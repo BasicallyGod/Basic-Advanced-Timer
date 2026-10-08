@@ -21,8 +21,9 @@
 # or click a gap to fill it with an account. Undo reverses the last change.
 #
 # Hours: right-click, Working hours, Hours and days, gives each working day its own start and finish
-# (for shift patterns). Once the day has started, the overtime section has a Finish day button, and the
-# menu has Finish for the day, which stops unallocated time and overtime counting until you carry on.
+# (for shift patterns). From 30 minutes before the end of the day, a Finish day button appears under the
+# Lunch row (and the menu has Finish for the day at any time once the day has started). It stops unallocated
+# time and overtime counting until you carry on.
 # Each week's individual entries are also saved to 'Week commencing <date> entries.csv'.
 #
 # Top: billable time since the start time, less lunch, as in the original timer.
@@ -383,10 +384,10 @@ namespace Win {
         public bool Reordering;
         public string RoundHover = "";
         public bool CollapseHover, HandleHover, DrawerOpen;
-        // The Finish day (or Carry on) button in the overtime section; its place matches $DayBtn in PowerShell
+        // The Finish day (or Carry on) button under the Lunch row; its size and place match $DayBtn in PowerShell
         public string DayBtnText = "";
         public bool DayBtnHover;
-        public float DayBtnX = 236f, DayBtnY = 74f, DayBtnW = 76f, DayBtnH = 20f;
+        public float DayBtnW = 150f, DayBtnH = 22f;
         public DrawerModel Drawer;
         public string DrawerHover = "";
         // Timeline hover and drag state, set by PowerShell each frame. The strip's own position is
@@ -624,12 +625,6 @@ namespace Win {
                 if (Overtime) {
                     g.DrawLine(sep, 10, 68, 310, 68);
                     g.DrawString(OT, FontOvertime, textB, new RectangleF(0, 69, BaseW, OvertimeH - 2), sfCentre);
-                    if (DayBtnText.Length > 0) {
-                        RectangleF dbr = new RectangleF(DayBtnX, DayBtnY, DayBtnW, DayBtnH);
-                        using (GraphicsPath dbp = RoundRect(dbr.X, dbr.Y, dbr.Width, dbr.Height, dbr.Height / 2f))
-                        using (SolidBrush dbb = new SolidBrush(DayBtnHover ? CircleHot : Circle)) { g.FillPath(dbb, dbp); }
-                        g.DrawString(DayBtnText, FontLabel, textB, dbr, sfCentre);
-                    }
                 }
 
                 // Progress through the working day
@@ -710,6 +705,14 @@ namespace Win {
                             }
                         }
                     }
+                }
+
+                // Finish day button, centred under the Lunch row
+                if (DayBtnText.Length > 0) {
+                    RectangleF dbr = new RectangleF((BaseW - DayBtnW) / 2f, BaseH - DayBtnH - 8f, DayBtnW, DayBtnH);
+                    using (GraphicsPath dbp = RoundRect(dbr.X, dbr.Y, dbr.Width, dbr.Height, dbr.Height / 2f))
+                    using (SolidBrush dbb = new SolidBrush(DayBtnHover ? CircleHot : Circle)) { g.FillPath(dbb, dbp); }
+                    ListText(g, DayBtnText, FontLabel, Text, dbr, sfCentre);
                 }
             }
         }
@@ -1250,6 +1253,7 @@ $script:drawerTimeline = $null    # that day's stretches of time, ready to draw
 $script:drawerLegend   = @()      # the lines under the strip
 $script:awayIntervals  = @()      # stretches marked as finished for the day: @{ Start; End } (End is $null while still finished)
 $script:dayBtnHover    = $false
+$script:finishH        = 0       # extra height under the Lunch row while the Finish day button is showing
 $script:pressedDayBtn  = $false
 $script:tlGeom         = $null    # where the strip was last drawn (window units), reported by the renderer
 $script:tlHover        = @{ Block = -1; Gap = -1; EdgeBlock = -1; Edge = '' }
@@ -1452,6 +1456,12 @@ function Get-WeekStart {
 
 function Get-WeekFile {
     return Join-Path $TimesheetDir ('Week commencing {0}.csv' -f (Get-WeekStart).ToString('yyyy-MM-dd', $Inv))
+}
+
+# Hours and minutes as h:mm, whatever the hours setting is, for the unallocated figures
+function Format-Clock($seconds) {
+    $mins = [int][math]::Floor([math]::Max(0.0, $seconds) / 60)
+    return '{0}:{1:00}' -f [math]::Floor($mins / 60), ($mins % 60)
 }
 
 function Format-Dur($seconds) {
@@ -2328,13 +2338,17 @@ function Update-View {
               elseif ($overtime) { 'OVERTIME' }
               else { 'WORKING' }
     # The figure that matters now on the status line; both on hover
-    $unallocLine = if ($overtime) { 'UNALLOCATED OT ' + (Format-Dur $unallocOT) }
-                   elseif ($workDay) { 'UNALLOCATED ' + (Format-Dur $unallocWork) }
+    $unallocLine = if ($overtime) { 'UNALLOCATED OT ' + (Format-Clock $unallocOT) }
+                   elseif ($workDay) { 'UNALLOCATED ' + (Format-Clock $unallocWork) }
                    else { '' }
     $unallocTip = if (-not $workDay) { $null }
-                  elseif ($overtime) { "Working day: $(Format-Dur $unallocWork) unallocated`nOvertime: $(Format-Dur $unallocOT) unallocated" }
-                  else { "Working day: $(Format-Dur $unallocWork) unallocated" }
+                  elseif ($overtime) { "Working day: $(Format-Clock $unallocWork) unallocated`nOvertime: $(Format-Clock $unallocOT) unallocated" }
+                  else { "Working day: $(Format-Clock $unallocWork) unallocated" }
     $activeRow = $rows | Where-Object { $_.Active } | Select-Object -First 1
+
+    # The Finish day button waits until half an hour before the end of the day, and stays once the day is
+    # finished so there is a way to carry on
+    $showFinish = [bool]($workDay -and ($dayDone -or ($clock -ge $start -and $clock -ge $end.AddMinutes(-$FinishLeadMinutes))))
 
     $bt = [timespan]::FromSeconds([math]::Floor($billable))
     $ot = [timespan]::FromSeconds([math]::Floor($otSec))
@@ -2348,7 +2362,7 @@ function Update-View {
         Status      = $status
         Unallocated = $unallocLine
         UnallocTip  = $unallocTip
-        UnallocText = $(if ($overtime) { (Format-Dur $unallocOT) + ' unallocated OT' } else { (Format-Dur $unallocWork) + ' unallocated' })
+        UnallocText = $(if ($overtime) { (Format-Clock $unallocOT) + ' unallocated OT' } else { (Format-Clock $unallocWork) + ' unallocated' })
         DayOff      = (-not $workDay)
         StartLabel  = $start.ToString('HH:mm', $Inv)
         Idle        = $idle
@@ -2359,7 +2373,7 @@ function Update-View {
         Before      = $before
         Overtime    = $overtime
         DayDone     = $dayDone
-        DayBtnText  = $(if ($overtime) { if ($dayDone) { 'Carry on' } else { 'Finish day' } } else { '' })
+        DayBtnText  = $(if ($showFinish) { if ($dayDone) { 'Carry on' } else { 'Finish day' } } else { '' })
         OT          = '+{0:00}:{1:00}:{2:00}' -f [math]::Floor($ot.TotalHours), $ot.Minutes, $ot.Seconds
         Rows        = $rows
     }
@@ -2368,8 +2382,10 @@ function Update-View {
 
     # Open or close the overtime section
     $newTop = if ($overtime) { $BaseRowTop + $OvertimeH } else { $BaseRowTop }
-    if ($newTop -ne $RowTop) {
+    $newFinishH = if ($showFinish) { $FinishAreaH } else { 0 }
+    if ($newTop -ne $RowTop -or $newFinishH -ne $script:finishH) {
         $script:RowTop = $newTop
+        $script:finishH = $newFinishH
         Resize-Form
     }
 }
@@ -2409,8 +2425,16 @@ $DrawerSideW = 520                  # width of the week drawer beside the timer
 $DrawerBtnX = 16                    # week drawer button, top left (mirrors the compact view button)
 $DrawerBtnY = 15
 
-# The Finish day button in the overtime section (the renderer's DayBtnX and the others match these)
-$DayBtn = @{ X = 236; Y = 74; W = 76; H = 20 }
+# The Finish day button, centred under the Lunch row (the renderer's DayBtnW and DayBtnH match these).
+# It shows from FinishLeadMinutes before the end of the day, and the timer grows by FinishAreaH to fit it.
+$DayBtn = @{ W = 150; H = 22 }
+$FinishLeadMinutes = 30
+$FinishAreaH = 30
+function Get-DayBtnRect {
+    $bx = ($BaseW - $DayBtn.W) / 2
+    $by = $BaseH - $DayBtn.H - 8
+    return @{ X = $bx; Y = $by; W = $DayBtn.W; H = $DayBtn.H }
+}
 
 function Get-PillListH {
     return 4 + $script:slots.Count * $PillRowH + $PillLunchGap + 6
@@ -2442,7 +2466,7 @@ function Get-PillRowTop($i) {
     return $top
 }
 Load-Accounts
-$BaseH  = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6
+$BaseH  = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6 + $script:finishH
 
 $C = [System.Drawing.Color]
 # ---- Themes ----
@@ -3025,13 +3049,6 @@ function Draw-Full($g, [bool]$layered) {
         if ($v.Overtime) {
             $g.DrawLine($pSep, 10, 68, 310, 68)
             $g.DrawString($v.OT, $fOvertime, $bWhite, (New-Object $RF 0, 69, $BaseW, ($OvertimeH - 2)), $sfCentre)
-            if ($v.DayBtnText) {
-                $dbr = New-Object $RF ([float]$DayBtn.X), ([float]$DayBtn.Y), ([float]$DayBtn.W), ([float]$DayBtn.H)
-                $dbp = New-RoundedPath $dbr.X $dbr.Y $dbr.Width $dbr.Height ([float]($dbr.Height / 2))
-                $g.FillPath($(if ($script:dayBtnHover) { $script:bRowOn } else { $script:bRowHover }), $dbp)
-                $dbp.Dispose()
-                $g.DrawString($v.DayBtnText, $fLabel, $bWhite, $dbr, $sfCentre)
-            }
         }
 
         # Progress through the working day
@@ -3123,6 +3140,17 @@ function Draw-Full($g, [bool]$layered) {
                     $cp.Dispose()
                 }
             }
+        }
+
+        # Finish day button, centred under the Lunch row
+        if ($v.DayBtnText) {
+            $dbRect = Get-DayBtnRect
+            $dbr = New-Object $RF ([float]$dbRect.X), ([float]$dbRect.Y), ([float]$dbRect.W), ([float]$dbRect.H)
+            $dbp = New-RoundedPath $dbr.X $dbr.Y $dbr.Width $dbr.Height ([float]($dbr.Height / 2))
+            $dbb = New-Object System.Drawing.SolidBrush ($(if ($script:dayBtnHover) { $theme.CircleHot } else { $theme.Circle }))
+            $g.FillPath($dbb, $dbp)
+            $dbb.Dispose(); $dbp.Dispose()
+            Draw-ListText $g $v.DayBtnText $fLabel $bWhite $dbr $sfCentre
         }
 
         if ($script:drawerOpen) {
@@ -3840,7 +3868,8 @@ function Complete-GapFill([string]$account) {
 function Test-HitDayBtn($tp) {
     if (-not $script:view -or -not $script:view.DayBtnText) { return $false }
     $x = $tp.X / $Zoom; $y = $tp.Y / $Zoom
-    return ($x -ge $DayBtn.X -and $x -le ($DayBtn.X + $DayBtn.W) -and $y -ge $DayBtn.Y -and $y -le ($DayBtn.Y + $DayBtn.H))
+    $dbRect = Get-DayBtnRect
+    return ($x -ge $dbRect.X -and $x -le ($dbRect.X + $dbRect.W) -and $y -ge $dbRect.Y -and $y -le ($dbRect.Y + $dbRect.H))
 }
 
 function Test-HitUnalloc($tp) {
@@ -6528,7 +6557,8 @@ $form.Add_MouseMove({
         $script:dayBtnHover = $dayHit
         if ($dayHit) {
             $dayTip = if ($script:view.DayDone) { 'Carry on working today' } else { "Finish for the day`nUnallocated time stops counting" }
-            $tip.Show($dayTip, $form, [int](($DayBtn.X - 60 + $ox) * $Zoom), [int](($DayBtn.Y + $DayBtn.H + 4 + $oy) * $Zoom), 3000)
+            $dbRect = Get-DayBtnRect
+            $tip.Show($dayTip, $form, [int](($dbRect.X + $ox) * $Zoom), [int](($dbRect.Y - 44 + $oy) * $Zoom), 3000)
         } else { $tip.Hide($form) }
         Request-Redraw
     }
@@ -6694,7 +6724,7 @@ function Resize-Form {
     if ($script:mode -eq 'full' -and $script:drawerOpen) {
         # With the drawer open, keep the timer where it is and rebuild around it
         $tl = Get-TimerScreenPos
-        $script:BaseH = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6
+        $script:BaseH = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6 + $script:finishH
         $script:drawerH = Get-DrawerHeight
         Update-DrawerGeometry $tl
         $script:hover = $null
@@ -6702,7 +6732,7 @@ function Resize-Form {
         return
     }
     # Grow or shrink to fit the rows, keeping the bottom edge where it was
-    $script:BaseH = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6
+    $script:BaseH = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6 + $script:finishH
     $bottom = $form.Bottom
     $bw, $bh = Get-BaseSize
     $form.ClientSize = New-Object System.Drawing.Size([int]($bw * $Zoom), [int]($bh * $Zoom))
