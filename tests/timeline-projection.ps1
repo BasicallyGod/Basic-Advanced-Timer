@@ -73,21 +73,21 @@ $script:creditPositions = @(
 $after = Get-DayTimeline $day
 $entriesAfter = @(Get-WeekEntries $ws)
 CloseTo $after.UnplacedSeconds 2400 'Unplaced credit must decrease by exactly the positioned amount.'
-CloseTo [double]($entriesAfter | Measure-Object -Property Seconds -Sum).Sum $beforeSeconds 'Positioning cannot create new credited time.'
+CloseTo ([double]($entriesAfter | Measure-Object -Property Seconds -Sum).Sum) $beforeSeconds 'Positioning cannot create new credited time.'
 Assert ($after.Blocks.Count -eq 6) 'Positioned credit must show as an additional timeline interval.'
 Assert (@($after.Blocks | Where-Object { $_.Origin -eq 'positioned' }).Count -eq 1) 'Position should have its own projection.'
 Assert (@($after.Blocks | Where-Object { $_.Origin -eq 'positioned' -and $_.Note -eq 'Synthetic activity note' }).Count -eq 1) 'Position notes must remain attached to their own metadata.'
 Assert (@($entriesAfter | Where-Object { $_.Origin -eq 'positioned' }).Count -eq 1) 'Weekly detail should show the positioned portion.'
-CloseTo [double](@($entriesAfter | Where-Object { $_.Origin -eq 'merged' })[0].Seconds) 2400 'Merged residual is only the unplaced balance.'
+CloseTo ([double](@($entriesAfter | Where-Object { $_.Origin -eq 'merged' })[0].Seconds)) 2400 'Merged residual is only the unplaced balance.'
 Assert (@($script:fixtureRows | Where-Object { $_.Origin -eq 'merged' }).Count -eq 1) 'Original merged source remains untouched.'
-CloseTo [double](@($script:fixtureRows | Where-Object { $_.Origin -eq 'merged' })[0].Seconds) 3600 'Merged source retains full original credit.'
+CloseTo ([double](@($script:fixtureRows | Where-Object { $_.Origin -eq 'merged' })[0].Seconds)) 3600 'Merged source retains full original credit.'
 Assert (@($after.Gaps | Where-Object { $_.StartH -le (11 + 20/60.0) -and $_.EndH -ge (11 + 40/60.0) }).Count -eq 0) 'A positioned interval is not available for gap filling.'
 
 # Removing a position restores the unplaced amount, without changing totals.
 $script:creditPositions = @()
 $restored = Get-DayTimeline $day
 CloseTo $restored.UnplacedSeconds 3600 'Removing a position restores unplaced credit.'
-CloseTo [double]((Get-WeekEntries $ws | Measure-Object Seconds -Sum).Sum) $beforeSeconds 'Removing a position must not change account totals.'
+CloseTo ([double]((Get-WeekEntries $ws | Measure-Object Seconds -Sum).Sum)) $beforeSeconds 'Removing a position must not change account totals.'
 
 # Explicit grouping references the source rows without erasing their timestamps.
 $groupId = 'test-group'
@@ -99,10 +99,10 @@ $blocks = @(Get-EntryBlocks $ws)
 $explicit = @($blocks | Where-Object { $_.ExplicitGroup })
 Assert ($explicit.Count -eq 1) 'An explicit group must be displayed as one weekly block.'
 Assert (@($explicit[0].Parts).Count -eq 2) 'The group must still contain both original source sessions.'
-CloseTo [double]($blocks | Measure-Object Seconds -Sum).Sum $beforeSeconds 'Grouping must preserve credited totals.'
+CloseTo ([double]($blocks | Measure-Object Seconds -Sum).Sum) $beforeSeconds 'Grouping must preserve credited totals.'
 $script:mergeEntries = $false
 Assert (@((Get-EntryBlocks $ws) | Where-Object { $_.ExplicitGroup }).Count -eq 1) 'Explicit groups persist when automatic grouping is disabled.'
-CloseTo [double](@($script:fixtureRows | Where-Object { $_.Origin -eq 'recorded' }).Count) 2 'Grouping must not delete source rows.'
+CloseTo (@($script:fixtureRows | Where-Object { $_.Origin -eq 'recorded' }).Count) 2 'Grouping must not delete source rows.'
 # Synthetic reproduction: end of preceding session derived from 16.62 CSV minutes
 # falls at 10:03:14.2; next session starts at 10:29:59.
 $gapStartH = (10 * 3600 + 3 * 60 + 14.2) / 3600.0
