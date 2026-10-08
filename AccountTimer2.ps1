@@ -1340,7 +1340,9 @@ function Initialize-SettingsStore {
         } catch {
             # Fail closed instead of silently replacing a damaged file with defaults.
             $reason = "Cannot read $($script:SettingsStoreFile). Restore its .bak copy before launching. $($_.Exception.Message)"
-            [void][System.Windows.Forms.MessageBox]::Show($reason, $script:AppName)
+            if (-not $script:SettingsNonInteractive) {
+                [void][System.Windows.Forms.MessageBox]::Show($reason, $script:AppName)
+            }
             throw $reason
         }
     }
