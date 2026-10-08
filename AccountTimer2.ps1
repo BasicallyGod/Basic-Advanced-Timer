@@ -1271,10 +1271,21 @@ $script:LegacySettings = [ordered]@{
 function Save-SettingsStore {
     $newFile = "$script:SettingsStoreFile.$([guid]::NewGuid().ToString('N')).tmp"
     try {
-        $payload = [ordered]@{
-            schemaVersion = $script:SettingsStoreVersion
-            sections = $script:SettingsSections
-        } | ConvertTo-Json -Depth 8
+        # Flat, versioned JSON. ConvertTo-Json on a nested PowerShell dictionary
+        # can recursively traverse the object graph and exhaust memory under
+        # Windows PowerShell 5.1. Serialize only fixed section names and scalar
+        # string values; the scalar converter still handles JSON escaping.
+        $members = New-Object 'System.Collections.Generic.List[string]'
+        foreach ($name in @($script:LegacySettings.Keys)) {
+            if (-not $script:SettingsSections.ContainsKey($name)) { continue }
+            $values = New-Object 'System.Collections.Generic.List[string]'
+            foreach ($line in @($script:SettingsSections[$name])) {
+                [void]$values.Add((ConvertTo-Json -InputObject ([string]$line) -Compress))
+            }
+            [void]$members.Add(('"{0}":[{1}]' -f $name, [string]::Join(',', $values.ToArray())))
+        }
+        $payload = '{"schemaVersion":' + [string]$script:SettingsStoreVersion +
+                   ',"sections":{' + [string]::Join(',', $members.ToArray()) + '}}'
         [System.IO.File]::WriteAllText($newFile, [string]$payload, (New-Object System.Text.UTF8Encoding($false)))
         if ([System.IO.File]::Exists($script:SettingsStoreFile)) {
             [System.IO.File]::Replace($newFile, $script:SettingsStoreFile, "$script:SettingsStoreFile.bak")
