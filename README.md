@@ -14,7 +14,9 @@ AccountTimer2.ps1 is the current version. The two earlier scripts are kept as wo
 - Separate unallocated figures for the working day and overtime
 - Themes, see-through account list, a Size setting for the whole timer, decimal or hours and minutes display
 - Weekly summary and time entry files in CSV, ready for timesheets or Excel
-- Merged credits with unknown original clock positions are shown as unplaced in the timeline totals rather than as misleading blocks. The weekly editor can assign them a new explicit time before gaps can be filled on that day.
+- In a timeline gap, choose whether to position an already credited portion of a merged entry (no new hours) or add new credited time. Credit positioning preserves the original merged source row and reduces the unplaced balance.
+- Weekly grouping is non-destructive: grouped time keeps all original recordings, notes and separate chronology.
+- Very short sessions remain visible as individual coloured intervals without overlapping labels; zoom in to inspect their positions.
 
 ## Requirements
 
@@ -44,6 +46,8 @@ The timer creates these alongside the scripts as you use it. They are listed in 
 | --- | --- |
 | Timesheets\sessions.csv | Every stretch of time tracked |
 | Timesheets\notes.csv | Notes on stretches of time |
+| Timesheets\\entry-groups.csv | References for non-destructive manual weekly groups |
+| Timesheets\\credit-positions.csv | Positions for previously merged credit; source total unchanged |
 | Timesheets\Week commencing (date).csv | Weekly summary by account and day |
 | Timesheets\Week commencing (date) entries.csv | Each stretch of time for the week |
 | account-timer-*.txt | Accounts, budgets, themes, settings and window positions |

@@ -1,0 +1,19 @@
+name: PowerShell checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  timeline-projection:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate application syntax and timeline projections
+        shell: powershell
+        run: ./tests/timeline-projection.ps1
