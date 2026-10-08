@@ -2497,6 +2497,124 @@ function Get-EntryBlocks($ws, [switch]$NoRunning) {
     return @($result | Sort-Object Start)
 }
 
+# Reconcile decimal hours at the point where they leave precise session accounting.
+# One hundredth of an hour is 36 seconds. Give the combined week exactly the
+# rounded aggregate number of 0.01h units, then distribute those units to
+# account/day buckets and finally to the individual weekly entry blocks.
+# Largest-remainder allocation is deterministic and supports negative adjustments.
+# Crucially, SUM(exported entries) == SUM(summary account/day cells) == grand total.
+function Distribute-HundredthHours($items, [long]$targetUnits) {
+    $items = @($items)
+    if ($items.Count -eq 0) {
+        if ($targetUnits -ne 0) { throw 'Cannot reconcile non-zero credited hours without entries.' }
+        return @()
+    }
+    $units = New-Object 'long[]' $items.Count
+    $rank = @()
+    [long]$baseTotal = 0
+    for ($i = 0; $i -lt $items.Count; $i++) {
+        $ideal = [double]$items[$i].Seconds / 36.0
+        [long]$base = [math]::Floor($ideal)
+        $units[$i] = $base
+        $baseTotal += $base
+        $rank += [pscustomobject]@{
+            Index = $i; Fraction = $ideal - $base
+            Key = [string]$items[$i].Key
+        }
+    }
+    [long]$remaining = $targetUnits - $baseTotal
+    if ($remaining -lt 0 -or $remaining -gt $rank.Count) {
+        throw "Cannot reconcile hours: $remaining hundredths for $($rank.Count) entries."
+    }
+    $order = @($rank | Sort-Object -Property @(
+        @{ Expression = { $_.Fraction }; Descending = $true },
+        @{ Expression = { $_.Key }; Descending = $false }
+    ))
+    for ($i = 0; $i -lt $remaining; $i++) { $units[[int]$order[$i].Index]++ }
+    return $units
+}
+
+function Get-WeekReconciliation($ws) {
+    $entries = @(Get-EntryBlocks $ws -NoRunning)
+    $byKey = @{}
+    $ledger = @{}
+    foreach ($e in $entries) {
+        $key = ('{0}`t{1}' -f $e.Day, $e.Name)
+        if (-not $byKey.ContainsKey($key)) { $byKey[$key] = @() }
+        $byKey[$key] += $e
+    }
+    $weekEnd = $ws.AddDays(7)
+    $lunchSec = New-Object 'double[]' 7
+    foreach ($r in @(Read-Sessions)) {
+        if ($r.Start -lt $ws -or $r.Start -ge $weekEnd) { continue }
+        $day = [int]($r.Start.Date - $ws).TotalDays
+        if ($r.Name -eq 'Lunch') { $lunchSec[$day] += [double]$r.Seconds; continue }
+        $key = ('{0}`t{1}' -f $day, $r.Name)
+        $ledger[$key] = [double]$ledger[$key] + [double]$r.Seconds
+    }
+    # The entries projection must account for every credit from sessions.csv;
+    # never silently publish a detailed report that omits a source adjustment.
+    foreach ($key in @($ledger.Keys) + @($byKey.Keys) | Select-Object -Unique) {
+        $parts = @($byKey[$key])
+        $sum = 0.0
+        foreach ($e in $parts) { $sum += [double]$e.Seconds }
+        if ([math]::Abs($sum - [double]$ledger[$key]) -gt 0.025) {
+            throw "Week entries do not reconcile with recorded credit for $key."
+        }
+    }
+    $buckets = @()
+    foreach ($key in @($byKey.Keys | Sort-Object)) {
+        $entriesForBucket = @($byKey[$key])
+        $secs = 0.0
+        foreach ($e in $entriesForBucket) { $secs += [double]$e.Seconds }
+        $buckets += [pscustomobject]@{
+            Key = $key; Seconds = $secs; Entries = $entriesForBucket
+        }
+    }
+    $totalSec = 0.0
+    foreach ($b in $buckets) { $totalSec += [double]$b.Seconds }
+    [long]$grandUnits = [math]::Round($totalSec / 36.0, 0, [System.MidpointRounding]::AwayFromZero)
+    $bucketUnits = @(Distribute-HundredthHours $buckets $grandUnits)
+    $accounts = @{}
+    $resultRows = @()
+    for ($i = 0; $i -lt $buckets.Count; $i++) {
+        $b = $buckets[$i]
+        $entryList = @($b.Entries)
+        $toAllocate = @()
+        for ($j = 0; $j -lt $entryList.Count; $j++) {
+            $toAllocate += [pscustomobject]@{
+                Key = ('{0:D6}' -f $j); Seconds = [double]$entryList[$j].Seconds
+            }
+        }
+        $unitsForEntries = @(Distribute-HundredthHours $toAllocate ([long]$bucketUnits[$i]))
+        for ($j = 0; $j -lt $entryList.Count; $j++) {
+            $resultRows += [pscustomobject]@{ Entry = $entryList[$j]; Units = [long]$unitsForEntries[$j] }
+        }
+        $first = $entryList[0]
+        if (-not $accounts.ContainsKey($first.Name)) {
+            $accounts[$first.Name] = New-Object 'long[]' 7
+        }
+        $accounts[$first.Name][[int]$first.Day] += [long]$bucketUnits[$i]
+    }
+    $lunchBuckets = @()
+    for ($d = 0; $d -lt 7; $d++) {
+        $lunchBuckets += [pscustomobject]@{ Key = ('{0:D2}' -f $d); Seconds = $lunchSec[$d] }
+    }
+    $lunchTotalSec = 0.0
+    foreach ($d in 0..6) { $lunchTotalSec += $lunchSec[$d] }
+    [long]$lunchTarget = [math]::Round($lunchTotalSec / 36.0, 0, [System.MidpointRounding]::AwayFromZero)
+    $lunchUnits = @(Distribute-HundredthHours $lunchBuckets $lunchTarget)
+    return [pscustomobject]@{
+        Rows = $resultRows; Accounts = $accounts; GrandUnits = $grandUnits
+        LunchUnits = $lunchUnits; RawSeconds = $totalSec
+    }
+}
+
+# Format quantized, additive 0.01h accounting cells without another rounding pass.
+function Format-HundredthHours([long]$units) {
+    return ($units / 100.0).ToString('0.00', $Inv)
+}
+
 function Get-EntryTypeLabel($kind) {
     switch ($kind) {
         'rounded up'   { return 'Rounded up' }
@@ -2517,28 +2635,30 @@ function Get-WeekEntriesFile($ws) {
 }
 
 # One row per stretch of time, ready to work through when filling in a timesheet
-function Write-WeekEntries($ws) {
+function Write-WeekEntries($ws, $reconciled = $null) {
     try {
-        $rows = @(Get-EntryBlocks $ws -NoRunning | ForEach-Object {
-            $isTime = $_.Kind -eq 'time'
-            $hasAdj = @($_.Parts | Where-Object { $_.Kind -ne 'time' }).Count -gt 0
+        if (-not $reconciled) { $reconciled = Get-WeekReconciliation $ws }
+        $rows = @($reconciled.Rows | ForEach-Object {
+            $e = $_.Entry
+            $isTime = $e.Kind -eq 'time'
+            $hasAdj = @($e.Parts | Where-Object { $_.Kind -ne 'time' }).Count -gt 0
             [pscustomobject][ordered]@{
-                Day      = $_.Start.ToString('ddd dd/MM', $GB)
-                Date     = $_.Start.ToString('yyyy-MM-dd', $Inv)
-                Account  = $_.Name
-                Start    = $(if ($isTime -and $_.Origin -ne 'merged' -and -not $_.ExplicitGroup) { $_.Start.ToString('HH:mm', $Inv) } else { '' })
-                End      = $(if ($isTime -and $_.Origin -ne 'merged' -and -not $_.ExplicitGroup) { $_.End.ToString('HH:mm', $Inv) } else { '' })
-                Duration = Format-HM $_.Seconds
-                Hours    = ([math]::Round($_.Seconds / 3600, 2)).ToString('0.00', $Inv)
-                Type     = $(if ($isTime -and $_.ExplicitGroup) { Get-EntryTypeLabel 'grouped' }
-                             elseif ($isTime -and $_.Origin -eq 'positioned') { Get-EntryTypeLabel 'positioned' }
-                             elseif ($isTime -and $_.Origin -eq 'merged') { Get-EntryTypeLabel 'merged' }
-                             elseif ($isTime -and $_.Origin -eq 'edited') { Get-EntryTypeLabel 'edited' }
-                             elseif ($isTime -and $_.Origin -eq 'added') { Get-EntryTypeLabel 'added' }
+                Day      = $e.Start.ToString('ddd dd/MM', $GB)
+                Date     = $e.Start.ToString('yyyy-MM-dd', $Inv)
+                Account  = $e.Name
+                Start    = $(if ($isTime -and $e.Origin -ne 'merged' -and -not $e.ExplicitGroup) { $e.Start.ToString('HH:mm', $Inv) } else { '' })
+                End      = $(if ($isTime -and $e.Origin -ne 'merged' -and -not $e.ExplicitGroup) { $e.End.ToString('HH:mm', $Inv) } else { '' })
+                Duration = Format-HM $e.Seconds
+                Hours    = Format-HundredthHours $_.Units
+                Type     = $(if ($isTime -and $e.ExplicitGroup) { Get-EntryTypeLabel 'grouped' }
+                             elseif ($isTime -and $e.Origin -eq 'positioned') { Get-EntryTypeLabel 'positioned' }
+                             elseif ($isTime -and $e.Origin -eq 'merged') { Get-EntryTypeLabel 'merged' }
+                             elseif ($isTime -and $e.Origin -eq 'edited') { Get-EntryTypeLabel 'edited' }
+                             elseif ($isTime -and $e.Origin -eq 'added') { Get-EntryTypeLabel 'added' }
                              elseif ($isTime -and $hasAdj) { 'Time (adjusted)' }
-                             else { Get-EntryTypeLabel $_.Kind })
-                Parts    = @($_.Parts).Count
-                Note     = "$($_.Note)"
+                             else { Get-EntryTypeLabel $e.Kind })
+                Parts    = @($e.Parts).Count
+                Note     = "$($e.Note)"
             }
         })
         $file = Get-WeekEntriesFile $ws
@@ -2595,48 +2715,58 @@ function Refresh-Totals {
 function Write-WeekSummary {
     try {
         $ws = Get-WeekStart
-        $hours = @{}
-        foreach ($r in @(Read-Sessions)) {
-            $idx = [int][math]::Floor(($r.Start.Date - $ws).TotalDays)
-            if ($idx -lt 0 -or $idx -gt 6) { continue }
-            if (-not $hours.ContainsKey($r.Name)) { $hours[$r.Name] = New-Object double[] 7 }
-            $hours[$r.Name][$idx] += $r.Seconds / 3600
-        }
+        # The summary and detailed export use the SAME reconciliation snapshot.
+        $reconciled = Get-WeekReconciliation $ws
+        $hours = $reconciled.Accounts
 
-        # Current accounts first, then any older names used this week, then lunch
-        $known  = @($script:accounts | ForEach-Object { $_.Name })
-        $order  = @($known | Where-Object { $hours.ContainsKey($_) })
-        $order += @($hours.Keys | Where-Object { $known -notcontains $_ -and $_ -ne 'Lunch' } | Sort-Object)
-        if ($hours.ContainsKey('Lunch')) { $order += 'Lunch' }
+        # Current accounts first, then historical account names, then lunch.
+        $known = @($script:accounts | ForEach-Object { $_.Name })
+        $order = @($known | Where-Object { $hours.ContainsKey($_) })
+        $order += @($hours.Keys | Where-Object { $known -notcontains $_ } | Sort-Object)
 
         $dayNames = @(0..6 | ForEach-Object { $ws.AddDays($_).ToString('ddd dd/MM', $GB) })
-        $totals = New-Object double[] 7
+        $totals = New-Object 'long[]' 7
         $out = @()
         foreach ($n in $order) {
             $o = [ordered]@{ Account = $n }
-            $sum = 0
+            [long]$sum = 0
             for ($d = 0; $d -lt 7; $d++) {
-                $h = $hours[$n][$d]
-                $o[$dayNames[$d]] = [math]::Round($h, 2).ToString($Inv)
-                $sum += $h
-                if ($n -ne 'Lunch') { $totals[$d] += $h }
+                [long]$units = $hours[$n][$d]
+                $o[$dayNames[$d]] = Format-HundredthHours $units
+                $sum += $units
+                $totals[$d] += $units
             }
-            $o['Total'] = [math]::Round($sum, 2).ToString($Inv)
+            $o['Total'] = Format-HundredthHours $sum
             $out += [pscustomobject]$o
         }
 
-        $t = [ordered]@{ Account = 'Total (excluding lunch)' }
-        $grand = 0
+        $lunch = [ordered]@{ Account = 'Lunch' }
+        [long]$lunchTotal = 0
         for ($d = 0; $d -lt 7; $d++) {
-            $t[$dayNames[$d]] = [math]::Round($totals[$d], 2).ToString($Inv)
+            [long]$units = $reconciled.LunchUnits[$d]
+            $lunch[$dayNames[$d]] = Format-HundredthHours $units
+            $lunchTotal += $units
+        }
+        if ($lunchTotal -ne 0) {
+            $lunch['Total'] = Format-HundredthHours $lunchTotal
+            $out += [pscustomobject]$lunch
+        }
+
+        $t = [ordered]@{ Account = 'Total (excluding lunch)' }
+        [long]$grand = 0
+        for ($d = 0; $d -lt 7; $d++) {
+            $t[$dayNames[$d]] = Format-HundredthHours $totals[$d]
             $grand += $totals[$d]
         }
-        $t['Total'] = [math]::Round($grand, 2).ToString($Inv)
+        if ($grand -ne [long]$reconciled.GrandUnits) {
+            throw "Decimal reconciliation failed: grand total $grand versus expected $($reconciled.GrandUnits)."
+        }
+        $t['Total'] = Format-HundredthHours $grand
         $out += [pscustomobject]$t
 
         $out | Export-Csv -Path (Get-WeekFile) -NoTypeInformation -Encoding UTF8
         $script:summaryDirty = $false
-        Write-WeekEntries $ws
+        Write-WeekEntries $ws $reconciled
     } catch {
         if (-not $script:summaryDirty) {
             Write-Log "Could not update the weekly summary (is it open in Excel?). Will keep retrying. $($_.Exception.Message)"
@@ -5646,6 +5776,20 @@ function Get-WeekData($ws) {
     }
     if ($days.Count -eq 0) { $days = @(0..6) }
 
+    # For a completed/stopped week, display exactly the same 0.01h allocations
+    # as the two exports. Keep the live timer provisional until it is stopped
+    # and written to sessions.csv; it has not yet become a persisted credit.
+    $hasLive = [bool]($script:active -and $script:active.Start -ge $ws -and $script:active.Start -lt $we)
+    if (-not $hasLive -and $script:hoursFormat -eq 'decimal') {
+        $quantized = Get-WeekReconciliation $ws
+        foreach ($n in @($quantized.Accounts.Keys)) {
+            if (-not $acc.ContainsKey($n)) { $acc[$n] = New-Object double[] 7; $names += $n }
+            for ($d = 0; $d -lt 7; $d++) {
+                $acc[$n][$d] = [double]$quantized.Accounts[$n][$d] * 36.0
+            }
+        }
+        for ($d = 0; $d -lt 7; $d++) { $lunch[$d] = [double]$quantized.LunchUnits[$d] * 36.0 }
+    }
     return @{ Accounts = $acc; Names = $names; Lunch = $lunch; Unalloc = $unalloc; Sessions = $sessions; Days = $days }
 }
 

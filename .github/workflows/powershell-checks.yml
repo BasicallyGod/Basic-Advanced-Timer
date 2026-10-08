@@ -16,4 +16,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate application syntax and timeline projections
         shell: powershell
-        run: ./tests/timeline-projection.ps1
+        run: |
+          ./tests/timeline-projection.ps1
+          ./tests/decimal-reconciliation.ps1
