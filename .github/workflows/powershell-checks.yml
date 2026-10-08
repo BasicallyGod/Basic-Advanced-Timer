@@ -12,11 +12,15 @@ permissions:
 jobs:
   regression-tests:
     runs-on: windows-latest
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v4
-      - name: Validate timeline, accounting and settings migration
+      - name: Timeline projection tests
         shell: powershell
-        run: |
-          ./tests/timeline-projection.ps1
-          ./tests/decimal-reconciliation.ps1
-          ./tests/settings-migration.ps1
+        run: ./tests/timeline-projection.ps1
+      - name: Decimal reconciliation tests
+        shell: powershell
+        run: ./tests/decimal-reconciliation.ps1
+      - name: Settings migration tests
+        shell: powershell
+        run: ./tests/settings-migration.ps1
