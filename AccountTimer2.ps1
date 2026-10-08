@@ -4621,29 +4621,42 @@ function Show-GapMenu($pt, [double]$fromH, [double]$toH) {
     $m.Show($form, $pt)
 }
 
+# CSV durations have a 0.6-second resolution, so legitimate timeline gaps may
+# begin or end between whole seconds. First check the unrounded selection
+# against the actual gaps, then snap *inwards* to an integer-second interval.
+function Resolve-TimelineGapFill($gaps, [double]$fromH, [double]$toH) {
+    if ($toH -le $fromH) { return $null }
+    $epsilonH = 0.000001 / 3600.0  # floating-point noise, never overlap tolerance
+    foreach ($gap in @($gaps)) {
+        $gapStart = [double]$gap.StartH
+        $gapEnd = [double]$gap.EndH
+        if ($fromH -lt ($gapStart - $epsilonH) -or $toH -gt ($gapEnd + $epsilonH)) { continue }
+        $lo = [math]::Max($fromH, $gapStart) * 3600.0
+        $hi = [math]::Min($toH, $gapEnd) * 3600.0
+        $startSecond = [long][math]::Ceiling($lo - 0.000001)
+        $endSecond = [long][math]::Floor($hi + 0.000001)
+        if ($endSecond -le $startSecond) { return $null }
+        return [pscustomobject]@{ StartSecond = $startSecond; EndSecond = $endSecond }
+    }
+    return $null
+}
+
 function Complete-GapFill([string]$account, [string]$mode) {
     $fill = $script:tlFill
     $script:tlFill = $null
     if (-not $fill -or @('credit', 'new') -notcontains $mode) { return }
     $day = [datetime]$fill.Day
     $dateStr = $day.ToString('yyyy-MM-dd', $Inv)
-    $from = $day.AddSeconds([math]::Round($fill.FromH * 3600))
-    $to = $day.AddSeconds([math]::Round($fill.ToH * 3600))
-    if ($to -le $from) { return }
-    $startH = ($from - $day).TotalHours
-    $endH = ($to - $day).TotalHours
-
-    # A menu may have been open while a timer updated the day. Never allocate
-    # a stale gap over an interval that has meanwhile been recorded.
+    # Validate unrounded bounds, then round inwards for CSV-safe whole seconds.
+    # Rounding before validation falsely rejected real fractional-second gaps.
     $current = Get-DayTimeline $day
-    $valid = $false
-    foreach ($gap in @($current.Gaps)) {
-        if ($startH -ge $gap.StartH - 0.00001 -and $endH -le $gap.EndH + 0.00001) { $valid = $true; break }
-    }
-    if (-not $valid) {
-        Show-Message 'That gap has changed. Please select it again before allocating time.'
+    $safeFill = Resolve-TimelineGapFill $current.Gaps ([double]$fill.FromH) ([double]$fill.ToH)
+    if (-not $safeFill) {
+        Show-Message 'That gap has changed or is too short to allocate. Please select it again.'
         return
     }
+    $from = $day.AddSeconds($safeFill.StartSecond)
+    $to = $day.AddSeconds($safeFill.EndSecond)
 
     if ($mode -eq 'credit') {
         $creditsNow = Get-UnplacedCredits $day

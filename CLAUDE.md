@@ -80,3 +80,7 @@ The user tests the visuals on Windows and reports back with screenshots.
 ## Planned next
 
 - Windows-drawn text for the timer's solid areas (status line, unallocated figure, overtime counter), matching the week drawer.
+
+
+### Fractional-second timeline gaps
+CSV session durations use hundredths of a minute (0.6-second increments), which can leave an effective end time such as 10:03:14.2 even though the source End field says 10:03:14. Never round the selected gap before containment validation. `Resolve-TimelineGapFill` first checks the unrounded selection against the current gap, then moves the start forward and the end backward to whole seconds for the portable CSV representation. This avoids false "gap has changed" errors while still rejecting occupied gaps. Regression fixture: `tests/timeline-projection.ps1`.

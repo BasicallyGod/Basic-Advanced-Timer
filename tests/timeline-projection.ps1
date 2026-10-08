@@ -9,7 +9,7 @@ if (@($parseErrors).Count -gt 0) { throw "PowerShell syntax errors: $($parseErro
 $names = @(
     'Convert-SessionRow', 'Get-SessionKey', 'Get-EntryGroupId',
     'Get-CreditPositionSeconds', 'Get-UnplacedCredits', 'Get-CreditPositionSessions',
-    'Get-TimelineGaps', 'Set-TimelineLanes', 'Get-DayTimeline',
+    'Get-TimelineGaps', 'Resolve-TimelineGapFill', 'Set-TimelineLanes', 'Get-DayTimeline',
     'Get-WeekEntries', 'Get-WeekLunchStarts', 'New-EntryBlock', 'Get-EntryBlocks',
     'Get-DayLegend', 'Get-EntryTypeLabel'
 )
@@ -103,4 +103,21 @@ CloseTo [double]($blocks | Measure-Object Seconds -Sum).Sum $beforeSeconds 'Grou
 $script:mergeEntries = $false
 Assert (@((Get-EntryBlocks $ws) | Where-Object { $_.ExplicitGroup }).Count -eq 1) 'Explicit groups persist when automatic grouping is disabled.'
 CloseTo [double](@($script:fixtureRows | Where-Object { $_.Origin -eq 'recorded' }).Count) 2 'Grouping must not delete source rows.'
+# Synthetic reproduction: end of preceding session derived from 16.62 CSV minutes
+# falls at 10:03:14.2; next session starts at 10:29:59.
+$gapStartH = (10 * 3600 + 3 * 60 + 14.2) / 3600.0
+$gapEndH = (10 * 3600 + 29 * 60 + 59) / 3600.0
+$gapRange = @([pscustomobject]@{ StartH = $gapStartH; EndH = $gapEndH })
+$safe = Resolve-TimelineGapFill $gapRange $gapStartH $gapEndH
+Assert ($null -ne $safe) 'A fractional-second gap must be fillable.'
+Assert ($safe.StartSecond -eq (10 * 3600 + 3 * 60 + 15)) 'The start must snap inside the gap, not before the preceding session.'
+Assert ($safe.EndSecond -eq (10 * 3600 + 29 * 60 + 59)) 'The end must not overlap the following session.'
+$snapped = Resolve-TimelineGapFill $gapRange ((10 * 60 + 5) / 60.0) ((10 * 60 + 15) / 60.0)
+Assert ($null -ne $snapped) 'A snapped drag inside the gap remains valid.'
+Assert ($snapped.StartSecond -eq (10 * 3600 + 5 * 60) -and $snapped.EndSecond -eq (10 * 3600 + 15 * 60)) 'Minute-aligned bounds are retained.'
+$changedGap = @([pscustomobject]@{ StartH = ((10 * 3600 + 10 * 60) / 3600.0); EndH = $gapEndH })
+Assert ($null -eq (Resolve-TimelineGapFill $changedGap $gapStartH $gapEndH)) 'Genuinely occupied portions must still be rejected.'
+$subsecond = @([pscustomobject]@{ StartH = ((10 * 3600 + 3 * 60 + 14.2) / 3600.0); EndH = ((10 * 3600 + 3 * 60 + 15.1) / 3600.0) })
+Assert ($null -eq (Resolve-TimelineGapFill $subsecond $subsecond[0].StartH $subsecond[0].EndH)) 'A sub-second gap cannot be saved at whole-second precision.'
+
 Write-Host 'Synthetic timeline, credit positioning, and grouping checks passed.'

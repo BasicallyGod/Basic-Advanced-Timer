@@ -14,6 +14,7 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Version | Script | Type | Change |
 | --- | --- | --- | --- |
+| 2.21 | AccountTimer2 | Fixed | Fractional-second session boundaries no longer cause valid timeline gaps to fail allocation validation; safely snap inward after verifying the unrounded selection |
 | 2.21 | AccountTimer2 | New | A timeline gap offers positioning existing merged credit without added hours, or adding new credited time |
 | 2.21 | AccountTimer2 | New | Position metadata projects original merged credit into the timeline and weekly entries without modifying the credited source rows |
 | 2.21 | AccountTimer2 | Improved | Manual weekly grouping preserves every original session and note rather than creating a destructive synthetic merged row |
