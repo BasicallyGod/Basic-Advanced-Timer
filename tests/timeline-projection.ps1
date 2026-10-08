@@ -102,7 +102,7 @@ Assert (@($explicit[0].Parts).Count -eq 2) 'The group must still contain both or
 CloseTo ([double]($blocks | Measure-Object Seconds -Sum).Sum) $beforeSeconds 'Grouping must preserve credited totals.'
 $script:mergeEntries = $false
 Assert (@((Get-EntryBlocks $ws) | Where-Object { $_.ExplicitGroup }).Count -eq 1) 'Explicit groups persist when automatic grouping is disabled.'
-CloseTo (@($script:fixtureRows | Where-Object { $_.Origin -eq 'recorded' }).Count) 2 'Grouping must not delete source rows.'
+CloseTo (@($script:fixtureRows | Where-Object { $_.Origin -eq 'recorded' -and $_.Name -eq 'Account A' }).Count) 2 'Grouping must not delete the two recorded source rows for the grouped account.'
 # Synthetic reproduction: end of preceding session derived from 16.62 CSV minutes
 # falls at 10:03:14.2; next session starts at 10:29:59.
 $gapStartH = (10 * 3600 + 3 * 60 + 14.2) / 3600.0
