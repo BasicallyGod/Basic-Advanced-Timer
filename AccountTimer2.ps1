@@ -1,0 +1,6127 @@
+# Account timer 2
+# Same as the account timer, plus a compact pill view and a red 'not tracking' state.
+# Shares its accounts, logs, themes and settings with AccountTimer.ps1, so only run one at a time.
+#
+# Compact view: click the collapse button (top right of the full view) or right-click, Compact view.
+# On the pill, click the time to open the full view, the name to open the account list, the button to pause.
+#
+# Budgets: right-click an account, Set budget, to give it hours per week, month or quarter.
+# Notes: after 15 minutes or more on an account, a small box asks what you worked on (optional).
+# Weekly view: right-click, Weekly view, for hours by account and day, budgets and notes,
+# plus a Time entries tab showing each stretch of time day by day, with consecutive stretches
+# on the same account merged into one block (switchable). The entries file follows the same grouping.
+# In the Time entries tab, click to select blocks (Ctrl+click for several) and right-click to merge,
+# delete, change account, edit the time or note, or add an entry. Undo reverses the last change.
+#
+# Week drawer: click the round button at the top left of the full timer (or right-click, Show week drawer)
+# to slide out this week's hours by account and day, and budgets, beside the timer.
+# Each week's individual entries are also saved to 'Week commencing <date> entries.csv'.
+#
+# Top: billable time since the start time, less lunch, as in the original timer.
+# After the end time it holds at the full day and an overtime counter appears below it
+# (the whole timer turns red). Everything resets at midnight.
+# Below: five account slots and a lunch slot. Click a row to start or pause it.
+# Only one slot runs at a time. Every stretch of time is logged to Timesheets\sessions.csv,
+# and a weekly summary (hours per account per day) is kept in
+# Timesheets\Week commencing <date>.csv for filling in timesheets.
+#
+# Drag the dotted handle on the left of a row to move it up or down.
+# Hover over an account to show the round-down and round-up buttons, which move today's
+# time to the previous or next 15-minute mark (logged as 'rounded down' or 'rounded up').
+# Right-click a row to rename or hide it, set today's time for it by hand, or clear it.
+# Right-click anywhere to add a new account, show a hidden one, or change the theme.
+# Themes are kept in account-timer-themes.txt, which you can edit (Theme, then Edit themes file).
+# The account list can be made see-through (right-click, Account list transparency).
+# Drag the timer by its top section. Right-click anywhere for more options.
+
+Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+
+# Use Windows' modern text drawing for buttons and labels, as normal Windows apps do
+try { [System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false) } catch {}
+
+# Its own identity in Windows, so the taskbar shows 'Account timer' rather than grouping it with PowerShell
+try {
+    Add-Type -Namespace Win -Name Shell -MemberDefinition '[DllImport("shell32.dll", CharSet = CharSet.Unicode)] public static extern int SetCurrentProcessExplicitAppUserModelID(string appId);'
+    [void][Win.Shell]::SetCurrentProcessExplicitAppUserModelID('AccountTimer.Timesheets')
+} catch {}
+
+# Only one account timer at a time, so the same time isn't tracked twice
+try {
+    $others = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe' OR Name='pwsh.exe'" |
+        Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match 'AccountTimer2?\.ps1' })
+    if ($others.Count -gt 0) {
+        [void][System.Windows.Forms.MessageBox]::Show(
+            "The account timer is already running. Close it before opening another copy, so time isn't tracked twice.",
+            'Account timer')
+        exit
+    }
+} catch {}
+
+# Sharp text on every monitor: handle each screen's scaling separately
+try {
+    Add-Type -Namespace Win -Name Dpi -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+[DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(System.IntPtr value);
+[DllImport("user32.dll")] public static extern uint GetDpiForWindow(System.IntPtr hwnd);
+'@
+} catch {}
+$script:perMonitor = $false
+try { $script:perMonitor = [Win.Dpi]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch {}
+if (-not $script:perMonitor) { try { [void][Win.Dpi]::SetProcessDPIAware() } catch {} }
+
+# Rounded corners on Windows 11 (ignored on Windows 10)
+try {
+    Add-Type -Namespace Win -Name Dwm -MemberDefinition '[DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(System.IntPtr hwnd, int attr, ref int val, int size);'
+} catch {}
+
+# Menus and dialogs: size them for the screen they appear on
+try {
+    Add-Type -Namespace Win -Name Mon -MemberDefinition @'
+public struct POINT { public int X; public int Y; }
+[DllImport("user32.dll")] public static extern System.IntPtr MonitorFromPoint(POINT pt, uint flags);
+[DllImport("shcore.dll")] public static extern int GetDpiForMonitor(System.IntPtr hmon, int dpiType, out uint dpiX, out uint dpiY);
+'@
+} catch {}
+
+function Get-CursorDpi {
+    try {
+        $p = [System.Windows.Forms.Cursor]::Position
+        $pt = New-Object 'Win.Mon+POINT'
+        $pt.X = $p.X; $pt.Y = $p.Y
+        $mon = [Win.Mon]::MonitorFromPoint($pt, 2)
+        $dx = [uint32]0; $dy = [uint32]0
+        if ([Win.Mon]::GetDpiForMonitor($mon, 0, [ref]$dx, [ref]$dy) -eq 0 -and $dx -gt 0) { return [double]$dx }
+    } catch {}
+    try { return [double][Win.Dpi]::GetDpiForWindow($form.Handle) } catch {}
+    return 96.0
+}
+
+function Set-MenuScale($strip) {
+    if (-not $script:perMonitor) { return }
+    $k = (Get-CursorDpi) / 96
+    $font = New-Object System.Drawing.Font('Segoe UI', [float](12 * $k), [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
+    $icons = New-Object System.Drawing.Size([int](16 * $k), [int](16 * $k))
+    $strip.Font = $font
+    $strip.ImageScalingSize = $icons
+    foreach ($item in $strip.Items) {
+        if ($item -is [System.Windows.Forms.ToolStripMenuItem] -and $item.DropDownItems.Count -gt 0) {
+            Set-MenuScale $item.DropDown
+        }
+    }
+}
+
+# Per-pixel transparency: the timer is drawn as one image with see-through areas
+try {
+    Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
+using System;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
+namespace Win {
+    public static class Layered {
+        // ---- Blur behind the window (experimental, undocumented Windows feature) ----
+        [StructLayout(LayoutKind.Sequential)] struct AccentPolicy { public int AccentState; public int AccentFlags; public int GradientColor; public int AnimationId; }
+        [StructLayout(LayoutKind.Sequential)] struct CompositionData { public int Attribute; public IntPtr Data; public int SizeOfData; }
+        [DllImport("user32.dll")] static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref CompositionData data);
+        [StructLayout(LayoutKind.Sequential)] struct BlurBehind { public int Flags; public bool Enable; public IntPtr Region; public bool Transition; }
+        [DllImport("dwmapi.dll")] static extern int DwmEnableBlurBehindWindow(IntPtr hwnd, ref BlurBehind bb);
+        [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+        // Make Windows redo the window's frame and backdrop without moving or resizing it
+        public static void RefreshFrame(IntPtr hwnd) {
+            SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020);
+        }
+        public static void ClearAllBlur(IntPtr hwnd) {
+            try { BlurBehind bb = new BlurBehind(); bb.Flags = 1; bb.Enable = false; DwmEnableBlurBehindWindow(hwnd, ref bb); } catch { }
+            SetBlur(hwnd, false);
+            RefreshFrame(hwnd);
+        }
+        public static bool SetBlur(IntPtr hwnd, bool on) {
+            AccentPolicy accent = new AccentPolicy();
+            accent.AccentState = on ? 3 : 0;
+            int size = Marshal.SizeOf(accent);
+            IntPtr ptr = Marshal.AllocHGlobal(size);
+            try {
+                Marshal.StructureToPtr(accent, ptr, false);
+                CompositionData data = new CompositionData();
+                data.Attribute = 19;
+                data.Data = ptr;
+                data.SizeOfData = size;
+                return SetWindowCompositionAttribute(hwnd, ref data) != 0;
+            } finally { Marshal.FreeHGlobal(ptr); }
+        }
+
+        // ---- Sharpened text over a see-through background ----
+        // colour: the text colour, filled behind where each piece of text goes
+        // mask:   the text drawn with standard smoothing, giving its exact shape
+        // The text colour is laid onto dest using the mask's shape, with the edges
+        // firmed up by a sharpening curve (gamma below 1 makes edges crisper).
+        public static void Combine(Bitmap dest, Bitmap colour, Bitmap mask, double gamma) {
+            Rectangle rect = new Rectangle(0, 0, dest.Width, dest.Height);
+            BitmapData dd = dest.LockBits(rect, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+            BitmapData cd = colour.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            BitmapData md = mask.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            try {
+                int n = rect.Width * rect.Height;
+                int[] d = new int[n]; int[] c = new int[n]; int[] m = new int[n];
+                Marshal.Copy(dd.Scan0, d, 0, n);
+                Marshal.Copy(cd.Scan0, c, 0, n);
+                Marshal.Copy(md.Scan0, m, 0, n);
+                for (int i = 0; i < n; i++) {
+                    int ma = (m[i] >> 24) & 255;
+                    if (ma == 0) continue;
+                    double fa = Math.Pow(ma / 255.0, gamma);
+                    int cc = c[i], dc = d[i];
+                    double da = ((dc >> 24) & 255) / 255.0;
+                    double fd = da * (1.0 - fa);
+                    double oa = fa + fd;
+                    if (oa <= 0) continue;
+                    int r = (int)((((cc >> 16) & 255) * fa + ((dc >> 16) & 255) * fd) / oa + 0.5);
+                    int g = (int)((((cc >> 8) & 255) * fa + ((dc >> 8) & 255) * fd) / oa + 0.5);
+                    int b = (int)(((cc & 255) * fa + (dc & 255) * fd) / oa + 0.5);
+                    int a = (int)(oa * 255.0 + 0.5);
+                    d[i] = (a << 24) | (r << 16) | (g << 8) | b;
+                }
+                Marshal.Copy(d, 0, dd.Scan0, n);
+            } finally {
+                dest.UnlockBits(dd); colour.UnlockBits(cd); mask.UnlockBits(md);
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)] struct POINT { public int x; public int y; }
+        [StructLayout(LayoutKind.Sequential)] struct SIZE { public int cx; public int cy; }
+        [StructLayout(LayoutKind.Sequential, Pack = 1)] struct BLEND { public byte Op; public byte Flags; public byte Alpha; public byte Format; }
+        [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hwnd);
+        [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
+        [DllImport("gdi32.dll")] static extern IntPtr CreateCompatibleDC(IntPtr dc);
+        [DllImport("gdi32.dll")] static extern bool DeleteDC(IntPtr dc);
+        [DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
+        [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr obj);
+        [DllImport("user32.dll")] static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref POINT pptDst, ref SIZE psize, IntPtr hdcSrc, ref POINT pptSrc, int crKey, ref BLEND pblend, int dwFlags);
+        [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hwnd, int index);
+        [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hwnd, int index, int value);
+        [DllImport("gdi32.dll")] static extern IntPtr CreateRoundRectRgn(int x1, int y1, int x2, int y2, int w, int h);
+        [DllImport("user32.dll")] static extern int SetWindowRgn(IntPtr hwnd, IntPtr rgn, bool redraw);
+        // Cut the window to a rounded rectangle (radius 0 removes the cut). Windows takes ownership of the region.
+        // Cut the window to an outline, slightly enlarged so the smooth edges drawn inside aren't clipped
+        public static void SetPathRegion(IntPtr hwnd, GraphicsPath path) { SetPathRegion(hwnd, path, 4f); }
+        public static void SetPathRegion(IntPtr hwnd, GraphicsPath path, float allowance) {
+            Region r = new Region(path);
+            using (GraphicsPath edge = (GraphicsPath)path.Clone())
+            using (Pen pen = new Pen(Color.Black, allowance)) {
+                edge.Widen(pen);
+                r.Union(edge);
+            }
+            using (Graphics g = Graphics.FromHwnd(hwnd)) {
+                IntPtr h = r.GetHrgn(g);
+                SetWindowRgn(hwnd, h, true);
+            }
+            r.Dispose();
+        }
+        [DllImport("user32.dll")] static extern bool ReleaseCapture();
+        [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr hwnd, int msg, IntPtr wp, IntPtr lp);
+        // Let Windows move the window, as it does for normal windows (returns once the move ends)
+        public static void StartMove(IntPtr hwnd) {
+            ReleaseCapture();
+            SendMessage(hwnd, 0xA1, (IntPtr)2, IntPtr.Zero);
+        }
+        public static void SetRoundRegion(IntPtr hwnd, int w, int h, int r) {
+            IntPtr rgn = r > 0 ? CreateRoundRectRgn(0, 0, w + 1, h + 1, r * 2, r * 2) : IntPtr.Zero;
+            SetWindowRgn(hwnd, rgn, true);
+        }
+        public static void MakeLayered(IntPtr hwnd) { SetWindowLong(hwnd, -20, GetWindowLong(hwnd, -20) | 0x80000); }
+        public static void MakeNormal(IntPtr hwnd) { SetWindowLong(hwnd, -20, GetWindowLong(hwnd, -20) & ~0x80000); }
+        public static bool Push(IntPtr hwnd, Bitmap bmp, int x, int y) {
+            IntPtr screen = GetDC(IntPtr.Zero);
+            IntPtr mem = CreateCompatibleDC(screen);
+            IntPtr hb = IntPtr.Zero, old = IntPtr.Zero;
+            bool ok = false;
+            try {
+                hb = bmp.GetHbitmap(Color.FromArgb(0));
+                old = SelectObject(mem, hb);
+                SIZE size; size.cx = bmp.Width; size.cy = bmp.Height;
+                POINT src; src.x = 0; src.y = 0;
+                POINT dst; dst.x = x; dst.y = y;
+                BLEND b; b.Op = 0; b.Flags = 0; b.Alpha = 255; b.Format = 1;
+                ok = UpdateLayeredWindow(hwnd, screen, ref dst, ref size, mem, ref src, 0, ref b, 2);
+            } finally {
+                ReleaseDC(IntPtr.Zero, screen);
+                if (hb != IntPtr.Zero) { SelectObject(mem, old); DeleteObject(hb); }
+                DeleteDC(mem);
+            }
+            return ok;
+        }
+    }
+}
+'@
+} catch {}
+
+# Faster drawing for the full view: a compiled C# component. If it can't be compiled here,
+# the timer quietly carries on with its own (slower) PowerShell drawing.
+$script:useRenderer = $false
+$script:rendererError = $null
+try {
+    Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Drawing.Text;
+using System.Runtime.InteropServices;
+
+namespace Win {
+    // One row of the timer, prepared by PowerShell once a second
+    public class RowModel {
+        public string Name = "";
+        public string TodayText = "";
+        public string WeekText = "";
+        public double Today;
+        public double Week;
+        public bool Active;
+        public bool IsLunch;
+        public bool CanRound;
+        public double? BudgetFrac;
+        public string BudgetText;
+    }
+
+    public class DrawerRow {
+        public string Name = "";
+        public string Style = "normal";     // normal, bold or faint
+        public string[] Cells = new string[0];
+        public string Total = "";
+    }
+
+    public class DrawerBudget {
+        public string Name = "";
+        public double Frac;
+        public string Text = "";
+    }
+
+    public class DrawerButton {
+        public string Id;
+        public RectangleF Rect;
+    }
+
+    public class DrawerModel {
+        public string Title = "";
+        public string[] DayLabels = new string[0];
+        public List<DrawerRow> Rows = new List<DrawerRow>();
+        public List<DrawerBudget> Budgets = new List<DrawerBudget>();
+        public string BudgetsHeading = "BUDGETS";
+        public string FormatLabel = "h:mm";
+        public bool NextEnabled;
+    }
+
+    // Draws the full view (timer, drawer, shadow and rim) into one image with see-through areas
+    public class FullRenderer {
+        public Font FontDigits, FontLabel, FontRow, FontOvertime, FontButton, FontSmall, FontDrawer, FontDrawerBold;
+        public Color Panel, Circle, CircleHot, Fill;
+        public Color Text = Color.White;
+        public Color LunchBand = Color.FromArgb(45, 0, 0, 0);
+        public Color BudgetWarn = Color.FromArgb(255, 0xff, 0xc1, 0x07);
+        public Color BudgetOver = Color.FromArgb(255, 0xff, 0x52, 0x52);
+
+        public float Zoom = 1f, BaseW = 320f, BaseH = 380f, RowTop = 100f, RowH = 30f, LunchGap = 10f, OvertimeH = 32f;
+        public float CollapseX = 306f, CollapseY = 9f, CollapseR = 6.5f, DrawerBtnX = 12f, DrawerBtnY = 9f;
+        public float RoundR = 8f, RoundDownX = 150f, RoundUpX = 170f;
+        public float DrawerW = 520f, DrawerH = 0f, DrawerRowH = 19f;
+        public float Margin = 10f, TimerOffX = 0f, TimerOffY = 0f;
+        public int ListAlpha = 255;
+        public float TextSharpen = 0.8f;
+        public bool Shadow = true, Rim = true;
+
+        public string H = "00", M = "00", S = "00", Status = "", Unallocated = "", OT = "";
+        public bool Before, OnLunch, Overtime;
+        public double Progress;
+        public RowModel[] Rows = new RowModel[0];
+        public int Hover = -1, GripHover = -1, DraggingRow = -1;
+        public bool Reordering;
+        public string RoundHover = "";
+        public bool CollapseHover, HandleHover, DrawerOpen;
+        public DrawerModel Drawer;
+        public string DrawerHover = "";
+        public List<DrawerButton> DrawerButtons = new List<DrawerButton>();
+
+        StringFormat sfCentre, sfLeft, sfRight, sfName;
+        Graphics layerColour, layerMask;   // used for text over a see-through background
+
+        public FullRenderer() {
+            sfCentre = new StringFormat();
+            sfCentre.Alignment = StringAlignment.Center; sfCentre.LineAlignment = StringAlignment.Center;
+            sfLeft = new StringFormat();
+            sfLeft.Alignment = StringAlignment.Near; sfLeft.LineAlignment = StringAlignment.Center;
+            sfRight = new StringFormat();
+            sfRight.Alignment = StringAlignment.Far; sfRight.LineAlignment = StringAlignment.Center;
+            sfName = new StringFormat();
+            sfName.Alignment = StringAlignment.Near; sfName.LineAlignment = StringAlignment.Center;
+            sfName.Trimming = StringTrimming.EllipsisCharacter; sfName.FormatFlags = StringFormatFlags.NoWrap;
+        }
+
+        static Color A(int a, Color c) { return Color.FromArgb(Math.Max(0, Math.Min(255, a)), c.R, c.G, c.B); }
+
+        static Color Mix(Color a, Color b, double t) {
+            return Color.FromArgb(255, (int)(a.R + (b.R - a.R) * t), (int)(a.G + (b.G - a.G) * t), (int)(a.B + (b.B - a.B) * t));
+        }
+
+        public static GraphicsPath RoundRect(float x, float y, float w, float h, float r) {
+            GraphicsPath p = new GraphicsPath();
+            float d = 2 * r;
+            p.AddArc(x, y, d, d, 180, 90);
+            p.AddArc(x + w - d, y, d, d, 270, 90);
+            p.AddArc(x + w - d, y + h - d, d, d, 0, 90);
+            p.AddArc(x, y + h - d, d, d, 90, 90);
+            p.CloseFigure();
+            return p;
+        }
+
+        // Outline of everything shown, in window units (including the margin left for the shadow)
+        public GraphicsPath GetOutline() {
+            if (!DrawerOpen) return RoundRect(Margin, Margin, BaseW, BaseH, 8f);
+            // Timer and drawer side by side as one rounded rectangle; if the drawer is taller,
+            // the space under the timer is filled with the panel colour, so there's never an empty corner
+            return RoundRect(Margin, Margin, DrawerW + BaseW, Math.Max(DrawerH, BaseH), 8f);
+        }
+
+        // The earlier L-shaped outline (no longer used)
+        public GraphicsPath GetLShapedOutline() {
+            // Built for 'drawer on the left, timer on the right', then mirrored if the drawer is on the right
+            float jx = DrawerW - 1, W = DrawerW + BaseW - 2, H1 = DrawerH - 2, H2 = BaseH - 2, d = 16f;
+            GraphicsPath p = new GraphicsPath();
+            p.AddArc(0, 0, d, d, 180, 90);
+            p.AddArc(W - d, 0, d, d, 270, 90);
+            p.AddArc(W - d, H2 - d, d, d, 0, 90);
+            if (H1 - H2 >= d) {
+                p.AddArc(jx, H2, d, d, 270, -90);
+                p.AddArc(jx - d, H1 - d, d, d, 0, 90);
+            }
+            p.AddArc(0, H1 - d, d, d, 90, 90);
+            p.CloseFigure();
+            if (TimerOffX == 0) {
+                using (Matrix mx = new Matrix(-1, 0, 0, 1, W, 0)) { p.Transform(mx); }
+            }
+            using (Matrix mt = new Matrix()) { mt.Translate(1 + Margin, 1 + Margin); p.Transform(mt); }
+            return p;
+        }
+
+        public Bitmap Render(int w, int h) {
+            Bitmap bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+            Bitmap colourBmp = null, maskBmp = null;
+            bool seeThrough = ListAlpha < 255;
+            using (Graphics g = Graphics.FromImage(bmp))
+            using (GraphicsPath outline = GetOutline()) {
+                g.Clear(Color.Transparent);
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                g.ScaleTransform(Zoom, Zoom);
+                if (Shadow) DrawShadow(g, outline);
+
+                float tx = Margin + TimerOffX, ty = Margin + TimerOffY;
+                if (seeThrough) {
+                    colourBmp = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+                    maskBmp = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+                    layerColour = Graphics.FromImage(colourBmp);
+                    layerColour.ScaleTransform(Zoom, Zoom);
+                    layerColour.TranslateTransform(tx, ty);
+                    layerMask = Graphics.FromImage(maskBmp);
+                    layerMask.Clear(Color.Transparent);
+                    layerMask.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                    layerMask.ScaleTransform(Zoom, Zoom);
+                    layerMask.TranslateTransform(tx, ty);
+                }
+                try {
+                    GraphicsState st = g.Save();
+                    g.TranslateTransform(tx, ty);
+                    using (GraphicsPath clip = (GraphicsPath)outline.Clone()) {
+                        using (Matrix m = new Matrix()) { m.Translate(-tx, -ty); clip.Transform(m); }
+                        DrawTimer(g, clip);
+                    }
+                    g.Restore(st);
+                    if (DrawerOpen && Drawer != null) DrawDrawer(g, outline, w, h);
+                    if (Rim) {
+                        using (Pen rim = new Pen(A(50, Text), 1f)) { g.DrawPath(rim, outline); }
+                    }
+                } finally {
+                    if (layerColour != null) { layerColour.Dispose(); layerColour = null; }
+                    if (layerMask != null) { layerMask.Dispose(); layerMask = null; }
+                }
+            }
+            if (seeThrough) {
+                Combine(bmp, colourBmp, maskBmp, TextSharpen);
+                colourBmp.Dispose();
+                maskBmp.Dispose();
+            }
+            return bmp;
+        }
+
+        // Soft shadow around the outline: layered strokes, faintest at the outside, kept outside the shape
+        void DrawShadow(Graphics g, GraphicsPath outline) {
+            using (GraphicsPath p = (GraphicsPath)outline.Clone()) {
+                using (Matrix m = new Matrix()) { m.Translate(0, 1.5f); p.Transform(m); }
+                g.SetClip(outline, CombineMode.Exclude);
+                for (int i = 6; i >= 1; i--) {
+                    float sp = i * 1.4f;
+                    int a = (int)(16.0 * (6 - i + 1) / 6.0);
+                    using (Pen pen = new Pen(Color.FromArgb(a, 0, 0, 0), sp * 2)) {
+                        pen.LineJoin = LineJoin.Round;
+                        g.DrawPath(pen, p);
+                    }
+                }
+                g.ResetClip();
+            }
+        }
+
+        void FillArea(Graphics g, Brush b, float x, float y, float w, float h, GraphicsPath clip) {
+            g.SetClip(new RectangleF(x, y, w, h));
+            g.FillPath(b, clip);
+            g.ResetClip();
+        }
+
+        // Text in the account list: drawn normally, or through the see-through text layers
+        void ListText(Graphics g, string text, Font f, Color c, RectangleF r, StringFormat sf) {
+            if (layerMask != null) {
+                using (SolidBrush solid = new SolidBrush(Color.FromArgb(255, c.R, c.G, c.B))) { layerColour.FillRectangle(solid, r); }
+                using (SolidBrush shape = new SolidBrush(Color.FromArgb(c.A, 255, 255, 255))) { layerMask.DrawString(text, f, shape, r, sf); }
+            } else {
+                using (SolidBrush b = new SolidBrush(c)) { g.DrawString(text, f, b, r, sf); }
+            }
+        }
+
+        void DrawPlay(Graphics g, float cx, float cy) {
+            using (SolidBrush b = new SolidBrush(Text)) {
+                g.FillPolygon(b, new PointF[] { new PointF(cx - 3, cy - 5), new PointF(cx - 3, cy + 5), new PointF(cx + 5, cy) });
+            }
+        }
+
+        void DrawPause(Graphics g, float cx, float cy) {
+            using (SolidBrush b = new SolidBrush(Text)) {
+                g.FillRectangle(b, cx - 4, cy - 5, 2.8f, 10);
+                g.FillRectangle(b, cx + 1.2f, cy - 5, 2.8f, 10);
+            }
+        }
+
+        void DrawLunch(Graphics g, float cx, float cy) {
+            GraphicsState st = g.Save();
+            g.TranslateTransform(cx, cy);
+            g.ScaleTransform(0.7f, 0.7f);
+            using (Pen pen = new Pen(Text, 1.6f))
+            using (SolidBrush b = new SolidBrush(Text)) {
+                pen.StartCap = LineCap.Round; pen.EndCap = LineCap.Round;
+                g.DrawLine(pen, -4f, -1f, -4f, 7f);
+                foreach (float tx in new float[] { -6.5f, -4f, -1.5f }) { g.DrawLine(pen, tx, -7f, tx, -3f); }
+                g.DrawArc(pen, -6.5f, -5.5f, 5f, 4.5f, 0f, 180f);
+                g.DrawLine(pen, 4.5f, 1f, 4.5f, 7f);
+                g.FillPolygon(b, new PointF[] { new PointF(3, 1.5f), new PointF(3, -7), new PointF(6.3f, -3), new PointF(6.3f, 1.5f) });
+            }
+            g.Restore(st);
+        }
+
+        void DrawTimer(Graphics g, GraphicsPath clip) {
+            Color faint = A(215, Text);
+            float split = RowTop - 17;
+            using (SolidBrush b = new SolidBrush(Panel)) { FillArea(g, b, 0, 0, BaseW, split, clip); }
+            using (SolidBrush b = new SolidBrush(A(ListAlpha, Panel))) { FillArea(g, b, 0, split, BaseW, BaseH - split, clip); }
+
+            using (SolidBrush textB = new SolidBrush(Text))
+            using (SolidBrush faintB = new SolidBrush(faint))
+            using (SolidBrush digitB = new SolidBrush(Before ? A(140, Text) : Text))
+            using (Pen sep = new Pen(A(35, Text), 1f)) {
+                // Week drawer button (top left) and compact view button (top right)
+                // A more solid fill, a fine ring and bolder lines, so they stand out against the panel
+                using (SolidBrush b = new SolidBrush((HandleHover || DrawerOpen) ? CircleHot : Circle))
+                using (Pen ring = new Pen(A(70, Text), 1f)) {
+                    g.FillEllipse(b, DrawerBtnX - CollapseR, DrawerBtnY - CollapseR, 2 * CollapseR, 2 * CollapseR);
+                    g.DrawEllipse(ring, DrawerBtnX - CollapseR, DrawerBtnY - CollapseR, 2 * CollapseR, 2 * CollapseR);
+                }
+                using (Pen p = new Pen(Text, 1.6f)) {
+                    p.StartCap = LineCap.Round; p.EndCap = LineCap.Round;
+                    foreach (float ly in new float[] { -2.6f, 0f, 2.6f }) { g.DrawLine(p, DrawerBtnX - 3, DrawerBtnY + ly, DrawerBtnX + 3, DrawerBtnY + ly); }
+                }
+                using (SolidBrush b = new SolidBrush(CollapseHover ? CircleHot : Circle))
+                using (Pen ring = new Pen(A(70, Text), 1f)) {
+                    g.FillEllipse(b, CollapseX - CollapseR, CollapseY - CollapseR, 2 * CollapseR, 2 * CollapseR);
+                    g.DrawEllipse(ring, CollapseX - CollapseR, CollapseY - CollapseR, 2 * CollapseR, 2 * CollapseR);
+                }
+                using (Pen p = new Pen(Text, 1.6f)) {
+                    p.StartCap = LineCap.Round; p.EndCap = LineCap.Round;
+                    g.DrawLine(p, CollapseX - 3, CollapseY, CollapseX + 3, CollapseY);
+                }
+
+                // Main timer
+                string[] values = { H, M, S };
+                float[] colX = { 0f, 107f, 213f };
+                for (int i = 0; i < 3; i++) {
+                    g.DrawString(values[i], FontDigits, digitB, new RectangleF(colX[i], 2, 107, 52), sfCentre);
+                }
+                foreach (float x in new float[] { 107f, 213f }) {
+                    g.FillEllipse(faintB, x - 1.3f, 22, 2.6f, 2.6f);
+                    g.FillEllipse(faintB, x - 1.3f, 33, 2.6f, 2.6f);
+                }
+
+                // Status and unallocated time
+                using (SolidBrush sb = new SolidBrush(OnLunch ? Text : faint)) {
+                    g.DrawString(Status, FontLabel, sb, new RectangleF(10, 51, 150, 14), sfLeft);
+                }
+                g.DrawString(Unallocated, FontLabel, faintB, new RectangleF(160, 51, 150, 14), sfRight);
+
+                // Overtime counter
+                if (Overtime) {
+                    g.DrawLine(sep, 10, 68, 310, 68);
+                    g.DrawString(OT, FontOvertime, textB, new RectangleF(0, 69, BaseW, OvertimeH - 2), sfCentre);
+                }
+
+                // Progress through the working day
+                using (SolidBrush track = new SolidBrush(A(40, Text)))
+                using (SolidBrush fb = new SolidBrush(Fill)) {
+                    g.FillRectangle(track, 0, RowTop - 20, BaseW, 3);
+                    g.FillRectangle(fb, 0, RowTop - 20, (float)(BaseW * Math.Min(1.0, Math.Max(0.0, Progress))), 3);
+                }
+
+                // Column headings
+                ListText(g, "TODAY", FontLabel, faint, new RectangleF(180, RowTop - 14, 70, 14), sfRight);
+                ListText(g, "WEEK", FontLabel, faint, new RectangleF(250, RowTop - 14, 60, 14), sfRight);
+
+                // Rows
+                for (int i = 0; i < Rows.Length; i++) {
+                    RowModel r = Rows[i];
+                    float y0 = RowTop + i * RowH + (r.IsLunch ? LunchGap : 0);
+                    float cy = y0 + RowH / 2;
+
+                    if (r.IsLunch) {
+                        using (SolidBrush lb = new SolidBrush(LunchBand)) { FillArea(g, lb, 0, y0, BaseW, BaseH - y0, clip); }
+                    }
+                    bool dragging = DraggingRow == i;
+                    int ha = dragging ? 60 : (r.Active ? 40 : (Hover == i ? 18 : 0));
+                    if (ha > 0) {
+                        using (SolidBrush hb = new SolidBrush(A(ha, Text))) { FillArea(g, hb, 0, y0, BaseW, RowH, clip); }
+                    }
+                    if (!r.IsLunch) {
+                        g.DrawLine(sep, 10, y0, 310, y0);
+                        using (SolidBrush gb = new SolidBrush((dragging || GripHover == i) ? Text : A(110, Text))) {
+                            foreach (float gx in new float[] { 6f, 10f }) {
+                                foreach (float gy in new float[] { -4f, 0f, 4f }) { g.FillEllipse(gb, gx - 1.1f, cy + gy - 1.1f, 2.2f, 2.2f); }
+                            }
+                        }
+                    }
+
+                    using (SolidBrush cb = new SolidBrush(r.Active ? CircleHot : Circle)) { g.FillEllipse(cb, 18, cy - 10, 20, 20); }
+                    if (r.Active) DrawPause(g, 28, cy);
+                    else if (r.IsLunch) DrawLunch(g, 28, cy);
+                    else DrawPlay(g, 28, cy);
+
+                    // Names use the full width, and only make room while the rounding buttons are showing
+                    bool showRound = r.CanRound && Hover == i && !Reordering;
+                    float nameW = 88f;
+                    if (!showRound) {
+                        float tw = g.MeasureString(r.TodayText, FontRow).Width;
+                        nameW = Math.Max(88f, 250f - tw - 8f - 46f);
+                    }
+                    float nameY = r.BudgetFrac.HasValue ? y0 - 3 : y0;
+                    ListText(g, r.Name, FontRow, Text, new RectangleF(46, nameY, nameW, RowH), sfName);
+
+                    // Budget progress: a fine line under the name, amber from 80%, red once over
+                    if (r.BudgetFrac.HasValue) {
+                        double frac = r.BudgetFrac.Value;
+                        float barW = 60f, by = y0 + RowH - 7;
+                        using (SolidBrush track = new SolidBrush(A(40, Text))) { g.FillRectangle(track, 46, by, barW, 3); }
+                        Color bc = frac >= 1 ? BudgetOver : (frac >= 0.8 ? BudgetWarn : Fill);
+                        float fillW = (float)(barW * Math.Min(1.0, frac));
+                        if (frac > 0 && fillW < 2) fillW = 2;
+                        using (SolidBrush bb = new SolidBrush(bc)) { g.FillRectangle(bb, 46, by, fillW, 3); }
+                    }
+                    ListText(g, r.TodayText, FontRow, Text, new RectangleF(180, y0, 70, RowH), sfRight);
+                    ListText(g, r.WeekText, FontLabel, faint, new RectangleF(250, y0, 60, RowH), sfRight);
+
+                    // Round-down and round-up buttons
+                    if (showRound) {
+                        for (int k = 0; k < 2; k++) {
+                            string dir = k == 0 ? "down" : "up";
+                            float bx = k == 0 ? RoundDownX : RoundUpX;
+                            bool hot = RoundHover == (i.ToString() + ":" + dir);
+                            using (SolidBrush rb = new SolidBrush(hot ? CircleHot : Circle)) {
+                                g.FillEllipse(rb, bx - RoundR, cy - RoundR, 2 * RoundR, 2 * RoundR);
+                            }
+                            float tipY = dir == "up" ? -1.8f : 1.8f;
+                            using (Pen cp = new Pen(Text, 1.5f)) {
+                                cp.StartCap = LineCap.Round; cp.EndCap = LineCap.Round; cp.LineJoin = LineJoin.Round;
+                                g.DrawLines(cp, new PointF[] { new PointF(bx - 3.5f, cy - tipY), new PointF(bx, cy + tipY), new PointF(bx + 3.5f, cy - tipY) });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- Windows' own (GDI) text drawing, used for the drawer's solid layer ----
+        struct GdiText { public string S; public Font F; public Color C; public RectangleF R; public uint Flags; }
+        [StructLayout(LayoutKind.Sequential)] struct RECT { public int Left, Top, Right, Bottom; }
+        [DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr hdc, IntPtr obj);
+        [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr obj);
+        [DllImport("gdi32.dll")] static extern int SetBkMode(IntPtr hdc, int mode);
+        [DllImport("gdi32.dll")] static extern int SetTextColor(IntPtr hdc, int color);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int DrawTextW(IntPtr hdc, string text, int len, ref RECT r, uint format);
+        [DllImport("gdi32.dll", CharSet = CharSet.Unicode)] static extern IntPtr CreateFontIndirectW([In] LOGFONT lf);
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        class LOGFONT {
+            public int lfHeight, lfWidth, lfEscapement, lfOrientation, lfWeight;
+            public byte lfItalic, lfUnderline, lfStrikeOut, lfCharSet, lfOutPrecision, lfClipPrecision, lfQuality, lfPitchAndFamily;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string lfFaceName;
+        }
+        const byte ANTIALIASED_QUALITY = 4;   // smooth edges in plain shades, no ClearType colour fringes
+        const uint DT_LEFT = 0, DT_CENTER = 1, DT_RIGHT = 2, DT_VCENTER = 4, DT_SINGLELINE = 0x20, DT_NOPREFIX = 0x800, DT_END_ELLIPSIS = 0x8000;
+        List<GdiText> gdiQueue = new List<GdiText>();
+        Dictionary<Font, Font> zoomFonts = new Dictionary<Font, Font>();
+        Dictionary<Font, IntPtr> hfonts = new Dictionary<Font, IntPtr>();
+        float fontZoom = 0f;
+
+        // Fonts at the screen's scaling (Windows' text drawing works in screen pixels)
+        Font ZoomFont(Font f) {
+            if (fontZoom != Zoom) {
+                foreach (IntPtr hf in hfonts.Values) DeleteObject(hf);
+                hfonts.Clear();
+                foreach (Font zf in zoomFonts.Values) zf.Dispose();
+                zoomFonts.Clear();
+                fontZoom = Zoom;
+            }
+            Font z;
+            if (!zoomFonts.TryGetValue(f, out z)) {
+                z = new Font(f.FontFamily, f.Size * Zoom, f.Style, GraphicsUnit.Pixel);
+                zoomFonts[f] = z;
+            }
+            return z;
+        }
+
+        // Windows' text drawing, placed neatly on the pixel grid, with plain-shade smoothing instead of ClearType
+        IntPtr HFont(Font z) {
+            IntPtr h;
+            if (!hfonts.TryGetValue(z, out h)) {
+                LOGFONT lf = new LOGFONT();
+                z.ToLogFont(lf);
+                lf.lfQuality = ANTIALIASED_QUALITY;
+                h = CreateFontIndirectW(lf);
+                if (h == IntPtr.Zero) h = z.ToHfont();
+                hfonts[z] = h;
+            }
+            return h;
+        }
+
+        void QueueText(string s, Font f, Color c, RectangleF r, uint align) {
+            GdiText t = new GdiText();
+            t.S = s == null ? "" : s; t.F = f; t.C = c; t.R = r;
+            t.Flags = align | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS;
+            gdiQueue.Add(t);
+        }
+
+        // Draw all queued text, after the shapes on the same solid layer
+        void FlushText(Graphics og) {
+            IntPtr hdc = og.GetHdc();
+            try {
+                SetBkMode(hdc, 1);
+                IntPtr original = IntPtr.Zero;
+                foreach (GdiText t in gdiQueue) {
+                    IntPtr prev = SelectObject(hdc, HFont(ZoomFont(t.F)));
+                    if (original == IntPtr.Zero) original = prev;
+                    SetTextColor(hdc, t.C.R | (t.C.G << 8) | (t.C.B << 16));
+                    RECT rc;
+                    rc.Left = (int)Math.Round(t.R.X * Zoom); rc.Top = (int)Math.Round(t.R.Y * Zoom);
+                    rc.Right = (int)Math.Round(t.R.Right * Zoom); rc.Bottom = (int)Math.Round(t.R.Bottom * Zoom);
+                    DrawTextW(hdc, t.S, t.S.Length, ref rc, t.Flags);
+                }
+                if (original != IntPtr.Zero) SelectObject(hdc, original);
+            } finally {
+                og.ReleaseHdc(hdc);
+                gdiQueue.Clear();
+            }
+        }
+
+        void DrawDrawer(Graphics g, GraphicsPath outline, int w, int h) {
+            float mg = Margin, dW = DrawerW;
+            float dx = mg + (TimerOffX > 0 ? 0 : BaseW);
+            float colH = Math.Max(DrawerH, BaseH);
+
+            // Background on the main image, so the rounded corners stay smooth
+            using (SolidBrush bg = new SolidBrush(Panel)) {
+                g.SetClip(outline);
+                g.SetClip(new RectangleF(mg + TimerOffX, mg + TimerOffY, BaseW, BaseH), CombineMode.Exclude);
+                g.FillRectangle(bg, 0, 0, 2 * mg + dW + BaseW, 2 * mg + colH);
+                g.ResetClip();
+            }
+
+            // Contents on a solid layer, where Windows' own text drawing can be used
+            using (Bitmap layer = new Bitmap(w, h, PixelFormat.Format24bppRgb)) {
+                using (Graphics og = Graphics.FromImage(layer)) {
+                    og.Clear(Panel);
+                    og.SmoothingMode = SmoothingMode.AntiAlias;
+                    og.ScaleTransform(Zoom, Zoom);
+                    DrawDrawerContents(og, dx, mg, dW);
+                    FlushText(og);
+                }
+                // Copied in pixel for pixel, kept just inside the drawer's rounded edges
+                GraphicsState st = g.Save();
+                g.ResetTransform();
+                g.SetClip(new RectangleF((dx + 4) * Zoom, (mg + 4) * Zoom, (dW - 8) * Zoom, (colH - 8) * Zoom));
+                g.InterpolationMode = InterpolationMode.NearestNeighbor;
+                g.PixelOffsetMode = PixelOffsetMode.Half;
+                g.DrawImage(layer, new Rectangle(0, 0, w, h));
+                g.Restore(st);
+            }
+
+            using (Pen sep = new Pen(A(35, Text), 1f)) {
+                float seamX = mg + (TimerOffX > 0 ? dW : BaseW);
+                g.DrawLine(sep, seamX, mg + 12, seamX, mg + BaseH - 12);
+            }
+        }
+
+        void DrawDrawerContents(Graphics og, float dx, float mg, float dW) {
+            DrawerModel d = Drawer;
+            Font fText = FontDrawer ?? FontSmall;
+            Font fBold = FontDrawerBold ?? FontButton;
+            Color textC = Text;
+            Color faintC = Mix(Panel, Text, 215 / 255.0);
+            // Lines and bars are drawn as solid colours, as the layer has no see-through areas
+            using (Pen sep = new Pen(Mix(Panel, Text, 35 / 255.0), 1f)) {
+                float pad = 14f, x0 = dx + pad, xR = dx + dW - pad, y = mg + 10;
+                QueueText(d.Title, FontRow, textC, new RectangleF(x0, y, 170, 24), DT_LEFT);
+
+                // Buttons, right to left
+                DrawerButtons.Clear();
+                string[][] defs = new string[][] {
+                    new string[] { "weekly", "Weekly view" }, new string[] { "copy", "Copy" },
+                    new string[] { "format", d.FormatLabel },
+                    new string[] { "next", "Next" }, new string[] { "prev", "Previous" } };
+                float bx = xR;
+                foreach (string[] def in defs) {
+                    float tw = og.MeasureString(def[1], FontButton).Width + 16;
+                    bx -= tw;
+                    RectangleF rect = new RectangleF(bx, y + 1, tw, 22);
+                    bool enabled = !(def[0] == "next" && !d.NextEnabled);
+                    Color col = !enabled ? Mix(Panel, Circle, 0.45) : (DrawerHover == def[0] ? CircleHot : Circle);
+                    using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 11f))
+                    using (SolidBrush bb = new SolidBrush(col)) { og.FillPath(bb, bp); }
+                    QueueText(def[1], FontButton, enabled ? textC : Mix(col, Text, 0.5), rect, DT_CENTER);
+                    if (enabled) {
+                        DrawerButton db = new DrawerButton();
+                        db.Id = def[0]; db.Rect = rect;
+                        DrawerButtons.Add(db);
+                    }
+                    bx -= 6;
+                }
+                y += 34;
+
+                // Hours by account and day
+                int nd = d.DayLabels.Length;
+                float nameW = 140f, tableW = dW - 2 * pad, colW = (tableW - nameW) / (nd + 1), rowH = DrawerRowH;
+                QueueText("ACCOUNT", FontLabel, faintC, new RectangleF(x0, y, nameW, rowH), DT_LEFT);
+                for (int j = 0; j < nd; j++) {
+                    QueueText(d.DayLabels[j], FontLabel, faintC, new RectangleF(x0 + nameW + j * colW, y, colW - 4, rowH), DT_RIGHT);
+                }
+                QueueText("TOTAL", FontLabel, faintC, new RectangleF(x0 + nameW + nd * colW, y, colW - 4, rowH), DT_RIGHT);
+                y += rowH;
+                foreach (DrawerRow tr in d.Rows) {
+                    og.DrawLine(sep, x0, y, xR, y);
+                    Font f = tr.Style == "bold" ? fBold : fText;
+                    Color c = tr.Style == "faint" ? faintC : textC;
+                    QueueText(tr.Name, f, c, new RectangleF(x0, y, nameW - 6, rowH), DT_LEFT);
+                    for (int j = 0; j < tr.Cells.Length && j < nd; j++) {
+                        QueueText(tr.Cells[j], f, c, new RectangleF(x0 + nameW + j * colW, y, colW - 4, rowH), DT_RIGHT);
+                    }
+                    QueueText(tr.Total, fBold, c, new RectangleF(x0 + nameW + nd * colW, y, colW - 4, rowH), DT_RIGHT);
+                    y += rowH;
+                }
+
+                // Budgets
+                if (d.Budgets.Count > 0) {
+                    y += 8;
+                    QueueText(d.BudgetsHeading, FontLabel, faintC, new RectangleF(x0, y, 260, 16), DT_LEFT);
+                    y += 18;
+                    foreach (DrawerBudget bl in d.Budgets) {
+                        QueueText(bl.Name, fText, textC, new RectangleF(x0, y, nameW - 6, 20), DT_LEFT);
+                        float barX = x0 + nameW, barY = y + 9;
+                        using (SolidBrush track = new SolidBrush(Mix(Panel, Text, 40 / 255.0))) { og.FillRectangle(track, barX, barY, 140, 3); }
+                        Color bc = bl.Frac >= 1 ? BudgetOver : (bl.Frac >= 0.8 ? BudgetWarn : Fill);
+                        float fillW = (float)(140 * Math.Min(1.0, bl.Frac));
+                        if (bl.Frac > 0 && fillW < 2) fillW = 2;
+                        using (SolidBrush bb = new SolidBrush(bc)) { og.FillRectangle(bb, barX, barY, fillW, 3); }
+                        QueueText(bl.Text, fText, faintC, new RectangleF(barX + 150, y, tableW - nameW - 150, 20), DT_RIGHT);
+                        y += 20;
+                    }
+                }
+            }
+        }
+
+        // Lays sharpened text onto a see-through background (same method as Win.Layered.Combine)
+        static void Combine(Bitmap dest, Bitmap colour, Bitmap mask, double gamma) {
+            Rectangle rect = new Rectangle(0, 0, dest.Width, dest.Height);
+            BitmapData dd = dest.LockBits(rect, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+            BitmapData cd = colour.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            BitmapData md = mask.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            try {
+                int n = rect.Width * rect.Height;
+                int[] dp = new int[n]; int[] cp = new int[n]; int[] mp = new int[n];
+                Marshal.Copy(dd.Scan0, dp, 0, n);
+                Marshal.Copy(cd.Scan0, cp, 0, n);
+                Marshal.Copy(md.Scan0, mp, 0, n);
+                for (int i = 0; i < n; i++) {
+                    int ma = (mp[i] >> 24) & 255;
+                    if (ma == 0) continue;
+                    double fa = Math.Pow(ma / 255.0, gamma);
+                    int cc = cp[i], dc = dp[i];
+                    double da = ((dc >> 24) & 255) / 255.0;
+                    double fd = da * (1.0 - fa);
+                    double oa = fa + fd;
+                    if (oa <= 0) continue;
+                    int r = (int)((((cc >> 16) & 255) * fa + ((dc >> 16) & 255) * fd) / oa + 0.5);
+                    int gg = (int)((((cc >> 8) & 255) * fa + ((dc >> 8) & 255) * fd) / oa + 0.5);
+                    int b = (int)(((cc & 255) * fa + (dc & 255) * fd) / oa + 0.5);
+                    int a = (int)(oa * 255.0 + 0.5);
+                    dp[i] = (a << 24) | (r << 16) | (gg << 8) | b;
+                }
+                Marshal.Copy(dp, 0, dd.Scan0, n);
+            } finally {
+                dest.UnlockBits(dd); colour.UnlockBits(cd); mask.UnlockBits(md);
+            }
+        }
+    }
+}
+'@
+    $script:useRenderer = $true
+} catch { $script:rendererError = $_.Exception.Message }
+
+# ---- Settings ----
+$StartTime       = '08:30'   # usual start and end (also changeable in the app: right-click, Working hours)
+$EndTime         = '17:30'
+$Scale           = 1.0      # make the timer bigger or smaller, e.g. 0.8 or 1.3
+$DefaultAccounts = @('ACCOUNT 1', 'ACCOUNT 2', 'ACCOUNT 3', 'ACCOUNT 4', 'ACCOUNT 5')
+$SleepGapMinutes = 5        # if the computer sleeps for longer than this, the running slot is paused
+$MaxVisibleAccounts = 12    # most accounts shown at once (hide some to make room)
+$NoteMinMinutes  = 15       # ask for a note after this long on an account (0 turns the note prompt off)
+$EntryMinSeconds = 60       # time entries shorter than this (stray clicks) are left out of the entries view and file
+# Pill effects (starting defaults; switch them in the menu under Appearance, which is remembered)
+$PillShadow      = $true    # soft shadow and thin rim around the pill, to lift it off other windows
+$PillPulse       = $true    # the pill gently glows and breathes while nothing is being tracked
+$PillLiveDot     = $true    # a small breathing dot beside the account name while time is being recorded
+# ------------------
+
+$Inv = [Globalization.CultureInfo]::InvariantCulture
+$GB  = [Globalization.CultureInfo]::GetCultureInfo('en-GB')
+
+$TimesheetDir = Join-Path $PSScriptRoot 'Timesheets'
+$SessionsFile = Join-Path $TimesheetDir 'sessions.csv'
+$AccountsFile = Join-Path $PSScriptRoot 'account-timer-accounts.txt'
+$StateFile    = Join-Path $PSScriptRoot 'account-timer-state.txt'
+$LogFile      = Join-Path $PSScriptRoot 'account-timer-error.log'
+$ThemeFile    = Join-Path $PSScriptRoot 'account-timer-theme.txt'
+$ThemesFile   = Join-Path $PSScriptRoot 'account-timer-themes.txt'
+$ListAlphaFile = Join-Path $PSScriptRoot 'account-timer-transparency.txt'
+$BlurFile     = Join-Path $PSScriptRoot 'account-timer-blur.txt'
+$ViewFile     = Join-Path $PSScriptRoot 'account-timer-view.txt'
+$PosFile      = Join-Path $PSScriptRoot 'account-timer-positions.txt'
+$BudgetsFile  = Join-Path $PSScriptRoot 'account-timer-budgets.txt'
+$NotesFile    = Join-Path $TimesheetDir 'notes.csv'
+$SessionsUndo = Join-Path $TimesheetDir 'sessions.undo.csv'
+$NotesUndo    = Join-Path $TimesheetDir 'notes.undo.csv'
+$MergeFile    = Join-Path $PSScriptRoot 'account-timer-merge.txt'
+$EffectsFile  = Join-Path $PSScriptRoot 'account-timer-effects.txt'
+$DrawerFile   = Join-Path $PSScriptRoot 'account-timer-drawer.txt'
+try { New-Item -ItemType Directory -Path $TimesheetDir -Force | Out-Null } catch {}
+
+$script:accounts       = @()   # every account, including hidden ones
+$script:slots          = @()   # visible accounts plus Lunch, in display order
+$script:active         = $null
+$script:pending        = @()
+$script:todayDone      = @{}
+$script:weekDone       = @{}
+$script:lunchIntervals = @()
+$script:lunchAdjust    = 0     # lunch rounding for today, in seconds
+$script:summaryDirty   = $false
+$script:pendingWarned  = $false
+$script:view           = $null
+$script:hover          = $null
+$script:pressed        = $null
+$script:dragStart      = $null
+$script:dialogOpen     = $false
+$script:menuRow        = $null
+$script:reorder        = $null   # account being dragged to a new position
+$script:gripHover      = $null
+$script:roundHover     = $null
+$script:pressedRound   = $null
+$script:tick           = 0
+$script:lastTick       = Get-Date
+$script:layered        = $false  # drawing as one image with see-through areas
+$script:listLevel      = 'Off'
+$script:listAlpha      = 255
+$script:shapePath      = $null
+$script:pushWarned     = $false
+$script:ct             = $null   # extra layers used for text over a see-through background
+$script:blurOn         = $false
+$script:mode           = 'full'   # 'full' or 'pill'
+$script:positions      = @{}
+$script:pillHover      = $null
+$script:pillDown       = $null
+$script:collapseHover  = $false
+$script:pressedCollapse = $false
+$script:regionKey      = ''
+$script:pillOpen       = $false  # account list showing below (or above) the pill
+$script:pillUp         = $false  # list opened upwards because there was no room below
+$script:budgets        = @{}     # account name -> @{ Hours; Period } (period is week, month or quarter)
+$script:monthDone      = @{}
+$script:quarterDone    = @{}
+$script:notes          = @{}     # "date<tab>account<tab>start" -> note text
+$script:pendingNote    = $null
+$script:noteForm       = $null
+$script:noteTimer      = $null
+$script:noteClosing    = $false
+$script:weekForm       = $null
+$script:weekStart      = $null
+$script:weekData       = $null
+$script:wv             = $null
+$script:wk             = 1.0
+$script:wvPanel        = $null
+$script:weekMode       = 'summary'   # weekly view tab: 'summary' or 'entries'
+$script:weekBlocks     = @()   # time entries grouped for the Time entries tab
+$script:mergeEntries   = $true
+$script:pillMargin     = 0       # room around the pill for its shadow (only with see-through drawing)
+$script:animClock      = [System.Diagnostics.Stopwatch]::StartNew()
+$script:entryBlocks    = @()
+$script:entryHover     = $null
+$script:entriesWarned  = $false
+$script:entrySelected  = @()     # blocks selected in the Time entries tab
+$script:entryCols      = @()
+$script:undoLabel      = $null   # description of the change Undo would reverse
+$script:drawerOpen     = $false  # week drawer below (or above) the full timer
+$script:drawerUp       = $false  # opened upwards because there was no room below
+$script:drawerH        = 0
+$script:drawerWeek     = $null
+$script:drawerData     = $null
+$script:drawerBudgets  = @()
+$script:drawerButtons  = @()
+$script:drawerHover    = $null
+$script:drawerPressed  = $null
+$script:drawerReopen   = $false
+$script:timerOffX      = 0       # where the timer sits within the window when the drawer is open
+$script:timerOffY      = 0
+$script:handleHover    = $false
+$script:unallocHover   = $false
+$script:tipShownAt     = $null    # when a tooltip last appeared
+$script:pressedHandle  = $false
+$script:fullMargin     = 0       # room around the full view for its shadow (with the faster drawing)
+$script:renderer       = $null
+$script:drawerModel    = $null
+$script:drawerVersion  = 0       # goes up whenever the drawer's figures are refreshed
+$script:drawerCache    = $null   # the drawer drawn once and reused until something in it changes
+$script:drawerCacheKey = ''
+$script:drawerCacheBuilds = 0
+
+# ======================================================================
+# Helpers
+# ======================================================================
+
+function Write-Log($msg) {
+    try { Add-Content -Path $LogFile -Value ('{0}  {1}' -f (Get-Date -Format 's'), $msg) } catch {}
+}
+
+# ---- Working hours and days (right-click, Working hours) ----
+$SettingsFile = Join-Path $PSScriptRoot 'account-timer-settings.txt'
+$DaysFile     = Join-Path $PSScriptRoot 'account-timer-days.txt'
+$DayAbbr = @('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat')
+$script:workDays     = @(1, 2, 3, 4, 5)    # Monday to Friday
+$script:weekStartDow = 1                   # weeks start on Monday
+$script:hoursFormat  = 'decimal'           # 'decimal' (1.25) or 'hm' (1:15)
+$script:dayOverrides = @{}                 # 'yyyy-MM-dd' -> @{ Off; Start; End } for one-off days
+
+# Reads '9:30' or '09:30' as a time of day, giving '09:30', or $null if it isn't one
+function ConvertTo-ClockText($text) {
+    $t = "$text".Trim()
+    if ($t -notmatch '^(\d{1,2})[:.](\d{2})$') { return $null }
+    $h = [int]$Matches[1]; $m = [int]$Matches[2]
+    if ($h -gt 23 -or $m -gt 59) { return $null }
+    return '{0:00}:{1:00}' -f $h, $m
+}
+
+function Load-WorkSettings {
+    if (Test-Path $SettingsFile) {
+        foreach ($line in Get-Content $SettingsFile) {
+            $kv = $line -split '=', 2
+            if ($kv.Count -ne 2) { continue }
+            $val = $kv[1].Trim()
+            switch ($kv[0].Trim().ToLower()) {
+                'start' { $clockText = ConvertTo-ClockText $val; if ($clockText) { $script:StartTime = $clockText } }
+                'end'   { $clockText = ConvertTo-ClockText $val; if ($clockText) { $script:EndTime = $clockText } }
+                'days'  {
+                    $list = @($val -split ',' | ForEach-Object { [array]::IndexOf($DayAbbr, $_.Trim()) } | Where-Object { $_ -ge 0 } | Sort-Object -Unique)
+                    if ($list.Count -gt 0) { $script:workDays = $list }
+                }
+                'weekstart' { $i = [array]::IndexOf($DayAbbr, $val); if ($i -ge 0) { $script:weekStartDow = $i } }
+                'hours' { if ($val -eq 'decimal' -or $val -eq 'hm') { $script:hoursFormat = $val } }
+            }
+        }
+    }
+    $script:dayOverrides = @{}
+    if (Test-Path $DaysFile) {
+        foreach ($line in Get-Content $DaysFile) {
+            $p = $line -split "`t"
+            if ($p.Count -ge 2 -and $p[1].Trim() -eq 'off') { $script:dayOverrides[$p[0].Trim()] = @{ Off = $true } }
+            elseif ($p.Count -ge 3) {
+                $a = ConvertTo-ClockText $p[1]; $b = ConvertTo-ClockText $p[2]
+                if ($a -and $b) { $script:dayOverrides[$p[0].Trim()] = @{ Off = $false; Start = $a; End = $b } }
+            }
+        }
+    }
+}
+
+function Save-WorkSettings {
+    $lines = @(
+        "start=$StartTime", "end=$EndTime",
+        ('days=' + (($script:workDays | ForEach-Object { $DayAbbr[$_] }) -join ',')),
+        ('weekstart=' + $DayAbbr[$script:weekStartDow]),
+        "hours=$($script:hoursFormat)")
+    try { Set-Content -Path $SettingsFile -Value $lines } catch { Write-Log "Could not save settings: $($_.Exception.Message)" }
+    $dl = @($script:dayOverrides.Keys | Sort-Object | ForEach-Object {
+        $o = $script:dayOverrides[$_]
+        if ($o.Off) { "$_`toff" } else { "$_`t$($o.Start)`t$($o.End)" }
+    })
+    try { Set-Content -Path $DaysFile -Value $dl } catch { Write-Log "Could not save day changes: $($_.Exception.Message)" }
+}
+
+# What a given day looks like: whether it's a working day, and its start and end
+function Get-DayPlan([datetime]$date) {
+    $d = $date.Date
+    $o = $script:dayOverrides[$d.ToString('yyyy-MM-dd', $Inv)]
+    if ($o) {
+        if ($o.Off) { return @{ Working = $false; Custom = $true } }
+        return @{ Working = $true; Custom = $true; Start = $d.Add([timespan]$o.Start); End = $d.Add([timespan]$o.End) }
+    }
+    if ($script:workDays -notcontains [int]$d.DayOfWeek) { return @{ Working = $false; Custom = $false } }
+    return @{ Working = $true; Custom = $false; Start = $d.Add([timespan]$StartTime); End = $d.Add([timespan]$EndTime) }
+}
+
+# Today's working window (a day off gives an empty window at midnight)
+function Get-DayBounds {
+    $p = Get-DayPlan ([datetime]::Today)
+    if ($p.Working) { return $p.Start, $p.End }
+    return [datetime]::Today, [datetime]::Today
+}
+
+Load-WorkSettings
+
+function Limit-Time($t, $min, $max) {
+    if ($t -lt $min) { return $min }
+    if ($t -gt $max) { return $max }
+    return $t
+}
+
+function Get-WeekStart {
+    return Get-WeekStartFor ([datetime]::Today)
+}
+
+function Get-WeekFile {
+    return Join-Path $TimesheetDir ('Week commencing {0}.csv' -f (Get-WeekStart).ToString('yyyy-MM-dd', $Inv))
+}
+
+function Format-Dur($seconds) {
+    $sec = [math]::Max(0.0, $seconds)
+    if ($script:hoursFormat -eq 'decimal') { return ([math]::Round($sec / 3600, 2)).ToString('0.00', $Inv) + 'h' }
+    $ts = [timespan]::FromSeconds([math]::Floor($sec))
+    return '{0}h {1:00}m' -f [math]::Floor($ts.TotalHours), $ts.Minutes
+}
+
+# ======================================================================
+# Accounts
+# ======================================================================
+
+function Rebuild-Slots {
+    $script:slots = @($script:accounts | Where-Object { -not $_.Hidden } | ForEach-Object { $_.Name }) + @('Lunch')
+}
+
+function Find-Account($name) {
+    return $script:accounts | Where-Object { $_.Name -eq $name } | Select-Object -First 1
+}
+
+function Get-VisibleCount {
+    return @($script:accounts | Where-Object { -not $_.Hidden }).Count
+}
+
+function Load-Accounts {
+    # One account per line. A tab followed by "hidden" marks a hidden account.
+    $list = @()
+    if (Test-Path $AccountsFile) {
+        foreach ($line in Get-Content $AccountsFile) {
+            if (-not $line.Trim()) { continue }
+            $parts = $line -split "`t"
+            $name = $parts[0].Trim()
+            if ($name -eq 'Lunch' -or ($list | Where-Object { $_.Name -eq $name })) { continue }
+            $list += @{ Name = $name; Hidden = ($parts.Count -gt 1 -and $parts[1].Trim() -eq 'hidden') }
+        }
+    }
+    if ($list.Count -eq 0) {
+        $list = @($DefaultAccounts | ForEach-Object { @{ Name = $_; Hidden = $false } })
+    }
+    $script:accounts = $list
+    Rebuild-Slots
+}
+
+function Save-Accounts {
+    $lines = @($script:accounts | ForEach-Object {
+        if ($_.Hidden) { "$($_.Name)`thidden" } else { $_.Name }
+    })
+    try { Set-Content -Path $AccountsFile -Value $lines }
+    catch { Write-Log "Could not save account names: $($_.Exception.Message)" }
+}
+
+# ======================================================================
+# Budgets
+# ======================================================================
+
+function Load-Budgets {
+    $script:budgets = @{}
+    if (-not (Test-Path $BudgetsFile)) { return }
+    foreach ($line in Get-Content $BudgetsFile) {
+        $p = $line -split "`t"
+        if ($p.Count -lt 3) { continue }
+        try {
+            $h = [double]::Parse($p[1].Trim(), $Inv)
+            $per = $p[2].Trim().ToLower()
+            if ($h -gt 0 -and @('week', 'month', 'quarter') -contains $per) {
+                $script:budgets[$p[0].Trim()] = @{ Hours = $h; Period = $per }
+            }
+        } catch {}
+    }
+}
+
+function Save-Budgets {
+    $lines = @($script:budgets.Keys | ForEach-Object {
+        "{0}`t{1}`t{2}" -f $_, $script:budgets[$_].Hours.ToString($Inv), $script:budgets[$_].Period
+    })
+    try { Set-Content -Path $BudgetsFile -Value $lines }
+    catch { Write-Log "Could not save budgets: $($_.Exception.Message)" }
+}
+
+# ======================================================================
+# Notes (kept in Timesheets\notes.csv, matched to sessions by date, account and start time)
+# ======================================================================
+
+function Get-NoteKey($dateStr, $account, $startStr) { return ("{0}`t{1}`t{2}" -f $dateStr, $account, $startStr) }
+
+function Load-Notes {
+    $script:notes = @{}
+    if (-not (Test-Path $NotesFile)) { return }
+    try {
+        foreach ($r in @(Import-Csv $NotesFile)) {
+            if ($r.Note) { $script:notes[(Get-NoteKey $r.Date $r.Account $r.Start)] = $r.Note }
+        }
+    } catch { Write-Log "Could not read notes: $($_.Exception.Message)" }
+}
+
+function Save-Note($dateStr, $account, $startStr, $text) {
+    $key = Get-NoteKey $dateStr $account $startStr
+    $text = "$text".Trim()
+    if ($text) { $script:notes[$key] = $text } else { [void]$script:notes.Remove($key) }
+    # Undo restores notes as they were before the last change, so it would lose this edit
+    $script:undoLabel = $null
+    if (-not (Write-AllNotes)) { return $false }
+    try { Write-WeekEntries (Get-WeekStartFor ([datetime]::ParseExact($dateStr, 'yyyy-MM-dd', $Inv))) } catch {}
+    return $true
+}
+
+function Write-AllNotes {
+    $rows = @($script:notes.Keys | Sort-Object | ForEach-Object {
+        $p = $_ -split "`t"
+        [pscustomobject]@{ Date = $p[0]; Account = $p[1]; Start = $p[2]; Note = $script:notes[$_] }
+    })
+    try {
+        if ($rows.Count -gt 0) { $rows | Export-Csv -Path $NotesFile -NoTypeInformation -Encoding UTF8 }
+        else { Set-Content -Path $NotesFile -Value '"Date","Account","Start","Note"' -Encoding UTF8 }
+        return $true
+    } catch {
+        Write-Log "Could not save note (is notes.csv open in Excel?): $($_.Exception.Message)"
+        return $false
+    }
+}
+
+# ======================================================================
+# Editing the time log (merge, delete, change account, edit, add) with one level of Undo
+# ======================================================================
+
+function Test-SameSession($a, $b) {
+    return ("$($a.Date)" -eq "$($b.Date)" -and "$($a.Account)" -ceq "$($b.Account)" -and "$($a.Start)" -eq "$($b.Start)" -and
+            "$($a.End)" -eq "$($b.End)" -and "$($a.Minutes)" -eq "$($b.Minutes)")
+}
+
+function Find-SessionRow($list, $raw) {
+    for ($i = 0; $i -lt $list.Count; $i++) { if (Test-SameSession $list[$i] $raw) { return $i } }
+    return -1
+}
+
+function New-SessionRow($dateStr, $account, $startStr, $endLabel, [double]$seconds) {
+    return [pscustomobject][ordered]@{
+        Date = $dateStr; Account = $account; Start = $startStr; End = $endLabel
+        Minutes = ([math]::Round($seconds / 60, 2)).ToString($Inv)
+    }
+}
+
+function Get-PartNoteKey($p) {
+    return Get-NoteKey $p.Start.ToString('yyyy-MM-dd', $Inv) $p.Name $p.Start.ToString('HH:mm:ss', $Inv)
+}
+
+# Runs a change against the time log. The change works on $logRows (an editable list of the log's rows)
+# and on $script:notes, and returns $true to save. Copies are kept first so Undo can put things back.
+function Invoke-LogChange($description, [scriptblock]$change) {
+    Flush-Pending
+    if ($script:pending.Count -gt 0) {
+        Show-Message "Couldn't change the time log because sessions.csv is open in another program. Close it and try again."
+        return $false
+    }
+    $notesBefore = $script:notes.Clone()
+    try {
+        $logRows = New-Object System.Collections.ArrayList
+        if (Test-Path $SessionsFile) { foreach ($row in @(Import-Csv $SessionsFile)) { [void]$logRows.Add($row) } }
+        $proceed = & $change
+        if (-not $proceed) { $script:notes = $notesBefore; return $false }
+
+        if (Test-Path $SessionsFile) { Copy-Item $SessionsFile $SessionsUndo -Force }
+        else { Set-Content -Path $SessionsUndo -Value '"Date","Account","Start","End","Minutes"' -Encoding UTF8 }
+        if (Test-Path $NotesFile) { Copy-Item $NotesFile $NotesUndo -Force }
+        else { Set-Content -Path $NotesUndo -Value '"Date","Account","Start","Note"' -Encoding UTF8 }
+
+        if ($logRows.Count -gt 0) {
+            $logRows | Select-Object Date, Account, Start, End, Minutes | Export-Csv -Path $SessionsFile -NoTypeInformation -Encoding UTF8
+        } else {
+            Set-Content -Path $SessionsFile -Value '"Date","Account","Start","End","Minutes"' -Encoding UTF8
+        }
+        [void](Write-AllNotes)
+        $script:undoLabel = $description
+    } catch {
+        $script:notes = $notesBefore
+        Write-Log "Time log change failed: $($_.Exception.Message)"
+        Show-Message "Couldn't save the change. If sessions.csv or notes.csv is open in Excel, close it and try again."
+        return $false
+    }
+    Complete-LogChange
+    return $true
+}
+
+# Bring every view and file up to date after the log has changed
+function Complete-LogChange {
+    $script:entrySelected = @()
+    Refresh-Totals
+    Update-DrawerContent
+    Write-WeekSummary
+    if ($script:weekStart -and $script:weekStart -ne (Get-WeekStart)) { Write-WeekEntries $script:weekStart }
+    Update-View
+    Request-Redraw
+    if ($script:weekForm -and -not $script:weekForm.IsDisposed) { Fill-WeeklyView }
+}
+
+function Undo-LogChange {
+    if (-not $script:undoLabel) { return }
+    if (-not (Ask-YesNo "Undo the last change ($($script:undoLabel))?")) { return }
+    try {
+        Copy-Item $SessionsUndo $SessionsFile -Force
+        Copy-Item $NotesUndo $NotesFile -Force
+    } catch {
+        Show-Message "Couldn't undo. If sessions.csv or notes.csv is open in Excel, close it and try again."
+        return
+    }
+    Load-Notes
+    $script:undoLabel = $null
+    Complete-LogChange
+}
+
+function Test-HasRunning($blocks) {
+    foreach ($b in @($blocks)) { if ($b.Kind -eq 'running') { return $true } }
+    return $false
+}
+
+function Remove-EntryBlocks {
+    $sel = @($script:entrySelected)
+    if ($sel.Count -eq 0) { return }
+    if (Test-HasRunning $sel) { Show-Message 'Stop the running account before deleting its time.'; return }
+    $total = 0.0; foreach ($b in $sel) { $total += $b.Seconds }
+    $what = if ($sel.Count -eq 1) { "this block ($($sel[0].Name), $(Format-HM $total))" } else { "these $($sel.Count) blocks ($(Format-HM $total) in total)" }
+    if (-not (Ask-YesNo "Delete $what? You can undo this straight afterwards.")) { return }
+    [void](Invoke-LogChange 'delete' {
+        foreach ($b in $sel) {
+            foreach ($part in @($b.Parts)) {
+                $at = Find-SessionRow $logRows $part.Raw
+                if ($at -ge 0) { $logRows.RemoveAt($at) }
+                if ($part.Kind -eq 'time') { [void]$script:notes.Remove((Get-PartNoteKey $part)) }
+            }
+        }
+        return $true
+    })
+}
+
+function Merge-EntryBlocks {
+    $sel = @($script:entrySelected)
+    if ($sel.Count -lt 2) { return }
+    if (Test-HasRunning $sel) { Show-Message 'Stop the running account before merging its time.'; return }
+    $acct = $sel[0].Name; $day = $sel[0].Day
+    foreach ($b in $sel) { if ($b.Name -ne $acct -or $b.Day -ne $day) { Show-Message 'Only blocks for the same account on the same day can be merged.'; return } }
+    $allParts = @($sel | ForEach-Object { $_.Parts } | Sort-Object Start)
+    $timeParts = @($allParts | Where-Object { $_.Kind -eq 'time' })
+    $firstPart = if ($timeParts.Count -gt 0) { $timeParts[0] } else { $allParts[0] }
+    $total = 0.0; foreach ($part in $allParts) { $total += $part.Seconds }
+    $mergedNotes = @()
+    foreach ($part in $timeParts) { if ($part.Note -and -not ($mergedNotes -contains $part.Note)) { $mergedNotes += $part.Note } }
+    $dateStr = $firstPart.Start.ToString('yyyy-MM-dd', $Inv)
+    $startStr = $firstPart.Start.ToString('HH:mm:ss', $Inv)
+    [void](Invoke-LogChange 'merge' {
+        foreach ($part in $allParts) {
+            $at = Find-SessionRow $logRows $part.Raw
+            if ($at -ge 0) { $logRows.RemoveAt($at) }
+            if ($part.Kind -eq 'time') { [void]$script:notes.Remove((Get-PartNoteKey $part)) }
+        }
+        [void]$logRows.Add((New-SessionRow $dateStr $acct $startStr 'merged' $total))
+        if ($mergedNotes.Count -gt 0) { $script:notes[(Get-NoteKey $dateStr $acct $startStr)] = ($mergedNotes -join '; ') }
+        return $true
+    })
+}
+
+function Set-EntryAccount($newName) {
+    $sel = @($script:entrySelected)
+    if ($sel.Count -eq 0) { return }
+    if (Test-HasRunning $sel) { Show-Message 'Stop the running account before moving its time.'; return }
+    [void](Invoke-LogChange "move to $newName" {
+        foreach ($b in $sel) {
+            foreach ($part in @($b.Parts)) {
+                $at = Find-SessionRow $logRows $part.Raw
+                if ($at -lt 0) { continue }
+                $logRows[$at].Account = $newName
+                if ($part.Kind -eq 'time') {
+                    $oldKey = Get-PartNoteKey $part
+                    if ($script:notes.ContainsKey($oldKey)) {
+                        $txt = $script:notes[$oldKey]
+                        [void]$script:notes.Remove($oldKey)
+                        $script:notes[(Get-NoteKey $part.Start.ToString('yyyy-MM-dd', $Inv) $newName $part.Start.ToString('HH:mm:ss', $Inv))] = $txt
+                    }
+                }
+            }
+        }
+        return $true
+    })
+}
+
+function Edit-EntryTime($b) {
+    if ($b.Kind -eq 'running') { Show-Message 'Stop the running account before editing its time.'; return }
+    $r = Show-EntryDialog "Edit time for $($b.Name)" @{ Start = $b.Start.ToString('HH:mm', $Inv); Duration = (Format-HM $b.Seconds) }
+    if (-not $r) { return }
+    $dateStr = $b.Start.ToString('yyyy-MM-dd', $Inv)
+    $startStr = $r.Start.ToString('HH:mm:ss', $Inv)
+    $keepNote = "$($b.Note)"
+    $acct = $b.Name
+    [void](Invoke-LogChange 'edit time' {
+        foreach ($part in @($b.Parts)) {
+            $at = Find-SessionRow $logRows $part.Raw
+            if ($at -ge 0) { $logRows.RemoveAt($at) }
+            if ($part.Kind -eq 'time') { [void]$script:notes.Remove((Get-PartNoteKey $part)) }
+        }
+        [void]$logRows.Add((New-SessionRow $dateStr $acct $startStr 'edited' $r.Seconds))
+        if ($keepNote) { $script:notes[(Get-NoteKey $dateStr $acct $startStr)] = $keepNote }
+        return $true
+    })
+}
+
+function Add-TimeEntry($dayIndex) {
+    $ws = $script:weekStart
+    $names = @($script:accounts | ForEach-Object { $_.Name })
+    if ($names.Count -eq 0) { Show-Message 'Add an account first (right-click the timer, Add account).'; return }
+    $r = Show-EntryDialog 'Add a time entry' @{
+        Days = @(0..6 | ForEach-Object { $ws.AddDays($_) }); DayIndex = [math]::Max(0, [int]$dayIndex)
+        Accounts = $names; Account = $names[0]; Start = '09:00'; Duration = '0:30'; Note = ''
+    }
+    if (-not $r) { return }
+    $dateStr = $r.Date.ToString('yyyy-MM-dd', $Inv)
+    $startStr = $r.Start.ToString('HH:mm:ss', $Inv)
+    [void](Invoke-LogChange 'add entry' {
+        [void]$logRows.Add((New-SessionRow $dateStr $r.Account $startStr 'added' $r.Seconds))
+        if ($r.Note) { $script:notes[(Get-NoteKey $dateStr $r.Account $startStr)] = $r.Note }
+        return $true
+    })
+}
+
+# ======================================================================
+# Session log
+# ======================================================================
+
+function Convert-SessionRow($r) {
+    try {
+        $day  = [datetime]::ParseExact($r.Date, 'yyyy-MM-dd', $Inv)
+        $from = $day.Add([timespan]::ParseExact($r.Start, 'hh\:mm\:ss', $Inv))
+        $sec  = [double]::Parse($r.Minutes, $Inv) * 60
+        $isAdj = ($r.End -like 'rounded*' -or $r.End -eq 'adjusted')
+        return [pscustomobject]@{ Name = $r.Account; Start = $from; End = $from.AddSeconds($sec); Seconds = $sec; IsAdjust = $isAdj; Kind = $(if ($isAdj) { $r.End } else { 'time' }); Raw = $r }
+    } catch { return $null }
+}
+
+function Read-Sessions {
+    $rows = @()
+    if (Test-Path $SessionsFile) { $rows = @(Import-Csv $SessionsFile) }
+    $rows += $script:pending
+    foreach ($r in $rows) {
+        $session = Convert-SessionRow $r
+        if ($session) { $session }
+    }
+}
+
+function Flush-Pending {
+    if ($script:pending.Count -eq 0) { return }
+    try {
+        $script:pending | Export-Csv -Path $SessionsFile -Append -NoTypeInformation -Encoding UTF8
+        $script:pending = @()
+        $script:pendingWarned = $false
+    } catch {
+        if (-not $script:pendingWarned) {
+            Write-Log "Could not write sessions.csv (is it open in Excel?). Will keep retrying. $($_.Exception.Message)"
+            $script:pendingWarned = $true
+        }
+    }
+}
+
+function Add-Session($name, [datetime]$from, [datetime]$to) {
+    $new = @()
+    while ($from -lt $to) {
+        # Split anything that runs past midnight so each day is logged separately
+        $segEnd   = $to
+        $midnight = $from.Date.AddDays(1)
+        if ($segEnd -gt $midnight) { $segEnd = $midnight }
+        $mins = ($segEnd - $from).TotalMinutes
+        if ($mins -ge 0.05) {
+            $new += [pscustomobject]@{
+                Date    = $from.ToString('yyyy-MM-dd', $Inv)
+                Account = $name
+                Start   = $from.ToString('HH:mm:ss', $Inv)
+                End     = $segEnd.ToString('HH:mm:ss', $Inv)
+                Minutes = [math]::Round($mins, 2).ToString($Inv)
+            }
+        }
+        $from = $segEnd
+    }
+    if ($new.Count -gt 0) {
+        $script:undoLabel = $null
+        $script:pending += $new
+        Flush-Pending
+    }
+}
+
+function Add-Rounding($name, $seconds, $label) {
+    # Logged with "rounded up" or "rounded down" in the End column so it's easy to spot.
+    # Round-downs are logged as negative minutes.
+    $now = Get-Date
+    $mins = [math]::Ceiling($seconds / 60 * 100) / 100
+    $script:undoLabel = $null
+    $script:pending += [pscustomobject]@{
+        Date    = $now.ToString('yyyy-MM-dd', $Inv)
+        Account = $name
+        Start   = $now.ToString('HH:mm:ss', $Inv)
+        End     = $label
+        Minutes = $mins.ToString($Inv)
+    }
+    Flush-Pending
+}
+
+# Hours and minutes, e.g. 0:30 or 1:05 (negative for rounding down)
+function Format-HM($seconds) {
+    $sign = if ($seconds -lt 0) { '-' } else { '' }
+    $ts = [timespan]::FromSeconds([math]::Round([math]::Abs($seconds)))
+    return '{0}{1}:{2:00}' -f $sign, [math]::Floor($ts.TotalHours), $ts.Minutes
+}
+
+function Get-WeekStartFor([datetime]$date) {
+    $back = ([int]$date.DayOfWeek - $script:weekStartDow + 7) % 7
+    return $date.Date.AddDays(-$back)
+}
+
+# Every stretch of time for a week, one entry each, in order (Lunch left out)
+function Get-WeekEntries($ws) {
+    $we = $ws.AddDays(7)
+    $list = @()
+    foreach ($r in @(Read-Sessions)) {
+        if ($r.Name -eq 'Lunch' -or $r.Start -lt $ws -or $r.Start -ge $we) { continue }
+        if ([math]::Abs($r.Seconds) -lt $EntryMinSeconds) { continue }
+        $note = $null
+        if ($r.Kind -eq 'time') {
+            $note = $script:notes[(Get-NoteKey $r.Start.ToString('yyyy-MM-dd', $Inv) $r.Name $r.Start.ToString('HH:mm:ss', $Inv))]
+        }
+        $list += [pscustomobject]@{
+            Day = [int][math]::Floor(($r.Start.Date - $ws).TotalDays)
+            Name = $r.Name; Start = $r.Start; End = $r.End; Seconds = $r.Seconds; Kind = $r.Kind; Note = $note; Raw = $r.Raw
+        }
+    }
+    # Whatever is running right now
+    $now = Get-Date
+    if ($script:active -and $script:active.Name -ne 'Lunch' -and $script:active.Start -ge $ws -and $script:active.Start -lt $we) {
+        $e = ($now - $script:active.Start).TotalSeconds
+        if ($e -ge $EntryMinSeconds) {
+            $list += [pscustomobject]@{
+                Day = [int][math]::Floor(($script:active.Start.Date - $ws).TotalDays)
+                Name = $script:active.Name; Start = $script:active.Start; End = $now; Seconds = $e; Kind = 'running'; Note = $null
+            }
+        }
+    }
+    return @($list | Sort-Object Start)
+}
+
+# Lunch start times for a week, which break a run of the same account into separate blocks
+function Get-WeekLunchStarts($ws) {
+    $we = $ws.AddDays(7)
+    $starts = @(Read-Sessions | Where-Object { $_.Name -eq 'Lunch' -and -not $_.IsAdjust -and $_.Start -ge $ws -and $_.Start -lt $we } | ForEach-Object { $_.Start })
+    if ($script:active -and $script:active.Name -eq 'Lunch' -and $script:active.Start -ge $ws -and $script:active.Start -lt $we) { $starts += $script:active.Start }
+    return $starts
+}
+
+# One block made from one or more entries: total time, first start, last end, combined notes
+function New-EntryBlock($parts) {
+    $parts = @($parts)
+    $times = @($parts | Where-Object { $_.Kind -eq 'time' -or $_.Kind -eq 'running' })
+    $first = if ($times.Count -gt 0) { $times[0] } else { $parts[0] }
+    $last  = if ($times.Count -gt 0) { $times[$times.Count - 1] } else { $parts[0] }
+    $sum = 0.0
+    foreach ($p in $parts) { $sum += $p.Seconds }
+    $kind = if (@($parts | Where-Object { $_.Kind -eq 'running' }).Count -gt 0) { 'running' }
+            elseif ($times.Count -gt 0) { 'time' }
+            else { $parts[0].Kind }
+    $notes = @()
+    foreach ($p in $times) { if ($p.Note -and -not ($notes -contains $p.Note)) { $notes += $p.Note } }
+    return [pscustomobject]@{
+        Day = $first.Day; Name = $first.Name; Start = $first.Start; End = $last.End
+        Seconds = $sum; Kind = $kind; Note = ($notes -join '; '); Parts = $parts
+    }
+}
+
+# Entries for a week as blocks. With merging on, a run of the same account on the same day becomes
+# one block (broken by another account or by Lunch), and rounding or adjustments join that
+# account's most recent block that day.
+function Get-EntryBlocks($ws, [switch]$NoRunning) {
+    $entries = @(Get-WeekEntries $ws)
+    if ($NoRunning) { $entries = @($entries | Where-Object { $_.Kind -ne 'running' }) }
+    if (-not $script:mergeEntries) {
+        return @($entries | ForEach-Object { New-EntryBlock @($_) })
+    }
+    $lunchStarts = @(Get-WeekLunchStarts $ws)
+    $groups = New-Object System.Collections.ArrayList
+    $current = $null
+    foreach ($e in @($entries | Where-Object { $_.Kind -eq 'time' -or $_.Kind -eq 'running' })) {
+        $join = $false
+        if ($current) {
+            $prev = $current[$current.Count - 1]
+            if ($prev.Name -eq $e.Name -and $prev.Day -eq $e.Day) {
+                $lunchBetween = @($lunchStarts | Where-Object { $_ -ge $prev.Start -and $_ -lt $e.Start }).Count -gt 0
+                $join = -not $lunchBetween
+            }
+        }
+        if ($join) { [void]$current.Add($e) }
+        else {
+            $current = New-Object System.Collections.ArrayList
+            [void]$current.Add($e)
+            [void]$groups.Add($current)
+        }
+    }
+    foreach ($a in @($entries | Where-Object { $_.Kind -ne 'time' -and $_.Kind -ne 'running' })) {
+        $target = $null
+        foreach ($grp in $groups) {
+            $g0 = $grp[0]
+            if ($g0.Kind -ne 'time' -and $g0.Kind -ne 'running') { continue }
+            if ($g0.Name -eq $a.Name -and $g0.Day -eq $a.Day -and $g0.Start -le $a.Start) {
+                if (-not $target -or $g0.Start -gt $target[0].Start) { $target = $grp }
+            }
+        }
+        if ($target) { [void]$target.Add($a) }
+        else {
+            $own = New-Object System.Collections.ArrayList
+            [void]$own.Add($a)
+            [void]$groups.Add($own)
+        }
+    }
+    return @($groups | ForEach-Object { New-EntryBlock @($_) } | Sort-Object Start)
+}
+
+function Get-EntryTypeLabel($kind) {
+    switch ($kind) {
+        'rounded up'   { return 'Rounded up' }
+        'rounded down' { return 'Rounded down' }
+        'adjusted'     { return 'Adjusted' }
+        'running'      { return 'Running' }
+        default        { return 'Time' }
+    }
+}
+
+function Get-WeekEntriesFile($ws) {
+    return Join-Path $TimesheetDir ('Week commencing {0} entries.csv' -f $ws.ToString('yyyy-MM-dd', $Inv))
+}
+
+# One row per stretch of time, ready to work through when filling in a timesheet
+function Write-WeekEntries($ws) {
+    try {
+        $rows = @(Get-EntryBlocks $ws -NoRunning | ForEach-Object {
+            $isTime = $_.Kind -eq 'time'
+            $hasAdj = @($_.Parts | Where-Object { $_.Kind -ne 'time' }).Count -gt 0
+            [pscustomobject][ordered]@{
+                Day      = $_.Start.ToString('ddd dd/MM', $GB)
+                Date     = $_.Start.ToString('yyyy-MM-dd', $Inv)
+                Account  = $_.Name
+                Start    = $(if ($isTime) { $_.Start.ToString('HH:mm', $Inv) } else { '' })
+                End      = $(if ($isTime) { $_.End.ToString('HH:mm', $Inv) } else { '' })
+                Duration = Format-HM $_.Seconds
+                Hours    = ([math]::Round($_.Seconds / 3600, 2)).ToString('0.00', $Inv)
+                Type     = $(if ($isTime -and $hasAdj) { 'Time (adjusted)' } else { Get-EntryTypeLabel $_.Kind })
+                Parts    = @($_.Parts).Count
+                Note     = "$($_.Note)"
+            }
+        })
+        $file = Get-WeekEntriesFile $ws
+        if ($rows.Count -gt 0) { $rows | Export-Csv -Path $file -NoTypeInformation -Encoding UTF8 }
+        else { Set-Content -Path $file -Value '"Day","Date","Account","Start","End","Duration","Hours","Type","Parts","Note"' -Encoding UTF8 }
+        $script:entriesWarned = $false
+    } catch {
+        if (-not $script:entriesWarned) {
+            Write-Log "Could not update the entries file (is it open in Excel?). Will keep retrying. $($_.Exception.Message)"
+            $script:entriesWarned = $true
+        }
+    }
+}
+
+function Open-WeekEntriesFile {
+    Flush-Pending
+    Write-WeekEntries (Get-WeekStart)
+    $f = Get-WeekEntriesFile (Get-WeekStart)
+    if (Test-Path $f) { Invoke-Item $f }
+}
+
+function Refresh-Totals {
+    $today = [datetime]::Today
+    $ws = Get-WeekStart
+    $we = $ws.AddDays(7)
+    $script:todayDone      = @{}
+    $script:weekDone       = @{}
+    $script:monthDone      = @{}
+    $script:quarterDone    = @{}
+    $script:lunchIntervals = @()
+    $script:lunchAdjust    = 0
+    $script:todayAccountIntervals = @()
+    $ms = New-Object DateTime($today.Year, $today.Month, 1)
+    $qs = New-Object DateTime($today.Year, ([int][math]::Floor(($today.Month - 1) / 3) * 3 + 1), 1)
+    foreach ($r in @(Read-Sessions)) {
+        if ($r.Start -ge $ms) { $script:monthDone[$r.Name] = [double]$script:monthDone[$r.Name] + $r.Seconds }
+        if ($r.Start -ge $qs) { $script:quarterDone[$r.Name] = [double]$script:quarterDone[$r.Name] + $r.Seconds }
+        if ($r.Start -ge $ws -and $r.Start -lt $we) {
+            $script:weekDone[$r.Name] = [double]$script:weekDone[$r.Name] + $r.Seconds
+        }
+        if ($r.Start.Date -eq $today) {
+            $script:todayDone[$r.Name] = [double]$script:todayDone[$r.Name] + $r.Seconds
+            if ($r.Name -eq 'Lunch') {
+                # Rounding is a straight adjustment; real lunch breaks are time ranges
+                if ($r.IsAdjust) { $script:lunchAdjust += $r.Seconds }
+                else { $script:lunchIntervals += ,@($r.Start, $r.End) }
+            } elseif (-not $r.IsAdjust) {
+                $script:todayAccountIntervals += ,@($r.Start, $r.End)
+            }
+        }
+    }
+}
+
+function Write-WeekSummary {
+    try {
+        $ws = Get-WeekStart
+        $hours = @{}
+        foreach ($r in @(Read-Sessions)) {
+            $idx = [int][math]::Floor(($r.Start.Date - $ws).TotalDays)
+            if ($idx -lt 0 -or $idx -gt 6) { continue }
+            if (-not $hours.ContainsKey($r.Name)) { $hours[$r.Name] = New-Object double[] 7 }
+            $hours[$r.Name][$idx] += $r.Seconds / 3600
+        }
+
+        # Current accounts first, then any older names used this week, then lunch
+        $known  = @($script:accounts | ForEach-Object { $_.Name })
+        $order  = @($known | Where-Object { $hours.ContainsKey($_) })
+        $order += @($hours.Keys | Where-Object { $known -notcontains $_ -and $_ -ne 'Lunch' } | Sort-Object)
+        if ($hours.ContainsKey('Lunch')) { $order += 'Lunch' }
+
+        $dayNames = @(0..6 | ForEach-Object { $ws.AddDays($_).ToString('ddd dd/MM', $GB) })
+        $totals = New-Object double[] 7
+        $out = @()
+        foreach ($n in $order) {
+            $o = [ordered]@{ Account = $n }
+            $sum = 0
+            for ($d = 0; $d -lt 7; $d++) {
+                $h = $hours[$n][$d]
+                $o[$dayNames[$d]] = [math]::Round($h, 2).ToString($Inv)
+                $sum += $h
+                if ($n -ne 'Lunch') { $totals[$d] += $h }
+            }
+            $o['Total'] = [math]::Round($sum, 2).ToString($Inv)
+            $out += [pscustomobject]$o
+        }
+
+        $t = [ordered]@{ Account = 'Total (excluding lunch)' }
+        $grand = 0
+        for ($d = 0; $d -lt 7; $d++) {
+            $t[$dayNames[$d]] = [math]::Round($totals[$d], 2).ToString($Inv)
+            $grand += $totals[$d]
+        }
+        $t['Total'] = [math]::Round($grand, 2).ToString($Inv)
+        $out += [pscustomobject]$t
+
+        $out | Export-Csv -Path (Get-WeekFile) -NoTypeInformation -Encoding UTF8
+        $script:summaryDirty = $false
+        Write-WeekEntries $ws
+    } catch {
+        if (-not $script:summaryDirty) {
+            Write-Log "Could not update the weekly summary (is it open in Excel?). Will keep retrying. $($_.Exception.Message)"
+        }
+        $script:summaryDirty = $true
+    }
+}
+
+function Clear-TodayFor($name) {
+    $script:undoLabel = $null
+    $today = (Get-Date).ToString('yyyy-MM-dd', $Inv)
+    Flush-Pending
+    $script:pending = @($script:pending | Where-Object { -not ($_.Date -eq $today -and $_.Account -eq $name) })
+    if (Test-Path $SessionsFile) {
+        $keep = @(Import-Csv $SessionsFile | Where-Object { -not ($_.Date -eq $today -and $_.Account -eq $name) })
+        if ($keep.Count -gt 0) {
+            $keep | Export-Csv -Path $SessionsFile -NoTypeInformation -Encoding UTF8
+        } else {
+            Set-Content -Path $SessionsFile -Value '"Date","Account","Start","End","Minutes"' -Encoding UTF8
+        }
+    }
+}
+
+# ======================================================================
+# Running slot
+# ======================================================================
+
+function Save-State {
+    $lines = @((Get-Date).ToString('o'), '', '', '')
+    if ($script:active) {
+        $lines[1] = '1'
+        $lines[2] = $script:active.Name
+        $lines[3] = $script:active.Start.ToString('o')
+    }
+    try { Set-Content -Path $StateFile -Value $lines }
+    catch { Write-Log "Could not save state: $($_.Exception.Message)" }
+}
+
+function Load-State {
+    # If the timer was closed unexpectedly (crash, power cut) while a slot was running,
+    # log that slot up to the last time the timer was known to be running.
+    if (-not (Test-Path $StateFile)) { return }
+    $lines = @(Get-Content $StateFile)
+    if ($lines.Count -ge 4 -and $lines[1]) {
+        $styles   = [Globalization.DateTimeStyles]::RoundtripKind
+        $lastSeen = [datetime]::Parse($lines[0], $Inv, $styles)
+        $from     = [datetime]::Parse($lines[3], $Inv, $styles)
+        if ($lastSeen -gt $from) { Add-Session $lines[2] $from $lastSeen }
+        Write-Log "Recovered a running '$($lines[2])' session, logged up to $lastSeen."
+    }
+    $script:active = $null
+    Save-State
+}
+
+function Stop-Active([datetime]$at) {
+    if (-not $script:active) { return }
+    $a = $script:active
+    $script:active = $null
+    if ($at -gt $a.Start) { Add-Session $a.Name $a.Start $at }
+    Save-State
+    Refresh-Totals
+    Write-WeekSummary
+}
+
+function Start-Slot($i) {
+    $script:active = @{ Name = $script:slots[$i]; Start = Get-Date }
+    Save-State
+}
+
+# Stopping by hand (switching or pausing) may offer a note, if the stretch was long enough
+function Stop-ByUser {
+    $a = $script:active
+    if (-not $a) { return }
+    $end = Get-Date
+    Stop-Active $end
+    $secs = ($end - $a.Start).TotalSeconds
+    if ($a.Name -ne 'Lunch' -and $NoteMinMinutes -gt 0 -and $secs -ge $NoteMinMinutes * 60) {
+        $script:pendingNote = @{
+            Name     = $a.Name
+            DateStr  = $a.Start.ToString('yyyy-MM-dd', $Inv)
+            StartStr = $a.Start.ToString('HH:mm:ss', $Inv)
+            Seconds  = $secs
+        }
+        # Shown once the timer has finished redrawing (and the pill has folded away)
+        [void]$form.BeginInvoke([System.Windows.Forms.MethodInvoker]{
+            if ($script:pendingNote) {
+                $n = $script:pendingNote
+                $script:pendingNote = $null
+                try { Show-NotePrompt $n } catch { Write-Log "Note prompt error: $($_.Exception.Message)" }
+            }
+        })
+    }
+}
+
+function Switch-Slot($i) {
+    $wasThis = [bool]($script:active -and $script:active.Name -eq $script:slots[$i])
+    Stop-ByUser
+    if (-not $wasThis) { Start-Slot $i }
+}
+
+# ======================================================================
+# Numbers for the display
+# ======================================================================
+
+function Update-View {
+    $now   = Get-Date
+    $clock = $now
+    $plan  = Get-DayPlan $clock
+    $workDay = [bool]$plan.Working
+    if ($workDay) { $start = $plan.Start; $end = $plan.End } else { $start = $clock.Date; $end = $clock.Date }
+    $cap = Limit-Time $clock $start $end
+    $worked = if ($workDay) { ($cap - $start).TotalSeconds } else { 0.0 }
+
+    $onLunch = [bool]($script:active -and $script:active.Name -eq 'Lunch')
+    $ints = @($script:lunchIntervals)
+    if ($onLunch) { $ints += ,@($script:active.Start, $clock) }
+
+    # Billable day, capped at the end time
+    $lunchSec = 0
+    foreach ($iv in $ints) {
+        $a = Limit-Time $iv[0] $start $cap
+        $b = Limit-Time $iv[1] $start $cap
+        if ($b -gt $a) { $lunchSec += ($b - $a).TotalSeconds }
+    }
+    $billable = if ($workDay) { [math]::Max(0.0, $worked - $lunchSec - $script:lunchAdjust) } else { 0.0 }
+
+    # Overtime after the end time, less any lunch taken during it (never on a day off)
+    $overtime = $workDay -and $clock -gt $end
+    $otSec = 0
+    if ($overtime) {
+        $otSec = ($clock - $end).TotalSeconds
+        foreach ($iv in $ints) {
+            $a = Limit-Time $iv[0] $end $clock
+            $b = Limit-Time $iv[1] $end $clock
+            if ($b -gt $a) { $otSec -= ($b - $a).TotalSeconds }
+        }
+        $otSec = [math]::Max(0.0, $otSec)
+    }
+
+    $rows = @()
+    $accountSec = 0
+    for ($i = 0; $i -lt $script:slots.Count; $i++) {
+        $n   = $script:slots[$i]
+        $td  = [double]$script:todayDone[$n]
+        $wk  = [double]$script:weekDone[$n]
+        $act = [bool]($script:active -and $script:active.Name -eq $script:slots[$i])
+        if ($act) {
+            $e = ($now - $script:active.Start).TotalSeconds
+            $td += $e; $wk += $e
+        }
+        if ($n -ne 'Lunch') { $accountSec += $td }
+        $canRound = ($td -gt 1 -and ($td % $RoundBlock) -gt 1)
+
+        # Progress against this account's budget, if it has one
+        $bFrac = $null; $bText = $null
+        $bud = $script:budgets[$n]
+        if ($bud -and $n -ne 'Lunch') {
+            $used = if ($bud.Period -eq 'week') { $wk }
+                    elseif ($bud.Period -eq 'month') { [double]$script:monthDone[$n] }
+                    else { [double]$script:quarterDone[$n] }
+            if ($act -and $bud.Period -ne 'week') { $used += ($now - $script:active.Start).TotalSeconds }
+            $bFrac = $used / ($bud.Hours * 3600)
+            $bText = '{0} of {1}h this {2}' -f (Format-Dur $used), $bud.Hours.ToString('0.##', $Inv), $bud.Period
+        }
+        if ($script:useRenderer) {
+            $rm = New-Object Win.RowModel
+            $rm.Name = $n; $rm.Today = $td; $rm.Week = $wk; $rm.Active = $act; $rm.CanRound = $canRound
+            $rm.IsLunch = ($n -eq 'Lunch'); $rm.TodayText = Format-Dur $td; $rm.WeekText = Format-Dur $wk
+            if ($null -ne $bFrac) { $rm.BudgetFrac = [double]$bFrac }
+            $rm.BudgetText = $bText
+            $rows += $rm
+        } else {
+            $rows += @{ Name = $n; Today = $td; Week = $wk; Active = $act; CanRound = $canRound; BudgetFrac = $bFrac; BudgetText = $bText }
+        }
+    }
+
+    # Account time after the end of the day, so unallocated working time and overtime can be told apart
+    $accountOT = 0.0
+    if ($overtime) {
+        $accIv = @($script:todayAccountIntervals)
+        if ($script:active -and $script:active.Name -ne 'Lunch') { $accIv += ,@($script:active.Start, $clock) }
+        foreach ($iv in $accIv) {
+            $a = Limit-Time $iv[0] $end $clock
+            $b = Limit-Time $iv[1] $end $clock
+            if ($b -gt $a) { $accountOT += ($b - $a).TotalSeconds }
+        }
+    }
+    $unallocWork = if ($workDay) { [math]::Max(0.0, $billable - ($accountSec - $accountOT)) } else { 0.0 }
+    $unallocOT = [math]::Max(0.0, $otSec - $accountOT)
+
+    # Not tracking: the working day has started (or it's overtime) but nothing is running
+    $idle = $workDay -and (-not $script:active) -and ($clock -ge $start)
+    $before = $workDay -and ($clock -lt $start)
+    $status = if ($onLunch) { 'ON LUNCH' }
+              elseif (-not $workDay) { if ($script:active) { 'DAY OFF, TRACKING' } else { 'DAY OFF' } }
+              elseif ($before) { 'STARTS AT ' + $start.ToString('HH:mm', $Inv) }
+              elseif ($idle) { 'NOT TRACKING' }
+              elseif ($overtime) { 'OVERTIME' }
+              else { 'WORKING' }
+    # The figure that matters now on the status line; both on hover
+    $unallocLine = if ($overtime) { 'UNALLOCATED OT ' + (Format-Dur $unallocOT) }
+                   elseif ($workDay) { 'UNALLOCATED ' + (Format-Dur $unallocWork) }
+                   else { '' }
+    $unallocTip = if (-not $workDay) { $null }
+                  elseif ($overtime) { "Working day: $(Format-Dur $unallocWork) unallocated`nOvertime: $(Format-Dur $unallocOT) unallocated" }
+                  else { "Working day: $(Format-Dur $unallocWork) unallocated" }
+    $activeRow = $rows | Where-Object { $_.Active } | Select-Object -First 1
+
+    $bt = [timespan]::FromSeconds([math]::Floor($billable))
+    $ot = [timespan]::FromSeconds([math]::Floor($otSec))
+    $pillTime = if ($overtime) { '+{0}:{1:00}' -f [math]::Floor($ot.TotalHours), $ot.Minutes }
+                else { '{0}:{1:00}' -f [math]::Floor($bt.TotalHours), $bt.Minutes }
+    $script:view = @{
+        H           = '{0:00}' -f [math]::Floor($bt.TotalHours)
+        M           = '{0:00}' -f $bt.Minutes
+        Sec         = '{0:00}' -f $bt.Seconds
+        Progress    = $(if ($workDay -and ($end - $start).TotalSeconds -gt 0) { $worked / ($end - $start).TotalSeconds } else { 0.0 })
+        Status      = $status
+        Unallocated = $unallocLine
+        UnallocTip  = $unallocTip
+        UnallocText = $(if ($overtime) { (Format-Dur $unallocOT) + ' unallocated OT' } else { (Format-Dur $unallocWork) + ' unallocated' })
+        DayOff      = (-not $workDay)
+        StartLabel  = $start.ToString('HH:mm', $Inv)
+        Idle        = $idle
+        PillTime    = $pillTime
+        ActiveName  = $(if ($activeRow) { $activeRow.Name } else { $null })
+        ActiveToday = $(if ($activeRow) { (Format-Dur $activeRow.Today) + ' today' } else { '' })
+        OnLunch     = $onLunch
+        Before      = $before
+        Overtime    = $overtime
+        OT          = '+{0:00}:{1:00}:{2:00}' -f [math]::Floor($ot.TotalHours), $ot.Minutes, $ot.Seconds
+        Rows        = $rows
+    }
+    $tray.Text = if ($overtime) { 'Account timer: overtime {0}h {1}m' -f [math]::Floor($ot.TotalHours), $ot.Minutes }
+                 else { 'Account timer: {0}h {1}m' -f [int]$script:view.H, $script:view.M }
+
+    # Open or close the overtime section
+    $newTop = if ($overtime) { $BaseRowTop + $OvertimeH } else { $BaseRowTop }
+    if ($newTop -ne $RowTop) {
+        $script:RowTop = $newTop
+        Resize-Form
+    }
+}
+
+# ======================================================================
+# Look and layout (drawn at 320 wide, height depends on the number of rows, then scaled)
+# ======================================================================
+
+$g0   = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero)
+$Zoom = $Scale * $g0.DpiX / 96
+$g0.Dispose()
+
+$BaseW  = 320
+$BaseRowTop = 88
+$OvertimeH  = 32     # height of the overtime section when it appears
+$RowTop = $BaseRowTop
+$RowH   = 30
+$LunchGap = 10   # space separating Lunch from the accounts
+$RoundXs  = @{ down = 150; up = 170 }   # positions of the round-down and round-up buttons
+$RoundR   = 8
+$RoundBlock = 15 * 60   # round up to the next 15 minutes
+
+# Compact pill view
+$PillW     = 240
+$PillH     = 42
+$PillTimeW = 74                    # the time area on the left (click to open the full view)
+$PillBtnX  = $PillW - 22           # play/pause button
+$PillBtnR  = 14
+$PillRowH  = 28                    # rows in the pill's account list
+$PillLunchGap = 6
+# Collapse button in the full view
+$CollapseX = 304
+$CollapseY = 15
+$CollapseR = 7.5
+# Week drawer
+$DrawerSideW = 520                  # width of the week drawer beside the timer
+$DrawerBtnX = 16                    # week drawer button, top left (mirrors the compact view button)
+$DrawerBtnY = 15
+
+function Get-PillListH {
+    return 4 + $script:slots.Count * $PillRowH + $PillLunchGap + 6
+}
+
+function Get-BaseSize {
+    if ($script:mode -eq 'pill') {
+        $m2 = 2 * $script:pillMargin
+        if ($script:pillOpen) { return ($PillW + $m2), ($PillH + (Get-PillListH) + $m2) }
+        return ($PillW + $m2), ($PillH + $m2)
+    }
+    $fm2 = 2 * $script:fullMargin
+    if ($script:drawerOpen) { return ($DrawerSideW + $BaseW + $fm2), ($script:drawerH + $fm2) }
+    return ($BaseW + $fm2), ($BaseH + $fm2)
+}
+
+# Where the pill's header and list sit, depending on whether the list is open and which way
+function Get-PillLayout {
+    $listH = if ($script:pillOpen) { Get-PillListH } else { 0 }
+    $hy = if ($script:pillOpen -and $script:pillUp) { $listH } else { 0 }
+    $ly = if ($script:pillUp) { 0 } else { $PillH }
+    return @{ HeaderY = $hy; ListY = $ly; ListH = $listH; Height = $PillH + $listH }
+}
+
+function Get-PillRowTop($i) {
+    $L = Get-PillLayout
+    $top = $L.ListY + 4 + $i * $PillRowH
+    if ($script:slots[$i] -eq 'Lunch') { $top += $PillLunchGap }
+    return $top
+}
+Load-Accounts
+$BaseH  = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6
+
+$C = [System.Drawing.Color]
+# ---- Themes ----
+# Themes live in account-timer-themes.txt next to this script, so they can be edited
+# without touching the script and survive script updates. The standard set below is
+# only used to create that file if it's missing, or as a fallback if it can't be read.
+function New-State($panel, $circle, $hot, $fill) {
+    return @{
+        Panel     = [System.Drawing.ColorTranslator]::FromHtml($panel)
+        Circle    = [System.Drawing.ColorTranslator]::FromHtml($circle)
+        CircleHot = [System.Drawing.ColorTranslator]::FromHtml($hot)
+        Fill      = [System.Drawing.ColorTranslator]::FromHtml($fill)
+    }
+}
+
+$DefaultThemesText = @'
+; Account timer themes
+;
+; Edit this file to change the colours or add your own themes, then right-click
+; the timer and go to Theme, then Reload themes. Lines starting with ; are notes.
+;
+; Each theme starts with its name in square brackets, followed by
+;   Text      the colour of the numbers, labels and icons
+;   Band      how dark the Lunch band is, from 0 (none) to 255 (black)
+;   Working   colours while the clock is running
+;   Lunch     colours while on lunch
+;   Overtime  colours after the end of the working day
+;
+; Working, Lunch and Overtime each take four colours, separated by commas, in this order
+;   background, buttons, button hover, progress bar
+; An optional NotTracking line sets the colours for when nothing is being tracked. Without it,
+; not tracking uses the Overtime colours and overtime uses a purple version of them.
+;
+; Colours are hex codes such as #357a38. Themes appear in the menu in the order
+; they're listed here, with a divider before the first light theme (one with dark text).
+; To remove a theme, delete its section. If this file is deleted, the timer
+; recreates it with the standard themes next time it starts.
+
+[Classic]
+Text     = #ffffff
+Band     = 45
+Working  = #357a38, #4caf50, #6fbf73, #6fbf73
+Lunch    = #b26a00, #ff9800, #ffac33, #ffac33
+Overtime = #aa2e25, #f44336, #f6685e, #f6685e
+
+[Midnight]
+Text     = #ffffff
+Band     = 50
+Working  = #1c2633, #2e3f55, #3c5270, #5b8def
+Lunch    = #33281a, #54422a, #6b5536, #f0b35b
+Overtime = #341b20, #562c35, #6e3844, #ef5b6e
+
+[Lavender]
+Text     = #ffffff
+Band     = 40
+Working  = #4f4762, #6a5f82, #7d7196, #b9aedc
+Lunch    = #6b4a3a, #8c6450, #a07562, #f2c48d
+Overtime = #6b3a4a, #8c4f63, #a15f75, #f28da8
+
+[Graphite]
+Text     = #ffffff
+Band     = 45
+Working  = #2b2d2f, #404346, #4f5357, #9aa0a6
+Lunch    = #3a3226, #574a36, #685a43, #d9a95b
+Overtime = #3a2626, #573838, #694444, #d96b6b
+
+[Ocean]
+Text     = #ffffff
+Band     = 45
+Working  = #0f4c5c, #1b6f84, #2a8aa3, #5ec8e0
+Lunch    = #7a4a12, #a0661f, #b8792e, #ffb74d
+Overtime = #7a1f2b, #a12d3c, #b8404f, #ff7083
+
+[Nord]
+Text     = #eceff4
+Band     = 40
+Working  = #2e3440, #3b4252, #4c566a, #88c0d0
+Lunch    = #3d3530, #5a4a3f, #6e5a4c, #d08770
+Overtime = #3d2c30, #5c3a41, #70474f, #bf616a
+
+[Dracula]
+Text     = #f8f8f2
+Band     = 45
+Working  = #282a36, #44475a, #6272a4, #bd93f9
+Lunch    = #3a2f2a, #5a4636, #6e5642, #ffb86c
+Overtime = #3a2228, #5c2f38, #723a46, #ff5555
+
+[Solarized Dark]
+Text     = #eee8d5
+Band     = 45
+Working  = #002b36, #073642, #0d4a59, #2aa198
+Lunch    = #2b2a10, #4a4214, #5c521a, #b58900
+Overtime = #36110f, #5a1d1a, #6e2420, #dc322f
+
+[Sunset]
+Text     = #ffffff
+Band     = 45
+Working  = #3d2352, #5b3577, #6f4391, #f78fb3
+Lunch    = #5c3a1e, #80522b, #996436, #ffc36e
+Overtime = #5c1e2e, #802b42, #993650, #ff6b81
+
+[Espresso]
+Text     = #f5ece4
+Band     = 45
+Working  = #3b2a22, #57402f, #6b4f3b, #c8a27a
+Lunch    = #4a3416, #6e4e1f, #856027, #f2b45c
+Overtime = #4a1f1c, #6e2f2a, #853a34, #e86a5c
+
+[High Contrast]
+Text     = #ffffff
+Band     = 70
+Working  = #0a0a0a, #262626, #3a3a3a, #00e676
+Lunch    = #2a1a00, #3d2700, #523400, #ffab00
+Overtime = #2a0000, #3d0a0a, #521414, #ff1744
+
+[Light]
+Text     = #202124
+Band     = 14
+Working  = #f4f6f4, #dbe7dc, #c8dcca, #4caf50
+Lunch    = #fff6e8, #ffe2b8, #ffd38f, #ff9800
+Overtime = #fdeeec, #f9cdc9, #f5b2ac, #f44336
+
+[Solarized Light]
+Text     = #073642
+Band     = 14
+Working  = #fdf6e3, #eee8d5, #e4dcc4, #2aa198
+Lunch    = #fbefd5, #f2dfae, #ebd393, #b58900
+Overtime = #fbe6df, #f2cbbe, #ebb8a7, #dc322f
+
+[Mint]
+Text     = #1d2b28
+Band     = 14
+Working  = #eef8f4, #d3ece2, #bfe2d4, #26a69a
+Lunch    = #fff5e6, #ffe0b5, #ffd08c, #fb8c00
+Overtime = #fdecee, #f8ccd2, #f4b3bd, #e53935
+'@
+
+# Colour helpers for deriving the overtime colours: the same lightness and strength, a different hue
+function Convert-HslToColour([double]$h, [double]$s, [double]$l) {
+    if ($s -le 0) { $v = [int][math]::Round($l * 255); return [System.Drawing.Color]::FromArgb($v, $v, $v) }
+    $q = if ($l -lt 0.5) { $l * (1 + $s) } else { $l + $s - $l * $s }
+    $p = 2 * $l - $q
+    $hk = $h / 360.0
+    $rgb = @()
+    foreach ($t in @(($hk + 1.0 / 3), $hk, ($hk - 1.0 / 3))) {
+        $tc = $t
+        if ($tc -lt 0) { $tc += 1 }
+        if ($tc -gt 1) { $tc -= 1 }
+        $v = if ($tc -lt 1.0 / 6) { $p + ($q - $p) * 6 * $tc }
+             elseif ($tc -lt 0.5) { $q }
+             elseif ($tc -lt 2.0 / 3) { $p + ($q - $p) * (2.0 / 3 - $tc) * 6 }
+             else { $p }
+        $rgb += [int][math]::Round([math]::Max(0.0, [math]::Min(1.0, $v)) * 255)
+    }
+    return [System.Drawing.Color]::FromArgb($rgb[0], $rgb[1], $rgb[2])
+}
+
+function Get-ShiftedColour($c, [double]$degrees) {
+    $h = ($c.GetHue() + $degrees + 360) % 360
+    return Convert-HslToColour $h $c.GetSaturation() $c.GetBrightness()
+}
+
+function Get-ShiftedState($state, [double]$degrees) {
+    return @{
+        Panel     = Get-ShiftedColour $state.Panel $degrees
+        Circle    = Get-ShiftedColour $state.Circle $degrees
+        CircleHot = Get-ShiftedColour $state.CircleHot $degrees
+        Fill      = Get-ShiftedColour $state.Fill $degrees
+    }
+}
+
+function New-ThemeFromSettings($name, $kv) {
+    try {
+        $text = $kv['text']
+        if (-not $text) { throw 'Text colour is missing' }
+        [void][System.Drawing.ColorTranslator]::FromHtml($text)
+        $band = 45
+        if ($kv.ContainsKey('band')) { $band = [math]::Max(0, [math]::Min(255, [int]$kv['band'])) }
+        $states = @{}
+        foreach ($pair in @(@('working', 'running'), @('lunch', 'paused'), @('overtime', 'overtime'))) {
+            $parts = @($kv[$pair[0]] -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            if ($parts.Count -ne 4) { throw "$($pair[0]) needs four colours" }
+            $states[$pair[1]] = New-State $parts[0] $parts[1] $parts[2] $parts[3]
+        }
+        # Not tracking: its own colours if the theme gives them; otherwise the theme's Overtime colours,
+        # with overtime itself shifted to a purple version of them so the two can be told apart
+        $ntParts = @("$($kv['nottracking'])" -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        if ($ntParts.Count -eq 4) {
+            $notTracking = New-State $ntParts[0] $ntParts[1] $ntParts[2] $ntParts[3]
+            $overtimeState = $states.overtime
+        } else {
+            $notTracking = $states.overtime
+            $overtimeState = Get-ShiftedState $states.overtime -70
+        }
+        return @{ Text = $text; Band = $band; running = $states.running; paused = $states.paused; overtime = $overtimeState; nottracking = $notTracking }
+    } catch {
+        Write-Log "Theme '$name' skipped: $($_.Exception.Message)"
+        return $null
+    }
+}
+
+function ConvertFrom-ThemeText($text) {
+    $sets = [ordered]@{}
+    $name = $null
+    $kv = $null
+    foreach ($raw in ($text -split "`r?`n")) {
+        $line = $raw.Trim()
+        if (-not $line -or $line.StartsWith(';')) { continue }
+        if ($line -match '^\[(.+)\]$') {
+            if ($name) { $t = New-ThemeFromSettings $name $kv; if ($t) { $sets[$name] = $t } }
+            $name = $Matches[1].Trim()
+            $kv = @{}
+            continue
+        }
+        if ($null -ne $kv -and $line -match '^([^=]+)=(.*)$') {
+            $kv[$Matches[1].Trim().ToLower()] = $Matches[2].Trim()
+        }
+    }
+    if ($name) { $t = New-ThemeFromSettings $name $kv; if ($t) { $sets[$name] = $t } }
+    return $sets
+}
+
+function Load-Themes {
+    if (-not (Test-Path $ThemesFile)) {
+        try { Set-Content -Path $ThemesFile -Value $DefaultThemesText -Encoding UTF8 }
+        catch { Write-Log "Could not create the themes file: $($_.Exception.Message)" }
+    }
+    $sets = [ordered]@{}
+    try { $sets = ConvertFrom-ThemeText ((Get-Content $ThemesFile) -join "`n") }
+    catch { Write-Log "Could not read the themes file: $($_.Exception.Message)" }
+    if ($sets.Count -eq 0) {
+        Write-Log 'No usable themes in the themes file, so the standard set is being used.'
+        $sets = ConvertFrom-ThemeText $DefaultThemesText
+    }
+    $script:ThemeSets = $sets
+}
+
+# A small clock badge in the theme's colours, used for windows, dialogs and the tray
+$script:appIcon = $null
+function New-AppIcon($theme, $textColour) {
+    $size = 64
+    $bmp = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.SmoothingMode = 'AntiAlias'
+    $g.Clear([System.Drawing.Color]::Transparent)
+    $path = New-RoundedPath 2 2 60 60 14
+    $bg = New-Object System.Drawing.SolidBrush $theme.Panel
+    $g.FillPath($bg, $path)
+    $ring = New-Object System.Drawing.Pen($theme.Fill, [float]6)
+    $g.DrawEllipse($ring, [float]13, [float]13, [float]38, [float]38)
+    $hand = New-Object System.Drawing.Pen($textColour, [float]5)
+    $hand.StartCap = 'Round'; $hand.EndCap = 'Round'
+    $g.DrawLine($hand, [float]32, [float]32, [float]32, [float]20)
+    $g.DrawLine($hand, [float]32, [float]32, [float]41, [float]37)
+    foreach ($o in @($bg, $ring, $hand, $path, $g)) { $o.Dispose() }
+    $icon = [System.Drawing.Icon]::FromHandle($bmp.GetHicon())
+    return $icon
+}
+
+function Update-AppIcon {
+    try {
+        $script:appIcon = New-AppIcon $Themes.running $cWhite
+        if ($tray) { $tray.Icon = $script:appIcon }
+        if ($script:weekForm -and -not $script:weekForm.IsDisposed) { $script:weekForm.Icon = $script:appIcon }
+    } catch { Write-Log "Icon error: $($_.Exception.Message)" }
+}
+
+# Windows 11: title bar in the theme's colours (ignored on Windows 10)
+function Set-TitleBarColours($win, $theme) {
+    try {
+        $toRef = { param($col) [int]$col.R -bor ([int]$col.G -shl 8) -bor ([int]$col.B -shl 16) }
+        $caption = & $toRef $theme.Panel
+        $textCol = & $toRef $cWhite
+        $border = & $toRef $theme.Circle
+        [void][Win.Dwm]::DwmSetWindowAttribute($win.Handle, 35, [ref]$caption, 4)
+        [void][Win.Dwm]::DwmSetWindowAttribute($win.Handle, 36, [ref]$textCol, 4)
+        [void][Win.Dwm]::DwmSetWindowAttribute($win.Handle, 34, [ref]$border, 4)
+    } catch {}
+}
+
+function Apply-Theme($name) {
+    if (-not $script:ThemeSets.Contains($name)) { $name = @($script:ThemeSets.Keys)[0] }
+    $set = $script:ThemeSets[$name]
+    $script:themeName = $name
+    $script:Themes = $set
+
+    # Text and overlays are all shades of the theme's text colour
+    $t = [System.Drawing.ColorTranslator]::FromHtml($set.Text)
+    $script:cWhite     = $t
+    $script:cFaint     = $C::FromArgb(215, $t)
+    $script:bWhite     = New-Object System.Drawing.SolidBrush $t
+    $script:bFaint     = New-Object System.Drawing.SolidBrush ($C::FromArgb(215, $t))
+    $script:bDim       = New-Object System.Drawing.SolidBrush ($C::FromArgb(140, $t))
+    $script:bTrack     = New-Object System.Drawing.SolidBrush ($C::FromArgb(40, $t))
+    $script:bRowOn     = New-Object System.Drawing.SolidBrush ($C::FromArgb(40, $t))
+    $script:bRowHover  = New-Object System.Drawing.SolidBrush ($C::FromArgb(18, $t))
+    $script:bRowDrag   = New-Object System.Drawing.SolidBrush ($C::FromArgb(60, $t))
+    $script:bGrip      = New-Object System.Drawing.SolidBrush ($C::FromArgb(110, $t))
+    $script:pSep       = New-Object System.Drawing.Pen(($C::FromArgb(35, $t)), 1)
+    $script:pFaint     = New-Object System.Drawing.Pen(($C::FromArgb(215, $t)), 0.8)
+    $script:bLunchBand = New-Object System.Drawing.SolidBrush ($C::FromArgb($set.Band, 0, 0, 0))
+
+    if ($tray) { Update-AppIcon }
+    if ($form) {
+        $form.BackColor = $set.running.Panel
+        Request-Redraw
+    }
+}
+
+function Save-Theme {
+    try { Set-Content -Path $ThemeFile -Value $script:themeName } catch {}
+}
+
+Load-Themes
+$savedTheme = 'Classic'
+if (Test-Path $ThemeFile) { try { $savedTheme = (Get-Content $ThemeFile -TotalCount 1).Trim() } catch {} }
+Apply-Theme $savedTheme
+
+$px = [System.Drawing.GraphicsUnit]::Pixel
+$fDigits = New-Object System.Drawing.Font('Segoe UI Semibold', 36, [System.Drawing.FontStyle]::Regular, $px)
+$fLabel  = New-Object System.Drawing.Font('Segoe UI', 9.5, [System.Drawing.FontStyle]::Bold, $px)
+$fRow    = New-Object System.Drawing.Font('Segoe UI Semibold', 12, [System.Drawing.FontStyle]::Regular, $px)
+$fOvertime = New-Object System.Drawing.Font('Segoe UI Semibold', 24, [System.Drawing.FontStyle]::Regular, $px)
+$fPillTime = New-Object System.Drawing.Font('Segoe UI Semibold', 19, [System.Drawing.FontStyle]::Regular, $px)
+$fPillSub  = New-Object System.Drawing.Font('Segoe UI', 10.5, [System.Drawing.FontStyle]::Regular, $px)
+$fDrawerBtn = New-Object System.Drawing.Font('Segoe UI Semibold', 10.5, [System.Drawing.FontStyle]::Regular, $px)
+$fDrawerText = New-Object System.Drawing.Font('Segoe UI', 11.5, [System.Drawing.FontStyle]::Regular, $px)
+$fDrawerTextBold = New-Object System.Drawing.Font('Segoe UI Semibold', 11.5, [System.Drawing.FontStyle]::Regular, $px)
+
+$sfCentre = New-Object System.Drawing.StringFormat
+$sfCentre.Alignment = 'Center'; $sfCentre.LineAlignment = 'Center'
+$sfLeft = New-Object System.Drawing.StringFormat
+$sfLeft.Alignment = 'Near'; $sfLeft.LineAlignment = 'Center'
+$sfRight = New-Object System.Drawing.StringFormat
+$sfRight.Alignment = 'Far'; $sfRight.LineAlignment = 'Center'
+$sfName = New-Object System.Drawing.StringFormat
+$sfName.Alignment = 'Near'; $sfName.LineAlignment = 'Center'
+$sfName.Trimming = 'EllipsisCharacter'; $sfName.FormatFlags = 'NoWrap'
+
+$RF = [System.Drawing.RectangleF]
+$PF = [System.Drawing.PointF]
+$colX = @(0, 107, 213)
+$colW = 107
+
+if ($script:useRenderer) {
+    try {
+        $script:renderer = New-Object Win.FullRenderer
+        $script:renderer.FontDigits = $fDigits
+        $script:renderer.FontLabel = $fLabel
+        $script:renderer.FontRow = $fRow
+        $script:renderer.FontOvertime = $fOvertime
+        $script:renderer.FontButton = $fDrawerBtn
+        $script:renderer.FontSmall = $fPillSub
+        $script:renderer.CollapseR = [float]$CollapseR
+        $script:renderer.CollapseX = [float]$CollapseX
+        $script:renderer.CollapseY = [float]$CollapseY
+        $script:renderer.DrawerBtnX = [float]$DrawerBtnX
+        $script:renderer.DrawerBtnY = [float]$DrawerBtnY
+        $script:renderer.FontDrawer = $fDrawerText
+        $script:renderer.FontDrawerBold = $fDrawerTextBold
+        $script:renderer.DrawerW = [float]$DrawerSideW
+    } catch {
+        $script:useRenderer = $false
+        $script:rendererError = $_.Exception.Message
+    }
+}
+
+# ---- Window ----
+$form = New-Object System.Windows.Forms.Form
+$form.FormBorderStyle = 'None'
+$form.TopMost = $true
+$form.ShowInTaskbar = $false
+$form.StartPosition = 'Manual'
+$form.BackColor = $Themes.running.Panel
+$form.ClientSize = New-Object System.Drawing.Size([int]($BaseW * $Zoom), [int]($BaseH * $Zoom))
+$form.GetType().GetProperty('DoubleBuffered',
+    [Reflection.BindingFlags]'NonPublic,Instance').SetValue($form, $true, $null)
+
+try {
+    $corner = 2
+    [void][Win.Dwm]::DwmSetWindowAttribute($form.Handle, 33, [ref]$corner, 4)
+} catch {}
+
+try {
+    [Win.Layered]::MakeLayered($form.Handle)
+    $script:layered = $true
+    $script:pillMargin = 10
+    if ($script:useRenderer) {
+        # Room for the full view's shadow, so the window grows slightly to fit it
+        $script:fullMargin = 10
+        $bw, $bh = Get-BaseSize
+        $form.ClientSize = New-Object System.Drawing.Size([int]($bw * $Zoom), [int]($bh * $Zoom))
+    }
+} catch {
+    Write-Log "See-through drawing isn't available, so the timer is using normal drawing. $($_.Exception.Message)"
+}
+
+# Resize and redraw for the scaling of whichever monitor the timer is on
+function Update-Dpi {
+    if (-not $script:perMonitor) { return }
+    try {
+        $dpi = [Win.Dpi]::GetDpiForWindow($form.Handle)
+        if ($dpi -gt 0) {
+            $z = $Scale * $dpi / 96
+            if ([math]::Abs($z - $script:Zoom) -gt 0.001) {
+                $script:Zoom = $z
+                $bw, $bh = Get-BaseSize
+                $form.ClientSize = New-Object System.Drawing.Size([int]($bw * $z), [int]($bh * $z))
+                Request-Redraw
+            }
+        }
+    } catch {}
+}
+Update-Dpi
+$form.Add_LocationChanged({ Update-Dpi })
+
+function Move-ToDefaultPosition {
+    $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $form.Location = New-Object System.Drawing.Point(
+        ($area.Right - $form.Width - 20), ($area.Bottom - $form.Height - 20))
+}
+Move-ToDefaultPosition
+
+# ---- Icons ----
+function Draw-PlayIcon($g, $cx, $cy) {
+    $g.FillPolygon($bWhite, [System.Drawing.PointF[]]@(
+        (New-Object $PF ($cx - 3), ($cy - 5)), (New-Object $PF ($cx - 3), ($cy + 5)),
+        (New-Object $PF ($cx + 5), $cy)))
+}
+
+function Draw-PauseIcon($g, $cx, $cy) {
+    $g.FillRectangle($bWhite, ($cx - 4), ($cy - 5), 2.8, 10)
+    $g.FillRectangle($bWhite, ($cx + 1.2), ($cy - 5), 2.8, 10)
+}
+
+function Draw-LunchIcon($g, $cx, $cy) {
+    # Fork and knife, drawn small to fit the circle
+    $state = $g.Save()
+    $g.TranslateTransform($cx, $cy)
+    $g.ScaleTransform(0.7, 0.7)
+    $pen = New-Object System.Drawing.Pen($cWhite, 1.6)
+    $pen.StartCap = 'Round'; $pen.EndCap = 'Round'
+    $g.DrawLine($pen, -4, -1, -4, 7)
+    foreach ($tx in @(-6.5, -4, -1.5)) { $g.DrawLine($pen, $tx, -7, $tx, -3) }
+    $g.DrawArc($pen, -6.5, -5.5, 5, 4.5, 0, 180)
+    $g.DrawLine($pen, 4.5, 1, 4.5, 7)
+    $g.FillPolygon($bWhite, [System.Drawing.PointF[]]@(
+        (New-Object $PF 3, 1.5), (New-Object $PF 3, -7),
+        (New-Object $PF 6.3, -3), (New-Object $PF 6.3, 1.5)))
+    $pen.Dispose()
+    $g.Restore($state)
+}
+
+# ---- Drawing ----
+# How see-through the account list is (255 = solid). The main timer always stays solid.
+$ListLevels = [ordered]@{ 'Off' = 255; 'Subtle' = 215; 'Medium' = 170; 'Strong' = 125 }
+$BudgetWarnColour = [System.Drawing.ColorTranslator]::FromHtml('#ffc107')
+$BudgetOverColour = [System.Drawing.ColorTranslator]::FromHtml('#ff5252')
+$TextSharpen = 0.8    # see-through text edge sharpening: 1 = none, lower = crisper and bolder
+$BlurTint    = 0.55   # with blur on, the background tint is lightened by this much so the blur shows
+
+function New-RoundedPath([float]$x, [float]$y, [float]$w, [float]$h, [float]$r) {
+    $p = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $d = [float](2 * $r)
+    $p.AddArc($x, $y, $d, $d, [float]180, [float]90)
+    $p.AddArc([float]($x + $w - $d), $y, $d, $d, [float]270, [float]90)
+    $p.AddArc([float]($x + $w - $d), [float]($y + $h - $d), $d, $d, [float]0, [float]90)
+    $p.AddArc($x, [float]($y + $h - $d), $d, $d, [float]90, [float]90)
+    $p.CloseFigure()
+    return $p
+}
+
+# Fill a band of the timer, keeping the rounded corners when drawing as an image
+function Fill-Area($g, $brush, $x, $y, $w, $h) {
+    if ($script:shapePath) {
+        $g.SetClip((New-Object System.Drawing.RectangleF([float]$x, [float]$y, [float]$w, [float]$h)))
+        $g.FillPath($brush, $script:shapePath)
+        $g.ResetClip()
+    } else {
+        $g.FillRectangle($brush, [float]$x, [float]$y, [float]$w, [float]$h)
+    }
+}
+
+# Text in the account list. With transparency on, ClearType can't be used (its coloured
+# edges show up as a halo), so the text's shape is drawn into a mask and then laid onto the
+# timer in its own colour with the edges sharpened.
+function Draw-ListText($g, $text, $font, $brush, $rect, $sf) {
+    if ($script:ct) {
+        $col = $brush.Color
+        $solid = New-Object System.Drawing.SolidBrush ($C::FromArgb(255, $col))
+        $script:ct.G.FillRectangle($solid, $rect)
+        $solid.Dispose()
+        $shape = New-Object System.Drawing.SolidBrush ($C::FromArgb($col.A, 255, 255, 255))
+        $script:ct.M.DrawString($text, $font, $shape, $rect, $sf)
+        $shape.Dispose()
+    } else {
+        $g.DrawString($text, $font, $brush, $rect, $sf)
+    }
+}
+
+# Red while overtime or not tracking, orange on lunch, otherwise the working colours
+function Get-StateTheme($v) {
+    if ($v.OnLunch) { return $Themes.paused }
+    if ($v.Idle) { return $(if ($Themes.nottracking) { $Themes.nottracking } else { $Themes.overtime }) }
+    if ($v.Overtime) { return $Themes.overtime }
+    return $Themes.running
+}
+
+function Draw-Full($g, [bool]$layered) {
+    try {
+        $g.SmoothingMode = 'AntiAlias'
+        $g.TextRenderingHint = 'ClearTypeGridFit'
+        $g.ScaleTransform($Zoom, $Zoom)
+        $v = $script:view
+        if (-not $v) { return }
+
+        $theme = Get-StateTheme $v
+        $alpha = if ($layered) { $script:listAlpha } else { 255 }
+        if ($alpha -lt 255 -and $script:blurOn) { $alpha = [int]($alpha * $BlurTint) }
+        if ($script:drawerOpen) {
+            # The timer sits within a larger L-shaped window that includes the drawer
+            $g.TranslateTransform([float]$script:timerOffX, [float]$script:timerOffY)
+            if ($script:ct) {
+                foreach ($layerG in @($script:ct.G, $script:ct.M)) { $layerG.TranslateTransform([float]$script:timerOffX, [float]$script:timerOffY) }
+            }
+            if ($layered) {
+                $script:shapePath = New-DrawerShape
+                $shift = New-Object System.Drawing.Drawing2D.Matrix
+                $shift.Translate([float](-$script:timerOffX), [float](-$script:timerOffY))
+                $script:shapePath.Transform($shift)
+                $shift.Dispose()
+            } else { $script:shapePath = $null }
+        } else {
+            $script:shapePath = if ($layered) { New-RoundedPath 0 0 $BaseW $BaseH 8 } else { $null }
+        }
+
+        # Solid main timer on top, account list below (see-through if chosen)
+        $split = $RowTop - 17
+        $bg = New-Object System.Drawing.SolidBrush $theme.Panel
+        Fill-Area $g $bg 0 0 $BaseW $split
+        $bg.Dispose()
+        $bg = New-Object System.Drawing.SolidBrush ($C::FromArgb($alpha, $theme.Panel))
+        Fill-Area $g $bg 0 $split $BaseW ($BaseH - $split)
+        $bg.Dispose()
+
+        # Week drawer button (top left, mirroring the compact view button at top right)
+        $dbr = if ($script:handleHover -or $script:drawerOpen) { $bRowOn } else { $bRowHover }
+        $g.FillEllipse($dbr, ($DrawerBtnX - $CollapseR), ($DrawerBtnY - $CollapseR), (2 * $CollapseR), (2 * $CollapseR))
+        $dpen = New-Object System.Drawing.Pen($cWhite, 1.2)
+        $dpen.StartCap = 'Round'; $dpen.EndCap = 'Round'
+        foreach ($ly in @(-2.6, 0, 2.6)) { $g.DrawLine($dpen, [float]($DrawerBtnX - 3), [float]($DrawerBtnY + $ly), [float]($DrawerBtnX + 3), [float]($DrawerBtnY + $ly)) }
+        $dpen.Dispose()
+
+        # Collapse to the compact view
+        $cbr = if ($script:collapseHover) { $bRowOn } else { $bRowHover }
+        $g.FillEllipse($cbr, ($CollapseX - $CollapseR), ($CollapseY - $CollapseR), (2 * $CollapseR), (2 * $CollapseR))
+        $cpen = New-Object System.Drawing.Pen($cWhite, 1.3)
+        $cpen.StartCap = 'Round'; $cpen.EndCap = 'Round'
+        $g.DrawLine($cpen, ($CollapseX - 3), $CollapseY, ($CollapseX + 3), $CollapseY)
+        $cpen.Dispose()
+
+        # Main timer
+        $values = @($v.H, $v.M, $v.Sec)
+        $digitBrush = if ($v.Before) { $bDim } else { $bWhite }
+        for ($i = 0; $i -lt 3; $i++) {
+            $g.DrawString($values[$i], $fDigits, $digitBrush, (New-Object $RF $colX[$i], 2, $colW, 52), $sfCentre)
+        }
+        foreach ($x in @(107, 213)) {
+            $g.FillEllipse($bFaint, ($x - 1.3), 22, 2.6, 2.6)
+            $g.FillEllipse($bFaint, ($x - 1.3), 33, 2.6, 2.6)
+        }
+
+        # Status and unallocated time
+        $statusBrush = if ($v.OnLunch) { $bWhite } else { $bFaint }
+        $g.DrawString($v.Status, $fLabel, $statusBrush, (New-Object $RF 10, 51, 150, 14), $sfLeft)
+        $g.DrawString($v.Unallocated, $fLabel, $bFaint, (New-Object $RF 160, 51, 150, 14), $sfRight)
+
+        # Overtime counter
+        if ($v.Overtime) {
+            $g.DrawLine($pSep, 10, 68, 310, 68)
+            $g.DrawString($v.OT, $fOvertime, $bWhite, (New-Object $RF 0, 69, $BaseW, ($OvertimeH - 2)), $sfCentre)
+        }
+
+        # Progress through the working day
+        $fb = New-Object System.Drawing.SolidBrush $theme.Fill
+        $g.FillRectangle($bTrack, 0, ($RowTop - 20), $BaseW, 3)
+        $g.FillRectangle($fb, 0, ($RowTop - 20), ($BaseW * [math]::Min(1.0, $v.Progress)), 3)
+        $fb.Dispose()
+
+
+        # Column headings
+        Draw-ListText $g 'TODAY' $fLabel $bFaint (New-Object $RF 180, ($RowTop - 14), 70, 14) $sfRight
+        Draw-ListText $g 'WEEK' $fLabel $bFaint (New-Object $RF 250, ($RowTop - 14), 60, 14) $sfRight
+
+        # Slots
+        for ($i = 0; $i -lt $v.Rows.Count; $i++) {
+            $r  = $v.Rows[$i]
+            $y0 = Get-RowTop $i
+            $cy = $y0 + $RowH / 2
+            $isLunch = $r.Name -eq 'Lunch'
+
+            # Lunch sits on its own darker band, set apart from the accounts
+            if ($isLunch) { Fill-Area $g $bLunchBand 0 $y0 $BaseW ($BaseH - $y0) }
+
+            $dragging = [bool]($script:reorder -and $script:reorder.Name -eq $r.Name)
+            if ($dragging) { Fill-Area $g $bRowDrag 0 $y0 $BaseW $RowH }
+            elseif ($r.Active) { Fill-Area $g $bRowOn 0 $y0 $BaseW $RowH }
+            elseif ($script:hover -eq $i) { Fill-Area $g $bRowHover 0 $y0 $BaseW $RowH }
+            if (-not $isLunch) { $g.DrawLine($pSep, 10, $y0, 310, $y0) }
+
+            # Drag handle (accounts only, Lunch stays at the bottom)
+            if ($r.Name -ne 'Lunch') {
+                $gripBrush = if ($dragging -or $script:gripHover -eq $i) { $bWhite } else { $bGrip }
+                foreach ($gx in @(6, 10)) {
+                    foreach ($gy in @(-4, 0, 4)) { $g.FillEllipse($gripBrush, ($gx - 1.1), ($cy + $gy - 1.1), 2.2, 2.2) }
+                }
+            }
+
+            $cb = New-Object System.Drawing.SolidBrush ($(if ($r.Active) { $theme.CircleHot } else { $theme.Circle }))
+            $g.FillEllipse($cb, 18, ($cy - 10), 20, 20)
+            $cb.Dispose()
+
+            if ($r.Active) { Draw-PauseIcon $g 28 $cy }
+            elseif ($r.Name -eq 'Lunch') { Draw-LunchIcon $g 28 $cy }
+            else { Draw-PlayIcon $g 28 $cy }
+
+            # Names use the full width, and only make room while the rounding buttons are showing
+            $todayText = Format-Dur $r.Today
+            $showRound = $r.CanRound -and $script:hover -eq $i -and -not $script:reorder
+            if ($showRound) {
+                $nameW = 88
+            } else {
+                $todayW = $g.MeasureString($todayText, $fRow).Width
+                $nameW = [math]::Max(88.0, 250 - $todayW - 8 - 46)
+            }
+            $nameY = if ($null -ne $r.BudgetFrac) { $y0 - 3 } else { $y0 }
+            Draw-ListText $g $r.Name $fRow $bWhite (New-Object $RF 46, $nameY, $nameW, $RowH) $sfName
+
+            # Budget progress: a fine line under the name, amber from 80%, red once over
+            if ($null -ne $r.BudgetFrac) {
+                $barW = 60
+                $by = [float]($y0 + $RowH - 7)
+                $g.FillRectangle($bTrack, [float]46, $by, [float]$barW, [float]3)
+                $bc = if ($r.BudgetFrac -ge 1) { $BudgetOverColour } elseif ($r.BudgetFrac -ge 0.8) { $BudgetWarnColour } else { $theme.Fill }
+                $bbr = New-Object System.Drawing.SolidBrush $bc
+                $fillW = $barW * [math]::Min(1.0, $r.BudgetFrac)
+                if ($r.BudgetFrac -gt 0 -and $fillW -lt 2) { $fillW = 2 }
+                $g.FillRectangle($bbr, [float]46, $by, [float]$fillW, [float]3)
+                $bbr.Dispose()
+            }
+            Draw-ListText $g $todayText $fRow $bWhite (New-Object $RF 180, $y0, 70, $RowH) $sfRight
+            Draw-ListText $g (Format-Dur $r.Week) $fLabel $bFaint (New-Object $RF 250, $y0, 60, $RowH) $sfRight
+
+            # Round-down and round-up buttons, shown when hovering over a row that isn't on a 15-minute mark
+            if ($showRound) {
+                foreach ($dir in @('down', 'up')) {
+                    $bx = $RoundXs[$dir]
+                    $key = '{0}:{1}' -f $i, $dir
+                    $rc = if ($script:roundHover -eq $key) { $theme.CircleHot } else { $theme.Circle }
+                    $rbr = New-Object System.Drawing.SolidBrush $rc
+                    $g.FillEllipse($rbr, ($bx - $RoundR), ($cy - $RoundR), (2 * $RoundR), (2 * $RoundR))
+                    $rbr.Dispose()
+                    $tipY = if ($dir -eq 'up') { -1.8 } else { 1.8 }
+                    $cp = New-Object System.Drawing.Pen($cWhite, 1.5)
+                    $cp.StartCap = 'Round'; $cp.EndCap = 'Round'; $cp.LineJoin = 'Round'
+                    $g.DrawLines($cp, [System.Drawing.PointF[]]@(
+                        (New-Object $PF ($bx - 3.5), ($cy - $tipY)),
+                        (New-Object $PF $bx, ($cy + $tipY)),
+                        (New-Object $PF ($bx + 3.5), ($cy - $tipY))))
+                    $cp.Dispose()
+                }
+            }
+        }
+
+        if ($script:drawerOpen) {
+            $g.TranslateTransform([float](-$script:timerOffX), [float](-$script:timerOffY))
+            if ($layered) { Draw-DrawerCached $g $theme } else { Draw-Drawer $g $theme }
+        }
+    } catch {
+        Write-Log "Drawing error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)"
+    } finally {
+        if ($script:shapePath) { $script:shapePath.Dispose(); $script:shapePath = $null }
+    }
+}
+
+# ---- Week drawer ----
+
+# The outline of timer and drawer together: an L shape with a curved inner corner.
+# Built for 'drawer below, timer on the right', then mirrored for the other cases.
+function New-DrawerShape {
+    # Built for 'drawer on the left, timer on the right', then mirrored if the drawer is on the right
+    $jx = [float]($DrawerSideW - 1)                 # where drawer meets timer
+    $W  = [float]($DrawerSideW + $BaseW - 2)
+    $H1 = [float]($script:drawerH - 2)              # drawer (at least as tall as the timer)
+    $H2 = [float]($BaseH - 2)                       # timer
+    $d  = [float]16
+    $p = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $p.AddArc([float]0, [float]0, $d, $d, [float]180, [float]90)
+    $p.AddArc([float]($W - $d), [float]0, $d, $d, [float]270, [float]90)
+    $p.AddArc([float]($W - $d), [float]($H2 - $d), $d, $d, [float]0, [float]90)
+    if (($H1 - $H2) -ge $d) {
+        # Drawer is taller: curve in under the timer, then down to the drawer's own corner
+        $p.AddArc($jx, $H2, $d, $d, [float]270, [float]-90)
+        $p.AddArc([float]($jx - $d), [float]($H1 - $d), $d, $d, [float]0, [float]90)
+    }
+    $p.AddArc([float]0, [float]($H1 - $d), $d, $d, [float]90, [float]90)
+    $p.CloseFigure()
+    if ($script:timerOffX -eq 0) {
+        $mx = New-Object System.Drawing.Drawing2D.Matrix([float]-1, [float]0, [float]0, [float]1, $W, [float]0)
+        $p.Transform($mx); $mx.Dispose()
+    }
+    $mt = New-Object System.Drawing.Drawing2D.Matrix
+    $mt.Translate([float]1, [float]1)
+    $p.Transform($mt); $mt.Dispose()
+    return $p
+}
+
+# Budgets for the current period, for the drawer
+function Get-BudgetLines {
+    $out = @()
+    foreach ($n in @($script:accounts | ForEach-Object { $_.Name })) {
+        $b = $script:budgets[$n]
+        if (-not $b) { continue }
+        $used = if ($b.Period -eq 'week') { [double]$script:weekDone[$n] }
+                elseif ($b.Period -eq 'month') { [double]$script:monthDone[$n] }
+                else { [double]$script:quarterDone[$n] }
+        if ($script:active -and $script:active.Name -eq $n) { $used += ((Get-Date) - $script:active.Start).TotalSeconds }
+        $out += @{ Name = $n; Frac = ($used / ($b.Hours * 3600)); Period = $b.Period
+                   Short = ('{0} of {1}h' -f (Format-Dur $used), $b.Hours.ToString('0.##', $Inv))
+                   Text = ('{0} of {1}h this {2}' -f (Format-Dur $used), $b.Hours.ToString('0.##', $Inv), $b.Period) }
+    }
+    return $out
+}
+
+$DrawerRowH = 19
+function Measure-DrawerHeight {
+    $d = $script:drawerData
+    $rows = 1 + @($d.Names).Count + 3
+    $h = 10 + 34 + $DrawerRowH * $rows + 10
+    $nb = @($script:drawerBudgets).Count
+    if ($nb -gt 0) { $h += 8 + 18 + 20 * $nb }
+    return $h
+}
+
+function Get-DrawerHeight {
+    $content = Measure-DrawerHeight
+    if ($content -lt ($BaseH + 16)) { return $BaseH }
+    return $content
+}
+
+function Refresh-DrawerData {
+    if (-not $script:drawerWeek) { $script:drawerWeek = Get-WeekStart }
+    $script:drawerData = Get-WeekData $script:drawerWeek
+    $script:drawerBudgets = @(Get-BudgetLines)
+    $script:drawerH = Get-DrawerHeight
+    $script:drawerVersion++
+    if ($script:useRenderer) { Build-DrawerModel }
+}
+
+function Build-DrawerModel {
+    $d = $script:drawerData
+    $ws = $script:drawerWeek
+    $m = New-Object Win.DrawerModel
+    $m.Title = 'Week of ' + $ws.ToString('d MMMM', $GB)
+    $m.DayLabels = [string[]]@($d.Days | ForEach-Object { $ws.AddDays($_).ToString('ddd dd', $GB).ToUpper() })
+    $m.NextEnabled = $ws -lt (Get-WeekStart)
+    $m.FormatLabel = if ($script:hoursFormat -eq 'decimal') { 'h:mm' } else { 'Decimal' }
+    $dayTotals = New-Object double[] 7
+    foreach ($n in $d.Names) { foreach ($dd in $d.Days) { $dayTotals[$dd] += $d.Accounts[$n][$dd] } }
+    $specs = @()
+    foreach ($n in $d.Names) { $specs += ,@($n, 'normal', $d.Accounts[$n]) }
+    $specs += ,@('Total', 'bold', $dayTotals)
+    $specs += ,@('Lunch', 'faint', $d.Lunch)
+    $specs += ,@('Unallocated', 'faint', $d.Unalloc)
+    foreach ($sp in $specs) {
+        $vals = $sp[2]
+        $row = New-Object Win.DrawerRow
+        $row.Name = $sp[0]
+        $row.Style = $sp[1]
+        $row.Cells = [string[]]@($d.Days | ForEach-Object { Format-Hours $vals[$_] })
+        $sum = 0.0
+        foreach ($dd in $d.Days) { $sum += $vals[$dd] }
+        $row.Total = Format-Hours $sum
+        [void]$m.Rows.Add($row)
+    }
+    $periods = @($script:drawerBudgets | ForEach-Object { $_.Period } | Select-Object -Unique)
+    $onePeriod = $periods.Count -eq 1
+    if ($onePeriod) { $m.BudgetsHeading = 'BUDGETS THIS ' + $periods[0].ToUpper() }
+    foreach ($bl in $script:drawerBudgets) {
+        $bm = New-Object Win.DrawerBudget
+        $bm.Name = $bl.Name; $bm.Frac = [double]$bl.Frac
+        $bm.Text = if ($onePeriod) { $bl.Short } else { '{0} ({1})' -f $bl.Short, $bl.Period }
+        [void]$m.Budgets.Add($bm)
+    }
+    $script:drawerModel = $m
+}
+
+# Where the timer itself is on screen (its window may be larger when the drawer is open)
+function Get-TimerScreenPos {
+    $mg = $script:fullMargin
+    return New-Object System.Drawing.Point(($form.Left + [int](($script:timerOffX + $mg) * $Zoom)), ($form.Top + [int](($script:timerOffY + $mg) * $Zoom)))
+}
+
+# Put the full view's window so the timer itself lands at this screen position
+function Set-TimerScreenPos($pt) {
+    $mg = $script:fullMargin
+    $form.Location = New-Object System.Drawing.Point(($pt.X - [int](($script:timerOffX + $mg) * $Zoom)), ($pt.Y - [int](($script:timerOffY + $mg) * $Zoom)))
+}
+
+# Window coordinates to timer coordinates
+function Get-TimerPoint($pt) {
+    $mg = $script:fullMargin
+    return New-Object System.Drawing.Point(([int]($pt.X - ($script:timerOffX + $mg) * $Zoom)), ([int]($pt.Y - ($script:timerOffY + $mg) * $Zoom)))
+}
+
+# Size and place the window so the timer stays put and the drawer opens where there's room
+function Update-DrawerGeometry($tl) {
+    if (-not $tl) { $tl = Get-TimerScreenPos }
+    if ($script:mode -eq 'full') { $script:fullMargin = Get-WantedFullMargin }
+    if ($script:drawerOpen) {
+        # Out to the left if there's room (the usual case with the timer on the right), otherwise the right
+        $area = [System.Windows.Forms.Screen]::FromPoint($tl).WorkingArea
+        $leftRoom = ($tl.X - $DrawerSideW * $Zoom) -ge $area.Left
+        $script:drawerUp = $false
+        $script:timerOffX = if ($leftRoom) { $DrawerSideW } else { 0 }
+        $script:timerOffY = 0
+    } else {
+        $script:timerOffX = 0; $script:timerOffY = 0; $script:drawerUp = $false
+    }
+    $bw, $bh = Get-BaseSize
+    $form.ClientSize = New-Object System.Drawing.Size([int]($bw * $Zoom), [int]($bh * $Zoom))
+    Set-TimerScreenPos $tl
+}
+
+function Set-DrawerOpen([bool]$open, [switch]$Starting) {
+    if ($script:mode -ne 'full') { return }
+    $tl = Get-TimerScreenPos
+    $script:drawerOpen = $open
+    if ($open) {
+        if (-not $Starting) { $script:drawerWeek = Get-WeekStart }
+        Refresh-DrawerData
+    } elseif ($script:drawerCache) {
+        $script:drawerCache.Dispose(); $script:drawerCache = $null; $script:drawerCacheKey = ''
+    }
+    Update-DrawerGeometry $tl
+    Apply-CornerStyle
+    $script:regionKey = ''
+    Update-Region
+    if (-not $Starting) { try { Set-Content -Path $DrawerFile -Value ([int]$open) } catch {} }
+    $script:drawerHover = $null
+    $tip.Hide($form)
+    Apply-BlurState
+    Update-View
+    Request-Redraw
+}
+
+# Refresh the figures; resize if the number of rows changed
+function Update-DrawerContent {
+    if (-not $script:drawerOpen) { return }
+    $oldH = $script:drawerH
+    Refresh-DrawerData
+    if ($script:drawerH -ne $oldH) { Update-DrawerGeometry }
+    Request-Redraw
+}
+
+function Test-InDrawer($pt) {
+    if (-not $script:drawerOpen) { return $false }
+    $x = $pt.X / $Zoom - $script:fullMargin
+    if ($script:timerOffX -gt 0) { return $x -lt $DrawerSideW }
+    return $x -ge $BaseW
+}
+
+function Get-DrawerButtonAt($pt) {
+    $x = [float]($pt.X / $Zoom); $y = [float]($pt.Y / $Zoom)
+    foreach ($b in $script:drawerButtons) { if ($b.Rect.Contains($x, $y)) { return $b.Id } }
+    return $null
+}
+
+function Test-HitUnalloc($tp) {
+    $x = $tp.X / $Zoom; $y = $tp.Y / $Zoom
+    return ($x -ge 160 -and $x -le 312 -and $y -ge 48 -and $y -le 67)
+}
+
+function Test-HitHandle($tp) {
+    $x = $tp.X / $Zoom; $y = $tp.Y / $Zoom
+    $dx = $x - $DrawerBtnX; $dy = $y - $DrawerBtnY
+    $r = $CollapseR + 3
+    return (($dx * $dx + $dy * $dy) -le ($r * $r))
+}
+
+function Get-DrawerTableLines {
+    $d = $script:drawerData
+    $ws = $script:drawerWeek
+    $lines = @()
+    $lines += (@('Account') + @($d.Days | ForEach-Object { $ws.AddDays($_).ToString('ddd dd/MM', $GB) }) + @('Total')) -join "`t"
+    $dayTotals = New-Object double[] 7
+    $rowsOut = @()
+    foreach ($n in $d.Names) {
+        $rowsOut += ,@($n, $d.Accounts[$n])
+        foreach ($dd in $d.Days) { $dayTotals[$dd] += $d.Accounts[$n][$dd] }
+    }
+    $rowsOut += ,@('Total (excluding lunch)', $dayTotals)
+    $rowsOut += ,@('Lunch', $d.Lunch)
+    $rowsOut += ,@('Unallocated', $d.Unalloc)
+    foreach ($ro in $rowsOut) {
+        $sum = 0.0
+        $cells = @($ro[0])
+        foreach ($dd in $d.Days) { $cells += (Format-Hours $ro[1][$dd]); $sum += $ro[1][$dd] }
+        $cells += (Format-Hours $sum)
+        $lines += ($cells -join "`t")
+    }
+    return $lines
+}
+
+function Invoke-DrawerButton($id) {
+    switch ($id) {
+        'prev' {
+            $script:drawerWeek = $script:drawerWeek.AddDays(-7)
+            Update-DrawerContent
+        }
+        'next' {
+            if ($script:drawerWeek -lt (Get-WeekStart)) { $script:drawerWeek = $script:drawerWeek.AddDays(7); Update-DrawerContent }
+        }
+        'copy' {
+            [System.Windows.Forms.Clipboard]::SetText(((Get-DrawerTableLines) -join "`r`n"))
+            $b = $script:drawerButtons | Where-Object { $_.Id -eq 'copy' } | Select-Object -First 1
+            if ($b) { $tip.Show('Copied, ready to paste', $form, [int]($b.Rect.X * $Zoom), [int](($b.Rect.Bottom + 4) * $Zoom), 1500) }
+        }
+        'weekly' { try { Show-WeeklyView } catch { Show-WeeklyError $_ } }
+        'format' { Switch-HoursFormat }
+    }
+}
+
+# The drawer only changes when its figures refresh, a button is hovered, or the theme, colour state
+# or size changes, so it's drawn once into a stored image and that image is reused every second.
+function Draw-DrawerCached($g, $theme) {
+    $w = $form.ClientSize.Width
+    $h = $form.ClientSize.Height
+    $key = '{0}|{1}|{2}|{3}|{4}x{5}|{6}|{7}|{8}|{9}' -f $script:drawerVersion, $script:drawerHover, $script:themeName,
+           $theme.Panel.ToArgb(), $w, $h, $Zoom, $script:timerOffX, [bool]$PillShadow, $BaseH
+    if ($key -ne $script:drawerCacheKey -or -not $script:drawerCache) {
+        if ($script:drawerCache) { $script:drawerCache.Dispose(); $script:drawerCache = $null }
+        $img = New-Object System.Drawing.Bitmap($w, $h, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        $ig = [System.Drawing.Graphics]::FromImage($img)
+        try {
+            $ig.Clear([System.Drawing.Color]::Transparent)
+            $ig.SmoothingMode = 'AntiAlias'
+            $ig.TextRenderingHint = 'ClearTypeGridFit'
+            $ig.ScaleTransform($Zoom, $Zoom)
+            Draw-Drawer $ig $theme
+        } finally { $ig.Dispose() }
+        $script:drawerCache = $img
+        $script:drawerCacheKey = $key
+        $script:drawerCacheBuilds++
+    }
+    # Copy it pixel for pixel, with no scaling or smoothing
+    $state = $g.Save()
+    $g.ResetTransform()
+    $g.InterpolationMode = 'NearestNeighbor'
+    $g.PixelOffsetMode = 'Half'
+    $g.DrawImage($script:drawerCache, (New-Object System.Drawing.Rectangle(0, 0, $w, $h)))
+    $g.Restore($state)
+}
+
+function Draw-Drawer($g, $theme) {
+    $DW = [float]$DrawerSideW
+    $H = [float]$script:drawerH
+    $dx = if ($script:timerOffX -gt 0) { [float]0 } else { [float]$BaseW }   # drawer's left edge
+
+    # Background: the drawer and any curved join, leaving the timer as it is
+    $shape = New-DrawerShape
+    $bg = New-Object System.Drawing.SolidBrush $theme.Panel
+    $g.SetClip($shape)
+    $g.SetClip((New-Object System.Drawing.RectangleF([float]$script:timerOffX, [float]0, [float]$BaseW, [float]$BaseH)), [System.Drawing.Drawing2D.CombineMode]::Exclude)
+    $g.FillRectangle($bg, [float]0, [float]0, [float]($DW + $BaseW), $H)
+    $g.ResetClip()
+    $bg.Dispose()
+    if ($script:layered -and $PillShadow) {
+        $rimPen = New-Object System.Drawing.Pen(($C::FromArgb(45, $cWhite)), [float]1)
+        $g.DrawPath($rimPen, $shape)
+        $rimPen.Dispose()
+    }
+    $shape.Dispose()
+    $seamX = if ($script:timerOffX -gt 0) { $DW } else { [float]$BaseW }
+    $g.DrawLine($pSep, $seamX, [float]12, $seamX, [float]($BaseH - 12))
+
+    $d = $script:drawerData
+    if (-not $d) { return }
+    $pad = [float]14
+    $x0 = $dx + $pad
+    $xR = $dx + $DW - $pad
+    $y = [float]10
+    $ws = $script:drawerWeek
+
+    # Title and buttons
+    $g.DrawString(('Week of ' + $ws.ToString('d MMMM', $GB)), $fRow, $bWhite, (New-Object $RF $x0, $y, 170, 24), $sfName)
+    $script:drawerButtons = @()
+    $bx = $xR
+    $isCurrent = $ws -ge (Get-WeekStart)
+    $fmtLabel = if ($script:hoursFormat -eq 'decimal') { 'h:mm' } else { 'Decimal' }
+    foreach ($def in @(@('weekly', 'Weekly view'), @('copy', 'Copy'), @('format', $fmtLabel), @('next', 'Next'), @('prev', 'Previous'))) {
+        $txt = $def[1]
+        $tw = [float]($g.MeasureString($txt, $fDrawerBtn).Width + 16)
+        $bx -= $tw
+        $rect = New-Object $RF $bx, ($y + 1), $tw, 22
+        $enabled = -not ($def[0] -eq 'next' -and $isCurrent)
+        $col = if (-not $enabled) { Mix-Colour $theme.Panel $theme.Circle 0.45 }
+               elseif ($script:drawerHover -eq $def[0]) { $theme.CircleHot }
+               else { $theme.Circle }
+        $bp = New-RoundedPath $rect.X $rect.Y $rect.Width $rect.Height ([float]11)
+        $bb = New-Object System.Drawing.SolidBrush $col
+        $g.FillPath($bb, $bp)
+        $bb.Dispose(); $bp.Dispose()
+        $g.DrawString($txt, $fDrawerBtn, $(if ($enabled) { $bWhite } else { $bDim }), $rect, $sfCentre)
+        if ($enabled) { $script:drawerButtons += @{ Id = $def[0]; Rect = $rect } }
+        $bx -= 6
+    }
+    $y += 34
+
+    # Hours by account and day
+    $days = @($d.Days)
+    $nameW = [float]140
+    $tableW = $DW - 2 * $pad
+    $colW = [float](($tableW - $nameW) / ($days.Count + 1))
+    $rowH = [float]$DrawerRowH
+    $g.DrawString('ACCOUNT', $fLabel, $bFaint, (New-Object $RF $x0, $y, $nameW, $rowH), $sfName)
+    for ($j = 0; $j -lt $days.Count; $j++) {
+        $label = $ws.AddDays($days[$j]).ToString('ddd dd', $GB).ToUpper()
+        $g.DrawString($label, $fLabel, $bFaint, (New-Object $RF ($x0 + $nameW + $j * $colW), $y, ($colW - 4), $rowH), $sfRight)
+    }
+    $g.DrawString('TOTAL', $fLabel, $bFaint, (New-Object $RF ($x0 + $nameW + $days.Count * $colW), $y, ($colW - 4), $rowH), $sfRight)
+    $y += $rowH
+
+    $dayTotals = New-Object double[] 7
+    $tableRows = @()
+    foreach ($n in $d.Names) {
+        $tableRows += @{ Name = $n; Values = $d.Accounts[$n]; Style = 'normal' }
+        foreach ($dd in $days) { $dayTotals[$dd] += $d.Accounts[$n][$dd] }
+    }
+    $tableRows += @{ Name = 'Total'; Values = $dayTotals; Style = 'bold' }
+    $tableRows += @{ Name = 'Lunch'; Values = $d.Lunch; Style = 'faint' }
+    $tableRows += @{ Name = 'Unallocated'; Values = $d.Unalloc; Style = 'faint' }
+    foreach ($tr in $tableRows) {
+        $g.DrawLine($pSep, $x0, $y, $xR, $y)
+        $font = if ($tr.Style -eq 'bold') { $fDrawerBtn } else { $fPillSub }
+        $brush = if ($tr.Style -eq 'faint') { $bFaint } else { $bWhite }
+        $g.DrawString($tr.Name, $font, $brush, (New-Object $RF $x0, $y, ($nameW - 6), $rowH), $sfName)
+        $sum = 0.0
+        for ($j = 0; $j -lt $days.Count; $j++) {
+            $v = $tr.Values[$days[$j]]
+            $sum += $v
+            $g.DrawString((Format-Hours $v), $font, $brush, (New-Object $RF ($x0 + $nameW + $j * $colW), $y, ($colW - 4), $rowH), $sfRight)
+        }
+        $g.DrawString((Format-Hours $sum), $fDrawerBtn, $brush, (New-Object $RF ($x0 + $nameW + $days.Count * $colW), $y, ($colW - 4), $rowH), $sfRight)
+        $y += $rowH
+    }
+
+    # Budgets
+    if (@($script:drawerBudgets).Count -gt 0) {
+        $y += 8
+        $bPeriods = @($script:drawerBudgets | ForEach-Object { $_.Period } | Select-Object -Unique)
+        $bHeading = if ($bPeriods.Count -eq 1) { 'BUDGETS THIS ' + $bPeriods[0].ToUpper() } else { 'BUDGETS' }
+        $g.DrawString($bHeading, $fLabel, $bFaint, (New-Object $RF $x0, $y, 260, 16), $sfName)
+        $y += 18
+        foreach ($bl in $script:drawerBudgets) {
+            $g.DrawString($bl.Name, $fPillSub, $bWhite, (New-Object $RF $x0, $y, ($nameW - 6), 20), $sfName)
+            $barX = $x0 + $nameW
+            $barY = [float]($y + 9)
+            $g.FillRectangle($bTrack, $barX, $barY, [float]140, [float]3)
+            $bc = if ($bl.Frac -ge 1) { $BudgetOverColour } elseif ($bl.Frac -ge 0.8) { $BudgetWarnColour } else { $theme.Fill }
+            $fillW = [float](140 * [math]::Min(1.0, $bl.Frac))
+            if ($bl.Frac -gt 0 -and $fillW -lt 2) { $fillW = 2 }
+            $bbr = New-Object System.Drawing.SolidBrush $bc
+            $g.FillRectangle($bbr, $barX, $barY, $fillW, [float]3)
+            $bbr.Dispose()
+            $bText = if ($bPeriods.Count -eq 1) { $bl.Short } else { '{0} ({1})' -f $bl.Short, $bl.Period }
+            $g.DrawString($bText, $fPillSub, $bFaint, (New-Object $RF ($barX + 150), $y, ($tableW - $nameW - 150), 20), $sfRight)
+            $y += 20
+        }
+    }
+}
+
+function Draw-Pill($g, [bool]$layered) {
+    try {
+        $g.SmoothingMode = 'AntiAlias'
+        $g.TextRenderingHint = 'ClearTypeGridFit'
+        $g.ScaleTransform($Zoom, $Zoom)
+        $v = $script:view
+        if (-not $v) { return }
+
+        $theme = Get-StateTheme $v
+        $L = Get-PillLayout
+        $H = $L.Height
+        $hy = $L.HeaderY
+        $inset = 1.5
+        $panelCol = $theme.Panel
+
+        # Slow breathing (0 to 1): about 3 seconds for the not-tracking glow, 2 for the live dot
+        $t = $script:animClock.Elapsed.TotalSeconds
+        $breath = 0.5 - 0.5 * [math]::Cos(2 * [math]::PI * $t / 3.2)
+        $dotBreath = 0.5 - 0.5 * [math]::Cos(2 * [math]::PI * $t / 2.0)
+        $nagging = $PillPulse -and $v.Idle -and -not $v.Before
+
+        # Shadow (or, when not tracking, a soft glow in the theme's colour that breathes)
+        $mg = $script:pillMargin
+        if ($layered -and $mg -gt 0) {
+            if ($nagging) { Draw-PillShadow $g $mg $mg $PillW $H $theme.Fill (0.55 + 1.1 * $breath) 0 }
+            elseif ($PillShadow) { Draw-PillShadow $g $mg $mg $PillW $H ([System.Drawing.Color]::Black) 1.0 1.5 }
+            $g.TranslateTransform([float]$mg, [float]$mg)
+        }
+        if ($nagging) { $panelCol = Mix-Colour $theme.Panel $theme.CircleHot (0.22 * $breath) }
+
+        # Drawn slightly inside the window's rounded cut, so the cut never clips the smooth edges
+        $script:shapePath = if ($layered) { New-RoundedPath $inset $inset ($PillW - 2 * $inset) ($H - 2 * $inset) (($PillH - 2 * $inset) / 2) } else { $null }
+        $bg = New-Object System.Drawing.SolidBrush $panelCol
+        Fill-Area $g $bg 0 0 $PillW $H
+        $bg.Dispose()
+
+        # ---- Header ----
+        $listW = $PillBtnX - $PillBtnR - 4 - $PillTimeW
+        if ($script:pillHover -eq 'time') { Fill-Area $g $bRowHover 0 $hy $PillTimeW $PillH }
+        elseif ($script:pillHover -eq 'list' -or $script:pillOpen) { Fill-Area $g $bRowHover $PillTimeW $hy $listW $PillH }
+
+        # The day so far (or overtime)
+        $timeBrush = if ($v.Before) { $bDim } else { $bWhite }
+        $g.DrawString($v.PillTime, $fPillTime, $timeBrush, (New-Object $RF 6, $hy, ($PillTimeW - 6), ($PillH - 2)), $sfCentre)
+        $g.DrawLine($pSep, $PillTimeW, ($hy + 10), $PillTimeW, ($hy + $PillH - 10))
+
+        # What's being tracked
+        if ($v.OnLunch)        { $line1 = 'On lunch';            $line2 = $v.ActiveToday }
+        elseif ($v.ActiveName) { $line1 = $v.ActiveName;          $line2 = $v.ActiveToday }
+        elseif ($v.Before)     { $line1 = "Starts at $($v.StartLabel)"; $line2 = 'Nothing running' }
+        elseif ($v.DayOff)     { $line1 = 'Day off';               $line2 = 'Nothing running' }
+        else                   { $line1 = 'Not tracking';         $line2 = $v.UnallocText }
+        $tx = $PillTimeW + 9
+        if ($PillLiveDot -and $v.ActiveName) {
+            # Breathing 'recording' dot
+            $da = [int](90 + 165 * $dotBreath)
+            $db = New-Object System.Drawing.SolidBrush ($C::FromArgb($da, $cWhite))
+            $g.FillEllipse($db, [float]($tx + 0.5), [float]($hy + 10.8), [float]6, [float]6)
+            $db.Dispose()
+            $tx += 11
+        }
+        $tw = $PillBtnX - $PillBtnR - 6 - $tx
+        $g.DrawString($line1, $fRow, $bWhite, (New-Object $RF $tx, ($hy + 5), $tw, 18), $sfName)
+        $g.DrawString($line2, $fPillSub, $bFaint, (New-Object $RF $tx, ($hy + 22), $tw, 15), $sfName)
+
+        # Play / pause
+        $cy = $hy + $PillH / 2
+        $cc = if ($script:pillHover -eq 'button') { $theme.CircleHot } else { $theme.Circle }
+        $cb = New-Object System.Drawing.SolidBrush $cc
+        $g.FillEllipse($cb, ($PillBtnX - $PillBtnR), ($cy - $PillBtnR), (2 * $PillBtnR), (2 * $PillBtnR))
+        $cb.Dispose()
+        if ($v.ActiveName) { Draw-PauseIcon $g $PillBtnX $cy } else { Draw-PlayIcon $g ($PillBtnX + 1) $cy }
+
+        # Progress through the day, as a fine line along the bottom of the header
+        $py = $hy + $PillH - 4
+        $g.FillRectangle($bTrack, 18, $py, ($PillW - 36), 2)
+        $fb = New-Object System.Drawing.SolidBrush $theme.Fill
+        $g.FillRectangle($fb, 18, $py, (($PillW - 36) * [math]::Min(1.0, $v.Progress)), 2)
+        $fb.Dispose()
+
+        # ---- Account list ----
+        if ($script:pillOpen) {
+            $sy = if ($script:pillUp) { $hy } else { $hy + $PillH }
+            $g.DrawLine($pSep, 14, $sy, ($PillW - 14), $sy)
+            for ($i = 0; $i -lt $v.Rows.Count; $i++) {
+                $r  = $v.Rows[$i]
+                $y0 = Get-PillRowTop $i
+                $rc = $y0 + $PillRowH / 2
+                $isLunch = $r.Name -eq 'Lunch'
+                if ($isLunch) { $g.DrawLine($pSep, 14, ($y0 - $PillLunchGap / 2), ($PillW - 14), ($y0 - $PillLunchGap / 2)) }
+
+                $key = 'row:' + $i
+                if ($r.Active) { Fill-Area $g $bRowOn 6 $y0 ($PillW - 12) $PillRowH }
+                elseif ($script:pillHover -eq $key) { Fill-Area $g $bRowHover 6 $y0 ($PillW - 12) $PillRowH }
+
+                $ccol = if ($r.Active) { $theme.CircleHot } else { $theme.Circle }
+                $cbr = New-Object System.Drawing.SolidBrush $ccol
+                $g.FillEllipse($cbr, 15, ($rc - 9), 18, 18)
+                $cbr.Dispose()
+                if ($r.Active) { Draw-PauseIcon $g 24 $rc }
+                elseif ($isLunch) { Draw-LunchIcon $g 24 $rc }
+                else { Draw-PlayIcon $g 25 $rc }
+
+                $g.DrawString($r.Name, $fRow, $bWhite, (New-Object $RF 40, $y0, ($PillW - 40 - 72), $PillRowH), $sfName)
+                $g.DrawString((Format-Dur $r.Today), $fPillSub, $bFaint, (New-Object $RF ($PillW - 76), $y0, 62, $PillRowH), $sfRight)
+            }
+        }
+
+        if ($layered -and $PillShadow -and $script:shapePath) {
+            $rimPen = New-Object System.Drawing.Pen(($C::FromArgb(60, $cWhite)), [float]1)
+            $g.DrawPath($rimPen, $script:shapePath)
+            $rimPen.Dispose()
+        }
+    } catch {
+        Write-Log "Drawing error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)"
+    } finally {
+        if ($script:shapePath) { $script:shapePath.Dispose(); $script:shapePath = $null }
+    }
+}
+
+# Soft shadow or glow: layered rounded shapes, faintest at the outside
+function Draw-PillShadow($g, [float]$x, [float]$y, [float]$w, [float]$h, $colour, [double]$strength, [float]$drop) {
+    $steps = 6
+    for ($i = $steps; $i -ge 1; $i--) {
+        $sp = [float]($i * 1.4)
+        $a = [int][math]::Min(255.0, $strength * 16 * (($steps - $i + 1) / $steps))
+        if ($a -le 0) { continue }
+        $path = New-RoundedPath ($x - $sp) ($y - $sp + $drop) ($w + 2 * $sp) ($h + 2 * $sp) ([float]($PillH / 2 + $sp))
+        $br = New-Object System.Drawing.SolidBrush ($C::FromArgb($a, $colour))
+        $g.FillPath($br, $path)
+        $br.Dispose()
+        $path.Dispose()
+    }
+}
+
+function Draw-Timer($g, [bool]$layered) {
+    if ($script:mode -eq 'pill') { Draw-Pill $g $layered } else { Draw-Full $g $layered }
+}
+
+# Normal drawing, used if see-through drawing isn't available
+$form.Add_Paint({ if (-not $script:layered) { Draw-Timer $_.Graphics $false } })
+
+# ---- Drawing speed check: the most recent 300 redraws for each kind of view ----
+$script:perf = @{}
+function Get-PerfKey {
+    if ($script:mode -eq 'pill') {
+        if ($script:pillOpen) { return 'Compact view with account list' }
+        return 'Compact view'
+    }
+    $key = if ($script:drawerOpen) { 'Full view with week drawer' } else { 'Full view' }
+    if ($script:listAlpha -lt 255) { $key += ', see-through list' }
+    return $key
+}
+
+function Add-PerfSample($key, [double]$total, [double]$draw, [double]$text, [double]$push) {
+    if (-not $script:perf.ContainsKey($key)) { $script:perf[$key] = New-Object System.Collections.ArrayList }
+    $list = $script:perf[$key]
+    [void]$list.Add(@($total, $draw, $text, $push))
+    if ($list.Count -gt 300) { $list.RemoveAt(0) }
+}
+
+function Get-Percentile($values, [double]$pc) {
+    $sorted = @($values | Sort-Object)
+    if ($sorted.Count -eq 0) { return 0 }
+    $i = [int][math]::Floor(($sorted.Count - 1) * $pc)
+    return $sorted[$i]
+}
+
+function Get-PerfReport {
+    $lines = @('Drawing speed, from the most recent redraws of each view on this machine.', '')
+    if ($script:perf.Count -eq 0) {
+        $lines += 'Nothing measured yet. Use the timer for a minute in each view, then check again.'
+    }
+    foreach ($key in ($script:perf.Keys | Sort-Object)) {
+        $list = $script:perf[$key]
+        $totals = @($list | ForEach-Object { $_[0] })
+        $avg = { param($i) $sum = 0.0; foreach ($sample in $list) { $sum += $sample[$i] }; $sum / $list.Count }
+        $lines += ('{0} ({1} redraws)' -f $key, $list.Count)
+        $lines += ('    Typical {0:0} ms, slowest 1 in 20 {1:0} ms, slowest {2:0} ms' -f (Get-Percentile $totals 0.5), (Get-Percentile $totals 0.95), (Get-Percentile $totals 1.0))
+        $parts = 'building the image {0:0} ms' -f (& $avg 1)
+        $textAvg = & $avg 2
+        if ($textAvg -gt 0.05) { $parts += ', see-through text {0:0} ms' -f $textAvg }
+        $parts += ', sending to screen {0:0} ms' -f (& $avg 3)
+        $lines += ('    On average: ' + $parts)
+        $lines += ''
+    }
+    if ($script:drawerCacheBuilds -gt 0) {
+        $lines += ('Week drawer: drawn {0} times since the timer started; every other redraw reused the stored image.' -f $script:drawerCacheBuilds)
+        $lines += ''
+    }
+    $lines += 'As a guide, under 30 ms feels instant and over 50 ms starts to feel sluggish.'
+    return $lines
+}
+
+function Show-PerfReport {
+    $lines = Get-PerfReport
+    Write-Log ('Drawing speed report: ' + (($lines | Where-Object { $_ }) -join ' | '))
+    Show-Message (($lines -join "`n") + "`n`nThis report has also been added to the error log (Open file, Error log). Press Ctrl+C to copy it.")
+}
+
+# The shadow margin is only kept while the shadow can show. Windows' blur fills the whole window
+# rectangle, so while the blur is showing the window shrinks back to exactly the timer's size.
+function Get-WantedFullMargin {
+    if (-not ($script:layered -and $script:useRenderer -and $PillShadow)) { return 0 }
+    $blurShowing = $script:blurOn -and $script:listLevel -ne 'Off'
+    if ($blurShowing) { return 0 }
+    return 10
+}
+
+# The full view's own shadow is skipped while the blur is showing (the blur needs the edge to itself)
+function Test-FullShadow {
+    $blurShowing = $script:blurOn -and $script:listLevel -ne 'Off'
+    return [bool]($script:useRenderer -and $PillShadow -and -not $blurShowing -and $script:fullMargin -gt 0)
+}
+
+# Size and position details the renderer needs (also used to cut the window to shape)
+function Sync-RendererLayout {
+    $r = $script:renderer
+    $r.Zoom = [float]$Zoom
+    $r.BaseH = [float]$BaseH
+    $r.RowTop = [float]$RowTop
+    $r.DrawerH = [float]$script:drawerH
+    $r.Margin = [float]$script:fullMargin
+    $r.TimerOffX = [float]$script:timerOffX
+    $r.TimerOffY = [float]$script:timerOffY
+    $r.DrawerOpen = [bool]$script:drawerOpen
+    $r.Shadow = Test-FullShadow
+    $r.Rim = [bool]$PillShadow
+}
+
+# Everything else for this frame: colours, figures, rows and what's being hovered
+function Sync-RendererState {
+    $r = $script:renderer
+    $v = $script:view
+    Sync-RendererLayout
+    $theme = Get-StateTheme $v
+    $r.Panel = $theme.Panel; $r.Circle = $theme.Circle; $r.CircleHot = $theme.CircleHot; $r.Fill = $theme.Fill
+    $r.Text = $cWhite
+    $r.LunchBand = $script:bLunchBand.Color
+    $alpha = $script:listAlpha
+    if ($alpha -lt 255 -and $script:blurOn) { $alpha = [int]($alpha * $BlurTint) }
+    $r.ListAlpha = $alpha
+    $r.TextSharpen = [float]$TextSharpen
+    $r.H = $v.H; $r.M = $v.M; $r.S = $v.Sec
+    $r.Status = $v.Status; $r.Unallocated = $v.Unallocated; $r.OT = "$($v.OT)"
+    $r.Before = [bool]$v.Before; $r.OnLunch = [bool]$v.OnLunch; $r.Overtime = [bool]$v.Overtime
+    $r.Progress = [double]$v.Progress
+    $r.Rows = [Win.RowModel[]]@($v.Rows)
+    $r.Hover = if ($null -ne $script:hover) { [int]$script:hover } else { -1 }
+    $r.GripHover = if ($null -ne $script:gripHover) { [int]$script:gripHover } else { -1 }
+    $r.Reordering = [bool]$script:reorder
+    $r.DraggingRow = if ($script:reorder) { [array]::IndexOf($script:slots, $script:reorder.Name) } else { -1 }
+    $r.RoundHover = "$($script:roundHover)"
+    $r.CollapseHover = [bool]$script:collapseHover
+    $r.HandleHover = [bool]$script:handleHover
+    $r.DrawerHover = "$($script:drawerHover)"
+    $r.Drawer = $script:drawerModel
+}
+
+# If the faster drawing ever fails, switch back to PowerShell drawing and carry on
+function Disable-Renderer($why) {
+    Write-Log "Faster drawing switched off, using standard drawing instead: $why"
+    $tl = Get-TimerScreenPos
+    $script:useRenderer = $false
+    $script:fullMargin = 0
+    $script:regionKey = ''
+    Update-DrawerGeometry $tl
+    Apply-CornerStyle
+}
+
+function Render-FullFrame($w, $h) {
+    $perfWatch = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        Sync-RendererState
+        Update-Region
+        $bmp = $script:renderer.Render($w, $h)
+    } catch {
+        Disable-Renderer $_.Exception.Message
+        return
+    }
+    $script:drawerButtons = @($script:renderer.DrawerButtons)
+    $msDraw = $perfWatch.Elapsed.TotalMilliseconds
+    try {
+        $ok = [Win.Layered]::Push($form.Handle, $bmp, $form.Left, $form.Top)
+        $msTotal = $perfWatch.Elapsed.TotalMilliseconds
+        Add-PerfSample ((Get-PerfKey) + ' (fast drawing)') $msTotal $msDraw 0 ($msTotal - $msDraw)
+        if (-not $ok) {
+            Write-Log 'See-through drawing failed, so the timer has switched back to normal drawing.'
+            [Win.Layered]::MakeNormal($form.Handle)
+            $script:pillMargin = 0
+            $script:layered = $false
+            Disable-Renderer 'see-through drawing unavailable'
+            $form.Invalidate()
+        }
+    } catch {
+        Write-Log "See-through drawing error: $($_.Exception.Message)"
+    } finally { $bmp.Dispose() }
+}
+
+function Render-Frame {
+    $w = $form.ClientSize.Width
+    $h = $form.ClientSize.Height
+    if ($w -le 0 -or $h -le 0) { return }
+    if ($script:mode -eq 'full' -and $script:useRenderer) { Render-FullFrame $w $h; return }
+    $perfWatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $msDraw = 0.0; $msText = 0.0
+    Update-Region
+    $fmt = [System.Drawing.Imaging.PixelFormat]::Format32bppArgb
+    $bmp = New-Object System.Drawing.Bitmap($w, $h, $fmt)
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+
+    # With the account list see-through, prepare the extra text layers
+    $ctColour = $null; $ctMask = $null
+    if ($script:listAlpha -lt 255 -and $script:mode -eq 'full') {
+        $ctColour = New-Object System.Drawing.Bitmap($w, $h, $fmt)
+        $ctMask = New-Object System.Drawing.Bitmap($w, $h, $fmt)
+        $cg = [System.Drawing.Graphics]::FromImage($ctColour)
+        $cg.ScaleTransform($Zoom, $Zoom)
+        $mg = [System.Drawing.Graphics]::FromImage($ctMask)
+        $mg.Clear([System.Drawing.Color]::Transparent)
+        $mg.TextRenderingHint = 'AntiAliasGridFit'
+        $mg.ScaleTransform($Zoom, $Zoom)
+        $script:ct = @{ G = $cg; M = $mg }
+    }
+    try {
+        $g.Clear([System.Drawing.Color]::Transparent)
+        Draw-Timer $g $true
+    } finally {
+        $g.Dispose()
+        if ($script:ct) {
+            $script:ct.G.Dispose(); $script:ct.M.Dispose()
+            $script:ct = $null
+        }
+    }
+    $msDraw = $perfWatch.Elapsed.TotalMilliseconds
+    if ($ctColour) {
+        try { [Win.Layered]::Combine($bmp, $ctColour, $ctMask, $TextSharpen) }
+        catch { Write-Log "Text drawing error: $($_.Exception.Message)" }
+        $ctColour.Dispose(); $ctMask.Dispose()
+        $msText = $perfWatch.Elapsed.TotalMilliseconds - $msDraw
+    }
+    $msBeforePush = $perfWatch.Elapsed.TotalMilliseconds
+    try {
+        $ok = [Win.Layered]::Push($form.Handle, $bmp, $form.Left, $form.Top)
+        $msTotal = $perfWatch.Elapsed.TotalMilliseconds
+        Add-PerfSample (Get-PerfKey) $msTotal $msDraw $msText ($msTotal - $msBeforePush)
+        if (-not $ok) {
+            # Fall back to normal drawing rather than risk an invisible timer
+            Write-Log 'See-through drawing failed, so the timer has switched back to normal drawing.'
+            [Win.Layered]::MakeNormal($form.Handle)
+            $script:pillMargin = 0
+            $script:layered = $false
+            $form.Invalidate()
+        }
+    } catch {
+        Write-Log "See-through drawing error: $($_.Exception.Message)"
+        try { [Win.Layered]::MakeNormal($form.Handle) } catch {}
+        $script:pillMargin = 0
+        $script:layered = $false
+        $form.Invalidate()
+    } finally { $bmp.Dispose() }
+}
+
+# In the pill view the window is cut to the pill's shape, so no backdrop shows in the corners
+function Update-Region {
+    if (-not $script:layered) { return }
+    $w = $form.ClientSize.Width
+    $h = $form.ClientSize.Height
+    $key = '{0}:{1}:{2}:{3}:{4}:{5}:{6}:{7}' -f $script:mode, $w, $h, $script:drawerOpen, $script:drawerUp, $script:timerOffX, (Test-FullShadow), $script:fullMargin
+    if ($key -eq $script:regionKey) { return }
+    $script:regionKey = $key
+    try {
+        if ($script:mode -eq 'pill') { [Win.Layered]::SetRoundRegion($form.Handle, $w, $h, [int][math]::Floor(($PillH / 2 + $script:pillMargin) * $Zoom)) }
+        elseif ($script:useRenderer -and $script:fullMargin -eq 0) {
+            [Win.Layered]::SetRoundRegion($form.Handle, $w, $h, 0)
+        }
+        elseif ($script:useRenderer) {
+            # Cut to the outline plus room for the shadow, so nothing else can show around it
+            Sync-RendererLayout
+            $outline = $script:renderer.GetOutline()
+            $toPixels = New-Object System.Drawing.Drawing2D.Matrix
+            $toPixels.Scale([float]$Zoom, [float]$Zoom)
+            $outline.Transform($toPixels)
+            $allowance = if ($script:renderer.Shadow) { [float](2 * $script:fullMargin * $Zoom + 2) } else { [float]4 }
+            [Win.Layered]::SetPathRegion($form.Handle, $outline, $allowance)
+            $toPixels.Dispose(); $outline.Dispose()
+        }
+        elseif ($script:drawerOpen) {
+            # L-shaped: the empty corner beside the timer is cut away, so nothing can show there
+            $outline = New-DrawerShape
+            $toPixels = New-Object System.Drawing.Drawing2D.Matrix
+            $toPixels.Scale([float]$Zoom, [float]$Zoom)
+            $outline.Transform($toPixels)
+            [Win.Layered]::SetPathRegion($form.Handle, $outline)
+            $toPixels.Dispose(); $outline.Dispose()
+        }
+        else { [Win.Layered]::SetRoundRegion($form.Handle, $w, $h, 0) }
+    } catch { Write-Log "Could not shape the window: $($_.Exception.Message)" }
+}
+
+function Request-Redraw {
+    if ($script:layered) { Render-Frame } else { $form.Invalidate() }
+}
+
+# Blur only shows while the account list is see-through, so it's switched off at 'Off'
+function Apply-BlurState {
+    if (-not $script:layered) { return }
+    if ($script:mode -eq 'full' -and $form.IsHandleCreated) {
+        Update-DrawerGeometry
+        $script:regionKey = ''
+        Apply-CornerStyle
+    }
+    # With the standard drawing the drawer can make an L shape, which the blur can't follow, so it pauses then
+    $want = $script:blurOn -and $script:listLevel -ne 'Off' -and $script:mode -eq 'full' -and ($script:useRenderer -or -not $script:drawerOpen)
+    try {
+        if ($want) { [void][Win.Layered]::SetBlur($form.Handle, $true) }
+        else { [Win.Layered]::ClearAllBlur($form.Handle) }
+    } catch { Write-Log "Blur change error: $($_.Exception.Message)" }
+}
+
+# Windows 11 rounds window corners itself; the pill draws its own fully round ends, so turn that off there
+function Apply-CornerStyle {
+    $pref = if ($script:mode -eq 'pill' -or ($script:useRenderer -and $script:fullMargin -gt 0) -or ($script:drawerOpen -and -not $script:useRenderer)) { 1 } else { 2 }   # 1 = don't round, 2 = round
+    try { [void][Win.Dwm]::DwmSetWindowAttribute($form.Handle, 33, [ref]$pref, 4) } catch {}
+}
+
+function Set-Blur([bool]$on, [switch]$Quiet) {
+    if ($on) {
+        $ok = $false
+        if ($script:layered) {
+            try { $ok = [Win.Layered]::SetBlur($form.Handle, $true) } catch {}
+        }
+        if (-not $ok) {
+            Write-Log 'Blur is not available on this version of Windows.'
+            if (-not $Quiet) { Show-Message "Blur isn't available on this version of Windows, so it has been left off." }
+            $on = $false
+        }
+    }
+    $script:blurOn = $on
+    try { Set-Content -Path $BlurFile -Value ([int]$on) } catch {}
+    Apply-BlurState
+    Request-Redraw
+}
+
+function Set-PillEffect($which) {
+    if ($which -eq 'shadow') { $script:PillShadow = -not $script:PillShadow }
+    elseif ($which -eq 'pulse') { $script:PillPulse = -not $script:PillPulse }
+    elseif ($which -eq 'dot') { $script:PillLiveDot = -not $script:PillLiveDot }
+    if ($which -eq 'shadow' -and $script:mode -eq 'full') {
+        Update-DrawerGeometry
+        $script:regionKey = ''
+        Apply-CornerStyle
+    }
+    $lines = @("shadow=$([int][bool]$script:PillShadow)", "pulse=$([int][bool]$script:PillPulse)", "dot=$([int][bool]$script:PillLiveDot)")
+    try { Set-Content -Path $EffectsFile -Value $lines } catch {}
+    Request-Redraw
+}
+
+function Load-PillEffects {
+    if (-not (Test-Path $EffectsFile)) { return }
+    foreach ($line in Get-Content $EffectsFile) {
+        $kv = $line -split '=', 2
+        if ($kv.Count -ne 2) { continue }
+        $on = $kv[1].Trim() -ne '0'
+        switch ($kv[0].Trim()) {
+            'shadow' { $script:PillShadow = $on }
+            'pulse'  { $script:PillPulse = $on }
+            'dot'    { $script:PillLiveDot = $on }
+        }
+    }
+}
+
+function Set-ListTransparency($level) {
+    if (-not $ListLevels.Contains($level)) { $level = 'Off' }
+    $script:listLevel = $level
+    $script:listAlpha = $ListLevels[$level]
+    try { Set-Content -Path $ListAlphaFile -Value $level } catch {}
+    Apply-BlurState
+    Request-Redraw
+}
+
+# ---- Small text prompt (for renaming) ----
+function Mix-Colour($a, $b, [double]$t) {
+    return $C::FromArgb(255, [int]($a.R + ($b.R - $a.R) * $t), [int]($a.G + ($b.G - $a.G) * $t), [int]($a.B + ($b.B - $a.B) * $t))
+}
+
+function New-PxFont($name, [double]$size, $k) {
+    return New-Object System.Drawing.Font($name, [float]($size * $k), [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
+}
+
+# ---- Note prompt: a small box beside the timer. Enter saves, Escape or ignoring it skips. ----
+function Show-NotePrompt($info) {
+    Complete-NotePrompt $true
+    $k = $Zoom / $Scale
+    $theme = if ($script:view) { Get-StateTheme $script:view } else { $Themes.running }
+
+    $nf = New-Object System.Windows.Forms.Form
+    $nf.FormBorderStyle = 'None'
+    $nf.ShowInTaskbar = $false
+    $nf.TopMost = $true
+    $nf.StartPosition = 'Manual'
+    $nf.AutoScaleMode = 'None'
+    $nf.BackColor = $theme.Panel
+    $w = $form.Width
+    $h = [int](62 * $k)
+    $nf.ClientSize = New-Object System.Drawing.Size($w, $h)
+
+    # Below the timer if there's room, otherwise above it
+    $area = [System.Windows.Forms.Screen]::FromControl($form).WorkingArea
+    $gap = [int](6 * $k)
+    $y = $form.Bottom + $gap
+    if (($y + $h) -gt $area.Bottom) { $y = $form.Top - $h - $gap }
+    $nf.Location = New-Object System.Drawing.Point($form.Left, $y)
+
+    $lbl = New-Object System.Windows.Forms.Label
+    $lbl.AutoSize = $false
+    $lbl.Location = New-Object System.Drawing.Point([int](12 * $k), [int](7 * $k))
+    $lbl.Size = New-Object System.Drawing.Size(($w - [int](24 * $k)), [int](18 * $k))
+    $lbl.ForeColor = $cWhite
+    $lbl.Font = New-PxFont 'Segoe UI' 11.5 $k
+    $lbl.AutoEllipsis = $true
+    $lbl.Text = 'What did you work on for {0}? ({1})' -f $info.Name, (Format-Dur $info.Seconds)
+
+    $box = New-Object System.Windows.Forms.TextBox
+    $box.BorderStyle = 'FixedSingle'
+    $box.BackColor = Mix-Colour $theme.Panel $cWhite 0.12
+    $box.ForeColor = $cWhite
+    $box.Font = New-PxFont 'Segoe UI' 12.5 $k
+    $box.Location = New-Object System.Drawing.Point([int](12 * $k), [int](29 * $k))
+    $box.Width = $w - [int](24 * $k)
+
+    $nf.Controls.Add($lbl)
+    $nf.Controls.Add($box)
+    $nf.Tag = $info
+
+    # Disappears after 20 seconds if nothing has been typed
+    $script:noteTimer = New-Object System.Windows.Forms.Timer
+    $script:noteTimer.Interval = 20000
+    $script:noteTimer.Add_Tick({
+        $script:noteTimer.Stop()
+        $f = $script:noteForm
+        if ($f -and -not $f.IsDisposed -and -not $f.Controls[1].Text.Trim()) { Complete-NotePrompt $false }
+    })
+    $box.Add_TextChanged({ if ($script:noteTimer) { $script:noteTimer.Stop() } })
+    $box.Add_KeyDown({
+        if ($_.KeyCode -eq 'Enter') { $_.SuppressKeyPress = $true; Complete-NotePrompt $true }
+        elseif ($_.KeyCode -eq 'Escape') { $_.SuppressKeyPress = $true; Complete-NotePrompt $false }
+    })
+    # Clicking away keeps anything typed
+    $nf.Add_Deactivate({ Complete-NotePrompt $true })
+    $nf.Add_FormClosed({
+        if ($script:noteTimer) { $script:noteTimer.Stop(); $script:noteTimer.Dispose(); $script:noteTimer = $null }
+        $script:noteForm = $null
+    })
+
+    $script:noteForm = $nf
+    try { $round = 2; [void][Win.Dwm]::DwmSetWindowAttribute($nf.Handle, 33, [ref]$round, 4) } catch {}
+    $nf.Show()
+    $nf.Activate()
+    [void]$box.Focus()
+    $script:noteTimer.Start()
+}
+
+# Save (or skip) the note and close the box. Guarded so closing doesn't trigger it twice.
+function Complete-NotePrompt([bool]$save) {
+    $f = $script:noteForm
+    if (-not $f -or $f.IsDisposed -or $script:noteClosing) { return }
+    $script:noteClosing = $true
+    try {
+        if ($save) {
+            $i = $f.Tag
+            $txt = $f.Controls[1].Text.Trim()
+            if ($txt -and -not (Save-Note $i.DateStr $i.Name $i.StartStr $txt)) {
+                Write-Log "Note for $($i.Name) wasn't saved."
+            }
+            if ($txt -and $script:weekForm -and -not $script:weekForm.IsDisposed) { Fill-WeeklyView }
+        }
+        if ($script:noteTimer) { $script:noteTimer.Stop() }
+        $f.Close()
+    } finally { $script:noteClosing = $false }
+}
+
+# ---- Budget box: hours and a period chosen from a list ----
+function Show-BudgetPrompt($name) {
+    $k = $Zoom / $Scale
+    $cur = $script:budgets[$name]
+    $dlg = New-Object System.Windows.Forms.Form
+    $dlg.Text = "Budget for $name"
+    $dlg.FormBorderStyle = 'FixedDialog'
+    $dlg.MinimizeBox = $false
+    $dlg.MaximizeBox = $false
+    $dlg.ShowInTaskbar = $false
+    $dlg.TopMost = $true
+    if ($script:appIcon) { $dlg.Icon = $script:appIcon }
+    $dlg.StartPosition = 'CenterScreen'
+    $dlg.AutoScaleMode = 'None'
+    $dlg.Font = New-PxFont 'Segoe UI' 12 $k
+    $dlg.ClientSize = New-Object System.Drawing.Size([int](300 * $k), [int](118 * $k))
+
+    $lh = New-Object System.Windows.Forms.Label
+    $lh.Text = 'Hours'
+    $lh.AutoSize = $true
+    $lh.Location = New-Object System.Drawing.Point([int](12 * $k), [int](14 * $k))
+    $box = New-Object System.Windows.Forms.TextBox
+    $box.Location = New-Object System.Drawing.Point([int](12 * $k), [int](34 * $k))
+    $box.Width = [int](110 * $k)
+    $box.Text = if ($cur) { $cur.Hours.ToString('0.##', $Inv) } else { '' }
+
+    $lp = New-Object System.Windows.Forms.Label
+    $lp.Text = 'Per'
+    $lp.AutoSize = $true
+    $lp.Location = New-Object System.Drawing.Point([int](136 * $k), [int](14 * $k))
+    $combo = New-Object System.Windows.Forms.ComboBox
+    $combo.DropDownStyle = 'DropDownList'
+    [void]$combo.Items.AddRange(@('Week', 'Month', 'Quarter'))
+    $combo.Location = New-Object System.Drawing.Point([int](136 * $k), [int](34 * $k))
+    $combo.Width = [int](152 * $k)
+    $combo.SelectedIndex = if ($cur) { @('week', 'month', 'quarter').IndexOf($cur.Period) } else { 1 }
+
+    $ok = New-Object System.Windows.Forms.Button
+    $ok.Text = 'OK'
+    $ok.DialogResult = 'OK'
+    $ok.Size = New-Object System.Drawing.Size([int](80 * $k), [int](28 * $k))
+    $ok.Location = New-Object System.Drawing.Point([int](122 * $k), [int](80 * $k))
+    $cancel = New-Object System.Windows.Forms.Button
+    $cancel.Text = 'Cancel'
+    $cancel.DialogResult = 'Cancel'
+    $cancel.Size = New-Object System.Drawing.Size([int](80 * $k), [int](28 * $k))
+    $cancel.Location = New-Object System.Drawing.Point([int](208 * $k), [int](80 * $k))
+    $remove = New-Object System.Windows.Forms.Button
+    $remove.Text = 'Remove'
+    $remove.DialogResult = 'Abort'
+    $remove.Size = New-Object System.Drawing.Size([int](80 * $k), [int](28 * $k))
+    $remove.Location = New-Object System.Drawing.Point([int](12 * $k), [int](80 * $k))
+    $remove.Visible = [bool]$cur
+
+    $dlg.AcceptButton = $ok
+    $dlg.CancelButton = $cancel
+    foreach ($ctl in @($lh, $box, $lp, $combo, $ok, $cancel, $remove)) { $dlg.Controls.Add($ctl) }
+
+    $script:dialogOpen = $true
+    try { $result = $dlg.ShowDialog((Get-DialogOwner)) } finally { $script:dialogOpen = $false }
+    $text = $box.Text.Trim()
+    $period = @('week', 'month', 'quarter')[$combo.SelectedIndex]
+    $dlg.Dispose()
+
+    if ($result -eq [System.Windows.Forms.DialogResult]::Abort) { return @{ Action = 'remove' } }
+    if ($result -ne [System.Windows.Forms.DialogResult]::OK) { return $null }
+    $hours = 0.0
+    if (-not [double]::TryParse($text.Replace(',', '.'), [Globalization.NumberStyles]::Float, $Inv, [ref]$hours) -or $hours -le 0) {
+        Show-Message "Couldn't read '$text' as a number of hours. Try something like 20 or 7.5."
+        return $null
+    }
+    return @{ Action = 'set'; Hours = $hours; Period = $period }
+}
+
+function Set-AccountBudget($name) {
+    $r = Show-BudgetPrompt $name
+    if (-not $r) { return }
+    if ($r.Action -eq 'remove') { [void]$script:budgets.Remove($name) }
+    else { $script:budgets[$name] = @{ Hours = $r.Hours; Period = $r.Period } }
+    Save-Budgets
+    Update-View
+    Request-Redraw
+    if ($script:weekForm -and -not $script:weekForm.IsDisposed) { Fill-WeeklyView }
+}
+
+# ---- Weekly view ----
+$AccountColours = @('#4fc3f7', '#ffb74d', '#81c784', '#ba68c8', '#f06292', '#4db6ac',
+                    '#ffd54f', '#9575cd', '#e57373', '#a1887f', '#90a4ae', '#aed581') |
+                  ForEach-Object { [System.Drawing.ColorTranslator]::FromHtml($_) }
+
+function Format-Hours($sec) {
+    if ($sec -lt 30) { return '' }
+    if ($script:hoursFormat -eq 'hm') {
+        $mins = [int][math]::Round($sec / 60)
+        return '{0}:{1:00}' -f [math]::Floor($mins / 60), ($mins % 60)
+    }
+    return ([math]::Round($sec / 3600, 2)).ToString('0.00', $Inv)
+}
+
+function Get-WeekData($ws) {
+    $we = $ws.AddDays(7)
+    $acc = @{}
+    $lunch = New-Object double[] 7
+    $lunchAdj = New-Object double[] 7
+    $lunchIv = @{}
+    $sessions = @()
+    foreach ($r in @(Read-Sessions)) {
+        if ($r.Start -lt $ws -or $r.Start -ge $we) { continue }
+        $d = [int][math]::Floor(($r.Start.Date - $ws).TotalDays)
+        if ($r.Name -eq 'Lunch') {
+            $lunch[$d] += $r.Seconds
+            if ($r.IsAdjust) { $lunchAdj[$d] += $r.Seconds }
+            else {
+                if (-not $lunchIv.ContainsKey($d)) { $lunchIv[$d] = @() }
+                $lunchIv[$d] += ,@($r.Start, $r.End)
+            }
+            continue
+        }
+        if (-not $acc.ContainsKey($r.Name)) { $acc[$r.Name] = New-Object double[] 7 }
+        $acc[$r.Name][$d] += $r.Seconds
+        if (-not $r.IsAdjust) { $sessions += $r }
+    }
+
+    # Include whatever is running right now
+    $now = Get-Date
+    if ($script:active -and $script:active.Start -ge $ws -and $script:active.Start -lt $we) {
+        $d = [int][math]::Floor(($script:active.Start.Date - $ws).TotalDays)
+        $e = ($now - $script:active.Start).TotalSeconds
+        if ($script:active.Name -eq 'Lunch') {
+            $lunch[$d] += $e
+            if (-not $lunchIv.ContainsKey($d)) { $lunchIv[$d] = @() }
+            $lunchIv[$d] += ,@($script:active.Start, $now)
+        } else {
+            if (-not $acc.ContainsKey($script:active.Name)) { $acc[$script:active.Name] = New-Object double[] 7 }
+            $acc[$script:active.Name][$d] += $e
+        }
+    }
+
+    # Accounts in the timer's order, then any others used that week
+    $known = @($script:accounts | ForEach-Object { $_.Name })
+    $names = @($known | Where-Object { $acc.ContainsKey($_) })
+    $names += @($acc.Keys | Where-Object { $known -notcontains $_ } | Sort-Object)
+
+    # Unallocated: working-day time (less lunch) not put against an account. Weekdays up to today only.
+    $unalloc = New-Object double[] 7
+    for ($d = 0; $d -lt 7; $d++) {
+        $day = $ws.AddDays($d)
+        $dayPlan = Get-DayPlan $day
+        if (-not $dayPlan.Working -or $day -gt $now.Date) { continue }
+        $s = $dayPlan.Start
+        $e = $dayPlan.End
+        $cap = if ($day -eq $now.Date) { Limit-Time $now $s $e } else { $e }
+        $worked = ($cap - $s).TotalSeconds
+        $l = $lunchAdj[$d]
+        if ($lunchIv.ContainsKey($d)) {
+            foreach ($iv in $lunchIv[$d]) {
+                $a = Limit-Time $iv[0] $s $cap
+                $b = Limit-Time $iv[1] $s $cap
+                if ($b -gt $a) { $l += ($b - $a).TotalSeconds }
+            }
+        }
+        $billable = [math]::Max(0.0, $worked - $l)
+        $sum = 0.0
+        foreach ($n in $names) { $sum += $acc[$n][$d] }
+        $unalloc[$d] = [math]::Max(0.0, $billable - $sum)
+    }
+
+    # Show working days, plus any other day where something was logged
+    $days = @()
+    for ($d = 0; $d -lt 7; $d++) {
+        $any = (Get-DayPlan $ws.AddDays($d)).Working -or $lunch[$d] -gt 0
+        foreach ($n in $names) { if ($acc[$n][$d] -gt 0) { $any = $true } }
+        if ($any) { $days += $d }
+    }
+    if ($days.Count -eq 0) { $days = @(0..6) }
+
+    return @{ Accounts = $acc; Names = $names; Lunch = $lunch; Unalloc = $unalloc; Sessions = $sessions; Days = $days }
+}
+
+function New-ThemedGrid($k, $theme) {
+    $panel = $theme.Panel
+    $gv = New-Object System.Windows.Forms.DataGridView
+    $gv.ReadOnly = $true
+    $gv.AllowUserToAddRows = $false
+    $gv.AllowUserToDeleteRows = $false
+    $gv.AllowUserToResizeRows = $false
+    $gv.AllowUserToOrderColumns = $false
+    $gv.RowHeadersVisible = $false
+    $gv.SelectionMode = 'CellSelect'
+    $gv.ClipboardCopyMode = 'EnableWithAutoHeaderText'
+    $gv.BorderStyle = 'None'
+    $gv.CellBorderStyle = 'SingleHorizontal'
+    $gv.BackgroundColor = $panel
+    $gv.GridColor = Mix-Colour $panel $cWhite 0.15
+    $gv.EnableHeadersVisualStyles = $false
+    $gv.ColumnHeadersBorderStyle = 'None'
+    $gv.ColumnHeadersDefaultCellStyle.BackColor = $theme.Circle
+    $gv.ColumnHeadersDefaultCellStyle.ForeColor = $cWhite
+    $gv.ColumnHeadersDefaultCellStyle.SelectionBackColor = $theme.Circle
+    $gv.ColumnHeadersDefaultCellStyle.Font = New-PxFont 'Segoe UI Semibold' 12 $k
+    $gv.ColumnHeadersHeightSizeMode = 'DisableResizing'
+    $gv.ColumnHeadersHeight = [int](28 * $k)
+    $gv.DefaultCellStyle.BackColor = $panel
+    $gv.DefaultCellStyle.ForeColor = $cWhite
+    $gv.DefaultCellStyle.SelectionBackColor = $theme.CircleHot
+    $gv.DefaultCellStyle.SelectionForeColor = $cWhite
+    $gv.DefaultCellStyle.Font = New-PxFont 'Segoe UI' 12 $k
+    $gv.AlternatingRowsDefaultCellStyle.BackColor = Mix-Colour $panel $cWhite 0.05
+    $gv.RowTemplate.Height = [int](26 * $k)
+    $gv.AutoSizeColumnsMode = 'Fill'
+    $gv.ScrollBars = 'None'
+    $gv.GetType().GetProperty('DoubleBuffered', [Reflection.BindingFlags]'NonPublic,Instance').SetValue($gv, $true, $null)
+    $gv.Add_CellPainting({
+        if ($_.RowIndex -ne -1) { return }
+        try { Draw-SmoothHeader $_ } catch {}
+    })
+    return $gv
+}
+
+# Column headers: smooth anti-aliased text without coloured fringes
+function Draw-SmoothHeader($e) {
+    $g = $e.Graphics
+    $hb = New-Object System.Drawing.SolidBrush $e.CellStyle.BackColor
+    $g.FillRectangle($hb, $e.CellBounds)
+    $hb.Dispose()
+    if ($e.ColumnIndex -ge 0) {
+        $g.TextRenderingHint = 'AntiAliasGridFit'
+        $sf = New-Object System.Drawing.StringFormat
+        $sf.LineAlignment = 'Center'
+        $sf.Alignment = if ("$($e.CellStyle.Alignment)" -like '*Right') { 'Far' } else { 'Near' }
+        $sf.Trimming = 'EllipsisCharacter'
+        $sf.FormatFlags = 'NoWrap'
+        $pad = [float](6 * $script:wk)
+        $b = $e.CellBounds
+        $rect = New-Object System.Drawing.RectangleF(($b.X + $pad), $b.Y, ($b.Width - 2 * $pad), $b.Height)
+        $tb = New-Object System.Drawing.SolidBrush $e.CellStyle.ForeColor
+        $g.DrawString("$($e.FormattedValue)", $e.CellStyle.Font, $tb, $rect, $sf)
+        $tb.Dispose(); $sf.Dispose()
+    }
+    $e.Handled = $true
+}
+
+function New-ThemedButton($text, $k, $theme) {
+    $b = New-Object System.Windows.Forms.Button
+    $b.Text = $text
+    $b.FlatStyle = 'Flat'
+    $b.FlatAppearance.BorderSize = 0
+    $b.BackColor = $theme.Circle
+    $b.ForeColor = $cWhite
+    $b.Font = New-PxFont 'Segoe UI Semibold' 12 $k
+    $b.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $sz = [System.Windows.Forms.TextRenderer]::MeasureText($text, $b.Font)
+    $b.Size = New-Object System.Drawing.Size(($sz.Width + [int](24 * $k)), [int](30 * $k))
+    $b.Add_Paint({ try { Draw-SmoothButton $_.Graphics $this } catch {} })
+    $b.Add_MouseEnter({ $this.Tag = 'hover'; $this.Invalidate() })
+    $b.Add_MouseLeave({ $this.Tag = $null; $this.Invalidate() })
+    $b.Add_TextChanged({ $this.Invalidate() })
+    $b.Add_EnabledChanged({ $this.Invalidate() })
+    return $b
+}
+
+# Paints over the standard button: rounded shape, smooth anti-aliased text without coloured fringes
+function Draw-SmoothButton($g, $b) {
+    $g.SmoothingMode = 'AntiAlias'
+    $g.PixelOffsetMode = 'HighQuality'
+    $g.TextRenderingHint = 'AntiAliasGridFit'
+    $g.Clear($b.Parent.BackColor)
+    $base = $b.BackColor
+    if ($b.Tag -eq 'hover' -and $b.Enabled) { $base = Mix-Colour $base $cWhite 0.12 }
+    $path = New-RoundedPath 0 0 ([float]($b.Width - 1)) ([float]($b.Height - 1)) ([float](5 * $script:wk))
+    $br = New-Object System.Drawing.SolidBrush $base
+    $g.FillPath($br, $path)
+    $br.Dispose(); $path.Dispose()
+    $tc = if ($b.Enabled) { $cWhite } else { Mix-Colour $base $cWhite 0.5 }
+    $tb = New-Object System.Drawing.SolidBrush $tc
+    $sf = New-Object System.Drawing.StringFormat
+    $sf.Alignment = 'Center'; $sf.LineAlignment = 'Center'
+    $g.DrawString($b.Text, $b.Font, $tb, (New-Object System.Drawing.RectangleF(0, 0, $b.Width, $b.Height)), $sf)
+    $tb.Dispose(); $sf.Dispose()
+}
+
+function New-SectionLabel($text, $k, $size, [bool]$bold) {
+    $l = New-Object System.Windows.Forms.Label
+    $l.AutoSize = $true
+    $l.ForeColor = $cWhite
+    # A solid background (not see-through), so text isn't redrawn over itself and thickened when scrolling
+    $l.BackColor = if ($script:wvPanel) { $script:wvPanel } else { [System.Drawing.Color]::Transparent }
+    $l.Font = New-PxFont ($(if ($bold) { 'Segoe UI Semibold' } else { 'Segoe UI' })) $size $k
+    $l.Text = $text
+    return $l
+}
+
+function Show-WeeklyView {
+    if ($script:weekForm -and -not $script:weekForm.IsDisposed) {
+        $script:weekForm.Activate()
+        return
+    }
+    $k = (Get-CursorDpi) / 96
+    $script:wk = $k
+    $theme = $Themes.running
+    $script:wvPanel = $theme.Panel
+    $script:weekStart = Get-WeekStart
+
+    $wf = New-Object System.Windows.Forms.Form
+    $wf.Text = 'Account timer - Weekly view'
+    if ($script:appIcon) { $wf.Icon = $script:appIcon }
+    $wf.AutoScaleMode = 'None'
+    $wf.StartPosition = 'Manual'
+    $wf.BackColor = $theme.Panel
+    $wf.ForeColor = $cWhite
+    $wf.Font = New-PxFont 'Segoe UI' 12 $k
+    $wf.AutoScroll = $true
+    $wf.TopMost = $true
+    $wf.KeyPreview = $true
+    $area = [System.Windows.Forms.Screen]::FromPoint([System.Windows.Forms.Cursor]::Position).WorkingArea
+    $W = [int](820 * $k)
+    $H = [math]::Min([int](760 * $k), $area.Height - [int](40 * $k))
+    $wf.ClientSize = New-Object System.Drawing.Size($W, $H)
+    $wf.Location = New-Object System.Drawing.Point(($area.Left + [int](($area.Width - $wf.Width) / 2)), ($area.Top + [int](($area.Height - $wf.Height) / 2)))
+    $wf.MinimumSize = New-Object System.Drawing.Size([int](600 * $k), [int](400 * $k))
+    # Draw off-screen first, so scrolling repaints cleanly
+    $wf.GetType().GetProperty('DoubleBuffered', [Reflection.BindingFlags]'NonPublic,Instance').SetValue($wf, $true, $null)
+
+    $wv = @{ Form = $wf; Theme = $theme }
+    $wv.Prev  = New-ThemedButton 'Previous week' $k $theme
+    $wv.Next  = New-ThemedButton 'Next week' $k $theme
+    $wv.Copy  = New-ThemedButton 'Copy hours table' $k $theme
+    $wv.Title = New-SectionLabel '' $k 17 $true
+    $wv.Chart = New-Object System.Windows.Forms.Panel
+    $wv.Chart.BackColor = $theme.Panel
+    $wv.Chart.GetType().GetProperty('DoubleBuffered', [Reflection.BindingFlags]'NonPublic,Instance').SetValue($wv.Chart, $true, $null)
+    $wv.HoursLabel  = New-SectionLabel 'Hours by account and day' $k 14 $true
+    $wv.HoursHint   = New-SectionLabel '' $k 11.5 $false
+    $wv.Grid        = New-ThemedGrid $k $theme
+    $wv.BudgetLabel = New-SectionLabel 'Budgets' $k 14 $true
+    $wv.BudgetHint  = New-SectionLabel '' $k 11.5 $false
+    $wv.BudgetGrid  = New-ThemedGrid $k $theme
+    $wv.NotesLabel  = New-SectionLabel 'Notes' $k 14 $true
+    $wv.NotesHint   = New-SectionLabel '' $k 11.5 $false
+    $wv.NotesGrid   = New-ThemedGrid $k $theme
+    $wv.NotesGrid.ReadOnly = $false
+    $wv.NotesGrid.EditMode = 'EditOnEnter'
+
+    # Tabs: the summary, or every stretch of time individually
+    $wv.TabSummary  = New-ThemedButton 'Summary' $k $theme
+    $wv.TabEntries  = New-ThemedButton 'Time entries' $k $theme
+    $wv.OpenEntries = New-ThemedButton 'Open entries file' $k $theme
+    $wv.MergeToggle = New-ThemedButton 'Merge consecutive: Off' $k $theme
+    $wv.EntriesHint = New-SectionLabel '' $k 11.5 $false
+    $wv.EntriesHint.AutoSize = $true
+    $wv.Entries     = New-Object System.Windows.Forms.Panel
+    $wv.Entries.BackColor = $theme.Panel
+    $wv.Entries.GetType().GetProperty('DoubleBuffered', [Reflection.BindingFlags]'NonPublic,Instance').SetValue($wv.Entries, $true, $null)
+    $wv.EntryTip    = New-Object System.Windows.Forms.ToolTip
+    Set-ThemedTooltip $wv.EntryTip
+    foreach ($ctl in @($wv.TabSummary, $wv.TabEntries, $wv.OpenEntries, $wv.MergeToggle, $wv.EntriesHint, $wv.Entries)) { $wf.Controls.Add($ctl) }
+    $wv.MergeToggle.Add_Click({
+        $script:mergeEntries = -not $script:mergeEntries
+        try { Set-Content -Path $MergeFile -Value ([int]$script:mergeEntries) } catch {}
+        try {
+            Fill-WeeklyView
+            Write-WeekEntries $script:weekStart
+            if ($script:weekStart -ne (Get-WeekStart)) { Write-WeekEntries (Get-WeekStart) }
+        } catch { Show-WeeklyError $_ }
+    })
+    $wv.TabSummary.Add_Click({ $script:weekMode = 'summary'; Layout-WeeklyView })
+    $wv.TabEntries.Add_Click({ $script:weekMode = 'entries'; Layout-WeeklyView })
+    $wv.OpenEntries.Add_Click({
+        try {
+            Flush-Pending
+            Write-WeekEntries $script:weekStart
+            $f = Get-WeekEntriesFile $script:weekStart
+            if (Test-Path $f) { Invoke-Item $f }
+        } catch { Show-WeeklyError $_ }
+    })
+    $wv.Entries.Add_Paint({ try { Draw-EntriesView $_.Graphics $this } catch { Write-Log "Entries view error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)" } })
+    $wv.Entries.Add_MouseMove({
+        $b = Get-EntryBlockAt $_.Location
+        if ($b -ne $script:entryHover) {
+            $script:entryHover = $b
+            $this.Cursor = if ($b) { [System.Windows.Forms.Cursors]::Hand } else { [System.Windows.Forms.Cursors]::Default }
+            if ($b) { $script:wv.EntryTip.Show((Get-EntryTipText $b.Entry), $this, ($_.X + 14), ($_.Y + 14), 8000) }
+            else { $script:wv.EntryTip.Hide($this) }
+            $this.Invalidate()
+        }
+    })
+    $wv.Entries.Add_MouseLeave({
+        if ($script:entryHover) { $script:entryHover = $null; $script:wv.EntryTip.Hide($this); $this.Invalidate() }
+    })
+    # Click to select, Ctrl+click to add to the selection, right-click for options
+    $wv.Entries.Add_MouseUp({
+        try {
+            $b = Get-EntryBlockAt $_.Location
+            $blk = if ($b) { $b.Entry } else { $null }
+            $ctrl = ([System.Windows.Forms.Control]::ModifierKeys -band [System.Windows.Forms.Keys]::Control) -ne 0
+            if ($_.Button -eq 'Left') {
+                if (-not $blk) { $script:entrySelected = @() }
+                elseif ($ctrl) {
+                    if ($script:entrySelected -contains $blk) { $script:entrySelected = @($script:entrySelected | Where-Object { $_ -ne $blk }) }
+                    else { $script:entrySelected = @($script:entrySelected) + @($blk) }
+                }
+                else { $script:entrySelected = @($blk) }
+                $this.Invalidate()
+                Update-EntryButtons
+            } elseif ($_.Button -eq 'Right') {
+                if ($blk) {
+                    if (-not ($script:entrySelected -contains $blk)) { $script:entrySelected = @($blk); $this.Invalidate() }
+                    Show-EntryMenu $this $_.Location $blk.Day
+                } else {
+                    Show-EntryMenu $this $_.Location (Get-EntryDayAt $_.Location.X)
+                }
+            }
+        } catch { Show-WeeklyError $_ }
+    })
+    $wv.AddEntry = New-ThemedButton 'Add entry' $k $theme
+    $wv.Undo = New-ThemedButton 'Undo last change' $k $theme
+    $wf.Controls.Add($wv.AddEntry)
+    $wf.Controls.Add($wv.Undo)
+    $wv.AddEntry.Add_Click({ try { Add-TimeEntry (Get-DefaultEntryDay) } catch { Show-WeeklyError $_ } })
+    $wv.Undo.Add_Click({ try { Undo-LogChange } catch { Show-WeeklyError $_ } })
+    $wf.Add_KeyDown({
+        if ($script:weekMode -eq 'entries' -and $_.KeyCode -eq 'Delete' -and @($script:entrySelected).Count -gt 0) {
+            try { Remove-EntryBlocks } catch { Show-WeeklyError $_ }
+        }
+    })
+
+    foreach ($ctl in @($wv.Prev, $wv.Next, $wv.Copy, $wv.Title, $wv.Chart, $wv.HoursLabel, $wv.HoursHint, $wv.Grid,
+                     $wv.BudgetLabel, $wv.BudgetHint, $wv.BudgetGrid, $wv.NotesLabel, $wv.NotesHint, $wv.NotesGrid)) {
+        $wf.Controls.Add($ctl)
+    }
+    $script:wv = $wv
+
+    $wv.Prev.Add_Click({ $script:weekStart = $script:weekStart.AddDays(-7); try { Fill-WeeklyView } catch { Show-WeeklyError $_ } })
+    $wv.Next.Add_Click({ $script:weekStart = $script:weekStart.AddDays(7); try { Fill-WeeklyView } catch { Show-WeeklyError $_ } })
+    $wv.Copy.Add_Click({
+        $g = $script:wv.Grid
+        $lines = @()
+        $lines += (@($g.Columns | ForEach-Object { $_.HeaderText }) -join "`t")
+        foreach ($row in $g.Rows) { $lines += (@($row.Cells | ForEach-Object { "$($_.Value)" }) -join "`t") }
+        [System.Windows.Forms.Clipboard]::SetText(($lines -join "`r`n"))
+        $script:wv.Copy.Text = 'Copied'
+        $ct = New-Object System.Windows.Forms.Timer
+        $ct.Interval = 1500
+        $ct.Add_Tick({ $this.Stop(); if ($script:wv) { $script:wv.Copy.Text = 'Copy hours table' } })
+        $ct.Start()
+    })
+    $wv.Chart.Add_Paint({ try { Draw-WeekChart $_.Graphics $this } catch { Write-Log "Chart error: $($_.Exception.Message)" } })
+    $wv.Chart.Add_Resize({ $this.Invalidate() })
+    $wf.Add_Resize({ if ($script:wv) { Layout-WeeklyView } })
+    $wf.Add_KeyDown({ if ($_.KeyCode -eq 'Escape') { $script:weekForm.Close() } })
+
+    # Notes are typed straight into the table and saved when you leave the cell
+    $wv.NotesGrid.Add_CellEndEdit({
+        $row = $script:wv.NotesGrid.Rows[$_.RowIndex]
+        $i = $row.Tag
+        $txt = "$($row.Cells['Note'].Value)"
+        if (Save-Note $i.DateStr $i.Name $i.StartStr $txt) {
+            $row.Cells['Note'].Style.BackColor = if ($txt.Trim()) { [System.Drawing.Color]::Empty } else { $script:wv.Unnoted }
+        } else {
+            Show-Message "Couldn't save the note. If notes.csv is open in Excel, close it and try again."
+        }
+    })
+
+    $wf.Add_FormClosed({ $script:weekForm = $null; $script:wv = $null })
+    $script:weekForm = $wf
+    Set-TitleBarColours $wf $theme
+    $wf.Show()
+    $wf.Activate()
+    try { Fill-WeeklyView }
+    catch { Show-WeeklyError $_ }
+}
+
+# Show what went wrong, so it can be passed on and fixed
+function Show-WeeklyError($err) {
+    $msg = "{0} (line {1})" -f $err.Exception.Message, $err.InvocationInfo.ScriptLineNumber
+    Write-Log "Weekly view error: $msg"
+    $script:dialogOpen = $true
+    try {
+        $owner = if ($script:weekForm -and -not $script:weekForm.IsDisposed) { $script:weekForm } else { $form }
+        [void][System.Windows.Forms.MessageBox]::Show($owner, "The weekly view hit a problem:`n`n$msg", 'Account timer')
+    } finally { $script:dialogOpen = $false }
+}
+
+function Fill-WeeklyView {
+    $wv = $script:wv
+    if (-not $wv) { return }
+    $k = $script:wk
+    $ws = $script:weekStart
+    $data = Get-WeekData $ws
+    $script:weekData = $data
+    $wv.Title.Text = 'Week commencing ' + $ws.ToString('d MMMM yyyy', $GB)
+    $wv.HoursHint.Text = $(if ($script:hoursFormat -eq 'hm') { 'Hours and minutes' } else { 'Decimal hours' }) + ', ready for your timesheet. Select cells and press Ctrl+C to copy part of it.'
+    $wv.Next.Enabled = ($ws -lt (Get-WeekStart))
+
+    # ---- Hours by account and day ----
+    $g = $wv.Grid
+    $g.Rows.Clear()
+    $g.Columns.Clear()
+    $col = $g.Columns.Add('Account', 'Account')
+    $g.Columns[$col].FillWeight = 220
+    foreach ($d in $data.Days) {
+        $ci = $g.Columns.Add("d$d", $ws.AddDays($d).ToString('ddd dd/MM', $GB))
+        $g.Columns[$ci].DefaultCellStyle.Alignment = 'MiddleRight'
+        $g.Columns[$ci].HeaderCell.Style.Alignment = 'MiddleRight'
+    }
+    $ci = $g.Columns.Add('Total', 'Total')
+    $g.Columns[$ci].DefaultCellStyle.Alignment = 'MiddleRight'
+    $g.Columns[$ci].HeaderCell.Style.Alignment = 'MiddleRight'
+    foreach ($column in $g.Columns) { $column.SortMode = 'NotSortable' }
+
+    $dayTotals = New-Object double[] 7
+    foreach ($n in $data.Names) {
+        $cells = @($n)
+        $sum = 0.0
+        foreach ($d in $data.Days) { $v = $data.Accounts[$n][$d]; $cells += (Format-Hours $v); $sum += $v; $dayTotals[$d] += $v }
+        $cells += (Format-Hours $sum)
+        [void]$g.Rows.Add([object[]]$cells)
+    }
+    $bold = New-PxFont 'Segoe UI Semibold' 12 $k
+    $faint = Mix-Colour $wv.Theme.Panel $cWhite 0.7
+    foreach ($extra in @(
+        @{ Name = 'Total (excluding lunch)'; Values = $dayTotals; Bold = $true },
+        @{ Name = 'Lunch'; Values = $data.Lunch; Bold = $false },
+        @{ Name = 'Unallocated'; Values = $data.Unalloc; Bold = $false })) {
+        $cells = @($extra.Name)
+        $sum = 0.0
+        foreach ($d in $data.Days) { $cells += (Format-Hours $extra.Values[$d]); $sum += $extra.Values[$d] }
+        $cells += (Format-Hours $sum)
+        $ri = $g.Rows.Add([object[]]$cells)
+        if ($extra.Bold) { $g.Rows[$ri].DefaultCellStyle.Font = $bold }
+        else { $g.Rows[$ri].DefaultCellStyle.ForeColor = $faint }
+    }
+    $g.Height = $g.ColumnHeadersHeight + $g.Rows.Count * $g.RowTemplate.Height + 2
+    $g.ClearSelection()
+
+    # ---- Budgets (always the current week, month or quarter) ----
+    $bg = $wv.BudgetGrid
+    $bg.Rows.Clear()
+    $bg.Columns.Clear()
+    foreach ($h in @('Account', 'Budget', 'Used', 'Remaining', 'Used %')) {
+        $ci = $bg.Columns.Add($h, $h)
+        if ($h -ne 'Account') { $bg.Columns[$ci].DefaultCellStyle.Alignment = 'MiddleRight'; $bg.Columns[$ci].HeaderCell.Style.Alignment = 'MiddleRight' }
+        $bg.Columns[$ci].SortMode = 'NotSortable'
+    }
+    $bg.Columns[0].FillWeight = 220
+    $budgetNames = @($script:accounts | ForEach-Object { $_.Name } | Where-Object { $script:budgets.ContainsKey($_) })
+    $weekNow = Get-WeekStart
+    foreach ($n in $budgetNames) {
+        $b = $script:budgets[$n]
+        $used = if ($b.Period -eq 'week') { [double]$script:weekDone[$n] }
+                elseif ($b.Period -eq 'month') { [double]$script:monthDone[$n] }
+                else { [double]$script:quarterDone[$n] }
+        if ($script:active -and $script:active.Name -eq $n) { $used += ((Get-Date) - $script:active.Start).TotalSeconds }
+        $limit = $b.Hours * 3600
+        $frac = $used / $limit
+        $cells = @($n, ('{0}h per {1}' -f $b.Hours.ToString('0.##', $Inv), $b.Period), (Format-Dur $used),
+                   (Format-Dur ([math]::Max(0.0, $limit - $used))), ('{0:0}%' -f ($frac * 100)))
+        $ri = $bg.Rows.Add([object[]]$cells)
+        if ($frac -ge 1) { $bg.Rows[$ri].Cells[4].Style.ForeColor = $BudgetOverColour }
+        elseif ($frac -ge 0.8) { $bg.Rows[$ri].Cells[4].Style.ForeColor = $BudgetWarnColour }
+    }
+    $wv.HasBudgets = $budgetNames.Count -gt 0
+    $bg.Visible = $wv.HasBudgets
+    $bg.Height = $bg.ColumnHeadersHeight + $bg.Rows.Count * $bg.RowTemplate.Height + 2
+    $bg.ClearSelection()
+    $wv.BudgetHint.Text = if ($budgetNames.Count -gt 0) { 'For the current week, month or quarter, whichever week you are looking at.' }
+                          else { "No budgets set yet. Right-click an account on the timer and choose Set budget." }
+
+    # ---- Notes ----
+    $ng = $wv.NotesGrid
+    $ng.Rows.Clear()
+    $ng.Columns.Clear()
+    foreach ($h in @('Day', 'Account', 'Start', 'Length', 'Note')) {
+        $ci = $ng.Columns.Add($h, $h)
+        $ng.Columns[$ci].SortMode = 'NotSortable'
+        $ng.Columns[$ci].ReadOnly = ($h -ne 'Note')
+    }
+    $ng.Columns['Day'].FillWeight = 70
+    $ng.Columns['Account'].FillWeight = 130
+    $ng.Columns['Start'].FillWeight = 50
+    $ng.Columns['Length'].FillWeight = 60
+    $ng.Columns['Note'].FillWeight = 300
+    $wv.Unnoted = Mix-Colour $wv.Theme.Panel ([System.Drawing.ColorTranslator]::FromHtml('#ffb74d')) 0.3
+    $minSec = [math]::Max(1, $NoteMinMinutes) * 60
+    $list = @($data.Sessions | Where-Object { $_.Seconds -ge $minSec } | Sort-Object Start)
+    foreach ($sn in $list) {
+        $info = @{ Name = $sn.Name; DateStr = $sn.Start.ToString('yyyy-MM-dd', $Inv); StartStr = $sn.Start.ToString('HH:mm:ss', $Inv) }
+        $note = $script:notes[(Get-NoteKey $info.DateStr $info.Name $info.StartStr)]
+        $ri = $ng.Rows.Add([object[]]@($sn.Start.ToString('ddd dd/MM', $GB), $sn.Name, $sn.Start.ToString('HH:mm', $Inv), (Format-Dur $sn.Seconds), "$note"))
+        $ng.Rows[$ri].Tag = $info
+        if (-not $note) { $ng.Rows[$ri].Cells['Note'].Style.BackColor = $wv.Unnoted }
+    }
+    $unnoted = @($list | Where-Object { -not $script:notes[(Get-NoteKey $_.Start.ToString('yyyy-MM-dd', $Inv) $_.Name $_.Start.ToString('HH:mm:ss', $Inv))] }).Count
+    $wv.NotesHint.Text = if ($list.Count -eq 0) { "No stretches of $NoteMinMinutes minutes or more logged this week." }
+                         elseif ($unnoted -gt 0) { "Stretches of $NoteMinMinutes minutes or more. $unnoted still need a note (highlighted). Click a note to add or edit it." }
+                         else { "Stretches of $NoteMinMinutes minutes or more. Click a note to edit it." }
+    $wv.HasNotes = $list.Count -gt 0
+    $ng.Visible = $wv.HasNotes
+    $ng.Height = $ng.ColumnHeadersHeight + $list.Count * $ng.RowTemplate.Height + 2
+    $ng.ClearSelection()
+
+    # ---- Time entries ----
+    $script:weekBlocks = @(Get-EntryBlocks $ws)
+    $script:entryHover = $null
+    $script:entrySelected = @()
+    Update-EntryButtons
+    $wv.MergeToggle.Text = if ($script:mergeEntries) { 'Merge consecutive: On' } else { 'Merge consecutive: Off' }
+    $wv.MergeToggle.BackColor = if ($script:mergeEntries) { $wv.Theme.CircleHot } else { $wv.Theme.Circle }
+    $wv.EntriesHint.Text = if ($script:weekBlocks.Count -eq 0) { 'No time entries logged this week.' }
+        elseif ($script:mergeEntries) { "Back-to-back time on the same account is merged into one block (Lunch or another account starts a new one). Hover for details. Click to select, Ctrl+click for several, right-click for options." }
+        else { "Each block is one stretch of time, in the order you worked it. Hover for details. Click to select, Ctrl+click for several, right-click for options." }
+
+    Layout-WeeklyView
+    $wv.Chart.Invalidate()
+    $wv.Entries.Invalidate()
+}
+
+function Layout-WeeklyView {
+    $wv = $script:wv
+    if (-not $wv) { return }
+    $k = $script:wk
+    $m = [int](20 * $k)
+    $wf = $wv.Form
+    $scroll = $wf.AutoScrollPosition
+    $W = $wf.ClientSize.Width - 2 * $m
+    $y = [int](14 * $k) + $scroll.Y
+    $entriesMode = $script:weekMode -eq 'entries'
+
+    # Top row: week buttons, tabs, and the action for the current tab
+    $wv.Prev.Location = New-Object System.Drawing.Point($m, $y)
+    $wv.Next.Location = New-Object System.Drawing.Point(($wv.Prev.Right + [int](8 * $k)), $y)
+    $wv.TabSummary.Location = New-Object System.Drawing.Point(($wv.Next.Right + [int](24 * $k)), $y)
+    $wv.TabEntries.Location = New-Object System.Drawing.Point(($wv.TabSummary.Right + [int](4 * $k)), $y)
+    $wv.TabSummary.BackColor = if ($entriesMode) { $wv.Theme.Circle } else { $wv.Theme.CircleHot }
+    $wv.TabEntries.BackColor = if ($entriesMode) { $wv.Theme.CircleHot } else { $wv.Theme.Circle }
+    $wv.Copy.Location = New-Object System.Drawing.Point(($m + $W - $wv.Copy.Width), $y)
+    $wv.OpenEntries.Location = New-Object System.Drawing.Point(($m + $W - $wv.OpenEntries.Width), $y)
+    $wv.Copy.Visible = -not $entriesMode
+    foreach ($ctl in @($wv.OpenEntries, $wv.MergeToggle, $wv.AddEntry, $wv.Undo)) { $ctl.Visible = $entriesMode }
+    $y += $wv.Prev.Height + [int](14 * $k)
+    $wv.Title.Location = New-Object System.Drawing.Point($m, $y)
+    $y += $wv.Title.Height + [int](8 * $k)
+
+    # Show only the current tab's content
+    foreach ($ctl in @($wv.Chart, $wv.HoursLabel, $wv.HoursHint, $wv.Grid, $wv.BudgetLabel, $wv.BudgetHint, $wv.NotesLabel, $wv.NotesHint)) {
+        $ctl.Visible = -not $entriesMode
+    }
+    $wv.BudgetGrid.Visible = (-not $entriesMode) -and [bool]$wv.HasBudgets
+    $wv.NotesGrid.Visible = (-not $entriesMode) -and [bool]$wv.HasNotes
+    $wv.EntriesHint.Visible = $entriesMode
+    $wv.Entries.Visible = $entriesMode
+
+    if ($entriesMode) {
+        # Toolbar: add and undo on the left, merging and the file on the right
+        $wv.AddEntry.Location = New-Object System.Drawing.Point($m, $y)
+        $wv.Undo.Location = New-Object System.Drawing.Point(($wv.AddEntry.Right + [int](8 * $k)), $y)
+        $wv.OpenEntries.Location = New-Object System.Drawing.Point(($m + $W - $wv.OpenEntries.Width), $y)
+        $wv.MergeToggle.Location = New-Object System.Drawing.Point(($wv.OpenEntries.Left - [int](8 * $k) - $wv.MergeToggle.Width), $y)
+        $y += $wv.AddEntry.Height + [int](12 * $k)
+        $wv.EntriesHint.MaximumSize = New-Object System.Drawing.Size($W, 0)
+        $wv.EntriesHint.Location = New-Object System.Drawing.Point($m, $y)
+        $y += $wv.EntriesHint.Height + [int](10 * $k)
+        $wv.Entries.Location = New-Object System.Drawing.Point($m, $y)
+        $wv.Entries.Width = $W
+        Build-EntryLayout
+        return
+    }
+
+    $wv.Chart.Location = New-Object System.Drawing.Point($m, $y)
+    $wv.Chart.Size = New-Object System.Drawing.Size($W, [int](230 * $k))
+    $y += $wv.Chart.Height + [int](18 * $k)
+
+    $sections = @(
+        @($wv.HoursLabel, $wv.HoursHint, $wv.Grid, $true),
+        @($wv.BudgetLabel, $wv.BudgetHint, $wv.BudgetGrid, [bool]$wv.HasBudgets),
+        @($wv.NotesLabel, $wv.NotesHint, $wv.NotesGrid, [bool]$wv.HasNotes))
+    foreach ($pair in $sections) {
+        $pair[0].Location = New-Object System.Drawing.Point($m, $y)
+        $y += $pair[0].Height + [int](2 * $k)
+        $pair[1].Location = New-Object System.Drawing.Point($m, $y)
+        $y += $pair[1].Height + [int](6 * $k)
+        if ($pair[3]) {
+            $pair[2].Location = New-Object System.Drawing.Point($m, $y)
+            $pair[2].Width = $W
+            $y += $pair[2].Height
+        }
+        $y += [int](20 * $k)
+    }
+}
+
+# ---- Time entries tab: one column per day, one block per stretch of time ----
+
+# Each account keeps the same colour here as in the chart
+function Get-EntryColour($name) {
+    $names = @($script:weekData.Names)
+    $i = [array]::IndexOf($names, $name)
+    if ($i -lt 0) { $i = $names.Count + [math]::Abs($name.GetHashCode()) % 5 }
+    return $AccountColours[$i % $AccountColours.Count]
+}
+
+function Build-EntryLayout {
+    $wv = $script:wv
+    $d = $script:weekData
+    if (-not $wv -or -not $d) { return }
+    $k = $script:wk
+    $W = [double]$wv.Entries.Width
+    $days = @($d.Days)
+    $gap = 8 * $k
+    $colW = ($W - $gap * ($days.Count - 1)) / [math]::Max(1, $days.Count)
+    $headH = 30 * $k
+    $blocks = @()
+    $maxY = $headH
+    for ($j = 0; $j -lt $days.Count; $j++) {
+        $x = $j * ($colW + $gap)
+        $y = $headH + 6 * $k
+        foreach ($e in @($script:weekBlocks | Where-Object { $_.Day -eq $days[$j] })) {
+            $h = if ($e.Kind -ne 'time' -and $e.Kind -ne 'running') { 24 * $k }
+                 elseif ($e.Note -or @($e.Parts).Count -gt 1) { 46 * $k }
+                 else { 30 * $k }
+            $blocks += @{ Rect = (New-Object System.Drawing.RectangleF([float]$x, [float]$y, [float]$colW, [float]$h)); Entry = $e }
+            $y += $h + 5 * $k
+        }
+        if ($y -gt $maxY) { $maxY = $y }
+    }
+    $script:entryBlocks = $blocks
+    $script:entryCols = @(for ($j = 0; $j -lt $days.Count; $j++) { @{ X = $j * ($colW + $gap); W = $colW; Day = $days[$j] } })
+    $wv.Entries.Height = [int]([math]::Max($maxY + 10 * $k, 140 * $k))
+    $wv.Entries.Invalidate()
+}
+
+function Get-EntryDayAt($x) {
+    foreach ($col in $script:entryCols) { if ($x -ge $col.X -and $x -lt ($col.X + $col.W + 8 * $script:wk)) { return $col.Day } }
+    return (Get-DefaultEntryDay)
+}
+
+# Today if it's in the week being viewed, otherwise Monday
+function Get-DefaultEntryDay {
+    $d = [int][math]::Floor(([datetime]::Today - $script:weekStart).TotalDays)
+    if ($d -ge 0 -and $d -le 6) { return $d }
+    return 0
+}
+
+function Update-EntryButtons {
+    if (-not $script:wv) { return }
+    $script:wv.Undo.Enabled = [bool]$script:undoLabel
+}
+
+# Right-click menu for the Time entries tab, built for whatever is selected
+$script:entryMenu = New-Object System.Windows.Forms.ContextMenuStrip
+function Show-EntryMenu($panel, $pt, $day) {
+    $em = $script:entryMenu
+    $em.Items.Clear()
+    $sel = @($script:entrySelected)
+    $n = $sel.Count
+    $running = Test-HasRunning $sel
+    if ($n -gt 0) {
+        $one = $n -eq 1
+        $mi = $em.Items.Add('Edit note...')
+        $mi.Enabled = $one -and $sel[0].Kind -eq 'time'
+        $mi.Add_Click({ try { Edit-EntryNote $script:entrySelected[0] } catch { Show-WeeklyError $_ } })
+        $mi = $em.Items.Add('Edit time...')
+        $mi.Enabled = $one -and -not $running
+        $mi.Add_Click({ try { Edit-EntryTime $script:entrySelected[0] } catch { Show-WeeklyError $_ } })
+
+        $move = New-Object System.Windows.Forms.ToolStripMenuItem 'Change account'
+        $move.Enabled = -not $running
+        foreach ($an in @($script:accounts | ForEach-Object { $_.Name })) {
+            $ai = $move.DropDownItems.Add($an)
+            $ai.Tag = $an
+            $ai.Checked = (@($sel | Where-Object { $_.Name -ne $an }).Count -eq 0)
+            $ai.Add_Click({ try { Set-EntryAccount $this.Tag } catch { Show-WeeklyError $_ } })
+        }
+        [void]$em.Items.Add($move)
+
+        $sameGroup = (@($sel | Where-Object { $_.Name -ne $sel[0].Name -or $_.Day -ne $sel[0].Day }).Count -eq 0)
+        $mi = $em.Items.Add($(if ($n -ge 2) { "Merge $n blocks" } else { 'Merge (select two or more)' }))
+        $mi.Enabled = ($n -ge 2) -and $sameGroup -and -not $running
+        if ($n -ge 2 -and -not $sameGroup) { $mi.Text = 'Merge (same account and day only)' }
+        $mi.Add_Click({ try { Merge-EntryBlocks } catch { Show-WeeklyError $_ } })
+
+        [void]$em.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+        $mi = $em.Items.Add($(if ($one) { 'Delete' } else { "Delete $n blocks" }))
+        $mi.Enabled = -not $running
+        $mi.Add_Click({ try { Remove-EntryBlocks } catch { Show-WeeklyError $_ } })
+        [void]$em.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+    }
+    $dayName = $script:weekStart.AddDays($day).ToString('dddd d', $GB)
+    $mi = $em.Items.Add("Add entry on $dayName...")
+    $mi.Tag = $day
+    $mi.Add_Click({ try { Add-TimeEntry $this.Tag } catch { Show-WeeklyError $_ } })
+    if ($script:undoLabel) {
+        $mi = $em.Items.Add("Undo last change ($($script:undoLabel))")
+        $mi.Add_Click({ try { Undo-LogChange } catch { Show-WeeklyError $_ } })
+    }
+    Set-MenuScale $em
+    $em.Show($panel, $pt)
+}
+
+function Get-EntryBlockAt($pt) {
+    foreach ($b in $script:entryBlocks) {
+        if ($b.Rect.Contains([float]$pt.X, [float]$pt.Y)) { return $b }
+    }
+    return $null
+}
+
+function Get-EntryTipText($e) {
+    if ($e.Kind -ne 'time' -and $e.Kind -ne 'running') {
+        return '{0}  {1} {2}' -f $e.Name, (Get-EntryTypeLabel $e.Kind).ToLower(), (Format-HM $e.Seconds)
+    }
+    $t = '{0}  {1} to {2}  ({3})' -f $e.Name, $e.Start.ToString('HH:mm', $Inv), $e.End.ToString('HH:mm', $Inv), (Format-HM $e.Seconds)
+    $parts = @($e.Parts)
+    if ($parts.Count -gt 1) {
+        $t += "`n"
+        foreach ($p in $parts) {
+            if ($p.Kind -eq 'time' -or $p.Kind -eq 'running') {
+                $line = '{0} to {1}   {2}' -f $p.Start.ToString('HH:mm', $Inv), $p.End.ToString('HH:mm', $Inv), (Format-HM $p.Seconds)
+                if ($p.Kind -eq 'running') { $line += '   still running' }
+                elseif ($p.Note) { $line += '   ' + $p.Note }
+            } else {
+                $line = '{0}   {1}' -f (Get-EntryTypeLabel $p.Kind), (Format-HM $p.Seconds)
+            }
+            $t += "`n" + $line
+        }
+        if (-not $e.Note -and $e.Kind -eq 'time') { $t += "`n`nNo note yet. Right-click to add one." }
+        return $t
+    }
+    if ($e.Kind -eq 'running') { $t += "`nStill running" }
+    elseif ($e.Note) { $t += "`n" + $e.Note }
+    else { $t += "`nNo note yet. Right-click to add one." }
+    return $t
+}
+
+function Edit-EntryNote($e) {
+    $times = @($e.Parts | Where-Object { $_.Kind -eq 'time' })
+    if ($times.Count -eq 0) { return }
+    $prompt = 'What did you work on? ({0} to {1})' -f $e.Start.ToString('HH:mm', $Inv), $e.End.ToString('HH:mm', $Inv)
+    $text = Show-TextPrompt "Note for $($e.Name)" $prompt "$($e.Note)"
+    if ($null -eq $text) { return }
+    $first = $times[0]
+    $ok = Save-Note $first.Start.ToString('yyyy-MM-dd', $Inv) $first.Name $first.Start.ToString('HH:mm:ss', $Inv) $text
+    for ($i = 1; $i -lt $times.Count -and $ok; $i++) {
+        $p = $times[$i]
+        if ($p.Note) { $ok = Save-Note $p.Start.ToString('yyyy-MM-dd', $Inv) $p.Name $p.Start.ToString('HH:mm:ss', $Inv) '' }
+    }
+    if ($ok) { Fill-WeeklyView }
+    else { Show-Message "Couldn't save the note. If notes.csv is open in Excel, close it and try again." }
+}
+
+# Text drawn the way Windows draws it (matching the tables and labels), aligned to whole pixels.
+# Windows text can't be see-through, so faint text uses a colour blended with the background instead.
+function Draw-WinText($g, $text, $font, $color, $x, $y, $w, $h, [string]$align = 'left') {
+    $flags = switch ($align) {
+        'right'  { 'Right, VerticalCenter, SingleLine, NoPrefix, NoPadding' }
+        'centre' { 'HorizontalCenter, VerticalCenter, SingleLine, NoPrefix, NoPadding' }
+        default  { 'Left, VerticalCenter, SingleLine, NoPrefix, NoPadding, EndEllipsis' }
+    }
+    $rect = New-Object System.Drawing.Rectangle([int][math]::Round($x), [int][math]::Round($y), [int][math]::Round($w), [int][math]::Round($h))
+    [System.Windows.Forms.TextRenderer]::DrawText($g, "$text", $font, $rect, $color, [System.Windows.Forms.TextFormatFlags]$flags)
+}
+
+function Measure-WinText($text, $font) {
+    $flags = [System.Windows.Forms.TextFormatFlags]'SingleLine, NoPrefix, NoPadding'
+    return [System.Windows.Forms.TextRenderer]::MeasureText("$text", $font, (New-Object System.Drawing.Size(10000, 1000)), $flags).Width
+}
+
+# A tiny speech-bubble mark for entries that have a note
+function Draw-NoteMark($g, $pen, [float]$x, [float]$y, $k) {
+    $w = [float](10 * $k); $h = [float](7 * $k)
+    $g.DrawRectangle($pen, $x, $y, $w, $h)
+    $g.DrawLine($pen, [float]($x + 2 * $k), [float]($y + $h), [float]($x + 2 * $k), [float]($y + $h + 3 * $k))
+}
+
+function Draw-EntriesView($g, $panel) {
+    $d = $script:weekData
+    if (-not $d) { return }
+    $k = $script:wk
+    $g.SmoothingMode = 'AntiAlias'
+    $g.PixelOffsetMode = 'HighQuality'
+    $theme = $script:wv.Theme
+    $faintCol = Mix-Colour $theme.Panel $cWhite 0.67
+    $fHead = New-PxFont 'Segoe UI Semibold' 13 $k
+    $fName = New-PxFont 'Segoe UI Semibold' 12 $k
+    $fNote = New-PxFont 'Segoe UI' 11.5 $k
+    $sfL = New-Object System.Drawing.StringFormat
+    $sfL.Alignment = 'Near'; $sfL.LineAlignment = 'Center'; $sfL.Trimming = 'EllipsisCharacter'; $sfL.FormatFlags = 'NoWrap'
+    $sfR = New-Object System.Drawing.StringFormat
+    $sfR.Alignment = 'Far'; $sfR.LineAlignment = 'Center'; $sfR.FormatFlags = 'NoWrap'
+    $sfC = New-Object System.Drawing.StringFormat
+    $sfC.Alignment = 'Center'; $sfC.LineAlignment = 'Center'
+    $textBrush = New-Object System.Drawing.SolidBrush $cWhite
+    $faintBrush = New-Object System.Drawing.SolidBrush ($C::FromArgb(170, $cWhite))
+    $badgeBrush = New-Object System.Drawing.SolidBrush (Mix-Colour $theme.Panel $cWhite 0.14)
+    $dark = [System.Drawing.ColorTranslator]::FromHtml('#1d1d1f')
+    $ws = $script:weekStart
+    $days = @($d.Days)
+    $W = [double]$panel.ClientSize.Width
+    $gap = 8 * $k
+    $colW = ($W - $gap * ($days.Count - 1)) / [math]::Max(1, $days.Count)
+    $headH = 30 * $k
+
+    # Day headings with the day's total (time entries and adjustments, Lunch excluded)
+    for ($j = 0; $j -lt $days.Count; $j++) {
+        $x = [float]($j * ($colW + $gap))
+        $total = 0.0
+        foreach ($e in $script:weekBlocks) { if ($e.Day -eq $days[$j]) { $total += $e.Seconds } }
+        Draw-WinText $g ($ws.AddDays($days[$j]).ToString('ddd d', $GB)) $fHead $cWhite $x 0 $colW $headH 'left'
+        if ($total -gt 0) {
+            $txt = Format-HM $total
+            $tw = [float]((Measure-WinText $txt $fName) + 14 * $k)
+            $bx = [float]($x + $colW - $tw)
+            $path = New-RoundedPath $bx ([float](5 * $k)) $tw ([float]($headH - 10 * $k)) ([float](5 * $k))
+            $g.FillPath($badgeBrush, $path)
+            $path.Dispose()
+            Draw-WinText $g $txt $fName $cWhite $bx 0 $tw $headH 'centre'
+        }
+    }
+
+    foreach ($b in $script:entryBlocks) {
+        $e = $b.Entry
+        $r = $b.Rect
+        $pad = [float](8 * $k)
+        $isAdj = $e.Kind -ne 'time' -and $e.Kind -ne 'running'
+        $path = New-RoundedPath $r.X $r.Y $r.Width $r.Height ([float](5 * $k))
+        if ($isAdj) {
+            # Rounding and manual changes: quiet outlined blocks
+            $selected = $script:entrySelected -contains $e
+            $pen = New-Object System.Drawing.Pen(($C::FromArgb($(if ($selected) { 255 } else { 110 }), $cWhite)), [float]($(if ($selected) { 2.5 } else { 1 }) * $k))
+            if (-not $selected) { $pen.DashStyle = 'Dash' }
+            $g.DrawPath($pen, $path)
+            $pen.Dispose()
+            $label = '{0}  {1}' -f (Get-EntryTypeLabel $e.Kind), $e.Name
+            Draw-WinText $g $label $fNote $faintCol ($r.X + $pad) $r.Y ($r.Width - 2 * $pad - 44 * $k) $r.Height 'left'
+            Draw-WinText $g (Format-HM $e.Seconds) $fNote $faintCol ($r.X + $pad) $r.Y ($r.Width - 2 * $pad) $r.Height 'right'
+            $path.Dispose()
+            continue
+        }
+
+        $col = Get-EntryColour $e.Name
+        $ink = if ($col.GetBrightness() -gt 0.55) { $dark } else { [System.Drawing.Color]::White }
+        $fillCol = if ($e.Kind -eq 'running') { Mix-Colour $theme.Panel $col 0.6 } else { $col }
+        if ($script:entryHover -and $script:entryHover.Entry -eq $e) { $fillCol = Mix-Colour $col ([System.Drawing.Color]::White) 0.18 }
+        $fb = New-Object System.Drawing.SolidBrush $fillCol
+        $g.FillPath($fb, $path)
+        $fb.Dispose()
+        if ($script:entrySelected -contains $e) {
+            $selPen = New-Object System.Drawing.Pen($cWhite, [float](2.5 * $k))
+            $g.DrawPath($selPen, $path)
+            $selPen.Dispose()
+        }
+        if ($e.Kind -eq 'running') {
+            $pen = New-Object System.Drawing.Pen($col, [float](1.5 * $k))
+            $g.DrawPath($pen, $path)
+            $pen.Dispose()
+        }
+        $path.Dispose()
+
+        $inkBrush = New-Object System.Drawing.SolidBrush $ink
+        $inkPen = New-Object System.Drawing.Pen($ink, [float](1 * $k))
+        $lineH = [float](30 * $k)
+        $durText = if ($e.Kind -eq 'running') { (Format-HM $e.Seconds) + ' so far' } else { Format-HM $e.Seconds }
+        $durW = [float](Measure-WinText $durText $fName)
+        $markW = if ($e.Note) { [float](16 * $k) } else { [float]0 }
+        Draw-WinText $g $durText $fName $ink ($r.X + $pad) $r.Y ($r.Width - 2 * $pad) $lineH 'right'
+        if ($e.Note) { Draw-NoteMark $g $inkPen ([float]($r.Right - $pad - $durW - $markW + 2 * $k)) ([float]($r.Y + $lineH / 2 - 5 * $k)) $k }
+        $nameW = [float]([math]::Max(10.0, $r.Width - 2 * $pad - $durW - $markW - 4 * $k))
+        Draw-WinText $g $e.Name $fName $ink ($r.X + $pad) $r.Y $nameW $lineH 'left'
+        $partCount = @($e.Parts).Count
+        $partsW = [float]0
+        if ($partCount -gt 1) {
+            $partsText = '{0} parts' -f $partCount
+            $partsW = [float]((Measure-WinText $partsText $fNote) + 8 * $k)
+            Draw-WinText $g $partsText $fNote (Mix-Colour $fillCol $ink 0.75) ($r.X + $pad) ($r.Y + 22 * $k) ($r.Width - 2 * $pad) (20 * $k) 'right'
+        }
+        if ($e.Note) {
+            Draw-WinText $g $e.Note $fNote $ink ($r.X + $pad) ($r.Y + 22 * $k) ($r.Width - 2 * $pad - $partsW) (20 * $k) 'left'
+        }
+        $inkBrush.Dispose()
+        $inkPen.Dispose()
+    }
+    foreach ($o in @($fHead, $fName, $fNote, $sfL, $sfR, $sfC, $textBrush, $faintBrush, $badgeBrush)) { $o.Dispose() }
+}
+
+function Draw-WeekChart($g, $panel) {
+    $d = $script:weekData
+    if (-not $d) { return }
+    $k = $script:wk
+    $g.SmoothingMode = 'AntiAlias'
+    $g.PixelOffsetMode = 'HighQuality'
+    $W = $panel.ClientSize.Width
+    $H = $panel.ClientSize.Height
+    $faintCol = Mix-Colour $script:wv.Theme.Panel $cWhite 0.67
+    $font = New-PxFont 'Segoe UI' 11 $k
+    $bold = New-PxFont 'Segoe UI Semibold' 11 $k
+    $textBrush = New-Object System.Drawing.SolidBrush $cWhite
+    $faintBrush = New-Object System.Drawing.SolidBrush ($C::FromArgb(170, $cWhite))
+    $linePen = New-Object System.Drawing.Pen(($C::FromArgb(40, $cWhite)), 1)
+    $sfC = New-Object System.Drawing.StringFormat
+    $sfC.Alignment = 'Center'; $sfC.LineAlignment = 'Center'
+    $sfR = New-Object System.Drawing.StringFormat
+    $sfR.Alignment = 'Far'; $sfR.LineAlignment = 'Center'
+
+    # Legend along the bottom
+    $legendH = [int](22 * $k)
+    $lx = [float](34 * $k)
+    $ly = [float]($H - $legendH + 4 * $k)
+    for ($i = 0; $i -lt $d.Names.Count; $i++) {
+        $n = $d.Names[$i]
+        $nw = Measure-WinText $n $font
+        if (($lx + 18 * $k + $nw) -gt $W) { break }
+        $cb = New-Object System.Drawing.SolidBrush $AccountColours[$i % $AccountColours.Count]
+        $g.FillRectangle($cb, $lx, ($ly + 3 * $k), (10 * $k), (10 * $k))
+        $cb.Dispose()
+        Draw-WinText $g $n $font $faintCol ($lx + 14 * $k) ($ly - 2 * $k) ($nw + 4) (20 * $k) 'left'
+        $lx += 14 * $k + $nw + 14 * $k
+    }
+
+    # Bars: one per day, stacked by account
+    $top = [float](16 * $k)
+    $bottom = [float]($H - $legendH - 24 * $k)
+    $left = [float](34 * $k)
+    $chartH = $bottom - $top
+    $max = 8 * 3600.0
+    foreach ($day in $d.Days) {
+        $t = 0.0
+        foreach ($n in $d.Names) { $t += $d.Accounts[$n][$day] }
+        if ($t -gt $max) { $max = $t }
+    }
+    $max = [math]::Ceiling($max / 7200) * 7200
+    for ($hr = 0; $hr -le $max; $hr += 7200) {
+        $yy = [float]($bottom - $chartH * ($hr / $max))
+        $g.DrawLine($linePen, $left, $yy, [float]$W, $yy)
+        Draw-WinText $g ('{0}h' -f ($hr / 3600)) $font $faintCol 0 ($yy - 8 * $k) ($left - 6 * $k) (16 * $k) 'right'
+    }
+    $slot = ($W - $left) / [math]::Max(1, $d.Days.Count)
+    $bw = [float]([math]::Min($slot * 0.5, 70 * $k))
+    $ws = $script:weekStart
+    for ($j = 0; $j -lt $d.Days.Count; $j++) {
+        $day = $d.Days[$j]
+        $cx = [float]($left + $slot * ($j + 0.5))
+        $yy = $bottom
+        $t = 0.0
+        for ($i = 0; $i -lt $d.Names.Count; $i++) {
+            $v = $d.Accounts[$d.Names[$i]][$day]
+            if ($v -le 0) { continue }
+            $hgt = [float]($chartH * ($v / $max))
+            $cb = New-Object System.Drawing.SolidBrush $AccountColours[$i % $AccountColours.Count]
+            $g.FillRectangle($cb, ($cx - $bw / 2), ($yy - $hgt), $bw, $hgt)
+            $cb.Dispose()
+            $yy -= $hgt
+            $t += $v
+        }
+        if ($t -gt 0) {
+            Draw-WinText $g ('{0:0.##}h' -f ($t / 3600)) $bold $cWhite ($cx - $slot / 2) ($yy - 18 * $k) $slot (16 * $k) 'centre'
+        }
+        Draw-WinText $g ($ws.AddDays($day).ToString('ddd dd/MM', $GB)) $font $faintCol ($cx - $slot / 2) ($bottom + 4 * $k) $slot (18 * $k) 'centre'
+    }
+    foreach ($o in @($font, $bold, $textBrush, $faintBrush, $linePen, $sfC, $sfR)) { $o.Dispose() }
+}
+
+# Fields shown depend on what's passed: Days/DayIndex, Accounts/Account, Start, Duration, Note.
+# Returns the chosen values, or $null if cancelled.
+function Show-EntryDialog($title, $opt) {
+    $k = $Zoom / $Scale
+    $dlg = New-Object System.Windows.Forms.Form
+    $dlg.Text = $title
+    $dlg.FormBorderStyle = 'FixedDialog'
+    $dlg.MinimizeBox = $false; $dlg.MaximizeBox = $false
+    $dlg.ShowInTaskbar = $false
+    $dlg.TopMost = $true
+    if ($script:appIcon) { $dlg.Icon = $script:appIcon }
+    $dlg.StartPosition = 'CenterScreen'
+    $dlg.AutoScaleMode = 'None'
+    $dlg.Font = New-PxFont 'Segoe UI' 12 $k
+    $labelW = [int](80 * $k); $fieldX = [int](100 * $k); $fieldW = [int](220 * $k); $rowH = [int](34 * $k)
+    $y = [int](14 * $k)
+    $fields = @{}
+    $addRow = {
+        param($labelText, $ctl)
+        $l = New-Object System.Windows.Forms.Label
+        $l.Text = $labelText
+        $l.AutoSize = $false
+        $l.Size = New-Object System.Drawing.Size($labelW, [int](24 * $k))
+        $l.TextAlign = 'MiddleLeft'
+        $l.Location = New-Object System.Drawing.Point([int](14 * $k), $y)
+        $ctl.Location = New-Object System.Drawing.Point($fieldX, $y)
+        $ctl.Width = $fieldW
+        $dlg.Controls.Add($l)
+        $dlg.Controls.Add($ctl)
+    }
+    if ($opt.Days) {
+        $picker = New-Object System.Windows.Forms.ComboBox
+        $picker.DropDownStyle = 'DropDownList'
+        foreach ($dd in $opt.Days) { [void]$picker.Items.Add($dd.ToString('dddd d MMMM', $GB)) }
+        $picker.SelectedIndex = [math]::Min($opt.DayIndex, $opt.Days.Count - 1)
+        . $addRow 'Day' $picker; $fields.Day = $picker; $y += $rowH
+    }
+    if ($opt.Accounts) {
+        $picker = New-Object System.Windows.Forms.ComboBox
+        $picker.DropDownStyle = 'DropDownList'
+        foreach ($an in $opt.Accounts) { [void]$picker.Items.Add($an) }
+        $picker.SelectedIndex = [math]::Max(0, [array]::IndexOf(@($opt.Accounts), $opt.Account))
+        . $addRow 'Account' $picker; $fields.Account = $picker; $y += $rowH
+    }
+    $tbStart = New-Object System.Windows.Forms.TextBox
+    $tbStart.Text = $opt.Start
+    . $addRow 'Start' $tbStart; $y += $rowH
+    $tbDur = New-Object System.Windows.Forms.TextBox
+    $tbDur.Text = $opt.Duration
+    . $addRow 'Duration' $tbDur; $y += $rowH
+    if ($null -ne $opt.Note) {
+        $tbNote = New-Object System.Windows.Forms.TextBox
+        $tbNote.Text = $opt.Note
+        . $addRow 'Note' $tbNote; $fields.Note = $tbNote; $y += $rowH
+    }
+    $hint = New-Object System.Windows.Forms.Label
+    $hint.AutoSize = $true
+    $hint.Text = 'Start as 09:30. Duration as 0:45, 45m or 1.25.'
+    $hint.ForeColor = [System.Drawing.SystemColors]::GrayText
+    $hint.Location = New-Object System.Drawing.Point($fieldX, $y)
+    $dlg.Controls.Add($hint)
+    $y += [int](30 * $k)
+
+    $ok = New-Object System.Windows.Forms.Button
+    $ok.Text = 'OK'; $ok.DialogResult = 'OK'
+    $ok.Size = New-Object System.Drawing.Size([int](80 * $k), [int](28 * $k))
+    $ok.Location = New-Object System.Drawing.Point(($fieldX + $fieldW - [int](166 * $k)), $y)
+    $cancel = New-Object System.Windows.Forms.Button
+    $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'
+    $cancel.Size = New-Object System.Drawing.Size([int](80 * $k), [int](28 * $k))
+    $cancel.Location = New-Object System.Drawing.Point(($fieldX + $fieldW - [int](80 * $k)), $y)
+    $dlg.Controls.Add($ok); $dlg.Controls.Add($cancel)
+    $dlg.AcceptButton = $ok; $dlg.CancelButton = $cancel
+    $dlg.ClientSize = New-Object System.Drawing.Size(($fieldX + $fieldW + [int](14 * $k)), ($y + [int](42 * $k)))
+
+    while ($true) {
+        $script:dialogOpen = $true
+        try { $result = $dlg.ShowDialog((Get-DialogOwner)) } finally { $script:dialogOpen = $false }
+        if ($result -ne [System.Windows.Forms.DialogResult]::OK) { $dlg.Dispose(); return $null }
+        # Check what was typed; if anything's wrong, say so and reopen the box with it intact
+        $problem = $null
+        $startText = $tbStart.Text.Trim()
+        if ($startText -notmatch '^(\d{1,2})[:.](\d{2})$' -or [int]$Matches[1] -gt 23 -or [int]$Matches[2] -gt 59) {
+            $problem = "Couldn't read '$startText' as a start time. Try something like 09:30."
+        } else {
+            $startTs = New-Object TimeSpan([int]$Matches[1], [int]$Matches[2], 0)
+        }
+        $secs = ConvertFrom-DurationText $tbDur.Text
+        if (-not $problem -and (-not $secs -or $secs -lt 60)) { $problem = "Couldn't read '$($tbDur.Text.Trim())' as a duration. Try 0:45, 45m or 1.25." }
+        if (-not $problem) { break }
+        Show-Message $problem
+    }
+    $baseDate = if ($fields.Day) { $opt.Days[$fields.Day.SelectedIndex] } else { $null }
+    $res = @{
+        Start   = $(if ($baseDate) { $baseDate.Date.Add($startTs) } else { [datetime]::Today.Add($startTs) })
+        Seconds = [double]$secs
+        Account = $(if ($fields.Account) { [string]$fields.Account.SelectedItem } else { $null })
+        Note    = $(if ($fields.Note) { $fields.Note.Text.Trim() } else { $null })
+        Date    = $baseDate
+    }
+    $dlg.Dispose()
+    return $res
+}
+
+# After hours, days or format change: recalculate and redraw everything
+function Complete-SettingsChange {
+    Refresh-Totals
+    Write-WeekSummary
+    Update-View
+    if ($script:drawerOpen) { $script:drawerWeek = Get-WeekStartFor $script:drawerWeek; Update-DrawerContent }
+    Request-Redraw
+    if ($script:weekForm -and -not $script:weekForm.IsDisposed) {
+        $script:weekStart = Get-WeekStartFor $script:weekStart
+        Fill-WeeklyView
+    }
+}
+
+function Switch-HoursFormat {
+    $script:hoursFormat = if ($script:hoursFormat -eq 'decimal') { 'hm' } else { 'decimal' }
+    Save-WorkSettings
+    Complete-SettingsChange
+}
+
+function New-SettingsDialog($title, [int]$width, [int]$height) {
+    $k = $Zoom / $Scale
+    $dlg = New-Object System.Windows.Forms.Form
+    $dlg.Text = $title
+    $dlg.FormBorderStyle = 'FixedDialog'
+    $dlg.MinimizeBox = $false; $dlg.MaximizeBox = $false
+    $dlg.ShowInTaskbar = $false
+    $dlg.TopMost = $true
+    $dlg.StartPosition = 'CenterScreen'
+    $dlg.AutoScaleMode = 'None'
+    $dlg.Font = New-PxFont 'Segoe UI' 12 $k
+    if ($script:appIcon) { $dlg.Icon = $script:appIcon }
+    $dlg.ClientSize = New-Object System.Drawing.Size([int]($width * $k), [int]($height * $k))
+    return $dlg
+}
+
+function Add-DialogControl($dlg, $ctl, [double]$x, [double]$y, [double]$w, [double]$h) {
+    $k = $Zoom / $Scale
+    $ctl.Location = New-Object System.Drawing.Point([int]($x * $k), [int]($y * $k))
+    if ($w -gt 0) { $ctl.Width = [int]($w * $k) }
+    if ($h -gt 0) { $ctl.Height = [int]($h * $k) }
+    $dlg.Controls.Add($ctl)
+    return $ctl
+}
+
+function New-DialogLabel($text) {
+    $l = New-Object System.Windows.Forms.Label
+    $l.Text = $text
+    $l.AutoSize = $true
+    return $l
+}
+
+function Add-DialogButtons($dlg, [double]$y, [bool]$withReset, $resetText) {
+    $ok = New-Object System.Windows.Forms.Button
+    $ok.Text = 'OK'; $ok.DialogResult = 'OK'
+    $cancel = New-Object System.Windows.Forms.Button
+    $cancel.Text = 'Cancel'; $cancel.DialogResult = 'Cancel'
+    $w = $dlg.ClientSize.Width / ($Zoom / $Scale)
+    [void](Add-DialogControl $dlg $ok ($w - 186) $y 80 28)
+    [void](Add-DialogControl $dlg $cancel ($w - 96) $y 80 28)
+    if ($withReset) {
+        $reset = New-Object System.Windows.Forms.Button
+        $reset.Text = $resetText; $reset.DialogResult = 'Abort'
+        [void](Add-DialogControl $dlg $reset 14 $y 150 28)
+    }
+    $dlg.AcceptButton = $ok
+    $dlg.CancelButton = $cancel
+}
+
+# Usual hours, working days, week start and how hours are shown
+function Show-WorkSettings {
+    $dlg = New-SettingsDialog 'Working hours and days' 380 262
+    [void](Add-DialogControl $dlg (New-DialogLabel 'Usual hours') 14 16 0 0)
+    $tbStart = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 130 13 70 0
+    $tbStart.Text = $StartTime
+    [void](Add-DialogControl $dlg (New-DialogLabel 'to') 208 16 0 0)
+    $tbEnd = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 232 13 70 0
+    $tbEnd.Text = $EndTime
+
+    [void](Add-DialogControl $dlg (New-DialogLabel 'Working days') 14 56 0 0)
+    $boxes = @()
+    $order = @(1, 2, 3, 4, 5, 6, 0)
+    for ($i = 0; $i -lt 7; $i++) {
+        $cb = New-Object System.Windows.Forms.CheckBox
+        $cb.Text = $DayAbbr[$order[$i]]
+        $cb.Tag = $order[$i]
+        $cb.Checked = $script:workDays -contains $order[$i]
+        $boxes += (Add-DialogControl $dlg $cb (14 + ($i % 4) * 88) (80 + [math]::Floor($i / 4) * 26) 84 0)
+    }
+
+    [void](Add-DialogControl $dlg (New-DialogLabel 'Week starts on') 14 146 0 0)
+    $cbWeek = Add-DialogControl $dlg (New-Object System.Windows.Forms.ComboBox) 130 143 150 0
+    $cbWeek.DropDownStyle = 'DropDownList'
+    $fullNames = @('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
+    foreach ($fn in $fullNames) { [void]$cbWeek.Items.Add($fn) }
+    $cbWeek.SelectedIndex = $script:weekStartDow
+
+    [void](Add-DialogControl $dlg (New-DialogLabel 'Show hours as') 14 182 0 0)
+    $cbFmt = Add-DialogControl $dlg (New-Object System.Windows.Forms.ComboBox) 130 179 236 0
+    $cbFmt.DropDownStyle = 'DropDownList'
+    [void]$cbFmt.Items.AddRange(@('Decimal (1.25)', 'Hours and minutes (1:15)'))
+    $cbFmt.SelectedIndex = if ($script:hoursFormat -eq 'hm') { 1 } else { 0 }
+
+    Add-DialogButtons $dlg 222 $false ''
+
+    while ($true) {
+        $script:dialogOpen = $true
+        try { $result = $dlg.ShowDialog((Get-DialogOwner)) } finally { $script:dialogOpen = $false }
+        if ($result -ne [System.Windows.Forms.DialogResult]::OK) { $dlg.Dispose(); return }
+        $a = ConvertTo-ClockText $tbStart.Text
+        $b = ConvertTo-ClockText $tbEnd.Text
+        $days = @($boxes | Where-Object { $_.Checked } | ForEach-Object { [int]$_.Tag } | Sort-Object)
+        $problem = if (-not $a -or -not $b) { 'Enter the hours as times, such as 08:30 and 17:30.' }
+                   elseif ([timespan]$b -le [timespan]$a) { 'The end time needs to be after the start time.' }
+                   elseif ($days.Count -eq 0) { 'Choose at least one working day.' }
+                   else { $null }
+        if (-not $problem) { break }
+        Show-Message $problem
+    }
+    $script:StartTime = $a
+    $script:EndTime = $b
+    $script:workDays = $days
+    $script:weekStartDow = $cbWeek.SelectedIndex
+    $script:hoursFormat = if ($cbFmt.SelectedIndex -eq 1) { 'hm' } else { 'decimal' }
+    $dlg.Dispose()
+    Save-WorkSettings
+    Complete-SettingsChange
+}
+
+# Different hours today, or today off
+function Show-TodaySettings {
+    $todayKey = [datetime]::Today.ToString('yyyy-MM-dd', $Inv)
+    $plan = Get-DayPlan ([datetime]::Today)
+    $dlg = New-SettingsDialog ('Today, ' + [datetime]::Today.ToString('dddd d MMMM', $GB)) 380 150
+    $cbOff = Add-DialogControl $dlg (New-Object System.Windows.Forms.CheckBox) 14 14 300 0
+    $cbOff.Text = 'Not working today (day off)'
+    $cbOff.Checked = -not $plan.Working
+    [void](Add-DialogControl $dlg (New-DialogLabel 'Hours today') 14 54 0 0)
+    $tbStart = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 130 51 70 0
+    $tbEnd = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 232 51 70 0
+    [void](Add-DialogControl $dlg (New-DialogLabel 'to') 208 54 0 0)
+    $tbStart.Text = if ($plan.Working) { $plan.Start.ToString('HH:mm', $Inv) } else { $StartTime }
+    $tbEnd.Text = if ($plan.Working) { $plan.End.ToString('HH:mm', $Inv) } else { $EndTime }
+    $cbOff.Add_CheckedChanged({ $tbStart.Enabled = -not $cbOff.Checked; $tbEnd.Enabled = -not $cbOff.Checked }.GetNewClosure())
+    $tbStart.Enabled = -not $cbOff.Checked; $tbEnd.Enabled = -not $cbOff.Checked
+    Add-DialogButtons $dlg 108 ([bool]$script:dayOverrides[$todayKey]) 'Back to usual hours'
+
+    while ($true) {
+        $script:dialogOpen = $true
+        try { $result = $dlg.ShowDialog((Get-DialogOwner)) } finally { $script:dialogOpen = $false }
+        if ($result -eq [System.Windows.Forms.DialogResult]::Abort) {
+            [void]$script:dayOverrides.Remove($todayKey)
+            break
+        }
+        if ($result -ne [System.Windows.Forms.DialogResult]::OK) { $dlg.Dispose(); return }
+        if ($cbOff.Checked) { $script:dayOverrides[$todayKey] = @{ Off = $true }; break }
+        $a = ConvertTo-ClockText $tbStart.Text
+        $b = ConvertTo-ClockText $tbEnd.Text
+        $problem = if (-not $a -or -not $b) { 'Enter the hours as times, such as 08:00 and 16:00.' }
+                   elseif ([timespan]$b -le [timespan]$a) { 'The end time needs to be after the start time.' }
+                   else { $null }
+        if ($problem) { Show-Message $problem; continue }
+        # Same as usual on a usual working day: no special arrangement needed
+        if ($a -eq $StartTime -and $b -eq $EndTime -and $script:workDays -contains [int][datetime]::Today.DayOfWeek) {
+            [void]$script:dayOverrides.Remove($todayKey)
+        } else {
+            $script:dayOverrides[$todayKey] = @{ Off = $false; Start = $a; End = $b }
+        }
+        break
+    }
+    $dlg.Dispose()
+    Save-WorkSettings
+    Complete-SettingsChange
+}
+
+function Show-TextPrompt($title, $prompt, $default) {
+    $k = $Zoom / $Scale
+    $dlg = New-Object System.Windows.Forms.Form
+    $dlg.Text = $title
+    $dlg.FormBorderStyle = 'FixedDialog'
+    $dlg.MinimizeBox = $false
+    $dlg.MaximizeBox = $false
+    $dlg.ShowInTaskbar = $false
+    $dlg.TopMost = $true
+    if ($script:appIcon) { $dlg.Icon = $script:appIcon }
+    $dlg.StartPosition = 'CenterScreen'
+    $dlg.AutoScaleMode = 'None'
+    $dlg.Font = New-Object System.Drawing.Font('Segoe UI', [float](12 * $k), [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
+    $dlg.ClientSize = New-Object System.Drawing.Size([int](300 * $k), [int](104 * $k))
+
+    $lbl = New-Object System.Windows.Forms.Label
+    $lbl.Text = $prompt
+    $lbl.AutoSize = $true
+    $lbl.MaximumSize = New-Object System.Drawing.Size([int](276 * $k), 0)
+    $lbl.Location = New-Object System.Drawing.Point([int](12 * $k), [int](12 * $k))
+
+    $box = New-Object System.Windows.Forms.TextBox
+    $box.Text = $default
+    $box.Location = New-Object System.Drawing.Point([int](12 * $k), [int](34 * $k))
+    $box.Width = [int](276 * $k)
+
+    $ok = New-Object System.Windows.Forms.Button
+    $ok.Text = 'OK'
+    $ok.DialogResult = 'OK'
+    $ok.Location = New-Object System.Drawing.Point([int](132 * $k), [int](68 * $k))
+    $ok.Size = New-Object System.Drawing.Size([int](75 * $k), [int](26 * $k))
+
+    $cancel = New-Object System.Windows.Forms.Button
+    $cancel.Text = 'Cancel'
+    $cancel.DialogResult = 'Cancel'
+    $cancel.Location = New-Object System.Drawing.Point([int](213 * $k), [int](68 * $k))
+    $cancel.Size = New-Object System.Drawing.Size([int](75 * $k), [int](26 * $k))
+
+    $dlg.AcceptButton = $ok
+    $dlg.CancelButton = $cancel
+    $dlg.Controls.Add($lbl)
+    $dlg.Controls.Add($box)
+    $dlg.Controls.Add($ok)
+    $dlg.Controls.Add($cancel)
+
+    $script:dialogOpen = $true
+    try { $result = $dlg.ShowDialog((Get-DialogOwner)) } finally { $script:dialogOpen = $false }
+    $text = $box.Text.Trim()
+    $dlg.Dispose()
+    if ($result -eq [System.Windows.Forms.DialogResult]::OK -and $text) { return $text }
+    return $null
+}
+
+function Get-DialogOwner {
+    if ($script:weekForm -and -not $script:weekForm.IsDisposed -and [System.Windows.Forms.Form]::ActiveForm -eq $script:weekForm) { return $script:weekForm }
+    return $form
+}
+
+function Ask-YesNo($question) {
+    $script:dialogOpen = $true
+    try {
+        $answer = [System.Windows.Forms.MessageBox]::Show((Get-DialogOwner), $question, 'Account timer', 'YesNo', 'Question')
+    } finally { $script:dialogOpen = $false }
+    return ($answer -eq 'Yes')
+}
+
+function Show-Message($text) {
+    $script:dialogOpen = $true
+    try { [void][System.Windows.Forms.MessageBox]::Show((Get-DialogOwner), $text, 'Account timer') }
+    finally { $script:dialogOpen = $false }
+}
+
+# ---- Mouse ----
+function Get-RowTop($i) {
+    $top = $RowTop + $i * $RowH
+    if ($script:slots[$i] -eq 'Lunch') { $top += $LunchGap }
+    return $top
+}
+
+function Get-HitRow($pt) {
+    $y = $pt.Y / $Zoom
+    for ($i = 0; $i -lt $script:slots.Count; $i++) {
+        $top = Get-RowTop $i
+        if ($y -ge $top -and $y -lt ($top + $RowH)) { return $i }
+    }
+    return $null
+}
+
+# Tooltips drawn in the theme's colours (panel background, theme text, a fine border)
+function Set-ThemedTooltip($tt) {
+    $tt.OwnerDraw = $true
+    $tt.Add_Popup({
+        $script:tipShownAt = Get-Date
+        try {
+            $theme = if ($script:view) { Get-StateTheme $script:view } else { $Themes.running }
+            $this.BackColor = $theme.Panel
+            $this.ForeColor = $cWhite
+        } catch {}
+    })
+    $tt.Add_Draw({
+        try {
+            $e = $_
+            $bg = New-Object System.Drawing.SolidBrush $this.BackColor
+            $e.Graphics.FillRectangle($bg, $e.Bounds)
+            $bg.Dispose()
+            $edge = New-Object System.Drawing.Pen((Mix-Colour $this.BackColor $this.ForeColor 0.3), 1)
+            $e.Graphics.DrawRectangle($edge, 0, 0, ($e.Bounds.Width - 1), ($e.Bounds.Height - 1))
+            $edge.Dispose()
+            $e.DrawText([System.Windows.Forms.TextFormatFlags]'HorizontalCenter, VerticalCenter, NoPrefix')
+        } catch { $_.DrawBackground(); $_.DrawBorder(); $_.DrawText() }
+    })
+}
+
+$tip = New-Object System.Windows.Forms.ToolTip
+Set-ThemedTooltip $tip
+
+function Get-HitRound($pt) {
+    # Returns e.g. "2:up" for the round-up button on row 2, or $null
+    $row = Get-HitRow $pt
+    if ($null -eq $row -or -not $script:view -or $row -ge $script:view.Rows.Count) { return $null }
+    if (-not $script:view.Rows[$row].CanRound) { return $null }
+    $x  = $pt.X / $Zoom
+    $y  = $pt.Y / $Zoom
+    $cy = (Get-RowTop $row) + $RowH / 2
+    $r  = $RoundR + 1
+    foreach ($dir in @('down', 'up')) {
+        $bx = $RoundXs[$dir]
+        if ((($x - $bx) * ($x - $bx) + ($y - $cy) * ($y - $cy)) -le ($r * $r)) { return ('{0}:{1}' -f $row, $dir) }
+    }
+    return $null
+}
+
+function Invoke-Round($key) {
+    $parts = $key -split ':'
+    $i = [int]$parts[0]
+    $dir = $parts[1]
+    $n = $script:slots[$i]
+
+    # Today's total so far, including any time on the clock right now
+    $total = [double]$script:todayDone[$n]
+    $running = [bool]($script:active -and $script:active.Name -eq $n)
+    if ($running) { $total += ((Get-Date) - $script:active.Start).TotalSeconds }
+    if ($dir -eq 'up') { $target = [math]::Ceiling(($total - 1) / $RoundBlock) * $RoundBlock }
+    else               { $target = [math]::Floor(($total + 1) / $RoundBlock) * $RoundBlock }
+    $change = $target - $total
+    if ([math]::Abs($change) -lt 1) { return }
+
+    $mins = [math]::Max(1, [math]::Round([math]::Abs($change) / 60))
+    $q = if ($dir -eq 'up') { "Add $mins min to $n so today comes to $(Format-Dur $target)?" }
+         else { "Remove $mins min from $n so today comes to $(Format-Dur $target)?" }
+    if ($running) { $q += "`n`n$n will be paused." }
+    if (-not (Ask-YesNo $q)) { return }
+
+    if ($running) { Stop-Active (Get-Date) }
+    $change = $target - [double]$script:todayDone[$n]
+    if ([math]::Abs($change) -ge 1) {
+        $label = if ($dir -eq 'up') { 'rounded up' } else { 'rounded down' }
+        Add-Rounding $n $change $label
+    }
+    Refresh-Totals
+    Write-WeekSummary
+    Update-View
+    Request-Redraw
+}
+
+# Reads times like "1h 15m", "1h", "45m", "1:15" or "1.25" (hours). Returns seconds, or $null.
+function ConvertFrom-DurationText($text) {
+    $t = ($text -replace '\s+', ' ').Trim().ToLower()
+    if (-not $t) { return $null }
+    $sec = $null
+    if ($t -match '^(\d+):(\d{1,2})$') {
+        if ([int]$Matches[2] -lt 60) { $sec = [int]$Matches[1] * 3600 + [int]$Matches[2] * 60 }
+    } elseif ($t -match '^\d+(\.\d+)?$') {
+        $sec = [double]::Parse($t, $Inv) * 3600
+    } elseif ($t -match '^(?:(\d+(?:\.\d+)?)\s*h(?:ours?|rs?)?)?\s*(?:(\d+)\s*m(?:ins?|inutes?)?)?$' -and ($Matches[1] -or $Matches[2])) {
+        $h = if ($Matches[1]) { [double]::Parse($Matches[1], $Inv) } else { 0 }
+        $m = if ($Matches[2]) { [int]$Matches[2] } else { 0 }
+        $sec = $h * 3600 + $m * 60
+    }
+    if ($null -eq $sec -or $sec -lt 0 -or $sec -gt 24 * 3600) { return $null }
+    return [math]::Round($sec)
+}
+
+function Set-TodayTime($i) {
+    $n = $script:slots[$i]
+    $total = [double]$script:todayDone[$n]
+    $running = [bool]($script:active -and $script:active.Name -eq $n)
+    if ($running) { $total += ((Get-Date) - $script:active.Start).TotalSeconds }
+
+    $entry = Show-TextPrompt "Set today's time for $n" 'Total for today, such as 1h 15m, 1:15 or 1.25' (Format-Dur $total)
+    if (-not $entry) { return }
+    $target = ConvertFrom-DurationText $entry
+    if ($null -eq $target) {
+        Show-Message "Couldn't read '$entry'. Try something like 1h 15m, 45m, 1:15 or 1.25."
+        return
+    }
+
+    if ($running) { Stop-Active (Get-Date) }
+    $change = $target - [double]$script:todayDone[$n]
+    if ([math]::Abs($change) -ge 1) { Add-Rounding $n $change 'adjusted' }
+    Refresh-Totals
+    Write-WeekSummary
+    Update-View
+    Request-Redraw
+}
+
+function Get-HitGrip($pt) {
+    $row = Get-HitRow $pt
+    if ($null -ne $row -and ($pt.X / $Zoom) -lt 15 -and $script:slots[$row] -ne 'Lunch') { return $row }
+    return $null
+}
+
+function Move-DraggedRow($y) {
+    $names = @($script:slots | Where-Object { $_ -ne 'Lunch' })
+    if ($names.Count -lt 2) { return }
+    $target = [int][math]::Floor(($y / $Zoom - $RowTop) / $RowH)
+    $target = [math]::Max(0, [math]::Min($names.Count - 1, $target))
+    $current = [array]::IndexOf($names, $script:reorder.Name)
+    if ($current -lt 0 -or $target -eq $current) { return }
+    $list = New-Object System.Collections.ArrayList
+    $list.AddRange($names)
+    $list.RemoveAt($current)
+    $list.Insert($target, $script:reorder.Name)
+    $script:slots = @($list) + @('Lunch')
+    $script:reorder.Moved = $true
+    Update-View
+    Request-Redraw
+}
+
+function Save-Order {
+    # Visible accounts in their new order, then hidden ones (which reappear at the bottom when shown)
+    $ordered = @()
+    foreach ($n in $script:slots) {
+        if ($n -ne 'Lunch') {
+            $acc = Find-Account $n
+            if ($acc) { $ordered += $acc }
+        }
+    }
+    $ordered += @($script:accounts | Where-Object { $_.Hidden })
+    $script:accounts = $ordered
+    Save-Accounts
+    Rebuild-Slots
+    Write-WeekSummary
+}
+
+# ---- Views ----
+function Load-Positions {
+    if (-not (Test-Path $PosFile)) { return }
+    foreach ($line in Get-Content $PosFile) {
+        $p = $line -split ','
+        if ($p.Count -eq 3) { $script:positions[$p[0]] = New-Object System.Drawing.Point([int]$p[1], [int]$p[2]) }
+    }
+}
+
+function Save-Position {
+    $script:positions[$script:mode] = if ($script:mode -eq 'full') { Get-TimerScreenPos } else { $form.Location }
+    $lines = @($script:positions.Keys | ForEach-Object { '{0},{1},{2}' -f $_, $script:positions[$_].X, $script:positions[$_].Y })
+    try { Set-Content -Path $PosFile -Value $lines } catch {}
+}
+
+function Set-View($mode, [switch]$Starting) {
+    if ($mode -ne 'pill') { $mode = 'full' }
+    if ($mode -eq $script:mode) { return }
+    if ($script:pillOpen) { Set-PillOpen $false }
+    if ($script:mode -eq 'full' -and $script:drawerOpen) { $script:drawerReopen = $true; Set-DrawerOpen $false -Starting }
+    if (-not $Starting) { Save-Position }
+    $right = $form.Right
+    $bottom = $form.Bottom
+    $script:mode = $mode
+    $bw, $bh = Get-BaseSize
+    $form.ClientSize = New-Object System.Drawing.Size([int]($bw * $Zoom), [int]($bh * $Zoom))
+    # Each view remembers where it was; the first time, it lines up with the other's bottom-right corner
+    if ($script:positions.ContainsKey($mode)) {
+        if ($mode -eq 'full') { Set-TimerScreenPos $script:positions[$mode] } else { $form.Location = $script:positions[$mode] }
+    }
+    else { $form.Location = New-Object System.Drawing.Point(($right - $form.Width), ($bottom - $form.Height)) }
+    $script:hover = $null; $script:gripHover = $null; $script:roundHover = $null
+    $script:pillHover = $null; $script:collapseHover = $false
+    $tip.Hide($form)
+    try { Set-Content -Path $ViewFile -Value $mode } catch {}
+    Apply-CornerStyle
+    $script:regionKey = ''
+    Update-Region
+    Apply-BlurState
+    Keep-Visible
+    Update-View
+    Request-Redraw
+    if ($mode -eq 'full' -and $script:drawerReopen) { $script:drawerReopen = $false; Set-DrawerOpen $true -Starting }
+}
+
+function Test-HitCollapse($pt) {
+    $x = $pt.X / $Zoom; $y = $pt.Y / $Zoom
+    $dx = $x - $CollapseX; $dy = $y - $CollapseY
+    $r = $CollapseR + 3
+    return (($dx * $dx + $dy * $dy) -le ($r * $r))
+}
+
+# Open or close the pill's account list. It opens downwards, or upwards if there's no room below.
+function Set-PillOpen([bool]$open) {
+    if ($script:mode -ne 'pill' -or $open -eq $script:pillOpen) { return }
+    $listPx = [int]((Get-PillListH) * $Zoom)
+    if ($open) {
+        $area = [System.Windows.Forms.Screen]::FromControl($form).WorkingArea
+        $needed = [int]($PillH * $Zoom) + $listPx
+        $script:pillUp = (($form.Top + $needed) -gt $area.Bottom) -and (($form.Bottom - $needed) -ge $area.Top)
+        $top = $form.Top
+        $script:pillOpen = $true
+        $bw, $bh = Get-BaseSize
+        $form.ClientSize = New-Object System.Drawing.Size([int]($bw * $Zoom), [int]($bh * $Zoom))
+        if ($script:pillUp) { $form.Top = $top - $listPx } else { $form.Top = $top }
+        $form.Activate()
+    } else {
+        $headerTop = if ($script:pillUp) { $form.Top + $listPx } else { $form.Top }
+        $script:pillOpen = $false
+        $script:pillUp = $false
+        $bw, $bh = Get-BaseSize
+        $form.ClientSize = New-Object System.Drawing.Size([int]($bw * $Zoom), [int]($bh * $Zoom))
+        $form.Top = $headerTop
+    }
+    $script:pillHover = $null
+    $tip.Hide($form)
+    Request-Redraw
+}
+
+function Get-PillZone($pt) {
+    $x = $pt.X / $Zoom - $script:pillMargin; $y = $pt.Y / $Zoom - $script:pillMargin
+    $L = Get-PillLayout
+    if ($y -ge $L.HeaderY -and $y -lt ($L.HeaderY + $PillH)) {
+        $dx = $x - $PillBtnX; $dy = $y - ($L.HeaderY + $PillH / 2)
+        $r = $PillBtnR + 2
+        if (($dx * $dx + $dy * $dy) -le ($r * $r)) { return 'button' }
+        if ($x -lt $PillTimeW) { return 'time' }
+        return 'list'
+    }
+    if ($script:pillOpen) {
+        for ($i = 0; $i -lt $script:slots.Count; $i++) {
+            $top = Get-PillRowTop $i
+            if ($y -ge $top -and $y -lt ($top + $PillRowH)) { return ('row:' + $i) }
+        }
+    }
+    return $null
+}
+
+function Pill-MouseDown($e) {
+    if ($e.Button -ne 'Left') { return }
+    $script:pillDown = @{
+        Cursor = [System.Windows.Forms.Cursor]::Position
+        Form = $form.Location
+        Zone = (Get-PillZone $e.Location)
+        Dragging = $false
+    }
+}
+
+function Pill-MouseMove($e) {
+    if ($script:pillDown) {
+        # A small movement is still a click; beyond that it's a drag
+        $p = [System.Windows.Forms.Cursor]::Position
+        $dx = $p.X - $script:pillDown.Cursor.X
+        $dy = $p.Y - $script:pillDown.Cursor.Y
+        if (-not $script:pillOpen -and ($script:pillDown.Dragging -or ([math]::Abs($dx) + [math]::Abs($dy)) -gt 4)) {
+            $script:pillDown.Dragging = $true
+            $tip.Hide($form)
+            $form.Location = New-Object System.Drawing.Point(($script:pillDown.Form.X + $dx), ($script:pillDown.Form.Y + $dy))
+        }
+        return
+    }
+    $form.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $zone = Get-PillZone $e.Location
+    if ($zone -ne $script:pillHover) {
+        $script:pillHover = $zone
+        if ($script:pillOpen -or -not $zone) {
+            $tip.Hide($form)
+        } else {
+            $text = if ($zone -eq 'time') { 'Open full view' }
+                    elseif ($zone -eq 'list') { 'Switch account' }
+                    elseif ($script:active) { 'Pause' }
+                    else { 'Start an account' }
+            $tip.Show($text, $form, [int]$e.Location.X, [int]($form.ClientSize.Height + 4), 2000)
+        }
+        Request-Redraw
+    }
+}
+
+function Pill-MouseUp($e) {
+    $d = $script:pillDown
+    $script:pillDown = $null
+    if (-not $d) { return }
+    if ($d.Dragging) { Save-Position; return }
+    $tip.Hide($form)
+    $zone = $d.Zone
+    if (-not $zone -or $zone -ne (Get-PillZone $e.Location)) { return }
+    if ($zone -eq 'time') {
+        Set-View 'full'
+    } elseif ($zone -eq 'list') {
+        Set-PillOpen (-not $script:pillOpen)
+    } elseif ($zone -eq 'button') {
+        if ($script:active) { Stop-ByUser; Update-View; Set-PillOpen $false; Request-Redraw }
+        else { Set-PillOpen (-not $script:pillOpen) }
+    } elseif ($zone -like 'row:*') {
+        # Switch to that account (or stop it, if it's the one running) and fold the list away
+        Switch-Slot ([int]$zone.Substring(4))
+        Update-View
+        Set-PillOpen $false
+        Request-Redraw
+    }
+}
+
+$form.KeyPreview = $true
+$form.Add_KeyDown({ if ($_.KeyCode -eq 'Escape' -and $script:pillOpen) { Set-PillOpen $false } })
+$form.Add_Deactivate({ if ($script:pillOpen -and -not $script:dialogOpen -and -not $menu.Visible) { Set-PillOpen $false } })
+
+$form.Add_MouseDown({
+    if ($script:mode -eq 'pill') { Pill-MouseDown $_; return }
+    if ($_.Button -ne 'Left') { return }
+    if (Test-InDrawer $_.Location) {
+        $btn = Get-DrawerButtonAt $_.Location
+        if ($btn) { $script:drawerPressed = $btn } else { Start-WindowMove }
+        return
+    }
+    $tp = Get-TimerPoint $_.Location
+    if (Test-HitHandle $tp) { $script:pressedHandle = $true; return }
+    if (Test-HitCollapse $tp) { $script:pressedCollapse = $true; return }
+    $grip = Get-HitGrip $tp
+    if ($null -ne $grip) {
+        $script:reorder = @{ Name = $script:slots[$grip]; Moved = $false }
+        Request-Redraw
+        return
+    }
+    $round = Get-HitRound $tp
+    if ($null -ne $round) {
+        $script:pressedRound = $round
+        return
+    }
+    $hit = Get-HitRow $tp
+    if ($null -ne $hit) {
+        $script:pressed = $hit
+    } else {
+        Start-WindowMove
+    }
+})
+$form.Add_MouseMove({
+    if ($script:mode -eq 'pill') { Pill-MouseMove $_; return }
+    if ($script:dragStart) {
+        $p = [System.Windows.Forms.Cursor]::Position
+        $form.Location = New-Object System.Drawing.Point(
+            ($script:formStart.X + $p.X - $script:dragStart.X),
+            ($script:formStart.Y + $p.Y - $script:dragStart.Y))
+        return
+    }
+    $tp = Get-TimerPoint $_.Location
+    if ($script:reorder) {
+        Move-DraggedRow $tp.Y
+        return
+    }
+
+    # Over the drawer: just its buttons
+    if (Test-InDrawer $_.Location) {
+        $btn = Get-DrawerButtonAt $_.Location
+        $form.Cursor = if ($btn) { [System.Windows.Forms.Cursors]::Hand } else { [System.Windows.Forms.Cursors]::Default }
+        if ($btn -ne $script:drawerHover -or $null -ne $script:hover -or $script:handleHover) {
+            $script:drawerHover = $btn
+            $script:hover = $null; $script:gripHover = $null; $script:roundHover = $null; $script:handleHover = $false
+            $tip.Hide($form)
+            Request-Redraw
+        }
+        return
+    }
+    if ($script:drawerHover) { $script:drawerHover = $null; Request-Redraw }
+
+    # Tooltips are placed in window coordinates, so add the timer's offset
+    $ox = $script:timerOffX + $script:fullMargin; $oy = $script:timerOffY + $script:fullMargin
+    $handle = Test-HitHandle $tp
+    if ($handle -ne $script:handleHover) {
+        $script:handleHover = $handle
+        if ($handle) {
+            $label = if ($script:drawerOpen) { 'Hide week drawer' } else { 'Show week drawer' }
+            $tip.Show($label, $form, [int](($DrawerBtnX - 4 + $ox) * $Zoom), [int](($DrawerBtnY + 12 + $oy) * $Zoom), 2000)
+        } else { $tip.Hide($form) }
+        Request-Redraw
+    }
+    $hit   = if ($handle) { $null } else { Get-HitRow $tp }
+    $grip  = Get-HitGrip $tp
+    $round = Get-HitRound $tp
+    $coll  = Test-HitCollapse $tp
+    if ($coll -ne $script:collapseHover) {
+        $script:collapseHover = $coll
+        if ($coll) { $tip.Show('Compact view', $form, [int](($CollapseX - 60 + $ox) * $Zoom), [int](($CollapseY + 12 + $oy) * $Zoom), 2000) }
+        else { $tip.Hide($form) }
+        Request-Redraw
+    }
+    $ua = Test-HitUnalloc $tp
+    if ($ua -ne $script:unallocHover) {
+        $script:unallocHover = $ua
+        if ($ua -and $script:view -and $script:view.UnallocTip) {
+            $tip.Show($script:view.UnallocTip, $form, [int]((160 + $ox) * $Zoom), [int]((68 + $oy) * $Zoom), 5000)
+        } elseif (-not $coll -and -not $handle) { $tip.Hide($form) }
+    }
+    $form.Cursor = if ($null -ne $grip) { [System.Windows.Forms.Cursors]::SizeNS }
+                   elseif ($null -ne $hit -or $coll -or $handle) { [System.Windows.Forms.Cursors]::Hand }
+                   else { [System.Windows.Forms.Cursors]::Default }
+    if ($round -ne $script:roundHover) {
+        if ($null -ne $round) {
+            $rp = $round -split ':'
+            $tipText = if ($rp[1] -eq 'up') { 'Round today up to the next 15 minutes' } else { 'Round today down to the previous 15 minutes' }
+            $tip.Show($tipText, $form,
+                [int](($RoundXs[$rp[1]] - 70 + $ox) * $Zoom), [int](((Get-RowTop ([int]$rp[0])) + $RowH + $oy) * $Zoom), 2500)
+        } else {
+            $tip.Hide($form)
+        }
+    }
+    if ($hit -ne $script:hover -or $grip -ne $script:gripHover -or $round -ne $script:roundHover) {
+        if ($hit -ne $script:hover -and $null -eq $round) {
+            $budgetTip = if ($null -ne $hit -and $script:view -and $hit -lt $script:view.Rows.Count) { $script:view.Rows[$hit].BudgetText } else { $null }
+            if ($budgetTip) { $tip.Show($budgetTip, $form, [int]((46 + $ox) * $Zoom), [int](((Get-RowTop $hit) + $RowH + $oy) * $Zoom), 2500) }
+            elseif (-not $coll -and -not $handle) { $tip.Hide($form) }
+        }
+        $script:hover = $hit
+        $script:gripHover = $grip
+        $script:roundHover = $round
+        Request-Redraw
+    }
+})
+$form.Add_MouseUp({
+    try {
+        if ($script:mode -eq 'pill') { Pill-MouseUp $_; return }
+        $tp = Get-TimerPoint $_.Location
+        if ($script:drawerPressed) {
+            $btn = $script:drawerPressed
+            $script:drawerPressed = $null
+            if ((Get-DrawerButtonAt $_.Location) -eq $btn) { Invoke-DrawerButton $btn }
+            return
+        }
+        if ($script:pressedHandle) {
+            $script:pressedHandle = $false
+            if (Test-HitHandle $tp) { $tip.Hide($form); Set-DrawerOpen (-not $script:drawerOpen) }
+            return
+        }
+        if ($script:pressedCollapse) {
+            $script:pressedCollapse = $false
+            if (Test-HitCollapse $tp) { Set-View 'pill' }
+            return
+        }
+        if ($script:dragStart) { $script:dragStart = $null; Save-Position }
+        if ($script:reorder) {
+            if ($script:reorder.Moved) { Save-Order }
+            $script:reorder = $null
+            Update-View
+            Request-Redraw
+            return
+        }
+        if ($null -ne $script:pressedRound) {
+            $pr = $script:pressedRound
+            $script:pressedRound = $null
+            if ((Get-HitRound $tp) -eq $pr) {
+                $tip.Hide($form)
+                Invoke-Round $pr
+            }
+            return
+        }
+        if ($null -ne $script:pressed -and (Get-HitRow $tp) -eq $script:pressed) {
+            Switch-Slot $script:pressed
+            Update-View
+            Request-Redraw
+        }
+        $script:pressed = $null
+    } catch {
+        Write-Log "Click error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)"
+    }
+})
+$form.Add_MouseLeave({
+    if ($script:mode -eq 'pill') {
+        if ($script:pillHover) { $script:pillHover = $null; $tip.Hide($form); Request-Redraw }
+        return
+    }
+    if ($script:reorder) { return }
+    if ($script:collapseHover -or $script:handleHover -or $script:drawerHover) {
+        $script:collapseHover = $false; $script:handleHover = $false; $script:drawerHover = $null
+        Request-Redraw
+    }
+    if ($null -ne $script:hover -or $null -ne $script:gripHover -or $null -ne $script:roundHover) {
+        $tip.Hide($form)
+        $script:hover = $null
+        $script:gripHover = $null
+        $script:roundHover = $null
+        $form.Cursor = [System.Windows.Forms.Cursors]::Default
+        Request-Redraw
+    }
+})
+
+# ---- Keeping it visible ----
+# Hand the move to Windows (smooth, like any other window), pausing the timer's redraws meanwhile.
+# Falls back to following the mouse if that isn't available.
+$script:moving = $false
+function Start-WindowMove {
+    if ($script:layered) {
+        try {
+            $script:moving = $true
+            [Win.Layered]::StartMove($form.Handle)
+        } catch {
+            $script:dragStart = [System.Windows.Forms.Cursor]::Position
+            $script:formStart = $form.Location
+            return
+        } finally { $script:moving = $false }
+        Save-Position
+        Request-Redraw
+        return
+    }
+    $script:dragStart = [System.Windows.Forms.Cursor]::Position
+    $script:formStart = $form.Location
+}
+
+function Keep-Visible {
+    Update-Dpi
+    if ($script:dialogOpen -or $menu.Visible -or $trayMenu.Visible) { return }
+    $activeForm = [System.Windows.Forms.Form]::ActiveForm
+    if ($activeForm -and ($activeForm -eq $script:weekForm -or $activeForm -eq $script:noteForm)) { return }
+    $rect = New-Object System.Drawing.Rectangle($form.Location, $form.Size)
+    $onScreen = $false
+    foreach ($scr in [System.Windows.Forms.Screen]::AllScreens) {
+        if ($scr.WorkingArea.IntersectsWith($rect)) { $onScreen = $true }
+    }
+    if (-not $onScreen) { Move-ToDefaultPosition }
+    if (-not $form.Visible) { $form.Show() }
+    # Don't jump in front of a tooltip that's showing, or while the mouse is over the timer (when tooltips
+    # appear, and when the timer is clearly already in view)
+    if ($form.Bounds.Contains([System.Windows.Forms.Control]::MousePosition)) { return }
+    if ($script:weekForm -and -not $script:weekForm.IsDisposed -and $script:weekForm.Bounds.Contains([System.Windows.Forms.Control]::MousePosition)) { return }
+    if ($script:tipShownAt -and ((Get-Date) - $script:tipShownAt).TotalSeconds -lt 9) { return }
+    $form.TopMost = $false
+    $form.TopMost = $true
+}
+
+function Open-WeekFile {
+    Flush-Pending
+    Refresh-Totals
+    Write-WeekSummary
+    $f = Get-WeekFile
+    if (Test-Path $f) { Invoke-Item $f }
+}
+
+# ---- Adding, hiding and renaming accounts ----
+function Resize-Form {
+    if ($script:mode -eq 'full' -and $script:drawerOpen) {
+        # With the drawer open, keep the timer where it is and rebuild around it
+        $tl = Get-TimerScreenPos
+        $script:BaseH = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6
+        $script:drawerH = Get-DrawerHeight
+        Update-DrawerGeometry $tl
+        $script:hover = $null
+        Request-Redraw
+        return
+    }
+    # Grow or shrink to fit the rows, keeping the bottom edge where it was
+    $script:BaseH = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6
+    $bottom = $form.Bottom
+    $bw, $bh = Get-BaseSize
+    $form.ClientSize = New-Object System.Drawing.Size([int]($bw * $Zoom), [int]($bh * $Zoom))
+    $form.Top = $bottom - $form.Height
+    $script:hover = $null
+    Request-Redraw
+}
+
+function Complete-AccountChange {
+    Save-Accounts
+    Rebuild-Slots
+    Refresh-Totals
+    Write-WeekSummary
+    Resize-Form
+    Update-View
+}
+
+function Add-Account {
+    $name = Show-TextPrompt 'Add account' 'Account code or name:' ''
+    if (-not $name) { return }
+    if ($name -eq 'Lunch') { Show-Message 'Lunch already has its own row.'; return }
+    $existing = Find-Account $name
+    if ($existing -and -not $existing.Hidden) { Show-Message "$name is already on the list."; return }
+    if ((Get-VisibleCount) -ge $MaxVisibleAccounts) {
+        Show-Message "There are already $MaxVisibleAccounts accounts showing. Hide one first to make room."
+        return
+    }
+    if ($existing) { $existing.Hidden = $false }
+    else { $script:accounts += @{ Name = $name; Hidden = $false } }
+    Complete-AccountChange
+}
+
+function Show-Account($name) {
+    if ((Get-VisibleCount) -ge $MaxVisibleAccounts) {
+        Show-Message "There are already $MaxVisibleAccounts accounts showing. Hide one first to make room."
+        return
+    }
+    $acc = Find-Account $name
+    if ($acc) { $acc.Hidden = $false; Complete-AccountChange }
+}
+
+function Hide-Account($name) {
+    if ($name -eq 'Lunch') { return }
+    if ($script:active -and $script:active.Name -eq $name) { Stop-Active (Get-Date) }
+    $acc = Find-Account $name
+    if ($acc) { $acc.Hidden = $true; Complete-AccountChange }
+}
+
+function Rename-Account($old) {
+    if ($old -eq 'Lunch') { return }
+    $new = Show-TextPrompt 'Rename account' 'Account code or name:' $old
+    if (-not $new -or $new -ceq $old) { return }
+    if ($new -eq 'Lunch') { Show-Message 'Lunch is reserved for the lunch row.'; return }
+    $acc = Find-Account $old
+    $clash = Find-Account $new
+    if ($clash -and -not [object]::ReferenceEquals($clash, $acc)) {
+        Show-Message "There's already an account called $new (it may be hidden)."
+        return
+    }
+    $wasActive = [bool]($script:active -and $script:active.Name -eq $old)
+    if ($wasActive) { Stop-Active (Get-Date) }
+    $acc.Name = $new
+    if ($script:budgets.ContainsKey($old)) {
+        $script:budgets[$new] = $script:budgets[$old]
+        [void]$script:budgets.Remove($old)
+        Save-Budgets
+    }
+    Complete-AccountChange
+    if ($wasActive) {
+        Start-Slot ([array]::IndexOf($script:slots, $new))
+        Update-View
+    }
+}
+
+# ---- Right-click menu ----
+$menu = New-Object System.Windows.Forms.ContextMenuStrip
+
+$miView = $menu.Items.Add('Compact view')
+$miView.Add_Click({ if ($script:mode -eq 'pill') { Set-View 'full' } else { Set-View 'pill' } })
+$miDrawer = $menu.Items.Add('Show week drawer')
+$miDrawer.Add_Click({ Set-DrawerOpen (-not $script:drawerOpen) })
+$miWork = New-Object System.Windows.Forms.ToolStripMenuItem 'Working hours'
+[void]$miWork.DropDownItems.Add('Usual hours and days...', $null, { try { Show-WorkSettings } catch { Write-Log "Settings error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)" } })
+[void]$miWork.DropDownItems.Add('Today only...', $null, { try { Show-TodaySettings } catch { Write-Log "Settings error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)" } })
+[void]$miWork.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+$miFormat = $miWork.DropDownItems.Add('Show hours as h:mm')
+$miFormat.Add_Click({ Switch-HoursFormat })
+[void]$menu.Items.Add($miWork)
+[void]$menu.Items.Add('Weekly view...', $null, {
+    try { Show-WeeklyView } catch { Show-WeeklyError $_ }
+})
+[void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+
+$miRename = $menu.Items.Add('Rename this account...')
+$miRename.Add_Click({
+    try {
+        if ($null -ne $script:menuRow) { Rename-Account $script:slots[$script:menuRow] }
+    } catch { Write-Log "Rename error: $($_.Exception.Message)" }
+})
+
+$miHide = $menu.Items.Add('Hide this account')
+$miHide.Add_Click({
+    try {
+        if ($null -ne $script:menuRow) { Hide-Account $script:slots[$script:menuRow] }
+    } catch { Write-Log "Hide error: $($_.Exception.Message)" }
+})
+
+$miBudget = $menu.Items.Add('Set budget...')
+$miBudget.Add_Click({
+    try {
+        if ($null -ne $script:menuRow) { Set-AccountBudget $script:slots[$script:menuRow] }
+    } catch { Write-Log "Budget error: $($_.Exception.Message)" }
+})
+
+$miSet = $menu.Items.Add("Set today's time...")
+$miSet.Add_Click({
+    try {
+        if ($null -ne $script:menuRow) { Set-TodayTime $script:menuRow }
+    } catch { Write-Log "Set time error: $($_.Exception.Message)" }
+})
+
+$miClear = $menu.Items.Add("Clear today's time")
+$miClear.Add_Click({
+    try {
+        $i = $script:menuRow
+        if ($null -eq $i) { return }
+        $n = $script:slots[$i]
+        if (-not (Ask-YesNo "Clear all of today's time for $n?")) { return }
+        try {
+            Clear-TodayFor $n
+        } catch {
+            Show-Message "Couldn't update sessions.csv. If it's open in Excel, close it and try again."
+            return
+        }
+        if ($script:active -and $script:active.Name -eq $n) {
+            $script:active.Start = Get-Date
+            Save-State
+        }
+        Refresh-Totals
+        Write-WeekSummary
+        Update-View
+        Request-Redraw
+    } catch { Write-Log "Clear error: $($_.Exception.Message)" }
+})
+
+$miSep = New-Object System.Windows.Forms.ToolStripSeparator
+[void]$menu.Items.Add($miSep)
+
+[void]$menu.Items.Add('Add account...', $null, {
+    try { Add-Account } catch { Write-Log "Add error: $($_.Exception.Message)" }
+})
+
+$miShow = New-Object System.Windows.Forms.ToolStripMenuItem 'Show hidden account'
+[void]$menu.Items.Add($miShow)
+
+[void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+
+# ---- Appearance: theme, transparency and the pill's effects ----
+$miAppearance = New-Object System.Windows.Forms.ToolStripMenuItem 'Appearance'
+$miTheme = New-Object System.Windows.Forms.ToolStripMenuItem 'Theme'
+
+function Build-ThemeMenu {
+    $miTheme.DropDownItems.Clear()
+    $darkSoFar = $true
+    foreach ($tn in $script:ThemeSets.Keys) {
+        # Divider before the first light theme (one with dark text)
+        $isLight = ([System.Drawing.ColorTranslator]::FromHtml($script:ThemeSets[$tn].Text)).GetBrightness() -lt 0.5
+        if ($isLight -and $darkSoFar -and $miTheme.DropDownItems.Count -gt 0) {
+            [void]$miTheme.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+        }
+        if ($isLight) { $darkSoFar = $false }
+        $ti = $miTheme.DropDownItems.Add($tn)
+        $ti.Tag = $tn
+        $ti.Checked = ($tn -eq $script:themeName)
+        $ti.Add_Click({
+            Apply-Theme $this.Tag
+            Save-Theme
+        })
+    }
+    [void]$miTheme.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+    [void]$miTheme.DropDownItems.Add('Edit themes file', $null, {
+        if (-not (Test-Path $ThemesFile)) { Load-Themes }
+        Invoke-Item $ThemesFile
+    })
+    [void]$miTheme.DropDownItems.Add('Reload themes', $null, {
+        Load-Themes
+        Apply-Theme $script:themeName
+        Save-Theme
+    })
+}
+[void]$miAppearance.DropDownItems.Add($miTheme)
+
+$miList = New-Object System.Windows.Forms.ToolStripMenuItem 'Account list transparency'
+foreach ($ll in $ListLevels.Keys) {
+    $li = $miList.DropDownItems.Add($ll)
+    $li.Tag = $ll
+    $li.Add_Click({ Set-ListTransparency $this.Tag })
+}
+[void]$miList.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+$miBlur = $miList.DropDownItems.Add('Blur behind (experimental)')
+$miBlur.Add_Click({ Set-Blur (-not $script:blurOn) })
+[void]$miAppearance.DropDownItems.Add($miList)
+[void]$miAppearance.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+$miEffShadow = $miAppearance.DropDownItems.Add('Shadow and rim')
+$miEffShadow.Add_Click({ Set-PillEffect 'shadow' })
+$miEffPulse = $miAppearance.DropDownItems.Add('Pill glow when not tracking')
+$miEffPulse.Add_Click({ Set-PillEffect 'pulse' })
+$miEffDot = $miAppearance.DropDownItems.Add('Pill live dot while recording')
+$miEffDot.Add_Click({ Set-PillEffect 'dot' })
+[void]$miAppearance.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+[void]$miAppearance.DropDownItems.Add('Drawing speed...', $null, { try { Show-PerfReport } catch { Write-Log "Speed report error: $($_.Exception.Message)" } })
+[void]$menu.Items.Add($miAppearance)
+
+# ---- Open file: everything the timer keeps, in one place ----
+function New-FilesMenu {
+    $mf = New-Object System.Windows.Forms.ToolStripMenuItem 'Open file'
+    [void]$mf.DropDownItems.Add("This week's summary", $null, { Open-WeekFile })
+    [void]$mf.DropDownItems.Add("This week's time entries", $null, { Open-WeekEntriesFile })
+    [void]$mf.DropDownItems.Add('Timesheets folder', $null, { Invoke-Item $TimesheetDir })
+    [void]$mf.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+    [void]$mf.DropDownItems.Add('Themes file', $null, {
+        if (-not (Test-Path $ThemesFile)) { Load-Themes }
+        Invoke-Item $ThemesFile
+    })
+    [void]$mf.DropDownItems.Add('Error log', $null, {
+        if (Test-Path $LogFile) { Invoke-Item $LogFile } else { Show-Message 'Nothing has been logged yet.' }
+    })
+    return $mf
+}
+[void]$menu.Items.Add((New-FilesMenu))
+
+[void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+[void]$menu.Items.Add('Reset position', $null, { Move-ToDefaultPosition })
+[void]$menu.Items.Add('Close timer', $null, { $form.Close() })
+
+$menu.Add_Opening({
+    $miView.Text = if ($script:mode -eq 'pill') { 'Full view' } else { 'Compact view' }
+    $miDrawer.Visible = $script:mode -eq 'full'
+    $miFormat.Text = if ($script:hoursFormat -eq 'decimal') { 'Show hours as h:mm' } else { 'Show hours as decimal' }
+    $miDrawer.Text = if ($script:drawerOpen) { 'Hide week drawer' } else { 'Show week drawer' }
+    $pt = $form.PointToClient([System.Windows.Forms.Cursor]::Position)
+    if ($script:mode -eq 'pill') {
+        # In the pill, only rows in the open account list count
+        $zone = Get-PillZone $pt
+        $script:menuRow = if ($zone -like 'row:*') { [int]$zone.Substring(4) } else { $null }
+    } else {
+        $script:menuRow = if (Test-InDrawer $pt) { $null } else { Get-HitRow (Get-TimerPoint $pt) }
+    }
+    $isRow = $null -ne $script:menuRow
+    $isAccount = $isRow -and $script:slots[$script:menuRow] -ne 'Lunch'
+    $miRename.Visible = $isAccount
+    $miHide.Visible = $isAccount
+    $miBudget.Visible = $isAccount
+    $miClear.Visible = $isRow
+    $miSet.Visible = $isRow
+    $miSep.Visible = $isRow
+    if ($isRow) { $miClear.Text = "Clear today's time for " + $script:slots[$script:menuRow] }
+
+    # List hidden accounts so they can be brought back
+    $miShow.DropDownItems.Clear()
+    foreach ($acc in @($script:accounts | Where-Object { $_.Hidden })) {
+        $item = $miShow.DropDownItems.Add($acc.Name)
+        $item.Tag = $acc.Name
+        $item.Add_Click({
+            try { Show-Account $this.Tag } catch { Write-Log "Show error: $($_.Exception.Message)" }
+        })
+    }
+    $miShow.Enabled = $miShow.DropDownItems.Count -gt 0
+
+    Build-ThemeMenu
+    $miList.Enabled = $script:layered
+    foreach ($li in $miList.DropDownItems) {
+        if ($li -is [System.Windows.Forms.ToolStripMenuItem] -and $li.Tag) { $li.Checked = ($li.Tag -eq $script:listLevel) }
+    }
+    $miBlur.Checked = $script:blurOn
+    $miBlur.Enabled = ($script:listLevel -ne 'Off')
+    $miEffShadow.Checked = [bool]$script:PillShadow
+    $miEffPulse.Checked = [bool]$script:PillPulse
+    $miEffDot.Checked = [bool]$script:PillLiveDot
+    foreach ($mi in @($miEffShadow, $miEffPulse, $miEffDot)) { $mi.Enabled = $script:layered }
+    Set-MenuScale $menu
+})
+$form.ContextMenuStrip = $menu
+
+# ---- Tray icon ----
+$tray = New-Object System.Windows.Forms.NotifyIcon
+Update-AppIcon
+if (-not $script:appIcon) { $tray.Icon = [System.Drawing.SystemIcons]::Application }
+$tray.Text = 'Account timer'
+$trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
+[void]$trayMenu.Items.Add('Show timer', $null, { Keep-Visible; $form.Activate() })
+[void]$trayMenu.Items.Add('Weekly view...', $null, { try { Show-WeeklyView } catch { Show-WeeklyError $_ } })
+[void]$trayMenu.Items.Add((New-FilesMenu))
+[void]$trayMenu.Items.Add('Reset position', $null, { Move-ToDefaultPosition; Keep-Visible })
+[void]$trayMenu.Items.Add('Close timer', $null, { $form.Close() })
+$tray.ContextMenuStrip = $trayMenu
+$trayMenu.Add_Opening({ Set-MenuScale $trayMenu })
+$tray.Add_MouseClick({ if ($_.Button -eq 'Left') { Keep-Visible; $form.Activate() } })
+$tray.Visible = $true
+
+$form.Add_FormClosing({
+    try { Stop-Active (Get-Date); Flush-Pending } catch {}
+    try { Save-Position } catch {}
+    $tray.Visible = $false
+    $tray.Dispose()
+    Write-Log 'Account timer closed normally.'
+})
+
+# ---- Refresh every second ----
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 1000
+$timer.Add_Tick({
+    if ($script:moving) { return }
+    try {
+        $now = Get-Date
+        $gap = ($now - $script:lastTick).TotalMinutes
+        if ($script:active -and $gap -gt $SleepGapMinutes) {
+            # The computer was asleep, so don't count that time
+            Write-Log "Paused '$($script:active.Name)' after a $([int]$gap) minute gap (computer asleep)."
+            Stop-Active $script:lastTick
+        } elseif ($script:lastTick.Date -ne $now.Date) {
+            if ($script:active) { Stop-Active $now.Date } else { Refresh-Totals }
+        }
+        $script:lastTick = $now
+
+        $script:tick++
+        if ($script:tick % 2 -eq 0) { Keep-Visible }
+        if ($script:tick % 60 -eq 0) {
+            Save-State
+            if ($script:pending.Count -gt 0) { Flush-Pending }
+            if ($script:summaryDirty) { Write-WeekSummary }
+        }
+
+        Update-View
+        if ($script:drawerOpen -and $script:tick % 15 -eq 0) { Update-DrawerContent }
+        Request-Redraw
+        if ($script:tick % 30 -eq 0 -and $script:weekForm -and -not $script:weekForm.IsDisposed -and
+            -not $script:wv.NotesGrid.IsCurrentCellInEditMode -and $script:weekStart -eq (Get-WeekStart) -and
+            @($script:entrySelected).Count -eq 0 -and -not $script:entryMenu.Visible -and -not $script:dialogOpen) {
+            Fill-WeeklyView
+        }
+    } catch {
+        Write-Log "Refresh error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)"
+    }
+})
+
+# ---- Start ----
+try { Load-State } catch { Write-Log "Could not load state: $($_.Exception.Message)" }
+Load-Budgets
+Load-Notes
+try { Load-PillEffects } catch {}
+if (Test-Path $MergeFile) { try { $script:mergeEntries = ((Get-Content $MergeFile -TotalCount 1).Trim() -ne '0') } catch {} }
+Refresh-Totals
+Write-WeekSummary
+Write-Log 'Account timer started.'
+if ($script:useRenderer) { Write-Log 'Using fast drawing for the full view.' }
+elseif ($script:rendererError) { Write-Log "Fast drawing unavailable, using standard drawing: $($script:rendererError)" }
+Update-View
+$savedList = 'Off'
+if (Test-Path $ListAlphaFile) { try { $savedList = (Get-Content $ListAlphaFile -TotalCount 1).Trim() } catch {} }
+$script:listLevel = if ($ListLevels.Contains($savedList)) { $savedList } else { 'Off' }
+$script:listAlpha = $ListLevels[$script:listLevel]
+$savedBlur = $false
+if (Test-Path $BlurFile) { try { $savedBlur = ((Get-Content $BlurFile -TotalCount 1).Trim() -eq '1') } catch {} }
+if ($savedBlur) { Set-Blur $true -Quiet }
+Load-Positions
+$savedView = 'full'
+if (Test-Path $ViewFile) { try { $savedView = (Get-Content $ViewFile -TotalCount 1).Trim() } catch {} }
+$drawerWasOpen = $false
+if (Test-Path $DrawerFile) { try { $drawerWasOpen = ((Get-Content $DrawerFile -TotalCount 1).Trim() -eq '1') } catch {} }
+if ($savedView -eq 'pill') {
+    Set-View 'pill' -Starting
+    $script:drawerReopen = $drawerWasOpen
+} else {
+    if ($script:positions.ContainsKey('full')) { Set-TimerScreenPos $script:positions['full'] }
+    if ($drawerWasOpen) { Set-DrawerOpen $true -Starting }
+    Keep-Visible
+}
+Request-Redraw
+$timer.Start()
+
+# Pill animation (breathing glow and live dot), about 10 frames a second, only when needed
+$animTimer = New-Object System.Windows.Forms.Timer
+$animTimer.Interval = 100
+$animTimer.Add_Tick({
+    if ($script:moving) { return }
+    try {
+        $v = $script:view
+        if ($script:mode -eq 'pill' -and $script:layered -and $v -and
+            (($PillPulse -and $v.Idle -and -not $v.Before) -or ($PillLiveDot -and $v.ActiveName))) {
+            Request-Redraw
+        }
+    } catch {}
+})
+$animTimer.Start()
+[System.Windows.Forms.Application]::Run($form)

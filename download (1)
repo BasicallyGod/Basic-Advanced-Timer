@@ -1,0 +1,8 @@
+# Personal time logs, notes and weekly files, created as the timer runs
+Timesheets/
+
+# Accounts, budgets, themes, settings, window positions and saved state
+*.txt
+
+# Error logs and drawing speed reports
+*.log

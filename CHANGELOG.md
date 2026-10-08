@@ -1,0 +1,77 @@
+# Changelog
+
+The timer grew from a single billable-hours counter into a full timesheet tracker across three scripts, with AccountTimer2.ps1 as the current version.
+
+Version numbers were assigned after the fact, one per round of changes, all built in October 2026.
+
+| Script | What it is | Versions |
+| --- | --- | --- |
+| AccountTimer2.ps1 | Current version, with the compact pill, week drawer, weekly view and settings | 2.0 to 2.12 |
+| AccountTimer.ps1 | Account slots, time logging, themes and the see-through list | 1.0 to 1.7 |
+| BillableTimer.ps1 | The original single billable-hours timer | 0.1 to 0.5 |
+
+## Version history
+
+| Version | Script | Type | Change |
+| --- | --- | --- | --- |
+| 2.12 | AccountTimer2 | Fixed | Tooltips no longer hidden behind the timer when it brings itself to the front |
+| 2.12 | AccountTimer2 | New | Usual working hours and days, week start day, and a today-only box for different hours or a day off |
+| 2.12 | AccountTimer2 | New | Days off show DAY OFF and never count as unallocated, overtime or not tracking |
+| 2.12 | AccountTimer2 | New | Unallocated time split into working day and overtime, with both shown on hover |
+| 2.12 | AccountTimer2 | New | Overtime while tracking gets its own purple colours, separate from the red not tracking state |
+| 2.12 | AccountTimer2 | New | Hours shown as decimal (1.25) or hours and minutes (1:15), switchable from the menu or the week drawer |
+| 2.11 | AccountTimer2 | Improved | Budgets in the week drawer show the period once in the heading instead of on every row |
+| 2.11 | AccountTimer2 | Fixed | Week drawer text drawn by Windows, crisp and without ClearType colour fringing |
+| 2.11 | AccountTimer2 | Improved | HOURS, MINUTES and SECONDS labels removed, making the full view 12 pixels shorter |
+| 2.11 | AccountTimer2 | Improved | Clearer corner buttons, moved in from the edges |
+| 2.11 | AccountTimer2 | Improved | Tooltips in the theme's colours instead of black on beige |
+| 2.11 | AccountTimer2 | Fixed | Weekly view text no longer thickens when scrolling |
+| 2.10 | AccountTimer2 | Improved | Full view drawing moved to compiled C#, with automatic fallback to the old drawing |
+| 2.10 | AccountTimer2 | New | The timer draws its own soft shadow and rim, following whatever shape is showing |
+| 2.10 | AccountTimer2 | Fixed | Blur no longer shows as a frosted border, and stays on with the week drawer open |
+| 2.9 | AccountTimer2 | New | Drawing speed report under Appearance, timing each redraw by view |
+| 2.9 | AccountTimer2 | Improved | Week drawer drawn once and reused, cutting redraw time from 74 ms to 47 ms |
+| 2.8 | AccountTimer2 | New | Week drawer beside the full timer, with hours by account and day, budgets, week navigation and copying |
+| 2.8 | AccountTimer2 | Improved | Drawer button moved to the top left so it can't be confused with the Lunch row |
+| 2.8 | AccountTimer2 | Improved | Dragging the full view handed to Windows for smooth movement |
+| 2.8 | AccountTimer2 | Fixed | Grey corner beside the timer when the drawer was open |
+| 2.7 | AccountTimer2 | New | Its own icon in the theme's colours, its own taskbar identity and a themed weekly view title bar |
+| 2.7 | AccountTimer2 | Fixed | Weekly view buttons and table headings drawn smoothly, and chart text drawn by Windows |
+| 2.6 | AccountTimer2 | New | Time entries can be merged, deleted, moved to another account, re-timed or added, with Undo |
+| 2.5 | AccountTimer2 | New | Pill shadow, rim, breathing glow when not tracking and a live dot while recording |
+| 2.5 | AccountTimer2 | Improved | Right-click menu regrouped into Appearance and Open file submenus |
+| 2.4 | AccountTimer2 | New | Time entries tab showing each stretch of time by day, with consecutive stretches merged |
+| 2.4 | AccountTimer2 | New | Weekly entries file listing every stretch of time with its note |
+| 2.3 | AccountTimer2 | Fixed | Budget bars and the day progress bar stuck at empty or full, caused by a rounding quirk |
+| 2.3 | AccountTimer2 | Fixed | Weekly view failing to open, caused by a clashing variable name |
+| 2.2 | AccountTimer2 | New | Budgets per account, weekly, monthly or quarterly, shown as a bar with figures on hover |
+| 2.2 | AccountTimer2 | New | Optional note prompt after 15 minutes or more on an account |
+| 2.2 | AccountTimer2 | New | Weekly view with a chart, hours table, budgets and notes |
+| 2.1 | AccountTimer2 | New | Pill expands into its own account list instead of a Windows menu |
+| 2.1 | AccountTimer2 | Fixed | Pill corners showing the backdrop and jagged pill edges |
+| 2.1 | AccountTimer2 | Fixed | Right-clicking the pill's list picked the wrong account |
+| 2.0 | AccountTimer2 | New | Compact pill view, switchable with the full view, with each view's position remembered |
+| 2.0 | AccountTimer2 | New | Red not tracking state whenever nothing is running during the working day |
+| 2.0 | AccountTimer2 | New | Refuses to start a second copy, so time is never tracked twice |
+| 1.7 | AccountTimer | New | See-through account list with sharpened text and optional blur |
+| 1.7 | AccountTimer | Fixed | Red halo on see-through text, and a laggy snapshot blur replaced |
+| 1.7 | AccountTimer | Improved | Account names use the full width unless the rounding buttons are showing |
+| 1.6 | AccountTimer | New | Fourteen themes in an editable themes file, with reload from the menu |
+| 1.5 | AccountTimer | New | Round today's time up or down to 15 minutes, and set today's time by hand, for accounts and Lunch |
+| 1.4 | AccountTimer | New | Overtime mode after the end of the day, with its own counter and red colours |
+| 1.3 | AccountTimer | Improved | Lunch set apart from the accounts with a gap and a darker band |
+| 1.2 | AccountTimer | New | Drag handles to reorder accounts |
+| 1.1 | AccountTimer | New | Add, hide and bring back accounts, up to 12 showing at once |
+| 1.0 | AccountTimer | New | Account slots with play and pause, one running at a time, logged to sessions.csv with a weekly summary file |
+| 1.0 | AccountTimer | New | Running time pauses when the laptop sleeps, and is recovered after a crash |
+| 0.5 | BillableTimer | Fixed | Soft text on monitors with different scaling, and oversized menus on the 1080p screen |
+| 0.4 | BillableTimer | Improved | Redesigned as a compact panel with bold digits, circular buttons and green and orange states |
+| 0.4 | BillableTimer | New | WORKING status and an always-visible lunch total |
+| 0.3 | BillableTimer | New | Tray icon, error log, and recovery when the timer is hidden or off screen |
+| 0.2 | BillableTimer | New | Lunch button that pauses the count, remembered across restarts |
+| 0.1 | BillableTimer | New | Always-on-top timer counting from 08:30 to 17:30, resetting at midnight, with no install needed |
+
+## Still to come
+
+- [ ] Timeline drawer showing each stretch of today along a strip, with Lunch as a gap and a marker for now
+- [ ] Crisp Windows-drawn text for the timer's solid areas, matching the week drawer
