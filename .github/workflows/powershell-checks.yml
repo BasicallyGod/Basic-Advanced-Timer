@@ -10,11 +10,11 @@ permissions:
   contents: read
 
 jobs:
-  timeline-projection:
+  regression-tests:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate application syntax and timeline projections
+      - name: Validate timeline and decimal reconciliation
         shell: powershell
         run: |
           ./tests/timeline-projection.ps1

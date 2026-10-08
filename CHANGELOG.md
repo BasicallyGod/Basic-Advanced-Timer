@@ -1,14 +1,22 @@
 # Changelog
 
-The timer grew from a single billable-hours counter into a full timesheet tracker across three scripts, with AccountTimer2.ps1 as the current version.
+The timer grew from a single billable-hours counter into a full timesheet tracker. Only `AccountTimer2.ps1` remains in the current working tree; the earlier implementations and their launchers are available in Git history.
 
 Version numbers were assigned after the fact, one per round of changes, all built in October 2026.
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current version, with the compact pill, week drawer, weekly view and settings | 2.0 to 2.22 |
-| AccountTimer.ps1 | Account slots, time logging, themes and the see-through list | 1.0 to 1.7 |
-| BillableTimer.ps1 | The original single billable-hours timer | 0.1 to 0.5 |
+| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.22 |
+| AccountTimer.ps1 | Historical predecessor, removed from current tree | 1.0 to 1.7 |
+| BillableTimer.ps1 | Historical predecessor, removed from current tree | 0.1 to 0.5 |
+
+## Repository maintenance after v2.22
+
+- Removed the unused historical scripts `AccountTimer.ps1` and `BillableTimer.ps1`, together with `StartAccountTimer.vbs` and `StartTimer.vbs`. The current timer and its launcher never load these files.
+- Kept the existing filenames `AccountTimer2.ps1` and `StartAccountTimer2.vbs` so existing shortcuts and portable installations continue to work.
+- Refreshed `README.md`, `CLAUDE.md` and the application header to describe the current timeline, non-destructive groups, credited-time positions and decimal exports.
+- Kept `tests/`, Windows CI, `.gitignore` and `.gitattributes`. They are development and data-safety infrastructure, not dead files.
+- This was repository housekeeping only. **The application remains v2.22**, and historical sources remain accessible in Git history.
 
 ## Version history
 
@@ -109,7 +117,6 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 | 0.2 | BillableTimer | New | Lunch button that pauses the count, remembered across restarts |
 | 0.1 | BillableTimer | New | Always-on-top timer counting from 08:30 to 17:30, resetting at midnight, with no install needed |
 
-## Still to come
+## Possible future work
 
-- [ ] Timeline drawer showing each stretch of today along a strip, with Lunch as a gap and a marker for now
-- [ ] Crisp Windows-drawn text for the timer's solid areas, matching the week drawer
+- [ ] Investigate Windows-drawn text for the main timer's solid areas, matching the drawer's text rendering. This is an idea for evaluation, not a scheduled release.
