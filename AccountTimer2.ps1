@@ -1,50 +1,27 @@
-# Account timer 2
-# Same as the account timer, plus a compact pill view and a red 'not tracking' state.
-# Shares its accounts, logs, themes and settings with AccountTimer.ps1, so only run one at a time.
+# Account Timer v2.22
 #
-# Compact view: click the collapse button (top right of the full view) or right-click, Compact view.
-# On the pill, click the time to open the full view, the name to open the account list, the button to pause.
+# Portable Windows PowerShell 5.1 application for client-account time tracking.
+# Launch from StartAccountTimer2.vbs in the same folder to avoid a console window.
+# The full view, compact pill, week drawer and weekly editor are implemented here.
+# WinForms handles dialogs and the weekly window; compiled C# draws the main view.
 #
-# Budgets: right-click an account, Set budget, to give it hours per week, month or quarter.
-# Notes: after 15 minutes or more on an account, a small box asks what you worked on (optional).
-# Weekly view: right-click, Weekly view, for hours by account and day, budgets and notes,
-# plus a Time entries tab showing each stretch of time day by day, with consecutive stretches
-# on the same account merged into one block (switchable). The entries file follows the same grouping.
-# In the Time entries tab, click to select blocks (Ctrl+click for several) and right-click to merge,
-# delete, change account, edit the time or note, or add an entry. Undo reverses the last change.
+# Only one timer instance may access the same CSV data. The process check also
+# recognises older AccountTimer installations that might still be running.
 #
-# Drawer: click the round button at the top left of the full timer (or right-click, Show drawer)
-# to slide out this week's hours by account and day, and budgets, beside the timer.
-# The Timeline tab shows one day like a calendar, with hours down the left and a card for each stretch of
-# time, Lunch as a hatched gap and a line for now. Scroll with the mouse wheel, zoom with Ctrl and the wheel
-# (or the plus and minus buttons), and use Now to jump back. Point at a card to see what it was; Previous and
-# Next move between days. Drag the top or bottom edge of a card to change its time (5 minute steps, Shift
-# for 1 minute, Escape to cancel), or click a gap to fill it with an account. Undo reverses the last change.
+# Sessions are saved in Timesheets\sessions.csv. It is the authority for credited
+# time, including rounding, manual adjustments and historical merged credits.
+# Session notes, reversible weekly groups and optional positions of historical
+# merged credit live in separate CSV files within Timesheets.
+# Positioning existing credit does not add hours or overwrite its original row.
+# The weekly summary and detailed export share one two-decimal reconciliation.
 #
-# Size: right-click, Appearance, Size makes the whole timer and drawer smaller or larger (remembered).
+# Working hours, day overrides, account budgets, themes, window preferences and
+# the current timer state are kept in local account-timer-*.txt files. All local
+# data and generated timesheets are outside the Git repository and should stay
+# together with the application when moved or backed up.
 #
-# Hours: right-click, Working hours, Hours and days, gives each working day its own start and finish
-# (for shift patterns). From 30 minutes before the end of the day, a Finish day button appears under the
-# Lunch row (and the menu has Finish for the day at any time once the day has started). It stops unallocated
-# time and overtime counting until you carry on.
-# Each week's individual entries are also saved to 'Week commencing <date> entries.csv'.
-#
-# Top: billable time since the start time, less lunch, as in the original timer.
-# After the end time it holds at the full day and an overtime counter appears below it
-# (the whole timer turns red). Everything resets at midnight.
-# Below: five account slots and a lunch slot. Click a row to start or pause it.
-# Only one slot runs at a time. Every stretch of time is logged to Timesheets\sessions.csv,
-# and a weekly summary (hours per account per day) is kept in
-# Timesheets\Week commencing <date>.csv for filling in timesheets.
-#
-# Drag the dotted handle on the left of a row to move it up or down.
-# Hover over an account to show the round-down and round-up buttons, which move today's
-# time to the previous or next 15-minute mark (logged as 'rounded down' or 'rounded up').
-# Right-click a row to rename or hide it, set today's time for it by hand, or clear it.
-# Right-click anywhere to add a new account, show a hidden one, or change the theme.
-# Themes are kept in account-timer-themes.txt, which you can edit (Theme, then Edit themes file).
-# The account list can be made see-through (right-click, Account list transparency).
-# Drag the timer by its top section. Right-click anywhere for more options.
+# Use the README for setup, CHANGELOG for history and CLAUDE.md for architecture.
+# Synthetic regression suites live in tests/ and run on Windows in CI.
 
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 

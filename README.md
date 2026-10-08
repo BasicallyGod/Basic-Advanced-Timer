@@ -1,58 +1,82 @@
-# Account timer
+# Account Timer
 
-A small always-on-top timer for Windows that tracks time against client accounts and prepares it for timesheets. It runs as a PowerShell script, so it needs no installation and no admin rights.
-
-AccountTimer2.ps1 is the current version. The two earlier scripts are kept as working fallbacks. See [CHANGELOG.md](CHANGELOG.md) for the full history.
-
-## What it does
-
-- Shows the working day so far, counting from your start time, with overtime after your end time
-- Start and finish times can differ by day, for shift patterns, and a Finish day button says the day is over so the timer stops counting unallocated time
-- One-click tracking per account, plus Lunch, with only one running at a time
-- A compact pill view and a full view, with a drawer beside it that shows the week as a table or the day as a timeline you can edit by dragging, and a separate weekly view
-- Budgets per account, notes on longer stretches of time, rounding to 15 minutes and manual edits with Undo
-- Separate unallocated figures for the working day and overtime
-- Themes, see-through account list, a Size setting for the whole timer, decimal or hours and minutes display
-- Weekly summary and detailed time-entry CSV exports, with reconciled two-decimal hours
-- In a timeline gap, choose whether to position an already credited portion of a merged entry (no new hours) or add new credited time. Credit positioning preserves the original merged source row and reduces the unplaced balance.
-- Weekly grouping is non-destructive: grouped time keeps all original recordings, notes and separate chronology.
-- Very short sessions remain visible as individual coloured intervals without overlapping labels; zoom in to inspect their positions.
-
-## Requirements
-
-- Windows 10 or 11
-- Windows PowerShell 5.1 (built into Windows)
+Account Timer is a portable, always-on-top Windows time tracker for client accounts and weekly timesheets. The current application is **v2.22**. It runs from a folder using Windows PowerShell 5.1 and WinForms, with compiled C# rendering built into the script. No installer, administrator access, extra PowerShell modules or separate .NET runtime are required.
 
 ## Getting started
 
-1. Put the files in a folder you'll keep, for example Documents\Account timer.
-2. Double-click StartAccountTimer2.vbs to start the timer.
-3. To start it automatically, press Win + R, type shell:startup, and put a shortcut to StartAccountTimer2.vbs in the folder that opens.
+1. Download the repository ZIP and extract it to a folder you can keep, such as `Documents\Account Timer`.
+2. Double-click `StartAccountTimer2.vbs`. It starts `AccountTimer2.ps1` without a visible PowerShell console.
+3. To start automatically when signing in, open `shell:startup` using Win + R and add a shortcut to `StartAccountTimer2.vbs`.
 
-Only run one of the timers at a time, as they share the same time log and settings.
+Keep `StartAccountTimer2.vbs` and `AccountTimer2.ps1` together. The launcher uses its own folder to find the script, so you can move the application as one folder. Close the timer before updating the script or moving its data. Run only one copy against a given data folder.
 
-| File | Purpose |
+**Requirements:** Windows 10 or 11 with the built-in Windows PowerShell 5.1.
+
+## What it does
+
+- Start, stop and switch between client accounts, with a dedicated Lunch timer, in the full window or compact pill.
+- Set usual working hours, different weekday shifts, days off and day-specific overrides. The Finish day control stops the working-day and unallocated counters until work resumes.
+- Track account budgets, record notes, and correct time through manual entries and round-up or round-down adjustments.
+- Review the week in the side drawer or separate weekly window. Scroll and zoom the daily timeline, drag session boundaries, and inspect short sessions and overlapping work.
+- Choose between **positioning existing credited time** and **adding new time** when filling a timeline gap. The first action does not increase account totals.
+- Group sessions in the weekly view without deleting the original recordings, and ungroup them to edit individual entries.
+- Choose themes, account-list transparency, interface size, and decimal-hours or hours-and-minutes display.
+- Export a weekly account/day summary and detailed time-entry CSV with reconciled two-decimal hours.
+
+## Repository files
+
+| Path | Purpose |
 | --- | --- |
-| AccountTimer2.ps1 | The current timer |
-| StartAccountTimer2.vbs | Starts the current timer without a console window |
-| AccountTimer.ps1, StartAccountTimer.vbs | The earlier account timer |
-| BillableTimer.ps1, StartTimer.vbs | The original billable-hours timer |
+| `AccountTimer2.ps1` | Current application, including its UI, tracking, editing and exports |
+| `StartAccountTimer2.vbs` | Relative-path launcher without a console window |
+| `tests/timeline-projection.ps1` | Synthetic timeline and credit-position regression checks |
+| `tests/decimal-reconciliation.ps1` | Synthetic accounting and CSV-export reconciliation checks |
+| `.github/workflows/powershell-checks.yml` | Runs both test scripts in Windows PowerShell on GitHub Actions |
+| `CLAUDE.md` | Engineering notes, architecture and pitfalls for contributors |
+| `CHANGELOG.md` | Feature and maintenance history |
+| `.gitignore`, `.gitattributes` | Exclude local data by default and standardise line endings |
 
-## Your data stays local
+Older `AccountTimer.ps1` and `BillableTimer.ps1` implementations and their launchers have been removed from the current file tree because the current application does not call them. Their source is still available through earlier commits in Git history. You do not need them to run v2.22.
 
-The timer creates these alongside the scripts as you use it. They are listed in .gitignore, so your time logs, account names and settings are never uploaded with the code.
+## Local data and portability
 
-| File | Contents |
+The application creates its files beside the script. These **are not in the repository** and are excluded from ordinary Git tracking by `.gitignore`. They can include sensitive account names and work notes. Avoid committing or sharing them.
+
+| Local path | Purpose |
 | --- | --- |
-| Timesheets\sessions.csv | Every stretch of time tracked |
-| Timesheets\notes.csv | Notes on stretches of time |
-| Timesheets\\entry-groups.csv | References for non-destructive manual weekly groups |
-| Timesheets\\credit-positions.csv | Positions for previously merged credit; source total unchanged |
-| Timesheets\Week commencing (date).csv | Weekly summary by account and day |
-| Timesheets\Week commencing (date) entries.csv | Each stretch of time for the week |
-| account-timer-*.txt | Accounts, budgets, themes, settings and window positions |
-| account-timer-error.log | Problems and the drawing speed report |
+| `Timesheets/sessions.csv` | Authoritative recorded and credited account time, including adjustments |
+| `Timesheets/notes.csv` | Notes linked to session records |
+| `Timesheets/entry-groups.csv` | Non-destructive group membership for weekly entries |
+| `Timesheets/credit-positions.csv` | Clock positions assigned to previously merged credit, without adding hours |
+| `Timesheets/*.undo.csv` | One-level undo snapshots for the corresponding files |
+| `Timesheets/Week commencing YYYY-MM-DD.csv` | Weekly summary by account and day |
+| `Timesheets/Week commencing YYYY-MM-DD entries.csv` | Detailed time entries and reconciled `Hours` column |
+| `account-timer-*.txt` | Accounts, themes, budgets, working hours, day overrides, window positions and other preferences |
+| `account-timer-error.log` | Diagnostic logging and rendering performance output |
+
+To move to another computer or make a complete backup, copy the **entire application folder**, including `Timesheets` and all `account-timer-*.txt` files. Keep the two newer metadata CSVs with `sessions.csv`; they affect how historical merged time and manual groups appear. On a fresh download, the timer creates local configuration and time files as they are needed.
+
+## Recorded time versus credited time
+
+`sessions.csv` determines credited hours. A manually added entry increases credited time, while a rounded or adjusted row changes the credited total without necessarily describing a continuous clock interval. Older destructive `merged` records retain credited hours but may not retain the original individual timestamps.
+
+Positioning some of that older merged credit adds a location in `credit-positions.csv`, not another credited session. The timeline shows the positioned portion and reports the remaining credit as unplaced. New groups in `entry-groups.csv` retain their original source intervals.
 
 ## Timesheet rounding
 
-The original recorded session durations are preserved. The detailed export's `Hours` column and the weekly summary share one reconciled two-decimal allocation, so account, day, and week totals add up without a rounding discrepancy. The nearest 0.01h to the precise weekly total is preserved. Whole-minute `Duration` and h:mm UI labels are approximate because 0.01h corresponds to 36 seconds. Time on an active timer remains provisional until stopped and written to the records.
+The application retains precise source durations. The exported `Hours` column distributes differences in 0.01-hour increments across entries and account/day figures so the detailed entries, weekly summary and grand total add up exactly. One hundredth of an hour equals 36 seconds. The `Duration` column and hours-and-minutes labels are rounded to whole minutes for readability, so adding those labels may not reproduce a two-decimal total.
+
+A running timer is provisional until its session is saved. Completed weekly decimal views use the export's reconciled values; the active timer can temporarily differ from the persisted export.
+
+## Running the tests
+
+From a PowerShell prompt in the repository folder:
+
+```powershell
+powershell.exe -NoProfile -File .\tests\timeline-projection.ps1
+powershell.exe -NoProfile -File .\tests\decimal-reconciliation.ps1
+```
+
+The tests use synthetic data and do not load your personal timesheets. GitHub Actions also runs both checks on Windows for pull requests and changes to `main`.
+
+See `CHANGELOG.md` for the feature history and `CLAUDE.md` for developer implementation notes.
