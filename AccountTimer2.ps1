@@ -19,6 +19,10 @@
 # gap and a marker for now. Point at a block to see what it was; Previous and Next move between days.
 # Drag the edge of a block to change its time (5 minute steps, Shift for 1 minute, Escape to cancel),
 # or click a gap to fill it with an account. Undo reverses the last change.
+#
+# Hours: right-click, Working hours, Hours and days, gives each working day its own start and finish
+# (for shift patterns). Once the day has started, the overtime section has a Finish day button, and the
+# menu has Finish for the day, which stops unallocated time and overtime counting until you carry on.
 # Each week's individual entries are also saved to 'Week commencing <date> entries.csv'.
 #
 # Top: billable time since the start time, less lunch, as in the original timer.
@@ -379,6 +383,10 @@ namespace Win {
         public bool Reordering;
         public string RoundHover = "";
         public bool CollapseHover, HandleHover, DrawerOpen;
+        // The Finish day (or Carry on) button in the overtime section; its place matches $DayBtn in PowerShell
+        public string DayBtnText = "";
+        public bool DayBtnHover;
+        public float DayBtnX = 236f, DayBtnY = 74f, DayBtnW = 76f, DayBtnH = 20f;
         public DrawerModel Drawer;
         public string DrawerHover = "";
         // Timeline hover and drag state, set by PowerShell each frame. The strip's own position is
@@ -616,6 +624,12 @@ namespace Win {
                 if (Overtime) {
                     g.DrawLine(sep, 10, 68, 310, 68);
                     g.DrawString(OT, FontOvertime, textB, new RectangleF(0, 69, BaseW, OvertimeH - 2), sfCentre);
+                    if (DayBtnText.Length > 0) {
+                        RectangleF dbr = new RectangleF(DayBtnX, DayBtnY, DayBtnW, DayBtnH);
+                        using (GraphicsPath dbp = RoundRect(dbr.X, dbr.Y, dbr.Width, dbr.Height, dbr.Height / 2f))
+                        using (SolidBrush dbb = new SolidBrush(DayBtnHover ? CircleHot : Circle)) { g.FillPath(dbb, dbp); }
+                        g.DrawString(DayBtnText, FontLabel, textB, dbr, sfCentre);
+                    }
                 }
 
                 // Progress through the working day
@@ -863,7 +877,7 @@ namespace Win {
 
                 // Tabs for switching between the week's table and the day's timeline
                 float tabX = x0;
-                string[][] tabs = new string[][] { new string[] { "week", "Week" }, new string[] { "timeline", "Timeline" } };
+                string[][] tabs = new string[][] { new string[] { "timeline", "Timeline" }, new string[] { "week", "Week" } };
                 foreach (string[] tab in tabs) {
                     float tw = og.MeasureString(tab[1], FontButton).Width + 20;
                     RectangleF rect = new RectangleF(tabX, y, tw, 22);
@@ -1141,6 +1155,7 @@ $NotesUndo    = Join-Path $TimesheetDir 'notes.undo.csv'
 $MergeFile    = Join-Path $PSScriptRoot 'account-timer-merge.txt'
 $EffectsFile  = Join-Path $PSScriptRoot 'account-timer-effects.txt'
 $DrawerFile   = Join-Path $PSScriptRoot 'account-timer-drawer.txt'
+$AwayFile     = Join-Path $PSScriptRoot 'account-timer-away.txt'
 try { New-Item -ItemType Directory -Path $TimesheetDir -Force | Out-Null } catch {}
 
 $script:accounts       = @()   # every account, including hidden ones
@@ -1229,10 +1244,13 @@ $script:drawerVersion  = 0       # goes up whenever the drawer's figures are ref
 $script:drawerCache    = $null   # the drawer drawn once and reused until something in it changes
 $script:drawerCacheKey = ''
 $script:drawerCacheBuilds = 0
-$script:drawerMode     = 'week'   # 'week' for the table of hours, 'timeline' for one day along a strip
+$script:drawerMode     = 'timeline'   # 'timeline' for one day along a strip (the usual view), 'week' for the table of hours
 $script:drawerDay      = $null    # the day shown in the timeline
 $script:drawerTimeline = $null    # that day's stretches of time, ready to draw
 $script:drawerLegend   = @()      # the lines under the strip
+$script:awayIntervals  = @()      # stretches marked as finished for the day: @{ Start; End } (End is $null while still finished)
+$script:dayBtnHover    = $false
+$script:pressedDayBtn  = $false
 $script:tlGeom         = $null    # where the strip was last drawn (window units), reported by the renderer
 $script:tlHover        = @{ Block = -1; Gap = -1; EdgeBlock = -1; Edge = '' }
 $script:tlDrag         = $null    # an edge or a stretch of gap being dragged
@@ -1258,6 +1276,7 @@ $script:workDays     = @(1, 2, 3, 4, 5)    # Monday to Friday
 $script:weekStartDow = 1                   # weeks start on Monday
 $script:hoursFormat  = 'decimal'           # 'decimal' (1.25) or 'hm' (1:15)
 $script:dayOverrides = @{}                 # 'yyyy-MM-dd' -> @{ Off; Start; End } for one-off days
+$script:dayHours     = @{}                 # weekday number -> @{ Start; End } where that day's hours differ from the usual ones (a shift pattern)
 
 # Reads '9:30' or '09:30' as a time of day, giving '09:30', or $null if it isn't one
 function ConvertTo-ClockText($text) {
@@ -1269,6 +1288,7 @@ function ConvertTo-ClockText($text) {
 }
 
 function Load-WorkSettings {
+    $script:dayHours = @{}
     if (Test-Path $SettingsFile) {
         foreach ($line in Get-Content $SettingsFile) {
             $kv = $line -split '=', 2
@@ -1282,6 +1302,14 @@ function Load-WorkSettings {
                     if ($list.Count -gt 0) { $script:workDays = $list }
                 }
                 'weekstart' { $i = [array]::IndexOf($DayAbbr, $val); if ($i -ge 0) { $script:weekStartDow = $i } }
+                { $_ -like 'shift.*' } {
+                    # shift.mon=09:00,17:00 gives Monday its own hours
+                    $dayName = $kv[0].Trim().Substring(6)
+                    $di = -1
+                    for ($k = 0; $k -lt 7; $k++) { if ($DayAbbr[$k] -eq $dayName) { $di = $k } }
+                    $times = @($val -split ',' | ForEach-Object { ConvertTo-ClockText $_ })
+                    if ($di -ge 0 -and $times.Count -eq 2 -and $times[0] -and $times[1]) { $script:dayHours[$di] = @{ Start = $times[0]; End = $times[1] } }
+                }
                 'hours' { if ($val -eq 'decimal' -or $val -eq 'hm') { $script:hoursFormat = $val } }
             }
         }
@@ -1305,12 +1333,23 @@ function Save-WorkSettings {
         ('days=' + (($script:workDays | ForEach-Object { $DayAbbr[$_] }) -join ',')),
         ('weekstart=' + $DayAbbr[$script:weekStartDow]),
         "hours=$($script:hoursFormat)")
+    foreach ($di in @($script:dayHours.Keys | Sort-Object)) {
+        $lines += ('shift.{0}={1},{2}' -f $DayAbbr[$di].ToLower(), $script:dayHours[$di].Start, $script:dayHours[$di].End)
+    }
     try { Set-Content -Path $SettingsFile -Value $lines } catch { Write-Log "Could not save settings: $($_.Exception.Message)" }
     $dl = @($script:dayOverrides.Keys | Sort-Object | ForEach-Object {
         $o = $script:dayOverrides[$_]
         if ($o.Off) { "$_`toff" } else { "$_`t$($o.Start)`t$($o.End)" }
     })
     try { Set-Content -Path $DaysFile -Value $dl } catch { Write-Log "Could not save day changes: $($_.Exception.Message)" }
+}
+
+# The usual start and end for a weekday: its own hours if the shift pattern gives it some,
+# otherwise the same hours as every other day
+function Get-UsualHours([int]$dow) {
+    $h = $script:dayHours[$dow]
+    if ($h) { return @($h.Start, $h.End) }
+    return @($StartTime, $EndTime)
 }
 
 # What a given day looks like: whether it's a working day, and its start and end
@@ -1322,7 +1361,8 @@ function Get-DayPlan([datetime]$date) {
         return @{ Working = $true; Custom = $true; Start = $d.Add([timespan]$o.Start); End = $d.Add([timespan]$o.End) }
     }
     if ($script:workDays -notcontains [int]$d.DayOfWeek) { return @{ Working = $false; Custom = $false } }
-    return @{ Working = $true; Custom = $false; Start = $d.Add([timespan]$StartTime); End = $d.Add([timespan]$EndTime) }
+    $usual = Get-UsualHours ([int]$d.DayOfWeek)
+    return @{ Working = $true; Custom = $false; Start = $d.Add([timespan]$usual[0]); End = $d.Add([timespan]$usual[1]) }
 }
 
 # Today's working window (a day off gives an empty window at midnight)
@@ -1333,6 +1373,72 @@ function Get-DayBounds {
 }
 
 Load-WorkSettings
+
+# ---- Finishing for the day ----
+# Pressing Finish day marks the time from then until the next account is started as away. Away time is
+# left out of the working day and of overtime in the same way as lunch, so the unallocated figures
+# stop growing, and the red not tracking state stays off until work carries on.
+
+function Save-Away {
+    $keep = [datetime]::Today.AddDays(-60)
+    $script:awayIntervals = @($script:awayIntervals | Where-Object { $_.Start -ge $keep })
+    $lines = @($script:awayIntervals | ForEach-Object {
+        $e = if ($null -ne $_.End) { $_.End.ToString('s', $Inv) } else { '' }
+        "{0}`t{1}" -f $_.Start.ToString('s', $Inv), $e
+    })
+    try { Set-Content -Path $AwayFile -Value $lines } catch { Write-Log "Could not save finished days: $($_.Exception.Message)" }
+}
+
+function Load-Away {
+    $script:awayIntervals = @()
+    if (-not (Test-Path $AwayFile)) { return }
+    foreach ($line in @(Get-Content $AwayFile)) {
+        $p = $line -split "`t"
+        if ($p.Count -lt 1 -or -not $p[0].Trim()) { continue }
+        try {
+            $s = [datetime]::ParseExact($p[0].Trim(), 's', $Inv)
+            $e = $null
+            if ($p.Count -ge 2 -and $p[1].Trim()) { $e = [datetime]::ParseExact($p[1].Trim(), 's', $Inv) }
+            # One left open from an earlier day (the timer was closed while finished) ends with that day
+            if ($null -eq $e -and $s.Date -lt [datetime]::Today) { $e = $s.Date.AddDays(1) }
+            $script:awayIntervals += ,@{ Start = $s; End = $e }
+        } catch { }
+    }
+}
+
+function Test-DayDone {
+    foreach ($iv in @($script:awayIntervals)) {
+        if ($null -eq $iv.End -and $iv.Start.Date -eq [datetime]::Today) { return $true }
+    }
+    return $false
+}
+
+# The away stretches that fall on a day, as start and end pairs. One still open runs to now, but never
+# past the end of the day it began.
+function Get-AwayOn([datetime]$day, [datetime]$now) {
+    $day = $day.Date
+    $dayEnd = $day.AddDays(1)
+    $out = @()
+    foreach ($iv in @($script:awayIntervals)) {
+        $a = $iv.Start
+        $b = if ($null -ne $iv.End) { $iv.End } else { $a.Date.AddDays(1) }
+        if ($null -eq $iv.End -and $now -lt $b) { $b = $now }
+        if ($a -lt $day) { $a = $day }
+        if ($b -gt $dayEnd) { $b = $dayEnd }
+        if ($b -gt $a) { $out += ,@($a, $b) }
+    }
+    return $out
+}
+
+function Close-AwayInterval {
+    $changed = $false
+    foreach ($iv in @($script:awayIntervals)) {
+        if ($null -eq $iv.End -and $iv.Start.Date -eq [datetime]::Today) { $iv.End = Get-Date; $changed = $true }
+    }
+    if ($changed) { Save-Away }
+}
+
+Load-Away
 
 function Limit-Time($t, $min, $max) {
     if ($t -lt $min) { return $min }
@@ -2059,6 +2165,8 @@ function Stop-Active([datetime]$at) {
 }
 
 function Start-Slot($i) {
+    # Starting any account carries on from a finished day
+    if (Test-DayDone) { Close-AwayInterval }
     $script:active = @{ Name = $script:slots[$i]; Start = Get-Date }
     Save-State
 }
@@ -2088,6 +2196,26 @@ function Stop-ByUser {
     }
 }
 
+# Finish the day, or carry on. Finishing stops whatever is running first. It is only offered on a working
+# day once the day has started.
+function Set-DayDone([bool]$done) {
+    if ($done -eq (Test-DayDone)) { return }
+    if ($done) {
+        $plan = Get-DayPlan ([datetime]::Today)
+        if (-not $plan.Working -or (Get-Date) -lt $plan.Start) { return }
+        Stop-ByUser
+        $script:awayIntervals += ,@{ Start = (Get-Date); End = $null }
+        Save-Away
+    } else {
+        Close-AwayInterval
+    }
+    Update-View
+    Update-DrawerContent
+    Request-Redraw
+}
+
+function Switch-DayDone { Set-DayDone (-not (Test-DayDone)) }
+
 function Switch-Slot($i) {
     $wasThis = [bool]($script:active -and $script:active.Name -eq $script:slots[$i])
     Stop-ByUser
@@ -2110,6 +2238,9 @@ function Update-View {
     $onLunch = [bool]($script:active -and $script:active.Name -eq 'Lunch')
     $ints = @($script:lunchIntervals)
     if ($onLunch) { $ints += ,@($script:active.Start, $clock) }
+    # Time marked as finished for the day is left out in the same way as lunch
+    $dayDone = [bool]($workDay -and (Test-DayDone))
+    foreach ($away in @(Get-AwayOn $clock.Date $clock)) { $ints += ,@($away[0], $away[1]) }
 
     # Billable day, capped at the end time
     $lunchSec = 0
@@ -2121,9 +2252,9 @@ function Update-View {
     $billable = if ($workDay) { [math]::Max(0.0, $worked - $lunchSec - $script:lunchAdjust) } else { 0.0 }
 
     # Overtime after the end time, less any lunch taken during it (never on a day off)
-    $overtime = $workDay -and $clock -gt $end
+    $pastEnd = $workDay -and $clock -gt $end
     $otSec = 0
-    if ($overtime) {
+    if ($pastEnd) {
         $otSec = ($clock - $end).TotalSeconds
         foreach ($iv in $ints) {
             $a = Limit-Time $iv[0] $end $clock
@@ -2132,6 +2263,8 @@ function Update-View {
         }
         $otSec = [math]::Max(0.0, $otSec)
     }
+    # A day finished before its end time never turns into overtime
+    $overtime = $pastEnd -and -not ($dayDone -and $otSec -lt 1)
 
     $rows = @()
     $accountSec = 0
@@ -2185,9 +2318,10 @@ function Update-View {
     $unallocOT = [math]::Max(0.0, $otSec - $accountOT)
 
     # Not tracking: the working day has started (or it's overtime) but nothing is running
-    $idle = $workDay -and (-not $script:active) -and ($clock -ge $start)
+    $idle = $workDay -and (-not $script:active) -and ($clock -ge $start) -and -not $dayDone
     $before = $workDay -and ($clock -lt $start)
     $status = if ($onLunch) { 'ON LUNCH' }
+              elseif ($dayDone) { 'DAY DONE' }
               elseif (-not $workDay) { if ($script:active) { 'DAY OFF, TRACKING' } else { 'DAY OFF' } }
               elseif ($before) { 'STARTS AT ' + $start.ToString('HH:mm', $Inv) }
               elseif ($idle) { 'NOT TRACKING' }
@@ -2224,6 +2358,8 @@ function Update-View {
         OnLunch     = $onLunch
         Before      = $before
         Overtime    = $overtime
+        DayDone     = $dayDone
+        DayBtnText  = $(if ($overtime) { if ($dayDone) { 'Carry on' } else { 'Finish day' } } else { '' })
         OT          = '+{0:00}:{1:00}:{2:00}' -f [math]::Floor($ot.TotalHours), $ot.Minutes, $ot.Seconds
         Rows        = $rows
     }
@@ -2272,6 +2408,9 @@ $CollapseR = 7.5
 $DrawerSideW = 520                  # width of the week drawer beside the timer
 $DrawerBtnX = 16                    # week drawer button, top left (mirrors the compact view button)
 $DrawerBtnY = 15
+
+# The Finish day button in the overtime section (the renderer's DayBtnX and the others match these)
+$DayBtn = @{ X = 236; Y = 74; W = 76; H = 20 }
 
 function Get-PillListH {
     return 4 + $script:slots.Count * $PillRowH + $PillLunchGap + 6
@@ -2807,6 +2946,7 @@ function Draw-ListText($g, $text, $font, $brush, $rect, $sf) {
 # Red while overtime or not tracking, orange on lunch, otherwise the working colours
 function Get-StateTheme($v) {
     if ($v.OnLunch) { return $Themes.paused }
+    if ($v.DayDone) { return $Themes.running }
     if ($v.Idle) { return $(if ($Themes.nottracking) { $Themes.nottracking } else { $Themes.overtime }) }
     if ($v.Overtime) { return $Themes.overtime }
     return $Themes.running
@@ -2885,6 +3025,13 @@ function Draw-Full($g, [bool]$layered) {
         if ($v.Overtime) {
             $g.DrawLine($pSep, 10, 68, 310, 68)
             $g.DrawString($v.OT, $fOvertime, $bWhite, (New-Object $RF 0, 69, $BaseW, ($OvertimeH - 2)), $sfCentre)
+            if ($v.DayBtnText) {
+                $dbr = New-Object $RF ([float]$DayBtn.X), ([float]$DayBtn.Y), ([float]$DayBtn.W), ([float]$DayBtn.H)
+                $dbp = New-RoundedPath $dbr.X $dbr.Y $dbr.Width $dbr.Height ([float]($dbr.Height / 2))
+                $g.FillPath($(if ($script:dayBtnHover) { $script:bRowOn } else { $script:bRowHover }), $dbp)
+                $dbp.Dispose()
+                $g.DrawString($v.DayBtnText, $fLabel, $bWhite, $dbr, $sfCentre)
+            }
         }
 
         # Progress through the working day
@@ -3690,6 +3837,12 @@ function Complete-GapFill([string]$account) {
     })
 }
 
+function Test-HitDayBtn($tp) {
+    if (-not $script:view -or -not $script:view.DayBtnText) { return $false }
+    $x = $tp.X / $Zoom; $y = $tp.Y / $Zoom
+    return ($x -ge $DayBtn.X -and $x -le ($DayBtn.X + $DayBtn.W) -and $y -ge $DayBtn.Y -and $y -le ($DayBtn.Y + $DayBtn.H))
+}
+
 function Test-HitUnalloc($tp) {
     $x = $tp.X / $Zoom; $y = $tp.Y / $Zoom
     return ($x -ge 160 -and $x -le 312 -and $y -ge 48 -and $y -le 67)
@@ -4155,6 +4308,8 @@ function Sync-RendererState {
     $r.DraggingRow = if ($script:reorder) { [array]::IndexOf($script:slots, $script:reorder.Name) } else { -1 }
     $r.RoundHover = "$($script:roundHover)"
     $r.CollapseHover = [bool]$script:collapseHover
+    $r.DayBtnText = [string]$v.DayBtnText
+    $r.DayBtnHover = [bool]$script:dayBtnHover
     $r.HandleHover = [bool]$script:handleHover
     $r.DrawerHover = "$($script:drawerHover)"
     $r.TlHoverBlock = [int]$script:tlHover.Block; $r.TlHoverGap = [int]$script:tlHover.Gap
@@ -4651,6 +4806,12 @@ function Get-WeekData($ws) {
                 $b = Limit-Time $iv[1] $s $cap
                 if ($b -gt $a) { $l += ($b - $a).TotalSeconds }
             }
+        }
+        # Time marked as finished for the day counts like lunch
+        foreach ($away in @(Get-AwayOn $day $now)) {
+            $a = Limit-Time $away[0] $s $cap
+            $b = Limit-Time $away[1] $s $cap
+            if ($b -gt $a) { $l += ($b - $a).TotalSeconds }
         }
         $billable = [math]::Max(0.0, $worked - $l)
         $sum = 0.0
@@ -5722,59 +5883,84 @@ function Add-DialogButtons($dlg, [double]$y, [bool]$withReset, $resetText) {
     $dlg.CancelButton = $cancel
 }
 
-# Usual hours, working days, week start and how hours are shown
+# Working days with their start and finish times (so each day can have its own shift), week start and how hours are shown
 function Show-WorkSettings {
-    $dlg = New-SettingsDialog 'Working hours and days' 380 262
-    [void](Add-DialogControl $dlg (New-DialogLabel 'Usual hours') 14 16 0 0)
-    $tbStart = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 130 13 70 0
-    $tbStart.Text = $StartTime
-    [void](Add-DialogControl $dlg (New-DialogLabel 'to') 208 16 0 0)
-    $tbEnd = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 232 13 70 0
-    $tbEnd.Text = $EndTime
-
-    [void](Add-DialogControl $dlg (New-DialogLabel 'Working days') 14 56 0 0)
-    $boxes = @()
+    $dlg = New-SettingsDialog 'Working hours and days' 380 344
     $order = @(1, 2, 3, 4, 5, 6, 0)
+    $rows = @()
     for ($i = 0; $i -lt 7; $i++) {
+        $dow = $order[$i]
+        $y = 14 + $i * 28
         $cb = New-Object System.Windows.Forms.CheckBox
-        $cb.Text = $DayAbbr[$order[$i]]
-        $cb.Tag = $order[$i]
-        $cb.Checked = $script:workDays -contains $order[$i]
-        $boxes += (Add-DialogControl $dlg $cb (14 + ($i % 4) * 88) (80 + [math]::Floor($i / 4) * 26) 84 0)
+        $cb.Text = $DayAbbr[$dow]
+        $cb.Tag = $dow
+        $cb.Checked = $script:workDays -contains $dow
+        [void](Add-DialogControl $dlg $cb 14 $y 70 0)
+        $usual = Get-UsualHours $dow
+        $tbA = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 90 ($y - 1) 62 0
+        $tbA.Text = $usual[0]
+        [void](Add-DialogControl $dlg (New-DialogLabel 'to') 160 ($y + 2) 0 0)
+        $tbB = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 182 ($y - 1) 62 0
+        $tbB.Text = $usual[1]
+        $tbA.Enabled = $cb.Checked; $tbB.Enabled = $cb.Checked
+        # Times are only available for days that are ticked
+        $cb.Tag = @{ Dow = $dow; Boxes = @($tbA, $tbB) }
+        $cb.Add_CheckedChanged({ foreach ($bx in $this.Tag.Boxes) { $bx.Enabled = $this.Checked } })
+        $rows += @{ Dow = $dow; Check = $cb; Start = $tbA; End = $tbB }
     }
+    $same = New-Object System.Windows.Forms.Button
+    $same.Text = 'Same every day'
+    $same.Tag = $rows
+    $same.Add_Click({
+        # Copy the first ticked day's hours to every other day
+        $first = $this.Tag | Where-Object { $_.Check.Checked } | Select-Object -First 1
+        if (-not $first) { return }
+        foreach ($r in $this.Tag) { $r.Start.Text = $first.Start.Text; $r.End.Text = $first.End.Text }
+    })
+    [void](Add-DialogControl $dlg $same 262 12 104 28)
 
-    [void](Add-DialogControl $dlg (New-DialogLabel 'Week starts on') 14 146 0 0)
-    $cbWeek = Add-DialogControl $dlg (New-Object System.Windows.Forms.ComboBox) 130 143 150 0
+    [void](Add-DialogControl $dlg (New-DialogLabel 'Week starts on') 14 226 0 0)
+    $cbWeek = Add-DialogControl $dlg (New-Object System.Windows.Forms.ComboBox) 130 223 150 0
     $cbWeek.DropDownStyle = 'DropDownList'
     $fullNames = @('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
     foreach ($fn in $fullNames) { [void]$cbWeek.Items.Add($fn) }
     $cbWeek.SelectedIndex = $script:weekStartDow
 
-    [void](Add-DialogControl $dlg (New-DialogLabel 'Show hours as') 14 182 0 0)
-    $cbFmt = Add-DialogControl $dlg (New-Object System.Windows.Forms.ComboBox) 130 179 236 0
+    [void](Add-DialogControl $dlg (New-DialogLabel 'Show hours as') 14 262 0 0)
+    $cbFmt = Add-DialogControl $dlg (New-Object System.Windows.Forms.ComboBox) 130 259 236 0
     $cbFmt.DropDownStyle = 'DropDownList'
     [void]$cbFmt.Items.AddRange(@('Decimal (1.25)', 'Hours and minutes (1:15)'))
     $cbFmt.SelectedIndex = if ($script:hoursFormat -eq 'hm') { 1 } else { 0 }
 
-    Add-DialogButtons $dlg 222 $false ''
+    Add-DialogButtons $dlg 302 $false ''
 
+    $fullDay = @{ 0 = 'Sunday'; 1 = 'Monday'; 2 = 'Tuesday'; 3 = 'Wednesday'; 4 = 'Thursday'; 5 = 'Friday'; 6 = 'Saturday' }
     while ($true) {
         $script:dialogOpen = $true
         try { $result = $dlg.ShowDialog((Get-DialogOwner)) } finally { $script:dialogOpen = $false }
         if ($result -ne [System.Windows.Forms.DialogResult]::OK) { $dlg.Dispose(); return }
-        $a = ConvertTo-ClockText $tbStart.Text
-        $b = ConvertTo-ClockText $tbEnd.Text
-        $days = @($boxes | Where-Object { $_.Checked } | ForEach-Object { [int]$_.Tag } | Sort-Object)
-        $problem = if (-not $a -or -not $b) { 'Enter the hours as times, such as 08:30 and 17:30.' }
-                   elseif ([timespan]$b -le [timespan]$a) { 'The end time needs to be after the start time.' }
-                   elseif ($days.Count -eq 0) { 'Choose at least one working day.' }
-                   else { $null }
+        $problem = $null
+        $chosen = @()
+        foreach ($r in $rows) {
+            if (-not $r.Check.Checked) { continue }
+            $a = ConvertTo-ClockText $r.Start.Text
+            $b = ConvertTo-ClockText $r.End.Text
+            if (-not $a -or -not $b) { $problem = "Enter the hours for $($fullDay[$r.Dow]) as times, such as 08:30 and 17:30."; break }
+            if ([timespan]$b -le [timespan]$a) { $problem = "The end time for $($fullDay[$r.Dow]) needs to be after the start time."; break }
+            $chosen += @{ Dow = $r.Dow; Start = $a; End = $b }
+        }
+        if (-not $problem -and $chosen.Count -eq 0) { $problem = 'Choose at least one working day.' }
         if (-not $problem) { break }
         Show-Message $problem
     }
-    $script:StartTime = $a
-    $script:EndTime = $b
-    $script:workDays = $days
+    # The first working day's hours become the usual ones, and any day that differs keeps its own
+    $script:StartTime = $chosen[0].Start
+    $script:EndTime = $chosen[0].End
+    $script:dayHours = @{}
+    foreach ($ch in $chosen) {
+        if ($ch.Start -ne $script:StartTime -or $ch.End -ne $script:EndTime) { $script:dayHours[[int]$ch.Dow] = @{ Start = $ch.Start; End = $ch.End } }
+    }
+    $script:workDays = @($chosen | ForEach-Object { [int]$_.Dow } | Sort-Object)
     $script:weekStartDow = $cbWeek.SelectedIndex
     $script:hoursFormat = if ($cbFmt.SelectedIndex -eq 1) { 'hm' } else { 'decimal' }
     $dlg.Dispose()
@@ -5794,8 +5980,9 @@ function Show-TodaySettings {
     $tbStart = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 130 51 70 0
     $tbEnd = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 232 51 70 0
     [void](Add-DialogControl $dlg (New-DialogLabel 'to') 208 54 0 0)
-    $tbStart.Text = if ($plan.Working) { $plan.Start.ToString('HH:mm', $Inv) } else { $StartTime }
-    $tbEnd.Text = if ($plan.Working) { $plan.End.ToString('HH:mm', $Inv) } else { $EndTime }
+    $usualToday = Get-UsualHours ([int][datetime]::Today.DayOfWeek)
+    $tbStart.Text = if ($plan.Working) { $plan.Start.ToString('HH:mm', $Inv) } else { $usualToday[0] }
+    $tbEnd.Text = if ($plan.Working) { $plan.End.ToString('HH:mm', $Inv) } else { $usualToday[1] }
     $cbOff.Add_CheckedChanged({ $tbStart.Enabled = -not $cbOff.Checked; $tbEnd.Enabled = -not $cbOff.Checked }.GetNewClosure())
     $tbStart.Enabled = -not $cbOff.Checked; $tbEnd.Enabled = -not $cbOff.Checked
     Add-DialogButtons $dlg 108 ([bool]$script:dayOverrides[$todayKey]) 'Back to usual hours'
@@ -5816,7 +6003,7 @@ function Show-TodaySettings {
                    else { $null }
         if ($problem) { Show-Message $problem; continue }
         # Same as usual on a usual working day: no special arrangement needed
-        if ($a -eq $StartTime -and $b -eq $EndTime -and $script:workDays -contains [int][datetime]::Today.DayOfWeek) {
+        if ($a -eq $usualToday[0] -and $b -eq $usualToday[1] -and $script:workDays -contains [int][datetime]::Today.DayOfWeek) {
             [void]$script:dayOverrides.Remove($todayKey)
         } else {
             $script:dayOverrides[$todayKey] = @{ Off = $false; Start = $a; End = $b }
@@ -6256,6 +6443,7 @@ $form.Add_MouseDown({
     $tp = Get-TimerPoint $_.Location
     if (Test-HitHandle $tp) { $script:pressedHandle = $true; return }
     if (Test-HitCollapse $tp) { $script:pressedCollapse = $true; return }
+    if (Test-HitDayBtn $tp) { $script:pressedDayBtn = $true; return }
     $grip = Get-HitGrip $tp
     if ($null -ne $grip) {
         $script:reorder = @{ Name = $script:slots[$grip]; Moved = $false }
@@ -6335,6 +6523,15 @@ $form.Add_MouseMove({
         else { $tip.Hide($form) }
         Request-Redraw
     }
+    $dayHit = Test-HitDayBtn $tp
+    if ($dayHit -ne $script:dayBtnHover) {
+        $script:dayBtnHover = $dayHit
+        if ($dayHit) {
+            $dayTip = if ($script:view.DayDone) { 'Carry on working today' } else { "Finish for the day`nUnallocated time stops counting" }
+            $tip.Show($dayTip, $form, [int](($DayBtn.X - 60 + $ox) * $Zoom), [int](($DayBtn.Y + $DayBtn.H + 4 + $oy) * $Zoom), 3000)
+        } else { $tip.Hide($form) }
+        Request-Redraw
+    }
     $ua = Test-HitUnalloc $tp
     if ($ua -ne $script:unallocHover) {
         $script:unallocHover = $ua
@@ -6343,7 +6540,7 @@ $form.Add_MouseMove({
         } elseif (-not $coll -and -not $handle) { $tip.Hide($form) }
     }
     $form.Cursor = if ($null -ne $grip) { [System.Windows.Forms.Cursors]::SizeNS }
-                   elseif ($null -ne $hit -or $coll -or $handle) { [System.Windows.Forms.Cursors]::Hand }
+                   elseif ($null -ne $hit -or $coll -or $handle -or $dayHit) { [System.Windows.Forms.Cursors]::Hand }
                    else { [System.Windows.Forms.Cursors]::Default }
     if ($round -ne $script:roundHover) {
         if ($null -ne $round) {
@@ -6388,6 +6585,11 @@ $form.Add_MouseUp({
             if (Test-HitCollapse $tp) { Set-View 'pill' }
             return
         }
+        if ($script:pressedDayBtn) {
+            $script:pressedDayBtn = $false
+            if (Test-HitDayBtn $tp) { $tip.Hide($form); Switch-DayDone }
+            return
+        }
         if ($script:dragStart) { $script:dragStart = $null; Save-Position }
         if ($script:reorder) {
             if ($script:reorder.Moved) { Save-Order }
@@ -6421,8 +6623,8 @@ $form.Add_MouseLeave({
         return
     }
     if ($script:reorder -or $script:tlDrag) { return }
-    if ($script:collapseHover -or $script:handleHover -or $script:drawerHover -or -not (Test-SameTimelineHit $script:tlHover (New-TimelineHover))) {
-        $script:collapseHover = $false; $script:handleHover = $false; $script:drawerHover = $null
+    if ($script:collapseHover -or $script:handleHover -or $script:dayBtnHover -or $script:drawerHover -or -not (Test-SameTimelineHit $script:tlHover (New-TimelineHover))) {
+        $script:collapseHover = $false; $script:handleHover = $false; $script:dayBtnHover = $false; $script:drawerHover = $null
         $script:tlHover = New-TimelineHover
         Request-Redraw
     }
@@ -6582,8 +6784,10 @@ $miView = $menu.Items.Add('Compact view')
 $miView.Add_Click({ if ($script:mode -eq 'pill') { Set-View 'full' } else { Set-View 'pill' } })
 $miDrawer = $menu.Items.Add('Show drawer')
 $miDrawer.Add_Click({ Set-DrawerOpen (-not $script:drawerOpen) })
+$miDone = $menu.Items.Add('Finish for the day')
+$miDone.Add_Click({ Switch-DayDone })
 $miWork = New-Object System.Windows.Forms.ToolStripMenuItem 'Working hours'
-[void]$miWork.DropDownItems.Add('Usual hours and days...', $null, { try { Show-WorkSettings } catch { Write-Log "Settings error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)" } })
+[void]$miWork.DropDownItems.Add('Hours and days...', $null, { try { Show-WorkSettings } catch { Write-Log "Settings error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)" } })
 [void]$miWork.DropDownItems.Add('Today only...', $null, { try { Show-TodaySettings } catch { Write-Log "Settings error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)" } })
 [void]$miWork.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 $miFormat = $miWork.DropDownItems.Add('Show hours as h:mm')
@@ -6741,6 +6945,9 @@ $menu.Add_Opening({
     $miDrawer.Visible = $script:mode -eq 'full'
     $miFormat.Text = if ($script:hoursFormat -eq 'decimal') { 'Show hours as h:mm' } else { 'Show hours as decimal' }
     $miDrawer.Text = if ($script:drawerOpen) { 'Hide drawer' } else { 'Show drawer' }
+    $donePlan = Get-DayPlan ([datetime]::Today)
+    $miDone.Text = if (Test-DayDone) { 'Carry on working' } else { 'Finish for the day' }
+    $miDone.Enabled = [bool]((Test-DayDone) -or ($donePlan.Working -and (Get-Date) -ge $donePlan.Start))
     $pt = $form.PointToClient([System.Windows.Forms.Cursor]::Position)
     if ($script:mode -eq 'pill') {
         # In the pill, only rows in the open account list count
@@ -6874,7 +7081,7 @@ if (Test-Path $DrawerFile) {
     try {
         $drawerLines = @(Get-Content $DrawerFile -TotalCount 2)
         $drawerWasOpen = ($drawerLines[0].Trim() -eq '1')
-        if ($drawerLines.Count -gt 1 -and $drawerLines[1].Trim() -eq 'timeline') { $script:drawerMode = 'timeline' }
+        if ($drawerLines.Count -gt 1 -and $drawerLines[1].Trim() -eq 'week') { $script:drawerMode = 'week' }
     } catch {}
 }
 if ($savedView -eq 'pill') {
