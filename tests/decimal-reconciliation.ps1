@@ -17,10 +17,19 @@ function Block($name, $day, [double]$seconds, $id) {
     $start = ([datetime]'2026-10-05').AddDays($day).AddHours(9)
     [int]$offset = 0
     if ([int]::TryParse([string]$id, [ref]$offset)) { $start = $start.AddMinutes($offset) }
-    [pscustomobject]@{ Name=$name; Day=$day; Seconds=$seconds
-                       Start=$start; End=$start.AddSeconds($seconds)
-                       Kind='time'; Origin='recorded'; ExplicitGroup=$false
-                       Note=''; Parts=@(); Raw=$id }
+    [pscustomobject]@{
+        Name = $name
+        Day = $day
+        Seconds = $seconds
+        Start = $start
+        End = $start.AddSeconds($seconds)
+        Kind = 'time'
+        Origin = 'recorded'
+        ExplicitGroup = $false
+        Note = ''
+        Parts = @()
+        Raw = $id
+    }
 }
 function Row($name, $day, [double]$seconds) {
     [pscustomobject]@{ Name=$name; Start=([datetime]'2026-10-05').AddDays($day); Seconds=$seconds }
