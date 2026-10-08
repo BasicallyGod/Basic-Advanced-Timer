@@ -6,7 +6,7 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current version, with the compact pill, week drawer, weekly view and settings | 2.0 to 2.19 |
+| AccountTimer2.ps1 | Current version, with the compact pill, week drawer, weekly view and settings | 2.0 to 2.20 |
 | AccountTimer.ps1 | Account slots, time logging, themes and the see-through list | 1.0 to 1.7 |
 | BillableTimer.ps1 | The original single billable-hours timer | 0.1 to 0.5 |
 
@@ -14,6 +14,11 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Version | Script | Type | Change |
 | --- | --- | --- | --- |
+| 2.20 | AccountTimer2 | Fixed | Legacy merged credits are no longer drawn as imaginary continuous sessions; their total appears separately as unplaced time in the timeline totals |
+| 2.20 | AccountTimer2 | Improved | Added and edited entries keep their chosen time positions but have a dashed outline, while rounding stays out of the clock timeline |
+| 2.20 | AccountTimer2 | Fixed | Recorded stretches shorter than a minute are retained in timeline gap detection and weekly entries; automatic weekly grouping now requires adjacent real sessions |
+| 2.20 | AccountTimer2 | Improved | The weekly entries export identifies merged, added and edited rows, leaves unknown merged clock ranges blank, and warns before a destructive merge |
+| 2.20 | AccountTimer2 | Fixed | Timeline clock and duration labels use the same truncate-to-minute convention as the tooltips |
 | 2.19 | AccountTimer2 | Fixed | Timeline card text uses the selected theme where legible, with light or dark text chosen for contrast on each account colour |
 | 2.19 | AccountTimer2 | Improved | Timeline text uses greyscale GDI+ antialiasing at different sizes while the rest of the drawer keeps its Windows text rendering |
 | 2.18 | AccountTimer2 | Fixed | Stretches that overlap, such as merged or hand-edited entries, now sit side by side on the timeline instead of hiding each other, and dragging an edge only stops at the neighbour in its own lane |

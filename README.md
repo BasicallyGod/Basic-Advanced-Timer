@@ -14,6 +14,7 @@ AccountTimer2.ps1 is the current version. The two earlier scripts are kept as wo
 - Separate unallocated figures for the working day and overtime
 - Themes, see-through account list, a Size setting for the whole timer, decimal or hours and minutes display
 - Weekly summary and time entry files in CSV, ready for timesheets or Excel
+- Merged credits with unknown original clock positions are shown as unplaced in the timeline totals rather than as misleading blocks. The weekly editor can assign them a new explicit time before gaps can be filled on that day.
 
 ## Requirements
 
