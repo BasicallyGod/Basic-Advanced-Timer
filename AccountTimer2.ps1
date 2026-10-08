@@ -2124,6 +2124,22 @@ function Merge-EntryBlocks {
     })
 }
 
+function Ungroup-EntryBlocks {
+    $ids = @()
+    foreach ($b in @($script:entrySelected)) {
+        if (-not $b.ExplicitGroup) { continue }
+        foreach ($part in @($b.Parts)) {
+            $id = Get-EntryGroupId $part.Raw
+            if ($id -and $ids -notcontains $id) { $ids += $id }
+        }
+    }
+    if ($ids.Count -eq 0) { return }
+    [void](Invoke-LogChange 'ungroup entries' {
+        $script:entryGroups = @($script:entryGroups | Where-Object { $ids -notcontains [string]$_.GroupId })
+        return $true
+    })
+}
+
 function Set-EntryAccount($newName) {
     $sel = @($script:entrySelected)
     if ($sel.Count -eq 0) { return }
@@ -2161,6 +2177,10 @@ function Set-EntryAccount($newName) {
 
 function Edit-EntryTime($b) {
     if ($b.Kind -eq 'running') { Show-Message 'Stop the running account before editing its time.'; return }
+    if ($b.ExplicitGroup) {
+        Show-Message 'Ungroup these recordings before editing their individual times. This preserves the original intervals.'
+        return
+    }
     if ($b.Origin -eq 'merged' -and @($script:creditPositions | Where-Object {
                 $_.Date -eq $b.Start.ToString('yyyy-MM-dd', $Inv) -and $_.Account -eq $b.Name }).Count -gt 0) {
         Show-Message 'This merged credit has positioned portions. Remove their positions before converting the source to a timed entry.'
@@ -6232,10 +6252,10 @@ function Show-EntryMenu($panel, $pt, $day) {
     if ($n -gt 0) {
         $one = $n -eq 1
         $mi = $em.Items.Add('Edit note...')
-        $mi.Enabled = $one -and $sel[0].Kind -eq 'time'
+        $mi.Enabled = $one -and $sel[0].Kind -eq 'time' -and -not $sel[0].ExplicitGroup
         $mi.Add_Click({ try { Edit-EntryNote $script:entrySelected[0] } catch { Show-WeeklyError $_ } })
         $mi = $em.Items.Add('Edit time...')
-        $mi.Enabled = $one -and -not $running
+        $mi.Enabled = $one -and -not $running -and -not $sel[0].ExplicitGroup
         $mi.Add_Click({ try { Edit-EntryTime $script:entrySelected[0] } catch { Show-WeeklyError $_ } })
 
         $move = New-Object System.Windows.Forms.ToolStripMenuItem 'Change account'
@@ -6253,6 +6273,11 @@ function Show-EntryMenu($panel, $pt, $day) {
         $mi.Enabled = ($n -ge 2) -and $sameGroup -and -not $running
         if ($n -ge 2 -and -not $sameGroup) { $mi.Text = 'Merge (same account and day only)' }
         $mi.Add_Click({ try { Merge-EntryBlocks } catch { Show-WeeklyError $_ } })
+        $hasGroup = @($sel | Where-Object { $_.ExplicitGroup }).Count -gt 0
+        if ($hasGroup) {
+            $mi = $em.Items.Add('Ungroup selected (keep recordings)')
+            $mi.Add_Click({ try { Ungroup-EntryBlocks } catch { Show-WeeklyError $_ } })
+        }
 
         [void]$em.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
         $mi = $em.Items.Add($(if ($one) { 'Delete' } else { "Delete $n blocks" }))
@@ -6316,6 +6341,10 @@ function Get-EntryTipText($e) {
 }
 
 function Edit-EntryNote($e) {
+    if ($e.ExplicitGroup) {
+        Show-Message 'Ungroup these recordings to edit their individual notes without replacing the original notes.'
+        return
+    }
     if ($e.Origin -eq 'positioned') {
         $parts = @($e.Parts | Where-Object { $_.Origin -eq 'positioned' })
         if ($parts.Count -ne 1) { Show-Message 'Select one positioned entry to edit its note.'; return }
