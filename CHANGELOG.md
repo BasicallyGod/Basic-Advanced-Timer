@@ -6,7 +6,7 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current version, with the compact pill, week drawer, weekly view and settings | 2.0 to 2.16 |
+| AccountTimer2.ps1 | Current version, with the compact pill, week drawer, weekly view and settings | 2.0 to 2.17 |
 | AccountTimer.ps1 | Account slots, time logging, themes and the see-through list | 1.0 to 1.7 |
 | BillableTimer.ps1 | The original single billable-hours timer | 0.1 to 0.5 |
 
@@ -14,6 +14,9 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Version | Script | Type | Change |
 | --- | --- | --- | --- |
+| 2.17 | AccountTimer2 | Improved | The timeline is now a vertical day view like a calendar, with hours down the left and each stretch of time as a card showing its name, times and length, so short stretches are readable and easy to drag |
+| 2.17 | AccountTimer2 | New | Scroll the timeline with the mouse wheel and zoom with Ctrl and the wheel or the plus and minus buttons. It opens with now in view, and a Now button jumps back to it |
+| 2.17 | AccountTimer2 | Improved | The timeline has an hour of room either side of the day for adding time, the account totals sit in a column beside it, and the drawer is at least 420 tall |
 | 2.16 | AccountTimer2 | Improved | Unallocated time, in the day and in overtime, is shown as h:mm (for example UNALLOCATED OT 0:45), whatever the hours setting is |
 | 2.16 | AccountTimer2 | Improved | The Finish day button now sits under the Lunch row and only appears from 30 minutes before the end of the day, staying as Carry on once the day is finished |
 | 2.15 | AccountTimer2 | New | Each working day can have its own start and finish times, for shift patterns, set under Working hours, Hours and days, with a Same every day button |

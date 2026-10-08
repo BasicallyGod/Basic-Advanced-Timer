@@ -15,10 +15,11 @@
 #
 # Drawer: click the round button at the top left of the full timer (or right-click, Show drawer)
 # to slide out this week's hours by account and day, and budgets, beside the timer.
-# The Timeline tab shows one day as a strip, with a block for each stretch of time, Lunch as a hatched
-# gap and a marker for now. Point at a block to see what it was; Previous and Next move between days.
-# Drag the edge of a block to change its time (5 minute steps, Shift for 1 minute, Escape to cancel),
-# or click a gap to fill it with an account. Undo reverses the last change.
+# The Timeline tab shows one day like a calendar, with hours down the left and a card for each stretch of
+# time, Lunch as a hatched gap and a line for now. Scroll with the mouse wheel, zoom with Ctrl and the wheel
+# (or the plus and minus buttons), and use Now to jump back. Point at a card to see what it was; Previous and
+# Next move between days. Drag the top or bottom edge of a card to change its time (5 minute steps, Shift
+# for 1 minute, Escape to cancel), or click a gap to fill it with an account. Undo reverses the last change.
 #
 # Hours: right-click, Working hours, Hours and days, gives each working day its own start and finish
 # (for shift patterns). From 30 minutes before the end of the day, a Finish day button appears under the
@@ -352,7 +353,7 @@ namespace Win {
         public List<DrawerBudget> Budgets = new List<DrawerBudget>();
         public string BudgetsHeading = "BUDGETS";
         public string FormatLabel = "h:mm";
-        public bool NextEnabled, UndoEnabled;
+        public bool NextEnabled, UndoEnabled, IsToday;
         public TimelineModel Timeline;
     }
 
@@ -370,7 +371,7 @@ namespace Win {
         public float RoundR = 8f, RoundDownX = 150f, RoundUpX = 170f;
         public float DrawerW = 520f, DrawerH = 0f, DrawerRowH = 19f;
         // Heights within the drawer, which the PowerShell side uses to work out how tall the drawer must be
-        public const float TabsH = 26f, AxisH = 16f, StripH = 44f, StripGap = 14f;
+        public const float TabsH = 26f;
         public float Margin = 10f, TimerOffX = 0f, TimerOffY = 0f;
         public int ListAlpha = 255;
         public float TextSharpen = 0.8f;
@@ -397,7 +398,9 @@ namespace Win {
         public double TlSelStartH = -1, TlSelEndH = -1;
         public string TlDragText = "";
         public double TlDragAtH;
-        public float TlX0, TlW, TlY, TlH;
+        public float TlX0, TlW, TlY, TlH;   // the timeline's cards column and viewport as last drawn, reported back
+        public double TlScrollH;            // the hour at the top of the viewport
+        public float TlPx = 64f;            // window units per hour (the zoom)
         public List<DrawerButton> DrawerButtons = new List<DrawerButton>();
 
         StringFormat sfCentre, sfLeft, sfRight, sfName;
@@ -896,6 +899,27 @@ namespace Win {
                     }
                     tabX += tw + 6;
                 }
+                // Zoom and jump-to-now, right-aligned in the same row
+                if (timeline) {
+                    float zx = xR;
+                    string[][] tools = new string[][] { new string[] { "now", "Now" }, new string[] { "zoomin", "+" }, new string[] { "zoomout", "-" } };
+                    foreach (string[] tool in tools) {
+                        float tw = Math.Max(22f, og.MeasureString(tool[1], FontButton).Width + 16);
+                        zx -= tw;
+                        RectangleF rect = new RectangleF(zx, y, tw, 22);
+                        bool enabled = !(tool[0] == "now" && !d.IsToday);
+                        Color col = !enabled ? Mix(Panel, Circle, 0.45) : (DrawerHover == tool[0] ? CircleHot : Circle);
+                        using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 11f))
+                        using (SolidBrush bb = new SolidBrush(col)) { og.FillPath(bb, bp); }
+                        QueueText(tool[1], FontButton, enabled ? textC : Mix(col, Text, 0.5), rect, DT_CENTER);
+                        if (enabled) {
+                            DrawerButton db = new DrawerButton();
+                            db.Id = tool[0]; db.Rect = rect;
+                            DrawerButtons.Add(db);
+                        }
+                        zx -= 6;
+                    }
+                }
                 y += TabsH;
 
                 if (timeline) { DrawTimeline(og, d.Timeline, x0, xR, y, sep, fText, fBold); return; }
@@ -941,95 +965,112 @@ namespace Win {
             }
         }
 
-        // The day as one strip: each stretch of time is a coloured block, Lunch is hatched, the gaps are
-        // left empty, working hours are a little lighter and a marker shows where now is.
-        // Hover areas for the blocks are added to DrawerButtons with ids of the form tip:<number>.
+        // The day as a vertical timeline, like a calendar day: hours run down the left, each stretch of time is a
+        // card, Lunch is hatched, gaps are left empty, working hours are a little lighter and a line shows where
+        // now is. Only the part in the viewport is drawn. PowerShell holds the scroll position (TlScrollH, in
+        // hours) and the zoom (TlPx, window units per hour), and works out hover and dragging from the viewport
+        // reported back in TlX0, TlW, TlY and TlH.
+        const float GutterW = 44f, LegendW = 128f;
+
+        static string Clock(double h) {
+            int m = (int)Math.Round(h * 60);
+            return (m / 60).ToString("00") + ":" + (m % 60).ToString("00");
+        }
+
+        static string Dur(double hours) {
+            int m = (int)Math.Round(hours * 60);
+            return (m / 60).ToString() + ":" + (m % 60).ToString("00");
+        }
+
+        // Windows draws the queued text afterwards with no clip, so only text that sits wholly inside the viewport is queued
+        void QueueIn(RectangleF vp, string s, Font f, Color c, RectangleF r, uint align) {
+            if (r.Top < vp.Top - 0.5f || r.Bottom > vp.Bottom + 0.5f) return;
+            QueueText(s, f, c, r, align);
+        }
+
         void DrawTimeline(Graphics og, TimelineModel t, float x0, float xR, float y, Pen sep, Font fText, Font fBold) {
             Color textC = Text;
             Color faintC = Mix(Panel, Text, 215 / 255.0);
-            float w = xR - x0;
-            double span = Math.Max(1.0, t.AxisEndH - t.AxisStartH);
-            float perHour = (float)(w / span);
+            float vh = Math.Max(DrawerH, BaseH) - (y - Margin) - 12f;
+            float bx = x0 + GutterW, bw = (xR - LegendW - 10f) - bx;
+            float lx = xR - LegendW;
+            RectangleF vp = new RectangleF(x0, y, bx + bw - x0, vh);
+            TlX0 = bx; TlW = bw; TlY = y; TlH = vh;
+            float px = TlPx;
+            double scroll = TlScrollH;
+            double viewH = vh / px;
+            Func<double, float> yOf = delegate(double h) { return y + (float)((h - scroll) * px); };
 
-            // Hour labels, thinned out when there isn't room for every hour
-            int firstHour = (int)Math.Ceiling(t.AxisStartH - 0.001), lastHour = (int)Math.Floor(t.AxisEndH + 0.001);
-            int step = 1;
-            while (perHour * step < 48f) step++;
-            for (int hr = firstHour; hr <= lastHour; hr++) {
-                if ((hr - firstHour) % step != 0) continue;
-                float lx = x0 + (float)((hr - t.AxisStartH) * perHour);
-                string label = (hr % 24).ToString("00") + ":00";
-                if (hr == firstHour && lx - x0 < 20f) QueueText(label, FontLabel, faintC, new RectangleF(lx, y, 44, AxisH - 2), DT_LEFT);
-                else if (xR - lx < 20f) QueueText(label, FontLabel, faintC, new RectangleF(lx - 44, y, 44, AxisH - 2), DT_RIGHT);
-                else QueueText(label, FontLabel, faintC, new RectangleF(lx - 22, y, 44, AxisH - 2), DT_CENTER);
+            // The strip of the day: empty track, lighter working hours, then hour and half hour lines
+            using (SolidBrush trackBrush = new SolidBrush(Mix(Panel, Text, 0.07))) { og.FillRectangle(trackBrush, bx, y, bw, vh); }
+            GraphicsState clipState = og.Save();
+            og.SetClip(new RectangleF(bx, y, bw, vh));
+            if (t.HasWork) {
+                float w1 = yOf(t.WorkStartH), w2 = yOf(t.WorkEndH);
+                using (SolidBrush workBrush = new SolidBrush(Mix(Panel, Text, 0.14))) { og.FillRectangle(workBrush, bx, w1, bw, w2 - w1); }
+            }
+            int stepMin = px >= 200f ? 15 : (px >= 100f ? 30 : 60);
+            using (Pen hourLine = new Pen(Mix(Panel, Text, 0.22), 1f))
+            using (Pen minorLine = new Pen(Mix(Panel, Text, 0.12), 1f)) {
+                for (int mm = (int)(Math.Floor(scroll) * 60); mm <= (int)(Math.Ceiling(scroll + viewH) * 60); mm += 15) {
+                    if (mm < 0) continue;
+                    float ly = yOf(mm / 60.0);
+                    if (mm % 60 == 0) og.DrawLine(hourLine, bx, ly, bx + bw, ly);
+                    else if (mm % stepMin == 0 || px >= 200f) og.DrawLine(minorLine, bx, ly, bx + bw, ly);
+                }
             }
 
-            // The strip: empty track, lighter working hours, hour lines
-            float sy = y + AxisH;
-            using (GraphicsPath track = RoundRect(x0, sy, w, StripH, 6f))
-            using (SolidBrush trackBrush = new SolidBrush(Mix(Panel, Text, 0.07))) {
-                og.FillPath(trackBrush, track);
-                GraphicsState clipState = og.Save();
-                og.SetClip(track, CombineMode.Intersect);
-                if (t.HasWork) {
-                    float wx1 = x0 + (float)((t.WorkStartH - t.AxisStartH) * perHour);
-                    float wx2 = x0 + (float)((t.WorkEndH - t.AxisStartH) * perHour);
-                    using (SolidBrush workBrush = new SolidBrush(Mix(Panel, Text, 0.14))) { og.FillRectangle(workBrush, wx1, sy, wx2 - wx1, StripH); }
-                }
-                using (Pen hourLine = new Pen(Mix(Panel, Text, 0.20), 1f)) {
-                    for (int hr = firstHour; hr <= lastHour; hr++) {
-                        float lx = x0 + (float)((hr - t.AxisStartH) * perHour);
-                        og.DrawLine(hourLine, lx, sy, lx, sy + StripH);
-                    }
-                }
-                og.Restore(clipState);
-            }
-
-            TlX0 = x0; TlW = w; TlY = sy; TlH = StripH;
-
-            // A gap under the pointer, or being filled, shows a plus sign
+            // A gap under the pointer, or being filled
             for (int gi = 0; gi < t.Gaps.Count; gi++) {
                 if (gi != TlHoverGap) continue;
                 TimelineGap gp = t.Gaps[gi];
-                float gx = x0 + (float)((gp.StartH - t.AxisStartH) * perHour), gw = (float)((gp.EndH - gp.StartH) * perHour);
-                using (SolidBrush gb = new SolidBrush(Mix(Panel, Text, 0.24))) { og.FillRectangle(gb, gx, sy + 3, gw, StripH - 6); }
-                if (gw >= 18f && TlSelStartH < 0) {
-                    using (Pen pp = new Pen(textC, 2f)) {
-                        float cx = gx + gw / 2f, cy = sy + StripH / 2f;
-                        og.DrawLine(pp, cx - 5f, cy, cx + 5f, cy);
-                        og.DrawLine(pp, cx, cy - 5f, cx, cy + 5f);
-                    }
+                float g1 = yOf(gp.StartH), g2 = yOf(gp.EndH);
+                using (SolidBrush gb = new SolidBrush(Mix(Panel, Text, 0.24))) { og.FillRectangle(gb, bx + 3, g1 + 1, bw - 6, Math.Max(2f, g2 - g1 - 2)); }
+                float vis1 = Math.Max(g1, y), vis2 = Math.Min(g2, y + vh);
+                if (vis2 - vis1 >= 18f && TlSelStartH < 0) {
+                    QueueIn(vp, "+ Fill gap", fText, textC, new RectangleF(bx, (vis1 + vis2) / 2f - 9f, bw, 18f), DT_CENTER);
                 }
             }
             if (TlSelStartH >= 0 && TlSelEndH > TlSelStartH) {
-                float sx = x0 + (float)((TlSelStartH - t.AxisStartH) * perHour), sw = Math.Max(2f, (float)((TlSelEndH - TlSelStartH) * perHour));
-                using (SolidBrush sb = new SolidBrush(A(150, Fill))) { og.FillRectangle(sb, sx, sy + 3, sw, StripH - 6); }
-                using (Pen sp = new Pen(Fill, 1f)) { og.DrawRectangle(sp, sx, sy + 3, sw, StripH - 6); }
+                float s1 = yOf(TlSelStartH), s2 = yOf(TlSelEndH);
+                using (SolidBrush sb = new SolidBrush(A(150, Fill))) { og.FillRectangle(sb, bx + 3, s1, bw - 6, Math.Max(2f, s2 - s1)); }
+                using (Pen sp = new Pen(Fill, 1f)) { og.DrawRectangle(sp, bx + 3, s1, bw - 7, Math.Max(2f, s2 - s1)); }
             }
 
-            // Blocks
+            // Cards
             Color dark = Color.FromArgb(0x1b, 0x1b, 0x1b);
             for (int i = 0; i < t.Blocks.Count; i++) {
                 TimelineBlock b = t.Blocks[i];
-                float bx = x0 + (float)((b.StartH - t.AxisStartH) * perHour);
-                float bw = Math.Max(2f, (float)((b.EndH - b.StartH) * perHour) - 1f);
-                RectangleF br = new RectangleF(bx, sy + 3, bw, StripH - 6);
+                float top = yOf(b.StartH), bot = yOf(b.EndH);
+                if (bot < y || top > y + vh) continue;
+                RectangleF br = new RectangleF(bx + 3, top + 1, bw - 6, Math.Max(2f, bot - top - 1.5f));
                 bool hot = TlHoverBlock == i || TlEdgeBlock == i;
-                if (b.Kind == "lunch") {
-                    using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, hot ? 0.45 : 0.33), Mix(Panel, Text, 0.12))) {
-                        og.FillRectangle(hb, br);
-                    }
-                    if (bw > 56f) QueueText("Lunch", FontLabel, textC, br, DT_CENTER);
+                bool lunch = b.Kind == "lunch";
+                if (lunch) {
+                    using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, hot ? 0.45 : 0.33), Mix(Panel, Text, 0.12))) { og.FillRectangle(hb, br); }
                 } else {
                     Color fillC = hot ? Mix(b.Colour, Color.White, 0.3) : b.Colour;
                     using (SolidBrush bb = new SolidBrush(fillC)) { og.FillRectangle(bb, br); }
-                    if (bw > 44f) QueueText(b.Name, fText, dark, new RectangleF(bx + 4, sy, bw - 8, StripH), DT_LEFT);
                 }
-                // Grips at both edges of a block that can be dragged, shown while it is pointed at
-                if (hot && b.Editable && bw > 14f) {
-                    using (Pen gp = new Pen(A(200, dark), 2f)) {
-                        og.DrawLine(gp, bx + 3f, sy + 14f, bx + 3f, sy + StripH - 14f);
-                        og.DrawLine(gp, bx + bw - 3f, sy + 14f, bx + bw - 3f, sy + StripH - 14f);
+                // The label stays at the top of the part of the card that is in view
+                float lineTop = Math.Max(br.Top + 1f, y + 1f);
+                float room = Math.Min(br.Bottom, y + vh) - lineTop;
+                string name = lunch ? "Lunch" : b.Name;
+                Color labelC = lunch ? textC : dark;
+                double len = b.EndH - b.StartH;
+                if (br.Height >= 34f && room >= 32f) {
+                    QueueIn(vp, name, fBold, labelC, new RectangleF(br.X + 6, lineTop, br.Width - 12, 15f), DT_LEFT);
+                    QueueIn(vp, Clock(b.StartH) + " to " + Clock(b.EndH) + "   " + Dur(len), fText, labelC, new RectangleF(br.X + 6, lineTop + 15f, br.Width - 12, 15f), DT_LEFT);
+                } else if (br.Height >= 14f && room >= 14f) {
+                    QueueIn(vp, name, fText, labelC, new RectangleF(br.X + 6, lineTop, br.Width - 62, 14f), DT_LEFT);
+                    QueueIn(vp, Dur(len), fText, labelC, new RectangleF(br.Right - 56, lineTop, 50, 14f), DT_RIGHT);
+                }
+                // Grips at both edges of a card that can be dragged, shown while it is pointed at
+                if (hot && b.Editable && br.Height > 12f) {
+                    using (Pen gp = new Pen(A(200, lunch ? textC : dark), 2f)) {
+                        float cx = br.X + br.Width / 2f;
+                        og.DrawLine(gp, cx - 10f, br.Top + 3f, cx + 10f, br.Top + 3f);
+                        og.DrawLine(gp, cx - 10f, br.Bottom - 3f, cx + 10f, br.Bottom - 3f);
                     }
                 }
             }
@@ -1037,50 +1078,72 @@ namespace Win {
             if (TlEdgeBlock >= 0 && TlEdgeBlock < t.Blocks.Count) {
                 TimelineBlock eb = t.Blocks[TlEdgeBlock];
                 double edgeH = TlEdge == "start" ? eb.StartH : eb.EndH;
-                float ex = x0 + (float)((edgeH - t.AxisStartH) * perHour);
-                using (Pen ep = new Pen(textC, 3f)) { og.DrawLine(ep, ex, sy + 1f, ex, sy + StripH - 1f); }
+                float ey = yOf(edgeH);
+                using (Pen ep = new Pen(textC, 3f)) { og.DrawLine(ep, bx, ey, bx + bw, ey); }
             }
-            if (t.Blocks.Count == 0 && t.EmptyText.Length > 0 && TlHoverGap < 0 && TlSelStartH < 0) QueueText(t.EmptyText, fText, faintC, new RectangleF(x0, sy, w, StripH), DT_CENTER);
-
             // Now
             if (t.ShowNow) {
-                float nx = x0 + (float)((t.NowH - t.AxisStartH) * perHour);
-                using (Pen np = new Pen(textC, 2f))
-                using (SolidBrush nb = new SolidBrush(textC)) {
-                    og.DrawLine(np, nx, sy - 2, nx, sy + StripH + 2);
-                    og.FillEllipse(nb, nx - 3.5f, sy - 6f, 7f, 7f);
+                float ny = yOf(t.NowH);
+                if (ny >= y && ny <= y + vh) {
+                    using (Pen np = new Pen(textC, 2f))
+                    using (SolidBrush nb = new SolidBrush(textC)) {
+                        og.DrawLine(np, bx - 5f, ny, bx + bw, ny);
+                        og.FillEllipse(nb, bx - 9f, ny - 3.5f, 7f, 7f);
+                    }
+                }
+            }
+            og.Restore(clipState);
+
+            // Hour labels down the left
+            int labelStep = px >= 200f ? 15 : (px >= 100f ? 30 : 60);
+            for (int mm = (int)(Math.Floor(scroll) * 60); mm <= (int)(Math.Ceiling(scroll + viewH) * 60); mm += labelStep) {
+                if (mm < 0 || mm > 24 * 60) continue;
+                float ly = yOf(mm / 60.0);
+                QueueIn(vp, Clock(mm / 60.0), FontLabel, mm % 60 == 0 ? textC : faintC, new RectangleF(x0, ly - 7f, GutterW - 6f, 14f), DT_RIGHT);
+            }
+            if (t.Blocks.Count == 0 && t.EmptyText.Length > 0 && TlHoverGap < 0 && TlSelStartH < 0) {
+                QueueIn(vp, t.EmptyText, fText, faintC, new RectangleF(bx, y + vh / 2f - 9f, bw, 18f), DT_CENTER);
+            }
+
+            // A thin scroll bar when there is more of the day than fits
+            double span = Math.Max(0.5, t.AxisEndH - t.AxisStartH);
+            if (span * px > vh + 1f) {
+                float thumbH = Math.Max(16f, (float)(vh * vh / (span * px)));
+                float thumbY = y + (float)((scroll - t.AxisStartH) / span * vh);
+                thumbY = Math.Max(y, Math.Min(y + vh - thumbH, thumbY));
+                using (SolidBrush tb = new SolidBrush(Mix(Panel, Text, 0.30))) { og.FillRectangle(tb, bx + bw + 3f, thumbY, 3f, thumbH); }
+            }
+
+            // The time being dragged to, in a label across the edge
+            if (TlDragText.Length > 0) {
+                float dy = yOf(TlDragAtH);
+                float lw = Math.Min(bw - 8f, og.MeasureString(TlDragText, FontLabel).Width + 18f);
+                RectangleF lr = new RectangleF(bx + bw - lw - 6f, dy - 7f, lw, 14f);
+                if (lr.Top >= y && lr.Bottom <= y + vh) {
+                    using (GraphicsPath lp = RoundRect(lr.X, lr.Y, lr.Width, lr.Height, 7f))
+                    using (SolidBrush lb = new SolidBrush(CircleHot)) { og.FillPath(lb, lp); }
+                    QueueText(TlDragText, FontLabel, textC, lr, DT_CENTER);
                 }
             }
 
-            // The time being dragged to, in a small label just under the strip
-            if (TlDragText.Length > 0) {
-                float dx2 = x0 + (float)((TlDragAtH - t.AxisStartH) * perHour);
-                float lw = Math.Min(w, og.MeasureString(TlDragText, FontLabel).Width + 18f);
-                float lx2 = Math.Max(x0, Math.Min(xR - lw, dx2 - lw / 2f));
-                RectangleF lr = new RectangleF(lx2, sy + StripH + 1f, lw, 13f);
-                using (GraphicsPath lp = RoundRect(lr.X, lr.Y, lr.Width, lr.Height, 6f))
-                using (SolidBrush lb = new SolidBrush(CircleHot)) { og.FillPath(lb, lp); }
-                QueueText(TlDragText, FontLabel, textC, lr, DT_CENTER);
-            }
-
-            // The day's figures under the strip
-            float ly = sy + StripH + StripGap;
+            // The day's figures in a column on the right
+            float gy = y;
             foreach (TimelineLegend lg in t.Legend) {
-                og.DrawLine(sep, x0, ly, xR, ly);
+                og.DrawLine(sep, lx, gy, xR, gy);
                 bool isTotal = lg.Kind == "total";
                 Font f = isTotal ? fBold : fText;
                 Color c = (lg.Kind == "lunch" || lg.Kind == "unallocated") ? faintC : textC;
-                float nameX = x0;
+                float nameX = lx;
                 if (lg.Kind == "account") {
-                    using (SolidBrush sw = new SolidBrush(lg.Colour)) { og.FillRectangle(sw, x0, ly + 4.5f, 10f, 10f); }
-                    nameX = x0 + 16f;
+                    using (SolidBrush sw = new SolidBrush(lg.Colour)) { og.FillRectangle(sw, lx, gy + 4.5f, 10f, 10f); }
+                    nameX = lx + 15f;
                 } else if (lg.Kind == "lunch") {
-                    using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, 0.33), Mix(Panel, Text, 0.12))) { og.FillRectangle(hb, x0, ly + 4.5f, 10f, 10f); }
-                    nameX = x0 + 16f;
+                    using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, 0.33), Mix(Panel, Text, 0.12))) { og.FillRectangle(hb, lx, gy + 4.5f, 10f, 10f); }
+                    nameX = lx + 15f;
                 }
-                QueueText(lg.Name, f, c, new RectangleF(nameX, ly, w - 100f - (nameX - x0), DrawerRowH), DT_LEFT);
-                QueueText(lg.Total, f, c, new RectangleF(xR - 90f, ly, 90f, DrawerRowH), DT_RIGHT);
-                ly += DrawerRowH;
+                QueueText(lg.Name, f, c, new RectangleF(nameX, gy, LegendW - 44f - (nameX - lx), DrawerRowH), DT_LEFT);
+                QueueText(lg.Total, f, c, new RectangleF(xR - 44f, gy, 44f, DrawerRowH), DT_RIGHT);
+                gy += DrawerRowH;
             }
         }
 
@@ -1255,6 +1318,9 @@ $script:awayIntervals  = @()      # stretches marked as finished for the day: @{
 $script:dayBtnHover    = $false
 $script:finishH        = 0       # extra height under the Lunch row while the Finish day button is showing
 $script:pressedDayBtn  = $false
+$script:tlScrollH      = $null    # the hour at the top of the timeline's view ($null until it is first placed)
+$script:tlPx           = 64.0     # window units per hour on the timeline (the zoom)
+$script:tlLastPt       = $null    # where the pointer last was over the drawer, to keep a drag following a wheel scroll
 $script:tlGeom         = $null    # where the strip was last drawn (window units), reported by the renderer
 $script:tlHover        = @{ Block = -1; Gap = -1; EdgeBlock = -1; Edge = '' }
 $script:tlDrag         = $null    # an edge or a stretch of gap being dragged
@@ -3214,6 +3280,8 @@ function Get-BudgetLines {
 }
 
 $DrawerRowH = 19
+$TimelineMinH = 420     # the timeline drawer is at least this tall, so there is room to see a few hours at once
+$TlMinPx = 24; $TlMaxPx = 240
 
 # The timeline needs the compiled drawing, so without it the drawer stays on the week table
 function Get-DrawerMode {
@@ -3304,7 +3372,7 @@ function Get-TimelineDrag($blocks, [int]$i, [string]$edge, [double]$targetH, [do
 # One day's stretches of time for the timeline strip, in order. Lunch is included because it shows as a
 # hatched gap. Rounding and other adjustments are left out, as they were never a stretch of real time.
 # Times for the drawing are hours since midnight. The strip covers the working hours plus anything
-# tracked outside them, to whole hours and at least four hours wide.
+# tracked outside them, with an hour either side, to whole hours and at least four hours wide.
 function Get-DayTimeline([datetime]$day) {
     $day = $day.Date
     $now = Get-Date
@@ -3354,8 +3422,9 @@ function Get-DayTimeline([datetime]$day) {
     }
     if ($isToday -and $null -ne $hi -and $now -gt $hi) { $hi = $now }
     if ($null -eq $lo) { $lo = $day.AddHours(8); $hi = $day.AddHours(18) }
-    $startH = [math]::Floor(($lo - $day).TotalHours)
-    $endH = [math]::Min(24.0, [math]::Ceiling(($hi - $day).TotalHours))
+    # An hour either side of the working day and what was tracked, so there is room to add time around it
+    $startH = [math]::Max(0.0, [math]::Floor(($lo - $day).TotalHours) - 1)
+    $endH = [math]::Min(24.0, [math]::Ceiling(($hi - $day).TotalHours) + 1)
     if ($endH - $startH -lt 4) {
         $endH = [math]::Min(24.0, $startH + 4)
         $startH = $endH - 4
@@ -3380,9 +3449,9 @@ function Get-DayTimeline([datetime]$day) {
 function Measure-DrawerHeight {
     $d = $script:drawerData
     if ((Get-DrawerMode) -eq 'timeline') {
-        # Header, tabs, hour labels and strip, then a line for each account used, plus total, lunch and unallocated
+        # A fixed height, with the day scrolling inside it (or taller if the account totals need more)
         $lines = @($script:drawerLegend).Count
-        return 10 + 34 + [Win.FullRenderer]::TabsH + [Win.FullRenderer]::AxisH + [Win.FullRenderer]::StripH + [Win.FullRenderer]::StripGap + $DrawerRowH * $lines + 10
+        return [math]::Max($TimelineMinH, 10 + 34 + [Win.FullRenderer]::TabsH + $DrawerRowH * $lines + 12)
     }
     $rows = 1 + @($d.Names).Count + 3
     $h = 10 + 34 + $DrawerRowH * $rows + 10
@@ -3429,6 +3498,9 @@ function Refresh-DrawerData {
     if ((Get-DrawerMode) -eq 'timeline') {
         $script:drawerTimeline = Get-DayTimeline $script:drawerDay
         $script:drawerLegend = @(Get-DayLegend $script:drawerDay $script:drawerData $script:drawerWeek)
+        # The drawer's height depends on the legend, so work it out before placing the view in it
+        $script:drawerH = Get-DrawerHeight
+        if ($null -eq $script:tlScrollH) { Reset-TimelineView } else { Set-TimelineScroll $script:tlScrollH }
     } else {
         $script:drawerTimeline = $null
         $script:drawerLegend = @()
@@ -3484,6 +3556,7 @@ function Build-DrawerModel {
         $m.Title = Get-DrawerDayTitle $script:drawerDay
         $m.NextEnabled = $script:drawerDay -lt [datetime]::Today
         $m.UndoEnabled = [bool]$script:undoLabel
+        $m.IsToday = ($script:drawerDay -eq [datetime]::Today)
         $m.FormatLabel = if ($script:hoursFormat -eq 'decimal') { 'h:mm' } else { 'Decimal' }
         $m.Timeline = Build-TimelineModel
         $script:drawerModel = $m
@@ -3564,7 +3637,7 @@ function Set-DrawerOpen([bool]$open, [switch]$Starting) {
     $tl = Get-TimerScreenPos
     $script:drawerOpen = $open
     if ($open) {
-        if (-not $Starting) { $script:drawerWeek = Get-WeekStart; $script:drawerDay = [datetime]::Today }
+        if (-not $Starting) { $script:drawerWeek = Get-WeekStart; $script:drawerDay = [datetime]::Today; $script:tlScrollH = $null }
         Refresh-DrawerData
     } elseif ($script:drawerCache) {
         $script:drawerCache.Dispose(); $script:drawerCache = $null; $script:drawerCacheKey = ''
@@ -3594,6 +3667,7 @@ function Set-DrawerMode([string]$mode) {
     Clear-TimelineDrag
     if ($mode -eq 'week') { $script:tlGeom = $null }
     if ($mode -eq 'timeline') {
+        $script:tlScrollH = $null
         # Today, unless the week table was showing a past week, then that week's last day so far
         $ws = $script:drawerWeek
         $script:drawerDay = if (-not $ws -or $ws -ge (Get-WeekStart)) { [datetime]::Today } else { $ws.AddDays(6) }
@@ -3629,34 +3703,69 @@ function Get-DrawerButtonAt($pt) {
     return $null
 }
 
+# ---- Timeline view: scrolling and zooming ----
+
+# The height of the part of the drawer that shows the day, under the title and tabs
+function Get-TimelineViewH {
+    return [math]::Max(40.0, [double]$script:drawerH - (10 + 34 + [Win.FullRenderer]::TabsH) - 12)
+}
+
+# Keep the view inside the day's range, which runs from the first hour to the last on the strip
+function Set-TimelineScroll([double]$h) {
+    $tl = $script:drawerTimeline
+    if (-not $tl) { return }
+    $farthest = [math]::Max([double]$tl.AxisStartH, [double]$tl.AxisEndH - (Get-TimelineViewH) / $script:tlPx)
+    $script:tlScrollH = [math]::Min([math]::Max($h, [double]$tl.AxisStartH), $farthest)
+}
+
+# Zoom by a factor, keeping the hour under the pointer where it is (or the middle of the view)
+function Set-TimelineZoom([double]$factor, $anchorH) {
+    $old = $script:tlPx
+    $new = [math]::Min([math]::Max($old * $factor, [double]$TlMinPx), [double]$TlMaxPx)
+    if ($new -eq $old) { return }
+    if ($null -eq $anchorH) { $anchorH = $script:tlScrollH + (Get-TimelineViewH) / $old / 2 }
+    $script:tlPx = $new
+    Set-TimelineScroll ($anchorH - ($anchorH - $script:tlScrollH) * $old / $new)
+}
+
+# Today opens with now about a third of the way down, other days at the start of the working day
+function Reset-TimelineView {
+    $tl = $script:drawerTimeline
+    if (-not $tl) { return }
+    $viewHours = (Get-TimelineViewH) / $script:tlPx
+    if ($script:drawerDay -eq [datetime]::Today -and $tl.ShowNow) { Set-TimelineScroll ($tl.NowH - 0.35 * $viewHours) }
+    elseif ($tl.HasWork) { Set-TimelineScroll ($tl.WorkStartH - 0.25) }
+    else { Set-TimelineScroll $tl.AxisStartH }
+}
+
 # ---- Timeline editing: dragging edges and filling gaps ----
 
 function New-TimelineHover { return @{ Block = -1; Gap = -1; EdgeBlock = -1; Edge = '' } }
 
-# The time under a window position, in hours since midnight, or $null when the strip isn't showing
+# The time at a window position, in hours since midnight, or $null when the timeline isn't showing.
+# It works for positions outside the view too, which a drag past the top or bottom relies on.
 function Get-TimelineTimeAt($pt) {
     $g = $script:tlGeom
     $tl = $script:drawerTimeline
-    if ((Get-DrawerMode) -ne 'timeline' -or -not $g -or -not $tl -or $g.W -le 0) { return $null }
-    $x = [double]($pt.X / $Zoom)
-    return $tl.AxisStartH + ($x - $g.X0) / $g.W * ($tl.AxisEndH - $tl.AxisStartH)
+    if ((Get-DrawerMode) -ne 'timeline' -or -not $g -or -not $tl -or $g.H -le 0 -or $null -eq $script:tlScrollH) { return $null }
+    return $script:tlScrollH + ([double]($pt.Y / $Zoom) - $g.Y) / $script:tlPx
 }
 
 function Test-InStrip($pt) {
     $g = $script:tlGeom
-    if ((Get-DrawerMode) -ne 'timeline' -or -not $g -or $g.W -le 0) { return $false }
+    if ((Get-DrawerMode) -ne 'timeline' -or -not $g -or $g.H -le 0) { return $false }
     $x = [double]($pt.X / $Zoom); $y = [double]($pt.Y / $Zoom)
-    return ($x -ge ($g.X0 - 6) -and $x -le ($g.X0 + $g.W + 6) -and $y -ge $g.Y -and $y -le ($g.Y + $g.H))
+    return ($x -ge $g.X0 -and $x -le ($g.X0 + $g.W) -and $y -ge $g.Y -and $y -le ($g.Y + $g.H))
 }
 
-# What is under the pointer on the strip: an edge, a block, a gap or nothing
+# What is under the pointer on the timeline: an edge, a card, a gap or nothing
 function Get-TimelineHit($pt) {
     $hit = New-TimelineHover
     if (-not (Test-InStrip $pt)) { return $hit }
     $tl = $script:drawerTimeline
     $h = Get-TimelineTimeAt $pt
-    $hoursPerUnit = ($tl.AxisEndH - $tl.AxisStartH) / $script:tlGeom.W    # the strip's width is in window units
-    $edge = Get-TimelineEdgeAt $tl.Blocks $h (6.0 * $hoursPerUnit)
+    $hoursPerUnit = 1.0 / $script:tlPx
+    $edge = Get-TimelineEdgeAt $tl.Blocks $h (5.0 * $hoursPerUnit)
     if ($edge) { $hit.EdgeBlock = $edge.Index; $hit.Edge = $edge.Edge; $hit.Block = $edge.Index; return $hit }
     $blocks = @($tl.Blocks)
     for ($i = 0; $i -lt $blocks.Count; $i++) {
@@ -3680,27 +3789,22 @@ function Format-ClockHours([double]$h) {
 }
 
 # Hover text for the strip, placed just under the part being pointed at
-function Show-TimelineTip($hit) {
-    $tl = $script:drawerTimeline; $g = $script:tlGeom
-    if (-not $tl -or -not $g) { return }
-    $text = $null; $atH = $null
+function Show-TimelineTip($hit, $pt) {
+    $tl = $script:drawerTimeline
+    if (-not $tl) { return }
+    $text = $null
     if ($hit.EdgeBlock -ge 0) {
-        $blk = $tl.Blocks[$hit.EdgeBlock]
         $text = switch ($hit.Edge) { 'start' { 'Drag to change the start time' } 'end' { 'Drag to change the finish time' } default { 'Drag to move the change-over' } }
-        $atH = if ($hit.Edge -eq 'start') { $blk.StartH } else { $blk.EndH }
     } elseif ($hit.Block -ge 0) {
         $blk = $tl.Blocks[$hit.Block]
         $text = $blk.Tip
         if (-not $blk.Editable) { $text += "`nStop it to change the times" }
-        $atH = $blk.StartH
     } elseif ($hit.Gap -ge 0) {
         $gp = $tl.Gaps[$hit.Gap]
         $text = "Nothing tracked from $(Format-ClockHours $gp.StartH) to $(Format-ClockHours $gp.EndH)`nClick to fill it, or drag across part of it"
-        $atH = $gp.StartH
     }
     if (-not $text) { return }
-    $x = $g.X0 + ($atH - $tl.AxisStartH) / ($tl.AxisEndH - $tl.AxisStartH) * $g.W
-    $tip.Show($text, $form, [int]($x * $Zoom), [int](($g.Y + $g.H + 4) * $Zoom), 6000)
+    $tip.Show($text, $form, [int]($pt.X + 14 * $Zoom), [int]($pt.Y + 20 * $Zoom), 6000)
 }
 
 # The latest the strip may be edited to, which is now for today
@@ -3726,7 +3830,7 @@ function Start-TimelineDrag($pt) {
     }
     if ($hit.Gap -ge 0) {
         $h = Get-TimelineTimeAt $pt
-        $script:tlDrag = @{ Kind = 'gap'; Gap = $hit.Gap; AnchorH = $h; StartX = $pt.X; Moved = $false }
+        $script:tlDrag = @{ Kind = 'gap'; Gap = $hit.Gap; AnchorH = $h; StartY = $pt.Y; Moved = $false }
         $script:tlHover = $hit
         $tip.Hide($form)
         return $true
@@ -3751,7 +3855,7 @@ function Update-TimelineDrag($pt) {
         $script:tlDragText = if ($drag.Edge -eq 'join') { Format-ClockHours $res.H }
                              else { '{0} ({1})' -f (Format-ClockHours $res.H), (Format-HM (($newEnd - $newStart) * 3600)) }
     } else {
-        if (-not $drag.Moved -and [math]::Abs($pt.X - $drag.StartX) -lt 4) { return }
+        if (-not $drag.Moved -and [math]::Abs($pt.Y - $drag.StartY) -lt 4) { return }
         $drag.Moved = $true
         $gp = $tl.Gaps[$drag.Gap]
         $a = [math]::Min([math]::Max($drag.AnchorH, $gp.StartH), $gp.EndH)
@@ -3911,17 +4015,20 @@ function Get-DrawerTableLines {
 function Invoke-DrawerButton($id) {
     switch ($id) {
         'prev' {
-            if ((Get-DrawerMode) -eq 'timeline') { $script:drawerDay = $script:drawerDay.AddDays(-1) }
+            if ((Get-DrawerMode) -eq 'timeline') { $script:drawerDay = $script:drawerDay.AddDays(-1); $script:tlScrollH = $null }
             else { $script:drawerWeek = $script:drawerWeek.AddDays(-7) }
             Update-DrawerContent
         }
         'next' {
             if ((Get-DrawerMode) -eq 'timeline') {
-                if ($script:drawerDay -lt [datetime]::Today) { $script:drawerDay = $script:drawerDay.AddDays(1); Update-DrawerContent }
+                if ($script:drawerDay -lt [datetime]::Today) { $script:drawerDay = $script:drawerDay.AddDays(1); $script:tlScrollH = $null; Update-DrawerContent }
             }
             elseif ($script:drawerWeek -lt (Get-WeekStart)) { $script:drawerWeek = $script:drawerWeek.AddDays(7); Update-DrawerContent }
         }
         'undo' { Undo-LogChange }
+        'zoomin' { Set-TimelineZoom 1.25 $null; $script:tlHover = New-TimelineHover; Request-Redraw }
+        'zoomout' { Set-TimelineZoom 0.8 $null; $script:tlHover = New-TimelineHover; Request-Redraw }
+        'now' { Reset-TimelineView; Request-Redraw }
         'week' { Set-DrawerMode 'week' }
         'timeline' { Set-DrawerMode 'timeline' }
         'copy' {
@@ -4346,6 +4453,8 @@ function Sync-RendererState {
     $r.TlSelStartH = if ($script:tlSel) { [double]$script:tlSel.StartH } else { -1.0 }
     $r.TlSelEndH = if ($script:tlSel) { [double]$script:tlSel.EndH } else { -1.0 }
     $r.TlDragText = [string]$script:tlDragText; $r.TlDragAtH = [double]$script:tlDragAt
+    $r.TlScrollH = if ($null -ne $script:tlScrollH) { [double]$script:tlScrollH } else { 0.0 }
+    $r.TlPx = [float]$script:tlPx
     $r.Drawer = $script:drawerModel
 }
 
@@ -6511,10 +6620,11 @@ $form.Add_MouseMove({
     if (Test-InDrawer $_.Location) {
         $btn = Get-DrawerButtonAt $_.Location
         $form.Cursor = if ($btn) { [System.Windows.Forms.Cursors]::Hand } else { [System.Windows.Forms.Cursors]::Default }
-        # On the timeline strip, edges, blocks and gaps each have their own hover and cursor
+        $script:tlLastPt = $_.Location
+        # On the timeline, edges, cards and gaps each have their own hover and cursor
         $hit = if ($btn) { New-TimelineHover } else { Get-TimelineHit $_.Location }
         if (-not $btn) {
-            if ($hit.EdgeBlock -ge 0) { $form.Cursor = [System.Windows.Forms.Cursors]::SizeWE }
+            if ($hit.EdgeBlock -ge 0) { $form.Cursor = [System.Windows.Forms.Cursors]::SizeNS }
             elseif ($hit.Gap -ge 0) { $form.Cursor = [System.Windows.Forms.Cursors]::Hand }
         }
         if ($btn -ne $script:drawerHover -or -not (Test-SameTimelineHit $hit $script:tlHover) -or $null -ne $script:hover -or $script:handleHover) {
@@ -6522,7 +6632,7 @@ $form.Add_MouseMove({
             $script:tlHover = $hit
             $script:hover = $null; $script:gripHover = $null; $script:roundHover = $null; $script:handleHover = $false
             $tip.Hide($form)
-            if (-not $btn) { Show-TimelineTip $hit }
+            if (-not $btn) { Show-TimelineTip $hit $_.Location }
             Request-Redraw
         }
         return
@@ -6593,6 +6703,24 @@ $form.Add_MouseMove({
         $script:roundHover = $round
         Request-Redraw
     }
+})
+# Mouse wheel over the timeline scrolls it, and with Ctrl held it zooms around the pointer
+$form.Add_MouseWheel({
+    try {
+        if ($script:mode -ne 'full' -or -not $script:drawerOpen -or (Get-DrawerMode) -ne 'timeline') { return }
+        if (-not (Test-InDrawer $_.Location)) { return }
+        if ([System.Windows.Forms.Control]::ModifierKeys -band [System.Windows.Forms.Keys]::Control) {
+            Set-TimelineZoom $(if ($_.Delta -gt 0) { 1.25 } else { 0.8 }) (Get-TimelineTimeAt $_.Location)
+        } else {
+            Set-TimelineScroll ($script:tlScrollH - ($_.Delta / 120.0) * 48.0 / $script:tlPx)
+        }
+        $tip.Hide($form)
+        if ($script:tlDrag) { Update-TimelineDrag $_.Location }
+        else {
+            $script:tlHover = if (Test-InStrip $_.Location) { Get-TimelineHit $_.Location } else { New-TimelineHover }
+            Request-Redraw
+        }
+    } catch { Write-Log "Timeline scroll error: $($_.Exception.Message)" }
 })
 $form.Add_MouseUp({
     try {
