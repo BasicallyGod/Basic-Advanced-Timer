@@ -12,6 +12,7 @@ Basic’s Advanced Timer is an always-on-top Windows timer for tracking time aga
 | `StartAccountTimer2.vbs` | Portable relative-path launcher without a console window. |
 | `tests/timeline-projection.ps1` | Synthetic regression tests for session projections, grouping and gap editing. |
 | `tests/decimal-reconciliation.ps1` | Synthetic tests for decimal-hour accounting and CSV exports. |
+| `tests/settings-migration.ps1` | Synthetic tests for legacy preference migration, backups, atomic saves and branding. |
 | `tests/settings-migration.ps1` | Synthetic tests for consolidated preferences, legacy migration and UI branding. |
 | `.github/workflows/powershell-checks.yml` | Runs both regression suites under Windows PowerShell 5.1. |
 | `README.md`, `CHANGELOG.md` | User guide and chronological development record. |
@@ -62,7 +63,7 @@ The CSV stores recorded intervals, manually added/edited intervals, adjustments 
 
 Visual behaviour must be validated on Windows. The following checks catch common mistakes, and the three synthetic suites already run in GitHub Actions on Windows:
 
-1. Parse `AccountTimer2.ps1` and the test scripts with `System.Management.Automation.Language.Parser.ParseFile`. Run `tests/timeline-projection.ps1` and `tests/decimal-reconciliation.ps1` in Windows PowerShell 5.1.
+1. Parse `AccountTimer2.ps1` and the test scripts with `System.Management.Automation.Language.Parser.ParseFile`. Run `tests/timeline-projection.ps1`, `tests/decimal-reconciliation.ps1` and `tests/settings-migration.ps1` in Windows PowerShell 5.1.
 2. Confirm the embedded C# blocks compile under Windows PowerShell 5.1 using `Add-Type`; the synthetic tests do not themselves exercise the interactive layered window.
 3. Unit-test non-visual functions (calculations, file reading and writing, formatting) by extracting them from the script with the PowerShell parser and running them against sample data.
 4. Search new code for variable names that clash with the script-level ones above.
@@ -110,3 +111,14 @@ The working tree deliberately contains only the current app, its launcher, docum
 - `Write-SettingSections` supports atomic multi-section updates such as working hours and date overrides. `Save-SettingsStore` writes a UTF-8 temporary file in the same directory and atomically replaces the settings JSON on Windows, keeping its prior contents in `.json.bak`. Do not bypass it when changing preferences. Avoid storing session rows or crash recovery in preferences.
 - `Timesheets/*.csv`, `account-timer-state.txt` (running session recovery), `account-timer-away.txt` (historical away periods) and `account-timer-themes.txt` (editable theme catalogue) are deliberately separate. The latter filenames are stable user-data paths, not current branding.
 - Regression suite `tests/settings-migration.ps1` checks migration, archive creation, settings persistence, JSON backup and branded taskbar ID. Run alongside existing timeline and decimal regression suites in Windows PowerShell 5.1.
+
+
+## v2.23 — unified preferences and application identity
+
+The app's visible name and Windows taskbar AppUserModelID are now `Basic’s Advanced Timer` and `Basics.AdvancedTimer` respectively. In PowerShell source, the name uses `[char]0x2019` so Windows PowerShell 5.1 does not depend on the encoding of the script. Existing script and launcher filenames remain unchanged to preserve installed shortcuts.
+
+The 13 historical per-preference text files are imported **once** by `Initialize-SettingsStore` into `basics-advanced-timer.settings.json` in the app folder. Schema v1 stores a `sections` object containing arrays of the original text lines, with keys `accounts`, `workingHours`, `dayOverrides`, `budgets`, `size`, `theme`, `transparency`, `blur`, `view`, `positions`, `merge`, `effects`, and `drawer`. The original parsing and validation logic for each section remains in place. `Read-SettingSection`/`Read-SettingFirst` and `Write-SettingSection`/`Write-SettingSections` are the single API for persistent preferences. `Save-SettingsStore` writes a temporary UTF-8 JSON file, then atomically replaces the previous settings file while retaining a `.bak` copy.
+
+On initial migration, the importer writes/verifies JSON **before** moving the historical files to `Timesheets/legacy-settings-backup/`; the user's originals are not deleted. A corrupt or unsupported JSON schema aborts startup rather than overwriting the file with defaults. Backup, migration, restart and independent-setting updates are covered by `tests/settings-migration.ps1`. The settings JSON and backups are gitignored.
+
+**Not preferences:** `Timesheets/sessions.csv`, notes, grouped entry references, positioned credit, undo snapshots, generated weekly reports, `account-timer-state.txt` (active timer recovery), `account-timer-away.txt` (historical away intervals), `account-timer-themes.txt` (editable multi-line theme catalogue), and `account-timer-error.log` stay separate. This is deliberate; don't merge them into a monolithic preferences file. Do not change filenames for these data records as part of branding.

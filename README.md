@@ -20,15 +20,15 @@ Keep `StartAccountTimer2.vbs` and `AccountTimer2.ps1` together. The launcher use
 - Review the week in the side drawer or separate weekly window. Scroll and zoom the daily timeline, drag session boundaries, and inspect short sessions and overlapping work.
 - Choose between **positioning existing credited time** and **adding new time** when filling a timeline gap. The first action does not increase account totals.
 - Group sessions in the weekly view without deleting the original recordings, and ungroup them to edit individual entries.
-- Choose themes, account-list transparency, interface size, and decimal-hours or hours-and-minutes display. Preferences are stored in a single JSON file.
+- Choose themes, account-list transparency, interface size, and decimal-hours or hours-and-minutes display. Preference changes are saved in one portable JSON configuration file. Preferences are stored in a single JSON file.
 - Export a weekly account/day summary and detailed time-entry CSV with reconciled two-decimal hours.
 
 ## Repository files
 
 | Path | Purpose |
 | --- | --- |
-| `AccountTimer2.ps1` | Current application, including its UI, tracking, editing and exports |
-| `StartAccountTimer2.vbs` | Relative-path launcher without a console window |
+| `AccountTimer2.ps1` | Current Basic’s Advanced Timer application, including its UI, tracking, editing and exports |
+| `StartAccountTimer2.vbs` | Relative-path launcher without a console window; filename retained for existing shortcuts |
 | `tests/timeline-projection.ps1` | Synthetic timeline and credit-position regression checks |
 | `tests/decimal-reconciliation.ps1` | Synthetic accounting and CSV-export reconciliation checks |
 | `tests/settings-migration.ps1` | Synthetic settings migration, persistence and branding checks |
@@ -67,6 +67,18 @@ Your work records, crash recovery and editable theme catalogue remain separate f
 
 To move to another computer or make a complete backup, copy the **entire application folder**, including `Timesheets`, the new `.json` settings file and the remaining `.txt` state and theme files. Keep the two newer metadata CSVs with `sessions.csv`; they affect how historical merged time and manual groups appear. On a fresh download, the timer creates local configuration and time files as they are needed.
 
+## Upgrading an existing installation (v2.23)
+
+Close the timer and **copy your entire existing application folder to a backup location** before replacing `AccountTimer2.ps1`. Keep the `StartAccountTimer2.vbs` filename: shortcuts created for earlier versions continue working, although the application now displays **Basic’s Advanced Timer** in Windows.
+
+On the first run, v2.23 imports the 13 existing preference files (`account-timer-accounts.txt`, `account-timer-settings.txt`, `account-timer-days.txt`, `account-timer-budgets.txt`, and appearance/view preference files) into `basics-advanced-timer.settings.json`. It verifies the new settings file and then moves the original preference files to `Timesheets/legacy-settings-backup/`; **it does not delete them**.
+
+Editable `account-timer-themes.txt`, `account-timer-state.txt`, `account-timer-away.txt`, error logs and all timesheet CSVs remain separate and are not migrated. The JSON settings writer uses a temporary file and a `.bak` copy of the previous version to reduce the risk of losing preferences. If the JSON becomes unreadable, startup stops with a message rather than silently resetting your settings.
+
+**Important:** Once the migration is complete, older versions of the script do not read the new JSON settings file. To roll back to an old script, restore the saved application folder or copy the original preference files back from the legacy backup. Always test upgrades against a separate copy of your live data.
+
+The GitHub repository keeps its existing URL and the PowerShell/VBS filenames for compatibility; the on-screen application and documentation use the new brand.
+
 ## Recorded time versus credited time
 
 `sessions.csv` determines credited hours. A manually added entry increases credited time, while a rounded or adjusted row changes the credited total without necessarily describing a continuous clock interval. Older destructive `merged` records retain credited hours but may not retain the original individual timestamps.
@@ -86,6 +98,7 @@ From a PowerShell prompt in the repository folder:
 ```powershell
 powershell.exe -NoProfile -File .\tests\timeline-projection.ps1
 powershell.exe -NoProfile -File .\tests\decimal-reconciliation.ps1
+powershell.exe -NoProfile -File .\tests\settings-migration.ps1
 powershell.exe -NoProfile -File .\tests\settings-migration.ps1
 ```
 

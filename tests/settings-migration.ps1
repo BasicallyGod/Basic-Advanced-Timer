@@ -1,25 +1,27 @@
-# Regression tests for portable preference consolidation and legacy migration.
-# Windows PowerShell 5.1. Uses disposable synthetic values, never personal files.
+# Synthetic portability, settings migration, and branding tests for Windows PowerShell 5.1.
+# Never reads the user's timesheets, credentials, themes, or configuration files.
 $ErrorActionPreference = 'Stop'
 $source = Join-Path (Split-Path $PSScriptRoot -Parent) 'AccountTimer2.ps1'
-$tokens = $null; $errors = $null
-$ast = [System.Management.Automation.Language.Parser]::ParseFile($source, [ref]$tokens, [ref]$errors)
-if (@($errors).Count -gt 0) { throw "Application PowerShell parse errors: $($errors -join '; ')" }
+$tokens = $null
+$parseErrors = $null
+$ast = [System.Management.Automation.Language.Parser]::ParseFile($source, [ref]$tokens, [ref]$parseErrors)
+if (@($parseErrors).Count -gt 0) { throw "Application has parse errors: $($parseErrors -join '; ')" }
 $names = @('Save-SettingsStore', 'Test-SettingSection', 'Read-SettingSection',
-           'Read-SettingFirst', 'Write-SettingSections', 'Write-SettingSection', 'Initialize-SettingsStore')
+           'Read-SettingFirst', 'Write-SettingSections', 'Write-SettingSection',
+           'Initialize-SettingsStore')
 foreach ($name in $names) {
-    $fn = @($ast.FindAll({ param($node)
+    $found = @($ast.FindAll({ param($node)
         $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
     }, $true))
-    if ($fn.Count -ne 1) { throw "Expected exactly one function $name, found $($fn.Count)" }
-    Invoke-Expression $fn[0].Extent.Text
+    if ($found.Count -ne 1) { throw "Expected one function $name, found $($found.Count)" }
+    Invoke-Expression $found[0].Extent.Text
 }
-function Assert([bool]$condition, [string]$reason) { if (-not $condition) { throw $reason } }
-$fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('basics-settings-test-' + [guid]::NewGuid().ToString('N'))
-[void](New-Item -ItemType Directory -Path $fixtureRoot -Force)
+function Assert([bool]$result, [string]$why) { if (-not $result) { throw $why } }
+$root = Join-Path ([IO.Path]::GetTempPath()) ('basics-timer-settings-' + [guid]::NewGuid().ToString('N'))
+[void](New-Item -ItemType Directory -Path $root -Force)
 try {
-    $script:AppRoot = $fixtureRoot
-    $script:SettingsStoreFile = Join-Path $fixtureRoot 'basics-advanced-timer.settings.json'
+    $script:AppRoot = $root
+    $script:SettingsStoreFile = Join-Path $root 'basics-advanced-timer.settings.json'
     $script:SettingsStoreVersion = 1
     $script:SettingsSections = @{}
     $script:LegacySettings = [ordered]@{
@@ -28,45 +30,51 @@ try {
         workingHours = 'account-timer-settings.txt'
         dayOverrides = 'account-timer-days.txt'
         theme = 'account-timer-theme.txt'
+        budgets = 'account-timer-budgets.txt'
     }
-    $accountLines = @('First synthetic client', "Another account`thidden")
-    $hours = @('start=09:30','end=18:00','days=Mon,Tue,Wed,Thu,Fri', 'shift.fri=10:00,16:00')
-    Set-Content -Path (Join-Path $fixtureRoot 'account-timer-accounts.txt') -Value $accountLines
-    Set-Content -Path (Join-Path $fixtureRoot 'account-timer-settings.txt') -Value $hours
-    Set-Content -Path (Join-Path $fixtureRoot 'account-timer-days.txt') -Value @('2026-10-08' + "`toff")
-    Set-Content -Path (Join-Path $fixtureRoot 'account-timer-theme.txt') -Value 'Lavender'
-    Set-Content -Path (Join-Path $fixtureRoot 'account-timer-size.txt') -Value '1.25'
+    $accounts = @('One synthetic account', "Another synthetic account`thidden")
+    $hours = @('start=09:30', 'end=18:00', 'days=Mon,Tue,Wed,Thu,Fri', 'shift.fri=10:00,16:00')
+    Set-Content -Path (Join-Path $root 'account-timer-accounts.txt') -Value $accounts
+    Set-Content -Path (Join-Path $root 'account-timer-settings.txt') -Value $hours
+    Set-Content -Path (Join-Path $root 'account-timer-days.txt') -Value ("2026-10-08`toff")
+    Set-Content -Path (Join-Path $root 'account-timer-theme.txt') -Value 'Lavender'
+    Set-Content -Path (Join-Path $root 'account-timer-size.txt') -Value '1.25'
+    Set-Content -Path (Join-Path $root 'account-timer-budgets.txt') -Value ("One synthetic account`t12.5`tweek")
     Initialize-SettingsStore
-    Assert (Test-Path $script:SettingsStoreFile) 'Migration did not create the JSON settings file.'
-    Assert ((Read-SettingFirst 'theme') -eq 'Lavender') 'Theme selection was lost on migration.'
-    Assert ((Read-SettingFirst 'size') -eq '1.25') 'Interface scale was lost on migration.'
-    Assert ((@(Read-SettingSection 'accounts') -join '|') -eq ($accountLines -join '|')) 'Accounts or hidden flags were lost.'
-    Assert ((@(Read-SettingSection 'workingHours') -join '|') -eq ($hours -join '|')) 'Working hours and shifts were lost.'
-    $backup = Join-Path $fixtureRoot 'Timesheets\legacy-settings-backup'
-    Assert (Test-Path (Join-Path $backup 'account-timer-accounts.txt')) 'Original account settings were not backed up.'
-    Assert (Test-Path (Join-Path $backup 'account-timer-settings.txt')) 'Original working-hours settings were not backed up.'
-    Assert (-not (Test-Path (Join-Path $fixtureRoot 'account-timer-accounts.txt'))) 'Legacy account settings were not archived.'
-    $current = ConvertFrom-Json -InputObject ([IO.File]::ReadAllText($script:SettingsStoreFile))
-    Assert ($current.schemaVersion -eq 1) 'Settings schema version is incorrect.'
-    Write-SettingSections @{ accounts = @('Account X', "Account Y`thidden"); theme = @('Midnight') }
-    Assert ((Read-SettingFirst 'theme') -eq 'Midnight') 'New theme selection was not saved.'
-    Assert (Test-Path "$script:SettingsStoreFile.bak") 'Atomic update must leave a previous JSON backup.'
+    Assert (Test-Path $script:SettingsStoreFile) 'Migration failed to create settings JSON.'
+    Assert ((Read-SettingFirst 'size') -eq '1.25') 'UI size lost during migration.'
+    Assert ((Read-SettingFirst 'theme') -eq 'Lavender') 'Theme choice lost during migration.'
+    Assert ((@(Read-SettingSection 'accounts') -join '|') -eq ($accounts -join '|')) 'Account order/visibility lost during migration.'
+    Assert ((@(Read-SettingSection 'workingHours') -join '|') -eq ($hours -join '|')) 'Working hours or weekday shifts lost.'
+    Assert ((Read-SettingFirst 'dayOverrides') -eq ("2026-10-08`toff")) 'Day override lost.'
+    Assert ((Read-SettingFirst 'budgets') -eq ("One synthetic account`t12.5`tweek")) 'Budget lost.'
+    $backup = Join-Path $root 'Timesheets\legacy-settings-backup'
+    foreach ($name in @($script:LegacySettings.Values)) {
+        Assert (Test-Path (Join-Path $backup $name)) "Legacy backup missing $name."
+        Assert (-not (Test-Path (Join-Path $root $name))) "Legacy file was not archived: $name."
+    }
+    $json = ConvertFrom-Json -InputObject ([IO.File]::ReadAllText($script:SettingsStoreFile))
+    Assert ($json.schemaVersion -eq 1) 'Missing JSON schema version.'
+    Write-SettingSections @{ theme = @('Midnight'); accounts = @('Account X', "Account Y`thidden") }
+    Assert ((Read-SettingFirst 'theme') -eq 'Midnight') 'New theme not immediately applied.'
+    Assert (Test-Path "$script:SettingsStoreFile.bak") 'Atomic save did not retain a previous JSON backup.'
     $script:SettingsSections = @{}
     Initialize-SettingsStore
-    Assert ((Read-SettingFirst 'theme') -eq 'Midnight') 'Saved settings did not survive a restart.'
-    Assert ((@(Read-SettingSection 'accounts') -join '|') -eq ('Account X|Account Y' + "`thidden")) 'Updated accounts were not loaded.'
+    Assert ((Read-SettingFirst 'theme') -eq 'Midnight') 'Updated theme lost after reload.'
+    Assert ((@(Read-SettingSection 'accounts') -join '|') -eq ('Account X|Account Y' + "`thidden")) 'Updated account lines lost after reload.'
+    Assert ((Read-SettingFirst 'workingHours') -eq $hours[0]) 'Unchanged working hours overwritten.'
     Write-SettingSection 'blur' @('1')
-    Assert ((Read-SettingFirst 'blur') -eq '1') 'Individual setting updates must persist.'
-    Assert ((Read-SettingFirst 'workingHours') -eq $hours[0]) 'Updating unrelated settings lost working hours.'
+    Assert ((Read-SettingFirst 'blur') -eq '1') 'Single-setting write failed.'
     $script:SettingsSections = @{}
     Initialize-SettingsStore
-    Assert ((Read-SettingFirst 'blur') -eq '1') 'Blur setting lost after reload.'
-    # Source content must not contain old per-preference write calls.
+    Assert ((Read-SettingFirst 'blur') -eq '1') 'Single-setting write lost after reload.'
+    Assert ((Read-SettingFirst 'theme') -eq 'Midnight') 'Writing blur overwrote unrelated preferences.'
     $appText = [IO.File]::ReadAllText($source)
-    Assert (-not $appText.Contains('Set-Content -Path $AccountsFile')) 'Application still writes fragmented account settings.'
-    Assert (-not $appText.Contains('Set-Content -Path $SettingsFile')) 'Application still writes fragmented working-hour settings.'
-    Assert ($appText.Contains('Basics.AdvancedTimer')) 'The Windows taskbar ID was not updated.'
-    Write-Host 'Settings migration, atomic update and branding tests passed.'
+    Assert ($appText.Contains('Basics.AdvancedTimer')) 'Windows app identity was not updated.'
+    Assert ($appText.Contains('basics-advanced-timer.settings.json')) 'Consolidated settings location not referenced.'
+    Assert (-not $appText.Contains('Set-Content -Path $AccountsFile')) 'App still writes old account preference file.'
+    Assert (-not $appText.Contains('Set-Content -Path $SettingsFile')) 'App still writes old working-hours preference file.'
+    Write-Host 'Settings migration, backup, restart, and branding tests passed.'
 } finally {
-    Remove-Item $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
