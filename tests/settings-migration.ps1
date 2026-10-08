@@ -19,6 +19,7 @@ $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('basics-settings-test-' + [
 [void](New-Item -ItemType Directory -Path $fixtureRoot -Force)
 try {
     $script:SettingsNonInteractive = $true
+    $script:SettingsTrace = $true
     $script:AppRoot = $fixtureRoot
     $script:SettingsStoreFile = Join-Path $fixtureRoot 'basics-advanced-timer.settings.json'
     $script:SettingsStoreVersion = 1
