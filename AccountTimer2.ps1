@@ -15,10 +15,18 @@
 #
 # Drawer: click the round button at the top left of the full timer (or right-click, Show drawer)
 # to slide out this week's hours by account and day, and budgets, beside the timer.
-# The Timeline tab shows one day as a strip, with a block for each stretch of time, Lunch as a hatched
-# gap and a marker for now. Point at a block to see what it was; Previous and Next move between days.
-# Drag the edge of a block to change its time (5 minute steps, Shift for 1 minute, Escape to cancel),
-# or click a gap to fill it with an account. Undo reverses the last change.
+# The Timeline tab shows one day like a calendar, with hours down the left and a card for each stretch of
+# time, Lunch as a hatched gap and a line for now. Scroll with the mouse wheel, zoom with Ctrl and the wheel
+# (or the plus and minus buttons), and use Now to jump back. Point at a card to see what it was; Previous and
+# Next move between days. Drag the top or bottom edge of a card to change its time (5 minute steps, Shift
+# for 1 minute, Escape to cancel), or click a gap to fill it with an account. Undo reverses the last change.
+#
+# Size: right-click, Appearance, Size makes the whole timer and drawer smaller or larger (remembered).
+#
+# Hours: right-click, Working hours, Hours and days, gives each working day its own start and finish
+# (for shift patterns). From 30 minutes before the end of the day, a Finish day button appears under the
+# Lunch row (and the menu has Finish for the day at any time once the day has started). It stops unallocated
+# time and overtime counting until you carry on.
 # Each week's individual entries are also saved to 'Week commencing <date> entries.csv'.
 #
 # Top: billable time since the start time, less lunch, as in the original timer.
@@ -102,7 +110,7 @@ function Get-CursorDpi {
 
 function Set-MenuScale($strip) {
     if (-not $script:perMonitor) { return }
-    $k = (Get-CursorDpi) / 96
+    $k = (Get-CursorDpi) / 96 * [math]::Max(1.0, $Scale)    # menus follow the size setting when it is larger
     $font = New-Object System.Drawing.Font('Segoe UI', [float](12 * $k), [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
     $icons = New-Object System.Drawing.Size([int](16 * $k), [int](16 * $k))
     $strip.Font = $font
@@ -315,6 +323,7 @@ namespace Win {
         public Color Colour = Color.Gray;
         public string Tip = "";
         public bool Editable;               // false for what is running now, which can't be dragged
+        public int Lane, Lanes = 1;         // blocks that overlap sit side by side, this one in lane Lane of Lanes
     }
 
     // A stretch of the day with nothing tracked, which can be filled
@@ -347,13 +356,14 @@ namespace Win {
         public List<DrawerBudget> Budgets = new List<DrawerBudget>();
         public string BudgetsHeading = "BUDGETS";
         public string FormatLabel = "h:mm";
-        public bool NextEnabled, UndoEnabled;
+        public bool NextEnabled, UndoEnabled, IsToday;
         public TimelineModel Timeline;
     }
 
     // Draws the full view (timer, drawer, shadow and rim) into one image with see-through areas
     public class FullRenderer {
         public Font FontDigits, FontLabel, FontRow, FontOvertime, FontButton, FontSmall, FontDrawer, FontDrawerBold;
+        public Font FontTimeline, FontTimelineBold, FontTimelineSmall;   // the timeline's own, larger text
         public Color Panel, Circle, CircleHot, Fill;
         public Color Text = Color.White;
         public Color LunchBand = Color.FromArgb(45, 0, 0, 0);
@@ -365,7 +375,7 @@ namespace Win {
         public float RoundR = 8f, RoundDownX = 150f, RoundUpX = 170f;
         public float DrawerW = 520f, DrawerH = 0f, DrawerRowH = 19f;
         // Heights within the drawer, which the PowerShell side uses to work out how tall the drawer must be
-        public const float TabsH = 26f, AxisH = 16f, StripH = 44f, StripGap = 14f;
+        public const float TabsH = 26f;
         public float Margin = 10f, TimerOffX = 0f, TimerOffY = 0f;
         public int ListAlpha = 255;
         public float TextSharpen = 0.8f;
@@ -379,6 +389,10 @@ namespace Win {
         public bool Reordering;
         public string RoundHover = "";
         public bool CollapseHover, HandleHover, DrawerOpen;
+        // The Finish day (or Carry on) button under the Lunch row; its size and place match $DayBtn in PowerShell
+        public string DayBtnText = "";
+        public bool DayBtnHover;
+        public float DayBtnW = 150f, DayBtnH = 22f;
         public DrawerModel Drawer;
         public string DrawerHover = "";
         // Timeline hover and drag state, set by PowerShell each frame. The strip's own position is
@@ -388,7 +402,9 @@ namespace Win {
         public double TlSelStartH = -1, TlSelEndH = -1;
         public string TlDragText = "";
         public double TlDragAtH;
-        public float TlX0, TlW, TlY, TlH;
+        public float TlX0, TlW, TlY, TlH;   // the timeline's cards column and viewport as last drawn, reported back
+        public double TlScrollH;            // the hour at the top of the viewport
+        public float TlPx = 64f;            // window units per hour (the zoom)
         public List<DrawerButton> DrawerButtons = new List<DrawerButton>();
 
         StringFormat sfCentre, sfLeft, sfRight, sfName;
@@ -697,6 +713,14 @@ namespace Win {
                         }
                     }
                 }
+
+                // Finish day button, centred under the Lunch row
+                if (DayBtnText.Length > 0) {
+                    RectangleF dbr = new RectangleF((BaseW - DayBtnW) / 2f, BaseH - DayBtnH - 8f, DayBtnW, DayBtnH);
+                    using (GraphicsPath dbp = RoundRect(dbr.X, dbr.Y, dbr.Width, dbr.Height, dbr.Height / 2f))
+                    using (SolidBrush dbb = new SolidBrush(DayBtnHover ? CircleHot : Circle)) { g.FillPath(dbb, dbp); }
+                    ListText(g, DayBtnText, FontLabel, Text, dbr, sfCentre);
+                }
             }
         }
 
@@ -863,7 +887,7 @@ namespace Win {
 
                 // Tabs for switching between the week's table and the day's timeline
                 float tabX = x0;
-                string[][] tabs = new string[][] { new string[] { "week", "Week" }, new string[] { "timeline", "Timeline" } };
+                string[][] tabs = new string[][] { new string[] { "timeline", "Timeline" }, new string[] { "week", "Week" } };
                 foreach (string[] tab in tabs) {
                     float tw = og.MeasureString(tab[1], FontButton).Width + 20;
                     RectangleF rect = new RectangleF(tabX, y, tw, 22);
@@ -878,6 +902,27 @@ namespace Win {
                         DrawerButtons.Add(db);
                     }
                     tabX += tw + 6;
+                }
+                // Zoom and jump-to-now, right-aligned in the same row
+                if (timeline) {
+                    float zx = xR;
+                    string[][] tools = new string[][] { new string[] { "now", "Now" }, new string[] { "zoomin", "+" }, new string[] { "zoomout", "-" } };
+                    foreach (string[] tool in tools) {
+                        float tw = Math.Max(22f, og.MeasureString(tool[1], FontButton).Width + 16);
+                        zx -= tw;
+                        RectangleF rect = new RectangleF(zx, y, tw, 22);
+                        bool enabled = !(tool[0] == "now" && !d.IsToday);
+                        Color col = !enabled ? Mix(Panel, Circle, 0.45) : (DrawerHover == tool[0] ? CircleHot : Circle);
+                        using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 11f))
+                        using (SolidBrush bb = new SolidBrush(col)) { og.FillPath(bb, bp); }
+                        QueueText(tool[1], FontButton, enabled ? textC : Mix(col, Text, 0.5), rect, DT_CENTER);
+                        if (enabled) {
+                            DrawerButton db = new DrawerButton();
+                            db.Id = tool[0]; db.Rect = rect;
+                            DrawerButtons.Add(db);
+                        }
+                        zx -= 6;
+                    }
                 }
                 y += TabsH;
 
@@ -924,95 +969,119 @@ namespace Win {
             }
         }
 
-        // The day as one strip: each stretch of time is a coloured block, Lunch is hatched, the gaps are
-        // left empty, working hours are a little lighter and a marker shows where now is.
-        // Hover areas for the blocks are added to DrawerButtons with ids of the form tip:<number>.
+        // The day as a vertical timeline, like a calendar day: hours run down the left, each stretch of time is a
+        // card, Lunch is hatched, gaps are left empty, working hours are a little lighter and a line shows where
+        // now is. Only the part in the viewport is drawn. PowerShell holds the scroll position (TlScrollH, in
+        // hours) and the zoom (TlPx, window units per hour), and works out hover and dragging from the viewport
+        // reported back in TlX0, TlW, TlY and TlH.
+        const float GutterW = 48f, LegendW = 132f;
+        public const float TlRowH = 22f;
+
+        static string Clock(double h) {
+            int m = (int)Math.Round(h * 60);
+            return (m / 60).ToString("00") + ":" + (m % 60).ToString("00");
+        }
+
+        static string Dur(double hours) {
+            int m = (int)Math.Round(hours * 60);
+            return (m / 60).ToString() + ":" + (m % 60).ToString("00");
+        }
+
+        // Windows draws the queued text afterwards with no clip, so only text that sits wholly inside the viewport is queued
+        void QueueIn(RectangleF vp, string s, Font f, Color c, RectangleF r, uint align) {
+            if (r.Top < vp.Top - 0.5f || r.Bottom > vp.Bottom + 0.5f) return;
+            QueueText(s, f, c, r, align);
+        }
+
         void DrawTimeline(Graphics og, TimelineModel t, float x0, float xR, float y, Pen sep, Font fText, Font fBold) {
             Color textC = Text;
             Color faintC = Mix(Panel, Text, 215 / 255.0);
-            float w = xR - x0;
-            double span = Math.Max(1.0, t.AxisEndH - t.AxisStartH);
-            float perHour = (float)(w / span);
+            // The timeline's own, larger fonts (the drawer's regular ones if none were given)
+            Font fT = FontTimeline ?? fText, fTB = FontTimelineBold ?? fBold, fTS = FontTimelineSmall ?? fText;
+            float vh = Math.Max(DrawerH, BaseH) - (y - Margin) - 12f;
+            float bx = x0 + GutterW, bw = (xR - LegendW - 10f) - bx;
+            float lx = xR - LegendW;
+            RectangleF vp = new RectangleF(x0, y, bx + bw - x0, vh);
+            TlX0 = bx; TlW = bw; TlY = y; TlH = vh;
+            float px = TlPx;
+            double scroll = TlScrollH;
+            double viewH = vh / px;
+            Func<double, float> yOf = delegate(double h) { return y + (float)((h - scroll) * px); };
 
-            // Hour labels, thinned out when there isn't room for every hour
-            int firstHour = (int)Math.Ceiling(t.AxisStartH - 0.001), lastHour = (int)Math.Floor(t.AxisEndH + 0.001);
-            int step = 1;
-            while (perHour * step < 48f) step++;
-            for (int hr = firstHour; hr <= lastHour; hr++) {
-                if ((hr - firstHour) % step != 0) continue;
-                float lx = x0 + (float)((hr - t.AxisStartH) * perHour);
-                string label = (hr % 24).ToString("00") + ":00";
-                if (hr == firstHour && lx - x0 < 20f) QueueText(label, FontLabel, faintC, new RectangleF(lx, y, 44, AxisH - 2), DT_LEFT);
-                else if (xR - lx < 20f) QueueText(label, FontLabel, faintC, new RectangleF(lx - 44, y, 44, AxisH - 2), DT_RIGHT);
-                else QueueText(label, FontLabel, faintC, new RectangleF(lx - 22, y, 44, AxisH - 2), DT_CENTER);
+            // The strip of the day: empty track, lighter working hours, then hour and half hour lines
+            using (SolidBrush trackBrush = new SolidBrush(Mix(Panel, Text, 0.07))) { og.FillRectangle(trackBrush, bx, y, bw, vh); }
+            GraphicsState clipState = og.Save();
+            og.SetClip(new RectangleF(bx, y, bw, vh));
+            if (t.HasWork) {
+                float w1 = yOf(t.WorkStartH), w2 = yOf(t.WorkEndH);
+                using (SolidBrush workBrush = new SolidBrush(Mix(Panel, Text, 0.14))) { og.FillRectangle(workBrush, bx, w1, bw, w2 - w1); }
+            }
+            int stepMin = px >= 200f ? 15 : (px >= 100f ? 30 : 60);
+            using (Pen hourLine = new Pen(Mix(Panel, Text, 0.22), 1f))
+            using (Pen minorLine = new Pen(Mix(Panel, Text, 0.12), 1f)) {
+                for (int mm = (int)(Math.Floor(scroll) * 60); mm <= (int)(Math.Ceiling(scroll + viewH) * 60); mm += 15) {
+                    if (mm < 0) continue;
+                    float ly = yOf(mm / 60.0);
+                    if (mm % 60 == 0) og.DrawLine(hourLine, bx, ly, bx + bw, ly);
+                    else if (mm % stepMin == 0 || px >= 200f) og.DrawLine(minorLine, bx, ly, bx + bw, ly);
+                }
             }
 
-            // The strip: empty track, lighter working hours, hour lines
-            float sy = y + AxisH;
-            using (GraphicsPath track = RoundRect(x0, sy, w, StripH, 6f))
-            using (SolidBrush trackBrush = new SolidBrush(Mix(Panel, Text, 0.07))) {
-                og.FillPath(trackBrush, track);
-                GraphicsState clipState = og.Save();
-                og.SetClip(track, CombineMode.Intersect);
-                if (t.HasWork) {
-                    float wx1 = x0 + (float)((t.WorkStartH - t.AxisStartH) * perHour);
-                    float wx2 = x0 + (float)((t.WorkEndH - t.AxisStartH) * perHour);
-                    using (SolidBrush workBrush = new SolidBrush(Mix(Panel, Text, 0.14))) { og.FillRectangle(workBrush, wx1, sy, wx2 - wx1, StripH); }
-                }
-                using (Pen hourLine = new Pen(Mix(Panel, Text, 0.20), 1f)) {
-                    for (int hr = firstHour; hr <= lastHour; hr++) {
-                        float lx = x0 + (float)((hr - t.AxisStartH) * perHour);
-                        og.DrawLine(hourLine, lx, sy, lx, sy + StripH);
-                    }
-                }
-                og.Restore(clipState);
-            }
-
-            TlX0 = x0; TlW = w; TlY = sy; TlH = StripH;
-
-            // A gap under the pointer, or being filled, shows a plus sign
+            // A gap under the pointer, or being filled
             for (int gi = 0; gi < t.Gaps.Count; gi++) {
                 if (gi != TlHoverGap) continue;
                 TimelineGap gp = t.Gaps[gi];
-                float gx = x0 + (float)((gp.StartH - t.AxisStartH) * perHour), gw = (float)((gp.EndH - gp.StartH) * perHour);
-                using (SolidBrush gb = new SolidBrush(Mix(Panel, Text, 0.24))) { og.FillRectangle(gb, gx, sy + 3, gw, StripH - 6); }
-                if (gw >= 18f && TlSelStartH < 0) {
-                    using (Pen pp = new Pen(textC, 2f)) {
-                        float cx = gx + gw / 2f, cy = sy + StripH / 2f;
-                        og.DrawLine(pp, cx - 5f, cy, cx + 5f, cy);
-                        og.DrawLine(pp, cx, cy - 5f, cx, cy + 5f);
-                    }
+                float g1 = yOf(gp.StartH), g2 = yOf(gp.EndH);
+                using (SolidBrush gb = new SolidBrush(Mix(Panel, Text, 0.24))) { og.FillRectangle(gb, bx + 3, g1 + 1, bw - 6, Math.Max(2f, g2 - g1 - 2)); }
+                float vis1 = Math.Max(g1, y), vis2 = Math.Min(g2, y + vh);
+                if (vis2 - vis1 >= 18f && TlSelStartH < 0) {
+                    QueueIn(vp, "+ Fill gap", fT, textC, new RectangleF(bx, (vis1 + vis2) / 2f - 10f, bw, 20f), DT_CENTER);
                 }
             }
             if (TlSelStartH >= 0 && TlSelEndH > TlSelStartH) {
-                float sx = x0 + (float)((TlSelStartH - t.AxisStartH) * perHour), sw = Math.Max(2f, (float)((TlSelEndH - TlSelStartH) * perHour));
-                using (SolidBrush sb = new SolidBrush(A(150, Fill))) { og.FillRectangle(sb, sx, sy + 3, sw, StripH - 6); }
-                using (Pen sp = new Pen(Fill, 1f)) { og.DrawRectangle(sp, sx, sy + 3, sw, StripH - 6); }
+                float s1 = yOf(TlSelStartH), s2 = yOf(TlSelEndH);
+                using (SolidBrush sb = new SolidBrush(A(150, Fill))) { og.FillRectangle(sb, bx + 3, s1, bw - 6, Math.Max(2f, s2 - s1)); }
+                using (Pen sp = new Pen(Fill, 1f)) { og.DrawRectangle(sp, bx + 3, s1, bw - 7, Math.Max(2f, s2 - s1)); }
             }
 
-            // Blocks
+            // Cards
             Color dark = Color.FromArgb(0x1b, 0x1b, 0x1b);
             for (int i = 0; i < t.Blocks.Count; i++) {
                 TimelineBlock b = t.Blocks[i];
-                float bx = x0 + (float)((b.StartH - t.AxisStartH) * perHour);
-                float bw = Math.Max(2f, (float)((b.EndH - b.StartH) * perHour) - 1f);
-                RectangleF br = new RectangleF(bx, sy + 3, bw, StripH - 6);
+                float top = yOf(b.StartH), bot = yOf(b.EndH);
+                if (bot < y || top > y + vh) continue;
+                // Overlapping stretches share the width, side by side
+                int lanes = Math.Max(1, b.Lanes);
+                float laneW = (bw - 6f) / lanes;
+                RectangleF br = new RectangleF(bx + 3 + b.Lane * laneW, top + 1, laneW - (lanes > 1 ? 2f : 0f), Math.Max(2f, bot - top - 1.5f));
                 bool hot = TlHoverBlock == i || TlEdgeBlock == i;
-                if (b.Kind == "lunch") {
-                    using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, hot ? 0.45 : 0.33), Mix(Panel, Text, 0.12))) {
-                        og.FillRectangle(hb, br);
-                    }
-                    if (bw > 56f) QueueText("Lunch", FontLabel, textC, br, DT_CENTER);
+                bool lunch = b.Kind == "lunch";
+                if (lunch) {
+                    using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, hot ? 0.45 : 0.33), Mix(Panel, Text, 0.12))) { og.FillRectangle(hb, br); }
                 } else {
                     Color fillC = hot ? Mix(b.Colour, Color.White, 0.3) : b.Colour;
                     using (SolidBrush bb = new SolidBrush(fillC)) { og.FillRectangle(bb, br); }
-                    if (bw > 44f) QueueText(b.Name, fText, dark, new RectangleF(bx + 4, sy, bw - 8, StripH), DT_LEFT);
                 }
-                // Grips at both edges of a block that can be dragged, shown while it is pointed at
-                if (hot && b.Editable && bw > 14f) {
-                    using (Pen gp = new Pen(A(200, dark), 2f)) {
-                        og.DrawLine(gp, bx + 3f, sy + 14f, bx + 3f, sy + StripH - 14f);
-                        og.DrawLine(gp, bx + bw - 3f, sy + 14f, bx + bw - 3f, sy + StripH - 14f);
+                // The label stays at the top of the part of the card that is in view
+                float lineTop = Math.Max(br.Top + 1f, y + 1f);
+                float room = Math.Min(br.Bottom, y + vh) - lineTop;
+                string name = lunch ? "Lunch" : b.Name;
+                Color labelC = lunch ? textC : dark;
+                double len = b.EndH - b.StartH;
+                if (br.Height >= 40f && room >= 38f && br.Width >= 90f) {
+                    QueueIn(vp, name, fTB, labelC, new RectangleF(br.X + 6, lineTop, br.Width - 12, 18f), DT_LEFT);
+                    QueueIn(vp, Clock(b.StartH) + " to " + Clock(b.EndH) + "   " + Dur(len), fT, labelC, new RectangleF(br.X + 6, lineTop + 18f, br.Width - 12, 18f), DT_LEFT);
+                } else if (br.Height >= 17f && room >= 17f) {
+                    bool wide = br.Width >= 130f;
+                    QueueIn(vp, name, fT, labelC, new RectangleF(br.X + 6, lineTop, br.Width - (wide ? 68f : 12f), 17f), DT_LEFT);
+                    if (wide) QueueIn(vp, Dur(len), fT, labelC, new RectangleF(br.Right - 60, lineTop, 54, 17f), DT_RIGHT);
+                }
+                // Grips at both edges of a card that can be dragged, shown while it is pointed at
+                if (hot && b.Editable && br.Height > 12f) {
+                    using (Pen gp = new Pen(A(200, lunch ? textC : dark), 2f)) {
+                        float gcx = br.X + br.Width / 2f, gw = Math.Min(10f, br.Width / 3f);
+                        og.DrawLine(gp, gcx - gw, br.Top + 3f, gcx + gw, br.Top + 3f);
+                        og.DrawLine(gp, gcx - gw, br.Bottom - 3f, gcx + gw, br.Bottom - 3f);
                     }
                 }
             }
@@ -1020,50 +1089,74 @@ namespace Win {
             if (TlEdgeBlock >= 0 && TlEdgeBlock < t.Blocks.Count) {
                 TimelineBlock eb = t.Blocks[TlEdgeBlock];
                 double edgeH = TlEdge == "start" ? eb.StartH : eb.EndH;
-                float ex = x0 + (float)((edgeH - t.AxisStartH) * perHour);
-                using (Pen ep = new Pen(textC, 3f)) { og.DrawLine(ep, ex, sy + 1f, ex, sy + StripH - 1f); }
+                float ey = yOf(edgeH);
+                int elanes = Math.Max(1, eb.Lanes);
+                float elaneW = (bw - 6f) / elanes;
+                using (Pen ep = new Pen(textC, 3f)) { og.DrawLine(ep, bx + 3 + eb.Lane * elaneW, ey, bx + 3 + (eb.Lane + 1) * elaneW - (elanes > 1 ? 2f : 0f), ey); }
             }
-            if (t.Blocks.Count == 0 && t.EmptyText.Length > 0 && TlHoverGap < 0 && TlSelStartH < 0) QueueText(t.EmptyText, fText, faintC, new RectangleF(x0, sy, w, StripH), DT_CENTER);
-
             // Now
             if (t.ShowNow) {
-                float nx = x0 + (float)((t.NowH - t.AxisStartH) * perHour);
-                using (Pen np = new Pen(textC, 2f))
-                using (SolidBrush nb = new SolidBrush(textC)) {
-                    og.DrawLine(np, nx, sy - 2, nx, sy + StripH + 2);
-                    og.FillEllipse(nb, nx - 3.5f, sy - 6f, 7f, 7f);
+                float ny = yOf(t.NowH);
+                if (ny >= y && ny <= y + vh) {
+                    using (Pen np = new Pen(textC, 2f))
+                    using (SolidBrush nb = new SolidBrush(textC)) {
+                        og.DrawLine(np, bx - 5f, ny, bx + bw, ny);
+                        og.FillEllipse(nb, bx - 9f, ny - 3.5f, 7f, 7f);
+                    }
                 }
             }
+            og.Restore(clipState);
 
-            // The time being dragged to, in a small label just under the strip
+            // Hour labels down the left
+            int labelStep = px >= 200f ? 15 : (px >= 100f ? 30 : 60);
+            for (int mm = (int)(Math.Floor(scroll) * 60); mm <= (int)(Math.Ceiling(scroll + viewH) * 60); mm += labelStep) {
+                if (mm < 0 || mm > 24 * 60) continue;
+                float ly = yOf(mm / 60.0);
+                QueueIn(vp, Clock(mm / 60.0), fTS, mm % 60 == 0 ? textC : faintC, new RectangleF(x0, ly - 8f, GutterW - 6f, 16f), DT_RIGHT);
+            }
+            if (t.Blocks.Count == 0 && t.EmptyText.Length > 0 && TlHoverGap < 0 && TlSelStartH < 0) {
+                QueueIn(vp, t.EmptyText, fT, faintC, new RectangleF(bx, y + vh / 2f - 10f, bw, 20f), DT_CENTER);
+            }
+
+            // A thin scroll bar when there is more of the day than fits
+            double span = Math.Max(0.5, t.AxisEndH - t.AxisStartH);
+            if (span * px > vh + 1f) {
+                float thumbH = Math.Max(16f, (float)(vh * vh / (span * px)));
+                float thumbY = y + (float)((scroll - t.AxisStartH) / span * vh);
+                thumbY = Math.Max(y, Math.Min(y + vh - thumbH, thumbY));
+                using (SolidBrush tb = new SolidBrush(Mix(Panel, Text, 0.30))) { og.FillRectangle(tb, bx + bw + 3f, thumbY, 3f, thumbH); }
+            }
+
+            // The time being dragged to, in a label across the edge
             if (TlDragText.Length > 0) {
-                float dx2 = x0 + (float)((TlDragAtH - t.AxisStartH) * perHour);
-                float lw = Math.Min(w, og.MeasureString(TlDragText, FontLabel).Width + 18f);
-                float lx2 = Math.Max(x0, Math.Min(xR - lw, dx2 - lw / 2f));
-                RectangleF lr = new RectangleF(lx2, sy + StripH + 1f, lw, 13f);
-                using (GraphicsPath lp = RoundRect(lr.X, lr.Y, lr.Width, lr.Height, 6f))
-                using (SolidBrush lb = new SolidBrush(CircleHot)) { og.FillPath(lb, lp); }
-                QueueText(TlDragText, FontLabel, textC, lr, DT_CENTER);
+                float dy = yOf(TlDragAtH);
+                float lw = Math.Min(bw - 8f, og.MeasureString(TlDragText, fTS).Width + 20f);
+                RectangleF lr = new RectangleF(bx + bw - lw - 6f, dy - 9f, lw, 18f);
+                if (lr.Top >= y && lr.Bottom <= y + vh) {
+                    using (GraphicsPath lp = RoundRect(lr.X, lr.Y, lr.Width, lr.Height, 9f))
+                    using (SolidBrush lb = new SolidBrush(CircleHot)) { og.FillPath(lb, lp); }
+                    QueueText(TlDragText, fTS, textC, lr, DT_CENTER);
+                }
             }
 
-            // The day's figures under the strip
-            float ly = sy + StripH + StripGap;
+            // The day's figures in a column on the right
+            float gy = y;
             foreach (TimelineLegend lg in t.Legend) {
-                og.DrawLine(sep, x0, ly, xR, ly);
+                og.DrawLine(sep, lx, gy, xR, gy);
                 bool isTotal = lg.Kind == "total";
-                Font f = isTotal ? fBold : fText;
+                Font f = isTotal ? fTB : fT;
                 Color c = (lg.Kind == "lunch" || lg.Kind == "unallocated") ? faintC : textC;
-                float nameX = x0;
+                float nameX = lx;
                 if (lg.Kind == "account") {
-                    using (SolidBrush sw = new SolidBrush(lg.Colour)) { og.FillRectangle(sw, x0, ly + 4.5f, 10f, 10f); }
-                    nameX = x0 + 16f;
+                    using (SolidBrush sw = new SolidBrush(lg.Colour)) { og.FillRectangle(sw, lx, gy + 6f, 10f, 10f); }
+                    nameX = lx + 16f;
                 } else if (lg.Kind == "lunch") {
-                    using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, 0.33), Mix(Panel, Text, 0.12))) { og.FillRectangle(hb, x0, ly + 4.5f, 10f, 10f); }
-                    nameX = x0 + 16f;
+                    using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, 0.33), Mix(Panel, Text, 0.12))) { og.FillRectangle(hb, lx, gy + 6f, 10f, 10f); }
+                    nameX = lx + 16f;
                 }
-                QueueText(lg.Name, f, c, new RectangleF(nameX, ly, w - 100f - (nameX - x0), DrawerRowH), DT_LEFT);
-                QueueText(lg.Total, f, c, new RectangleF(xR - 90f, ly, 90f, DrawerRowH), DT_RIGHT);
-                ly += DrawerRowH;
+                QueueText(lg.Name, f, c, new RectangleF(nameX, gy, LegendW - 46f - (nameX - lx), TlRowH), DT_LEFT);
+                QueueText(lg.Total, f, c, new RectangleF(xR - 46f, gy, 46f, TlRowH), DT_RIGHT);
+                gy += TlRowH;
             }
         }
 
@@ -1108,7 +1201,14 @@ namespace Win {
 # ---- Settings ----
 $StartTime       = '08:30'   # usual start and end (also changeable in the app: right-click, Working hours)
 $EndTime         = '17:30'
-$Scale           = 1.0      # make the timer bigger or smaller, e.g. 0.8 or 1.3
+$Scale           = 1.0      # make the timer bigger or smaller, e.g. 0.8 or 1.3 (also changeable in the app: right-click, Appearance, Size)
+$SizeFile = Join-Path $PSScriptRoot 'account-timer-size.txt'
+if (Test-Path $SizeFile) {
+    try {
+        $savedSize = [double]::Parse((Get-Content $SizeFile -TotalCount 1).Trim(), [Globalization.CultureInfo]::InvariantCulture)
+        if ($savedSize -ge 0.5 -and $savedSize -le 3.0) { $Scale = $savedSize }
+    } catch {}
+}
 $DefaultAccounts = @('ACCOUNT 1', 'ACCOUNT 2', 'ACCOUNT 3', 'ACCOUNT 4', 'ACCOUNT 5')
 $SleepGapMinutes = 5        # if the computer sleeps for longer than this, the running slot is paused
 $MaxVisibleAccounts = 12    # most accounts shown at once (hide some to make room)
@@ -1141,6 +1241,7 @@ $NotesUndo    = Join-Path $TimesheetDir 'notes.undo.csv'
 $MergeFile    = Join-Path $PSScriptRoot 'account-timer-merge.txt'
 $EffectsFile  = Join-Path $PSScriptRoot 'account-timer-effects.txt'
 $DrawerFile   = Join-Path $PSScriptRoot 'account-timer-drawer.txt'
+$AwayFile     = Join-Path $PSScriptRoot 'account-timer-away.txt'
 try { New-Item -ItemType Directory -Path $TimesheetDir -Force | Out-Null } catch {}
 
 $script:accounts       = @()   # every account, including hidden ones
@@ -1229,10 +1330,17 @@ $script:drawerVersion  = 0       # goes up whenever the drawer's figures are ref
 $script:drawerCache    = $null   # the drawer drawn once and reused until something in it changes
 $script:drawerCacheKey = ''
 $script:drawerCacheBuilds = 0
-$script:drawerMode     = 'week'   # 'week' for the table of hours, 'timeline' for one day along a strip
+$script:drawerMode     = 'timeline'   # 'timeline' for one day along a strip (the usual view), 'week' for the table of hours
 $script:drawerDay      = $null    # the day shown in the timeline
 $script:drawerTimeline = $null    # that day's stretches of time, ready to draw
 $script:drawerLegend   = @()      # the lines under the strip
+$script:awayIntervals  = @()      # stretches marked as finished for the day: @{ Start; End } (End is $null while still finished)
+$script:dayBtnHover    = $false
+$script:finishH        = 0       # extra height under the Lunch row while the Finish day button is showing
+$script:pressedDayBtn  = $false
+$script:tlScrollH      = $null    # the hour at the top of the timeline's view ($null until it is first placed)
+$script:tlPx           = 64.0     # window units per hour on the timeline (the zoom)
+$script:tlLastPt       = $null    # where the pointer last was over the drawer, to keep a drag following a wheel scroll
 $script:tlGeom         = $null    # where the strip was last drawn (window units), reported by the renderer
 $script:tlHover        = @{ Block = -1; Gap = -1; EdgeBlock = -1; Edge = '' }
 $script:tlDrag         = $null    # an edge or a stretch of gap being dragged
@@ -1258,6 +1366,7 @@ $script:workDays     = @(1, 2, 3, 4, 5)    # Monday to Friday
 $script:weekStartDow = 1                   # weeks start on Monday
 $script:hoursFormat  = 'decimal'           # 'decimal' (1.25) or 'hm' (1:15)
 $script:dayOverrides = @{}                 # 'yyyy-MM-dd' -> @{ Off; Start; End } for one-off days
+$script:dayHours     = @{}                 # weekday number -> @{ Start; End } where that day's hours differ from the usual ones (a shift pattern)
 
 # Reads '9:30' or '09:30' as a time of day, giving '09:30', or $null if it isn't one
 function ConvertTo-ClockText($text) {
@@ -1269,6 +1378,7 @@ function ConvertTo-ClockText($text) {
 }
 
 function Load-WorkSettings {
+    $script:dayHours = @{}
     if (Test-Path $SettingsFile) {
         foreach ($line in Get-Content $SettingsFile) {
             $kv = $line -split '=', 2
@@ -1282,6 +1392,14 @@ function Load-WorkSettings {
                     if ($list.Count -gt 0) { $script:workDays = $list }
                 }
                 'weekstart' { $i = [array]::IndexOf($DayAbbr, $val); if ($i -ge 0) { $script:weekStartDow = $i } }
+                { $_ -like 'shift.*' } {
+                    # shift.mon=09:00,17:00 gives Monday its own hours
+                    $dayName = $kv[0].Trim().Substring(6)
+                    $di = -1
+                    for ($k = 0; $k -lt 7; $k++) { if ($DayAbbr[$k] -eq $dayName) { $di = $k } }
+                    $times = @($val -split ',' | ForEach-Object { ConvertTo-ClockText $_ })
+                    if ($di -ge 0 -and $times.Count -eq 2 -and $times[0] -and $times[1]) { $script:dayHours[$di] = @{ Start = $times[0]; End = $times[1] } }
+                }
                 'hours' { if ($val -eq 'decimal' -or $val -eq 'hm') { $script:hoursFormat = $val } }
             }
         }
@@ -1305,12 +1423,23 @@ function Save-WorkSettings {
         ('days=' + (($script:workDays | ForEach-Object { $DayAbbr[$_] }) -join ',')),
         ('weekstart=' + $DayAbbr[$script:weekStartDow]),
         "hours=$($script:hoursFormat)")
+    foreach ($di in @($script:dayHours.Keys | Sort-Object)) {
+        $lines += ('shift.{0}={1},{2}' -f $DayAbbr[$di].ToLower(), $script:dayHours[$di].Start, $script:dayHours[$di].End)
+    }
     try { Set-Content -Path $SettingsFile -Value $lines } catch { Write-Log "Could not save settings: $($_.Exception.Message)" }
     $dl = @($script:dayOverrides.Keys | Sort-Object | ForEach-Object {
         $o = $script:dayOverrides[$_]
         if ($o.Off) { "$_`toff" } else { "$_`t$($o.Start)`t$($o.End)" }
     })
     try { Set-Content -Path $DaysFile -Value $dl } catch { Write-Log "Could not save day changes: $($_.Exception.Message)" }
+}
+
+# The usual start and end for a weekday: its own hours if the shift pattern gives it some,
+# otherwise the same hours as every other day
+function Get-UsualHours([int]$dow) {
+    $h = $script:dayHours[$dow]
+    if ($h) { return @($h.Start, $h.End) }
+    return @($StartTime, $EndTime)
 }
 
 # What a given day looks like: whether it's a working day, and its start and end
@@ -1322,7 +1451,8 @@ function Get-DayPlan([datetime]$date) {
         return @{ Working = $true; Custom = $true; Start = $d.Add([timespan]$o.Start); End = $d.Add([timespan]$o.End) }
     }
     if ($script:workDays -notcontains [int]$d.DayOfWeek) { return @{ Working = $false; Custom = $false } }
-    return @{ Working = $true; Custom = $false; Start = $d.Add([timespan]$StartTime); End = $d.Add([timespan]$EndTime) }
+    $usual = Get-UsualHours ([int]$d.DayOfWeek)
+    return @{ Working = $true; Custom = $false; Start = $d.Add([timespan]$usual[0]); End = $d.Add([timespan]$usual[1]) }
 }
 
 # Today's working window (a day off gives an empty window at midnight)
@@ -1333,6 +1463,72 @@ function Get-DayBounds {
 }
 
 Load-WorkSettings
+
+# ---- Finishing for the day ----
+# Pressing Finish day marks the time from then until the next account is started as away. Away time is
+# left out of the working day and of overtime in the same way as lunch, so the unallocated figures
+# stop growing, and the red not tracking state stays off until work carries on.
+
+function Save-Away {
+    $keep = [datetime]::Today.AddDays(-60)
+    $script:awayIntervals = @($script:awayIntervals | Where-Object { $_.Start -ge $keep })
+    $lines = @($script:awayIntervals | ForEach-Object {
+        $e = if ($null -ne $_.End) { $_.End.ToString('s', $Inv) } else { '' }
+        "{0}`t{1}" -f $_.Start.ToString('s', $Inv), $e
+    })
+    try { Set-Content -Path $AwayFile -Value $lines } catch { Write-Log "Could not save finished days: $($_.Exception.Message)" }
+}
+
+function Load-Away {
+    $script:awayIntervals = @()
+    if (-not (Test-Path $AwayFile)) { return }
+    foreach ($line in @(Get-Content $AwayFile)) {
+        $p = $line -split "`t"
+        if ($p.Count -lt 1 -or -not $p[0].Trim()) { continue }
+        try {
+            $s = [datetime]::ParseExact($p[0].Trim(), 's', $Inv)
+            $e = $null
+            if ($p.Count -ge 2 -and $p[1].Trim()) { $e = [datetime]::ParseExact($p[1].Trim(), 's', $Inv) }
+            # One left open from an earlier day (the timer was closed while finished) ends with that day
+            if ($null -eq $e -and $s.Date -lt [datetime]::Today) { $e = $s.Date.AddDays(1) }
+            $script:awayIntervals += ,@{ Start = $s; End = $e }
+        } catch { }
+    }
+}
+
+function Test-DayDone {
+    foreach ($iv in @($script:awayIntervals)) {
+        if ($null -eq $iv.End -and $iv.Start.Date -eq [datetime]::Today) { return $true }
+    }
+    return $false
+}
+
+# The away stretches that fall on a day, as start and end pairs. One still open runs to now, but never
+# past the end of the day it began.
+function Get-AwayOn([datetime]$day, [datetime]$now) {
+    $day = $day.Date
+    $dayEnd = $day.AddDays(1)
+    $out = @()
+    foreach ($iv in @($script:awayIntervals)) {
+        $a = $iv.Start
+        $b = if ($null -ne $iv.End) { $iv.End } else { $a.Date.AddDays(1) }
+        if ($null -eq $iv.End -and $now -lt $b) { $b = $now }
+        if ($a -lt $day) { $a = $day }
+        if ($b -gt $dayEnd) { $b = $dayEnd }
+        if ($b -gt $a) { $out += ,@($a, $b) }
+    }
+    return $out
+}
+
+function Close-AwayInterval {
+    $changed = $false
+    foreach ($iv in @($script:awayIntervals)) {
+        if ($null -eq $iv.End -and $iv.Start.Date -eq [datetime]::Today) { $iv.End = Get-Date; $changed = $true }
+    }
+    if ($changed) { Save-Away }
+}
+
+Load-Away
 
 function Limit-Time($t, $min, $max) {
     if ($t -lt $min) { return $min }
@@ -1346,6 +1542,12 @@ function Get-WeekStart {
 
 function Get-WeekFile {
     return Join-Path $TimesheetDir ('Week commencing {0}.csv' -f (Get-WeekStart).ToString('yyyy-MM-dd', $Inv))
+}
+
+# Hours and minutes as h:mm, whatever the hours setting is, for the unallocated figures
+function Format-Clock($seconds) {
+    $mins = [int][math]::Floor([math]::Max(0.0, $seconds) / 60)
+    return '{0}:{1:00}' -f [math]::Floor($mins / 60), ($mins % 60)
 }
 
 function Format-Dur($seconds) {
@@ -2059,6 +2261,8 @@ function Stop-Active([datetime]$at) {
 }
 
 function Start-Slot($i) {
+    # Starting any account carries on from a finished day
+    if (Test-DayDone) { Close-AwayInterval }
     $script:active = @{ Name = $script:slots[$i]; Start = Get-Date }
     Save-State
 }
@@ -2088,6 +2292,26 @@ function Stop-ByUser {
     }
 }
 
+# Finish the day, or carry on. Finishing stops whatever is running first. It is only offered on a working
+# day once the day has started.
+function Set-DayDone([bool]$done) {
+    if ($done -eq (Test-DayDone)) { return }
+    if ($done) {
+        $plan = Get-DayPlan ([datetime]::Today)
+        if (-not $plan.Working -or (Get-Date) -lt $plan.Start) { return }
+        Stop-ByUser
+        $script:awayIntervals += ,@{ Start = (Get-Date); End = $null }
+        Save-Away
+    } else {
+        Close-AwayInterval
+    }
+    Update-View
+    Update-DrawerContent
+    Request-Redraw
+}
+
+function Switch-DayDone { Set-DayDone (-not (Test-DayDone)) }
+
 function Switch-Slot($i) {
     $wasThis = [bool]($script:active -and $script:active.Name -eq $script:slots[$i])
     Stop-ByUser
@@ -2110,6 +2334,9 @@ function Update-View {
     $onLunch = [bool]($script:active -and $script:active.Name -eq 'Lunch')
     $ints = @($script:lunchIntervals)
     if ($onLunch) { $ints += ,@($script:active.Start, $clock) }
+    # Time marked as finished for the day is left out in the same way as lunch
+    $dayDone = [bool]($workDay -and (Test-DayDone))
+    foreach ($away in @(Get-AwayOn $clock.Date $clock)) { $ints += ,@($away[0], $away[1]) }
 
     # Billable day, capped at the end time
     $lunchSec = 0
@@ -2121,9 +2348,9 @@ function Update-View {
     $billable = if ($workDay) { [math]::Max(0.0, $worked - $lunchSec - $script:lunchAdjust) } else { 0.0 }
 
     # Overtime after the end time, less any lunch taken during it (never on a day off)
-    $overtime = $workDay -and $clock -gt $end
+    $pastEnd = $workDay -and $clock -gt $end
     $otSec = 0
-    if ($overtime) {
+    if ($pastEnd) {
         $otSec = ($clock - $end).TotalSeconds
         foreach ($iv in $ints) {
             $a = Limit-Time $iv[0] $end $clock
@@ -2132,6 +2359,8 @@ function Update-View {
         }
         $otSec = [math]::Max(0.0, $otSec)
     }
+    # A day finished before its end time never turns into overtime
+    $overtime = $pastEnd -and -not ($dayDone -and $otSec -lt 1)
 
     $rows = @()
     $accountSec = 0
@@ -2185,22 +2414,27 @@ function Update-View {
     $unallocOT = [math]::Max(0.0, $otSec - $accountOT)
 
     # Not tracking: the working day has started (or it's overtime) but nothing is running
-    $idle = $workDay -and (-not $script:active) -and ($clock -ge $start)
+    $idle = $workDay -and (-not $script:active) -and ($clock -ge $start) -and -not $dayDone
     $before = $workDay -and ($clock -lt $start)
     $status = if ($onLunch) { 'ON LUNCH' }
+              elseif ($dayDone) { 'DAY DONE' }
               elseif (-not $workDay) { if ($script:active) { 'DAY OFF, TRACKING' } else { 'DAY OFF' } }
               elseif ($before) { 'STARTS AT ' + $start.ToString('HH:mm', $Inv) }
               elseif ($idle) { 'NOT TRACKING' }
               elseif ($overtime) { 'OVERTIME' }
               else { 'WORKING' }
     # The figure that matters now on the status line; both on hover
-    $unallocLine = if ($overtime) { 'UNALLOCATED OT ' + (Format-Dur $unallocOT) }
-                   elseif ($workDay) { 'UNALLOCATED ' + (Format-Dur $unallocWork) }
+    $unallocLine = if ($overtime) { 'UNALLOCATED OT ' + (Format-Clock $unallocOT) }
+                   elseif ($workDay) { 'UNALLOCATED ' + (Format-Clock $unallocWork) }
                    else { '' }
     $unallocTip = if (-not $workDay) { $null }
-                  elseif ($overtime) { "Working day: $(Format-Dur $unallocWork) unallocated`nOvertime: $(Format-Dur $unallocOT) unallocated" }
-                  else { "Working day: $(Format-Dur $unallocWork) unallocated" }
+                  elseif ($overtime) { "Working day: $(Format-Clock $unallocWork) unallocated`nOvertime: $(Format-Clock $unallocOT) unallocated" }
+                  else { "Working day: $(Format-Clock $unallocWork) unallocated" }
     $activeRow = $rows | Where-Object { $_.Active } | Select-Object -First 1
+
+    # The Finish day button waits until half an hour before the end of the day, and stays once the day is
+    # finished so there is a way to carry on
+    $showFinish = [bool]($workDay -and ($dayDone -or ($clock -ge $start -and $clock -ge $end.AddMinutes(-$FinishLeadMinutes))))
 
     $bt = [timespan]::FromSeconds([math]::Floor($billable))
     $ot = [timespan]::FromSeconds([math]::Floor($otSec))
@@ -2214,7 +2448,7 @@ function Update-View {
         Status      = $status
         Unallocated = $unallocLine
         UnallocTip  = $unallocTip
-        UnallocText = $(if ($overtime) { (Format-Dur $unallocOT) + ' unallocated OT' } else { (Format-Dur $unallocWork) + ' unallocated' })
+        UnallocText = $(if ($overtime) { (Format-Clock $unallocOT) + ' unallocated OT' } else { (Format-Clock $unallocWork) + ' unallocated' })
         DayOff      = (-not $workDay)
         StartLabel  = $start.ToString('HH:mm', $Inv)
         Idle        = $idle
@@ -2224,6 +2458,8 @@ function Update-View {
         OnLunch     = $onLunch
         Before      = $before
         Overtime    = $overtime
+        DayDone     = $dayDone
+        DayBtnText  = $(if ($showFinish) { if ($dayDone) { 'Carry on' } else { 'Finish day' } } else { '' })
         OT          = '+{0:00}:{1:00}:{2:00}' -f [math]::Floor($ot.TotalHours), $ot.Minutes, $ot.Seconds
         Rows        = $rows
     }
@@ -2232,8 +2468,10 @@ function Update-View {
 
     # Open or close the overtime section
     $newTop = if ($overtime) { $BaseRowTop + $OvertimeH } else { $BaseRowTop }
-    if ($newTop -ne $RowTop) {
+    $newFinishH = if ($showFinish) { $FinishAreaH } else { 0 }
+    if ($newTop -ne $RowTop -or $newFinishH -ne $script:finishH) {
         $script:RowTop = $newTop
+        $script:finishH = $newFinishH
         Resize-Form
     }
 }
@@ -2244,6 +2482,7 @@ function Update-View {
 
 $g0   = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero)
 $Zoom = $Scale * $g0.DpiX / 96
+$script:SystemDpi = $g0.DpiX
 $g0.Dispose()
 
 $BaseW  = 320
@@ -2272,6 +2511,17 @@ $CollapseR = 7.5
 $DrawerSideW = 520                  # width of the week drawer beside the timer
 $DrawerBtnX = 16                    # week drawer button, top left (mirrors the compact view button)
 $DrawerBtnY = 15
+
+# The Finish day button, centred under the Lunch row (the renderer's DayBtnW and DayBtnH match these).
+# It shows from FinishLeadMinutes before the end of the day, and the timer grows by FinishAreaH to fit it.
+$DayBtn = @{ W = 150; H = 22 }
+$FinishLeadMinutes = 30
+$FinishAreaH = 30
+function Get-DayBtnRect {
+    $bx = ($BaseW - $DayBtn.W) / 2
+    $by = $BaseH - $DayBtn.H - 8
+    return @{ X = $bx; Y = $by; W = $DayBtn.W; H = $DayBtn.H }
+}
 
 function Get-PillListH {
     return 4 + $script:slots.Count * $PillRowH + $PillLunchGap + 6
@@ -2303,7 +2553,7 @@ function Get-PillRowTop($i) {
     return $top
 }
 Load-Accounts
-$BaseH  = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6
+$BaseH  = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6 + $script:finishH
 
 $C = [System.Drawing.Color]
 # ---- Themes ----
@@ -2629,9 +2879,13 @@ $fRow    = New-Object System.Drawing.Font('Segoe UI Semibold', 12, [System.Drawi
 $fOvertime = New-Object System.Drawing.Font('Segoe UI Semibold', 24, [System.Drawing.FontStyle]::Regular, $px)
 $fPillTime = New-Object System.Drawing.Font('Segoe UI Semibold', 19, [System.Drawing.FontStyle]::Regular, $px)
 $fPillSub  = New-Object System.Drawing.Font('Segoe UI', 10.5, [System.Drawing.FontStyle]::Regular, $px)
-$fDrawerBtn = New-Object System.Drawing.Font('Segoe UI Semibold', 10.5, [System.Drawing.FontStyle]::Regular, $px)
+$fDrawerBtn = New-Object System.Drawing.Font('Segoe UI Semibold', 11.5, [System.Drawing.FontStyle]::Regular, $px)
 $fDrawerText = New-Object System.Drawing.Font('Segoe UI', 11.5, [System.Drawing.FontStyle]::Regular, $px)
 $fDrawerTextBold = New-Object System.Drawing.Font('Segoe UI Semibold', 11.5, [System.Drawing.FontStyle]::Regular, $px)
+# The timeline's text is a little larger than the rest of the drawer's, as it has to be read at a glance
+$fTimeline = New-Object System.Drawing.Font('Segoe UI', 13, [System.Drawing.FontStyle]::Regular, $px)
+$fTimelineBold = New-Object System.Drawing.Font('Segoe UI Semibold', 13, [System.Drawing.FontStyle]::Regular, $px)
+$fTimelineSmall = New-Object System.Drawing.Font('Segoe UI', 12, [System.Drawing.FontStyle]::Regular, $px)
 
 $sfCentre = New-Object System.Drawing.StringFormat
 $sfCentre.Alignment = 'Center'; $sfCentre.LineAlignment = 'Center'
@@ -2664,6 +2918,9 @@ if ($script:useRenderer) {
         $script:renderer.DrawerBtnY = [float]$DrawerBtnY
         $script:renderer.FontDrawer = $fDrawerText
         $script:renderer.FontDrawerBold = $fDrawerTextBold
+        $script:renderer.FontTimeline = $fTimeline
+        $script:renderer.FontTimelineBold = $fTimelineBold
+        $script:renderer.FontTimelineSmall = $fTimelineSmall
         $script:renderer.DrawerW = [float]$DrawerSideW
     } catch {
         $script:useRenderer = $false
@@ -2807,6 +3064,7 @@ function Draw-ListText($g, $text, $font, $brush, $rect, $sf) {
 # Red while overtime or not tracking, orange on lunch, otherwise the working colours
 function Get-StateTheme($v) {
     if ($v.OnLunch) { return $Themes.paused }
+    if ($v.DayDone) { return $Themes.running }
     if ($v.Idle) { return $(if ($Themes.nottracking) { $Themes.nottracking } else { $Themes.overtime }) }
     if ($v.Overtime) { return $Themes.overtime }
     return $Themes.running
@@ -2978,6 +3236,17 @@ function Draw-Full($g, [bool]$layered) {
             }
         }
 
+        # Finish day button, centred under the Lunch row
+        if ($v.DayBtnText) {
+            $dbRect = Get-DayBtnRect
+            $dbr = New-Object $RF ([float]$dbRect.X), ([float]$dbRect.Y), ([float]$dbRect.W), ([float]$dbRect.H)
+            $dbp = New-RoundedPath $dbr.X $dbr.Y $dbr.Width $dbr.Height ([float]($dbr.Height / 2))
+            $dbb = New-Object System.Drawing.SolidBrush ($(if ($script:dayBtnHover) { $theme.CircleHot } else { $theme.Circle }))
+            $g.FillPath($dbb, $dbp)
+            $dbb.Dispose(); $dbp.Dispose()
+            Draw-ListText $g $v.DayBtnText $fLabel $bWhite $dbr $sfCentre
+        }
+
         if ($script:drawerOpen) {
             $g.TranslateTransform([float](-$script:timerOffX), [float](-$script:timerOffY))
             if ($layered) { Draw-DrawerCached $g $theme } else { Draw-Drawer $g $theme }
@@ -3039,6 +3308,8 @@ function Get-BudgetLines {
 }
 
 $DrawerRowH = 19
+$TimelineMinH = 420     # the timeline drawer is at least this tall, so there is room to see a few hours at once
+$TlMinPx = 24; $TlMaxPx = 240
 
 # The timeline needs the compiled drawing, so without it the drawer stays on the week table
 function Get-DrawerMode {
@@ -3074,14 +3345,60 @@ function Get-TimelineGaps($blocks, [double]$axisStartH, [double]$axisEndH, [doub
     return $out
 }
 
+# Stretches that overlap (a merged or hand-edited entry can run into its neighbours) are laid out side by
+# side in lanes, like a calendar, so none is hidden behind another. Blocks that overlap by only a few seconds,
+# which rounding in the log can cause, still count as touching. Each block gets its Lane and the number of
+# Lanes across its overlapping group. The blocks must be in start order.
+function Set-TimelineLanes($blocks) {
+    $bl = @($blocks)
+    $slack = 3.0 / 3600.0
+    $laneEnds = @()
+    $groupEnd = -1.0
+    $groupStart = 0
+    for ($i = 0; $i -le $bl.Count; $i++) {
+        $atEnd = ($i -eq $bl.Count)
+        if ($atEnd -or [double]$bl[$i].StartH -ge $groupEnd - $slack) {
+            # A new group begins, so the one before is finished and every block in it learns how many lanes it has
+            for ($j = $groupStart; $j -lt $i; $j++) { $bl[$j] | Add-Member -NotePropertyName Lanes -NotePropertyValue ([math]::Max(1, $laneEnds.Count)) -Force }
+            if ($atEnd) { break }
+            $laneEnds = @(); $groupEnd = -1.0; $groupStart = $i
+        }
+        $lane = -1
+        for ($l = 0; $l -lt $laneEnds.Count; $l++) { if ($laneEnds[$l] - $slack -le [double]$bl[$i].StartH) { $lane = $l; break } }
+        if ($lane -lt 0) { $lane = $laneEnds.Count; $laneEnds += 0.0 }
+        $laneEnds[$lane] = [double]$bl[$i].EndH
+        $groupEnd = [math]::Max($groupEnd, [double]$bl[$i].EndH)
+        $bl[$i] | Add-Member -NotePropertyName Lane -NotePropertyValue $lane -Force
+    }
+}
+
+# The next (or previous) block in the same lane, which is the one whose edge limits this block's
+function Get-LaneNeighbour($blocks, [int]$i, [int]$dir) {
+    $bl = @($blocks)
+    $lane = [int]$bl[$i].Lane
+    for ($j = $i + $dir; $j -ge 0 -and $j -lt $bl.Count; $j += $dir) {
+        if ([int]$bl[$j].Lane -eq $lane) { return $j }
+    }
+    return -1
+}
+
+# Whether a point a fraction of the way across the column is within a block's lane
+function Test-InLane($block, $fx) {
+    $lanes = [math]::Max(1, [int]$block.Lanes)
+    $lane = [int]$block.Lane
+    return ($fx -ge ($lane / $lanes) -and $fx -le (($lane + 1) / $lanes))
+}
+
 # Which edge of a block is at this time, if any. Two editable blocks that touch (within a minute) share one
 # edge, 'join', owned by the left block, so dragging it moves the change-over between them.
-function Get-TimelineEdgeAt($blocks, [double]$h, [double]$tolH) {
+function Get-TimelineEdgeAt($blocks, [double]$h, [double]$tolH, $fx = $null) {
     $bl = @($blocks)
     $minH = 1.0 / 60.0
     $best = $null; $bestD = $tolH + 1.0
     for ($i = 0; $i -lt $bl.Count; $i++) {
         if (-not $bl[$i].Editable) { continue }
+        # With blocks side by side, only the lane under the pointer counts (fx is how far across the column it is, 0 to 1)
+        if ($null -ne $fx -and -not (Test-InLane $bl[$i] $fx)) { continue }
         foreach ($e in @('start', 'end')) {
             $at = if ($e -eq 'start') { [double]$bl[$i].StartH } else { [double]$bl[$i].EndH }
             $d = [math]::Abs($at - $h)
@@ -3090,11 +3407,17 @@ function Get-TimelineEdgeAt($blocks, [double]$h, [double]$tolH) {
     }
     if (-not $best) { return $null }
     $i = $best.Index
-    if ($best.Edge -eq 'end' -and $i + 1 -lt $bl.Count -and $bl[$i + 1].Editable -and ($bl[$i + 1].StartH - $bl[$i].EndH) -le $minH) {
-        return @{ Index = $i; Edge = 'join' }
+    if ($best.Edge -eq 'end') {
+        $n = Get-LaneNeighbour $bl $i 1
+        if ($n -ge 0 -and $bl[$n].Editable -and ($bl[$n].StartH - $bl[$i].EndH) -le $minH -and ($bl[$n].StartH - $bl[$i].EndH) -ge -$minH) {
+            return @{ Index = $i; Edge = 'join' }
+        }
     }
-    if ($best.Edge -eq 'start' -and $i -gt 0 -and $bl[$i - 1].Editable -and ($bl[$i].StartH - $bl[$i - 1].EndH) -le $minH) {
-        return @{ Index = ($i - 1); Edge = 'join' }
+    if ($best.Edge -eq 'start') {
+        $pv = Get-LaneNeighbour $bl $i -1
+        if ($pv -ge 0 -and $bl[$pv].Editable -and ($bl[$i].StartH - $bl[$pv].EndH) -le $minH -and ($bl[$i].StartH - $bl[$pv].EndH) -ge -$minH) {
+            return @{ Index = $pv; Edge = 'join' }
+        }
     }
     return $best
 }
@@ -3108,10 +3431,13 @@ function Get-TimelineDrag($blocks, [int]$i, [string]$edge, [double]$targetH, [do
     $snap = $snapMin / 60.0
     $t = [math]::Round($targetH / $snap) * $snap
     $cur = 0.0
+    # An edge stops at the neighbour in its own lane; blocks in other lanes overlap it by design
+    $nextIdx = Get-LaneNeighbour $bl $i 1
+    $prevIdx = Get-LaneNeighbour $bl $i -1
     switch ($edge) {
-        'join'  { $lo = $bl[$i].StartH + $minH; $hi = $bl[$i + 1].EndH - $minH; $cur = $bl[$i].EndH }
-        'start' { $lo = $(if ($i -gt 0) { [double]$bl[$i - 1].EndH } else { 0.0 }); $hi = $bl[$i].EndH - $minH; $cur = $bl[$i].StartH }
-        default { $lo = $bl[$i].StartH + $minH; $hi = $(if ($i + 1 -lt $bl.Count) { [double]$bl[$i + 1].StartH } else { 24.0 }); $cur = $bl[$i].EndH }
+        'join'  { $lo = $bl[$i].StartH + $minH; $hi = $bl[$nextIdx].EndH - $minH; $cur = $bl[$i].EndH }
+        'start' { $lo = $(if ($prevIdx -ge 0) { [double]$bl[$prevIdx].EndH } else { 0.0 }); $hi = $bl[$i].EndH - $minH; $cur = $bl[$i].StartH }
+        default { $lo = $bl[$i].StartH + $minH; $hi = $(if ($nextIdx -ge 0) { [double]$bl[$nextIdx].StartH } else { 24.0 }); $cur = $bl[$i].EndH }
     }
     $hi = [math]::Min([double]$hi, $capH)
     if ($hi -lt $lo) { $hi = $lo }
@@ -3119,7 +3445,7 @@ function Get-TimelineDrag($blocks, [int]$i, [string]$edge, [double]$targetH, [do
     $moves = @()
     if ($edge -eq 'join') {
         $moves += @{ Index = $i; Edge = 'end'; H = $t }
-        $moves += @{ Index = ($i + 1); Edge = 'start'; H = $t }
+        $moves += @{ Index = $nextIdx; Edge = 'start'; H = $t }
     } else {
         $moves += @{ Index = $i; Edge = $edge; H = $t }
     }
@@ -3129,7 +3455,7 @@ function Get-TimelineDrag($blocks, [int]$i, [string]$edge, [double]$targetH, [do
 # One day's stretches of time for the timeline strip, in order. Lunch is included because it shows as a
 # hatched gap. Rounding and other adjustments are left out, as they were never a stretch of real time.
 # Times for the drawing are hours since midnight. The strip covers the working hours plus anything
-# tracked outside them, to whole hours and at least four hours wide.
+# tracked outside them, with an hour either side, to whole hours and at least four hours wide.
 function Get-DayTimeline([datetime]$day) {
     $day = $day.Date
     $now = Get-Date
@@ -3142,7 +3468,8 @@ function Get-DayTimeline([datetime]$day) {
         $note = $null
         if (-not $isLunch) { $note = $script:notes[(Get-NoteKey $r.Start.ToString('yyyy-MM-dd', $Inv) $r.Name $r.Start.ToString('HH:mm:ss', $Inv))] }
         $blocks += [pscustomobject]@{ Name = $r.Name; Start = $r.Start; End = $r.End; Seconds = $r.Seconds
-                                      Kind = $(if ($isLunch) { 'lunch' } else { 'time' }); Note = $note; Raw = $r.Raw }
+                                      Kind = $(if ($isLunch) { 'lunch' } else { 'time' }); Note = $note; Raw = $r.Raw
+                                      Label = "$($r.Raw.End)" }
     }
     # Whatever is running right now (from midnight if it carried on past it)
     if ($isToday -and $script:active) {
@@ -3155,20 +3482,27 @@ function Get-DayTimeline([datetime]$day) {
                                           Kind = $(if ($isLunch) { 'lunch' } else { 'running' }); Note = $null; Raw = $null }
         }
     }
-    $blocks = @($blocks | Sort-Object Start)
+    $blocks = @($blocks | Sort-Object Start, End)
     foreach ($b in $blocks) {
         $label = if ($b.Kind -eq 'lunch') { 'Lunch' } else { $b.Name }
         $span = '{0} to {1}' -f $b.Start.ToString('HH:mm', $Inv), $b.End.ToString('HH:mm', $Inv)
         $text = "$label`n$span ($(Format-Dur $b.Seconds))"
         if ($b.Kind -eq 'running') { $text += "`nRunning now" }
         if ($b.Note) { $text += "`n" + $b.Note }
+        # Rows made by hand or by merging don't describe one real stretch, so say so
+        if ("$($b.Label)" -eq 'merged') { $text += "`nMerged from several stretches, so the times are approximate" }
+        elseif ("$($b.Label)" -eq 'edited') { $text += "`nEdited by hand" }
+        elseif ("$($b.Label)" -eq 'added') { $text += "`nAdded by hand" }
         $b | Add-Member -NotePropertyName Tip -NotePropertyValue $text -Force
         # Hours since midnight for the drawing and dragging. What is running now has no row in the log
         # yet, so it can't be dragged.
         $b | Add-Member -NotePropertyName StartH -NotePropertyValue (($b.Start - $day).TotalHours) -Force
-        $b | Add-Member -NotePropertyName EndH -NotePropertyValue (($b.End - $day).TotalHours) -Force
+        # A stretch edited to run past midnight is drawn to the end of the day, so it can never be out of view
+        $b | Add-Member -NotePropertyName EndH -NotePropertyValue ([math]::Min(24.0, ($b.End - $day).TotalHours)) -Force
         $b | Add-Member -NotePropertyName Editable -NotePropertyValue ($null -ne $b.Raw) -Force
     }
+
+    Set-TimelineLanes $blocks
 
     $plan = Get-DayPlan $day
     $lo = $null; $hi = $null
@@ -3176,11 +3510,13 @@ function Get-DayTimeline([datetime]$day) {
     foreach ($b in $blocks) {
         if ($null -eq $lo -or $b.Start -lt $lo) { $lo = $b.Start }
         if ($null -eq $hi -or $b.End -gt $hi) { $hi = $b.End }
+        if ($hi -gt $day.AddDays(1)) { $hi = $day.AddDays(1) }
     }
     if ($isToday -and $null -ne $hi -and $now -gt $hi) { $hi = $now }
     if ($null -eq $lo) { $lo = $day.AddHours(8); $hi = $day.AddHours(18) }
-    $startH = [math]::Floor(($lo - $day).TotalHours)
-    $endH = [math]::Min(24.0, [math]::Ceiling(($hi - $day).TotalHours))
+    # An hour either side of the working day and what was tracked, so there is room to add time around it
+    $startH = [math]::Max(0.0, [math]::Floor(($lo - $day).TotalHours) - 1)
+    $endH = [math]::Min(24.0, [math]::Ceiling(($hi - $day).TotalHours) + 1)
     if ($endH - $startH -lt 4) {
         $endH = [math]::Min(24.0, $startH + 4)
         $startH = $endH - 4
@@ -3205,9 +3541,9 @@ function Get-DayTimeline([datetime]$day) {
 function Measure-DrawerHeight {
     $d = $script:drawerData
     if ((Get-DrawerMode) -eq 'timeline') {
-        # Header, tabs, hour labels and strip, then a line for each account used, plus total, lunch and unallocated
+        # A fixed height, with the day scrolling inside it (or taller if the account totals need more)
         $lines = @($script:drawerLegend).Count
-        return 10 + 34 + [Win.FullRenderer]::TabsH + [Win.FullRenderer]::AxisH + [Win.FullRenderer]::StripH + [Win.FullRenderer]::StripGap + $DrawerRowH * $lines + 10
+        return [math]::Max($TimelineMinH, 10 + 34 + [Win.FullRenderer]::TabsH + [Win.FullRenderer]::TlRowH * $lines + 12)
     }
     $rows = 1 + @($d.Names).Count + 3
     $h = 10 + 34 + $DrawerRowH * $rows + 10
@@ -3254,6 +3590,9 @@ function Refresh-DrawerData {
     if ((Get-DrawerMode) -eq 'timeline') {
         $script:drawerTimeline = Get-DayTimeline $script:drawerDay
         $script:drawerLegend = @(Get-DayLegend $script:drawerDay $script:drawerData $script:drawerWeek)
+        # The drawer's height depends on the legend, so work it out before placing the view in it
+        $script:drawerH = Get-DrawerHeight
+        if ($null -eq $script:tlScrollH) { Reset-TimelineView } else { Set-TimelineScroll $script:tlScrollH }
     } else {
         $script:drawerTimeline = $null
         $script:drawerLegend = @()
@@ -3277,6 +3616,7 @@ function Build-TimelineModel {
         $tb = New-Object Win.TimelineBlock
         $tb.Name = $b.Name; $tb.Kind = $b.Kind; $tb.Tip = $b.Tip; $tb.Editable = [bool]$b.Editable
         $tb.StartH = $b.StartH; $tb.EndH = $b.EndH
+        $tb.Lane = [int]$b.Lane; $tb.Lanes = [math]::Max(1, [int]$b.Lanes)
         foreach ($mv in @($script:tlPreview)) {
             if ($mv.Index -ne $i) { continue }
             if ($mv.Edge -eq 'start') { $tb.StartH = $mv.H } else { $tb.EndH = $mv.H }
@@ -3309,6 +3649,7 @@ function Build-DrawerModel {
         $m.Title = Get-DrawerDayTitle $script:drawerDay
         $m.NextEnabled = $script:drawerDay -lt [datetime]::Today
         $m.UndoEnabled = [bool]$script:undoLabel
+        $m.IsToday = ($script:drawerDay -eq [datetime]::Today)
         $m.FormatLabel = if ($script:hoursFormat -eq 'decimal') { 'h:mm' } else { 'Decimal' }
         $m.Timeline = Build-TimelineModel
         $script:drawerModel = $m
@@ -3389,7 +3730,7 @@ function Set-DrawerOpen([bool]$open, [switch]$Starting) {
     $tl = Get-TimerScreenPos
     $script:drawerOpen = $open
     if ($open) {
-        if (-not $Starting) { $script:drawerWeek = Get-WeekStart; $script:drawerDay = [datetime]::Today }
+        if (-not $Starting) { $script:drawerWeek = Get-WeekStart; $script:drawerDay = [datetime]::Today; $script:tlScrollH = $null }
         Refresh-DrawerData
     } elseif ($script:drawerCache) {
         $script:drawerCache.Dispose(); $script:drawerCache = $null; $script:drawerCacheKey = ''
@@ -3419,6 +3760,7 @@ function Set-DrawerMode([string]$mode) {
     Clear-TimelineDrag
     if ($mode -eq 'week') { $script:tlGeom = $null }
     if ($mode -eq 'timeline') {
+        $script:tlScrollH = $null
         # Today, unless the week table was showing a past week, then that week's last day so far
         $ws = $script:drawerWeek
         $script:drawerDay = if (-not $ws -or $ws -ge (Get-WeekStart)) { [datetime]::Today } else { $ws.AddDays(6) }
@@ -3454,40 +3796,80 @@ function Get-DrawerButtonAt($pt) {
     return $null
 }
 
+# ---- Timeline view: scrolling and zooming ----
+
+# The height of the part of the drawer that shows the day, under the title and tabs
+function Get-TimelineViewH {
+    return [math]::Max(40.0, [double]$script:drawerH - (10 + 34 + [Win.FullRenderer]::TabsH) - 12)
+}
+
+# Keep the view inside the day's range, which runs from the first hour to the last on the strip
+function Set-TimelineScroll([double]$h) {
+    $tl = $script:drawerTimeline
+    if (-not $tl) { return }
+    $farthest = [math]::Max([double]$tl.AxisStartH, [double]$tl.AxisEndH - (Get-TimelineViewH) / $script:tlPx)
+    $script:tlScrollH = [math]::Min([math]::Max($h, [double]$tl.AxisStartH), $farthest)
+}
+
+# Zoom by a factor, keeping the hour under the pointer where it is (or the middle of the view)
+function Set-TimelineZoom([double]$factor, $anchorH) {
+    $old = $script:tlPx
+    $new = [math]::Min([math]::Max($old * $factor, [double]$TlMinPx), [double]$TlMaxPx)
+    if ($new -eq $old) { return }
+    if ($null -eq $anchorH) { $anchorH = $script:tlScrollH + (Get-TimelineViewH) / $old / 2 }
+    $script:tlPx = $new
+    Set-TimelineScroll ($anchorH - ($anchorH - $script:tlScrollH) * $old / $new)
+}
+
+# Today opens with now about a third of the way down, other days at the start of the working day
+function Reset-TimelineView {
+    $tl = $script:drawerTimeline
+    if (-not $tl) { return }
+    $viewHours = (Get-TimelineViewH) / $script:tlPx
+    if ($script:drawerDay -eq [datetime]::Today -and $tl.ShowNow) { Set-TimelineScroll ($tl.NowH - 0.35 * $viewHours) }
+    elseif ($tl.HasWork) { Set-TimelineScroll ($tl.WorkStartH - 0.25) }
+    else { Set-TimelineScroll $tl.AxisStartH }
+}
+
 # ---- Timeline editing: dragging edges and filling gaps ----
 
 function New-TimelineHover { return @{ Block = -1; Gap = -1; EdgeBlock = -1; Edge = '' } }
 
-# The time under a window position, in hours since midnight, or $null when the strip isn't showing
+# The time at a window position, in hours since midnight, or $null when the timeline isn't showing.
+# It works for positions outside the view too, which a drag past the top or bottom relies on.
 function Get-TimelineTimeAt($pt) {
     $g = $script:tlGeom
     $tl = $script:drawerTimeline
-    if ((Get-DrawerMode) -ne 'timeline' -or -not $g -or -not $tl -or $g.W -le 0) { return $null }
-    $x = [double]($pt.X / $Zoom)
-    return $tl.AxisStartH + ($x - $g.X0) / $g.W * ($tl.AxisEndH - $tl.AxisStartH)
+    if ((Get-DrawerMode) -ne 'timeline' -or -not $g -or -not $tl -or $g.H -le 0 -or $null -eq $script:tlScrollH) { return $null }
+    return $script:tlScrollH + ([double]($pt.Y / $Zoom) - $g.Y) / $script:tlPx
 }
 
 function Test-InStrip($pt) {
     $g = $script:tlGeom
-    if ((Get-DrawerMode) -ne 'timeline' -or -not $g -or $g.W -le 0) { return $false }
+    if ((Get-DrawerMode) -ne 'timeline' -or -not $g -or $g.H -le 0) { return $false }
     $x = [double]($pt.X / $Zoom); $y = [double]($pt.Y / $Zoom)
-    return ($x -ge ($g.X0 - 6) -and $x -le ($g.X0 + $g.W + 6) -and $y -ge $g.Y -and $y -le ($g.Y + $g.H))
+    return ($x -ge $g.X0 -and $x -le ($g.X0 + $g.W) -and $y -ge $g.Y -and $y -le ($g.Y + $g.H))
 }
 
-# What is under the pointer on the strip: an edge, a block, a gap or nothing
+# What is under the pointer on the timeline: an edge, a card, a gap or nothing
 function Get-TimelineHit($pt) {
     $hit = New-TimelineHover
     if (-not (Test-InStrip $pt)) { return $hit }
     $tl = $script:drawerTimeline
     $h = Get-TimelineTimeAt $pt
-    $hoursPerUnit = ($tl.AxisEndH - $tl.AxisStartH) / $script:tlGeom.W    # the strip's width is in window units
-    $edge = Get-TimelineEdgeAt $tl.Blocks $h (6.0 * $hoursPerUnit)
+    $hoursPerUnit = 1.0 / $script:tlPx
+    $g = $script:tlGeom
+    $fx = ([double]($pt.X / $Zoom) - $g.X0) / $g.W
+    $edge = Get-TimelineEdgeAt $tl.Blocks $h (5.0 * $hoursPerUnit) $fx
     if ($edge) { $hit.EdgeBlock = $edge.Index; $hit.Edge = $edge.Edge; $hit.Block = $edge.Index; return $hit }
     $blocks = @($tl.Blocks)
     for ($i = 0; $i -lt $blocks.Count; $i++) {
+        if (-not (Test-InLane $blocks[$i] $fx)) { continue }
         $pad = [math]::Max(0.0, (6.0 * $hoursPerUnit - ($blocks[$i].EndH - $blocks[$i].StartH)) / 2)
         if ($h -ge ($blocks[$i].StartH - $pad) -and $h -le ($blocks[$i].EndH + $pad)) { $hit.Block = $i; return $hit }
     }
+    # Time covered by a block in another lane isn't a gap, so there is nothing to point at here
+    foreach ($bk in $blocks) { if ($h -ge $bk.StartH -and $h -le $bk.EndH) { return $hit } }
     $gaps = @($tl.Gaps)
     for ($i = 0; $i -lt $gaps.Count; $i++) {
         if ($h -ge $gaps[$i].StartH -and $h -le $gaps[$i].EndH) { $hit.Gap = $i; return $hit }
@@ -3505,27 +3887,22 @@ function Format-ClockHours([double]$h) {
 }
 
 # Hover text for the strip, placed just under the part being pointed at
-function Show-TimelineTip($hit) {
-    $tl = $script:drawerTimeline; $g = $script:tlGeom
-    if (-not $tl -or -not $g) { return }
-    $text = $null; $atH = $null
+function Show-TimelineTip($hit, $pt) {
+    $tl = $script:drawerTimeline
+    if (-not $tl) { return }
+    $text = $null
     if ($hit.EdgeBlock -ge 0) {
-        $blk = $tl.Blocks[$hit.EdgeBlock]
         $text = switch ($hit.Edge) { 'start' { 'Drag to change the start time' } 'end' { 'Drag to change the finish time' } default { 'Drag to move the change-over' } }
-        $atH = if ($hit.Edge -eq 'start') { $blk.StartH } else { $blk.EndH }
     } elseif ($hit.Block -ge 0) {
         $blk = $tl.Blocks[$hit.Block]
         $text = $blk.Tip
         if (-not $blk.Editable) { $text += "`nStop it to change the times" }
-        $atH = $blk.StartH
     } elseif ($hit.Gap -ge 0) {
         $gp = $tl.Gaps[$hit.Gap]
         $text = "Nothing tracked from $(Format-ClockHours $gp.StartH) to $(Format-ClockHours $gp.EndH)`nClick to fill it, or drag across part of it"
-        $atH = $gp.StartH
     }
     if (-not $text) { return }
-    $x = $g.X0 + ($atH - $tl.AxisStartH) / ($tl.AxisEndH - $tl.AxisStartH) * $g.W
-    $tip.Show($text, $form, [int]($x * $Zoom), [int](($g.Y + $g.H + 4) * $Zoom), 6000)
+    $tip.Show($text, $form, [int]($pt.X + 14 * $Zoom), [int]($pt.Y + 20 * $Zoom), 6000)
 }
 
 # The latest the strip may be edited to, which is now for today
@@ -3551,7 +3928,7 @@ function Start-TimelineDrag($pt) {
     }
     if ($hit.Gap -ge 0) {
         $h = Get-TimelineTimeAt $pt
-        $script:tlDrag = @{ Kind = 'gap'; Gap = $hit.Gap; AnchorH = $h; StartX = $pt.X; Moved = $false }
+        $script:tlDrag = @{ Kind = 'gap'; Gap = $hit.Gap; AnchorH = $h; StartY = $pt.Y; Moved = $false }
         $script:tlHover = $hit
         $tip.Hide($form)
         return $true
@@ -3576,7 +3953,7 @@ function Update-TimelineDrag($pt) {
         $script:tlDragText = if ($drag.Edge -eq 'join') { Format-ClockHours $res.H }
                              else { '{0} ({1})' -f (Format-ClockHours $res.H), (Format-HM (($newEnd - $newStart) * 3600)) }
     } else {
-        if (-not $drag.Moved -and [math]::Abs($pt.X - $drag.StartX) -lt 4) { return }
+        if (-not $drag.Moved -and [math]::Abs($pt.Y - $drag.StartY) -lt 4) { return }
         $drag.Moved = $true
         $gp = $tl.Gaps[$drag.Gap]
         $a = [math]::Min([math]::Max($drag.AnchorH, $gp.StartH), $gp.EndH)
@@ -3690,6 +4067,13 @@ function Complete-GapFill([string]$account) {
     })
 }
 
+function Test-HitDayBtn($tp) {
+    if (-not $script:view -or -not $script:view.DayBtnText) { return $false }
+    $x = $tp.X / $Zoom; $y = $tp.Y / $Zoom
+    $dbRect = Get-DayBtnRect
+    return ($x -ge $dbRect.X -and $x -le ($dbRect.X + $dbRect.W) -and $y -ge $dbRect.Y -and $y -le ($dbRect.Y + $dbRect.H))
+}
+
 function Test-HitUnalloc($tp) {
     $x = $tp.X / $Zoom; $y = $tp.Y / $Zoom
     return ($x -ge 160 -and $x -le 312 -and $y -ge 48 -and $y -le 67)
@@ -3729,17 +4113,20 @@ function Get-DrawerTableLines {
 function Invoke-DrawerButton($id) {
     switch ($id) {
         'prev' {
-            if ((Get-DrawerMode) -eq 'timeline') { $script:drawerDay = $script:drawerDay.AddDays(-1) }
+            if ((Get-DrawerMode) -eq 'timeline') { $script:drawerDay = $script:drawerDay.AddDays(-1); $script:tlScrollH = $null }
             else { $script:drawerWeek = $script:drawerWeek.AddDays(-7) }
             Update-DrawerContent
         }
         'next' {
             if ((Get-DrawerMode) -eq 'timeline') {
-                if ($script:drawerDay -lt [datetime]::Today) { $script:drawerDay = $script:drawerDay.AddDays(1); Update-DrawerContent }
+                if ($script:drawerDay -lt [datetime]::Today) { $script:drawerDay = $script:drawerDay.AddDays(1); $script:tlScrollH = $null; Update-DrawerContent }
             }
             elseif ($script:drawerWeek -lt (Get-WeekStart)) { $script:drawerWeek = $script:drawerWeek.AddDays(7); Update-DrawerContent }
         }
         'undo' { Undo-LogChange }
+        'zoomin' { Set-TimelineZoom 1.25 $null; $script:tlHover = New-TimelineHover; Request-Redraw }
+        'zoomout' { Set-TimelineZoom 0.8 $null; $script:tlHover = New-TimelineHover; Request-Redraw }
+        'now' { Reset-TimelineView; Request-Redraw }
         'week' { Set-DrawerMode 'week' }
         'timeline' { Set-DrawerMode 'timeline' }
         'copy' {
@@ -4155,6 +4542,8 @@ function Sync-RendererState {
     $r.DraggingRow = if ($script:reorder) { [array]::IndexOf($script:slots, $script:reorder.Name) } else { -1 }
     $r.RoundHover = "$($script:roundHover)"
     $r.CollapseHover = [bool]$script:collapseHover
+    $r.DayBtnText = [string]$v.DayBtnText
+    $r.DayBtnHover = [bool]$script:dayBtnHover
     $r.HandleHover = [bool]$script:handleHover
     $r.DrawerHover = "$($script:drawerHover)"
     $r.TlHoverBlock = [int]$script:tlHover.Block; $r.TlHoverGap = [int]$script:tlHover.Gap
@@ -4162,6 +4551,8 @@ function Sync-RendererState {
     $r.TlSelStartH = if ($script:tlSel) { [double]$script:tlSel.StartH } else { -1.0 }
     $r.TlSelEndH = if ($script:tlSel) { [double]$script:tlSel.EndH } else { -1.0 }
     $r.TlDragText = [string]$script:tlDragText; $r.TlDragAtH = [double]$script:tlDragAt
+    $r.TlScrollH = if ($null -ne $script:tlScrollH) { [double]$script:tlScrollH } else { 0.0 }
+    $r.TlPx = [float]$script:tlPx
     $r.Drawer = $script:drawerModel
 }
 
@@ -4651,6 +5042,12 @@ function Get-WeekData($ws) {
                 $b = Limit-Time $iv[1] $s $cap
                 if ($b -gt $a) { $l += ($b - $a).TotalSeconds }
             }
+        }
+        # Time marked as finished for the day counts like lunch
+        foreach ($away in @(Get-AwayOn $day $now)) {
+            $a = Limit-Time $away[0] $s $cap
+            $b = Limit-Time $away[1] $s $cap
+            if ($b -gt $a) { $l += ($b - $a).TotalSeconds }
         }
         $billable = [math]::Max(0.0, $worked - $l)
         $sum = 0.0
@@ -5722,59 +6119,84 @@ function Add-DialogButtons($dlg, [double]$y, [bool]$withReset, $resetText) {
     $dlg.CancelButton = $cancel
 }
 
-# Usual hours, working days, week start and how hours are shown
+# Working days with their start and finish times (so each day can have its own shift), week start and how hours are shown
 function Show-WorkSettings {
-    $dlg = New-SettingsDialog 'Working hours and days' 380 262
-    [void](Add-DialogControl $dlg (New-DialogLabel 'Usual hours') 14 16 0 0)
-    $tbStart = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 130 13 70 0
-    $tbStart.Text = $StartTime
-    [void](Add-DialogControl $dlg (New-DialogLabel 'to') 208 16 0 0)
-    $tbEnd = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 232 13 70 0
-    $tbEnd.Text = $EndTime
-
-    [void](Add-DialogControl $dlg (New-DialogLabel 'Working days') 14 56 0 0)
-    $boxes = @()
+    $dlg = New-SettingsDialog 'Working hours and days' 380 344
     $order = @(1, 2, 3, 4, 5, 6, 0)
+    $rows = @()
     for ($i = 0; $i -lt 7; $i++) {
+        $dow = $order[$i]
+        $y = 14 + $i * 28
         $cb = New-Object System.Windows.Forms.CheckBox
-        $cb.Text = $DayAbbr[$order[$i]]
-        $cb.Tag = $order[$i]
-        $cb.Checked = $script:workDays -contains $order[$i]
-        $boxes += (Add-DialogControl $dlg $cb (14 + ($i % 4) * 88) (80 + [math]::Floor($i / 4) * 26) 84 0)
+        $cb.Text = $DayAbbr[$dow]
+        $cb.Tag = $dow
+        $cb.Checked = $script:workDays -contains $dow
+        [void](Add-DialogControl $dlg $cb 14 $y 70 0)
+        $usual = Get-UsualHours $dow
+        $tbA = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 90 ($y - 1) 62 0
+        $tbA.Text = $usual[0]
+        [void](Add-DialogControl $dlg (New-DialogLabel 'to') 160 ($y + 2) 0 0)
+        $tbB = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 182 ($y - 1) 62 0
+        $tbB.Text = $usual[1]
+        $tbA.Enabled = $cb.Checked; $tbB.Enabled = $cb.Checked
+        # Times are only available for days that are ticked
+        $cb.Tag = @{ Dow = $dow; Boxes = @($tbA, $tbB) }
+        $cb.Add_CheckedChanged({ foreach ($bx in $this.Tag.Boxes) { $bx.Enabled = $this.Checked } })
+        $rows += @{ Dow = $dow; Check = $cb; Start = $tbA; End = $tbB }
     }
+    $same = New-Object System.Windows.Forms.Button
+    $same.Text = 'Same every day'
+    $same.Tag = $rows
+    $same.Add_Click({
+        # Copy the first ticked day's hours to every other day
+        $first = $this.Tag | Where-Object { $_.Check.Checked } | Select-Object -First 1
+        if (-not $first) { return }
+        foreach ($r in $this.Tag) { $r.Start.Text = $first.Start.Text; $r.End.Text = $first.End.Text }
+    })
+    [void](Add-DialogControl $dlg $same 262 12 104 28)
 
-    [void](Add-DialogControl $dlg (New-DialogLabel 'Week starts on') 14 146 0 0)
-    $cbWeek = Add-DialogControl $dlg (New-Object System.Windows.Forms.ComboBox) 130 143 150 0
+    [void](Add-DialogControl $dlg (New-DialogLabel 'Week starts on') 14 226 0 0)
+    $cbWeek = Add-DialogControl $dlg (New-Object System.Windows.Forms.ComboBox) 130 223 150 0
     $cbWeek.DropDownStyle = 'DropDownList'
     $fullNames = @('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
     foreach ($fn in $fullNames) { [void]$cbWeek.Items.Add($fn) }
     $cbWeek.SelectedIndex = $script:weekStartDow
 
-    [void](Add-DialogControl $dlg (New-DialogLabel 'Show hours as') 14 182 0 0)
-    $cbFmt = Add-DialogControl $dlg (New-Object System.Windows.Forms.ComboBox) 130 179 236 0
+    [void](Add-DialogControl $dlg (New-DialogLabel 'Show hours as') 14 262 0 0)
+    $cbFmt = Add-DialogControl $dlg (New-Object System.Windows.Forms.ComboBox) 130 259 236 0
     $cbFmt.DropDownStyle = 'DropDownList'
     [void]$cbFmt.Items.AddRange(@('Decimal (1.25)', 'Hours and minutes (1:15)'))
     $cbFmt.SelectedIndex = if ($script:hoursFormat -eq 'hm') { 1 } else { 0 }
 
-    Add-DialogButtons $dlg 222 $false ''
+    Add-DialogButtons $dlg 302 $false ''
 
+    $fullDay = @{ 0 = 'Sunday'; 1 = 'Monday'; 2 = 'Tuesday'; 3 = 'Wednesday'; 4 = 'Thursday'; 5 = 'Friday'; 6 = 'Saturday' }
     while ($true) {
         $script:dialogOpen = $true
         try { $result = $dlg.ShowDialog((Get-DialogOwner)) } finally { $script:dialogOpen = $false }
         if ($result -ne [System.Windows.Forms.DialogResult]::OK) { $dlg.Dispose(); return }
-        $a = ConvertTo-ClockText $tbStart.Text
-        $b = ConvertTo-ClockText $tbEnd.Text
-        $days = @($boxes | Where-Object { $_.Checked } | ForEach-Object { [int]$_.Tag } | Sort-Object)
-        $problem = if (-not $a -or -not $b) { 'Enter the hours as times, such as 08:30 and 17:30.' }
-                   elseif ([timespan]$b -le [timespan]$a) { 'The end time needs to be after the start time.' }
-                   elseif ($days.Count -eq 0) { 'Choose at least one working day.' }
-                   else { $null }
+        $problem = $null
+        $chosen = @()
+        foreach ($r in $rows) {
+            if (-not $r.Check.Checked) { continue }
+            $a = ConvertTo-ClockText $r.Start.Text
+            $b = ConvertTo-ClockText $r.End.Text
+            if (-not $a -or -not $b) { $problem = "Enter the hours for $($fullDay[$r.Dow]) as times, such as 08:30 and 17:30."; break }
+            if ([timespan]$b -le [timespan]$a) { $problem = "The end time for $($fullDay[$r.Dow]) needs to be after the start time."; break }
+            $chosen += @{ Dow = $r.Dow; Start = $a; End = $b }
+        }
+        if (-not $problem -and $chosen.Count -eq 0) { $problem = 'Choose at least one working day.' }
         if (-not $problem) { break }
         Show-Message $problem
     }
-    $script:StartTime = $a
-    $script:EndTime = $b
-    $script:workDays = $days
+    # The first working day's hours become the usual ones, and any day that differs keeps its own
+    $script:StartTime = $chosen[0].Start
+    $script:EndTime = $chosen[0].End
+    $script:dayHours = @{}
+    foreach ($ch in $chosen) {
+        if ($ch.Start -ne $script:StartTime -or $ch.End -ne $script:EndTime) { $script:dayHours[[int]$ch.Dow] = @{ Start = $ch.Start; End = $ch.End } }
+    }
+    $script:workDays = @($chosen | ForEach-Object { [int]$_.Dow } | Sort-Object)
     $script:weekStartDow = $cbWeek.SelectedIndex
     $script:hoursFormat = if ($cbFmt.SelectedIndex -eq 1) { 'hm' } else { 'decimal' }
     $dlg.Dispose()
@@ -5794,8 +6216,9 @@ function Show-TodaySettings {
     $tbStart = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 130 51 70 0
     $tbEnd = Add-DialogControl $dlg (New-Object System.Windows.Forms.TextBox) 232 51 70 0
     [void](Add-DialogControl $dlg (New-DialogLabel 'to') 208 54 0 0)
-    $tbStart.Text = if ($plan.Working) { $plan.Start.ToString('HH:mm', $Inv) } else { $StartTime }
-    $tbEnd.Text = if ($plan.Working) { $plan.End.ToString('HH:mm', $Inv) } else { $EndTime }
+    $usualToday = Get-UsualHours ([int][datetime]::Today.DayOfWeek)
+    $tbStart.Text = if ($plan.Working) { $plan.Start.ToString('HH:mm', $Inv) } else { $usualToday[0] }
+    $tbEnd.Text = if ($plan.Working) { $plan.End.ToString('HH:mm', $Inv) } else { $usualToday[1] }
     $cbOff.Add_CheckedChanged({ $tbStart.Enabled = -not $cbOff.Checked; $tbEnd.Enabled = -not $cbOff.Checked }.GetNewClosure())
     $tbStart.Enabled = -not $cbOff.Checked; $tbEnd.Enabled = -not $cbOff.Checked
     Add-DialogButtons $dlg 108 ([bool]$script:dayOverrides[$todayKey]) 'Back to usual hours'
@@ -5816,7 +6239,7 @@ function Show-TodaySettings {
                    else { $null }
         if ($problem) { Show-Message $problem; continue }
         # Same as usual on a usual working day: no special arrangement needed
-        if ($a -eq $StartTime -and $b -eq $EndTime -and $script:workDays -contains [int][datetime]::Today.DayOfWeek) {
+        if ($a -eq $usualToday[0] -and $b -eq $usualToday[1] -and $script:workDays -contains [int][datetime]::Today.DayOfWeek) {
             [void]$script:dayOverrides.Remove($todayKey)
         } else {
             $script:dayOverrides[$todayKey] = @{ Off = $false; Start = $a; End = $b }
@@ -6256,6 +6679,7 @@ $form.Add_MouseDown({
     $tp = Get-TimerPoint $_.Location
     if (Test-HitHandle $tp) { $script:pressedHandle = $true; return }
     if (Test-HitCollapse $tp) { $script:pressedCollapse = $true; return }
+    if (Test-HitDayBtn $tp) { $script:pressedDayBtn = $true; return }
     $grip = Get-HitGrip $tp
     if ($null -ne $grip) {
         $script:reorder = @{ Name = $script:slots[$grip]; Moved = $false }
@@ -6294,10 +6718,11 @@ $form.Add_MouseMove({
     if (Test-InDrawer $_.Location) {
         $btn = Get-DrawerButtonAt $_.Location
         $form.Cursor = if ($btn) { [System.Windows.Forms.Cursors]::Hand } else { [System.Windows.Forms.Cursors]::Default }
-        # On the timeline strip, edges, blocks and gaps each have their own hover and cursor
+        $script:tlLastPt = $_.Location
+        # On the timeline, edges, cards and gaps each have their own hover and cursor
         $hit = if ($btn) { New-TimelineHover } else { Get-TimelineHit $_.Location }
         if (-not $btn) {
-            if ($hit.EdgeBlock -ge 0) { $form.Cursor = [System.Windows.Forms.Cursors]::SizeWE }
+            if ($hit.EdgeBlock -ge 0) { $form.Cursor = [System.Windows.Forms.Cursors]::SizeNS }
             elseif ($hit.Gap -ge 0) { $form.Cursor = [System.Windows.Forms.Cursors]::Hand }
         }
         if ($btn -ne $script:drawerHover -or -not (Test-SameTimelineHit $hit $script:tlHover) -or $null -ne $script:hover -or $script:handleHover) {
@@ -6305,7 +6730,7 @@ $form.Add_MouseMove({
             $script:tlHover = $hit
             $script:hover = $null; $script:gripHover = $null; $script:roundHover = $null; $script:handleHover = $false
             $tip.Hide($form)
-            if (-not $btn) { Show-TimelineTip $hit }
+            if (-not $btn) { Show-TimelineTip $hit $_.Location }
             Request-Redraw
         }
         return
@@ -6335,6 +6760,16 @@ $form.Add_MouseMove({
         else { $tip.Hide($form) }
         Request-Redraw
     }
+    $dayHit = Test-HitDayBtn $tp
+    if ($dayHit -ne $script:dayBtnHover) {
+        $script:dayBtnHover = $dayHit
+        if ($dayHit) {
+            $dayTip = if ($script:view.DayDone) { 'Carry on working today' } else { "Finish for the day`nUnallocated time stops counting" }
+            $dbRect = Get-DayBtnRect
+            $tip.Show($dayTip, $form, [int](($dbRect.X + $ox) * $Zoom), [int](($dbRect.Y - 44 + $oy) * $Zoom), 3000)
+        } else { $tip.Hide($form) }
+        Request-Redraw
+    }
     $ua = Test-HitUnalloc $tp
     if ($ua -ne $script:unallocHover) {
         $script:unallocHover = $ua
@@ -6343,7 +6778,7 @@ $form.Add_MouseMove({
         } elseif (-not $coll -and -not $handle) { $tip.Hide($form) }
     }
     $form.Cursor = if ($null -ne $grip) { [System.Windows.Forms.Cursors]::SizeNS }
-                   elseif ($null -ne $hit -or $coll -or $handle) { [System.Windows.Forms.Cursors]::Hand }
+                   elseif ($null -ne $hit -or $coll -or $handle -or $dayHit) { [System.Windows.Forms.Cursors]::Hand }
                    else { [System.Windows.Forms.Cursors]::Default }
     if ($round -ne $script:roundHover) {
         if ($null -ne $round) {
@@ -6367,6 +6802,24 @@ $form.Add_MouseMove({
         Request-Redraw
     }
 })
+# Mouse wheel over the timeline scrolls it, and with Ctrl held it zooms around the pointer
+$form.Add_MouseWheel({
+    try {
+        if ($script:mode -ne 'full' -or -not $script:drawerOpen -or (Get-DrawerMode) -ne 'timeline') { return }
+        if (-not (Test-InDrawer $_.Location)) { return }
+        if ([System.Windows.Forms.Control]::ModifierKeys -band [System.Windows.Forms.Keys]::Control) {
+            Set-TimelineZoom $(if ($_.Delta -gt 0) { 1.25 } else { 0.8 }) (Get-TimelineTimeAt $_.Location)
+        } else {
+            Set-TimelineScroll ($script:tlScrollH - ($_.Delta / 120.0) * 48.0 / $script:tlPx)
+        }
+        $tip.Hide($form)
+        if ($script:tlDrag) { Update-TimelineDrag $_.Location }
+        else {
+            $script:tlHover = if (Test-InStrip $_.Location) { Get-TimelineHit $_.Location } else { New-TimelineHover }
+            Request-Redraw
+        }
+    } catch { Write-Log "Timeline scroll error: $($_.Exception.Message)" }
+})
 $form.Add_MouseUp({
     try {
         if ($script:mode -eq 'pill') { Pill-MouseUp $_; return }
@@ -6386,6 +6839,11 @@ $form.Add_MouseUp({
         if ($script:pressedCollapse) {
             $script:pressedCollapse = $false
             if (Test-HitCollapse $tp) { Set-View 'pill' }
+            return
+        }
+        if ($script:pressedDayBtn) {
+            $script:pressedDayBtn = $false
+            if (Test-HitDayBtn $tp) { $tip.Hide($form); Switch-DayDone }
             return
         }
         if ($script:dragStart) { $script:dragStart = $null; Save-Position }
@@ -6421,8 +6879,8 @@ $form.Add_MouseLeave({
         return
     }
     if ($script:reorder -or $script:tlDrag) { return }
-    if ($script:collapseHover -or $script:handleHover -or $script:drawerHover -or -not (Test-SameTimelineHit $script:tlHover (New-TimelineHover))) {
-        $script:collapseHover = $false; $script:handleHover = $false; $script:drawerHover = $null
+    if ($script:collapseHover -or $script:handleHover -or $script:dayBtnHover -or $script:drawerHover -or -not (Test-SameTimelineHit $script:tlHover (New-TimelineHover))) {
+        $script:collapseHover = $false; $script:handleHover = $false; $script:dayBtnHover = $false; $script:drawerHover = $null
         $script:tlHover = New-TimelineHover
         Request-Redraw
     }
@@ -6492,7 +6950,7 @@ function Resize-Form {
     if ($script:mode -eq 'full' -and $script:drawerOpen) {
         # With the drawer open, keep the timer where it is and rebuild around it
         $tl = Get-TimerScreenPos
-        $script:BaseH = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6
+        $script:BaseH = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6 + $script:finishH
         $script:drawerH = Get-DrawerHeight
         Update-DrawerGeometry $tl
         $script:hover = $null
@@ -6500,7 +6958,7 @@ function Resize-Form {
         return
     }
     # Grow or shrink to fit the rows, keeping the bottom edge where it was
-    $script:BaseH = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6
+    $script:BaseH = $RowTop + $script:slots.Count * $RowH + $LunchGap + 6 + $script:finishH
     $bottom = $form.Bottom
     $bw, $bh = Get-BaseSize
     $form.ClientSize = New-Object System.Drawing.Size([int]($bw * $Zoom), [int]($bh * $Zoom))
@@ -6582,8 +7040,10 @@ $miView = $menu.Items.Add('Compact view')
 $miView.Add_Click({ if ($script:mode -eq 'pill') { Set-View 'full' } else { Set-View 'pill' } })
 $miDrawer = $menu.Items.Add('Show drawer')
 $miDrawer.Add_Click({ Set-DrawerOpen (-not $script:drawerOpen) })
+$miDone = $menu.Items.Add('Finish for the day')
+$miDone.Add_Click({ Switch-DayDone })
 $miWork = New-Object System.Windows.Forms.ToolStripMenuItem 'Working hours'
-[void]$miWork.DropDownItems.Add('Usual hours and days...', $null, { try { Show-WorkSettings } catch { Write-Log "Settings error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)" } })
+[void]$miWork.DropDownItems.Add('Hours and days...', $null, { try { Show-WorkSettings } catch { Write-Log "Settings error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)" } })
 [void]$miWork.DropDownItems.Add('Today only...', $null, { try { Show-TodaySettings } catch { Write-Log "Settings error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)" } })
 [void]$miWork.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator))
 $miFormat = $miWork.DropDownItems.Add('Show hours as h:mm')
@@ -6693,6 +7153,55 @@ function Build-ThemeMenu {
 }
 [void]$miAppearance.DropDownItems.Add($miTheme)
 
+# ---- Size: the whole timer and drawer, kept for next time ----
+$SizeLevels = [ordered]@{ 'Smaller (85%)' = 0.85; 'Normal (100%)' = 1.0; 'Larger (125%)' = 1.25; 'Large (150%)' = 1.5; 'Largest (175%)' = 1.75 }
+
+function Get-WantedZoom {
+    $dpi = $script:SystemDpi
+    if ($script:perMonitor) { try { $d = [Win.Dpi]::GetDpiForWindow($form.Handle); if ($d -gt 0) { $dpi = $d } } catch {} }
+    return $script:Scale * $dpi / 96
+}
+
+# Nudge the window back into view if making it bigger pushed it over an edge of the screen
+function Keep-OnScreen {
+    $area = [System.Windows.Forms.Screen]::FromControl($form).WorkingArea
+    $x = $form.Left; $y = $form.Top
+    if ($form.Right -gt $area.Right) { $x = $area.Right - $form.Width }
+    if ($form.Bottom -gt $area.Bottom) { $y = $area.Bottom - $form.Height }
+    if ($x -lt $area.Left) { $x = $area.Left }
+    if ($y -lt $area.Top) { $y = $area.Top }
+    if ($x -ne $form.Left -or $y -ne $form.Top) { $form.Location = New-Object System.Drawing.Point($x, $y) }
+}
+
+function Set-UiScale([double]$newSize) {
+    # (Not called $scale, which would hide the script's $Scale from everything this calls)
+    $script:Scale = $newSize
+    try { Set-Content -Path $SizeFile -Value $newSize.ToString($Inv) } catch {}
+    # Keep the timer where it is on screen while the window grows or shrinks around it
+    $tl = if ($script:mode -eq 'full') { Get-TimerScreenPos } else { $null }
+    $script:Zoom = Get-WantedZoom
+    if ($tl) { Update-DrawerGeometry $tl }
+    else {
+        $bw, $bh = Get-BaseSize
+        $form.ClientSize = New-Object System.Drawing.Size([int]($bw * $Zoom), [int]($bh * $Zoom))
+    }
+    $script:regionKey = ''
+    Keep-OnScreen
+    $tip.Hide($form)
+    Request-Redraw
+}
+
+$miSize = New-Object System.Windows.Forms.ToolStripMenuItem 'Size'
+foreach ($sl in $SizeLevels.Keys) {
+    $si = $miSize.DropDownItems.Add($sl)
+    $si.Tag = [double]$SizeLevels[$sl]
+    $si.Add_Click({ try { Set-UiScale ([double]$this.Tag) } catch { Write-Log "Size error: $($_.Exception.Message)" } })
+}
+$miSize.Add_DropDownOpening({
+    foreach ($it in $miSize.DropDownItems) { $it.Checked = ([math]::Abs([double]$it.Tag - $script:Scale) -lt 0.01) }
+})
+[void]$miAppearance.DropDownItems.Add($miSize)
+
 $miList = New-Object System.Windows.Forms.ToolStripMenuItem 'Account list transparency'
 foreach ($ll in $ListLevels.Keys) {
     $li = $miList.DropDownItems.Add($ll)
@@ -6741,6 +7250,9 @@ $menu.Add_Opening({
     $miDrawer.Visible = $script:mode -eq 'full'
     $miFormat.Text = if ($script:hoursFormat -eq 'decimal') { 'Show hours as h:mm' } else { 'Show hours as decimal' }
     $miDrawer.Text = if ($script:drawerOpen) { 'Hide drawer' } else { 'Show drawer' }
+    $donePlan = Get-DayPlan ([datetime]::Today)
+    $miDone.Text = if (Test-DayDone) { 'Carry on working' } else { 'Finish for the day' }
+    $miDone.Enabled = [bool]((Test-DayDone) -or ($donePlan.Working -and (Get-Date) -ge $donePlan.Start))
     $pt = $form.PointToClient([System.Windows.Forms.Cursor]::Position)
     if ($script:mode -eq 'pill') {
         # In the pill, only rows in the open account list count
@@ -6874,7 +7386,7 @@ if (Test-Path $DrawerFile) {
     try {
         $drawerLines = @(Get-Content $DrawerFile -TotalCount 2)
         $drawerWasOpen = ($drawerLines[0].Trim() -eq '1')
-        if ($drawerLines.Count -gt 1 -and $drawerLines[1].Trim() -eq 'timeline') { $script:drawerMode = 'timeline' }
+        if ($drawerLines.Count -gt 1 -and $drawerLines[1].Trim() -eq 'week') { $script:drawerMode = 'week' }
     } catch {}
 }
 if ($savedView -eq 'pill') {

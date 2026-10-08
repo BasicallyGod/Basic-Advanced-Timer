@@ -7,11 +7,12 @@ AccountTimer2.ps1 is the current version. The two earlier scripts are kept as wo
 ## What it does
 
 - Shows the working day so far, counting from your start time, with overtime after your end time
+- Start and finish times can differ by day, for shift patterns, and a Finish day button says the day is over so the timer stops counting unallocated time
 - One-click tracking per account, plus Lunch, with only one running at a time
 - A compact pill view and a full view, with a drawer beside it that shows the week as a table or the day as a timeline you can edit by dragging, and a separate weekly view
 - Budgets per account, notes on longer stretches of time, rounding to 15 minutes and manual edits with Undo
 - Separate unallocated figures for the working day and overtime
-- Themes, see-through account list, decimal or hours and minutes display
+- Themes, see-through account list, a Size setting for the whole timer, decimal or hours and minutes display
 - Weekly summary and time entry files in CSV, ready for timesheets or Excel
 
 ## Requirements
