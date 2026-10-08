@@ -68,7 +68,7 @@ Assert ($entriesBefore.Count -eq 6) 'Detailed weekly entries must include all si
 
 # Position twenty minutes of the existing hour, without editing the source ledger.
 $script:creditPositions = @(
-    [pscustomobject]@{ Id='sample-1'; Date='2026-10-07'; Account='Account A'; Start='11:20:00'; Minutes='20.00' }
+    [pscustomobject]@{ Id='sample-1'; Date='2026-10-07'; Account='Account A'; Start='11:20:00'; Minutes='20.00'; Note='Synthetic activity note' }
 )
 $after = Get-DayTimeline $day
 $entriesAfter = @(Get-WeekEntries $ws)
@@ -76,6 +76,7 @@ CloseTo $after.UnplacedSeconds 2400 'Unplaced credit must decrease by exactly th
 CloseTo [double]($entriesAfter | Measure-Object -Property Seconds -Sum).Sum $beforeSeconds 'Positioning cannot create new credited time.'
 Assert ($after.Blocks.Count -eq 6) 'Positioned credit must show as an additional timeline interval.'
 Assert (@($after.Blocks | Where-Object { $_.Origin -eq 'positioned' }).Count -eq 1) 'Position should have its own projection.'
+Assert (@($after.Blocks | Where-Object { $_.Origin -eq 'positioned' -and $_.Note -eq 'Synthetic activity note' }).Count -eq 1) 'Position notes must remain attached to their own metadata.'
 Assert (@($entriesAfter | Where-Object { $_.Origin -eq 'positioned' }).Count -eq 1) 'Weekly detail should show the positioned portion.'
 CloseTo [double](@($entriesAfter | Where-Object { $_.Origin -eq 'merged' })[0].Seconds) 2400 'Merged residual is only the unplaced balance.'
 Assert (@($script:fixtureRows | Where-Object { $_.Origin -eq 'merged' }).Count -eq 1) 'Original merged source remains untouched.'

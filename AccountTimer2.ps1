@@ -1257,7 +1257,7 @@ namespace Win {
                 gy += TlRowH;
             }
             if (t.HasUnplaced) {
-                QueueSmoothText("* Position via gap menu", fTS, faintC,
+                QueueSmoothText("* Click gap to place", fTS, faintC,
                                 new RectangleF(lx, gy + 4f, LegendW, 34f), DT_LEFT);
             }
         }
@@ -1834,6 +1834,11 @@ function Load-CreditPositions {
     if (-not (Test-Path $PositionsFile)) { return }
     try {
         $script:creditPositions = @(Import-Csv $PositionsFile | Where-Object { $_.Id -and $_.Date -and $_.Account -and $_.Start -and $_.Minutes })
+        foreach ($p in @($script:creditPositions)) {
+            if (-not $p.PSObject.Properties['Note']) {
+                $p | Add-Member -NotePropertyName Note -NotePropertyValue ''
+            }
+        }
     } catch { Write-Log "Could not read credit positions: $($_.Exception.Message)" }
 }
 
@@ -1842,10 +1847,10 @@ function Write-CreditPositions {
     try {
         $rows = @($script:creditPositions)
         if ($rows.Count -gt 0) {
-            $rows | Select-Object Id, Date, Account, Start, Minutes |
+            $rows | Select-Object Id, Date, Account, Start, Minutes, Note |
                 Export-Csv -Path $temp -NoTypeInformation -Encoding UTF8
         } else {
-            Set-Content -Path $temp -Value '"Id","Date","Account","Start","Minutes"' -Encoding UTF8
+            Set-Content -Path $temp -Value '"Id","Date","Account","Start","Minutes","Note"' -Encoding UTF8
         }
         Move-Item -Path $temp -Destination $PositionsFile -Force -ErrorAction Stop
         return $true
@@ -1891,7 +1896,7 @@ function Get-CreditPositionSessions([datetime]$day) {
             [pscustomobject]@{
                 Name = $p.Account; Start = $from; End = $from.AddSeconds($secs)
                 Seconds = $secs; IsAdjust = $false; Kind = 'time'; Origin = 'positioned'
-                Raw = $null; PositionId = [string]$p.Id
+                Raw = $null; PositionId = [string]$p.Id; Note = [string]$p.Note
             }
         } catch { Write-Log "Invalid credit position $($p.Id): $($_.Exception.Message)" }
     }
@@ -1967,7 +1972,7 @@ function Invoke-LogChange($description, [scriptblock]$change) {
         if (Test-Path $GroupsFile) { Copy-Item $GroupsFile $GroupsUndo -Force }
         else { Set-Content -Path $GroupsUndo -Value '"GroupId","Date","Account","Start","End","Minutes"' -Encoding UTF8 }
         if (Test-Path $PositionsFile) { Copy-Item $PositionsFile $PositionsUndo -Force }
-        else { Set-Content -Path $PositionsUndo -Value '"Id","Date","Account","Start","Minutes"' -Encoding UTF8 }
+        else { Set-Content -Path $PositionsUndo -Value '"Id","Date","Account","Start","Minutes","Note"' -Encoding UTF8 }
         $snapshotsReady = $true
 
         if ($logRows.Count -gt 0) {
@@ -2061,7 +2066,9 @@ function Remove-EntryBlocks {
                     $at = Find-SessionRow $logRows $part.Raw
                     if ($at -ge 0) { $logRows.RemoveAt($at) }
                 }
-                if ($part.Kind -eq 'time') { [void]$script:notes.Remove((Get-PartNoteKey $part)) }
+                if ($part.Kind -eq 'time' -and $part.Origin -ne 'positioned') {
+                    [void]$script:notes.Remove((Get-PartNoteKey $part))
+                }
             }
         }
         return $true
@@ -2194,14 +2201,8 @@ function Edit-EntryTime($b) {
                 Show-Message 'There is not enough merged credit to increase this positioned entry.'
                 return $false
             }
-            $oldKey = Get-NoteKey $pos.Date $pos.Account $pos.Start
             $pos.Start = $startStr
             $pos.Minutes = ([math]::Round($r.Seconds / 60, 2)).ToString('0.00', $Inv)
-            $newKey = Get-NoteKey $pos.Date $pos.Account $pos.Start
-            if ($newKey -ne $oldKey -and $script:notes.ContainsKey($oldKey)) {
-                $script:notes[$newKey] = $script:notes[$oldKey]
-                [void]$script:notes.Remove($oldKey)
-            }
             return $true
         })
         return
@@ -2377,7 +2378,7 @@ function Get-WeekEntries($ws) {
             $day = [datetime]::ParseExact($p.Date, 'yyyy-MM-dd', $Inv)
             if ($day -lt $ws -or $day -ge $we) { continue }
             foreach ($s in @(Get-CreditPositionSessions $day | Where-Object { $_.PositionId -ceq [string]$p.Id })) {
-                $note = $script:notes[(Get-NoteKey $p.Date $p.Account $p.Start)]
+                $note = $s.Note
                 $list += [pscustomobject]@{
                     Day = [int][math]::Floor(($day - $ws).TotalDays)
                     Name = $p.Account; Start = $s.Start; End = $s.End
@@ -3939,7 +3940,7 @@ function Get-DayTimeline([datetime]$day) {
     # Explicit positions for previously merged credit have zero additional billable
     # effect, but are real user-specified clock coordinates and must occupy gaps.
     foreach ($p in @(Get-CreditPositionSessions $day)) {
-        $note = $script:notes[(Get-NoteKey $p.Start.ToString('yyyy-MM-dd', $Inv) $p.Name $p.Start.ToString('HH:mm:ss', $Inv))]
+        $note = $p.Note
         $blocks += [pscustomobject]@{
             Name = $p.Name; Start = $p.Start; End = $p.End; Seconds = $p.Seconds
             Kind = 'time'; Origin = 'positioned'; Note = $note; Raw = $null
@@ -4516,10 +4517,10 @@ function Save-TimelineEdit($tl, $moves) {
             if ($newEnd -le $newStart) { return $false }
             if ($blk.Origin -eq 'positioned') {
                 $position = Find-CreditPosition $blk.PositionId
-                $oldKey = Get-NoteKey $position.Date $position.Account $position.Start
+                $oldKey = $null
+                $newKey = $null
                 $position.Start = $newStart.ToString('HH:mm:ss', $Inv)
                 $position.Minutes = ([math]::Round(($newEnd - $newStart).TotalSeconds / 60, 2)).ToString('0.00', $Inv)
-                $newKey = Get-NoteKey $position.Date $position.Account $position.Start
             } else {
                 $row = $logRows[(Find-SessionRow $logRows $blk.Raw)]
                 $oldKey = Get-NoteKey $row.Date $row.Account $row.Start
@@ -4528,7 +4529,7 @@ function Save-TimelineEdit($tl, $moves) {
                 if ($row.End -match '^[0-9]{2}:[0-9]{2}:[0-9]{2}$') { $row.End = $newEnd.ToString('HH:mm:ss', $Inv) }
                 $newKey = Get-NoteKey $row.Date $row.Account $row.Start
             }
-            if ($newKey -ne $oldKey -and $script:notes.ContainsKey($oldKey)) {
+            if ($newKey -and $newKey -ne $oldKey -and $script:notes.ContainsKey($oldKey)) {
                 $script:notes[$newKey] = $script:notes[$oldKey]
                 [void]$script:notes.Remove($oldKey)
             }
@@ -4639,6 +4640,7 @@ function Complete-GapFill([string]$account, [string]$mode) {
             $script:creditPositions += [pscustomobject]@{
                 Id = $posId; Date = $dateStr; Account = $account
                 Start = $from.ToString('HH:mm:ss', $Inv); Minutes = $take.ToString('0.00', $Inv)
+                Note = ''
             }
             return $true
         })
@@ -6314,6 +6316,21 @@ function Get-EntryTipText($e) {
 }
 
 function Edit-EntryNote($e) {
+    if ($e.Origin -eq 'positioned') {
+        $parts = @($e.Parts | Where-Object { $_.Origin -eq 'positioned' })
+        if ($parts.Count -ne 1) { Show-Message 'Select one positioned entry to edit its note.'; return }
+        $p = Find-CreditPosition $parts[0].PositionId
+        if (-not $p) { return }
+        $text = Show-TextPrompt "Note for $($p.Account)" 'What did you work on during this positioned time?' "$($p.Note)"
+        if ($null -eq $text) { return }
+        [void](Invoke-LogChange 'edit positioned note' {
+            $pos = Find-CreditPosition $parts[0].PositionId
+            if (-not $pos) { return $false }
+            $pos.Note = [string]$text
+            return $true
+        })
+        return
+    }
     $times = @($e.Parts | Where-Object { $_.Kind -eq 'time' })
     if ($times.Count -eq 0) { return }
     $prompt = 'What did you work on? ({0} to {1})' -f $e.Start.ToString('HH:mm', $Inv), $e.End.ToString('HH:mm', $Inv)
