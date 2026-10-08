@@ -742,6 +742,8 @@ namespace Win {
         const byte ANTIALIASED_QUALITY = 4;   // smooth edges in plain shades, no ClearType colour fringes
         const uint DT_LEFT = 0, DT_CENTER = 1, DT_RIGHT = 2, DT_VCENTER = 4, DT_SINGLELINE = 0x20, DT_NOPREFIX = 0x800, DT_END_ELLIPSIS = 0x8000;
         List<GdiText> gdiQueue = new List<GdiText>();
+        // Timeline labels use smoother greyscale text on the opaque drawer layer.
+        List<GdiText> smoothQueue = new List<GdiText>();
         Dictionary<Font, Font> zoomFonts = new Dictionary<Font, Font>();
         Dictionary<Font, IntPtr> hfonts = new Dictionary<Font, IntPtr>();
         float fontZoom = 0f;
@@ -784,6 +786,14 @@ namespace Win {
             gdiQueue.Add(t);
         }
 
+        // Put timeline labels on a separate antialiased text path, leaving the rest
+        // of the drawer's Windows text drawing unchanged.
+        void QueueSmoothText(string s, Font f, Color c, RectangleF r, uint align) {
+            GdiText t = new GdiText();
+            t.S = s == null ? "" : s; t.F = f; t.C = c; t.R = r; t.Flags = align;
+            smoothQueue.Add(t);
+        }
+
         // Draw all queued text, after the shapes on the same solid layer
         void FlushText(Graphics og) {
             IntPtr hdc = og.GetHdc();
@@ -803,6 +813,26 @@ namespace Win {
             } finally {
                 og.ReleaseHdc(hdc);
                 gdiQueue.Clear();
+            }
+            if (smoothQueue.Count == 0) return;
+            TextRenderingHint oldHint = og.TextRenderingHint;
+            try {
+                og.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                using (StringFormat sf = new StringFormat()) {
+                    sf.FormatFlags = StringFormatFlags.NoWrap;
+                    sf.Trimming = StringTrimming.EllipsisCharacter;
+                    sf.LineAlignment = StringAlignment.Center;
+                    foreach (GdiText t in smoothQueue) {
+                        sf.Alignment = (t.Flags & DT_CENTER) != 0 ? StringAlignment.Center :
+                                       ((t.Flags & DT_RIGHT) != 0 ? StringAlignment.Far : StringAlignment.Near);
+                        using (SolidBrush brush = new SolidBrush(t.C)) {
+                            og.DrawString(t.S, t.F, brush, t.R, sf);
+                        }
+                    }
+                }
+            } finally {
+                og.TextRenderingHint = oldHint;
+                smoothQueue.Clear();
             }
         }
 
@@ -990,7 +1020,29 @@ namespace Win {
         // Windows draws the queued text afterwards with no clip, so only text that sits wholly inside the viewport is queued
         void QueueIn(RectangleF vp, string s, Font f, Color c, RectangleF r, uint align) {
             if (r.Top < vp.Top - 0.5f || r.Bottom > vp.Bottom + 0.5f) return;
-            QueueText(s, f, c, r, align);
+            QueueSmoothText(s, f, c, r, align);
+        }
+
+        static double LinearChannel(byte value) {
+            double v = value / 255.0;
+            return v <= 0.04045 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4);
+        }
+        static double Luminance(Color c) {
+            return 0.2126 * LinearChannel(c.R) + 0.7152 * LinearChannel(c.G) +
+                   0.0722 * LinearChannel(c.B);
+        }
+        static double Contrast(Color a, Color b) {
+            double la = Luminance(a), lb = Luminance(b);
+            return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
+        }
+
+        // Prefer the selected theme's text colour when readable, otherwise choose
+        // a light or dark foreground with sufficient contrast on the account colour.
+        static Color CardTextColour(Color card, Color themeText) {
+            if (Contrast(card, themeText) >= 4.5) return themeText;
+            Color dark = Color.FromArgb(20, 20, 20);
+            Color light = Color.White;
+            return Contrast(card, dark) >= Contrast(card, light) ? dark : light;
         }
 
         void DrawTimeline(Graphics og, TimelineModel t, float x0, float xR, float y, Pen sep, Font fText, Font fBold) {
@@ -1045,7 +1097,6 @@ namespace Win {
             }
 
             // Cards
-            Color dark = Color.FromArgb(0x1b, 0x1b, 0x1b);
             for (int i = 0; i < t.Blocks.Count; i++) {
                 TimelineBlock b = t.Blocks[i];
                 float top = yOf(b.StartH), bot = yOf(b.EndH);
@@ -1056,17 +1107,17 @@ namespace Win {
                 RectangleF br = new RectangleF(bx + 3 + b.Lane * laneW, top + 1, laneW - (lanes > 1 ? 2f : 0f), Math.Max(2f, bot - top - 1.5f));
                 bool hot = TlHoverBlock == i || TlEdgeBlock == i;
                 bool lunch = b.Kind == "lunch";
+                Color fillC = hot ? Mix(b.Colour, Color.White, 0.3) : b.Colour;
                 if (lunch) {
                     using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, hot ? 0.45 : 0.33), Mix(Panel, Text, 0.12))) { og.FillRectangle(hb, br); }
                 } else {
-                    Color fillC = hot ? Mix(b.Colour, Color.White, 0.3) : b.Colour;
                     using (SolidBrush bb = new SolidBrush(fillC)) { og.FillRectangle(bb, br); }
                 }
                 // The label stays at the top of the part of the card that is in view
                 float lineTop = Math.Max(br.Top + 1f, y + 1f);
                 float room = Math.Min(br.Bottom, y + vh) - lineTop;
                 string name = lunch ? "Lunch" : b.Name;
-                Color labelC = lunch ? textC : dark;
+                Color labelC = lunch ? textC : CardTextColour(fillC, textC);
                 double len = b.EndH - b.StartH;
                 if (br.Height >= 40f && room >= 38f && br.Width >= 90f) {
                     QueueIn(vp, name, fTB, labelC, new RectangleF(br.X + 6, lineTop, br.Width - 12, 18f), DT_LEFT);
@@ -1078,7 +1129,7 @@ namespace Win {
                 }
                 // Grips at both edges of a card that can be dragged, shown while it is pointed at
                 if (hot && b.Editable && br.Height > 12f) {
-                    using (Pen gp = new Pen(A(200, lunch ? textC : dark), 2f)) {
+                    using (Pen gp = new Pen(A(200, labelC), 2f)) {
                         float gcx = br.X + br.Width / 2f, gw = Math.Min(10f, br.Width / 3f);
                         og.DrawLine(gp, gcx - gw, br.Top + 3f, gcx + gw, br.Top + 3f);
                         og.DrawLine(gp, gcx - gw, br.Bottom - 3f, gcx + gw, br.Bottom - 3f);
@@ -1135,7 +1186,7 @@ namespace Win {
                 if (lr.Top >= y && lr.Bottom <= y + vh) {
                     using (GraphicsPath lp = RoundRect(lr.X, lr.Y, lr.Width, lr.Height, 9f))
                     using (SolidBrush lb = new SolidBrush(CircleHot)) { og.FillPath(lb, lp); }
-                    QueueText(TlDragText, fTS, textC, lr, DT_CENTER);
+                    QueueSmoothText(TlDragText, fTS, textC, lr, DT_CENTER);
                 }
             }
 
@@ -1154,8 +1205,8 @@ namespace Win {
                     using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, 0.33), Mix(Panel, Text, 0.12))) { og.FillRectangle(hb, lx, gy + 6f, 10f, 10f); }
                     nameX = lx + 16f;
                 }
-                QueueText(lg.Name, f, c, new RectangleF(nameX, gy, LegendW - 46f - (nameX - lx), TlRowH), DT_LEFT);
-                QueueText(lg.Total, f, c, new RectangleF(xR - 46f, gy, 46f, TlRowH), DT_RIGHT);
+                QueueSmoothText(lg.Name, f, c, new RectangleF(nameX, gy, LegendW - 46f - (nameX - lx), TlRowH), DT_LEFT);
+                QueueSmoothText(lg.Total, f, c, new RectangleF(xR - 46f, gy, 46f, TlRowH), DT_RIGHT);
                 gy += TlRowH;
             }
         }
