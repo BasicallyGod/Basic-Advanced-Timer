@@ -13,7 +13,7 @@ AccountTimer2.ps1 is the current version. The two earlier scripts are kept as wo
 - Budgets per account, notes on longer stretches of time, rounding to 15 minutes and manual edits with Undo
 - Separate unallocated figures for the working day and overtime
 - Themes, see-through account list, a Size setting for the whole timer, decimal or hours and minutes display
-- Weekly summary and time entry files in CSV, ready for timesheets or Excel
+- Weekly summary and detailed time-entry CSV exports, with reconciled two-decimal hours
 - In a timeline gap, choose whether to position an already credited portion of a merged entry (no new hours) or add new credited time. Credit positioning preserves the original merged source row and reduces the unplaced balance.
 - Weekly grouping is non-destructive: grouped time keeps all original recordings, notes and separate chronology.
 - Very short sessions remain visible as individual coloured intervals without overlapping labels; zoom in to inspect their positions.
@@ -52,3 +52,7 @@ The timer creates these alongside the scripts as you use it. They are listed in 
 | Timesheets\Week commencing (date) entries.csv | Each stretch of time for the week |
 | account-timer-*.txt | Accounts, budgets, themes, settings and window positions |
 | account-timer-error.log | Problems and the drawing speed report |
+
+## Timesheet rounding
+
+The original recorded session durations are preserved. The detailed export's `Hours` column and the weekly summary share one reconciled two-decimal allocation, so account, day, and week totals add up without a rounding discrepancy. The nearest 0.01h to the precise weekly total is preserved. Whole-minute `Duration` and h:mm UI labels are approximate because 0.01h corresponds to 36 seconds. Time on an active timer remains provisional until stopped and written to the records.

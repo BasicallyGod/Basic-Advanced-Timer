@@ -84,3 +84,12 @@ The user tests the visuals on Windows and reports back with screenshots.
 
 ### Fractional-second timeline gaps
 CSV session durations use hundredths of a minute (0.6-second increments), which can leave an effective end time such as 10:03:14.2 even though the source End field says 10:03:14. Never round the selected gap before containment validation. `Resolve-TimelineGapFill` first checks the unrounded selection against the current gap, then moves the start forward and the end backward to whole seconds for the portable CSV representation. This avoids false "gap has changed" errors while still rejecting occupied gaps. Regression fixture: `tests/timeline-projection.ps1`.
+
+
+## Decimal timesheet reconciliation (v2.22)
+
+`Get-WeekReconciliation` produces authoritative **persisted** decimal-hour exports without modifying `sessions.csv`. It checks that the projected detailed entries equal the raw credited seconds for every account/day. Hundredths of an hour (36 seconds each) are assigned by deterministic largest-remainder apportionment: first across account/day totals to match the precisely rounded weekly grand total, and then to each detailed entry within its bucket. This works with negative adjustments, historical merged credit, and positions placed from it. All final figures are integer hundredths, so daily sums, weekly account sums, and detailed Hours rows are exactly additive.
+
+`Write-WeekSummary` supplies its reconciliation result to `Write-WeekEntries`, preventing two independent rounding passes. Stopped/completed weekly views in decimal mode use the same quantized account/day figures. While a timer runs, it is provisional until saved, so the live UI and persisted exports differ temporarily. In h:mm mode, whole-minute display may not add to hundredths of hours, as 0.01h equals 36 seconds; use exported Hours for exact timesheet arithmetic.
+
+The reconciliation algorithm can move 0.01h between individual account/day displayed cells when necessary to preserve the precisely rounded weekly grand total. It does not change source durations. Tests: `tests/decimal-reconciliation.ps1`, exercised on Windows PowerShell 5.1.
