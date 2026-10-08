@@ -323,6 +323,7 @@ namespace Win {
         public Color Colour = Color.Gray;
         public string Tip = "";
         public bool Editable;               // false for what is running now, which can't be dragged
+        public bool Manual;                 // added/edited time has a position but was not recorded live
         public int Lane, Lanes = 1;         // blocks that overlap sit side by side, this one in lane Lane of Lanes
     }
 
@@ -341,7 +342,7 @@ namespace Win {
 
     public class TimelineModel {
         public double AxisStartH, AxisEndH, WorkStartH, WorkEndH, NowH;
-        public bool HasWork, ShowNow;
+        public bool HasWork, ShowNow, HasUnplaced;  // legacy merged credits have no reliable clock position
         public string EmptyText = "";
         public List<TimelineBlock> Blocks = new List<TimelineBlock>();
         public List<TimelineGap> Gaps = new List<TimelineGap>();
@@ -1008,12 +1009,12 @@ namespace Win {
         public const float TlRowH = 22f;
 
         static string Clock(double h) {
-            int m = (int)Math.Round(h * 60);
+            int m = (int)Math.Floor(h * 60 + 0.000001);
             return (m / 60).ToString("00") + ":" + (m % 60).ToString("00");
         }
 
         static string Dur(double hours) {
-            int m = (int)Math.Round(hours * 60);
+            int m = (int)Math.Floor(hours * 60 + 0.000001);
             return (m / 60).ToString() + ":" + (m % 60).ToString("00");
         }
 
@@ -1087,7 +1088,8 @@ namespace Win {
                 using (SolidBrush gb = new SolidBrush(Mix(Panel, Text, 0.24))) { og.FillRectangle(gb, bx + 3, g1 + 1, bw - 6, Math.Max(2f, g2 - g1 - 2)); }
                 float vis1 = Math.Max(g1, y), vis2 = Math.Min(g2, y + vh);
                 if (vis2 - vis1 >= 18f && TlSelStartH < 0) {
-                    QueueIn(vp, "+ Fill gap", fT, textC, new RectangleF(bx, (vis1 + vis2) / 2f - 10f, bw, 20f), DT_CENTER);
+                    QueueIn(vp, t.HasUnplaced ? "Merged time not positioned" : "+ Fill gap", fT, textC,
+                            new RectangleF(bx, (vis1 + vis2) / 2f - 10f, bw, 20f), DT_CENTER);
                 }
             }
             if (TlSelStartH >= 0 && TlSelEndH > TlSelStartH) {
@@ -1118,6 +1120,14 @@ namespace Win {
                 float room = Math.Min(br.Bottom, y + vh) - lineTop;
                 string name = lunch ? "Lunch" : b.Name;
                 Color labelC = lunch ? textC : CardTextColour(fillC, textC);
+                if (b.Manual && !lunch) {
+                    // An entered or edited allocation has a stated time, not a live-observed span.
+                    using (Pen manualEdge = new Pen(A(180, labelC), 1.5f)) {
+                        manualEdge.DashStyle = DashStyle.Dash;
+                        og.DrawRectangle(manualEdge, br.X + 1f, br.Y + 1f,
+                                         Math.Max(1f, br.Width - 2f), Math.Max(1f, br.Height - 2f));
+                    }
+                }
                 double len = b.EndH - b.StartH;
                 if (br.Height >= 40f && room >= 38f && br.Width >= 90f) {
                     QueueIn(vp, name, fTB, labelC, new RectangleF(br.X + 6, lineTop, br.Width - 12, 18f), DT_LEFT);
@@ -1208,6 +1218,10 @@ namespace Win {
                 QueueSmoothText(lg.Name, f, c, new RectangleF(nameX, gy, LegendW - 46f - (nameX - lx), TlRowH), DT_LEFT);
                 QueueSmoothText(lg.Total, f, c, new RectangleF(xR - 46f, gy, 46f, TlRowH), DT_RIGHT);
                 gy += TlRowH;
+            }
+            if (t.HasUnplaced) {
+                QueueSmoothText("* Merge has no clock time", fTS, faintC,
+                                new RectangleF(lx, gy + 4f, LegendW, 34f), DT_LEFT);
             }
         }
 
@@ -1844,6 +1858,9 @@ function Merge-EntryBlocks {
     $timeParts = @($allParts | Where-Object { $_.Kind -eq 'time' })
     $firstPart = if ($timeParts.Count -gt 0) { $timeParts[0] } else { $allParts[0] }
     $total = 0.0; foreach ($part in $allParts) { $total += $part.Seconds }
+    # The legacy CSV merge destroys the original clock positions. Make that explicit
+    # until merged groups have their own non-destructive storage format.
+    if (-not (Ask-YesNo 'Merging replaces the original times with one credited total. The timeline cannot place that time precisely afterwards. Continue?')) { return }
     $mergedNotes = @()
     foreach ($part in $timeParts) { if ($part.Note -and -not ($mergedNotes -contains $part.Note)) { $mergedNotes += $part.Note } }
     $dateStr = $firstPart.Start.ToString('yyyy-MM-dd', $Inv)
@@ -1932,7 +1949,13 @@ function Convert-SessionRow($r) {
         $from = $day.Add([timespan]::ParseExact($r.Start, 'hh\:mm\:ss', $Inv))
         $sec  = [double]::Parse($r.Minutes, $Inv) * 60
         $isAdj = ($r.End -like 'rounded*' -or $r.End -eq 'adjusted')
-        return [pscustomobject]@{ Name = $r.Account; Start = $from; End = $from.AddSeconds($sec); Seconds = $sec; IsAdjust = $isAdj; Kind = $(if ($isAdj) { $r.End } else { 'time' }); Raw = $r }
+        # Legacy merged records retain their credited duration but not the positions of their parts.
+        $origin = if ($isAdj) { 'adjustment' }
+                  elseif ($r.End -eq 'merged') { 'merged' }
+                  elseif ($r.End -eq 'edited') { 'edited' }
+                  elseif ($r.End -eq 'added') { 'added' }
+                  else { 'recorded' }
+        return [pscustomobject]@{ Name = $r.Account; Start = $from; End = $from.AddSeconds($sec); Seconds = $sec; IsAdjust = $isAdj; Kind = $(if ($isAdj) { $r.End } else { 'time' }); Origin = $origin; Raw = $r }
     } catch { return $null }
 }
 
@@ -2020,24 +2043,25 @@ function Get-WeekEntries($ws) {
     $list = @()
     foreach ($r in @(Read-Sessions)) {
         if ($r.Name -eq 'Lunch' -or $r.Start -lt $ws -or $r.Start -ge $we) { continue }
-        if ([math]::Abs($r.Seconds) -lt $EntryMinSeconds) { continue }
+        # Even a short session is already credited by the weekly totals, so never discard it here.
+        if ([math]::Abs($r.Seconds) -le 0) { continue }
         $note = $null
         if ($r.Kind -eq 'time') {
             $note = $script:notes[(Get-NoteKey $r.Start.ToString('yyyy-MM-dd', $Inv) $r.Name $r.Start.ToString('HH:mm:ss', $Inv))]
         }
         $list += [pscustomobject]@{
             Day = [int][math]::Floor(($r.Start.Date - $ws).TotalDays)
-            Name = $r.Name; Start = $r.Start; End = $r.End; Seconds = $r.Seconds; Kind = $r.Kind; Note = $note; Raw = $r.Raw
+            Name = $r.Name; Start = $r.Start; End = $r.End; Seconds = $r.Seconds; Kind = $r.Kind; Origin = $r.Origin; Note = $note; Raw = $r.Raw
         }
     }
     # Whatever is running right now
     $now = Get-Date
     if ($script:active -and $script:active.Name -ne 'Lunch' -and $script:active.Start -ge $ws -and $script:active.Start -lt $we) {
         $e = ($now - $script:active.Start).TotalSeconds
-        if ($e -ge $EntryMinSeconds) {
+        if ($e -gt 0) {
             $list += [pscustomobject]@{
                 Day = [int][math]::Floor(($script:active.Start.Date - $ws).TotalDays)
-                Name = $script:active.Name; Start = $script:active.Start; End = $now; Seconds = $e; Kind = 'running'; Note = $null
+                Name = $script:active.Name; Start = $script:active.Start; End = $now; Seconds = $e; Kind = 'running'; Origin = 'running'; Note = $null
             }
         }
     }
@@ -2065,15 +2089,25 @@ function New-EntryBlock($parts) {
             else { $parts[0].Kind }
     $notes = @()
     foreach ($p in $times) { if ($p.Note -and -not ($notes -contains $p.Note)) { $notes += $p.Note } }
+    # Preserve the classification of legacy merges even when an adjustment
+    # is attached to the same block. Their approximate clock span is not real.
+    $origins = @($times | ForEach-Object { $_.Origin })
+    $origin = if ($origins -contains 'merged') { 'merged' }
+              elseif ($origins -contains 'edited') { 'edited' }
+              elseif ($origins -contains 'added') { 'added' }
+              elseif ($parts.Count -eq 1) { $parts[0].Origin }
+              else { 'grouped' }
     return [pscustomobject]@{
         Day = $first.Day; Name = $first.Name; Start = $first.Start; End = $last.End
-        Seconds = $sum; Kind = $kind; Note = ($notes -join '; '); Parts = $parts
+        Seconds = $sum; Kind = $kind; Origin = $origin; Note = ($notes -join '; '); Parts = $parts
     }
 }
 
 # Entries for a week as blocks. With merging on, a run of the same account on the same day becomes
-# one block (broken by another account or by Lunch), and rounding or adjustments join that
-# account's most recent block that day.
+# one block only when the clock intervals are actually adjacent (and not separated
+# by Lunch). Legacy merged rows and manual entries stay separate so their dates
+# cannot be mistaken for a continuous live recording. Adjustments join the
+# account's most recent block on that day.
 function Get-EntryBlocks($ws, [switch]$NoRunning) {
     $entries = @(Get-WeekEntries $ws)
     if ($NoRunning) { $entries = @($entries | Where-Object { $_.Kind -ne 'running' }) }
@@ -2089,7 +2123,10 @@ function Get-EntryBlocks($ws, [switch]$NoRunning) {
             $prev = $current[$current.Count - 1]
             if ($prev.Name -eq $e.Name -and $prev.Day -eq $e.Day) {
                 $lunchBetween = @($lunchStarts | Where-Object { $_ -ge $prev.Start -and $_ -lt $e.Start }).Count -gt 0
-                $join = -not $lunchBetween
+                $gapSeconds = ($e.Start - $prev.End).TotalSeconds
+                $observed = ($prev.Origin -eq 'recorded' -or $prev.Kind -eq 'running') -and
+                            ($e.Origin -eq 'recorded' -or $e.Kind -eq 'running')
+                $join = (-not $lunchBetween) -and $observed -and $gapSeconds -ge -3 -and $gapSeconds -le 5
             }
         }
         if ($join) { [void]$current.Add($e) }
@@ -2124,6 +2161,9 @@ function Get-EntryTypeLabel($kind) {
         'rounded down' { return 'Rounded down' }
         'adjusted'     { return 'Adjusted' }
         'running'      { return 'Running' }
+        'merged'       { return 'Merged credit (unplaced)' }
+        'edited'       { return 'Edited by hand' }
+        'added'        { return 'Added by hand' }
         default        { return 'Time' }
     }
 }
@@ -2142,11 +2182,15 @@ function Write-WeekEntries($ws) {
                 Day      = $_.Start.ToString('ddd dd/MM', $GB)
                 Date     = $_.Start.ToString('yyyy-MM-dd', $Inv)
                 Account  = $_.Name
-                Start    = $(if ($isTime) { $_.Start.ToString('HH:mm', $Inv) } else { '' })
-                End      = $(if ($isTime) { $_.End.ToString('HH:mm', $Inv) } else { '' })
+                Start    = $(if ($isTime -and $_.Origin -ne 'merged') { $_.Start.ToString('HH:mm', $Inv) } else { '' })
+                End      = $(if ($isTime -and $_.Origin -ne 'merged') { $_.End.ToString('HH:mm', $Inv) } else { '' })
                 Duration = Format-HM $_.Seconds
                 Hours    = ([math]::Round($_.Seconds / 3600, 2)).ToString('0.00', $Inv)
-                Type     = $(if ($isTime -and $hasAdj) { 'Time (adjusted)' } else { Get-EntryTypeLabel $_.Kind })
+                Type     = $(if ($isTime -and $_.Origin -eq 'merged') { Get-EntryTypeLabel 'merged' }
+                             elseif ($isTime -and $_.Origin -eq 'edited') { Get-EntryTypeLabel 'edited' }
+                             elseif ($isTime -and $_.Origin -eq 'added') { Get-EntryTypeLabel 'added' }
+                             elseif ($isTime -and $hasAdj) { 'Time (adjusted)' }
+                             else { Get-EntryTypeLabel $_.Kind })
                 Parts    = @($_.Parts).Count
                 Note     = "$($_.Note)"
             }
@@ -3512,25 +3556,32 @@ function Get-DayTimeline([datetime]$day) {
     $now = Get-Date
     $isToday = ($day -eq $now.Date)
     $blocks = @()
+    $unplacedSecs = 0.0
     foreach ($r in @(Read-Sessions)) {
-        if ($r.IsAdjust -or $r.Start.Date -ne $day) { continue }
-        if ([math]::Abs($r.Seconds) -lt $EntryMinSeconds) { continue }
+        if ($r.Start.Date -ne $day) { continue }
+        # A legacy merge stores only a credited sum anchored at its first part's start.
+        # Its individual clock intervals were deleted, so drawing it as a continuous
+        # time block would conceal real sessions and create artificial overlaps.
+        if ($r.Origin -eq 'merged') { $unplacedSecs += [double]$r.Seconds; continue }
+        if ($r.IsAdjust -or $r.Seconds -le 0) { continue }
+        # Include every real interval, even those shorter than a minute. The ledger
+        # already counts them, and they must not become fillable gaps on the timeline.
         $isLunch = ($r.Name -eq 'Lunch')
         $note = $null
         if (-not $isLunch) { $note = $script:notes[(Get-NoteKey $r.Start.ToString('yyyy-MM-dd', $Inv) $r.Name $r.Start.ToString('HH:mm:ss', $Inv))] }
         $blocks += [pscustomobject]@{ Name = $r.Name; Start = $r.Start; End = $r.End; Seconds = $r.Seconds
                                       Kind = $(if ($isLunch) { 'lunch' } else { 'time' }); Note = $note; Raw = $r.Raw
-                                      Label = "$($r.Raw.End)" }
+                                      Origin = $r.Origin; Label = "$($r.Raw.End)" }
     }
     # Whatever is running right now (from midnight if it carried on past it)
     if ($isToday -and $script:active) {
         $from = $script:active.Start
         if ($from -lt $day) { $from = $day }
         $secs = ($now - $from).TotalSeconds
-        if ($secs -ge $EntryMinSeconds) {
+        if ($secs -gt 0) {
             $isLunch = ($script:active.Name -eq 'Lunch')
             $blocks += [pscustomobject]@{ Name = $script:active.Name; Start = $from; End = $now; Seconds = $secs
-                                          Kind = $(if ($isLunch) { 'lunch' } else { 'running' }); Note = $null; Raw = $null }
+                                          Kind = $(if ($isLunch) { 'lunch' } else { 'running' }); Origin = 'running'; Note = $null; Raw = $null }
         }
     }
     $blocks = @($blocks | Sort-Object Start, End)
@@ -3540,10 +3591,9 @@ function Get-DayTimeline([datetime]$day) {
         $text = "$label`n$span ($(Format-Dur $b.Seconds))"
         if ($b.Kind -eq 'running') { $text += "`nRunning now" }
         if ($b.Note) { $text += "`n" + $b.Note }
-        # Rows made by hand or by merging don't describe one real stretch, so say so
-        if ("$($b.Label)" -eq 'merged') { $text += "`nMerged from several stretches, so the times are approximate" }
-        elseif ("$($b.Label)" -eq 'edited') { $text += "`nEdited by hand" }
-        elseif ("$($b.Label)" -eq 'added') { $text += "`nAdded by hand" }
+        # Added and edited rows have an explicit position but are not live recordings.
+        if ($b.Origin -eq 'edited') { $text += "`nEdited by hand (dashed outline)" }
+        elseif ($b.Origin -eq 'added') { $text += "`nAdded by hand (dashed outline)" }
         $b | Add-Member -NotePropertyName Tip -NotePropertyValue $text -Force
         # Hours since midnight for the drawing and dragging. What is running now has no row in the log
         # yet, so it can't be dragged.
@@ -3575,11 +3625,13 @@ function Get-DayTimeline([datetime]$day) {
     $nowH = ($now - $day).TotalHours
     $capH = if ($isToday) { $nowH } else { 24.0 }
     $empty = if ($blocks.Count -gt 0) { '' }
+             elseif ($unplacedSecs -gt 0) { 'Merged time is credited but has no clock position' }
              elseif (-not $plan.Working) { 'Day off' }
              elseif ($isToday) { 'Nothing tracked yet' }
              else { 'Nothing tracked on this day' }
     return [pscustomobject]@{
         Day = $day; Blocks = $blocks; AxisStartH = [double]$startH; AxisEndH = [double]$endH
+        UnplacedSeconds = [double]$unplacedSecs
         Gaps = @(Get-TimelineGaps $blocks ([double]$startH) ([double]$endH) $capH)
         HasWork = [bool]$plan.Working
         WorkStartH = $(if ($plan.Working) { ($plan.Start - $day).TotalHours } else { 0.0 })
@@ -3612,7 +3664,7 @@ function Get-DrawerHeight {
 
 # The lines under the timeline strip: each account used that day, then total, lunch and unallocated.
 # The figures come from the week's data, so they include rounding and match the week table.
-function Get-DayLegend([datetime]$day, $data, [datetime]$ws) {
+function Get-DayLegend([datetime]$day, $data, [datetime]$ws, $timeline) {
     $idx = [int][math]::Floor(($day.Date - $ws).TotalDays)
     $out = @()
     $sum = 0.0
@@ -3628,6 +3680,10 @@ function Get-DayLegend([datetime]$day, $data, [datetime]$ws) {
     if ($lunchText) { $out += [pscustomobject]@{ Name = 'Lunch'; Kind = 'lunch'; Colour = $null; Total = $lunchText } }
     $unallocText = Format-Hours ([double]$data.Unalloc[$idx])
     if ($unallocText) { $out += [pscustomobject]@{ Name = 'Unallocated'; Kind = 'unallocated'; Colour = $null; Total = $unallocText } }
+    # Already included in Total above. This is a breakdown, not additional time.
+    if ($timeline -and $timeline.UnplacedSeconds -gt 0) {
+        $out += [pscustomobject]@{ Name = 'Unplaced*'; Kind = 'unplaced'; Colour = $null; Total = (Format-Hours $timeline.UnplacedSeconds) }
+    }
     return $out
 }
 
@@ -3640,7 +3696,7 @@ function Refresh-DrawerData {
     $script:drawerBudgets = @(Get-BudgetLines)
     if ((Get-DrawerMode) -eq 'timeline') {
         $script:drawerTimeline = Get-DayTimeline $script:drawerDay
-        $script:drawerLegend = @(Get-DayLegend $script:drawerDay $script:drawerData $script:drawerWeek)
+        $script:drawerLegend = @(Get-DayLegend $script:drawerDay $script:drawerData $script:drawerWeek $script:drawerTimeline)
         # The drawer's height depends on the legend, so work it out before placing the view in it
         $script:drawerH = Get-DrawerHeight
         if ($null -eq $script:tlScrollH) { Reset-TimelineView } else { Set-TimelineScroll $script:tlScrollH }
@@ -3662,10 +3718,12 @@ function Build-TimelineModel {
     $tm.HasWork = $tmData.HasWork; $tm.WorkStartH = $tmData.WorkStartH; $tm.WorkEndH = $tmData.WorkEndH
     $tm.ShowNow = $tmData.ShowNow; $tm.NowH = $tmData.NowH
     $tm.EmptyText = [string]$tmData.EmptyText
+    $tm.HasUnplaced = ([double]$tmData.UnplacedSeconds -gt 0)
     $i = 0
     foreach ($b in @($tmData.Blocks)) {
         $tb = New-Object Win.TimelineBlock
         $tb.Name = $b.Name; $tb.Kind = $b.Kind; $tb.Tip = $b.Tip; $tb.Editable = [bool]$b.Editable
+        $tb.Manual = ($b.Origin -eq 'edited' -or $b.Origin -eq 'added')
         $tb.StartH = $b.StartH; $tb.EndH = $b.EndH
         $tb.Lane = [int]$b.Lane; $tb.Lanes = [math]::Max(1, [int]$b.Lanes)
         foreach ($mv in @($script:tlPreview)) {
@@ -3950,7 +4008,11 @@ function Show-TimelineTip($hit, $pt) {
         if (-not $blk.Editable) { $text += "`nStop it to change the times" }
     } elseif ($hit.Gap -ge 0) {
         $gp = $tl.Gaps[$hit.Gap]
-        $text = "Nothing tracked from $(Format-ClockHours $gp.StartH) to $(Format-ClockHours $gp.EndH)`nClick to fill it, or drag across part of it"
+        $text = if ($tl.UnplacedSeconds -gt 0) {
+            "No positioned session from $(Format-ClockHours $gp.StartH) to $(Format-ClockHours $gp.EndH)`nMerged time is already credited for this day, but its original positions are unknown. Edit those entries in Weekly view before filling gaps."
+        } else {
+            "Nothing tracked from $(Format-ClockHours $gp.StartH) to $(Format-ClockHours $gp.EndH)`nClick to fill it, or drag across part of it"
+        }
     }
     if (-not $text) { return }
     $tip.Show($text, $form, [int]($pt.X + 14 * $Zoom), [int]($pt.Y + 20 * $Zoom), 6000)
@@ -3978,6 +4040,10 @@ function Start-TimelineDrag($pt) {
         return $true
     }
     if ($hit.Gap -ge 0) {
+        if ($script:drawerTimeline.UnplacedSeconds -gt 0) {
+            Show-Message 'This day includes merged credit whose original times are unknown. Edit or delete those merged entries in Weekly view before filling timeline gaps, to avoid double counting.'
+            return $true
+        }
         $h = Get-TimelineTimeAt $pt
         $script:tlDrag = @{ Kind = 'gap'; Gap = $hit.Gap; AnchorH = $h; StartY = $pt.Y; Moved = $false }
         $script:tlHover = $hit
@@ -4105,6 +4171,11 @@ function Complete-GapFill([string]$account) {
     $fill = $script:tlFill
     $script:tlFill = $null
     if (-not $fill -or -not $script:drawerDay) { return }
+    # Also guard the final write in case the day gained a merge after the menu opened.
+    if ((Get-DayTimeline $script:drawerDay).UnplacedSeconds -gt 0) {
+        Show-Message 'Merged time has no reliable clock position. Resolve it in Weekly view before adding time through the timeline.'
+        return
+    }
     $day = $script:drawerDay.Date
     $from = $day.AddSeconds([math]::Round($fill.FromH * 3600))
     $to = $day.AddSeconds([math]::Round($fill.ToH * 3600))
@@ -5748,7 +5819,12 @@ function Get-EntryTipText($e) {
     if ($e.Kind -ne 'time' -and $e.Kind -ne 'running') {
         return '{0}  {1} {2}' -f $e.Name, (Get-EntryTypeLabel $e.Kind).ToLower(), (Format-HM $e.Seconds)
     }
+    if ($e.Origin -eq 'merged') {
+        return ('{0}  {1} credited' -f $e.Name, (Format-HM $e.Seconds)) +
+               "`nOriginal session positions are not available. Edit this entry to give it a specific time."
+    }
     $t = '{0}  {1} to {2}  ({3})' -f $e.Name, $e.Start.ToString('HH:mm', $Inv), $e.End.ToString('HH:mm', $Inv), (Format-HM $e.Seconds)
+    if ($e.Origin -eq 'added' -or $e.Origin -eq 'edited') { $t += "`n" + (Get-EntryTypeLabel $e.Origin) }
     $parts = @($e.Parts)
     if ($parts.Count -gt 1) {
         $t += "`n"
