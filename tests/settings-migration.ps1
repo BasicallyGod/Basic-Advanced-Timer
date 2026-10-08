@@ -37,7 +37,9 @@ try {
     Set-Content -Path (Join-Path $fixtureRoot 'account-timer-days.txt') -Value @('2026-10-08' + "`toff")
     Set-Content -Path (Join-Path $fixtureRoot 'account-timer-theme.txt') -Value 'Lavender'
     Set-Content -Path (Join-Path $fixtureRoot 'account-timer-size.txt') -Value '1.25'
+    Write-Host 'Fixture: importing legacy preferences'
     Initialize-SettingsStore
+    Write-Host 'Fixture: legacy preferences imported'
     Assert (Test-Path $script:SettingsStoreFile) 'Migration did not create the JSON settings file.'
     Assert ((Read-SettingFirst 'theme') -eq 'Lavender') 'Theme selection was lost on migration.'
     Assert ((Read-SettingFirst 'size') -eq '1.25') 'Interface scale was lost on migration.'
@@ -49,19 +51,24 @@ try {
     Assert (-not (Test-Path (Join-Path $fixtureRoot 'account-timer-accounts.txt'))) 'Legacy account settings were not archived.'
     $current = ConvertFrom-Json -InputObject ([IO.File]::ReadAllText($script:SettingsStoreFile))
     Assert ($current.schemaVersion -eq 1) 'Settings schema version is incorrect.'
+    Write-Host 'Fixture: updating preferences'
     Write-SettingSections @{ accounts = @('Account X', "Account Y`thidden"); theme = @('Midnight') }
     Assert ((Read-SettingFirst 'theme') -eq 'Midnight') 'New theme selection was not saved.'
+    Write-Host 'Fixture: update written'
     Assert (Test-Path "$script:SettingsStoreFile.bak") 'Atomic update must leave a previous JSON backup.'
     $script:SettingsSections = @{}
+    Write-Host 'Fixture: reloading consolidated preferences'
     Initialize-SettingsStore
     Assert ((Read-SettingFirst 'theme') -eq 'Midnight') 'Saved settings did not survive a restart.'
     Assert ((@(Read-SettingSection 'accounts') -join '|') -eq ('Account X|Account Y' + "`thidden")) 'Updated accounts were not loaded.'
+    Write-Host 'Fixture: updating independent section'
     Write-SettingSection 'blur' @('1')
     Assert ((Read-SettingFirst 'blur') -eq '1') 'Individual setting updates must persist.'
     Assert ((Read-SettingFirst 'workingHours') -eq $hours[0]) 'Updating unrelated settings lost working hours.'
     $script:SettingsSections = @{}
     Initialize-SettingsStore
     Assert ((Read-SettingFirst 'blur') -eq '1') 'Blur setting lost after reload.'
+    Write-Host 'Fixture: completed settings verification'
     # Source content must not contain old per-preference write calls.
     $appText = [IO.File]::ReadAllText($source)
     Assert (-not $appText.Contains('Set-Content -Path $AccountsFile')) 'Application still writes fragmented account settings.'
