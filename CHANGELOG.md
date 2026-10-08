@@ -1,12 +1,12 @@
 # Changelog
 
-The timer grew from a single billable-hours counter into a full timesheet tracker. Only `AccountTimer2.ps1` remains in the current working tree; the earlier implementations and their launchers are available in Git history.
+Basic’s Advanced Timer grew from a single billable-hours counter into a full timesheet tracker. Only `AccountTimer2.ps1` remains in the current working tree; the earlier implementations and their launchers are available in Git history.
 
 Version numbers were assigned after the fact, one per round of changes, all built in October 2026.
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.22 |
+| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.23 |
 | AccountTimer.ps1 | Historical predecessor, removed from current tree | 1.0 to 1.7 |
 | BillableTimer.ps1 | Historical predecessor, removed from current tree | 0.1 to 0.5 |
 
@@ -22,6 +22,10 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Version | Script | Type | Change |
 | --- | --- | --- | --- |
+| 2.23 | AccountTimer2 | Improved | Rebranded visible windows, dialogs, notification icon and Windows application identity as Basic’s Advanced Timer while keeping script and launcher filenames compatible |
+| 2.23 | AccountTimer2 | Improved | Consolidated 13 legacy preference text files into a portable JSON settings store with automatic migration, atomic writes, prior-version backups and archived originals |
+| 2.23 | AccountTimer2 | Improved | Retained sessions, undo records, crash-recovery state, away periods and editable theme catalogue in separate dedicated files |
+| 2.23 | AccountTimer2 | New | Added synthetic PowerShell settings migration and branding regression coverage to Windows CI |
 | 2.22 | AccountTimer2 | Fixed | Two-decimal weekly summary and detailed entry exports now reconcile exactly, including rounding, grouping, adjustments and positioned credit |
 | 2.22 | AccountTimer2 | Improved | Assign deterministic integer 0.01h increments across account/day and detailed rows rather than rounding each independently |
 | 2.22 | AccountTimer2 | Improved | Completed weekly views follow the exported decimal allocation; live active time remains provisional |

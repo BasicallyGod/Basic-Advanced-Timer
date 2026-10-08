@@ -1,7 +1,10 @@
 # Personal time logs, notes and weekly files, created as the timer runs
 Timesheets/
 
-# Accounts, budgets, themes, settings, window positions and saved state
+# Consolidated preferences and atomic write/recovery copies
+basics-advanced-timer.settings.json*
+
+# Existing local themes, runtime state, historical preferences and overrides
 *.txt
 
 # Error logs and drawing speed reports

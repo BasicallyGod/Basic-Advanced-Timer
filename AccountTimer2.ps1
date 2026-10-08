@@ -1,4 +1,4 @@
-# Account Timer v2.22
+# Basic's Advanced Timer v2.23
 #
 # Portable Windows PowerShell 5.1 application for client-account time tracking.
 # Launch from StartAccountTimer2.vbs in the same folder to avoid a console window.
@@ -16,22 +16,24 @@
 # The weekly summary and detailed export share one two-decimal reconciliation.
 #
 # Working hours, day overrides, account budgets, themes, window preferences and
-# the current timer state are kept in local account-timer-*.txt files. All local
-# data and generated timesheets are outside the Git repository and should stay
-# together with the application when moved or backed up.
+# preferences are consolidated in basics-advanced-timer.settings.json. The
+# timer's crash-recovery state, away history and editable theme catalogue stay
+# separate; copy the entire folder when backing up an installation.
 #
 # Use the README for setup, CHANGELOG for history and CLAUDE.md for architecture.
 # Synthetic regression suites live in tests/ and run on Windows in CI.
+
+$script:AppName = 'Basic' + [char]0x2019 + 's Advanced Timer'
 
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 
 # Use Windows' modern text drawing for buttons and labels, as normal Windows apps do
 try { [System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false) } catch {}
 
-# Its own identity in Windows, so the taskbar shows 'Account timer' rather than grouping it with PowerShell
+# Windows taskbar identity, separate from PowerShell-hosted applications
 try {
     Add-Type -Namespace Win -Name Shell -MemberDefinition '[DllImport("shell32.dll", CharSet = CharSet.Unicode)] public static extern int SetCurrentProcessExplicitAppUserModelID(string appId);'
-    [void][Win.Shell]::SetCurrentProcessExplicitAppUserModelID('AccountTimer.Timesheets')
+    [void][Win.Shell]::SetCurrentProcessExplicitAppUserModelID('Basics.AdvancedTimer')
 } catch {}
 
 # Only one account timer at a time, so the same time isn't tracked twice
@@ -40,8 +42,8 @@ try {
         Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -match 'AccountTimer2?\.ps1' })
     if ($others.Count -gt 0) {
         [void][System.Windows.Forms.MessageBox]::Show(
-            "The account timer is already running. Close it before opening another copy, so time isn't tracked twice.",
-            'Account timer')
+            "$($script:AppName) is already running. Close it before opening another copy, so time isn't tracked twice.",
+            $script:AppName)
         exit
     }
 } catch {}
@@ -1244,10 +1246,131 @@ namespace Win {
 $StartTime       = '08:30'   # usual start and end (also changeable in the app: right-click, Working hours)
 $EndTime         = '17:30'
 $Scale           = 1.0      # make the timer bigger or smaller, e.g. 0.8 or 1.3 (also changeable in the app: right-click, Appearance, Size)
-$SizeFile = Join-Path $PSScriptRoot 'account-timer-size.txt'
-if (Test-Path $SizeFile) {
+# Consolidated portable preferences. Sessions, crash recovery, away intervals and
+# editable theme definitions deliberately remain independent files.
+$script:AppRoot = $PSScriptRoot
+$script:SettingsStoreFile = Join-Path $script:AppRoot 'basics-advanced-timer.settings.json'
+$script:SettingsStoreVersion = 1
+$script:SettingsSections = @{}
+$script:LegacySettings = [ordered]@{
+    size          = 'account-timer-size.txt'
+    accounts      = 'account-timer-accounts.txt'
+    theme         = 'account-timer-theme.txt'
+    transparency  = 'account-timer-transparency.txt'
+    blur          = 'account-timer-blur.txt'
+    view          = 'account-timer-view.txt'
+    positions     = 'account-timer-positions.txt'
+    budgets       = 'account-timer-budgets.txt'
+    merge         = 'account-timer-merge.txt'
+    effects       = 'account-timer-effects.txt'
+    drawer        = 'account-timer-drawer.txt'
+    workingHours  = 'account-timer-settings.txt'
+    dayOverrides  = 'account-timer-days.txt'
+}
+
+function Save-SettingsStore {
+    $newFile = "$script:SettingsStoreFile.$([guid]::NewGuid().ToString('N')).tmp"
     try {
-        $savedSize = [double]::Parse((Get-Content $SizeFile -TotalCount 1).Trim(), [Globalization.CultureInfo]::InvariantCulture)
+        $payload = [ordered]@{
+            schemaVersion = $script:SettingsStoreVersion
+            sections = $script:SettingsSections
+        } | ConvertTo-Json -Depth 8
+        [System.IO.File]::WriteAllText($newFile, [string]$payload, (New-Object System.Text.UTF8Encoding($false)))
+        if ([System.IO.File]::Exists($script:SettingsStoreFile)) {
+            [System.IO.File]::Replace($newFile, $script:SettingsStoreFile, "$script:SettingsStoreFile.bak")
+        } else {
+            [System.IO.File]::Move($newFile, $script:SettingsStoreFile)
+        }
+        return $true
+    } catch {
+        try { [System.IO.File]::Delete($newFile) } catch {}
+        throw "Could not save $($script:SettingsStoreFile): $($_.Exception.Message)"
+    }
+}
+
+function Test-SettingSection([string]$name) {
+    return $script:SettingsSections.ContainsKey($name)
+}
+
+function Read-SettingSection([string]$name) {
+    if (-not $script:SettingsSections.ContainsKey($name)) { return @() }
+    return @($script:SettingsSections[$name])
+}
+
+function Read-SettingFirst([string]$name) {
+    $lines = @(Read-SettingSection $name)
+    if ($lines.Count -eq 0) { return '' }
+    return [string]$lines[0]
+}
+
+function Write-SettingSections($updates) {
+    if ($null -eq $updates) { return }
+    $prior = $script:SettingsSections
+    $next = @{}
+    foreach ($key in $prior.Keys) { $next[$key] = @($prior[$key]) }
+    foreach ($key in $updates.Keys) { $next[$key] = @($updates[$key] | ForEach-Object { [string]$_ }) }
+    $script:SettingsSections = $next
+    try {
+        [void](Save-SettingsStore)
+    } catch {
+        $script:SettingsSections = $prior
+        throw
+    }
+}
+
+function Write-SettingSection([string]$name, $lines) {
+    Write-SettingSections @{ $name = @($lines) }
+}
+
+function Initialize-SettingsStore {
+    if (Test-Path -LiteralPath $script:SettingsStoreFile) {
+        try {
+            $json = [System.IO.File]::ReadAllText($script:SettingsStoreFile, [System.Text.Encoding]::UTF8)
+            $obj = ConvertFrom-Json -InputObject $json -ErrorAction Stop
+            if ($null -eq $obj -or [int]$obj.schemaVersion -ne $script:SettingsStoreVersion -or
+                $null -eq $obj.sections) { throw 'Unknown settings schema or missing sections.' }
+            $loaded = @{}
+            foreach ($property in $obj.sections.PSObject.Properties) {
+                if ($script:LegacySettings.Contains($property.Name)) {
+                    $loaded[$property.Name] = @($property.Value | ForEach-Object { [string]$_ })
+                }
+            }
+            $script:SettingsSections = $loaded
+            return
+        } catch {
+            # Fail closed instead of silently replacing a damaged file with defaults.
+            $reason = "Cannot read $($script:SettingsStoreFile). Restore its .bak copy before launching. $($_.Exception.Message)"
+            [void][System.Windows.Forms.MessageBox]::Show($reason, $script:AppName)
+            throw $reason
+        }
+    }
+    $found = @()
+    foreach ($name in $script:LegacySettings.Keys) {
+        $oldPath = Join-Path $script:AppRoot $script:LegacySettings[$name]
+        if (-not (Test-Path -LiteralPath $oldPath)) { continue }
+        $script:SettingsSections[$name] = @(Get-Content -LiteralPath $oldPath -ErrorAction Stop)
+        $found += $oldPath
+    }
+    if ($found.Count -eq 0) { return }
+    # Write and verify the new store BEFORE moving any old files. Archive originals
+    # rather than deleting them, making this upgrade reversible.
+    [void](Save-SettingsStore)
+    $verify = ConvertFrom-Json -InputObject ([System.IO.File]::ReadAllText($script:SettingsStoreFile)) -ErrorAction Stop
+    if ($null -eq $verify.sections) { throw 'Settings migration validation failed.' }
+    $archive = Join-Path $script:AppRoot 'Timesheets\\legacy-settings-backup'
+    [void](New-Item -ItemType Directory -Path $archive -Force -ErrorAction Stop)
+    foreach ($path in $found) {
+        $dest = Join-Path $archive ([System.IO.Path]::GetFileName($path))
+        if (Test-Path -LiteralPath $dest) { continue }
+        try { Move-Item -LiteralPath $path -Destination $dest -ErrorAction Stop }
+        catch { throw "Settings migrated, but old settings could not be archived: $($_.Exception.Message)" }
+    }
+}
+
+Initialize-SettingsStore
+if (Test-SettingSection 'size') {
+    try {
+        $savedSize = [double]::Parse((Read-SettingFirst 'size').Trim(), [Globalization.CultureInfo]::InvariantCulture)
         if ($savedSize -ge 0.5 -and $savedSize -le 3.0) { $Scale = $savedSize }
     } catch {}
 }
@@ -1255,7 +1378,7 @@ $DefaultAccounts = @('ACCOUNT 1', 'ACCOUNT 2', 'ACCOUNT 3', 'ACCOUNT 4', 'ACCOUN
 $SleepGapMinutes = 5        # if the computer sleeps for longer than this, the running slot is paused
 $MaxVisibleAccounts = 12    # most accounts shown at once (hide some to make room)
 $NoteMinMinutes  = 15       # ask for a note after this long on an account (0 turns the note prompt off)
-$EntryMinSeconds = 60       # time entries shorter than this (stray clicks) are left out of the entries view and file
+$EntryMinSeconds = 60       # retained for compatibility with older settings; short recorded sessions are included in reports
 # Pill effects (starting defaults; switch them in the menu under Appearance, which is remembered)
 $PillShadow      = $true    # soft shadow and thin rim around the pill, to lift it off other windows
 $PillPulse       = $true    # the pill gently glows and breathes while nothing is being tracked
@@ -1267,16 +1390,9 @@ $GB  = [Globalization.CultureInfo]::GetCultureInfo('en-GB')
 
 $TimesheetDir = Join-Path $PSScriptRoot 'Timesheets'
 $SessionsFile = Join-Path $TimesheetDir 'sessions.csv'
-$AccountsFile = Join-Path $PSScriptRoot 'account-timer-accounts.txt'
 $StateFile    = Join-Path $PSScriptRoot 'account-timer-state.txt'
 $LogFile      = Join-Path $PSScriptRoot 'account-timer-error.log'
-$ThemeFile    = Join-Path $PSScriptRoot 'account-timer-theme.txt'
 $ThemesFile   = Join-Path $PSScriptRoot 'account-timer-themes.txt'
-$ListAlphaFile = Join-Path $PSScriptRoot 'account-timer-transparency.txt'
-$BlurFile     = Join-Path $PSScriptRoot 'account-timer-blur.txt'
-$ViewFile     = Join-Path $PSScriptRoot 'account-timer-view.txt'
-$PosFile      = Join-Path $PSScriptRoot 'account-timer-positions.txt'
-$BudgetsFile  = Join-Path $PSScriptRoot 'account-timer-budgets.txt'
 $NotesFile    = Join-Path $TimesheetDir 'notes.csv'
 $SessionsUndo = Join-Path $TimesheetDir 'sessions.undo.csv'
 $NotesUndo    = Join-Path $TimesheetDir 'notes.undo.csv'
@@ -1284,9 +1400,6 @@ $GroupsFile   = Join-Path $TimesheetDir 'entry-groups.csv'
 $GroupsUndo   = Join-Path $TimesheetDir 'entry-groups.undo.csv'
 $PositionsFile = Join-Path $TimesheetDir 'credit-positions.csv'
 $PositionsUndo = Join-Path $TimesheetDir 'credit-positions.undo.csv'
-$MergeFile    = Join-Path $PSScriptRoot 'account-timer-merge.txt'
-$EffectsFile  = Join-Path $PSScriptRoot 'account-timer-effects.txt'
-$DrawerFile   = Join-Path $PSScriptRoot 'account-timer-drawer.txt'
 $AwayFile     = Join-Path $PSScriptRoot 'account-timer-away.txt'
 try { New-Item -ItemType Directory -Path $TimesheetDir -Force | Out-Null } catch {}
 
@@ -1407,8 +1520,6 @@ function Write-Log($msg) {
 }
 
 # ---- Working hours and days (right-click, Working hours) ----
-$SettingsFile = Join-Path $PSScriptRoot 'account-timer-settings.txt'
-$DaysFile     = Join-Path $PSScriptRoot 'account-timer-days.txt'
 $DayAbbr = @('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat')
 $script:workDays     = @(1, 2, 3, 4, 5)    # Monday to Friday
 $script:weekStartDow = 1                   # weeks start on Monday
@@ -1427,8 +1538,8 @@ function ConvertTo-ClockText($text) {
 
 function Load-WorkSettings {
     $script:dayHours = @{}
-    if (Test-Path $SettingsFile) {
-        foreach ($line in Get-Content $SettingsFile) {
+    if (Test-SettingSection 'workingHours') {
+        foreach ($line in @(Read-SettingSection 'workingHours')) {
             $kv = $line -split '=', 2
             if ($kv.Count -ne 2) { continue }
             $val = $kv[1].Trim()
@@ -1453,8 +1564,8 @@ function Load-WorkSettings {
         }
     }
     $script:dayOverrides = @{}
-    if (Test-Path $DaysFile) {
-        foreach ($line in Get-Content $DaysFile) {
+    if (Test-SettingSection 'dayOverrides') {
+        foreach ($line in @(Read-SettingSection 'dayOverrides')) {
             $p = $line -split "`t"
             if ($p.Count -ge 2 -and $p[1].Trim() -eq 'off') { $script:dayOverrides[$p[0].Trim()] = @{ Off = $true } }
             elseif ($p.Count -ge 3) {
@@ -1474,12 +1585,12 @@ function Save-WorkSettings {
     foreach ($di in @($script:dayHours.Keys | Sort-Object)) {
         $lines += ('shift.{0}={1},{2}' -f $DayAbbr[$di].ToLower(), $script:dayHours[$di].Start, $script:dayHours[$di].End)
     }
-    try { Set-Content -Path $SettingsFile -Value $lines } catch { Write-Log "Could not save settings: $($_.Exception.Message)" }
     $dl = @($script:dayOverrides.Keys | Sort-Object | ForEach-Object {
         $o = $script:dayOverrides[$_]
         if ($o.Off) { "$_`toff" } else { "$_`t$($o.Start)`t$($o.End)" }
     })
-    try { Set-Content -Path $DaysFile -Value $dl } catch { Write-Log "Could not save day changes: $($_.Exception.Message)" }
+    try { Write-SettingSections @{ workingHours = $lines; dayOverrides = $dl } }
+    catch { Write-Log "Could not save working hours or day changes: $($_.Exception.Message)" }
 }
 
 # The usual start and end for a weekday: its own hours if the shift pattern gives it some,
@@ -1624,8 +1735,8 @@ function Get-VisibleCount {
 function Load-Accounts {
     # One account per line. A tab followed by "hidden" marks a hidden account.
     $list = @()
-    if (Test-Path $AccountsFile) {
-        foreach ($line in Get-Content $AccountsFile) {
+    if (Test-SettingSection 'accounts') {
+        foreach ($line in @(Read-SettingSection 'accounts')) {
             if (-not $line.Trim()) { continue }
             $parts = $line -split "`t"
             $name = $parts[0].Trim()
@@ -1644,7 +1755,7 @@ function Save-Accounts {
     $lines = @($script:accounts | ForEach-Object {
         if ($_.Hidden) { "$($_.Name)`thidden" } else { $_.Name }
     })
-    try { Set-Content -Path $AccountsFile -Value $lines }
+    try { Write-SettingSection 'accounts' $lines }
     catch { Write-Log "Could not save account names: $($_.Exception.Message)" }
 }
 
@@ -1654,8 +1765,8 @@ function Save-Accounts {
 
 function Load-Budgets {
     $script:budgets = @{}
-    if (-not (Test-Path $BudgetsFile)) { return }
-    foreach ($line in Get-Content $BudgetsFile) {
+    if (-not (Test-SettingSection 'budgets')) { return }
+    foreach ($line in @(Read-SettingSection 'budgets')) {
         $p = $line -split "`t"
         if ($p.Count -lt 3) { continue }
         try {
@@ -1672,7 +1783,7 @@ function Save-Budgets {
     $lines = @($script:budgets.Keys | ForEach-Object {
         "{0}`t{1}`t{2}" -f $_, $script:budgets[$_].Hours.ToString($Inv), $script:budgets[$_].Period
     })
-    try { Set-Content -Path $BudgetsFile -Value $lines }
+    try { Write-SettingSection 'budgets' $lines }
     catch { Write-Log "Could not save budgets: $($_.Exception.Message)" }
 }
 
@@ -3013,8 +3124,8 @@ function Update-View {
         OT          = '+{0:00}:{1:00}:{2:00}' -f [math]::Floor($ot.TotalHours), $ot.Minutes, $ot.Seconds
         Rows        = $rows
     }
-    $tray.Text = if ($overtime) { 'Account timer: overtime {0}h {1}m' -f [math]::Floor($ot.TotalHours), $ot.Minutes }
-                 else { 'Account timer: {0}h {1}m' -f [int]$script:view.H, $script:view.M }
+    $tray.Text = if ($overtime) { '{0}: overtime {1}h {2}m' -f $script:AppName, [math]::Floor($ot.TotalHours), $ot.Minutes }
+                 else { '{0}: {1}h {2}m' -f $script:AppName, [int]$script:view.H, $script:view.M }
 
     # Open or close the overtime section
     $newTop = if ($overtime) { $BaseRowTop + $OvertimeH } else { $BaseRowTop }
@@ -3120,7 +3231,7 @@ function New-State($panel, $circle, $hot, $fill) {
 }
 
 $DefaultThemesText = @'
-; Account timer themes
+; Basic's Advanced Timer themes
 ;
 ; Edit this file to change the colours or add your own themes, then right-click
 ; the timer and go to Theme, then Reload themes. Lines starting with ; are notes.
@@ -3414,12 +3525,12 @@ function Apply-Theme($name) {
 }
 
 function Save-Theme {
-    try { Set-Content -Path $ThemeFile -Value $script:themeName } catch {}
+    try { Write-SettingSection 'theme' @([string]$script:themeName) } catch {}
 }
 
 Load-Themes
 $savedTheme = 'Classic'
-if (Test-Path $ThemeFile) { try { $savedTheme = (Get-Content $ThemeFile -TotalCount 1).Trim() } catch {} }
+if (Test-SettingSection 'theme') { try { $savedTheme = (Read-SettingFirst 'theme').Trim() } catch {} }
 Apply-Theme $savedTheme
 
 $px = [System.Drawing.GraphicsUnit]::Pixel
@@ -3480,6 +3591,7 @@ if ($script:useRenderer) {
 
 # ---- Window ----
 $form = New-Object System.Windows.Forms.Form
+$form.Text = $script:AppName
 $form.FormBorderStyle = 'None'
 $form.TopMost = $true
 $form.ShowInTaskbar = $false
@@ -4325,9 +4437,9 @@ function Set-DrawerOpen([bool]$open, [switch]$Starting) {
     Request-Redraw
 }
 
-# Whether the drawer is open and which view it shows, kept as two lines for the next start
+# Whether the drawer is open and which view it shows, stored in the JSON settings section
 function Save-DrawerState {
-    try { Set-Content -Path $DrawerFile -Value @([string][int]$script:drawerOpen, $script:drawerMode) } catch {}
+    try { Write-SettingSection 'drawer' @([string][int]$script:drawerOpen, $script:drawerMode) } catch {}
 }
 
 # Switch the drawer between the week table and the day's timeline
@@ -5428,7 +5540,7 @@ function Set-Blur([bool]$on, [switch]$Quiet) {
         }
     }
     $script:blurOn = $on
-    try { Set-Content -Path $BlurFile -Value ([int]$on) } catch {}
+    try { Write-SettingSection 'blur' @([string][int]$on) } catch {}
     Apply-BlurState
     Request-Redraw
 }
@@ -5443,13 +5555,13 @@ function Set-PillEffect($which) {
         Apply-CornerStyle
     }
     $lines = @("shadow=$([int][bool]$script:PillShadow)", "pulse=$([int][bool]$script:PillPulse)", "dot=$([int][bool]$script:PillLiveDot)")
-    try { Set-Content -Path $EffectsFile -Value $lines } catch {}
+    try { Write-SettingSection 'effects' $lines } catch {}
     Request-Redraw
 }
 
 function Load-PillEffects {
-    if (-not (Test-Path $EffectsFile)) { return }
-    foreach ($line in Get-Content $EffectsFile) {
+    if (-not (Test-SettingSection 'effects')) { return }
+    foreach ($line in @(Read-SettingSection 'effects')) {
         $kv = $line -split '=', 2
         if ($kv.Count -ne 2) { continue }
         $on = $kv[1].Trim() -ne '0'
@@ -5465,7 +5577,7 @@ function Set-ListTransparency($level) {
     if (-not $ListLevels.Contains($level)) { $level = 'Off' }
     $script:listLevel = $level
     $script:listAlpha = $ListLevels[$level]
-    try { Set-Content -Path $ListAlphaFile -Value $level } catch {}
+    try { Write-SettingSection 'transparency' @([string]$level) } catch {}
     Apply-BlurState
     Request-Redraw
 }
@@ -5895,7 +6007,7 @@ function Show-WeeklyView {
     $script:weekStart = Get-WeekStart
 
     $wf = New-Object System.Windows.Forms.Form
-    $wf.Text = 'Account timer - Weekly view'
+    $wf.Text = "$($script:AppName) - Weekly view"
     if ($script:appIcon) { $wf.Icon = $script:appIcon }
     $wf.AutoScaleMode = 'None'
     $wf.StartPosition = 'Manual'
@@ -5949,7 +6061,7 @@ function Show-WeeklyView {
     foreach ($ctl in @($wv.TabSummary, $wv.TabEntries, $wv.OpenEntries, $wv.MergeToggle, $wv.EntriesHint, $wv.Entries)) { $wf.Controls.Add($ctl) }
     $wv.MergeToggle.Add_Click({
         $script:mergeEntries = -not $script:mergeEntries
-        try { Set-Content -Path $MergeFile -Value ([int]$script:mergeEntries) } catch {}
+        try { Write-SettingSection 'merge' @([string][int]$script:mergeEntries) } catch {}
         try {
             Fill-WeeklyView
             Write-WeekEntries $script:weekStart
@@ -6070,7 +6182,7 @@ function Show-WeeklyError($err) {
     $script:dialogOpen = $true
     try {
         $owner = if ($script:weekForm -and -not $script:weekForm.IsDisposed) { $script:weekForm } else { $form }
-        [void][System.Windows.Forms.MessageBox]::Show($owner, "The weekly view hit a problem:`n`n$msg", 'Account timer')
+        [void][System.Windows.Forms.MessageBox]::Show($owner, "The weekly view hit a problem:`n`n$msg", $script:AppName)
     } finally { $script:dialogOpen = $false }
 }
 
@@ -7048,14 +7160,14 @@ function Get-DialogOwner {
 function Ask-YesNo($question) {
     $script:dialogOpen = $true
     try {
-        $answer = [System.Windows.Forms.MessageBox]::Show((Get-DialogOwner), $question, 'Account timer', 'YesNo', 'Question')
+        $answer = [System.Windows.Forms.MessageBox]::Show((Get-DialogOwner), $question, $script:AppName, 'YesNo', 'Question')
     } finally { $script:dialogOpen = $false }
     return ($answer -eq 'Yes')
 }
 
 function Show-Message($text) {
     $script:dialogOpen = $true
-    try { [void][System.Windows.Forms.MessageBox]::Show((Get-DialogOwner), $text, 'Account timer') }
+    try { [void][System.Windows.Forms.MessageBox]::Show((Get-DialogOwner), $text, $script:AppName) }
     finally { $script:dialogOpen = $false }
 }
 
@@ -7234,8 +7346,8 @@ function Save-Order {
 
 # ---- Views ----
 function Load-Positions {
-    if (-not (Test-Path $PosFile)) { return }
-    foreach ($line in Get-Content $PosFile) {
+    if (-not (Test-SettingSection 'positions')) { return }
+    foreach ($line in @(Read-SettingSection 'positions')) {
         $p = $line -split ','
         if ($p.Count -eq 3) { $script:positions[$p[0]] = New-Object System.Drawing.Point([int]$p[1], [int]$p[2]) }
     }
@@ -7244,7 +7356,7 @@ function Load-Positions {
 function Save-Position {
     $script:positions[$script:mode] = if ($script:mode -eq 'full') { Get-TimerScreenPos } else { $form.Location }
     $lines = @($script:positions.Keys | ForEach-Object { '{0},{1},{2}' -f $_, $script:positions[$_].X, $script:positions[$_].Y })
-    try { Set-Content -Path $PosFile -Value $lines } catch {}
+    try { Write-SettingSection 'positions' $lines } catch {}
 }
 
 function Set-View($mode, [switch]$Starting) {
@@ -7266,7 +7378,7 @@ function Set-View($mode, [switch]$Starting) {
     $script:hover = $null; $script:gripHover = $null; $script:roundHover = $null
     $script:pillHover = $null; $script:collapseHover = $false
     $tip.Hide($form)
-    try { Set-Content -Path $ViewFile -Value $mode } catch {}
+    try { Write-SettingSection 'view' @([string]$mode) } catch {}
     Apply-CornerStyle
     $script:regionKey = ''
     Update-Region
@@ -7889,7 +8001,7 @@ function Build-ThemeMenu {
 }
 [void]$miAppearance.DropDownItems.Add($miTheme)
 
-# ---- Size: the whole timer and drawer, kept for next time ----
+# ---- Size: the whole timer and drawer, persisted with the other settings ----
 $SizeLevels = [ordered]@{ 'Smaller (85%)' = 0.85; 'Normal (100%)' = 1.0; 'Larger (125%)' = 1.25; 'Large (150%)' = 1.5; 'Largest (175%)' = 1.75 }
 
 function Get-WantedZoom {
@@ -7912,7 +8024,7 @@ function Keep-OnScreen {
 function Set-UiScale([double]$newSize) {
     # (Not called $scale, which would hide the script's $Scale from everything this calls)
     $script:Scale = $newSize
-    try { Set-Content -Path $SizeFile -Value $newSize.ToString($Inv) } catch {}
+    try { Write-SettingSection 'size' @($newSize.ToString($Inv)) } catch {}
     # Keep the timer where it is on screen while the window grows or shrinks around it
     $tl = if ($script:mode -eq 'full') { Get-TimerScreenPos } else { $null }
     $script:Zoom = Get-WantedZoom
@@ -8037,7 +8149,7 @@ $form.ContextMenuStrip = $menu
 $tray = New-Object System.Windows.Forms.NotifyIcon
 Update-AppIcon
 if (-not $script:appIcon) { $tray.Icon = [System.Drawing.SystemIcons]::Application }
-$tray.Text = 'Account timer'
+$tray.Text = $script:AppName
 $trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
 [void]$trayMenu.Items.Add('Show timer', $null, { Keep-Visible; $form.Activate() })
 [void]$trayMenu.Items.Add('Weekly view...', $null, { try { Show-WeeklyView } catch { Show-WeeklyError $_ } })
@@ -8054,7 +8166,7 @@ $form.Add_FormClosing({
     try { Save-Position } catch {}
     $tray.Visible = $false
     $tray.Dispose()
-    Write-Log 'Account timer closed normally.'
+    Write-Log "$($script:AppName) closed normally."
 })
 
 # ---- Refresh every second ----
@@ -8102,27 +8214,27 @@ Load-Notes
 Load-EntryGroups
 Load-CreditPositions
 try { Load-PillEffects } catch {}
-if (Test-Path $MergeFile) { try { $script:mergeEntries = ((Get-Content $MergeFile -TotalCount 1).Trim() -ne '0') } catch {} }
+if (Test-SettingSection 'merge') { try { $script:mergeEntries = ((Read-SettingFirst 'merge').Trim() -ne '0') } catch {} }
 Refresh-Totals
 Write-WeekSummary
-Write-Log 'Account timer started.'
+Write-Log "$($script:AppName) started."
 if ($script:useRenderer) { Write-Log 'Using fast drawing for the full view.' }
 elseif ($script:rendererError) { Write-Log "Fast drawing unavailable, using standard drawing: $($script:rendererError)" }
 Update-View
 $savedList = 'Off'
-if (Test-Path $ListAlphaFile) { try { $savedList = (Get-Content $ListAlphaFile -TotalCount 1).Trim() } catch {} }
+if (Test-SettingSection 'transparency') { try { $savedList = (Read-SettingFirst 'transparency').Trim() } catch {} }
 $script:listLevel = if ($ListLevels.Contains($savedList)) { $savedList } else { 'Off' }
 $script:listAlpha = $ListLevels[$script:listLevel]
 $savedBlur = $false
-if (Test-Path $BlurFile) { try { $savedBlur = ((Get-Content $BlurFile -TotalCount 1).Trim() -eq '1') } catch {} }
+if (Test-SettingSection 'blur') { try { $savedBlur = ((Read-SettingFirst 'blur').Trim() -eq '1') } catch {} }
 if ($savedBlur) { Set-Blur $true -Quiet }
 Load-Positions
 $savedView = 'full'
-if (Test-Path $ViewFile) { try { $savedView = (Get-Content $ViewFile -TotalCount 1).Trim() } catch {} }
+if (Test-SettingSection 'view') { try { $savedView = (Read-SettingFirst 'view').Trim() } catch {} }
 $drawerWasOpen = $false
-if (Test-Path $DrawerFile) {
+if (Test-SettingSection 'drawer') {
     try {
-        $drawerLines = @(Get-Content $DrawerFile -TotalCount 2)
+        $drawerLines = @(Read-SettingSection 'drawer' | Select-Object -First 2)
         $drawerWasOpen = ($drawerLines[0].Trim() -eq '1')
         if ($drawerLines.Count -gt 1 -and $drawerLines[1].Trim() -eq 'week') { $script:drawerMode = 'week' }
     } catch {}

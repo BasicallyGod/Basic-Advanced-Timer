@@ -1,10 +1,10 @@
-# Engineering notes
+# Basic’s Advanced Timer — engineering notes
 
-Implementation reference for contributors and coding assistants working on Account Timer. It documents the current architecture, earlier engineering pitfalls and the behaviour that should be preserved when making changes. The application has evolved through PowerShell and C# rendering iterations.
+Implementation reference for contributors and coding assistants working on Basic’s Advanced Timer. It documents the current architecture, earlier engineering pitfalls and the behaviour that should be preserved when making changes. The application has evolved through PowerShell and C# rendering iterations.
 
 ## What this is
 
-An always-on-top Windows timer for tracking time against client accounts and preparing timesheets. It is written in Windows PowerShell 5.1 with WinForms, plus C# compiled at start-up with Add-Type. No installs or admin rights are allowed, so no modules, packages or external tools.
+Basic’s Advanced Timer is an always-on-top Windows timer for tracking time against client accounts and preparing timesheets. It is written in Windows PowerShell 5.1 with WinForms, plus C# compiled at start-up with Add-Type. No installs or admin rights are allowed, so no modules, packages or external tools.
 
 | File | Role |
 | --- | --- |
@@ -12,6 +12,7 @@ An always-on-top Windows timer for tracking time against client accounts and pre
 | `StartAccountTimer2.vbs` | Portable relative-path launcher without a console window. |
 | `tests/timeline-projection.ps1` | Synthetic regression tests for session projections, grouping and gap editing. |
 | `tests/decimal-reconciliation.ps1` | Synthetic tests for decimal-hour accounting and CSV exports. |
+| `tests/settings-migration.ps1` | Synthetic tests for consolidated preferences, legacy migration and UI branding. |
 | `.github/workflows/powershell-checks.yml` | Runs both regression suites under Windows PowerShell 5.1. |
 | `README.md`, `CHANGELOG.md` | User guide and chronological development record. |
 
@@ -33,7 +34,7 @@ The CSV stores recorded intervals, manually added/edited intervals, adjustments 
 ## How AccountTimer2.ps1 is put together
 
 - **Tracking and files** are plain PowerShell. Time is logged to Timesheets\sessions.csv (Date, Account, Start, End, Minutes), one row per stretch. The End column also marks special rows with "rounded up", "rounded down", "adjusted", "merged", "edited" or "added". Notes are in Timesheets\notes.csv, keyed by date, account and start time.
-- **Settings** live in account-timer-*.txt files beside the script (accounts, budgets, themes, view, positions, effects, working hours, day overrides and more). Working hours are a default start and end plus optional per-weekday shifts ($script:dayHours, written as shift.mon=09:00,17:00 lines), and Get-DayPlan is the one place that works out a day's hours, so use it rather than reading $StartTime and $EndTime. Themes are in account-timer-themes.txt, editable by the user.
+- **Preferences** live in `basics-advanced-timer.settings.json` beside the script. `Initialize-SettingsStore` imports the 13 old per-setting `account-timer-*.txt` files on first launch and archives them under `Timesheets/legacy-settings-backup/` after writing and validating the new JSON. `Read-SettingSection` and `Write-SettingSection(s)` centralise subsequent access and write a replacement file atomically, retaining `.json.bak`. To minimise conversion risk, the JSON's `sections` values are arrays of legacy-format lines and the existing account, budget, working-hour and layout parsers are reused. A future data-model rewrite could replace these arrays with typed settings, but must migrate them safely. Working hours support per-weekday shifts (`$script:dayHours`) and `Get-DayPlan` is the canonical calculator. Editable theme definitions remain in `account-timer-themes.txt`.
 - **The window** is a layered window (WS_EX_LAYERED). Each frame is drawn into a 32-bit image and pushed with UpdateLayeredWindow, which allows see-through areas, rounded shapes and shadows. WinForms child controls cannot be shown on a layered window, so everything on the timer is drawn by hand. Text input uses separate small windows (note prompt, dialogs).
 - **The full view** (timer rows plus the week drawer) is drawn by the C# class Win.FullRenderer. PowerShell fills its fields each frame (Sync-RendererState) and calls Render. If the C# fails to compile or throws, the script falls back to the PowerShell drawing functions (Draw-Full, Draw-Drawer) and logs why.
 - **The drawer** has two views, switched by the Timeline and Week tabs under its title (Timeline is first and the default). The week table is described above. The timeline (Win.FullRenderer.DrawTimeline) draws one day as a vertical calendar column, with hours down the left, a card per stretch of time, Lunch hatched, working hours lightly shaded, a line for now and the account totals in a column on the right. PowerShell owns the scroll position ($script:tlScrollH, the hour at the top) and zoom ($script:tlPx, units per hour) and hands them to the renderer each frame; the wheel scrolls, Ctrl and the wheel zooms, and the timeline needs at least $TimelineMinH of drawer height. Legacy merged rows contain only credited sums and have no trustworthy clock span. Get-DayTimeline keeps these off the timeline and reports UnplacedSeconds in the totals legend. Gap filling offers two explicit actions, positioning existing legacy credit without changing totals or adding new credited time, with refreshed gap and credit validation before saving. Added and edited rows have an explicit clock position but are marked with a dashed card outline. The timeline counts even sub-minute recorded sessions when finding gaps, matching the ledger. Overlapping positioned stretches are given lanes by Set-TimelineLanes and drawn side by side, and an edge only stops at the neighbour in its own lane (Get-LaneNeighbour). Overlaps of a few seconds count as touching, because rounding in the log produces them. The drawer queues text after drawing its shapes and only queues timeline labels fully inside the viewport (`QueueIn`); timeline labels use their separate antialiased GDI+ path rather than the standard Windows text queue. PowerShell prepares the day with Get-DayTimeline and Get-DayLegend, and Build-TimelineModel hands it to C#, with times as hours since midnight. Timeline labels use a separate GDI+ antialiasing queue on the solid drawer layer, and CardTextColour chooses a contrasting text colour based on the theme. The renderer reports where it drew the cards column and viewport (TlX0, TlW, TlY, TlH) so PowerShell can turn a pointer position into a time (Get-TimelineTimeAt), and PowerShell does all the hit testing (Get-TimelineHit) and pushes the hover and drag state back each frame in Sync-RendererState. The timeline exists only in the C# drawing, so if that has to be switched off the drawer goes back to the week table. Whether the drawer is open and which view it shows are kept as two lines in account-timer-drawer.txt.
@@ -59,12 +60,13 @@ The CSV stores recorded intervals, manually added/edited intervals, adjustments 
 
 ## Checking changes
 
-Visual behaviour must be validated on Windows. The following checks catch common mistakes, and the two synthetic suites already run in GitHub Actions on Windows:
+Visual behaviour must be validated on Windows. The following checks catch common mistakes, and the three synthetic suites already run in GitHub Actions on Windows:
 
 1. Parse `AccountTimer2.ps1` and the test scripts with `System.Management.Automation.Language.Parser.ParseFile`. Run `tests/timeline-projection.ps1` and `tests/decimal-reconciliation.ps1` in Windows PowerShell 5.1.
 2. Confirm the embedded C# blocks compile under Windows PowerShell 5.1 using `Add-Type`; the synthetic tests do not themselves exercise the interactive layered window.
 3. Unit-test non-visual functions (calculations, file reading and writing, formatting) by extracting them from the script with the PowerShell parser and running them against sample data.
 4. Search new code for variable names that clash with the script-level ones above.
+5. Run the synthetic settings migration test, which uses a disposable directory and does not inspect personal settings.
 
 5. Off Windows, PowerShell 7 can be had with `dotnet tool install --tool-path <dir> PowerShell --version 7.4.6` (after installing dotnet-sdk-8.0), and `mcs -langversion:5` from the mono-mcs package enforces the C# 5 limit on the extracted C# blocks. With libgdiplus, a small C# harness can render the drawer to a PNG, with the Windows text drawing swapped for DrawString, which is enough to check layout and hover areas.
 
@@ -76,7 +78,7 @@ The user tests the visuals on Windows and reports back with screenshots.
 - Record functional changes in `CHANGELOG.md` newest first, with version, script and a short description. Record repository-only maintenance separately rather than inventing a new runtime version.
 - Code comments in plain English explaining why, not just what.
 - Interface text and documentation follow the user's writing preferences: British spelling, no em dashes, no colons mid-sentence, no arrows or unusual characters, plain and human wording. Refer to "client accounts", not "retained accounts".
-- Never commit private `Timesheets` contents, local `account-timer-*.txt` settings or logs. `.gitignore` excludes these by default. Test with synthetic fixtures only.
+- Never commit private `Timesheets` contents, `basics-advanced-timer.settings.json` or its backups, local `account-timer-*.txt` recovery/themes, or logs. `.gitignore` excludes these by default. Test with synthetic fixtures only.
 
 ## Potential future improvement
 
@@ -97,4 +99,14 @@ The reconciliation algorithm can move 0.01h between individual account/day displ
 
 ## Repository maintenance after v2.22
 
-The working tree deliberately contains only the current app, its launcher, documentation, configuration for Git, and two synthetic tests plus their Windows CI workflow. Previous complete timers and their VBS launchers were removed from the current tree, not rewritten out of history. Keep `StartAccountTimer2.vbs` alongside `AccountTimer2.ps1`; it resolves the application path relative to itself. Do not remove `tests/` or `.github/workflows/`, even though they are not called by the interactive app; they protect the accounting and timeline behaviour. The generated `Timesheets/` folder, undo snapshots, and text settings are real runtime dependencies and must remain intact when copying an existing installation, even though they are not versioned.
+The working tree deliberately contains only the current app, its launcher, documentation, configuration for Git, and three synthetic tests plus their Windows CI workflow. Previous complete timers and their VBS launchers were removed from the current tree, not rewritten out of history. Keep `StartAccountTimer2.vbs` alongside `AccountTimer2.ps1`; it resolves the application path relative to itself. Do not remove `tests/` or `.github/workflows/`, even though they are not called by the interactive app; they protect the accounting and timeline behaviour. The generated `Timesheets/` folder, undo snapshots, consolidated JSON preferences and separate state/theme files are real runtime dependencies and must remain intact when copying an existing installation, even though they are not versioned.
+
+
+## v2.23: naming and settings consolidation
+
+- User-visible application name is **Basic’s Advanced Timer**. To avoid Unicode source-file decoding issues under Windows PowerShell 5.1, the literal right apostrophe is constructed with `'Basic' + [char]0x2019 + 's Advanced Timer'` and stored in `$script:AppName`; use that for UI window titles, dialogs and tray text. The Windows AppUserModelID is `Basics.AdvancedTimer`. The PowerShell script and VBS launcher filenames are unchanged for shortcut compatibility. Repository slug also stays unchanged.
+- `basics-advanced-timer.settings.json` is the consolidated local preference store. It contains `schemaVersion` and `sections` with keys `size`, `accounts`, `theme`, `transparency`, `blur`, `view`, `positions`, `budgets`, `merge`, `effects`, `drawer`, `workingHours`, `dayOverrides`. Each section is a string array preserving the old validated read/write representation. Do not directly write old per-feature preference files after v2.23.
+- Migration occurs before the original size preference is consumed. It reads all existing legacy preference files when the consolidated JSON is absent, saves the JSON, verifies its structure, and archives originals under `Timesheets/legacy-settings-backup/`. The archive is retained. A corrupt consolidated JSON raises a visible error and prevents startup rather than overwriting prior preferences.
+- `Write-SettingSections` supports atomic multi-section updates such as working hours and date overrides. `Save-SettingsStore` writes a UTF-8 temporary file in the same directory and atomically replaces the settings JSON on Windows, keeping its prior contents in `.json.bak`. Do not bypass it when changing preferences. Avoid storing session rows or crash recovery in preferences.
+- `Timesheets/*.csv`, `account-timer-state.txt` (running session recovery), `account-timer-away.txt` (historical away periods) and `account-timer-themes.txt` (editable theme catalogue) are deliberately separate. The latter filenames are stable user-data paths, not current branding.
+- Regression suite `tests/settings-migration.ps1` checks migration, archive creation, settings persistence, JSON backup and branded taskbar ID. Run alongside existing timeline and decimal regression suites in Windows PowerShell 5.1.

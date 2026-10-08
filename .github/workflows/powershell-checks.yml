@@ -14,8 +14,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate timeline and decimal reconciliation
+      - name: Validate timeline, accounting and settings migration
         shell: powershell
         run: |
           ./tests/timeline-projection.ps1
           ./tests/decimal-reconciliation.ps1
+          ./tests/settings-migration.ps1
