@@ -8,7 +8,7 @@ AccountTimer2.ps1 is the current version. The two earlier scripts are kept as wo
 
 - Shows the working day so far, counting from your start time, with overtime after your end time
 - One-click tracking per account, plus Lunch, with only one running at a time
-- A compact pill view and a full view, with a drawer beside it that shows the week as a table or the day as a timeline, and a separate weekly view
+- A compact pill view and a full view, with a drawer beside it that shows the week as a table or the day as a timeline you can edit by dragging, and a separate weekly view
 - Budgets per account, notes on longer stretches of time, rounding to 15 minutes and manual edits with Undo
 - Separate unallocated figures for the working day and overtime
 - Themes, see-through account list, decimal or hours and minutes display

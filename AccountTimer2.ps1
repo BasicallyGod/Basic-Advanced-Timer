@@ -17,6 +17,8 @@
 # to slide out this week's hours by account and day, and budgets, beside the timer.
 # The Timeline tab shows one day as a strip, with a block for each stretch of time, Lunch as a hatched
 # gap and a marker for now. Point at a block to see what it was; Previous and Next move between days.
+# Drag the edge of a block to change its time (5 minute steps, Shift for 1 minute, Escape to cancel),
+# or click a gap to fill it with an account. Undo reverses the last change.
 # Each week's individual entries are also saved to 'Week commencing <date> entries.csv'.
 #
 # Top: billable time since the start time, less lunch, as in the original timer.
