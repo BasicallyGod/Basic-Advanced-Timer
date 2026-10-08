@@ -21,6 +21,8 @@
 # Next move between days. Drag the top or bottom edge of a card to change its time (5 minute steps, Shift
 # for 1 minute, Escape to cancel), or click a gap to fill it with an account. Undo reverses the last change.
 #
+# Size: right-click, Appearance, Size makes the whole timer and drawer smaller or larger (remembered).
+#
 # Hours: right-click, Working hours, Hours and days, gives each working day its own start and finish
 # (for shift patterns). From 30 minutes before the end of the day, a Finish day button appears under the
 # Lunch row (and the menu has Finish for the day at any time once the day has started). It stops unallocated
@@ -108,7 +110,7 @@ function Get-CursorDpi {
 
 function Set-MenuScale($strip) {
     if (-not $script:perMonitor) { return }
-    $k = (Get-CursorDpi) / 96
+    $k = (Get-CursorDpi) / 96 * [math]::Max(1.0, $Scale)    # menus follow the size setting when it is larger
     $font = New-Object System.Drawing.Font('Segoe UI', [float](12 * $k), [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
     $icons = New-Object System.Drawing.Size([int](16 * $k), [int](16 * $k))
     $strip.Font = $font
@@ -321,6 +323,7 @@ namespace Win {
         public Color Colour = Color.Gray;
         public string Tip = "";
         public bool Editable;               // false for what is running now, which can't be dragged
+        public int Lane, Lanes = 1;         // blocks that overlap sit side by side, this one in lane Lane of Lanes
     }
 
     // A stretch of the day with nothing tracked, which can be filled
@@ -360,6 +363,7 @@ namespace Win {
     // Draws the full view (timer, drawer, shadow and rim) into one image with see-through areas
     public class FullRenderer {
         public Font FontDigits, FontLabel, FontRow, FontOvertime, FontButton, FontSmall, FontDrawer, FontDrawerBold;
+        public Font FontTimeline, FontTimelineBold, FontTimelineSmall;   // the timeline's own, larger text
         public Color Panel, Circle, CircleHot, Fill;
         public Color Text = Color.White;
         public Color LunchBand = Color.FromArgb(45, 0, 0, 0);
@@ -970,7 +974,8 @@ namespace Win {
         // now is. Only the part in the viewport is drawn. PowerShell holds the scroll position (TlScrollH, in
         // hours) and the zoom (TlPx, window units per hour), and works out hover and dragging from the viewport
         // reported back in TlX0, TlW, TlY and TlH.
-        const float GutterW = 44f, LegendW = 128f;
+        const float GutterW = 48f, LegendW = 132f;
+        public const float TlRowH = 22f;
 
         static string Clock(double h) {
             int m = (int)Math.Round(h * 60);
@@ -991,6 +996,8 @@ namespace Win {
         void DrawTimeline(Graphics og, TimelineModel t, float x0, float xR, float y, Pen sep, Font fText, Font fBold) {
             Color textC = Text;
             Color faintC = Mix(Panel, Text, 215 / 255.0);
+            // The timeline's own, larger fonts (the drawer's regular ones if none were given)
+            Font fT = FontTimeline ?? fText, fTB = FontTimelineBold ?? fBold, fTS = FontTimelineSmall ?? fText;
             float vh = Math.Max(DrawerH, BaseH) - (y - Margin) - 12f;
             float bx = x0 + GutterW, bw = (xR - LegendW - 10f) - bx;
             float lx = xR - LegendW;
@@ -1028,7 +1035,7 @@ namespace Win {
                 using (SolidBrush gb = new SolidBrush(Mix(Panel, Text, 0.24))) { og.FillRectangle(gb, bx + 3, g1 + 1, bw - 6, Math.Max(2f, g2 - g1 - 2)); }
                 float vis1 = Math.Max(g1, y), vis2 = Math.Min(g2, y + vh);
                 if (vis2 - vis1 >= 18f && TlSelStartH < 0) {
-                    QueueIn(vp, "+ Fill gap", fText, textC, new RectangleF(bx, (vis1 + vis2) / 2f - 9f, bw, 18f), DT_CENTER);
+                    QueueIn(vp, "+ Fill gap", fT, textC, new RectangleF(bx, (vis1 + vis2) / 2f - 10f, bw, 20f), DT_CENTER);
                 }
             }
             if (TlSelStartH >= 0 && TlSelEndH > TlSelStartH) {
@@ -1043,7 +1050,10 @@ namespace Win {
                 TimelineBlock b = t.Blocks[i];
                 float top = yOf(b.StartH), bot = yOf(b.EndH);
                 if (bot < y || top > y + vh) continue;
-                RectangleF br = new RectangleF(bx + 3, top + 1, bw - 6, Math.Max(2f, bot - top - 1.5f));
+                // Overlapping stretches share the width, side by side
+                int lanes = Math.Max(1, b.Lanes);
+                float laneW = (bw - 6f) / lanes;
+                RectangleF br = new RectangleF(bx + 3 + b.Lane * laneW, top + 1, laneW - (lanes > 1 ? 2f : 0f), Math.Max(2f, bot - top - 1.5f));
                 bool hot = TlHoverBlock == i || TlEdgeBlock == i;
                 bool lunch = b.Kind == "lunch";
                 if (lunch) {
@@ -1058,19 +1068,20 @@ namespace Win {
                 string name = lunch ? "Lunch" : b.Name;
                 Color labelC = lunch ? textC : dark;
                 double len = b.EndH - b.StartH;
-                if (br.Height >= 34f && room >= 32f) {
-                    QueueIn(vp, name, fBold, labelC, new RectangleF(br.X + 6, lineTop, br.Width - 12, 15f), DT_LEFT);
-                    QueueIn(vp, Clock(b.StartH) + " to " + Clock(b.EndH) + "   " + Dur(len), fText, labelC, new RectangleF(br.X + 6, lineTop + 15f, br.Width - 12, 15f), DT_LEFT);
-                } else if (br.Height >= 14f && room >= 14f) {
-                    QueueIn(vp, name, fText, labelC, new RectangleF(br.X + 6, lineTop, br.Width - 62, 14f), DT_LEFT);
-                    QueueIn(vp, Dur(len), fText, labelC, new RectangleF(br.Right - 56, lineTop, 50, 14f), DT_RIGHT);
+                if (br.Height >= 40f && room >= 38f && br.Width >= 90f) {
+                    QueueIn(vp, name, fTB, labelC, new RectangleF(br.X + 6, lineTop, br.Width - 12, 18f), DT_LEFT);
+                    QueueIn(vp, Clock(b.StartH) + " to " + Clock(b.EndH) + "   " + Dur(len), fT, labelC, new RectangleF(br.X + 6, lineTop + 18f, br.Width - 12, 18f), DT_LEFT);
+                } else if (br.Height >= 17f && room >= 17f) {
+                    bool wide = br.Width >= 130f;
+                    QueueIn(vp, name, fT, labelC, new RectangleF(br.X + 6, lineTop, br.Width - (wide ? 68f : 12f), 17f), DT_LEFT);
+                    if (wide) QueueIn(vp, Dur(len), fT, labelC, new RectangleF(br.Right - 60, lineTop, 54, 17f), DT_RIGHT);
                 }
                 // Grips at both edges of a card that can be dragged, shown while it is pointed at
                 if (hot && b.Editable && br.Height > 12f) {
                     using (Pen gp = new Pen(A(200, lunch ? textC : dark), 2f)) {
-                        float cx = br.X + br.Width / 2f;
-                        og.DrawLine(gp, cx - 10f, br.Top + 3f, cx + 10f, br.Top + 3f);
-                        og.DrawLine(gp, cx - 10f, br.Bottom - 3f, cx + 10f, br.Bottom - 3f);
+                        float gcx = br.X + br.Width / 2f, gw = Math.Min(10f, br.Width / 3f);
+                        og.DrawLine(gp, gcx - gw, br.Top + 3f, gcx + gw, br.Top + 3f);
+                        og.DrawLine(gp, gcx - gw, br.Bottom - 3f, gcx + gw, br.Bottom - 3f);
                     }
                 }
             }
@@ -1079,7 +1090,9 @@ namespace Win {
                 TimelineBlock eb = t.Blocks[TlEdgeBlock];
                 double edgeH = TlEdge == "start" ? eb.StartH : eb.EndH;
                 float ey = yOf(edgeH);
-                using (Pen ep = new Pen(textC, 3f)) { og.DrawLine(ep, bx, ey, bx + bw, ey); }
+                int elanes = Math.Max(1, eb.Lanes);
+                float elaneW = (bw - 6f) / elanes;
+                using (Pen ep = new Pen(textC, 3f)) { og.DrawLine(ep, bx + 3 + eb.Lane * elaneW, ey, bx + 3 + (eb.Lane + 1) * elaneW - (elanes > 1 ? 2f : 0f), ey); }
             }
             // Now
             if (t.ShowNow) {
@@ -1099,10 +1112,10 @@ namespace Win {
             for (int mm = (int)(Math.Floor(scroll) * 60); mm <= (int)(Math.Ceiling(scroll + viewH) * 60); mm += labelStep) {
                 if (mm < 0 || mm > 24 * 60) continue;
                 float ly = yOf(mm / 60.0);
-                QueueIn(vp, Clock(mm / 60.0), FontLabel, mm % 60 == 0 ? textC : faintC, new RectangleF(x0, ly - 7f, GutterW - 6f, 14f), DT_RIGHT);
+                QueueIn(vp, Clock(mm / 60.0), fTS, mm % 60 == 0 ? textC : faintC, new RectangleF(x0, ly - 8f, GutterW - 6f, 16f), DT_RIGHT);
             }
             if (t.Blocks.Count == 0 && t.EmptyText.Length > 0 && TlHoverGap < 0 && TlSelStartH < 0) {
-                QueueIn(vp, t.EmptyText, fText, faintC, new RectangleF(bx, y + vh / 2f - 9f, bw, 18f), DT_CENTER);
+                QueueIn(vp, t.EmptyText, fT, faintC, new RectangleF(bx, y + vh / 2f - 10f, bw, 20f), DT_CENTER);
             }
 
             // A thin scroll bar when there is more of the day than fits
@@ -1117,12 +1130,12 @@ namespace Win {
             // The time being dragged to, in a label across the edge
             if (TlDragText.Length > 0) {
                 float dy = yOf(TlDragAtH);
-                float lw = Math.Min(bw - 8f, og.MeasureString(TlDragText, FontLabel).Width + 18f);
-                RectangleF lr = new RectangleF(bx + bw - lw - 6f, dy - 7f, lw, 14f);
+                float lw = Math.Min(bw - 8f, og.MeasureString(TlDragText, fTS).Width + 20f);
+                RectangleF lr = new RectangleF(bx + bw - lw - 6f, dy - 9f, lw, 18f);
                 if (lr.Top >= y && lr.Bottom <= y + vh) {
-                    using (GraphicsPath lp = RoundRect(lr.X, lr.Y, lr.Width, lr.Height, 7f))
+                    using (GraphicsPath lp = RoundRect(lr.X, lr.Y, lr.Width, lr.Height, 9f))
                     using (SolidBrush lb = new SolidBrush(CircleHot)) { og.FillPath(lb, lp); }
-                    QueueText(TlDragText, FontLabel, textC, lr, DT_CENTER);
+                    QueueText(TlDragText, fTS, textC, lr, DT_CENTER);
                 }
             }
 
@@ -1131,19 +1144,19 @@ namespace Win {
             foreach (TimelineLegend lg in t.Legend) {
                 og.DrawLine(sep, lx, gy, xR, gy);
                 bool isTotal = lg.Kind == "total";
-                Font f = isTotal ? fBold : fText;
+                Font f = isTotal ? fTB : fT;
                 Color c = (lg.Kind == "lunch" || lg.Kind == "unallocated") ? faintC : textC;
                 float nameX = lx;
                 if (lg.Kind == "account") {
-                    using (SolidBrush sw = new SolidBrush(lg.Colour)) { og.FillRectangle(sw, lx, gy + 4.5f, 10f, 10f); }
-                    nameX = lx + 15f;
+                    using (SolidBrush sw = new SolidBrush(lg.Colour)) { og.FillRectangle(sw, lx, gy + 6f, 10f, 10f); }
+                    nameX = lx + 16f;
                 } else if (lg.Kind == "lunch") {
-                    using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, 0.33), Mix(Panel, Text, 0.12))) { og.FillRectangle(hb, lx, gy + 4.5f, 10f, 10f); }
-                    nameX = lx + 15f;
+                    using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, 0.33), Mix(Panel, Text, 0.12))) { og.FillRectangle(hb, lx, gy + 6f, 10f, 10f); }
+                    nameX = lx + 16f;
                 }
-                QueueText(lg.Name, f, c, new RectangleF(nameX, gy, LegendW - 44f - (nameX - lx), DrawerRowH), DT_LEFT);
-                QueueText(lg.Total, f, c, new RectangleF(xR - 44f, gy, 44f, DrawerRowH), DT_RIGHT);
-                gy += DrawerRowH;
+                QueueText(lg.Name, f, c, new RectangleF(nameX, gy, LegendW - 46f - (nameX - lx), TlRowH), DT_LEFT);
+                QueueText(lg.Total, f, c, new RectangleF(xR - 46f, gy, 46f, TlRowH), DT_RIGHT);
+                gy += TlRowH;
             }
         }
 
@@ -1188,7 +1201,14 @@ namespace Win {
 # ---- Settings ----
 $StartTime       = '08:30'   # usual start and end (also changeable in the app: right-click, Working hours)
 $EndTime         = '17:30'
-$Scale           = 1.0      # make the timer bigger or smaller, e.g. 0.8 or 1.3
+$Scale           = 1.0      # make the timer bigger or smaller, e.g. 0.8 or 1.3 (also changeable in the app: right-click, Appearance, Size)
+$SizeFile = Join-Path $PSScriptRoot 'account-timer-size.txt'
+if (Test-Path $SizeFile) {
+    try {
+        $savedSize = [double]::Parse((Get-Content $SizeFile -TotalCount 1).Trim(), [Globalization.CultureInfo]::InvariantCulture)
+        if ($savedSize -ge 0.5 -and $savedSize -le 3.0) { $Scale = $savedSize }
+    } catch {}
+}
 $DefaultAccounts = @('ACCOUNT 1', 'ACCOUNT 2', 'ACCOUNT 3', 'ACCOUNT 4', 'ACCOUNT 5')
 $SleepGapMinutes = 5        # if the computer sleeps for longer than this, the running slot is paused
 $MaxVisibleAccounts = 12    # most accounts shown at once (hide some to make room)
@@ -2462,6 +2482,7 @@ function Update-View {
 
 $g0   = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero)
 $Zoom = $Scale * $g0.DpiX / 96
+$script:SystemDpi = $g0.DpiX
 $g0.Dispose()
 
 $BaseW  = 320
@@ -2858,9 +2879,13 @@ $fRow    = New-Object System.Drawing.Font('Segoe UI Semibold', 12, [System.Drawi
 $fOvertime = New-Object System.Drawing.Font('Segoe UI Semibold', 24, [System.Drawing.FontStyle]::Regular, $px)
 $fPillTime = New-Object System.Drawing.Font('Segoe UI Semibold', 19, [System.Drawing.FontStyle]::Regular, $px)
 $fPillSub  = New-Object System.Drawing.Font('Segoe UI', 10.5, [System.Drawing.FontStyle]::Regular, $px)
-$fDrawerBtn = New-Object System.Drawing.Font('Segoe UI Semibold', 10.5, [System.Drawing.FontStyle]::Regular, $px)
+$fDrawerBtn = New-Object System.Drawing.Font('Segoe UI Semibold', 11.5, [System.Drawing.FontStyle]::Regular, $px)
 $fDrawerText = New-Object System.Drawing.Font('Segoe UI', 11.5, [System.Drawing.FontStyle]::Regular, $px)
 $fDrawerTextBold = New-Object System.Drawing.Font('Segoe UI Semibold', 11.5, [System.Drawing.FontStyle]::Regular, $px)
+# The timeline's text is a little larger than the rest of the drawer's, as it has to be read at a glance
+$fTimeline = New-Object System.Drawing.Font('Segoe UI', 13, [System.Drawing.FontStyle]::Regular, $px)
+$fTimelineBold = New-Object System.Drawing.Font('Segoe UI Semibold', 13, [System.Drawing.FontStyle]::Regular, $px)
+$fTimelineSmall = New-Object System.Drawing.Font('Segoe UI', 12, [System.Drawing.FontStyle]::Regular, $px)
 
 $sfCentre = New-Object System.Drawing.StringFormat
 $sfCentre.Alignment = 'Center'; $sfCentre.LineAlignment = 'Center'
@@ -2893,6 +2918,9 @@ if ($script:useRenderer) {
         $script:renderer.DrawerBtnY = [float]$DrawerBtnY
         $script:renderer.FontDrawer = $fDrawerText
         $script:renderer.FontDrawerBold = $fDrawerTextBold
+        $script:renderer.FontTimeline = $fTimeline
+        $script:renderer.FontTimelineBold = $fTimelineBold
+        $script:renderer.FontTimelineSmall = $fTimelineSmall
         $script:renderer.DrawerW = [float]$DrawerSideW
     } catch {
         $script:useRenderer = $false
@@ -3317,14 +3345,60 @@ function Get-TimelineGaps($blocks, [double]$axisStartH, [double]$axisEndH, [doub
     return $out
 }
 
+# Stretches that overlap (a merged or hand-edited entry can run into its neighbours) are laid out side by
+# side in lanes, like a calendar, so none is hidden behind another. Blocks that overlap by only a few seconds,
+# which rounding in the log can cause, still count as touching. Each block gets its Lane and the number of
+# Lanes across its overlapping group. The blocks must be in start order.
+function Set-TimelineLanes($blocks) {
+    $bl = @($blocks)
+    $slack = 3.0 / 3600.0
+    $laneEnds = @()
+    $groupEnd = -1.0
+    $groupStart = 0
+    for ($i = 0; $i -le $bl.Count; $i++) {
+        $atEnd = ($i -eq $bl.Count)
+        if ($atEnd -or [double]$bl[$i].StartH -ge $groupEnd - $slack) {
+            # A new group begins, so the one before is finished and every block in it learns how many lanes it has
+            for ($j = $groupStart; $j -lt $i; $j++) { $bl[$j] | Add-Member -NotePropertyName Lanes -NotePropertyValue ([math]::Max(1, $laneEnds.Count)) -Force }
+            if ($atEnd) { break }
+            $laneEnds = @(); $groupEnd = -1.0; $groupStart = $i
+        }
+        $lane = -1
+        for ($l = 0; $l -lt $laneEnds.Count; $l++) { if ($laneEnds[$l] - $slack -le [double]$bl[$i].StartH) { $lane = $l; break } }
+        if ($lane -lt 0) { $lane = $laneEnds.Count; $laneEnds += 0.0 }
+        $laneEnds[$lane] = [double]$bl[$i].EndH
+        $groupEnd = [math]::Max($groupEnd, [double]$bl[$i].EndH)
+        $bl[$i] | Add-Member -NotePropertyName Lane -NotePropertyValue $lane -Force
+    }
+}
+
+# The next (or previous) block in the same lane, which is the one whose edge limits this block's
+function Get-LaneNeighbour($blocks, [int]$i, [int]$dir) {
+    $bl = @($blocks)
+    $lane = [int]$bl[$i].Lane
+    for ($j = $i + $dir; $j -ge 0 -and $j -lt $bl.Count; $j += $dir) {
+        if ([int]$bl[$j].Lane -eq $lane) { return $j }
+    }
+    return -1
+}
+
+# Whether a point a fraction of the way across the column is within a block's lane
+function Test-InLane($block, $fx) {
+    $lanes = [math]::Max(1, [int]$block.Lanes)
+    $lane = [int]$block.Lane
+    return ($fx -ge ($lane / $lanes) -and $fx -le (($lane + 1) / $lanes))
+}
+
 # Which edge of a block is at this time, if any. Two editable blocks that touch (within a minute) share one
 # edge, 'join', owned by the left block, so dragging it moves the change-over between them.
-function Get-TimelineEdgeAt($blocks, [double]$h, [double]$tolH) {
+function Get-TimelineEdgeAt($blocks, [double]$h, [double]$tolH, $fx = $null) {
     $bl = @($blocks)
     $minH = 1.0 / 60.0
     $best = $null; $bestD = $tolH + 1.0
     for ($i = 0; $i -lt $bl.Count; $i++) {
         if (-not $bl[$i].Editable) { continue }
+        # With blocks side by side, only the lane under the pointer counts (fx is how far across the column it is, 0 to 1)
+        if ($null -ne $fx -and -not (Test-InLane $bl[$i] $fx)) { continue }
         foreach ($e in @('start', 'end')) {
             $at = if ($e -eq 'start') { [double]$bl[$i].StartH } else { [double]$bl[$i].EndH }
             $d = [math]::Abs($at - $h)
@@ -3333,11 +3407,17 @@ function Get-TimelineEdgeAt($blocks, [double]$h, [double]$tolH) {
     }
     if (-not $best) { return $null }
     $i = $best.Index
-    if ($best.Edge -eq 'end' -and $i + 1 -lt $bl.Count -and $bl[$i + 1].Editable -and ($bl[$i + 1].StartH - $bl[$i].EndH) -le $minH) {
-        return @{ Index = $i; Edge = 'join' }
+    if ($best.Edge -eq 'end') {
+        $n = Get-LaneNeighbour $bl $i 1
+        if ($n -ge 0 -and $bl[$n].Editable -and ($bl[$n].StartH - $bl[$i].EndH) -le $minH -and ($bl[$n].StartH - $bl[$i].EndH) -ge -$minH) {
+            return @{ Index = $i; Edge = 'join' }
+        }
     }
-    if ($best.Edge -eq 'start' -and $i -gt 0 -and $bl[$i - 1].Editable -and ($bl[$i].StartH - $bl[$i - 1].EndH) -le $minH) {
-        return @{ Index = ($i - 1); Edge = 'join' }
+    if ($best.Edge -eq 'start') {
+        $pv = Get-LaneNeighbour $bl $i -1
+        if ($pv -ge 0 -and $bl[$pv].Editable -and ($bl[$i].StartH - $bl[$pv].EndH) -le $minH -and ($bl[$i].StartH - $bl[$pv].EndH) -ge -$minH) {
+            return @{ Index = $pv; Edge = 'join' }
+        }
     }
     return $best
 }
@@ -3351,10 +3431,13 @@ function Get-TimelineDrag($blocks, [int]$i, [string]$edge, [double]$targetH, [do
     $snap = $snapMin / 60.0
     $t = [math]::Round($targetH / $snap) * $snap
     $cur = 0.0
+    # An edge stops at the neighbour in its own lane; blocks in other lanes overlap it by design
+    $nextIdx = Get-LaneNeighbour $bl $i 1
+    $prevIdx = Get-LaneNeighbour $bl $i -1
     switch ($edge) {
-        'join'  { $lo = $bl[$i].StartH + $minH; $hi = $bl[$i + 1].EndH - $minH; $cur = $bl[$i].EndH }
-        'start' { $lo = $(if ($i -gt 0) { [double]$bl[$i - 1].EndH } else { 0.0 }); $hi = $bl[$i].EndH - $minH; $cur = $bl[$i].StartH }
-        default { $lo = $bl[$i].StartH + $minH; $hi = $(if ($i + 1 -lt $bl.Count) { [double]$bl[$i + 1].StartH } else { 24.0 }); $cur = $bl[$i].EndH }
+        'join'  { $lo = $bl[$i].StartH + $minH; $hi = $bl[$nextIdx].EndH - $minH; $cur = $bl[$i].EndH }
+        'start' { $lo = $(if ($prevIdx -ge 0) { [double]$bl[$prevIdx].EndH } else { 0.0 }); $hi = $bl[$i].EndH - $minH; $cur = $bl[$i].StartH }
+        default { $lo = $bl[$i].StartH + $minH; $hi = $(if ($nextIdx -ge 0) { [double]$bl[$nextIdx].StartH } else { 24.0 }); $cur = $bl[$i].EndH }
     }
     $hi = [math]::Min([double]$hi, $capH)
     if ($hi -lt $lo) { $hi = $lo }
@@ -3362,7 +3445,7 @@ function Get-TimelineDrag($blocks, [int]$i, [string]$edge, [double]$targetH, [do
     $moves = @()
     if ($edge -eq 'join') {
         $moves += @{ Index = $i; Edge = 'end'; H = $t }
-        $moves += @{ Index = ($i + 1); Edge = 'start'; H = $t }
+        $moves += @{ Index = $nextIdx; Edge = 'start'; H = $t }
     } else {
         $moves += @{ Index = $i; Edge = $edge; H = $t }
     }
@@ -3385,7 +3468,8 @@ function Get-DayTimeline([datetime]$day) {
         $note = $null
         if (-not $isLunch) { $note = $script:notes[(Get-NoteKey $r.Start.ToString('yyyy-MM-dd', $Inv) $r.Name $r.Start.ToString('HH:mm:ss', $Inv))] }
         $blocks += [pscustomobject]@{ Name = $r.Name; Start = $r.Start; End = $r.End; Seconds = $r.Seconds
-                                      Kind = $(if ($isLunch) { 'lunch' } else { 'time' }); Note = $note; Raw = $r.Raw }
+                                      Kind = $(if ($isLunch) { 'lunch' } else { 'time' }); Note = $note; Raw = $r.Raw
+                                      Label = "$($r.Raw.End)" }
     }
     # Whatever is running right now (from midnight if it carried on past it)
     if ($isToday -and $script:active) {
@@ -3398,20 +3482,27 @@ function Get-DayTimeline([datetime]$day) {
                                           Kind = $(if ($isLunch) { 'lunch' } else { 'running' }); Note = $null; Raw = $null }
         }
     }
-    $blocks = @($blocks | Sort-Object Start)
+    $blocks = @($blocks | Sort-Object Start, End)
     foreach ($b in $blocks) {
         $label = if ($b.Kind -eq 'lunch') { 'Lunch' } else { $b.Name }
         $span = '{0} to {1}' -f $b.Start.ToString('HH:mm', $Inv), $b.End.ToString('HH:mm', $Inv)
         $text = "$label`n$span ($(Format-Dur $b.Seconds))"
         if ($b.Kind -eq 'running') { $text += "`nRunning now" }
         if ($b.Note) { $text += "`n" + $b.Note }
+        # Rows made by hand or by merging don't describe one real stretch, so say so
+        if ("$($b.Label)" -eq 'merged') { $text += "`nMerged from several stretches, so the times are approximate" }
+        elseif ("$($b.Label)" -eq 'edited') { $text += "`nEdited by hand" }
+        elseif ("$($b.Label)" -eq 'added') { $text += "`nAdded by hand" }
         $b | Add-Member -NotePropertyName Tip -NotePropertyValue $text -Force
         # Hours since midnight for the drawing and dragging. What is running now has no row in the log
         # yet, so it can't be dragged.
         $b | Add-Member -NotePropertyName StartH -NotePropertyValue (($b.Start - $day).TotalHours) -Force
-        $b | Add-Member -NotePropertyName EndH -NotePropertyValue (($b.End - $day).TotalHours) -Force
+        # A stretch edited to run past midnight is drawn to the end of the day, so it can never be out of view
+        $b | Add-Member -NotePropertyName EndH -NotePropertyValue ([math]::Min(24.0, ($b.End - $day).TotalHours)) -Force
         $b | Add-Member -NotePropertyName Editable -NotePropertyValue ($null -ne $b.Raw) -Force
     }
+
+    Set-TimelineLanes $blocks
 
     $plan = Get-DayPlan $day
     $lo = $null; $hi = $null
@@ -3419,6 +3510,7 @@ function Get-DayTimeline([datetime]$day) {
     foreach ($b in $blocks) {
         if ($null -eq $lo -or $b.Start -lt $lo) { $lo = $b.Start }
         if ($null -eq $hi -or $b.End -gt $hi) { $hi = $b.End }
+        if ($hi -gt $day.AddDays(1)) { $hi = $day.AddDays(1) }
     }
     if ($isToday -and $null -ne $hi -and $now -gt $hi) { $hi = $now }
     if ($null -eq $lo) { $lo = $day.AddHours(8); $hi = $day.AddHours(18) }
@@ -3451,7 +3543,7 @@ function Measure-DrawerHeight {
     if ((Get-DrawerMode) -eq 'timeline') {
         # A fixed height, with the day scrolling inside it (or taller if the account totals need more)
         $lines = @($script:drawerLegend).Count
-        return [math]::Max($TimelineMinH, 10 + 34 + [Win.FullRenderer]::TabsH + $DrawerRowH * $lines + 12)
+        return [math]::Max($TimelineMinH, 10 + 34 + [Win.FullRenderer]::TabsH + [Win.FullRenderer]::TlRowH * $lines + 12)
     }
     $rows = 1 + @($d.Names).Count + 3
     $h = 10 + 34 + $DrawerRowH * $rows + 10
@@ -3524,6 +3616,7 @@ function Build-TimelineModel {
         $tb = New-Object Win.TimelineBlock
         $tb.Name = $b.Name; $tb.Kind = $b.Kind; $tb.Tip = $b.Tip; $tb.Editable = [bool]$b.Editable
         $tb.StartH = $b.StartH; $tb.EndH = $b.EndH
+        $tb.Lane = [int]$b.Lane; $tb.Lanes = [math]::Max(1, [int]$b.Lanes)
         foreach ($mv in @($script:tlPreview)) {
             if ($mv.Index -ne $i) { continue }
             if ($mv.Edge -eq 'start') { $tb.StartH = $mv.H } else { $tb.EndH = $mv.H }
@@ -3765,13 +3858,18 @@ function Get-TimelineHit($pt) {
     $tl = $script:drawerTimeline
     $h = Get-TimelineTimeAt $pt
     $hoursPerUnit = 1.0 / $script:tlPx
-    $edge = Get-TimelineEdgeAt $tl.Blocks $h (5.0 * $hoursPerUnit)
+    $g = $script:tlGeom
+    $fx = ([double]($pt.X / $Zoom) - $g.X0) / $g.W
+    $edge = Get-TimelineEdgeAt $tl.Blocks $h (5.0 * $hoursPerUnit) $fx
     if ($edge) { $hit.EdgeBlock = $edge.Index; $hit.Edge = $edge.Edge; $hit.Block = $edge.Index; return $hit }
     $blocks = @($tl.Blocks)
     for ($i = 0; $i -lt $blocks.Count; $i++) {
+        if (-not (Test-InLane $blocks[$i] $fx)) { continue }
         $pad = [math]::Max(0.0, (6.0 * $hoursPerUnit - ($blocks[$i].EndH - $blocks[$i].StartH)) / 2)
         if ($h -ge ($blocks[$i].StartH - $pad) -and $h -le ($blocks[$i].EndH + $pad)) { $hit.Block = $i; return $hit }
     }
+    # Time covered by a block in another lane isn't a gap, so there is nothing to point at here
+    foreach ($bk in $blocks) { if ($h -ge $bk.StartH -and $h -le $bk.EndH) { return $hit } }
     $gaps = @($tl.Gaps)
     for ($i = 0; $i -lt $gaps.Count; $i++) {
         if ($h -ge $gaps[$i].StartH -and $h -le $gaps[$i].EndH) { $hit.Gap = $i; return $hit }
@@ -7054,6 +7152,55 @@ function Build-ThemeMenu {
     })
 }
 [void]$miAppearance.DropDownItems.Add($miTheme)
+
+# ---- Size: the whole timer and drawer, kept for next time ----
+$SizeLevels = [ordered]@{ 'Smaller (85%)' = 0.85; 'Normal (100%)' = 1.0; 'Larger (125%)' = 1.25; 'Large (150%)' = 1.5; 'Largest (175%)' = 1.75 }
+
+function Get-WantedZoom {
+    $dpi = $script:SystemDpi
+    if ($script:perMonitor) { try { $d = [Win.Dpi]::GetDpiForWindow($form.Handle); if ($d -gt 0) { $dpi = $d } } catch {} }
+    return $script:Scale * $dpi / 96
+}
+
+# Nudge the window back into view if making it bigger pushed it over an edge of the screen
+function Keep-OnScreen {
+    $area = [System.Windows.Forms.Screen]::FromControl($form).WorkingArea
+    $x = $form.Left; $y = $form.Top
+    if ($form.Right -gt $area.Right) { $x = $area.Right - $form.Width }
+    if ($form.Bottom -gt $area.Bottom) { $y = $area.Bottom - $form.Height }
+    if ($x -lt $area.Left) { $x = $area.Left }
+    if ($y -lt $area.Top) { $y = $area.Top }
+    if ($x -ne $form.Left -or $y -ne $form.Top) { $form.Location = New-Object System.Drawing.Point($x, $y) }
+}
+
+function Set-UiScale([double]$newSize) {
+    # (Not called $scale, which would hide the script's $Scale from everything this calls)
+    $script:Scale = $newSize
+    try { Set-Content -Path $SizeFile -Value $newSize.ToString($Inv) } catch {}
+    # Keep the timer where it is on screen while the window grows or shrinks around it
+    $tl = if ($script:mode -eq 'full') { Get-TimerScreenPos } else { $null }
+    $script:Zoom = Get-WantedZoom
+    if ($tl) { Update-DrawerGeometry $tl }
+    else {
+        $bw, $bh = Get-BaseSize
+        $form.ClientSize = New-Object System.Drawing.Size([int]($bw * $Zoom), [int]($bh * $Zoom))
+    }
+    $script:regionKey = ''
+    Keep-OnScreen
+    $tip.Hide($form)
+    Request-Redraw
+}
+
+$miSize = New-Object System.Windows.Forms.ToolStripMenuItem 'Size'
+foreach ($sl in $SizeLevels.Keys) {
+    $si = $miSize.DropDownItems.Add($sl)
+    $si.Tag = [double]$SizeLevels[$sl]
+    $si.Add_Click({ try { Set-UiScale ([double]$this.Tag) } catch { Write-Log "Size error: $($_.Exception.Message)" } })
+}
+$miSize.Add_DropDownOpening({
+    foreach ($it in $miSize.DropDownItems) { $it.Checked = ([math]::Abs([double]$it.Tag - $script:Scale) -lt 0.01) }
+})
+[void]$miAppearance.DropDownItems.Add($miSize)
 
 $miList = New-Object System.Windows.Forms.ToolStripMenuItem 'Account list transparency'
 foreach ($ll in $ListLevels.Keys) {

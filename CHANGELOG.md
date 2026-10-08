@@ -6,7 +6,7 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current version, with the compact pill, week drawer, weekly view and settings | 2.0 to 2.17 |
+| AccountTimer2.ps1 | Current version, with the compact pill, week drawer, weekly view and settings | 2.0 to 2.18 |
 | AccountTimer.ps1 | Account slots, time logging, themes and the see-through list | 1.0 to 1.7 |
 | BillableTimer.ps1 | The original single billable-hours timer | 0.1 to 0.5 |
 
@@ -14,6 +14,11 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Version | Script | Type | Change |
 | --- | --- | --- | --- |
+| 2.18 | AccountTimer2 | Fixed | Stretches that overlap, such as merged or hand-edited entries, now sit side by side on the timeline instead of hiding each other, and dragging an edge only stops at the neighbour in its own lane |
+| 2.18 | AccountTimer2 | Fixed | An entry edited to run past midnight is drawn to the end of the day instead of going missing from the timeline |
+| 2.18 | AccountTimer2 | Improved | Pointing at a merged, edited or added entry on the timeline says how it was made, and that merged times are approximate |
+| 2.18 | AccountTimer2 | New | A Size setting under Appearance, from Smaller to Largest, that scales the whole timer and drawer, is remembered, and makes menus larger too |
+| 2.18 | AccountTimer2 | Improved | Larger text on the timeline and the drawer's buttons, and taller account totals rows |
 | 2.17 | AccountTimer2 | Improved | The timeline is now a vertical day view like a calendar, with hours down the left and each stretch of time as a card showing its name, times and length, so short stretches are readable and easy to drag |
 | 2.17 | AccountTimer2 | New | Scroll the timeline with the mouse wheel and zoom with Ctrl and the wheel or the plus and minus buttons. It opens with now in view, and a Now button jumps back to it |
 | 2.17 | AccountTimer2 | Improved | The timeline has an hour of room either side of the day for adding time, the account totals sit in a column beside it, and the drawer is at least 420 tall |
