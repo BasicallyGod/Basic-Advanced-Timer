@@ -16,6 +16,15 @@ An always-on-top Windows timer for tracking time against client accounts and pre
 
 Only one timer runs at a time. AccountTimer2.ps1 refuses to start if another copy is running.
 
+## v2.21: credited totals and positioned timeline intervals
+
+- `Timesheets/sessions.csv` remains the **only source of account credited totals**, including original merged rows. Positioning credit never changes the source row or adds hours.
+- `Timesheets/credit-positions.csv` keeps `Id,Date,Account,Start,Minutes` for manually located portions of a merged legacy credit. The timeline draws dashed positioned intervals and the weekly entries view projects those portions with their own times, subtracting them from the displayed unplaced residual of the merged source. The source CSV remains unchanged.
+- `Timesheets/entry-groups.csv` keeps `GroupId,Date,Account,Start,End,Minutes` for original session references. A manual weekly Group command preserves all original source intervals. The UI groups only; the timekeeping ledger does not.
+- Metadata files have matching .undo.csv snapshots and are managed via `Invoke-LogChange`. Editing a source row can invalidate its old group membership. CSV row keys remain imperfect; a future database should introduce permanent IDs.
+- The gap menu distinguishes **Position existing credited time** (no added hours) from **Add new credited time** (increases totals). It rechecks the gap before committing. Short rapid switches may have a visual badge when zoomed out, without changing hit testing or real positions.
+- Run the synthetic regression fixture with `powershell -NoProfile -File tests\\timeline-projection.ps1` on Windows PowerShell 5.1.
+
 ## Timeline and timesheet reconciliation
 
 The CSV stores recorded intervals, manually added/edited intervals, adjustments and legacy merged credit in the same row format. Convert-SessionRow derives Origin without changing any saved files. Timeline rendering shows recorded and explicitly positioned manual intervals, but never places legacy merges by pretending that their credited duration is continuous. The daily totals and week summary still include those credits. Get-WeekEntries retains short sessions, and Get-EntryBlocks automatically groups only adjacent recorded intervals. The explicit Merge command is still destructive in this PowerShell format, so it warns before proceeding; a future rewrite should preserve constituent session IDs instead. Run tests/timeline-projection.ps1 on Windows PowerShell 5.1 to check the non-visual projection and grouping rules.

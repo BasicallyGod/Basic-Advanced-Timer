@@ -1088,7 +1088,7 @@ namespace Win {
                 using (SolidBrush gb = new SolidBrush(Mix(Panel, Text, 0.24))) { og.FillRectangle(gb, bx + 3, g1 + 1, bw - 6, Math.Max(2f, g2 - g1 - 2)); }
                 float vis1 = Math.Max(g1, y), vis2 = Math.Min(g2, y + vh);
                 if (vis2 - vis1 >= 18f && TlSelStartH < 0) {
-                    QueueIn(vp, t.HasUnplaced ? "Merged time not positioned" : "+ Fill gap", fT, textC,
+                    QueueIn(vp, "+ Allocate time", fT, textC,
                             new RectangleF(bx, (vis1 + vis2) / 2f - 10f, bw, 20f), DT_CENTER);
                 }
             }
@@ -1144,6 +1144,43 @@ namespace Win {
                         og.DrawLine(gp, gcx - gw, br.Top + 3f, gcx + gw, br.Top + 3f);
                         og.DrawLine(gp, gcx - gw, br.Bottom - 3f, gcx + gw, br.Bottom - 3f);
                     }
+                }
+            }
+            // Compact labels for bursts of brief recorded switches at ordinary zoom.
+            // The underlying blocks, timestamps and hit-testing are unchanged: this
+            // is a visual summary only. Zoom in to inspect every individual interval.
+            if (px < 130f) {
+                int k = 0;
+                while (k < t.Blocks.Count) {
+                    TimelineBlock first = t.Blocks[k];
+                    if (first.Kind != "time" || first.Manual ||
+                        (first.EndH - first.StartH) * px >= 13f) { k++; continue; }
+                    double firstH = first.StartH, lastH = first.EndH;
+                    int count = 1, endIdx = k + 1;
+                    while (endIdx < t.Blocks.Count) {
+                        TimelineBlock next = t.Blocks[endIdx];
+                        if (next.Kind != "time" || next.Manual ||
+                            (next.EndH - next.StartH) * px >= 13f ||
+                            next.StartH - lastH > 0.12 ||
+                            next.EndH - firstH > 0.85) break;
+                        lastH = Math.Max(lastH, next.EndH);
+                        count++; endIdx++;
+                    }
+                    if (count >= 3 && yOf(lastH) > y && yOf(firstH) < y + vh) {
+                        float badgeH = 18f, badgeW = Math.Min(bw - 12f, 132f);
+                        float badgeY = Math.Max(y + 2f, Math.Min(y + vh - badgeH - 2f,
+                                                                yOf(firstH) + 3f));
+                        RectangleF badge = new RectangleF(bx + bw - badgeW - 5f,
+                                                          badgeY, badgeW, badgeH);
+                        using (SolidBrush shade = new SolidBrush(Mix(Panel, Text, 0.22)))
+                        using (Pen stroke = new Pen(Mix(Panel, Text, 0.38), 1f))
+                        using (GraphicsPath bp = RoundRect(badge.X, badge.Y, badge.Width, badge.Height, 7f)) {
+                            og.FillPath(shade, bp); og.DrawPath(stroke, bp);
+                        }
+                        QueueIn(vp, count.ToString() + " short switches  (+ zoom)", fTS,
+                                textC, badge, DT_CENTER);
+                    }
+                    k = endIdx;
                 }
             }
             // The edge being pointed at or dragged
@@ -1220,7 +1257,7 @@ namespace Win {
                 gy += TlRowH;
             }
             if (t.HasUnplaced) {
-                QueueSmoothText("* Merge has no clock time", fTS, faintC,
+                QueueSmoothText("* Position via gap menu", fTS, faintC,
                                 new RectangleF(lx, gy + 4f, LegendW, 34f), DT_LEFT);
             }
         }
@@ -1303,6 +1340,10 @@ $BudgetsFile  = Join-Path $PSScriptRoot 'account-timer-budgets.txt'
 $NotesFile    = Join-Path $TimesheetDir 'notes.csv'
 $SessionsUndo = Join-Path $TimesheetDir 'sessions.undo.csv'
 $NotesUndo    = Join-Path $TimesheetDir 'notes.undo.csv'
+$GroupsFile   = Join-Path $TimesheetDir 'entry-groups.csv'
+$GroupsUndo   = Join-Path $TimesheetDir 'entry-groups.undo.csv'
+$PositionsFile = Join-Path $TimesheetDir 'credit-positions.csv'
+$PositionsUndo = Join-Path $TimesheetDir 'credit-positions.undo.csv'
 $MergeFile    = Join-Path $PSScriptRoot 'account-timer-merge.txt'
 $EffectsFile  = Join-Path $PSScriptRoot 'account-timer-effects.txt'
 $DrawerFile   = Join-Path $PSScriptRoot 'account-timer-drawer.txt'
@@ -1313,6 +1354,8 @@ $script:accounts       = @()   # every account, including hidden ones
 $script:slots          = @()   # visible accounts plus Lunch, in display order
 $script:active         = $null
 $script:pending        = @()
+$script:entryGroups    = @()  # explicit time-entry groups, stored separately from source sessions
+$script:creditPositions = @() # timestamps assigned to legacy merged credit, zero additional hours
 $script:todayDone      = @{}
 $script:weekDone       = @{}
 $script:lunchIntervals = @()
@@ -1736,6 +1779,144 @@ function Write-AllNotes {
 }
 
 # ======================================================================
+# Non-destructive weekly entry grouping. The source CSV stays unchanged.
+# Each association identifies a specific existing source row by its five CSV fields.
+# If an edited/deleted row no longer matches, its grouping is automatically pruned.
+# ======================================================================
+
+function Get-SessionKey($r) {
+    return [string]::Join([string][char]31, [string[]]@("$($r.Date)", "$($r.Account)", "$($r.Start)", "$($r.End)", "$($r.Minutes)"))
+}
+
+function Get-EntryGroupId($raw) {
+    if (-not $raw) { return $null }
+    $key = Get-SessionKey $raw
+    foreach ($member in @($script:entryGroups)) {
+        if ((Get-SessionKey $member) -ceq $key) { return [string]$member.GroupId }
+    }
+    return $null
+}
+
+function Load-EntryGroups {
+    $script:entryGroups = @()
+    if (-not (Test-Path $GroupsFile)) { return }
+    try {
+        $script:entryGroups = @(Import-Csv $GroupsFile | Where-Object { $_.GroupId -and $_.Date -and $_.Start })
+    } catch { Write-Log "Could not read entry groups: $($_.Exception.Message)" }
+}
+
+function Write-EntryGroups {
+    $temp = "$GroupsFile.tmp"
+    try {
+        $members = @($script:entryGroups)
+        if ($members.Count -gt 0) {
+            $members | Select-Object GroupId, Date, Account, Start, End, Minutes |
+                Export-Csv -Path $temp -NoTypeInformation -Encoding UTF8
+        } else {
+            Set-Content -Path $temp -Value '"GroupId","Date","Account","Start","End","Minutes"' -Encoding UTF8
+        }
+        Move-Item -Path $temp -Destination $GroupsFile -Force -ErrorAction Stop
+        return $true
+    } catch {
+        Write-Log "Could not save entry groups: $($_.Exception.Message)"
+        return $false
+    } finally {
+        if (Test-Path $temp) { Remove-Item $temp -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+# Credit positions are additional coordinates for existing legacy merged credit,
+# not billable rows. The original sessions.csv is never changed when they are placed.
+# A separate projection splits merged credit into positioned and remaining portions
+# in the weekly entries view without changing the authoritative daily totals.
+function Load-CreditPositions {
+    $script:creditPositions = @()
+    if (-not (Test-Path $PositionsFile)) { return }
+    try {
+        $script:creditPositions = @(Import-Csv $PositionsFile | Where-Object { $_.Id -and $_.Date -and $_.Account -and $_.Start -and $_.Minutes })
+    } catch { Write-Log "Could not read credit positions: $($_.Exception.Message)" }
+}
+
+function Write-CreditPositions {
+    $temp = "$PositionsFile.tmp"
+    try {
+        $rows = @($script:creditPositions)
+        if ($rows.Count -gt 0) {
+            $rows | Select-Object Id, Date, Account, Start, Minutes |
+                Export-Csv -Path $temp -NoTypeInformation -Encoding UTF8
+        } else {
+            Set-Content -Path $temp -Value '"Id","Date","Account","Start","Minutes"' -Encoding UTF8
+        }
+        Move-Item -Path $temp -Destination $PositionsFile -Force -ErrorAction Stop
+        return $true
+    } catch {
+        Write-Log "Could not save credit positions: $($_.Exception.Message)"
+        return $false
+    } finally {
+        if (Test-Path $temp) { Remove-Item $temp -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+function Get-CreditPositionSeconds($row) {
+    try { return [double]::Parse([string]$row.Minutes, $Inv) * 60.0 } catch { return 0.0 }
+}
+
+function Get-UnplacedCredits([datetime]$day) {
+    $totals = @{}
+    foreach ($row in @(Read-Sessions)) {
+        if ($row.Start.Date -eq $day.Date -and $row.Origin -eq 'merged') {
+            $totals[$row.Name] = [double]$totals[$row.Name] + $row.Seconds
+        }
+    }
+    foreach ($p in @($script:creditPositions)) {
+        if ($p.Date -eq $day.ToString('yyyy-MM-dd', $Inv)) {
+            $totals[$p.Account] = [double]$totals[$p.Account] - (Get-CreditPositionSeconds $p)
+        }
+    }
+    $result = @{}
+    foreach ($name in @($totals.Keys)) {
+        if ($totals[$name] -gt 0.01) { $result[$name] = [double]$totals[$name] }
+    }
+    return $result
+}
+
+function Get-CreditPositionSessions([datetime]$day) {
+    foreach ($p in @($script:creditPositions)) {
+        if ($p.Date -ne $day.ToString('yyyy-MM-dd', $Inv)) { continue }
+        try {
+            $from = [datetime]::ParseExact($p.Date, 'yyyy-MM-dd', $Inv).Add(
+                [timespan]::ParseExact($p.Start, 'hh\:mm\:ss', $Inv))
+            $secs = Get-CreditPositionSeconds $p
+            if ($secs -le 0) { continue }
+            [pscustomobject]@{
+                Name = $p.Account; Start = $from; End = $from.AddSeconds($secs)
+                Seconds = $secs; IsAdjust = $false; Kind = 'time'; Origin = 'positioned'
+                Raw = $null; PositionId = [string]$p.Id
+            }
+        } catch { Write-Log "Invalid credit position $($p.Id): $($_.Exception.Message)" }
+    }
+}
+
+function Find-CreditPosition($id) {
+    foreach ($p in @($script:creditPositions)) {
+        if ("$($p.Id)" -ceq "$id") { return $p }
+    }
+    return $null
+}
+
+function Prune-EntryGroups($logRows) {
+    $valid = @{}
+    foreach ($r in @($logRows)) { $valid[(Get-SessionKey $r)] = $true }
+    $kept = @($script:entryGroups | Where-Object { $valid.ContainsKey((Get-SessionKey $_)) })
+    $counts = @{}
+    foreach ($m in $kept) {
+        $id = [string]$m.GroupId
+        $counts[$id] = [int]$counts[$id] + 1
+    }
+    $script:entryGroups = @($kept | Where-Object { $counts[[string]$_.GroupId] -ge 2 })
+}
+
+# ======================================================================
 # Editing the time log (merge, delete, change account, edit, add) with one level of Undo
 # ======================================================================
 
@@ -1769,26 +1950,48 @@ function Invoke-LogChange($description, [scriptblock]$change) {
         return $false
     }
     $notesBefore = $script:notes.Clone()
+    $groupsBefore = @($script:entryGroups | ForEach-Object { $_.PSObject.Copy() })
+    $positionsBefore = @($script:creditPositions | ForEach-Object { $_.PSObject.Copy() })
+    $snapshotsReady = $false
     try {
         $logRows = New-Object System.Collections.ArrayList
         if (Test-Path $SessionsFile) { foreach ($row in @(Import-Csv $SessionsFile)) { [void]$logRows.Add($row) } }
         $proceed = & $change
-        if (-not $proceed) { $script:notes = $notesBefore; return $false }
+        if (-not $proceed) { $script:notes = $notesBefore; $script:entryGroups = $groupsBefore; $script:creditPositions = $positionsBefore; return $false }
+        Prune-EntryGroups $logRows
 
         if (Test-Path $SessionsFile) { Copy-Item $SessionsFile $SessionsUndo -Force }
         else { Set-Content -Path $SessionsUndo -Value '"Date","Account","Start","End","Minutes"' -Encoding UTF8 }
         if (Test-Path $NotesFile) { Copy-Item $NotesFile $NotesUndo -Force }
         else { Set-Content -Path $NotesUndo -Value '"Date","Account","Start","Note"' -Encoding UTF8 }
+        if (Test-Path $GroupsFile) { Copy-Item $GroupsFile $GroupsUndo -Force }
+        else { Set-Content -Path $GroupsUndo -Value '"GroupId","Date","Account","Start","End","Minutes"' -Encoding UTF8 }
+        if (Test-Path $PositionsFile) { Copy-Item $PositionsFile $PositionsUndo -Force }
+        else { Set-Content -Path $PositionsUndo -Value '"Id","Date","Account","Start","Minutes"' -Encoding UTF8 }
+        $snapshotsReady = $true
 
         if ($logRows.Count -gt 0) {
             $logRows | Select-Object Date, Account, Start, End, Minutes | Export-Csv -Path $SessionsFile -NoTypeInformation -Encoding UTF8
         } else {
             Set-Content -Path $SessionsFile -Value '"Date","Account","Start","End","Minutes"' -Encoding UTF8
         }
-        [void](Write-AllNotes)
+        if (-not (Write-AllNotes)) { throw 'Could not save notes' }
+        if (-not (Write-EntryGroups)) { throw 'Could not save entry groups' }
+        if (-not (Write-CreditPositions)) { throw 'Could not save credit positions' }
         $script:undoLabel = $description
     } catch {
         $script:notes = $notesBefore
+        $script:entryGroups = $groupsBefore
+        $script:creditPositions = $positionsBefore
+        # Restore every component only if this transaction prepared its own snapshots.
+        if ($snapshotsReady) {
+            try {
+                if (Test-Path $SessionsUndo) { Copy-Item $SessionsUndo $SessionsFile -Force }
+                if (Test-Path $NotesUndo) { Copy-Item $NotesUndo $NotesFile -Force }
+                if (Test-Path $GroupsUndo) { Copy-Item $GroupsUndo $GroupsFile -Force }
+                if (Test-Path $PositionsUndo) { Copy-Item $PositionsUndo $PositionsFile -Force }
+            } catch { Write-Log "Transaction rollback failed: $($_.Exception.Message)" }
+        }
         Write-Log "Time log change failed: $($_.Exception.Message)"
         Show-Message "Couldn't save the change. If sessions.csv or notes.csv is open in Excel, close it and try again."
         return $false
@@ -1815,11 +2018,15 @@ function Undo-LogChange {
     try {
         Copy-Item $SessionsUndo $SessionsFile -Force
         Copy-Item $NotesUndo $NotesFile -Force
+        if (Test-Path $GroupsUndo) { Copy-Item $GroupsUndo $GroupsFile -Force }
+        if (Test-Path $PositionsUndo) { Copy-Item $PositionsUndo $PositionsFile -Force }
     } catch {
         Show-Message "Couldn't undo. If sessions.csv or notes.csv is open in Excel, close it and try again."
         return
     }
     Load-Notes
+    Load-EntryGroups
+    Load-CreditPositions
     $script:undoLabel = $null
     Complete-LogChange
 }
@@ -1833,14 +2040,27 @@ function Remove-EntryBlocks {
     $sel = @($script:entrySelected)
     if ($sel.Count -eq 0) { return }
     if (Test-HasRunning $sel) { Show-Message 'Stop the running account before deleting its time.'; return }
+    foreach ($b in $sel) {
+        foreach ($part in @($b.Parts)) {
+            if ($part.Origin -eq 'merged' -and
+                @($script:creditPositions | Where-Object { $_.Date -eq $part.Start.ToString('yyyy-MM-dd', $Inv) -and $_.Account -eq $part.Name }).Count -gt 0) {
+                Show-Message 'This merged credit has positioned portions. Unposition those portions first before deleting the source credit.'
+                return
+            }
+        }
+    }
     $total = 0.0; foreach ($b in $sel) { $total += $b.Seconds }
     $what = if ($sel.Count -eq 1) { "this block ($($sel[0].Name), $(Format-HM $total))" } else { "these $($sel.Count) blocks ($(Format-HM $total) in total)" }
     if (-not (Ask-YesNo "Delete $what? You can undo this straight afterwards.")) { return }
     [void](Invoke-LogChange 'delete' {
         foreach ($b in $sel) {
             foreach ($part in @($b.Parts)) {
-                $at = Find-SessionRow $logRows $part.Raw
-                if ($at -ge 0) { $logRows.RemoveAt($at) }
+                if ($part.Origin -eq 'positioned') {
+                    $script:creditPositions = @($script:creditPositions | Where-Object { $_.Id -cne [string]$part.PositionId })
+                } else {
+                    $at = Find-SessionRow $logRows $part.Raw
+                    if ($at -ge 0) { $logRows.RemoveAt($at) }
+                }
                 if ($part.Kind -eq 'time') { [void]$script:notes.Remove((Get-PartNoteKey $part)) }
             }
         }
@@ -1851,28 +2071,48 @@ function Remove-EntryBlocks {
 function Merge-EntryBlocks {
     $sel = @($script:entrySelected)
     if ($sel.Count -lt 2) { return }
-    if (Test-HasRunning $sel) { Show-Message 'Stop the running account before merging its time.'; return }
+    if (Test-HasRunning $sel) { Show-Message 'Stop the running account before grouping its time.'; return }
     $acct = $sel[0].Name; $day = $sel[0].Day
-    foreach ($b in $sel) { if ($b.Name -ne $acct -or $b.Day -ne $day) { Show-Message 'Only blocks for the same account on the same day can be merged.'; return } }
-    $allParts = @($sel | ForEach-Object { $_.Parts } | Sort-Object Start)
-    $timeParts = @($allParts | Where-Object { $_.Kind -eq 'time' })
-    $firstPart = if ($timeParts.Count -gt 0) { $timeParts[0] } else { $allParts[0] }
-    $total = 0.0; foreach ($part in $allParts) { $total += $part.Seconds }
-    # The legacy CSV merge destroys the original clock positions. Make that explicit
-    # until merged groups have their own non-destructive storage format.
-    if (-not (Ask-YesNo 'Merging replaces the original times with one credited total. The timeline cannot place that time precisely afterwards. Continue?')) { return }
-    $mergedNotes = @()
-    foreach ($part in $timeParts) { if ($part.Note -and -not ($mergedNotes -contains $part.Note)) { $mergedNotes += $part.Note } }
-    $dateStr = $firstPart.Start.ToString('yyyy-MM-dd', $Inv)
-    $startStr = $firstPart.Start.ToString('HH:mm:ss', $Inv)
-    [void](Invoke-LogChange 'merge' {
-        foreach ($part in $allParts) {
-            $at = Find-SessionRow $logRows $part.Raw
-            if ($at -ge 0) { $logRows.RemoveAt($at) }
-            if ($part.Kind -eq 'time') { [void]$script:notes.Remove((Get-PartNoteKey $part)) }
+    foreach ($b in $sel) {
+        if ($b.Name -ne $acct -or $b.Day -ne $day) {
+            Show-Message 'Only entries for the same account and day can be grouped.'
+            return
         }
-        [void]$logRows.Add((New-SessionRow $dateStr $acct $startStr 'merged' $total))
-        if ($mergedNotes.Count -gt 0) { $script:notes[(Get-NoteKey $dateStr $acct $startStr)] = ($mergedNotes -join '; ') }
+    }
+    $allSelectedParts = @($sel | ForEach-Object { $_.Parts })
+    if (@($allSelectedParts | Where-Object { $_.Origin -eq 'positioned' }).Count -gt 0) {
+        Show-Message 'Positioned credit already belongs to a merged source. It cannot be grouped again.'
+        return
+    }
+    $parts = @($allSelectedParts | Where-Object { $_.Raw })
+    if (@($parts | Where-Object { $_.Origin -eq 'merged' }).Count -gt 0) {
+        Show-Message 'Legacy merged credit must first be assigned a real start time. It cannot be grouped with positioned sessions.'
+        return
+    }
+    $keys = @($parts | ForEach-Object { Get-SessionKey $_.Raw } | Select-Object -Unique)
+    if ($keys.Count -lt 2 -or $keys.Count -ne $parts.Count) {
+        Show-Message 'Cannot group duplicate or ambiguous source records. Individual source rows must be identifiable.'
+        return
+    }
+    # Grouping records references in a separate file. No sessions or notes are removed,
+    # so every original timestamp and duration remains recoverable on the timeline.
+    $id = [guid]::NewGuid().ToString('N')
+    [void](Invoke-LogChange 'group entries' {
+        $oldIds = @()
+        foreach ($member in @($script:entryGroups)) {
+            if ($keys -contains (Get-SessionKey $member)) { $oldIds += [string]$member.GroupId }
+        }
+        $script:entryGroups = @($script:entryGroups | Where-Object {
+            $oldIds -notcontains [string]$_.GroupId -and $keys -notcontains (Get-SessionKey $_)
+        })
+        foreach ($part in $parts) {
+            $raw = $part.Raw
+            if ((Find-SessionRow $logRows $raw) -lt 0) { return $false }
+            $script:entryGroups += [pscustomobject]@{
+                GroupId = $id; Date = $raw.Date; Account = $raw.Account; Start = $raw.Start
+                End = $raw.End; Minutes = $raw.Minutes
+            }
+        }
         return $true
     })
 }
@@ -1881,6 +2121,17 @@ function Set-EntryAccount($newName) {
     $sel = @($script:entrySelected)
     if ($sel.Count -eq 0) { return }
     if (Test-HasRunning $sel) { Show-Message 'Stop the running account before moving its time.'; return }
+    foreach ($part in @($sel | ForEach-Object { $_.Parts })) {
+        if ($part.Origin -eq 'positioned') {
+            Show-Message 'To change the account of positioned credit, remove that position and allocate it from the appropriate account again.'
+            return
+        }
+        if ($part.Origin -eq 'merged' -and @($script:creditPositions | Where-Object {
+                    $_.Date -eq $part.Start.ToString('yyyy-MM-dd', $Inv) -and $_.Account -eq $part.Name }).Count -gt 0) {
+            Show-Message 'Unposition any linked credit before changing the source merged account.'
+            return
+        }
+    }
     [void](Invoke-LogChange "move to $newName" {
         foreach ($b in $sel) {
             foreach ($part in @($b.Parts)) {
@@ -1903,12 +2154,58 @@ function Set-EntryAccount($newName) {
 
 function Edit-EntryTime($b) {
     if ($b.Kind -eq 'running') { Show-Message 'Stop the running account before editing its time.'; return }
+    if ($b.Origin -eq 'merged' -and @($script:creditPositions | Where-Object {
+                $_.Date -eq $b.Start.ToString('yyyy-MM-dd', $Inv) -and $_.Account -eq $b.Name }).Count -gt 0) {
+        Show-Message 'This merged credit has positioned portions. Remove their positions before converting the source to a timed entry.'
+        return
+    }
     $r = Show-EntryDialog "Edit time for $($b.Name)" @{ Start = $b.Start.ToString('HH:mm', $Inv); Duration = (Format-HM $b.Seconds) }
     if (-not $r) { return }
     $dateStr = $b.Start.ToString('yyyy-MM-dd', $Inv)
     $startStr = $r.Start.ToString('HH:mm:ss', $Inv)
     $keepNote = "$($b.Note)"
     $acct = $b.Name
+    if ($b.Origin -eq 'positioned') {
+        if (($r.Start - $r.Start.Date).TotalSeconds + $r.Seconds -gt 86400.01) {
+            Show-Message 'Positioned credit cannot extend into another day.'
+            return
+        }
+        if (@($b.Parts).Count -ne 1) {
+            Show-Message 'Edit this positioned credit individually, with automatic grouping turned off.'
+            return
+        }
+        [void](Invoke-LogChange 'edit credit position' {
+            $part = @($b.Parts | Where-Object { $_.Origin -eq 'positioned' })[0]
+            $pos = Find-CreditPosition $part.PositionId
+            if (-not $pos) { return $false }
+            $source = 0.0
+            foreach ($row in @($logRows)) {
+                if ($row.Date -eq $pos.Date -and $row.Account -eq $pos.Account -and $row.End -eq 'merged') {
+                    $source += [double]::Parse($row.Minutes, $Inv) * 60
+                }
+            }
+            $other = 0.0
+            foreach ($p in @($script:creditPositions)) {
+                if ($p.Id -cne $pos.Id -and $p.Date -eq $pos.Date -and $p.Account -eq $pos.Account) {
+                    $other += Get-CreditPositionSeconds $p
+                }
+            }
+            if ($r.Seconds + $other -gt $source + 0.01) {
+                Show-Message 'There is not enough merged credit to increase this positioned entry.'
+                return $false
+            }
+            $oldKey = Get-NoteKey $pos.Date $pos.Account $pos.Start
+            $pos.Start = $startStr
+            $pos.Minutes = ([math]::Round($r.Seconds / 60, 2)).ToString('0.00', $Inv)
+            $newKey = Get-NoteKey $pos.Date $pos.Account $pos.Start
+            if ($newKey -ne $oldKey -and $script:notes.ContainsKey($oldKey)) {
+                $script:notes[$newKey] = $script:notes[$oldKey]
+                [void]$script:notes.Remove($oldKey)
+            }
+            return $true
+        })
+        return
+    }
     [void](Invoke-LogChange 'edit time' {
         foreach ($part in @($b.Parts)) {
             $at = Find-SessionRow $logRows $part.Raw
@@ -2041,27 +2338,64 @@ function Get-WeekStartFor([datetime]$date) {
 function Get-WeekEntries($ws) {
     $we = $ws.AddDays(7)
     $list = @()
+    # Group manually positioned credit by source account/day. Its source merged
+    # rows remain untouched. The detailed view gets positioned entries plus any
+    # unplaced remainder, never both the entire source and the positioned part.
+    $allocated = @{}
+    foreach ($p in @($script:creditPositions)) {
+        try {
+            $day = [datetime]::ParseExact($p.Date, 'yyyy-MM-dd', $Inv)
+            if ($day -lt $ws -or $day -ge $we) { continue }
+            $key = Get-NoteKey $p.Date $p.Account ''
+            $allocated[$key] = [double]$allocated[$key] + (Get-CreditPositionSeconds $p)
+        } catch {}
+    }
     foreach ($r in @(Read-Sessions)) {
         if ($r.Name -eq 'Lunch' -or $r.Start -lt $ws -or $r.Start -ge $we) { continue }
-        # Even a short session is already credited by the weekly totals, so never discard it here.
         if ([math]::Abs($r.Seconds) -le 0) { continue }
+        $seconds = [double]$r.Seconds
+        if ($r.Origin -eq 'merged') {
+            $key = Get-NoteKey $r.Start.ToString('yyyy-MM-dd', $Inv) $r.Name ''
+            $take = [math]::Min($seconds, [math]::Max(0.0, [double]$allocated[$key]))
+            $allocated[$key] = [math]::Max(0.0, [double]$allocated[$key] - $take)
+            $seconds -= $take
+            if ($seconds -le 0.01) { continue }
+        }
         $note = $null
         if ($r.Kind -eq 'time') {
             $note = $script:notes[(Get-NoteKey $r.Start.ToString('yyyy-MM-dd', $Inv) $r.Name $r.Start.ToString('HH:mm:ss', $Inv))]
         }
         $list += [pscustomobject]@{
             Day = [int][math]::Floor(($r.Start.Date - $ws).TotalDays)
-            Name = $r.Name; Start = $r.Start; End = $r.End; Seconds = $r.Seconds; Kind = $r.Kind; Origin = $r.Origin; Note = $note; Raw = $r.Raw
+            Name = $r.Name; Start = $r.Start; End = $r.Start.AddSeconds($seconds)
+            Seconds = $seconds; Kind = $r.Kind; Origin = $r.Origin; Note = $note
+            Raw = $r.Raw; PositionId = $null
         }
     }
-    # Whatever is running right now
+    foreach ($p in @($script:creditPositions)) {
+        try {
+            $day = [datetime]::ParseExact($p.Date, 'yyyy-MM-dd', $Inv)
+            if ($day -lt $ws -or $day -ge $we) { continue }
+            foreach ($s in @(Get-CreditPositionSessions $day | Where-Object { $_.PositionId -ceq [string]$p.Id })) {
+                $note = $script:notes[(Get-NoteKey $p.Date $p.Account $p.Start)]
+                $list += [pscustomobject]@{
+                    Day = [int][math]::Floor(($day - $ws).TotalDays)
+                    Name = $p.Account; Start = $s.Start; End = $s.End
+                    Seconds = $s.Seconds; Kind = 'time'; Origin = 'positioned'; Note = $note
+                    Raw = $null; PositionId = [string]$p.Id
+                }
+            }
+        } catch { Write-Log "Could not prepare credit position $($p.Id): $($_.Exception.Message)" }
+    }
     $now = Get-Date
     if ($script:active -and $script:active.Name -ne 'Lunch' -and $script:active.Start -ge $ws -and $script:active.Start -lt $we) {
         $e = ($now - $script:active.Start).TotalSeconds
         if ($e -gt 0) {
             $list += [pscustomobject]@{
                 Day = [int][math]::Floor(($script:active.Start.Date - $ws).TotalDays)
-                Name = $script:active.Name; Start = $script:active.Start; End = $now; Seconds = $e; Kind = 'running'; Origin = 'running'; Note = $null
+                Name = $script:active.Name; Start = $script:active.Start; End = $now
+                Seconds = $e; Kind = 'running'; Origin = 'running'; Note = $null
+                Raw = $null; PositionId = $null
             }
         }
     }
@@ -2108,18 +2442,31 @@ function New-EntryBlock($parts) {
 # by Lunch). Legacy merged rows and manual entries stay separate so their dates
 # cannot be mistaken for a continuous live recording. Adjustments join the
 # account's most recent block on that day.
+# Weekly blocks are presentation groups only; no original session is ever removed
+# to make one. Explicit groups from entry-groups.csv persist even when automatic
+# adjacency grouping is disabled. Rounded/adjusted credits join their nearest
+# earlier block unless they have an explicit group assignment.
 function Get-EntryBlocks($ws, [switch]$NoRunning) {
     $entries = @(Get-WeekEntries $ws)
     if ($NoRunning) { $entries = @($entries | Where-Object { $_.Kind -ne 'running' }) }
-    if (-not $script:mergeEntries) {
-        return @($entries | ForEach-Object { New-EntryBlock @($_) })
-    }
     $lunchStarts = @(Get-WeekLunchStarts $ws)
     $groups = New-Object System.Collections.ArrayList
+    $byId = @{}
     $current = $null
     foreach ($e in @($entries | Where-Object { $_.Kind -eq 'time' -or $_.Kind -eq 'running' })) {
+        $gid = Get-EntryGroupId $e.Raw
+        if ($gid) {
+            if (-not $byId.ContainsKey($gid)) {
+                $group = New-Object System.Collections.ArrayList
+                [void]$groups.Add($group)
+                $byId[$gid] = $group
+            }
+            [void]$byId[$gid].Add($e)
+            $current = $null
+            continue
+        }
         $join = $false
-        if ($current) {
+        if ($script:mergeEntries -and $current -and $current.Count -gt 0) {
             $prev = $current[$current.Count - 1]
             if ($prev.Name -eq $e.Name -and $prev.Day -eq $e.Day) {
                 $lunchBetween = @($lunchStarts | Where-Object { $_ -ge $prev.Start -and $_ -lt $e.Start }).Count -gt 0
@@ -2137,22 +2484,33 @@ function Get-EntryBlocks($ws, [switch]$NoRunning) {
         }
     }
     foreach ($a in @($entries | Where-Object { $_.Kind -ne 'time' -and $_.Kind -ne 'running' })) {
+        $gid = Get-EntryGroupId $a.Raw
         $target = $null
-        foreach ($grp in $groups) {
-            $g0 = $grp[0]
-            if ($g0.Kind -ne 'time' -and $g0.Kind -ne 'running') { continue }
-            if ($g0.Name -eq $a.Name -and $g0.Day -eq $a.Day -and $g0.Start -le $a.Start) {
-                if (-not $target -or $g0.Start -gt $target[0].Start) { $target = $grp }
+        if ($gid -and $byId.ContainsKey($gid)) { $target = $byId[$gid] }
+        if (-not $target) {
+            foreach ($grp in $groups) {
+                $g0 = @($grp | Sort-Object Start)[0]
+                if ($g0.Name -eq $a.Name -and $g0.Day -eq $a.Day -and $g0.Start -le $a.Start) {
+                    if (-not $target -or $g0.Start -gt @($target | Sort-Object Start)[0].Start) { $target = $grp }
+                }
             }
         }
         if ($target) { [void]$target.Add($a) }
         else {
-            $own = New-Object System.Collections.ArrayList
-            [void]$own.Add($a)
-            [void]$groups.Add($own)
+            $target = New-Object System.Collections.ArrayList
+            [void]$target.Add($a)
+            [void]$groups.Add($target)
         }
     }
-    return @($groups | ForEach-Object { New-EntryBlock @($_) } | Sort-Object Start)
+    $result = @()
+    foreach ($grp in $groups) {
+        $parts = @($grp | Sort-Object Start)
+        $block = New-EntryBlock $parts
+        $gid = Get-EntryGroupId $parts[0].Raw
+        $block | Add-Member -NotePropertyName ExplicitGroup -NotePropertyValue ([bool]$gid) -Force
+        $result += $block
+    }
+    return @($result | Sort-Object Start)
 }
 
 function Get-EntryTypeLabel($kind) {
@@ -2162,6 +2520,8 @@ function Get-EntryTypeLabel($kind) {
         'adjusted'     { return 'Adjusted' }
         'running'      { return 'Running' }
         'merged'       { return 'Merged credit (unplaced)' }
+        'grouped'      { return 'Grouped sessions' }
+        'positioned'   { return 'Positioned existing credit' }
         'edited'       { return 'Edited by hand' }
         'added'        { return 'Added by hand' }
         default        { return 'Time' }
@@ -2182,11 +2542,13 @@ function Write-WeekEntries($ws) {
                 Day      = $_.Start.ToString('ddd dd/MM', $GB)
                 Date     = $_.Start.ToString('yyyy-MM-dd', $Inv)
                 Account  = $_.Name
-                Start    = $(if ($isTime -and $_.Origin -ne 'merged') { $_.Start.ToString('HH:mm', $Inv) } else { '' })
-                End      = $(if ($isTime -and $_.Origin -ne 'merged') { $_.End.ToString('HH:mm', $Inv) } else { '' })
+                Start    = $(if ($isTime -and $_.Origin -ne 'merged' -and -not $_.ExplicitGroup) { $_.Start.ToString('HH:mm', $Inv) } else { '' })
+                End      = $(if ($isTime -and $_.Origin -ne 'merged' -and -not $_.ExplicitGroup) { $_.End.ToString('HH:mm', $Inv) } else { '' })
                 Duration = Format-HM $_.Seconds
                 Hours    = ([math]::Round($_.Seconds / 3600, 2)).ToString('0.00', $Inv)
-                Type     = $(if ($isTime -and $_.Origin -eq 'merged') { Get-EntryTypeLabel 'merged' }
+                Type     = $(if ($isTime -and $_.ExplicitGroup) { Get-EntryTypeLabel 'grouped' }
+                             elseif ($isTime -and $_.Origin -eq 'positioned') { Get-EntryTypeLabel 'positioned' }
+                             elseif ($isTime -and $_.Origin -eq 'merged') { Get-EntryTypeLabel 'merged' }
                              elseif ($isTime -and $_.Origin -eq 'edited') { Get-EntryTypeLabel 'edited' }
                              elseif ($isTime -and $_.Origin -eq 'added') { Get-EntryTypeLabel 'added' }
                              elseif ($isTime -and $hasAdj) { 'Time (adjusted)' }
@@ -2300,18 +2662,20 @@ function Write-WeekSummary {
 }
 
 function Clear-TodayFor($name) {
-    $script:undoLabel = $null
     $today = (Get-Date).ToString('yyyy-MM-dd', $Inv)
-    Flush-Pending
-    $script:pending = @($script:pending | Where-Object { -not ($_.Date -eq $today -and $_.Account -eq $name) })
-    if (Test-Path $SessionsFile) {
-        $keep = @(Import-Csv $SessionsFile | Where-Object { -not ($_.Date -eq $today -and $_.Account -eq $name) })
-        if ($keep.Count -gt 0) {
-            $keep | Export-Csv -Path $SessionsFile -NoTypeInformation -Encoding UTF8
-        } else {
-            Set-Content -Path $SessionsFile -Value '"Date","Account","Start","End","Minutes"' -Encoding UTF8
+    $done = Invoke-LogChange "clear today's $name" {
+        for ($i = $logRows.Count - 1; $i -ge 0; $i--) {
+            $r = $logRows[$i]
+            if ($r.Date -ne $today -or $r.Account -ne $name) { continue }
+            [void]$script:notes.Remove((Get-NoteKey $r.Date $r.Account $r.Start))
+            $logRows.RemoveAt($i)
         }
+        $script:creditPositions = @($script:creditPositions | Where-Object {
+            -not ($_.Date -eq $today -and $_.Account -eq $name)
+        })
+        return $true
     }
+    return $done
 }
 
 # ======================================================================
@@ -3559,10 +3923,9 @@ function Get-DayTimeline([datetime]$day) {
     $unplacedSecs = 0.0
     foreach ($r in @(Read-Sessions)) {
         if ($r.Start.Date -ne $day) { continue }
-        # A legacy merge stores only a credited sum anchored at its first part's start.
-        # Its individual clock intervals were deleted, so drawing it as a continuous
-        # time block would conceal real sessions and create artificial overlaps.
-        if ($r.Origin -eq 'merged') { $unplacedSecs += [double]$r.Seconds; continue }
+        # Merged source credit is accounted for in totals. Its exact positions are
+        # projections kept separately, so never invent a contiguous span here.
+        if ($r.Origin -eq 'merged') { continue }
         if ($r.IsAdjust -or $r.Seconds -le 0) { continue }
         # Include every real interval, even those shorter than a minute. The ledger
         # already counts them, and they must not become fillable gaps on the timeline.
@@ -3572,6 +3935,16 @@ function Get-DayTimeline([datetime]$day) {
         $blocks += [pscustomobject]@{ Name = $r.Name; Start = $r.Start; End = $r.End; Seconds = $r.Seconds
                                       Kind = $(if ($isLunch) { 'lunch' } else { 'time' }); Note = $note; Raw = $r.Raw
                                       Origin = $r.Origin; Label = "$($r.Raw.End)" }
+    }
+    # Explicit positions for previously merged credit have zero additional billable
+    # effect, but are real user-specified clock coordinates and must occupy gaps.
+    foreach ($p in @(Get-CreditPositionSessions $day)) {
+        $note = $script:notes[(Get-NoteKey $p.Start.ToString('yyyy-MM-dd', $Inv) $p.Name $p.Start.ToString('HH:mm:ss', $Inv))]
+        $blocks += [pscustomobject]@{
+            Name = $p.Name; Start = $p.Start; End = $p.End; Seconds = $p.Seconds
+            Kind = 'time'; Origin = 'positioned'; Note = $note; Raw = $null
+            PositionId = $p.PositionId; Label = 'positioned'
+        }
     }
     # Whatever is running right now (from midnight if it carried on past it)
     if ($isToday -and $script:active) {
@@ -3594,17 +3967,22 @@ function Get-DayTimeline([datetime]$day) {
         # Added and edited rows have an explicit position but are not live recordings.
         if ($b.Origin -eq 'edited') { $text += "`nEdited by hand (dashed outline)" }
         elseif ($b.Origin -eq 'added') { $text += "`nAdded by hand (dashed outline)" }
+        elseif ($b.Origin -eq 'positioned') { $text += "`nPositioned from existing merged credit: no additional hours (dashed outline)" }
         $b | Add-Member -NotePropertyName Tip -NotePropertyValue $text -Force
         # Hours since midnight for the drawing and dragging. What is running now has no row in the log
         # yet, so it can't be dragged.
         $b | Add-Member -NotePropertyName StartH -NotePropertyValue (($b.Start - $day).TotalHours) -Force
         # A stretch edited to run past midnight is drawn to the end of the day, so it can never be out of view
         $b | Add-Member -NotePropertyName EndH -NotePropertyValue ([math]::Min(24.0, ($b.End - $day).TotalHours)) -Force
-        $b | Add-Member -NotePropertyName Editable -NotePropertyValue ($null -ne $b.Raw) -Force
+        $editable = ($null -ne $b.Raw -or $b.Origin -eq 'positioned')
+        $b | Add-Member -NotePropertyName Editable -NotePropertyValue $editable -Force
     }
 
     Set-TimelineLanes $blocks
 
+    $unplacedByAccount = Get-UnplacedCredits $day
+    $unplacedSecs = 0.0
+    foreach ($n in @($unplacedByAccount.Keys)) { $unplacedSecs += [double]$unplacedByAccount[$n] }
     $plan = Get-DayPlan $day
     $lo = $null; $hi = $null
     if ($plan.Working) { $lo = $plan.Start; $hi = $plan.End }
@@ -3723,7 +4101,7 @@ function Build-TimelineModel {
     foreach ($b in @($tmData.Blocks)) {
         $tb = New-Object Win.TimelineBlock
         $tb.Name = $b.Name; $tb.Kind = $b.Kind; $tb.Tip = $b.Tip; $tb.Editable = [bool]$b.Editable
-        $tb.Manual = ($b.Origin -eq 'edited' -or $b.Origin -eq 'added')
+        $tb.Manual = ($b.Origin -eq 'edited' -or $b.Origin -eq 'added' -or $b.Origin -eq 'positioned')
         $tb.StartH = $b.StartH; $tb.EndH = $b.EndH
         $tb.Lane = [int]$b.Lane; $tb.Lanes = [math]::Max(1, [int]$b.Lanes)
         foreach ($mv in @($script:tlPreview)) {
@@ -4008,11 +4386,7 @@ function Show-TimelineTip($hit, $pt) {
         if (-not $blk.Editable) { $text += "`nStop it to change the times" }
     } elseif ($hit.Gap -ge 0) {
         $gp = $tl.Gaps[$hit.Gap]
-        $text = if ($tl.UnplacedSeconds -gt 0) {
-            "No positioned session from $(Format-ClockHours $gp.StartH) to $(Format-ClockHours $gp.EndH)`nMerged time is already credited for this day, but its original positions are unknown. Edit those entries in Weekly view before filling gaps."
-        } else {
-            "Nothing tracked from $(Format-ClockHours $gp.StartH) to $(Format-ClockHours $gp.EndH)`nClick to fill it, or drag across part of it"
-        }
+        $text = "No positioned session from $(Format-ClockHours $gp.StartH) to $(Format-ClockHours $gp.EndH)`nClick to choose existing credited time or add new hours."
     }
     if (-not $text) { return }
     $tip.Show($text, $form, [int]($pt.X + 14 * $Zoom), [int]($pt.Y + 20 * $Zoom), 6000)
@@ -4040,10 +4414,6 @@ function Start-TimelineDrag($pt) {
         return $true
     }
     if ($hit.Gap -ge 0) {
-        if ($script:drawerTimeline.UnplacedSeconds -gt 0) {
-            Show-Message 'This day includes merged credit whose original times are unknown. Edit or delete those merged entries in Weekly view before filling timeline gaps, to avoid double counting.'
-            return $true
-        }
         $h = Get-TimelineTimeAt $pt
         $script:tlDrag = @{ Kind = 'gap'; Gap = $hit.Gap; AnchorH = $h; StartY = $pt.Y; Moved = $false }
         $script:tlHover = $hit
@@ -4120,28 +4490,66 @@ function Save-TimelineEdit($tl, $moves) {
     $day = $tl.Day
     $edits = @{}
     foreach ($mv in $moves) {
-        if (-not $edits.ContainsKey($mv.Index)) { $edits[$mv.Index] = @{ Start = $tl.Blocks[$mv.Index].Start; End = $tl.Blocks[$mv.Index].End } }
+        if (-not $edits.ContainsKey($mv.Index)) {
+            $edits[$mv.Index] = @{ Start = $tl.Blocks[$mv.Index].Start; End = $tl.Blocks[$mv.Index].End }
+        }
         $at = $day.AddSeconds([math]::Round($mv.H * 3600))
         if ($mv.Edge -eq 'start') { $edits[$mv.Index].Start = $at } else { $edits[$mv.Index].End = $at }
     }
     $done = Invoke-LogChange 'change times' {
+        # Validate all sources before changing any, including separately positioned credits.
         foreach ($idx in @($edits.Keys)) {
             $blk = $tl.Blocks[$idx]
-            $at = Find-SessionRow $logRows $blk.Raw
-            if ($at -lt 0) { Show-Message 'That time changed somewhere else. Nothing was saved.'; return $false }
+            if ($blk.Origin -eq 'positioned') {
+                if (-not (Find-CreditPosition $blk.PositionId)) {
+                    Show-Message 'That positioned credit changed somewhere else. Nothing was saved.'
+                    return $false
+                }
+            } elseif ((Find-SessionRow $logRows $blk.Raw) -lt 0) {
+                Show-Message 'That time changed somewhere else. Nothing was saved.'
+                return $false
+            }
         }
         foreach ($idx in @($edits.Keys)) {
             $blk = $tl.Blocks[$idx]
-            $row = $logRows[(Find-SessionRow $logRows $blk.Raw)]
             $newStart = $edits[$idx].Start; $newEnd = $edits[$idx].End
-            $oldKey = Get-NoteKey $row.Date $row.Account $row.Start
-            $row.Start = $newStart.ToString('HH:mm:ss', $Inv)
-            $row.Minutes = ([math]::Round(($newEnd - $newStart).TotalSeconds / 60, 2)).ToString($Inv)
-            if ($row.End -match '^\d\d:\d\d:\d\d$') { $row.End = $newEnd.ToString('HH:mm:ss', $Inv) }
-            $newKey = Get-NoteKey $row.Date $row.Account $row.Start
+            if ($newEnd -le $newStart) { return $false }
+            if ($blk.Origin -eq 'positioned') {
+                $position = Find-CreditPosition $blk.PositionId
+                $oldKey = Get-NoteKey $position.Date $position.Account $position.Start
+                $position.Start = $newStart.ToString('HH:mm:ss', $Inv)
+                $position.Minutes = ([math]::Round(($newEnd - $newStart).TotalSeconds / 60, 2)).ToString('0.00', $Inv)
+                $newKey = Get-NoteKey $position.Date $position.Account $position.Start
+            } else {
+                $row = $logRows[(Find-SessionRow $logRows $blk.Raw)]
+                $oldKey = Get-NoteKey $row.Date $row.Account $row.Start
+                $row.Start = $newStart.ToString('HH:mm:ss', $Inv)
+                $row.Minutes = ([math]::Round(($newEnd - $newStart).TotalSeconds / 60, 2)).ToString('0.00', $Inv)
+                if ($row.End -match '^[0-9]{2}:[0-9]{2}:[0-9]{2}$') { $row.End = $newEnd.ToString('HH:mm:ss', $Inv) }
+                $newKey = Get-NoteKey $row.Date $row.Account $row.Start
+            }
             if ($newKey -ne $oldKey -and $script:notes.ContainsKey($oldKey)) {
                 $script:notes[$newKey] = $script:notes[$oldKey]
                 [void]$script:notes.Remove($oldKey)
+            }
+        }
+        # The original merge is the sole source of credited hours. A longer
+        # positioned card is allowed only when enough merged credit exists.
+        foreach ($p in @($script:creditPositions)) {
+            $s = [double](Get-CreditPositionSeconds $p)
+            $source = 0.0
+            foreach ($row in @($logRows)) {
+                if ($row.Date -eq $p.Date -and $row.Account -eq $p.Account -and $row.End -eq 'merged') {
+                    $source += [double]::Parse($row.Minutes, $Inv) * 60
+                }
+            }
+            $totalPositions = 0.0
+            foreach ($other in @($script:creditPositions)) {
+                if ($other.Date -eq $p.Date -and $other.Account -eq $p.Account) { $totalPositions += Get-CreditPositionSeconds $other }
+            }
+            if ($totalPositions -gt $source + 0.01) {
+                Show-Message "Not enough existing merged credit remains for $($p.Account). Reduce the positioned duration or add new time instead."
+                return $false
             }
         }
         return $true
@@ -4153,40 +4561,94 @@ function Save-TimelineEdit($tl, $moves) {
 $script:gapMenu = New-Object System.Windows.Forms.ContextMenuStrip
 
 function Show-GapMenu($pt, [double]$fromH, [double]$toH) {
-    $script:tlFill = @{ FromH = $fromH; ToH = $toH }
+    $day = $script:drawerDay.Date
+    $script:tlFill = @{ Day = $day; FromH = $fromH; ToH = $toH }
     $m = $script:gapMenu
     $m.Items.Clear()
-    $head = $m.Items.Add(('Fill {0} to {1} ({2}) with' -f (Format-ClockHours $fromH), (Format-ClockHours $toH), (Format-HM (($toH - $fromH) * 3600))))
+    $duration = ($toH - $fromH) * 3600.0
+    $head = $m.Items.Add(('Fill {0} to {1} ({2})' -f (Format-ClockHours $fromH), (Format-ClockHours $toH), (Format-HM $duration)))
     $head.Enabled = $false
-    foreach ($name in @($script:slots)) {
-        $mi = $m.Items.Add($name)
-        $mi.Tag = $name
-        $mi.Add_Click({ try { Complete-GapFill ([string]$this.Tag) } catch { Write-Log "Fill error: $($_.Exception.Message)" } })
+
+    $existing = New-Object System.Windows.Forms.ToolStripMenuItem 'Position existing credited time (no extra hours)'
+    $credits = Get-UnplacedCredits $day
+    foreach ($account in @($credits.Keys | Sort-Object)) {
+        $available = [double]$credits[$account]
+        if ($available -le 0.01) { continue }
+        $take = [math]::Min($available, $duration)
+        $label = '{0}: position {1} ({2} unplaced)' -f $account, (Format-HM $take), (Format-HM $available)
+        $mi = $existing.DropDownItems.Add($label)
+        $mi.Tag = @{ Account = $account; Mode = 'credit' }
+        $mi.Add_Click({
+            try { Complete-GapFill ([string]$this.Tag.Account) ([string]$this.Tag.Mode) }
+            catch { Write-Log "Position credit error: $($_.Exception.Message)" }
+        })
     }
+    $existing.Enabled = ($existing.DropDownItems.Count -gt 0)
+    [void]$m.Items.Add($existing)
+
+    $additional = New-Object System.Windows.Forms.ToolStripMenuItem 'Add new credited time (increases total)'
+    foreach ($account in @($script:accounts | ForEach-Object { $_.Name })) {
+        $mi = $additional.DropDownItems.Add($account)
+        $mi.Tag = @{ Account = $account; Mode = 'new' }
+        $mi.Add_Click({
+            try { Complete-GapFill ([string]$this.Tag.Account) ([string]$this.Tag.Mode) }
+            catch { Write-Log "Add gap error: $($_.Exception.Message)" }
+        })
+    }
+    [void]$m.Items.Add($additional)
     Set-MenuScale $m
     $m.Show($form, $pt)
 }
 
-function Complete-GapFill([string]$account) {
+function Complete-GapFill([string]$account, [string]$mode) {
     $fill = $script:tlFill
     $script:tlFill = $null
-    if (-not $fill -or -not $script:drawerDay) { return }
-    # Also guard the final write in case the day gained a merge after the menu opened.
-    if ((Get-DayTimeline $script:drawerDay).UnplacedSeconds -gt 0) {
-        Show-Message 'Merged time has no reliable clock position. Resolve it in Weekly view before adding time through the timeline.'
-        return
-    }
-    $day = $script:drawerDay.Date
+    if (-not $fill -or @('credit', 'new') -notcontains $mode) { return }
+    $day = [datetime]$fill.Day
+    $dateStr = $day.ToString('yyyy-MM-dd', $Inv)
     $from = $day.AddSeconds([math]::Round($fill.FromH * 3600))
     $to = $day.AddSeconds([math]::Round($fill.ToH * 3600))
-    $secs = ($to - $from).TotalSeconds
-    if ($secs -lt 1) { return }
-    $dateStr = $day.ToString('yyyy-MM-dd', $Inv)
-    $startStr = $from.ToString('HH:mm:ss', $Inv)
-    [void](Invoke-LogChange 'fill gap' {
-        [void]$logRows.Add((New-SessionRow $dateStr $account $startStr 'added' $secs))
-        return $true
-    })
+    if ($to -le $from) { return }
+    $startH = ($from - $day).TotalHours
+    $endH = ($to - $day).TotalHours
+
+    # A menu may have been open while a timer updated the day. Never allocate
+    # a stale gap over an interval that has meanwhile been recorded.
+    $current = Get-DayTimeline $day
+    $valid = $false
+    foreach ($gap in @($current.Gaps)) {
+        if ($startH -ge $gap.StartH - 0.00001 -and $endH -le $gap.EndH + 0.00001) { $valid = $true; break }
+    }
+    if (-not $valid) {
+        Show-Message 'That gap has changed. Please select it again before allocating time.'
+        return
+    }
+
+    if ($mode -eq 'credit') {
+        $creditsNow = Get-UnplacedCredits $day
+        $available = [double]$creditsNow[$account]
+        $take = [math]::Floor(([math]::Min($available, ($to - $from).TotalSeconds) / 60.0) * 100.0 + 0.000001) / 100.0
+        if ($take -le 0) { Show-Message 'There is no unplaced credit remaining for that account.'; return }
+        $posId = [guid]::NewGuid().ToString('N')
+        # No session row is created or changed. One existing merged source still
+        # owns the credit; this record only assigns some of it a clock position.
+        [void](Invoke-LogChange 'position existing credit' {
+            $currentCredits = Get-UnplacedCredits $day
+            $still = [double]$currentCredits[$account]
+            if ($still + 0.01 -lt ($take * 60.0)) { return $false }
+            $script:creditPositions += [pscustomobject]@{
+                Id = $posId; Date = $dateStr; Account = $account
+                Start = $from.ToString('HH:mm:ss', $Inv); Minutes = $take.ToString('0.00', $Inv)
+            }
+            return $true
+        })
+    } else {
+        $secs = ($to - $from).TotalSeconds
+        [void](Invoke-LogChange 'add new credited time' {
+            [void]$logRows.Add((New-SessionRow $dateStr $account $from.ToString('HH:mm:ss', $Inv) 'added' $secs))
+            return $true
+        })
+    }
 }
 
 function Test-HitDayBtn($tp) {
@@ -5619,8 +6081,8 @@ function Fill-WeeklyView {
     $wv.MergeToggle.Text = if ($script:mergeEntries) { 'Merge consecutive: On' } else { 'Merge consecutive: Off' }
     $wv.MergeToggle.BackColor = if ($script:mergeEntries) { $wv.Theme.CircleHot } else { $wv.Theme.Circle }
     $wv.EntriesHint.Text = if ($script:weekBlocks.Count -eq 0) { 'No time entries logged this week.' }
-        elseif ($script:mergeEntries) { "Back-to-back time on the same account is merged into one block (Lunch or another account starts a new one). Hover for details. Click to select, Ctrl+click for several, right-click for options." }
-        else { "Each block is one stretch of time, in the order you worked it. Hover for details. Click to select, Ctrl+click for several, right-click for options." }
+        elseif ($script:mergeEntries) { "Adjacent recordings are grouped automatically. Manual groups keep the original sessions and show their details on hover. Select entries to edit or group them." }
+        else { "Original recordings are shown individually, except for groups you created manually. Select entries to edit or group them." }
 
     Layout-WeeklyView
     $wv.Chart.Invalidate()
@@ -5785,7 +6247,7 @@ function Show-EntryMenu($panel, $pt, $day) {
         [void]$em.Items.Add($move)
 
         $sameGroup = (@($sel | Where-Object { $_.Name -ne $sel[0].Name -or $_.Day -ne $sel[0].Day }).Count -eq 0)
-        $mi = $em.Items.Add($(if ($n -ge 2) { "Merge $n blocks" } else { 'Merge (select two or more)' }))
+        $mi = $em.Items.Add($(if ($n -ge 2) { "Group $n blocks (keep recordings)" } else { 'Group (select two or more)' }))
         $mi.Enabled = ($n -ge 2) -and $sameGroup -and -not $running
         if ($n -ge 2 -and -not $sameGroup) { $mi.Text = 'Merge (same account and day only)' }
         $mi.Add_Click({ try { Merge-EntryBlocks } catch { Show-WeeklyError $_ } })
@@ -5823,8 +6285,12 @@ function Get-EntryTipText($e) {
         return ('{0}  {1} credited' -f $e.Name, (Format-HM $e.Seconds)) +
                "`nOriginal session positions are not available. Edit this entry to give it a specific time."
     }
-    $t = '{0}  {1} to {2}  ({3})' -f $e.Name, $e.Start.ToString('HH:mm', $Inv), $e.End.ToString('HH:mm', $Inv), (Format-HM $e.Seconds)
-    if ($e.Origin -eq 'added' -or $e.Origin -eq 'edited') { $t += "`n" + (Get-EntryTypeLabel $e.Origin) }
+    if ($e.ExplicitGroup) {
+        $t = '{0}  {1} credited, grouped without changing source sessions' -f $e.Name, (Format-HM $e.Seconds)
+    } else {
+        $t = '{0}  {1} to {2}  ({3})' -f $e.Name, $e.Start.ToString('HH:mm', $Inv), $e.End.ToString('HH:mm', $Inv), (Format-HM $e.Seconds)
+    }
+    if (@('added', 'edited', 'positioned') -contains $e.Origin) { $t += "`n" + (Get-EntryTypeLabel $e.Origin) }
     $parts = @($e.Parts)
     if ($parts.Count -gt 1) {
         $t += "`n"
@@ -7217,7 +7683,7 @@ $miClear.Add_Click({
         $n = $script:slots[$i]
         if (-not (Ask-YesNo "Clear all of today's time for $n?")) { return }
         try {
-            Clear-TodayFor $n
+            if (-not (Clear-TodayFor $n)) { return }
         } catch {
             Show-Message "Couldn't update sessions.csv. If it's open in Excel, close it and try again."
             return
@@ -7490,6 +7956,8 @@ $timer.Add_Tick({
 try { Load-State } catch { Write-Log "Could not load state: $($_.Exception.Message)" }
 Load-Budgets
 Load-Notes
+Load-EntryGroups
+Load-CreditPositions
 try { Load-PillEffects } catch {}
 if (Test-Path $MergeFile) { try { $script:mergeEntries = ((Get-Content $MergeFile -TotalCount 1).Trim() -ne '0') } catch {} }
 Refresh-Totals
