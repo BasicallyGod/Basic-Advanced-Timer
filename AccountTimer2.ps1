@@ -1146,43 +1146,6 @@ namespace Win {
                     }
                 }
             }
-            // Compact labels for bursts of brief recorded switches at ordinary zoom.
-            // The underlying blocks, timestamps and hit-testing are unchanged: this
-            // is a visual summary only. Zoom in to inspect every individual interval.
-            if (px < 130f) {
-                int k = 0;
-                while (k < t.Blocks.Count) {
-                    TimelineBlock first = t.Blocks[k];
-                    if (first.Kind != "time" || first.Manual ||
-                        (first.EndH - first.StartH) * px >= 13f) { k++; continue; }
-                    double firstH = first.StartH, lastH = first.EndH;
-                    int count = 1, endIdx = k + 1;
-                    while (endIdx < t.Blocks.Count) {
-                        TimelineBlock next = t.Blocks[endIdx];
-                        if (next.Kind != "time" || next.Manual ||
-                            (next.EndH - next.StartH) * px >= 13f ||
-                            next.StartH - lastH > 0.12 ||
-                            next.EndH - firstH > 0.85) break;
-                        lastH = Math.Max(lastH, next.EndH);
-                        count++; endIdx++;
-                    }
-                    if (count >= 3 && yOf(lastH) > y && yOf(firstH) < y + vh) {
-                        float badgeH = 18f, badgeW = Math.Min(bw - 12f, 132f);
-                        float badgeY = Math.Max(y + 2f, Math.Min(y + vh - badgeH - 2f,
-                                                                yOf(firstH) + 3f));
-                        RectangleF badge = new RectangleF(bx + bw - badgeW - 5f,
-                                                          badgeY, badgeW, badgeH);
-                        using (SolidBrush shade = new SolidBrush(Mix(Panel, Text, 0.22)))
-                        using (Pen stroke = new Pen(Mix(Panel, Text, 0.38), 1f))
-                        using (GraphicsPath bp = RoundRect(badge.X, badge.Y, badge.Width, badge.Height, 7f)) {
-                            og.FillPath(shade, bp); og.DrawPath(stroke, bp);
-                        }
-                        QueueIn(vp, count.ToString() + " short switches  (+ zoom)", fTS,
-                                textC, badge, DT_CENTER);
-                    }
-                    k = endIdx;
-                }
-            }
             // The edge being pointed at or dragged
             if (TlEdgeBlock >= 0 && TlEdgeBlock < t.Blocks.Count) {
                 TimelineBlock eb = t.Blocks[TlEdgeBlock];

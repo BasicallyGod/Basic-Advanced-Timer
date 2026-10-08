@@ -19,7 +19,7 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 | 2.21 | AccountTimer2 | New | Position metadata projects original merged credit into the timeline and weekly entries without modifying the credited source rows |
 | 2.21 | AccountTimer2 | Improved | Manual weekly grouping preserves every original session and note rather than creating a destructive synthetic merged row |
 | 2.21 | AccountTimer2 | Improved | Group and credit-position metadata are portable CSV files with undo snapshots; positioned time can be adjusted in both editing views |
-| 2.21 | AccountTimer2 | Improved | Short recording bursts have compact explanatory badges at ordinary zoom without changing timestamps or hit areas |
+| 2.21 | AccountTimer2 | Fixed | Removed clipped short-switch zoom badges; short intervals remain drawn at their recorded positions and can be inspected by zooming in |
 | 2.21 | AccountTimer2 | Fixed | Clearing today's account time now includes corresponding group/position metadata in the undoable edit |
 | 2.20 | AccountTimer2 | Fixed | Legacy merged credits are no longer drawn as imaginary continuous sessions; their total appears separately as unplaced time in the timeline totals |
 | 2.20 | AccountTimer2 | Improved | Added and edited entries keep their chosen time positions but have a dashed outline, while rounding stays out of the clock timeline |

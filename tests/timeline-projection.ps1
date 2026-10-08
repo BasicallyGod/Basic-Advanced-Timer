@@ -2,6 +2,9 @@
 # Synthetic fixtures only; no user sessions or configuration files are loaded.
 $ErrorActionPreference = 'Stop'
 $source = Join-Path (Split-Path $PSScriptRoot -Parent) 'AccountTimer2.ps1'
+# The timeline should never overlay short-session badges that clip card text.
+$sourceText = [System.IO.File]::ReadAllText($source)
+if ($sourceText.Contains('short switches  (+ zoom)')) { throw 'Clipped short-switch badge rendering has returned.' }
 $tokens = $null
 $parseErrors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($source, [ref]$tokens, [ref]$parseErrors)

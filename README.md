@@ -16,7 +16,7 @@ AccountTimer2.ps1 is the current version. The two earlier scripts are kept as wo
 - Weekly summary and time entry files in CSV, ready for timesheets or Excel
 - In a timeline gap, choose whether to position an already credited portion of a merged entry (no new hours) or add new credited time. Credit positioning preserves the original merged source row and reduces the unplaced balance.
 - Weekly grouping is non-destructive: grouped time keeps all original recordings, notes and separate chronology.
-- Bursts of very short sessions have explanatory badges at lower zoom; zoom in to inspect individual intervals.
+- Very short sessions remain visible as individual coloured intervals without overlapping labels; zoom in to inspect their positions.
 
 ## Requirements
 
