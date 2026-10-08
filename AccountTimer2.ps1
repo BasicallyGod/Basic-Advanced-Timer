@@ -312,6 +312,12 @@ namespace Win {
         public string Kind = "time";        // time, running or lunch
         public Color Colour = Color.Gray;
         public string Tip = "";
+        public bool Editable;               // false for what is running now, which can't be dragged
+    }
+
+    // A stretch of the day with nothing tracked, which can be filled
+    public class TimelineGap {
+        public double StartH, EndH;
     }
 
     // One line under the strip: an account's time for the day, or Lunch, Total or Unallocated
@@ -327,6 +333,7 @@ namespace Win {
         public bool HasWork, ShowNow;
         public string EmptyText = "";
         public List<TimelineBlock> Blocks = new List<TimelineBlock>();
+        public List<TimelineGap> Gaps = new List<TimelineGap>();
         public List<TimelineLegend> Legend = new List<TimelineLegend>();
     }
 
@@ -338,7 +345,7 @@ namespace Win {
         public List<DrawerBudget> Budgets = new List<DrawerBudget>();
         public string BudgetsHeading = "BUDGETS";
         public string FormatLabel = "h:mm";
-        public bool NextEnabled;
+        public bool NextEnabled, UndoEnabled;
         public TimelineModel Timeline;
     }
 
@@ -372,6 +379,14 @@ namespace Win {
         public bool CollapseHover, HandleHover, DrawerOpen;
         public DrawerModel Drawer;
         public string DrawerHover = "";
+        // Timeline hover and drag state, set by PowerShell each frame. The strip's own position is
+        // reported back so PowerShell can tell which time the pointer is over.
+        public int TlHoverBlock = -1, TlHoverGap = -1, TlEdgeBlock = -1;
+        public string TlEdge = "";          // start, end or join (the shared edge of two blocks that touch)
+        public double TlSelStartH = -1, TlSelEndH = -1;
+        public string TlDragText = "";
+        public double TlDragAtH;
+        public float TlX0, TlW, TlY, TlH;
         public List<DrawerButton> DrawerButtons = new List<DrawerButton>();
 
         StringFormat sfCentre, sfLeft, sfRight, sfName;
@@ -819,7 +834,7 @@ namespace Win {
                 DrawerButtons.Clear();
                 string[][] defs = timeline
                     ? new string[][] {
-                        new string[] { "format", d.FormatLabel },
+                        new string[] { "undo", "Undo" }, new string[] { "format", d.FormatLabel },
                         new string[] { "next", "Next" }, new string[] { "prev", "Previous" } }
                     : new string[][] {
                         new string[] { "weekly", "Weekly view" }, new string[] { "copy", "Copy" },
@@ -830,7 +845,7 @@ namespace Win {
                     float tw = og.MeasureString(def[1], FontButton).Width + 16;
                     bx -= tw;
                     RectangleF rect = new RectangleF(bx, y + 1, tw, 22);
-                    bool enabled = !(def[0] == "next" && !d.NextEnabled);
+                    bool enabled = !(def[0] == "next" && !d.NextEnabled) && !(def[0] == "undo" && !d.UndoEnabled);
                     Color col = !enabled ? Mix(Panel, Circle, 0.45) : (DrawerHover == def[0] ? CircleHot : Circle);
                     using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 11f))
                     using (SolidBrush bb = new SolidBrush(col)) { og.FillPath(bb, bp); }
@@ -951,6 +966,28 @@ namespace Win {
                 og.Restore(clipState);
             }
 
+            TlX0 = x0; TlW = w; TlY = sy; TlH = StripH;
+
+            // A gap under the pointer, or being filled, shows a plus sign
+            for (int gi = 0; gi < t.Gaps.Count; gi++) {
+                if (gi != TlHoverGap) continue;
+                TimelineGap gp = t.Gaps[gi];
+                float gx = x0 + (float)((gp.StartH - t.AxisStartH) * perHour), gw = (float)((gp.EndH - gp.StartH) * perHour);
+                using (SolidBrush gb = new SolidBrush(Mix(Panel, Text, 0.24))) { og.FillRectangle(gb, gx, sy + 3, gw, StripH - 6); }
+                if (gw >= 18f && TlSelStartH < 0) {
+                    using (Pen pp = new Pen(textC, 2f)) {
+                        float cx = gx + gw / 2f, cy = sy + StripH / 2f;
+                        og.DrawLine(pp, cx - 5f, cy, cx + 5f, cy);
+                        og.DrawLine(pp, cx, cy - 5f, cx, cy + 5f);
+                    }
+                }
+            }
+            if (TlSelStartH >= 0 && TlSelEndH > TlSelStartH) {
+                float sx = x0 + (float)((TlSelStartH - t.AxisStartH) * perHour), sw = Math.Max(2f, (float)((TlSelEndH - TlSelStartH) * perHour));
+                using (SolidBrush sb = new SolidBrush(A(150, Fill))) { og.FillRectangle(sb, sx, sy + 3, sw, StripH - 6); }
+                using (Pen sp = new Pen(Fill, 1f)) { og.DrawRectangle(sp, sx, sy + 3, sw, StripH - 6); }
+            }
+
             // Blocks
             Color dark = Color.FromArgb(0x1b, 0x1b, 0x1b);
             for (int i = 0; i < t.Blocks.Count; i++) {
@@ -958,7 +995,7 @@ namespace Win {
                 float bx = x0 + (float)((b.StartH - t.AxisStartH) * perHour);
                 float bw = Math.Max(2f, (float)((b.EndH - b.StartH) * perHour) - 1f);
                 RectangleF br = new RectangleF(bx, sy + 3, bw, StripH - 6);
-                bool hot = DrawerHover == "tip:" + i;
+                bool hot = TlHoverBlock == i || TlEdgeBlock == i;
                 if (b.Kind == "lunch") {
                     using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, hot ? 0.45 : 0.33), Mix(Panel, Text, 0.12))) {
                         og.FillRectangle(hb, br);
@@ -969,14 +1006,22 @@ namespace Win {
                     using (SolidBrush bb = new SolidBrush(fillC)) { og.FillRectangle(bb, br); }
                     if (bw > 44f) QueueText(b.Name, fText, dark, new RectangleF(bx + 4, sy, bw - 8, StripH), DT_LEFT);
                 }
-                // A hover area at least 6 wide, so even short stretches can be pointed at
-                float hw = Math.Max(bw, 6f);
-                DrawerButton hit = new DrawerButton();
-                hit.Id = "tip:" + i;
-                hit.Rect = new RectangleF(bx - (hw - bw) / 2f, sy, hw, StripH);
-                DrawerButtons.Add(hit);
+                // Grips at both edges of a block that can be dragged, shown while it is pointed at
+                if (hot && b.Editable && bw > 14f) {
+                    using (Pen gp = new Pen(A(200, dark), 2f)) {
+                        og.DrawLine(gp, bx + 3f, sy + 14f, bx + 3f, sy + StripH - 14f);
+                        og.DrawLine(gp, bx + bw - 3f, sy + 14f, bx + bw - 3f, sy + StripH - 14f);
+                    }
+                }
             }
-            if (t.Blocks.Count == 0 && t.EmptyText.Length > 0) QueueText(t.EmptyText, fText, faintC, new RectangleF(x0, sy, w, StripH), DT_CENTER);
+            // The edge being pointed at or dragged
+            if (TlEdgeBlock >= 0 && TlEdgeBlock < t.Blocks.Count) {
+                TimelineBlock eb = t.Blocks[TlEdgeBlock];
+                double edgeH = TlEdge == "start" ? eb.StartH : eb.EndH;
+                float ex = x0 + (float)((edgeH - t.AxisStartH) * perHour);
+                using (Pen ep = new Pen(textC, 3f)) { og.DrawLine(ep, ex, sy + 1f, ex, sy + StripH - 1f); }
+            }
+            if (t.Blocks.Count == 0 && t.EmptyText.Length > 0 && TlHoverGap < 0 && TlSelStartH < 0) QueueText(t.EmptyText, fText, faintC, new RectangleF(x0, sy, w, StripH), DT_CENTER);
 
             // Now
             if (t.ShowNow) {
@@ -986,6 +1031,17 @@ namespace Win {
                     og.DrawLine(np, nx, sy - 2, nx, sy + StripH + 2);
                     og.FillEllipse(nb, nx - 3.5f, sy - 6f, 7f, 7f);
                 }
+            }
+
+            // The time being dragged to, in a small label just under the strip
+            if (TlDragText.Length > 0) {
+                float dx2 = x0 + (float)((TlDragAtH - t.AxisStartH) * perHour);
+                float lw = Math.Min(w, og.MeasureString(TlDragText, FontLabel).Width + 18f);
+                float lx2 = Math.Max(x0, Math.Min(xR - lw, dx2 - lw / 2f));
+                RectangleF lr = new RectangleF(lx2, sy + StripH + 1f, lw, 13f);
+                using (GraphicsPath lp = RoundRect(lr.X, lr.Y, lr.Width, lr.Height, 6f))
+                using (SolidBrush lb = new SolidBrush(CircleHot)) { og.FillPath(lb, lp); }
+                QueueText(TlDragText, FontLabel, textC, lr, DT_CENTER);
             }
 
             // The day's figures under the strip
@@ -1175,7 +1231,14 @@ $script:drawerMode     = 'week'   # 'week' for the table of hours, 'timeline' fo
 $script:drawerDay      = $null    # the day shown in the timeline
 $script:drawerTimeline = $null    # that day's stretches of time, ready to draw
 $script:drawerLegend   = @()      # the lines under the strip
-$script:drawerTips     = @{}      # hover text for the timeline's blocks, by block number
+$script:tlGeom         = $null    # where the strip was last drawn (window units), reported by the renderer
+$script:tlHover        = @{ Block = -1; Gap = -1; EdgeBlock = -1; Edge = '' }
+$script:tlDrag         = $null    # an edge or a stretch of gap being dragged
+$script:tlPreview      = @()      # edge moves shown while dragging, before they are saved
+$script:tlSel          = $null    # part of a gap being selected, in hours
+$script:tlDragText     = ''
+$script:tlDragAt       = 0.0
+$script:tlFill         = $null    # the stretch a gap menu is about to fill
 
 # ======================================================================
 # Helpers
@@ -2994,6 +3057,73 @@ function Get-DrawerDayTitle([datetime]$day) {
     return $day.ToString('ddd d MMMM', $GB)
 }
 
+# The stretches of the strip with nothing tracked, a minute or longer, up to now for today
+function Get-TimelineGaps($blocks, [double]$axisStartH, [double]$axisEndH, [double]$capH) {
+    $minH = 1.0 / 60.0
+    $out = @()
+    $cursor = $axisStartH
+    $limit = [math]::Min($axisEndH, $capH)
+    foreach ($b in @($blocks | Sort-Object StartH)) {
+        $gapEnd = [math]::Min([double]$b.StartH, $limit)
+        if ($gapEnd - $cursor -ge $minH) { $out += [pscustomobject]@{ StartH = $cursor; EndH = $gapEnd } }
+        $cursor = [math]::Max($cursor, [double]$b.EndH)
+    }
+    if ($limit - $cursor -ge $minH) { $out += [pscustomobject]@{ StartH = $cursor; EndH = $limit } }
+    return $out
+}
+
+# Which edge of a block is at this time, if any. Two editable blocks that touch (within a minute) share one
+# edge, 'join', owned by the left block, so dragging it moves the change-over between them.
+function Get-TimelineEdgeAt($blocks, [double]$h, [double]$tolH) {
+    $bl = @($blocks)
+    $minH = 1.0 / 60.0
+    $best = $null; $bestD = $tolH + 1.0
+    for ($i = 0; $i -lt $bl.Count; $i++) {
+        if (-not $bl[$i].Editable) { continue }
+        foreach ($e in @('start', 'end')) {
+            $at = if ($e -eq 'start') { [double]$bl[$i].StartH } else { [double]$bl[$i].EndH }
+            $d = [math]::Abs($at - $h)
+            if ($d -le $tolH -and $d -lt $bestD) { $best = @{ Index = $i; Edge = $e }; $bestD = $d }
+        }
+    }
+    if (-not $best) { return $null }
+    $i = $best.Index
+    if ($best.Edge -eq 'end' -and $i + 1 -lt $bl.Count -and $bl[$i + 1].Editable -and ($bl[$i + 1].StartH - $bl[$i].EndH) -le $minH) {
+        return @{ Index = $i; Edge = 'join' }
+    }
+    if ($best.Edge -eq 'start' -and $i -gt 0 -and $bl[$i - 1].Editable -and ($bl[$i].StartH - $bl[$i - 1].EndH) -le $minH) {
+        return @{ Index = ($i - 1); Edge = 'join' }
+    }
+    return $best
+}
+
+# Where an edge ends up when dragged to a time. The time snaps to the grid (in minutes), then is kept
+# between its neighbours, at least a minute from the block's other edge, and no later than the cap
+# (now, for today). Returns the new hours for each edge that moves, and whether anything changed.
+function Get-TimelineDrag($blocks, [int]$i, [string]$edge, [double]$targetH, [double]$snapMin, [double]$capH) {
+    $bl = @($blocks)
+    $minH = 1.0 / 60.0
+    $snap = $snapMin / 60.0
+    $t = [math]::Round($targetH / $snap) * $snap
+    $cur = 0.0
+    switch ($edge) {
+        'join'  { $lo = $bl[$i].StartH + $minH; $hi = $bl[$i + 1].EndH - $minH; $cur = $bl[$i].EndH }
+        'start' { $lo = $(if ($i -gt 0) { [double]$bl[$i - 1].EndH } else { 0.0 }); $hi = $bl[$i].EndH - $minH; $cur = $bl[$i].StartH }
+        default { $lo = $bl[$i].StartH + $minH; $hi = $(if ($i + 1 -lt $bl.Count) { [double]$bl[$i + 1].StartH } else { 24.0 }); $cur = $bl[$i].EndH }
+    }
+    $hi = [math]::Min([double]$hi, $capH)
+    if ($hi -lt $lo) { $hi = $lo }
+    $t = [math]::Min([math]::Max($t, $lo), $hi)
+    $moves = @()
+    if ($edge -eq 'join') {
+        $moves += @{ Index = $i; Edge = 'end'; H = $t }
+        $moves += @{ Index = ($i + 1); Edge = 'start'; H = $t }
+    } else {
+        $moves += @{ Index = $i; Edge = $edge; H = $t }
+    }
+    return [pscustomobject]@{ Moves = $moves; H = $t; Changed = ([math]::Abs($t - $cur) -gt 0.0001) }
+}
+
 # One day's stretches of time for the timeline strip, in order. Lunch is included because it shows as a
 # hatched gap. Rounding and other adjustments are left out, as they were never a stretch of real time.
 # Times for the drawing are hours since midnight. The strip covers the working hours plus anything
@@ -3010,7 +3140,7 @@ function Get-DayTimeline([datetime]$day) {
         $note = $null
         if (-not $isLunch) { $note = $script:notes[(Get-NoteKey $r.Start.ToString('yyyy-MM-dd', $Inv) $r.Name $r.Start.ToString('HH:mm:ss', $Inv))] }
         $blocks += [pscustomobject]@{ Name = $r.Name; Start = $r.Start; End = $r.End; Seconds = $r.Seconds
-                                      Kind = $(if ($isLunch) { 'lunch' } else { 'time' }); Note = $note }
+                                      Kind = $(if ($isLunch) { 'lunch' } else { 'time' }); Note = $note; Raw = $r.Raw }
     }
     # Whatever is running right now (from midnight if it carried on past it)
     if ($isToday -and $script:active) {
@@ -3020,7 +3150,7 @@ function Get-DayTimeline([datetime]$day) {
         if ($secs -ge $EntryMinSeconds) {
             $isLunch = ($script:active.Name -eq 'Lunch')
             $blocks += [pscustomobject]@{ Name = $script:active.Name; Start = $from; End = $now; Seconds = $secs
-                                          Kind = $(if ($isLunch) { 'lunch' } else { 'running' }); Note = $null }
+                                          Kind = $(if ($isLunch) { 'lunch' } else { 'running' }); Note = $null; Raw = $null }
         }
     }
     $blocks = @($blocks | Sort-Object Start)
@@ -3031,6 +3161,11 @@ function Get-DayTimeline([datetime]$day) {
         if ($b.Kind -eq 'running') { $text += "`nRunning now" }
         if ($b.Note) { $text += "`n" + $b.Note }
         $b | Add-Member -NotePropertyName Tip -NotePropertyValue $text -Force
+        # Hours since midnight for the drawing and dragging. What is running now has no row in the log
+        # yet, so it can't be dragged.
+        $b | Add-Member -NotePropertyName StartH -NotePropertyValue (($b.Start - $day).TotalHours) -Force
+        $b | Add-Member -NotePropertyName EndH -NotePropertyValue (($b.End - $day).TotalHours) -Force
+        $b | Add-Member -NotePropertyName Editable -NotePropertyValue ($null -ne $b.Raw) -Force
     }
 
     $plan = Get-DayPlan $day
@@ -3049,12 +3184,14 @@ function Get-DayTimeline([datetime]$day) {
         $startH = $endH - 4
     }
     $nowH = ($now - $day).TotalHours
+    $capH = if ($isToday) { $nowH } else { 24.0 }
     $empty = if ($blocks.Count -gt 0) { '' }
              elseif (-not $plan.Working) { 'Day off' }
              elseif ($isToday) { 'Nothing tracked yet' }
              else { 'Nothing tracked on this day' }
     return [pscustomobject]@{
         Day = $day; Blocks = $blocks; AxisStartH = [double]$startH; AxisEndH = [double]$endH
+        Gaps = @(Get-TimelineGaps $blocks ([double]$startH) ([double]$endH) $capH)
         HasWork = [bool]$plan.Working
         WorkStartH = $(if ($plan.Working) { ($plan.Start - $day).TotalHours } else { 0.0 })
         WorkEndH = $(if ($plan.Working) { ($plan.End - $day).TotalHours } else { 0.0 })
@@ -3124,7 +3261,7 @@ function Refresh-DrawerData {
     if ($script:useRenderer) { Build-DrawerModel }
 }
 
-# The timeline half of the drawer's model
+# The timeline half of the drawer's model. While an edge is being dragged, its preview moves are applied.
 function Build-TimelineModel {
     $tmData = $script:drawerTimeline
     $d = $script:drawerData
@@ -3133,19 +3270,24 @@ function Build-TimelineModel {
     $tm.HasWork = $tmData.HasWork; $tm.WorkStartH = $tmData.WorkStartH; $tm.WorkEndH = $tmData.WorkEndH
     $tm.ShowNow = $tmData.ShowNow; $tm.NowH = $tmData.NowH
     $tm.EmptyText = [string]$tmData.EmptyText
-    $tips = @{}
     $i = 0
     foreach ($b in @($tmData.Blocks)) {
         $tb = New-Object Win.TimelineBlock
-        $tb.Name = $b.Name; $tb.Kind = $b.Kind; $tb.Tip = $b.Tip
-        $tb.StartH = ($b.Start - $tmData.Day).TotalHours
-        $tb.EndH = ($b.End - $tmData.Day).TotalHours
+        $tb.Name = $b.Name; $tb.Kind = $b.Kind; $tb.Tip = $b.Tip; $tb.Editable = [bool]$b.Editable
+        $tb.StartH = $b.StartH; $tb.EndH = $b.EndH
+        foreach ($mv in @($script:tlPreview)) {
+            if ($mv.Index -ne $i) { continue }
+            if ($mv.Edge -eq 'start') { $tb.StartH = $mv.H } else { $tb.EndH = $mv.H }
+        }
         if ($b.Kind -ne 'lunch') { $tb.Colour = Get-DrawerAccountColour $b.Name $d.Names }
         [void]$tm.Blocks.Add($tb)
-        $tips["tip:$i"] = $b.Tip
         $i++
     }
-    $script:drawerTips = $tips
+    foreach ($gp in @($tmData.Gaps)) {
+        $tg = New-Object Win.TimelineGap
+        $tg.StartH = $gp.StartH; $tg.EndH = $gp.EndH
+        [void]$tm.Gaps.Add($tg)
+    }
     foreach ($lg in @($script:drawerLegend)) {
         $tl2 = New-Object Win.TimelineLegend
         $tl2.Name = $lg.Name; $tl2.Kind = $lg.Kind; $tl2.Total = $lg.Total
@@ -3164,6 +3306,7 @@ function Build-DrawerModel {
     if ($m.Mode -eq 'timeline') {
         $m.Title = Get-DrawerDayTitle $script:drawerDay
         $m.NextEnabled = $script:drawerDay -lt [datetime]::Today
+        $m.UndoEnabled = [bool]$script:undoLabel
         $m.FormatLabel = if ($script:hoursFormat -eq 'decimal') { 'h:mm' } else { 'Decimal' }
         $m.Timeline = Build-TimelineModel
         $script:drawerModel = $m
@@ -3271,6 +3414,8 @@ function Set-DrawerMode([string]$mode) {
     if ($mode -ne 'week' -and $mode -ne 'timeline') { return }
     if ($script:drawerMode -eq $mode) { return }
     $script:drawerMode = $mode
+    Clear-TimelineDrag
+    if ($mode -eq 'week') { $script:tlGeom = $null }
     if ($mode -eq 'timeline') {
         # Today, unless the week table was showing a past week, then that week's last day so far
         $ws = $script:drawerWeek
@@ -3287,6 +3432,7 @@ function Set-DrawerMode([string]$mode) {
 # Refresh the figures; resize if the number of rows changed
 function Update-DrawerContent {
     if (-not $script:drawerOpen) { return }
+    if ($script:tlDrag) { return }      # the regular refresh waits until a drag is finished
     $oldH = $script:drawerH
     Refresh-DrawerData
     if ($script:drawerH -ne $oldH) { Update-DrawerGeometry }
@@ -3306,11 +3452,240 @@ function Get-DrawerButtonAt($pt) {
     return $null
 }
 
-# The timeline block under the pointer, as its tip id such as tip:2, with the hover area it came from
-function Get-DrawerTipAt($pt) {
-    $x = [float]($pt.X / $Zoom); $y = [float]($pt.Y / $Zoom)
-    foreach ($b in $script:drawerButtons) { if ($b.Rect.Contains($x, $y) -and "$($b.Id)".StartsWith('tip:')) { return $b } }
-    return $null
+# ---- Timeline editing: dragging edges and filling gaps ----
+
+function New-TimelineHover { return @{ Block = -1; Gap = -1; EdgeBlock = -1; Edge = '' } }
+
+# The time under a window position, in hours since midnight, or $null when the strip isn't showing
+function Get-TimelineTimeAt($pt) {
+    $g = $script:tlGeom
+    $tl = $script:drawerTimeline
+    if ((Get-DrawerMode) -ne 'timeline' -or -not $g -or -not $tl -or $g.W -le 0) { return $null }
+    $x = [double]($pt.X / $Zoom)
+    return $tl.AxisStartH + ($x - $g.X0) / $g.W * ($tl.AxisEndH - $tl.AxisStartH)
+}
+
+function Test-InStrip($pt) {
+    $g = $script:tlGeom
+    if ((Get-DrawerMode) -ne 'timeline' -or -not $g -or $g.W -le 0) { return $false }
+    $x = [double]($pt.X / $Zoom); $y = [double]($pt.Y / $Zoom)
+    return ($x -ge ($g.X0 - 6) -and $x -le ($g.X0 + $g.W + 6) -and $y -ge $g.Y -and $y -le ($g.Y + $g.H))
+}
+
+# What is under the pointer on the strip: an edge, a block, a gap or nothing
+function Get-TimelineHit($pt) {
+    $hit = New-TimelineHover
+    if (-not (Test-InStrip $pt)) { return $hit }
+    $tl = $script:drawerTimeline
+    $h = Get-TimelineTimeAt $pt
+    $hoursPerUnit = ($tl.AxisEndH - $tl.AxisStartH) / $script:tlGeom.W    # the strip's width is in window units
+    $edge = Get-TimelineEdgeAt $tl.Blocks $h (6.0 * $hoursPerUnit)
+    if ($edge) { $hit.EdgeBlock = $edge.Index; $hit.Edge = $edge.Edge; $hit.Block = $edge.Index; return $hit }
+    $blocks = @($tl.Blocks)
+    for ($i = 0; $i -lt $blocks.Count; $i++) {
+        $pad = [math]::Max(0.0, (6.0 * $hoursPerUnit - ($blocks[$i].EndH - $blocks[$i].StartH)) / 2)
+        if ($h -ge ($blocks[$i].StartH - $pad) -and $h -le ($blocks[$i].EndH + $pad)) { $hit.Block = $i; return $hit }
+    }
+    $gaps = @($tl.Gaps)
+    for ($i = 0; $i -lt $gaps.Count; $i++) {
+        if ($h -ge $gaps[$i].StartH -and $h -le $gaps[$i].EndH) { $hit.Gap = $i; return $hit }
+    }
+    return $hit
+}
+
+function Test-SameTimelineHit($a, $b) {
+    return ($a.Block -eq $b.Block -and $a.Gap -eq $b.Gap -and $a.EdgeBlock -eq $b.EdgeBlock -and $a.Edge -eq $b.Edge)
+}
+
+function Format-ClockHours([double]$h) {
+    $mins = [int][math]::Round($h * 60)
+    return '{0:00}:{1:00}' -f [math]::Floor($mins / 60), ($mins % 60)
+}
+
+# Hover text for the strip, placed just under the part being pointed at
+function Show-TimelineTip($hit) {
+    $tl = $script:drawerTimeline; $g = $script:tlGeom
+    if (-not $tl -or -not $g) { return }
+    $text = $null; $atH = $null
+    if ($hit.EdgeBlock -ge 0) {
+        $blk = $tl.Blocks[$hit.EdgeBlock]
+        $text = switch ($hit.Edge) { 'start' { 'Drag to change the start time' } 'end' { 'Drag to change the finish time' } default { 'Drag to move the change-over' } }
+        $atH = if ($hit.Edge -eq 'start') { $blk.StartH } else { $blk.EndH }
+    } elseif ($hit.Block -ge 0) {
+        $blk = $tl.Blocks[$hit.Block]
+        $text = $blk.Tip
+        if (-not $blk.Editable) { $text += "`nStop it to change the times" }
+        $atH = $blk.StartH
+    } elseif ($hit.Gap -ge 0) {
+        $gp = $tl.Gaps[$hit.Gap]
+        $text = "Nothing tracked from $(Format-ClockHours $gp.StartH) to $(Format-ClockHours $gp.EndH)`nClick to fill it, or drag across part of it"
+        $atH = $gp.StartH
+    }
+    if (-not $text) { return }
+    $x = $g.X0 + ($atH - $tl.AxisStartH) / ($tl.AxisEndH - $tl.AxisStartH) * $g.W
+    $tip.Show($text, $form, [int]($x * $Zoom), [int](($g.Y + $g.H + 4) * $Zoom), 6000)
+}
+
+# The latest the strip may be edited to, which is now for today
+function Get-TimelineCapH {
+    if ($script:drawerDay -eq [datetime]::Today) { return ((Get-Date) - [datetime]::Today).TotalHours }
+    return 24.0
+}
+
+function Clear-TimelineDrag {
+    $script:tlDrag = $null; $script:tlPreview = @(); $script:tlSel = $null
+    $script:tlDragText = ''
+    $script:tlHover = New-TimelineHover
+}
+
+# Press on the strip: an edge starts a drag, a gap starts a selection, anything else is left to the caller
+function Start-TimelineDrag($pt) {
+    $hit = Get-TimelineHit $pt
+    if ($hit.EdgeBlock -ge 0) {
+        $script:tlDrag = @{ Kind = 'edge'; Index = $hit.EdgeBlock; Edge = $hit.Edge; Moved = $false }
+        $script:tlHover = $hit
+        $tip.Hide($form)
+        return $true
+    }
+    if ($hit.Gap -ge 0) {
+        $h = Get-TimelineTimeAt $pt
+        $script:tlDrag = @{ Kind = 'gap'; Gap = $hit.Gap; AnchorH = $h; StartX = $pt.X; Moved = $false }
+        $script:tlHover = $hit
+        $tip.Hide($form)
+        return $true
+    }
+    return $false
+}
+
+function Update-TimelineDrag($pt) {
+    $drag = $script:tlDrag
+    $tl = $script:drawerTimeline
+    $h = Get-TimelineTimeAt $pt
+    if ($null -eq $h) { return }
+    $snap = if ([System.Windows.Forms.Control]::ModifierKeys -band [System.Windows.Forms.Keys]::Shift) { 1.0 } else { 5.0 }
+    if ($drag.Kind -eq 'edge') {
+        $res = Get-TimelineDrag $tl.Blocks $drag.Index $drag.Edge $h $snap (Get-TimelineCapH)
+        $script:tlPreview = if ($res.Changed) { @($res.Moves) } else { @() }
+        $drag.Moved = $true
+        $blk = $tl.Blocks[$drag.Index]
+        $newStart = $blk.StartH; $newEnd = $blk.EndH
+        foreach ($mv in $res.Moves) { if ($mv.Index -eq $drag.Index) { if ($mv.Edge -eq 'start') { $newStart = $mv.H } else { $newEnd = $mv.H } } }
+        $script:tlDragAt = $res.H
+        $script:tlDragText = if ($drag.Edge -eq 'join') { Format-ClockHours $res.H }
+                             else { '{0} ({1})' -f (Format-ClockHours $res.H), (Format-HM (($newEnd - $newStart) * 3600)) }
+    } else {
+        if (-not $drag.Moved -and [math]::Abs($pt.X - $drag.StartX) -lt 4) { return }
+        $drag.Moved = $true
+        $gp = $tl.Gaps[$drag.Gap]
+        $a = [math]::Min([math]::Max($drag.AnchorH, $gp.StartH), $gp.EndH)
+        $b = [math]::Min([math]::Max($h, $gp.StartH), $gp.EndH)
+        $grid = $snap / 60.0
+        $lo = [math]::Round([math]::Min($a, $b) / $grid) * $grid
+        $hi = [math]::Round([math]::Max($a, $b) / $grid) * $grid
+        $lo = [math]::Max($lo, $gp.StartH); $hi = [math]::Min($hi, $gp.EndH)
+        if ($hi - $lo -lt (1.0 / 60.0)) { $script:tlSel = $null; $script:tlDragText = '' }
+        else {
+            $script:tlSel = @{ StartH = $lo; EndH = $hi }
+            $script:tlDragAt = ($lo + $hi) / 2
+            $script:tlDragText = '{0} to {1} ({2})' -f (Format-ClockHours $lo), (Format-ClockHours $hi), (Format-HM (($hi - $lo) * 3600))
+        }
+    }
+    Build-DrawerModel
+    Request-Redraw
+}
+
+function Complete-TimelineDrag($pt) {
+    $drag = $script:tlDrag
+    $moves = @($script:tlPreview)
+    $sel = $script:tlSel
+    $tl = $script:drawerTimeline
+    Clear-TimelineDrag
+    if ($drag.Kind -eq 'edge') {
+        if ($moves.Count -gt 0) { Save-TimelineEdit $tl $moves }
+        else { Build-DrawerModel; Request-Redraw }
+        return
+    }
+    $gp = $tl.Gaps[$drag.Gap]
+    $from = $gp.StartH; $to = $gp.EndH
+    if ($drag.Moved -and $sel) { $from = $sel.StartH; $to = $sel.EndH }
+    elseif ($drag.Moved) { Build-DrawerModel; Request-Redraw; return }
+    Show-GapMenu $pt $from $to
+}
+
+function Stop-TimelineDrag {
+    Clear-TimelineDrag
+    Build-DrawerModel
+    Request-Redraw
+}
+
+# Write edge moves to the time log. Each moved block's row is found again in the file, so a change made
+# elsewhere in the meantime is noticed rather than overwritten.
+function Save-TimelineEdit($tl, $moves) {
+    $day = $tl.Day
+    $edits = @{}
+    foreach ($mv in $moves) {
+        if (-not $edits.ContainsKey($mv.Index)) { $edits[$mv.Index] = @{ Start = $tl.Blocks[$mv.Index].Start; End = $tl.Blocks[$mv.Index].End } }
+        $at = $day.AddSeconds([math]::Round($mv.H * 3600))
+        if ($mv.Edge -eq 'start') { $edits[$mv.Index].Start = $at } else { $edits[$mv.Index].End = $at }
+    }
+    $done = Invoke-LogChange 'change times' {
+        foreach ($idx in @($edits.Keys)) {
+            $blk = $tl.Blocks[$idx]
+            $at = Find-SessionRow $logRows $blk.Raw
+            if ($at -lt 0) { Show-Message 'That time changed somewhere else. Nothing was saved.'; return $false }
+        }
+        foreach ($idx in @($edits.Keys)) {
+            $blk = $tl.Blocks[$idx]
+            $row = $logRows[(Find-SessionRow $logRows $blk.Raw)]
+            $newStart = $edits[$idx].Start; $newEnd = $edits[$idx].End
+            $oldKey = Get-NoteKey $row.Date $row.Account $row.Start
+            $row.Start = $newStart.ToString('HH:mm:ss', $Inv)
+            $row.Minutes = ([math]::Round(($newEnd - $newStart).TotalSeconds / 60, 2)).ToString($Inv)
+            if ($row.End -match '^\d\d:\d\d:\d\d$') { $row.End = $newEnd.ToString('HH:mm:ss', $Inv) }
+            $newKey = Get-NoteKey $row.Date $row.Account $row.Start
+            if ($newKey -ne $oldKey -and $script:notes.ContainsKey($oldKey)) {
+                $script:notes[$newKey] = $script:notes[$oldKey]
+                [void]$script:notes.Remove($oldKey)
+            }
+        }
+        return $true
+    }
+    if (-not $done) { Update-DrawerContent }
+}
+
+# A small menu of accounts for filling a stretch of the strip
+$script:gapMenu = New-Object System.Windows.Forms.ContextMenuStrip
+
+function Show-GapMenu($pt, [double]$fromH, [double]$toH) {
+    $script:tlFill = @{ FromH = $fromH; ToH = $toH }
+    $m = $script:gapMenu
+    $m.Items.Clear()
+    $head = $m.Items.Add(('Fill {0} to {1} ({2}) with' -f (Format-ClockHours $fromH), (Format-ClockHours $toH), (Format-HM (($toH - $fromH) * 3600))))
+    $head.Enabled = $false
+    foreach ($name in @($script:slots)) {
+        $mi = $m.Items.Add($name)
+        $mi.Tag = $name
+        $mi.Add_Click({ try { Complete-GapFill ([string]$this.Tag) } catch { Write-Log "Fill error: $($_.Exception.Message)" } })
+    }
+    Set-MenuScale $m
+    $m.Show($form, $pt)
+}
+
+function Complete-GapFill([string]$account) {
+    $fill = $script:tlFill
+    $script:tlFill = $null
+    if (-not $fill -or -not $script:drawerDay) { return }
+    $day = $script:drawerDay.Date
+    $from = $day.AddSeconds([math]::Round($fill.FromH * 3600))
+    $to = $day.AddSeconds([math]::Round($fill.ToH * 3600))
+    $secs = ($to - $from).TotalSeconds
+    if ($secs -lt 1) { return }
+    $dateStr = $day.ToString('yyyy-MM-dd', $Inv)
+    $startStr = $from.ToString('HH:mm:ss', $Inv)
+    [void](Invoke-LogChange 'fill gap' {
+        [void]$logRows.Add((New-SessionRow $dateStr $account $startStr 'added' $secs))
+        return $true
+    })
 }
 
 function Test-HitUnalloc($tp) {
@@ -3362,6 +3737,7 @@ function Invoke-DrawerButton($id) {
             }
             elseif ($script:drawerWeek -lt (Get-WeekStart)) { $script:drawerWeek = $script:drawerWeek.AddDays(7); Update-DrawerContent }
         }
+        'undo' { Undo-LogChange }
         'week' { Set-DrawerMode 'week' }
         'timeline' { Set-DrawerMode 'timeline' }
         'copy' {
@@ -3779,6 +4155,11 @@ function Sync-RendererState {
     $r.CollapseHover = [bool]$script:collapseHover
     $r.HandleHover = [bool]$script:handleHover
     $r.DrawerHover = "$($script:drawerHover)"
+    $r.TlHoverBlock = [int]$script:tlHover.Block; $r.TlHoverGap = [int]$script:tlHover.Gap
+    $r.TlEdgeBlock = [int]$script:tlHover.EdgeBlock; $r.TlEdge = [string]$script:tlHover.Edge
+    $r.TlSelStartH = if ($script:tlSel) { [double]$script:tlSel.StartH } else { -1.0 }
+    $r.TlSelEndH = if ($script:tlSel) { [double]$script:tlSel.EndH } else { -1.0 }
+    $r.TlDragText = [string]$script:tlDragText; $r.TlDragAtH = [double]$script:tlDragAt
     $r.Drawer = $script:drawerModel
 }
 
@@ -3806,6 +4187,7 @@ function Render-FullFrame($w, $h) {
         return
     }
     $script:drawerButtons = @($script:renderer.DrawerButtons)
+    $script:tlGeom = @{ X0 = [double]$script:renderer.TlX0; Y = [double]$script:renderer.TlY; W = [double]$script:renderer.TlW; H = [double]$script:renderer.TlH }
     $msDraw = $perfWatch.Elapsed.TotalMilliseconds
     try {
         $ok = [Win.Layered]::Push($form.Handle, $bmp, $form.Left, $form.Top)
@@ -5852,7 +6234,11 @@ function Pill-MouseUp($e) {
 }
 
 $form.KeyPreview = $true
-$form.Add_KeyDown({ if ($_.KeyCode -eq 'Escape' -and $script:pillOpen) { Set-PillOpen $false } })
+$form.Add_KeyDown({
+    if ($_.KeyCode -ne 'Escape') { return }
+    if ($script:tlDrag) { Stop-TimelineDrag }      # puts the strip back as it was
+    elseif ($script:pillOpen) { Set-PillOpen $false }
+})
 $form.Add_Deactivate({ if ($script:pillOpen -and -not $script:dialogOpen -and -not $menu.Visible) { Set-PillOpen $false } })
 
 $form.Add_MouseDown({
@@ -5860,7 +6246,9 @@ $form.Add_MouseDown({
     if ($_.Button -ne 'Left') { return }
     if (Test-InDrawer $_.Location) {
         $btn = Get-DrawerButtonAt $_.Location
-        if ($btn) { $script:drawerPressed = $btn } else { Start-WindowMove }
+        if ($btn) { $script:drawerPressed = $btn }
+        elseif ((Get-DrawerMode) -eq 'timeline' -and (Start-TimelineDrag $_.Location)) { }
+        else { Start-WindowMove }
         return
     }
     $tp = Get-TimerPoint $_.Location
@@ -5886,6 +6274,7 @@ $form.Add_MouseDown({
 })
 $form.Add_MouseMove({
     if ($script:mode -eq 'pill') { Pill-MouseMove $_; return }
+    if ($script:tlDrag) { Update-TimelineDrag $_.Location; return }
     if ($script:dragStart) {
         $p = [System.Windows.Forms.Cursor]::Position
         $form.Location = New-Object System.Drawing.Point(
@@ -5903,21 +6292,25 @@ $form.Add_MouseMove({
     if (Test-InDrawer $_.Location) {
         $btn = Get-DrawerButtonAt $_.Location
         $form.Cursor = if ($btn) { [System.Windows.Forms.Cursors]::Hand } else { [System.Windows.Forms.Cursors]::Default }
-        # Over a block on the timeline strip, show what it was
-        $blockHit = if ($btn) { $null } else { Get-DrawerTipAt $_.Location }
-        $hoverId = if ($btn) { $btn } elseif ($blockHit) { $blockHit.Id } else { $null }
-        if ($hoverId -ne $script:drawerHover -or $null -ne $script:hover -or $script:handleHover) {
-            $script:drawerHover = $hoverId
+        # On the timeline strip, edges, blocks and gaps each have their own hover and cursor
+        $hit = if ($btn) { New-TimelineHover } else { Get-TimelineHit $_.Location }
+        if (-not $btn) {
+            if ($hit.EdgeBlock -ge 0) { $form.Cursor = [System.Windows.Forms.Cursors]::SizeWE }
+            elseif ($hit.Gap -ge 0) { $form.Cursor = [System.Windows.Forms.Cursors]::Hand }
+        }
+        if ($btn -ne $script:drawerHover -or -not (Test-SameTimelineHit $hit $script:tlHover) -or $null -ne $script:hover -or $script:handleHover) {
+            $script:drawerHover = $btn
+            $script:tlHover = $hit
             $script:hover = $null; $script:gripHover = $null; $script:roundHover = $null; $script:handleHover = $false
             $tip.Hide($form)
-            if ($blockHit -and $script:drawerTips.ContainsKey($blockHit.Id)) {
-                $tip.Show($script:drawerTips[$blockHit.Id], $form, [int]($blockHit.Rect.X * $Zoom), [int](($blockHit.Rect.Bottom + 4) * $Zoom), 6000)
-            }
+            if (-not $btn) { Show-TimelineTip $hit }
             Request-Redraw
         }
         return
     }
-    if ($script:drawerHover) { $script:drawerHover = $null; Request-Redraw }
+    if ($script:drawerHover -or -not (Test-SameTimelineHit $script:tlHover (New-TimelineHover))) {
+        $script:drawerHover = $null; $script:tlHover = New-TimelineHover; Request-Redraw
+    }
 
     # Tooltips are placed in window coordinates, so add the timer's offset
     $ox = $script:timerOffX + $script:fullMargin; $oy = $script:timerOffY + $script:fullMargin
@@ -5975,6 +6368,7 @@ $form.Add_MouseMove({
 $form.Add_MouseUp({
     try {
         if ($script:mode -eq 'pill') { Pill-MouseUp $_; return }
+        if ($script:tlDrag) { Complete-TimelineDrag $_.Location; return }
         $tp = Get-TimerPoint $_.Location
         if ($script:drawerPressed) {
             $btn = $script:drawerPressed
@@ -6024,9 +6418,10 @@ $form.Add_MouseLeave({
         if ($script:pillHover) { $script:pillHover = $null; $tip.Hide($form); Request-Redraw }
         return
     }
-    if ($script:reorder) { return }
-    if ($script:collapseHover -or $script:handleHover -or $script:drawerHover) {
+    if ($script:reorder -or $script:tlDrag) { return }
+    if ($script:collapseHover -or $script:handleHover -or $script:drawerHover -or -not (Test-SameTimelineHit $script:tlHover (New-TimelineHover))) {
         $script:collapseHover = $false; $script:handleHover = $false; $script:drawerHover = $null
+        $script:tlHover = New-TimelineHover
         Request-Redraw
     }
     if ($null -ne $script:hover -or $null -ne $script:gripHover -or $null -ne $script:roundHover) {

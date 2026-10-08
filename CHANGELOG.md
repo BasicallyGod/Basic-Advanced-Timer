@@ -6,7 +6,7 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current version, with the compact pill, week drawer, weekly view and settings | 2.0 to 2.13 |
+| AccountTimer2.ps1 | Current version, with the compact pill, week drawer, weekly view and settings | 2.0 to 2.14 |
 | AccountTimer.ps1 | Account slots, time logging, themes and the see-through list | 1.0 to 1.7 |
 | BillableTimer.ps1 | The original single billable-hours timer | 0.1 to 0.5 |
 
@@ -14,6 +14,10 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Version | Script | Type | Change |
 | --- | --- | --- | --- |
+| 2.14 | AccountTimer2 | New | Drag the start or finish edge of a block on the timeline to change its time, snapping to 5 minutes (hold Shift for 1 minute) and stopping at its neighbours, and at now for today |
+| 2.14 | AccountTimer2 | New | Where two blocks touch, one drag moves the change-over between them, and a note stays with its block |
+| 2.14 | AccountTimer2 | New | Click a gap on the timeline to fill it with an account, or drag across part of the gap to fill just that stretch |
+| 2.14 | AccountTimer2 | New | An Undo button on the timeline, and Escape cancels a drag in progress |
 | 2.13 | AccountTimer2 | New | Timeline tab in the drawer, showing a day along a strip with a block for each stretch of time, Lunch as a hatched gap, working hours lightly shaded and a marker for now |
 | 2.13 | AccountTimer2 | New | Point at a block on the timeline to see the account, start and finish, length and note, and use Previous and Next to move between days |
 | 2.13 | AccountTimer2 | Improved | The drawer remembers whether it was showing the week or the timeline, and the menu now says Show drawer and Hide drawer |
