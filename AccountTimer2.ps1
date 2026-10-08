@@ -13,8 +13,10 @@
 # In the Time entries tab, click to select blocks (Ctrl+click for several) and right-click to merge,
 # delete, change account, edit the time or note, or add an entry. Undo reverses the last change.
 #
-# Week drawer: click the round button at the top left of the full timer (or right-click, Show week drawer)
+# Drawer: click the round button at the top left of the full timer (or right-click, Show drawer)
 # to slide out this week's hours by account and day, and budgets, beside the timer.
+# The Timeline tab shows one day as a strip, with a block for each stretch of time, Lunch as a hatched
+# gap and a marker for now. Point at a block to see what it was; Previous and Next move between days.
 # Each week's individual entries are also saved to 'Week commencing <date> entries.csv'.
 #
 # Top: billable time since the start time, less lunch, as in the original timer.
@@ -303,14 +305,41 @@ namespace Win {
         public RectangleF Rect;
     }
 
+    // One stretch of time on the timeline strip (times are hours since midnight)
+    public class TimelineBlock {
+        public string Name = "";
+        public double StartH, EndH;
+        public string Kind = "time";        // time, running or lunch
+        public Color Colour = Color.Gray;
+        public string Tip = "";
+    }
+
+    // One line under the strip: an account's time for the day, or Lunch, Total or Unallocated
+    public class TimelineLegend {
+        public string Name = "";
+        public string Kind = "account";     // account, lunch, total or unallocated
+        public Color Colour = Color.Gray;
+        public string Total = "";
+    }
+
+    public class TimelineModel {
+        public double AxisStartH, AxisEndH, WorkStartH, WorkEndH, NowH;
+        public bool HasWork, ShowNow;
+        public string EmptyText = "";
+        public List<TimelineBlock> Blocks = new List<TimelineBlock>();
+        public List<TimelineLegend> Legend = new List<TimelineLegend>();
+    }
+
     public class DrawerModel {
         public string Title = "";
+        public string Mode = "week";        // week or timeline
         public string[] DayLabels = new string[0];
         public List<DrawerRow> Rows = new List<DrawerRow>();
         public List<DrawerBudget> Budgets = new List<DrawerBudget>();
         public string BudgetsHeading = "BUDGETS";
         public string FormatLabel = "h:mm";
         public bool NextEnabled;
+        public TimelineModel Timeline;
     }
 
     // Draws the full view (timer, drawer, shadow and rim) into one image with see-through areas
@@ -326,6 +355,8 @@ namespace Win {
         public float CollapseX = 306f, CollapseY = 9f, CollapseR = 6.5f, DrawerBtnX = 12f, DrawerBtnY = 9f;
         public float RoundR = 8f, RoundDownX = 150f, RoundUpX = 170f;
         public float DrawerW = 520f, DrawerH = 0f, DrawerRowH = 19f;
+        // Heights within the drawer, which the PowerShell side uses to work out how tall the drawer must be
+        public const float TabsH = 26f, AxisH = 16f, StripH = 44f, StripGap = 14f;
         public float Margin = 10f, TimerOffX = 0f, TimerOffY = 0f;
         public int ListAlpha = 255;
         public float TextSharpen = 0.8f;
@@ -781,14 +812,19 @@ namespace Win {
             // Lines and bars are drawn as solid colours, as the layer has no see-through areas
             using (Pen sep = new Pen(Mix(Panel, Text, 35 / 255.0), 1f)) {
                 float pad = 14f, x0 = dx + pad, xR = dx + dW - pad, y = mg + 10;
-                QueueText(d.Title, FontRow, textC, new RectangleF(x0, y, 170, 24), DT_LEFT);
+                bool timeline = d.Mode == "timeline" && d.Timeline != null;
+                QueueText(d.Title, FontRow, textC, new RectangleF(x0, y, timeline ? 200 : 170, 24), DT_LEFT);
 
                 // Buttons, right to left
                 DrawerButtons.Clear();
-                string[][] defs = new string[][] {
-                    new string[] { "weekly", "Weekly view" }, new string[] { "copy", "Copy" },
-                    new string[] { "format", d.FormatLabel },
-                    new string[] { "next", "Next" }, new string[] { "prev", "Previous" } };
+                string[][] defs = timeline
+                    ? new string[][] {
+                        new string[] { "format", d.FormatLabel },
+                        new string[] { "next", "Next" }, new string[] { "prev", "Previous" } }
+                    : new string[][] {
+                        new string[] { "weekly", "Weekly view" }, new string[] { "copy", "Copy" },
+                        new string[] { "format", d.FormatLabel },
+                        new string[] { "next", "Next" }, new string[] { "prev", "Previous" } };
                 float bx = xR;
                 foreach (string[] def in defs) {
                     float tw = og.MeasureString(def[1], FontButton).Width + 16;
@@ -807,6 +843,28 @@ namespace Win {
                     bx -= 6;
                 }
                 y += 34;
+
+                // Tabs for switching between the week's table and the day's timeline
+                float tabX = x0;
+                string[][] tabs = new string[][] { new string[] { "week", "Week" }, new string[] { "timeline", "Timeline" } };
+                foreach (string[] tab in tabs) {
+                    float tw = og.MeasureString(tab[1], FontButton).Width + 20;
+                    RectangleF rect = new RectangleF(tabX, y, tw, 22);
+                    bool current = d.Mode == tab[0];
+                    Color col = current ? CircleHot : (DrawerHover == tab[0] ? Circle : Mix(Panel, Circle, 0.45));
+                    using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 11f))
+                    using (SolidBrush bb = new SolidBrush(col)) { og.FillPath(bb, bp); }
+                    QueueText(tab[1], FontButton, textC, rect, DT_CENTER);
+                    if (!current) {
+                        DrawerButton db = new DrawerButton();
+                        db.Id = tab[0]; db.Rect = rect;
+                        DrawerButtons.Add(db);
+                    }
+                    tabX += tw + 6;
+                }
+                y += TabsH;
+
+                if (timeline) { DrawTimeline(og, d.Timeline, x0, xR, y, sep, fText, fBold); return; }
 
                 // Hours by account and day
                 int nd = d.DayLabels.Length;
@@ -846,6 +904,108 @@ namespace Win {
                         y += 20;
                     }
                 }
+            }
+        }
+
+        // The day as one strip: each stretch of time is a coloured block, Lunch is hatched, the gaps are
+        // left empty, working hours are a little lighter and a marker shows where now is.
+        // Hover areas for the blocks are added to DrawerButtons with ids of the form tip:<number>.
+        void DrawTimeline(Graphics og, TimelineModel t, float x0, float xR, float y, Pen sep, Font fText, Font fBold) {
+            Color textC = Text;
+            Color faintC = Mix(Panel, Text, 215 / 255.0);
+            float w = xR - x0;
+            double span = Math.Max(1.0, t.AxisEndH - t.AxisStartH);
+            float perHour = (float)(w / span);
+
+            // Hour labels, thinned out when there isn't room for every hour
+            int firstHour = (int)Math.Ceiling(t.AxisStartH - 0.001), lastHour = (int)Math.Floor(t.AxisEndH + 0.001);
+            int step = 1;
+            while (perHour * step < 48f) step++;
+            for (int hr = firstHour; hr <= lastHour; hr++) {
+                if ((hr - firstHour) % step != 0) continue;
+                float lx = x0 + (float)((hr - t.AxisStartH) * perHour);
+                string label = (hr % 24).ToString("00") + ":00";
+                if (hr == firstHour && lx - x0 < 20f) QueueText(label, FontLabel, faintC, new RectangleF(lx, y, 44, AxisH - 2), DT_LEFT);
+                else if (xR - lx < 20f) QueueText(label, FontLabel, faintC, new RectangleF(lx - 44, y, 44, AxisH - 2), DT_RIGHT);
+                else QueueText(label, FontLabel, faintC, new RectangleF(lx - 22, y, 44, AxisH - 2), DT_CENTER);
+            }
+
+            // The strip: empty track, lighter working hours, hour lines
+            float sy = y + AxisH;
+            using (GraphicsPath track = RoundRect(x0, sy, w, StripH, 6f))
+            using (SolidBrush trackBrush = new SolidBrush(Mix(Panel, Text, 0.07))) {
+                og.FillPath(trackBrush, track);
+                GraphicsState clipState = og.Save();
+                og.SetClip(track, CombineMode.Intersect);
+                if (t.HasWork) {
+                    float wx1 = x0 + (float)((t.WorkStartH - t.AxisStartH) * perHour);
+                    float wx2 = x0 + (float)((t.WorkEndH - t.AxisStartH) * perHour);
+                    using (SolidBrush workBrush = new SolidBrush(Mix(Panel, Text, 0.14))) { og.FillRectangle(workBrush, wx1, sy, wx2 - wx1, StripH); }
+                }
+                using (Pen hourLine = new Pen(Mix(Panel, Text, 0.20), 1f)) {
+                    for (int hr = firstHour; hr <= lastHour; hr++) {
+                        float lx = x0 + (float)((hr - t.AxisStartH) * perHour);
+                        og.DrawLine(hourLine, lx, sy, lx, sy + StripH);
+                    }
+                }
+                og.Restore(clipState);
+            }
+
+            // Blocks
+            Color dark = Color.FromArgb(0x1b, 0x1b, 0x1b);
+            for (int i = 0; i < t.Blocks.Count; i++) {
+                TimelineBlock b = t.Blocks[i];
+                float bx = x0 + (float)((b.StartH - t.AxisStartH) * perHour);
+                float bw = Math.Max(2f, (float)((b.EndH - b.StartH) * perHour) - 1f);
+                RectangleF br = new RectangleF(bx, sy + 3, bw, StripH - 6);
+                bool hot = DrawerHover == "tip:" + i;
+                if (b.Kind == "lunch") {
+                    using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, hot ? 0.45 : 0.33), Mix(Panel, Text, 0.12))) {
+                        og.FillRectangle(hb, br);
+                    }
+                    if (bw > 56f) QueueText("Lunch", FontLabel, textC, br, DT_CENTER);
+                } else {
+                    Color fillC = hot ? Mix(b.Colour, Color.White, 0.3) : b.Colour;
+                    using (SolidBrush bb = new SolidBrush(fillC)) { og.FillRectangle(bb, br); }
+                    if (bw > 44f) QueueText(b.Name, fText, dark, new RectangleF(bx + 4, sy, bw - 8, StripH), DT_LEFT);
+                }
+                // A hover area at least 6 wide, so even short stretches can be pointed at
+                float hw = Math.Max(bw, 6f);
+                DrawerButton hit = new DrawerButton();
+                hit.Id = "tip:" + i;
+                hit.Rect = new RectangleF(bx - (hw - bw) / 2f, sy, hw, StripH);
+                DrawerButtons.Add(hit);
+            }
+            if (t.Blocks.Count == 0 && t.EmptyText.Length > 0) QueueText(t.EmptyText, fText, faintC, new RectangleF(x0, sy, w, StripH), DT_CENTER);
+
+            // Now
+            if (t.ShowNow) {
+                float nx = x0 + (float)((t.NowH - t.AxisStartH) * perHour);
+                using (Pen np = new Pen(textC, 2f))
+                using (SolidBrush nb = new SolidBrush(textC)) {
+                    og.DrawLine(np, nx, sy - 2, nx, sy + StripH + 2);
+                    og.FillEllipse(nb, nx - 3.5f, sy - 6f, 7f, 7f);
+                }
+            }
+
+            // The day's figures under the strip
+            float ly = sy + StripH + StripGap;
+            foreach (TimelineLegend lg in t.Legend) {
+                og.DrawLine(sep, x0, ly, xR, ly);
+                bool isTotal = lg.Kind == "total";
+                Font f = isTotal ? fBold : fText;
+                Color c = (lg.Kind == "lunch" || lg.Kind == "unallocated") ? faintC : textC;
+                float nameX = x0;
+                if (lg.Kind == "account") {
+                    using (SolidBrush sw = new SolidBrush(lg.Colour)) { og.FillRectangle(sw, x0, ly + 4.5f, 10f, 10f); }
+                    nameX = x0 + 16f;
+                } else if (lg.Kind == "lunch") {
+                    using (HatchBrush hb = new HatchBrush(HatchStyle.WideUpwardDiagonal, Mix(Panel, Text, 0.33), Mix(Panel, Text, 0.12))) { og.FillRectangle(hb, x0, ly + 4.5f, 10f, 10f); }
+                    nameX = x0 + 16f;
+                }
+                QueueText(lg.Name, f, c, new RectangleF(nameX, ly, w - 100f - (nameX - x0), DrawerRowH), DT_LEFT);
+                QueueText(lg.Total, f, c, new RectangleF(xR - 90f, ly, 90f, DrawerRowH), DT_RIGHT);
+                ly += DrawerRowH;
             }
         }
 
@@ -1011,6 +1171,11 @@ $script:drawerVersion  = 0       # goes up whenever the drawer's figures are ref
 $script:drawerCache    = $null   # the drawer drawn once and reused until something in it changes
 $script:drawerCacheKey = ''
 $script:drawerCacheBuilds = 0
+$script:drawerMode     = 'week'   # 'week' for the table of hours, 'timeline' for one day along a strip
+$script:drawerDay      = $null    # the day shown in the timeline
+$script:drawerTimeline = $null    # that day's stretches of time, ready to draw
+$script:drawerLegend   = @()      # the lines under the strip
+$script:drawerTips     = @{}      # hover text for the timeline's blocks, by block number
 
 # ======================================================================
 # Helpers
@@ -2809,10 +2974,105 @@ function Get-BudgetLines {
 }
 
 $DrawerRowH = 19
+
+# The timeline needs the compiled drawing, so without it the drawer stays on the week table
+function Get-DrawerMode {
+    if ($script:useRenderer -and $script:drawerMode -eq 'timeline') { return 'timeline' }
+    return 'week'
+}
+
+function Get-DrawerAccountColour($name, $names) {
+    $names = @($names)
+    $i = [array]::IndexOf($names, $name)
+    if ($i -lt 0) { $i = $names.Count + [math]::Abs($name.GetHashCode()) % 5 }
+    return $AccountColours[$i % $AccountColours.Count]
+}
+
+function Get-DrawerDayTitle([datetime]$day) {
+    if ($day.Date -eq [datetime]::Today) { return 'Today, ' + $day.ToString('d MMMM', $GB) }
+    if ($day.Date -eq [datetime]::Today.AddDays(-1)) { return 'Yesterday, ' + $day.ToString('d MMMM', $GB) }
+    return $day.ToString('ddd d MMMM', $GB)
+}
+
+# One day's stretches of time for the timeline strip, in order. Lunch is included because it shows as a
+# hatched gap. Rounding and other adjustments are left out, as they were never a stretch of real time.
+# Times for the drawing are hours since midnight. The strip covers the working hours plus anything
+# tracked outside them, to whole hours and at least four hours wide.
+function Get-DayTimeline([datetime]$day) {
+    $day = $day.Date
+    $now = Get-Date
+    $isToday = ($day -eq $now.Date)
+    $blocks = @()
+    foreach ($r in @(Read-Sessions)) {
+        if ($r.IsAdjust -or $r.Start.Date -ne $day) { continue }
+        if ([math]::Abs($r.Seconds) -lt $EntryMinSeconds) { continue }
+        $isLunch = ($r.Name -eq 'Lunch')
+        $note = $null
+        if (-not $isLunch) { $note = $script:notes[(Get-NoteKey $r.Start.ToString('yyyy-MM-dd', $Inv) $r.Name $r.Start.ToString('HH:mm:ss', $Inv))] }
+        $blocks += [pscustomobject]@{ Name = $r.Name; Start = $r.Start; End = $r.End; Seconds = $r.Seconds
+                                      Kind = $(if ($isLunch) { 'lunch' } else { 'time' }); Note = $note }
+    }
+    # Whatever is running right now (from midnight if it carried on past it)
+    if ($isToday -and $script:active) {
+        $from = $script:active.Start
+        if ($from -lt $day) { $from = $day }
+        $secs = ($now - $from).TotalSeconds
+        if ($secs -ge $EntryMinSeconds) {
+            $isLunch = ($script:active.Name -eq 'Lunch')
+            $blocks += [pscustomobject]@{ Name = $script:active.Name; Start = $from; End = $now; Seconds = $secs
+                                          Kind = $(if ($isLunch) { 'lunch' } else { 'running' }); Note = $null }
+        }
+    }
+    $blocks = @($blocks | Sort-Object Start)
+    foreach ($b in $blocks) {
+        $label = if ($b.Kind -eq 'lunch') { 'Lunch' } else { $b.Name }
+        $span = '{0} to {1}' -f $b.Start.ToString('HH:mm', $Inv), $b.End.ToString('HH:mm', $Inv)
+        $text = "$label`n$span ($(Format-Dur $b.Seconds))"
+        if ($b.Kind -eq 'running') { $text += "`nRunning now" }
+        if ($b.Note) { $text += "`n" + $b.Note }
+        $b | Add-Member -NotePropertyName Tip -NotePropertyValue $text -Force
+    }
+
+    $plan = Get-DayPlan $day
+    $lo = $null; $hi = $null
+    if ($plan.Working) { $lo = $plan.Start; $hi = $plan.End }
+    foreach ($b in $blocks) {
+        if ($null -eq $lo -or $b.Start -lt $lo) { $lo = $b.Start }
+        if ($null -eq $hi -or $b.End -gt $hi) { $hi = $b.End }
+    }
+    if ($isToday -and $null -ne $hi -and $now -gt $hi) { $hi = $now }
+    if ($null -eq $lo) { $lo = $day.AddHours(8); $hi = $day.AddHours(18) }
+    $startH = [math]::Floor(($lo - $day).TotalHours)
+    $endH = [math]::Min(24.0, [math]::Ceiling(($hi - $day).TotalHours))
+    if ($endH - $startH -lt 4) {
+        $endH = [math]::Min(24.0, $startH + 4)
+        $startH = $endH - 4
+    }
+    $nowH = ($now - $day).TotalHours
+    $empty = if ($blocks.Count -gt 0) { '' }
+             elseif (-not $plan.Working) { 'Day off' }
+             elseif ($isToday) { 'Nothing tracked yet' }
+             else { 'Nothing tracked on this day' }
+    return [pscustomobject]@{
+        Day = $day; Blocks = $blocks; AxisStartH = [double]$startH; AxisEndH = [double]$endH
+        HasWork = [bool]$plan.Working
+        WorkStartH = $(if ($plan.Working) { ($plan.Start - $day).TotalHours } else { 0.0 })
+        WorkEndH = $(if ($plan.Working) { ($plan.End - $day).TotalHours } else { 0.0 })
+        ShowNow = [bool]($isToday -and $nowH -ge $startH -and $nowH -le $endH)
+        NowH = [double]$nowH; EmptyText = $empty
+    }
+}
+
 function Measure-DrawerHeight {
     $d = $script:drawerData
+    if ((Get-DrawerMode) -eq 'timeline') {
+        # Header, tabs, hour labels and strip, then a line for each account used, plus total, lunch and unallocated
+        $lines = @($script:drawerLegend).Count
+        return 10 + 34 + [Win.FullRenderer]::TabsH + [Win.FullRenderer]::AxisH + [Win.FullRenderer]::StripH + [Win.FullRenderer]::StripGap + $DrawerRowH * $lines + 10
+    }
     $rows = 1 + @($d.Names).Count + 3
     $h = 10 + 34 + $DrawerRowH * $rows + 10
+    if ($script:useRenderer) { $h += [Win.FullRenderer]::TabsH }
     $nb = @($script:drawerBudgets).Count
     if ($nb -gt 0) { $h += 8 + 18 + 20 * $nb }
     return $h
@@ -2824,13 +3084,75 @@ function Get-DrawerHeight {
     return $content
 }
 
+# The lines under the timeline strip: each account used that day, then total, lunch and unallocated.
+# The figures come from the week's data, so they include rounding and match the week table.
+function Get-DayLegend([datetime]$day, $data, [datetime]$ws) {
+    $idx = [int][math]::Floor(($day.Date - $ws).TotalDays)
+    $out = @()
+    $sum = 0.0
+    foreach ($n in @($data.Names)) {
+        $secs = [double]$data.Accounts[$n][$idx]
+        $sum += $secs
+        $txt = Format-Hours $secs
+        if ($txt) { $out += [pscustomobject]@{ Name = $n; Kind = 'account'; Colour = (Get-DrawerAccountColour $n $data.Names); Total = $txt } }
+    }
+    $sumText = Format-Hours $sum
+    if ($sumText) { $out += [pscustomobject]@{ Name = 'Total'; Kind = 'total'; Colour = $null; Total = $sumText } }
+    $lunchText = Format-Hours ([double]$data.Lunch[$idx])
+    if ($lunchText) { $out += [pscustomobject]@{ Name = 'Lunch'; Kind = 'lunch'; Colour = $null; Total = $lunchText } }
+    $unallocText = Format-Hours ([double]$data.Unalloc[$idx])
+    if ($unallocText) { $out += [pscustomobject]@{ Name = 'Unallocated'; Kind = 'unallocated'; Colour = $null; Total = $unallocText } }
+    return $out
+}
+
 function Refresh-DrawerData {
-    if (-not $script:drawerWeek) { $script:drawerWeek = Get-WeekStart }
+    if ((Get-DrawerMode) -eq 'timeline') {
+        if (-not $script:drawerDay) { $script:drawerDay = [datetime]::Today }
+        $script:drawerWeek = Get-WeekStartFor $script:drawerDay
+    } elseif (-not $script:drawerWeek) { $script:drawerWeek = Get-WeekStart }
     $script:drawerData = Get-WeekData $script:drawerWeek
     $script:drawerBudgets = @(Get-BudgetLines)
+    if ((Get-DrawerMode) -eq 'timeline') {
+        $script:drawerTimeline = Get-DayTimeline $script:drawerDay
+        $script:drawerLegend = @(Get-DayLegend $script:drawerDay $script:drawerData $script:drawerWeek)
+    } else {
+        $script:drawerTimeline = $null
+        $script:drawerLegend = @()
+    }
     $script:drawerH = Get-DrawerHeight
     $script:drawerVersion++
     if ($script:useRenderer) { Build-DrawerModel }
+}
+
+# The timeline half of the drawer's model
+function Build-TimelineModel {
+    $tmData = $script:drawerTimeline
+    $d = $script:drawerData
+    $tm = New-Object Win.TimelineModel
+    $tm.AxisStartH = $tmData.AxisStartH; $tm.AxisEndH = $tmData.AxisEndH
+    $tm.HasWork = $tmData.HasWork; $tm.WorkStartH = $tmData.WorkStartH; $tm.WorkEndH = $tmData.WorkEndH
+    $tm.ShowNow = $tmData.ShowNow; $tm.NowH = $tmData.NowH
+    $tm.EmptyText = [string]$tmData.EmptyText
+    $tips = @{}
+    $i = 0
+    foreach ($b in @($tmData.Blocks)) {
+        $tb = New-Object Win.TimelineBlock
+        $tb.Name = $b.Name; $tb.Kind = $b.Kind; $tb.Tip = $b.Tip
+        $tb.StartH = ($b.Start - $tmData.Day).TotalHours
+        $tb.EndH = ($b.End - $tmData.Day).TotalHours
+        if ($b.Kind -ne 'lunch') { $tb.Colour = Get-DrawerAccountColour $b.Name $d.Names }
+        [void]$tm.Blocks.Add($tb)
+        $tips["tip:$i"] = $b.Tip
+        $i++
+    }
+    $script:drawerTips = $tips
+    foreach ($lg in @($script:drawerLegend)) {
+        $tl2 = New-Object Win.TimelineLegend
+        $tl2.Name = $lg.Name; $tl2.Kind = $lg.Kind; $tl2.Total = $lg.Total
+        if ($lg.Colour) { $tl2.Colour = $lg.Colour }
+        [void]$tm.Legend.Add($tl2)
+    }
+    return $tm
 }
 
 function Build-DrawerModel {
@@ -2838,6 +3160,15 @@ function Build-DrawerModel {
     $ws = $script:drawerWeek
     $m = New-Object Win.DrawerModel
     $m.Title = 'Week of ' + $ws.ToString('d MMMM', $GB)
+    $m.Mode = Get-DrawerMode
+    if ($m.Mode -eq 'timeline') {
+        $m.Title = Get-DrawerDayTitle $script:drawerDay
+        $m.NextEnabled = $script:drawerDay -lt [datetime]::Today
+        $m.FormatLabel = if ($script:hoursFormat -eq 'decimal') { 'h:mm' } else { 'Decimal' }
+        $m.Timeline = Build-TimelineModel
+        $script:drawerModel = $m
+        return
+    }
     $m.DayLabels = [string[]]@($d.Days | ForEach-Object { $ws.AddDays($_).ToString('ddd dd', $GB).ToUpper() })
     $m.NextEnabled = $ws -lt (Get-WeekStart)
     $m.FormatLabel = if ($script:hoursFormat -eq 'decimal') { 'h:mm' } else { 'Decimal' }
@@ -2913,7 +3244,7 @@ function Set-DrawerOpen([bool]$open, [switch]$Starting) {
     $tl = Get-TimerScreenPos
     $script:drawerOpen = $open
     if ($open) {
-        if (-not $Starting) { $script:drawerWeek = Get-WeekStart }
+        if (-not $Starting) { $script:drawerWeek = Get-WeekStart; $script:drawerDay = [datetime]::Today }
         Refresh-DrawerData
     } elseif ($script:drawerCache) {
         $script:drawerCache.Dispose(); $script:drawerCache = $null; $script:drawerCacheKey = ''
@@ -2922,12 +3253,35 @@ function Set-DrawerOpen([bool]$open, [switch]$Starting) {
     Apply-CornerStyle
     $script:regionKey = ''
     Update-Region
-    if (-not $Starting) { try { Set-Content -Path $DrawerFile -Value ([int]$open) } catch {} }
+    if (-not $Starting) { Save-DrawerState }
     $script:drawerHover = $null
     $tip.Hide($form)
     Apply-BlurState
     Update-View
     Request-Redraw
+}
+
+# Whether the drawer is open and which view it shows, kept as two lines for the next start
+function Save-DrawerState {
+    try { Set-Content -Path $DrawerFile -Value @([string][int]$script:drawerOpen, $script:drawerMode) } catch {}
+}
+
+# Switch the drawer between the week table and the day's timeline
+function Set-DrawerMode([string]$mode) {
+    if ($mode -ne 'week' -and $mode -ne 'timeline') { return }
+    if ($script:drawerMode -eq $mode) { return }
+    $script:drawerMode = $mode
+    if ($mode -eq 'timeline') {
+        # Today, unless the week table was showing a past week, then that week's last day so far
+        $ws = $script:drawerWeek
+        $script:drawerDay = if (-not $ws -or $ws -ge (Get-WeekStart)) { [datetime]::Today } else { $ws.AddDays(6) }
+    } elseif ($script:drawerDay) {
+        $script:drawerWeek = Get-WeekStartFor $script:drawerDay
+    }
+    Save-DrawerState
+    $script:drawerHover = $null
+    $tip.Hide($form)
+    Update-DrawerContent
 }
 
 # Refresh the figures; resize if the number of rows changed
@@ -2948,7 +3302,14 @@ function Test-InDrawer($pt) {
 
 function Get-DrawerButtonAt($pt) {
     $x = [float]($pt.X / $Zoom); $y = [float]($pt.Y / $Zoom)
-    foreach ($b in $script:drawerButtons) { if ($b.Rect.Contains($x, $y)) { return $b.Id } }
+    foreach ($b in $script:drawerButtons) { if ($b.Rect.Contains($x, $y) -and -not "$($b.Id)".StartsWith('tip:')) { return $b.Id } }
+    return $null
+}
+
+# The timeline block under the pointer, as its tip id such as tip:2, with the hover area it came from
+function Get-DrawerTipAt($pt) {
+    $x = [float]($pt.X / $Zoom); $y = [float]($pt.Y / $Zoom)
+    foreach ($b in $script:drawerButtons) { if ($b.Rect.Contains($x, $y) -and "$($b.Id)".StartsWith('tip:')) { return $b } }
     return $null
 }
 
@@ -2991,12 +3352,18 @@ function Get-DrawerTableLines {
 function Invoke-DrawerButton($id) {
     switch ($id) {
         'prev' {
-            $script:drawerWeek = $script:drawerWeek.AddDays(-7)
+            if ((Get-DrawerMode) -eq 'timeline') { $script:drawerDay = $script:drawerDay.AddDays(-1) }
+            else { $script:drawerWeek = $script:drawerWeek.AddDays(-7) }
             Update-DrawerContent
         }
         'next' {
-            if ($script:drawerWeek -lt (Get-WeekStart)) { $script:drawerWeek = $script:drawerWeek.AddDays(7); Update-DrawerContent }
+            if ((Get-DrawerMode) -eq 'timeline') {
+                if ($script:drawerDay -lt [datetime]::Today) { $script:drawerDay = $script:drawerDay.AddDays(1); Update-DrawerContent }
+            }
+            elseif ($script:drawerWeek -lt (Get-WeekStart)) { $script:drawerWeek = $script:drawerWeek.AddDays(7); Update-DrawerContent }
         }
+        'week' { Set-DrawerMode 'week' }
+        'timeline' { Set-DrawerMode 'timeline' }
         'copy' {
             [System.Windows.Forms.Clipboard]::SetText(((Get-DrawerTableLines) -join "`r`n"))
             $b = $script:drawerButtons | Where-Object { $_.Id -eq 'copy' } | Select-Object -First 1
@@ -3422,6 +3789,8 @@ function Disable-Renderer($why) {
     $script:useRenderer = $false
     $script:fullMargin = 0
     $script:regionKey = ''
+    # The timeline needs the compiled drawing, so an open drawer goes back to the week table
+    if ($script:drawerOpen) { Refresh-DrawerData }
     Update-DrawerGeometry $tl
     Apply-CornerStyle
 }
@@ -5534,10 +5903,16 @@ $form.Add_MouseMove({
     if (Test-InDrawer $_.Location) {
         $btn = Get-DrawerButtonAt $_.Location
         $form.Cursor = if ($btn) { [System.Windows.Forms.Cursors]::Hand } else { [System.Windows.Forms.Cursors]::Default }
-        if ($btn -ne $script:drawerHover -or $null -ne $script:hover -or $script:handleHover) {
-            $script:drawerHover = $btn
+        # Over a block on the timeline strip, show what it was
+        $blockHit = if ($btn) { $null } else { Get-DrawerTipAt $_.Location }
+        $hoverId = if ($btn) { $btn } elseif ($blockHit) { $blockHit.Id } else { $null }
+        if ($hoverId -ne $script:drawerHover -or $null -ne $script:hover -or $script:handleHover) {
+            $script:drawerHover = $hoverId
             $script:hover = $null; $script:gripHover = $null; $script:roundHover = $null; $script:handleHover = $false
             $tip.Hide($form)
+            if ($blockHit -and $script:drawerTips.ContainsKey($blockHit.Id)) {
+                $tip.Show($script:drawerTips[$blockHit.Id], $form, [int]($blockHit.Rect.X * $Zoom), [int](($blockHit.Rect.Bottom + 4) * $Zoom), 6000)
+            }
             Request-Redraw
         }
         return
@@ -5550,7 +5925,7 @@ $form.Add_MouseMove({
     if ($handle -ne $script:handleHover) {
         $script:handleHover = $handle
         if ($handle) {
-            $label = if ($script:drawerOpen) { 'Hide week drawer' } else { 'Show week drawer' }
+            $label = if ($script:drawerOpen) { 'Hide drawer' } else { 'Show drawer' }
             $tip.Show($label, $form, [int](($DrawerBtnX - 4 + $ox) * $Zoom), [int](($DrawerBtnY + 12 + $oy) * $Zoom), 2000)
         } else { $tip.Hide($form) }
         Request-Redraw
@@ -5808,7 +6183,7 @@ $menu = New-Object System.Windows.Forms.ContextMenuStrip
 
 $miView = $menu.Items.Add('Compact view')
 $miView.Add_Click({ if ($script:mode -eq 'pill') { Set-View 'full' } else { Set-View 'pill' } })
-$miDrawer = $menu.Items.Add('Show week drawer')
+$miDrawer = $menu.Items.Add('Show drawer')
 $miDrawer.Add_Click({ Set-DrawerOpen (-not $script:drawerOpen) })
 $miWork = New-Object System.Windows.Forms.ToolStripMenuItem 'Working hours'
 [void]$miWork.DropDownItems.Add('Usual hours and days...', $null, { try { Show-WorkSettings } catch { Write-Log "Settings error: $($_.Exception.Message) $($_.InvocationInfo.PositionMessage)" } })
@@ -5968,7 +6343,7 @@ $menu.Add_Opening({
     $miView.Text = if ($script:mode -eq 'pill') { 'Full view' } else { 'Compact view' }
     $miDrawer.Visible = $script:mode -eq 'full'
     $miFormat.Text = if ($script:hoursFormat -eq 'decimal') { 'Show hours as h:mm' } else { 'Show hours as decimal' }
-    $miDrawer.Text = if ($script:drawerOpen) { 'Hide week drawer' } else { 'Show week drawer' }
+    $miDrawer.Text = if ($script:drawerOpen) { 'Hide drawer' } else { 'Show drawer' }
     $pt = $form.PointToClient([System.Windows.Forms.Cursor]::Position)
     if ($script:mode -eq 'pill') {
         # In the pill, only rows in the open account list count
@@ -6098,7 +6473,13 @@ Load-Positions
 $savedView = 'full'
 if (Test-Path $ViewFile) { try { $savedView = (Get-Content $ViewFile -TotalCount 1).Trim() } catch {} }
 $drawerWasOpen = $false
-if (Test-Path $DrawerFile) { try { $drawerWasOpen = ((Get-Content $DrawerFile -TotalCount 1).Trim() -eq '1') } catch {} }
+if (Test-Path $DrawerFile) {
+    try {
+        $drawerLines = @(Get-Content $DrawerFile -TotalCount 2)
+        $drawerWasOpen = ($drawerLines[0].Trim() -eq '1')
+        if ($drawerLines.Count -gt 1 -and $drawerLines[1].Trim() -eq 'timeline') { $script:drawerMode = 'timeline' }
+    } catch {}
+}
 if ($savedView -eq 'pill') {
     Set-View 'pill' -Starting
     $script:drawerReopen = $drawerWasOpen

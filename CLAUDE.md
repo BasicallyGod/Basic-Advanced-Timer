@@ -22,6 +22,7 @@ Only one timer runs at a time. AccountTimer2.ps1 refuses to start if another cop
 - **Settings** live in account-timer-*.txt files beside the script (accounts, budgets, themes, view, positions, effects, working hours, day overrides and more). Themes are in account-timer-themes.txt, editable by the user.
 - **The window** is a layered window (WS_EX_LAYERED). Each frame is drawn into a 32-bit image and pushed with UpdateLayeredWindow, which allows see-through areas, rounded shapes and shadows. WinForms child controls cannot be shown on a layered window, so everything on the timer is drawn by hand. Text input uses separate small windows (note prompt, dialogs).
 - **The full view** (timer rows plus the week drawer) is drawn by the C# class Win.FullRenderer. PowerShell fills its fields each frame (Sync-RendererState) and calls Render. If the C# fails to compile or throws, the script falls back to the PowerShell drawing functions (Draw-Full, Draw-Drawer) and logs why.
+- **The drawer** has two views, switched by the Week and Timeline tabs under its title. The week table is described above. The timeline (Win.FullRenderer.DrawTimeline) draws one day as a strip, with a block per stretch of time, Lunch hatched, working hours lightly shaded and a marker for now. PowerShell prepares the day with Get-DayTimeline and Get-DayLegend, and Build-TimelineModel hands it to C#, with times as hours since midnight. Hover areas for the blocks are added to the renderer's DrawerButtons with ids like tip:2, and the tooltip text for them is in $script:drawerTips. The timeline exists only in the C# drawing, so if that has to be switched off the drawer goes back to the week table. Whether the drawer is open and which view it shows are kept as two lines in account-timer-drawer.txt.
 - **The pill** (compact view) is still drawn in PowerShell, as it is fast enough.
 - **The weekly view** is a normal WinForms window with DataGridView tables, owner-drawn headers and buttons.
 - **Drawing speed** can be checked from the menu (Appearance, Drawing speed). Under 30 ms per redraw feels instant, over 50 ms feels sluggish.
@@ -48,6 +49,8 @@ Nothing can be run visually off Windows, but these catch most mistakes:
 3. Unit-test non-visual functions (calculations, file reading and writing, formatting) by extracting them from the script with the PowerShell parser and running them against sample data.
 4. Search new code for variable names that clash with the script-level ones above.
 
+5. Off Windows, PowerShell 7 can be had with `dotnet tool install --tool-path <dir> PowerShell --version 7.4.6` (after installing dotnet-sdk-8.0), and `mcs -langversion:5` from the mono-mcs package enforces the C# 5 limit on the extracted C# blocks. With libgdiplus, a small C# harness can render the drawer to a PNG, with the Windows text drawing swapped for DrawString, which is enough to check layout and hover areas.
+
 The user tests the visuals on Windows and reports back with screenshots.
 
 ## Conventions
@@ -60,5 +63,5 @@ The user tests the visuals on Windows and reports back with screenshots.
 
 ## Planned next
 
-- A timeline drawer showing each stretch of today along a strip, with Lunch as a gap and a marker for now. Interactive editing (dragging edges, filling gaps) could follow. Build its drawing in C# from the start.
+- Interactive editing on the timeline (dragging block edges, filling gaps with an account). The read-only timeline is built in C#, and its blocks already have hover areas to build on.
 - Windows-drawn text for the timer's solid areas (status line, unallocated figure, overtime counter), matching the week drawer.
