@@ -69,6 +69,7 @@ public sealed class PillWindow : Window
         var head = Ui.Grid("*,Auto,Auto", "*");
         head.Margin = new Thickness(16, 0);
         var labels = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
+        account.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis;
         labels.Children.Add(account);
         labels.Children.Add(new TrackingLabels(model));
         Ui.Put(head, labels);

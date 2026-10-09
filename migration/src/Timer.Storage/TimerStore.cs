@@ -140,8 +140,8 @@ public sealed class TimerStore : IDisposable
         }).ToList();
         hours.Add($"start={engine.Schedule.Default.Start:hh\\:mm}");
         hours.Add($"end={engine.Schedule.Default.End:hh\\:mm}");
-        hours.Add("days=" + string.Join(",", engine.Schedule.Days.OrderBy(d => (int)d)));
-        hours.AddRange(engine.Schedule.Shifts.OrderBy(p => (int)p.Key).Select(p => $"shift.{p.Key}={p.Value.Start:hh\\:mm},{p.Value.End:hh\\:mm}"));
+        hours.Add("days=" + string.Join(",", engine.Schedule.Days.OrderBy(d => (int)d).Select(d => d.ToString()[..3].ToLowerInvariant())));
+        hours.AddRange(engine.Schedule.Shifts.OrderBy(p => (int)p.Key).Select(p => $"shift.{p.Key.ToString()[..3].ToLowerInvariant()}={p.Value.Start:hh\\:mm},{p.Value.End:hh\\:mm}"));
         hours.Add("hours=" + (preferences.DecimalHours ? "decimal" : "hm")); sections["workingHours"] = Array(hours);
         var rows = new List<Dictionary<string, string>>(originalRows);
         foreach (var s in engine.Sessions.Skip(originalCount)) rows.Add(new() { ["Date"] = s.Date, ["Account"] = s.Account, ["Start"] = s.Start, ["End"] = s.End, ["Minutes"] = s.Minutes });

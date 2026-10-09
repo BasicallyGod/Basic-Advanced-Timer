@@ -41,7 +41,7 @@ public static class Ui
         return p;
     }
     public static bool IsDragSurface(object? source) => source is Visual visual
-        && visual is not Button && !visual.GetVisualAncestors().OfType<Button>().Any();
+        && visual is not Avalonia.Controls.Button && !visual.GetVisualAncestors().OfType<Button>().Any();
     public static void DragHeader(Control header, Window window)
     {
         if (header is Panel panel) panel.Background = Brushes.Transparent;
@@ -203,8 +203,8 @@ public sealed class TrackingLabels : StackPanel
     private readonly TextBlock overtime = Ui.Text("Overtime", 12, "overtime");
     public TrackingLabels(TimerModel model)
     {
-        Orientation = Orientation.Horizontal;
-        Spacing = 12;
+        Orientation = Orientation.Vertical;
+        Spacing = 3;
         Children.Add(status);
         Children.Add(overtime);
         void Refresh()
