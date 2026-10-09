@@ -94,6 +94,12 @@ for ($i = 0; $i -lt 13; $i++) {
     $row.Active = ($i -eq 0); $rows += $row
 }
 $r.Rows = $rows
+$r.Drawer.DayLabels = @('MON 05', 'TUE 06', 'WED 07', 'THU 08', 'FRI 09')
+for ($i = 0; $i -lt 16; $i++) {
+    $weekRow = New-Object Win.DrawerRow
+    $weekRow.Name = 'Client account ' + $i; $weekRow.Cells = @('1:00', '1:00', '1:00', '1:00', '1:00'); $weekRow.Total = '5:00'
+    $r.Drawer.Rows.Add($weekRow)
+}
 try {
     foreach ($mode in @('timeline', 'week')) {
         $r.Drawer.Mode = $mode
@@ -111,7 +117,7 @@ try {
         if ($mode -eq 'week') {
             if ($r.WeekContentH -le $r.WeekViewportH) { throw 'Maximum account fixture must exercise Week scrolling.' }
             $r.WeekScrollY = $r.WeekContentH - $r.WeekViewportH
-            $scrolled = $r.Render()
+            $scrolled = $r.Render(960, 640)
             $scrolled.Dispose()
         }
         if ($mode -eq 'timeline' -and ($r.TlY -lt 124 -or $r.TlY + $r.TlH -gt 640)) { throw 'Timeline viewport does not match the dashboard body.' }
