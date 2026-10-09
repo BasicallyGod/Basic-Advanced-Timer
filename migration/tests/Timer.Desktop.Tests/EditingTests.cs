@@ -157,7 +157,8 @@ public sealed class EditingTests
             Assert.Same(row, engine.Sessions.Single()); Assert.Equal("1.01", engine.Sessions.Single().Minutes);
         }
         finally { editor.Close(); }
-        var requests = 0; model.EntryRequested += (entry, _, _) => { if (entry is not null) requests++; };
+        var requests = 0; DateTime? gap = null;
+        model.EntryRequested += (entry, from, _) => { if (entry is not null) requests++; else gap = from; };
         var window = new Window { Width = 600, Height = 500, Content = ReviewViews.Timeline(model) }; window.Show();
         try
         {
@@ -167,8 +168,40 @@ public sealed class EditingTests
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             Assert.Equal(1, requests);
+            var nine = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
+            var empty = nine.TranslatePoint(new Point(200, 55), window)!.Value;
+            window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
+            window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
+            Assert.Equal(row.Day.AddHours(9).AddMinutes(20), gap);
         }
         finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void RetryingFailedDialogSaveDoesNotAddTheEntryTwice()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-edit-dialog-retry-" + Guid.NewGuid());
+        try
+        {
+            using var store = new TimerStore(folder);
+            var engine = Engine(); var prefs = store.Load(engine); engine.Sessions.Add(Row());
+            var model = new TimerModel(engine, prefs, store); Assert.True(model.Save());
+            Directory.CreateDirectory(Path.Combine(folder, "Timesheets/notes.csv.tmp"));
+            var row = engine.Sessions.Single();
+            var dialog = new EntryWindow(model, null, row.To, row.To.AddMinutes(30)); dialog.Show();
+            try
+            {
+                Dispatcher.UIThread.RunJobs(); using var frame = dialog.CaptureRenderedFrame();
+                var button = dialog.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry");
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.True(dialog.IsVisible); Assert.Equal(2, engine.Sessions.Count); Assert.NotNull(model.LastError);
+                Directory.Delete(Path.Combine(folder, "Timesheets/notes.csv.tmp"));
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.False(dialog.IsVisible); Assert.Equal(2, engine.Sessions.Count); Assert.Null(model.LastError);
+            }
+            finally { dialog.Close(); }
+        }
+        finally { Directory.Delete(folder, true); }
     }
 
     [AvaloniaFact]

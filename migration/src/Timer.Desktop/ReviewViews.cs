@@ -20,7 +20,7 @@ public static class ReviewViews
         caption.Margin = new Thickness(0, 0, 0, 10);
         Ui.Put(root, caption);
         const double pixelsPerHour = 160;
-        var canvas = new Canvas { Height = 24 * pixelsPerHour, MinWidth = 460 };
+        var canvas = new Canvas { Height = 24 * pixelsPerHour, MinWidth = 460, Background = Brushes.Transparent };
         for (var hour = 0; hour < 24; hour++)
         {
             var label = Ui.Text($"{hour:00}:00", 12, "muted");
