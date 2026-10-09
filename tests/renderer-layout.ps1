@@ -165,7 +165,7 @@ function Get-StateTheme($view) { return @{ Panel = [Drawing.Color]::DarkGreen; F
 function Mix-Colour($left, $right, $amount) { return $left }
 function Format-Dur($seconds) { return '0h 15m' }
 function Write-Log($message) { throw $message }
-$script:C = [Drawing.Color]; $script:RF = [Drawing.RectangleF]
+$script:C = [Drawing.Color]; $script:RF = [Drawing.RectangleF]; $script:PF = [Drawing.PointF]
 $script:cWhite = [Drawing.Color]::White
 $script:BudgetWarnColour = [Drawing.Color]::Gold; $script:BudgetOverColour = [Drawing.Color]::Red
 $script:PillShadow = $false; $script:PillPulse = $false; $script:PillLiveDot = $true
