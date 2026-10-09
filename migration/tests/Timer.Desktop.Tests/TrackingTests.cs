@@ -92,7 +92,7 @@ public sealed class TrackingTests
         {
             var engine = new TrackingEngine(clock: () => new(2026, 10, 9, 10, 0, 0));
             var settings = store.Load(engine);
-            Assert.Single(settings.Accounts); Assert.Equal("month", settings.Accounts[0].BudgetPeriod);
+            Assert.Single(settings.Accounts.Where(a => !a.Hidden)); Assert.True(settings.Accounts.Single(a => a.Name == "Hidden").Hidden); Assert.Equal("month", settings.Accounts[0].BudgetPeriod);
             Assert.Equal(8, engine.Plan(engine.Now).Start.Hour);
             Assert.Equal(TimeSpan.FromMinutes(55), engine.Credited("A, quoted", engine.Now.Date, engine.Now.Date.AddDays(1)));
             engine.AddSession("A, quoted", engine.Now.AddMinutes(-10), engine.Now);

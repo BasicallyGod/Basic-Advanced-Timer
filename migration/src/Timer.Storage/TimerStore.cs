@@ -7,7 +7,7 @@ using Timer.Core;
 
 namespace Timer.Storage;
 
-public sealed record AccountSettings(string Name, double? BudgetHours = null, string BudgetPeriod = "week");
+public sealed record AccountSettings(string Name, double? BudgetHours = null, string BudgetPeriod = "week", bool Hidden = false);
 public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart);
 public sealed record RecoveryState(int SchemaVersion, ActiveSession? Active, DateTime LastSeen);
 public sealed record SaveJournal(int SchemaVersion, Dictionary<string, string> Files);
@@ -41,7 +41,7 @@ public sealed class TimerStore : IDisposable
         }
         else settings = new() { ["schemaVersion"] = 1, ["sections"] = new JsonObject() };
         var accounts = Lines("accounts").Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Split('\t'))
-            .Where(s => s[0] != "Lunch" && (s.Length < 2 || s[1] != "hidden")).Select(s => new AccountSettings(s[0])).DistinctBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            .Where(s => !s[0].Equals("Lunch", StringComparison.OrdinalIgnoreCase)).Select(s => new AccountSettings(s[0], Hidden: s.Length >= 2 && s[1].Trim() == "hidden")).DistinctBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
         if (accounts.Count == 0 && !Lines("accounts").Any()) accounts = new() { new("Account one"), new("Account two"), new("Internal") };
         foreach (var line in Lines("budgets"))
         {
@@ -132,7 +132,12 @@ public sealed class TimerStore : IDisposable
         sections["dayOverrides"] = Array(engine.Schedule.Overrides.OrderBy(p => p.Key).Select(p => p.Value.Off
             ? $"{p.Key:yyyy-MM-dd}\toff" : $"{p.Key:yyyy-MM-dd}\t{p.Value.Shift!.Start:hh\\:mm}\t{p.Value.Shift.End:hh\\:mm}"));
         sections["migrationAppearance"] = Array(new[] { preferences.Theme });
-        if (sections["accounts"] is null) sections["accounts"] = Array(preferences.Accounts.Select(a => a.Name));
+        sections["accounts"] = Array(preferences.Accounts.Select(a => a.Name + (a.Hidden ? "\thidden" : "")));
+        var configured = preferences.Accounts.Select(a => a.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var budgets = Lines("budgets").Where(line => !configured.Contains(line.Split('\t')[0])).ToList();
+        budgets.AddRange(preferences.Accounts.Where(a => a.BudgetHours is not null).Select(a =>
+            a.Name + "\t" + a.BudgetHours!.Value.ToString("R", CultureInfo.InvariantCulture) + "\t" + a.BudgetPeriod));
+        sections["budgets"] = Array(budgets);
         var hours = Lines("workingHours").Where(s =>
         {
             var key = s.Split('=')[0];

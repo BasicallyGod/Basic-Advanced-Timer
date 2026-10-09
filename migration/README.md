@@ -6,13 +6,13 @@ The `migration` branch starts from experimental v2.32. Its original PowerShell l
 
 Download **BasicsAdvancedTimer-Windows-preview** from the latest successful **Avalonia migration preview** GitHub Actions run. Extract the whole ZIP into its own folder and run `BasicsAdvancedTimer.Preview.exe`. Keep its DLLs and native libraries together. The package includes the .NET runtime and runs with ordinary user privileges, without an installer or separately installed SDK/runtime.
 
-This stage now records real sessions. By default it creates **migration-data** beside the executable. Accounts and totals start empty; the earlier illustrative timesheet is no longer seeded into the app. Three initial account names are provided until account editing is migrated.
+This stage now records real sessions. By default it creates **migration-data** beside the executable. Accounts and totals start empty; the earlier illustrative timesheet is no longer seeded into the app. Three initial account names are provided; change visibility, add accounts and configure budgets through Settings → Accounts and budgets.
 
 The main clock shows elapsed working-day time, from the configured or early/manual start. It continues when accounts are paused or switched, and excludes Lunch and finished-day intervals. It continues counting beyond the scheduled finish, with overtime shown separately in red. Account rows count only their own credited time. Usual scheduled starts still take effect automatically, matching the PowerShell application. Start day allows early starts and resumes finished days; starting an account starts/resumes the day too.
 
 Theme options are under **Settings > Appearance**, and also available by right-clicking either window. Choose System, Light or Dark. Hours format is in Settings and the dashboard tools row. Not tracking is grey; overtime is independent and red. Budget rings use the configured week/month/quarter period.
 
-The pill and fixed dashboard share one tracking model. Drag the pill's account text or the dashboard's date header to move the window. Timeline and Week now use recorded sessions and credited totals. Sessions crossing midnight are split; overlapping timeline entries use separate lanes. Timeline scroll is retained during periodic updates.
+The pill and fixed dashboard share one tracking model. Drag anywhere across the pill header, or drag the dashboard's date header, to move the window. Timeline and Week now use recorded sessions and credited totals. Sessions crossing midnight are split; overlapping timeline entries use separate lanes. Timeline scroll is retained during periodic updates.
 
 ## Test copied existing data
 
@@ -30,9 +30,9 @@ Sessions, manual starts, away intervals, preferences and crash recovery are save
 
 ## Current scope
 
-Connected: day/account/lunch tracking, early starts, finish/resume, overtime, copied settings/CSV loading, new session saving, crash recovery, budget period totals, theme and format persistence, and recorded Timeline/Week display.
+Connected: day/account/lunch tracking, early starts, finish/resume, overtime, copied settings/CSV loading, new session saving, crash recovery, account visibility and budget editing, budget period totals, theme and format persistence, and recorded Timeline/Week display.
 
-Still to migrate: account/budget/working-hours editors, positioned credit and grouping presentation, timeline dragging and gap filling, Tidy day, notes, Undo, export and exact two-decimal reconciliation, tray integration and auto-start. Weekly decimal values currently format credited durations directly; they are not the reconciled export values. This remains a migration build for testing, rather than the complete replacement for everyday timesheets.
+Still to migrate: account renaming/reordering, positioned credit and grouping presentation, timeline dragging and gap filling, Tidy day, notes, Undo, export and exact two-decimal reconciliation, tray integration and auto-start. Weekly decimal values currently format credited durations directly; they are not the reconciled export values. This remains a migration build for testing, rather than the complete replacement for everyday timesheets.
 
 ## Architecture and checks
 
@@ -52,8 +52,10 @@ Tests use disposable synthetic data only. Core checks exercise early starts, acc
 
 ### UI review and sample data
 
-Click the pill’s account area to show or hide its compact account list. Click its timer to open the dashboard, and use Back to pill to return. Drag the pill using the clear strip above or below these two click targets, or its side margins. The dashboard moves by dragging its header text or empty header space. Header buttons remain clickable. The main clock turns green while tracking and grey while idle; overtime has its own red label.
+The compact pill follows the original layout: timer on the left, account and today’s credit in the middle, pause/resume on the right. Click the account area to show or hide its account list. Click the timer to open the dashboard, and use Back to pill to return. Hold LMB and move at least five display-independent pixels anywhere across the pill header, including its timer, account or pause control, to drag it without activating that control. Release without dragging to click. The dashboard moves by dragging its header text or empty header space. Header buttons remain clickable. The main clock turns green while tracking and grey while idle; overtime has its own red label. Pause/resume retains the selected account and does not stop the day clock.
 
 Run **Start-Demo.cmd** from the Windows preview folder, or choose **Settings → Open sample-data demo**. Demo mode has populated accounts, budgets and recorded intervals. It uses a simulated 14:15 clock on today's date, advances in real time, and never opens or saves personal data. Choose **Settings → Force overtime** inside the demo to set today's shift end to 13:00. Restart the demo to reset it. CLI: `--demo` (cannot be combined with `--data-dir`).
 
 **Settings → Working hours** edits each weekday's working status, start and end. These changes persist in normal mode. The optional “Also reset today” checkbox removes today's exceptional start/shift so the new schedule applies; it does not change account records or finished-day breaks. Overnight shifts remain unsupported at this stage. Copied-data imports still require `--data-dir` as described above; normal launch starts with your migration-data folder, without synthetic records.
+
+**Settings → Accounts and budgets** adds accounts, hides/shows existing accounts and edits their week/month/quarter budgets. Budget hours accept decimals such as 7.5; blank means no budget. Hiding the active account first stops and saves its current session. Hidden accounts remain in Timeline and Week history, and showing one again restores its tracking row and credited totals. Existing account names cannot yet be renamed or deleted because their historical CSV references must be migrated together. Lunch stays a built-in account.

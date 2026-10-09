@@ -52,6 +52,42 @@ public static class Ui
             { window.BeginMoveDrag(e); e.Handled = true; }
         }, RoutingStrategies.Tunnel);
     }
+    public static void PillGestures(Control header, Window window)
+    {
+        if (header is Panel panel) panel.Background = Brushes.Transparent;
+        header.Name = "DragHeader";
+        PointerPressedEventArgs? press = null;
+        Button? target = null;
+        Point origin = default;
+        header.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
+        {
+            if (!e.GetCurrentPoint(window).Properties.IsLeftButtonPressed) return;
+            press = e; origin = e.GetPosition(header);
+            target = e.Source is Visual visual ? visual as Button ?? visual.GetVisualAncestors().OfType<Button>().FirstOrDefault() : null;
+            // Stop the button from capturing/activating before intent is known.
+            e.Handled = true; e.Pointer.Capture(header);
+        }, RoutingStrategies.Tunnel);
+        header.AddHandler(InputElement.PointerMovedEvent, (_, e) =>
+        {
+            if (press is null) return;
+            var delta = e.GetPosition(header) - origin;
+            if (Math.Abs(delta.X) < 5 && Math.Abs(delta.Y) < 5) return;
+            var start = press;
+            press = null; target = null;
+            e.Handled = true; e.Pointer.Capture(null);
+            window.BeginMoveDrag(start);
+        }, RoutingStrategies.Tunnel);
+        header.AddHandler(InputElement.PointerReleasedEvent, (_, e) =>
+        {
+            if (press is null) return;
+            var click = target;
+            press = null; target = null;
+            e.Handled = true; e.Pointer.Capture(null);
+            if (click is not null && click.IsEffectivelyEnabled && new Rect(click.Bounds.Size).Contains(e.GetPosition(click)))
+                click.RaiseEvent(new RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+        }, RoutingStrategies.Tunnel);
+        header.PointerCaptureLost += (_, _) => { press = null; target = null; };
+    }
     public static ContextMenu SettingsMenu(TimerModel model)
     {
         var variants = new List<MenuItem>();
@@ -67,6 +103,9 @@ public static class Ui
         var shifts = new MenuItem { Header = "Working hours…" };
         shifts.Click += (_, _) => { if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life)
             new ShiftWindow(model).Show(life.Windows.First(w => w.IsVisible)); };
+        var accounts = new MenuItem { Header = "Accounts and budgets…" };
+        accounts.Click += (_, _) => { if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life)
+            new AccountsWindow(model).Show(life.Windows.First(w => w.IsVisible)); };
         var demo = new MenuItem { Header = model.IsDemo ? "Force overtime" : "Open sample-data demo" };
         demo.Click += (_, _) =>
         {
@@ -81,7 +120,7 @@ public static class Ui
             }
         };
         var menu = new ContextMenu { ItemsSource = new MenuItem[]
-        { new() { Header = "Appearance", ItemsSource = variants }, format, shifts, demo } };
+        { new() { Header = "Appearance", ItemsSource = variants }, format, shifts, accounts, demo } };
         menu.Opened += (_, _) =>
         {
             foreach (var item in variants) item.IsChecked = (string?)item.Header == model.Theme;
@@ -168,6 +207,13 @@ public sealed class AccountList : StackPanel
     public AccountList(TimerModel model)
     {
         this.model = model;
+        Rebuild();
+        AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
+        DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
+    }
+    private void Rebuild()
+    {
+        Children.Clear(); rows.Clear();
         foreach (var account in model.Accounts)
         {
             var row = new Button { Name = "Account" + rows.Count, Classes = { "account" } };
@@ -185,11 +231,12 @@ public sealed class AccountList : StackPanel
             Children.Add(row);
             rows.Add((account, row, today, budget, icon));
         }
-        AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
-        DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
         Refresh();
     }
-    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
+    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (!rows.Select(r => r.Account).SequenceEqual(model.Accounts)) Rebuild(); else Refresh();
+    }
     private void Refresh()
     {
         foreach (var row in rows)
@@ -238,5 +285,21 @@ public sealed class Chevron : Control
         var y = Expanded ? 9 : 5;
         context.DrawLine(pen, new Point(2, y), new Point(7, Expanded ? 4 : 10));
         context.DrawLine(pen, new Point(7, Expanded ? 4 : 10), new Point(12, y));
+    }
+}
+
+public sealed class PauseGlyph : Control
+{
+    public bool Playing { get; set; }
+    public PauseGlyph() { Width = Height = 14; }
+    public override void Render(DrawingContext context)
+    {
+        var brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
+        if (Playing)
+        {
+            context.DrawRectangle(brush, null, new Rect(2, 1, 4, 12), 1, 1);
+            context.DrawRectangle(brush, null, new Rect(8, 1, 4, 12), 1, 1);
+        }
+        else context.DrawGeometry(brush, null, Geometry.Parse("M 3,1 L 13,7 L 3,13 Z"));
     }
 }

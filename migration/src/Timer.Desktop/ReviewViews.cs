@@ -36,7 +36,7 @@ public static class ReviewViews
         {
             var lane = ends.FindIndex(end => end <= interval.Start);
             if (lane < 0) { lane = ends.Count; ends.Add(interval.End); } else ends[lane] = interval.End;
-            var colour = model.Accounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
+            var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
             var end = interval.End > day.AddDays(1) ? day.AddDays(1) : interval.End;
             var duration = end - interval.Start;
             var height = Math.Max(3, duration.TotalHours * pixelsPerHour - 4);
@@ -75,13 +75,13 @@ public static class ReviewViews
             || model.Engine.Sessions.Any(s => s.Day == day.AddDays(i))
             || (model.Engine.Active is not null && day.AddDays(i) == model.Engine.Now.Date)).ToArray();
         if (days.Length == 0) days = Enumerable.Range(0, 7).ToArray();
-        var grid = Ui.Grid("125," + string.Join(",", days.Select(_ => "*")) + ",75", "Auto," + string.Join(",", model.Accounts.Select(_ => "Auto")));
+        var grid = Ui.Grid("125," + string.Join(",", days.Select(_ => "*")) + ",75", "Auto," + string.Join(",", model.ReviewAccounts.Select(_ => "Auto")));
         grid.MinWidth = 200 + days.Length * 58;
         Ui.Put(grid, Ui.Text("Account", 12, "muted"));
         for (var i = 0; i < days.Length; i++) Ui.Put(grid, Ui.Text(day.AddDays(days[i]).ToString("ddd"), 12, "muted"), i + 1);
         Ui.Put(grid, Ui.Text("Total", 12, "muted"), days.Length + 1);
         var row = 1;
-        foreach (var a in model.Accounts)
+        foreach (var a in model.ReviewAccounts)
         {
             Ui.Put(grid, Ui.Text(a.Name, 13), row: row).Margin = new Thickness(0, 16);
             for (var i = 0; i < days.Length; i++) Ui.Put(grid, Ui.Text(model.Format(model.OnDay(a, day.AddDays(days[i]))), 12), i + 1, row);

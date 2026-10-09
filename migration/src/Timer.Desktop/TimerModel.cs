@@ -20,13 +20,20 @@ public sealed class TimerModel : INotifyPropertyChanged
         Engine = engine ?? new();
         this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, "System", DayOfWeek.Monday);
         this.store = store;
-        var colours = new[] { "#91B7D5", "#94BF9B", "#D9A18A", "#BAA4CE", "#D6C48C" };
-        Accounts = this.preferences.Accounts.Select((a, i) => new TimerAccount(a.Name, colours[i % colours.Length],
-            a.BudgetHours is { } hours ? TimeSpan.FromHours(hours) : null, a.BudgetPeriod)).Append(new("Lunch", "#D6C48C", null)).ToArray();
+        SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
         SelectedDate = Engine.Now.Date;
         ApplyTheme();
     }
-    public IReadOnlyList<TimerAccount> Accounts { get; }
+    public IReadOnlyList<AccountSettings> AccountSettings => preferences.Accounts.AsReadOnly();
+    private TimerAccount[] Catalogue()
+    {
+        var colours = new[] { "#91B7D5", "#94BF9B", "#D9A18A", "#BAA4CE", "#D6C48C" };
+        return preferences.Accounts.Select((a, i) => new TimerAccount(a.Name, colours[i % colours.Length],
+            a.BudgetHours is { } hours ? TimeSpan.FromHours(hours) : null, a.BudgetPeriod)).Append(new("Lunch", "#D6C48C", null)).ToArray();
+    }
+    public IReadOnlyList<TimerAccount> ReviewAccounts => Catalogue();
+    public IReadOnlyList<TimerAccount> Accounts => Catalogue().Where(a => !preferences.Accounts.Any(p => p.Name == a.Name && p.Hidden)).ToArray();
+    public string? SelectedAccount { get; private set; }
     public string? ActiveAccount => Engine.Active?.Account;
     public string AccountLabel => ActiveAccount ?? (Engine.Finished ? "Day finished" : "Ready when you are");
     public string Status => ActiveAccount == "Lunch" ? "On lunch" : IsTracking ? "Tracking" : "Not tracking";
@@ -48,7 +55,29 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void ToggleAccount(string name)
     {
         if (!Accounts.Any(a => a.Name == name)) throw new ArgumentException("Unknown account", nameof(name));
-        Engine.ToggleAccount(name); Save(); Notify();
+        SelectedAccount = name; Engine.ToggleAccount(name); Save(); Notify();
+    }
+    public void TogglePause()
+    {
+        if (Engine.Active is { } active) { SelectedAccount = active.Account; Engine.StopAccount(); }
+        else if (SelectedAccount is { } name && Accounts.Any(a => a.Name == name)) Engine.ToggleAccount(name);
+        Save(); Notify();
+    }
+    public void SetAccounts(IEnumerable<AccountSettings> accounts)
+    {
+        var values = accounts.ToList();
+        if (values.Count == 0 || values.Any(a => string.IsNullOrWhiteSpace(a.Name) || a.Name != a.Name.Trim()
+            || a.Name.IndexOfAny(new[] { '\t', '\r', '\n' }) >= 0 || a.Name.Equals("Lunch", StringComparison.OrdinalIgnoreCase)
+            || a.BudgetPeriod is not ("week" or "month" or "quarter")
+            || (a.BudgetHours is { } h && (!double.IsFinite(h) || h <= 0)))
+            || values.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Count)
+            throw new ArgumentException("Use unique account names and positive budgets; Lunch is reserved.");
+        if (preferences.Accounts.Any(a => !values.Any(v => v.Name == a.Name)))
+            throw new ArgumentException("Hide existing accounts instead of removing or renaming their history.");
+        if (ActiveAccount is { } active && values.Any(a => a.Name == active && a.Hidden)) Engine.StopAccount();
+        preferences = preferences with { Accounts = values };
+        if (!Accounts.Any(a => a.Name == SelectedAccount)) SelectedAccount = values.FirstOrDefault(a => !a.Hidden)?.Name;
+        Save(); Notify();
     }
     public void ToggleDay()
     {

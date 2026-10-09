@@ -325,18 +325,97 @@ public sealed class ShellTests
                 Dispatcher.UIThread.RunJobs();
             }
             Click("PillAccounts");
-            Assert.True(coordinator.Pill.Height > 88);
+            Assert.True(coordinator.Pill.Height > PillWindow.CollapsedHeight);
             Assert.False(coordinator.Dashboard.IsVisible);
             Click("PillAccounts");
-            Assert.Equal(88, coordinator.Pill.Height);
+            Assert.Equal(PillWindow.CollapsedHeight, coordinator.Pill.Height);
             Click("PillDashboard");
             Assert.True(coordinator.Dashboard.IsVisible);
             Assert.False(coordinator.Pill.IsVisible);
             Assert.Equal("Account one", model.ActiveAccount);
             coordinator.Dashboard.OpenPill!();
-            Assert.Equal(88, coordinator.Pill.Height);
+            Assert.Equal(PillWindow.CollapsedHeight, coordinator.Pill.Height);
         }
         finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void DraggingEachPillTargetSuppressesClicksAndPauseResumesTheSelectedAccount()
+    {
+        var model = Fixture();
+        var coordinator = new WindowCoordinator(model, () => { }); coordinator.Pill.Show();
+        try
+        {
+            model.ToggleAccount("Account one");
+            Dispatcher.UIThread.RunJobs(); using var initial = coordinator.Pill.CaptureRenderedFrame();
+            foreach (var name in new[] { "PillDashboard", "PillAccounts", "PillPause" })
+            {
+                var button = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
+                var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), coordinator.Pill)!.Value;
+                coordinator.Pill.MouseDown(point, MouseButton.Left);
+                coordinator.Pill.MouseMove(point + new Vector(20, 10));
+                coordinator.Pill.MouseUp(point + new Vector(20, 10), MouseButton.Left);
+                Assert.False(coordinator.Dashboard.IsVisible);
+                Assert.Equal(PillWindow.CollapsedHeight, coordinator.Pill.Height);
+                Assert.Equal("Account one", model.ActiveAccount);
+            }
+            var pause = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillPause");
+            var pausePoint = pause.TranslatePoint(new Point(18, 18), coordinator.Pill)!.Value;
+            coordinator.Pill.MouseDown(pausePoint, MouseButton.Left); coordinator.Pill.MouseUp(pausePoint, MouseButton.Left);
+            Assert.False(model.IsTracking); Assert.Equal("Account one", model.SelectedAccount);
+            coordinator.Pill.MouseDown(pausePoint, MouseButton.Left); coordinator.Pill.MouseUp(pausePoint, MouseButton.Left);
+            Assert.Equal("Account one", model.ActiveAccount);
+            var timerButton = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDashboard");
+            var accountButton = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillAccounts");
+            Assert.True(timerButton.Bounds.X < accountButton.Bounds.X && accountButton.Bounds.X < pause.Bounds.X);
+            var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();
+            Save(coordinator.Pill, Path.Combine(output, "pill-classic-tracking.png"));
+            model.TogglePause(); Save(coordinator.Pill, Path.Combine(output, "pill-classic-paused.png"));
+        }
+        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void AccountEditorUpdatesRowsAndPreservesHiddenCreditAcrossRestart()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-accounts-" + Guid.NewGuid());
+        var now = new DateTime(2026, 10, 9, 12, 0, 0);
+        try
+        {
+            using (var store = new TimerStore(folder))
+            {
+                var engine = new TrackingEngine(clock: () => now);
+                var model = new TimerModel(engine, store.Load(engine), store);
+                var window = new DashboardWindow(model); window.Show();
+                try
+                {
+                    model.ToggleAccount("Account one"); now = now.AddMinutes(5);
+                    model.SetAccounts(model.AccountSettings.Select(a => a.Name == "Account one" ? a with { Hidden = true, BudgetHours = 7.5, BudgetPeriod = "month" } : a).Append(new("New client", 10, "quarter")));
+                    Assert.False(model.IsTracking);
+                    Assert.DoesNotContain(model.Accounts, a => a.Name == "Account one");
+                    Assert.Contains(model.ReviewAccounts, a => a.Name == "Account one");
+                    Assert.Equal(TimeSpan.FromMinutes(5), engine.Credited("Account one", now.Date, now.Date.AddDays(1)));
+                    Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+                    Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "New client");
+                    var editor = new AccountsWindow(model); editor.Show(window);
+                    var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();
+                    Save(editor, Path.Combine(output, "accounts-editor.png")); editor.Close();
+                    Assert.Throws<ArgumentException>(() => model.SetAccounts(model.AccountSettings.Append(new("new CLIENT"))));
+                }
+                finally { window.Close(); }
+            }
+            using (var store = new TimerStore(folder))
+            {
+                var engine = new TrackingEngine(clock: () => now); var prefs = store.Load(engine);
+                var old = prefs.Accounts.Single(a => a.Name == "Account one");
+                Assert.True(old.Hidden); Assert.Equal(7.5, old.BudgetHours); Assert.Equal("month", old.BudgetPeriod);
+                var model = new TimerModel(engine, prefs, store);
+                model.SetAccounts(model.AccountSettings.Select(a => a with { Hidden = false }));
+                Assert.Equal(TimeSpan.FromMinutes(5), model.Today(model.Accounts.Single(a => a.Name == "Account one")));
+                Assert.Equal("quarter", prefs.Accounts.Single(a => a.Name == "New client").BudgetPeriod);
+            }
+        }
+        finally { Directory.Delete(folder, true); }
     }
 
     private static void Save(Window window, string path)
