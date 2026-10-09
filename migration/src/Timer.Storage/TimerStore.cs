@@ -25,6 +25,19 @@ public sealed class TimerStore : IDisposable
     private readonly Dictionary<string, string> written = new();
     public LedgerEditor? Editor { get; private set; }
     public string ExportDirectory => Path.Combine(directory, "Timesheets", "Exports");
+    /// <summary>Copies the saved ledger, notes, groups, positions, settings and edit history into a new folder under Timesheets/Backups.</summary>
+    public string Backup(string label)
+    {
+        var target = Path.Combine(directory, "Timesheets", "Backups", label + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+        Directory.CreateDirectory(target);
+        foreach (var name in new[] { "Timesheets/sessions.csv", "Timesheets/notes.csv", "Timesheets/entry-groups.csv", "Timesheets/credit-positions.csv",
+            "basics-advanced-timer.settings.json", "migration-edit-state.json" })
+        {
+            var source = Path.Combine(directory, name);
+            if (File.Exists(source)) File.Copy(source, Path.Combine(target, Path.GetFileName(name)), true);
+        }
+        return target;
+    }
     public TimerStore(string directory)
     {
         this.directory = Path.GetFullPath(directory);

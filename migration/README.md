@@ -30,9 +30,9 @@ Sessions, manual starts, away intervals, preferences and crash recovery are save
 
 ## Current scope
 
-Connected: day/account/lunch tracking, early starts, finish/resume, overtime, copied settings/CSV loading, new session saving, crash recovery, account visibility and budget editing, budget period totals, theme and format persistence, recorded Timeline/Week display, entry editing and notes, gap additions, deletion, persistent Undo, credit positioning/grouping, reviewed Tidy day and reconciled weekly CSV exports.
+Connected: account renaming and reordering, day/account/lunch tracking, early starts, finish/resume, overtime, copied settings/CSV loading, new session saving, crash recovery, account visibility and budget editing, budget period totals, theme and format persistence, recorded Timeline/Week display, entry editing and notes, gap additions, deletion, persistent Undo, credit positioning/grouping, reviewed Tidy day and reconciled weekly CSV exports.
 
-Still to migrate: account renaming/reordering, tray integration and auto-start. Stopped weekly decimal values use the same reconciled hundredths as export; running totals are provisional. This remains a migration build for testing, rather than the complete replacement for everyday timesheets.
+Still to migrate: tray integration, auto-start and overnight shifts. Stopped weekly decimal values use the same reconciled hundredths as export; running totals are provisional. This remains a migration build for testing, rather than the complete replacement for everyday timesheets.
 
 ## Architecture and checks
 
@@ -58,7 +58,9 @@ Run **Start-Demo.cmd** from the Windows preview folder, or choose **Settings →
 
 **Settings → Working hours** edits each weekday's working status, start and end. These changes persist in normal mode. The optional “Also reset today” checkbox removes today's exceptional start/shift so the new schedule applies; it does not change account records or finished-day breaks. Overnight shifts remain unsupported at this stage. Copied-data imports still require `--data-dir` as described above; normal launch starts with your migration-data folder, without synthetic records.
 
-**Settings → Accounts and budgets** adds accounts, hides/shows existing accounts and edits their week/month/quarter budgets. Budget hours accept decimals such as 7.5; blank means no budget. Hiding the active account first stops and saves its current session. Hidden accounts remain in Timeline and Week history, and showing one again restores its tracking row and credited totals. Existing account names cannot yet be renamed or deleted because their historical CSV references must be migrated together. Lunch stays a built-in account.
+**Settings → Accounts and budgets** adds accounts, hides/shows existing accounts and edits their week/month/quarter budgets. Budget hours accept decimals such as 7.5; blank means no budget. Hiding the active account first stops and saves its current session. Hidden accounts remain in Timeline and Week history, and showing one again restores its tracking row and credited totals. Edit an account's name in the same window to rename it. When you save, you choose between **Rename past entries**, which moves all recorded time, notes, groups, positioned credit and the budget to the new name after saving a backup copy under `Timesheets/Backups`, and **Start afresh from now**, which leaves the past entries under the old name as a separate historical account. Renaming past entries clears the Undo history, because older steps would put the old name back. A new name that already appears in the history, or on another account, is refused so two accounts are never combined by accident, and a renamed account that is running is stopped and saved first. Accounts cannot be deleted, only hidden. Lunch stays a built-in account.
+
+**Reorder accounts** by dragging a row up or down in the dashboard list. The rows it passes slide aside, Lunch stays at the bottom, hidden accounts keep their places, and a plain click still starts or stops tracking. Account colours follow their position in the list.
 
 ### Editing recorded time
 

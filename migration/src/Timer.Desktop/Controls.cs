@@ -204,9 +204,10 @@ public sealed class AccountList : StackPanel
 {
     private readonly TimerModel model;
     private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon)> rows = new();
-    public AccountList(TimerModel model)
+    private readonly bool reorderable;
+    public AccountList(TimerModel model, bool reorderable = false)
     {
-        this.model = model;
+        this.model = model; this.reorderable = reorderable;
         Rebuild();
         AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
@@ -228,10 +229,56 @@ public sealed class AccountList : StackPanel
             var today = Ui.Put(grid, Ui.Text(model.Format(model.Today(account))), 2);
             row.Content = grid;
             row.Click += (_, _) => model.ToggleAccount(account.Name);
+            if (reorderable && account.Name != "Lunch") AttachReorder(row, account.Name);
             Children.Add(row);
             rows.Add((account, row, today, budget, icon));
         }
         Refresh();
+    }
+    // Dragging a row up or down reorders the accounts. A press that never moves still starts or stops tracking as usual.
+    // Lunch stays at the bottom, and the rows it passes slide aside to show where the account will land.
+    private void AttachReorder(Button row, string name)
+    {
+        Point? press = null; var dragging = false; var target = 0;
+        int Index() => rows.FindIndex(r => r.Account.Name == name);
+        void Finish(bool commit)
+        {
+            var from = Index(); var to = target;
+            press = null; dragging = false;
+            foreach (var r in rows) { r.Row.RenderTransform = null; r.Row.Opacity = 1; r.Row.ZIndex = 0; }
+            if (commit && from >= 0 && to != from) model.MoveAccount(name, to);
+        }
+        row.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
+        { if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) { press = e.GetPosition(this); dragging = false; } }, RoutingStrategies.Tunnel);
+        row.AddHandler(InputElement.PointerMovedEvent, (_, e) =>
+        {
+            if (press is not { } start) return;
+            var dy = e.GetPosition(this).Y - start.Y;
+            if (!dragging)
+            {
+                if (Math.Abs(dy) < 6) return;
+                dragging = true; e.Pointer.Capture(row);
+            }
+            var from = Index(); var height = row.Bounds.Height;
+            if (from < 0 || height <= 0) return;
+            var movable = rows.Count(r => r.Account.Name != "Lunch");
+            target = Math.Clamp((int)Math.Round(from + dy / height), 0, Math.Max(0, movable - 1));
+            for (var j = 0; j < rows.Count; j++)
+            {
+                if (j == from) continue;
+                var shift = from < target && j > from && j <= target ? -height : target < from && j >= target && j < from ? height : 0;
+                rows[j].Row.RenderTransform = shift == 0 ? null : new TranslateTransform(0, shift);
+            }
+            row.RenderTransform = new TranslateTransform(0, Math.Clamp(dy, -from * height, (movable - 1 - from) * height));
+            row.Opacity = .8; row.ZIndex = 1; e.Handled = true;
+        }, RoutingStrategies.Tunnel);
+        row.AddHandler(InputElement.PointerReleasedEvent, (_, e) =>
+        {
+            if (press is null) return;
+            if (!dragging) { press = null; return; }
+            e.Handled = true; Finish(true); e.Pointer.Capture(null);
+        }, RoutingStrategies.Tunnel);
+        row.PointerCaptureLost += (_, _) => { if (dragging) Finish(false); press = null; };
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {

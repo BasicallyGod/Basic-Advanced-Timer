@@ -114,8 +114,12 @@ public sealed class TimerModel : INotifyPropertyChanged
         else if (SelectedAccount is { } name && Accounts.Any(a => a.Name == name)) Engine.ToggleAccount(name);
         Save(); Notify();
     }
-    public void SetAccounts(IEnumerable<AccountSettings> accounts)
+    /// <summary>Applies the account list. <paramref name="renames"/> maps an account's old name to its new one (the list holds the new
+    /// names). With <paramref name="renameHistory"/> the past entries move to the new name too, after a backup copy is saved; without
+    /// it the old name stays in the history as a separate historical account and the new name starts empty.</summary>
+    public void SetAccounts(IEnumerable<AccountSettings> accounts, IReadOnlyDictionary<string, string>? renames = null, bool renameHistory = false)
     {
+        renames ??= new Dictionary<string, string>();
         var values = accounts.ToList();
         if (values.Count == 0 || values.Any(a => string.IsNullOrWhiteSpace(a.Name) || a.Name != a.Name.Trim()
             || a.Name.IndexOfAny(new[] { '\t', '\r', '\n' }) >= 0 || a.Name.Equals("Lunch", StringComparison.OrdinalIgnoreCase)
@@ -123,10 +127,27 @@ public sealed class TimerModel : INotifyPropertyChanged
             || (a.BudgetHours is { } h && (!double.IsFinite(h) || h <= 0)))
             || values.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Count)
             throw new ArgumentException("Use unique account names and positive budgets; Lunch is reserved.");
-        if (preferences.Accounts.Any(a => !values.Any(v => v.Name == a.Name)))
-            throw new ArgumentException("Hide existing accounts instead of removing or renaming their history.");
-        if (ActiveAccount is { } active && values.Any(a => a.Name == active && a.Hidden)) Engine.StopAccount();
+        if (preferences.Accounts.Any(a => !values.Any(v => v.Name == (renames.TryGetValue(a.Name, out var to) ? to : a.Name))))
+            throw new ArgumentException("Hide existing accounts instead of removing them.");
+        var renamed = renames.Where(r => !r.Value.Equals(r.Key, StringComparison.Ordinal)).ToList();
+        foreach (var (from, to) in renamed)
+        {
+            if (!preferences.Accounts.Any(a => a.Name == from)) throw new ArgumentException("Unknown account.");
+            // A name that already appears anywhere would silently join two histories, so it is refused.
+            // Changing only the capitals of the same account is fine.
+            if (!to.Equals(from, StringComparison.OrdinalIgnoreCase) && (ReviewAccounts.Any(a => a.Name.Equals(to, StringComparison.OrdinalIgnoreCase))
+                || renamed.Any(r => r.Key != from && r.Value.Equals(to, StringComparison.OrdinalIgnoreCase))))
+                throw new ArgumentException($"\"{to}\" is already used by another account or in the history.");
+        }
+        if (ActiveAccount is { } active && (values.Any(a => a.Name == active && a.Hidden) || renamed.Any(r => r.Key == active))) Engine.StopAccount();
+        if (renamed.Count > 0 && renameHistory)
+        {
+            // Save first so the backup holds the latest entries, then rewrite everything in one go.
+            if (store is not null) { store.Save(Engine, preferences); store.Backup("before-rename"); }
+            foreach (var (from, to) in renamed) Editor.RenameAccount(from, to);
+        }
         preferences = preferences with { Accounts = values };
+        if (renamed.Count > 0 && SelectedAccount is { } picked && renames.TryGetValue(picked, out var now)) SelectedAccount = now;
         if (!Accounts.Any(a => a.Name == SelectedAccount)) SelectedAccount = values.FirstOrDefault(a => !a.Hidden)?.Name;
         Save(); Notify();
     }
@@ -230,6 +251,23 @@ public sealed class TimerModel : INotifyPropertyChanged
         => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note); });
     public bool DragEntry(SessionRow row, DateTime start, DateTime end, bool insert)
         => ChangeLog(() => Editor.EditTimeline(row, start, end, insert));
+    /// <summary>Moves an account to a new place among the accounts (hidden ones keep their own places).</summary>
+    public void MoveAccount(string name, int visibleIndex)
+    {
+        var list = preferences.Accounts.ToList();
+        var visible = list.Where(a => !a.Hidden).ToList();
+        var item = visible.FirstOrDefault(a => a.Name == name);
+        if (item is null) return;
+        visibleIndex = Math.Clamp(visibleIndex, 0, visible.Count - 1);
+        var current = visible.IndexOf(item);
+        if (current == visibleIndex) return;
+        visible.RemoveAt(current); visible.Insert(visibleIndex, item);
+        // Put the visible accounts back into the slots the visible accounts held, so hidden ones stay where they were.
+        var next = 0;
+        for (var i = 0; i < list.Count; i++) if (!list[i].Hidden) list[i] = visible[next++];
+        preferences = preferences with { Accounts = list };
+        Save(); Notify();
+    }
     public bool DeleteEntry(SessionRow row) => ChangeLog(() => Editor.Delete(row));
     /// <summary>Deletes the selected blocks as one undoable edit. Selection that cannot be deleted is left alone with an explanation.</summary>
     public bool DeleteSelection()

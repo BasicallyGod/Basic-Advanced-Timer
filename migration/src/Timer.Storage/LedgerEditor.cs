@@ -204,6 +204,40 @@ public sealed partial class LedgerEditor
         if (!row.IsPositioned) throw new ArgumentException("Merged credit and adjustments cannot be deleted here.");
         Change("Delete entry", () => { engine.Sessions.RemoveAt(index); notes.Rows.RemoveAll(n => SameKey(n, row)); });
     }
+    /// <summary>Moves every past entry, note, group and credit position from one account name to another.
+    /// The new name must not already appear in the history, so two accounts can never be combined by accident.
+    /// Earlier Undo steps would put the old name back under a new one, so the history starts afresh.</summary>
+    public int RenameAccount(string oldName, string newName)
+    {
+        if (string.IsNullOrWhiteSpace(newName) || newName != newName.Trim()) throw new ArgumentException("Choose a name for the account.");
+        bool Is(string name) => name.Equals(oldName, StringComparison.OrdinalIgnoreCase);
+        if (!newName.Equals(oldName, StringComparison.OrdinalIgnoreCase) && (engine.Sessions.Any(r => r.Account.Equals(newName, StringComparison.OrdinalIgnoreCase))
+            || notes.Rows.Concat(positions.Rows).Any(r => r["Account"].Equals(newName, StringComparison.OrdinalIgnoreCase))))
+            throw new ArgumentException($"\"{newName}\" is already used in the history.");
+        if (engine.Active is { } active && Is(active.Account)) throw new InvalidOperationException("Stop tracking this account before renaming it.");
+        var count = engine.Sessions.Count(r => Is(r.Account));
+        if (count == 0 && !notes.Rows.Concat(positions.Rows).Any(r => Is(r["Account"]))) return 0;
+        Change("Rename account", () =>
+        {
+            for (var i = 0; i < engine.Sessions.Count; i++)
+            {
+                var old = engine.Sessions[i];
+                if (!Is(old.Account)) continue;
+                var row = old with { Account = newName };
+                raw[row] = Fields(old); raw[row]["Account"] = newName;
+                engine.Sessions[i] = row;
+            }
+            foreach (var item in notes.Rows.Concat(positions.Rows).Where(r => Is(r["Account"]))) item["Account"] = newName;
+            if (groups is not null)
+            {
+                var table = CsvTable.Parse(groups, groupHeaders);
+                foreach (var item in table.Rows.Where(r => Is(r["Account"]))) item["Account"] = newName;
+                groups = table.Serialize();
+            }
+        });
+        history.Clear(); stepBytes.Clear(); stateJson = null;
+        return count;
+    }
     /// <summary>Deletes several entries as one edit, so a single Undo brings them all back.</summary>
     public void Delete(IReadOnlyList<SessionRow> rows)
     {

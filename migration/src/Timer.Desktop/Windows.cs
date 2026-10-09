@@ -207,7 +207,7 @@ public sealed class DashboardWindow : Window
         var title = Ui.Text("Client accounts", 13, "muted");
         title.Margin = new Thickness(18, 16);
         Ui.Put(sidebar, title);
-        Ui.Put(sidebar, new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model), AllowAutoHide = false,
+        Ui.Put(sidebar, new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 1);
         var summary = new StackPanel { Margin = new Thickness(18, 12, 18, 18), Spacing = 10 };
         summary.Children.Add(Ui.Rule());

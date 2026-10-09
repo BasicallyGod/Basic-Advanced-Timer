@@ -4,6 +4,12 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration account renaming and reordering
+
+- Account names can be edited in Accounts and budgets. Saving asks whether to rename the past entries too or start afresh under the new name. Renaming the past moves entries, notes, groups, positioned credit and the budget in one save after a backup copy to `Timesheets/Backups`, and clears the Undo history. Starting afresh keeps the old name as a historical account.
+- Names already used by another account or anywhere in the history are refused, so a rename can never combine two histories. A running account is stopped and saved before it is renamed.
+- Accounts can be reordered by dragging rows in the dashboard list. Lunch stays last, hidden accounts keep their places and a click without movement still tracks as before.
+
 ## Migration timeline add and delete shortcuts
 
 - Adding time on the timeline now needs a double-click on empty space. A single click only clears the selection, so stray clicks no longer open the editor.
