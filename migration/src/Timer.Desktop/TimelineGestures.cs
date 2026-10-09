@@ -52,7 +52,12 @@ public static class TimelineGestures
             e.Handled = true;
         };
         card.PointerCaptureLost += (_, _) =>
-        { origin = null; dragging = false; card.Opacity = 1; Canvas.SetTop(card, oldTop); card.Height = oldHeight; };
+        {
+            // Context menus can release capture without a left-button gesture.
+            if (origin is null) return;
+            origin = null; dragging = false; card.Opacity = 1;
+            Canvas.SetTop(card, oldTop); card.Height = oldHeight;
+        };
         card.Cursor = new Cursor(StandardCursorType.SizeAll);
     }
 }

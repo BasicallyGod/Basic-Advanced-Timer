@@ -226,6 +226,44 @@ public sealed class CreditReviewTests
         var combined = Assert.Single(model.Editor.Entries(Day, Day.AddDays(1))); Assert.Equal(90, combined.Minutes); Assert.Equal(3, combined.Sources.Count);
         Assert.Equal(csv, model.Editor.SessionsCsv); dashboard.Close();
     }
+    [AvaloniaFact]
+    public void MergeContextMenuCaptureLossKeepsBothSelectedBlocksInPlace()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "50"), Row("09:53:00", "55") });
+        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+        model.ToggleSelection(engine.Sessions.ToArray()); Capture(window, "merge-menu-before");
+        var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(Canvas.GetTop).ToArray();
+        Assert.Equal(2, cards.Length); var tops = cards.Select(Canvas.GetTop).ToArray();
+        var heights = cards.Select(b => b.Height).ToArray(); var csv = model.Editor.SessionsCsv;
+        IPointer? pointer = null; cards[1].PointerPressed += (_, e) => pointer = e.Pointer;
+        var point = cards[1].TranslatePoint(new Point(70, 30), window)!.Value;
+        window.MouseDown(point, MouseButton.Right); window.MouseUp(point, MouseButton.Right);
+        Assert.NotNull(pointer); Assert.True(cards[1].ContextMenu!.IsOpen);
+        // Exercise the capture-loss notification produced by native popup transitions.
+        pointer!.Capture(cards[1]); pointer.Capture(null);
+        Capture(window, "merge-menu-open");
+        Assert.Equal(tops, cards.Select(Canvas.GetTop).ToArray()); Assert.Equal(heights, cards.Select(b => b.Height).ToArray());
+        Assert.All(cards, b => { Assert.True(b.IsVisible); Assert.Equal(1, b.Opacity); });
+        Assert.Equal(2, model.SelectedRows.Count); Assert.Equal(csv, model.Editor.SessionsCsv);
+        var menu = cards[1].ContextMenu!.ItemsSource!.Cast<MenuItem>().Single(item => item.Name == "MergeSelectedMenu");
+        menu.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        Assert.Equal(108, Assert.Single(model.Editor.Entries(Day, Day.AddDays(1))).Minutes); window.Close();
+    }
+    [AvaloniaFact]
+    public void LosingCaptureDuringActualDragRestoresBlockWithoutEditingTime()
+    {
+        var engine = Engine(); engine.Sessions.Add(Row("09:00:00", "50"));
+        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show(); Capture(window, "capture-cancel-before");
+        var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is SessionRow);
+        var top = Canvas.GetTop(card); var height = card.Height; var csv = model.Editor.SessionsCsv;
+        IPointer? pointer = null; card.PointerPressed += (_, e) => pointer = e.Pointer;
+        var point = card.TranslatePoint(new Point(70, 30), window)!.Value;
+        window.MouseDown(point, MouseButton.Left); window.MouseMove(point + new Vector(0, 20), RawInputModifiers.LeftMouseButton);
+        Assert.NotEqual(top, Canvas.GetTop(card)); Assert.NotNull(pointer); pointer!.Capture(null);
+        Assert.Equal(top, Canvas.GetTop(card)); Assert.Equal(height, card.Height); Assert.Equal(1, card.Opacity);
+        window.MouseUp(point + new Vector(0, 20), MouseButton.Left);
+        Assert.Equal(csv, model.Editor.SessionsCsv); window.Close();
+    }
     [Fact]
     public void MergeFillsGapsButRejectsInterveningAccountsAndPartialGroups()
     {
