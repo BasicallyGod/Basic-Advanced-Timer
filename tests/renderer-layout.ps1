@@ -54,6 +54,22 @@ try {
 } finally { $font.Dispose() }
 Write-Output 'Renderer layout checks passed.'
 
+# Load the same fonts, layout constants and renderer factory used by app startup.
+$script:useRenderer = $true; $script:Zoom = 1; $script:fullMargin = 0
+$startupNames = @('$px', '$fDigits', '$fDashboardHeader', '$fDashboardClock', '$fLabel', '$fRow',
+    '$fOvertime', '$fPillTime', '$fPillSub', '$fDrawerBtn', '$fDrawerText', '$fDrawerTextBold',
+    '$fTimeline', '$fTimelineBold', '$fTimelineSmall', '$BaseRowTop', '$RowH', '$LunchGap',
+    '$DashboardW', '$DashboardH', '$BaseW', '$DrawerSideW', '$CollapseR', '$CollapseX', '$CollapseY', '$DrawerBtnX', '$DrawerBtnY')
+foreach ($assignment in @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst }, $true))) {
+    if ($startupNames -contains $assignment.Left.Extent.Text) { Invoke-Expression $assignment.Extent.Text }
+}
+foreach ($name in @('New-DashboardRenderer', 'Get-RowTop', 'Get-HitRow', 'Get-TimerPoint', 'Test-HitCollapse', 'Test-HitDashboardPause', 'Test-HitDayBtn')) {
+    $fn = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true))
+    Invoke-Expression $fn[0].Extent.Text
+}
+$r = New-DashboardRenderer
+if ($r.RowH -ne 48 -or $r.RowTop -ne 164) { throw 'Production startup must use the dashboard row geometry.' }
+
 foreach ($name in @('Sync-RendererLayout', 'Get-DayBtnRect')) {
     $fn = @($ast.FindAll({ param($node)
         $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
@@ -76,19 +92,11 @@ Sync-RendererLayout
 if ($r.BaseH -ne 640) { throw 'Dashboard height must remain fixed.' }
 
 # Exercise the new dashboard at maximum account capacity and on both tabs.
-$r.Dashboard = $true; $r.BaseW = 320; $r.DrawerW = 640
-$r.BaseH = 640; $r.DrawerH = 640; $r.TimerOffX = 0; $r.DrawerOpen = $true
-$r.RowTop = 164; $r.RowH = 48; $r.Margin = 0
+$script:drawerOpen = $true
+Sync-RendererLayout
 $r.DashboardDate = 'Friday, 9 October 2026'; $r.ActiveAccount = 'Account A'
 $r.LiveDot = $true; $r.DotPhase = 0.5; $r.DayBtnText = 'Finish day'
-$font = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
-foreach ($field in $r.GetType().GetFields()) { if ($field.FieldType -eq [System.Drawing.Font]) { $field.SetValue($r, $font) } }
-$digitFont = New-Object System.Drawing.Font('Segoe UI', 36, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
-$r.FontDigits = $digitFont
-$headerFont = New-Object Drawing.Font('Segoe UI', 17, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
-$clockFont = New-Object Drawing.Font('Segoe UI', 28, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
-$labelFont = New-Object Drawing.Font('Segoe UI', 12, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
-$r.FontDashboardHeader = $headerFont; $r.FontDashboardClock = $clockFont; $r.FontLabel = $labelFont
+# Fonts remain those from production startup; the fixture does not replace renderer metrics.
 $rows = @()
 for ($i = 0; $i -lt 13; $i++) {
     $row = New-Object Win.RowModel
@@ -141,7 +149,40 @@ try {
     $r.AccountScrollY = $r.Rows.Length * $r.RowH + $r.LunchGap - ([Win.FullRenderer]::AccountBottom - $r.RowTop)
     $scrolled = $r.Render(960, 640)
     try { $scrolled.Save((Join-Path $outputDir 'accounts-scrolled.png'), [Drawing.Imaging.ImageFormat]::Png) } finally { $scrolled.Dispose() }
-} finally { $font.Dispose(); $digitFont.Dispose(); $headerFont.Dispose(); $clockFont.Dispose(); $labelFont.Dispose() }
+    # Test the app's coordinate conversion and actual shared row bounds at Windows DPI scales.
+    $script:slots = @((0..11 | ForEach-Object { 'Client account ' + $_ })) + @('Lunch')
+    $script:mode = 'full'; $script:active = @{ Name = 'Client account 0' }; $script:view.DayBtnText = 'Finish day'
+    $script:timerOffX = 0; $script:timerOffY = 0
+    foreach ($testScale in @(0.8, 1.0, 1.25, 1.5, 2.0)) {
+        $script:Zoom = $testScale; $script:fullMargin = 10
+        Sync-RendererLayout
+        foreach ($scroll in @(0, [Win.DashboardLayout]::MaxAccountScroll($script:slots.Count))) {
+            $r.AccountScrollY = $scroll
+            for ($rowIndex = 0; $rowIndex -lt $script:slots.Count; $rowIndex++) {
+                $bounds = [Win.DashboardLayout]::AccountRect($rowIndex, ($script:slots[$rowIndex] -eq 'Lunch'), $script:slots.Count, $scroll)
+                if (-not [Win.DashboardLayout]::AccountVisible($bounds)) { continue }
+                foreach ($within in @(2, 24, 46)) {
+                    $client = [Drawing.Point]::new([int](($r.Margin + 28) * $testScale), [int](($r.Margin + $bounds.Top + $within) * $testScale))
+                    $hit = Get-HitRow (Get-TimerPoint $client)
+                    if ($hit -ne $rowIndex) { throw "Pointer selects row $hit instead of $rowIndex at scale $testScale, scroll $scroll." }
+                }
+            }
+            if ($null -ne (Get-HitRow (Get-TimerPoint ([Drawing.Point]::new([int](38 * $testScale), [int](630 * $testScale)))))) { throw 'Summary selected an account.' }
+            foreach ($testMode in @('timeline', 'week')) {
+                $r.Drawer.Mode = $testMode
+                $scaled = $r.Render([int](980 * $testScale), [int](660 * $testScale))
+                try {
+                    if ($scaled.GetPixel([int](100 * $testScale), [int](620 * $testScale)).A -ne 255) { throw 'Dashboard must remain opaque at each scale.' }
+                    if ($scroll -eq 0) { $scaled.Save((Join-Path $outputDir ("$testMode-scale-$testScale.png")), [Drawing.Imaging.ImageFormat]::Png) }
+                } finally { $scaled.Dispose() }
+            }
+        }
+    }
+    $script:Zoom = 1; $script:fullMargin = 0; Sync-RendererLayout
+    $r.AccountScrollY = [Win.DashboardLayout]::MaxAccountScroll($script:slots.Count)
+} finally {
+    foreach ($font in @($fDigits, $fDashboardHeader, $fDashboardClock, $fLabel, $fRow, $fOvertime, $fPillTime, $fPillSub, $fDrawerBtn, $fDrawerText, $fDrawerTextBold, $fTimeline, $fTimelineBold, $fTimelineSmall)) { $font.Dispose() }
+}
 
 foreach ($name in @('Get-BaseSize', 'Get-PillListH', 'Get-PillLayout', 'Get-PillRowTop', 'Get-PillZone', 'Test-HitCollapse', 'Get-DayBtnRect', 'Test-HitDayBtn', 'Test-HitDashboardPause', 'Get-RowTop', 'Get-HitRow')) {
     $fn = @($ast.FindAll({ param($node)

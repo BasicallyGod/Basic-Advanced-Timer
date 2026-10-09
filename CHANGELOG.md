@@ -6,9 +6,17 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.29 |
+| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.30 |
 | AccountTimer.ps1 | Historical predecessor, removed from current tree | 1.0 to 1.7 |
 | BillableTimer.ps1 | Historical predecessor, removed from current tree | 0.1 to 0.5 |
+
+## v2.30
+
+- Refactored the dashboard into shared layout and typography services, separate chrome, live strip, account list, sidebar summary and Week components, alongside the existing Timeline component.
+- Centralised dashboard row bounds, scroll limits, button rectangles and timeline height. Drawing and pointer hit tests use the same geometry.
+- Fixed startup using 30px rendered rows with 48px hit targets. Renderer creation and every layout refresh now configure the dashboard from the shared layout.
+- Unified dashboard text on grayscale GDI+ antialiasing, including header, tabs, timeline labels and week cells. The working pill rendering remains unchanged.
+- Renderer tests now use the actual startup factory and font assignments, and exercise pointer positions above, within and below rows before/after scrolling at 80%, 100%, 125%, 150% and 200% scaling, with rendered previews for each view.
 
 ## v2.29
 

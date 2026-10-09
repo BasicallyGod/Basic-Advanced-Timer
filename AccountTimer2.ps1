@@ -1,4 +1,4 @@
-# Basic's Advanced Timer v2.29
+# Basic's Advanced Timer v2.30
 #
 # Portable Windows PowerShell 5.1 application for client-account time tracking.
 # Launch from StartAccountTimer2.vbs in the same folder to avoid a console window.
@@ -342,6 +342,41 @@ namespace Win {
     }
 
     // Draws the full view (timer, drawer, shadow and rim) into one image with see-through areas
+    // Dashboard geometry is shared by painting and pointer hit testing.
+    public static class DashboardLayout {
+        public const float Width = 960, Height = 640, SidebarWidth = 320;
+        public const float RowTop = 164, RowHeight = 48, LunchGap = 10, AccountBottom = 560;
+        public const float TimelineTop = 216, TimelineBottom = 600;
+        public static readonly RectangleF BackButton = new RectangleF(800, 12, 140, 28);
+        public static readonly RectangleF PauseButton = new RectangleF(550, 74, 90, 28);
+        public static readonly RectangleF DayButton = new RectangleF(790, 72, 150, 28);
+        public static readonly RectangleF Unallocated = new RectangleF(18, 608, 284, 24);
+        public static float MaxAccountScroll(int count) {
+            return Math.Max(0, count * RowHeight + LunchGap - (AccountBottom - RowTop));
+        }
+        public static float ClampAccountScroll(float scroll, int count) {
+            return Math.Max(0, Math.Min(scroll, MaxAccountScroll(count)));
+        }
+        public static RectangleF AccountRect(int index, bool lunch, int count, float scroll) {
+            return new RectangleF(0, RowTop + index * RowHeight + (lunch ? LunchGap : 0) - ClampAccountScroll(scroll, count), SidebarWidth, RowHeight);
+        }
+        public static bool AccountVisible(RectangleF rect) {
+            return rect.Top >= RowTop && rect.Bottom <= AccountBottom;
+        }
+    }
+
+    // Grayscale antialiasing works on both the opaque dashboard frame and its workspace layer.
+    public static class DashboardTypography {
+        public static void Draw(Graphics g, string text, Font font, Color colour, RectangleF rect, StringFormat format) {
+            if (font == null || String.IsNullOrEmpty(text)) return;
+            TextRenderingHint hint = g.TextRenderingHint;
+            try {
+                g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                using (SolidBrush brush = new SolidBrush(colour)) { g.DrawString(text, font, brush, rect, format); }
+            } finally { g.TextRenderingHint = hint; }
+        }
+    }
+
     public class FullRenderer {
         public Font FontDigits, FontLabel, FontRow, FontOvertime, FontButton, FontSmall, FontDrawer, FontDrawerBold;
         public Font FontTimeline, FontTimelineBold, FontTimelineSmall;   // the timeline's own, larger text
@@ -524,6 +559,7 @@ namespace Win {
 
         // Text in the account list: drawn normally, or through the see-through text layers
         void ListText(Graphics g, string text, Font f, Color c, RectangleF r, StringFormat sf) {
+            if (Dashboard) { DashboardTypography.Draw(g, text, f, c, r, sf); return; }
             if (layerMask != null) {
                 using (SolidBrush solid = new SolidBrush(Color.FromArgb(255, c.R, c.G, c.B))) { layerColour.FillRectangle(solid, r); }
                 using (SolidBrush shape = new SolidBrush(Color.FromArgb(c.A, 255, 255, 255))) { layerMask.DrawString(text, f, shape, r, sf); }
@@ -567,11 +603,19 @@ namespace Win {
         public string DashboardDate = "", ActiveAccount = "";
         public bool LiveDot;
         public double DotPhase;
-        public const float DashboardWidth = 960f, DashboardHeight = 640f;
+        public const float DashboardWidth = DashboardLayout.Width, DashboardHeight = DashboardLayout.Height;
 
+        public void ConfigureDashboard(float zoom, float margin) {
+            Dashboard = true; Zoom = zoom; Margin = margin;
+            BaseW = DashboardLayout.SidebarWidth; BaseH = DashboardLayout.Height;
+            DrawerW = DashboardLayout.Width - BaseW; DrawerH = BaseH;
+            RowTop = DashboardLayout.RowTop; RowH = DashboardLayout.RowHeight; LunchGap = DashboardLayout.LunchGap;
+            TimerOffX = 0; TimerOffY = 0;
+            AccountScrollY = DashboardLayout.ClampAccountScroll(AccountScrollY, Rows.Length);
+        }
         public Font FontDashboardHeader, FontDashboardClock;
         public float AccountScrollY;
-        public const float AccountBottom = 560f;
+        public const float AccountBottom = DashboardLayout.AccountBottom;
         public string TodayAllocated = "";
         void SurfaceButton(Graphics g, string label, RectangleF rect, bool hot, bool primary, bool enabled, Font font) {
             Color colour = primary ? Mix(Fill, Text, 0.28) : (hot ? CircleHot : Circle);
@@ -587,15 +631,26 @@ namespace Win {
         }
 
         void DrawDashboardTimer(Graphics g, GraphicsPath clip) {
+            using (SolidBrush background = new SolidBrush(Panel)) { g.FillPath(background, clip); }
+            DrawDashboardChrome(g); DrawDashboardLive(g);
+            DrawDashboardAccounts(g); DrawDashboardSummary(g);
+        }
+
+        void DrawDashboardChrome(Graphics g) {
             Color faint = Mix(Panel, Text, 0.68);
-            using (SolidBrush bg = new SolidBrush(Panel)) { g.FillPath(bg, clip); }
-            using (Pen sep = new Pen(Mix(Panel, Text, 0.18), 1f))
-            using (SolidBrush digits = new SolidBrush(Text)) {
+            using (Pen sep = new Pen(Mix(Panel, Text, 0.18), 1f)) {
                 ListText(g, DashboardDate, FontDashboardHeader ?? FontDrawerBold, Text, new RectangleF(20, 12, 640, 28), sfLeft);
-                SurfaceButton(g, "Back to pill", new RectangleF(800, 12, 140, 28), CollapseHover, false, true, FontDrawer);
+                SurfaceButton(g, "Back to pill", DashboardLayout.BackButton, CollapseHover, false, true, FontDrawer);
+
+            }
+        }
+
+        void DrawDashboardLive(Graphics g) {
+            Color faint = Mix(Panel, Text, 0.68);
+            using (Pen sep = new Pen(Mix(Panel, Text, 0.18), 1f)) {
                 using (SolidBrush band = new SolidBrush(Circle)) { g.FillRectangle(band, 0, 52, DashboardWidth, 70); }
                 g.DrawLine(sep, 0, 52, DashboardWidth, 52);
-                g.DrawString(H + ":" + M + ":" + S, FontDashboardClock ?? FontDigits, digits, new RectangleF(20, 65, 220, 42), sfLeft);
+                DashboardTypography.Draw(g, H + ":" + M + ":" + S, FontDashboardClock ?? FontDigits, Text, new RectangleF(20, 65, 220, 42), sfLeft);
                 string current = ActiveAccount.Length > 0 ? ActiveAccount : Status;
                 ListText(g, current, FontRow, Text, new RectangleF(250, 66, 290, 24), sfName);
                 float labelX = 250;
@@ -604,15 +659,23 @@ namespace Win {
                     labelX += 15;
                 }
                 ListText(g, ActiveAccount.Length > 0 ? "Tracking live" : Status, FontLabel, faint, new RectangleF(labelX, 90, 280, 20), sfLeft);
-                if (ActiveAccount.Length > 0) SurfaceButton(g, "Pause", new RectangleF(550, 74, 90, 28), false, false, true, FontDrawer);
-                SurfaceButton(g, DayBtnText, new RectangleF(790, 72, 150, 28), DayBtnHover, false, true, FontDrawer);
+                if (ActiveAccount.Length > 0) SurfaceButton(g, "Pause", DashboardLayout.PauseButton, false, false, true, FontDrawer);
+                SurfaceButton(g, DayBtnText, DashboardLayout.DayButton, DayBtnHover, false, true, FontDrawer);
                 g.DrawLine(sep, 0, 122, DashboardWidth, 122);
+
+            }
+        }
+
+        void DrawDashboardAccounts(Graphics g) {
+            Color faint = Mix(Panel, Text, 0.68);
+            using (Pen sep = new Pen(Mix(Panel, Text, 0.18), 1f)) {
                 ListText(g, "Accounts", FontDrawerBold, Text, new RectangleF(18, 132, 160, 24), sfLeft);
-                float scroll = Math.Max(0, Math.Min(AccountScrollY, Math.Max(0, Rows.Length * RowH + LunchGap - (AccountBottom - RowTop))));
+                float scroll = DashboardLayout.ClampAccountScroll(AccountScrollY, Rows.Length);
                 for (int i = 0; i < Rows.Length; i++) {
                     RowModel r = Rows[i];
-                    float y0 = RowTop + i * RowH + (r.IsLunch ? LunchGap : 0) - scroll;
-                    if (y0 < RowTop || y0 + RowH > AccountBottom) continue;
+                    RectangleF bounds = DashboardLayout.AccountRect(i, r.IsLunch, Rows.Length, scroll);
+                    if (!DashboardLayout.AccountVisible(bounds)) continue;
+                    float y0 = bounds.Y;
                     float cy = y0 + RowH / 2;
                     bool dragging = DraggingRow == i;
                     if (r.Active || Hover == i || dragging) {
@@ -651,11 +714,19 @@ namespace Win {
                     float thumbH = Math.Max(24, viewportH * viewportH / contentH);
                     using (SolidBrush thumb = new SolidBrush(faint)) { g.FillRectangle(thumb, BaseW - 5, RowTop + (viewportH - thumbH) * scroll / (contentH - viewportH), 3, thumbH); }
                 }
+
+            }
+        }
+
+        void DrawDashboardSummary(Graphics g) {
+            Color faint = Mix(Panel, Text, 0.68);
+            using (Pen sep = new Pen(Mix(Panel, Text, 0.18), 1f)) {
                 g.DrawLine(sep, 16, 572, BaseW - 16, 572);
                 ListText(g, "Today allocated", FontDrawer, faint, new RectangleF(18, 584, 160, 24), sfLeft);
                 ListText(g, TodayAllocated, FontDrawer, Text, new RectangleF(178, 584, 124, 24), sfRight);
                 ListText(g, "Unallocated", FontDrawer, faint, new RectangleF(18, 608, 160, 24), sfLeft);
                 ListText(g, Unallocated.Replace("UNALLOCATED ", ""), FontDrawer, Text, new RectangleF(178, 608, 124, 24), sfRight);
+
             }
         }
 
@@ -860,6 +931,7 @@ namespace Win {
         }
 
         void QueueText(string s, Font f, Color c, RectangleF r, uint align) {
+            if (Dashboard) { QueueSmoothText(s, f, c, r, align); return; }
             GdiText t = new GdiText();
             t.S = s == null ? "" : s; t.F = f; t.C = c; t.R = r;
             t.Flags = align | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS;
@@ -905,9 +977,8 @@ namespace Win {
                     foreach (GdiText t in smoothQueue) {
                         sf.Alignment = (t.Flags & DT_CENTER) != 0 ? StringAlignment.Center :
                                        ((t.Flags & DT_RIGHT) != 0 ? StringAlignment.Far : StringAlignment.Near);
-                        using (SolidBrush brush = new SolidBrush(t.C)) {
-                            og.DrawString(t.S, t.F, brush, t.R, sf);
-                        }
+                        if (Dashboard) DashboardTypography.Draw(og, t.S, t.F, t.C, t.R, sf);
+                        else using (SolidBrush brush = new SolidBrush(t.C)) { og.DrawString(t.S, t.F, brush, t.R, sf); }
                     }
                 }
             } finally {
@@ -993,7 +1064,7 @@ namespace Win {
             using (Pen sep = new Pen(Mix(Panel, Text, 35 / 255.0), 1f)) {
                 float pad = 14f, x0 = dx + pad, xR = dx + dW - pad, y = mg + (Dashboard ? 132 : 10);
                 bool timeline = d.Mode == "timeline" && d.Timeline != null;
-                if (Dashboard) { DrawDashboardTools(og, d, x0, xR, mg, fBold); y = mg + 216; }
+                if (Dashboard) { DrawDashboardTools(og, d, x0, xR, mg, fBold); y = mg + DashboardLayout.TimelineTop; }
                 else {
                 QueueText(d.Title, fBold, textC, new RectangleF(x0, y, dW - 2 * pad, 24), DT_LEFT);
 
@@ -1072,6 +1143,13 @@ namespace Win {
 
                 if (timeline) { DrawTimeline(og, d.Timeline, x0, xR, y, sep, fText, fBold); return; }
 
+                DrawWeekWorkspace(og, d, x0, xR, y, sep, fText, fBold, dW);
+            }
+        }
+
+        void DrawWeekWorkspace(Graphics og, DrawerModel d, float x0, float xR, float y, Pen sep, Font fText, Font fBold, float dW) {
+            Color textC = Text, faintC = Mix(Panel, Text, 215 / 255.0);
+            float pad = 14, mg = Margin;
                 // Hours by account and day
                 int nd = d.DayLabels.Length;
                 float nameW = 190f, tableW = dW - 2 * pad, colW = (tableW - nameW) / (nd + 1), rowH = DrawerRowH;
@@ -1120,7 +1198,6 @@ namespace Win {
                         y += 20;
                     }
                 }
-            }
         }
 
         // The day as a vertical timeline, like a calendar day: hours run down the left, each stretch of time is a
@@ -1174,7 +1251,7 @@ namespace Win {
             Color faintC = Mix(Panel, Text, 215 / 255.0);
             // The timeline's own, larger fonts (the drawer's regular ones if none were given)
             Font fT = FontTimeline ?? fText, fTB = FontTimelineBold ?? fBold, fTS = FontTimelineSmall ?? fText;
-            float vh = Math.Max(DrawerH, BaseH) - (y - Margin) - (Dashboard ? 40f : 12f);
+            float vh = Math.Max(DrawerH, BaseH) - (y - Margin) - (Dashboard ? DashboardLayout.Height - DashboardLayout.TimelineBottom : 12f);
             float bx = x0 + GutterW, bw = (Dashboard ? xR : xR - LegendW - 10f) - bx;
             float lx = xR - LegendW;
             RectangleF vp = new RectangleF(x0, y, bx + bw - x0, vh);
@@ -3352,10 +3429,10 @@ $g0.Dispose()
 $BaseW  = 320
 $DashboardW = 960
 $DashboardH = 640
-$BaseRowTop = 164
+$BaseRowTop = if ($script:useRenderer) { [Win.DashboardLayout]::RowTop } else { 164 }
 $OvertimeH  = 32     # height of the overtime section when it appears
 $RowTop = $BaseRowTop
-$RowH   = 48
+$RowH   = if ($script:useRenderer) { [Win.DashboardLayout]::RowHeight } else { 48 }
 $LunchGap = 10   # space separating Lunch from the accounts
 $RoundXs  = @{ down = 260; up = 286 }   # positions of the round-down and round-up buttons
 $RoundR   = 8
@@ -3383,7 +3460,10 @@ $DrawerBtnY = 15
 $DayBtn = @{ W = 150; H = 22 }
 $FinishAreaH = 30
 function Get-DayBtnRect {
-    if ($script:useRenderer -and $script:mode -eq 'full') { return @{ X = 790; Y = 72; W = 150; H = 28 } }
+    if ($script:useRenderer -and $script:mode -eq 'full') {
+        $bounds = [Win.DashboardLayout]::DayButton
+        return @{ X = $bounds.X; Y = $bounds.Y; W = $bounds.Width; H = $bounds.Height }
+    }
     $bx = ($BaseW - $DayBtn.W) / 2
     $panelH = if ($script:useRenderer -and $script:drawerOpen) { [math]::Max($BaseH, $script:drawerH) } else { $BaseH }
     $by = $panelH - $DayBtn.H - 8
@@ -3780,28 +3860,34 @@ $PF = [System.Drawing.PointF]
 $colX = @(0, 107, 213)
 $colW = 107
 
+function New-DashboardRenderer {
+    $renderer = New-Object Win.FullRenderer
+    $renderer.FontDigits = $fDigits
+    $renderer.FontDashboardHeader = $fDashboardHeader
+    $renderer.FontDashboardClock = $fDashboardClock
+    $renderer.FontLabel = $fLabel
+    $renderer.FontRow = $fRow
+    $renderer.FontOvertime = $fOvertime
+    $renderer.FontButton = $fDrawerBtn
+    $renderer.FontSmall = $fPillSub
+    $renderer.CollapseR = [float]$CollapseR
+    $renderer.CollapseX = [float]$CollapseX
+    $renderer.CollapseY = [float]$CollapseY
+    $renderer.DrawerBtnX = [float]$DrawerBtnX
+    $renderer.DrawerBtnY = [float]$DrawerBtnY
+    $renderer.FontDrawer = $fDrawerText
+    $renderer.FontDrawerBold = $fDrawerTextBold
+    $renderer.FontTimeline = $fTimeline
+    $renderer.FontTimelineBold = $fTimelineBold
+    $renderer.FontTimelineSmall = $fTimelineSmall
+    $renderer.DrawerW = [float]$DrawerSideW
+    $renderer.ConfigureDashboard([float]$Zoom, [float]$script:fullMargin)
+    return $renderer
+}
+
 if ($script:useRenderer) {
     try {
-        $script:renderer = New-Object Win.FullRenderer
-        $script:renderer.FontDigits = $fDigits
-        $script:renderer.FontDashboardHeader = $fDashboardHeader
-        $script:renderer.FontDashboardClock = $fDashboardClock
-        $script:renderer.FontLabel = $fLabel
-        $script:renderer.FontRow = $fRow
-        $script:renderer.FontOvertime = $fOvertime
-        $script:renderer.FontButton = $fDrawerBtn
-        $script:renderer.FontSmall = $fPillSub
-        $script:renderer.CollapseR = [float]$CollapseR
-        $script:renderer.CollapseX = [float]$CollapseX
-        $script:renderer.CollapseY = [float]$CollapseY
-        $script:renderer.DrawerBtnX = [float]$DrawerBtnX
-        $script:renderer.DrawerBtnY = [float]$DrawerBtnY
-        $script:renderer.FontDrawer = $fDrawerText
-        $script:renderer.FontDrawerBold = $fDrawerTextBold
-        $script:renderer.FontTimeline = $fTimeline
-        $script:renderer.FontTimelineBold = $fTimelineBold
-        $script:renderer.FontTimelineSmall = $fTimelineSmall
-        $script:renderer.DrawerW = [float]$DrawerSideW
+        $script:renderer = New-DashboardRenderer
     } catch {
         $script:useRenderer = $false
         $script:rendererError = $_.Exception.Message
@@ -4722,7 +4808,7 @@ function Get-DrawerButtonAt($pt) {
 
 # The height of the part of the drawer that shows the day, under the title and tabs
 function Get-TimelineViewH {
-    if ($script:useRenderer -and $script:mode -eq 'full') { return [double]$DashboardH - 216 - 40 }
+    if ($script:useRenderer -and $script:mode -eq 'full') { return [double]([Win.DashboardLayout]::TimelineBottom - [Win.DashboardLayout]::TimelineTop) }
     return [math]::Max(40.0, [double]$script:drawerH - (10 + 34 + [Win.FullRenderer]::TabsH) - 12)
 }
 
@@ -5230,7 +5316,7 @@ function Test-HitDayBtn($tp) {
 }
 
 function Test-HitUnalloc($tp) {
-    if ($script:useRenderer) { return ($tp.X / $Zoom -ge 18 -and $tp.X / $Zoom -le 302 -and $tp.Y / $Zoom -ge 608 -and $tp.Y / $Zoom -le 632) }
+    if ($script:useRenderer) { return [Win.DashboardLayout]::Unallocated.Contains([System.Drawing.PointF]::new([float]($tp.X / $Zoom), [float]($tp.Y / $Zoom))) }
     $x = $tp.X / $Zoom; $y = $tp.Y / $Zoom
     return ($x -ge 160 -and $x -le 312 -and $y -ge 48 -and $y -le 67)
 }
@@ -5691,17 +5777,11 @@ function Test-FullShadow {
 function Sync-RendererLayout {
     $r = $script:renderer
     $r.Zoom = [float]$Zoom
-    $r.Dashboard = $true
-    $r.BaseH = [float]$DashboardH
+    $r.ConfigureDashboard([float]$Zoom, [float]$script:fullMargin)
     $r.DashboardDate = (Get-Date).ToString('dddd, d MMMM yyyy', $GB)
     $r.ActiveAccount = [string]$script:view.ActiveName
     $r.LiveDot = [bool]$PillLiveDot
     $r.DotPhase = 0.5 - 0.5 * [math]::Cos(2 * [math]::PI * $script:animClock.Elapsed.TotalSeconds / 2.0)
-    $r.RowTop = [float]$RowTop
-    $r.DrawerH = [float]$DashboardH
-    $r.Margin = [float]$script:fullMargin
-    $r.TimerOffX = [float]$script:timerOffX
-    $r.TimerOffY = [float]$script:timerOffY
     $r.DrawerOpen = [bool]$script:drawerOpen
     $r.Shadow = Test-FullShadow
     $r.Rim = [bool]$PillShadow
@@ -5744,7 +5824,7 @@ function Sync-RendererState {
     $r.TlScrollH = if ($null -ne $script:tlScrollH) { [double]$script:tlScrollH } else { 0.0 }
     $r.TlPx = [float]$script:tlPx
     $r.Drawer = $script:drawerModel
-    $r.AccountScrollY = [float][math]::Max(0, [math]::Min($r.AccountScrollY, [math]::Max(0, $script:slots.Count * $RowH + $LunchGap - ([Win.FullRenderer]::AccountBottom - $RowTop))))
+    $r.AccountScrollY = [Win.DashboardLayout]::ClampAccountScroll($r.AccountScrollY, $script:slots.Count)
 }
 
 # If the faster drawing ever fails, switch back to PowerShell drawing and carry on
@@ -7551,19 +7631,26 @@ function Show-Message($text) {
 
 # ---- Mouse ----
 function Get-RowTop($i) {
+    if ($script:useRenderer -and $script:mode -eq 'full') {
+        return [Win.DashboardLayout]::AccountRect($i, ($script:slots[$i] -eq 'Lunch'), $script:slots.Count, $script:renderer.AccountScrollY).Y
+    }
     $top = $RowTop + $i * $RowH
     if ($script:slots[$i] -eq 'Lunch') { $top += $LunchGap }
-    if ($script:useRenderer -and $script:mode -eq 'full') { $top -= $script:renderer.AccountScrollY }
     return $top
 }
 
 function Get-HitRow($pt) {
-    if ($script:useRenderer -and ($pt.X / $Zoom -lt 0 -or $pt.X / $Zoom -gt $BaseW)) { return $null }
+    if ($script:useRenderer -and $script:mode -eq 'full') {
+        $point = [System.Drawing.PointF]::new([float]($pt.X / $Zoom), [float]($pt.Y / $Zoom))
+        for ($i = 0; $i -lt $script:slots.Count; $i++) {
+            $bounds = [Win.DashboardLayout]::AccountRect($i, ($script:slots[$i] -eq 'Lunch'), $script:slots.Count, $script:renderer.AccountScrollY)
+            if ([Win.DashboardLayout]::AccountVisible($bounds) -and $bounds.Contains($point)) { return $i }
+        }
+        return $null
+    }
     $y = $pt.Y / $Zoom
-    if ($script:useRenderer -and ($y -lt $RowTop -or $y -ge [Win.FullRenderer]::AccountBottom)) { return $null }
     for ($i = 0; $i -lt $script:slots.Count; $i++) {
         $top = Get-RowTop $i
-        if ($script:useRenderer -and ($top -lt $RowTop -or $top + $RowH -gt [Win.FullRenderer]::AccountBottom)) { continue }
         if ($y -ge $top -and $y -lt ($top + $RowH)) { return $i }
     }
     return $null
@@ -7775,14 +7862,12 @@ function Set-View($mode, [switch]$Starting) {
 
 function Test-HitDashboardPause($pt) {
     if (-not $script:useRenderer -or -not $script:active) { return $false }
-    $xx = $pt.X / $Zoom; $yy = $pt.Y / $Zoom
-    return ($xx -ge 550 -and $xx -le 640 -and $yy -ge 74 -and $yy -le 102)
+    return [Win.DashboardLayout]::PauseButton.Contains([System.Drawing.PointF]::new([float]($pt.X / $Zoom), [float]($pt.Y / $Zoom)))
 }
 
 function Test-HitCollapse($pt) {
     if ($script:useRenderer) {
-        $xx = $pt.X / $Zoom; $yy = $pt.Y / $Zoom
-        return ($xx -ge 800 -and $xx -le 940 -and $yy -ge 12 -and $yy -le 40)
+        return [Win.DashboardLayout]::BackButton.Contains([System.Drawing.PointF]::new([float]($pt.X / $Zoom), [float]($pt.Y / $Zoom)))
     }
     $x = $pt.X / $Zoom; $y = $pt.Y / $Zoom
     $dx = $x - $CollapseX; $dy = $y - $CollapseY
@@ -8065,8 +8150,7 @@ $form.Add_MouseWheel({
     try {
         if ($script:mode -ne 'full' -or -not $script:drawerOpen) { return }
         if ($script:useRenderer -and $_.X / $Zoom -lt $BaseW -and $_.Y / $Zoom -ge $RowTop -and $_.Y / $Zoom -lt [Win.FullRenderer]::AccountBottom) {
-            $maxScroll = [math]::Max(0, $script:slots.Count * $RowH + $LunchGap - ([Win.FullRenderer]::AccountBottom - $RowTop))
-            $script:renderer.AccountScrollY = [math]::Max(0, [math]::Min($maxScroll, $script:renderer.AccountScrollY - ($_.Delta / 120.0) * $RowH))
+            $script:renderer.AccountScrollY = [Win.DashboardLayout]::ClampAccountScroll([float]($script:renderer.AccountScrollY - ($_.Delta / 120.0) * [Win.DashboardLayout]::RowHeight), $script:slots.Count)
             $tip.Hide($form); $script:hover = $null; Request-Redraw; return
         }
         if ((Get-DrawerMode) -eq 'week') {
