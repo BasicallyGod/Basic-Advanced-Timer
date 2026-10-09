@@ -60,7 +60,7 @@ $startupNames = @('$px', '$fDigits', '$fDashboardHeader', '$fDashboardClock', '$
     '$fOvertime', '$fPillTime', '$fPillSub', '$fDrawerBtn', '$fDrawerText', '$fDrawerTextBold',
     '$fTimeline', '$fTimelineBold', '$fTimelineSmall', '$BaseRowTop', '$RowH', '$LunchGap',
     '$DashboardW', '$DashboardH', '$BaseW', '$DrawerSideW', '$CollapseR', '$CollapseX', '$CollapseY', '$DrawerBtnX', '$DrawerBtnY')
-foreach ($assignment in @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst }, $true))) {
+foreach ($assignment in @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst] }, $true))) {
     if ($startupNames -contains $assignment.Left.Extent.Text) { Invoke-Expression $assignment.Extent.Text }
 }
 foreach ($name in @('New-DashboardRenderer', 'Get-RowTop', 'Get-HitRow', 'Get-TimerPoint', 'Test-HitCollapse', 'Test-HitDashboardPause', 'Test-HitDayBtn')) {
