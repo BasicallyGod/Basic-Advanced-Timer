@@ -140,6 +140,9 @@ public sealed class ShellTests
                 dashboard.SelectTab(false);
                 Save(dashboard, Path.Combine(output, $"dashboard-timeline-{theme}.png"));
                 Assert.True(dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll").Offset.Y > 1000);
+                var nine = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
+                var ninePoint = nine.TranslatePoint(new Point(0, 0), dashboard)!.Value;
+                Assert.InRange(ninePoint.Y, 250, 400);
                 dashboard.SelectTab(true);
                 Save(dashboard, Path.Combine(output, $"dashboard-week-{theme}.png"));
                 Save(pill, Path.Combine(output, $"pill-{theme}.png"));
@@ -226,6 +229,9 @@ public sealed class ShellTests
 
     private static void Save(Window window, string path)
     {
+        Dispatcher.UIThread.RunJobs();
+        // First frame completes deferred scroll layout; capture the settled production view.
+        using var warmup = window.CaptureRenderedFrame();
         Dispatcher.UIThread.RunJobs();
         using var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
