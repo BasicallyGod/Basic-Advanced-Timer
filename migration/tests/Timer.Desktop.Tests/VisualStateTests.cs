@@ -52,6 +52,24 @@ public sealed class VisualStateTests
     }
 
     [AvaloniaFact]
+    public void OvertimeTurnsTheAppRedAndABreakOutranksIt()
+    {
+        var now = Day.AddHours(10); var engine = new TrackingEngine(clock: () => now); var model = new TimerModel(engine);
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); var normal = Brush(window, "Surface"); Assert.Equal("Normal", model.ThemeState);
+            now = Day.AddHours(18); model.Tick(); model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Overtime", model.ThemeState); var red = Brush(window, "Surface"); Assert.NotEqual(normal, red);
+            model.ToggleAccount("Lunch"); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Break", model.ThemeState); Assert.NotEqual(red, Brush(window, "Surface")); Assert.NotEqual(normal, Brush(window, "Surface"));
+            model.TogglePause(); Dispatcher.UIThread.RunJobs(); // Still in overtime, not tracking: overtime colours, grey glow.
+            Assert.Equal("Overtime", model.ThemeState); Assert.Equal(red, Brush(window, "Surface"));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void PillShowsDayProgressGlowsForItsStatesAndPulsesItsDot()
     {
         var now = Day.AddHours(13); var engine = new TrackingEngine(clock: () => now); var model = new TimerModel(engine);
@@ -76,6 +94,24 @@ public sealed class VisualStateTests
             Assert.Equal(Brush(pill, "Break").R, host.BoxShadow[0].Color.R); // Break outranks overtime.
             model.TogglePause(); Dispatcher.UIThread.RunJobs();
             Assert.False(Ui.IsPulsing(dot));
+        }
+        finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ExpandedPillKeepsSettingsAndDayButtonsSideBySideAlongTheBottom()
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => Day.AddHours(10)));
+        var pill = new PillWindow(model); pill.Show();
+        try
+        {
+            pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+            var settings = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings");
+            var day = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDay");
+            Assert.Equal(settings.TranslatePoint(default, pill)!.Value.Y, day.TranslatePoint(default, pill)!.Value.Y, 1);
+            Assert.True(day.TranslatePoint(default, pill)!.Value.X > settings.TranslatePoint(new Point(settings.Bounds.Width, 0), pill)!.Value.X - 1);
+            Assert.InRange(settings.Bounds.Width, 150, 230); Assert.Equal(settings.Bounds.Width, day.Bounds.Width, 1);
+            Assert.True(day.TranslatePoint(new Point(0, day.Bounds.Height), pill)!.Value.Y <= pill.Height - Ui.ShadowMargin); // Inside the card, not clipped.
         }
         finally { pill.Close(); }
     }

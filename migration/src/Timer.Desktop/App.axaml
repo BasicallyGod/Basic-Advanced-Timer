@@ -66,6 +66,37 @@
           <SolidColorBrush x:Key="Break">#F0C45A</SolidColorBrush>
           <Color x:Key="ShadowColor">#B3000000</Color>
         </ResourceDictionary>
+        <!-- Overtime turns the app red in the same way a break turns it amber. -->
+        <ResourceDictionary x:Key="{x:Static local:TimerModel.OvertimeLight}">
+          <SolidColorBrush x:Key="Surface">#FBEAE8</SolidColorBrush>
+          <SolidColorBrush x:Key="Panel">#FFF4F2</SolidColorBrush>
+          <SolidColorBrush x:Key="Ink">#3B1A18</SolidColorBrush>
+          <SolidColorBrush x:Key="Muted">#7D5A57</SolidColorBrush>
+          <SolidColorBrush x:Key="Line">#EBCFCB</SolidColorBrush>
+          <SolidColorBrush x:Key="Hover">#F4D9D5</SolidColorBrush>
+          <SolidColorBrush x:Key="Selected">#F0C9C4</SolidColorBrush>
+          <SolidColorBrush x:Key="Live">#337A50</SolidColorBrush>
+          <SolidColorBrush x:Key="Idle">#8A6F6B</SolidColorBrush>
+          <SolidColorBrush x:Key="Overtime">#B83B3B</SolidColorBrush>
+          <SolidColorBrush x:Key="BudgetWarning">#9D6C13</SolidColorBrush>
+          <SolidColorBrush x:Key="Break">#B07A12</SolidColorBrush>
+          <Color x:Key="ShadowColor">#59000000</Color>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="{x:Static local:TimerModel.OvertimeDark}">
+          <SolidColorBrush x:Key="Surface">#2B1A19</SolidColorBrush>
+          <SolidColorBrush x:Key="Panel">#352220</SolidColorBrush>
+          <SolidColorBrush x:Key="Ink">#F7E1DE</SolidColorBrush>
+          <SolidColorBrush x:Key="Muted">#D0AEAA</SolidColorBrush>
+          <SolidColorBrush x:Key="Line">#54332F</SolidColorBrush>
+          <SolidColorBrush x:Key="Hover">#432926</SolidColorBrush>
+          <SolidColorBrush x:Key="Selected">#5E302B</SolidColorBrush>
+          <SolidColorBrush x:Key="Live">#8FD7A3</SolidColorBrush>
+          <SolidColorBrush x:Key="Idle">#C9A8A4</SolidColorBrush>
+          <SolidColorBrush x:Key="Overtime">#FF9292</SolidColorBrush>
+          <SolidColorBrush x:Key="BudgetWarning">#E8BD67</SolidColorBrush>
+          <SolidColorBrush x:Key="Break">#F0C45A</SolidColorBrush>
+          <Color x:Key="ShadowColor">#B3000000</Color>
+        </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
     </ResourceDictionary>
   </Application.Resources>

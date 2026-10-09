@@ -4,6 +4,12 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration overtime theme and pill layout
+
+- Overtime now turns the app red, as a break turns it amber, with its own light and dark variants. A break outranks overtime and overtime outranks normal, and not tracking keeps the ordinary theme with its grey glow.
+- Moved the live dot in the pill away from the edge of its button.
+- The expanded pill now ends in a row with Settings and the day button side by side along the bottom edge. A line under them appears only for a failed save or the demo.
+
 ## Migration visual stability and lost visuals
 
 - Times now use fixed-width digits, so the clock, totals and budgets no longer shift as numbers change.

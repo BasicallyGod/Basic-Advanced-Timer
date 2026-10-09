@@ -319,9 +319,14 @@ public sealed class TimerModel : INotifyPropertyChanged
         catch (Exception error) when (error is ArgumentException or InvalidOperationException or IOException)
         { EditError = error.Message; Notify(); return false; }
     }
-    // Break themes are variants of Light and Dark that override the colours, so the app turns amber while a break is on.
+    // Break and overtime themes are variants of Light and Dark that override colours. A break outranks overtime, because it is
+    // the state you chose just now, and overtime outranks normal. Not tracking has no tint of its own: it keeps the ordinary
+    // theme and shows itself through the grey glow, so it never fights the other two.
     public static readonly ThemeVariant BreakLight = new("BreakLight", ThemeVariant.Light);
     public static readonly ThemeVariant BreakDark = new("BreakDark", ThemeVariant.Dark);
+    public static readonly ThemeVariant OvertimeLight = new("OvertimeLight", ThemeVariant.Light);
+    public static readonly ThemeVariant OvertimeDark = new("OvertimeDark", ThemeVariant.Dark);
+    public string ThemeState => IsOnBreak ? "Break" : IsOvertime ? "Overtime" : "Normal";
     private ThemeVariant? appliedVariant;
     private void ApplyTheme()
     {
@@ -331,9 +336,13 @@ public sealed class TimerModel : INotifyPropertyChanged
             "Light" => false, "Dark" => true,
             _ => app.PlatformSettings?.GetColorValues().ThemeVariant == Avalonia.Platform.PlatformThemeVariant.Dark
         };
-        // Following the system when no break is on keeps the default variant, so a change of system theme still applies.
-        var variant = IsOnBreak ? (dark ? BreakDark : BreakLight)
-            : Theme switch { "Light" => ThemeVariant.Light, "Dark" => ThemeVariant.Dark, _ => ThemeVariant.Default };
+        // Following the system when nothing is overriding keeps the default variant, so a change of system theme still applies.
+        var variant = ThemeState switch
+        {
+            "Break" => dark ? BreakDark : BreakLight,
+            "Overtime" => dark ? OvertimeDark : OvertimeLight,
+            _ => Theme switch { "Light" => ThemeVariant.Light, "Dark" => ThemeVariant.Dark, _ => ThemeVariant.Default }
+        };
         if (ReferenceEquals(variant, appliedVariant)) return;
         appliedVariant = variant; app.RequestedThemeVariant = variant;
     }

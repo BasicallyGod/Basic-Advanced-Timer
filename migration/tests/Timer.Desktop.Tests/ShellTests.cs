@@ -57,16 +57,15 @@ public sealed class ShellTests
             var labels = window.GetVisualDescendants().OfType<TextBlock>().ToArray();
             var idle = labels.Single(x => x.Text == "● Not tracking");
             var overtime = labels.Single(x => x.Text is not null && x.Text.StartsWith("Overtime"));
-            var idleColour = ((ISolidColorBrush)idle.Foreground!).Color;
-            Assert.InRange(Math.Abs(idleColour.R - idleColour.G), 0, 15);
             Assert.NotEqual(idle.Foreground, overtime.Foreground);
             var overtimeColour = ((ISolidColorBrush)overtime.Foreground!).Color;
             Assert.True(overtimeColour.R > overtimeColour.G + 30);
             Assert.True(overtime.IsVisible);
-            Assert.Equal(theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark, Application.Current!.ActualThemeVariant);
+            Assert.Equal(theme == "Light" ? TimerModel.OvertimeLight : TimerModel.OvertimeDark, Application.Current!.ActualThemeVariant);
         }
         model.SetTheme("System");
-        Assert.Equal(ThemeVariant.Default, Application.Current!.RequestedThemeVariant);
+        // Following the system, the overtime tint still applies on top of whichever of light or dark the system uses.
+        Assert.Contains(Application.Current!.RequestedThemeVariant, new[] { TimerModel.OvertimeLight, TimerModel.OvertimeDark });
     }
 
     [AvaloniaFact]

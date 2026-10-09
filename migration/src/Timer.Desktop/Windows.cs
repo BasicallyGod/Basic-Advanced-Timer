@@ -142,8 +142,8 @@ public sealed class PillWindow : Window
         var labels = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         account.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis;
         labels.Children.Add(account); labels.Children.Add(credited); labels.Children.Add(overtime);
-        var accountContent = Ui.Grid("12,*");
-        dot.VerticalAlignment = VerticalAlignment.Top; dot.Margin = new Thickness(0, 3, 0, 0);
+        var accountContent = Ui.Grid("24,*");
+        dot.VerticalAlignment = VerticalAlignment.Top; dot.Margin = new Thickness(8, 3, 0, 0);
         Ui.Put(accountContent, dot); Ui.Put(accountContent, labels, 1);
         var accountButton = Ui.Button("", ToggleExpansion, "PillAccounts");
         accountButton.Content = accountContent;
@@ -171,12 +171,17 @@ public sealed class PillWindow : Window
         expansion.Children.Add(Ui.Rule());
         expansion.Children.Add(new AccountList(model));
         day = Ui.Button("Start day", model.ToggleDay, "PillDay");
-        var actions = Ui.Horizontal(day);
-        actions.Margin = new Thickness(16, 0);
-        expansion.Children.Add(actions);
-        var bottom = Ui.Horizontal(Ui.SettingsButton(model), saved);
-        bottom.Margin = new Thickness(16, 0, 16, 12);
+        // Settings and the day button sit side by side along the bottom edge, each taking half the width.
+        var settings = Ui.SettingsButton(model);
+        foreach (var button in new[] { settings, day })
+        { button.HorizontalAlignment = HorizontalAlignment.Stretch; button.Height = 38; }
+        settings.Margin = new Thickness(0, 0, 5, 0); day.Margin = new Thickness(5, 0, 0, 0);
+        var bottom = Ui.Grid("*,*", "Auto");
+        Ui.Put(bottom, settings); Ui.Put(bottom, day, 1);
+        bottom.Margin = new Thickness(16, 4, 16, 14);
         expansion.Children.Add(bottom);
+        saved.HorizontalAlignment = HorizontalAlignment.Center; saved.Margin = new Thickness(0, -6, 0, 10);
+        expansion.Children.Add(saved);
         Ui.Put(root, new ScrollViewer { Content = expansion,
             AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 1);
@@ -188,11 +193,13 @@ public sealed class PillWindow : Window
         Closed += (_, _) => model.PropertyChanged -= Changed;
         Refresh();
     }
+    // The expanded pill grows by a line when a note such as a failed save is showing under the buttons.
+    private double WantedHeight() => (expanded ? CollapsedHeight + model.Accounts.Count * 68 + (saved.IsVisible ? 108 : 84) : CollapsedHeight) + 2 * Ui.ShadowMargin;
     public void ToggleExpansion()
     {
         expanded = !expanded;
         expansion.IsVisible = expanded;
-        Height = (expanded ? CollapsedHeight + model.Accounts.Count * 68 + 110 : CollapsedHeight) + 2 * Ui.ShadowMargin;
+        Height = WantedHeight();
         if (Screens.ScreenFromWindow(this) is { } screen)
         {
             Height = Math.Min(Height, screen.WorkingArea.Height / screen.Scaling);
@@ -203,7 +210,10 @@ public sealed class PillWindow : Window
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
     private void Refresh()
     {
-        saved.Text = model.LastError is null ? (model.Persistent ? "Saved locally" : model.IsDemo ? "Sample data · demo" : "Test session") : "Save failed; retrying";
+        // Only worth a line when something is unusual, so the bottom edge stays just the two buttons.
+        saved.Text = model.LastError is not null ? "Save failed; retrying" : model.IsDemo ? "Sample data · demo" : "";
+        var noteShown = saved.IsVisible; saved.IsVisible = saved.Text.Length > 0;
+        if (expanded && noteShown != saved.IsVisible) Height = WantedHeight();
         ToolTip.SetTip(saved, model.LastError);
         account.Text = model.AccountLabel;
         timer.Text = model.ClockText;
