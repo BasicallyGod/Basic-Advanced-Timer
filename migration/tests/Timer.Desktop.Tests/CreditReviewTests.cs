@@ -264,6 +264,34 @@ public sealed class CreditReviewTests
         window.MouseUp(point + new Vector(0, 20), MouseButton.Left);
         Assert.Equal(csv, model.Editor.SessionsCsv); window.Close();
     }
+    [AvaloniaFact]
+    public void DragAndResizeSnapToNeighbourTimesBetweenFiveMinuteMarks()
+    {
+        void Check(string firstStart, string firstMinutes, string nextStart, string nextMinutes,
+            int index, double fraction, double minutes, DateTime expectedFrom, DateTime expectedTo)
+        {
+            var engine = Engine(); engine.Sessions.AddRange(new[] { Row(firstStart, firstMinutes), Row(nextStart, nextMinutes) });
+            var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+            try
+            {
+                Capture(window, "snap-neighbour-before"); var original = model.Editor.SessionsCsv;
+                var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + index);
+                var point = card.TranslatePoint(new Point(70, card.Height * fraction), window)!.Value;
+                var target = point + new Vector(0, minutes / 60 * 160);
+                window.MouseDown(point, MouseButton.Left); window.MouseMove(target); window.MouseUp(target, MouseButton.Left);
+                Assert.Null(model.EditError); Assert.Equal(expectedFrom, engine.Sessions[index].From); Assert.Equal(expectedTo, engine.Sessions[index].To);
+                Assert.True(model.UndoEdit()); Assert.Equal(original, model.Editor.SessionsCsv);
+            }
+            finally { window.Close(); }
+        }
+        // Move upward against a 09:53 end, keeping the dragged block's duration.
+        Check("09:00:00", "53", "10:00:00", "30", 1, .5, -7, Day.AddHours(9).AddMinutes(53), Day.AddHours(10).AddMinutes(23));
+        // Move downward until the bottom edge meets a 10:03 start.
+        Check("09:00:00", "30", "10:03:00", "30", 0, .5, 33, Day.AddHours(9).AddMinutes(33), Day.AddHours(10).AddMinutes(3));
+        // Resize either edge to the same exact boundaries.
+        Check("09:00:00", "53", "10:00:00", "30", 1, .01, -7, Day.AddHours(9).AddMinutes(53), Day.AddHours(10.5));
+        Check("09:00:00", "30", "10:03:00", "30", 0, .99, 33, Day.AddHours(9), Day.AddHours(10).AddMinutes(3));
+    }
     [Fact]
     public void MergeFillsGapsButRejectsInterveningAccountsAndPartialGroups()
     {

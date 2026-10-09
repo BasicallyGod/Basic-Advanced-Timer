@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Timer.Core;
+using Timer.Storage;
 
 namespace Timer.Desktop;
 
@@ -31,7 +32,7 @@ public static class TimelineGestures
             var moved = e.GetPosition(canvas) - start;
             if (!dragging && Math.Abs(moved.Y) < 5) return;
             dragging = true;
-            delta = TimeSpan.FromMinutes(Math.Round(moved.Y / pixelsPerHour * 60 / 5) * 5);
+            delta = SnapDelta(model, row, edge, TimeSpan.FromHours(moved.Y / pixelsPerHour), pixelsPerHour);
             var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero);
             var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
             if (from < row.Day || until > row.Day.AddDays(1) || until <= from) return;
@@ -60,4 +61,34 @@ public static class TimelineGestures
         };
         card.Cursor = new Cursor(StandardCursorType.SizeAll);
     }
+    private static TimeSpan SnapDelta(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour)
+    {
+        var occupied = model.Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.IsPositioned && s.Duration > TimeSpan.Zero)
+            .Select(s => (Start: s.From, End: s.To)).Concat(model.Editor.Positions.Select(p => (Start: p.Start, End: p.End))).ToList();
+        if (model.Engine.Active is { } active && model.Engine.Now > active.Start)
+            occupied.Add((active.Start, model.Engine.Now));
+        var candidates = new List<TimeSpan>();
+        foreach (var other in occupied)
+        {
+            // Starts are stored in whole seconds. Round up fractional legacy ends
+            // so snapping never creates a small overlap when the entry is saved.
+            if (edge <= 0)
+            {
+                var end = new DateTime(((other.End.Ticks + TimeSpan.TicksPerSecond - 1) / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond, other.End.Kind);
+                candidates.Add(end - row.From);
+            }
+            if (edge >= 0) candidates.Add(other.Start - row.To);
+        }
+        foreach (var candidate in candidates.OrderBy(c => Math.Abs((c - requested).TotalHours)))
+        {
+            if (Math.Abs((candidate - requested).TotalHours * pixelsPerHour) > 8) break;
+            var from = row.From + (edge <= 0 ? candidate : TimeSpan.Zero);
+            var until = row.To + (edge >= 0 ? candidate : TimeSpan.Zero);
+            if (from < row.Day || until > row.Day.AddDays(1) || (until - from).TotalSeconds < 3) continue;
+            var saved = LedgerEditor.TimedRow(row.Account, from, until, "edited");
+            if (!occupied.Any(other => other.Start < saved.To && other.End > saved.From)) return candidate;
+        }
+        return TimeSpan.FromMinutes(Math.Round(requested.TotalMinutes / 5) * 5);
+    }
+
 }
