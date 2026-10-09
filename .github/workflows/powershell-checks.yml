@@ -2,9 +2,9 @@ name: PowerShell checks
 
 on:
   pull_request:
-    branches: [main, experimental]
+    branches: [main, experimental, migration]
   push:
-    branches: [main, experimental]
+    branches: [main, experimental, migration]
 
 permissions:
   contents: read

@@ -1,0 +1,86 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Timer.Desktop.App" RequestedThemeVariant="Default">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="Surface">#F5F8F4</SolidColorBrush>
+          <SolidColorBrush x:Key="Panel">#FFFFFF</SolidColorBrush>
+          <SolidColorBrush x:Key="Ink">#24312B</SolidColorBrush>
+          <SolidColorBrush x:Key="Muted">#68726C</SolidColorBrush>
+          <SolidColorBrush x:Key="Line">#DDE5DC</SolidColorBrush>
+          <SolidColorBrush x:Key="Hover">#E7EEE5</SolidColorBrush>
+          <SolidColorBrush x:Key="Selected">#D9E9DA</SolidColorBrush>
+          <SolidColorBrush x:Key="Live">#337A50</SolidColorBrush>
+          <SolidColorBrush x:Key="Idle">#6D7471</SolidColorBrush>
+          <SolidColorBrush x:Key="Overtime">#B83B3B</SolidColorBrush>
+          <SolidColorBrush x:Key="BudgetWarning">#9D6C13</SolidColorBrush>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="Surface">#1B221F</SolidColorBrush>
+          <SolidColorBrush x:Key="Panel">#242D28</SolidColorBrush>
+          <SolidColorBrush x:Key="Ink">#ECF2EC</SolidColorBrush>
+          <SolidColorBrush x:Key="Muted">#ABB8AE</SolidColorBrush>
+          <SolidColorBrush x:Key="Line">#3B493F</SolidColorBrush>
+          <SolidColorBrush x:Key="Hover">#303D34</SolidColorBrush>
+          <SolidColorBrush x:Key="Selected">#3B5542</SolidColorBrush>
+          <SolidColorBrush x:Key="Live">#8FD7A3</SolidColorBrush>
+          <SolidColorBrush x:Key="Idle">#ABB3AE</SolidColorBrush>
+          <SolidColorBrush x:Key="Overtime">#FF9292</SolidColorBrush>
+          <SolidColorBrush x:Key="BudgetWarning">#E8BD67</SolidColorBrush>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+  <Application.Styles>
+    <FluentTheme />
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{DynamicResource Surface}" />
+      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+      <Setter Property="FontFamily" Value="avares://Avalonia.Fonts.Inter/Assets#Inter" />
+      <Setter Property="FontSize" Value="14" />
+    </Style>
+    <Style Selector="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+    <Style Selector="TextBlock.idle"><Setter Property="Foreground" Value="{DynamicResource Idle}" /></Style>
+    <Style Selector="TextBlock.live"><Setter Property="Foreground" Value="{DynamicResource Live}" /></Style>
+    <Style Selector="TextBlock.overtime"><Setter Property="Foreground" Value="{DynamicResource Overtime}" /></Style>
+    <Style Selector="Border.surface"><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
+    <Style Selector="Border.panel"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
+    <Style Selector="Border.rule"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
+    <Style Selector="Button">
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Background" Value="{DynamicResource Panel}" />
+      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Padding" Value="12,8" />
+    </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Hover}" />
+      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+    </Style>
+    <Style Selector="Button.account">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Height" Value="68" />
+      <Setter Property="Padding" Value="16,8" />
+    </Style>
+    <Style Selector="Button.account.active">
+      <Setter Property="Background" Value="{DynamicResource Selected}" />
+    </Style>
+    <Style Selector="Button.tab.selected">
+      <Setter Property="Background" Value="{DynamicResource Selected}" />
+    </Style>
+    <Style Selector="Button.round">
+      <Setter Property="CornerRadius" Value="24" />
+      <Setter Property="Width" Value="40" />
+      <Setter Property="Height" Value="40" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+  </Application.Styles>
+</Application>

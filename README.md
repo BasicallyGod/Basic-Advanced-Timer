@@ -1,5 +1,7 @@
 # Basic’s Advanced Timer
 
+**Avalonia migration:** The `migration` branch adds a separate cross-platform UI preview alongside the existing v2.32 application. See [migration/README.md](migration/README.md) for preview downloads, limitations and the staged plan. It uses synthetic data and does not save timesheets. The existing launcher continues to start the PowerShell application.
+
 **Development status:** `main` contains the stable v2.22 release. The `experimental` branch contains v2.32 with settings consolidation, branding changes and all-day Start day / Finish day controls. Its automated tests have passed, but migration against a real Windows installation has not yet been verified. Keep everyday timesheets on the stable release until that check is complete.
 
 Basic’s Advanced Timer is a portable, always-on-top Windows time tracker for client accounts and weekly timesheets. The current application is **v2.32**. It runs from a folder using Windows PowerShell 5.1 and WinForms, with compiled C# rendering built into the script. No installer, administrator access, extra PowerShell modules or separate .NET runtime are required.

@@ -141,3 +141,10 @@ Dashboard drag grips end at x=18; play buttons and budget rings centre at x=40. 
 ### v2.32 dashboard polish
 
 Account highlights fill the sidebar width; Lunch uses the same contiguous 48px row geometry (DashboardLayout.LunchGap = 0). The dashboard clock uses 40px type. Tracking actions live in the account rows; the removed top Pause control has no remaining draw or input handlers.
+
+
+## Avalonia migration branch
+
+`migration/` is the authorised exception to the single-script/no-new-dependencies conventions for the existing PowerShell application. Keep those conventions for `AccountTimer2.ps1`. Build the replacement as a separate .NET/Avalonia application, while preserving the legacy app and all six regression suites until the migration is verified. The desktop shell uses synthetic in-memory state only and must not read or write personal CSV/settings/recovery files. `PreviewModel` is a disposable UI demonstrator, not the migrated accounting core. Port authoritative behaviour into a separate platform-independent C# core with parity tests in the next stage.
+
+Shared light/dark dictionaries and component styles live in `migration/src/Timer.Desktop/App.axaml`. Not tracking uses the neutral Idle resource, recording uses Live, and overtime uses Overtime independently of recording. Native Avalonia layout and input own ordinary controls; custom drawing is limited to vector account icons/budget rings. Pill and dashboard are separate windows sharing one model, so view changes do not resize a visible window. Production styles, bundled fonts and controls are used in headless tests. The migration workflow checks Windows/Linux/macOS and publishes a self-contained Windows preview; native work-machine launch and OS integration remain explicit checkpoints. See `migration/README.md` before extending the shell.

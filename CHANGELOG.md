@@ -1,5 +1,13 @@
 # Changelog
 
+## Migration foundation (repository development)
+
+- Created `migration` from experimental v2.32; kept the existing application and launcher intact.
+- Added an isolated Avalonia desktop preview with pill/dashboard windows, shared System/Light/Dark themes, vector budget indicators and illustrative Timeline/Week views.
+- Made Not tracking grey and overtime red, with independent recording/overtime indicators.
+- Added production-style headless input/rendering checks, cross-platform CI and self-contained Windows preview packaging.
+- Documented staged core/storage/editing migration and the preview's synthetic, non-persistent data boundary. No production tracking behaviour or file format is changed.
+
 Basic’s Advanced Timer grew from a single billable-hours counter into a full timesheet tracker. Only `AccountTimer2.ps1` remains in the current working tree; the earlier implementations and their launchers are available in Git history.
 
 Version numbers were assigned after the fact, one per round of changes, all built in October 2026.

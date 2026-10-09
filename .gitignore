@@ -9,3 +9,9 @@ basics-advanced-timer.settings.json*
 
 # Error logs and drawing speed reports
 *.log
+
+# Avalonia build output and disposable preview artifacts
+**/bin/
+**/obj/
+artifacts/
+TestResults/
