@@ -238,6 +238,36 @@ public sealed partial class LedgerEditor
         history.Clear(); stepBytes.Clear(); stateJson = null;
         return count;
     }
+    /// <summary>Moves entries to another account, with their notes, as one edit. Times do not change, so nothing can overlap.</summary>
+    public void Reassign(IReadOnlyList<SessionRow> rows, string account)
+    {
+        if (rows.Count == 0) return;
+        if (string.IsNullOrWhiteSpace(account) || account != account.Trim()) throw new ArgumentException("Choose an account.");
+        var moving = rows.Where(r => !r.Account.Equals(account, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (moving.Count == 0) return;
+        foreach (var row in moving)
+        {
+            Index(row); CheckNoteKey(row);
+            if (!row.IsPositioned) throw new ArgumentException("Merged credit and adjustments cannot be moved to another account here.");
+            if (engine.Sessions.Any(s => !moving.Any(m => ReferenceEquals(m, s)) && s.Date == row.Date && s.Start == row.Start && s.Account.Equals(account, StringComparison.OrdinalIgnoreCase)))
+                throw new ArgumentException("Another entry for that account starts at the same time.");
+        }
+        var keys = moving.Select(r => (r.Date, r.Start)).ToList();
+        if (keys.Distinct().Count() != keys.Count) throw new ArgumentException("Two of these entries start at the same time, so they cannot move to one account.");
+        var notesBefore = moving.Select(Note).ToList();
+        Change(moving.Count == 1 ? "Move to " + BreakAccount.Display(account) : $"Move {moving.Count} entries to {BreakAccount.Display(account)}", () =>
+        {
+            for (var i = 0; i < moving.Count; i++)
+            {
+                var old = moving[i]; var index = Index(old);
+                var row = old with { Account = account };
+                raw[row] = Fields(old); raw[row]["Account"] = account;
+                engine.Sessions[index] = row;
+                notes.Rows.RemoveAll(n => SameKey(n, old));
+                SetNote(null, row, notesBefore[i]);
+            }
+        });
+    }
     /// <summary>Deletes several entries as one edit, so a single Undo brings them all back.</summary>
     public void Delete(IReadOnlyList<SessionRow> rows)
     {

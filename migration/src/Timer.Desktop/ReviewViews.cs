@@ -83,7 +83,7 @@ public static class ReviewViews
             {
                 card.Tag = row; card.Name = "TimelineEntry" + model.Engine.Sessions.IndexOf(row);
                 var edit = new MenuItem { Header = "Edit entry / note…" }; edit.Click += (_, _) => model.OpenEntry(row);
-                card.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, MergeMenu(model) } };
+                card.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, MoveMenu(model, new[] { row }), MergeMenu(model) } };
                 TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour);
             }
             if (interval.Row is null && interval.Position is null && interval.Group is null)
@@ -187,29 +187,70 @@ public static class ReviewViews
             || model.Engine.Sessions.Any(s => s.Day == day.AddDays(i))
             || (model.Engine.Active is not null && day.AddDays(i) == model.Engine.Now.Date)).ToArray();
         if (days.Length == 0) days = Enumerable.Range(0, 7).ToArray();
-        var grid = Ui.Grid("125," + string.Join(",", days.Select(_ => "*")) + ",75", "Auto," + string.Join(",", model.ReviewAccounts.Select(_ => "Auto")));
-        grid.MinWidth = 200 + days.Length * 58;
-        Ui.Put(grid, Ui.Text("Account", 12, "muted"));
-        for (var i = 0; i < days.Length; i++) Ui.Put(grid, Ui.Text(day.AddDays(days[i]).ToString("ddd"), 12, "muted"), i + 1);
-        Ui.Put(grid, Ui.Text("Total", 12, "muted"), days.Length + 1);
         var reconciled = new WeekExport(model.Editor, model.Engine, day);
-        string Value(TimerAccount account, int? index)
+        var table = WeekTable.Build(model, reconciled, day, days);
+        var grid = Ui.Grid("170," + string.Join(",", days.Select(_ => "*")) + ",85", "Auto," + string.Join(",", table.Rows.Select(_ => "Auto")));
+        grid.MinWidth = 255 + days.Length * 62;
+        // Account figures, then the bold total, then the faint break and unallocated rows beneath a rule.
+        for (var c = 0; c < table.Headers.Length; c++)
         {
-            if (!model.DecimalHours || model.Engine.Active is not null) return model.Format(index is { } i ? model.OnDay(account, day.AddDays(i)) : model.Week(account));
-            var values = reconciled.Accounts.GetValueOrDefault(account.Name) ?? new long[7];
-            return WeekExport.Hours(index is { } d ? values[d] : values.Sum()) + "h";
+            var heading = Ui.Text(c == 0 ? table.Headers[c] : table.Headers[c].Split(' ')[0], 12, "muted");
+            if (c > 0) heading.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
+            Ui.Put(grid, heading, c);
         }
-        var row = 1;
-        foreach (var a in model.ReviewAccounts)
+        for (var r = 0; r < table.Rows.Count; r++)
         {
-            Ui.Put(grid, Ui.Text(a.Display, 13), row: row).Margin = new Thickness(0, 16);
-            for (var i = 0; i < days.Length; i++) Ui.Put(grid, Ui.Text(Value(a, days[i]), 12), i + 1, row);
-            Ui.Put(grid, Ui.Text(Value(a, null), 12), days.Length + 1, row);
-            row++;
+            var item = table.Rows[r];
+            TextBlock Cell(string text, bool right)
+            {
+                var block = Ui.Text(text, item.Style == "bold" ? 14 : 13, item.Style == "faint" ? "muted" : null);
+                if (item.Style == "bold") block.FontWeight = FontWeight.SemiBold;
+                block.Margin = new Thickness(0, item.Style == "normal" ? 12 : 9);
+                if (right) block.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
+                return block;
+            }
+            Ui.Put(grid, Cell(item.Label, false), 0, r + 1);
+            for (var i = 0; i < item.Cells.Length; i++) Ui.Put(grid, Cell(item.Cells[i], true), i + 1, r + 1);
+            Ui.Put(grid, Cell(item.Total, true), item.Cells.Length + 1, r + 1);
+            if (item.Style == "bold") Ui.Put(grid, new Border { Height = 1, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Classes = { "rule" } }, 0, r + 1).SetValue(Grid.ColumnSpanProperty, table.Headers.Length);
         }
         var root = new StackPanel { Spacing = 16 };
-        root.Children.Add(Ui.Text("Week commencing " + day.ToString("d MMMM"), 12, "muted"));
+        var heading2 = Ui.Grid("*,Auto");
+        Ui.Put(heading2, Ui.Text("Week commencing " + day.ToString("d MMMM"), 12, "muted"));
+        var copy = Ui.Button("Copy hours table", () => { }, "CopyHours"); ToolTip.SetTip(copy, "Copy the table to the clipboard, ready to paste into a timesheet");
+        copy.Click += async (_, _) =>
+        {
+            if (TopLevel.GetTopLevel(copy)?.Clipboard is not { } clipboard) return;
+            await clipboard.SetTextAsync(table.ToTsv());
+            copy.Content = "Copied";
+            var reset = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            reset.Tick += (_, _) => { reset.Stop(); copy.Content = "Copy hours table"; };
+            reset.Start();
+        };
+        Ui.Put(heading2, copy, 1);
+        root.Children.Add(heading2);
         root.Children.Add(grid);
+        if (table.Budgets.Count > 0)
+        {
+            root.Children.Add(Ui.Text("Budgets", 13, "muted"));
+            var budgets = Ui.Grid("170,*,*,*,70", "Auto," + string.Join(",", table.Budgets.Select(_ => "Auto")));
+            foreach (var (text, c) in new[] { "Account", "Budget", "Used", "Remaining", "Used" }.Select((t, c) => (t, c)))
+            {
+                var h = Ui.Text(text, 12, "muted"); if (c > 0) h.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(budgets, h, c);
+            }
+            for (var r = 0; r < table.Budgets.Count; r++)
+            {
+                var b = table.Budgets[r];
+                var cells = new[] { b.Account, b.Budget, b.Used, b.Remaining, $"{b.Fraction * 100:0}%" };
+                for (var c = 0; c < cells.Length; c++)
+                {
+                    var block = Ui.Text(cells[c], 13, c == 4 ? (b.Fraction >= 1 ? "overtime" : b.Fraction >= .8 ? "budgetWarning" : null) : null);
+                    block.Margin = new Thickness(0, 8); if (c > 0) block.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
+                    Ui.Put(budgets, block, c, r + 1);
+                }
+            }
+            root.Children.Add(budgets);
+        }
         root.Children.Add(Ui.Text(model.SelectedBlockCount > 0 ? $"{model.SelectedBlockCount} blocks selected · " + model.MergeHint : "Entries · click to select · right-click to edit or merge", 12, "muted"));
         foreach (var entry in reconciled.Entries)
         {
@@ -235,7 +276,7 @@ public static class ReviewViews
             {
                 button.Classes.Set("mergeSelected", model.IsSelected(entry.Sources));
                 var edit = new MenuItem { Header = "Edit / inspect entry…" }; edit.Click += (_, _) => Open();
-                button.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, MergeMenu(model) } };
+                button.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, MoveMenu(model, entry.Sources), MergeMenu(model) } };
             }
             if (entry.GroupId is { } groupId)
             {
@@ -249,6 +290,21 @@ public static class ReviewViews
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
         DeferOffset(scroll);
         return scroll;
+    }
+    // Moves the clicked entry, or every selected block when the clicked one is selected, to another account.
+    private static MenuItem MoveMenu(TimerModel model, IReadOnlyList<SessionRow> clicked)
+    {
+        var item = new MenuItem { Name = "MoveToAccountMenu", Header = "Move to account" };
+        var rows = model.IsSelected(clicked) ? model.Engine.Sessions.Where(model.SelectedRows.Contains).ToList() : clicked.ToList();
+        var targets = model.Accounts.Where(a => rows.Any(r => !r.Account.Equals(a.Name, StringComparison.OrdinalIgnoreCase))).ToList();
+        item.ItemsSource = targets.Select(a =>
+        {
+            var target = new MenuItem { Header = a.Display, Name = "MoveTo" + a.Name.Replace(" ", "") };
+            target.Click += (_, _) => model.MoveEntries(rows, a.Name);
+            return target;
+        }).ToList();
+        item.IsEnabled = targets.Count > 0 && rows.All(r => r.IsPositioned);
+        return item;
     }
     private static MenuItem MergeMenu(TimerModel model)
     {

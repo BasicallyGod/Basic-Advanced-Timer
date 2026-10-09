@@ -4,6 +4,13 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration week tab
+
+- The hours table now ends with a bold Total (excluding breaks) row and faint Break and Unallocated rows, laid out with clearer weight. Decimal totals add up exactly.
+- Added a Budgets table (budget, used, remaining, used percentage, with amber and red warnings) and a Copy hours table button that copies tab separated text for a timesheet.
+- The Week tab arrows now move a whole week and stop at the current week. Timeline still moves a day.
+- Added Move to account to the right-click menu of timeline blocks and week entries, applying to the whole selection and keeping notes, as one undoable edit.
+
 ## Migration break button
 
 - Replaced the Lunch row with a Break button that sits apart from the account rows and wears the amber break colour. It is in the dashboard sidebar and beside pause on the pill. Ending a break returns to the account that was running before it, found from the recorded time so it is not lost.

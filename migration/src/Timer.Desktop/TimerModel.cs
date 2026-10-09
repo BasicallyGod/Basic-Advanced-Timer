@@ -217,6 +217,17 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
     public void ChangeDate(int days) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
+    /// <summary>Steps the Week tab by whole weeks. It never goes past the current week, since there is nothing to review there.</summary>
+    public void ChangeWeek(int weeks)
+    {
+        var target = WeekStart(SelectedDate).AddDays(7 * weeks);
+        if (target > WeekStart(Engine.Now)) return;
+        selectedRows.Clear(); TimelineOffset = null; SelectedDate = target; Notify();
+    }
+    public bool CanStepForwardAWeek => WeekStart(SelectedDate) < WeekStart(Engine.Now);
+    /// <summary>Moves entries to another account as one undoable edit. Every selected block moves when the one clicked is selected.</summary>
+    public bool MoveEntries(IReadOnlyList<SessionRow> rows, string account)
+        => ChangeLog(() => { ValidateAccount(account); Editor.Reassign(rows, account); });
     public void SetTheme(string theme)
     {
         if (theme is not ("Light" or "Dark" or "System")) throw new ArgumentException("Unknown theme", nameof(theme));

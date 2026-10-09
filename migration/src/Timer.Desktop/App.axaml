@@ -147,6 +147,7 @@
     <Style Selector="TextBlock.idle"><Setter Property="Foreground" Value="{DynamicResource Idle}" /></Style>
     <Style Selector="TextBlock.live"><Setter Property="Foreground" Value="{DynamicResource Live}" /></Style>
     <Style Selector="TextBlock.break"><Setter Property="Foreground" Value="{DynamicResource Break}" /></Style>
+    <Style Selector="TextBlock.budgetWarning"><Setter Property="Foreground" Value="{DynamicResource BudgetWarning}" /></Style>
     <Style Selector="TextBlock.overtime"><Setter Property="Foreground" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.surface"><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
     <Style Selector="Border.panel"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>

@@ -269,7 +269,7 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock today = Ui.Text("", 23);
     private readonly ContentControl workspace = new();
     private readonly Button day;
-    private Button breakButton = null!;
+    private Button breakButton = null!, previous = null!, next = null!;
     private readonly BreakGlyph dashboardCup = new();
     private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly Button format;
@@ -336,7 +336,10 @@ public sealed class DashboardWindow : Window
         timeline = Ui.Button("Timeline", () => SelectTab(false), "TimelineTab"); timeline.Classes.Add("tab");
         week = Ui.Button("Week", () => SelectTab(true), "WeekTab"); week.Classes.Add("tab");
         Ui.Put(nav, Ui.Horizontal(timeline, week));
-        Ui.Put(nav, Ui.Horizontal(Ui.Button("‹", () => model.ChangeDate(-1)), date, Ui.Button("›", () => model.ChangeDate(1))), 2);
+        // In the Week tab the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
+        previous = Ui.Button("‹", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }, "PreviousPeriod");
+        next = Ui.Button("›", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }, "NextPeriod");
+        Ui.Put(nav, Ui.Horizontal(previous, date, next), 2);
         Ui.Put(review, nav);
         format = Ui.Button("Hours and minutes", model.ToggleFormat, "HoursFormat");
         undo = Ui.Button("Undo", () => model.UndoEdit(), "UndoEdit");
@@ -402,7 +405,10 @@ public sealed class DashboardWindow : Window
         clock.Classes.Set("idle", !model.IsTracking);
         account.Text = model.IsOnBreak ? (model.ResumeAccount is { } backTo ? "Then back to " + backTo : "No account running") : model.AccountLabel;
         today.Text = model.Engine.Now.ToString("dddd, d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
-        date.Text = model.SelectedDate.ToString("ddd d MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
+        var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
+        date.Text = weekMode ? "Week of " + model.WeekStart(model.SelectedDate).ToString("d MMM", british) : model.SelectedDate.ToString("ddd d MMM", british);
+        next.IsEnabled = !weekMode || model.CanStepForwardAWeek;
+        ToolTip.SetTip(previous, weekMode ? "Previous week" : "Previous day"); ToolTip.SetTip(next, weekMode ? "Next week" : "Next day");
         allocated.Text = "Today allocated   " + model.Format(model.Allocated);
         unallocated.Text = "Unallocated   " + model.Format(model.Unallocated);
         day.Content = model.DayStarted ? "Finish day" : "Start day";

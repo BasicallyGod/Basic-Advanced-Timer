@@ -427,6 +427,7 @@ public sealed class CreditReviewTests
             Assert.Equal(2, window.GetVisualDescendants().OfType<Border>().Count(b => b.Tag is ReviewEntry));
             window.SelectTab(true); Capture(window, "week-ctrl-selection");
             var entry = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekReviewEntry");
+            entry.BringIntoView(); Dispatcher.UIThread.RunJobs(); // The table above is taller now, so scroll the entry into view first.
             var point = entry.TranslatePoint(new Point(50, 15), window)!.Value;
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             Assert.Equal(2, model.SelectedRows.Count); Assert.False(model.CanMergeSelection); window.Close();
