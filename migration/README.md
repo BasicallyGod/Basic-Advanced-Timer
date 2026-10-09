@@ -52,7 +52,7 @@ Tests use disposable synthetic data only. Core checks exercise early starts, acc
 
 ### UI review and sample data
 
-Both windows move by dragging their header, including its empty space, account label and clock in the pill. Header buttons remain clickable. The main clock turns green while tracking and grey while idle; overtime has its own red label.
+Click the pill’s account area to show or hide its compact account list. Click its timer to open the dashboard, and use Back to pill to return. Drag the pill using the clear strip above or below these two click targets, or its side margins. The dashboard moves by dragging its header text or empty header space. Header buttons remain clickable. The main clock turns green while tracking and grey while idle; overtime has its own red label.
 
 Run **Start-Demo.cmd** from the Windows preview folder, or choose **Settings → Open sample-data demo**. Demo mode has populated accounts, budgets and recorded intervals. It uses a simulated 14:15 clock on today's date, advances in real time, and never opens or saves personal data. Choose **Settings → Force overtime** inside the demo to set today's shift end to 13:00. Restart the demo to reset it. CLI: `--demo` (cannot be combined with `--data-dir`).
 

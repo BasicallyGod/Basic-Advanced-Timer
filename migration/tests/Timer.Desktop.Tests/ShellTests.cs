@@ -241,7 +241,8 @@ public sealed class ShellTests
                 var header = window.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "DragHeader");
                 Assert.NotNull(header.Background);
                 Assert.True(Ui.IsDragSurface(header));
-                Assert.True(Ui.IsDragSurface(header.GetVisualDescendants().OfType<TextBlock>().First()));
+                var label = header.GetVisualDescendants().OfType<TextBlock>().First();
+                Assert.Equal(window is DashboardWindow, Ui.IsDragSurface(label));
                 var button = header.GetVisualDescendants().OfType<Button>().First();
                 Assert.False(Ui.IsDragSurface(button));
                 Assert.All(button.GetVisualDescendants(), child => Assert.False(Ui.IsDragSurface(child)));
@@ -302,6 +303,40 @@ public sealed class ShellTests
             }
         }
         finally { Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public void PillAccountAndTimerClicksOpenTheirRespectiveViews()
+    {
+        var model = Fixture();
+        var coordinator = new WindowCoordinator(model, () => { });
+        coordinator.Pill.Show();
+        try
+        {
+            model.ToggleAccount("Account one");
+            Dispatcher.UIThread.RunJobs();
+            using var frame = coordinator.Pill.CaptureRenderedFrame();
+            void Click(string name)
+            {
+                var button = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
+                var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), coordinator.Pill)!.Value;
+                coordinator.Pill.MouseDown(point, MouseButton.Left);
+                coordinator.Pill.MouseUp(point, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+            }
+            Click("PillAccounts");
+            Assert.True(coordinator.Pill.Height > 88);
+            Assert.False(coordinator.Dashboard.IsVisible);
+            Click("PillAccounts");
+            Assert.Equal(88, coordinator.Pill.Height);
+            Click("PillDashboard");
+            Assert.True(coordinator.Dashboard.IsVisible);
+            Assert.False(coordinator.Pill.IsVisible);
+            Assert.Equal("Account one", model.ActiveAccount);
+            coordinator.Dashboard.OpenPill!();
+            Assert.Equal(88, coordinator.Pill.Height);
+        }
+        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
     }
 
     private static void Save(Window window, string path)
