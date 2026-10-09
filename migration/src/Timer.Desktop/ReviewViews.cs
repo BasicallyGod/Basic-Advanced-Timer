@@ -20,6 +20,7 @@ public static class ReviewViews
         var caption = Ui.Text(unplaced > TimeSpan.Zero ? "Unplaced legacy credit " + model.Format(unplaced) : "Recorded time", 12, "muted");
         if (model.SelectedBlockCount > 0) caption.Text += $" · {model.SelectedBlockCount} blocks selected · " + model.MergeHint;
         else caption.Text += " · Ctrl+click blocks to select";
+        caption.TextWrapping = TextWrapping.Wrap;
         caption.Margin = new Thickness(0, 0, 0, 10);
         Ui.Put(root, caption);
         const double pixelsPerHour = 160;

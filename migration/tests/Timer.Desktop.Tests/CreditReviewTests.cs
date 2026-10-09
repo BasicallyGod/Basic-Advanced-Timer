@@ -104,7 +104,7 @@ public sealed class CreditReviewTests
     [Fact]
     public void TidyPreviewsEligibleGapsAndRechecksEntireBatchBeforeAddingTime()
     {
-        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "27"), Row("10:04:00", "26", account: "Account two") });
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:33:00", "27"), Row("10:04:00", "26", account: "Account two") });
         var editor = new LedgerEditor(engine); var gaps = editor.TidyCandidates(Day); Assert.Equal(2, gaps.Count);
         var choices = gaps.Select(g => new GapChoice(g, g.Previous)).ToArray();
         engine.Away.Add(new(gaps[1].Start, gaps[1].End));
