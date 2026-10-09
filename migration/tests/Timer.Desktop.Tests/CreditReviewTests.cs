@@ -323,7 +323,21 @@ public sealed class CreditReviewTests
         Assert.Equal(csv, editor.SessionsCsv); Assert.Equal(undo, editor.StateJson);
     }
     [AvaloniaFact]
-    public void DragBeyondNestleThresholdPreviewsAndCommitsNudges()
+    public void TimelineZoomKeepsPointerTimeAndClampsScale()
+    {
+        var model = new TimerModel(Engine());
+        model.ZoomTimeline(1, 120, 800);
+        Assert.Equal(192, model.TimelinePixelsPerHour);
+        Assert.Equal(984, model.TimelineOffset!.Value, 5);
+        model.ZoomTimeline(-1, 120, model.TimelineOffset.Value);
+        Assert.Equal(160, model.TimelinePixelsPerHour, 5);
+        Assert.Equal(800, model.TimelineOffset!.Value, 5);
+        model.ZoomTimeline(100, 0, 0); Assert.Equal(640, model.TimelinePixelsPerHour);
+        model.ZoomTimeline(-100, 0, 0); Assert.Equal(60, model.TimelinePixelsPerHour);
+        model.ChangeDate(1); Assert.Null(model.TimelineOffset);
+    }
+    [AvaloniaFact]
+    public void DragBeyondNestleThresholdLeapfrogsWithoutMovingNeighbours()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:00:00", "30") });
         var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show(); Capture(window, "nudge-before");
@@ -333,9 +347,9 @@ public sealed class CreditReviewTests
             var csv = model.Editor.SessionsCsv; var oldTop = Canvas.GetTop(cards[1]);
             var point = cards[0].TranslatePoint(new Point(70, 30), window)!.Value; var target = point + new Vector(0, 20.0 / 60 * 160);
             window.MouseDown(point, MouseButton.Left); window.MouseMove(target);
-            Assert.True(Canvas.GetTop(cards[1]) > oldTop); Assert.Equal(csv, model.Editor.SessionsCsv);
+            Assert.Equal(oldTop, Canvas.GetTop(cards[1])); Assert.Equal(csv, model.Editor.SessionsCsv);
             window.MouseUp(target, MouseButton.Left); Assert.Null(model.EditError); Assert.Empty(model.SelectedRows);
-            Assert.Equal(Day.AddHours(9).AddMinutes(50), engine.Sessions[1].From); Assert.True(model.UndoEdit()); Assert.Equal(csv, model.Editor.SessionsCsv);
+            Assert.Equal(Day.AddHours(9.5), engine.Sessions[1].From); Assert.Equal(Day.AddHours(10.5), engine.Sessions[0].From); Assert.True(model.UndoEdit()); Assert.Equal(csv, model.Editor.SessionsCsv);
         }
         finally { window.Close(); }
     }
