@@ -12,7 +12,7 @@ $blocks = @($ast.FindAll({ param($node)
 if ($blocks.Count -ne 1) { throw 'Expected one embedded renderer.' }
 Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition $blocks[0].Value
 $r = New-Object Win.FullRenderer
-$r.BaseW = 320; $r.BaseH = 370; $r.DrawerW = 720; $r.DrawerH = 480
+$r.BaseW = 320; $r.BaseH = 480; $r.DrawerW = 720; $r.DrawerH = 480
 $r.DrawerOpen = $true; $r.Shadow = $false
 foreach ($left in @($true, $false)) {
     $r.TimerOffX = if ($left) { 720 } else { 0 }
@@ -20,7 +20,7 @@ foreach ($left in @($true, $false)) {
     try {
         $timerX = if ($left) { 850 } else { 150 }
         $drawerX = if ($left) { 150 } else { 850 }
-        if ($outline.IsVisible([single]$timerX, [single]440)) { throw 'Blank corner under timer remains visible.' }
+        if (-not $outline.IsVisible([single]$timerX, [single]440)) { throw 'Timer backdrop does not reach the drawer height.' }
         if (-not $outline.IsVisible([single]$drawerX, [single]440)) { throw 'Drawer content area was cut away.' }
         if (-not $outline.IsVisible([single]$timerX, [single]150)) { throw 'Timer controls were cut away.' }
     } finally { $outline.Dispose() }
@@ -44,7 +44,7 @@ try {
         $r.Drawer.Mode = $mode
         $bitmap = $r.Render(1060, 500)
         try {
-            if ($bitmap.GetPixel(850, 440).A -ne 0) { throw 'Renderer paints the blank corner.' }
+            if ($bitmap.GetPixel(850, 440).A -eq 0) { throw 'Renderer leaves a hole in the timer backdrop.' }
         } finally { $bitmap.Dispose() }
         foreach ($button in $r.DrawerButtons) {
             if ($button.Rect.Height -lt 28) { throw 'Drawer button targets are too small.' }
@@ -53,3 +53,20 @@ try {
     }
 } finally { $font.Dispose() }
 Write-Output 'Renderer layout checks passed.'
+
+foreach ($name in @('Sync-RendererLayout', 'Get-DayBtnRect')) {
+    $fn = @($ast.FindAll({ param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
+    }, $true))
+    Invoke-Expression $fn[0].Extent.Text
+}
+function Test-FullShadow { return $false }
+$script:renderer = $r; $script:Zoom = 1; $script:BaseH = 370; $script:BaseW = 320
+$script:drawerH = 480; $script:drawerOpen = $true; $script:useRenderer = $true
+$script:DayBtn = @{ W = 150; H = 22 }; $script:RowTop = 100
+Sync-RendererLayout
+$rect = Get-DayBtnRect
+if ($r.BaseH -ne 480 -or $rect.Y -ne 450) { throw 'Tall panel and footer hit target are misaligned.' }
+$script:drawerOpen = $false
+Sync-RendererLayout
+if ($r.BaseH -ne 370 -or (Get-DayBtnRect).Y -ne 340) { throw 'Closed drawer must restore compact height.' }

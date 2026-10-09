@@ -113,3 +113,7 @@ The working tree deliberately contains only the current app, its launcher, docum
 ## v2.25 drawer readability
 
 The drawer is 720 base pixels wide, with 14px body text, 15px timeline labels, 30px rows and a 220px legend. Title, navigation and tabs occupy separate rows. Keep Measure-DrawerHeight and Get-TimelineViewportH aligned with the renderer's 70px title/navigation header and 32px tabs. GetOutline uses the existing mirrored L shape when the drawer is at least 16px taller than the timer. Blur is suppressed while that cut-out is present because Windows blur fills the rectangular window bounds. tests/renderer-layout.ps1 compiles the embedded C# and renders both views on Windows, checking button bounds and transparent corners.
+
+## v2.26 backdrop correction
+
+The rectangular combined outline is restored. Sync-RendererLayout extends the renderer BaseH to the drawer height while open; Get-DayBtnRect uses the same effective height. The logical PowerShell BaseH remains the natural account-list height, so closing the drawer returns to compact sizing. Blur stays enabled in compiled drawing with the drawer open. This supersedes the v2.25 cut-out and blur suppression described above. Renderer tests verify the filled backdrop and footer alignment in open and closed states.

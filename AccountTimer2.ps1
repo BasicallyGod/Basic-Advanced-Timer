@@ -1,4 +1,4 @@
-# Basic's Advanced Timer v2.25
+# Basic's Advanced Timer v2.26
 #
 # Portable Windows PowerShell 5.1 application for client-account time tracking.
 # Launch from StartAccountTimer2.vbs in the same folder to avoid a console window.
@@ -422,8 +422,8 @@ namespace Win {
         // Outline of everything shown, in window units (including the margin left for the shadow)
         public GraphicsPath GetOutline() {
             if (!DrawerOpen) return RoundRect(Margin, Margin, BaseW, BaseH, 8f);
-            // Keep the shorter timer tight to its controls when the drawer needs more height.
-            if (DrawerH - BaseH >= 16f) return GetLShapedOutline();
+            // A rectangular backdrop lets Windows blur cover the translucent timer consistently.
+
             return RoundRect(Margin, Margin, DrawerW + BaseW, Math.Max(DrawerH, BaseH), 8f);
         }
 
@@ -3233,7 +3233,8 @@ $DayBtn = @{ W = 150; H = 22 }
 $FinishAreaH = 30
 function Get-DayBtnRect {
     $bx = ($BaseW - $DayBtn.W) / 2
-    $by = $BaseH - $DayBtn.H - 8
+    $panelH = if ($script:useRenderer -and $script:drawerOpen) { [math]::Max($BaseH, $script:drawerH) } else { $BaseH }
+    $by = $panelH - $DayBtn.H - 8
     return @{ X = $bx; Y = $by; W = $DayBtn.W; H = $DayBtn.H }
 }
 
@@ -5362,7 +5363,7 @@ function Test-FullShadow {
 function Sync-RendererLayout {
     $r = $script:renderer
     $r.Zoom = [float]$Zoom
-    $r.BaseH = [float]$BaseH
+    $r.BaseH = [float]$(if ($script:drawerOpen) { [math]::Max($BaseH, $script:drawerH) } else { $BaseH })
     $r.RowTop = [float]$RowTop
     $r.DrawerH = [float]$script:drawerH
     $r.Margin = [float]$script:fullMargin
@@ -5568,7 +5569,7 @@ function Apply-BlurState {
         Apply-CornerStyle
     }
     # With the standard drawing the drawer can make an L shape, which the blur can't follow, so it pauses then
-    $want = $script:blurOn -and $script:listLevel -ne 'Off' -and $script:mode -eq 'full' -and (-not $script:drawerOpen -or $script:drawerH -le $BaseH)
+    $want = $script:blurOn -and $script:listLevel -ne 'Off' -and $script:mode -eq 'full' -and ($script:useRenderer -or -not $script:drawerOpen)
     try {
         if ($want) { [void][Win.Layered]::SetBlur($form.Handle, $true) }
         else { [Win.Layered]::ClearAllBlur($form.Handle) }

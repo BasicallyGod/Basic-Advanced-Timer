@@ -6,9 +6,15 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.25 |
+| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.26 |
 | AccountTimer.ps1 | Historical predecessor, removed from current tree | 1.0 to 1.7 |
 | BillableTimer.ps1 | Historical predecessor, removed from current tree | 0.1 to 0.5 |
+
+## v2.26
+
+- Restored Windows blur with an open drawer by extending the normal timer backdrop to match the drawer height.
+- Kept the day button at the bottom of the extended panel with matching hit testing. Closing the drawer restores the compact normal height.
+- Updated renderer checks to verify the filled backdrop and footer alignment.
 
 ## v2.25
 
