@@ -108,11 +108,17 @@ try {
         foreach ($button in $r.DrawerButtons) {
             if ($button.Rect.Left -lt 320 -or $button.Rect.Right -gt 960 -or $button.Rect.Bottom -gt 640) { throw 'Dashboard action is outside its workspace.' }
         }
+        if ($mode -eq 'week') {
+            if ($r.WeekContentH -le $r.WeekViewportH) { throw 'Maximum account fixture must exercise Week scrolling.' }
+            $r.WeekScrollY = $r.WeekContentH - $r.WeekViewportH
+            $scrolled = $r.Render()
+            $scrolled.Dispose()
+        }
         if ($mode -eq 'timeline' -and ($r.TlY -lt 124 -or $r.TlY + $r.TlH -gt 640)) { throw 'Timeline viewport does not match the dashboard body.' }
     }
 } finally { $font.Dispose(); $digitFont.Dispose() }
 
-foreach ($name in @('Get-BaseSize', 'Get-PillListH', 'Get-PillLayout', 'Get-PillRowTop', 'Get-PillZone', 'Test-HitCollapse', 'Test-HitDayBtn', 'Test-HitDashboardPause')) {
+foreach ($name in @('Get-BaseSize', 'Get-PillListH', 'Get-PillLayout', 'Get-PillRowTop', 'Get-PillZone', 'Test-HitCollapse', 'Get-DayBtnRect', 'Test-HitDayBtn', 'Test-HitDashboardPause')) {
     $fn = @($ast.FindAll({ param($node)
         $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
     }, $true))

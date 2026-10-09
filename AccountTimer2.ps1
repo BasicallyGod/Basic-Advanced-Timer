@@ -562,6 +562,7 @@ namespace Win {
 
 
         public bool Dashboard;
+        public float WeekScrollY, WeekContentH, WeekViewportH;
         public string DashboardDate = "", ActiveAccount = "";
         public bool LiveDot;
         public double DotPhase;
@@ -1072,7 +1073,11 @@ namespace Win {
                 }
                 QueueText("TOTAL", fBold, faintC, new RectangleF(x0 + nameW + nd * colW, y, colW - 4, rowH), DT_RIGHT);
                 y += rowH;
+                RectangleF weekVp = new RectangleF(x0, y, xR - x0, Math.Max(1f, BaseH + mg - 12f - y));
+                WeekContentH = d.Rows.Count * rowH; WeekViewportH = weekVp.Height;
+                if (Dashboard) y -= Math.Max(0f, Math.Min(WeekScrollY, WeekContentH - WeekViewportH));
                 foreach (DrawerRow tr in d.Rows) {
+                    if (Dashboard && (y < weekVp.Top || y + rowH > weekVp.Bottom)) { y += rowH; continue; }
                     og.DrawLine(sep, x0, y, xR, y);
                     Font f = tr.Style == "bold" ? fBold : fText;
                     Color c = tr.Style == "faint" ? faintC : textC;
@@ -1084,6 +1089,12 @@ namespace Win {
                     y += rowH;
                 }
 
+                if (Dashboard && WeekContentH > WeekViewportH) {
+                    float thumbH = Math.Max(24f, WeekViewportH * WeekViewportH / WeekContentH);
+                    float scrollY = Math.Max(0f, Math.Min(WeekScrollY, WeekContentH - WeekViewportH));
+                    float thumbY = weekVp.Top + (WeekViewportH - thumbH) * scrollY / (WeekContentH - WeekViewportH);
+                    using (SolidBrush thumb = new SolidBrush(faintC)) { og.FillRectangle(thumb, xR + 5f, thumbY, 3f, thumbH); }
+                }
                 // Budget details are attached to the account controls in dashboard mode.
                 if (!Dashboard && d.Budgets.Count > 0) {
                     y += 8;
@@ -8026,7 +8037,14 @@ $form.Add_MouseMove({
 # Mouse wheel over the timeline scrolls it, and with Ctrl held it zooms around the pointer
 $form.Add_MouseWheel({
     try {
-        if ($script:mode -ne 'full' -or -not $script:drawerOpen -or (Get-DrawerMode) -ne 'timeline') { return }
+        if ($script:mode -ne 'full' -or -not $script:drawerOpen) { return }
+        if ((Get-DrawerMode) -eq 'week') {
+            if (Test-InDrawer $_.Location) {
+                $script:renderer.WeekScrollY = [math]::Max(0, [math]::Min([math]::Max(0, $script:renderer.WeekContentH - $script:renderer.WeekViewportH), $script:renderer.WeekScrollY - ($_.Delta / 120.0) * 34))
+                Request-Redraw
+            }
+            return
+        }
         if (-not (Test-InDrawer $_.Location)) { return }
         if ([System.Windows.Forms.Control]::ModifierKeys -band [System.Windows.Forms.Keys]::Control) {
             Set-TimelineZoom $(if ($_.Delta -gt 0) { 1.25 } else { 0.8 }) (Get-TimelineTimeAt $_.Location)
