@@ -36,7 +36,9 @@
   <Application.Styles>
     <FluentTheme />
     <Style Selector="ScrollBar">
-      <Setter Property="Template">
+      <Setter Property="Theme">
+        <ControlTheme TargetType="ScrollBar">
+          <Setter Property="Template">
         <ControlTemplate>
           <Track Name="PART_Track" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
                  Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}"
@@ -52,6 +54,8 @@
             </Track.Thumb>
           </Track>
         </ControlTemplate>
+          </Setter>
+        </ControlTheme>
       </Setter>
     </Style>
     <Style Selector="ScrollBar:vertical">

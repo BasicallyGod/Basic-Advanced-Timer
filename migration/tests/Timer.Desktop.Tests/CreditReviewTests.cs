@@ -188,6 +188,7 @@ public sealed class CreditReviewTests
         var scroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
         var bar = scroll.GetVisualDescendants().OfType<ScrollBar>().Single(b => b.Orientation == Avalonia.Layout.Orientation.Vertical);
         Assert.InRange(bar.Bounds.Width, 6, 8);
+        Assert.Empty(bar.GetVisualDescendants().OfType<RepeatButton>());
         var thumb = bar.GetVisualDescendants().OfType<Thumb>().Single();
         var point = thumb.TranslatePoint(new Point(thumb.Bounds.Width / 2, thumb.Bounds.Height / 2), dashboard)!.Value;
         var old = scroll.Offset.Y; dashboard.MouseDown(point, MouseButton.Left); dashboard.MouseMove(point + new Vector(0, 20)); dashboard.MouseUp(point + new Vector(0, 20), MouseButton.Left);
