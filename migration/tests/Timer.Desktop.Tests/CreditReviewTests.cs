@@ -322,6 +322,48 @@ public sealed class CreditReviewTests
         Assert.Throws<ArgumentException>(() => editor.EditTimeline(engine.Sessions[0], Day.AddHours(9).AddMinutes(20), Day.AddHours(9).AddMinutes(50), true));
         Assert.Equal(csv, editor.SessionsCsv); Assert.Equal(undo, editor.StateJson);
     }
+    [Fact]
+    public void InsertionReordersBothWaysAndRepeatedUndoSurvivesRestartWithLaterRecording()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:00:00", "30") });
+        var editor = new LedgerEditor(engine); var original = editor.SessionsCsv;
+        editor.Edit(engine.Sessions[1], "Account one", Day.AddHours(9.5), Day.AddHours(10), "Keep note");
+        var annotated = editor.SessionsCsv; var annotatedNotes = editor.NotesCsv;
+        editor.EditTimeline(engine.Sessions[2], Day.AddHours(9).AddMinutes(40), Day.AddHours(10).AddMinutes(10), false, true);
+        Assert.Equal(Day.AddHours(9.5), engine.Sessions[2].From);
+        Assert.Equal(Day.AddHours(10), engine.Sessions[1].From);
+        Assert.Equal("Keep note", editor.Note(engine.Sessions[1]));
+        var firstMove = editor.SessionsCsv;
+        editor.EditTimeline(engine.Sessions[0], Day.AddHours(9).AddMinutes(20), Day.AddHours(9).AddMinutes(50), false, true);
+        Assert.Equal(Day.AddHours(9.5), engine.Sessions[0].From);
+        Assert.Equal(Day.AddHours(9), engine.Sessions[2].From);
+        var later = Row("11:00:00", "15"); engine.Sessions.Add(later);
+        editor = new LedgerEditor(engine, stateJson: editor.StateJson, notesCsv: editor.NotesCsv);
+        Assert.Equal(3, editor.UndoCount);
+        editor.Undo(); Assert.Equal(firstMove, new LedgerEditorPrefix(engine, 3).Csv);
+        editor.Undo(); Assert.Equal(annotatedNotes, editor.NotesCsv);
+        Assert.Equal(annotated, new LedgerEditorPrefix(engine, 3).Csv);
+        editor.Undo(); Assert.Equal(original, new LedgerEditorPrefix(engine, 3).Csv);
+        Assert.Same(later, engine.Sessions[^1]); Assert.False(editor.CanUndo);
+    }
+    private sealed class LedgerEditorPrefix
+    {
+        public string Csv { get; }
+        public LedgerEditorPrefix(TrackingEngine source, int count)
+        { var copy = Engine(); copy.Sessions.AddRange(source.Sessions.Take(count)); Csv = new LedgerEditor(copy).SessionsCsv; }
+    }
+    [Fact]
+    public void UndoImportsLegacyHistoryAndKeepsOnlyFiftySteps()
+    {
+        var engine = Engine(); var editor = new LedgerEditor(engine);
+        editor.Add("Account one", Day.AddHours(9), Day.AddHours(9.5), "first");
+        var legacy = System.Text.Json.JsonSerializer.Serialize(new LedgerEditState(1, editor.UndoState));
+        editor = new LedgerEditor(engine, stateJson: legacy); Assert.Equal(1, editor.UndoCount);
+        for (var i = 0; i < 55; i++) editor.Edit(engine.Sessions[0], "Account one", engine.Sessions[0].From, engine.Sessions[0].To, "note " + i);
+        Assert.Equal(50, editor.UndoCount);
+        for (var i = 0; i < 50; i++) editor.Undo();
+        Assert.False(editor.CanUndo); Assert.Equal("note 4", editor.Note(engine.Sessions[0]));
+    }
     [AvaloniaFact]
     public void DashboardZoomRetainsPointerAnchorAfterRefresh()
     {
@@ -353,7 +395,7 @@ public sealed class CreditReviewTests
         model.ChangeDate(1); Assert.Null(model.TimelineOffset);
     }
     [AvaloniaFact]
-    public void DragBeyondNestleThresholdLeapfrogsWithoutMovingNeighbours()
+    public void DragBeyondNestleThresholdInsertsAndPreviewsNeighbours()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:00:00", "30") });
         var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show(); Capture(window, "nudge-before");
@@ -363,9 +405,9 @@ public sealed class CreditReviewTests
             var csv = model.Editor.SessionsCsv; var oldTop = Canvas.GetTop(cards[1]);
             var point = cards[0].TranslatePoint(new Point(70, 30), window)!.Value; var target = point + new Vector(0, 20.0 / 60 * 160);
             window.MouseDown(point, MouseButton.Left); window.MouseMove(target);
-            Assert.Equal(oldTop, Canvas.GetTop(cards[1])); Assert.Equal(csv, model.Editor.SessionsCsv);
+            Assert.True(Canvas.GetTop(cards[1]) < oldTop); Assert.Equal(csv, model.Editor.SessionsCsv);
             window.MouseUp(target, MouseButton.Left); Assert.Null(model.EditError); Assert.Empty(model.SelectedRows);
-            Assert.Equal(Day.AddHours(9.5), engine.Sessions[1].From); Assert.Equal(Day.AddHours(10.5), engine.Sessions[0].From); Assert.True(model.UndoEdit()); Assert.Equal(csv, model.Editor.SessionsCsv);
+            Assert.Equal(Day.AddHours(9), engine.Sessions[1].From); Assert.Equal(Day.AddHours(9.5), engine.Sessions[0].From); Assert.True(model.UndoEdit()); Assert.Equal(csv, model.Editor.SessionsCsv);
         }
         finally { window.Close(); }
     }

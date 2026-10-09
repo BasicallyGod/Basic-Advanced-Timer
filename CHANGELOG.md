@@ -11,6 +11,12 @@ The entries below follow the migration milestones, newest first. They describe t
 - Preview nudged source blocks during the drag, preserve their durations and notes, and save the complete move as one journalled edit with persistent Undo.
 - Reject pushes that would cross midnight or collide with positioned credit, running time or unresolved imported overlaps, without partially applying the move.
 
+## Migration drag insertion and multi-step Undo
+
+- Dragged blocks insert between crossed neighbours, moving those entries into the space left behind instead of jumping past the entire run.
+- Small overshoots still nestle; resize edges remain clamped. Neighbour movements preview before release, preserve durations and notes, and commit as one undoable action.
+- Undo now retains up to 50 edits across restarts, imports the previous single-step history, and preserves subsequently recorded sessions. The Undo button shows the available step count.
+
 ## Migration leapfrogging, selection and timeline zoom
 
 - Ordinary clicks toggle block selection; Merge remains available in the toolbar and right-click menu.

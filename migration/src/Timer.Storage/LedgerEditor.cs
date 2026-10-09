@@ -7,9 +7,9 @@ namespace Timer.Storage;
 
 public sealed record LedgerUndo(string Description, List<Dictionary<string, string>> BeforeRows,
     List<SessionRow> AfterRows, string BeforeNotes, string? BeforeGroups, string? BeforePositions = null);
-public sealed record LedgerEditState(int SchemaVersion, LedgerUndo? Undo);
+public sealed record LedgerEditState(int SchemaVersion, LedgerUndo? Undo, List<LedgerUndo>? History = null);
 
-// Sessions remain the credited ledger. Extra CSV fields and one reversible edit
+// Sessions remain the credited ledger. Extra CSV fields and reversible edits
 // travel with it; Undo restores the edited prefix and retains later recordings.
 public sealed partial class LedgerEditor
 {
@@ -18,7 +18,9 @@ public sealed partial class LedgerEditor
     private readonly Dictionary<SessionRow, Dictionary<string, string>> raw = new(ReferenceEqualityComparer.Instance);
     private CsvTable notes;
     private string? groups;
-    public LedgerUndo? UndoState { get; private set; }
+    private readonly List<LedgerUndo> history = new();
+    public LedgerUndo? UndoState => history.LastOrDefault();
+    public int UndoCount => history.Count;
     public bool Changed { get; private set; }
     public bool CanUndo => UndoState is { } u && engine.Sessions.Count >= u.AfterRows.Count
         && engine.Sessions.Take(u.AfterRows.Count).SequenceEqual(u.AfterRows);
@@ -34,8 +36,9 @@ public sealed partial class LedgerEditor
         if (stateJson is not null)
         {
             var state = JsonSerializer.Deserialize<LedgerEditState>(stateJson) ?? throw new InvalidDataException("Invalid edit history.");
-            if (state.SchemaVersion != 1) throw new InvalidDataException("Unsupported edit history.");
-            UndoState = state.Undo;
+            if (state.SchemaVersion is not (1 or 2)) throw new InvalidDataException("Unsupported edit history.");
+            if (state.History is { } saved) history.AddRange(saved.TakeLast(50));
+            else if (state.Undo is { } last) history.Add(last);
         }
         ValidateCredits();
     }
@@ -53,7 +56,7 @@ public sealed partial class LedgerEditor
     public string SessionsCsv => new CsvTable(headers, Rows()).Serialize();
     public string NotesCsv => notes.Serialize();
     public string? GroupsCsv => groups;
-    public string StateJson => JsonSerializer.Serialize(new LedgerEditState(1, UndoState));
+    public string StateJson => JsonSerializer.Serialize(new LedgerEditState(2, UndoState, history));
     private int Index(SessionRow row)
     {
         var index = engine.Sessions.FindIndex(s => ReferenceEquals(s, row));
@@ -88,6 +91,10 @@ public sealed partial class LedgerEditor
         if (!string.IsNullOrWhiteSpace(text))
         { value["Date"] = row.Date; value["Account"] = row.Account; value["Start"] = row.Start; value["Note"] = text.Trim(); notes.Rows.Add(value); }
     }
+    private static bool Matches(LedgerUndo edit, List<Dictionary<string, string>> rows)
+        => rows.Count >= edit.AfterRows.Count && rows.Take(edit.AfterRows.Count)
+            .Select(r => new SessionRow(r["Date"], r["Account"], r["Start"], r["End"], r["Minutes"]))
+            .SequenceEqual(edit.AfterRows);
     private void Change(string description, Action mutation)
     {
         var before = Rows(); var beforeNotes = NotesCsv; var beforeGroups = groups; var beforePositions = PositionsCsv;
@@ -104,7 +111,10 @@ public sealed partial class LedgerEditor
             table.Rows.RemoveAll(r => singletons.Contains(r["GroupId"]));
             groups = table.Serialize();
         }
-        UndoState = new(description, before, engine.Sessions.ToList(), beforeNotes, beforeGroups, beforePositions); Changed = true;
+        if (history.Count > 0 && !Matches(history[^1], before)) history.Clear();
+        history.Add(new(description, before, engine.Sessions.ToList(), beforeNotes, beforeGroups, beforePositions));
+        if (history.Count > 50) history.RemoveAt(0);
+        Changed = true;
     }
     public void Edit(SessionRow old, string account, DateTime start, DateTime end, string note)
     {
@@ -145,7 +155,7 @@ public sealed partial class LedgerEditor
         engine.Sessions.Clear(); engine.Sessions.AddRange(restored); engine.Sessions.AddRange(tail);
         notes = restoredNotes; groups = undo.BeforeGroups;
         if (undo.BeforePositions is not null) positions = ParsePositions(undo.BeforePositions);
-        UndoState = null; Changed = true;
+        history.RemoveAt(history.Count - 1); Changed = true;
     }
 }
 

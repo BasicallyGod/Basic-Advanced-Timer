@@ -47,7 +47,7 @@ public static class TimelineGestures
             {
                 try
                 {
-                    foreach (var change in model.Editor.PlanTimeline(row, from, until, true).Where(p => !ReferenceEquals(p.Source, row)))
+                    foreach (var change in model.Editor.PlanTimeline(row, from, until, false, true))
                     {
                         foreach (var neighbour in canvas.Children.OfType<Border>().Where(b => ReferenceEquals(b.Tag, change.Source)))
                         {
@@ -56,7 +56,7 @@ public static class TimelineGestures
                         }
                     }
                 }
-                catch (ArgumentException) { } // Final validation reports a blocked push without changing the ledger.
+                catch (ArgumentException) { } // Final validation reports a blocked insertion without changing the ledger.
             }
             e.Handled = true;
         };
@@ -115,20 +115,7 @@ public static class TimelineGestures
         // well beyond it. Apply this to grid rounding as well as raw movement.
         var overshoot = lower is { } l && requested < l ? (l - requested).TotalHours * pixelsPerHour
             : upper is { } u && requested > u ? (requested - u).TotalHours * pixelsPerHour : 0;
-        if (overshoot > 24 && edge == 0)
-        {
-            // Leapfrog occupied intervals without moving or resizing their entries.
-            var target = row.From + grid;
-            for (var i = 0; i <= occupied.Count; i++)
-            {
-                var collision = occupied.Where(o => o.Start < target + row.Duration && o.End > target)
-                    .OrderBy(o => o.Start).ToArray();
-                if (collision.Length == 0) return target - row.From;
-                target = requested > TimeSpan.Zero ? collision.Max(o => o.End) : collision.Min(o => o.Start) - row.Duration;
-                target = new DateTime(((target.Ticks + (requested > TimeSpan.Zero ? TimeSpan.TicksPerSecond - 1 : 0))
-                    / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond, target.Kind);
-            }
-        }
+        if (overshoot > 24 && edge == 0) { nudge = true; return grid; }
         if (lower is { } minimum && (requested <= minimum || grid <= minimum)) requested = minimum;
         if (upper is { } maximum && (requested >= maximum || grid >= maximum)) requested = maximum;
         foreach (var candidate in candidates.OrderBy(c => Math.Abs((c - requested).TotalHours)))
