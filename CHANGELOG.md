@@ -11,6 +11,13 @@ The entries below follow the migration milestones, newest first. They describe t
 - Preview nudged source blocks during the drag, preserve their durations and notes, and save the complete move as one journalled edit with persistent Undo.
 - Reject pushes that would cross midnight or collide with positioned credit, running time or unresolved imported overlaps, without partially applying the move.
 
+## Migration leapfrogging, selection and timeline zoom
+
+- Ordinary clicks toggle block selection; Merge remains available in the toolbar and right-click menu.
+- Small drag overshoots nestle against neighbours. Larger whole-block drags leapfrog occupied intervals without shifting neighbouring entries; resizing retains boundary clamping.
+- Ctrl+mousewheel zooms the timeline between 60 and 640 pixels per hour, keeping the time under the pointer anchored. Ordinary wheel scrolling remains available.
+- Timeline scale survives view refreshes; changing date resets the scroll position to the first entry.
+
 ## Migration drag snapping and merge-menu fixes
 
 - Fixed a selected block disappearing when its right-click menu opened. Pointer capture loss now restores a block's geometry only when a left-button gesture is actually in progress.
