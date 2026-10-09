@@ -1,5 +1,35 @@
 # Changelog
 
+## Avalonia migration — 9 October 2026
+
+The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
+
+## Migration drag snapping and merge-menu fixes
+
+- Fixed a selected block disappearing when its right-click menu opened. Pointer capture loss now restores a block's geometry only when a left-button gesture is actually in progress.
+- Made moving and resizing snap to neighbouring blocks' boundaries, including times such as 09:53 that fall between five-minute marks. Five-minute increments remain the default away from neighbours.
+- Made overshooting stop at the first neighbouring block instead of producing an overlap error or jumping past it. This applies to whole-block moves and both resize edges.
+- Kept real overlap validation and Undo, and accounted for fractional legacy end times when saving snapped entries.
+- Extended native input regression checks for menu capture loss, cancelled drags, exact-boundary snapping, substantial overshoots and Undo. All 49 tests pass on Windows, Linux and macOS; packaged Windows normal/demo launch checks also pass.
+
+## Migration block selection, gap merges and click-to-add
+
+- Added Ctrl+left-click selection in Timeline and Week, visible selection outlines, a toolbar Merge button and right-click → Merge selected.
+- Kept selection separate from moving/resizing and opening editors. Escape and date changes clear selection.
+- Initially restricted new merges to adjoining blocks and rendered older groups with gaps as separate linked sections, avoiding a continuous block over uncredited time.
+- Revised merging to allow blank gaps between blocks for the same account/day. Those gaps now become “Added by merge” credited entries and count towards the combined total. The selection hint previews the amount added.
+- Continue to reject merges across intervening entries, positioned credit, running time or overlaps. Existing groups can be extended when all their source parts are selected.
+- Preserve original source rows. One Undo removes the added gap time and restores prior grouping; Ungroup keeps the newly credited gap entries.
+- Added single-click entry creation on empty timeline space, with a five-minute-snapped start and a proposed 30-minute duration capped at the next occupied interval or midnight. Only one entry editor opens at a time.
+
+## Migration grouped-block presentation and dashboard polish
+
+- Made compatible grouped intervals appear as a combined timeline block and Week entry, with access to their original parts.
+- Added right-click Ungroup, a visible Week Ungroup action and existing-group access through Tools → Group entries.
+- Allowed future manual entries and credit placements; their time is credited immediately.
+- Replaced oversized scrollbars and arrow buttons with an eight-pixel track and slim draggable thumb.
+- Restored the dashboard's transparent rounded window surface to match the pill.
+
 ## Migration credit review and weekly exports (repository development)
 
 - Restored non-destructive positioning of merged credit, with position notes, editing, unplacing and compatible metadata import.
@@ -18,6 +48,16 @@
 - Retained exact credited durations when only notes change, including fractional-minute short segments.
 
 
+## Migration pill layout, dragging, settings and demo
+
+- Restored the familiar compact pill: timer on the left, account and today's credit in the middle, pause/resume on the right.
+- Clicking the timer opens the dashboard; clicking the account toggles the small account list. Back to pill returns from the dashboard.
+- Separated clicks from dragging with a five-pixel movement threshold, so dragging over timer, account and pause controls does not activate them. Added dashboard header dragging.
+- Made tracking and idle states visibly distinct, with a green tracking clock, grey idle clock and independent red overtime indication.
+- Corrected timeline startup scrolling and retained its position during updates.
+- Added an isolated, populated sample-data demo and a Force overtime setting for checking both themes and tracking states without saving personal data.
+- Added weekday working-hour/shift settings, account visibility/addition and budget editing, with persisted preferences in normal mode.
+
 ## Migration tracking and storage (repository development)
 
 - Connected a platform-independent C# tracking core, separating the day clock from account session clocks.
@@ -25,7 +65,7 @@
 - Added compatible copied-data loading and persistent sessions/settings/away/recovery with locking, atomic backups and journal replay.
 - Replaced illustrative Timeline/Week data with recorded entries and credited totals; preserved unplaced legacy credit.
 - Moved light/dark/system appearance into Settings and right-click menus.
-- Added synthetic core/storage regression cases. The migration still lacks editing, metadata presentation, exact export reconciliation and tray integration.
+- Added synthetic core/storage regression cases. At this stage, editing, metadata presentation, exact export reconciliation and tray integration remained to be migrated; the subsequent milestones above restore the first three.
 
 ## Migration foundation (repository development)
 
@@ -35,9 +75,9 @@
 - Added production-style headless input/rendering checks, cross-platform CI and self-contained Windows preview packaging.
 - Documented staged core/storage/editing migration and the preview's synthetic, non-persistent data boundary. No production tracking behaviour or file format is changed.
 
-Basic’s Advanced Timer grew from a single billable-hours counter into a full timesheet tracker. Only `AccountTimer2.ps1` remains in the current working tree; the earlier implementations and their launchers are available in Git history.
+Basic’s Advanced Timer grew from a single billable-hours counter into a full timesheet tracker. The original Windows application remains in `AccountTimer2.ps1`, alongside the separate Avalonia work under `migration/`. Earlier PowerShell implementations and their launchers are available in Git history.
 
-Version numbers were assigned after the fact, one per round of changes, all built in October 2026.
+The PowerShell version numbers below were assigned after the fact, one per round of changes, all built in October 2026.
 
 | Script | What it is | Versions |
 | --- | --- | --- |
