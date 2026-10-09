@@ -115,7 +115,20 @@ public static class TimelineGestures
         // well beyond it. Apply this to grid rounding as well as raw movement.
         var overshoot = lower is { } l && requested < l ? (l - requested).TotalHours * pixelsPerHour
             : upper is { } u && requested > u ? (requested - u).TotalHours * pixelsPerHour : 0;
-        if (overshoot > 24) { nudge = true; return grid; }
+        if (overshoot > 24 && edge == 0)
+        {
+            // Leapfrog occupied intervals without moving or resizing their entries.
+            var target = row.From + grid;
+            for (var i = 0; i <= occupied.Count; i++)
+            {
+                var collision = occupied.Where(o => o.Start < target + row.Duration && o.End > target)
+                    .OrderBy(o => o.Start).ToArray();
+                if (collision.Length == 0) return target - row.From;
+                target = requested > TimeSpan.Zero ? collision.Max(o => o.End) : collision.Min(o => o.Start) - row.Duration;
+                target = new DateTime(((target.Ticks + (requested > TimeSpan.Zero ? TimeSpan.TicksPerSecond - 1 : 0))
+                    / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond, target.Kind);
+            }
+        }
         if (lower is { } minimum && (requested <= minimum || grid <= minimum)) requested = minimum;
         if (upper is { } maximum && (requested >= maximum || grid >= maximum)) requested = maximum;
         foreach (var candidate in candidates.OrderBy(c => Math.Abs((c - requested).TotalHours)))
