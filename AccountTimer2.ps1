@@ -857,7 +857,7 @@ namespace Win {
         void DrawDrawerContents(Graphics og, float dx, float mg, float dW) {
             DrawerModel d = Drawer;
             Font fText = FontDrawer ?? FontSmall;
-            Font fBold = FontDrawerBold ?? fBold;
+            Font fBold = FontDrawerBold ?? FontButton;
             Color textC = Text;
             Color faintC = Mix(Panel, Text, 215 / 255.0);
             // Lines and bars are drawn as solid colours, as the layer has no see-through areas
