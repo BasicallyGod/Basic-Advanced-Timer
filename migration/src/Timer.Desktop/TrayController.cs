@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Timer.Core;
 using Timer.Storage;
 
 namespace Timer.Desktop;
@@ -45,10 +46,11 @@ public sealed class TrayController : IDisposable
         // Windows shows at most 127 characters, so keep it short.
         var overtime = model.IsOvertime ? ", overtime " + model.Format(model.Engine.Totals(model.Engine.Now).Overtime) : "";
         var text = !model.DayStarted && !model.IsTracking ? "Ready when you are"
-            : (model.ActiveAccount is { } name ? (name == "Lunch" ? "On lunch" : "Tracking " + name) : "Not tracking") + ", day " + model.Format(model.Elapsed) + overtime;
+            : (model.ActiveAccount is { } name ? (BreakAccount.Is(name) ? "On break" : "Tracking " + name) : "Not tracking") + ", day " + model.Format(model.Elapsed) + overtime;
         return "Basic’s Advanced Timer\n" + text;
     }
-    public static string PauseLabel(TimerModel model) => model.IsTracking ? "Pause tracking"
+    public static string PauseLabel(TimerModel model) => model.IsOnBreak ? (model.ResumeAccount is { } back ? "End break and resume " + back : "End break")
+        : model.IsTracking ? "Pause tracking"
         : model.SelectedAccount is { } name && model.Accounts.Any(a => a.Name == name) ? "Resume " + name : "Start tracking";
     public static string DayLabel(TimerModel model) => model.DayStarted ? "Finish day" : "Start day";
     public void RefreshMenu()

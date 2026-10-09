@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using Avalonia.Styling;
+using Timer.Core;
 
 namespace Timer.Desktop;
 
@@ -272,17 +273,19 @@ public sealed class AccountList : StackPanel
         AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
     }
+    // The break has its own button, set apart from the accounts, so it is not one of the rows.
+    private static IEnumerable<TimerAccount> Listed(TimerModel model) => model.Accounts.Where(a => !BreakAccount.Is(a.Name));
     private void Rebuild()
     {
         Children.Clear(); rows.Clear();
-        foreach (var account in model.Accounts)
+        foreach (var account in Listed(model))
         {
             var row = new Button { Name = "Account" + rows.Count, Classes = { "account" } };
             var grid = Ui.Grid("44,*,Auto");
             var icon = Ui.Put(grid, new AccountIndicator(account, model));
             var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) };
             var dot = Ui.Text("●", 10, "live"); dot.IsVisible = false;
-            labels.Children.Add(Ui.Horizontal(Ui.Text(account.Name, 15), dot));
+            labels.Children.Add(Ui.Horizontal(Ui.Text(account.Display, 15), dot));
             var budget = Ui.Text(model.BudgetSummary(account), 12, "muted");
             budget.TextTrimming = TextTrimming.CharacterEllipsis;
             labels.Children.Add(budget);
@@ -343,7 +346,7 @@ public sealed class AccountList : StackPanel
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (!rows.Select(r => r.Account).SequenceEqual(model.Accounts)) Rebuild(); else Refresh();
+        if (!rows.Select(r => r.Account).SequenceEqual(Listed(model))) Rebuild(); else Refresh();
     }
     private void Refresh()
     {
@@ -413,5 +416,22 @@ public sealed class PauseGlyph : Control
             context.DrawRectangle(brush, null, new Rect(8, 1, 4, 12), 1, 1);
         }
         else context.DrawGeometry(brush, null, Geometry.Parse("M 3,1 L 13,7 L 3,13 Z"));
+    }
+}
+
+// A cup, for the break button. It is drawn with the break colour, or the surface colour when it sits on a filled button.
+public sealed class BreakGlyph : Control
+{
+    public bool Filled { get; set; }
+    public BreakGlyph() { Width = Height = 18; }
+    public override void Render(DrawingContext context)
+    {
+        IBrush? brush = null;
+        if (this.TryFindResource(Filled ? "Surface" : "Break", ActualThemeVariant, out var value)) brush = value as IBrush;
+        var pen = new Pen(brush ?? Brushes.Gray, 1.8, lineCap: PenLineCap.Round);
+        context.DrawGeometry(null, pen, Geometry.Parse("M 3,7 L 3,12 Q 3,15.5 6.5,15.5 L 9.5,15.5 Q 13,15.5 13,12 L 13,7 Z"));
+        context.DrawGeometry(null, pen, Geometry.Parse("M 13,8 L 14.5,8 Q 16.5,8 16.5,10 Q 16.5,12 14.5,12 L 13,12"));
+        context.DrawLine(pen, new Point(6, 1.5), new Point(6, 4));
+        context.DrawLine(pen, new Point(10, 1.5), new Point(10, 4));
     }
 }

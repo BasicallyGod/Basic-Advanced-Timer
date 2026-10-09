@@ -83,8 +83,8 @@ public sealed class WeekExport
         }
         foreach (var account in configured.Concat(Accounts.Keys).Distinct(StringComparer.OrdinalIgnoreCase).Where(a => !a.Equals("Lunch", StringComparison.OrdinalIgnoreCase)))
             rows.Add(Row(account, Accounts.GetValueOrDefault(account) ?? new long[7]));
-        if (LunchUnits != 0) rows.Add(Row("Lunch", Accounts.GetValueOrDefault("Lunch") ?? new long[7]));
-        rows.Add(Row("Total (excluding lunch)", Enumerable.Range(0, 7).Select(i => Accounts.Where(a => !a.Key.Equals("Lunch", StringComparison.OrdinalIgnoreCase)).Sum(a => a.Value[i])).ToArray()));
+        if (LunchUnits != 0) rows.Add(Row(BreakAccount.Label, Accounts.GetValueOrDefault("Lunch") ?? new long[7]));
+        rows.Add(Row("Total (excluding breaks)", Enumerable.Range(0, 7).Select(i => Accounts.Where(a => !a.Key.Equals("Lunch", StringComparison.OrdinalIgnoreCase)).Sum(a => a.Value[i])).ToArray()));
         return new CsvTable(headers, rows).Serialize();
     }
     public string Write(string directory, IEnumerable<string> configured)

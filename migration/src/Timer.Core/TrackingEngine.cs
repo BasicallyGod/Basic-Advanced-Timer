@@ -153,3 +153,17 @@ public sealed class TrackingEngine
         => Positive((end < until ? end : until) - (start > from ? start : from));
     private static TimeSpan Positive(TimeSpan span) => span < TimeSpan.Zero ? TimeSpan.Zero : span;
 }
+
+/// <summary>
+/// A break is a pause of any kind. It is stored under the name earlier timers used for lunch, so existing
+/// time files keep their meaning, and shown as "Break" everywhere.
+/// </summary>
+public static class BreakAccount
+{
+    public const string Name = "Lunch";
+    public const string Label = "Break";
+    public static bool Is(string? account) => string.Equals(account, Name, StringComparison.OrdinalIgnoreCase);
+    public static string Display(string account) => Is(account) ? Label : account;
+    /// <summary>Turns a name chosen from a list back into the stored name, so picking "Break" means the break account.</summary>
+    public static string Stored(string account) => string.Equals(account, Label, StringComparison.OrdinalIgnoreCase) ? Name : account;
+}

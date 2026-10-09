@@ -7,7 +7,10 @@ using Timer.Storage;
 
 namespace Timer.Desktop;
 
-public sealed record TimerAccount(string Name, string Colour, TimeSpan? Budget, string Period = "week");
+public sealed record TimerAccount(string Name, string Colour, TimeSpan? Budget, string Period = "week")
+{
+    public string Display => BreakAccount.Display(Name);
+}
 
 public sealed class TimerModel : INotifyPropertyChanged
 {
@@ -79,15 +82,16 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         var colours = new[] { "#91B7D5", "#94BF9B", "#D9A18A", "#BAA4CE", "#D6C48C" };
         return preferences.Accounts.Select((a, i) => new TimerAccount(a.Name, colours[i % colours.Length],
-            a.BudgetHours is { } hours ? TimeSpan.FromHours(hours) : null, a.BudgetPeriod)).Append(new("Lunch", "#D6C48C", null)).ToArray();
+            a.BudgetHours is { } hours ? TimeSpan.FromHours(hours) : null, a.BudgetPeriod)).Append(new(BreakAccount.Name, "#D6C48C", null)).ToArray();
     }
     public IReadOnlyList<TimerAccount> ReviewAccounts => Catalogue().Concat(Engine.Sessions.Select(s => s.Account).Distinct(StringComparer.OrdinalIgnoreCase)
         .Where(name => !Catalogue().Any(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase))).Select(name => new TimerAccount(name, "#91B7D5", null))).ToArray();
     public IReadOnlyList<TimerAccount> Accounts => Catalogue().Where(a => !preferences.Accounts.Any(p => p.Name == a.Name && p.Hidden)).ToArray();
     public string? SelectedAccount { get; private set; }
     public string? ActiveAccount => Engine.Active?.Account;
-    public string AccountLabel => ActiveAccount ?? (Engine.Finished ? "Day finished" : "Ready when you are");
-    public string Status => ActiveAccount == "Lunch" ? "On lunch" : IsTracking ? "Tracking" : "Not tracking";
+    public string AccountLabel => IsOnBreak ? "On break" : ActiveAccount ?? (Engine.Finished ? "Day finished" : "Ready when you are");
+    public string Label(string account) => BreakAccount.Display(account);
+    public string Status => IsOnBreak ? "On break" : IsTracking ? "Tracking" : "Not tracking";
     public bool IsTracking => Engine.Active is not null;
     public bool IsOvertime => Engine.Totals(Engine.Now).Overtime > TimeSpan.Zero;
     public bool DayStarted => Engine.DayRunning;
@@ -106,14 +110,44 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void ToggleAccount(string name)
     {
         if (!Accounts.Any(a => a.Name == name)) throw new ArgumentException("Unknown account", nameof(name));
+        if (BreakAccount.Is(name)) { ToggleBreak(); return; } // A break is never the selected account, so it can always hand back.
         SelectedAccount = name; Engine.ToggleAccount(name); Save(); Notify();
     }
     // The block being recorded has no ledger row yet, so it cannot be dragged or edited until tracking stops.
     public void ExplainRunning() { EditError = "This block is still recording. Stop tracking to move or edit it."; Notify(); }
     public void TogglePause()
     {
+        // On a break, resume ends the break and goes back to the account that was running before it.
+        if (IsOnBreak) { EndBreak(); return; }
         if (Engine.Active is { } active) { SelectedAccount = active.Account; Engine.StopAccount(); }
         else if (SelectedAccount is { } name && Accounts.Any(a => a.Name == name)) Engine.ToggleAccount(name);
+        Save(); Notify();
+    }
+    // The account to go back to after a break: the one that stopped at the moment the break began. It is found from the
+    // recorded time, so it still works after the timer has been closed and reopened in the middle of a break.
+    public string? ResumeAccount
+    {
+        get
+        {
+            if (!IsOnBreak || Engine.Active is not { } active) return null;
+            var before = Engine.Sessions.Where(s => s.IsPositioned && !BreakAccount.Is(s.Account) && Math.Abs((s.To - active.Start).TotalSeconds) <= 2)
+                .OrderByDescending(s => s.To).FirstOrDefault()?.Account ?? accountBeforeBreak;
+            return before is { } name && Accounts.Any(a => a.Name == name && !BreakAccount.Is(a.Name)) ? name : null;
+        }
+    }
+    private string? accountBeforeBreak;
+    public void ToggleBreak()
+    {
+        if (IsOnBreak) { EndBreak(); return; }
+        accountBeforeBreak = Engine.Active?.Account;
+        Engine.ToggleAccount(BreakAccount.Name);
+        Save(); Notify();
+    }
+    private void EndBreak()
+    {
+        var back = ResumeAccount; accountBeforeBreak = null;
+        if (back is not null) { SelectedAccount = back; Engine.ToggleAccount(back); }
+        else Engine.StopAccount();
         Save(); Notify();
     }
     /// <summary>Applies the account list. <paramref name="renames"/> maps an account's old name to its new one (the list holds the new
@@ -124,11 +158,11 @@ public sealed class TimerModel : INotifyPropertyChanged
         renames ??= new Dictionary<string, string>();
         var values = accounts.ToList();
         if (values.Count == 0 || values.Any(a => string.IsNullOrWhiteSpace(a.Name) || a.Name != a.Name.Trim()
-            || a.Name.IndexOfAny(new[] { '\t', '\r', '\n' }) >= 0 || a.Name.Equals("Lunch", StringComparison.OrdinalIgnoreCase)
+            || a.Name.IndexOfAny(new[] { '\t', '\r', '\n' }) >= 0 || (a.Name.Equals(BreakAccount.Name, StringComparison.OrdinalIgnoreCase) || a.Name.Equals(BreakAccount.Label, StringComparison.OrdinalIgnoreCase))
             || a.BudgetPeriod is not ("week" or "month" or "quarter")
             || (a.BudgetHours is { } h && (!double.IsFinite(h) || h <= 0)))
             || values.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Count)
-            throw new ArgumentException("Use unique account names and positive budgets; Lunch is reserved.");
+            throw new ArgumentException("Use unique account names and positive budgets; Break is reserved.");
         if (preferences.Accounts.Any(a => !values.Any(v => v.Name == (renames.TryGetValue(a.Name, out var to) ? to : a.Name))))
             throw new ArgumentException("Hide existing accounts instead of removing them.");
         var renamed = renames.Where(r => !r.Value.Equals(r.Key, StringComparison.Ordinal)).ToList();
@@ -321,32 +355,32 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     // Break and overtime themes are variants of Light and Dark that override colours. A break outranks overtime, because it is
     // the state you chose just now, and overtime outranks normal. Not tracking has no tint of its own: it keeps the ordinary
-    // theme and shows itself through the grey glow, so it never fights the other two.
+    // theme and shows itself through the grey glow, so it never fights the other two. A break tints the whole app, but
+    // overtime tints only the pill (see PillVariant), so the dashboard stays calm while the pill warns.
     public static readonly ThemeVariant BreakLight = new("BreakLight", ThemeVariant.Light);
     public static readonly ThemeVariant BreakDark = new("BreakDark", ThemeVariant.Dark);
     public static readonly ThemeVariant OvertimeLight = new("OvertimeLight", ThemeVariant.Light);
     public static readonly ThemeVariant OvertimeDark = new("OvertimeDark", ThemeVariant.Dark);
     public string ThemeState => IsOnBreak ? "Break" : IsOvertime ? "Overtime" : "Normal";
     private ThemeVariant? appliedVariant;
+    private bool IsDark(Application app) => Theme switch
+    {
+        "Light" => false, "Dark" => true,
+        _ => app.PlatformSettings?.GetColorValues().ThemeVariant == Avalonia.Platform.PlatformThemeVariant.Dark
+    };
+    /// <summary>The theme the pill wears by itself: red in overtime, otherwise null so it follows the rest of the app.</summary>
+    public ThemeVariant? PillVariant => ThemeState == "Overtime" && Application.Current is { } app && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()
+        ? (IsDark(app) ? OvertimeDark : OvertimeLight) : null;
     private void ApplyTheme()
     {
         if (Application.Current is not { } app || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;
-        var dark = Theme switch
-        {
-            "Light" => false, "Dark" => true,
-            _ => app.PlatformSettings?.GetColorValues().ThemeVariant == Avalonia.Platform.PlatformThemeVariant.Dark
-        };
         // Following the system when nothing is overriding keeps the default variant, so a change of system theme still applies.
-        var variant = ThemeState switch
-        {
-            "Break" => dark ? BreakDark : BreakLight,
-            "Overtime" => dark ? OvertimeDark : OvertimeLight,
-            _ => Theme switch { "Light" => ThemeVariant.Light, "Dark" => ThemeVariant.Dark, _ => ThemeVariant.Default }
-        };
+        var variant = IsOnBreak ? (IsDark(app) ? BreakDark : BreakLight)
+            : Theme switch { "Light" => ThemeVariant.Light, "Dark" => ThemeVariant.Dark, _ => ThemeVariant.Default };
         if (ReferenceEquals(variant, appliedVariant)) return;
         appliedVariant = variant; app.RequestedThemeVariant = variant;
     }
-    public bool IsOnBreak => ActiveAccount == "Lunch";
+    public bool IsOnBreak => BreakAccount.Is(ActiveAccount);
     public bool Shadows => preferences.Shadows;
     public void SetShadows(bool on) { preferences = preferences with { Shadows = on }; Save(); Notify(); }
     /// <summary>How far through the working day it is, from 0 to 1, or null on a day off.</summary>

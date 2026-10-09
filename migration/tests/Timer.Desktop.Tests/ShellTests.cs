@@ -61,11 +61,10 @@ public sealed class ShellTests
             var overtimeColour = ((ISolidColorBrush)overtime.Foreground!).Color;
             Assert.True(overtimeColour.R > overtimeColour.G + 30);
             Assert.True(overtime.IsVisible);
-            Assert.Equal(theme == "Light" ? TimerModel.OvertimeLight : TimerModel.OvertimeDark, Application.Current!.ActualThemeVariant);
+            Assert.Equal(theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark, Application.Current!.ActualThemeVariant);
         }
         model.SetTheme("System");
-        // Following the system, the overtime tint still applies on top of whichever of light or dark the system uses.
-        Assert.Contains(Application.Current!.RequestedThemeVariant, new[] { TimerModel.OvertimeLight, TimerModel.OvertimeDark });
+        Assert.Equal(ThemeVariant.Default, Application.Current!.RequestedThemeVariant);
     }
 
     [AvaloniaFact]
@@ -77,7 +76,7 @@ public sealed class ShellTests
         try
         {
             Dispatcher.UIThread.RunJobs();
-            for (var i = 0; i < model.Accounts.Count; i++)
+            for (var i = 0; i < model.Accounts.Count - 1; i++) // The break has its own button, not a row.
             {
                 var row = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account" + i);
                 var point = row.TranslatePoint(new Point(row.Bounds.Width - 8, row.Bounds.Height / 2), window)!.Value;
@@ -87,6 +86,7 @@ public sealed class ShellTests
                     $"Row {i}: bounds {row.Bounds}, point {point}, hit {window.GetVisualAt(point)?.GetType().Name}, active {model.ActiveAccount ?? "none"}");
                 Assert.InRange(row.Bounds.Width, 280, 300);
             }
+            model.TogglePause(); // Nothing recording, so the scrolled click below starts an account.
             var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "AccountScroll");
             scroll.Offset = new Vector(0, 2000);
             Dispatcher.UIThread.RunJobs();

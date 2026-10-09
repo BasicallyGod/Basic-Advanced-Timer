@@ -4,6 +4,13 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration break button
+
+- Replaced the Lunch row with a Break button that sits apart from the account rows and wears the amber break colour. It is in the dashboard sidebar and beside pause on the pill. Ending a break returns to the account that was running before it, found from the recorded time so it is not lost.
+- A break is called Break everywhere, including the timeline, week table, entry editor and exports (Summary now shows Break and Total excluding breaks). It is still stored as Lunch in the time file, so existing data is unchanged, and Break is now a reserved account name.
+- Pause on the pill resumes the earlier account while a break is on. The dashboard header says which account the break returns to.
+- The red overtime theme now applies to the pill only, so the dashboard stays calm. A break still tints both.
+
 ## Migration overtime theme and pill layout
 
 - Overtime now turns the app red, as a break turns it amber, with its own light and dark variants. A break outranks overtime and overtime outranks normal, and not tracking keeps the ordinary theme with its grey glow.

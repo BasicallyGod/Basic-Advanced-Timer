@@ -113,6 +113,8 @@ public sealed class PillWindow : Window
     private readonly TextBlock overtime = Ui.Text("", 11, "overtime");
     private readonly Button pause;
     private readonly PauseGlyph pauseGlyph = new();
+    private readonly BreakGlyph breakGlyph = new();
+    private Button breakButton = null!;
     private readonly TextBlock saved = Ui.Text("", 11, "muted");
     private readonly Grid progressBar = new();
     private Border progressFill = null!, shadowHost = null!;
@@ -130,7 +132,7 @@ public sealed class PillWindow : Window
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
         var root = Ui.Grid("*", "80,*");
-        var head = Ui.Grid("Auto,1,*,36", "*");
+        var head = Ui.Grid("Auto,1,*,36,36", "*");
         head.Margin = new Thickness(16, 0);
         var timerButton = Ui.Button("", () => OpenDashboard?.Invoke(), "PillDashboard");
         timerButton.Content = timer;
@@ -156,7 +158,11 @@ public sealed class PillWindow : Window
         pause.Content = pauseGlyph;
         pause.Classes.Add("round");
         pause.Width = pause.Height = 36;
-        Ui.Put(head, pause, 3);
+        Ui.Put(head, pause, 4);
+        breakButton = Ui.Button("", model.ToggleBreak, "PillBreak");
+        breakButton.Content = breakGlyph; breakButton.Classes.Add("round"); breakButton.Classes.Add("breakButton");
+        breakButton.Width = breakButton.Height = 36; breakButton.Margin = new Thickness(0, 0, 8, 0);
+        Ui.Put(head, breakButton, 3);
         Ui.PillGestures(head, this);
         Ui.Put(root, head);
         // How far through the working day it is, as a thin line along the bottom of the pill's main row.
@@ -210,6 +216,9 @@ public sealed class PillWindow : Window
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
     private void Refresh()
     {
+        // Overtime tints the pill alone, so the dashboard stays calm.
+        var wanted = model.PillVariant;
+        if (!ReferenceEquals(RequestedThemeVariant, wanted)) RequestedThemeVariant = wanted;
         // Only worth a line when something is unusual, so the bottom edge stays just the two buttons.
         saved.Text = model.LastError is not null ? "Save failed; retrying" : model.IsDemo ? "Sample data · demo" : "";
         var noteShown = saved.IsVisible; saved.IsVisible = saved.Text.Length > 0;
@@ -218,15 +227,17 @@ public sealed class PillWindow : Window
         account.Text = model.AccountLabel;
         timer.Text = model.ClockText;
         var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);
-        account.Text = model.ActiveAccount ?? (selected?.Name ?? model.AccountLabel);
+        account.Text = model.IsOnBreak ? model.AccountLabel : model.ActiveAccount ?? (selected?.Name ?? model.AccountLabel);
         credited.Text = model.IsTracking && selected is not null ? model.Format(model.Today(selected)) + " today" : model.Status;
         dot.Classes.Set("live", model.IsTracking && !model.IsOnBreak); dot.Classes.Set("break", model.IsOnBreak); dot.Classes.Set("idle", !model.IsTracking);
         Ui.Pulse(dot, model.IsTracking);
         overtime.IsVisible = model.IsOvertime;
         overtime.Text = "OT +" + model.Format(model.Engine.Totals(model.Engine.Now).Overtime);
-        pauseGlyph.Playing = model.IsTracking; pauseGlyph.InvalidateVisual();
+        pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
+        breakButton.Classes.Set("onBreak", model.IsOnBreak); breakGlyph.Filled = model.IsOnBreak; breakGlyph.InvalidateVisual();
+        ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Take a break");
         pause.IsEnabled = model.IsTracking || selected is not null;
-        ToolTip.SetTip(pause, model.IsTracking ? "Pause account; drag to move" : "Resume account; drag to move");
+        ToolTip.SetTip(pause, model.IsOnBreak ? "End break; drag to move" : model.IsTracking ? "Pause account; drag to move" : "Resume account; drag to move");
         timer.Classes.Set("live", model.IsTracking && !model.IsOnBreak); timer.Classes.Set("break", model.IsOnBreak);
         timer.Classes.Set("idle", !model.IsTracking);
         day.Content = model.DayStarted ? "Finish day" : "Start day";
@@ -258,6 +269,9 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock today = Ui.Text("", 23);
     private readonly ContentControl workspace = new();
     private readonly Button day;
+    private Button breakButton = null!;
+    private readonly BreakGlyph dashboardCup = new();
+    private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly Button format;
     private readonly Button timeline;
     private readonly Button week;
@@ -303,6 +317,11 @@ public sealed class DashboardWindow : Window
         Ui.Put(sidebar, new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 1);
         var summary = new StackPanel { Margin = new Thickness(18, 12, 18, 18), Spacing = 10 };
+        // The break is its own control, apart from the account rows above it, because it stops time going to any account.
+        breakButton = Ui.Button("", model.ToggleBreak, "DashboardBreak");
+        breakButton.Classes.Add("breakButton"); breakButton.HorizontalAlignment = HorizontalAlignment.Stretch; breakButton.Height = 42;
+        breakButton.Content = Ui.Horizontal(dashboardCup, dashboardBreakText);
+        summary.Children.Add(breakButton);
         summary.Children.Add(Ui.Rule());
         summary.Children.Add(allocated);
         summary.Children.Add(unallocated);
@@ -381,7 +400,7 @@ public sealed class DashboardWindow : Window
         clock.Text = model.ClockText;
         clock.Classes.Set("live", model.IsTracking);
         clock.Classes.Set("idle", !model.IsTracking);
-        account.Text = model.AccountLabel;
+        account.Text = model.IsOnBreak ? (model.ResumeAccount is { } backTo ? "Then back to " + backTo : "No account running") : model.AccountLabel;
         today.Text = model.Engine.Now.ToString("dddd, d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
         date.Text = model.SelectedDate.ToString("ddd d MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
         allocated.Text = "Today allocated   " + model.Format(model.Allocated);
@@ -389,6 +408,10 @@ public sealed class DashboardWindow : Window
         day.Content = model.DayStarted ? "Finish day" : "Start day";
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
         undo.Content = model.Editor.CanUndo ? $"Undo ({model.Editor.UndoCount})" : "Undo";
+        dashboardCup.Filled = model.IsOnBreak; dashboardCup.InvalidateVisual();
+        dashboardBreakText.Text = model.IsOnBreak ? "End break" : "Take a break";
+        breakButton.Classes.Set("onBreak", model.IsOnBreak);
+        ToolTip.SetTip(breakButton, model.IsOnBreak ? "End the break" + (model.ResumeAccount is { } resumeTo ? " and go back to " + resumeTo : "") : "Stop timing any account while you take a break");
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? "Undo: " + label : "No edit to undo");
         format.Content = model.DecimalHours ? "Decimal hours" : "Hours and minutes";

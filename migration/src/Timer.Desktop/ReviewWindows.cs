@@ -44,17 +44,17 @@ public sealed class PositionWindow : ReviewWindow
         if (old is not null && !available.Contains(old.Account)) available.Add(old.Account);
         Root.Children.Add(Ui.Text(day.ToString("dddd, d MMMM yyyy"), 13, "muted"));
         Root.Children.Add(Info("Place merged credit on the timeline. This uses existing credit and keeps account totals unchanged."));
-        var accounts = new ComboBox { Name = "PositionAccount", ItemsSource = available, SelectedItem = old?.Account ?? available.FirstOrDefault(), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
+        var accounts = new ComboBox { Name = "PositionAccount", ItemsSource = available.Select(BreakAccount.Display).ToList(), SelectedItem = BreakAccount.Display(old?.Account ?? available.FirstOrDefault() ?? ""), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
         var remaining = Ui.Text("", 13, "muted");
         void Update()
         {
-            var account = (string?)accounts.SelectedItem ?? "";
+            var account = BreakAccount.Stored((string?)accounts.SelectedItem ?? "");
             var minutes = model.Editor.Unplaced(day).GetValueOrDefault(account) + (old?.Account == account ? old.Minutes : 0);
             remaining.Text = minutes.ToString("0.00", CultureInfo.InvariantCulture) + " minutes available";
         }
         accounts.SelectionChanged += (_, _) => Update(); Update(); Root.Children.Add(accounts); Root.Children.Add(remaining);
         var suggested = old?.Start ?? (model.Engine.Plan(day).Working ? model.Engine.Plan(day).Start : day.AddHours(9));
-        var suggestedMinutes = old?.Minutes ?? Math.Min(30m, model.Editor.Unplaced(day).GetValueOrDefault((string?)accounts.SelectedItem ?? ""));
+        var suggestedMinutes = old?.Minutes ?? Math.Min(30m, model.Editor.Unplaced(day).GetValueOrDefault(BreakAccount.Stored((string?)accounts.SelectedItem ?? "")));
         if (old is null)
         {
             var spans = model.Engine.Sessions.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero && s.Day == day).Select(s => (Start: s.From, End: s.To)).ToList();
@@ -76,7 +76,7 @@ public sealed class PositionWindow : ReviewWindow
         var amount = new TextBox { Name = "PositionMinutes", Width = 120, Text = suggestedMinutes.ToString("0.00", CultureInfo.InvariantCulture), Watermark = "Minutes of existing credit" };
         Root.Children.Add(Ui.Text("Start time and minutes to place", 12, "muted")); Root.Children.Add(Ui.Horizontal(start, amount));
         var note = new TextBox { Name = "PositionNote", Text = old?.Note ?? "", Watermark = "Position note", AcceptsReturn = true, Height = 90, TextWrapping = TextWrapping.Wrap }; Root.Children.Add(note); Root.Children.Add(Error);
-        var buttons = Ui.Horizontal(Ui.Button("Save position", () => Apply(model, () => model.PlaceCredit((string?)accounts.SelectedItem ?? "", At(day, start.Text), decimal.Parse(amount.Text ?? "", CultureInfo.InvariantCulture), note.Text ?? "", old)), "SavePosition"), Ui.Button("Cancel", Close));
+        var buttons = Ui.Horizontal(Ui.Button("Save position", () => Apply(model, () => model.PlaceCredit(BreakAccount.Stored((string?)accounts.SelectedItem ?? ""), At(day, start.Text), decimal.Parse(amount.Text ?? "", CultureInfo.InvariantCulture), note.Text ?? "", old)), "SavePosition"), Ui.Button("Cancel", Close));
         if (old is not null) buttons.Children.Add(Ui.Button("Unplace", () => Apply(model, () => model.UnplaceCredit(old)), "UnplaceCredit"));
         Root.Children.Add(buttons);
         if (available.Count == 0) Error.Text = "No unplaced merged credit on this day.";
@@ -95,7 +95,7 @@ public sealed class GroupWindow : ReviewWindow
         {
             Root.Children.Add(Ui.Text("Existing groups · open to inspect or ungroup", 13, "muted"));
             foreach (var entry in existing)
-                Root.Children.Add(Ui.Button($"{entry.Day:ddd d MMM} · {entry.Account} · {entry.Sources.Count} entries", () => { var owner = Owner; Close(); if (owner is Window window) new GroupWindow(model, entry.GroupId).Show(window); }));
+                Root.Children.Add(Ui.Button($"{entry.Day:ddd d MMM} · {model.Label(entry.Account)} · {entry.Sources.Count} entries", () => { var owner = Owner; Close(); if (owner is Window window) new GroupWindow(model, entry.GroupId).Show(window); }));
         }
         var grouped = existing.SelectMany(e => e.Sources).ToHashSet();
         var rows = group?.Sources ?? model.Engine.Sessions.Where(s => s.Day >= week && s.Day < week.AddDays(7) && !s.IsMerged && !grouped.Contains(s)).OrderBy(s => s.From).ToArray();
@@ -103,10 +103,10 @@ public sealed class GroupWindow : ReviewWindow
         var choices = new List<(CheckBox Check, SessionRow Row)>();
         foreach (var row in rows)
         {
-            if (id is not null) Root.Children.Add(Ui.Button($"{row.Account} · {row.From:HH:mm:ss} · {model.Format(row.Duration)} · {model.Editor.Note(row)}", () => { Close(); model.OpenEntry(row); }));
+            if (id is not null) Root.Children.Add(Ui.Button($"{model.Label(row.Account)} · {row.From:HH:mm:ss} · {model.Format(row.Duration)} · {model.Editor.Note(row)}", () => { Close(); model.OpenEntry(row); }));
             else
             {
-                var check = new CheckBox { Content = $"{row.Day:ddd d MMM} · {row.Account} · {row.From:HH:mm:ss} · {model.Format(row.Duration)}", Name = "GroupChoice" + model.Engine.Sessions.IndexOf(row) };
+                var check = new CheckBox { Content = $"{row.Day:ddd d MMM} · {model.Label(row.Account)} · {row.From:HH:mm:ss} · {model.Format(row.Duration)}", Name = "GroupChoice" + model.Engine.Sessions.IndexOf(row) };
                 choices.Add((check, row)); Root.Children.Add(check);
             }
         }
@@ -122,7 +122,7 @@ public sealed class TidyWindow : ReviewWindow
     public TidyWindow(TimerModel model) : base("Tidy day")
     {
         Height = 620;
-        Root.Children.Add(Info("Review short gaps between stopped entries. Lunch, away time and running entries are excluded. Each fill adds credited time; one Undo reverses the batch."));
+        Root.Children.Add(Info("Review short gaps between stopped entries. Breaks, away time and running entries are excluded. Each fill adds credited time; one Undo reverses the batch."));
         var limit = new NumericUpDown { Name = "TidyLimit", Minimum = 1, Maximum = 60, Value = 5, Width = 100 };
         Root.Children.Add(Ui.Horizontal(Ui.Text("Maximum gap (minutes)", 13), limit));
         var list = new StackPanel { Spacing = 10 }; Root.Children.Add(list);
@@ -150,7 +150,7 @@ public sealed class ExportWindow : ReviewWindow
     {
         Height = 420;
         Root.Children.Add(Ui.Text("Week commencing " + model.WeekStart(model.SelectedDate).ToString("d MMMM yyyy"), 13));
-        Root.Children.Add(Info("Creates Detail.csv and Summary.csv together. Decimal hours reconcile across entries, days and account totals. Lunch is shown separately from the working total."));
+        Root.Children.Add(Info("Creates Detail.csv and Summary.csv together. Decimal hours reconcile across entries, days and account totals. Breaks are shown separately from the working total."));
         Root.Children.Add(Info("Exports include saved entries only. Pause tracking first to include the current running interval."));
         var result = new TextBox { IsReadOnly = true, TextWrapping = TextWrapping.Wrap, IsVisible = false }; Root.Children.Add(result); Root.Children.Add(Error);
         var export = Ui.Button("Export CSV files", () =>

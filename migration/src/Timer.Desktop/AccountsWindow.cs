@@ -44,9 +44,9 @@ public sealed class AccountsWindow : Window
         var add = Ui.Horizontal(input, Ui.Button("Add account", () =>
         {
             var name = input.Text?.Trim() ?? "";
-            if (name.Length == 0 || name.IndexOfAny(new[] { '\t', '\r', '\n' }) >= 0 || name.Equals("Lunch", StringComparison.OrdinalIgnoreCase)
+            if (name.Length == 0 || name.IndexOfAny(new[] { '\t', '\r', '\n' }) >= 0 || name.Equals(Timer.Core.BreakAccount.Name, StringComparison.OrdinalIgnoreCase) || name.Equals(Timer.Core.BreakAccount.Label, StringComparison.OrdinalIgnoreCase)
                 || Taken(name))
-            { error.Text = "Choose a unique account name. Lunch is reserved."; return; }
+            { error.Text = "Choose a unique account name. Break is reserved."; return; }
             Add(new(name), false); input.Text = ""; error.Text = "";
         }));
         add.Margin = new Thickness(0, 14, 0, 0); Ui.Put(root, add, row: 2); Ui.Put(root, error, row: 3);

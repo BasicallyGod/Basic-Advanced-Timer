@@ -52,21 +52,26 @@ public sealed class VisualStateTests
     }
 
     [AvaloniaFact]
-    public void OvertimeTurnsTheAppRedAndABreakOutranksIt()
+    public void OvertimeTurnsOnlyThePillRedAndABreakOutranksIt()
     {
         var now = Day.AddHours(10); var engine = new TrackingEngine(clock: () => now); var model = new TimerModel(engine);
-        var window = new DashboardWindow(model); window.Show();
+        var dashboard = new DashboardWindow(model); dashboard.Show(); var pill = new PillWindow(model); pill.Show();
         try
         {
-            Dispatcher.UIThread.RunJobs(); var normal = Brush(window, "Surface"); Assert.Equal("Normal", model.ThemeState);
+            Dispatcher.UIThread.RunJobs(); var normal = Brush(dashboard, "Surface"); Assert.Equal("Normal", model.ThemeState);
+            Assert.Equal(normal, Brush(pill, "Surface"));
             now = Day.AddHours(18); model.Tick(); model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs();
-            Assert.Equal("Overtime", model.ThemeState); var red = Brush(window, "Surface"); Assert.NotEqual(normal, red);
+            Assert.Equal("Overtime", model.ThemeState);
+            var red = Brush(pill, "Surface"); Assert.NotEqual(normal, red);
+            Assert.Equal(normal, Brush(dashboard, "Surface")); // The dashboard stays calm.
             model.ToggleAccount("Lunch"); Dispatcher.UIThread.RunJobs();
-            Assert.Equal("Break", model.ThemeState); Assert.NotEqual(red, Brush(window, "Surface")); Assert.NotEqual(normal, Brush(window, "Surface"));
-            model.TogglePause(); Dispatcher.UIThread.RunJobs(); // Still in overtime, not tracking: overtime colours, grey glow.
-            Assert.Equal("Overtime", model.ThemeState); Assert.Equal(red, Brush(window, "Surface"));
+            Assert.Equal("Break", model.ThemeState);
+            Assert.NotEqual(red, Brush(pill, "Surface")); Assert.NotEqual(normal, Brush(pill, "Surface"));
+            Assert.Equal(Brush(pill, "Surface"), Brush(dashboard, "Surface")); // A break tints both the same way.
+            model.TogglePause(); model.TogglePause(); Dispatcher.UIThread.RunJobs(); // Back on the account, then paused: still in overtime, not tracking.
+            Assert.Equal("Overtime", model.ThemeState); Assert.Equal(red, Brush(pill, "Surface")); Assert.Equal(normal, Brush(dashboard, "Surface"));
         }
-        finally { window.Close(); }
+        finally { pill.Close(); dashboard.Close(); }
     }
 
     [AvaloniaFact]
@@ -92,6 +97,8 @@ public sealed class VisualStateTests
             Assert.Equal(1.0, bar.ColumnDefinitions[0].Width.Value, 2);
             model.ToggleAccount("Lunch"); Dispatcher.UIThread.RunJobs();
             Assert.Equal(Brush(pill, "Break").R, host.BoxShadow[0].Color.R); // Break outranks overtime.
+            model.TogglePause(); Dispatcher.UIThread.RunJobs(); // Resume ends the break and returns to the account.
+            Assert.False(model.IsOnBreak); Assert.Equal("Account one", model.ActiveAccount);
             model.TogglePause(); Dispatcher.UIThread.RunJobs();
             Assert.False(Ui.IsPulsing(dot));
         }

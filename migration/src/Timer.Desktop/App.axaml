@@ -203,6 +203,20 @@
       <Setter Property="Height" Value="52" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
+    <!-- The break button wears the break colour, so it reads as its own function beside the account buttons. -->
+    <Style Selector="Button.breakButton">
+      <Setter Property="BorderBrush" Value="{DynamicResource Break}" />
+      <Setter Property="Foreground" Value="{DynamicResource Break}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+    <Style Selector="Button.breakButton.onBreak">
+      <Setter Property="Background" Value="{DynamicResource Break}" />
+      <Setter Property="Foreground" Value="{DynamicResource Surface}" />
+    </Style>
+    <Style Selector="Button.breakButton.onBreak:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Break}" />
+      <Setter Property="Foreground" Value="{DynamicResource Surface}" />
+    </Style>
     <Style Selector="Button.round">
       <Setter Property="CornerRadius" Value="24" />
       <Setter Property="Width" Value="40" />

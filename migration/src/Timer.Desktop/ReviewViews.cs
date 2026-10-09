@@ -64,7 +64,7 @@ public static class ReviewViews
             var duration = interval.Group is { } groupDuration ? TimeSpan.FromMinutes((double)groupDuration.Minutes) : end - interval.Start;
             var height = Math.Max(3, (end - interval.Start).TotalHours * pixelsPerHour - 4);
             var text = new StackPanel { Spacing = 6 };
-            text.Children.Add(Ui.Text(interval.Account + (interval.Group is { } labelGroup ? $" · Group ({labelGroup.Sources.Count})" : ""), 15));
+            text.Children.Add(Ui.Text(model.Label(interval.Account) + (interval.Group is { } labelGroup ? $" · Group ({labelGroup.Sources.Count})" : ""), 15));
             if (height >= 58) text.Children.Add(Ui.Text($"{interval.Start:HH:mm} – {end:HH:mm} · {model.Format(duration)}", 12));
             foreach (TextBlock child in text.Children) child.Foreground = Brush.Parse("#24312B");
             var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
@@ -78,7 +78,7 @@ public static class ReviewViews
                 var noteText = Ui.Text(note, 12); noteText.Foreground = Brush.Parse("#24312B");
                 noteText.TextTrimming = TextTrimming.CharacterEllipsis; text.Children.Add(noteText);
             }
-            ToolTip.SetTip(card, $"{interval.Account} · {interval.Start:HH:mm:ss} – {end:HH:mm:ss} · {model.Format(duration)}\n{note}");
+            ToolTip.SetTip(card, $"{model.Label(interval.Account)} · {interval.Start:HH:mm:ss} – {end:HH:mm:ss} · {model.Format(duration)}\n{note}");
             if (interval.Row is { } row)
             {
                 card.Tag = row; card.Name = "TimelineEntry" + model.Engine.Sessions.IndexOf(row);
@@ -125,7 +125,7 @@ public static class ReviewViews
                 var editGroup = new MenuItem { Header = "Inspect / edit grouped entries…" }; editGroup.Click += (_, _) => model.OpenGroup(group.GroupId!);
                 var ungroup = new MenuItem { Header = "Ungroup" }; ungroup.Click += (_, _) => model.UngroupEntries(group.GroupId!);
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { editGroup, ungroup, MergeMenu(model) } };
-                ToolTip.SetTip(card, $"{group.Account} · {group.Sources.Count} grouped entries · {model.Format(duration)} credited\nSeparate sections preserve any gaps. Double-click to inspect; right-click to ungroup.");
+                ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} grouped entries · {model.Format(duration)} credited\nSeparate sections preserve any gaps. Double-click to inspect; right-click to ungroup.");
             }
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
             canvas.Children.Add(card); cards.Add((card, lane));
@@ -202,7 +202,7 @@ public static class ReviewViews
         var row = 1;
         foreach (var a in model.ReviewAccounts)
         {
-            Ui.Put(grid, Ui.Text(a.Name, 13), row: row).Margin = new Thickness(0, 16);
+            Ui.Put(grid, Ui.Text(a.Display, 13), row: row).Margin = new Thickness(0, 16);
             for (var i = 0; i < days.Length; i++) Ui.Put(grid, Ui.Text(Value(a, days[i]), 12), i + 1, row);
             Ui.Put(grid, Ui.Text(Value(a, null), 12), days.Length + 1, row);
             row++;
@@ -228,7 +228,7 @@ public static class ReviewViews
             var labels = new StackPanel { Spacing = 5 };
             var index = reconciled.Entries.ToList().IndexOf(entry);
             var duration = model.DecimalHours ? WeekExport.Hours(reconciled.EntryUnits[index]) + "h" : model.Format(TimeSpan.FromMinutes((double)entry.Minutes));
-            labels.Children.Add(Ui.Text($"{entry.Day:ddd d MMM} · {entry.Account} · {caption} · {duration}", 12));
+            labels.Children.Add(Ui.Text($"{entry.Day:ddd d MMM} · {model.Label(entry.Account)} · {caption} · {duration}", 12));
             if (!string.IsNullOrWhiteSpace(entry.Note)) labels.Children.Add(new TextBlock { Text = entry.Note, FontSize = 12, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
             button.Content = labels;
             if (entry.PositionId is null && entry.Sources.Count > 0 && entry.Sources.All(s => !s.IsMerged))

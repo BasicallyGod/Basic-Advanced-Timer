@@ -98,7 +98,7 @@ public sealed class CreditReviewTests
             for (var d = 0; d < 7; d++) Assert.Equal(account.Value[d], export.Entries.Select((e, i) => (e, i)).Where(p => p.e.Account == account.Key && p.e.Day == Day.AddDays(-4 + d)).Sum(p => export.EntryUnits[p.i]));
         Assert.DoesNotContain("\"Lunch\"", export.DetailCsv());
         var folder = Path.Combine(Path.GetTempPath(), "timer-export-" + Guid.NewGuid());
-        try { var path = export.Write(folder, new[] { "Account one" }); Assert.Equal(2, Directory.GetFiles(path).Length); Assert.Contains("Total (excluding lunch)", File.ReadAllText(Path.Combine(path, "Summary.csv"))); }
+        try { var path = export.Write(folder, new[] { "Account one" }); Assert.Equal(2, Directory.GetFiles(path).Length); Assert.Contains("Total (excluding breaks)", File.ReadAllText(Path.Combine(path, "Summary.csv"))); }
         finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }
     [Fact]
