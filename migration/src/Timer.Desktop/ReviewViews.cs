@@ -23,7 +23,7 @@ public static class ReviewViews
         caption.TextWrapping = TextWrapping.Wrap;
         caption.Margin = new Thickness(0, 0, 0, 10);
         Ui.Put(root, caption);
-        const double pixelsPerHour = 160;
+        var pixelsPerHour = model.TimelinePixelsPerHour;
         var canvas = new Canvas { Height = 24 * pixelsPerHour, MinWidth = 460, Background = Brushes.Transparent };
         for (var hour = 0; hour < 24; hour++)
         {
@@ -149,8 +149,15 @@ public static class ReviewViews
         var plan = model.Engine.Plan(day);
         var first = intervals.Count > 0 ? intervals.Min(i => i.Start) : plan.Working ? plan.Start : day.AddHours(9);
         var scroll = new ScrollViewer { Name = "TimelineScroll", Content = canvas,
-            Tag = new Vector(0, Math.Max(0, (first - day).TotalHours * pixelsPerHour - 24)),
+            Tag = new Vector(0, model.TimelineOffset ?? Math.Max(0, (first - day).TotalHours * pixelsPerHour - 24)),
             AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+        scroll.ScrollChanged += (_, _) => model.TimelineOffset = scroll.Offset.Y;
+        scroll.AddHandler(InputElement.PointerWheelChangedEvent, (_, e) =>
+        {
+            if (!e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
+            e.Handled = true;
+            model.ZoomTimeline(e.Delta.Y, e.GetPosition(scroll).Y, scroll.Offset.Y);
+        }, RoutingStrategies.Tunnel);
         DeferOffset(scroll);
         Ui.Put(root, scroll, row: 1);
         return root;
