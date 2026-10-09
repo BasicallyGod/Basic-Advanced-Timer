@@ -95,6 +95,15 @@
       <Setter Property="Background" Value="{DynamicResource Hover}" />
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
     </Style>
+    <Style Selector="Border.mergeSelected">
+      <Setter Property="BorderThickness" Value="3" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
+    </Style>
+    <Style Selector="Button.mergeSelected">
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
+      <Setter Property="Background" Value="{DynamicResource Selected}" />
+    </Style>
     <Style Selector="Button.account">
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />

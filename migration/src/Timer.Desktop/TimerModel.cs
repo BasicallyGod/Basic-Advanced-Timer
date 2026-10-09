@@ -18,6 +18,29 @@ public sealed class TimerModel : INotifyPropertyChanged
     public event Action<CreditPosition?>? PositionRequested;
     public event Action<string>? GroupRequested;
     public string? ExportPath { get; private set; }
+    private readonly HashSet<SessionRow> selectedRows = new(ReferenceEqualityComparer.Instance);
+    public IReadOnlyCollection<SessionRow> SelectedRows => selectedRows;
+    public bool IsSelected(IReadOnlyList<SessionRow> rows) => rows.Count > 0 && rows.All(selectedRows.Contains);
+    public int SelectedBlockCount => selectedRows.Count == 0 ? 0 : Editor.Entries(WeekStart(SelectedDate), WeekStart(SelectedDate).AddDays(7))
+        .Count(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains));
+    public bool CanMergeSelection => SelectedBlockCount >= 2 && selectedRows.Select(s => s.Day).Distinct().Count() == 1
+        && selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() == 1 && Editor.CanCombine(selectedRows.ToArray());
+    public string MergeHint => SelectedBlockCount < 2 ? "Ctrl+left-click at least two blocks to merge." : CanMergeSelection
+        ? $"Merge {SelectedBlockCount} selected blocks. Credited totals stay unchanged." : "Select adjoining blocks for the same account/day, without gaps or overlapping time.";
+    public void ToggleSelection(IReadOnlyList<SessionRow> rows)
+    {
+        if (rows.Count == 0 || rows.Any(s => s.IsMerged || !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
+        var remove = IsSelected(rows);
+        foreach (var row in rows) { if (remove) selectedRows.Remove(row); else selectedRows.Add(row); }
+        EditError = null; Notify();
+    }
+    public void ClearSelection() { if (selectedRows.Count == 0) return; selectedRows.Clear(); Notify(); }
+    public bool MergeSelection()
+    {
+        if (!CanMergeSelection) { EditError = MergeHint; Notify(); return false; }
+        var rows = Engine.Sessions.Where(selectedRows.Contains).ToArray();
+        return ChangeLog(() => { Editor.Group(rows); selectedRows.Clear(); });
+    }
     private StoreSettings preferences;
     private readonly TimerStore? store;
     private int ticks;
@@ -116,7 +139,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string BudgetText(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} of {Format(target)} this {a.Period}" : "No budget";
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
-    public void ChangeDate(int days) { SelectedDate = SelectedDate.AddDays(days); Notify(); }
+    public void ChangeDate(int days) { selectedRows.Clear(); SelectedDate = SelectedDate.AddDays(days); Notify(); }
     public void SetTheme(string theme)
     {
         if (theme is not ("Light" or "Dark" or "System")) throw new ArgumentException("Unknown theme", nameof(theme));
@@ -220,6 +243,7 @@ public sealed class TimerModel : INotifyPropertyChanged
             // Save any pending recording/edit before replacing the undo snapshot.
             if (!Save()) { EditError = LastError; Notify(); return false; }
             change();
+            selectedRows.RemoveWhere(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)));
             EditError = null;
             var saved = Save(); Notify(); return saved;
         }

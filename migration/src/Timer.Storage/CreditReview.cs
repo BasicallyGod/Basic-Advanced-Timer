@@ -74,6 +74,22 @@ public sealed partial class LedgerEditor
         if (!Positions.Contains(position)) throw new InvalidOperationException("This position changed. Reopen it.");
         Change("Unplace credit", () => positions.Rows.RemoveAll(r => r["Id"] == position.Id));
     }
+    // CSV starts have whole-second precision and durations are rounded to 0.01
+    // minutes. Permit only that sub-second representation error at a join.
+    public static bool Adjoining(IReadOnlyList<SessionRow> rows)
+    {
+        if (rows.Count == 0 || rows.Any(s => !s.IsPositioned || s.Duration <= TimeSpan.Zero)) return false;
+        var ordered = rows.OrderBy(s => s.From).ToArray();
+        return ordered.Skip(1).Select((s, i) => Math.Abs((s.From - ordered[i].To).TotalSeconds)).All(gap => gap <= .6 + 1e-8);
+    }
+    public bool CanCombine(IReadOnlyList<SessionRow> rows)
+    {
+        if (!Adjoining(rows)) return false;
+        var from = rows.Min(s => s.From); var until = rows.Max(s => s.To);
+        return !engine.Sessions.Any(s => !rows.Any(r => ReferenceEquals(r, s)) && s.IsPositioned && s.Duration > TimeSpan.Zero && s.From < until && s.To > from)
+            && !Positions.Any(p => p.Start < until && p.End > from)
+            && !(engine.Active is { } active && active.Start < until && engine.Now > from);
+    }
     public void Group(IReadOnlyList<SessionRow> selected)
     {
         foreach (var row in selected) Index(row);
@@ -81,11 +97,15 @@ public sealed partial class LedgerEditor
             || selected.Any(s => s.Day != selected[0].Day || s.Account != selected[0].Account || s.IsMerged)
             || selected.Any(s => engine.Sessions.Count(r => Key(r) == Key(s)) != 1))
             throw new ArgumentException("Select at least two distinct entries for the same account and day. Merged credit is placed separately.");
+        if (!CanCombine(selected)) throw new ArgumentException("Merge adjoining blocks only. Fill gaps first; overlapping or intervening time cannot be merged.");
         var table = CsvTable.Parse(groups ?? string.Join(",", groupHeaders) + "\n", groupHeaders);
         var keys = selected.Select(Key).ToHashSet();
-        if (table.Rows.Any(r => keys.Contains(Key(r)))) throw new ArgumentException("Ungroup these entries before regrouping them.");
+        var oldGroups = table.Rows.Where(r => keys.Contains(Key(r))).Select(r => r["GroupId"]).ToHashSet();
+        if (table.Rows.Any(r => oldGroups.Contains(r["GroupId"]) && !keys.Contains(Key(r))))
+            throw new ArgumentException("Select every part of an existing group before merging it.");
         Change("Group entries", () =>
         {
+            table.Rows.RemoveAll(r => oldGroups.Contains(r["GroupId"]));
             var id = Guid.NewGuid().ToString("N");
             foreach (var row in selected) { var value = Fields(row); value["GroupId"] = id; table.Rows.Add(value); }
             groups = table.Serialize();

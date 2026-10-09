@@ -169,6 +169,7 @@ public sealed class DashboardWindow : Window
     private readonly Button timeline;
     private readonly Button week;
     private readonly Button undo;
+    private readonly Button merge;
     private bool weekMode;
     private bool? renderedWeekMode;
     private DateTime? renderedDate;
@@ -226,6 +227,7 @@ public sealed class DashboardWindow : Window
         Ui.Put(review, nav);
         format = Ui.Button("Hours and minutes", model.ToggleFormat, "HoursFormat");
         undo = Ui.Button("Undo", () => model.UndoEdit(), "UndoEdit");
+        merge = Ui.Button("Merge", () => model.MergeSelection(), "MergeSelected");
         var more = Ui.Button("Tools", () => { }, "ReviewTools");
         var place = new MenuItem { Header = "Position existing credit…" }; place.Click += (_, _) => new PositionWindow(model).Show(this);
         var group = new MenuItem { Header = "Group entries…" }; group.Click += (_, _) => new GroupWindow(model).Show(this);
@@ -233,7 +235,7 @@ public sealed class DashboardWindow : Window
         var export = new MenuItem { Header = "Export week…" }; export.Click += (_, _) => new ExportWindow(model).Show(this);
         more.ContextMenu = new ContextMenu { ItemsSource = new[] { place, group, tidy, export } };
         more.Click += (_, _) => more.ContextMenu.Open(more);
-        var tools = Ui.Horizontal(format, Ui.Button("Add time", () => model.OpenGap(), "AddTime"), undo, more);
+        var tools = Ui.Horizontal(format, Ui.Button("Add time", () => model.OpenGap(), "AddTime"), undo, merge, more);
         tools.Margin = new Thickness(0, 12);
         Ui.Put(review, tools, row: 1);
         Ui.Put(review, workspace, row: 2);
@@ -245,6 +247,7 @@ public sealed class DashboardWindow : Window
         Ui.Put(root, footer, row: 3);
         var surface = new Border { Name = "DashboardSurface", CornerRadius = new CornerRadius(20), Child = root, ClipToBounds = true };
         surface.Classes.Add("surface"); Content = surface;
+        KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Escape) { model.ClearSelection(); e.Handled = true; } };
         model.PropertyChanged += Changed;
         model.EntryRequested += ShowEntry;
         model.PositionRequested += ShowPosition; model.GroupRequested += ShowGroup;
@@ -270,6 +273,7 @@ public sealed class DashboardWindow : Window
         allocated.Text = "Today allocated   " + model.Format(model.Allocated);
         unallocated.Text = "Unallocated   " + model.Format(model.Unallocated);
         day.Content = model.DayStarted ? "Finish day" : "Start day";
+        merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? "Undo: " + label : "No edit to undo");
         format.Content = model.DecimalHours ? "Decimal hours" : "Hours and minutes";

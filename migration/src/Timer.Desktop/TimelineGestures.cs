@@ -17,6 +17,8 @@ public static class TimelineGestures
         card.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            { model.ToggleSelection(new[] { row }); e.Handled = true; return; }
             origin = e.GetPosition(canvas); delta = TimeSpan.Zero; dragging = false;
             oldTop = Canvas.GetTop(card); oldHeight = card.Height;
             var y = e.GetPosition(card).Y;
