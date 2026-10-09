@@ -353,7 +353,7 @@ namespace Win {
 
         public float Zoom = 1f, BaseW = 320f, BaseH = 380f, RowTop = 100f, RowH = 30f, LunchGap = 10f, OvertimeH = 32f;
         public float CollapseX = 306f, CollapseY = 9f, CollapseR = 6.5f, DrawerBtnX = 12f, DrawerBtnY = 9f;
-        public float RoundR = 8f, RoundDownX = 150f, RoundUpX = 170f;
+        public float RoundR = 8f, RoundDownX = 260f, RoundUpX = 286f;
         public float DrawerW = 640f, DrawerH = 0f, DrawerRowH = 30f;
         // Heights within the drawer, which the PowerShell side uses to work out how tall the drawer must be
         public const float TabsH = 32f;
@@ -633,9 +633,9 @@ namespace Win {
                     using (SolidBrush button = new SolidBrush(Panel)) { g.FillEllipse(button, 17, cy - 11, 22, 22); }
                     if (r.Active) DrawPause(g, 28, cy); else if (r.IsLunch) DrawLunch(g, 28, cy); else DrawPlay(g, 28, cy);
                     bool rounding = r.CanRound && Hover == i && !Reordering;
-                    ListText(g, r.Name, FontRow, Text, new RectangleF(52, y0 + 4, BaseW - 68, 22), sfName);
+                    ListText(g, r.Name, FontRow, Text, new RectangleF(52, y0 + 4, rounding ? 184 : BaseW - 68, 22), sfName);
                     string detail = !String.IsNullOrEmpty(r.BudgetText) ? r.BudgetText : r.TodayText + " today";
-                    ListText(g, detail, FontLabel, faint, new RectangleF(52, y0 + 26, rounding ? 118 : BaseW - 68, 18), sfName);
+                    ListText(g, detail, FontLabel, faint, new RectangleF(52, y0 + 26, rounding ? 184 : BaseW - 68, 18), sfName);
                     if (rounding) {
                         for (int k = 0; k < 2; k++) {
                             float bx = k == 0 ? RoundDownX : RoundUpX;
@@ -3357,7 +3357,7 @@ $OvertimeH  = 32     # height of the overtime section when it appears
 $RowTop = $BaseRowTop
 $RowH   = 48
 $LunchGap = 10   # space separating Lunch from the accounts
-$RoundXs  = @{ down = 150; up = 170 }   # positions of the round-down and round-up buttons
+$RoundXs  = @{ down = 260; up = 286 }   # positions of the round-down and round-up buttons
 $RoundR   = 8
 $RoundBlock = 15 * 60   # round up to the next 15 minutes
 
@@ -5571,7 +5571,7 @@ function Draw-Pill($g, [bool]$layered) {
             foreach ($footer in @(@{ X = 14; W = 136; Text = 'Dashboard' }, @{ X = 160; W = ($PillW - 174); Text = $v.DayBtnText })) {
                 $footerPath = New-RoundedPath $footer.X $fy $footer.W 28 8
                 $isPrimary = $footer.Text -eq 'Dashboard'
-                $footerColour = if ($isPrimary) { $theme.Fill } else { $theme.Circle }
+                $footerColour = if ($isPrimary) { Mix-Colour $theme.Fill $cWhite 0.28 } else { $theme.Circle }
                 $footerBrush = New-Object System.Drawing.SolidBrush $footerColour
                 $g.FillPath($footerBrush, $footerPath)
                 $footerInk = if ($isPrimary) { New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::White) } else { $bWhite }

@@ -85,6 +85,10 @@ $font = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle
 foreach ($field in $r.GetType().GetFields()) { if ($field.FieldType -eq [System.Drawing.Font]) { $field.SetValue($r, $font) } }
 $digitFont = New-Object System.Drawing.Font('Segoe UI', 36, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
 $r.FontDigits = $digitFont
+$headerFont = New-Object Drawing.Font('Segoe UI', 17, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
+$clockFont = New-Object Drawing.Font('Segoe UI', 28, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
+$labelFont = New-Object Drawing.Font('Segoe UI', 12, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
+$r.FontDashboardHeader = $headerFont; $r.FontDashboardClock = $clockFont; $r.FontLabel = $labelFont
 $rows = @()
 for ($i = 0; $i -lt 13; $i++) {
     $row = New-Object Win.RowModel
@@ -137,9 +141,9 @@ try {
     $r.AccountScrollY = $r.Rows.Length * $r.RowH + $r.LunchGap - ([Win.FullRenderer]::AccountBottom - $r.RowTop)
     $scrolled = $r.Render(960, 640)
     try { $scrolled.Save((Join-Path $outputDir 'accounts-scrolled.png'), [Drawing.Imaging.ImageFormat]::Png) } finally { $scrolled.Dispose() }
-} finally { $font.Dispose(); $digitFont.Dispose() }
+} finally { $font.Dispose(); $digitFont.Dispose(); $headerFont.Dispose(); $clockFont.Dispose(); $labelFont.Dispose() }
 
-foreach ($name in @('Get-BaseSize', 'Get-PillListH', 'Get-PillLayout', 'Get-PillRowTop', 'Get-PillZone', 'Test-HitCollapse', 'Get-DayBtnRect', 'Test-HitDayBtn', 'Test-HitDashboardPause')) {
+foreach ($name in @('Get-BaseSize', 'Get-PillListH', 'Get-PillLayout', 'Get-PillRowTop', 'Get-PillZone', 'Test-HitCollapse', 'Get-DayBtnRect', 'Test-HitDayBtn', 'Test-HitDashboardPause', 'Get-RowTop', 'Get-HitRow')) {
     $fn = @($ast.FindAll({ param($node)
         $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
     }, $true))
@@ -154,6 +158,10 @@ if (-not (Test-HitDashboardPause ([Drawing.Point]::new(590, 85)))) { throw 'Paus
 if (-not (Test-HitCollapse ([Drawing.Point]::new(880, 25)))) { throw 'Back to pill must be reachable.' }
 $script:view.DayBtnText = 'Finish day'
 if (-not (Test-HitDayBtn ([Drawing.Point]::new(850, 85)))) { throw 'Day control must be reachable.' }
+$script:RowTop = 164; $script:RowH = 48; $script:LunchGap = 10; $script:BaseW = 320
+$script:slots = @((0..11 | ForEach-Object { 'Client account ' + $_ })) + @('Lunch')
+if ((Get-HitRow ([Drawing.Point]::new(28, 536))) -ne 12) { throw 'Scrolled Lunch hit target must match its row.' }
+if ($null -ne (Get-HitRow ([Drawing.Point]::new(28, 620)))) { throw 'Sidebar summary must not select a hidden account.' }
 $script:mode = 'pill'; $script:pillOpen = $true; $script:pillUp = $false; $script:pillMargin = 0
 $script:PillW = 350; $script:PillH = 52; $script:PillRowH = 44; $script:PillLunchGap = 6
 $script:PillTimeW = 116; $script:PillBtnX = 328; $script:PillBtnR = 14
