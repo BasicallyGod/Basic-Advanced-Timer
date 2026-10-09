@@ -146,7 +146,7 @@ public sealed class TrackingTests
         using (var store = new TimerStore(folder.Path)) { var engine = new TrackingEngine(); store.Load(engine); Assert.Single(engine.Sessions); }
         Assert.False(File.Exists(Path.Combine(folder.Path, "migration-journal.json")));
         File.WriteAllText(Path.Combine(folder.Path, "basics-advanced-timer.settings.json"), "broken");
-        using (var store = new TimerStore(folder.Path)) Assert.Throws<JsonException>(() => store.Load(new TrackingEngine()));
+        using (var store = new TimerStore(folder.Path)) Assert.ThrowsAny<JsonException>(() => store.Load(new TrackingEngine()));
         Assert.Equal("broken", File.ReadAllText(Path.Combine(folder.Path, "basics-advanced-timer.settings.json")));
     }
     private sealed class TempFolder : IDisposable

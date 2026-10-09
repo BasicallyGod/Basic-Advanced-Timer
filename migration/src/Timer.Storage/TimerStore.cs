@@ -79,6 +79,9 @@ public sealed class TimerStore : IDisposable
         {
             var p = line.Split('\t'); engine.DayStarts[DateTime.ParseExact(p[0], "yyyy-MM-dd", CultureInfo.InvariantCulture)] = DateTime.Parse(p[1], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
         }
+        var shifts = engine.Schedule.Shifts.Values.Append(engine.Schedule.Default)
+            .Concat(engine.Schedule.Overrides.Values.Where(o => !o.Off).Select(o => o.Shift!));
+        if (shifts.Any(s => s.End <= s.Start)) throw new InvalidDataException("A working shift must finish after it starts.");
         var sessionsPath = Path.Combine(directory, "Timesheets", "sessions.csv");
         if (File.Exists(sessionsPath))
         {

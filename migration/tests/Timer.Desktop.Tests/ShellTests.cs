@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -167,6 +168,59 @@ public sealed class ShellTests
         for (var i = 0; i < names.Length; i++) { engine.AddSession(names[i], start, start.AddMinutes(minutes[i])); start = start.AddMinutes(minutes[i]); }
         engine.Sessions.Add(new("2026-10-05", "Account one", "09:00:00", "merged", "435"));
         return new TimerModel(engine, prefs);
+    }
+
+    [AvaloniaFact]
+    public void AppearanceIsAvailableThroughSettingsAndRightClick()
+    {
+        var model = Fixture();
+        var window = new DashboardWindow(model);
+        window.Show();
+        try
+        {
+            Assert.Empty(window.GetVisualDescendants().OfType<ComboBox>());
+            Assert.NotNull(window.ContextMenu);
+            var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings");
+            var appearance = ((IEnumerable<MenuItem>)button.ContextMenu!.ItemsSource!).First();
+            var dark = ((IEnumerable<MenuItem>)appearance.ItemsSource!).Single(item => (string?)item.Header == "Dark");
+            var elapsed = model.Elapsed;
+            dark.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal("Dark", model.Theme);
+            Assert.Equal(elapsed, model.Elapsed);
+        }
+        finally { window.Close(); model.SetTheme("System"); }
+    }
+
+    [AvaloniaFact]
+    public void FailedSaveKeepsStoppedTimeAndRetriesWithoutDuplicatingIt()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-failed-save-" + Guid.NewGuid());
+        var now = new DateTime(2026, 10, 9, 9, 0, 0);
+        try
+        {
+            using (var store = new TimerStore(folder))
+            {
+                var engine = new TrackingEngine(clock: () => now);
+                var prefs = store.Load(engine);
+                var model = new TimerModel(engine, prefs, store);
+                model.ToggleAccount("Account one");
+                now = now.AddMinutes(5);
+                Directory.CreateDirectory(Path.Combine(folder, "Timesheets", "sessions.csv.tmp"));
+                Assert.False(model.StopForClose());
+                Assert.NotNull(model.LastError);
+                Assert.Single(engine.Sessions);
+                Directory.Delete(Path.Combine(folder, "Timesheets", "sessions.csv.tmp"));
+                Assert.True(model.Save());
+                Assert.Null(model.LastError);
+            }
+            using (var store = new TimerStore(folder))
+            {
+                var engine = new TrackingEngine(clock: () => now); store.Load(engine);
+                Assert.Single(engine.Sessions);
+                Assert.Equal(TimeSpan.FromMinutes(5), engine.Sessions[0].Duration);
+            }
+        }
+        finally { Directory.Delete(folder, true); }
     }
 
     private static void Save(Window window, string path)

@@ -135,6 +135,8 @@ public sealed class DashboardWindow : Window
     private readonly Button timeline;
     private readonly Button week;
     private bool weekMode;
+    private bool? renderedWeekMode;
+    private DateTime? renderedDate;
     public DashboardWindow(TimerModel model)
     {
         this.model = model;
@@ -217,13 +219,16 @@ public sealed class DashboardWindow : Window
         week.Classes.Set("selected", weekMode);
         if (refreshWorkspace)
         {
-            var previous = (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault()?.Offset;
+            var previous = renderedWeekMode == weekMode && renderedDate == model.SelectedDate
+                ? (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault()?.Offset : null;
             workspace.Content = weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
             if (previous is { } offset && workspace.Content is Control control)
             {
                 var scroll = control is ScrollViewer direct ? direct : control.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();
                 if (scroll is not null) scroll.Offset = offset;
             }
+            renderedWeekMode = weekMode;
+            renderedDate = model.SelectedDate;
         }
     }
 }
