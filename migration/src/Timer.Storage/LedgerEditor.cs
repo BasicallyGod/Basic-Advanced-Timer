@@ -5,12 +5,14 @@ using Timer.Core;
 
 namespace Timer.Storage;
 
+// The full-snapshot form used by schema 1 and 2 edit history. It is only read now, to import an older
+// history; new steps are the much smaller UndoStep splices (schema 3).
 public sealed record LedgerUndo(string Description, List<Dictionary<string, string>> BeforeRows,
     List<SessionRow> AfterRows, string BeforeNotes, string? BeforeGroups, string? BeforePositions = null);
-public sealed record LedgerEditState(int SchemaVersion, LedgerUndo? Undo, List<LedgerUndo>? History = null);
+public sealed record LedgerEditState(int SchemaVersion, LedgerUndo? Undo, List<LedgerUndo>? History = null, List<UndoStep>? Steps = null);
 
 // Sessions remain the credited ledger. Extra CSV fields and reversible edits
-// travel with it; Undo restores the edited prefix and retains later recordings.
+// travel with it; Undo restores the edited stretch and retains later recordings.
 public sealed partial class LedgerEditor
 {
     private readonly TrackingEngine engine;
@@ -18,17 +20,28 @@ public sealed partial class LedgerEditor
     private readonly Dictionary<SessionRow, Dictionary<string, string>> raw = new(ReferenceEqualityComparer.Instance);
     private CsvTable notes;
     private string? groups;
-    private readonly List<LedgerUndo> history = new();
-    public LedgerUndo? UndoState => history.LastOrDefault();
+    // Most recent step last. Each step stores only what its edit changed.
+    private readonly List<UndoStep> history = new();
+    private readonly Dictionary<UndoStep, int> stepBytes = new(ReferenceEqualityComparer.Instance);
+    private string? stateJson;
+    public const int MaxUndoSteps = 50;
+    // A few very large edits could still add up, so the saved history has a size limit as well.
+    public const int MaxHistoryBytes = 2_000_000;
+    private readonly int historyBudget;
+    public UndoStep? UndoState => history.LastOrDefault();
     public int UndoCount => history.Count;
     public bool Changed { get; private set; }
-    public bool CanUndo => UndoState is { } u && engine.Sessions.Count >= u.AfterRows.Count
-        && engine.Sessions.Take(u.AfterRows.Count).SequenceEqual(u.AfterRows);
+    // Offered only while the ledger, notes, groups and positions still match what the last edit left behind.
+    public bool CanUndo => UndoState is { } u && engine.Sessions.Count >= u.AfterCount
+        && UndoMath.HashSessions(engine.Sessions, u.AfterCount) == u.AfterHash
+        && UndoMath.HashText(NotesCsv) == u.AfterNotesHash
+        && UndoMath.HashGroups(groups) == u.AfterGroupsHash
+        && UndoMath.HashText(PositionsCsv) == u.AfterPositionsHash;
     public string? UndoLabel => CanUndo ? UndoState?.Description : null;
     public LedgerEditor(TrackingEngine engine, string[]? headers = null, IEnumerable<Dictionary<string, string>>? rows = null,
-        string? notesCsv = null, string? groupsCsv = null, string? stateJson = null, string? positionsCsv = null)
+        string? notesCsv = null, string? groupsCsv = null, string? stateJson = null, string? positionsCsv = null, int maxHistoryBytes = MaxHistoryBytes)
     {
-        this.engine = engine; this.headers = headers ?? new[] { "Date", "Account", "Start", "End", "Minutes" };
+        this.engine = engine; historyBudget = maxHistoryBytes; this.headers = headers ?? new[] { "Date", "Account", "Start", "End", "Minutes" };
         if (rows is not null) foreach (var pair in engine.Sessions.Zip(rows)) raw[pair.First] = new(pair.Second);
         notes = CsvTable.Parse(notesCsv ?? "Date,Account,Start,Note\n", new[] { "Date", "Account", "Start", "Note" });
         groups = groupsCsv;
@@ -36,11 +49,55 @@ public sealed partial class LedgerEditor
         if (stateJson is not null)
         {
             var state = JsonSerializer.Deserialize<LedgerEditState>(stateJson) ?? throw new InvalidDataException("Invalid edit history.");
-            if (state.SchemaVersion is not (1 or 2)) throw new InvalidDataException("Unsupported edit history.");
-            if (state.History is { } saved) history.AddRange(saved.TakeLast(50));
-            else if (state.Undo is { } last) history.Add(last);
+            switch (state.SchemaVersion)
+            {
+                case 1 or 2:
+                    // Older files kept whole-ledger snapshots. Only the latest step is carried over, as splices.
+                    var latest = state.History?.LastOrDefault() ?? state.Undo;
+                    if (latest is not null && FromSnapshot(latest) is { } converted) history.Add(converted);
+                    break;
+                case 3:
+                    foreach (var step in (state.Steps ?? new()).TakeLast(MaxUndoSteps))
+                    { CheckStep(step); history.Add(step); }
+                    break;
+                default: throw new InvalidDataException("Unsupported edit history.");
+            }
+            TrimHistory();
         }
         ValidateCredits();
+    }
+    private static void CheckStep(UndoStep? step)
+    {
+        if (step is null || step.Rows is null || step.Notes is null || step.Groups is null || step.Positions is null
+            || step.Rows.Before is null || step.Rows.Start < 0 || step.Rows.AfterLength < 0
+            || step.Rows.Start + step.Rows.AfterLength > step.AfterCount
+            || step.Rows.Before.Any(r => r is null || UndoMath.Core.Any(k => !r.ContainsKey(k))))
+            throw new InvalidDataException("Invalid edit history.");
+    }
+    // Turn an old whole-ledger step into a splice against the current ledger, if the ledger still matches it.
+    private UndoStep? FromSnapshot(LedgerUndo old)
+    {
+        var count = old.AfterRows.Count;
+        if (engine.Sessions.Count < count || !engine.Sessions.Take(count).SequenceEqual(old.AfterRows)) return null;
+        var after = engine.Sessions.Take(count).Select(Fields).ToList();
+        return new(old.Description, count, UndoMath.HashSessions(engine.Sessions, count),
+            UndoMath.Diff(old.BeforeRows, after, UndoMath.SameCore),
+            UndoMath.DiffText(old.BeforeNotes, NotesCsv), UndoMath.DiffText(old.BeforeGroups, groups),
+            UndoMath.DiffText(old.BeforePositions ?? PositionsCsv, PositionsCsv),
+            UndoMath.HashText(NotesCsv), UndoMath.HashGroups(groups), UndoMath.HashText(PositionsCsv));
+    }
+    private int Bytes(UndoStep step)
+    {
+        if (!stepBytes.TryGetValue(step, out var size)) stepBytes[step] = size = JsonSerializer.SerializeToUtf8Bytes(step).Length;
+        return size;
+    }
+    // Keep at most 50 steps and about 2 MB of history, dropping the oldest first. The newest step always stays.
+    private void TrimHistory()
+    {
+        while (history.Count > MaxUndoSteps) history.RemoveAt(0);
+        while (history.Count > 1 && history.Sum(Bytes) > historyBudget) history.RemoveAt(0);
+        foreach (var gone in stepBytes.Keys.Where(k => !history.Contains(k)).ToList()) stepBytes.Remove(gone);
+        stateJson = null;
     }
     private static bool SameKey(Dictionary<string, string> item, SessionRow row) =>
         item["Date"] == row.Date && item["Start"] == row.Start && item["Account"].Equals(row.Account, StringComparison.OrdinalIgnoreCase);
@@ -56,7 +113,8 @@ public sealed partial class LedgerEditor
     public string SessionsCsv => new CsvTable(headers, Rows()).Serialize();
     public string NotesCsv => notes.Serialize();
     public string? GroupsCsv => groups;
-    public string StateJson => JsonSerializer.Serialize(new LedgerEditState(2, UndoState, history));
+    private static readonly JsonSerializerOptions StateOptions = new() { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
+    public string StateJson => stateJson ??= JsonSerializer.Serialize(new LedgerEditState(3, null, null, history), StateOptions);
     private int Index(SessionRow row)
     {
         var index = engine.Sessions.FindIndex(s => ReferenceEquals(s, row));
@@ -91,10 +149,9 @@ public sealed partial class LedgerEditor
         if (!string.IsNullOrWhiteSpace(text))
         { value["Date"] = row.Date; value["Account"] = row.Account; value["Start"] = row.Start; value["Note"] = text.Trim(); notes.Rows.Add(value); }
     }
-    private static bool Matches(LedgerUndo edit, List<Dictionary<string, string>> rows)
-        => rows.Count >= edit.AfterRows.Count && rows.Take(edit.AfterRows.Count)
-            .Select(r => new SessionRow(r["Date"], r["Account"], r["Start"], r["End"], r["Minutes"]))
-            .SequenceEqual(edit.AfterRows);
+    // Whether the ledger, as it was before a new edit, is still what the last step left behind.
+    private static bool LedgerMatches(UndoStep step, List<Dictionary<string, string>> rows)
+        => rows.Count >= step.AfterCount && UndoMath.HashRows(rows, step.AfterCount) == step.AfterHash;
     private void Change(string description, Action mutation)
     {
         var before = Rows(); var beforeNotes = NotesCsv; var beforeGroups = groups; var beforePositions = PositionsCsv;
@@ -111,9 +168,13 @@ public sealed partial class LedgerEditor
             table.Rows.RemoveAll(r => singletons.Contains(r["GroupId"]));
             groups = table.Serialize();
         }
-        if (history.Count > 0 && !Matches(history[^1], before)) history.Clear();
-        history.Add(new(description, before, engine.Sessions.ToList(), beforeNotes, beforeGroups, beforePositions));
-        if (history.Count > 50) history.RemoveAt(0);
+        if (history.Count > 0 && !LedgerMatches(history[^1], before)) history.Clear();
+        var notesNow = NotesCsv; var positionsNow = PositionsCsv;
+        history.Add(new(description, engine.Sessions.Count, UndoMath.HashSessions(engine.Sessions, engine.Sessions.Count),
+            UndoMath.Diff(before, Rows(), UndoMath.SameFields),
+            UndoMath.DiffText(beforeNotes, notesNow), UndoMath.DiffText(beforeGroups, groups), UndoMath.DiffText(beforePositions, positionsNow),
+            UndoMath.HashText(notesNow), UndoMath.HashGroups(groups), UndoMath.HashText(positionsNow)));
+        TrimHistory();
         Changed = true;
     }
     public void Edit(SessionRow old, string account, DateTime start, DateTime end, string note)
@@ -147,15 +208,26 @@ public sealed partial class LedgerEditor
     {
         if (!CanUndo) throw new InvalidOperationException("No matching edit is available to undo.");
         var undo = UndoState!;
-        var tail = engine.Sessions.Skip(undo.AfterRows.Count).ToArray();
-        var restored = undo.BeforeRows.Select(r => new SessionRow(r["Date"], r["Account"], r["Start"], r["End"], r["Minutes"])).ToArray();
-        foreach (var row in restored) { _ = row.From; _ = row.To; }
-        var restoredNotes = CsvTable.Parse(undo.BeforeNotes, new[] { "Date", "Account", "Start", "Note" });
-        for (var i = 0; i < restored.Length; i++) raw[restored[i]] = new(undo.BeforeRows[i]);
-        engine.Sessions.Clear(); engine.Sessions.AddRange(restored); engine.Sessions.AddRange(tail);
-        notes = restoredNotes; groups = undo.BeforeGroups;
-        if (undo.BeforePositions is not null) positions = ParsePositions(undo.BeforePositions);
-        history.RemoveAt(history.Count - 1); Changed = true;
+        var start = undo.Rows.Start; var after = start + undo.Rows.AfterLength;
+        // Rows the edit did not touch keep their objects. Only the changed stretch is rebuilt, and everything is
+        // checked before anything is replaced, so a bad history leaves the ledger as it was.
+        var restoredRows = new List<(SessionRow Row, Dictionary<string, string> Fields)>();
+        foreach (var fields in undo.Rows.Before)
+        {
+            var row = new SessionRow(fields["Date"], fields["Account"], fields["Start"], fields["End"], fields["Minutes"]);
+            _ = row.From; _ = row.To;
+            restoredRows.Add((row, new(fields)));
+        }
+        var restoredNotes = CsvTable.Parse(UndoMath.RevertText(NotesCsv, undo.Notes) ?? "Date,Account,Start,Note\n", new[] { "Date", "Account", "Start", "Note" });
+        var restoredGroups = UndoMath.RevertText(groups, undo.Groups);
+        var restoredPositions = ParsePositions(UndoMath.RevertText(PositionsCsv, undo.Positions));
+        var tail = engine.Sessions.Skip(undo.AfterCount).ToArray();
+        var rows = new List<SessionRow>(engine.Sessions.Take(start));
+        foreach (var item in restoredRows) { raw[item.Row] = item.Fields; rows.Add(item.Row); }
+        rows.AddRange(engine.Sessions.Skip(after).Take(undo.AfterCount - after));
+        engine.Sessions.Clear(); engine.Sessions.AddRange(rows); engine.Sessions.AddRange(tail);
+        notes = restoredNotes; groups = restoredGroups; positions = restoredPositions;
+        history.RemoveAt(history.Count - 1); TrimHistory(); Changed = true;
     }
 }
 
