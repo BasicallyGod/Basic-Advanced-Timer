@@ -67,7 +67,9 @@ foreach ($name in @('New-DashboardRenderer', 'Get-RowTop', 'Get-HitRow', 'Get-Ti
     $fn = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true))
     Invoke-Expression $fn[0].Extent.Text
 }
+$drawerFixture = $r.Drawer
 $r = New-DashboardRenderer
+$r.Drawer = $drawerFixture
 if ($r.RowH -ne 48 -or $r.RowTop -ne 164) { throw 'Production startup must use the dashboard row geometry.' }
 
 foreach ($name in @('Sync-RendererLayout', 'Get-DayBtnRect')) {

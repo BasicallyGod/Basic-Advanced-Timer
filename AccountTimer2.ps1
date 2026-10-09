@@ -3427,13 +3427,13 @@ $script:SystemDpi = $g0.DpiX
 $g0.Dispose()
 
 $BaseW  = 320
-$DashboardW = 960
-$DashboardH = 640
+$DashboardW = if ($script:useRenderer) { [Win.DashboardLayout]::Width } else { 960 }
+$DashboardH = if ($script:useRenderer) { [Win.DashboardLayout]::Height } else { 640 }
 $BaseRowTop = if ($script:useRenderer) { [Win.DashboardLayout]::RowTop } else { 164 }
 $OvertimeH  = 32     # height of the overtime section when it appears
 $RowTop = $BaseRowTop
 $RowH   = if ($script:useRenderer) { [Win.DashboardLayout]::RowHeight } else { 48 }
-$LunchGap = 10   # space separating Lunch from the accounts
+$LunchGap = if ($script:useRenderer) { [Win.DashboardLayout]::LunchGap } else { 10 }   # space separating Lunch from the accounts
 $RoundXs  = @{ down = 260; up = 286 }   # positions of the round-down and round-up buttons
 $RoundR   = 8
 $RoundBlock = 15 * 60   # round up to the next 15 minutes
@@ -3451,7 +3451,7 @@ $CollapseX = 304
 $CollapseY = 15
 $CollapseR = 7.5
 # Week drawer
-$DrawerSideW = 640                  # width of the week drawer beside the timer
+$DrawerSideW = if ($script:useRenderer) { [Win.DashboardLayout]::Width - [Win.DashboardLayout]::SidebarWidth } else { 640 }                  # width of the week drawer beside the timer
 $DrawerBtnX = 16                    # week drawer button, top left (mirrors the compact view button)
 $DrawerBtnY = 15
 
