@@ -75,6 +75,8 @@ public sealed class PreviewModel : INotifyPropertyChanged
     public string BudgetText(PreviewAccount a) => a.Budget is { } target
         ? $"{Format(Week(a))} of {Format(target)} this week"
         : "No budget";
+    public string BudgetSummary(PreviewAccount a) => a.Budget is { } target
+        ? $"{Format(Week(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { DecimalHours = !DecimalHours; Notify(); }
     public void ToggleOvertime() { IsOvertime = !IsOvertime; Notify(); }
     public void ChangeDate(int days) { SelectedDate = SelectedDate.AddDays(days); Notify(); }

@@ -59,7 +59,7 @@ public sealed class PillWindow : Window
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
         var root = Ui.Grid("*", "88,*");
-        var head = Ui.Grid("*,Auto,Auto");
+        var head = Ui.Grid("*,Auto,Auto", "*");
         head.Margin = new Thickness(16, 0);
         var labels = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         labels.Children.Add(account);

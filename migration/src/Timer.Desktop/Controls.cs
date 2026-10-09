@@ -109,7 +109,7 @@ public sealed class AccountIndicator : Control
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == ActualThemeVariantProperty) InvalidateVisual();
+        if (change.Property.Name == nameof(ActualThemeVariant)) InvalidateVisual();
     }
     private IBrush Resource(string key) => this.TryFindResource(key, ActualThemeVariant, out var value) && value is IBrush brush
         ? brush : Brushes.Gray;
@@ -129,7 +129,7 @@ public sealed class AccountList : StackPanel
             var icon = Ui.Put(grid, new AccountIndicator(account, model));
             var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) };
             labels.Children.Add(Ui.Text(account.Name, 15));
-            var budget = Ui.Text(model.BudgetText(account), 12, "muted");
+            var budget = Ui.Text(model.BudgetSummary(account), 12, "muted");
             budget.TextTrimming = TextTrimming.CharacterEllipsis;
             labels.Children.Add(budget);
             Ui.Put(grid, labels, 1);
@@ -150,7 +150,7 @@ public sealed class AccountList : StackPanel
         {
             row.Row.Classes.Set("active", model.ActiveAccount == row.Account.Name);
             row.Today.Text = model.Format(model.Today(row.Account));
-            row.Budget.Text = model.BudgetText(row.Account);
+            row.Budget.Text = model.BudgetSummary(row.Account);
             ToolTip.SetTip(row.Row, model.BudgetText(row.Account));
             row.Icon.InvalidateVisual();
         }

@@ -144,7 +144,7 @@ public sealed class ShellTests
             var texts = dashboard.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
             Assert.Contains(texts, t => t is not null && t.Contains("Today allocated") && t.Contains("4.50h"));
             Assert.Contains(texts, t => t is not null && t.Contains("Unallocated") && t.Contains("0.25h"));
-            Assert.Contains(texts, t => t is not null && t.Contains("9.00h of 15.00h"));
+            Assert.Contains(texts, t => t is not null && t.Contains("9.00h / 15.00h"));
             model.ToggleAccount("Account three");
             pill.ToggleExpansion();
             Save(pill, Path.Combine(output, "pill-expanded-Dark.png"));
