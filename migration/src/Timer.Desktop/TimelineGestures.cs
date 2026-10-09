@@ -15,11 +15,14 @@ public static class TimelineGestures
         var delta = TimeSpan.Zero;
         var oldTop = Canvas.GetTop(card); var oldHeight = card.Height;
         var dragging = false;
+        var nudging = false;
+        var previews = new Dictionary<Border, (double Top, double Height)>();
+        void RestoreNeighbours()
+        { foreach (var p in previews) { Canvas.SetTop(p.Key, p.Value.Top); p.Key.Height = p.Value.Height; p.Key.Opacity = 1; } previews.Clear(); }
         card.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
-            if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
-            { model.ToggleSelection(new[] { row }); e.Handled = true; return; }
+            if (e.ClickCount == 2) { model.OpenEntry(row); e.Handled = true; return; }
             origin = e.GetPosition(canvas); delta = TimeSpan.Zero; dragging = false;
             oldTop = Canvas.GetTop(card); oldHeight = card.Height;
             var y = e.GetPosition(card).Y;
@@ -32,37 +35,57 @@ public static class TimelineGestures
             var moved = e.GetPosition(canvas) - start;
             if (!dragging && Math.Abs(moved.Y) < 5) return;
             dragging = true;
-            delta = SnapDelta(model, row, edge, TimeSpan.FromHours(moved.Y / pixelsPerHour), pixelsPerHour);
+            delta = SnapDelta(model, row, edge, TimeSpan.FromHours(moved.Y / pixelsPerHour), pixelsPerHour, out nudging);
+            RestoreNeighbours();
             var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero);
             var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
             if (from < row.Day || until > row.Day.AddDays(1) || until <= from) return;
             Canvas.SetTop(card, oldTop + (edge <= 0 ? delta.TotalHours * pixelsPerHour : 0));
             card.Height = Math.Max(3, (until - from).TotalHours * pixelsPerHour - 4);
             card.Opacity = .75;
+            if (nudging)
+            {
+                try
+                {
+                    foreach (var change in model.Editor.PlanTimeline(row, from, until, true).Where(p => !ReferenceEquals(p.Source, row)))
+                    {
+                        foreach (var neighbour in canvas.Children.OfType<Border>().Where(b => ReferenceEquals(b.Tag, change.Source)))
+                        {
+                            previews[neighbour] = (Canvas.GetTop(neighbour), neighbour.Height);
+                            Canvas.SetTop(neighbour, (change.Updated.From - row.Day).TotalHours * pixelsPerHour + 2); neighbour.Opacity = .75;
+                        }
+                    }
+                }
+                catch (ArgumentException) { } // Final validation reports a blocked push without changing the ledger.
+            }
             e.Handled = true;
         };
         card.PointerReleased += (_, e) =>
         {
             if (origin is null) return;
             var commit = dragging && delta != TimeSpan.Zero;
-            var change = delta; var mode = edge;
+            var change = delta; var mode = edge; var push = nudging; var select = !dragging;
+            RestoreNeighbours();
             origin = null; dragging = false; e.Pointer.Capture(null); card.Opacity = 1;
             Canvas.SetTop(card, oldTop); card.Height = oldHeight;
-            if (commit) model.EditEntry(row, row.Account, row.From + (mode <= 0 ? change : TimeSpan.Zero),
-                row.To + (mode >= 0 ? change : TimeSpan.Zero), model.Editor.Note(row));
+            if (commit) model.DragEntry(row, row.From + (mode <= 0 ? change : TimeSpan.Zero),
+                row.To + (mode >= 0 ? change : TimeSpan.Zero), push);
+            else if (select) model.ToggleSelection(new[] { row });
             e.Handled = true;
         };
         card.PointerCaptureLost += (_, _) =>
         {
             // Context menus can release capture without a left-button gesture.
             if (origin is null) return;
+            RestoreNeighbours();
             origin = null; dragging = false; card.Opacity = 1;
             Canvas.SetTop(card, oldTop); card.Height = oldHeight;
         };
         card.Cursor = new Cursor(StandardCursorType.SizeAll);
     }
-    private static TimeSpan SnapDelta(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour)
+    private static TimeSpan SnapDelta(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour, out bool nudge)
     {
+        nudge = false;
         var occupied = model.Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.IsPositioned && s.Duration > TimeSpan.Zero)
             .Select(s => (Start: s.From, End: s.To)).Concat(model.Editor.Positions.Select(p => (Start: p.Start, End: p.End))).ToList();
         if (model.Engine.Active is { } active && model.Engine.Now > active.Start)
@@ -90,6 +113,9 @@ public static class TimelineGestures
         }
         // Clamp to the first neighbour crossed, even when the pointer travels
         // well beyond it. Apply this to grid rounding as well as raw movement.
+        var overshoot = lower is { } l && requested < l ? (l - requested).TotalHours * pixelsPerHour
+            : upper is { } u && requested > u ? (requested - u).TotalHours * pixelsPerHour : 0;
+        if (overshoot > 24) { nudge = true; return grid; }
         if (lower is { } minimum && (requested <= minimum || grid <= minimum)) requested = minimum;
         if (upper is { } maximum && (requested >= maximum || grid >= maximum)) requested = maximum;
         foreach (var candidate in candidates.OrderBy(c => Math.Abs((c - requested).TotalHours)))

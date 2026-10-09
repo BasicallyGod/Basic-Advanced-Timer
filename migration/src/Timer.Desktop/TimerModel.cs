@@ -208,6 +208,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note)
         => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note); });
+    public bool DragEntry(SessionRow row, DateTime start, DateTime end, bool nudge)
+        => ChangeLog(() => Editor.EditTimeline(row, start, end, nudge));
     public bool DeleteEntry(SessionRow row) => ChangeLog(() => Editor.Delete(row));
     public bool UndoEdit() => ChangeLog(Editor.Undo);
     public void OpenPosition(CreditPosition? position = null) => PositionRequested?.Invoke(position);

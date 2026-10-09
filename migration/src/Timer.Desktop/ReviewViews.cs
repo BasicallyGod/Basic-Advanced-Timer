@@ -70,8 +70,6 @@ public static class ReviewViews
             var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
                 Width = 380, Height = height, Padding = new Thickness(14, height < 58 ? 2 : 10),
                 Child = height >= 24 ? text : null, ClipToBounds = true };
-            var ctrlClick = false;
-            card.PointerPressed += (_, e) => ctrlClick = e.KeyModifiers.HasFlag(KeyModifiers.Control);
             var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
             if (model.IsSelected(selectionSources)) { card.Classes.Add("mergeSelected"); text.Children.Insert(0, Ui.Text("✓ Selected", 12)); }
             var note = interval.Group is { } groupNote ? "Grouped entries · " + groupNote.Note : interval.Position is { } positionNote ? "Existing credit · " + positionNote.Note : interval.Row is null ? "Running · stop tracking to edit" : model.Editor.Note(interval.Row);
@@ -84,7 +82,6 @@ public static class ReviewViews
             if (interval.Row is { } row)
             {
                 card.Tag = row; card.Name = "TimelineEntry" + model.Engine.Sessions.IndexOf(row);
-                card.DoubleTapped += (_, e) => { if (!ctrlClick) model.OpenEntry(row); e.Handled = true; };
                 var edit = new MenuItem { Header = "Edit entry / note…" }; edit.Click += (_, _) => model.OpenEntry(row);
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, MergeMenu(model) } };
                 TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour);
@@ -99,13 +96,20 @@ public static class ReviewViews
             }
             if (interval.Group is { } group)
             {
+                Point? groupPress = null;
                 card.PointerPressed += (_, e) =>
                 {
-                    if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed && e.KeyModifiers.HasFlag(KeyModifiers.Control))
-                    { model.ToggleSelection(group.Sources); e.Handled = true; }
+                    if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
+                    if (e.ClickCount == 2) { model.OpenGroup(group.GroupId!); groupPress = null; }
+                    else groupPress = e.GetPosition(canvas);
+                    e.Handled = true;
+                };
+                card.PointerReleased += (_, e) =>
+                {
+                    if (groupPress is { } p && (e.GetPosition(canvas) - p).Length <= 5) model.ToggleSelection(group.Sources);
+                    groupPress = null; e.Handled = true;
                 };
                 card.Tag = group; card.Name = "TimelineGroup" + group.GroupId + "-" + interval.Start.ToString("HHmmss");
-                card.DoubleTapped += (_, e) => { if (!ctrlClick) model.OpenGroup(group.GroupId!); e.Handled = true; };
                 var editGroup = new MenuItem { Header = "Inspect / edit grouped entries…" }; editGroup.Click += (_, _) => model.OpenGroup(group.GroupId!);
                 var ungroup = new MenuItem { Header = "Ungroup" }; ungroup.Click += (_, _) => model.UngroupEntries(group.GroupId!);
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { editGroup, ungroup, MergeMenu(model) } };
@@ -181,7 +185,7 @@ public static class ReviewViews
         var root = new StackPanel { Spacing = 16 };
         root.Children.Add(Ui.Text("Week commencing " + day.ToString("d MMMM"), 12, "muted"));
         root.Children.Add(grid);
-        root.Children.Add(Ui.Text(model.SelectedBlockCount > 0 ? $"{model.SelectedBlockCount} blocks selected · " + model.MergeHint : "Entries · click to edit · Ctrl+click to select for merging", 12, "muted"));
+        root.Children.Add(Ui.Text(model.SelectedBlockCount > 0 ? $"{model.SelectedBlockCount} blocks selected · " + model.MergeHint : "Entries · click to select · right-click to edit or merge", 12, "muted"));
         foreach (var entry in reconciled.Entries)
         {
             void Open()
@@ -192,7 +196,8 @@ public static class ReviewViews
             }
             var caption = entry.GroupId is not null ? $"Group · {entry.Sources.Count} entries" : entry.Start is { } start && entry.End is { } end ? $"{start:HH:mm} – {end:HH:mm}" : entry.Type;
             var name = entry.Sources.Count == 1 ? "WeekEntry" + model.Engine.Sessions.IndexOf(entry.Sources[0]) : "WeekReviewEntry";
-            var button = Ui.Button("", Open, name);
+            var selectable = entry.PositionId is null && entry.Sources.Count > 0 && entry.Sources.All(s => !s.IsMerged);
+            var button = Ui.Button("", () => { if (selectable) model.ToggleSelection(entry.Sources); else Open(); }, name);
             button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
             button.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
             var labels = new StackPanel { Spacing = 5 };
@@ -203,13 +208,9 @@ public static class ReviewViews
             button.Content = labels;
             if (entry.PositionId is null && entry.Sources.Count > 0 && entry.Sources.All(s => !s.IsMerged))
             {
-                button.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
-                {
-                    if (e.GetCurrentPoint(button).Properties.IsLeftButtonPressed && e.KeyModifiers.HasFlag(KeyModifiers.Control))
-                    { model.ToggleSelection(entry.Sources); e.Handled = true; }
-                }, RoutingStrategies.Tunnel);
                 button.Classes.Set("mergeSelected", model.IsSelected(entry.Sources));
-                button.ContextMenu = new ContextMenu { ItemsSource = new[] { MergeMenu(model) } };
+                var edit = new MenuItem { Header = "Edit / inspect entry…" }; edit.Click += (_, _) => Open();
+                button.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, MergeMenu(model) } };
             }
             if (entry.GroupId is { } groupId)
             {
