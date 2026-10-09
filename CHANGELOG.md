@@ -6,9 +6,17 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.28 |
+| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.29 |
 | AccountTimer.ps1 | Historical predecessor, removed from current tree | 1.0 to 1.7 |
 | BillableTimer.ps1 | Historical predecessor, removed from current tree | 0.1 to 0.5 |
+
+## v2.29
+
+- Matched the approved dashboard concept: pale Sage surfaces, a distinct live timer strip, two-line account rows with budget details, and allocated/unallocated totals in the sidebar.
+- Placed Timeline/Week tabs beside date navigation, with actions on one tools row. Removed the duplicate timeline legend so cards use the full workspace; account and week lists scroll within the fixed window.
+- Added softer timeline cards with account-coloured edges and matching pill colours, a seconds clock and larger account spacing.
+- Disabled blur and hid obsolete transparency controls. Existing blur preferences cannot re-enable the backdrop effect.
+- Kept the date header, live dot, budgets, day controls, recording, editing and exports.
 
 ## v2.28
 

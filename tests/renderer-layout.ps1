@@ -78,7 +78,7 @@ if ($r.BaseH -ne 640) { throw 'Dashboard height must remain fixed.' }
 # Exercise the new dashboard at maximum account capacity and on both tabs.
 $r.Dashboard = $true; $r.BaseW = 320; $r.DrawerW = 640
 $r.BaseH = 640; $r.DrawerH = 640; $r.TimerOffX = 0; $r.DrawerOpen = $true
-$r.RowTop = 170; $r.RowH = 34; $r.Margin = 0
+$r.RowTop = 164; $r.RowH = 48; $r.Margin = 0
 $r.DashboardDate = 'Friday, 9 October 2026'; $r.ActiveAccount = 'Account A'
 $r.LiveDot = $true; $r.DotPhase = 0.5; $r.DayBtnText = 'Finish day'
 $font = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
@@ -91,7 +91,19 @@ for ($i = 0; $i -lt 13; $i++) {
     $row.Name = if ($i -eq 12) { 'Lunch' } else { 'Client account ' + $i }
     $row.IsLunch = ($i -eq 12); $row.TodayText = '0h 15m'; $row.WeekText = '3h 49m'
     if ($i -lt 12) { $row.BudgetFrac = 0.64 }
+    $row.BudgetText = if ($i -lt 12) { '3h 49m of 6h this week' } else { '' }
     $row.Active = ($i -eq 0); $rows += $row
+}
+$r.Panel = [Drawing.ColorTranslator]::FromHtml('#f2f7f2'); $r.Circle = [Drawing.ColorTranslator]::FromHtml('#e4eee5')
+$r.CircleHot = [Drawing.ColorTranslator]::FromHtml('#d4e5d6'); $r.Text = [Drawing.ColorTranslator]::FromHtml('#183523'); $r.Fill = [Drawing.ColorTranslator]::FromHtml('#3d984b')
+$r.H = '00'; $r.M = '29'; $r.S = '59'; $r.TodayAllocated = '0h 34m'; $r.Unallocated = 'UNALLOCATED 0:00'
+$r.Drawer.Timeline.HasWork = $true; $r.Drawer.Timeline.WorkStartH = 8.5; $r.Drawer.Timeline.WorkEndH = 17.5
+for ($i = 0; $i -lt 3; $i++) {
+    $block = New-Object Win.TimelineBlock
+    $block.Name = @('Hawthorn non-billable', 'ION Analytics', 'DLA Piper')[$i]
+    $block.StartH = 8.5 + $i * 0.5; $block.EndH = $block.StartH + 0.5
+    $block.Colour = @([Drawing.Color]::CornflowerBlue, [Drawing.Color]::Orange, [Drawing.Color]::MediumSeaGreen)[$i]
+    $r.Drawer.Timeline.Blocks.Add($block)
 }
 $r.Rows = $rows
 $r.Drawer.DayLabels = @('MON 05', 'TUE 06', 'WED 07', 'THU 08', 'FRI 09')
@@ -120,8 +132,11 @@ try {
             $scrolled = $r.Render(960, 640)
             $scrolled.Dispose()
         }
-        if ($mode -eq 'timeline' -and ($r.TlY -lt 124 -or $r.TlY + $r.TlH -gt 640)) { throw 'Timeline viewport does not match the dashboard body.' }
+        if ($mode -eq 'timeline' -and ($r.TlY -ne 216 -or $r.TlW -lt 500 -or $r.TlY + $r.TlH -gt 604)) { throw 'Timeline viewport does not match the dashboard body.' }
     }
+    $r.AccountScrollY = $r.Rows.Length * $r.RowH + $r.LunchGap - ([Win.FullRenderer]::AccountBottom - $r.RowTop)
+    $scrolled = $r.Render(960, 640)
+    try { $scrolled.Save((Join-Path $outputDir 'accounts-scrolled.png'), [Drawing.Imaging.ImageFormat]::Png) } finally { $scrolled.Dispose() }
 } finally { $font.Dispose(); $digitFont.Dispose() }
 
 foreach ($name in @('Get-BaseSize', 'Get-PillListH', 'Get-PillLayout', 'Get-PillRowTop', 'Get-PillZone', 'Test-HitCollapse', 'Get-DayBtnRect', 'Test-HitDayBtn', 'Test-HitDashboardPause')) {
@@ -135,13 +150,13 @@ $script:fullMargin = 0; $script:drawerH = 999
 $size = Get-BaseSize
 if ($size[0] -ne 960 -or $size[1] -ne 640) { throw 'Content must not resize the dashboard.' }
 $script:active = @{ Name = 'Account A' }
-if (-not (Test-HitDashboardPause ([Drawing.Point]::new(690, 75)))) { throw 'Pause action must be reachable.' }
+if (-not (Test-HitDashboardPause ([Drawing.Point]::new(590, 85)))) { throw 'Pause action must be reachable.' }
 if (-not (Test-HitCollapse ([Drawing.Point]::new(880, 25)))) { throw 'Back to pill must be reachable.' }
 $script:view.DayBtnText = 'Finish day'
 if (-not (Test-HitDayBtn ([Drawing.Point]::new(850, 85)))) { throw 'Day control must be reachable.' }
 $script:mode = 'pill'; $script:pillOpen = $true; $script:pillUp = $false; $script:pillMargin = 0
-$script:PillW = 320; $script:PillH = 42; $script:PillRowH = 34; $script:PillLunchGap = 6
-$script:PillTimeW = 88; $script:PillBtnX = 298; $script:PillBtnR = 14
+$script:PillW = 350; $script:PillH = 52; $script:PillRowH = 44; $script:PillLunchGap = 6
+$script:PillTimeW = 116; $script:PillBtnX = 328; $script:PillBtnR = 14
 $script:slots = @('Account A', 'Lunch')
 $layout = Get-PillLayout
 $footerY = $layout.ListY + $layout.ListH - 30
@@ -185,7 +200,7 @@ $script:sfName = New-Object Drawing.StringFormat
 $script:sfName.Trimming = 'EllipsisCharacter'; $script:sfName.FormatFlags = 'NoWrap'
 $script:sfRight = New-Object Drawing.StringFormat; $script:sfRight.Alignment = 'Far'
 $layout = Get-PillLayout
-$bitmap = New-Object Drawing.Bitmap(320, ([int]$layout.Height))
+$bitmap = New-Object Drawing.Bitmap(350, ([int]$layout.Height))
 $graphics = [Drawing.Graphics]::FromImage($bitmap)
 try { Draw-Pill $graphics $false } finally { $graphics.Dispose(); $bitmap.Dispose() }
 Write-Output 'Expanded pill ring and footer drawing checks passed.'

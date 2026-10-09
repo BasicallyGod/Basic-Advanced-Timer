@@ -13,7 +13,7 @@ Basic’s Advanced Timer is an always-on-top Windows timer for tracking time aga
 | `tests/timeline-projection.ps1` | Synthetic regression tests for session projections, grouping and gap editing. |
 | `tests/decimal-reconciliation.ps1` | Synthetic tests for decimal-hour accounting and CSV exports. |
 | `tests/settings-migration.ps1` | Synthetic tests for legacy preference migration, the consolidated settings file, backups, atomic saves and branding. |
-| `.github/workflows/powershell-checks.yml` | Runs all four regression suites under Windows PowerShell 5.1. |
+| `.github/workflows/powershell-checks.yml` | Runs all six regression suites under Windows PowerShell 5.1. |
 | `README.md`, `CHANGELOG.md` | User guide and chronological development record. |
 
 There are no legacy timer executables or launchers in the current tree. Older `AccountTimer.ps1` and `BillableTimer.ps1` versions are preserved in Git history. The current application does not import or launch them. Its single-instance check also recognises an older AccountTimer process in case one is still installed elsewhere and could use the same local data. Do not relax this safeguard without checking for concurrent CSV writes.
@@ -125,3 +125,7 @@ Get-TidyDayCandidates recomputes gaps with a one-second minimum using the option
 ## v2.28 pill and fixed dashboard
 
 Compiled full view is now Dashboard, with a 320px accounts sidebar and 640px workspace, 960 by 640 total. Sync-RendererLayout sets Dashboard and a fixed height; DrawDashboardTimer draws today's header, active account, live dot and shared account-row controls. Get-BaseSize and Measure-DrawerHeight return fixed dashboard dimensions. Get-ViewZoom caps display scale against the current working area while retaining the user's Scale preference; pill mode restores its own scale. Compiled dashboard always opens the workspace, and the old drawer-toggle menu is hidden. Day and Pause hit testing matches the top header, and Back to pill uses its labelled rectangular hit area. All CSV accounting and editing paths remain unchanged. Pill list height includes a footer, with Dashboard and day controls hit-tested in both upward and downward list layouts; its account icons carry budget rings and BudgetText tooltips. Existing view preferences remain valid, while new installs default to pill. The opaque dashboard avoids layered blur geometry problems. Renderer tests exercise both modes and maximum account capacity.
+
+## v2.29 dashboard concept
+
+The compiled dashboard remains 960x640. Its content starts at y=122, with account rows at y=164 (48px), clipped above y=560 and independent AccountScrollY. Sidebar totals sit below y=572. Get-RowTop and hit testing must use the same scroll and skip partially clipped rows. Timeline/week controls use one tabs/date row and one tools row. The timeline starts at y=216, ends at y=600 and uses the full width without the legacy legend. Get-TimelineViewH matches this viewport. The Sage theme is inserted into older theme catalogues and selected once using the dashboardStyle preference section; later theme choices are respected. Blur is disabled and obsolete transparency controls are hidden; dashboard ListAlpha stays 255.
