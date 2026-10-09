@@ -11,7 +11,7 @@ public static class ReviewViews
     {
         var day = model.SelectedDate;
         var root = Ui.Grid("*", "Auto,*");
-        var unplaced = model.Engine.Sessions.Where(s => s.Day == day && s.End == "merged")
+        var unplaced = model.Engine.Sessions.Where(s => s.Day == day && s.IsMerged)
             .Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
         var caption = Ui.Text(unplaced > TimeSpan.Zero ? "Unplaced legacy credit " + model.Format(unplaced) : "Recorded time", 12, "muted");
         caption.Margin = new Thickness(0, 0, 0, 10);
@@ -35,7 +35,7 @@ public static class ReviewViews
         {
             var lane = ends.FindIndex(end => end <= interval.Start);
             if (lane < 0) { lane = ends.Count; ends.Add(interval.End); } else ends[lane] = interval.End;
-            var colour = model.Accounts.FirstOrDefault(a => a.Name == interval.Account)?.Colour ?? "#91B7D5";
+            var colour = model.Accounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
             var end = interval.End > day.AddDays(1) ? day.AddDays(1) : interval.End;
             var duration = end - interval.Start;
             var height = Math.Max(3, duration.TotalHours * pixelsPerHour - 4);

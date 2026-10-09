@@ -41,7 +41,7 @@ public sealed class TimerStore : IDisposable
         }
         else settings = new() { ["schemaVersion"] = 1, ["sections"] = new JsonObject() };
         var accounts = Lines("accounts").Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Split('\t'))
-            .Where(s => s[0] != "Lunch" && (s.Length < 2 || s[1] != "hidden")).Select(s => new AccountSettings(s[0])).DistinctBy(a => a.Name).ToList();
+            .Where(s => s[0] != "Lunch" && (s.Length < 2 || s[1] != "hidden")).Select(s => new AccountSettings(s[0])).DistinctBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
         if (accounts.Count == 0 && !Lines("accounts").Any()) accounts = new() { new("Account one"), new("Account two"), new("Internal") };
         foreach (var line in Lines("budgets"))
         {
@@ -49,7 +49,7 @@ public sealed class TimerStore : IDisposable
             if (p.Length < 3 || !double.TryParse(p[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var hours) || hours <= 0 || !double.IsFinite(hours))
                 throw new InvalidDataException("Invalid budget settings.");
             if (p[2] is not ("week" or "month" or "quarter")) throw new InvalidDataException("Unknown budget period.");
-            var i = accounts.FindIndex(a => a.Name == p[0]);
+            var i = accounts.FindIndex(a => a.Name.Equals(p[0], StringComparison.OrdinalIgnoreCase));
             if (i >= 0) accounts[i] = accounts[i] with { BudgetHours = hours, BudgetPeriod = p[2] };
         }
         var decimalHours = false;

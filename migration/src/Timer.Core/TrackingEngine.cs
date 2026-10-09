@@ -34,8 +34,9 @@ public sealed record SessionRow(string Date, string Account, string Start, strin
     public DateTime From => Day + TimeSpan.ParseExact(Start, "hh\\:mm\\:ss", CultureInfo.InvariantCulture);
     public TimeSpan Duration => TimeSpan.FromMinutes(double.Parse(Minutes, CultureInfo.InvariantCulture));
     public DateTime To => From + Duration;
-    public bool IsAdjustment => End.StartsWith("rounded", StringComparison.OrdinalIgnoreCase) || End == "adjusted";
-    public bool IsPositioned => !IsAdjustment && End != "merged";
+    public bool IsAdjustment => End.StartsWith("rounded", StringComparison.OrdinalIgnoreCase) || End.Equals("adjusted", StringComparison.OrdinalIgnoreCase);
+    public bool IsMerged => End.Equals("merged", StringComparison.OrdinalIgnoreCase);
+    public bool IsPositioned => !IsAdjustment && !IsMerged;
 }
 
 public sealed class TrackingEngine
@@ -77,7 +78,7 @@ public sealed class TrackingEngine
     }
     public void ToggleAccount(string account)
     {
-        var stop = Active?.Account == account;
+        var stop = string.Equals(Active?.Account, account, StringComparison.OrdinalIgnoreCase);
         StopAccount();
         if (!stop) { StartDay(); Active = new(account, Now); }
     }
@@ -107,9 +108,9 @@ public sealed class TrackingEngine
     }
     public TimeSpan Credited(string account, DateTime from, DateTime until)
     {
-        var credited = Sessions.Where(s => s.Account == account && s.Day >= from.Date && s.Day < until.Date)
+        var credited = Sessions.Where(s => s.Account.Equals(account, StringComparison.OrdinalIgnoreCase) && s.Day >= from.Date && s.Day < until.Date)
             .Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
-        if (Active is { } active && active.Account == account)
+        if (Active is { } active && active.Account.Equals(account, StringComparison.OrdinalIgnoreCase))
             credited += Intersection(active.Start, Now, from.Date, until.Date);
         return credited;
     }
@@ -119,15 +120,15 @@ public sealed class TrackingEngine
         var plan = Plan(day);
         var now = Now;
         var cap = now < day.AddDays(1) ? now : day.AddDays(1);
-        var allocated = Sessions.Where(s => s.Day == day && s.Account != "Lunch").Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
+        var allocated = Sessions.Where(s => s.Day == day && !s.Account.Equals("Lunch", StringComparison.OrdinalIgnoreCase)).Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
         if (Active is { Account: not "Lunch" } active) allocated += Intersection(active.Start, now, day, day.AddDays(1));
         if (!plan.Working || cap <= plan.Start) return new(TimeSpan.Zero, TimeSpan.Zero, allocated, TimeSpan.Zero);
-        var blocked = Sessions.Where(s => s.Day == day && s.Account == "Lunch" && s.IsPositioned && s.Duration > TimeSpan.Zero)
+        var blocked = Sessions.Where(s => s.Day == day && s.Account.Equals("Lunch", StringComparison.OrdinalIgnoreCase) && s.IsPositioned && s.Duration > TimeSpan.Zero)
             .Select(s => (s.From, s.To)).ToList();
         blocked.AddRange(Away.Select(a => (a.Start, a.End ?? (now < a.Start.Date.AddDays(1) ? now : a.Start.Date.AddDays(1)))));
         if (Active is { Account: "Lunch" } lunch) blocked.Add((lunch.Start, now));
         var regularEnd = cap < plan.End ? cap : plan.End;
-        var lunchAdjustment = Sessions.Where(s => s.Day == day && s.Account == "Lunch" && s.IsAdjustment)
+        var lunchAdjustment = Sessions.Where(s => s.Day == day && s.Account.Equals("Lunch", StringComparison.OrdinalIgnoreCase) && s.IsAdjustment)
             .Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
         var work = Positive(regularEnd - plan.Start - Blocked(blocked, plan.Start, regularEnd) - lunchAdjustment);
         var overtime = cap > plan.End ? Positive(cap - plan.End - Blocked(blocked, plan.End, cap)) : TimeSpan.Zero;
