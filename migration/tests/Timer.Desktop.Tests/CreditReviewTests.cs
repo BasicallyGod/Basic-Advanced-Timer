@@ -256,7 +256,7 @@ public sealed class CreditReviewTests
         var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show(); Capture(window, "capture-cancel-before");
         var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is SessionRow);
         var top = Canvas.GetTop(card); var height = card.Height; var csv = model.Editor.SessionsCsv;
-        IPointer? pointer = null; card.PointerPressed += (_, e) => pointer = e.Pointer;
+        IPointer? pointer = null; card.AddHandler(InputElement.PointerPressedEvent, (_, e) => pointer = e.Pointer, RoutingStrategies.Tunnel, true);
         var point = card.TranslatePoint(new Point(70, 30), window)!.Value;
         window.MouseDown(point, MouseButton.Left); window.MouseMove(point + new Vector(0, 20), RawInputModifiers.LeftMouseButton);
         Assert.NotEqual(top, Canvas.GetTop(card)); Assert.NotNull(pointer); pointer!.Capture(null);
