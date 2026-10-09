@@ -85,7 +85,7 @@ public sealed class PillWindow : Window
         var surface = new Border { CornerRadius = new CornerRadius(24), Child = root, ClipToBounds = true };
         surface.Classes.Add("surface");
         Content = surface;
-        Opened += (_, _) => model.PropertyChanged += Changed;
+        model.PropertyChanged += Changed;
         Closed += (_, _) => model.PropertyChanged -= Changed;
         Refresh();
     }
@@ -185,7 +185,7 @@ public sealed class DashboardWindow : Window
         footer.Margin = new Thickness(24, 10);
         Ui.Put(root, footer, row: 3);
         Content = root;
-        Opened += (_, _) => model.PropertyChanged += Changed;
+        model.PropertyChanged += Changed;
         Closed += (_, _) => model.PropertyChanged -= Changed;
         Refresh(true);
     }

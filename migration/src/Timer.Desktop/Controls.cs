@@ -41,6 +41,12 @@ public static class Ui
     {
         var c = new ComboBox { ItemsSource = new[] { "System", "Light", "Dark" }, SelectedItem = model.Theme, Width = 108 };
         c.SelectionChanged += (_, _) => { if (c.SelectedItem is string theme && model.Theme != theme) model.SetTheme(theme); };
+        void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(PreviewModel.Elapsed)) c.SelectedItem = model.Theme;
+        }
+        c.AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; c.SelectedItem = model.Theme; };
+        c.DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
         ToolTip.SetTip(c, "Appearance");
         return c;
     }
@@ -118,7 +124,7 @@ public sealed class AccountList : StackPanel
             var icon = Ui.Put(grid, new AccountIndicator(account, model));
             var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) };
             labels.Children.Add(Ui.Text(account.Name, 15));
-            var budget = Ui.Text(model.BudgetText(account), 11, "muted");
+            var budget = Ui.Text(model.BudgetText(account), 12, "muted");
             labels.Children.Add(budget);
             Ui.Put(grid, labels, 1);
             var today = Ui.Put(grid, Ui.Text(model.Format(model.Today(account))), 2);

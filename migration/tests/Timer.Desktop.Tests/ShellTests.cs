@@ -50,6 +50,7 @@ public sealed class ShellTests
         {
             model.SetTheme(theme);
             Dispatcher.UIThread.RunJobs();
+            using var initialFrame = window.CaptureRenderedFrame();
             var labels = window.GetVisualDescendants().OfType<TextBlock>().ToArray();
             var idle = labels.Single(x => x.Text == "● Not tracking");
             var overtime = labels.Single(x => x.Text == "Overtime");
@@ -78,7 +79,8 @@ public sealed class ShellTests
                 var point = row.TranslatePoint(new Point(row.Bounds.Width - 8, row.Bounds.Height / 2), window)!.Value;
                 window.MouseDown(point, MouseButton.Left);
                 window.MouseUp(point, MouseButton.Left);
-                Assert.Equal(model.Accounts[i].Name, model.ActiveAccount);
+                Assert.True(model.Accounts[i].Name == model.ActiveAccount,
+                    $"Row {i}: bounds {row.Bounds}, point {point}, hit {window.GetVisualAt(point)?.GetType().Name}, active {model.ActiveAccount ?? "none"}");
                 Assert.InRange(row.Bounds.Width, 280, 300);
             }
         }

@@ -43,7 +43,8 @@ public static class ReviewViews
 
     public static Control Week(PreviewModel model)
     {
-        var grid = Ui.Grid("150,*,*,*,*,*,70", "Auto,Auto,Auto,Auto,Auto,Auto,Auto");
+        var grid = Ui.Grid("125,*,*,*,*,*,75", "Auto,Auto,Auto,Auto,Auto,Auto,Auto");
+        grid.MinWidth = 510;
         var day = model.SelectedDate.AddDays(-((7 + (int)model.SelectedDate.DayOfWeek - (int)DayOfWeek.Monday) % 7));
         Ui.Put(grid, Ui.Text("Account", 12, "muted"));
         for (var i = 0; i < 5; i++) Ui.Put(grid, Ui.Text(day.AddDays(i).ToString("ddd"), 12, "muted"), i + 1);
@@ -53,7 +54,7 @@ public static class ReviewViews
         {
             Ui.Put(grid, Ui.Text(a.Name, 13), row: row).Margin = new Thickness(0, 16);
             var earlier = (a.Week - a.Today) / 4;
-            for (var i = 0; i < 5; i++) Ui.Put(grid, Ui.Text(model.Format(i == 4 ? model.Today(a) : earlier), 11), i + 1, row);
+            for (var i = 0; i < 5; i++) Ui.Put(grid, Ui.Text(model.Format(i == 4 ? model.Today(a) : earlier), 12), i + 1, row);
             Ui.Put(grid, Ui.Text(model.Format(model.Week(a)), 12), 6, row);
             row++;
         }
