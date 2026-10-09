@@ -64,7 +64,7 @@ public sealed class WeekExport
             ["Account"] = e.Account, ["Start"] = e.Start?.ToString("HH:mm:ss") ?? "", ["End"] = e.End == e.Day.AddDays(1) ? "24:00:00" : e.End?.ToString("HH:mm:ss") ?? "",
             ["Duration"] = Duration(e.Minutes), ["Hours"] = Hours(EntryUnits[i]), ["Type"] = e.Type,
             ["Parts"] = Math.Max(1, e.Sources.Count).ToString(CultureInfo.InvariantCulture), ["Note"] = e.Note
-        }).ToList();
+        }).Where(r => !r["Account"].Equals("Lunch", StringComparison.OrdinalIgnoreCase)).ToList();
         return new CsvTable(headers, rows).Serialize();
     }
     private static string Duration(decimal minutes)
