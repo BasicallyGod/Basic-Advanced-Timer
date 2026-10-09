@@ -102,6 +102,6 @@ public sealed class TimerModel : INotifyPropertyChanged
         { LastError = "Could not save. Time remains in memory; retrying. " + error.Message; return false; }
     }
     public bool StopForClose()
-    { Engine.StopAccount(); var saved = Save(); Notify(); return saved; }
+    { Engine.StopAccount(); var saved = Save(); if (!saved) Notify(); return saved; }
     private void Notify() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
 }

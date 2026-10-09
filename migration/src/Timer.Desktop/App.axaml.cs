@@ -16,6 +16,9 @@ public sealed partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var lifetimeEnded = false;
+            desktop.Exit += (_, _) => lifetimeEnded = true;
             var smokeMode = desktop.Args?.Contains("--smoke-test") == true;
             TimerStore? store = null;
             TimerModel model;
@@ -32,7 +35,14 @@ public sealed partial class App : Application
                 model = new TimerModel(engine, preferences, store);
                 if (!model.Save()) throw new IOException(model.LastError);
                 var openedStore = store;
-                desktop.Exit += (_, _) => { openedStore.Dispose(); if (smokeMode) Directory.Delete(folder, true); };
+                var released = false;
+                desktop.Exit += (_, _) =>
+                {
+                    if (released) return;
+                    released = true;
+                    openedStore.Dispose();
+                    if (smokeMode && Directory.Exists(folder)) Directory.Delete(folder, true);
+                };
             }
             catch (Exception error)
             {
@@ -46,7 +56,8 @@ public sealed partial class App : Application
                 base.OnFrameworkInitializationCompleted();
                 return;
             }
-            var windows = new WindowCoordinator(model, () => desktop.Shutdown());
+            // Native Closed callbacks can arrive after lifetime Exit; do not request shutdown again.
+            var windows = new WindowCoordinator(model, () => { if (!lifetimeEnded) desktop.Shutdown(); });
             desktop.MainWindow = windows.Pill;
             var ticker = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             ticker.Tick += (_, _) => model.Tick();

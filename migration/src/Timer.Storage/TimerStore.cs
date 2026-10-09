@@ -170,8 +170,13 @@ public sealed class TimerStore : IDisposable
         if (backup && File.Exists(path)) File.Copy(path, path + ".bak", true);
         File.Move(temporary, path, true);
     }
-    private IEnumerable<string> Lines(string key) => settings["sections"]?[key] is JsonArray array
-        ? array.Select(s => s?.GetValue<string>() ?? "").ToArray() : System.Array.Empty<string>();
+    private IEnumerable<string> Lines(string key)
+    {
+        var node = settings["sections"]?[key];
+        if (node is null) return System.Array.Empty<string>();
+        if (node is not JsonArray array) throw new InvalidDataException("Settings section " + key + " must be an array.");
+        return array.Select(s => s?.GetValue<string>() ?? "").ToArray();
+    }
     private static JsonArray Array(IEnumerable<string> lines) => new(lines.Select(s => (JsonNode?)JsonValue.Create(s)).ToArray());
     private static TimeSpan Clock(string s) => TimeSpan.TryParse(s, CultureInfo.InvariantCulture, out var time) && time >= TimeSpan.Zero && time < TimeSpan.FromDays(1)
         ? time : throw new InvalidDataException("Invalid working-hours clock.");
