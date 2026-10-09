@@ -130,6 +130,7 @@ foreach ($name in @('Get-BaseSize', 'Get-PillListH', 'Get-PillLayout', 'Get-Pill
     }, $true))
     Invoke-Expression $fn[0].Extent.Text
 }
+$script:mode = 'full'
 $script:fullMargin = 0; $script:drawerH = 999
 $size = Get-BaseSize
 if ($size[0] -ne 960 -or $size[1] -ne 640) { throw 'Content must not resize the dashboard.' }
