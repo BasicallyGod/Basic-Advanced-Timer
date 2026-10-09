@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Timer.Core;
+using Avalonia.Threading;
 
 namespace Timer.Desktop;
 
@@ -59,31 +60,45 @@ public static class ReviewViews
         canvas.SizeChanged += (_, _) => Resize();
         var plan = model.Engine.Plan(day);
         var first = intervals.Count > 0 ? intervals.Min(i => i.Start) : plan.Working ? plan.Start : day.AddHours(9);
-        Ui.Put(root, new ScrollViewer { Content = canvas, Offset = new Vector(0, Math.Max(0, (first - day).TotalHours * pixelsPerHour - 24)),
-            AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 1);
+        var scroll = new ScrollViewer { Name = "TimelineScroll", Content = canvas,
+            Tag = new Vector(0, Math.Max(0, (first - day).TotalHours * pixelsPerHour - 24)),
+            AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+        DeferOffset(scroll);
+        Ui.Put(root, scroll, row: 1);
         return root;
     }
 
     public static Control Week(TimerModel model)
     {
-        var grid = Ui.Grid("125,*,*,*,*,*,*,*,75", "Auto," + string.Join(",", model.Accounts.Select(_ => "Auto")));
-        grid.MinWidth = 690;
         var day = model.WeekStart(model.SelectedDate);
+        var days = Enumerable.Range(0, 7).Where(i => model.Engine.Schedule.Days.Contains(day.AddDays(i).DayOfWeek)
+            || model.Engine.Sessions.Any(s => s.Day == day.AddDays(i))
+            || (model.Engine.Active is not null && day.AddDays(i) == model.Engine.Now.Date)).ToArray();
+        if (days.Length == 0) days = Enumerable.Range(0, 7).ToArray();
+        var grid = Ui.Grid("125," + string.Join(",", days.Select(_ => "*")) + ",75", "Auto," + string.Join(",", model.Accounts.Select(_ => "Auto")));
+        grid.MinWidth = 200 + days.Length * 58;
         Ui.Put(grid, Ui.Text("Account", 12, "muted"));
-        for (var i = 0; i < 7; i++) Ui.Put(grid, Ui.Text(day.AddDays(i).ToString("ddd"), 12, "muted"), i + 1);
-        Ui.Put(grid, Ui.Text("Total", 12, "muted"), 8);
+        for (var i = 0; i < days.Length; i++) Ui.Put(grid, Ui.Text(day.AddDays(days[i]).ToString("ddd"), 12, "muted"), i + 1);
+        Ui.Put(grid, Ui.Text("Total", 12, "muted"), days.Length + 1);
         var row = 1;
         foreach (var a in model.Accounts)
         {
             Ui.Put(grid, Ui.Text(a.Name, 13), row: row).Margin = new Thickness(0, 16);
-            for (var i = 0; i < 7; i++) Ui.Put(grid, Ui.Text(model.Format(model.OnDay(a, day.AddDays(i))), 12), i + 1, row);
-            Ui.Put(grid, Ui.Text(model.Format(model.Week(a)), 12), 8, row);
+            for (var i = 0; i < days.Length; i++) Ui.Put(grid, Ui.Text(model.Format(model.OnDay(a, day.AddDays(days[i]))), 12), i + 1, row);
+            Ui.Put(grid, Ui.Text(model.Format(model.Week(a)), 12), days.Length + 1, row);
             row++;
         }
         var root = new StackPanel { Spacing = 16 };
         root.Children.Add(Ui.Text("Week commencing " + day.ToString("d MMMM"), 12, "muted"));
         root.Children.Add(grid);
-        return new ScrollViewer { Content = root, AllowAutoHide = false,
+        var scroll = new ScrollViewer { Content = root, AllowAutoHide = false, Tag = Vector.Zero,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+        DeferOffset(scroll);
+        return scroll;
     }
+    private static void DeferOffset(ScrollViewer scroll) => scroll.AttachedToVisualTree += (_, _) =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (scroll.Tag is Vector offset) { scroll.Offset = offset; scroll.Tag = null; }
+        }, DispatcherPriority.Loaded);
 }

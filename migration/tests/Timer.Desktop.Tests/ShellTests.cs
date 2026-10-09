@@ -139,6 +139,7 @@ public sealed class ShellTests
                 model.SetTheme(theme);
                 dashboard.SelectTab(false);
                 Save(dashboard, Path.Combine(output, $"dashboard-timeline-{theme}.png"));
+                Assert.True(dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll").Offset.Y > 1000);
                 dashboard.SelectTab(true);
                 Save(dashboard, Path.Combine(output, $"dashboard-week-{theme}.png"));
                 Save(pill, Path.Combine(output, $"pill-{theme}.png"));

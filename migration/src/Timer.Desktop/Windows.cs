@@ -219,13 +219,15 @@ public sealed class DashboardWindow : Window
         week.Classes.Set("selected", weekMode);
         if (refreshWorkspace)
         {
+            var oldScroll = workspace.Content is ScrollViewer directOld ? directOld
+                : (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
             var previous = renderedWeekMode == weekMode && renderedDate == model.SelectedDate
-                ? (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault()?.Offset : null;
+                ? oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset : null;
             workspace.Content = weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
             if (previous is { } offset && workspace.Content is Control control)
             {
                 var scroll = control is ScrollViewer direct ? direct : control.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();
-                if (scroll is not null) scroll.Offset = offset;
+                if (scroll is not null) scroll.Tag = offset;
             }
             renderedWeekMode = weekMode;
             renderedDate = model.SelectedDate;

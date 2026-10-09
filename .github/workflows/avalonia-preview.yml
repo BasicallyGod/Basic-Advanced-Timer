@@ -45,12 +45,16 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $preview = Start-Process ./artifacts/windows-preview/BasicsAdvancedTimer.Preview.exe -ArgumentList '--smoke-test' -PassThru
+          $preview = Start-Process ./artifacts/windows-preview/BasicsAdvancedTimer.Preview.exe -ArgumentList '--smoke-test' -PassThru -RedirectStandardError "$env:RUNNER_TEMP/timer-native-error.log"
           if (-not $preview.WaitForExit(30000)) {
             $preview.Kill()
             throw 'Published preview did not finish its startup check.'
           }
-          if ($preview.ExitCode -ne 0) { throw "Published preview exited with code $($preview.ExitCode)." }
+          if ($preview.ExitCode -ne 0) {
+            Get-Content "$env:RUNNER_TEMP/timer-native-error.log" -ErrorAction SilentlyContinue
+            Get-Content ./artifacts/windows-preview/migration-startup-error.log -ErrorAction SilentlyContinue
+            throw "Published preview exited with code $($preview.ExitCode)."
+          }
       - name: Upload portable Windows preview
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
