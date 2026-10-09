@@ -70,7 +70,9 @@ foreach ($name in @('New-DashboardRenderer', 'Get-RowTop', 'Get-HitRow', 'Get-Ti
 $drawerFixture = $r.Drawer
 $r = New-DashboardRenderer
 $r.Drawer = $drawerFixture
-$r.TlScrollH = $drawerFixture.Timeline.AxisStartH
+$r.TlScrollH = 8.25
+if ($r.TlPx -ne 192) { throw 'New users must start at the readable timeline zoom.' }
+if ([Win.DashboardLayout]::AccountButtonX - 15 -le [Win.DashboardLayout]::GripRight) { throw 'Budget ring overlaps the drag grip.' }
 if ($r.RowH -ne 48 -or $r.RowTop -ne 164) { throw 'Production startup must use the dashboard row geometry.' }
 
 foreach ($name in @('Sync-RendererLayout', 'Get-DayBtnRect')) {
@@ -111,7 +113,7 @@ for ($i = 0; $i -lt 13; $i++) {
 }
 $r.Panel = [Drawing.ColorTranslator]::FromHtml('#f2f7f2'); $r.Circle = [Drawing.ColorTranslator]::FromHtml('#e4eee5')
 $r.CircleHot = [Drawing.ColorTranslator]::FromHtml('#d4e5d6'); $r.Text = [Drawing.ColorTranslator]::FromHtml('#183523'); $r.Fill = [Drawing.ColorTranslator]::FromHtml('#3d984b')
-$r.H = '00'; $r.M = '29'; $r.S = '59'; $r.TodayAllocated = '0h 34m'; $r.Unallocated = 'UNALLOCATED 0:00'
+$r.H = '00'; $r.M = '29'; $r.S = '59'; $r.TodayAllocated = '0h 34m'; $r.Unallocated = 'UNALLOCATED 0:00'; $r.UnallocatedTotal = '0h 00m'
 $r.Drawer.Timeline.HasWork = $true; $r.Drawer.Timeline.WorkStartH = 8.5; $r.Drawer.Timeline.WorkEndH = 17.5
 for ($i = 0; $i -lt 3; $i++) {
     $block = New-Object Win.TimelineBlock
@@ -254,5 +256,58 @@ $script:sfRight = New-Object Drawing.StringFormat; $script:sfRight.Alignment = '
 $layout = Get-PillLayout
 $bitmap = New-Object Drawing.Bitmap(350, ([int]$layout.Height))
 $graphics = [Drawing.Graphics]::FromImage($bitmap)
-try { Draw-Pill $graphics $false } finally { $graphics.Dispose(); $bitmap.Dispose() }
+try {
+    Draw-Pill $graphics $false
+    $bitmap.Save((Join-Path $outputDir 'pill-expanded.png'), [Drawing.Imaging.ImageFormat]::Png)
+} finally { $graphics.Dispose(); $bitmap.Dispose() }
 Write-Output 'Expanded pill ring and footer drawing checks passed.'
+
+# Exercise production formatting for fractional budgets and summary values.
+foreach ($name in @('Format-Dur', 'Format-BudgetUsage', 'Get-ViewZoom', 'Request-Redraw', 'Set-View')) {
+    $fn = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true))
+    Invoke-Expression $fn[0].Extent.Text
+}
+$script:Inv = [Globalization.CultureInfo]::InvariantCulture
+foreach ($format in @('hm', 'decimal')) {
+    $script:hoursFormat = $format
+    $expected = if ($format -eq 'decimal') { '1.00h of 2.50h this week' } else { '1h 00m of 2h 30m this week' }
+    if ((Format-BudgetUsage 3600 2.5 'week') -ne $expected) { throw "Budget target ignores $format format." }
+    $zero = if ($format -eq 'decimal') { '0.00h' } else { '0h 00m' }
+    if ((Format-Dur 0) -ne $zero) { throw 'Zero unallocated uses a different format.' }
+}
+
+# Run the production view transition with a real WinForms window, substituting
+# persistence and drawing so no user data is touched and each frame is recorded.
+Add-Type -AssemblyName System.Windows.Forms
+$form = New-Object Windows.Forms.Form
+$form.AutoScaleMode = 'None'
+$tip = New-Object Windows.Forms.ToolTip
+$script:positions = @{}
+$script:SystemDpi = 192; $script:Scale = 3
+$script:mode = 'pill'; $script:pillOpen = $true; $script:layered = $true
+$script:drawerOpen = $false; $script:drawerReopen = $false
+$script:frames = @()
+function Render-Frame {
+    $script:frames += @{ Width = $form.ClientSize.Width; Height = $form.ClientSize.Height; Mode = $script:mode; Drawer = $script:drawerOpen }
+}
+function Set-PillOpen($open) { $script:pillOpen = $open; Request-Redraw }
+function Set-DrawerOpen($open, [switch]$Starting) { $script:drawerOpen = $open; Request-Redraw }
+function Save-Position {}
+function Write-SettingSection($name, $values) {}
+function Apply-CornerStyle {}
+function Update-Region {}
+function Apply-BlurState {}
+function Keep-Visible {}
+function Update-View { Request-Redraw }
+try {
+    Set-View 'full'
+    $area = [Windows.Forms.Screen]::FromControl($form).WorkingArea
+    if ($script:frames.Count -ne 1 -or -not $script:frames[0].Drawer) { throw 'View switch renders an intermediate dashboard frame.' }
+    if ($form.ClientSize.Width -gt $area.Width -or $form.ClientSize.Height -gt $area.Height) { throw 'Dashboard transition exceeds the monitor working area.' }
+    $expectedZoom = Get-ViewZoom
+    if ([math]::Abs($script:Zoom - $expectedZoom) -gt 0.001) { throw 'Transition ignores fitted DPI scale.' }
+    $script:frames = @()
+    Set-View 'pill'
+    if ($script:frames.Count -ne 1 -or $script:frames[0].Mode -ne 'pill') { throw 'Return to pill renders intermediate frames.' }
+} finally { $tip.Dispose(); $form.Dispose() }
+Write-Output 'Budget formatting and atomic dashboard transition checks passed.'

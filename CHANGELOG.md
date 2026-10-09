@@ -6,9 +6,18 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.30 |
+| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.31 |
 | AccountTimer.ps1 | Historical predecessor, removed from current tree | 1.0 to 1.7 |
 | BillableTimer.ps1 | Historical predecessor, removed from current tree | 0.1 to 0.5 |
+
+## v2.31
+
+- Separated dashboard drag grips from budget rings, removed the duplicate idle status, and centred the pill account details vertically.
+- Increased the initial Timeline zoom to 192 pixels per hour so short entries are easier to read and edit.
+- Applied the selected hours/minutes or decimal format to allocated/unallocated totals and both parts of budget usage.
+- Removed the extra Lunch separator and replaced the skewed cutlery icon with a shared upright glyph.
+- Made DPI updates use the same monitor-fit calculation as dashboard layout, and deferred drawing until a view switch is complete.
+- Added regression coverage for fractional budget formats, default timeline zoom, grip spacing and a fitted view transition without intermediate frames.
 
 ## v2.30
 
