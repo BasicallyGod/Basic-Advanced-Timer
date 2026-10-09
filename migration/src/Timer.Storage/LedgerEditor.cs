@@ -90,7 +90,9 @@ public sealed class LedgerEditor
     {
         var before = Rows(); var beforeNotes = NotesCsv; var beforeGroups = groups;
         // Validate group metadata before touching the ledger; keep unrelated fields.
-        var table = groups is null ? null : CsvTable.Parse(groups, new[] { "GroupId", "Date", "Account", "Start", "End", "Minutes" });
+        CsvTable? table;
+        try { table = groups is null ? null : CsvTable.Parse(groups, new[] { "GroupId", "Date", "Account", "Start", "End", "Minutes" }); }
+        catch (MalformedLineException error) { throw new InvalidDataException("Could not read entry-group metadata; no edit was applied.", error); }
         mutation();
         if (table is not null)
         {

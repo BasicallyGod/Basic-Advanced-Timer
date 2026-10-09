@@ -144,6 +144,34 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
+    public void NoteOnlyDialogPreservesFractionalCreditAndDoubleClickRequestsAnEditor()
+    {
+        var engine = Engine(); var row = Row(end: "09:01:01", minutes: "1.01"); engine.Sessions.Add(row);
+        var model = new TimerModel(engine);
+        var editor = new EntryWindow(model, row, row.From, row.To); editor.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = editor.CaptureRenderedFrame();
+            editor.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryNote").Text = "Short entry note";
+            editor.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Same(row, engine.Sessions.Single()); Assert.Equal("1.01", engine.Sessions.Single().Minutes);
+        }
+        finally { editor.Close(); }
+        var requests = 0; model.EntryRequested += (entry, _, _) => { if (entry is not null) requests++; };
+        var window = new Window { Width = 600, Height = 500, Content = ReviewViews.Timeline(model) }; window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var settled = window.CaptureRenderedFrame();
+            var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry0");
+            var point = card.TranslatePoint(new Point(80, 1), window)!.Value;
+            window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
+            window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
+            Assert.Equal(1, requests);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void EntryDialogSavesNotesAndGapTimeAndWeekExposesLegacyRows()
     {
         var engine = Engine(); engine.Sessions.Add(Row()); engine.Sessions.Add(Row("08:00:00", "merged", "30"));

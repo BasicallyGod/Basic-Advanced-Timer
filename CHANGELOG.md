@@ -1,5 +1,14 @@
 # Changelog
 
+## Migration timeline editing, notes and Undo (repository development)
+
+- Restored entry time/account/note editing and deletion, plus five-minute snapped timeline move/resize gestures and new credited time in free gaps.
+- Added individual entries beneath Week totals, including notes-only access for merged legacy credit and adjustments.
+- Preserved CSV extra columns and moved notes with edited source keys; pruned obsolete group references without changing positioned merged credit.
+- Added a persistent last-edit Undo snapshot that retains later recorded sessions, saved together with sessions, notes and group metadata through journal replay.
+- Retained exact credited durations when only notes change, including fractional-minute short segments.
+
+
 ## Migration tracking and storage (repository development)
 
 - Connected a platform-independent C# tracking core, separating the day clock from account session clocks.

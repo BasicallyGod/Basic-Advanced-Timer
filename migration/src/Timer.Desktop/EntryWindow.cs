@@ -22,6 +22,7 @@ public sealed class EntryWindow : Window
         var times = Ui.Grid("*,24,*");
         var from = new TextBox { Name = "EntryStart", Text = start.ToString("HH:mm:ss"), IsEnabled = editableTime };
         var until = new TextBox { Name = "EntryEnd", Text = end == start.Date.AddDays(1) ? "24:00:00" : end.ToString("HH:mm:ss"), IsEnabled = editableTime };
+        var initialStart = from.Text; var initialEnd = until.Text;
         Ui.Put(times, from); Ui.Put(times, Ui.Text("–"), 1); Ui.Put(times, until, 2); root.Children.Add(times);
         root.Children.Add(Ui.Text(editableTime ? "Start/end use HH:mm or HH:mm:ss. Time changes affect credited totals." : "Merged credit and adjustments: notes only; credited time stays unchanged.", 11, "muted"));
         var note = new TextBox { Name = "EntryNote", Watermark = "Entry note", AcceptsReturn = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Height = 110, Text = row is null ? "" : model.Editor.Note(row) };
@@ -42,8 +43,8 @@ public sealed class EntryWindow : Window
             {
                 if (applied) { if (model.Save()) Close(); else error.Text = model.LastError; return; }
                 var previous = model.Editor.UndoState;
-                if (model.EditEntry(row, (string?)accounts.SelectedItem ?? row?.Account ?? "", editableTime ? Parse(from.Text, false) : start,
-                    editableTime ? Parse(until.Text, true) : end, note.Text ?? "")) Close();
+                if (model.EditEntry(row, (string?)accounts.SelectedItem ?? row?.Account ?? "", editableTime && from.Text != initialStart ? Parse(from.Text, false) : start,
+                    editableTime && until.Text != initialEnd ? Parse(until.Text, true) : end, note.Text ?? "")) Close();
                 else
                 {
                     applied = model.LastError is not null && !ReferenceEquals(previous, model.Editor.UndoState);
