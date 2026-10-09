@@ -25,10 +25,7 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 | 2.23 | AccountTimer2 | Improved | Consolidate 13 preference files into one portable versioned JSON settings store; preserve the original text files in a migration backup |
 | 2.23 | AccountTimer2 | Improved | Use atomic settings updates with the previous JSON version retained as a backup; reject unreadable or unsupported settings instead of silently resetting |
 | 2.23 | AccountTimer2 | Improved | Rename the Windows application, dialogs, tray text and theme header to Basic’s Advanced Timer, while retaining script and launcher filenames for compatibility |
-| 2.23 | AccountTimer2 | Improved | Keep session records, theme definitions, away intervals and crash recovery separate from preferences; add synthetic Windows migration tests |
-| 2.23 | AccountTimer2 | Improved | Rebranded visible windows, dialogs, notification icon and Windows application identity as Basic’s Advanced Timer while keeping script and launcher filenames compatible |
-| 2.23 | AccountTimer2 | Improved | Consolidated 13 legacy preference text files into a portable JSON settings store with automatic migration, atomic writes, prior-version backups and archived originals |
-| 2.23 | AccountTimer2 | Improved | Retained sessions, undo records, crash-recovery state, away periods and editable theme catalogue in separate dedicated files |
+| 2.23 | AccountTimer2 | Improved | Keep session records, theme definitions, away intervals and crash recovery separate from preferences |
 | 2.23 | AccountTimer2 | New | Added synthetic PowerShell settings migration and branding regression coverage to Windows CI |
 | 2.22 | AccountTimer2 | Fixed | Two-decimal weekly summary and detailed entry exports now reconcile exactly, including rounding, grouping, adjustments and positioned credit |
 | 2.22 | AccountTimer2 | Improved | Assign deterministic integer 0.01h increments across account/day and detailed rows rather than rounding each independently |

@@ -1270,7 +1270,6 @@ $script:LegacySettings = [ordered]@{
 
 function Save-SettingsStore {
     $newFile = "$script:SettingsStoreFile.$([guid]::NewGuid().ToString('N')).tmp"
-    if ($script:SettingsTrace) { Write-Host 'Settings trace: Save-SettingsStore entered' }
     try {
         # Serialize only scalar values. Windows PowerShell 5.1 may exhaust
         # memory if ConvertTo-Json is given the nested PowerShell hashtable.
@@ -1285,15 +1284,12 @@ function Save-SettingsStore {
         }
         $payload = '{"schemaVersion":' + [string]$script:SettingsStoreVersion +
                    ',"sections":{' + [string]::Join(',', $members.ToArray()) + '}}'
-        if ($script:SettingsTrace) { Write-Host 'Settings trace: JSON serialized' }
         [System.IO.File]::WriteAllText($newFile, [string]$payload, (New-Object System.Text.UTF8Encoding($false)))
-        if ($script:SettingsTrace) { Write-Host 'Settings trace: temporary file written' }
         if ([System.IO.File]::Exists($script:SettingsStoreFile)) {
             [System.IO.File]::Replace($newFile, $script:SettingsStoreFile, "$script:SettingsStoreFile.bak")
         } else {
             [System.IO.File]::Move($newFile, $script:SettingsStoreFile)
         }
-        if ($script:SettingsTrace) { Write-Host 'Settings trace: saved settings atomically' }
         return $true
     } catch {
         try { [System.IO.File]::Delete($newFile) } catch {}
@@ -1336,7 +1332,6 @@ function Write-SettingSection([string]$name, $lines) {
 }
 
 function Initialize-SettingsStore {
-    if ($script:SettingsTrace) { Write-Host 'Settings trace: initialization entered' }
     if (Test-Path -LiteralPath $script:SettingsStoreFile) {
         try {
             $json = [System.IO.File]::ReadAllText($script:SettingsStoreFile, [System.Text.Encoding]::UTF8)
@@ -1362,36 +1357,27 @@ function Initialize-SettingsStore {
             throw $reason
         }
     }
-    if ($script:SettingsTrace) { Write-Host 'Settings trace: gathering legacy sections' }
     $found = @()
     foreach ($name in $script:LegacySettings.Keys) {
         $oldPath = Join-Path $script:AppRoot $script:LegacySettings[$name]
         if (-not (Test-Path -LiteralPath $oldPath)) { continue }
-        if ($script:SettingsTrace) { Write-Host "Settings trace: reading $name" }
         $script:SettingsSections[$name] = @(Get-Content -LiteralPath $oldPath -ErrorAction Stop)
         $found += $oldPath
     }
-    if ($script:SettingsTrace) { Write-Host "Settings trace: read $($found.Count) legacy files" }
     if ($found.Count -eq 0) { return }
     # Write and verify the new store BEFORE moving any old files. Archive originals
     # rather than deleting them, making this upgrade reversible.
-    if ($script:SettingsTrace) { Write-Host 'Settings trace: saving initial JSON' }
     [void](Save-SettingsStore)
-    if ($script:SettingsTrace) { Write-Host 'Settings trace: saved initial JSON' }
     $verify = ConvertFrom-Json -InputObject ([System.IO.File]::ReadAllText($script:SettingsStoreFile)) -ErrorAction Stop
     if ($null -eq $verify.sections) { throw 'Settings migration validation failed.' }
-    if ($script:SettingsTrace) { Write-Host 'Settings trace: validated JSON' }
-    $archive = Join-Path $script:AppRoot 'Timesheets\\legacy-settings-backup'
+    $archive = Join-Path (Join-Path $script:AppRoot 'Timesheets') 'legacy-settings-backup'
     [void](New-Item -ItemType Directory -Path $archive -Force -ErrorAction Stop)
-    if ($script:SettingsTrace) { Write-Host 'Settings trace: archiving files' }
     foreach ($path in $found) {
         $dest = Join-Path $archive ([System.IO.Path]::GetFileName($path))
         if (Test-Path -LiteralPath $dest) { continue }
-        if ($script:SettingsTrace) { Write-Host "Settings trace: moving $path" }
         try { Move-Item -LiteralPath $path -Destination $dest -ErrorAction Stop }
         catch { throw "Settings migrated, but old settings could not be archived: $($_.Exception.Message)" }
     }
-    if ($script:SettingsTrace) { Write-Host 'Settings trace: finished migration' }
 }
 
 Initialize-SettingsStore

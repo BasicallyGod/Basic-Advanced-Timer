@@ -19,7 +19,6 @@ $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('basics-settings-test-' + [
 [void](New-Item -ItemType Directory -Path $fixtureRoot -Force)
 try {
     $script:SettingsNonInteractive = $true
-    $script:SettingsTrace = $true
     $script:AppRoot = $fixtureRoot
     $script:SettingsStoreFile = Join-Path $fixtureRoot 'basics-advanced-timer.settings.json'
     $script:SettingsStoreVersion = 1
@@ -46,7 +45,7 @@ try {
     Assert ((Read-SettingFirst 'size') -eq '1.25') 'Interface scale was lost on migration.'
     Assert ((@(Read-SettingSection 'accounts') -join '|') -eq ($accountLines -join '|')) 'Accounts or hidden flags were lost.'
     Assert ((@(Read-SettingSection 'workingHours') -join '|') -eq ($hours -join '|')) 'Working hours and shifts were lost.'
-    $backup = Join-Path $fixtureRoot 'Timesheets\legacy-settings-backup'
+    $backup = Join-Path (Join-Path $fixtureRoot 'Timesheets') 'legacy-settings-backup'
     Assert (Test-Path (Join-Path $backup 'account-timer-accounts.txt')) 'Original account settings were not backed up.'
     Assert (Test-Path (Join-Path $backup 'account-timer-settings.txt')) 'Original working-hours settings were not backed up.'
     Assert (-not (Test-Path (Join-Path $fixtureRoot 'account-timer-accounts.txt'))) 'Legacy account settings were not archived.'

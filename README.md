@@ -45,7 +45,7 @@ Older `AccountTimer.ps1` and `BillableTimer.ps1` implementations and their launc
 
 The application keeps its user preferences in **`basics-advanced-timer.settings.json`** beside the script. It replaces 13 separate legacy preference files covering accounts, budgets, working days and hours, interface size, window positions, theme selection, appearance and view state.
 
-**Upgrading an existing installation:** On first launch, v2.23 reads the old `account-timer-*.txt` preferences, writes the combined JSON file, verifies it and moves the original files to `Timesheets/legacy-settings-backup/`. Your actual time records are not migrated or changed. The archive is a safety copy; don't delete it until you've checked your settings. JSON changes create a `.json.bak` backup. If the JSON is corrupted, the application displays an error instead of silently resetting your preferences. Keep a copy of the whole folder before upgrading.
+An existing installation is migrated automatically on first launch, and your original preference files are kept as a backup. See [Upgrading an existing installation](#upgrading-an-existing-installation-v223) below before replacing the script.
 
 Your work records, crash recovery and editable theme catalogue remain separate from the JSON preferences. These local files **are not in the repository** and are excluded from ordinary Git tracking by `.gitignore`. They may contain sensitive client names and work notes.
 
@@ -64,7 +64,6 @@ Your work records, crash recovery and editable theme catalogue remain separate f
 | `account-timer-themes.txt` | Editable colour theme definitions; deliberately separate |
 | `Timesheets/Week commencing YYYY-MM-DD.csv` | Weekly summary by account and day |
 | `Timesheets/Week commencing YYYY-MM-DD entries.csv` | Detailed time entries and reconciled `Hours` column |
-| `account-timer-*.txt` | Separate crash recovery and theme files, plus historical preferences retained in the backup folder |
 | `account-timer-error.log` | Diagnostic logging and rendering performance output |
 
 To move to another computer or make a complete backup, copy the **entire application folder**, including `Timesheets`, the new `.json` settings file and the remaining `.txt` state and theme files. Keep the two newer metadata CSVs with `sessions.csv`; they affect how historical merged time and manual groups appear. On a fresh download, the timer creates local configuration and time files as they are needed.
@@ -73,7 +72,7 @@ To move to another computer or make a complete backup, copy the **entire applica
 
 Close the timer and **copy your entire existing application folder to a backup location** before replacing `AccountTimer2.ps1`. Keep the `StartAccountTimer2.vbs` filename: shortcuts created for earlier versions continue working, although the application now displays **Basic’s Advanced Timer** in Windows.
 
-On the first run, v2.23 imports the 13 existing preference files (`account-timer-accounts.txt`, `account-timer-settings.txt`, `account-timer-days.txt`, `account-timer-budgets.txt`, and appearance/view preference files) into `basics-advanced-timer.settings.json`. It verifies the new settings file and then moves the original preference files to `Timesheets/legacy-settings-backup/`; **it does not delete them**.
+On the first run, v2.23 imports the 13 existing preference files (`account-timer-accounts.txt`, `account-timer-settings.txt`, `account-timer-days.txt`, `account-timer-budgets.txt`, and appearance/view preference files) into `basics-advanced-timer.settings.json`. It verifies the new settings file and then moves the original preference files to `Timesheets/legacy-settings-backup/`; **it does not delete them**. Keep that archive until you have checked your settings. Your actual time records are not migrated or changed.
 
 Editable `account-timer-themes.txt`, `account-timer-state.txt`, `account-timer-away.txt`, error logs and all timesheet CSVs remain separate and are not migrated. The JSON settings writer uses a temporary file and a `.bak` copy of the previous version to reduce the risk of losing preferences. If the JSON becomes unreadable, startup stops with a message rather than silently resetting your settings.
 
@@ -101,10 +100,9 @@ From a PowerShell prompt in the repository folder:
 powershell.exe -NoProfile -File .\tests\timeline-projection.ps1
 powershell.exe -NoProfile -File .\tests\decimal-reconciliation.ps1
 powershell.exe -NoProfile -File .\tests\settings-migration.ps1
-powershell.exe -NoProfile -File .\tests\settings-migration.ps1
 ```
 
-The tests use synthetic data and do not load your personal timesheets. GitHub Actions runs all three checks on Windows for pull requests and changes to `main`.
+The tests use synthetic data and do not load your personal timesheets. GitHub Actions runs all three checks on Windows for pull requests and changes to `main` and `experimental`.
 
 See `CHANGELOG.md` for the feature history and `CLAUDE.md` for developer implementation notes.
 
