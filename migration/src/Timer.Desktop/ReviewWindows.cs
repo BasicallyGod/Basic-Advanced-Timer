@@ -99,7 +99,7 @@ public sealed class GroupWindow : ReviewWindow
         }
         var grouped = existing.SelectMany(e => e.Sources).ToHashSet();
         var rows = group?.Sources ?? model.Engine.Sessions.Where(s => s.Day >= week && s.Day < week.AddDays(7) && !s.IsMerged && !grouped.Contains(s)).OrderBy(s => s.From).ToArray();
-        Root.Children.Add(Info("Merge adjoining entries for the same account/day. Gaps or intervening time must be resolved first. Source records and totals stay intact."));
+        Root.Children.Add(Info("Merge entries for the same account/day. Blank gaps are added as credited time. Overlapping or intervening blocks prevent a merge. Undo reverses the added time; Ungroup keeps it."));
         var choices = new List<(CheckBox Check, SessionRow Row)>();
         foreach (var row in rows)
         {

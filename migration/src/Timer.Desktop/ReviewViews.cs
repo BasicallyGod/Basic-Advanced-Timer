@@ -44,7 +44,7 @@ public static class ReviewViews
             var sections = new List<List<SessionRow>>();
             foreach (var row in group.Sources.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero).OrderBy(s => s.From))
             {
-                if (sections.Count == 0 || Math.Abs((row.From - sections[^1][^1].To).TotalSeconds) > .6 + 1e-8) sections.Add(new());
+                if (sections.Count == 0 || Math.Abs((row.From - sections[^1][^1].To).TotalSeconds) > 1 + 1e-8) sections.Add(new());
                 sections[^1].Add(row);
             }
             foreach (var section in sections)
@@ -125,17 +125,21 @@ public static class ReviewViews
         DateTime At(double y) => day.AddMinutes(Math.Clamp(Math.Floor(y / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var add = new MenuItem { Header = "Add new credited time…" }; add.Click += (_, _) => model.OpenGap(clicked);
         canvas.ContextMenu = new ContextMenu { ItemsSource = new[] { add, MergeMenu(model) } };
+        bool OnBlock(object? source) => source is Visual visual && (visual is Border { Tag: SessionRow or CreditPosition or ReviewEntry }
+            || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow or CreditPosition or ReviewEntry));
+        Point? emptyPress = null;
         canvas.PointerPressed += (_, e) =>
         {
             if (e.GetCurrentPoint(canvas).Properties.IsRightButtonPressed) clicked = At(e.GetPosition(canvas).Y);
-            else if (e.GetCurrentPoint(canvas).Properties.IsLeftButtonPressed && e.Source is Visual visual
-                && !(visual is Border { Tag: SessionRow or CreditPosition or ReviewEntry })
-                && !visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow or CreditPosition or ReviewEntry)) model.ClearSelection();
+            else if (e.GetCurrentPoint(canvas).Properties.IsLeftButtonPressed && !OnBlock(e.Source)
+                && !e.KeyModifiers.HasFlag(KeyModifiers.Control)) emptyPress = e.GetPosition(canvas);
         };
-        canvas.DoubleTapped += (_, e) =>
+        canvas.PointerReleased += (_, e) =>
         {
-            if (e.Source is Visual visual && (visual is Border { Tag: SessionRow or CreditPosition or ReviewEntry } || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow or CreditPosition or ReviewEntry))) return;
-            model.OpenGap(At(e.GetPosition(canvas).Y)); e.Handled = true;
+            var start = emptyPress; emptyPress = null;
+            if (start is not { } point || e.InitialPressMouseButton != MouseButton.Left || OnBlock(e.Source)
+                || (e.GetPosition(canvas) - point).Length > 5) return;
+            model.ClearSelection(); model.OpenGap(At(point.Y)); e.Handled = true;
         };
         var plan = model.Engine.Plan(day);
         var first = intervals.Count > 0 ? intervals.Min(i => i.Start) : plan.Working ? plan.Start : day.AddHours(9);

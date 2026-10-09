@@ -26,7 +26,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool CanMergeSelection => SelectedBlockCount >= 2 && selectedRows.Select(s => s.Day).Distinct().Count() == 1
         && selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() == 1 && Editor.CanCombine(selectedRows.ToArray());
     public string MergeHint => SelectedBlockCount < 2 ? "Ctrl+left-click at least two blocks to merge." : CanMergeSelection
-        ? $"Merge {SelectedBlockCount} selected blocks. Credited totals stay unchanged." : "Select adjoining blocks for the same account/day, without gaps or overlapping time.";
+        ? $"Merge {SelectedBlockCount} blocks · adds {Format(TimeSpan.FromMinutes((double)Editor.MergeGapMinutes(selectedRows.ToArray())))} of gap time." : "Select blocks for the same account/day, with only blank gaps between them.";
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
     {
         if (rows.Count == 0 || rows.Any(s => s.IsMerged || !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;

@@ -227,11 +227,12 @@ public sealed class CreditReviewTests
         Assert.Equal(csv, model.Editor.SessionsCsv); dashboard.Close();
     }
     [Fact]
-    public void MergeRejectsGapsInterveningAccountsAndPartialGroups()
+    public void MergeFillsGapsButRejectsInterveningAccountsAndPartialGroups()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
         var editor = new LedgerEditor(engine); var csv = editor.SessionsCsv;
-        Assert.Throws<ArgumentException>(() => editor.Group(engine.Sessions.ToArray())); Assert.Equal(csv, editor.SessionsCsv);
+        editor.Group(engine.Sessions.ToArray()); Assert.Equal(90, engine.Sessions.Sum(s => decimal.Parse(s.Minutes, CultureInfo.InvariantCulture)));
+        editor.Undo(); Assert.Equal(csv, editor.SessionsCsv);
         engine.Sessions[1] = Row("09:30:00", "30"); engine.Sessions.Add(Row("09:15:00", "30", account: "Account two"));
         Assert.Throws<ArgumentException>(() => editor.Group(engine.Sessions.Take(2).ToArray()));
         engine.Sessions.RemoveAt(2); editor.Group(engine.Sessions.ToArray()); engine.Sessions.Add(Row("10:00:00", "30"));
@@ -257,6 +258,60 @@ public sealed class CreditReviewTests
             Assert.Equal(2, model.SelectedRows.Count); Assert.False(model.CanMergeSelection); window.Close();
         }
         finally { Directory.Delete(folder, true); }
+    }
+
+    [Fact]
+    public void MergeAddsAllBlankGapsAsOneUndoableLedgerChange()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30"), Row("11:00:00", "30") });
+        var editor = new LedgerEditor(engine); var original = editor.SessionsCsv;
+        Assert.Equal(60, editor.MergeGapMinutes(engine.Sessions.ToArray())); editor.Group(engine.Sessions.ToArray());
+        Assert.Equal(5, engine.Sessions.Count); var group = Assert.Single(editor.Entries(Day, Day.AddDays(1)));
+        Assert.Equal(150, group.Minutes); Assert.Equal(5, group.Sources.Count);
+        Assert.All(engine.Sessions.Skip(3), s => Assert.Equal("Added by merge", editor.Note(s)));
+        var export = new WeekExport(editor, engine, Day.AddDays(-4)); Assert.Equal(250, export.TotalUnits);
+        editor.Undo(); Assert.Equal(original, editor.SessionsCsv); Assert.Equal(3, editor.Entries(Day, Day.AddDays(1)).Count);
+        editor.Group(engine.Sessions.ToArray()); group = Assert.Single(editor.Entries(Day, Day.AddDays(1)));
+        editor.Ungroup(group.GroupId!); Assert.Equal(150, engine.Sessions.Sum(s => decimal.Parse(s.Minutes, CultureInfo.InvariantCulture)));
+    }
+    [Fact]
+    public void GapMergeUndoSurvivesRestartAndRunningOrPositionedTimePreventsIt()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-gap-merge-" + Guid.NewGuid());
+        try
+        {
+            using (var store = new TimerStore(folder))
+            {
+                var engine = Engine(); var preferences = store.Load(engine);
+                engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
+                store.Editor!.Group(engine.Sessions.ToArray()); store.Save(engine, preferences);
+            }
+            using (var store = new TimerStore(folder))
+            {
+                var engine = Engine(); var preferences = store.Load(engine); store.Editor!.Undo(); store.Save(engine, preferences);
+                Assert.Equal(2, engine.Sessions.Count); Assert.Equal(60, engine.Sessions.Sum(s => decimal.Parse(s.Minutes, CultureInfo.InvariantCulture)));
+                engine.Sessions.Add(Row("00:00:00", "30", "merged", "Account two"));
+                store.Editor.Place("Account two", Day.AddHours(9.5), 30, "In gap");
+                Assert.False(store.Editor.CanCombine(engine.Sessions.Take(2).ToArray()));
+            }
+            var clock = Day.AddHours(9.5); var running = new TrackingEngine(clock: () => clock);
+            running.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") }); running.ToggleAccount("Account two"); clock = Day.AddHours(9.75);
+            Assert.False(new LedgerEditor(running).CanCombine(running.Sessions.ToArray()));
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+    [AvaloniaFact]
+    public void SingleClickBlankTimelineOpensOnePrefilledEditorAndSavesTime()
+    {
+        var engine = Engine(); engine.Sessions.Add(Row("10:00:00", "30")); var model = new TimerModel(engine);
+        var window = new DashboardWindow(model); window.Show(); Capture(window, "click-to-add-timeline");
+        var ten = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "10:00");
+        var point = ten.TranslatePoint(new Point(180, 168), window)!.Value; // 11:00
+        window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
+        var editor = Assert.Single(window.OwnedWindows.OfType<EntryWindow>()); Capture(editor, "click-to-add-editor");
+        Assert.Equal("11:00:00", Find<TextBox>(editor, "EntryStart").Text); Assert.Equal("11:30:00", Find<TextBox>(editor, "EntryEnd").Text);
+        Find<Button>(editor, "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(2, engine.Sessions.Count); Assert.Equal("added", engine.Sessions[1].End); window.Close();
     }
     private static T Find<T>(Window window, string name) where T : Control => window.GetLogicalDescendants().OfType<T>().Single(c => c.Name == name);
     private static void Capture(Window window, string name)

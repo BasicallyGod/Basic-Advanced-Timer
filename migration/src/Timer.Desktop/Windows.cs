@@ -170,6 +170,7 @@ public sealed class DashboardWindow : Window
     private readonly Button week;
     private readonly Button undo;
     private readonly Button merge;
+    private EntryWindow? entryEditor;
     private bool weekMode;
     private bool? renderedWeekMode;
     private DateTime? renderedDate;
@@ -256,7 +257,11 @@ public sealed class DashboardWindow : Window
     }
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
     {
-        if (IsVisible) new EntryWindow(model, row, start, end).Show(this);
+        if (!IsVisible) return;
+        if (entryEditor is { IsVisible: true }) { entryEditor.Activate(); return; }
+        entryEditor = new EntryWindow(model, row, start, end);
+        entryEditor.Closed += (_, _) => entryEditor = null;
+        entryEditor.Show(this);
     }
     private void ShowPosition(Timer.Storage.CreditPosition? position) { if (IsVisible) new PositionWindow(model, position).Show(this); }
     private void ShowGroup(string id) { if (IsVisible) new GroupWindow(model, id).Show(this); }
