@@ -1,4 +1,4 @@
-# Basic's Advanced Timer v2.24
+# Basic's Advanced Timer v2.25
 #
 # Portable Windows PowerShell 5.1 application for client-account time tracking.
 # Launch from StartAccountTimer2.vbs in the same folder to avoid a console window.
@@ -353,9 +353,9 @@ namespace Win {
         public float Zoom = 1f, BaseW = 320f, BaseH = 380f, RowTop = 100f, RowH = 30f, LunchGap = 10f, OvertimeH = 32f;
         public float CollapseX = 306f, CollapseY = 9f, CollapseR = 6.5f, DrawerBtnX = 12f, DrawerBtnY = 9f;
         public float RoundR = 8f, RoundDownX = 150f, RoundUpX = 170f;
-        public float DrawerW = 520f, DrawerH = 0f, DrawerRowH = 19f;
+        public float DrawerW = 520f, DrawerH = 0f, DrawerRowH = 30f;
         // Heights within the drawer, which the PowerShell side uses to work out how tall the drawer must be
-        public const float TabsH = 26f;
+        public const float TabsH = 32f;
         public float Margin = 10f, TimerOffX = 0f, TimerOffY = 0f;
         public int ListAlpha = 255;
         public float TextSharpen = 0.8f;
@@ -422,8 +422,8 @@ namespace Win {
         // Outline of everything shown, in window units (including the margin left for the shadow)
         public GraphicsPath GetOutline() {
             if (!DrawerOpen) return RoundRect(Margin, Margin, BaseW, BaseH, 8f);
-            // Timer and drawer side by side as one rounded rectangle; if the drawer is taller,
-            // the space under the timer is filled with the panel colour, so there's never an empty corner
+            // Keep the shorter timer tight to its controls when the drawer needs more height.
+            if (DrawerH - BaseH >= 16f) return GetLShapedOutline();
             return RoundRect(Margin, Margin, DrawerW + BaseW, Math.Max(DrawerH, BaseH), 8f);
         }
 
@@ -857,15 +857,17 @@ namespace Win {
         void DrawDrawerContents(Graphics og, float dx, float mg, float dW) {
             DrawerModel d = Drawer;
             Font fText = FontDrawer ?? FontSmall;
-            Font fBold = FontDrawerBold ?? FontButton;
+            Font fBold = FontDrawerBold ?? fBold;
             Color textC = Text;
             Color faintC = Mix(Panel, Text, 215 / 255.0);
             // Lines and bars are drawn as solid colours, as the layer has no see-through areas
             using (Pen sep = new Pen(Mix(Panel, Text, 35 / 255.0), 1f)) {
                 float pad = 14f, x0 = dx + pad, xR = dx + dW - pad, y = mg + 10;
                 bool timeline = d.Mode == "timeline" && d.Timeline != null;
-                QueueText(d.Title, FontRow, textC, new RectangleF(x0, y, timeline ? 200 : 170, 24), DT_LEFT);
+                QueueText(d.Title, fBold, textC, new RectangleF(x0, y, dW - 2 * pad, 24), DT_LEFT);
 
+                y += 34;
+                // Navigation gets its own row, leaving the title unobstructed.
                 // Buttons, right to left
                 DrawerButtons.Clear();
                 string[][] defs = timeline
@@ -878,14 +880,14 @@ namespace Win {
                         new string[] { "next", "Next" }, new string[] { "prev", "Previous" } };
                 float bx = xR;
                 foreach (string[] def in defs) {
-                    float tw = og.MeasureString(def[1], FontButton).Width + 16;
+                    float tw = og.MeasureString(def[1], fBold).Width + 16;
                     bx -= tw;
-                    RectangleF rect = new RectangleF(bx, y + 1, tw, 22);
+                    RectangleF rect = new RectangleF(bx, y + 1, tw, 28);
                     bool enabled = !(def[0] == "next" && !d.NextEnabled) && !(def[0] == "undo" && !d.UndoEnabled);
                     Color col = !enabled ? Mix(Panel, Circle, 0.45) : (DrawerHover == def[0] ? CircleHot : Circle);
                     using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 11f))
                     using (SolidBrush bb = new SolidBrush(col)) { og.FillPath(bb, bp); }
-                    QueueText(def[1], FontButton, enabled ? textC : Mix(col, Text, 0.5), rect, DT_CENTER);
+                    QueueText(def[1], fBold, enabled ? textC : Mix(col, Text, 0.5), rect, DT_CENTER);
                     if (enabled) {
                         DrawerButton db = new DrawerButton();
                         db.Id = def[0]; db.Rect = rect;
@@ -893,19 +895,19 @@ namespace Win {
                     }
                     bx -= 6;
                 }
-                y += 34;
+                y += 36;
 
                 // Tabs for switching between the week's table and the day's timeline
                 float tabX = x0;
                 string[][] tabs = new string[][] { new string[] { "timeline", "Timeline" }, new string[] { "week", "Week" } };
                 foreach (string[] tab in tabs) {
-                    float tw = og.MeasureString(tab[1], FontButton).Width + 20;
-                    RectangleF rect = new RectangleF(tabX, y, tw, 22);
+                    float tw = og.MeasureString(tab[1], fBold).Width + 20;
+                    RectangleF rect = new RectangleF(tabX, y, tw, 28);
                     bool current = d.Mode == tab[0];
                     Color col = current ? CircleHot : (DrawerHover == tab[0] ? Circle : Mix(Panel, Circle, 0.45));
                     using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 11f))
                     using (SolidBrush bb = new SolidBrush(col)) { og.FillPath(bb, bp); }
-                    QueueText(tab[1], FontButton, textC, rect, DT_CENTER);
+                    QueueText(tab[1], fBold, textC, rect, DT_CENTER);
                     if (!current) {
                         DrawerButton db = new DrawerButton();
                         db.Id = tab[0]; db.Rect = rect;
@@ -918,14 +920,14 @@ namespace Win {
                     float zx = xR;
                     string[][] tools = new string[][] { new string[] { "now", "Now" }, new string[] { "zoomin", "+" }, new string[] { "zoomout", "-" } };
                     foreach (string[] tool in tools) {
-                        float tw = Math.Max(22f, og.MeasureString(tool[1], FontButton).Width + 16);
+                        float tw = Math.Max(22f, og.MeasureString(tool[1], fBold).Width + 16);
                         zx -= tw;
-                        RectangleF rect = new RectangleF(zx, y, tw, 22);
+                        RectangleF rect = new RectangleF(zx, y, tw, 28);
                         bool enabled = !(tool[0] == "now" && !d.IsToday);
                         Color col = !enabled ? Mix(Panel, Circle, 0.45) : (DrawerHover == tool[0] ? CircleHot : Circle);
                         using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 11f))
                         using (SolidBrush bb = new SolidBrush(col)) { og.FillPath(bb, bp); }
-                        QueueText(tool[1], FontButton, enabled ? textC : Mix(col, Text, 0.5), rect, DT_CENTER);
+                        QueueText(tool[1], fBold, enabled ? textC : Mix(col, Text, 0.5), rect, DT_CENTER);
                         if (enabled) {
                             DrawerButton db = new DrawerButton();
                             db.Id = tool[0]; db.Rect = rect;
@@ -940,12 +942,12 @@ namespace Win {
 
                 // Hours by account and day
                 int nd = d.DayLabels.Length;
-                float nameW = 140f, tableW = dW - 2 * pad, colW = (tableW - nameW) / (nd + 1), rowH = DrawerRowH;
-                QueueText("ACCOUNT", FontLabel, faintC, new RectangleF(x0, y, nameW, rowH), DT_LEFT);
+                float nameW = 190f, tableW = dW - 2 * pad, colW = (tableW - nameW) / (nd + 1), rowH = DrawerRowH;
+                QueueText("ACCOUNT", fBold, faintC, new RectangleF(x0, y, nameW, rowH), DT_LEFT);
                 for (int j = 0; j < nd; j++) {
-                    QueueText(d.DayLabels[j], FontLabel, faintC, new RectangleF(x0 + nameW + j * colW, y, colW - 4, rowH), DT_RIGHT);
+                    QueueText(d.DayLabels[j], fBold, faintC, new RectangleF(x0 + nameW + j * colW, y, colW - 4, rowH), DT_RIGHT);
                 }
-                QueueText("TOTAL", FontLabel, faintC, new RectangleF(x0 + nameW + nd * colW, y, colW - 4, rowH), DT_RIGHT);
+                QueueText("TOTAL", fBold, faintC, new RectangleF(x0 + nameW + nd * colW, y, colW - 4, rowH), DT_RIGHT);
                 y += rowH;
                 foreach (DrawerRow tr in d.Rows) {
                     og.DrawLine(sep, x0, y, xR, y);
@@ -962,7 +964,7 @@ namespace Win {
                 // Budgets
                 if (d.Budgets.Count > 0) {
                     y += 8;
-                    QueueText(d.BudgetsHeading, FontLabel, faintC, new RectangleF(x0, y, 260, 16), DT_LEFT);
+                    QueueText(d.BudgetsHeading, fBold, faintC, new RectangleF(x0, y, 260, 16), DT_LEFT);
                     y += 18;
                     foreach (DrawerBudget bl in d.Budgets) {
                         QueueText(bl.Name, fText, textC, new RectangleF(x0, y, nameW - 6, 20), DT_LEFT);
@@ -984,8 +986,8 @@ namespace Win {
         // now is. Only the part in the viewport is drawn. PowerShell holds the scroll position (TlScrollH, in
         // hours) and the zoom (TlPx, window units per hour), and works out hover and dragging from the viewport
         // reported back in TlX0, TlW, TlY and TlH.
-        const float GutterW = 48f, LegendW = 132f;
-        public const float TlRowH = 22f;
+        const float GutterW = 58f, LegendW = 220f;
+        public const float TlRowH = 30f;
 
         static string Clock(double h) {
             int m = (int)Math.Floor(h * 60 + 0.000001);
@@ -3221,7 +3223,7 @@ $CollapseX = 304
 $CollapseY = 15
 $CollapseR = 7.5
 # Week drawer
-$DrawerSideW = 520                  # width of the week drawer beside the timer
+$DrawerSideW = 720                  # width of the week drawer beside the timer
 $DrawerBtnX = 16                    # week drawer button, top left (mirrors the compact view button)
 $DrawerBtnY = 15
 
@@ -3591,13 +3593,13 @@ $fRow    = New-Object System.Drawing.Font('Segoe UI Semibold', 12, [System.Drawi
 $fOvertime = New-Object System.Drawing.Font('Segoe UI Semibold', 24, [System.Drawing.FontStyle]::Regular, $px)
 $fPillTime = New-Object System.Drawing.Font('Segoe UI Semibold', 19, [System.Drawing.FontStyle]::Regular, $px)
 $fPillSub  = New-Object System.Drawing.Font('Segoe UI', 10.5, [System.Drawing.FontStyle]::Regular, $px)
-$fDrawerBtn = New-Object System.Drawing.Font('Segoe UI Semibold', 11.5, [System.Drawing.FontStyle]::Regular, $px)
-$fDrawerText = New-Object System.Drawing.Font('Segoe UI', 11.5, [System.Drawing.FontStyle]::Regular, $px)
-$fDrawerTextBold = New-Object System.Drawing.Font('Segoe UI Semibold', 11.5, [System.Drawing.FontStyle]::Regular, $px)
+$fDrawerBtn = New-Object System.Drawing.Font('Segoe UI Semibold', 14, [System.Drawing.FontStyle]::Regular, $px)
+$fDrawerText = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Regular, $px)
+$fDrawerTextBold = New-Object System.Drawing.Font('Segoe UI Semibold', 14, [System.Drawing.FontStyle]::Regular, $px)
 # The timeline's text is a little larger than the rest of the drawer's, as it has to be read at a glance
-$fTimeline = New-Object System.Drawing.Font('Segoe UI', 13, [System.Drawing.FontStyle]::Regular, $px)
-$fTimelineBold = New-Object System.Drawing.Font('Segoe UI Semibold', 13, [System.Drawing.FontStyle]::Regular, $px)
-$fTimelineSmall = New-Object System.Drawing.Font('Segoe UI', 12, [System.Drawing.FontStyle]::Regular, $px)
+$fTimeline = New-Object System.Drawing.Font('Segoe UI', 15, [System.Drawing.FontStyle]::Regular, $px)
+$fTimelineBold = New-Object System.Drawing.Font('Segoe UI Semibold', 15, [System.Drawing.FontStyle]::Regular, $px)
+$fTimelineSmall = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Regular, $px)
 
 $sfCentre = New-Object System.Drawing.StringFormat
 $sfCentre.Alignment = 'Center'; $sfCentre.LineAlignment = 'Center'
@@ -4020,7 +4022,7 @@ function Get-BudgetLines {
     return $out
 }
 
-$DrawerRowH = 19
+$DrawerRowH = 30
 $TimelineMinH = 420     # the timeline drawer is at least this tall, so there is room to see a few hours at once
 $TlMinPx = 24; $TlMaxPx = 240
 
@@ -4278,10 +4280,11 @@ function Measure-DrawerHeight {
     if ((Get-DrawerMode) -eq 'timeline') {
         # A fixed height, with the day scrolling inside it (or taller if the account totals need more)
         $lines = @($script:drawerLegend).Count
-        return [math]::Max($TimelineMinH, 10 + 34 + [Win.FullRenderer]::TabsH + [Win.FullRenderer]::TlRowH * $lines + 12)
+        return [math]::Max($TimelineMinH, 10 + 70 + [Win.FullRenderer]::TabsH + [Win.FullRenderer]::TlRowH * $lines + 12)
     }
     $rows = 1 + @($d.Names).Count + 3
-    $h = 10 + 34 + $DrawerRowH * $rows + 10
+    $headerH = if ($script:useRenderer) { 70 } else { 34 }
+    $h = 10 + $headerH + $DrawerRowH * $rows + 10
     if ($script:useRenderer) { $h += [Win.FullRenderer]::TabsH }
     $nb = @($script:drawerBudgets).Count
     if ($nb -gt 0) { $h += 8 + 18 + 20 * $nb }
@@ -5079,7 +5082,7 @@ function Draw-Drawer($g, $theme) {
 
     # Hours by account and day
     $days = @($d.Days)
-    $nameW = [float]140
+    $nameW = [float]190
     $tableW = $DW - 2 * $pad
     $colW = [float](($tableW - $nameW) / ($days.Count + 1))
     $rowH = [float]$DrawerRowH
@@ -5102,7 +5105,7 @@ function Draw-Drawer($g, $theme) {
     $tableRows += @{ Name = 'Unallocated'; Values = $d.Unalloc; Style = 'faint' }
     foreach ($tr in $tableRows) {
         $g.DrawLine($pSep, $x0, $y, $xR, $y)
-        $font = if ($tr.Style -eq 'bold') { $fDrawerBtn } else { $fPillSub }
+        $font = if ($tr.Style -eq 'bold') { $fDrawerBtn } else { $fDrawerText }
         $brush = if ($tr.Style -eq 'faint') { $bFaint } else { $bWhite }
         $g.DrawString($tr.Name, $font, $brush, (New-Object $RF $x0, $y, ($nameW - 6), $rowH), $sfName)
         $sum = 0.0
@@ -5565,7 +5568,7 @@ function Apply-BlurState {
         Apply-CornerStyle
     }
     # With the standard drawing the drawer can make an L shape, which the blur can't follow, so it pauses then
-    $want = $script:blurOn -and $script:listLevel -ne 'Off' -and $script:mode -eq 'full' -and ($script:useRenderer -or -not $script:drawerOpen)
+    $want = $script:blurOn -and $script:listLevel -ne 'Off' -and $script:mode -eq 'full' -and (-not $script:drawerOpen -or $script:drawerH -le $BaseH)
     try {
         if ($want) { [void][Win.Layered]::SetBlur($form.Handle, $true) }
         else { [Win.Layered]::ClearAllBlur($form.Handle) }
@@ -5953,16 +5956,16 @@ function New-ThemedGrid($k, $theme) {
     $gv.ColumnHeadersDefaultCellStyle.BackColor = $theme.Circle
     $gv.ColumnHeadersDefaultCellStyle.ForeColor = $cWhite
     $gv.ColumnHeadersDefaultCellStyle.SelectionBackColor = $theme.Circle
-    $gv.ColumnHeadersDefaultCellStyle.Font = New-PxFont 'Segoe UI Semibold' 12 $k
+    $gv.ColumnHeadersDefaultCellStyle.Font = New-PxFont 'Segoe UI Semibold' 14 $k
     $gv.ColumnHeadersHeightSizeMode = 'DisableResizing'
-    $gv.ColumnHeadersHeight = [int](28 * $k)
+    $gv.ColumnHeadersHeight = [int](34 * $k)
     $gv.DefaultCellStyle.BackColor = $panel
     $gv.DefaultCellStyle.ForeColor = $cWhite
     $gv.DefaultCellStyle.SelectionBackColor = $theme.CircleHot
     $gv.DefaultCellStyle.SelectionForeColor = $cWhite
-    $gv.DefaultCellStyle.Font = New-PxFont 'Segoe UI' 12 $k
+    $gv.DefaultCellStyle.Font = New-PxFont 'Segoe UI' 14 $k
     $gv.AlternatingRowsDefaultCellStyle.BackColor = Mix-Colour $panel $cWhite 0.05
-    $gv.RowTemplate.Height = [int](26 * $k)
+    $gv.RowTemplate.Height = [int](32 * $k)
     $gv.AutoSizeColumnsMode = 'Fill'
     $gv.ScrollBars = 'None'
     $gv.GetType().GetProperty('DoubleBuffered', [Reflection.BindingFlags]'NonPublic,Instance').SetValue($gv, $true, $null)
@@ -6272,7 +6275,7 @@ function Fill-WeeklyView {
         $cells += (Format-Hours $sum)
         [void]$g.Rows.Add([object[]]$cells)
     }
-    $bold = New-PxFont 'Segoe UI Semibold' 12 $k
+    $bold = New-PxFont 'Segoe UI Semibold' 14 $k
     $faint = Mix-Colour $wv.Theme.Panel $cWhite 0.7
     foreach ($extra in @(
         @{ Name = 'Total (excluding lunch)'; Values = $dayTotals; Bold = $true },

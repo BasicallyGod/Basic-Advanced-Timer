@@ -27,3 +27,6 @@ jobs:
       - name: Day control tests
         shell: powershell
         run: ./tests/day-controls.ps1
+      - name: Renderer layout tests
+        shell: powershell
+        run: ./tests/renderer-layout.ps1

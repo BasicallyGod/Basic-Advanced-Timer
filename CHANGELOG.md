@@ -6,9 +6,16 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.24 |
+| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.25 |
 | AccountTimer.ps1 | Historical predecessor, removed from current tree | 1.0 to 1.7 |
 | BillableTimer.ps1 | Historical predecessor, removed from current tree | 0.1 to 0.5 |
+
+## v2.25
+
+- Removed the filled blank corner below the timer when the drawer is taller, with correct shapes on either side.
+- Enlarged drawer text to 14px and timeline text to 15px, increased row spacing and widened the drawer and totals column.
+- Moved navigation onto a separate row, enlarged button targets, and increased text and rows in the separate weekly window.
+- Added Windows renderer compilation and drawing checks for transparent corners and button bounds.
 
 ## v2.24
 
