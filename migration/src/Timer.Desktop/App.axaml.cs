@@ -39,6 +39,9 @@ public sealed partial class App : Application
                 var preferences = store.Load(engine);
                 model = new TimerModel(engine, preferences, store);
                 if (!model.Save()) throw new IOException(model.LastError);
+                // Only an explicit data folder is remembered; the default one sits beside the program and needs no argument.
+                if (!smokeMode && WindowsRunKey.Available)
+                    model.AutoStart = new AutoStartSetting(new WindowsRunKey(), Environment.ProcessPath, index >= 0 ? args[index + 1] : null);
                 }
                 var openedStore = store;
                 var released = false;

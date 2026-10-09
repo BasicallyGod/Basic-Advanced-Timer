@@ -119,14 +119,18 @@ public static class Ui
                 System.Diagnostics.Process.Start(start);
             }
         };
+        var startup = new MenuItem { Header = "Start with Windows", ToggleType = MenuItemToggleType.CheckBox };
+        startup.Click += (_, _) => model.SetAutoStart(model.AutoStart?.IsEnabled != true);
         var quit = new MenuItem { Header = "Close timer" };
         quit.Click += (_, _) => model.RequestQuit();
         var menu = new ContextMenu { ItemsSource = new MenuItem[]
-        { new() { Header = "Appearance", ItemsSource = variants }, format, shifts, accounts, demo, quit } };
+        { new() { Header = "Appearance", ItemsSource = variants }, format, startup, shifts, accounts, demo, quit } };
         menu.Opened += (_, _) =>
         {
             foreach (var item in variants) item.IsChecked = (string?)item.Header == model.Theme;
             format.IsChecked = model.DecimalHours;
+            startup.IsVisible = model.AutoStart?.Available == true;
+            startup.IsChecked = model.AutoStart?.IsEnabled == true;
         };
         return menu;
     }

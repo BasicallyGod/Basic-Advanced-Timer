@@ -336,6 +336,15 @@ public sealed class TimerModel : INotifyPropertyChanged
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { LastError = "Could not save. Time remains in memory; retrying. " + error.Message; return false; }
     }
+    /// <summary>Whether to start with Windows. Null in demo mode and tests, where it is not offered.</summary>
+    public AutoStartSetting? AutoStart { get; set; }
+    public void SetAutoStart(bool enabled)
+    {
+        try { AutoStart?.Set(enabled); LastError = null; }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException or PlatformNotSupportedException)
+        { LastError = "Could not change starting with Windows. " + error.Message; }
+        Notify();
+    }
     public event Action? QuitRequested;
     public void RequestQuit() => QuitRequested?.Invoke();
     public bool StopForClose()

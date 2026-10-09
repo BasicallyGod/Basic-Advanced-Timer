@@ -4,6 +4,10 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration start with Windows
+
+- Added a Start with Windows checkbox to the Settings menu. It uses the per-user sign-in list, needs no administrator rights and is removed by unticking. An explicit `--data-dir` folder is remembered, and the box shows as unticked if the saved entry points at a different copy of the program.
+
 ## Migration tray icon
 
 - Added a notification area icon. The timer has no taskbar button, and the × button hides it to the tray with tracking still running.
