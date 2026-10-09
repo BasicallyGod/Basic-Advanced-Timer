@@ -72,7 +72,13 @@ public static class Ui
         {
             if (model.IsDemo) model.ForceOvertime();
             else if (Environment.ProcessPath is { } executable)
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(executable, "--demo") { UseShellExecute = true });
+            {
+                var start = new System.Diagnostics.ProcessStartInfo(executable) { UseShellExecute = true };
+                if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+                    start.ArgumentList.Add(typeof(App).Assembly.Location);
+                start.ArgumentList.Add("--demo");
+                System.Diagnostics.Process.Start(start);
+            }
         };
         var menu = new ContextMenu { ItemsSource = new MenuItem[]
         { new() { Header = "Appearance", ItemsSource = variants }, format, shifts, demo } };

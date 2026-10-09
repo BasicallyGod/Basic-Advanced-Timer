@@ -57,6 +57,16 @@ jobs:
             Get-Content ./artifacts/windows-preview/migration-startup-error.log -ErrorAction SilentlyContinue
             throw "Published preview exited with code $($preview.ExitCode)."
           }
+      - name: Check the isolated demo executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $demo = Start-Process ./artifacts/windows-preview/BasicsAdvancedTimer.Preview.exe -ArgumentList '--smoke-test', '--demo' -PassThru
+          if (-not $demo.WaitForExit(30000)) {
+            $demo.Kill()
+            throw 'Demo did not finish its startup check.'
+          }
+          if ($demo.ExitCode -ne 0) { throw "Demo exited with code $($demo.ExitCode)." }
       - name: Upload portable Windows preview
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4

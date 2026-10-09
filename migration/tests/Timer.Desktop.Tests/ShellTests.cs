@@ -306,6 +306,7 @@ public sealed class ShellTests
 
     private static void Save(Window window, string path)
     {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         Dispatcher.UIThread.RunJobs();
         // First frame completes deferred scroll layout; capture the settled production view.
         using var warmup = window.CaptureRenderedFrame();
