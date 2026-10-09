@@ -15,3 +15,7 @@ basics-advanced-timer.settings.json*
 **/obj/
 artifacts/
 TestResults/
+
+# Isolated Avalonia migration runtime data
+migration-data/
+**/migration-data/

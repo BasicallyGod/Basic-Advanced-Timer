@@ -2,6 +2,9 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using Avalonia.Controls;
+using Timer.Core;
+using Timer.Storage;
 
 namespace Timer.Desktop;
 
@@ -13,17 +16,45 @@ public sealed partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // This shell only uses synthetic in-memory data. Storage is a later migration stage.
-            var model = new PreviewModel();
+            var smokeMode = desktop.Args?.Contains("--smoke-test") == true;
+            TimerStore? store = null;
+            TimerModel model;
+            try
+            {
+                var args = desktop.Args ?? Array.Empty<string>();
+                var index = Array.IndexOf(args, "--data-dir");
+                if (index >= 0 && index + 1 >= args.Length) throw new ArgumentException("--data-dir requires a folder path.");
+                var folder = smokeMode ? Path.Combine(Path.GetTempPath(), "timer-smoke-" + Guid.NewGuid())
+                    : index >= 0 ? args[index + 1] : Path.Combine(AppContext.BaseDirectory, "migration-data");
+                store = new TimerStore(folder);
+                var engine = new TrackingEngine();
+                var preferences = store.Load(engine);
+                model = new TimerModel(engine, preferences, store);
+                if (!model.Save()) throw new IOException(model.LastError);
+                var openedStore = store;
+                desktop.Exit += (_, _) => { openedStore.Dispose(); if (smokeMode) Directory.Delete(folder, true); };
+            }
+            catch (Exception error)
+            {
+                store?.Dispose();
+                if (smokeMode) { desktop.Shutdown(1); return; }
+                var panel = new StackPanel { Margin = new Thickness(24), Spacing = 16 };
+                panel.Children.Add(new TextBlock { Text = "Could not open timer data", FontSize = 20 });
+                panel.Children.Add(new TextBlock { Text = error.Message, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+                panel.Children.Add(Ui.Button("Close", () => desktop.Shutdown()));
+                desktop.MainWindow = new Window { Title = "Basic’s Advanced Timer", Width = 600, Height = 260, Content = panel };
+                base.OnFrameworkInitializationCompleted();
+                return;
+            }
             var windows = new WindowCoordinator(model, () => desktop.Shutdown());
             desktop.MainWindow = windows.Pill;
             var ticker = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             ticker.Tick += (_, _) => model.Tick();
             ticker.Start();
             desktop.Exit += (_, _) => ticker.Stop();
-            if (desktop.Args?.Contains("--smoke-test") == true)
+            if (smokeMode)
             {
-                // Exercise the actual published native executable, without a data directory.
+                // Exercise the native executable and isolated persistent storage.
                 var phase = 0;
                 var smoke = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
                 smoke.Tick += (_, _) =>

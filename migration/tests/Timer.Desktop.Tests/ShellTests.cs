@@ -8,6 +8,8 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Desktop;
+using Timer.Core;
+using Timer.Storage;
 using Xunit;
 
 [assembly: AvaloniaTestApplication(typeof(Timer.Desktop.Tests.TestAppBuilder))]
@@ -26,24 +28,24 @@ public sealed class ShellTests
     [Fact]
     public void SwitchingAccountsPreservesElapsedAndFinishStopsRecording()
     {
-        var now = new DateTimeOffset(2026, 10, 9, 9, 0, 0, TimeSpan.Zero);
-        var model = new PreviewModel(() => now);
+        var now = new DateTime(2026, 10, 9, 9, 0, 0);
+        var model = new TimerModel(new TrackingEngine(clock: () => now));
         model.ToggleAccount("Account one");
         now += TimeSpan.FromMinutes(2);
         model.ToggleAccount("Account two");
-        Assert.Equal(TimeSpan.FromMinutes(107), model.Today(model.Accounts[0]));
+        Assert.Equal(TimeSpan.FromMinutes(2), model.Today(model.Accounts[0]));
         now += TimeSpan.FromMinutes(3);
         model.ToggleDay();
         Assert.False(model.IsTracking);
         Assert.False(model.DayStarted);
-        Assert.Equal(TimeSpan.FromMinutes(93), model.Today(model.Accounts[1]));
+        Assert.Equal(TimeSpan.FromMinutes(3), model.Today(model.Accounts[1]));
     }
 
     [AvaloniaFact]
     public void IdleAndOvertimeUseIndependentThemeResources()
     {
-        var model = new PreviewModel();
-        model.ToggleOvertime();
+        var model = Fixture();
+        model.Engine.Schedule.Default = new Shift(TimeSpan.FromHours(9), TimeSpan.FromHours(13));
         using var window = new TestWindow(new TrackingLabels(model));
         window.Show();
         foreach (var theme in new[] { "Light", "Dark" })
@@ -53,7 +55,7 @@ public sealed class ShellTests
             using var initialFrame = window.CaptureRenderedFrame();
             var labels = window.GetVisualDescendants().OfType<TextBlock>().ToArray();
             var idle = labels.Single(x => x.Text == "● Not tracking");
-            var overtime = labels.Single(x => x.Text == "Overtime");
+            var overtime = labels.Single(x => x.Text is not null && x.Text.StartsWith("Overtime"));
             var idleColour = ((ISolidColorBrush)idle.Foreground!).Color;
             Assert.InRange(Math.Abs(idleColour.R - idleColour.G), 0, 15);
             Assert.NotEqual(idle.Foreground, overtime.Foreground);
@@ -69,7 +71,7 @@ public sealed class ShellTests
     [AvaloniaFact]
     public void RealAccountRowsRespondAtTheirDrawnPositions()
     {
-        var model = new PreviewModel();
+        var model = Fixture();
         var window = new DashboardWindow(model);
         window.Show();
         try
@@ -101,7 +103,7 @@ public sealed class ShellTests
     [AvaloniaFact]
     public void ViewSwitchesPreserveTheActiveTimer()
     {
-        var model = new PreviewModel();
+        var model = Fixture();
         var coordinator = new WindowCoordinator(model, () => { });
         coordinator.Pill.Show();
         try
@@ -124,7 +126,7 @@ public sealed class ShellTests
     {
         var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.Combine(Path.GetTempPath(), "avalonia-timer-previews");
         Directory.CreateDirectory(output);
-        var model = new PreviewModel();
+        var model = Fixture();
         var dashboard = new DashboardWindow(model);
         var pill = new PillWindow(model);
         dashboard.Show();
@@ -152,6 +154,19 @@ public sealed class ShellTests
             Assert.Equal(640, dashboard.Height);
         }
         finally { dashboard.Close(); pill.Close(); model.SetTheme("System"); }
+    }
+
+    private static TimerModel Fixture()
+    {
+        var now = new DateTime(2026, 10, 9, 14, 15, 0);
+        var engine = new TrackingEngine(clock: () => now);
+        var prefs = new StoreSettings(new() { new("Account one", 15), new("Account two", 10), new("Account three", 5), new("Internal") }, false, "System", DayOfWeek.Monday);
+        var names = new[] { "Account one", "Account two", "Lunch", "Account three", "Internal" };
+        var minutes = new[] { 105, 90, 30, 45, 30 };
+        var start = now.Date.AddHours(9);
+        for (var i = 0; i < names.Length; i++) { engine.AddSession(names[i], start, start.AddMinutes(minutes[i])); start = start.AddMinutes(minutes[i]); }
+        engine.Sessions.Add(new("2026-10-05", "Account one", "09:00:00", "merged", "435"));
+        return new TimerModel(engine, prefs);
     }
 
     private static void Save(Window window, string path)

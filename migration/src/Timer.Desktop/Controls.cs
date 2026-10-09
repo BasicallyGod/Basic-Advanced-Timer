@@ -37,27 +37,42 @@ public static class Ui
         foreach (var c in children) p.Children.Add(c);
         return p;
     }
-    public static ComboBox Themes(PreviewModel model)
+    public static ContextMenu SettingsMenu(TimerModel model)
     {
-        var c = new ComboBox { ItemsSource = new[] { "System", "Light", "Dark" }, SelectedItem = model.Theme, Width = 108 };
-        c.SelectionChanged += (_, _) => { if (c.SelectedItem is string theme && model.Theme != theme) model.SetTheme(theme); };
-        void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        var variants = new List<MenuItem>();
+        foreach (var theme in new[] { "System", "Light", "Dark" })
         {
-            if (e.PropertyName != nameof(PreviewModel.Elapsed)) c.SelectedItem = model.Theme;
+            var item = new MenuItem { Header = theme, IsChecked = model.Theme == theme,
+                ToggleType = MenuItemToggleType.Radio };
+            item.Click += (_, _) => model.SetTheme(theme);
+            variants.Add(item);
         }
-        c.AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; c.SelectedItem = model.Theme; };
-        c.DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
-        ToolTip.SetTip(c, "Appearance");
-        return c;
+        var format = new MenuItem { Header = "Decimal hours", IsChecked = model.DecimalHours, ToggleType = MenuItemToggleType.CheckBox };
+        format.Click += (_, _) => model.ToggleFormat();
+        var menu = new ContextMenu { ItemsSource = new MenuItem[]
+        { new() { Header = "Appearance", ItemsSource = variants }, format } };
+        menu.Opened += (_, _) =>
+        {
+            foreach (var item in variants) item.IsChecked = (string?)item.Header == model.Theme;
+            format.IsChecked = model.DecimalHours;
+        };
+        return menu;
+    }
+    public static Button SettingsButton(TimerModel model)
+    {
+        var menu = SettingsMenu(model);
+        var button = new Button { Content = "Settings", Name = "Settings", ContextMenu = menu };
+        button.Click += (_, _) => menu.Open(button);
+        return button;
     }
 }
 
 // Vector geometry keeps the budget ring and cutlery crisp at any display scale.
 public sealed class AccountIndicator : Control
 {
-    public PreviewAccount Account { get; }
-    private readonly PreviewModel model;
-    public AccountIndicator(PreviewAccount account, PreviewModel model)
+    public TimerAccount Account { get; }
+    private readonly TimerModel model;
+    public AccountIndicator(TimerAccount account, TimerModel model)
     {
         Account = account;
         this.model = model;
@@ -71,7 +86,7 @@ public sealed class AccountIndicator : Control
         if (Account.Budget is { } budget)
         {
             context.DrawEllipse(null, new Pen(Resource("Line"), 3), centre, 19, 19);
-            var ratio = Math.Clamp(model.Week(Account).TotalSeconds / budget.TotalSeconds, 0, 1);
+            var ratio = Math.Clamp(model.BudgetUsed(Account).TotalSeconds / budget.TotalSeconds, 0, 1);
             var colour = ratio >= 1 ? Resource("Overtime") : ratio >= .8 ? Resource("BudgetWarning") : Resource("Live");
             if (ratio >= 1) context.DrawEllipse(null, new Pen(colour, 3), centre, 19, 19);
             else if (ratio > 0)
@@ -117,9 +132,9 @@ public sealed class AccountIndicator : Control
 
 public sealed class AccountList : StackPanel
 {
-    private readonly PreviewModel model;
-    private readonly List<(PreviewAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon)> rows = new();
-    public AccountList(PreviewModel model)
+    private readonly TimerModel model;
+    private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon)> rows = new();
+    public AccountList(TimerModel model)
     {
         this.model = model;
         foreach (var account in model.Accounts)
@@ -161,7 +176,7 @@ public sealed class TrackingLabels : StackPanel
 {
     private readonly TextBlock status = Ui.Text("", 12);
     private readonly TextBlock overtime = Ui.Text("Overtime", 12, "overtime");
-    public TrackingLabels(PreviewModel model)
+    public TrackingLabels(TimerModel model)
     {
         Orientation = Orientation.Horizontal;
         Spacing = 12;
@@ -169,10 +184,11 @@ public sealed class TrackingLabels : StackPanel
         Children.Add(overtime);
         void Refresh()
         {
-            status.Text = model.IsTracking ? "● Tracking" : "● Not tracking";
+            status.Text = "● " + model.Status;
             status.Classes.Set("live", model.IsTracking);
             status.Classes.Set("idle", !model.IsTracking);
             overtime.IsVisible = model.IsOvertime;
+            overtime.Text = "Overtime +" + model.Format(model.Engine.Totals(model.Engine.Now).Overtime);
         }
         void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Refresh(); };

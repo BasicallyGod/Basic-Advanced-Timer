@@ -1,6 +1,6 @@
 # Basic’s Advanced Timer
 
-**Avalonia migration:** The `migration` branch adds a separate cross-platform UI preview alongside the existing v2.32 application. See [migration/README.md](migration/README.md) for preview downloads, limitations and the staged plan. It uses synthetic data and does not save timesheets. The existing launcher continues to start the PowerShell application.
+**Avalonia migration:** The `migration` branch adds a separate cross-platform UI preview alongside the existing v2.32 application. See [migration/README.md](migration/README.md) for preview downloads, limitations and the staged plan. It now connects a shared C# tracking core and compatible storage, saving to its own migration-data folder by default. Editing and exports are still being migrated. The existing launcher continues to start the PowerShell application.
 
 **Development status:** `main` contains the stable v2.22 release. The `experimental` branch contains v2.32 with settings consolidation, branding changes and all-day Start day / Finish day controls. Its automated tests have passed, but migration against a real Windows installation has not yet been verified. Keep everyday timesheets on the stable release until that check is complete.
 

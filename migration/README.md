@@ -1,20 +1,46 @@
-# Avalonia migration preview
+# Avalonia migration build
 
-The `migration` branch starts from experimental v2.32. The PowerShell application remains runnable through its existing launcher. This directory contains the first, separate Avalonia desktop shell.
+The `migration` branch starts from experimental v2.32. Its original PowerShell launcher still runs the existing application. This directory contains the separate Avalonia replacement under development.
 
-## Try the Windows preview
+## Try the Windows build
 
-Open the latest successful **Avalonia migration preview** run in GitHub Actions and download **BasicsAdvancedTimer-Windows-preview**. Extract the complete ZIP into its own folder, then double-click `BasicsAdvancedTimer.Preview.exe`. Keep all neighbouring DLLs and native libraries with it. The package includes the .NET runtime, requests ordinary user privileges and does not require an installer or a separately installed SDK/runtime. Workplace application policies may still block an unfamiliar executable; launching on the intended Windows machine is a migration checkpoint.
+Download **BasicsAdvancedTimer-Windows-preview** from the latest successful **Avalonia migration preview** GitHub Actions run. Extract the whole ZIP into its own folder and run `BasicsAdvancedTimer.Preview.exe`. Keep its DLLs and native libraries together. The package includes the .NET runtime and runs with ordinary user privileges, without an installer or separately installed SDK/runtime.
 
-The preview starts as an always-on-top pill. Expand it to select a sample account, open Dashboard, start/finish the demonstration day or choose System, Light or Dark appearance. Drag the account text to move the pill, or the dashboard's date header to move the dashboard. Close from the expanded pill or dashboard.
+This stage now records real sessions. By default it creates **migration-data** beside the executable. Accounts and totals start empty; the earlier illustrative timesheet is no longer seeded into the app. Three initial account names are provided until account editing is migrated.
 
-The dashboard has a 960 by 640 logical-pixel layout, fitted to the current screen before it opens. It is a separate window from the pill, so switching views does not resize a visible window. Per-account controls include budget rings. Lunch has the same row layout. There is one recording indicator and a separate overtime indicator. Not tracking is grey; overtime is red in both themes. Use **Preview overtime** to inspect the combination, and the hours-format button to check totals and budgets.
+The main clock shows elapsed working-day time, from the configured or early/manual start. It continues when accounts are paused or switched, and excludes Lunch and finished-day intervals. It continues counting beyond the scheduled finish, with overtime shown separately in red. Account rows count only their own credited time. Usual scheduled starts still take effect automatically, matching the PowerShell application. Start day allows early starts and resumes finished days; starting an account starts/resumes the day too.
 
-**This is a UI preview, not a replacement time tracker.** All accounts, day blocks and weekly totals are illustrative. Account buttons run an in-memory demonstration timer; nothing is saved. It never opens the existing CSV files, preferences or recovery state. Relaunching resets the demonstration. Timeline editing, budgets/settings editing, export, Undo, recovery, tray integration and authoritative working-hours logic are not connected yet. Timeline blocks remain illustrative when the demonstration timer runs.
+Theme options are under **Settings > Appearance**, and also available by right-clicking either window. Choose System, Light or Dark. Hours format is in Settings and the dashboard tools row. Not tracking is grey; overtime is independent and red. Budget rings use the configured week/month/quarter period.
 
-## Development
+The pill and fixed dashboard share one tracking model. Drag the pill's account text or the dashboard's date header to move the window. Timeline and Week now use recorded sessions and credited totals. Sessions crossing midnight are split; overlapping timeline entries use separate lanes. Timeline scroll is retained during periodic updates.
 
-The preview uses .NET 8 and pinned Avalonia 11.3.16 packages. The SDK and NuGet packages are development/build dependencies only; user-facing Windows builds are self-contained.
+## Test copied existing data
+
+Close the old application, then copy its settings, `Timesheets` directory and recovery/away files into a **separate data-only folder**, keeping the originals. Launch the new executable with:
+
+```powershell
+.\BasicsAdvancedTimer.Preview.exe --data-dir "C:\Users\YourName\Documents\Timer migration test"
+```
+
+The app refuses the old application folder when its script or launcher is present. A folder lock prevents two new builds using the same data folder. Do not run the old app against the migration copy simultaneously; the old process does not participate in the new lock.
+
+The storage adapter reads the existing schema-1 JSON sections, account visibility, budget periods, weekday shifts, days off, manual starts, CSV credited rows and away intervals. It preserves unknown settings sections/root properties and extra CSV columns. Notes, groups, credit positions, Undo files and exports remain in place and are not rewritten. Legacy merged credit contributes to totals but is not turned into invented timeline blocks. Position/group/note rendering is a later stage.
+
+Sessions, manual starts, away intervals, preferences and crash recovery are saved together through an atomic write-ahead journal. Interrupted saves replay before loading. Files receive `.bak` copies. Active sessions checkpoint every 15 seconds and stop/save on a normal close. Crash recovery credits only up to the last successful checkpoint, not the time the app was closed. A save failure keeps pending time in memory, shows an error, retries, and prevents ordinary closing until saving succeeds. Invalid settings/CSV stop startup rather than resetting data.
+
+## Current scope
+
+Connected: day/account/lunch tracking, early starts, finish/resume, overtime, copied settings/CSV loading, new session saving, crash recovery, budget period totals, theme and format persistence, and recorded Timeline/Week display.
+
+Still to migrate: account/budget/working-hours editors, positioned credit and grouping presentation, timeline dragging and gap filling, Tidy day, notes, Undo, export and exact two-decimal reconciliation, tray integration and auto-start. Weekly decimal values currently format credited durations directly; they are not the reconciled export values. This remains a migration build for testing, rather than the complete replacement for everyday timesheets.
+
+## Architecture and checks
+
+- `Timer.Core` is platform-independent C# for schedules, day calculations, credited sessions and recovery.
+- `Timer.Storage` adapts existing files, locking, backups and recoverable saves.
+- `Timer.Desktop` supplies Avalonia views, shared theme resources and the application model. It has no duplicate timekeeping rules.
+
+The build uses .NET 8 and pinned Avalonia 11.3.16. SDK/NuGet dependencies are needed to develop it, not to run the packaged Windows build.
 
 ```sh
 dotnet run --project migration/src/Timer.Desktop/Timer.Desktop.csproj
@@ -22,20 +48,4 @@ dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --con
 dotnet publish migration/src/Timer.Desktop/Timer.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true -o artifacts/windows-preview
 ```
 
-Headless checks load the production app styles, bundled Inter font and actual window components. They check drawn row positions with pointer input before and after scrolling, independent recording/overtime states, shared formats and view switching. They render both themes and tabs for inspection. CI runs on Windows, Linux and macOS, and also starts the published Windows executable with a native pill/dashboard switch check. This verifies the shell, not complete native platform compatibility. Native DPI transitions, window positioning, transparency and the intended work-machine launch need desktop checks.
-
-## Migration stages
-
-1. **Desktop shell.** Prove the pill/dashboard arrangement, themes, native layout/input and portable Windows launch. Current stage.
-2. **Tracking core.** Port working hours, early starts, away intervals, sessions, overtime and budgets to a platform-independent C# project. Translate the established synthetic regression cases before connecting the views.
-3. **Compatible storage.** Implement and fixture-test existing CSV, metadata, JSON sections, atomic saving, single-instance protection and recovery. Exercise copied fixture data; preserve credited versus recorded time and decimal reconciliation. Do not silently replace production files.
-4. **Review and editing.** Connect Timeline/Week, lane-aware drags, grouping, credit positioning, Tidy day, notes, export and batch Undo to the tested core.
-5. **Platform integration and adoption.** Implement tray/lifecycle behaviour, screen positioning, packaging and optional auto-start separately per OS. Verify the Windows replacement first, then test the Mac/Linux desktop builds before retiring the old launcher.
-
-The migration replaces the PowerShell/WinForms presentation architecture. It preserves the approved pill/dashboard design and the established timekeeping rules. No database redesign is part of this first stage.
-
-## Theme architecture
-
-`App.axaml` owns shared component styles and two theme dictionaries. Surface, panel, ink, muted text, separators, hover, selection, recording, idle, overtime and budget-warning colours have named meanings. System delegates to the operating system's preference; Light/Dark override it. Account colours are shared across variants, with dark text on the light account cards.
-
-Themes do not determine recording or overtime state. Both indicators can be shown together. The old editable theme catalogue remains used by the existing PowerShell app; the new shell neither reads nor rewrites it. Mapping existing theme preferences is a later, explicit settings migration.
+Tests use disposable synthetic data only. Core checks exercise early starts, account pauses, lunch, finish/resume, overtime, days off, midnight splitting and credited adjustments. Storage checks cover copied legacy formats, unknown-field preservation, locking, checkpoint recovery, journal replay and malformed-file handling. UI checks use production styles/fonts/windows, drawn row positions, shared formats and view switching. CI checks Windows, Linux and macOS, uploads rendered previews, and starts the published Windows executable with an isolated temporary store. Native DPI transitions, tray behaviour and the intended work-machine launch still need desktop checks.

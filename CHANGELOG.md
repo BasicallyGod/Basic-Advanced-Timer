@@ -1,5 +1,14 @@
 # Changelog
 
+## Migration tracking and storage (repository development)
+
+- Connected a platform-independent C# tracking core, separating the day clock from account session clocks.
+- Ported scheduled/early starts, lunch, finish/resume, overtime, midnight splitting and credited adjustments.
+- Added compatible copied-data loading and persistent sessions/settings/away/recovery with locking, atomic backups and journal replay.
+- Replaced illustrative Timeline/Week data with recorded entries and credited totals; preserved unplaced legacy credit.
+- Moved light/dark/system appearance into Settings and right-click menus.
+- Added synthetic core/storage regression cases. The migration still lacks editing, metadata presentation, exact export reconciliation and tray integration.
+
 ## Migration foundation (repository development)
 
 - Created `migration` from experimental v2.32; kept the existing application and launcher intact.
