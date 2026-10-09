@@ -475,12 +475,14 @@ public sealed class CreditReviewTests
         finally { Directory.Delete(folder, true); }
     }
     [AvaloniaFact]
-    public void SingleClickBlankTimelineOpensOnePrefilledEditorAndSavesTime()
+    public void DoubleClickBlankTimelineOpensOnePrefilledEditorAndSavesTime()
     {
         var engine = Engine(); engine.Sessions.Add(Row("10:00:00", "30")); var model = new TimerModel(engine);
         var window = new DashboardWindow(model); window.Show(); Capture(window, "click-to-add-timeline");
         var ten = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "10:00");
         var point = ten.TranslatePoint(new Point(180, 168), window)!.Value; // 11:00
+        window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
+        Assert.Empty(window.OwnedWindows.OfType<EntryWindow>()); // A single click adds nothing.
         window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
         var editor = Assert.Single(window.OwnedWindows.OfType<EntryWindow>()); Capture(editor, "click-to-add-editor");
         Assert.Equal("11:00:00", Find<TextBox>(editor, "EntryStart").Text); Assert.Equal("11:30:00", Find<TextBox>(editor, "EntryEnd").Text);

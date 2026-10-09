@@ -101,7 +101,7 @@ public static class TimelineGestures
     /// <summary>Keeps a drag inside its day and above the minimum length, so the preview and the saved value always agree.</summary>
     public static TimeSpan ClampToDay(SessionRow row, int edge, TimeSpan delta)
     {
-        var minimum = TimeSpan.FromSeconds(3);
+        var minimum = edge == 0 ? TimeSpan.Zero : TimeSpan.FromMinutes(1);
         var low = edge <= 0 ? row.Day - row.From : (row.From + minimum) - row.To;
         var high = edge >= 0 ? row.Day.AddDays(1) - row.To : (row.To - minimum) - row.From;
         return delta < low ? low : delta > high ? high : delta;

@@ -204,6 +204,21 @@ public sealed partial class LedgerEditor
         if (!row.IsPositioned) throw new ArgumentException("Merged credit and adjustments cannot be deleted here.");
         Change("Delete entry", () => { engine.Sessions.RemoveAt(index); notes.Rows.RemoveAll(n => SameKey(n, row)); });
     }
+    /// <summary>Deletes several entries as one edit, so a single Undo brings them all back.</summary>
+    public void Delete(IReadOnlyList<SessionRow> rows)
+    {
+        if (rows.Count == 0) return;
+        foreach (var row in rows)
+        {
+            Index(row); CheckNoteKey(row);
+            if (!row.IsPositioned) throw new ArgumentException("Merged credit and adjustments cannot be deleted here.");
+        }
+        Change(rows.Count == 1 ? "Delete entry" : "Delete entries", () =>
+        {
+            engine.Sessions.RemoveAll(s => rows.Any(r => ReferenceEquals(r, s)));
+            notes.Rows.RemoveAll(n => rows.Any(r => SameKey(n, r)));
+        });
+    }
     public void Undo()
     {
         if (!CanUndo) throw new InvalidOperationException("No matching edit is available to undo.");

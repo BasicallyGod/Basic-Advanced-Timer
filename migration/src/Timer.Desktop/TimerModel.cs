@@ -231,6 +231,13 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool DragEntry(SessionRow row, DateTime start, DateTime end, bool insert)
         => ChangeLog(() => Editor.EditTimeline(row, start, end, insert));
     public bool DeleteEntry(SessionRow row) => ChangeLog(() => Editor.Delete(row));
+    /// <summary>Deletes the selected blocks as one undoable edit. Selection that cannot be deleted is left alone with an explanation.</summary>
+    public bool DeleteSelection()
+    {
+        var rows = Engine.Sessions.Where(selectedRows.Contains).ToArray();
+        if (rows.Length == 0) return false;
+        return ChangeLog(() => { Editor.Delete(rows); selectedRows.Clear(); });
+    }
     public bool UndoEdit() => ChangeLog(Editor.Undo);
     public void OpenPosition(CreditPosition? position = null) => PositionRequested?.Invoke(position);
     public void OpenGroup(string id) => GroupRequested?.Invoke(id);

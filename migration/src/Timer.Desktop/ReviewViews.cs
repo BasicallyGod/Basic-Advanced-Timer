@@ -137,14 +137,19 @@ public static class ReviewViews
         {
             if (e.GetCurrentPoint(canvas).Properties.IsRightButtonPressed) clicked = At(e.GetPosition(canvas).Y);
             else if (e.GetCurrentPoint(canvas).Properties.IsLeftButtonPressed && !OnBlock(e.Source)
-                && !e.KeyModifiers.HasFlag(KeyModifiers.Control)) emptyPress = e.GetPosition(canvas);
+                && !e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            {
+                // A double-click adds time. A single click only clears the selection, so stray clicks add nothing.
+                if (e.ClickCount == 2) { model.ClearSelection(); model.OpenGap(At(e.GetPosition(canvas).Y)); e.Handled = true; }
+                else emptyPress = e.GetPosition(canvas);
+            }
         };
         canvas.PointerReleased += (_, e) =>
         {
             var start = emptyPress; emptyPress = null;
             if (start is not { } point || e.InitialPressMouseButton != MouseButton.Left || OnBlock(e.Source)
                 || Math.Pow(e.GetPosition(canvas).X - point.X, 2) + Math.Pow(e.GetPosition(canvas).Y - point.Y, 2) > 25) return;
-            model.ClearSelection(); model.OpenGap(At(point.Y)); e.Handled = true;
+            model.ClearSelection(); e.Handled = true;
         };
         var plan = model.Engine.Plan(day);
         var first = intervals.Count > 0 ? intervals.Min(i => i.Start) : plan.Working ? plan.Start : day.AddHours(9);

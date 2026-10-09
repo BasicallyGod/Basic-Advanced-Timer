@@ -171,6 +171,7 @@ public sealed class EditingTests
             var nine = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
             var empty = nine.TranslatePoint(new Point(200, 55), window)!.Value;
             window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
+            Assert.Null(gap); // One click adds nothing.
             window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
             Assert.Equal(row.Day.AddHours(9).AddMinutes(20), gap);
         }
@@ -257,8 +258,24 @@ public sealed class EditingTests
         Assert.Equal(row.Day.AddDays(1) - row.To, TimelineGestures.ClampToDay(row, 0, TimeSpan.FromHours(5)));
         Assert.Equal(row.Day - row.From, TimelineGestures.ClampToDay(row, 0, TimeSpan.FromHours(-30)));
         Assert.Equal(row.Day.AddDays(1) - row.To, TimelineGestures.ClampToDay(row, 1, TimeSpan.FromHours(5)));
-        Assert.Equal(TimeSpan.FromSeconds(3) - row.Duration, TimelineGestures.ClampToDay(row, 1, TimeSpan.FromHours(-2)));
-        Assert.Equal(row.Duration - TimeSpan.FromSeconds(3), TimelineGestures.ClampToDay(row, -1, TimeSpan.FromHours(2)));
+        Assert.Equal(TimeSpan.FromMinutes(1) - row.Duration, TimelineGestures.ClampToDay(row, 1, TimeSpan.FromHours(-2)));
+        Assert.Equal(row.Duration - TimeSpan.FromMinutes(1), TimelineGestures.ClampToDay(row, -1, TimeSpan.FromHours(2)));
         Assert.Equal(TimeSpan.FromMinutes(5), TimelineGestures.ClampToDay(row, 0, TimeSpan.FromMinutes(5)));
+    }
+
+    [AvaloniaFact]
+    public void BackspaceDeletesSelectedBlocksAsOneUndoableEdit()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "added", "30"), Row("10:00:00", "added", "30"), Row("11:00:00", "added", "30") });
+        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            window.KeyPressQwerty(PhysicalKey.Backspace, RawInputModifiers.None); Assert.Equal(3, engine.Sessions.Count); // Nothing selected.
+            model.ToggleSelection(new[] { engine.Sessions[0] }); model.ToggleSelection(new[] { engine.Sessions[2] });
+            window.KeyPressQwerty(PhysicalKey.Backspace, RawInputModifiers.None);
+            Assert.Equal("10:00:00", Assert.Single(engine.Sessions).Start); Assert.Empty(model.SelectedRows);
+            Assert.True(model.UndoEdit()); Assert.Equal(3, engine.Sessions.Count);
+        }
+        finally { window.Close(); }
     }
 }

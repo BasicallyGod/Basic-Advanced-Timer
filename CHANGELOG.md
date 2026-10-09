@@ -4,6 +4,12 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration timeline add and delete shortcuts
+
+- Adding time on the timeline now needs a double-click on empty space. A single click only clears the selection, so stray clicks no longer open the editor.
+- Backspace or Delete removes the selected blocks as one undoable edit, except while typing in a text box.
+- Dragging an edge across the other one now leaves a block of at least one minute instead of a three second sliver that looked as if it had vanished.
+
 ## Migration timeline editing fixes
 
 - Double-clicking a block to edit it no longer leaves it selected or deselected by the click that began the double-click.

@@ -248,7 +248,13 @@ public sealed class DashboardWindow : Window
         Ui.Put(root, footer, row: 3);
         var surface = new Border { Name = "DashboardSurface", CornerRadius = new CornerRadius(20), Child = root, ClipToBounds = true };
         surface.Classes.Add("surface"); Content = surface;
-        KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Escape) { model.ClearSelection(); e.Handled = true; } };
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Escape) { model.ClearSelection(); e.Handled = true; }
+            // Backspace and Delete remove the selected blocks, but never while typing in a text box.
+            else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete && FocusManager?.GetFocusedElement() is not TextBox)
+            { if (model.SelectedRows.Count > 0) { model.DeleteSelection(); e.Handled = true; } }
+        };
         model.PropertyChanged += Changed;
         model.EntryRequested += ShowEntry;
         model.PositionRequested += ShowPosition; model.GroupRequested += ShowGroup;
