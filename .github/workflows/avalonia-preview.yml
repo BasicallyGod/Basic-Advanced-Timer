@@ -17,21 +17,21 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
-    env:
-      TIMER_PREVIEW_DIR: ${{ runner.temp }}/avalonia-timer-previews
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
       - name: Build and test production views and themes
+        env:
+          TIMER_PREVIEW_DIR: ${{ runner.temp }}/avalonia-timer-previews
         run: dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release --verbosity minimal
       - name: Upload rendered previews
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: avalonia-previews-${{ matrix.os }}
-          path: ${{ env.TIMER_PREVIEW_DIR }}/*.png
+          path: ${{ runner.temp }}/avalonia-timer-previews/*.png
           if-no-files-found: ignore
       - name: Publish self-contained Windows preview
         if: runner.os == 'Windows'
