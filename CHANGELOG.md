@@ -6,9 +6,16 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.23 |
+| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.24 |
 | AccountTimer.ps1 | Historical predecessor, removed from current tree | 1.0 to 1.7 |
 | BillableTimer.ps1 | Historical predecessor, removed from current tree | 0.1 to 0.5 |
+
+## v2.24
+
+- Start day and Finish day are available throughout the day in the full window and right-click menu, including before scheduled hours and during overtime.
+- Early starts count from the exact press time and persist for that date only. Starting a client account early also starts the day.
+- Finishing stops the active account and freezes unallocated time; restarting excludes the break and retains work already completed.
+- Added synthetic regression checks for early starts, persistence, finishing and resuming, days off and overtime.
 
 ## Repository maintenance after v2.22
 

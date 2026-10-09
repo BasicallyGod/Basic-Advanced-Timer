@@ -24,3 +24,6 @@ jobs:
       - name: Settings migration tests
         shell: powershell
         run: ./tests/settings-migration.ps1
+      - name: Day control tests
+        shell: powershell
+        run: ./tests/day-controls.ps1

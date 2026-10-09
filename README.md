@@ -1,8 +1,8 @@
 # Basic’s Advanced Timer
 
-**Development status:** `main` contains the stable v2.22 release. The `experimental` branch contains v2.23 settings consolidation and branding changes. Its automated tests have passed, but migration against a real Windows installation has not yet been verified. Keep everyday timesheets on the stable release until that check is complete.
+**Development status:** `main` contains the stable v2.22 release. The `experimental` branch contains v2.24 with settings consolidation, branding changes and all-day Start day / Finish day controls. Its automated tests have passed, but migration against a real Windows installation has not yet been verified. Keep everyday timesheets on the stable release until that check is complete.
 
-Basic’s Advanced Timer is a portable, always-on-top Windows time tracker for client accounts and weekly timesheets. The current application is **v2.23**. It runs from a folder using Windows PowerShell 5.1 and WinForms, with compiled C# rendering built into the script. No installer, administrator access, extra PowerShell modules or separate .NET runtime are required.
+Basic’s Advanced Timer is a portable, always-on-top Windows time tracker for client accounts and weekly timesheets. The current application is **v2.24**. It runs from a folder using Windows PowerShell 5.1 and WinForms, with compiled C# rendering built into the script. No installer, administrator access, extra PowerShell modules or separate .NET runtime are required.
 
 ## Getting started
 
@@ -17,7 +17,7 @@ Keep `StartAccountTimer2.vbs` and `AccountTimer2.ps1` together. The launcher use
 ## What it does
 
 - Start, stop and switch between client accounts, with a dedicated Lunch timer, in the full window or compact pill.
-- Set usual working hours, different weekday shifts, days off and day-specific overrides. The Finish day control stops the working-day and unallocated counters until work resumes.
+- Set usual working hours, different weekday shifts, days off and day-specific overrides. Start day and Finish day are available throughout the day, including before the usual start and after the usual finish. Starting early counts from the exact button press for that date without changing your usual hours. Finish day pauses the day and unallocated counters; Start day resumes them without counting the break. Choose a client account to allocate the time. Starting an account early also starts the day. The same controls are available from the right-click menu in compact view.
 - Track account budgets, record notes, and correct time through manual entries and round-up or round-down adjustments.
 - Review the week in the side drawer or separate weekly window. Scroll and zoom the daily timeline, drag session boundaries, and inspect short sessions and overlapping work.
 - Choose between **positioning existing credited time** and **adding new time** when filling a timeline gap. The first action does not increase account totals.
@@ -33,8 +33,9 @@ Keep `StartAccountTimer2.vbs` and `AccountTimer2.ps1` together. The launcher use
 | `StartAccountTimer2.vbs` | Relative-path launcher without a console window; filename retained for existing shortcuts |
 | `tests/timeline-projection.ps1` | Synthetic timeline and credit-position regression checks |
 | `tests/decimal-reconciliation.ps1` | Synthetic accounting and CSV-export reconciliation checks |
+| `tests/day-controls.ps1` | Synthetic early-start, finish, resume and overtime checks |
 | `tests/settings-migration.ps1` | Synthetic settings migration, persistence and branding checks |
-| `.github/workflows/powershell-checks.yml` | Runs both test scripts in Windows PowerShell on GitHub Actions |
+| `.github/workflows/powershell-checks.yml` | Runs all four test scripts in Windows PowerShell on GitHub Actions |
 | `CLAUDE.md` | Engineering notes, architecture and pitfalls for contributors |
 | `CHANGELOG.md` | Feature and maintenance history |
 | `.gitignore`, `.gitattributes` | Exclude local data by default and standardise line endings |
@@ -100,9 +101,10 @@ From a PowerShell prompt in the repository folder:
 powershell.exe -NoProfile -File .\tests\timeline-projection.ps1
 powershell.exe -NoProfile -File .\tests\decimal-reconciliation.ps1
 powershell.exe -NoProfile -File .\tests\settings-migration.ps1
+powershell.exe -NoProfile -File .\tests\day-controls.ps1
 ```
 
-The tests use synthetic data and do not load your personal timesheets. GitHub Actions runs all three checks on Windows for pull requests and changes to `main` and `experimental`.
+The tests use synthetic data and do not load your personal timesheets. GitHub Actions runs all four checks on Windows for pull requests and changes to `main` and `experimental`.
 
 See `CHANGELOG.md` for the feature history and `CLAUDE.md` for developer implementation notes.
 

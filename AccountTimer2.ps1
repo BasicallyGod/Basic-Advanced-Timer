@@ -1,4 +1,4 @@
-# Basic's Advanced Timer v2.23
+# Basic's Advanced Timer v2.24
 #
 # Portable Windows PowerShell 5.1 application for client-account time tracking.
 # Launch from StartAccountTimer2.vbs in the same folder to avoid a console window.
@@ -1538,6 +1538,7 @@ $script:workDays     = @(1, 2, 3, 4, 5)    # Monday to Friday
 $script:weekStartDow = 1                   # weeks start on Monday
 $script:hoursFormat  = 'decimal'           # 'decimal' (1.25) or 'hm' (1:15)
 $script:dayOverrides = @{}                 # 'yyyy-MM-dd' -> @{ Off; Start; End } for one-off days
+$script:dayStarts    = @{}                 # exact manual start per date, stored in settings
 $script:dayHours     = @{}                 # weekday number -> @{ Start; End } where that day's hours differ from the usual ones (a shift pattern)
 
 # Reads '9:30' or '09:30' as a time of day, giving '09:30', or $null if it isn't one
@@ -1550,6 +1551,13 @@ function ConvertTo-ClockText($text) {
 }
 
 function Load-WorkSettings {
+    $script:dayStarts = @{}
+    foreach ($line in @(Read-SettingSection 'dayStarts')) {
+        $parts = $line -split "`t", 2
+        if ($parts.Count -eq 2) {
+            try { $script:dayStarts[$parts[0]] = [datetime]::ParseExact($parts[1], 'o', $Inv) } catch { }
+        }
+    }
     $script:dayHours = @{}
     if (Test-SettingSection 'workingHours') {
         foreach ($line in @(Read-SettingSection 'workingHours')) {
@@ -1615,7 +1623,7 @@ function Get-UsualHours([int]$dow) {
 }
 
 # What a given day looks like: whether it's a working day, and its start and end
-function Get-DayPlan([datetime]$date) {
+function Get-ScheduledDayPlan([datetime]$date) {
     $d = $date.Date
     $o = $script:dayOverrides[$d.ToString('yyyy-MM-dd', $Inv)]
     if ($o) {
@@ -1625,6 +1633,33 @@ function Get-DayPlan([datetime]$date) {
     if ($script:workDays -notcontains [int]$d.DayOfWeek) { return @{ Working = $false; Custom = $false } }
     $usual = Get-UsualHours ([int]$d.DayOfWeek)
     return @{ Working = $true; Custom = $false; Start = $d.Add([timespan]$usual[0]); End = $d.Add([timespan]$usual[1]) }
+}
+
+# Manual starts affect only that date, including historical weekly calculations.
+function Get-DayPlan([datetime]$date) {
+    $plan = Get-ScheduledDayPlan $date
+    $key = $date.Date.ToString('yyyy-MM-dd', $Inv)
+    if ($script:dayStarts -and $script:dayStarts.ContainsKey($key)) {
+        $manualStart = $script:dayStarts[$key]
+        $plannedEnd = if ($plan.Working) { $plan.End } else { $date.Date.Add([timespan]$EndTime) }
+        # A first start after the usual finish begins overtime at the press, not at the scheduled end.
+        if ($plannedEnd -lt $manualStart) { $plannedEnd = $manualStart }
+        return @{ Working = $true; Custom = $true; Start = $manualStart; End = $plannedEnd }
+    }
+    return $plan
+}
+
+function Start-Day {
+    $now = Get-Date
+    $plan = Get-DayPlan $now
+    if (-not $plan.Working -or $now -lt $plan.Start) {
+        $script:dayStarts[$now.ToString('yyyy-MM-dd', $Inv)] = $now
+        $lines = @($script:dayStarts.Keys | Sort-Object | ForEach-Object {
+            "{0}`t{1}" -f $_, $script:dayStarts[$_].ToString('o', $Inv)
+        })
+        Write-SettingSection 'dayStarts' $lines
+    }
+    Close-AwayInterval
 }
 
 # Today's working window (a day off gives an empty window at midnight)
@@ -2936,7 +2971,7 @@ function Stop-Active([datetime]$at) {
 
 function Start-Slot($i) {
     # Starting any account carries on from a finished day
-    if (Test-DayDone) { Close-AwayInterval }
+    Start-Day
     $script:active = @{ Name = $script:slots[$i]; Start = Get-Date }
     Save-State
 }
@@ -2966,10 +3001,9 @@ function Stop-ByUser {
     }
 }
 
-# Finish the day, or carry on. Finishing stops whatever is running first. It is only offered on a working
-# day once the day has started.
+# Finishing stops the active account; starting resumes the day without choosing an account.
 function Set-DayDone([bool]$done) {
-    if ($done -eq (Test-DayDone)) { return }
+    if ($done -and (Test-DayDone)) { return }
     if ($done) {
         $plan = Get-DayPlan ([datetime]::Today)
         if (-not $plan.Working -or (Get-Date) -lt $plan.Start) { return }
@@ -2977,14 +3011,20 @@ function Set-DayDone([bool]$done) {
         $script:awayIntervals += ,@{ Start = (Get-Date); End = $null }
         Save-Away
     } else {
-        Close-AwayInterval
+        Start-Day
     }
     Update-View
     Update-DrawerContent
     Request-Redraw
 }
 
-function Switch-DayDone { Set-DayDone (-not (Test-DayDone)) }
+function Get-DayButtonText([datetime]$now) {
+    $plan = Get-DayPlan $now
+    if ((Test-DayDone) -or -not $plan.Working -or $now -lt $plan.Start) { return 'Start day' }
+    return 'Finish day'
+}
+
+function Switch-DayDone { Set-DayDone ((Get-DayButtonText (Get-Date)) -eq 'Finish day') }
 
 function Switch-Slot($i) {
     $wasThis = [bool]($script:active -and $script:active.Name -eq $script:slots[$i])
@@ -3106,9 +3146,8 @@ function Update-View {
                   else { "Working day: $(Format-Clock $unallocWork) unallocated" }
     $activeRow = $rows | Where-Object { $_.Active } | Select-Object -First 1
 
-    # The Finish day button waits until half an hour before the end of the day, and stays once the day is
-    # finished so there is a way to carry on
-    $showFinish = [bool]($workDay -and ($dayDone -or ($clock -ge $start -and $clock -ge $end.AddMinutes(-$FinishLeadMinutes))))
+    # Keep the day control available before, during and after scheduled hours.
+    $showFinish = $true
 
     $bt = [timespan]::FromSeconds([math]::Floor($billable))
     $ot = [timespan]::FromSeconds([math]::Floor($otSec))
@@ -3133,7 +3172,7 @@ function Update-View {
         Before      = $before
         Overtime    = $overtime
         DayDone     = $dayDone
-        DayBtnText  = $(if ($showFinish) { if ($dayDone) { 'Carry on' } else { 'Finish day' } } else { '' })
+        DayBtnText  = (Get-DayButtonText $clock)
         OT          = '+{0:00}:{1:00}:{2:00}' -f [math]::Floor($ot.TotalHours), $ot.Minutes, $ot.Seconds
         Rows        = $rows
     }
@@ -3187,9 +3226,8 @@ $DrawerBtnX = 16                    # week drawer button, top left (mirrors the 
 $DrawerBtnY = 15
 
 # The Finish day button, centred under the Lunch row (the renderer's DayBtnW and DayBtnH match these).
-# It shows from FinishLeadMinutes before the end of the day, and the timer grows by FinishAreaH to fit it.
+# The timer always reserves FinishAreaH for the day control.
 $DayBtn = @{ W = 150; H = 22 }
-$FinishLeadMinutes = 30
 $FinishAreaH = 30
 function Get-DayBtnRect {
     $bx = ($BaseW - $DayBtn.W) / 2
@@ -7625,7 +7663,7 @@ $form.Add_MouseMove({
     if ($dayHit -ne $script:dayBtnHover) {
         $script:dayBtnHover = $dayHit
         if ($dayHit) {
-            $dayTip = if ($script:view.DayDone) { 'Carry on working today' } else { "Finish for the day`nUnallocated time stops counting" }
+            $dayTip = if ($script:view.DayBtnText -eq 'Start day') { 'Start working now' } else { "Finish for the day`nUnallocated time stops counting" }
             $dbRect = Get-DayBtnRect
             $tip.Show($dayTip, $form, [int](($dbRect.X + $ox) * $Zoom), [int](($dbRect.Y - 44 + $oy) * $Zoom), 3000)
         } else { $tip.Hide($form) }
@@ -8112,8 +8150,8 @@ $menu.Add_Opening({
     $miFormat.Text = if ($script:hoursFormat -eq 'decimal') { 'Show hours as h:mm' } else { 'Show hours as decimal' }
     $miDrawer.Text = if ($script:drawerOpen) { 'Hide drawer' } else { 'Show drawer' }
     $donePlan = Get-DayPlan ([datetime]::Today)
-    $miDone.Text = if (Test-DayDone) { 'Carry on working' } else { 'Finish for the day' }
-    $miDone.Enabled = [bool]((Test-DayDone) -or ($donePlan.Working -and (Get-Date) -ge $donePlan.Start))
+    $miDone.Text = Get-DayButtonText (Get-Date)
+    $miDone.Enabled = $true
     $pt = $form.PointToClient([System.Windows.Forms.Cursor]::Position)
     if ($script:mode -eq 'pill') {
         # In the pill, only rows in the open account list count
