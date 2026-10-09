@@ -168,6 +168,7 @@ public sealed class DashboardWindow : Window
     private readonly Button format;
     private readonly Button timeline;
     private readonly Button week;
+    private readonly Button undo;
     private bool weekMode;
     private bool? renderedWeekMode;
     private DateTime? renderedDate;
@@ -222,20 +223,26 @@ public sealed class DashboardWindow : Window
         Ui.Put(nav, Ui.Horizontal(Ui.Button("‹", () => model.ChangeDate(-1)), date, Ui.Button("›", () => model.ChangeDate(1))), 2);
         Ui.Put(review, nav);
         format = Ui.Button("Hours and minutes", model.ToggleFormat, "HoursFormat");
-        var tools = Ui.Horizontal(format);
+        undo = Ui.Button("Undo", () => model.UndoEdit(), "UndoEdit");
+        var tools = Ui.Horizontal(format, Ui.Button("Add time", () => model.OpenGap(), "AddTime"), undo);
         tools.Margin = new Thickness(0, 12);
         Ui.Put(review, tools, row: 1);
         Ui.Put(review, workspace, row: 2);
         Ui.Put(body, review, 2);
         Ui.Put(root, body, row: 2);
-        var footer = Ui.Text(model.Persistent ? "Migration build · saved locally · timeline editing follows" : model.IsDemo ? "Sample data · demo" : "Test session", 11, "muted");
-        model.PropertyChanged += (_, _) => footer.Text = model.LastError ?? (model.Persistent ? "Migration build · saved locally · timeline editing follows" : model.IsDemo ? "Sample data · demo" : "Test session");
+        var footer = Ui.Text(model.Persistent ? "Migration build · saved locally" : model.IsDemo ? "Sample data · demo" : "Test session", 11, "muted");
+        model.PropertyChanged += (_, _) => footer.Text = model.LastError ?? model.EditError ?? (model.Persistent ? "Migration build · saved locally" : model.IsDemo ? "Sample data · demo" : "Test session");
         footer.Margin = new Thickness(24, 10);
         Ui.Put(root, footer, row: 3);
         Content = root;
         model.PropertyChanged += Changed;
-        Closed += (_, _) => model.PropertyChanged -= Changed;
+        model.EntryRequested += ShowEntry;
+        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; };
         Refresh(true);
+    }
+    private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
+    {
+        if (IsVisible) new EntryWindow(model, row, start, end).Show(this);
     }
     public void SelectTab(bool showWeek) { weekMode = showWeek; Refresh(true); }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
@@ -250,6 +257,8 @@ public sealed class DashboardWindow : Window
         allocated.Text = "Today allocated   " + model.Format(model.Allocated);
         unallocated.Text = "Unallocated   " + model.Format(model.Unallocated);
         day.Content = model.DayStarted ? "Finish day" : "Start day";
+        undo.IsEnabled = model.Editor.CanUndo;
+        ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? "Undo: " + label : "No edit to undo");
         format.Content = model.DecimalHours ? "Decimal hours" : "Hours and minutes";
         timeline.Classes.Set("selected", !weekMode);
         week.Classes.Set("selected", weekMode);

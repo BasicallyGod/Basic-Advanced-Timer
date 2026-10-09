@@ -3,6 +3,8 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Timer.Core;
 using Avalonia.Threading;
+using Avalonia.Input;
+using Avalonia.VisualTree;
 
 namespace Timer.Desktop;
 
@@ -27,9 +29,9 @@ public static class ReviewViews
             Canvas.SetLeft(rule, 60); Canvas.SetTop(rule, hour * pixelsPerHour + 8); canvas.Children.Add(rule);
         }
         var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.IsPositioned && s.Duration > TimeSpan.Zero)
-            .Select(s => (s.Account, Start: s.From, End: s.To)).ToList();
+            .Select(s => (s.Account, Start: s.From, End: s.To, Row: (SessionRow?)s)).ToList();
         if (model.Engine.Active is { } active && active.Start < day.AddDays(1) && model.Engine.Now > day)
-            intervals.Add((active.Account, active.Start < day ? day : active.Start, model.Engine.Now < day.AddDays(1) ? model.Engine.Now : day.AddDays(1)));
+            intervals.Add((active.Account, active.Start < day ? day : active.Start, model.Engine.Now < day.AddDays(1) ? model.Engine.Now : day.AddDays(1), null));
         var ends = new List<DateTime>();
         var cards = new List<(Border Card, int Lane)>();
         foreach (var interval in intervals.OrderBy(s => s.Start))
@@ -47,7 +49,21 @@ public static class ReviewViews
             var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
                 Width = 380, Height = height, Padding = new Thickness(14, height < 58 ? 2 : 10),
                 Child = height >= 24 ? text : null, ClipToBounds = true };
-            ToolTip.SetTip(card, $"{interval.Account} · {interval.Start:HH:mm:ss} – {end:HH:mm:ss} · {model.Format(duration)}");
+            var note = interval.Row is null ? "Running · stop tracking to edit" : model.Editor.Note(interval.Row);
+            if (height >= 90 && !string.IsNullOrWhiteSpace(note))
+            {
+                var noteText = Ui.Text(note, 12); noteText.Foreground = Brush.Parse("#24312B");
+                noteText.TextTrimming = TextTrimming.CharacterEllipsis; text.Children.Add(noteText);
+            }
+            ToolTip.SetTip(card, $"{interval.Account} · {interval.Start:HH:mm:ss} – {end:HH:mm:ss} · {model.Format(duration)}\n{note}");
+            if (interval.Row is { } row)
+            {
+                card.Tag = row; card.Name = "TimelineEntry" + model.Engine.Sessions.IndexOf(row);
+                card.DoubleTapped += (_, e) => { model.OpenEntry(row); e.Handled = true; };
+                var edit = new MenuItem { Header = "Edit entry / note…" }; edit.Click += (_, _) => model.OpenEntry(row);
+                card.ContextMenu = new ContextMenu { ItemsSource = new[] { edit } };
+                TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour);
+            }
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
             canvas.Children.Add(card); cards.Add((card, lane));
         }
@@ -58,6 +74,16 @@ public static class ReviewViews
             foreach (var card in cards) { card.Card.Width = Math.Max(40, width - 6); Canvas.SetLeft(card.Card, 64 + card.Lane * width); }
         }
         canvas.SizeChanged += (_, _) => Resize();
+        DateTime clicked = day.AddHours(9);
+        DateTime At(double y) => day.AddMinutes(Math.Clamp(Math.Floor(y / pixelsPerHour * 60 / 5) * 5, 0, 1435));
+        var add = new MenuItem { Header = "Add new credited time…" }; add.Click += (_, _) => model.OpenGap(clicked);
+        canvas.ContextMenu = new ContextMenu { ItemsSource = new[] { add } };
+        canvas.PointerPressed += (_, e) => { if (e.GetCurrentPoint(canvas).Properties.IsRightButtonPressed) clicked = At(e.GetPosition(canvas).Y); };
+        canvas.DoubleTapped += (_, e) =>
+        {
+            if (e.Source is Visual visual && (visual is Border { Tag: SessionRow } || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow))) return;
+            model.OpenGap(At(e.GetPosition(canvas).Y)); e.Handled = true;
+        };
         var plan = model.Engine.Plan(day);
         var first = intervals.Count > 0 ? intervals.Min(i => i.Start) : plan.Working ? plan.Start : day.AddHours(9);
         var scroll = new ScrollViewer { Name = "TimelineScroll", Content = canvas,
@@ -91,6 +117,19 @@ public static class ReviewViews
         var root = new StackPanel { Spacing = 16 };
         root.Children.Add(Ui.Text("Week commencing " + day.ToString("d MMMM"), 12, "muted"));
         root.Children.Add(grid);
+        root.Children.Add(Ui.Text("Entries · click to edit time or notes", 12, "muted"));
+        foreach (var entry in model.Engine.Sessions.Where(s => s.Day >= day && s.Day < day.AddDays(7)).OrderBy(s => s.From))
+        {
+            var caption = entry.IsMerged ? "Merged credit" : entry.IsAdjustment ? "Adjustment" : $"{entry.From:HH:mm} – {entry.To:HH:mm}";
+            var button = Ui.Button("", () => model.OpenEntry(entry), "WeekEntry" + model.Engine.Sessions.IndexOf(entry));
+            button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+            button.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+            var labels = new StackPanel { Spacing = 5 };
+            labels.Children.Add(Ui.Text($"{entry.Day:ddd d MMM} · {entry.Account} · {caption} · {model.Format(entry.Duration)}", 12));
+            var note = model.Editor.Note(entry);
+            if (!string.IsNullOrWhiteSpace(note)) labels.Children.Add(new TextBlock { Text = note, FontSize = 12, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
+            button.Content = labels; root.Children.Add(button);
+        }
         var scroll = new ScrollViewer { Content = root, AllowAutoHide = false, Tag = Vector.Zero,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
         DeferOffset(scroll);

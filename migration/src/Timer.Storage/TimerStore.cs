@@ -20,7 +20,7 @@ public sealed class TimerStore : IDisposable
     private JsonObject settings = new();
     private readonly List<string> headers = new() { "Date", "Account", "Start", "End", "Minutes" };
     private readonly List<Dictionary<string, string>> originalRows = new();
-    private int originalCount;
+    public LedgerEditor? Editor { get; private set; }
     public TimerStore(string directory)
     {
         this.directory = Path.GetFullPath(directory);
@@ -100,7 +100,9 @@ public sealed class TimerStore : IDisposable
                 originalRows.Add(raw); engine.Sessions.Add(row);
             }
         }
-        originalCount = engine.Sessions.Count;
+        string? ReadOptional(string relative) { var path = Path.Combine(directory, relative); return File.Exists(path) ? File.ReadAllText(path) : null; }
+        Editor = new LedgerEditor(engine, headers.ToArray(), originalRows, ReadOptional("Timesheets/notes.csv"),
+            ReadOptional("Timesheets/entry-groups.csv"), ReadOptional("migration-edit-state.json"));
         var awayPath = Path.Combine(directory, "account-timer-away.txt");
         if (File.Exists(awayPath)) foreach (var line in File.ReadAllLines(awayPath).Where(s => !string.IsNullOrWhiteSpace(s)))
         { var p = line.Split('\t'); engine.Away.Add(new(DateTime.Parse(p[0], CultureInfo.InvariantCulture), p.Length > 1 && p[1].Length > 0 ? DateTime.Parse(p[1], CultureInfo.InvariantCulture) : null)); }
@@ -126,7 +128,7 @@ public sealed class TimerStore : IDisposable
     }
     public void Save(TrackingEngine engine, StoreSettings preferences)
     {
-        if (engine.Sessions.Count < originalCount) throw new InvalidOperationException("This migration stage cannot edit or remove source sessions.");
+        Editor ??= new LedgerEditor(engine);
         var sections = (JsonObject)settings["sections"]!;
         sections["dayStarts"] = Array(engine.DayStarts.OrderBy(p => p.Key).Select(p => $"{p.Key:yyyy-MM-dd}\t{p.Value:o}"));
         sections["dayOverrides"] = Array(engine.Schedule.Overrides.OrderBy(p => p.Key).Select(p => p.Value.Off
@@ -148,10 +150,7 @@ public sealed class TimerStore : IDisposable
         hours.Add("days=" + string.Join(",", engine.Schedule.Days.OrderBy(d => (int)d).Select(d => d.ToString()[..3].ToLowerInvariant())));
         hours.AddRange(engine.Schedule.Shifts.OrderBy(p => (int)p.Key).Select(p => $"shift.{p.Key.ToString()[..3].ToLowerInvariant()}={p.Value.Start:hh\\:mm},{p.Value.End:hh\\:mm}"));
         hours.Add("hours=" + (preferences.DecimalHours ? "decimal" : "hm")); sections["workingHours"] = Array(hours);
-        var rows = new List<Dictionary<string, string>>(originalRows);
-        foreach (var s in engine.Sessions.Skip(originalCount)) rows.Add(new() { ["Date"] = s.Date, ["Account"] = s.Account, ["Start"] = s.Start, ["End"] = s.End, ["Minutes"] = s.Minutes });
-        string Q(string s) => "\"" + s.Replace("\"", "\"\"") + "\"";
-        var csv = string.Join(",", headers.Select(Q)) + "\r\n" + string.Concat(rows.Select(row => string.Join(",", headers.Select(h => Q(row.GetValueOrDefault(h, "")))) + "\r\n"));
+        var csv = Editor.SessionsCsv;
         var files = new Dictionary<string, string>
         {
             ["Timesheets/sessions.csv"] = csv,
@@ -161,18 +160,24 @@ public sealed class TimerStore : IDisposable
             // Clearing the legacy checkpoint prevents the same recovery being credited on rollback.
             ["account-timer-state.txt"] = $"{engine.Now:o}\n\n\n\n"
         };
+        files["migration-edit-state.json"] = Editor.StateJson;
+        if (Editor.Changed)
+        {
+            files["Timesheets/notes.csv"] = Editor.NotesCsv;
+            files["Timesheets/entry-groups.csv"] = Editor.GroupsCsv ?? "GroupId,Date,Account,Start,End,Minutes\n";
+        }
         Atomic("migration-journal.json", JsonSerializer.Serialize(new SaveJournal(1, files)), false);
         foreach (var file in files) Atomic(file.Key, file.Value, true);
         File.Delete(Path.Combine(directory, "migration-journal.json"));
-        originalRows.Clear(); originalRows.AddRange(rows); originalCount = engine.Sessions.Count;
+
     }
     private void RecoverJournal()
     {
         var path = Path.Combine(directory, "migration-journal.json");
         if (!File.Exists(path)) return;
         var journal = JsonSerializer.Deserialize<SaveJournal>(File.ReadAllText(path)) ?? throw new InvalidDataException("Invalid save journal.");
-        var allowed = new[] { "Timesheets/sessions.csv", "basics-advanced-timer.settings.json", "account-timer-away.txt", "migration-recovery.json", "account-timer-state.txt" };
-        if (journal.SchemaVersion != 1 || journal.Files.Count != allowed.Length || journal.Files.Keys.Except(allowed).Any()) throw new InvalidDataException("Unsupported save journal.");
+        var allowed = new[] { "Timesheets/sessions.csv", "basics-advanced-timer.settings.json", "account-timer-away.txt", "migration-recovery.json", "account-timer-state.txt", "migration-edit-state.json", "Timesheets/notes.csv", "Timesheets/entry-groups.csv" };
+        if (journal.SchemaVersion != 1 || journal.Files.Keys.Except(allowed).Any() || allowed.Take(5).Except(journal.Files.Keys).Any()) throw new InvalidDataException("Unsupported save journal.");
         foreach (var file in journal.Files) Atomic(file.Key, file.Value, true);
         File.Delete(path);
     }

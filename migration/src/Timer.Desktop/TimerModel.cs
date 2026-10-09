@@ -12,6 +12,9 @@ public sealed record TimerAccount(string Name, string Colour, TimeSpan? Budget, 
 public sealed class TimerModel : INotifyPropertyChanged
 {
     public TrackingEngine Engine { get; }
+    public LedgerEditor Editor { get; }
+    public string? EditError { get; private set; }
+    public event Action<SessionRow?, DateTime, DateTime>? EntryRequested;
     private StoreSettings preferences;
     private readonly TimerStore? store;
     private int ticks;
@@ -20,6 +23,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         Engine = engine ?? new();
         this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, "System", DayOfWeek.Monday);
         this.store = store;
+        Editor = store?.Editor ?? new LedgerEditor(Engine);
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
         SelectedDate = Engine.Now.Date;
         ApplyTheme();
@@ -144,6 +148,49 @@ public sealed class TimerModel : INotifyPropertyChanged
         Engine.Schedule.Shifts = new(shifts);
         if (resetToday) { Engine.Schedule.Overrides.Remove(Engine.Now.Date); Engine.DayStarts.Remove(Engine.Now.Date); }
         Save(); Notify();
+    }
+    public void OpenEntry(SessionRow row) => EntryRequested?.Invoke(row, row.From, row.To);
+    public void OpenGap(DateTime? at = null)
+    {
+        var day = SelectedDate;
+        var limit = day == Engine.Now.Date ? Engine.Now : day.AddDays(1);
+        var start = at ?? (Engine.Plan(day).Working ? Engine.Plan(day).Start : day.AddHours(9));
+        var occupied = Engine.Sessions.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero && s.From < day.AddDays(1) && s.To > day)
+            .Select(s => (Start: s.From, End: s.To)).ToList();
+        if (Engine.Active is { } active) occupied.Add((active.Start, Engine.Now));
+        foreach (var span in occupied.OrderBy(s => s.Start))
+        {
+            if (span.End <= start) continue;
+            if (span.Start > start) break;
+            start = span.End;
+        }
+        var next = occupied.Where(s => s.Start > start).Select(s => s.Start).DefaultIfEmpty(limit).Min();
+        var end = new[] { start.AddMinutes(30), next, limit, day.AddDays(1) }.Min();
+        if (end <= start) { EditError = "There is no free recorded-time gap here."; Notify(); return; }
+        EditError = null; EntryRequested?.Invoke(null, start, end);
+    }
+    public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note)
+        => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note); });
+    public bool DeleteEntry(SessionRow row) => ChangeLog(() => Editor.Delete(row));
+    public bool UndoEdit() => ChangeLog(Editor.Undo);
+    private void ValidateAccount(string account)
+    {
+        if (!ReviewAccounts.Any(a => a.Name.Equals(account, StringComparison.OrdinalIgnoreCase))
+            && !Engine.Sessions.Any(s => s.Account.Equals(account, StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException("Choose an existing account.");
+    }
+    private bool ChangeLog(Action change)
+    {
+        try
+        {
+            // Save any pending recording/edit before replacing the undo snapshot.
+            if (!Save()) { EditError = LastError; Notify(); return false; }
+            change();
+            EditError = null;
+            var saved = Save(); Notify(); return saved;
+        }
+        catch (Exception error) when (error is ArgumentException or InvalidOperationException or IOException)
+        { EditError = error.Message; Notify(); return false; }
     }
     private void ApplyTheme()
     {
