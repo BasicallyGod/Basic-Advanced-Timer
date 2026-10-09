@@ -83,6 +83,15 @@ public sealed class ShellTests
                     $"Row {i}: bounds {row.Bounds}, point {point}, hit {window.GetVisualAt(point)?.GetType().Name}, active {model.ActiveAccount ?? "none"}");
                 Assert.InRange(row.Bounds.Width, 280, 300);
             }
+            var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "AccountScroll");
+            scroll.Offset = new Vector(0, 2000);
+            Dispatcher.UIThread.RunJobs();
+            using var scrolledFrame = window.CaptureRenderedFrame();
+            var lower = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account3");
+            var lowerPoint = lower.TranslatePoint(new Point(lower.Bounds.Width - 8, lower.Bounds.Height / 2), window)!.Value;
+            window.MouseDown(lowerPoint, MouseButton.Left);
+            window.MouseUp(lowerPoint, MouseButton.Left);
+            Assert.Equal("Internal", model.ActiveAccount);
         }
         finally { window.Close(); }
     }

@@ -125,6 +125,7 @@ public sealed class AccountList : StackPanel
             var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) };
             labels.Children.Add(Ui.Text(account.Name, 15));
             var budget = Ui.Text(model.BudgetText(account), 12, "muted");
+            budget.TextTrimming = TextTrimming.CharacterEllipsis;
             labels.Children.Add(budget);
             Ui.Put(grid, labels, 1);
             var today = Ui.Put(grid, Ui.Text(model.Format(model.Today(account))), 2);

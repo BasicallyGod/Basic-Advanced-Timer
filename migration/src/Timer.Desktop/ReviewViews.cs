@@ -36,8 +36,14 @@ public static class ReviewViews
             Canvas.SetLeft(card, 64); Canvas.SetTop(card, (start - 8) * pixelsPerHour + 3); canvas.Children.Add(card);
             start += duration;
         }
+        canvas.SizeChanged += (_, _) =>
+        {
+            foreach (var border in canvas.Children.OfType<Border>())
+                border.Width = Math.Max(220, canvas.Bounds.Width - (border.Classes.Contains("rule") ? 70 : 80));
+        };
         Ui.Put(root, new ScrollViewer { Content = canvas, Offset = new Vector(0, 145),
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto }, row: 1);
+            AllowAutoHide = false,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 1);
         return root;
     }
 
@@ -61,6 +67,7 @@ public static class ReviewViews
         var root = new StackPanel { Spacing = 16 };
         root.Children.Add(Ui.Text("Illustrative week · totals include the preview timer", 11, "muted"));
         root.Children.Add(grid);
-        return new ScrollViewer { Content = root, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+        return new ScrollViewer { Content = root, AllowAutoHide = false,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
     }
 }

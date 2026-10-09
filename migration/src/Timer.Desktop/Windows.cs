@@ -81,6 +81,7 @@ public sealed class PillWindow : Window
         bottom.Margin = new Thickness(16, 0, 16, 12);
         expansion.Children.Add(bottom);
         Ui.Put(root, new ScrollViewer { Content = expansion,
+            AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 1);
         var surface = new Border { CornerRadius = new CornerRadius(24), Child = root, ClipToBounds = true };
         surface.Classes.Add("surface");
@@ -156,7 +157,8 @@ public sealed class DashboardWindow : Window
         var title = Ui.Text("Client accounts", 13, "muted");
         title.Margin = new Thickness(18, 16);
         Ui.Put(sidebar, title);
-        Ui.Put(sidebar, new ScrollViewer { Content = new AccountList(model), HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 1);
+        Ui.Put(sidebar, new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model), AllowAutoHide = false,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 1);
         var summary = new StackPanel { Margin = new Thickness(18, 12, 18, 18), Spacing = 10 };
         summary.Children.Add(Ui.Rule());
         summary.Children.Add(allocated);
