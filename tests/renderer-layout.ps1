@@ -134,7 +134,7 @@ try {
         $r.Drawer.Mode = $mode
         $bitmap = $r.Render(960, 640)
         try {
-            if ($bitmap.GetPixel(0, 180).ToArgb() -ne $bitmap.GetPixel(310, 180).ToArgb()) { throw 'Active highlight does not fill the sidebar width.' }
+            if ($bitmap.GetPixel(2, 180).ToArgb() -ne $bitmap.GetPixel(319, 180).ToArgb()) { throw 'Active highlight does not fill the sidebar width.' }
             if ($bitmap.GetPixel(150, 630).A -eq 0 -or $bitmap.GetPixel(850, 630).A -eq 0) { throw 'Dashboard backdrop must fill the fixed window.' }
             $previewRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
             $outputDir = Join-Path $previewRoot 'timer-dashboard-previews'
@@ -155,7 +155,7 @@ try {
     $r.Hover = 1
     $hoverPreview = $r.Render(960, 640)
     try {
-        if ($hoverPreview.GetPixel(0, 230).ToArgb() -ne $r.CircleHot.ToArgb() -or $hoverPreview.GetPixel(310, 230).ToArgb() -ne $r.CircleHot.ToArgb()) { throw 'Hover highlight does not fill the sidebar width.' }
+        if ($hoverPreview.GetPixel(2, 230).ToArgb() -ne $r.CircleHot.ToArgb() -or $hoverPreview.GetPixel(319, 230).ToArgb() -ne $r.CircleHot.ToArgb()) { throw 'Hover highlight does not fill the sidebar width.' }
         $hoverPreview.Save((Join-Path $outputDir 'dashboard-hover.png'), [Drawing.Imaging.ImageFormat]::Png)
     } finally { $hoverPreview.Dispose(); $r.Hover = -1 }
     $r.ActiveAccount = ''; $r.Status = 'NOT TRACKING'; $r.Drawer.Mode = 'timeline'
