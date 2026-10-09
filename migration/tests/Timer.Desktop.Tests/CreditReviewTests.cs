@@ -323,6 +323,22 @@ public sealed class CreditReviewTests
         Assert.Equal(csv, editor.SessionsCsv); Assert.Equal(undo, editor.StateJson);
     }
     [AvaloniaFact]
+    public void DashboardZoomRetainsPointerAnchorAfterRefresh()
+    {
+        var model = new TimerModel(Engine()); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Capture(window, "zoom-before");
+            var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
+            var oldOffset = scroll.Offset.Y;
+            model.ZoomTimeline(1, 120, oldOffset);
+            Capture(window, "zoom-after");
+            scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
+            Assert.Equal((oldOffset + 120) * 1.2 - 120, scroll.Offset.Y, 4);
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
     public void TimelineZoomKeepsPointerTimeAndClampsScale()
     {
         var model = new TimerModel(Engine());
