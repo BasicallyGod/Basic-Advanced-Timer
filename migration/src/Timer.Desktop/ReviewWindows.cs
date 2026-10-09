@@ -52,8 +52,27 @@ public sealed class PositionWindow : ReviewWindow
             remaining.Text = minutes.ToString("0.00", CultureInfo.InvariantCulture) + " minutes available";
         }
         accounts.SelectionChanged += (_, _) => Update(); Update(); Root.Children.Add(accounts); Root.Children.Add(remaining);
-        var start = new TextBox { Name = "PositionStart", Text = (old?.Start ?? day.AddHours(9)).ToString("HH:mm:ss"), Watermark = "Start (HH:mm)" };
-        var amount = new TextBox { Name = "PositionMinutes", Text = old?.Minutes.ToString("0.00", CultureInfo.InvariantCulture) ?? "30", Watermark = "Minutes of existing credit" };
+        var suggested = old?.Start ?? (model.Engine.Plan(day).Working ? model.Engine.Plan(day).Start : day.AddHours(9));
+        var suggestedMinutes = old?.Minutes ?? Math.Min(30m, model.Editor.Unplaced(day).GetValueOrDefault((string?)accounts.SelectedItem ?? ""));
+        if (old is null)
+        {
+            var spans = model.Engine.Sessions.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero && s.Day == day).Select(s => (Start: s.From, End: s.To)).ToList();
+            spans.AddRange(model.Editor.Positions.Where(p => p.Start.Date == day).Select(p => (p.Start, p.End)));
+            if (model.Engine.Active is { } active) spans.Add((active.Start, model.Engine.Now));
+            foreach (var span in spans.OrderBy(s => s.Start))
+            {
+                if (span.End <= suggested) continue;
+                if (span.Start >= suggested.AddMinutes((double)suggestedMinutes)) break;
+                suggested = span.End;
+            }
+            // A saved credited duration may finish between seconds; move inward to a whole second.
+            suggested = day.AddSeconds(Math.Ceiling((suggested - day).TotalSeconds));
+            var cap = day == model.Engine.Now.Date ? model.Engine.Now : day.AddDays(1);
+            var next = spans.Where(s => s.Start > suggested).Select(s => s.Start).Append(cap).Min();
+            suggestedMinutes = Math.Max(0, Math.Min(suggestedMinutes, decimal.Floor((decimal)(next - suggested).TotalMinutes * 100m) / 100m));
+        }
+        var start = new TextBox { Name = "PositionStart", Text = suggested.ToString("HH:mm:ss"), Watermark = "Start (HH:mm)" };
+        var amount = new TextBox { Name = "PositionMinutes", Text = suggestedMinutes.ToString("0.00", CultureInfo.InvariantCulture), Watermark = "Minutes of existing credit" };
         Root.Children.Add(Ui.Text("Start time and minutes to place", 12, "muted")); Root.Children.Add(Ui.Horizontal(start, amount));
         var note = new TextBox { Name = "PositionNote", Text = old?.Note ?? "", Watermark = "Position note", AcceptsReturn = true, Height = 90, TextWrapping = TextWrapping.Wrap }; Root.Children.Add(note); Root.Children.Add(Error);
         var buttons = Ui.Horizontal(Ui.Button("Save position", () => Apply(model, () => model.PlaceCredit((string?)accounts.SelectedItem ?? "", At(day, start.Text), decimal.Parse(amount.Text ?? "", CultureInfo.InvariantCulture), note.Text ?? "", old)), "SavePosition"), Ui.Button("Cancel", Close));
@@ -126,7 +145,7 @@ public sealed class ExportWindow : ReviewWindow
         var result = new TextBox { IsReadOnly = true, TextWrapping = TextWrapping.Wrap, IsVisible = false }; Root.Children.Add(result); Root.Children.Add(Error);
         var export = Ui.Button("Export CSV files", () =>
         {
-            if (model.ExportWeek()) { result.IsVisible = true; result.Text = model.ExportPath; Error.Text = "Both files saved."; }
+            if (model.ExportWeek()) { result.IsVisible = true; result.Text = model.ExportPath; Error.Text = null; Root.Children.Add(Ui.Text("Both files saved.", 13)); }
             else Error.Text = model.LastError ?? model.EditError;
         }, "ExportCsv");
         Root.Children.Add(Ui.Horizontal(export, Ui.Button("Close", Close)));

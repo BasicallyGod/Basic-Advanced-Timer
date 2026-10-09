@@ -77,116 +77,173 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (values.Count == 0 || values.Any(a => string.IsNullOrWhiteSpace(a.Name) || a.Name != a.Name.Trim()
             || a.Name.IndexOfAny(new[] { '\t', '\r', '\n' }) >= 0 || a.Name.Equals("Lunch", StringComparison.OrdinalIgnoreCase)
             || a.BudgetPeriod is not ("week" or "month" or "quarter")
-       …4803 tokens truncated…ingsMenu(model);
-        Width = 960;
-        Height = 640;
-        CanResize = false;
-        SystemDecorations = SystemDecorations.None;
-        var root = Ui.Grid("*", "Auto,Auto,*,Auto");
-        var header = Ui.Grid("*,Auto");
-        header.Margin = new Thickness(24, 18);
-        Ui.Put(header, today);
-        Ui.Put(header, Ui.Horizontal(Ui.SettingsButton(model), Ui.Button("Back to pill", () => OpenPill?.Invoke(), "BackToPill"), Ui.Button("×", Close)), 1);
-        Ui.DragHeader(header, this);
-        Ui.Put(root, header);
-        var strip = Ui.Grid("Auto,*,Auto");
-        strip.Margin = new Thickness(24, 0, 24, 18);
-        Ui.Put(strip, clock);
-        var live = new StackPanel { Spacing = 7, Margin = new Thickness(20, 0), VerticalAlignment = VerticalAlignment.Center };
-        live.Children.Add(account);
-        live.Children.Add(new TrackingLabels(model));
-        Ui.Put(strip, live, 1);
-        day = Ui.Button("Start day", model.ToggleDay, "DashboardDay");
-        Ui.Put(strip, day, 2);
-        Ui.Put(root, strip, row: 1);
-        var body = Ui.Grid("300,1,*", "*");
-        var sidebar = Ui.Grid("*", "Auto,*,Auto");
-        var title = Ui.Text("Client accounts", 13, "muted");
-        title.Margin = new Thickness(18, 16);
-        Ui.Put(sidebar, title);
-        Ui.Put(sidebar, new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model), AllowAutoHide = false,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 1);
-        var summary = new StackPanel { Margin = new Thickness(18, 12, 18, 18), Spacing = 10 };
-        summary.Children.Add(Ui.Rule());
-        summary.Children.Add(allocated);
-        summary.Children.Add(unallocated);
-        Ui.Put(sidebar, summary, row: 2);
-        var panel = new Border { Child = sidebar };
-        panel.Classes.Add("panel");
-        Ui.Put(body, panel);
-        var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
-        var review = Ui.Grid("*", "Auto,Auto,*");
-        review.Margin = new Thickness(22, 14, 22, 18);
-        var nav = Ui.Grid("Auto,*,Auto");
-        timeline = Ui.Button("Timeline", () => SelectTab(false), "TimelineTab"); timeline.Classes.Add("tab");
-        week = Ui.Button("Week", () => SelectTab(true), "WeekTab"); week.Classes.Add("tab");
-        Ui.Put(nav, Ui.Horizontal(timeline, week));
-        Ui.Put(nav, Ui.Horizontal(Ui.Button("‹", () => model.ChangeDate(-1)), date, Ui.Button("›", () => model.ChangeDate(1))), 2);
-        Ui.Put(review, nav);
-        format = Ui.Button("Hours and minutes", model.ToggleFormat, "HoursFormat");
-        undo = Ui.Button("Undo", () => model.UndoEdit(), "UndoEdit");
-        var more = Ui.Button("Tools", () => { }, "ReviewTools");
-        var place = new MenuItem { Header = "Position existing credit…" }; place.Click += (_, _) => new PositionWindow(model).Show(this);
-        var group = new MenuItem { Header = "Group entries…" }; group.Click += (_, _) => new GroupWindow(model).Show(this);
-        var tidy = new MenuItem { Header = "Tidy day…" }; tidy.Click += (_, _) => new TidyWindow(model).Show(this);
-        var export = new MenuItem { Header = "Export week…" }; export.Click += (_, _) => new ExportWindow(model).Show(this);
-        more.ContextMenu = new ContextMenu { ItemsSource = new[] { place, group, tidy, export } };
-        more.Click += (_, _) => more.ContextMenu.Open(more);
-        var tools = Ui.Horizontal(format, Ui.Button("Add time", () => model.OpenGap(), "AddTime"), undo, more);
-        tools.Margin = new Thickness(0, 12);
-        Ui.Put(review, tools, row: 1);
-        Ui.Put(review, workspace, row: 2);
-        Ui.Put(body, review, 2);
-        Ui.Put(root, body, row: 2);
-        var footer = Ui.Text(model.Persistent ? "Migration build · saved locally" : model.IsDemo ? "Sample data · demo" : "Test session", 11, "muted");
-        model.PropertyChanged += (_, _) => footer.Text = model.LastError ?? model.EditError ?? (model.Persistent ? "Migration build · saved locally" : model.IsDemo ? "Sample data · demo" : "Test session");
-        footer.Margin = new Thickness(24, 10);
-        Ui.Put(root, footer, row: 3);
-        Content = root;
-        model.PropertyChanged += Changed;
-        model.EntryRequested += ShowEntry;
-        model.PositionRequested += ShowPosition; model.GroupRequested += ShowGroup;
-        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.PositionRequested -= ShowPosition; model.GroupRequested -= ShowGroup; };
-        Refresh(true);
+            || (a.BudgetHours is { } h && (!double.IsFinite(h) || h <= 0)))
+            || values.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Count)
+            throw new ArgumentException("Use unique account names and positive budgets; Lunch is reserved.");
+        if (preferences.Accounts.Any(a => !values.Any(v => v.Name == a.Name)))
+            throw new ArgumentException("Hide existing accounts instead of removing or renaming their history.");
+        if (ActiveAccount is { } active && values.Any(a => a.Name == active && a.Hidden)) Engine.StopAccount();
+        preferences = preferences with { Accounts = values };
+        if (!Accounts.Any(a => a.Name == SelectedAccount)) SelectedAccount = values.FirstOrDefault(a => !a.Hidden)?.Name;
+        Save(); Notify();
     }
-    private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
+    public void ToggleDay()
     {
-        if (IsVisible) new EntryWindow(model, row, start, end).Show(this);
+        if (Engine.DayRunning) Engine.FinishDay(); else Engine.StartDay();
+        Save(); Notify();
     }
-    private void ShowPosition(Timer.Storage.CreditPosition? position) { if (IsVisible) new PositionWindow(model, position).Show(this); }
-    private void ShowGroup(string id) { if (IsVisible) new GroupWindow(model, id).Show(this); }
-    public void SelectTab(bool showWeek) { weekMode = showWeek; Refresh(true); }
-    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
-    private void Refresh(bool refreshWorkspace)
+    public DateTime WeekStart(DateTime date) => date.Date.AddDays(-((7 + (int)date.DayOfWeek - (int)preferences.WeekStart) % 7));
+    public TimeSpan Today(TimerAccount a) => Engine.Credited(a.Name, Engine.Now.Date, Engine.Now.Date.AddDays(1));
+    public TimeSpan OnDay(TimerAccount a, DateTime day) => Engine.Credited(a.Name, day, day.AddDays(1));
+    public TimeSpan Week(TimerAccount a) { var start = WeekStart(SelectedDate); return Engine.Credited(a.Name, start, start.AddDays(7)); }
+    public TimeSpan BudgetUsed(TimerAccount a)
     {
-        clock.Text = model.ClockText;
-        clock.Classes.Set("live", model.IsTracking);
-        clock.Classes.Set("idle", !model.IsTracking);
-        account.Text = model.AccountLabel;
-        today.Text = model.Engine.Now.ToString("dddd, d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
-        date.Text = model.SelectedDate.ToString("ddd d MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
-        allocated.Text = "Today allocated   " + model.Format(model.Allocated);
-        unallocated.Text = "Unallocated   " + model.Format(model.Unallocated);
-        day.Content = model.DayStarted ? "Finish day" : "Start day";
-        undo.IsEnabled = model.Editor.CanUndo;
-        ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? "Undo: " + label : "No edit to undo");
-        format.Content = model.DecimalHours ? "Decimal hours" : "Hours and minutes";
-        timeline.Classes.Set("selected", !weekMode);
-        week.Classes.Set("selected", weekMode);
-        if (refreshWorkspace)
+        var now = Engine.Now;
+        var start = a.Period switch
         {
-            var oldScroll = workspace.Content is ScrollViewer directOld ? directOld
-                : (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
-            var previous = renderedWeekMode == weekMode && renderedDate == model.SelectedDate
-                ? oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset : null;
-            workspace.Content = weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
-            if (previous is { } offset && workspace.Content is Control control)
-            {
-                var scroll = control is ScrollViewer direct ? direct : control.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();
-                if (scroll is not null) scroll.Tag = offset;
-            }
-            renderedWeekMode = weekMode;
-            renderedDate = model.SelectedDate;
-        }
+            "month" => new DateTime(now.Year, now.Month, 1),
+            "quarter" => new DateTime(now.Year, ((now.Month - 1) / 3) * 3 + 1, 1), _ => WeekStart(now)
+        };
+        var end = a.Period switch { "month" => start.AddMonths(1), "quarter" => start.AddMonths(3), _ => start.AddDays(7) };
+        return Engine.Credited(a.Name, start, end);
     }
+    public string Format(TimeSpan value)
+    {
+        if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) + "h";
+        var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
+        return $"{sign}{(int)value.TotalHours}h {value.Minutes:00}m";
+    }
+    public string BudgetText(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} of {Format(target)} this {a.Period}" : "No budget";
+    public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
+    public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
+    public void ChangeDate(int days) { SelectedDate = SelectedDate.AddDays(days); Notify(); }
+    public void SetTheme(string theme)
+    {
+        if (theme is not ("Light" or "Dark" or "System")) throw new ArgumentException("Unknown theme", nameof(theme));
+        preferences = preferences with { Theme = theme }; ApplyTheme(); Save(); Notify();
+    }
+    public static TimerModel CreateDemo(Func<DateTime>? clock = null)
+    {
+        var realClock = clock ?? (() => DateTime.Now);
+        var wallStart = realClock();
+        var anchor = wallStart.Date.AddHours(14).AddMinutes(15);
+        var engine = new TrackingEngine(clock: () => anchor + (realClock() - wallStart));
+        engine.Schedule.Days.Add(anchor.DayOfWeek);
+        var prefs = new StoreSettings(new() { new("Account one", 15), new("Account two", 10), new("Account three", 5), new("Internal") }, false, "System", DayOfWeek.Monday);
+        var start = anchor.Date.AddHours(9);
+        var names = new[] { "Account one", "Account two", "Lunch", "Account three", "Internal" };
+        var minutes = new[] { 105, 90, 30, 45, 30 };
+        for (var i = 0; i < names.Length; i++)
+        {
+            if (i == 0)
+            {
+                engine.AddSession(names[i], start, start.AddMinutes(50)); start = start.AddMinutes(53);
+                engine.AddSession(names[i], start, start.AddMinutes(55)); start = start.AddMinutes(55);
+            }
+            else { engine.AddSession(names[i], start, start.AddMinutes(minutes[i])); start = start.AddMinutes(minutes[i]); }
+        }
+        engine.Sessions.Add(new(anchor.ToString("yyyy-MM-dd"), "Account one", "00:00:00", "merged", "10.00"));
+        var monday = anchor.Date.AddDays(-((7 + (int)anchor.DayOfWeek - 1) % 7));
+        if (monday < anchor.Date) engine.AddSession("Account one", monday.AddHours(9), monday.AddHours(16));
+        return new TimerModel(engine, prefs) { IsDemo = true };
+    }
+    public void ForceOvertime()
+    {
+        if (!IsDemo) throw new InvalidOperationException("Overtime simulation is available only in the demo.");
+        Engine.Schedule.Overrides[Engine.Now.Date] = new(false, new(TimeSpan.FromHours(9), TimeSpan.FromHours(13)));
+        Notify();
+    }
+    public void SetShifts(Dictionary<DayOfWeek, Shift> shifts, bool resetToday = false)
+    {
+        if (shifts.Count == 0 || shifts.Values.Any(s => s.Start < TimeSpan.Zero || s.End >= TimeSpan.FromDays(1) || s.End <= s.Start))
+            throw new ArgumentException("Choose at least one working day, with an end after its start.");
+        Engine.Schedule.Days = shifts.Keys.ToHashSet();
+        Engine.Schedule.Shifts = new(shifts);
+        if (resetToday) { Engine.Schedule.Overrides.Remove(Engine.Now.Date); Engine.DayStarts.Remove(Engine.Now.Date); }
+        Save(); Notify();
+    }
+    public void OpenEntry(SessionRow row) => EntryRequested?.Invoke(row, row.From, row.To);
+    public void OpenGap(DateTime? at = null)
+    {
+        var day = SelectedDate;
+        var limit = day == Engine.Now.Date ? Engine.Now : day.AddDays(1);
+        var start = at ?? (Engine.Plan(day).Working ? Engine.Plan(day).Start : day.AddHours(9));
+        var occupied = Engine.Sessions.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero && s.From < day.AddDays(1) && s.To > day)
+            .Select(s => (Start: s.From, End: s.To)).ToList();
+        occupied.AddRange(Editor.Positions.Select(p => (p.Start, p.End)));
+        if (Engine.Active is { } active) occupied.Add((active.Start, Engine.Now));
+        foreach (var span in occupied.OrderBy(s => s.Start))
+        {
+            if (span.End <= start) continue;
+            if (span.Start > start) break;
+            start = span.End;
+        }
+        var next = occupied.Where(s => s.Start > start).Select(s => s.Start).DefaultIfEmpty(limit).Min();
+        var end = new[] { start.AddMinutes(30), next, limit, day.AddDays(1) }.Min();
+        if (end <= start) { EditError = "There is no free recorded-time gap here."; Notify(); return; }
+        EditError = null; EntryRequested?.Invoke(null, start, end);
+    }
+    public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note)
+        => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note); });
+    public bool DeleteEntry(SessionRow row) => ChangeLog(() => Editor.Delete(row));
+    public bool UndoEdit() => ChangeLog(Editor.Undo);
+    public void OpenPosition(CreditPosition? position = null) => PositionRequested?.Invoke(position);
+    public void OpenGroup(string id) => GroupRequested?.Invoke(id);
+    public bool PlaceCredit(string account, DateTime start, decimal minutes, string note, CreditPosition? old = null)
+        => ChangeLog(() => Editor.Place(account, start, minutes, note, old));
+    public bool UnplaceCredit(CreditPosition position) => ChangeLog(() => Editor.Unplace(position));
+    public bool GroupEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Group(rows));
+    public bool UngroupEntries(string id) => ChangeLog(() => Editor.Ungroup(id));
+    public bool TidyDay(IReadOnlyList<GapChoice> choices, int limit) => ChangeLog(() => Editor.Tidy(choices, limit));
+    public bool ExportWeek()
+    {
+        try
+        {
+            if (!Save()) return false;
+            var export = new WeekExport(Editor, Engine, WeekStart(SelectedDate));
+            ExportPath = export.Write(store?.ExportDirectory ?? Path.Combine(Path.GetTempPath(), "BasicsAdvancedTimer-demo-exports"), ReviewAccounts.Select(a => a.Name));
+            EditError = null; Notify(); return true;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        { EditError = error.Message; Notify(); return false; }
+    }
+    private void ValidateAccount(string account)
+    {
+        if (!ReviewAccounts.Any(a => a.Name.Equals(account, StringComparison.OrdinalIgnoreCase))
+            && !Engine.Sessions.Any(s => s.Account.Equals(account, StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException("Choose an existing account.");
+    }
+    private bool ChangeLog(Action change)
+    {
+        try
+        {
+            // Save any pending recording/edit before replacing the undo snapshot.
+            if (!Save()) { EditError = LastError; Notify(); return false; }
+            change();
+            EditError = null;
+            var saved = Save(); Notify(); return saved;
+        }
+        catch (Exception error) when (error is ArgumentException or InvalidOperationException or IOException)
+        { EditError = error.Message; Notify(); return false; }
+    }
+    private void ApplyTheme()
+    {
+        if (Application.Current is { } app) app.RequestedThemeVariant = Theme switch
+        { "Light" => ThemeVariant.Light, "Dark" => ThemeVariant.Dark, _ => ThemeVariant.Default };
+    }
+    public void Tick()
+    {
+        ticks++;
+        if (ticks % 15 == 0) { Save(); Notify(); }
+        else PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Elapsed)));
+    }
+    public bool Save()
+    {
+        try { store?.Save(Engine, preferences); LastError = null; return true; }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        { LastError = "Could not save. Time remains in memory; retrying. " + error.Message; return false; }
+    }
+    public bool StopForClose()
+    { Engine.StopAccount(); var saved = Save(); if (!saved) Notify(); return saved; }
+    private void Notify() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
 }
