@@ -289,7 +289,8 @@ public sealed class DashboardWindow : Window
             var oldScroll = workspace.Content is ScrollViewer directOld ? directOld
                 : (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
             var previous = renderedWeekMode == weekMode && renderedDate == model.SelectedDate
-                ? oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset : null;
+                ? !weekMode && model.TimelineOffset is double timelineOffset ? new Vector(0, timelineOffset)
+                    : oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset : null;
             workspace.Content = weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
             if (previous is { } offset && workspace.Content is Control control)
             {
