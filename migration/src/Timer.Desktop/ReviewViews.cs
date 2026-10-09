@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Timer.Core;
+using Timer.Storage;
 using Avalonia.Threading;
 using Avalonia.Input;
 using Avalonia.VisualTree;
@@ -14,8 +15,7 @@ public static class ReviewViews
     {
         var day = model.SelectedDate;
         var root = Ui.Grid("*", "Auto,*");
-        var unplaced = model.Engine.Sessions.Where(s => s.Day == day && s.IsMerged)
-            .Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
+        var unplaced = TimeSpan.FromMinutes((double)model.Editor.Unplaced(day).Values.Sum());
         var caption = Ui.Text(unplaced > TimeSpan.Zero ? "Unplaced legacy credit " + model.Format(unplaced) : "Recorded time", 12, "muted");
         caption.Margin = new Thickness(0, 0, 0, 10);
         Ui.Put(root, caption);
@@ -29,9 +29,10 @@ public static class ReviewViews
             Canvas.SetLeft(rule, 60); Canvas.SetTop(rule, hour * pixelsPerHour + 8); canvas.Children.Add(rule);
         }
         var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.IsPositioned && s.Duration > TimeSpan.Zero)
-            .Select(s => (s.Account, Start: s.From, End: s.To, Row: (SessionRow?)s)).ToList();
+            .Select(s => (s.Account, Start: s.From, End: s.To, Row: (SessionRow?)s, Position: (CreditPosition?)null)).ToList();
         if (model.Engine.Active is { } active && active.Start < day.AddDays(1) && model.Engine.Now > day)
-            intervals.Add((active.Account, active.Start < day ? day : active.Start, model.Engine.Now < day.AddDays(1) ? model.Engine.Now : day.AddDays(1), null));
+            intervals.Add((active.Account, active.Start < day ? day : active.Start, model.Engine.Now < day.AddDays(1) ? model.Engine.Now : day.AddDays(1), null, null));
+        intervals.AddRange(model.Editor.Positions.Where(p => p.Start.Date == day).Select(p => (p.Account, p.Start, p.End, (SessionRow?)null, (CreditPosition?)p)));
         var ends = new List<DateTime>();
         var cards = new List<(Border Card, int Lane)>();
         foreach (var interval in intervals.OrderBy(s => s.Start))
@@ -49,7 +50,7 @@ public static class ReviewViews
             var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
                 Width = 380, Height = height, Padding = new Thickness(14, height < 58 ? 2 : 10),
                 Child = height >= 24 ? text : null, ClipToBounds = true };
-            var note = interval.Row is null ? "Running · stop tracking to edit" : model.Editor.Note(interval.Row);
+            var note = interval.Position is { } positionNote ? "Existing credit · " + positionNote.Note : interval.Row is null ? "Running · stop tracking to edit" : model.Editor.Note(interval.Row);
             if (height >= 90 && !string.IsNullOrWhiteSpace(note))
             {
                 var noteText = Ui.Text(note, 12); noteText.Foreground = Brush.Parse("#24312B");
@@ -63,6 +64,14 @@ public static class ReviewViews
                 var edit = new MenuItem { Header = "Edit entry / note…" }; edit.Click += (_, _) => model.OpenEntry(row);
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { edit } };
                 TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour);
+            }
+            if (interval.Position is { } position)
+            {
+                card.Tag = position; card.Name = "CreditPosition" + position.Id;
+                card.DoubleTapped += (_, e) => { model.OpenPosition(position); e.Handled = true; };
+                var editPosition = new MenuItem { Header = "Edit / unplace existing credit…" }; editPosition.Click += (_, _) => model.OpenPosition(position);
+                card.ContextMenu = new ContextMenu { ItemsSource = new[] { editPosition } };
+                card.BorderThickness = new Thickness(2); card.BorderBrush = Brush.Parse("#24312B");
             }
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
             canvas.Children.Add(card); cards.Add((card, lane));
@@ -81,7 +90,7 @@ public static class ReviewViews
         canvas.PointerPressed += (_, e) => { if (e.GetCurrentPoint(canvas).Properties.IsRightButtonPressed) clicked = At(e.GetPosition(canvas).Y); };
         canvas.DoubleTapped += (_, e) =>
         {
-            if (e.Source is Visual visual && (visual is Border { Tag: SessionRow } || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow))) return;
+            if (e.Source is Visual visual && (visual is Border { Tag: SessionRow or CreditPosition } || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow or CreditPosition))) return;
             model.OpenGap(At(e.GetPosition(canvas).Y)); e.Handled = true;
         };
         var plan = model.Engine.Plan(day);
@@ -106,28 +115,43 @@ public static class ReviewViews
         Ui.Put(grid, Ui.Text("Account", 12, "muted"));
         for (var i = 0; i < days.Length; i++) Ui.Put(grid, Ui.Text(day.AddDays(days[i]).ToString("ddd"), 12, "muted"), i + 1);
         Ui.Put(grid, Ui.Text("Total", 12, "muted"), days.Length + 1);
+        var reconciled = new WeekExport(model.Editor, model.Engine, day);
+        string Value(TimerAccount account, int? index)
+        {
+            if (!model.DecimalHours || model.Engine.Active is not null) return model.Format(index is { } i ? model.OnDay(account, day.AddDays(i)) : model.Week(account));
+            var values = reconciled.Accounts.GetValueOrDefault(account.Name) ?? new long[7];
+            return WeekExport.Hours(index is { } d ? values[d] : values.Sum()) + "h";
+        }
         var row = 1;
         foreach (var a in model.ReviewAccounts)
         {
             Ui.Put(grid, Ui.Text(a.Name, 13), row: row).Margin = new Thickness(0, 16);
-            for (var i = 0; i < days.Length; i++) Ui.Put(grid, Ui.Text(model.Format(model.OnDay(a, day.AddDays(days[i]))), 12), i + 1, row);
-            Ui.Put(grid, Ui.Text(model.Format(model.Week(a)), 12), days.Length + 1, row);
+            for (var i = 0; i < days.Length; i++) Ui.Put(grid, Ui.Text(Value(a, days[i]), 12), i + 1, row);
+            Ui.Put(grid, Ui.Text(Value(a, null), 12), days.Length + 1, row);
             row++;
         }
         var root = new StackPanel { Spacing = 16 };
         root.Children.Add(Ui.Text("Week commencing " + day.ToString("d MMMM"), 12, "muted"));
         root.Children.Add(grid);
         root.Children.Add(Ui.Text("Entries · click to edit time or notes", 12, "muted"));
-        foreach (var entry in model.Engine.Sessions.Where(s => s.Day >= day && s.Day < day.AddDays(7)).OrderBy(s => s.From))
+        foreach (var entry in reconciled.Entries)
         {
-            var caption = entry.IsMerged ? "Merged credit" : entry.IsAdjustment ? "Adjustment" : $"{entry.From:HH:mm} – {entry.To:HH:mm}";
-            var button = Ui.Button("", () => model.OpenEntry(entry), "WeekEntry" + model.Engine.Sessions.IndexOf(entry));
+            void Open()
+            {
+                if (entry.PositionId is { } id) model.OpenPosition(model.Editor.Positions.Single(p => p.Id == id));
+                else if (entry.GroupId is { } group) model.OpenGroup(group);
+                else model.OpenEntry(entry.Sources[0]);
+            }
+            var caption = entry.Start is { } start && entry.End is { } end ? $"{start:HH:mm} – {end:HH:mm}" : entry.Type;
+            var name = entry.Sources.Count == 1 ? "WeekEntry" + model.Engine.Sessions.IndexOf(entry.Sources[0]) : "WeekReviewEntry";
+            var button = Ui.Button("", Open, name);
             button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
             button.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
             var labels = new StackPanel { Spacing = 5 };
-            labels.Children.Add(Ui.Text($"{entry.Day:ddd d MMM} · {entry.Account} · {caption} · {model.Format(entry.Duration)}", 12));
-            var note = model.Editor.Note(entry);
-            if (!string.IsNullOrWhiteSpace(note)) labels.Children.Add(new TextBlock { Text = note, FontSize = 12, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
+            var index = reconciled.Entries.ToList().IndexOf(entry);
+            var duration = model.DecimalHours ? WeekExport.Hours(reconciled.EntryUnits[index]) + "h" : model.Format(TimeSpan.FromMinutes((double)entry.Minutes));
+            labels.Children.Add(Ui.Text($"{entry.Day:ddd d MMM} · {entry.Account} · {caption} · {duration}", 12));
+            if (!string.IsNullOrWhiteSpace(entry.Note)) labels.Children.Add(new TextBlock { Text = entry.Note, FontSize = 12, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
             button.Content = labels; root.Children.Add(button);
         }
         var scroll = new ScrollViewer { Content = root, AllowAutoHide = false, Tag = Vector.Zero,

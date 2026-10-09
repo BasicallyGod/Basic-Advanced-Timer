@@ -224,7 +224,14 @@ public sealed class DashboardWindow : Window
         Ui.Put(review, nav);
         format = Ui.Button("Hours and minutes", model.ToggleFormat, "HoursFormat");
         undo = Ui.Button("Undo", () => model.UndoEdit(), "UndoEdit");
-        var tools = Ui.Horizontal(format, Ui.Button("Add time", () => model.OpenGap(), "AddTime"), undo);
+        var more = Ui.Button("Tools", () => { }, "ReviewTools");
+        var place = new MenuItem { Header = "Position existing credit…" }; place.Click += (_, _) => new PositionWindow(model).Show(this);
+        var group = new MenuItem { Header = "Group entries…" }; group.Click += (_, _) => new GroupWindow(model).Show(this);
+        var tidy = new MenuItem { Header = "Tidy day…" }; tidy.Click += (_, _) => new TidyWindow(model).Show(this);
+        var export = new MenuItem { Header = "Export week…" }; export.Click += (_, _) => new ExportWindow(model).Show(this);
+        more.ContextMenu = new ContextMenu { ItemsSource = new[] { place, group, tidy, export } };
+        more.Click += (_, _) => more.ContextMenu.Open(more);
+        var tools = Ui.Horizontal(format, Ui.Button("Add time", () => model.OpenGap(), "AddTime"), undo, more);
         tools.Margin = new Thickness(0, 12);
         Ui.Put(review, tools, row: 1);
         Ui.Put(review, workspace, row: 2);
@@ -237,13 +244,16 @@ public sealed class DashboardWindow : Window
         Content = root;
         model.PropertyChanged += Changed;
         model.EntryRequested += ShowEntry;
-        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; };
+        model.PositionRequested += ShowPosition; model.GroupRequested += ShowGroup;
+        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.PositionRequested -= ShowPosition; model.GroupRequested -= ShowGroup; };
         Refresh(true);
     }
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
     {
         if (IsVisible) new EntryWindow(model, row, start, end).Show(this);
     }
+    private void ShowPosition(Timer.Storage.CreditPosition? position) { if (IsVisible) new PositionWindow(model, position).Show(this); }
+    private void ShowGroup(string id) { if (IsVisible) new GroupWindow(model, id).Show(this); }
     public void SelectTab(bool showWeek) { weekMode = showWeek; Refresh(true); }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
     private void Refresh(bool refreshWorkspace)

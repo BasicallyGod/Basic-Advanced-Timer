@@ -21,6 +21,7 @@ public sealed class TimerStore : IDisposable
     private readonly List<string> headers = new() { "Date", "Account", "Start", "End", "Minutes" };
     private readonly List<Dictionary<string, string>> originalRows = new();
     public LedgerEditor? Editor { get; private set; }
+    public string ExportDirectory => Path.Combine(directory, "Timesheets", "Exports");
     public TimerStore(string directory)
     {
         this.directory = Path.GetFullPath(directory);
@@ -102,7 +103,7 @@ public sealed class TimerStore : IDisposable
         }
         string? ReadOptional(string relative) { var path = Path.Combine(directory, relative); return File.Exists(path) ? File.ReadAllText(path) : null; }
         Editor = new LedgerEditor(engine, headers.ToArray(), originalRows, ReadOptional("Timesheets/notes.csv"),
-            ReadOptional("Timesheets/entry-groups.csv"), ReadOptional("migration-edit-state.json"));
+            ReadOptional("Timesheets/entry-groups.csv"), ReadOptional("migration-edit-state.json"), ReadOptional("Timesheets/credit-positions.csv"));
         var awayPath = Path.Combine(directory, "account-timer-away.txt");
         if (File.Exists(awayPath)) foreach (var line in File.ReadAllLines(awayPath).Where(s => !string.IsNullOrWhiteSpace(s)))
         { var p = line.Split('\t'); engine.Away.Add(new(DateTime.Parse(p[0], CultureInfo.InvariantCulture), p.Length > 1 && p[1].Length > 0 ? DateTime.Parse(p[1], CultureInfo.InvariantCulture) : null)); }
@@ -164,6 +165,7 @@ public sealed class TimerStore : IDisposable
         if (Editor.Changed)
         {
             files["Timesheets/notes.csv"] = Editor.NotesCsv;
+            files["Timesheets/credit-positions.csv"] = Editor.PositionsCsv;
             files["Timesheets/entry-groups.csv"] = Editor.GroupsCsv ?? "GroupId,Date,Account,Start,End,Minutes\n";
         }
         Atomic("migration-journal.json", JsonSerializer.Serialize(new SaveJournal(1, files)), false);
@@ -176,7 +178,7 @@ public sealed class TimerStore : IDisposable
         var path = Path.Combine(directory, "migration-journal.json");
         if (!File.Exists(path)) return;
         var journal = JsonSerializer.Deserialize<SaveJournal>(File.ReadAllText(path)) ?? throw new InvalidDataException("Invalid save journal.");
-        var allowed = new[] { "Timesheets/sessions.csv", "basics-advanced-timer.settings.json", "account-timer-away.txt", "migration-recovery.json", "account-timer-state.txt", "migration-edit-state.json", "Timesheets/notes.csv", "Timesheets/entry-groups.csv" };
+        var allowed = new[] { "Timesheets/sessions.csv", "basics-advanced-timer.settings.json", "account-timer-away.txt", "migration-recovery.json", "account-timer-state.txt", "migration-edit-state.json", "Timesheets/notes.csv", "Timesheets/entry-groups.csv", "Timesheets/credit-positions.csv" };
         if (journal.SchemaVersion != 1 || journal.Files.Keys.Except(allowed).Any() || allowed.Take(5).Except(journal.Files.Keys).Any()) throw new InvalidDataException("Unsupported save journal.");
         foreach (var file in journal.Files) Atomic(file.Key, file.Value, true);
         File.Delete(path);
