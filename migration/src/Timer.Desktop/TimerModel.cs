@@ -336,6 +336,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         { LastError = "Could not save. Time remains in memory; retrying. " + error.Message; return false; }
     }
+    public event Action? QuitRequested;
+    public void RequestQuit() => QuitRequested?.Invoke();
     public bool StopForClose()
     { Engine.StopAccount(); var saved = Save(); if (!saved) Notify(); return saved; }
     private void Notify() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));

@@ -4,6 +4,13 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration tray icon
+
+- Added a notification area icon. The timer has no taskbar button, and the × button hides it to the tray with tracking still running.
+- The icon is green while recording and slate otherwise. The hover text gives the account, the day's time and any overtime. Left-click shows or hides the timer.
+- The tray menu offers Show timer, Dashboard, Pause or Resume, Start or Finish day, Reset position and Close timer, which saves and quits. Close timer is also in the Settings menu.
+- Windows shutting down still saves and closes the timer normally.
+
 ## Migration recording block marked on the timeline
 
 - The block that is recording now has a green outline and a "Recording now" label, and keeps its pointer arrow instead of the move cursor. Clicking or dragging it explains that it is still recording and can be moved or edited once tracking stops, and right-click offers Stop tracking.

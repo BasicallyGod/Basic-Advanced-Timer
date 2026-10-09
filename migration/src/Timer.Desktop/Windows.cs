@@ -11,10 +11,18 @@ public sealed class WindowCoordinator
 {
     public PillWindow Pill { get; }
     public DashboardWindow Dashboard { get; }
+    private readonly TimerModel model;
+    private bool quitting, dashboardWasShown;
+    // Whether closing a window hides the timer to the tray. Without a tray the window really closes, as it always did.
+    public bool HideToTray { get; set; }
+    public bool IsShown => Pill.IsVisible || Dashboard.IsVisible;
     public WindowCoordinator(TimerModel model, Action exit)
     {
+        this.model = model;
         Pill = new PillWindow(model);
         Dashboard = new DashboardWindow(model);
+        // The timer lives in the tray, so neither window needs a taskbar button.
+        Pill.ShowInTaskbar = false; Dashboard.ShowInTaskbar = false;
         Pill.OpenDashboard = () =>
         {
             Fit(Dashboard, Pill, 960, 640);
@@ -25,8 +33,55 @@ public sealed class WindowCoordinator
         Dashboard.OpenPill = () => { Pill.Show(); Dashboard.Hide(); Pill.Activate(); };
         Pill.Closed += (_, _) => exit();
         Dashboard.Closed += (_, _) => exit();
-        Pill.Closing += (_, e) => e.Cancel = !model.StopForClose();
-        Dashboard.Closing += (_, e) => e.Cancel = !model.StopForClose();
+        Pill.Closing += OnClosing; Dashboard.Closing += OnClosing;
+        model.QuitRequested += Quit;
+    }
+    private void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        // The close button hides the timer and leaves tracking running. Quitting, or Windows shutting down, saves and really closes.
+        if (HideToTray && !quitting && e.CloseReason == WindowCloseReason.WindowClosing) { e.Cancel = true; Hide(); return; }
+        e.Cancel = !model.StopForClose();
+    }
+    public void Hide()
+    {
+        dashboardWasShown = Dashboard.IsVisible;
+        Pill.Hide(); Dashboard.Hide();
+    }
+    public void ShowTimer()
+    {
+        if (IsShown) { (Dashboard.IsVisible ? (Window)Dashboard : Pill).Activate(); return; }
+        if (dashboardWasShown) ShowDashboard(); else { Pill.Show(); BringToFront(Pill); }
+    }
+    public void ShowDashboard()
+    {
+        if (!Dashboard.IsVisible) { Fit(Dashboard, Pill, 960, 640); Dashboard.Show(); }
+        Pill.Hide(); BringToFront(Dashboard);
+    }
+    // The tray icon's left click shows the timer, or hides it when it is already in front.
+    public void ToggleFromTray()
+    {
+        if ((Pill.IsVisible && Pill.IsActive) || (Dashboard.IsVisible && Dashboard.IsActive)) Hide(); else ShowTimer();
+    }
+    private static void BringToFront(Window window)
+    {
+        window.Topmost = false; window.Topmost = true; window.Activate();
+    }
+    public void ResetPosition()
+    {
+        // Back to the top right of the main screen, which also recovers a window dragged off a disconnected monitor.
+        var screen = Pill.Screens.Primary;
+        if (screen is not null)
+        {
+            var area = screen.WorkingArea;
+            Pill.Position = new PixelPoint(area.Right - (int)(Pill.Width * screen.Scaling) - 24, area.Y + 24);
+        }
+        Dashboard.Hide(); Pill.Show(); BringToFront(Pill);
+    }
+    public void Quit()
+    {
+        if (!model.StopForClose()) { ShowTimer(); return; }
+        quitting = true;
+        Pill.Close(); Dashboard.Close();
     }
     private static void Fit(Window target, Window source, double width, double height)
     {
@@ -103,7 +158,7 @@ public sealed class PillWindow : Window
         expansion.Children.Add(Ui.Rule());
         expansion.Children.Add(new AccountList(model));
         day = Ui.Button("Start day", model.ToggleDay, "PillDay");
-        var actions = Ui.Horizontal(day, Ui.Button("×", Close));
+        var actions = Ui.Horizontal(day, Ui.Button("×", Close, "HideToTray"));
         actions.Margin = new Thickness(16, 0);
         expansion.Children.Add(actions);
         var bottom = Ui.Horizontal(Ui.SettingsButton(model), saved);
@@ -189,7 +244,7 @@ public sealed class DashboardWindow : Window
         var header = Ui.Grid("*,Auto");
         header.Margin = new Thickness(24, 18);
         Ui.Put(header, today);
-        Ui.Put(header, Ui.Horizontal(Ui.SettingsButton(model), Ui.Button("Back to pill", () => OpenPill?.Invoke(), "BackToPill"), Ui.Button("×", Close)), 1);
+        Ui.Put(header, Ui.Horizontal(Ui.SettingsButton(model), Ui.Button("Back to pill", () => OpenPill?.Invoke(), "BackToPill"), Ui.Button("×", Close, "HideToTray")), 1);
         Ui.DragHeader(header, this);
         Ui.Put(root, header);
         var strip = Ui.Grid("Auto,*,Auto");

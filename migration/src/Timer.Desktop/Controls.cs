@@ -119,8 +119,10 @@ public static class Ui
                 System.Diagnostics.Process.Start(start);
             }
         };
+        var quit = new MenuItem { Header = "Close timer" };
+        quit.Click += (_, _) => model.RequestQuit();
         var menu = new ContextMenu { ItemsSource = new MenuItem[]
-        { new() { Header = "Appearance", ItemsSource = variants }, format, shifts, accounts, demo } };
+        { new() { Header = "Appearance", ItemsSource = variants }, format, shifts, accounts, demo, quit } };
         menu.Opened += (_, _) =>
         {
             foreach (var item in variants) item.IsChecked = (string?)item.Header == model.Theme;

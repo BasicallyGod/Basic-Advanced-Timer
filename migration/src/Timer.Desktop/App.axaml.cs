@@ -65,6 +65,14 @@ public sealed partial class App : Application
             // Native Closed callbacks can arrive after lifetime Exit; do not request shutdown again.
             var windows = new WindowCoordinator(model, () => { if (!lifetimeEnded) desktop.Shutdown(); });
             desktop.MainWindow = windows.Pill;
+            if (!smokeMode)
+            {
+                // The tray icon keeps the timer reachable when its windows are hidden, and closing a window hides it there.
+                var tray = new TrayController(model, windows);
+                TrayIcon.SetIcons(this, tray.Icons);
+                windows.HideToTray = true;
+                desktop.Exit += (_, _) => tray.Dispose();
+            }
             var ticker = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             ticker.Tick += (_, _) => model.Tick();
             ticker.Start();
