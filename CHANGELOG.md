@@ -4,6 +4,10 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration recording block marked on the timeline
+
+- The block that is recording now has a green outline and a "Recording now" label, and keeps its pointer arrow instead of the move cursor. Clicking or dragging it explains that it is still recording and can be moved or edited once tracking stops, and right-click offers Stop tracking.
+
 ## Migration account renaming and reordering
 
 - Account names can be edited in Accounts and budgets. Saving asks whether to rename the past entries too or start afresh under the new name. Renaming the past moves entries, notes, groups, positioned credit and the budget in one save after a backup copy to `Timesheets/Backups`, and clears the Undo history. Starting afresh keeps the old name as a historical account.

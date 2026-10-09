@@ -72,7 +72,7 @@ public static class ReviewViews
                 Child = height >= 24 ? text : null, ClipToBounds = true };
             var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
             if (model.IsSelected(selectionSources)) { card.Classes.Add("mergeSelected"); text.Children.Insert(0, Ui.Text("✓ Selected", 12)); }
-            var note = interval.Group is { } groupNote ? "Grouped entries · " + groupNote.Note : interval.Position is { } positionNote ? "Existing credit · " + positionNote.Note : interval.Row is null ? "Running · stop tracking to edit" : model.Editor.Note(interval.Row);
+            var note = interval.Group is { } groupNote ? "Grouped entries · " + groupNote.Note : interval.Position is { } positionNote ? "Existing credit · " + positionNote.Note : interval.Row is null ? "Recording now · stop tracking to move or edit" : model.Editor.Note(interval.Row);
             if (height >= 90 && !string.IsNullOrWhiteSpace(note))
             {
                 var noteText = Ui.Text(note, 12); noteText.Foreground = Brush.Parse("#24312B");
@@ -85,6 +85,17 @@ public static class ReviewViews
                 var edit = new MenuItem { Header = "Edit entry / note…" }; edit.Click += (_, _) => model.OpenEntry(row);
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, MergeMenu(model) } };
                 TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour);
+            }
+            if (interval.Row is null && interval.Position is null && interval.Group is null)
+            {
+                // The block that is recording now. A green outline, a label and the stop menu make it clear why it can't be dragged.
+                card.Classes.Add("recording"); card.Name = "TimelineRecording"; card.Cursor = new Cursor(StandardCursorType.Arrow);
+                var live = Ui.Text("● Recording now", 12); live.Foreground = Brush.Parse("#1E5C38"); live.FontWeight = FontWeight.SemiBold;
+                text.Children.Insert(model.IsSelected(selectionSources) ? 1 : 0, live);
+                var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
+                card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };
+                card.PointerPressed += (_, e) =>
+                { if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) { model.ExplainRunning(); e.Handled = true; } };
             }
             if (interval.Position is { } position)
             {

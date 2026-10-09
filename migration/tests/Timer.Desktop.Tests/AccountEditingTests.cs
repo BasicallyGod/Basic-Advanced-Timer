@@ -129,4 +129,25 @@ public sealed class AccountEditingTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheRecordingBlockIsMarkedAndExplainsWhyItCannotBeMoved()
+    {
+        var now = Day.AddHours(10);
+        var engine = Engine(() => now); var model = new TimerModel(engine);
+        model.ToggleAccount("Account one"); now = now.AddMinutes(45);
+        var window = new Window { Width = 600, Height = 500, Content = ReviewViews.Timeline(model) }; window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs();
+            var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineRecording");
+            Assert.Contains("recording", card.Classes);
+            Assert.Contains(card.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "● Recording now");
+            var point = card.TranslatePoint(new Point(80, 30), window)!.Value;
+            window.MouseDown(point, MouseButton.Left); window.MouseMove(point + new Vector(0, 40)); window.MouseUp(point + new Vector(0, 40), MouseButton.Left);
+            Assert.Contains("still recording", model.EditError);
+            Assert.Equal(TimeSpan.FromMinutes(45), engine.Active is { } a ? now - a.Start : TimeSpan.Zero); // Nothing moved.
+        }
+        finally { window.Close(); }
+    }
 }

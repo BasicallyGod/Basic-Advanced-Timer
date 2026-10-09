@@ -108,6 +108,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (!Accounts.Any(a => a.Name == name)) throw new ArgumentException("Unknown account", nameof(name));
         SelectedAccount = name; Engine.ToggleAccount(name); Save(); Notify();
     }
+    // The block being recorded has no ledger row yet, so it cannot be dragged or edited until tracking stops.
+    public void ExplainRunning() { EditError = "This block is still recording. Stop tracking to move or edit it."; Notify(); }
     public void TogglePause()
     {
         if (Engine.Active is { } active) { SelectedAccount = active.Account; Engine.StopAccount(); }
