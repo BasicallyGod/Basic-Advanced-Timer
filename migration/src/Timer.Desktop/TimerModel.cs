@@ -166,7 +166,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void OpenGap(DateTime? at = null)
     {
         var day = SelectedDate;
-        var limit = day == Engine.Now.Date ? Engine.Now : day.AddDays(1);
+        var limit = day.AddDays(1);
         var start = at ?? (Engine.Plan(day).Working ? Engine.Plan(day).Start : day.AddHours(9));
         var occupied = Engine.Sessions.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero && s.From < day.AddDays(1) && s.To > day)
             .Select(s => (Start: s.From, End: s.To)).ToList();

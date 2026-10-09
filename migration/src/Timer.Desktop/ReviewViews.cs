@@ -28,11 +28,14 @@ public static class ReviewViews
             var rule = Ui.Rule(); rule.Width = 390;
             Canvas.SetLeft(rule, 60); Canvas.SetTop(rule, hour * pixelsPerHour + 8); canvas.Children.Add(rule);
         }
-        var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.IsPositioned && s.Duration > TimeSpan.Zero)
-            .Select(s => (s.Account, Start: s.From, End: s.To, Row: (SessionRow?)s, Position: (CreditPosition?)null)).ToList();
+        var groups = model.Editor.Entries(day, day.AddDays(1)).Where(e => e.GroupId is not null && e.Sources.Any(s => s.IsPositioned && s.Duration > TimeSpan.Zero)).ToArray();
+        var grouped = groups.SelectMany(e => e.Sources).ToHashSet();
+        var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.IsPositioned && s.Duration > TimeSpan.Zero && !grouped.Contains(s))
+            .Select(s => (s.Account, Start: s.From, End: s.To, Row: (SessionRow?)s, Position: (CreditPosition?)null, Group: (ReviewEntry?)null)).ToList();
         if (model.Engine.Active is { } active && active.Start < day.AddDays(1) && model.Engine.Now > day)
-            intervals.Add((active.Account, active.Start < day ? day : active.Start, model.Engine.Now < day.AddDays(1) ? model.Engine.Now : day.AddDays(1), null, null));
-        intervals.AddRange(model.Editor.Positions.Where(p => p.Start.Date == day).Select(p => (p.Account, p.Start, p.End, (SessionRow?)null, (CreditPosition?)p)));
+            intervals.Add((active.Account, active.Start < day ? day : active.Start, model.Engine.Now < day.AddDays(1) ? model.Engine.Now : day.AddDays(1), null, null, null));
+        intervals.AddRange(model.Editor.Positions.Where(p => p.Start.Date == day).Select(p => (p.Account, p.Start, p.End, (SessionRow?)null, (CreditPosition?)p, (ReviewEntry?)null)));
+        intervals.AddRange(groups.Select(g => (g.Account, g.Sources.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero).Min(s => s.From), g.Sources.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero).Max(s => s.To), (SessionRow?)null, (CreditPosition?)null, (ReviewEntry?)g)));
         var ends = new List<DateTime>();
         var cards = new List<(Border Card, int Lane)>();
         foreach (var interval in intervals.OrderBy(s => s.Start))
@@ -41,16 +44,16 @@ public static class ReviewViews
             if (lane < 0) { lane = ends.Count; ends.Add(interval.End); } else ends[lane] = interval.End;
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
             var end = interval.End > day.AddDays(1) ? day.AddDays(1) : interval.End;
-            var duration = end - interval.Start;
-            var height = Math.Max(3, duration.TotalHours * pixelsPerHour - 4);
+            var duration = interval.Group is { } groupDuration ? TimeSpan.FromMinutes((double)groupDuration.Minutes) : end - interval.Start;
+            var height = Math.Max(3, (end - interval.Start).TotalHours * pixelsPerHour - 4);
             var text = new StackPanel { Spacing = 6 };
-            text.Children.Add(Ui.Text(interval.Account, 15));
+            text.Children.Add(Ui.Text(interval.Account + (interval.Group is { } labelGroup ? $" · Group ({labelGroup.Sources.Count})" : ""), 15));
             if (height >= 58) text.Children.Add(Ui.Text($"{interval.Start:HH:mm} – {end:HH:mm} · {model.Format(duration)}", 12));
             foreach (TextBlock child in text.Children) child.Foreground = Brush.Parse("#24312B");
             var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
                 Width = 380, Height = height, Padding = new Thickness(14, height < 58 ? 2 : 10),
                 Child = height >= 24 ? text : null, ClipToBounds = true };
-            var note = interval.Position is { } positionNote ? "Existing credit · " + positionNote.Note : interval.Row is null ? "Running · stop tracking to edit" : model.Editor.Note(interval.Row);
+            var note = interval.Group is { } groupNote ? "Grouped entries · gaps remain uncredited · " + groupNote.Note : interval.Position is { } positionNote ? "Existing credit · " + positionNote.Note : interval.Row is null ? "Running · stop tracking to edit" : model.Editor.Note(interval.Row);
             if (height >= 90 && !string.IsNullOrWhiteSpace(note))
             {
                 var noteText = Ui.Text(note, 12); noteText.Foreground = Brush.Parse("#24312B");
@@ -73,6 +76,15 @@ public static class ReviewViews
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { editPosition } };
                 card.BorderThickness = new Thickness(2); card.BorderBrush = Brush.Parse("#24312B");
             }
+            if (interval.Group is { } group)
+            {
+                card.Tag = group; card.Name = "TimelineGroup" + group.GroupId;
+                card.DoubleTapped += (_, e) => { model.OpenGroup(group.GroupId!); e.Handled = true; };
+                var editGroup = new MenuItem { Header = "Inspect / edit grouped entries…" }; editGroup.Click += (_, _) => model.OpenGroup(group.GroupId!);
+                var ungroup = new MenuItem { Header = "Ungroup" }; ungroup.Click += (_, _) => model.UngroupEntries(group.GroupId!);
+                card.ContextMenu = new ContextMenu { ItemsSource = new[] { editGroup, ungroup } };
+                ToolTip.SetTip(card, $"{group.Account} · {group.Sources.Count} grouped entries · {model.Format(duration)} credited\nGaps remain uncredited. Double-click to inspect; right-click to ungroup.");
+            }
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
             canvas.Children.Add(card); cards.Add((card, lane));
         }
@@ -90,7 +102,7 @@ public static class ReviewViews
         canvas.PointerPressed += (_, e) => { if (e.GetCurrentPoint(canvas).Properties.IsRightButtonPressed) clicked = At(e.GetPosition(canvas).Y); };
         canvas.DoubleTapped += (_, e) =>
         {
-            if (e.Source is Visual visual && (visual is Border { Tag: SessionRow or CreditPosition } || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow or CreditPosition))) return;
+            if (e.Source is Visual visual && (visual is Border { Tag: SessionRow or CreditPosition or ReviewEntry } || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow or CreditPosition or ReviewEntry))) return;
             model.OpenGap(At(e.GetPosition(canvas).Y)); e.Handled = true;
         };
         var plan = model.Engine.Plan(day);
@@ -142,7 +154,7 @@ public static class ReviewViews
                 else if (entry.GroupId is { } group) model.OpenGroup(group);
                 else model.OpenEntry(entry.Sources[0]);
             }
-            var caption = entry.Start is { } start && entry.End is { } end ? $"{start:HH:mm} – {end:HH:mm}" : entry.Type;
+            var caption = entry.GroupId is not null ? $"Group · {entry.Sources.Count} entries" : entry.Start is { } start && entry.End is { } end ? $"{start:HH:mm} – {end:HH:mm}" : entry.Type;
             var name = entry.Sources.Count == 1 ? "WeekEntry" + model.Engine.Sessions.IndexOf(entry.Sources[0]) : "WeekReviewEntry";
             var button = Ui.Button("", Open, name);
             button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
@@ -152,7 +164,14 @@ public static class ReviewViews
             var duration = model.DecimalHours ? WeekExport.Hours(reconciled.EntryUnits[index]) + "h" : model.Format(TimeSpan.FromMinutes((double)entry.Minutes));
             labels.Children.Add(Ui.Text($"{entry.Day:ddd d MMM} · {entry.Account} · {caption} · {duration}", 12));
             if (!string.IsNullOrWhiteSpace(entry.Note)) labels.Children.Add(new TextBlock { Text = entry.Note, FontSize = 12, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
-            button.Content = labels; root.Children.Add(button);
+            button.Content = labels;
+            if (entry.GroupId is { } groupId)
+            {
+                var combined = Ui.Grid("*,Auto"); Ui.Put(combined, button);
+                Ui.Put(combined, Ui.Button("Ungroup", () => model.UngroupEntries(groupId), "Ungroup" + groupId), 1).Margin = new Thickness(8, 0, 0, 0);
+                root.Children.Add(combined);
+            }
+            else root.Children.Add(button);
         }
         var scroll = new ScrollViewer { Content = root, AllowAutoHide = false, Tag = Vector.Zero,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };

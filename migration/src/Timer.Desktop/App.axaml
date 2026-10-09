@@ -35,6 +35,33 @@
   </Application.Resources>
   <Application.Styles>
     <FluentTheme />
+    <Style Selector="ScrollBar">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Track Name="PART_Track" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}"
+                 Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}"
+                 Orientation="{TemplateBinding Orientation}">
+            <Track.Thumb>
+              <Thumb Name="PART_Thumb" MinHeight="24" MinWidth="6">
+                <Thumb.Template>
+                  <ControlTemplate>
+                    <Border Background="{DynamicResource Muted}" CornerRadius="3" Margin="1" Opacity="0.55" />
+                  </ControlTemplate>
+                </Thumb.Template>
+              </Thumb>
+            </Track.Thumb>
+          </Track>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="ScrollBar:vertical">
+      <Setter Property="Width" Value="8" /><Setter Property="MinWidth" Value="8" /><Setter Property="MaxWidth" Value="8" />
+    </Style>
+    <Style Selector="ScrollBar:vertical /template/ Track"><Setter Property="IsDirectionReversed" Value="True" /></Style>
+    <Style Selector="ScrollBar:horizontal">
+      <Setter Property="Height" Value="8" /><Setter Property="MinHeight" Value="8" /><Setter Property="MaxHeight" Value="8" />
+    </Style>
+    <Style Selector="ScrollBar:horizontal /template/ Thumb"><Setter Property="MinHeight" Value="6" /><Setter Property="MinWidth" Value="24" /></Style>
     <Style Selector="Window">
       <Setter Property="Background" Value="{DynamicResource Surface}" />
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />

@@ -181,6 +181,8 @@ public sealed class DashboardWindow : Window
         Height = 640;
         CanResize = false;
         SystemDecorations = SystemDecorations.None;
+        TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
+        Background = Avalonia.Media.Brushes.Transparent;
         var root = Ui.Grid("*", "Auto,Auto,*,Auto");
         var header = Ui.Grid("*,Auto");
         header.Margin = new Thickness(24, 18);
@@ -241,7 +243,8 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += (_, _) => footer.Text = model.LastError ?? model.EditError ?? (model.Persistent ? "Migration build · saved locally" : model.IsDemo ? "Sample data · demo" : "Test session");
         footer.Margin = new Thickness(24, 10);
         Ui.Put(root, footer, row: 3);
-        Content = root;
+        var surface = new Border { Name = "DashboardSurface", CornerRadius = new CornerRadius(20), Child = root, ClipToBounds = true };
+        surface.Classes.Add("surface"); Content = surface;
         model.PropertyChanged += Changed;
         model.EntryRequested += ShowEntry;
         model.PositionRequested += ShowPosition; model.GroupRequested += ShowGroup;

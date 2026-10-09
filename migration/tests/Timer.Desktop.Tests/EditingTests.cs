@@ -58,7 +58,7 @@ public sealed class EditingTests
     }
 
     [Fact]
-    public void AddDeleteAndUndoAreReversibleAndRejectOverlapFutureAndStaleEntries()
+    public void AddDeleteAndUndoAreReversibleAndRejectOverlapAndStaleEntries()
     {
         var engine = Engine(); var row = Row(); engine.Sessions.Add(row); var editor = new LedgerEditor(engine);
         editor.Add("Account two", row.To, row.To.AddMinutes(30), "Added note");
@@ -67,12 +67,12 @@ public sealed class EditingTests
         Assert.Equal(Row(), engine.Sessions.Single());
         var current = engine.Sessions.Single();
         Assert.Throws<ArgumentException>(() => editor.Add("Account two", current.From.AddMinutes(20), current.To, ""));
-        Assert.Throws<ArgumentException>(() => editor.Add("Account two", engine.Now, engine.Now.AddMinutes(30), ""));
         Assert.Throws<ArgumentException>(() => editor.Edit(current, current.Account, current.From, current.From, ""));
         Assert.Throws<InvalidOperationException>(() => editor.Delete(row)); // Undo replaced this reference.
         Assert.Single(engine.Sessions);
         engine.ToggleAccount("Internal");
-        Assert.Throws<ArgumentException>(() => editor.Add("Account two", engine.Now, engine.Now.AddMinutes(1), ""));
+        editor.Add("Account two", engine.Now.AddHours(1), engine.Now.AddHours(2), "Future entry");
+        Assert.Equal(2, engine.Sessions.Count);
     }
 
     [Fact]

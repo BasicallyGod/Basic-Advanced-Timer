@@ -69,7 +69,6 @@ public sealed partial class LedgerEditor
     }
     private void ValidateInterval(SessionRow row, SessionRow? except)
     {
-        if (row.To > engine.Now) throw new ArgumentException("Time cannot extend into the future.");
         if (engine.Sessions.Any(s => !ReferenceEquals(s, except) && s.IsPositioned && s.Duration > TimeSpan.Zero && s.From < row.To && s.To > row.From)
             || Positions.Any(p => p.Start < row.To && p.End > row.From)
             || (engine.Active is { } active && active.Start < row.To && engine.Now > row.From))

@@ -1,5 +1,8 @@
 using System.Globalization;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Headless.XUnit;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
@@ -42,7 +45,7 @@ public sealed class CreditReviewTests
         finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }
     [Fact]
-    public void PlacementRejectsExcessOverlapFutureAndStaleEditsWithoutChangingTotals()
+    public void PlacementRejectsExcessOverlapAndStaleEditsWithoutChangingTotals()
     {
         var engine = Engine(); engine.Sessions.Add(Row("00:00:00", "60", "merged")); engine.Sessions.Add(Row("10:00:00", "60"));
         var editor = new LedgerEditor(engine); var original = editor.SessionsCsv;
@@ -50,7 +53,7 @@ public sealed class CreditReviewTests
         Assert.Throws<ArgumentException>(() => editor.Place("Account one", Day.AddHours(12), 31, ""));
         Assert.Throws<ArgumentException>(() => editor.Place("Account one", Day.AddHours(10), 20, ""));
         Assert.Throws<ArgumentException>(() => editor.Add("Internal", Day.AddHours(9), Day.AddHours(9.25), ""));
-        Assert.Throws<ArgumentException>(() => editor.Place("Account one", Day.AddHours(16), 20, ""));
+        editor.Place("Account one", Day.AddHours(16), 20, "Future placement"); editor.Undo();
         editor.Place("Account one", Day.AddHours(12), 60, "Moved", position);
         Assert.Equal(0, editor.Unplaced(Day)["Account one"]);
         Assert.Throws<InvalidOperationException>(() => editor.Unplace(position));
@@ -148,6 +151,47 @@ public sealed class CreditReviewTests
         dashboard.SelectTab(true); Capture(dashboard, "grouped-credit-week");
         Assert.NotNull(model.ExportPath); Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Detail.csv")));
         Directory.Delete(model.ExportPath!, true); export.Close(); dashboard.Close();
+    }
+
+    [Fact]
+    public void FutureEntriesCanBeAddedMovedAndPlacedWithinOneDay()
+    {
+        var engine = Engine(); var editor = new LedgerEditor(engine);
+        editor.Add("Account one", Day.AddDays(1).AddHours(9), Day.AddDays(1).AddHours(10), "Tomorrow");
+        var row = engine.Sessions.Single(); editor.Edit(row, row.Account, row.From.AddHours(1), row.To.AddHours(1), "Moved");
+        Assert.Equal(Day.AddDays(1).AddHours(10), engine.Sessions.Single().From);
+        engine.Sessions.Add(new("2026-10-10", "Account one", "00:00:00", "merged", "30"));
+        editor.Place("Account one", Day.AddDays(1).AddHours(12), 30, "Future credit");
+        Assert.Equal(0, editor.Unplaced(Day.AddDays(1))["Account one"]);
+        Assert.Throws<ArgumentException>(() => editor.Place("Account one", Day.AddDays(1).AddHours(10), 30, "Overlap", editor.Positions.Single()));
+    }
+    [AvaloniaFact]
+    public void GroupIsOneTimelineCardAndWeekUngroupRestoresSourceCards()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:33:00", "27") });
+        var model = new TimerModel(engine); model.GroupEntries(engine.Sessions.ToArray());
+        var dashboard = new DashboardWindow(model); dashboard.Show(); Capture(dashboard, "combined-group-timeline");
+        Assert.Single(dashboard.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is ReviewEntry));
+        Assert.Empty(dashboard.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow));
+        dashboard.SelectTab(true); Capture(dashboard, "explicit-ungroup-week");
+        var ungroup = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name?.StartsWith("Ungroup") == true);
+        ungroup.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); dashboard.SelectTab(false); Capture(dashboard, "ungrouped-timeline");
+        Assert.Equal(2, dashboard.GetVisualDescendants().OfType<Border>().Count(b => b.Tag is SessionRow));
+        Assert.Equal(57, engine.Sessions.Sum(s => decimal.Parse(s.Minutes, CultureInfo.InvariantCulture))); dashboard.Close();
+    }
+    [AvaloniaFact]
+    public void DashboardHasRoundedSurfaceAndSlimScrollbarStillDrags()
+    {
+        var model = TimerModel.CreateDemo(() => Day.AddHours(12)); var dashboard = new DashboardWindow(model); dashboard.Show();
+        Capture(dashboard, "dashboard-rounded-slim-scrollbars");
+        var surface = Find<Border>(dashboard, "DashboardSurface"); Assert.Equal(new CornerRadius(20), surface.CornerRadius); Assert.True(surface.ClipToBounds);
+        var scroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
+        var bar = scroll.GetVisualDescendants().OfType<ScrollBar>().Single(b => b.Orientation == Avalonia.Layout.Orientation.Vertical);
+        Assert.InRange(bar.Bounds.Width, 6, 8);
+        var thumb = bar.GetVisualDescendants().OfType<Thumb>().Single();
+        var point = thumb.TranslatePoint(new Point(thumb.Bounds.Width / 2, thumb.Bounds.Height / 2), dashboard)!.Value;
+        var old = scroll.Offset.Y; dashboard.MouseDown(point, MouseButton.Left); dashboard.MouseMove(point + new Vector(0, 20)); dashboard.MouseUp(point + new Vector(0, 20), MouseButton.Left);
+        Assert.True(scroll.Offset.Y > old); dashboard.Close();
     }
     private static T Find<T>(Window window, string name) where T : Control => window.GetLogicalDescendants().OfType<T>().Single(c => c.Name == name);
     private static void Capture(Window window, string name)

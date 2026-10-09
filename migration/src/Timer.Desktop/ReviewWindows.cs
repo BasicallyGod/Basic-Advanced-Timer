@@ -68,7 +68,7 @@ public sealed class PositionWindow : ReviewWindow
             }
             // A saved credited duration may finish between seconds; move inward to a whole second.
             suggested = day.AddSeconds(Math.Ceiling((suggested - day).TotalSeconds));
-            var cap = day == model.Engine.Now.Date ? model.Engine.Now : day.AddDays(1);
+            var cap = day.AddDays(1);
             var next = spans.Where(s => s.Start > suggested).Select(s => s.Start).Append(cap).Min();
             suggestedMinutes = Math.Max(0, Math.Min(suggestedMinutes, decimal.Floor((decimal)(next - suggested).TotalMinutes * 100m) / 100m));
         }
@@ -89,7 +89,16 @@ public sealed class GroupWindow : ReviewWindow
     {
         Height = 620;
         var group = id is null ? null : model.Editor.Entries(model.WeekStart(model.SelectedDate), model.WeekStart(model.SelectedDate).AddDays(7)).FirstOrDefault(e => e.GroupId == id);
-        var rows = group?.Sources ?? model.Engine.Sessions.Where(s => s.Day == model.SelectedDate && !s.IsMerged).OrderBy(s => s.From).ToArray();
+        var week = model.WeekStart(model.SelectedDate);
+        var existing = model.Editor.Entries(week, week.AddDays(7)).Where(e => e.GroupId is not null).ToArray();
+        if (id is null && existing.Length > 0)
+        {
+            Root.Children.Add(Ui.Text("Existing groups · open to inspect or ungroup", 13, "muted"));
+            foreach (var entry in existing)
+                Root.Children.Add(Ui.Button($"{entry.Day:ddd d MMM} · {entry.Account} · {entry.Sources.Count} entries", () => { var owner = Owner; Close(); if (owner is not null) new GroupWindow(model, entry.GroupId).Show(owner); }));
+        }
+        var grouped = existing.SelectMany(e => e.Sources).ToHashSet();
+        var rows = group?.Sources ?? model.Engine.Sessions.Where(s => s.Day >= week && s.Day < week.AddDays(7) && !s.IsMerged && !grouped.Contains(s)).OrderBy(s => s.From).ToArray();
         Root.Children.Add(Info("Group entries for the same account and day. Source intervals and credited totals stay intact."));
         var choices = new List<(CheckBox Check, SessionRow Row)>();
         foreach (var row in rows)
@@ -97,7 +106,7 @@ public sealed class GroupWindow : ReviewWindow
             if (id is not null) Root.Children.Add(Ui.Button($"{row.Account} · {row.From:HH:mm:ss} · {model.Format(row.Duration)} · {model.Editor.Note(row)}", () => { Close(); model.OpenEntry(row); }));
             else
             {
-                var check = new CheckBox { Content = $"{row.Account} · {row.From:HH:mm:ss} · {model.Format(row.Duration)}", Name = "GroupChoice" + model.Engine.Sessions.IndexOf(row) };
+                var check = new CheckBox { Content = $"{row.Day:ddd d MMM} · {row.Account} · {row.From:HH:mm:ss} · {model.Format(row.Duration)}", Name = "GroupChoice" + model.Engine.Sessions.IndexOf(row) };
                 choices.Add((check, row)); Root.Children.Add(check);
             }
         }

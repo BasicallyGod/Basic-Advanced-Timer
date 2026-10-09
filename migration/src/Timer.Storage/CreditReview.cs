@@ -54,7 +54,7 @@ public sealed partial class LedgerEditor
         if (minutes < .05m || minutes != decimal.Round(minutes, 2) || minutes > available)
             throw new ArgumentException("Choose at least 0.05 minutes, up to the available credit, with at most two decimal places.");
         var end = start.AddMinutes((double)minutes);
-        if (end > start.Date.AddDays(1) || end > engine.Now) throw new ArgumentException("Credit must fit within one day and cannot extend into the future.");
+        if (end > start.Date.AddDays(1)) throw new ArgumentException("Credit must fit within one day.");
         if (engine.Sessions.Any(s => s.IsPositioned && s.Duration > TimeSpan.Zero && s.From < end && s.To > start)
             || items.Any(p => p.Id != old?.Id && p.Start < end && p.End > start)
             || (engine.Active is { } active && active.Start < end && engine.Now > start))
