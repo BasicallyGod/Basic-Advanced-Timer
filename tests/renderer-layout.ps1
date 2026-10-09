@@ -151,6 +151,10 @@ try {
         }
         if ($mode -eq 'timeline' -and ($r.TlY -ne 216 -or $r.TlW -lt 500 -or $r.TlY + $r.TlH -gt 604)) { throw 'Timeline viewport does not match the dashboard body.' }
     }
+    $r.ActiveAccount = ''; $r.Status = 'NOT TRACKING'; $r.Drawer.Mode = 'timeline'
+    $idle = $r.Render(960, 640)
+    try { $idle.Save((Join-Path $outputDir 'dashboard-idle.png'), [Drawing.Imaging.ImageFormat]::Png) } finally { $idle.Dispose() }
+    $r.ActiveAccount = 'Account A'; $r.Drawer.Mode = 'week'
     $r.AccountScrollY = $r.Rows.Length * $r.RowH + $r.LunchGap - ([Win.FullRenderer]::AccountBottom - $r.RowTop)
     $scrolled = $r.Render(960, 640)
     try { $scrolled.Save((Join-Path $outputDir 'accounts-scrolled.png'), [Drawing.Imaging.ImageFormat]::Png) } finally { $scrolled.Dispose() }
@@ -230,29 +234,32 @@ foreach ($name in @('Draw-Pill', 'Fill-Area', 'New-RoundedPath', 'Draw-PlayIcon'
     if ($fn.Count -ne 1) { throw "Missing pill drawing function $name" }
     Invoke-Expression $fn[0].Extent.Text
 }
-function Get-StateTheme($view) { return @{ Panel = [Drawing.Color]::DarkGreen; Fill = [Drawing.Color]::LightGreen; Circle = [Drawing.Color]::ForestGreen; CircleHot = [Drawing.Color]::Green } }
+function Get-StateTheme($view) { return @{ Panel = [Drawing.ColorTranslator]::FromHtml('#f2f7f2'); Fill = [Drawing.ColorTranslator]::FromHtml('#3d984b'); Circle = [Drawing.ColorTranslator]::FromHtml('#e4eee5'); CircleHot = [Drawing.ColorTranslator]::FromHtml('#d4e5d6') } }
 function Mix-Colour($left, $right, $amount) { return $left }
 function Format-Dur($seconds) { return '0h 15m' }
 function Write-Log($message) { throw $message }
 $script:C = [Drawing.Color]; $script:RF = [Drawing.RectangleF]; $script:PF = [Drawing.PointF]
-$script:cWhite = [Drawing.Color]::White
+$script:cWhite = [Drawing.ColorTranslator]::FromHtml('#183523')
 $script:BudgetWarnColour = [Drawing.Color]::Gold; $script:BudgetOverColour = [Drawing.Color]::Red
 $script:PillShadow = $false; $script:PillPulse = $false; $script:PillLiveDot = $true
 $script:pillUp = $false; $script:pillHover = $null; $script:shapePath = $null
-$script:view = @{ PillTime = '0:29'; ActiveName = 'Client account'; ActiveToday = '0h 15m today'; Progress = 0.2; Rows = @($rows[0], $rows[12]); DayBtnText = 'Finish day' }
+$script:view = @{ H = '00'; M = '29'; Sec = '59'; PillTime = '0:29'; ActiveName = 'Client account'; ActiveToday = '0h 15m today'; Progress = 0.2; Rows = @($rows[0], $rows[12]); DayBtnText = 'Finish day' }
 $script:fRow = New-Object Drawing.Font('Segoe UI', 14, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
 $script:fPillSub = New-Object Drawing.Font('Segoe UI', 12, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
 $script:fPillTime = New-Object Drawing.Font('Segoe UI Semibold', 19, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
 $script:fDrawerBtn = $script:fRow
 foreach ($name in @('bWhite', 'bFaint', 'bDim', 'bTrack', 'bRowHover', 'bRowOn')) {
-    Set-Variable -Scope Script -Name $name -Value (New-Object Drawing.SolidBrush([Drawing.Color]::White))
+    Set-Variable -Scope Script -Name $name -Value (New-Object Drawing.SolidBrush($script:cWhite))
 }
-$script:pSep = New-Object Drawing.Pen([Drawing.Color]::LightGreen)
+$script:bRowHover.Dispose(); $script:bRowOn.Dispose()
+$script:bRowHover = New-Object Drawing.SolidBrush([Drawing.ColorTranslator]::FromHtml('#d4e5d6'))
+$script:bRowOn = New-Object Drawing.SolidBrush([Drawing.ColorTranslator]::FromHtml('#e4eee5'))
+$script:pSep = New-Object Drawing.Pen([Drawing.ColorTranslator]::FromHtml('#c9d7cd'))
 $script:sfCentre = New-Object Drawing.StringFormat
 $script:sfCentre.Alignment = 'Center'; $script:sfCentre.LineAlignment = 'Center'
 $script:sfName = New-Object Drawing.StringFormat
-$script:sfName.Trimming = 'EllipsisCharacter'; $script:sfName.FormatFlags = 'NoWrap'
-$script:sfRight = New-Object Drawing.StringFormat; $script:sfRight.Alignment = 'Far'
+$script:sfName.Trimming = 'EllipsisCharacter'; $script:sfName.FormatFlags = 'NoWrap'; $script:sfName.LineAlignment = 'Center'
+$script:sfRight = New-Object Drawing.StringFormat; $script:sfRight.Alignment = 'Far'; $script:sfRight.LineAlignment = 'Center'
 $layout = Get-PillLayout
 $bitmap = New-Object Drawing.Bitmap(350, ([int]$layout.Height))
 $graphics = [Drawing.Graphics]::FromImage($bitmap)
