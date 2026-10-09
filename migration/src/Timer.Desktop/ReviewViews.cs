@@ -151,7 +151,8 @@ public static class ReviewViews
         var scroll = new ScrollViewer { Name = "TimelineScroll", Content = canvas,
             Tag = new Vector(0, model.TimelineOffset ?? Math.Max(0, (first - day).TotalHours * pixelsPerHour - 24)),
             AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
-        scroll.ScrollChanged += (_, _) => model.TimelineOffset = scroll.Offset.Y;
+        scroll.ScrollChanged += (_, _) =>
+        { if (scroll.Tag is null && scroll.Viewport.Height > 0) model.TimelineOffset = scroll.Offset.Y; };
         scroll.AddHandler(InputElement.PointerWheelChangedEvent, (_, e) =>
         {
             if (!e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
