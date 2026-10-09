@@ -138,7 +138,7 @@ public static class ReviewViews
         {
             var start = emptyPress; emptyPress = null;
             if (start is not { } point || e.InitialPressMouseButton != MouseButton.Left || OnBlock(e.Source)
-                || (e.GetPosition(canvas) - point).Length > 5) return;
+                || Math.Pow(e.GetPosition(canvas).X - point.X, 2) + Math.Pow(e.GetPosition(canvas).Y - point.Y, 2) > 25) return;
             model.ClearSelection(); model.OpenGap(At(point.Y)); e.Handled = true;
         };
         var plan = model.Engine.Plan(day);
