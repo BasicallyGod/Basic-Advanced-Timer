@@ -11,6 +11,16 @@ public sealed record TimerAccount(string Name, string Colour, TimeSpan? Budget, 
 
 public sealed class TimerModel : INotifyPropertyChanged
 {
+    public double TimelinePixelsPerHour { get; private set; } = 160;
+    public double? TimelineOffset { get; set; }
+    public void ZoomTimeline(double wheel, double pointerY, double offset)
+    {
+        if (wheel == 0) return;
+        var previous = TimelinePixelsPerHour;
+        TimelinePixelsPerHour = Math.Clamp(previous * Math.Pow(1.2, wheel), 60, 640);
+        TimelineOffset = Math.Max(0, (offset + pointerY) / previous * TimelinePixelsPerHour - pointerY);
+        Notify();
+    }
     public TrackingEngine Engine { get; }
     public LedgerEditor Editor { get; }
     public string? EditError { get; private set; }
@@ -25,7 +35,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         .Count(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains));
     public bool CanMergeSelection => SelectedBlockCount >= 2 && selectedRows.Select(s => s.Day).Distinct().Count() == 1
         && selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() == 1 && Editor.CanCombine(selectedRows.ToArray());
-    public string MergeHint => SelectedBlockCount < 2 ? "Ctrl+left-click at least two blocks to merge." : CanMergeSelection
+    public string MergeHint => SelectedBlockCount < 2 ? "Click at least two blocks to merge." : CanMergeSelection
         ? $"Merge {SelectedBlockCount} blocks · adds {Format(TimeSpan.FromMinutes((double)Editor.MergeGapMinutes(selectedRows.ToArray())))} of gap time." : "Select blocks for the same account/day, with only blank gaps between them.";
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
     {
@@ -139,7 +149,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string BudgetText(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} of {Format(target)} this {a.Period}" : "No budget";
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
-    public void ChangeDate(int days) { selectedRows.Clear(); SelectedDate = SelectedDate.AddDays(days); Notify(); }
+    public void ChangeDate(int days) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
     public void SetTheme(string theme)
     {
         if (theme is not ("Light" or "Dark" or "System")) throw new ArgumentException("Unknown theme", nameof(theme));
