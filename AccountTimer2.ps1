@@ -4897,7 +4897,7 @@ function Get-TidyDayCandidates($timeline, [double]$maxMinutes, $away) {
         $from = $timeline.Day.Date.AddHours($gap.StartH)
         $to = $timeline.Day.Date.AddHours($gap.EndH)
         $isAway = $false
-        foreach ($iv in @($away)) { if ($iv[0] -lt $to -and $iv[1] -gt $from) { $isAway = $true; break } }
+        foreach ($iv in @($away)) { if (-not $iv) { continue }; if ($iv[0] -lt $to -and $iv[1] -gt $from) { $isAway = $true; break } }
         if ($isAway) { continue }
         $safe = Resolve-TimelineGapFill @($gap) $gap.StartH $gap.EndH
         if (-not $safe) { continue }
@@ -4933,7 +4933,7 @@ function Apply-TidyDay([datetime]$day, $selections, [double]$maxMinutes) {
         }
         foreach ($selection in $chosen) {
             $from = $day.Date.AddSeconds($selection.StartSecond)
-            $seconds = $selection.EndSecond - $selection.StartSecond
+            $seconds = [math]::Floor(($selection.EndSecond - $selection.StartSecond) / 0.6 + 0.000001) * 0.6
             [void]$logRows.Add((New-SessionRow $day.ToString('yyyy-MM-dd', $Inv) $selection.Account $from.ToString('HH:mm:ss', $Inv) 'added' $seconds))
         }
         return $true

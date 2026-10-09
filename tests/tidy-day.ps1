@@ -70,4 +70,12 @@ Assert (@(Get-TidyDayCandidates $future 5 @()).Count -eq 0) 'Future time must no
 $fractional = @{ Day = $day; Blocks = @((Block 'A' 9 (10 + 0.2/3600)), (Block 'B' (10 + 30.8/3600) 11)) }
 $small = @(Get-TidyDayCandidates $fractional 5 @())
 Assert ($small[0].StartSecond -eq 36001 -and $small[0].EndSecond -eq 36030) 'Fractional edges must be rounded safely inward.'
+
+$script:fixture = @{ Day = $day; Blocks = @((Block 'A' 9 10), (Block 'B' (10 + 31.0/3600) 11)) }
+$script:ledger.Clear()
+$gap31 = @(Get-TidyDayCandidates $script:fixture 5 @())[0]
+$fill31 = [pscustomobject]@{ StartSecond = $gap31.StartSecond; EndSecond = $gap31.EndSecond; Previous = 'A'; Next = 'B'; Account = 'A' }
+Assert (Apply-TidyDay $day @($fill31) 5) 'A 31-second gap must apply.'
+Assert (([double]$script:ledger[0].Minutes * 60) -le 31) 'CSV rounding must never extend into the next entry.'
 Write-Output 'Tidy day checks passed.'
+
