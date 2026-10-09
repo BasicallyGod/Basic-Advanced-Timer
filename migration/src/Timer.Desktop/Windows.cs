@@ -21,8 +21,8 @@ public sealed class WindowCoordinator
             Dashboard.Activate();
         };
         Dashboard.OpenPill = () => { Pill.Show(); Dashboard.Hide(); Pill.Activate(); };
-        Pill.Closing += (_, _) => exit();
-        Dashboard.Closing += (_, _) => exit();
+        Pill.Closed += (_, _) => exit();
+        Dashboard.Closed += (_, _) => exit();
     }
     private static void Fit(Window target, Window source, double width, double height)
     {

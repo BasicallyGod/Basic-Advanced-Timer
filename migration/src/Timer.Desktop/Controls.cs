@@ -106,6 +106,11 @@ public sealed class AccountIndicator : Control
         }
         else context.DrawGeometry(ink, null, Geometry.Parse("M 17,13 L 28,21 L 17,29 Z"));
     }
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == ActualThemeVariantProperty) InvalidateVisual();
+    }
     private IBrush Resource(string key) => this.TryFindResource(key, ActualThemeVariant, out var value) && value is IBrush brush
         ? brush : Brushes.Gray;
 }

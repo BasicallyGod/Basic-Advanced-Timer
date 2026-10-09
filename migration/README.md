@@ -22,7 +22,7 @@ dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --con
 dotnet publish migration/src/Timer.Desktop/Timer.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true -o artifacts/windows-preview
 ```
 
-Headless checks load the production app styles, bundled Inter font and actual window components. They check drawn row positions with pointer input, independent recording/overtime states, shared formats and view switching. They render both themes and tabs for inspection. CI runs on Windows, Linux and macOS; this verifies the shell, not complete native platform compatibility. Native DPI transitions, window positioning, transparency and the intended work-machine launch need desktop checks.
+Headless checks load the production app styles, bundled Inter font and actual window components. They check drawn row positions with pointer input before and after scrolling, independent recording/overtime states, shared formats and view switching. They render both themes and tabs for inspection. CI runs on Windows, Linux and macOS, and also starts the published Windows executable with a native pill/dashboard switch check. This verifies the shell, not complete native platform compatibility. Native DPI transitions, window positioning, transparency and the intended work-machine launch need desktop checks.
 
 ## Migration stages
 

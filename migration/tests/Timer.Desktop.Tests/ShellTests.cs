@@ -57,6 +57,8 @@ public sealed class ShellTests
             var idleColour = ((ISolidColorBrush)idle.Foreground!).Color;
             Assert.InRange(Math.Abs(idleColour.R - idleColour.G), 0, 15);
             Assert.NotEqual(idle.Foreground, overtime.Foreground);
+            var overtimeColour = ((ISolidColorBrush)overtime.Foreground!).Color;
+            Assert.True(overtimeColour.R > overtimeColour.G + 30);
             Assert.True(overtime.IsVisible);
             Assert.Equal(theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark, Application.Current!.ActualThemeVariant);
         }
