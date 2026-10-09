@@ -25,7 +25,7 @@ public sealed class WindowCoordinator
         Pill.ShowInTaskbar = false; Dashboard.ShowInTaskbar = false;
         Pill.OpenDashboard = () =>
         {
-            Fit(Dashboard, Pill, 960, 640);
+            Fit(Dashboard, Pill, 960 + 2 * Ui.ShadowMargin, 640 + 2 * Ui.ShadowMargin);
             Dashboard.Show();
             Pill.Hide();
             Dashboard.Activate();
@@ -54,7 +54,7 @@ public sealed class WindowCoordinator
     }
     public void ShowDashboard()
     {
-        if (!Dashboard.IsVisible) { Fit(Dashboard, Pill, 960, 640); Dashboard.Show(); }
+        if (!Dashboard.IsVisible) { Fit(Dashboard, Pill, 960 + 2 * Ui.ShadowMargin, 640 + 2 * Ui.ShadowMargin); Dashboard.Show(); }
         Pill.Hide(); BringToFront(Dashboard);
     }
     // The tray icon's left click shows the timer, or hides it when it is already in front.
@@ -106,26 +106,30 @@ public sealed class PillWindow : Window
     private readonly StackPanel expansion = new() { IsVisible = false, Spacing = 8 };
     private readonly Button day;
     private bool expanded;
-    public const double CollapsedHeight = 64;
+    public const double CollapsedHeight = 80;
+    public static double CollapsedWindowHeight => CollapsedHeight + 2 * Ui.ShadowMargin;
     private readonly TextBlock credited = Ui.Text("", 12, "muted");
     private readonly TextBlock dot = Ui.Text("●", 11);
     private readonly TextBlock overtime = Ui.Text("", 11, "overtime");
     private readonly Button pause;
     private readonly PauseGlyph pauseGlyph = new();
     private readonly TextBlock saved = Ui.Text("", 11, "muted");
+    private readonly Grid progressBar = new();
+    private Border progressFill = null!, shadowHost = null!;
+    private (bool, string?, Avalonia.Styling.ThemeVariant)? lastShadow;
     public PillWindow(TimerModel model)
     {
         this.model = model;
         Title = "Basic’s Advanced Timer migration";
         ContextMenu = Ui.SettingsMenu(model);
-        Width = 420;
-        Height = CollapsedHeight;
+        Width = 420 + 2 * Ui.ShadowMargin;
+        Height = CollapsedHeight + 2 * Ui.ShadowMargin;
         CanResize = false;
         Topmost = true;
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
-        var root = Ui.Grid("*", "64,*");
+        var root = Ui.Grid("*", "80,*");
         var head = Ui.Grid("Auto,1,*,36", "*");
         head.Margin = new Thickness(16, 0);
         var timerButton = Ui.Button("", () => OpenDashboard?.Invoke(), "PillDashboard");
@@ -155,10 +159,19 @@ public sealed class PillWindow : Window
         Ui.Put(head, pause, 3);
         Ui.PillGestures(head, this);
         Ui.Put(root, head);
+        // How far through the working day it is, as a thin line along the bottom of the pill's main row.
+        progressBar.Height = 4; progressBar.VerticalAlignment = VerticalAlignment.Bottom; progressBar.Margin = new Thickness(22, 0, 22, 6);
+        progressBar.ColumnDefinitions = new ColumnDefinitions("0*,1*");
+        var fill = new Border { Name = "DayProgressFill", CornerRadius = new CornerRadius(2) };
+        var rest = new Border { CornerRadius = new CornerRadius(2), Opacity = .8 }; rest.Classes.Add("rule");
+        progressFill = fill; Grid.SetColumn(fill, 0); Grid.SetColumn(rest, 1);
+        progressBar.Children.Add(rest); progressBar.Children.Add(fill);
+        progressBar.Name = "DayProgress"; progressBar.IsHitTestVisible = false;
+        Ui.Put(root, progressBar);
         expansion.Children.Add(Ui.Rule());
         expansion.Children.Add(new AccountList(model));
         day = Ui.Button("Start day", model.ToggleDay, "PillDay");
-        var actions = Ui.Horizontal(day, Ui.Button("×", Close, "HideToTray"));
+        var actions = Ui.Horizontal(day);
         actions.Margin = new Thickness(16, 0);
         expansion.Children.Add(actions);
         var bottom = Ui.Horizontal(Ui.SettingsButton(model), saved);
@@ -167,10 +180,11 @@ public sealed class PillWindow : Window
         Ui.Put(root, new ScrollViewer { Content = expansion,
             AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 1);
-        var surface = new Border { CornerRadius = new CornerRadius(24), Child = root, ClipToBounds = true };
+        var surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true };
         surface.Classes.Add("surface");
-        Content = surface;
+        shadowHost = Ui.Shadowed(surface, 24); Content = shadowHost;
         model.PropertyChanged += Changed;
+        ActualThemeVariantChanged += (_, _) => { lastShadow = null; Refresh(); };
         Closed += (_, _) => model.PropertyChanged -= Changed;
         Refresh();
     }
@@ -178,7 +192,7 @@ public sealed class PillWindow : Window
     {
         expanded = !expanded;
         expansion.IsVisible = expanded;
-        Height = expanded ? CollapsedHeight + model.Accounts.Count * 68 + 110 : CollapsedHeight;
+        Height = (expanded ? CollapsedHeight + model.Accounts.Count * 68 + 110 : CollapsedHeight) + 2 * Ui.ShadowMargin;
         if (Screens.ScreenFromWindow(this) is { } screen)
         {
             Height = Math.Min(Height, screen.WorkingArea.Height / screen.Scaling);
@@ -196,15 +210,29 @@ public sealed class PillWindow : Window
         var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);
         account.Text = model.ActiveAccount ?? (selected?.Name ?? model.AccountLabel);
         credited.Text = model.IsTracking && selected is not null ? model.Format(model.Today(selected)) + " today" : model.Status;
-        dot.Classes.Set("live", model.IsTracking); dot.Classes.Set("idle", !model.IsTracking);
+        dot.Classes.Set("live", model.IsTracking && !model.IsOnBreak); dot.Classes.Set("break", model.IsOnBreak); dot.Classes.Set("idle", !model.IsTracking);
+        Ui.Pulse(dot, model.IsTracking);
         overtime.IsVisible = model.IsOvertime;
         overtime.Text = "OT +" + model.Format(model.Engine.Totals(model.Engine.Now).Overtime);
         pauseGlyph.Playing = model.IsTracking; pauseGlyph.InvalidateVisual();
         pause.IsEnabled = model.IsTracking || selected is not null;
         ToolTip.SetTip(pause, model.IsTracking ? "Pause account; drag to move" : "Resume account; drag to move");
-        timer.Classes.Set("live", model.IsTracking);
+        timer.Classes.Set("live", model.IsTracking && !model.IsOnBreak); timer.Classes.Set("break", model.IsOnBreak);
         timer.Classes.Set("idle", !model.IsTracking);
         day.Content = model.DayStarted ? "Finish day" : "Start day";
+        var progress = model.DayProgress;
+        progressBar.IsVisible = progress is not null;
+        if (progress is { } done)
+        {
+            progressBar.ColumnDefinitions[0].Width = new GridLength(done, GridUnitType.Star);
+            progressBar.ColumnDefinitions[1].Width = new GridLength(1.0 - done, GridUnitType.Star);
+            progressFill.Classes.Set("progressOvertime", model.IsOvertime); progressFill.Classes.Set("progressBreak", model.IsOnBreak);
+            ToolTip.SetTip(progressBar, $"{(int)(done * 100)}% of the working day");
+        }
+        // The pill glows for a break, overtime and not tracking, so its state shows from across the room.
+        var glow = model.IsOnBreak ? "Break" : model.IsOvertime ? "Overtime" : !model.IsTracking ? "Idle" : null;
+        var shadow = (model.Shadows, glow, ActualThemeVariant);
+        if (lastShadow != shadow) { lastShadow = shadow; Ui.SetShadow(shadowHost, model.Shadows, glow); }
     }
 }
 
@@ -234,8 +262,8 @@ public sealed class DashboardWindow : Window
         this.model = model;
         Title = "Basic’s Advanced Timer migration";
         ContextMenu = Ui.SettingsMenu(model);
-        Width = 960;
-        Height = 640;
+        Width = 960 + 2 * Ui.ShadowMargin;
+        Height = 640 + 2 * Ui.ShadowMargin;
         CanResize = false;
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
@@ -244,7 +272,7 @@ public sealed class DashboardWindow : Window
         var header = Ui.Grid("*,Auto");
         header.Margin = new Thickness(24, 18);
         Ui.Put(header, today);
-        Ui.Put(header, Ui.Horizontal(Ui.SettingsButton(model), Ui.Button("Back to pill", () => OpenPill?.Invoke(), "BackToPill"), Ui.Button("×", Close, "HideToTray")), 1);
+        Ui.Put(header, Ui.Horizontal(Ui.SettingsButton(model), Ui.Button("Back to pill", () => OpenPill?.Invoke(), "BackToPill")), 1);
         Ui.DragHeader(header, this);
         Ui.Put(root, header);
         var strip = Ui.Grid("Auto,*,Auto");
@@ -301,8 +329,18 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += (_, _) => footer.Text = model.LastError ?? model.EditError ?? (model.Persistent ? "Migration build · saved locally" : model.IsDemo ? "Sample data · demo" : "Test session");
         footer.Margin = new Thickness(24, 10);
         Ui.Put(root, footer, row: 3);
-        var surface = new Border { Name = "DashboardSurface", CornerRadius = new CornerRadius(20), Child = root, ClipToBounds = true };
-        surface.Classes.Add("surface"); Content = surface;
+        var surface = new Border { Name = "DashboardSurface", Child = root, ClipToBounds = true };
+        surface.Classes.Add("surface");
+        var host = Ui.Shadowed(surface, 20); Content = host;
+        (bool, Avalonia.Styling.ThemeVariant)? lastShadow = null;
+        void UpdateShadow()
+        {
+            var state = (model.Shadows, ActualThemeVariant);
+            if (lastShadow != state) { lastShadow = state; Ui.SetShadow(host, model.Shadows, null); }
+        }
+        model.PropertyChanged += (_, _) => UpdateShadow();
+        ActualThemeVariantChanged += (_, _) => UpdateShadow();
+        UpdateShadow();
         KeyDown += (_, e) =>
         {
             if (e.Key == Avalonia.Input.Key.Escape) { model.ClearSelection(); e.Handled = true; }

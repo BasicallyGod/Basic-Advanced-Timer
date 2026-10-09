@@ -1,6 +1,6 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="Timer.Desktop.App" RequestedThemeVariant="Default">
+             xmlns:local="clr-namespace:Timer.Desktop" x:Class="Timer.Desktop.App" RequestedThemeVariant="Default">
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.ThemeDictionaries>
@@ -16,6 +16,8 @@
           <SolidColorBrush x:Key="Idle">#6D7471</SolidColorBrush>
           <SolidColorBrush x:Key="Overtime">#B83B3B</SolidColorBrush>
           <SolidColorBrush x:Key="BudgetWarning">#9D6C13</SolidColorBrush>
+          <SolidColorBrush x:Key="Break">#B07A12</SolidColorBrush>
+          <Color x:Key="ShadowColor">#59000000</Color>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
           <SolidColorBrush x:Key="Surface">#1B221F</SolidColorBrush>
@@ -29,6 +31,40 @@
           <SolidColorBrush x:Key="Idle">#ABB3AE</SolidColorBrush>
           <SolidColorBrush x:Key="Overtime">#FF9292</SolidColorBrush>
           <SolidColorBrush x:Key="BudgetWarning">#E8BD67</SolidColorBrush>
+          <SolidColorBrush x:Key="Break">#F0C45A</SolidColorBrush>
+          <Color x:Key="ShadowColor">#B3000000</Color>
+        </ResourceDictionary>
+        <!-- While a break is on, the whole app shifts to amber so it is obvious that no account is being timed.
+             These are variants of Light and Dark, so everything not listed here is inherited. -->
+        <ResourceDictionary x:Key="{x:Static local:TimerModel.BreakLight}">
+          <SolidColorBrush x:Key="Surface">#FBF1D6</SolidColorBrush>
+          <SolidColorBrush x:Key="Panel">#FFF8E5</SolidColorBrush>
+          <SolidColorBrush x:Key="Ink">#3A2C0B</SolidColorBrush>
+          <SolidColorBrush x:Key="Muted">#7A6A45</SolidColorBrush>
+          <SolidColorBrush x:Key="Line">#EBDDB4</SolidColorBrush>
+          <SolidColorBrush x:Key="Hover">#F4E6BC</SolidColorBrush>
+          <SolidColorBrush x:Key="Selected">#F1DC9C</SolidColorBrush>
+          <SolidColorBrush x:Key="Live">#337A50</SolidColorBrush>
+          <SolidColorBrush x:Key="Idle">#8A7A50</SolidColorBrush>
+          <SolidColorBrush x:Key="Overtime">#B83B3B</SolidColorBrush>
+          <SolidColorBrush x:Key="BudgetWarning">#9D6C13</SolidColorBrush>
+          <SolidColorBrush x:Key="Break">#B07A12</SolidColorBrush>
+          <Color x:Key="ShadowColor">#59000000</Color>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="{x:Static local:TimerModel.BreakDark}">
+          <SolidColorBrush x:Key="Surface">#2A2314</SolidColorBrush>
+          <SolidColorBrush x:Key="Panel">#342B18</SolidColorBrush>
+          <SolidColorBrush x:Key="Ink">#F7EBCB</SolidColorBrush>
+          <SolidColorBrush x:Key="Muted">#CDBB8E</SolidColorBrush>
+          <SolidColorBrush x:Key="Line">#54482A</SolidColorBrush>
+          <SolidColorBrush x:Key="Hover">#43381F</SolidColorBrush>
+          <SolidColorBrush x:Key="Selected">#5E4D22</SolidColorBrush>
+          <SolidColorBrush x:Key="Live">#8FD7A3</SolidColorBrush>
+          <SolidColorBrush x:Key="Idle">#C7B684</SolidColorBrush>
+          <SolidColorBrush x:Key="Overtime">#FF9292</SolidColorBrush>
+          <SolidColorBrush x:Key="BudgetWarning">#E8BD67</SolidColorBrush>
+          <SolidColorBrush x:Key="Break">#F0C45A</SolidColorBrush>
+          <Color x:Key="ShadowColor">#B3000000</Color>
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
     </ResourceDictionary>
@@ -68,6 +104,8 @@
     </Style>
     <Style Selector="ScrollBar:horizontal /template/ Thumb"><Setter Property="MinHeight" Value="6" /><Setter Property="MinWidth" Value="24" /></Style>
     <Style Selector="Window">
+      <!-- Fixed-width digits, so a clock or total does not shift its neighbours as the numbers change. -->
+      <Setter Property="TextElement.FontFeatures" Value="tnum" />
       <Setter Property="Background" Value="{DynamicResource Surface}" />
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
       <Setter Property="FontFamily" Value="avares://Avalonia.Fonts.Inter/Assets#Inter" />
@@ -77,6 +115,7 @@
     <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
     <Style Selector="TextBlock.idle"><Setter Property="Foreground" Value="{DynamicResource Idle}" /></Style>
     <Style Selector="TextBlock.live"><Setter Property="Foreground" Value="{DynamicResource Live}" /></Style>
+    <Style Selector="TextBlock.break"><Setter Property="Foreground" Value="{DynamicResource Break}" /></Style>
     <Style Selector="TextBlock.overtime"><Setter Property="Foreground" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.surface"><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
     <Style Selector="Border.panel"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
@@ -99,6 +138,9 @@
       <Setter Property="BorderThickness" Value="3" />
       <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
     </Style>
+    <Style Selector="Border#DayProgressFill"><Setter Property="Background" Value="{DynamicResource Live}" /></Style>
+    <Style Selector="Border#DayProgressFill.progressOvertime"><Setter Property="Background" Value="{DynamicResource Overtime}" /></Style>
+    <Style Selector="Border#DayProgressFill.progressBreak"><Setter Property="Background" Value="{DynamicResource Break}" /></Style>
     <Style Selector="Border.recording">
       <Setter Property="BorderThickness" Value="3" />
       <Setter Property="BorderBrush" Value="{DynamicResource Live}" />

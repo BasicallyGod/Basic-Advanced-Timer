@@ -8,7 +8,7 @@ using Timer.Core;
 namespace Timer.Storage;
 
 public sealed record AccountSettings(string Name, double? BudgetHours = null, string BudgetPeriod = "week", bool Hidden = false);
-public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart);
+public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true);
 public sealed record RecoveryState(int SchemaVersion, ActiveSession? Active, DateTime LastSeen);
 public sealed record SaveJournal(int SchemaVersion, Dictionary<string, string> Files);
 
@@ -139,9 +139,11 @@ public sealed class TimerStore : IDisposable
                 if (p.Length >= 4 && p[1].Length > 0) engine.Recover(new(p[2], DateTime.Parse(p[3], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)), DateTime.Parse(p[0], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
             }
         }
-        var theme = Lines("migrationAppearance").FirstOrDefault() ?? "System";
+        var appearance = Lines("migrationAppearance").ToList();
+        var theme = appearance.FirstOrDefault() ?? "System";
+        var shadows = !appearance.Skip(1).Contains("shadows=off");
         if (theme is not ("System" or "Light" or "Dark")) theme = "System";
-        return new(accounts, decimalHours, theme, weekStart);
+        return new(accounts, decimalHours, theme, weekStart, shadows);
     }
     public void Save(TrackingEngine engine, StoreSettings preferences)
     {
@@ -150,7 +152,7 @@ public sealed class TimerStore : IDisposable
         sections["dayStarts"] = Array(engine.DayStarts.OrderBy(p => p.Key).Select(p => $"{p.Key:yyyy-MM-dd}\t{p.Value:o}"));
         sections["dayOverrides"] = Array(engine.Schedule.Overrides.OrderBy(p => p.Key).Select(p => p.Value.Off
             ? $"{p.Key:yyyy-MM-dd}\toff" : $"{p.Key:yyyy-MM-dd}\t{p.Value.Shift!.Start:hh\\:mm}\t{p.Value.Shift.End:hh\\:mm}"));
-        sections["migrationAppearance"] = Array(new[] { preferences.Theme });
+        sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off" });
         sections["accounts"] = Array(preferences.Accounts.Select(a => a.Name + (a.Hidden ? "\thidden" : "")));
         var configured = preferences.Accounts.Select(a => a.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var budgets = Lines("budgets").Where(line => !configured.Contains(line.Split('\t')[0])).ToList();

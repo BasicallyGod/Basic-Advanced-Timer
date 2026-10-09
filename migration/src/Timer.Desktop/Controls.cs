@@ -5,11 +5,62 @@ using Avalonia.Media;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using Avalonia.Interactivity;
+using Avalonia.Styling;
 
 namespace Timer.Desktop;
 
 public static class Ui
 {
+    // Room around a borderless window for its soft shadow or glow, which are drawn outside the card.
+    public const double ShadowMargin = 22;
+    /// <summary>Wraps a window's card so it can cast a shadow or glow. The card clips its own content, so the shadow lives on a parent.</summary>
+    public static Border Shadowed(Border card, double radius)
+    {
+        card.CornerRadius = new CornerRadius(radius);
+        return new Border { Margin = new Thickness(ShadowMargin), CornerRadius = new CornerRadius(radius), Child = card, Name = "ShadowHost" };
+    }
+    public static Color ThemeColour(Control control, string key, Color fallback)
+    {
+        if (control.TryFindResource(key, control.ActualThemeVariant, out var value))
+            return value switch { Color c => c, ISolidColorBrush b => b.Color, _ => fallback };
+        return fallback;
+    }
+    /// <summary>The window's shadow, or a coloured glow in its place when <paramref name="glow"/> names a theme brush.</summary>
+    public static void SetShadow(Border host, bool shadows, string? glow)
+    {
+        if (glow is not null)
+        {
+            var colour = ThemeColour(host, glow, Colors.Gray);
+            host.BoxShadow = new BoxShadows(new BoxShadow { Blur = 26, Spread = 2, Color = Color.FromArgb(150, colour.R, colour.G, colour.B) });
+        }
+        else if (shadows)
+            host.BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 6, Blur = 22, Spread = 0, Color = ThemeColour(host, "ShadowColor", Color.FromArgb(90, 0, 0, 0)) });
+        else host.BoxShadow = default;
+    }
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Control, CancellationTokenSource> pulses = new();
+    /// <summary>Fades a control in and out gently while <paramref name="on"/> is true, as the live dot does while an account is recording.</summary>
+    public static void Pulse(Control control, bool on)
+    {
+        if (pulses.TryGetValue(control, out var running))
+        {
+            if (on) return;
+            running.Cancel(); pulses.Remove(control); control.Opacity = 1; return;
+        }
+        if (!on) return;
+        var source = new CancellationTokenSource(); pulses.Add(control, source);
+        var animation = new Avalonia.Animation.Animation
+        {
+            Duration = TimeSpan.FromSeconds(1.6), IterationCount = Avalonia.Animation.IterationCount.Infinite,
+            Children =
+            {
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0), Setters = { new Setter(Visual.OpacityProperty, 1.0) } },
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(.5), Setters = { new Setter(Visual.OpacityProperty, .3) } },
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1), Setters = { new Setter(Visual.OpacityProperty, 1.0) } },
+            }
+        };
+        _ = animation.RunAsync(control, source.Token);
+    }
+    public static bool IsPulsing(Control control) => pulses.TryGetValue(control, out _);
     public static TextBlock Text(string text, double size = 14, string? style = null)
     {
         var control = new TextBlock { Text = text, FontSize = size, VerticalAlignment = VerticalAlignment.Center };
@@ -121,14 +172,17 @@ public static class Ui
         };
         var startup = new MenuItem { Header = "Start with Windows", ToggleType = MenuItemToggleType.CheckBox };
         startup.Click += (_, _) => model.SetAutoStart(model.AutoStart?.IsEnabled != true);
+        var shadows = new MenuItem { Header = "Window shadows", ToggleType = MenuItemToggleType.CheckBox };
+        shadows.Click += (_, _) => model.SetShadows(!model.Shadows);
         var quit = new MenuItem { Header = "Close timer" };
         quit.Click += (_, _) => model.RequestQuit();
-        var menu = new ContextMenu { ItemsSource = new MenuItem[]
-        { new() { Header = "Appearance", ItemsSource = variants }, format, startup, shifts, accounts, demo, quit } };
+        // Closing sits alone at the bottom, apart from everyday actions, because the window has no close button.
+        var menu = new ContextMenu { ItemsSource = new Control[]
+        { new MenuItem { Header = "Appearance", ItemsSource = variants }, shadows, format, startup, shifts, accounts, demo, new Separator(), quit } };
         menu.Opened += (_, _) =>
         {
             foreach (var item in variants) item.IsChecked = (string?)item.Header == model.Theme;
-            format.IsChecked = model.DecimalHours;
+            format.IsChecked = model.DecimalHours; shadows.IsChecked = model.Shadows;
             startup.IsVisible = model.AutoStart?.Available == true;
             startup.IsChecked = model.AutoStart?.IsEnabled == true;
         };
@@ -209,7 +263,7 @@ public sealed class AccountIndicator : Control
 public sealed class AccountList : StackPanel
 {
     private readonly TimerModel model;
-    private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon)> rows = new();
+    private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot)> rows = new();
     private readonly bool reorderable;
     public AccountList(TimerModel model, bool reorderable = false)
     {
@@ -227,7 +281,8 @@ public sealed class AccountList : StackPanel
             var grid = Ui.Grid("44,*,Auto");
             var icon = Ui.Put(grid, new AccountIndicator(account, model));
             var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) };
-            labels.Children.Add(Ui.Text(account.Name, 15));
+            var dot = Ui.Text("●", 10, "live"); dot.IsVisible = false;
+            labels.Children.Add(Ui.Horizontal(Ui.Text(account.Name, 15), dot));
             var budget = Ui.Text(model.BudgetSummary(account), 12, "muted");
             budget.TextTrimming = TextTrimming.CharacterEllipsis;
             labels.Children.Add(budget);
@@ -237,7 +292,7 @@ public sealed class AccountList : StackPanel
             row.Click += (_, _) => model.ToggleAccount(account.Name);
             if (reorderable && account.Name != "Lunch") AttachReorder(row, account.Name);
             Children.Add(row);
-            rows.Add((account, row, today, budget, icon));
+            rows.Add((account, row, today, budget, icon, dot));
         }
         Refresh();
     }
@@ -299,6 +354,10 @@ public sealed class AccountList : StackPanel
             row.Budget.Text = model.BudgetSummary(row.Account);
             ToolTip.SetTip(row.Row, model.BudgetText(row.Account));
             row.Icon.InvalidateVisual();
+            // The live dot pulses beside the account that is recording.
+            var live = model.ActiveAccount == row.Account.Name;
+            row.Dot.IsVisible = live; row.Dot.Classes.Set("break", model.IsOnBreak); row.Dot.Classes.Set("live", !model.IsOnBreak);
+            Ui.Pulse(row.Dot, live);
         }
     }
 }

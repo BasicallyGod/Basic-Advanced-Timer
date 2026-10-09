@@ -94,7 +94,7 @@ public sealed partial class App : Application
                     }
                     else if (phase == 1)
                     {
-                        if (!windows.Dashboard.IsVisible || windows.Dashboard.ClientSize.Width > 960) { smoke.Stop(); desktop.Shutdown(1); return; }
+                        if (!windows.Dashboard.IsVisible || windows.Dashboard.ClientSize.Width > 960 + 2 * Ui.ShadowMargin) { smoke.Stop(); desktop.Shutdown(1); return; }
                         windows.Dashboard.OpenPill!();
                     }
                     else { smoke.Stop(); desktop.Shutdown(windows.Pill.IsVisible ? 0 : 1); }

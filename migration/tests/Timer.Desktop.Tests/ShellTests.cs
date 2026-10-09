@@ -113,7 +113,7 @@ public sealed class ShellTests
             coordinator.Pill.OpenDashboard!();
             Assert.True(coordinator.Dashboard.IsVisible);
             Assert.False(coordinator.Pill.IsVisible);
-            Assert.InRange(coordinator.Dashboard.Width, 1, 960);
+            Assert.InRange(coordinator.Dashboard.Width, 1, 960 + 2 * Ui.ShadowMargin);
             coordinator.Dashboard.OpenPill!();
             Assert.Equal("Account one", model.ActiveAccount);
             Assert.True(coordinator.Pill.IsVisible);
@@ -155,8 +155,8 @@ public sealed class ShellTests
             model.ToggleAccount("Account three");
             pill.ToggleExpansion();
             Save(pill, Path.Combine(output, "pill-expanded-Dark.png"));
-            Assert.Equal(960, dashboard.Width);
-            Assert.Equal(640, dashboard.Height);
+            Assert.Equal(960 + 2 * Ui.ShadowMargin, dashboard.Width);
+            Assert.Equal(640 + 2 * Ui.ShadowMargin, dashboard.Height);
         }
         finally { dashboard.Close(); pill.Close(); model.SetTheme("System"); }
     }
@@ -185,7 +185,7 @@ public sealed class ShellTests
             Assert.Empty(window.GetVisualDescendants().OfType<ComboBox>());
             Assert.NotNull(window.ContextMenu);
             var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings");
-            var appearance = ((IEnumerable<MenuItem>)button.ContextMenu!.ItemsSource!).First();
+            var appearance = ((IEnumerable<Control>)button.ContextMenu!.ItemsSource!).OfType<MenuItem>().First();
             var dark = ((IEnumerable<MenuItem>)appearance.ItemsSource!).Single(item => (string?)item.Header == "Dark");
             var elapsed = model.Elapsed;
             dark.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
@@ -325,16 +325,16 @@ public sealed class ShellTests
                 Dispatcher.UIThread.RunJobs();
             }
             Click("PillAccounts");
-            Assert.True(coordinator.Pill.Height > PillWindow.CollapsedHeight);
+            Assert.True(coordinator.Pill.Height > PillWindow.CollapsedWindowHeight);
             Assert.False(coordinator.Dashboard.IsVisible);
             Click("PillAccounts");
-            Assert.Equal(PillWindow.CollapsedHeight, coordinator.Pill.Height);
+            Assert.Equal(PillWindow.CollapsedWindowHeight, coordinator.Pill.Height);
             Click("PillDashboard");
             Assert.True(coordinator.Dashboard.IsVisible);
             Assert.False(coordinator.Pill.IsVisible);
             Assert.Equal("Account one", model.ActiveAccount);
             coordinator.Dashboard.OpenPill!();
-            Assert.Equal(PillWindow.CollapsedHeight, coordinator.Pill.Height);
+            Assert.Equal(PillWindow.CollapsedWindowHeight, coordinator.Pill.Height);
         }
         finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
     }
@@ -356,7 +356,7 @@ public sealed class ShellTests
                 coordinator.Pill.MouseMove(point + new Vector(20, 10));
                 coordinator.Pill.MouseUp(point + new Vector(20, 10), MouseButton.Left);
                 Assert.False(coordinator.Dashboard.IsVisible);
-                Assert.Equal(PillWindow.CollapsedHeight, coordinator.Pill.Height);
+                Assert.Equal(PillWindow.CollapsedWindowHeight, coordinator.Pill.Height);
                 Assert.Equal("Account one", model.ActiveAccount);
             }
             var pause = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillPause");

@@ -4,6 +4,14 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration visual stability and lost visuals
+
+- Times now use fixed-width digits, so the clock, totals and budgets no longer shift as numbers change.
+- Brought back the day progress line in the pill, the glow for a break, overtime and not tracking, and the pulsing live dot, which now also appears beside the recording account in the list.
+- Brought back drop shadows on the pill and dashboard, with a Window shadows setting. The windows have a transparent margin to hold them.
+- Removed the close button from both windows. Close timer now sits alone at the bottom of the menu, and the tray icon hides the timer.
+- Lunch now turns the whole app amber while it is on, through new BreakLight and BreakDark theme variants. Colours for break, glow and shadow are theme names in `App.axaml`, ready for custom themes.
+
 ## Migration start with Windows
 
 - Added a Start with Windows checkbox to the Settings menu. It uses the per-user sign-in list, needs no administrator rights and is removed by unticking. An explicit `--data-dir` folder is remembered, and the box shows as unticked if the saved entry points at a different copy of the program.

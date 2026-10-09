@@ -319,10 +319,36 @@ public sealed class TimerModel : INotifyPropertyChanged
         catch (Exception error) when (error is ArgumentException or InvalidOperationException or IOException)
         { EditError = error.Message; Notify(); return false; }
     }
+    // Break themes are variants of Light and Dark that override the colours, so the app turns amber while a break is on.
+    public static readonly ThemeVariant BreakLight = new("BreakLight", ThemeVariant.Light);
+    public static readonly ThemeVariant BreakDark = new("BreakDark", ThemeVariant.Dark);
+    private ThemeVariant? appliedVariant;
     private void ApplyTheme()
     {
-        if (Application.Current is { } app) app.RequestedThemeVariant = Theme switch
-        { "Light" => ThemeVariant.Light, "Dark" => ThemeVariant.Dark, _ => ThemeVariant.Default };
+        if (Application.Current is not { } app || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;
+        var dark = Theme switch
+        {
+            "Light" => false, "Dark" => true,
+            _ => app.PlatformSettings?.GetColorValues().ThemeVariant == Avalonia.Platform.PlatformThemeVariant.Dark
+        };
+        // Following the system when no break is on keeps the default variant, so a change of system theme still applies.
+        var variant = IsOnBreak ? (dark ? BreakDark : BreakLight)
+            : Theme switch { "Light" => ThemeVariant.Light, "Dark" => ThemeVariant.Dark, _ => ThemeVariant.Default };
+        if (ReferenceEquals(variant, appliedVariant)) return;
+        appliedVariant = variant; app.RequestedThemeVariant = variant;
+    }
+    public bool IsOnBreak => ActiveAccount == "Lunch";
+    public bool Shadows => preferences.Shadows;
+    public void SetShadows(bool on) { preferences = preferences with { Shadows = on }; Save(); Notify(); }
+    /// <summary>How far through the working day it is, from 0 to 1, or null on a day off.</summary>
+    public double? DayProgress
+    {
+        get
+        {
+            var plan = Engine.Plan(Engine.Now);
+            if (!plan.Working || plan.End <= plan.Start) return null;
+            return Math.Clamp((Engine.Now - plan.Start).TotalSeconds / (plan.End - plan.Start).TotalSeconds, 0.0, 1.0);
+        }
     }
     public void Tick()
     {
@@ -349,5 +375,5 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void RequestQuit() => QuitRequested?.Invoke();
     public bool StopForClose()
     { Engine.StopAccount(); var saved = Save(); if (!saved) Notify(); return saved; }
-    private void Notify() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
+    private void Notify() { ApplyTheme(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
 }
