@@ -227,6 +227,83 @@ public sealed class ShellTests
         finally { Directory.Delete(folder, true); }
     }
 
+    [AvaloniaFact]
+    public void HeadersAcceptBlankAndTextHitsButExcludeButtons()
+    {
+        var coordinator = new WindowCoordinator(Fixture(), () => { });
+        coordinator.Pill.Show(); coordinator.Pill.OpenDashboard!();
+        try
+        {
+            foreach (var window in new Window[] { coordinator.Pill, coordinator.Dashboard })
+            {
+                window.Show(); Dispatcher.UIThread.RunJobs();
+                using var frame = window.CaptureRenderedFrame();
+                var header = window.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "DragHeader");
+                Assert.NotNull(header.Background);
+                Assert.True(Ui.IsDragSurface(header));
+                Assert.True(Ui.IsDragSurface(header.GetVisualDescendants().OfType<TextBlock>().First()));
+                var button = header.GetVisualDescendants().OfType<Button>().First();
+                Assert.False(Ui.IsDragSurface(button));
+                Assert.All(button.GetVisualDescendants(), child => Assert.False(Ui.IsDragSurface(child)));
+            }
+        }
+        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void HiddenDashboardKeepsItsInitialTimelinePositionAndDemoShowsOvertime()
+    {
+        var now = new DateTime(2026, 10, 9, 12, 0, 0);
+        var model = TimerModel.CreateDemo(() => now);
+        Assert.False(model.Persistent);
+        Assert.True(model.Allocated > TimeSpan.Zero);
+        var coordinator = new WindowCoordinator(model, () => { });
+        coordinator.Pill.Show();
+        try
+        {
+            for (var i = 0; i < 30; i++) model.Tick();
+            Dispatcher.UIThread.RunJobs();
+            coordinator.Pill.OpenDashboard!();
+            var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();
+            Save(coordinator.Dashboard, Path.Combine(output, "demo-idle.png"));
+            var nine = coordinator.Dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
+            Assert.InRange(nine.TranslatePoint(default, coordinator.Dashboard)!.Value.Y, 250, 400);
+            model.ToggleAccount("Account one");
+            Save(coordinator.Dashboard, Path.Combine(output, "demo-tracking.png"));
+            Assert.Contains(coordinator.Dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Classes.Contains("live") && t.Text == model.ClockText);
+            model.ForceOvertime(); Assert.True(model.IsOvertime);
+            Save(coordinator.Dashboard, Path.Combine(output, "demo-overtime.png"));
+            coordinator.Dashboard.OpenPill!(); coordinator.Pill.ToggleExpansion();
+            Save(coordinator.Pill, Path.Combine(output, "demo-pill-overtime.png"));
+        }
+        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
+    }
+
+    [Fact]
+    public void EditedShiftsSurviveRestartAndControlDayClockAndOvertime()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-shifts-" + Guid.NewGuid());
+        var now = new DateTime(2026, 10, 9, 12, 0, 0);
+        try
+        {
+            using (var store = new TimerStore(folder))
+            {
+                var engine = new TrackingEngine(clock: () => now);
+                var model = new TimerModel(engine, store.Load(engine), store);
+                model.SetShifts(new() { [DayOfWeek.Friday] = new(TimeSpan.FromHours(10), TimeSpan.FromHours(11)) });
+                Assert.Equal(TimeSpan.FromHours(2), model.Elapsed); Assert.True(model.IsOvertime);
+            }
+            using (var store = new TimerStore(folder))
+            {
+                var engine = new TrackingEngine(clock: () => now); store.Load(engine);
+                Assert.Equal(TimeSpan.FromHours(10), engine.Plan(now).Start.TimeOfDay);
+                Assert.Equal(TimeSpan.FromHours(11), engine.Plan(now).End.TimeOfDay);
+                Assert.Single(engine.Schedule.Days); Assert.Equal(TimeSpan.FromHours(1), engine.Totals(now).Overtime);
+            }
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
     private static void Save(Window window, string path)
     {
         Dispatcher.UIThread.RunJobs();

@@ -51,6 +51,7 @@ public sealed class PillWindow : Window
     private readonly StackPanel expansion = new() { IsVisible = false, Spacing = 8 };
     private readonly Button day;
     private bool expanded;
+    private readonly Chevron chevron = new();
     private readonly TextBlock saved = Ui.Text("", 11, "muted");
     public PillWindow(TimerModel model)
     {
@@ -72,10 +73,13 @@ public sealed class PillWindow : Window
         labels.Children.Add(new TrackingLabels(model));
         Ui.Put(head, labels);
         Ui.Put(head, timer, 1).Margin = new Thickness(8, 0);
-        var toggle = Ui.Button("⌄", ToggleExpansion, "ExpandPill");
+        var toggle = Ui.Button("", ToggleExpansion, "ExpandPill");
+        toggle.Content = chevron;
+        toggle.HorizontalContentAlignment = HorizontalAlignment.Center;
+        toggle.VerticalContentAlignment = VerticalAlignment.Center;
         toggle.Classes.Add("round");
         Ui.Put(head, toggle, 2);
-        head.PointerPressed += (_, e) => { if (e.Source is TextBlock && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) BeginMoveDrag(e); };
+        Ui.DragHeader(head, this);
         Ui.Put(root, head);
         expansion.Children.Add(Ui.Rule());
         expansion.Children.Add(new AccountList(model));
@@ -99,6 +103,7 @@ public sealed class PillWindow : Window
     public void ToggleExpansion()
     {
         expanded = !expanded;
+        chevron.Expanded = expanded; chevron.InvalidateVisual();
         expansion.IsVisible = expanded;
         Height = expanded ? 560 : 88;
         if (Screens.ScreenFromWindow(this) is { } screen)
@@ -111,10 +116,12 @@ public sealed class PillWindow : Window
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
     private void Refresh()
     {
-        saved.Text = model.LastError is null ? (model.Persistent ? "Saved locally" : "Test session") : "Save failed; retrying";
+        saved.Text = model.LastError is null ? (model.Persistent ? "Saved locally" : model.IsDemo ? "Sample data · demo" : "Test session") : "Save failed; retrying";
         ToolTip.SetTip(saved, model.LastError);
         account.Text = model.AccountLabel;
         timer.Text = model.ClockText;
+        timer.Classes.Set("live", model.IsTracking);
+        timer.Classes.Set("idle", !model.IsTracking);
         day.Content = model.DayStarted ? "Finish day" : "Start day";
     }
 }
@@ -151,7 +158,7 @@ public sealed class DashboardWindow : Window
         header.Margin = new Thickness(24, 18);
         Ui.Put(header, today);
         Ui.Put(header, Ui.Horizontal(Ui.SettingsButton(model), Ui.Button("Back to pill", () => OpenPill?.Invoke(), "BackToPill"), Ui.Button("×", Close)), 1);
-        header.PointerPressed += (_, e) => { if (e.Source == today && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) BeginMoveDrag(e); };
+        Ui.DragHeader(header, this);
         Ui.Put(root, header);
         var strip = Ui.Grid("Auto,*,Auto");
         strip.Margin = new Thickness(24, 0, 24, 18);
@@ -194,8 +201,8 @@ public sealed class DashboardWindow : Window
         Ui.Put(review, workspace, row: 2);
         Ui.Put(body, review, 2);
         Ui.Put(root, body, row: 2);
-        var footer = Ui.Text(model.Persistent ? "Migration build · saved locally · timeline editing follows" : "Test session", 11, "muted");
-        model.PropertyChanged += (_, _) => footer.Text = model.LastError ?? (model.Persistent ? "Migration build · saved locally · timeline editing follows" : "Test session");
+        var footer = Ui.Text(model.Persistent ? "Migration build · saved locally · timeline editing follows" : model.IsDemo ? "Sample data · demo" : "Test session", 11, "muted");
+        model.PropertyChanged += (_, _) => footer.Text = model.LastError ?? (model.Persistent ? "Migration build · saved locally · timeline editing follows" : model.IsDemo ? "Sample data · demo" : "Test session");
         footer.Margin = new Thickness(24, 10);
         Ui.Put(root, footer, row: 3);
         Content = root;
@@ -208,6 +215,8 @@ public sealed class DashboardWindow : Window
     private void Refresh(bool refreshWorkspace)
     {
         clock.Text = model.ClockText;
+        clock.Classes.Set("live", model.IsTracking);
+        clock.Classes.Set("idle", !model.IsTracking);
         account.Text = model.AccountLabel;
         today.Text = model.Engine.Now.ToString("dddd, d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
         date.Text = model.SelectedDate.ToString("ddd d MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));

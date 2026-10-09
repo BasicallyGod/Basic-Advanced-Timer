@@ -49,3 +49,11 @@ dotnet publish migration/src/Timer.Desktop/Timer.Desktop.csproj --configuration 
 ```
 
 Tests use disposable synthetic data only. Core checks exercise early starts, account pauses, lunch, finish/resume, overtime, days off, midnight splitting and credited adjustments. Storage checks cover copied legacy formats, unknown-field preservation, locking, checkpoint recovery, journal replay and malformed-file handling. UI checks use production styles/fonts/windows, drawn row positions, shared formats and view switching. CI checks Windows, Linux and macOS, uploads rendered previews, and starts the published Windows executable with an isolated temporary store. Native DPI transitions, tray behaviour and the intended work-machine launch still need desktop checks.
+
+### UI review and sample data
+
+Both windows move by dragging their header, including its empty space, account label and clock in the pill. Header buttons remain clickable. The main clock turns green while tracking and grey while idle; overtime has its own red label.
+
+Run **Start-Demo.cmd** from the Windows preview folder, or choose **Settings → Open sample-data demo**. Demo mode has populated accounts, budgets and recorded intervals. It uses a simulated 14:15 clock on today's date, advances in real time, and never opens or saves personal data. Choose **Settings → Force overtime** inside the demo to set today's shift end to 13:00. Restart the demo to reset it. CLI: `--demo` (cannot be combined with `--data-dir`).
+
+**Settings → Working hours** edits each weekday's working status, start and end. These changes persist in normal mode. The optional “Also reset today” checkbox removes today's exceptional start/shift so the new schedule applies; it does not change account records or finished-day breaks. Overnight shifts remain unsupported at this stage. Copied-data imports still require `--data-dir` as described above; normal launch starts with your migration-data folder, without synthetic records.

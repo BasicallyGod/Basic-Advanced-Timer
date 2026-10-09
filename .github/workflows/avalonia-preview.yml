@@ -40,7 +40,9 @@ jobs:
       - name: Include preview instructions
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Copy-Item migration/README.md artifacts/windows-preview/README.md
+        run: |
+          Copy-Item migration/README.md artifacts/windows-preview/README.md
+          Copy-Item migration/Start-Demo.cmd artifacts/windows-preview/Start-Demo.cmd
       - name: Check the published native executable starts and switches views
         if: runner.os == 'Windows'
         shell: pwsh

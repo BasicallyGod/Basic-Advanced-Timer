@@ -2,6 +2,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Input;
+using Avalonia.VisualTree;
+using Avalonia.Interactivity;
 
 namespace Timer.Desktop;
 
@@ -37,6 +40,18 @@ public static class Ui
         foreach (var c in children) p.Children.Add(c);
         return p;
     }
+    public static bool IsDragSurface(object? source) => source is Visual visual
+        && visual is not Button && !visual.GetVisualAncestors().OfType<Button>().Any();
+    public static void DragHeader(Control header, Window window)
+    {
+        if (header is Panel panel) panel.Background = Brushes.Transparent;
+        header.Name = "DragHeader";
+        header.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
+        {
+            if (IsDragSurface(e.Source) && e.GetCurrentPoint(window).Properties.IsLeftButtonPressed)
+            { window.BeginMoveDrag(e); e.Handled = true; }
+        }, RoutingStrategies.Tunnel);
+    }
     public static ContextMenu SettingsMenu(TimerModel model)
     {
         var variants = new List<MenuItem>();
@@ -49,8 +64,18 @@ public static class Ui
         }
         var format = new MenuItem { Header = "Decimal hours", IsChecked = model.DecimalHours, ToggleType = MenuItemToggleType.CheckBox };
         format.Click += (_, _) => model.ToggleFormat();
+        var shifts = new MenuItem { Header = "Working hours…" };
+        shifts.Click += (_, _) => { if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life)
+            new ShiftWindow(model).Show(life.Windows.First(w => w.IsVisible)); };
+        var demo = new MenuItem { Header = model.IsDemo ? "Force overtime" : "Open sample-data demo" };
+        demo.Click += (_, _) =>
+        {
+            if (model.IsDemo) model.ForceOvertime();
+            else if (Environment.ProcessPath is { } executable)
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(executable, "--demo") { UseShellExecute = true });
+        };
         var menu = new ContextMenu { ItemsSource = new MenuItem[]
-        { new() { Header = "Appearance", ItemsSource = variants }, format } };
+        { new() { Header = "Appearance", ItemsSource = variants }, format, shifts, demo } };
         menu.Opened += (_, _) =>
         {
             foreach (var item in variants) item.IsChecked = (string?)item.Header == model.Theme;
@@ -193,5 +218,19 @@ public sealed class TrackingLabels : StackPanel
         void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Refresh(); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
+    }
+}
+
+public sealed class Chevron : Control
+{
+    public bool Expanded { get; set; }
+    public Chevron() { Width = 14; Height = 14; }
+    public override void Render(DrawingContext context)
+    {
+        var brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
+        var pen = new Pen(brush, 1.8);
+        var y = Expanded ? 9 : 5;
+        context.DrawLine(pen, new Point(2, y), new Point(7, Expanded ? 4 : 10));
+        context.DrawLine(pen, new Point(7, Expanded ? 4 : 10), new Point(12, y));
     }
 }

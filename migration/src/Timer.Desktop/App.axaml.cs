@@ -26,21 +26,27 @@ public sealed partial class App : Application
             {
                 var args = desktop.Args ?? Array.Empty<string>();
                 var index = Array.IndexOf(args, "--data-dir");
+                var demoMode = args.Contains("--demo");
+                if (demoMode && index >= 0) throw new ArgumentException("Demo mode cannot open a data folder.");
                 if (index >= 0 && index + 1 >= args.Length) throw new ArgumentException("--data-dir requires a folder path.");
                 var folder = smokeMode ? Path.Combine(Path.GetTempPath(), "timer-smoke-" + Guid.NewGuid())
                     : index >= 0 ? args[index + 1] : Path.Combine(AppContext.BaseDirectory, "migration-data");
+                if (demoMode) model = TimerModel.CreateDemo();
+                else
+                {
                 store = new TimerStore(folder);
                 var engine = new TrackingEngine();
                 var preferences = store.Load(engine);
                 model = new TimerModel(engine, preferences, store);
                 if (!model.Save()) throw new IOException(model.LastError);
+                }
                 var openedStore = store;
                 var released = false;
                 desktop.Exit += (_, _) =>
                 {
                     if (released) return;
                     released = true;
-                    openedStore.Dispose();
+                    openedStore?.Dispose();
                     if (smokeMode && Directory.Exists(folder)) Directory.Delete(folder, true);
                 };
             }

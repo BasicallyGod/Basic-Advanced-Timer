@@ -129,9 +129,19 @@ public sealed class TimerStore : IDisposable
         if (engine.Sessions.Count < originalCount) throw new InvalidOperationException("This migration stage cannot edit or remove source sessions.");
         var sections = (JsonObject)settings["sections"]!;
         sections["dayStarts"] = Array(engine.DayStarts.OrderBy(p => p.Key).Select(p => $"{p.Key:yyyy-MM-dd}\t{p.Value:o}"));
+        sections["dayOverrides"] = Array(engine.Schedule.Overrides.OrderBy(p => p.Key).Select(p => p.Value.Off
+            ? $"{p.Key:yyyy-MM-dd}\toff" : $"{p.Key:yyyy-MM-dd}\t{p.Value.Shift!.Start:hh\\:mm}\t{p.Value.Shift.End:hh\\:mm}"));
         sections["migrationAppearance"] = Array(new[] { preferences.Theme });
         if (sections["accounts"] is null) sections["accounts"] = Array(preferences.Accounts.Select(a => a.Name));
-        var hours = Lines("workingHours").Where(s => !s.StartsWith("hours=", StringComparison.OrdinalIgnoreCase)).ToList();
+        var hours = Lines("workingHours").Where(s =>
+        {
+            var key = s.Split('=')[0];
+            return key is not ("start" or "end" or "days" or "hours") && !key.StartsWith("shift.", StringComparison.OrdinalIgnoreCase);
+        }).ToList();
+        hours.Add($"start={engine.Schedule.Default.Start:hh\\:mm}");
+        hours.Add($"end={engine.Schedule.Default.End:hh\\:mm}");
+        hours.Add("days=" + string.Join(",", engine.Schedule.Days.OrderBy(d => (int)d)));
+        hours.AddRange(engine.Schedule.Shifts.OrderBy(p => (int)p.Key).Select(p => $"shift.{p.Key}={p.Value.Start:hh\\:mm},{p.Value.End:hh\\:mm}"));
         hours.Add("hours=" + (preferences.DecimalHours ? "decimal" : "hm")); sections["workingHours"] = Array(hours);
         var rows = new List<Dictionary<string, string>>(originalRows);
         foreach (var s in engine.Sessions.Skip(originalCount)) rows.Add(new() { ["Date"] = s.Date, ["Account"] = s.Account, ["Start"] = s.Start, ["End"] = s.End, ["Minutes"] = s.Minutes });

@@ -37,6 +37,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public DateTime SelectedDate { get; private set; }
     public string Theme => preferences.Theme;
     public string? LastError { get; private set; }
+    public bool IsDemo { get; private set; }
     public bool Persistent => store is not null;
     public TimeSpan Elapsed => Engine.Totals(Engine.Now).Elapsed;
     public TimeSpan AccountElapsed => Engine.ActiveElapsed;
@@ -83,6 +84,37 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (theme is not ("Light" or "Dark" or "System")) throw new ArgumentException("Unknown theme", nameof(theme));
         preferences = preferences with { Theme = theme }; ApplyTheme(); Save(); Notify();
+    }
+    public static TimerModel CreateDemo(Func<DateTime>? clock = null)
+    {
+        var realClock = clock ?? (() => DateTime.Now);
+        var wallStart = realClock();
+        var anchor = wallStart.Date.AddHours(14).AddMinutes(15);
+        var engine = new TrackingEngine(clock: () => anchor + (realClock() - wallStart));
+        engine.Schedule.Days.Add(anchor.DayOfWeek);
+        var prefs = new StoreSettings(new() { new("Account one", 15), new("Account two", 10), new("Account three", 5), new("Internal") }, false, "System", DayOfWeek.Monday);
+        var start = anchor.Date.AddHours(9);
+        var names = new[] { "Account one", "Account two", "Lunch", "Account three", "Internal" };
+        var minutes = new[] { 105, 90, 30, 45, 30 };
+        for (var i = 0; i < names.Length; i++) { engine.AddSession(names[i], start, start.AddMinutes(minutes[i])); start = start.AddMinutes(minutes[i]); }
+        var monday = anchor.Date.AddDays(-((7 + (int)anchor.DayOfWeek - 1) % 7));
+        if (monday < anchor.Date) engine.AddSession("Account one", monday.AddHours(9), monday.AddHours(16));
+        return new TimerModel(engine, prefs) { IsDemo = true };
+    }
+    public void ForceOvertime()
+    {
+        if (!IsDemo) throw new InvalidOperationException("Overtime simulation is available only in the demo.");
+        Engine.Schedule.Overrides[Engine.Now.Date] = new(false, new(TimeSpan.FromHours(9), TimeSpan.FromHours(13)));
+        Notify();
+    }
+    public void SetShifts(Dictionary<DayOfWeek, Shift> shifts, bool resetToday = false)
+    {
+        if (shifts.Count == 0 || shifts.Values.Any(s => s.Start < TimeSpan.Zero || s.End >= TimeSpan.FromDays(1) || s.End <= s.Start))
+            throw new ArgumentException("Choose at least one working day, with an end after its start.");
+        Engine.Schedule.Days = shifts.Keys.ToHashSet();
+        Engine.Schedule.Shifts = new(shifts);
+        if (resetToday) { Engine.Schedule.Overrides.Remove(Engine.Now.Date); Engine.DayStarts.Remove(Engine.Now.Date); }
+        Save(); Notify();
     }
     private void ApplyTheme()
     {

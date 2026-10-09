@@ -96,9 +96,14 @@ public static class ReviewViews
         DeferOffset(scroll);
         return scroll;
     }
-    private static void DeferOffset(ScrollViewer scroll) => scroll.AttachedToVisualTree += (_, _) =>
-        Dispatcher.UIThread.Post(() =>
+    private static void DeferOffset(ScrollViewer scroll)
+    {
+        // Hidden windows can attach before they have a viewport. Keep the requested
+        // position until a visible layout can apply it, rather than saving a clamped zero.
+        scroll.LayoutUpdated += (_, _) =>
         {
-            if (scroll.Tag is Vector offset) { scroll.Offset = offset; scroll.Tag = null; }
-        }, DispatcherPriority.Loaded);
+            if (scroll.Tag is Vector offset && scroll.Viewport.Height > 0 && scroll.Extent.Height > scroll.Viewport.Height)
+            { scroll.Offset = offset; scroll.Tag = null; }
+        };
+    }
 }

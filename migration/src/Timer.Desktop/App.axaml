@@ -50,6 +50,8 @@
     <Style Selector="Border.panel"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
     <Style Selector="Border.rule"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Button">
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="CornerRadius" Value="8" />
       <Setter Property="Background" Value="{DynamicResource Panel}" />
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
