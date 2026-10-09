@@ -240,9 +240,9 @@ $script:BudgetWarnColour = [Drawing.Color]::Gold; $script:BudgetOverColour = [Dr
 $script:PillShadow = $false; $script:PillPulse = $false; $script:PillLiveDot = $true
 $script:pillUp = $false; $script:pillHover = $null; $script:shapePath = $null
 $script:view = @{ PillTime = '0:29'; ActiveName = 'Client account'; ActiveToday = '0h 15m today'; Progress = 0.2; Rows = @($rows[0], $rows[12]); DayBtnText = 'Finish day' }
-$script:fRow = New-Object Drawing.Font('Segoe UI', 14)
-$script:fPillSub = New-Object Drawing.Font('Segoe UI', 12)
-$script:fPillTime = New-Object Drawing.Font('Segoe UI', 19)
+$script:fRow = New-Object Drawing.Font('Segoe UI', 14, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
+$script:fPillSub = New-Object Drawing.Font('Segoe UI', 12, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
+$script:fPillTime = New-Object Drawing.Font('Segoe UI Semibold', 19, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
 $script:fDrawerBtn = $script:fRow
 foreach ($name in @('bWhite', 'bFaint', 'bDim', 'bTrack', 'bRowHover', 'bRowOn')) {
     Set-Variable -Scope Script -Name $name -Value (New-Object Drawing.SolidBrush([Drawing.Color]::White))
@@ -263,7 +263,7 @@ try {
 Write-Output 'Expanded pill ring and footer drawing checks passed.'
 
 # Exercise production formatting for fractional budgets and summary values.
-foreach ($name in @('Format-Dur', 'Format-BudgetUsage', 'Get-ViewZoom', 'Request-Redraw', 'Set-View')) {
+foreach ($name in @('Format-Dur', 'Format-BudgetUsage', 'Get-ViewZoom', 'Request-Redraw', 'Set-View', 'Update-Dpi')) {
     $fn = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true))
     Invoke-Expression $fn[0].Extent.Text
 }
@@ -279,6 +279,8 @@ foreach ($format in @('hm', 'decimal')) {
 # Run the production view transition with a real WinForms window, substituting
 # persistence and drawing so no user data is touched and each frame is recorded.
 Add-Type -AssemblyName System.Windows.Forms
+$dpiBlock = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.StringConstantExpressionAst] -and $node.Value.Contains('extern uint GetDpiForWindow') }, $true))
+Add-Type -Namespace Win -Name Dpi -MemberDefinition $dpiBlock[0].Value
 $form = New-Object Windows.Forms.Form
 $form.AutoScaleMode = 'None'
 $tip = New-Object Windows.Forms.ToolTip
@@ -306,6 +308,11 @@ try {
     if ($form.ClientSize.Width -gt $area.Width -or $form.ClientSize.Height -gt $area.Height) { throw 'Dashboard transition exceeds the monitor working area.' }
     $expectedZoom = Get-ViewZoom
     if ([math]::Abs($script:Zoom - $expectedZoom) -gt 0.001) { throw 'Transition ignores fitted DPI scale.' }
+    $script:perMonitor = $true
+    $script:Zoom = 6
+    Update-Dpi
+    if ([math]::Abs($script:Zoom - (Get-ViewZoom)) -gt 0.001 -or $script:Zoom -ge 6) { throw 'DPI update restores the oversized dashboard scale.' }
+    if ($form.ClientSize.Width -gt $area.Width -or $form.ClientSize.Height -gt $area.Height) { throw 'DPI update exceeds the monitor working area.' }
     $script:frames = @()
     Set-View 'pill'
     if ($script:frames.Count -ne 1 -or $script:frames[0].Mode -ne 'pill') { throw 'Return to pill renders intermediate frames.' }
