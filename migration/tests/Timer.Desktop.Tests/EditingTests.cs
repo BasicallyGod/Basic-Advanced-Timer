@@ -146,7 +146,7 @@ public sealed class EditingTests
     [AvaloniaFact]
     public void NoteOnlyDialogPreservesFractionalCreditAndDoubleClickRequestsAnEditor()
     {
-        var engine = Engine(); var row = Row(end: "09:01:01", minutes: "1.01"); engine.Sessions.Add(row);
+        var engine = Engine(); var row = Row(end: "09:01:01", minutes: "1.01") with { Account = "ACCOUNT ONE" }; engine.Sessions.Add(row);
         var model = new TimerModel(engine);
         var editor = new EntryWindow(model, row, row.From, row.To); editor.Show();
         try

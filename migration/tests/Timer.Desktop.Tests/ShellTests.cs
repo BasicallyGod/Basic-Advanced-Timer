@@ -26,7 +26,7 @@ public static class TestAppBuilder
 
 public sealed class ShellTests
 {
-    [Fact]
+    [AvaloniaFact]
     public void SwitchingAccountsPreservesElapsedAndFinishStopsRecording()
     {
         var now = new DateTime(2026, 10, 9, 9, 0, 0);
@@ -280,7 +280,7 @@ public sealed class ShellTests
         finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void EditedShiftsSurviveRestartAndControlDayClockAndOvertime()
     {
         var folder = Path.Combine(Path.GetTempPath(), "timer-shifts-" + Guid.NewGuid());

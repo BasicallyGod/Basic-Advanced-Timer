@@ -17,7 +17,8 @@ public sealed class EntryWindow : Window
         root.Children.Add(Ui.Text(Title, 22));
         root.Children.Add(Ui.Text(start.ToString("dddd, d MMMM yyyy"), 13, "muted"));
         var names = model.ReviewAccounts.Select(a => a.Name).Concat(model.Engine.Sessions.Select(s => s.Account)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        var accounts = new ComboBox { Name = "EntryAccount", ItemsSource = names, SelectedItem = row?.Account ?? model.SelectedAccount ?? names.First(), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch, IsEnabled = editableTime };
+        var initialAccount = names.FirstOrDefault(n => n.Equals(row?.Account ?? model.SelectedAccount, StringComparison.OrdinalIgnoreCase)) ?? names.First();
+        var accounts = new ComboBox { Name = "EntryAccount", ItemsSource = names, SelectedItem = initialAccount, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch, IsEnabled = editableTime };
         root.Children.Add(accounts);
         var times = Ui.Grid("*,24,*");
         var from = new TextBox { Name = "EntryStart", Text = start.ToString("HH:mm:ss"), IsEnabled = editableTime };
@@ -43,7 +44,7 @@ public sealed class EntryWindow : Window
             {
                 if (applied) { if (model.Save()) Close(); else error.Text = model.LastError; return; }
                 var previous = model.Editor.UndoState;
-                if (model.EditEntry(row, (string?)accounts.SelectedItem ?? row?.Account ?? "", editableTime && from.Text != initialStart ? Parse(from.Text, false) : start,
+                if (model.EditEntry(row, row is not null && (string?)accounts.SelectedItem == initialAccount ? row.Account : (string?)accounts.SelectedItem ?? row?.Account ?? "", editableTime && from.Text != initialStart ? Parse(from.Text, false) : start,
                     editableTime && until.Text != initialEnd ? Parse(until.Text, true) : end, note.Text ?? "")) Close();
                 else
                 {
