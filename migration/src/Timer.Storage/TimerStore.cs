@@ -20,6 +20,9 @@ public sealed class TimerStore : IDisposable
     private JsonObject settings = new();
     private readonly List<string> headers = new() { "Date", "Account", "Start", "End", "Minutes" };
     private readonly List<Dictionary<string, string>> originalRows = new();
+    // What each file held the last time this run wrote it. A file whose content has not changed is not written
+    // again, so a quiet 15 second checkpoint no longer rewrites the whole ledger, settings and edit history.
+    private readonly Dictionary<string, string> written = new();
     public LedgerEditor? Editor { get; private set; }
     public string ExportDirectory => Path.Combine(directory, "Timesheets", "Exports");
     public TimerStore(string directory)
@@ -168,9 +171,13 @@ public sealed class TimerStore : IDisposable
             files["Timesheets/credit-positions.csv"] = Editor.PositionsCsv;
             files["Timesheets/entry-groups.csv"] = Editor.GroupsCsv ?? "GroupId,Date,Account,Start,End,Minutes\n";
         }
-        Atomic("migration-journal.json", JsonSerializer.Serialize(new SaveJournal(1, files)), false);
-        foreach (var file in files) Atomic(file.Key, file.Value, true);
+        var changed = files.Where(f => !written.TryGetValue(f.Key, out var previous) || previous != f.Value).ToDictionary(f => f.Key, f => f.Value);
+        if (changed.Count == 0) return;
+        Atomic("migration-journal.json", JsonSerializer.Serialize(new SaveJournal(1, changed)), false);
+        foreach (var file in changed) Atomic(file.Key, file.Value, true);
         File.Delete(Path.Combine(directory, "migration-journal.json"));
+        // Only remembered once everything has been written, so a failed save is retried in full.
+        foreach (var file in changed) written[file.Key] = file.Value;
 
     }
     private void RecoverJournal()
@@ -179,7 +186,8 @@ public sealed class TimerStore : IDisposable
         if (!File.Exists(path)) return;
         var journal = JsonSerializer.Deserialize<SaveJournal>(File.ReadAllText(path)) ?? throw new InvalidDataException("Invalid save journal.");
         var allowed = new[] { "Timesheets/sessions.csv", "basics-advanced-timer.settings.json", "account-timer-away.txt", "migration-recovery.json", "account-timer-state.txt", "migration-edit-state.json", "Timesheets/notes.csv", "Timesheets/entry-groups.csv", "Timesheets/credit-positions.csv" };
-        if (journal.SchemaVersion != 1 || journal.Files.Keys.Except(allowed).Any() || allowed.Take(5).Except(journal.Files.Keys).Any()) throw new InvalidDataException("Unsupported save journal.");
+        // A journal lists only the files that changed in that save, so it may hold any non-empty subset of the known files.
+        if (journal.SchemaVersion != 1 || journal.Files.Count == 0 || journal.Files.Keys.Except(allowed).Any()) throw new InvalidDataException("Unsupported save journal.");
         foreach (var file in journal.Files) Atomic(file.Key, file.Value, true);
         File.Delete(path);
     }

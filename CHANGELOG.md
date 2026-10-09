@@ -11,6 +11,15 @@ The entries below follow the migration milestones, newest first. They describe t
 - Preview nudged source blocks during the drag, preserve their durations and notes, and save the complete move as one journalled edit with persistent Undo.
 - Reject pushes that would cross midnight or collide with positioned credit, running time or unresolved imported overlaps, without partially applying the move.
 
+## Migration Undo history stored as small changes
+
+- Each Undo step now stores only what its edit changed (a splice of rows, and of the notes, groups and positions lines) instead of a copy of the whole ledger before and after. With about a year of entries and a full 50 step history the edit state falls from about 30 MB to about 72 KB, and a 15 second checkpoint no longer spends hundreds of milliseconds on the UI thread serialising it.
+- The history is also limited to about 2 MB, dropping the oldest steps first and always keeping the newest, so a few very large edits cannot grow it without bound.
+- Saving writes only the files whose content changed, and a save journal may now list any subset of the known files, so an interrupted save still recovers.
+- Undo is offered only while the ledger, notes, groups and positions still match what the last edit left behind. A change made outside the app disables it instead of being silently overwritten. A missing groups file and an empty one count as the same, so Undo keeps working after a restart.
+- Edit history from earlier migration builds is imported as its latest step only. The new history is schema 3 in `migration-edit-state.json`.
+- Added randomized tests that compare Undo against full snapshots taken before each edit, through restarts and later recordings, along with tests for the size limits, malformed history, outside changes and quiet checkpoints.
+
 ## Migration drag insertion and multi-step Undo
 
 - Dragged blocks insert between crossed neighbours, moving those entries into the space left behind instead of jumping past the entire run.

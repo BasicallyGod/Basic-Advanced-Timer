@@ -357,7 +357,10 @@ public sealed class CreditReviewTests
     {
         var engine = Engine(); var editor = new LedgerEditor(engine);
         editor.Add("Account one", Day.AddHours(9), Day.AddHours(9.5), "first");
-        var legacy = System.Text.Json.JsonSerializer.Serialize(new LedgerEditState(1, editor.UndoState));
+        // A schema 1 file, as an earlier build wrote it: one whole-ledger snapshot of the state before the Add.
+        var blank = new LedgerEditor(Engine());
+        var legacy = System.Text.Json.JsonSerializer.Serialize(new LedgerEditState(1,
+            new LedgerUndo("Add time", new(), engine.Sessions.ToList(), blank.NotesCsv, null, blank.PositionsCsv)));
         editor = new LedgerEditor(engine, stateJson: legacy); Assert.Equal(1, editor.UndoCount);
         for (var i = 0; i < 55; i++) editor.Edit(engine.Sessions[0], "Account one", engine.Sessions[0].From, engine.Sessions[0].To, "note " + i);
         Assert.Equal(50, editor.UndoCount);
