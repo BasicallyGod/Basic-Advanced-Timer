@@ -37,6 +37,7 @@ public sealed partial class LedgerEditor
             if (state.SchemaVersion != 1) throw new InvalidDataException("Unsupported edit history.");
             UndoState = state.Undo;
         }
+        ValidateCredits();
     }
     private static bool SameKey(Dictionary<string, string> item, SessionRow row) =>
         item["Date"] == row.Date && item["Start"] == row.Start && item["Account"].Equals(row.Account, StringComparison.OrdinalIgnoreCase);

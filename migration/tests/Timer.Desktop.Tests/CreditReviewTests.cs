@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
@@ -116,8 +117,7 @@ public sealed class CreditReviewTests
         var editor = new LedgerEditor(engine, positionsCsv: csv); var p = editor.Positions.Single();
         editor.Place(p.Account, p.Start.AddHours(1), p.Minutes, "New note", p);
         Assert.Contains("keep", editor.PositionsCsv); Assert.Contains("New note", editor.PositionsCsv);
-        var bad = new LedgerEditor(engine, positionsCsv: csv.Replace(",30,", ",90,"));
-        Assert.Throws<InvalidDataException>(() => bad.Entries(Day, Day.AddDays(1)));
+        Assert.Throws<InvalidDataException>(() => new LedgerEditor(engine, positionsCsv: csv.Replace(",30,", ",90,")));
     }
     [AvaloniaFact]
     public void NativeReviewControlsPlaceGroupTidyAndExport()
@@ -125,21 +125,37 @@ public sealed class CreditReviewTests
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("00:00:00", "60", "merged"), Row("10:00:00", "30"), Row("10:33:00", "27") });
         var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
         var place = new PositionWindow(model); place.Show(dashboard);
-        place.FindControl<TextBox>("PositionStart")!.Text = "09:00";
-        place.FindControl<Button>("SavePosition")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Find<TextBox>(place, "PositionStart").Text = "09:00";
+        Capture(place, "credit-position-editor");
+        Find<Button>(place, "SavePosition").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Single(model.Editor.Positions); Assert.False(place.IsVisible);
+        Capture(dashboard, "positioned-credit-timeline");
         var grouping = new GroupWindow(model); grouping.Show(dashboard);
         Dispatcher.UIThread.RunJobs(); using var groupFrame = grouping.CaptureRenderedFrame();
         foreach (var box in grouping.GetVisualDescendants().OfType<CheckBox>()) box.IsChecked = true;
-        grouping.FindControl<Button>("SaveGroup")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Capture(grouping, "group-editor");
+        Find<Button>(grouping, "SaveGroup").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Contains(model.Editor.Entries(Day, Day.AddDays(1)), e => e.GroupId is not null);
         var tidy = new TidyWindow(model); tidy.Show(dashboard);
         Dispatcher.UIThread.RunJobs(); using var tidyFrame = tidy.CaptureRenderedFrame();
         foreach (var box in tidy.GetVisualDescendants().OfType<ComboBox>()) box.SelectedIndex = 1;
-        tidy.FindControl<Button>("ApplyTidy")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Capture(tidy, "tidy-day-review");
+        Find<Button>(tidy, "ApplyTidy").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(4, engine.Sessions.Count);
-        var export = new ExportWindow(model); export.Show(dashboard); export.FindControl<Button>("ExportCsv")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var export = new ExportWindow(model); export.Show(dashboard); Find<Button>(export, "ExportCsv").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Capture(export, "weekly-export-result");
+        dashboard.SelectTab(true); Capture(dashboard, "grouped-credit-week");
         Assert.NotNull(model.ExportPath); Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Detail.csv")));
         Directory.Delete(model.ExportPath!, true); export.Close(); dashboard.Close();
     }
+    private static T Find<T>(Window window, string name) where T : Control => window.GetLogicalDescendants().OfType<T>().Single(c => c.Name == name);
+    private static void Capture(Window window, string name)
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.Combine(Path.GetTempPath(), "timer-credit-previews");
+        Directory.CreateDirectory(folder); Dispatcher.UIThread.RunJobs();
+        using var warmup = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs();
+        using var frame = window.CaptureRenderedFrame(); Assert.NotNull(frame);
+        frame!.Save(Path.Combine(folder, name + ".png"));
+    }
+
 }

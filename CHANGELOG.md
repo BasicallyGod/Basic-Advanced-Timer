@@ -1,5 +1,14 @@
 # Changelog
 
+## Migration credit review and weekly exports (repository development)
+
+- Restored non-destructive positioning of merged credit, with position notes, editing, unplacing and compatible metadata import.
+- Added same-day/account source grouping, grouped Week entries and ungrouping without rewriting credited sessions.
+- Added reviewed Tidy day gap fills, excluding lunch/away/running intervals, with stale-preview rejection and one batch Undo.
+- Reconciled integer hundredths across detailed entries, account/day summary cells and weekly totals, including negative adjustments and separate Lunch totals.
+- Saved export pairs to new folders and journalled position metadata with the ledger, notes, groups and persistent Undo.
+- Added synthetic accounting/storage checks and native UI input/rendering checks; sample data now includes merged credit and a short gap.
+
 ## Migration timeline editing, notes and Undo (repository development)
 
 - Restored entry time/account/note editing and deletion, plus five-minute snapped timeline move/resize gestures and new credited time in free gaps.
