@@ -30,6 +30,7 @@ public class ReviewWindow : Window
         catch (Exception error) when (error is FormatException or OverflowException or ArgumentException or InvalidOperationException or IOException)
         { Error.Text = error.Message; }
     }
+    protected static TextBlock Info(string text) => new() { Text = text, FontSize = 13, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } };
     protected static DateTime At(DateTime day, string? value)
         => day.Date + TimeSpan.ParseExact(value ?? "", new[] { @"hh\:mm", @"hh\:mm\:ss" }, CultureInfo.InvariantCulture);
 }
@@ -42,7 +43,7 @@ public sealed class PositionWindow : ReviewWindow
         var available = model.Editor.Unplaced(day).Where(p => p.Value > 0 || p.Key == old?.Account).Select(p => p.Key).ToList();
         if (old is not null && !available.Contains(old.Account)) available.Add(old.Account);
         Root.Children.Add(Ui.Text(day.ToString("dddd, d MMMM yyyy"), 13, "muted"));
-        Root.Children.Add(Ui.Text("Place merged credit on the timeline. This uses existing credit and keeps account totals unchanged.", 13, "muted"));
+        Root.Children.Add(Info("Place merged credit on the timeline. This uses existing credit and keeps account totals unchanged."));
         var accounts = new ComboBox { Name = "PositionAccount", ItemsSource = available, SelectedItem = old?.Account ?? available.FirstOrDefault(), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
         var remaining = Ui.Text("", 13, "muted");
         void Update()
@@ -71,8 +72,8 @@ public sealed class PositionWindow : ReviewWindow
             var next = spans.Where(s => s.Start > suggested).Select(s => s.Start).Append(cap).Min();
             suggestedMinutes = Math.Max(0, Math.Min(suggestedMinutes, decimal.Floor((decimal)(next - suggested).TotalMinutes * 100m) / 100m));
         }
-        var start = new TextBox { Name = "PositionStart", Text = suggested.ToString("HH:mm:ss"), Watermark = "Start (HH:mm)" };
-        var amount = new TextBox { Name = "PositionMinutes", Text = suggestedMinutes.ToString("0.00", CultureInfo.InvariantCulture), Watermark = "Minutes of existing credit" };
+        var start = new TextBox { Name = "PositionStart", Width = 120, Text = suggested.ToString("HH:mm:ss"), Watermark = "Start (HH:mm)" };
+        var amount = new TextBox { Name = "PositionMinutes", Width = 120, Text = suggestedMinutes.ToString("0.00", CultureInfo.InvariantCulture), Watermark = "Minutes of existing credit" };
         Root.Children.Add(Ui.Text("Start time and minutes to place", 12, "muted")); Root.Children.Add(Ui.Horizontal(start, amount));
         var note = new TextBox { Name = "PositionNote", Text = old?.Note ?? "", Watermark = "Position note", AcceptsReturn = true, Height = 90, TextWrapping = TextWrapping.Wrap }; Root.Children.Add(note); Root.Children.Add(Error);
         var buttons = Ui.Horizontal(Ui.Button("Save position", () => Apply(model, () => model.PlaceCredit((string?)accounts.SelectedItem ?? "", At(day, start.Text), decimal.Parse(amount.Text ?? "", CultureInfo.InvariantCulture), note.Text ?? "", old)), "SavePosition"), Ui.Button("Cancel", Close));
@@ -89,7 +90,7 @@ public sealed class GroupWindow : ReviewWindow
         Height = 620;
         var group = id is null ? null : model.Editor.Entries(model.WeekStart(model.SelectedDate), model.WeekStart(model.SelectedDate).AddDays(7)).FirstOrDefault(e => e.GroupId == id);
         var rows = group?.Sources ?? model.Engine.Sessions.Where(s => s.Day == model.SelectedDate && !s.IsMerged).OrderBy(s => s.From).ToArray();
-        Root.Children.Add(Ui.Text("Group entries for the same account and day. Source intervals and credited totals stay intact.", 13, "muted"));
+        Root.Children.Add(Info("Group entries for the same account and day. Source intervals and credited totals stay intact."));
         var choices = new List<(CheckBox Check, SessionRow Row)>();
         foreach (var row in rows)
         {
@@ -112,7 +113,7 @@ public sealed class TidyWindow : ReviewWindow
     public TidyWindow(TimerModel model) : base("Tidy day")
     {
         Height = 620;
-        Root.Children.Add(Ui.Text("Review short gaps between stopped entries. Lunch, away time and running entries are excluded. Each fill adds credited time; one Undo reverses the batch.", 13, "muted"));
+        Root.Children.Add(Info("Review short gaps between stopped entries. Lunch, away time and running entries are excluded. Each fill adds credited time; one Undo reverses the batch."));
         var limit = new NumericUpDown { Name = "TidyLimit", Minimum = 1, Maximum = 60, Value = 5, Width = 100 };
         Root.Children.Add(Ui.Horizontal(Ui.Text("Maximum gap (minutes)", 13), limit));
         var list = new StackPanel { Spacing = 10 }; Root.Children.Add(list);
@@ -140,8 +141,8 @@ public sealed class ExportWindow : ReviewWindow
     {
         Height = 420;
         Root.Children.Add(Ui.Text("Week commencing " + model.WeekStart(model.SelectedDate).ToString("d MMMM yyyy"), 13));
-        Root.Children.Add(Ui.Text("Creates Detail.csv and Summary.csv together. Decimal hours reconcile across entries, days and account totals. Lunch is shown separately from the working total.", 13, "muted"));
-        Root.Children.Add(Ui.Text("Exports include saved entries only. Pause tracking first to include the current running interval.", 13, "muted"));
+        Root.Children.Add(Info("Creates Detail.csv and Summary.csv together. Decimal hours reconcile across entries, days and account totals. Lunch is shown separately from the working total."));
+        Root.Children.Add(Info("Exports include saved entries only. Pause tracking first to include the current running interval."));
         var result = new TextBox { IsReadOnly = true, TextWrapping = TextWrapping.Wrap, IsVisible = false }; Root.Children.Add(result); Root.Children.Add(Error);
         var export = Ui.Button("Export CSV files", () =>
         {
