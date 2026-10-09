@@ -137,3 +137,7 @@ The compiled dashboard remains 960x640. Its content starts at y=122, with accoun
 ### v2.31 UI details
 
 Dashboard drag grips end at x=18; play buttons and budget rings centre at x=40. Budget labels use Format-BudgetUsage so usage and targets both honour hoursFormat. Sidebar UnallocatedTotal is formatted from the numeric UnallocatedSeconds. The initial timeline scale is 192 pixels/hour. LunchGlyph is shared between C# and the pill. Get-ViewZoom uses DashboardLayout.FitZoom, including in Update-Dpi; Set-View defers Request-Redraw through viewChanging until layout and drawer state are final.
+
+### v2.32 dashboard polish
+
+Account highlights fill the sidebar width; Lunch uses the same contiguous 48px row geometry (DashboardLayout.LunchGap = 0). The dashboard clock uses 40px type. Tracking actions live in the account rows; the removed top Pause control has no remaining draw or input handlers.

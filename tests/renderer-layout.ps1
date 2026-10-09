@@ -63,7 +63,7 @@ $startupNames = @('$PillLiveDot', '$px', '$fDigits', '$fDashboardHeader', '$fDas
 foreach ($assignment in @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst] }, $true))) {
     if ($startupNames -contains $assignment.Left.Extent.Text) { Invoke-Expression $assignment.Extent.Text }
 }
-foreach ($name in @('New-DashboardRenderer', 'Get-RowTop', 'Get-HitRow', 'Get-TimerPoint', 'Test-HitCollapse', 'Test-HitDashboardPause', 'Test-HitDayBtn')) {
+foreach ($name in @('New-DashboardRenderer', 'Get-RowTop', 'Get-HitRow', 'Get-TimerPoint', 'Test-HitCollapse', 'Test-HitDayBtn')) {
     $fn = @($ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true))
     Invoke-Expression $fn[0].Extent.Text
 }
@@ -73,7 +73,7 @@ $r.Drawer = $drawerFixture
 $r.TlScrollH = 8.25
 if ($r.TlPx -ne 192) { throw 'New users must start at the readable timeline zoom.' }
 if ([Win.DashboardLayout]::AccountButtonX - 15 -le [Win.DashboardLayout]::GripRight) { throw 'Budget ring overlaps the drag grip.' }
-if ($r.RowH -ne 48 -or $r.RowTop -ne 164) { throw 'Production startup must use the dashboard row geometry.' }
+if ($r.RowH -ne 48 -or $r.RowTop -ne 164 -or $r.LunchGap -ne 0) { throw 'Production startup must use the dashboard row geometry.' }
 
 foreach ($name in @('Sync-RendererLayout', 'Get-DayBtnRect')) {
     $fn = @($ast.FindAll({ param($node)
@@ -134,6 +134,7 @@ try {
         $r.Drawer.Mode = $mode
         $bitmap = $r.Render(960, 640)
         try {
+            if ($bitmap.GetPixel(0, 180).ToArgb() -ne $bitmap.GetPixel(310, 180).ToArgb()) { throw 'Active highlight does not fill the sidebar width.' }
             if ($bitmap.GetPixel(150, 630).A -eq 0 -or $bitmap.GetPixel(850, 630).A -eq 0) { throw 'Dashboard backdrop must fill the fixed window.' }
             $previewRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
             $outputDir = Join-Path $previewRoot 'timer-dashboard-previews'
@@ -151,6 +152,12 @@ try {
         }
         if ($mode -eq 'timeline' -and ($r.TlY -ne 216 -or $r.TlW -lt 500 -or $r.TlY + $r.TlH -gt 604)) { throw 'Timeline viewport does not match the dashboard body.' }
     }
+    $r.Hover = 1
+    $hoverPreview = $r.Render(960, 640)
+    try {
+        if ($hoverPreview.GetPixel(0, 230).ToArgb() -ne $r.CircleHot.ToArgb() -or $hoverPreview.GetPixel(310, 230).ToArgb() -ne $r.CircleHot.ToArgb()) { throw 'Hover highlight does not fill the sidebar width.' }
+        $hoverPreview.Save((Join-Path $outputDir 'dashboard-hover.png'), [Drawing.Imaging.ImageFormat]::Png)
+    } finally { $hoverPreview.Dispose(); $r.Hover = -1 }
     $r.ActiveAccount = ''; $r.Status = 'NOT TRACKING'; $r.Drawer.Mode = 'timeline'
     $idle = $r.Render(960, 640)
     try { $idle.Save((Join-Path $outputDir 'dashboard-idle.png'), [Drawing.Imaging.ImageFormat]::Png) } finally { $idle.Dispose() }
@@ -193,7 +200,7 @@ try {
     foreach ($font in @($fDigits, $fDashboardHeader, $fDashboardClock, $fLabel, $fRow, $fOvertime, $fPillTime, $fPillSub, $fDrawerBtn, $fDrawerText, $fDrawerTextBold, $fTimeline, $fTimelineBold, $fTimelineSmall)) { $font.Dispose() }
 }
 
-foreach ($name in @('Get-BaseSize', 'Get-PillListH', 'Get-PillLayout', 'Get-PillRowTop', 'Get-PillZone', 'Test-HitCollapse', 'Get-DayBtnRect', 'Test-HitDayBtn', 'Test-HitDashboardPause', 'Get-RowTop', 'Get-HitRow')) {
+foreach ($name in @('Get-BaseSize', 'Get-PillListH', 'Get-PillLayout', 'Get-PillRowTop', 'Get-PillZone', 'Test-HitCollapse', 'Get-DayBtnRect', 'Test-HitDayBtn', 'Get-RowTop', 'Get-HitRow')) {
     $fn = @($ast.FindAll({ param($node)
         $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name
     }, $true))
@@ -204,11 +211,10 @@ $script:fullMargin = 0; $script:drawerH = 999
 $size = Get-BaseSize
 if ($size[0] -ne 960 -or $size[1] -ne 640) { throw 'Content must not resize the dashboard.' }
 $script:active = @{ Name = 'Account A' }
-if (-not (Test-HitDashboardPause ([Drawing.Point]::new(590, 85)))) { throw 'Pause action must be reachable.' }
 if (-not (Test-HitCollapse ([Drawing.Point]::new(880, 25)))) { throw 'Back to pill must be reachable.' }
 $script:view.DayBtnText = 'Finish day'
 if (-not (Test-HitDayBtn ([Drawing.Point]::new(850, 85)))) { throw 'Day control must be reachable.' }
-$script:RowTop = 164; $script:RowH = 48; $script:LunchGap = 10; $script:BaseW = 320
+$script:RowTop = 164; $script:RowH = 48; $script:LunchGap = 0; $script:BaseW = 320
 $script:slots = @((0..11 | ForEach-Object { 'Client account ' + $_ })) + @('Lunch')
 if ((Get-HitRow ([Drawing.Point]::new(28, 536))) -ne 12) { throw 'Scrolled Lunch hit target must match its row.' }
 if ($null -ne (Get-HitRow ([Drawing.Point]::new(28, 620)))) { throw 'Sidebar summary must not select a hidden account.' }

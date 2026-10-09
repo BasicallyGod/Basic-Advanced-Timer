@@ -6,9 +6,17 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.31 |
+| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.32 |
 | AccountTimer.ps1 | Historical predecessor, removed from current tree | 1.0 to 1.7 |
 | BillableTimer.ps1 | Historical predecessor, removed from current tree | 0.1 to 0.5 |
+
+## v2.32
+
+- Made dashboard hover, active and drag highlights span the full account column.
+- Removed the top Pause action and its pointer handlers; account play/pause controls remain the tracking controls.
+- Integrated Lunch into the account list with the same row height and spacing.
+- Increased the dashboard timer from 28px to 40px while preserving the live status and day action.
+- Extended renderer checks with full-width active/hover assertions and a hover preview.
 
 ## v2.31
 

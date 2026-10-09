@@ -1,4 +1,4 @@
-# Basic's Advanced Timer v2.31
+# Basic's Advanced Timer v2.32
 #
 # Portable Windows PowerShell 5.1 application for client-account time tracking.
 # Launch from StartAccountTimer2.vbs in the same folder to avoid a console window.
@@ -345,14 +345,13 @@ namespace Win {
     // Dashboard geometry is shared by painting and pointer hit testing.
     public static class DashboardLayout {
         public const float Width = 960, Height = 640, SidebarWidth = 320;
-        public const float RowTop = 164, RowHeight = 48, LunchGap = 10, AccountBottom = 560;
+        public const float RowTop = 164, RowHeight = 48, LunchGap = 0, AccountBottom = 560;
         public const float TimelineTop = 216, TimelineBottom = 600;
         public const float GripRight = 18, AccountButtonX = 40, AccountNameX = 64;
         public static float FitZoom(float normal, float areaWidth, float areaHeight) {
             return Math.Min(normal, Math.Min(areaWidth / (Width + 20), areaHeight / (Height + 20)));
         }
         public static readonly RectangleF BackButton = new RectangleF(800, 12, 140, 28);
-        public static readonly RectangleF PauseButton = new RectangleF(550, 74, 90, 28);
         public static readonly RectangleF DayButton = new RectangleF(790, 72, 150, 28);
         public static readonly RectangleF Unallocated = new RectangleF(18, 608, 284, 24);
         public static float MaxAccountScroll(int count) {
@@ -655,7 +654,7 @@ namespace Win {
             using (Pen sep = new Pen(Mix(Panel, Text, 0.18), 1f)) {
                 using (SolidBrush band = new SolidBrush(Circle)) { g.FillRectangle(band, 0, 52, DashboardWidth, 70); }
                 g.DrawLine(sep, 0, 52, DashboardWidth, 52);
-                DashboardTypography.Draw(g, H + ":" + M + ":" + S, FontDashboardClock ?? FontDigits, Text, new RectangleF(20, 65, 220, 42), sfLeft);
+                DashboardTypography.Draw(g, H + ":" + M + ":" + S, FontDashboardClock ?? FontDigits, Text, new RectangleF(20, 61, 220, 54), sfLeft);
                 string current = ActiveAccount.Length > 0 ? ActiveAccount : Status;
                 ListText(g, current, FontRow, Text, new RectangleF(250, ActiveAccount.Length > 0 ? 66 : 77, 290, 24), sfName);
                 float labelX = 250;
@@ -664,7 +663,6 @@ namespace Win {
                     labelX += 15;
                 }
                 ListText(g, ActiveAccount.Length > 0 ? "Tracking live" : "", FontLabel, faint, new RectangleF(labelX, 90, 280, 20), sfLeft);
-                if (ActiveAccount.Length > 0) SurfaceButton(g, "Pause", DashboardLayout.PauseButton, false, false, true, FontDrawer);
                 SurfaceButton(g, DayBtnText, DashboardLayout.DayButton, DayBtnHover, false, true, FontDrawer);
                 g.DrawLine(sep, 0, 122, DashboardWidth, 122);
 
@@ -684,7 +682,7 @@ namespace Win {
                     float cy = y0 + RowH / 2;
                     bool dragging = DraggingRow == i;
                     if (r.Active || Hover == i || dragging) {
-                        using (SolidBrush row = new SolidBrush(r.Active ? Circle : CircleHot)) { g.FillRectangle(row, 8, y0 + 1, BaseW - 16, RowH - 2); }
+                        using (SolidBrush row = new SolidBrush(r.Active ? Circle : CircleHot)) { g.FillRectangle(row, 0, y0, BaseW, RowH); }
                     }
                     if (!r.IsLunch) g.DrawLine(sep, 16, y0 + RowH, BaseW - 16, y0 + RowH);
                     if (!r.IsLunch) {
@@ -3445,7 +3443,7 @@ $BaseRowTop = if ($script:useRenderer) { [Win.DashboardLayout]::RowTop } else { 
 $OvertimeH  = 32     # height of the overtime section when it appears
 $RowTop = $BaseRowTop
 $RowH   = if ($script:useRenderer) { [Win.DashboardLayout]::RowHeight } else { 48 }
-$LunchGap = if ($script:useRenderer) { [Win.DashboardLayout]::LunchGap } else { 10 }   # space separating Lunch from the accounts
+$LunchGap = if ($script:useRenderer) { [Win.DashboardLayout]::LunchGap } else { 10 }   # dashboard Lunch follows the same row spacing as accounts
 $RoundXs  = @{ down = 260; up = 286 }   # positions of the round-down and round-up buttons
 $RoundR   = 8
 $RoundBlock = 15 * 60   # round up to the next 15 minutes
@@ -3843,7 +3841,7 @@ Apply-Theme $savedTheme
 $px = [System.Drawing.GraphicsUnit]::Pixel
 $fDigits = New-Object System.Drawing.Font('Segoe UI Semibold', 36, [System.Drawing.FontStyle]::Regular, $px)
 $fDashboardHeader = New-Object System.Drawing.Font('Segoe UI', 17, [System.Drawing.FontStyle]::Regular, $px)
-$fDashboardClock = New-Object System.Drawing.Font('Segoe UI', 28, [System.Drawing.FontStyle]::Regular, $px)
+$fDashboardClock = New-Object System.Drawing.Font('Segoe UI', 40, [System.Drawing.FontStyle]::Regular, $px)
 $fLabel  = New-Object System.Drawing.Font('Segoe UI', 12, [System.Drawing.FontStyle]::Regular, $px)
 $fRow    = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Regular, $px)
 $fOvertime = New-Object System.Drawing.Font('Segoe UI Semibold', 24, [System.Drawing.FontStyle]::Regular, $px)
@@ -7870,11 +7868,6 @@ function Set-View($mode, [switch]$Starting) {
 
 }
 
-function Test-HitDashboardPause($pt) {
-    if (-not $script:useRenderer -or -not $script:active) { return $false }
-    return [Win.DashboardLayout]::PauseButton.Contains([System.Drawing.PointF]::new([float]($pt.X / $Zoom), [float]($pt.Y / $Zoom)))
-}
-
 function Test-HitCollapse($pt) {
     if ($script:useRenderer) {
         return [Win.DashboardLayout]::BackButton.Contains([System.Drawing.PointF]::new([float]($pt.X / $Zoom), [float]($pt.Y / $Zoom)))
@@ -8031,7 +8024,6 @@ $form.Add_MouseDown({
     $tp = Get-TimerPoint $_.Location
     if (Test-HitHandle $tp) { $script:pressedHandle = $true; return }
     if (Test-HitCollapse $tp) { $script:pressedCollapse = $true; return }
-    if (Test-HitDashboardPause $tp) { $script:pressedDashboardPause = $true; return }
     if (Test-HitDayBtn $tp) { $script:pressedDayBtn = $true; return }
     $grip = Get-HitGrip $tp
     if ($null -ne $grip) {
@@ -8131,7 +8123,7 @@ $form.Add_MouseMove({
         } elseif (-not $coll -and -not $handle) { $tip.Hide($form) }
     }
     $form.Cursor = if ($null -ne $grip) { [System.Windows.Forms.Cursors]::SizeNS }
-                   elseif ($null -ne $hit -or $coll -or $handle -or $dayHit -or (Test-HitDashboardPause $tp)) { [System.Windows.Forms.Cursors]::Hand }
+                   elseif ($null -ne $hit -or $coll -or $handle -or $dayHit) { [System.Windows.Forms.Cursors]::Hand }
                    else { [System.Windows.Forms.Cursors]::Default }
     if ($round -ne $script:roundHover) {
         if ($null -ne $round) {
@@ -8203,11 +8195,6 @@ $form.Add_MouseUp({
         if ($script:pressedCollapse) {
             $script:pressedCollapse = $false
             if (Test-HitCollapse $tp) { Set-View 'pill' }
-            return
-        }
-        if ($script:pressedDashboardPause) {
-            $script:pressedDashboardPause = $false
-            if (Test-HitDashboardPause $tp) { Stop-ByUser; Update-View; Update-DrawerContent; Request-Redraw }
             return
         }
         if ($script:pressedDayBtn) {
