@@ -67,7 +67,9 @@ public static class TimelineGestures
             .Select(s => (Start: s.From, End: s.To)).Concat(model.Editor.Positions.Select(p => (Start: p.Start, End: p.End))).ToList();
         if (model.Engine.Active is { } active && model.Engine.Now > active.Start)
             occupied.Add((active.Start, model.Engine.Now));
+        var grid = TimeSpan.FromMinutes(Math.Round(requested.TotalMinutes / 5) * 5);
         var candidates = new List<TimeSpan>();
+        TimeSpan? lower = null, upper = null;
         foreach (var other in occupied)
         {
             // Starts are stored in whole seconds. Round up fractional legacy ends
@@ -75,10 +77,21 @@ public static class TimelineGestures
             if (edge <= 0)
             {
                 var end = new DateTime(((other.End.Ticks + TimeSpan.TicksPerSecond - 1) / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond, other.End.Kind);
-                candidates.Add(end - row.From);
+                var boundary = end - row.From;
+                candidates.Add(boundary);
+                if (other.End <= row.From && (lower is null || boundary > lower.Value)) lower = boundary;
             }
-            if (edge >= 0) candidates.Add(other.Start - row.To);
+            if (edge >= 0)
+            {
+                var boundary = other.Start - row.To;
+                candidates.Add(boundary);
+                if (other.Start >= row.To && (upper is null || boundary < upper.Value)) upper = boundary;
+            }
         }
+        // Clamp to the first neighbour crossed, even when the pointer travels
+        // well beyond it. Apply this to grid rounding as well as raw movement.
+        if (lower is { } minimum && (requested <= minimum || grid <= minimum)) requested = minimum;
+        if (upper is { } maximum && (requested >= maximum || grid >= maximum)) requested = maximum;
         foreach (var candidate in candidates.OrderBy(c => Math.Abs((c - requested).TotalHours)))
         {
             if (Math.Abs((candidate - requested).TotalHours * pixelsPerHour) > 8) break;
@@ -88,7 +101,7 @@ public static class TimelineGestures
             var saved = LedgerEditor.TimedRow(row.Account, from, until, "edited");
             if (!occupied.Any(other => other.Start < saved.To && other.End > saved.From)) return candidate;
         }
-        return TimeSpan.FromMinutes(Math.Round(requested.TotalMinutes / 5) * 5);
+        return grid;
     }
 
 }

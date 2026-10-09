@@ -288,6 +288,11 @@ public sealed class CreditReviewTests
         Check("09:00:00", "53", "10:00:00", "30", 1, .5, -7, Day.AddHours(9).AddMinutes(53), Day.AddHours(10).AddMinutes(23));
         // Move downward until the bottom edge meets a 10:03 start.
         Check("09:00:00", "30", "10:03:00", "30", 0, .5, 33, Day.AddHours(9).AddMinutes(33), Day.AddHours(10).AddMinutes(3));
+        // Substantial overshoots stop at the first neighbour rather than overlap or jump past it.
+        Check("09:00:00", "53", "10:00:00", "30", 1, .5, -60, Day.AddHours(9).AddMinutes(53), Day.AddHours(10).AddMinutes(23));
+        Check("09:00:00", "30", "10:03:00", "30", 0, .5, 90, Day.AddHours(9).AddMinutes(33), Day.AddHours(10).AddMinutes(3));
+        Check("09:00:00", "53", "10:00:00", "30", 1, .01, -60, Day.AddHours(9).AddMinutes(53), Day.AddHours(10.5));
+        Check("09:00:00", "30", "10:03:00", "30", 0, .99, 90, Day.AddHours(9), Day.AddHours(10).AddMinutes(3));
         // Resize either edge to the same exact boundaries.
         Check("09:00:00", "53", "10:00:00", "30", 1, .01, -7, Day.AddHours(9).AddMinutes(53), Day.AddHours(10.5));
         Check("09:00:00", "30", "10:03:00", "30", 0, .99, 33, Day.AddHours(9), Day.AddHours(10).AddMinutes(3));
