@@ -696,7 +696,7 @@ namespace Win {
                         Color ring = frac >= 1 ? BudgetOver : (frac >= 0.8 ? BudgetWarn : Fill);
                         using (Pen progress = new Pen(ring, 3)) { g.DrawArc(progress, DashboardLayout.AccountButtonX - 15, cy - 15, 30, 30, -90, (float)(360 * Math.Min(1, Math.Max(0, frac)))); }
                     }
-                    using (SolidBrush button = new SolidBrush(Panel)) { g.FillEllipse(button, DashboardLayout.AccountButtonX - 11, cy - 11, 22, 22); }
+                    using (SolidBrush button = new SolidBrush(r.IsLunch ? Circle : Panel)) { g.FillEllipse(button, DashboardLayout.AccountButtonX - 11, cy - 11, 22, 22); }
                     if (r.Active) DrawPause(g, DashboardLayout.AccountButtonX, cy); else if (r.IsLunch) DrawLunch(g, DashboardLayout.AccountButtonX, cy); else DrawPlay(g, DashboardLayout.AccountButtonX, cy);
                     bool rounding = r.CanRound && Hover == i && !Reordering;
                     ListText(g, r.Name, FontRow, Text, new RectangleF(DashboardLayout.AccountNameX, y0 + 4, rounding ? 172 : BaseW - DashboardLayout.AccountNameX - 16, 22), sfName);
