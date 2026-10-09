@@ -19,7 +19,7 @@ public static class ReviewViews
         var unplaced = TimeSpan.FromMinutes((double)model.Editor.Unplaced(day).Values.Sum());
         var caption = Ui.Text(unplaced > TimeSpan.Zero ? "Unplaced legacy credit " + model.Format(unplaced) : "Recorded time", 12, "muted");
         if (model.SelectedBlockCount > 0) caption.Text += $" · {model.SelectedBlockCount} blocks selected · " + model.MergeHint;
-        else caption.Text += " · Ctrl+click blocks to select";
+        else caption.Text += " · Click blocks to select";
         caption.TextWrapping = TextWrapping.Wrap;
         caption.Margin = new Thickness(0, 0, 0, 10);
         Ui.Put(root, caption);
@@ -106,7 +106,8 @@ public static class ReviewViews
                 };
                 card.PointerReleased += (_, e) =>
                 {
-                    if (groupPress is { } p && (e.GetPosition(canvas) - p).Length <= 5) model.ToggleSelection(group.Sources);
+                    if (groupPress is { } p)
+                    { var movement = e.GetPosition(canvas) - p; if (movement.X * movement.X + movement.Y * movement.Y <= 25) model.ToggleSelection(group.Sources); }
                     groupPress = null; e.Handled = true;
                 };
                 card.Tag = group; card.Name = "TimelineGroup" + group.GroupId + "-" + interval.Start.ToString("HHmmss");

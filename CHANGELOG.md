@@ -4,6 +4,13 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration click selection and deliberate nudging
+
+- Replaced Ctrl+click with normal click selection in Timeline and Week. Dragging does not select blocks; right-click offers editing/inspection and Merge selected, alongside the toolbar Merge action.
+- Kept forgiving neighbour snapping for small overshoots. Moving more than 24 display-independent pixels past a neighbour deliberately pushes it, rippling through additional blocks as needed.
+- Preview nudged source blocks during the drag, preserve their durations and notes, and save the complete move as one journalled edit with persistent Undo.
+- Reject pushes that would cross midnight or collide with positioned credit, running time or unresolved imported overlaps, without partially applying the move.
+
 ## Migration drag snapping and merge-menu fixes
 
 - Fixed a selected block disappearing when its right-click menu opened. Pointer capture loss now restores a block's geometry only when a left-button gesture is actually in progress.
