@@ -42,7 +42,7 @@
                  Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}"
                  Orientation="{TemplateBinding Orientation}">
             <Track.Thumb>
-              <Thumb Name="PART_Thumb" MinHeight="24" MinWidth="6">
+              <Thumb Name="PART_Thumb">
                 <Thumb.Template>
                   <ControlTemplate>
                     <Border Background="{DynamicResource Muted}" CornerRadius="3" Margin="1" Opacity="0.55" />
@@ -57,6 +57,7 @@
     <Style Selector="ScrollBar:vertical">
       <Setter Property="Width" Value="8" /><Setter Property="MinWidth" Value="8" /><Setter Property="MaxWidth" Value="8" />
     </Style>
+    <Style Selector="ScrollBar:vertical /template/ Thumb"><Setter Property="MinHeight" Value="24" /><Setter Property="MinWidth" Value="6" /></Style>
     <Style Selector="ScrollBar:vertical /template/ Track"><Setter Property="IsDirectionReversed" Value="True" /></Style>
     <Style Selector="ScrollBar:horizontal">
       <Setter Property="Height" Value="8" /><Setter Property="MinHeight" Value="8" /><Setter Property="MaxHeight" Value="8" />

@@ -95,7 +95,7 @@ public sealed class GroupWindow : ReviewWindow
         {
             Root.Children.Add(Ui.Text("Existing groups · open to inspect or ungroup", 13, "muted"));
             foreach (var entry in existing)
-                Root.Children.Add(Ui.Button($"{entry.Day:ddd d MMM} · {entry.Account} · {entry.Sources.Count} entries", () => { var owner = Owner; Close(); if (owner is not null) new GroupWindow(model, entry.GroupId).Show(owner); }));
+                Root.Children.Add(Ui.Button($"{entry.Day:ddd d MMM} · {entry.Account} · {entry.Sources.Count} entries", () => { var owner = Owner; Close(); if (owner is Window window) new GroupWindow(model, entry.GroupId).Show(window); }));
         }
         var grouped = existing.SelectMany(e => e.Sources).ToHashSet();
         var rows = group?.Sources ?? model.Engine.Sessions.Where(s => s.Day >= week && s.Day < week.AddDays(7) && !s.IsMerged && !grouped.Contains(s)).OrderBy(s => s.From).ToArray();
