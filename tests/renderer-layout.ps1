@@ -56,7 +56,7 @@ Write-Output 'Renderer layout checks passed.'
 
 # Load the same fonts, layout constants and renderer factory used by app startup.
 $script:useRenderer = $true; $script:Zoom = 1; $script:fullMargin = 0
-$startupNames = @('$px', '$fDigits', '$fDashboardHeader', '$fDashboardClock', '$fLabel', '$fRow',
+$startupNames = @('$PillLiveDot', '$px', '$fDigits', '$fDashboardHeader', '$fDashboardClock', '$fLabel', '$fRow',
     '$fOvertime', '$fPillTime', '$fPillSub', '$fDrawerBtn', '$fDrawerText', '$fDrawerTextBold',
     '$fTimeline', '$fTimelineBold', '$fTimelineSmall', '$BaseRowTop', '$RowH', '$LunchGap',
     '$DashboardW', '$DashboardH', '$BaseW', '$DrawerSideW', '$CollapseR', '$CollapseX', '$CollapseY', '$DrawerBtnX', '$DrawerBtnY')
@@ -70,6 +70,7 @@ foreach ($name in @('New-DashboardRenderer', 'Get-RowTop', 'Get-HitRow', 'Get-Ti
 $drawerFixture = $r.Drawer
 $r = New-DashboardRenderer
 $r.Drawer = $drawerFixture
+$r.TlScrollH = $drawerFixture.Timeline.AxisStartH
 if ($r.RowH -ne 48 -or $r.RowTop -ne 164) { throw 'Production startup must use the dashboard row geometry.' }
 
 foreach ($name in @('Sync-RendererLayout', 'Get-DayBtnRect')) {
