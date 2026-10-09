@@ -1,8 +1,8 @@
 # Basic’s Advanced Timer
 
-**Development status:** `main` contains the stable v2.22 release. The `experimental` branch contains v2.26 with settings consolidation, branding changes and all-day Start day / Finish day controls. Its automated tests have passed, but migration against a real Windows installation has not yet been verified. Keep everyday timesheets on the stable release until that check is complete.
+**Development status:** `main` contains the stable v2.22 release. The `experimental` branch contains v2.27 with settings consolidation, branding changes and all-day Start day / Finish day controls. Its automated tests have passed, but migration against a real Windows installation has not yet been verified. Keep everyday timesheets on the stable release until that check is complete.
 
-Basic’s Advanced Timer is a portable, always-on-top Windows time tracker for client accounts and weekly timesheets. The current application is **v2.26**. It runs from a folder using Windows PowerShell 5.1 and WinForms, with compiled C# rendering built into the script. No installer, administrator access, extra PowerShell modules or separate .NET runtime are required.
+Basic’s Advanced Timer is a portable, always-on-top Windows time tracker for client accounts and weekly timesheets. The current application is **v2.27**. It runs from a folder using Windows PowerShell 5.1 and WinForms, with compiled C# rendering built into the script. No installer, administrator access, extra PowerShell modules or separate .NET runtime are required.
 
 ## Getting started
 
@@ -34,10 +34,11 @@ Keep `StartAccountTimer2.vbs` and `AccountTimer2.ps1` together. The launcher use
 | `StartAccountTimer2.vbs` | Relative-path launcher without a console window; filename retained for existing shortcuts |
 | `tests/timeline-projection.ps1` | Synthetic timeline and credit-position regression checks |
 | `tests/decimal-reconciliation.ps1` | Synthetic accounting and CSV-export reconciliation checks |
+| `tests/tidy-day.ps1` | Synthetic small-gap selection and batch-apply checks |
 | `tests/renderer-layout.ps1` | Compiles and renders the UI, checking drawer controls and matched panel heights |
 | `tests/day-controls.ps1` | Synthetic early-start, finish, resume and overtime checks |
 | `tests/settings-migration.ps1` | Synthetic settings migration, persistence and branding checks |
-| `.github/workflows/powershell-checks.yml` | Runs all five test scripts in Windows PowerShell on GitHub Actions |
+| `.github/workflows/powershell-checks.yml` | Runs all six test scripts in Windows PowerShell on GitHub Actions |
 | `CLAUDE.md` | Engineering notes, architecture and pitfalls for contributors |
 | `CHANGELOG.md` | Feature and maintenance history |
 | `.gitignore`, `.gitattributes` | Exclude local data by default and standardise line endings |
@@ -113,3 +114,7 @@ See `CHANGELOG.md` for the feature history and `CLAUDE.md` for developer impleme
 ## Application naming
 
 The interface, notification-area tooltip, windows and dialogs use **Basic’s Advanced Timer**. The original launcher and script filenames remain `StartAccountTimer2.vbs` and `AccountTimer2.ps1` so existing shortcuts and portable installations continue working. The repository URL has also been left unchanged to preserve existing links.
+
+## Tidy a completed day
+
+Open the Timeline tab and select **Tidy day**. Review gaps up to five minutes by default, or adjust the maximum from 1 to 30 minutes. Each row offers the account before the gap, the account after it, or **Leave gap**. The previous account is suggested initially. **Apply** adds new credited time for the selected gaps and leaves existing timestamps untouched; **Undo** reverses the whole batch. Cancel makes no changes. Lunch, finished-day intervals, ambiguous overlapping neighbours, future time and gaps beside a running timer are excluded. Only gaps between entries are offered, so larger unallocated stretches still need individual review. Fractional-second edges are rounded inward for CSV-safe positions.

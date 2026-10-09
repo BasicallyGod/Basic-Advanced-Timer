@@ -30,3 +30,6 @@ jobs:
       - name: Renderer layout tests
         shell: powershell
         run: ./tests/renderer-layout.ps1
+      - name: Tidy day tests
+        shell: powershell
+        run: ./tests/tidy-day.ps1

@@ -1,4 +1,4 @@
-# Basic's Advanced Timer v2.26
+# Basic's Advanced Timer v2.27
 #
 # Portable Windows PowerShell 5.1 application for client-account time tracking.
 # Launch from StartAccountTimer2.vbs in the same folder to avoid a console window.
@@ -872,7 +872,7 @@ namespace Win {
                 DrawerButtons.Clear();
                 string[][] defs = timeline
                     ? new string[][] {
-                        new string[] { "undo", "Undo" }, new string[] { "format", d.FormatLabel },
+                        new string[] { "tidy", "Tidy day" }, new string[] { "undo", "Undo" }, new string[] { "format", d.FormatLabel },
                         new string[] { "next", "Next" }, new string[] { "prev", "Previous" } }
                     : new string[][] {
                         new string[] { "weekly", "Weekly view" }, new string[] { "copy", "Copy" },
@@ -4047,8 +4047,8 @@ function Get-DrawerDayTitle([datetime]$day) {
 }
 
 # The stretches of the strip with nothing tracked, a minute or longer, up to now for today
-function Get-TimelineGaps($blocks, [double]$axisStartH, [double]$axisEndH, [double]$capH) {
-    $minH = 1.0 / 60.0
+function Get-TimelineGaps($blocks, [double]$axisStartH, [double]$axisEndH, [double]$capH, [double]$minSeconds = 60.0) {
+    $minH = $minSeconds / 3600.0
     $out = @()
     $cursor = $axisStartH
     $limit = [math]::Min($axisEndH, $capH)
@@ -4878,6 +4878,127 @@ function Resolve-TimelineGapFill($gaps, [double]$fromH, [double]$toH) {
     return $null
 }
 
+
+# Offer only short, bounded gaps between completed account entries.
+function Get-TidyDayCandidates($timeline, [double]$maxMinutes, $away) {
+    $blocks = @($timeline.Blocks)
+    $capH = if ($timeline.Day.Date -eq [datetime]::Today) { ((Get-Date) - $timeline.Day.Date).TotalHours } else { 24.0 }
+    if ($timeline.Day.Date -gt [datetime]::Today) { return @() }
+    $gaps = @(Get-TimelineGaps $blocks 0.0 24.0 $capH 1.0)
+    $out = @()
+    foreach ($gap in $gaps) {
+        if (($gap.EndH - $gap.StartH) * 60 -gt $maxMinutes + 0.000001) { continue }
+        $previous = @($blocks | Where-Object { [math]::Abs($_.EndH - $gap.StartH) -lt 0.000001 })
+        $next = @($blocks | Where-Object { [math]::Abs($_.StartH - $gap.EndH) -lt 0.000001 })
+        # Overlaps, lunch and live entries need an individual decision on the timeline.
+        if ($previous.Count -ne 1 -or $next.Count -ne 1) { continue }
+        if ($previous[0].Kind -ne 'time' -or $next[0].Kind -ne 'time' -or
+            $previous[0].Origin -eq 'running' -or $next[0].Origin -eq 'running') { continue }
+        $from = $timeline.Day.Date.AddHours($gap.StartH)
+        $to = $timeline.Day.Date.AddHours($gap.EndH)
+        $isAway = $false
+        foreach ($iv in @($away)) { if ($iv[0] -lt $to -and $iv[1] -gt $from) { $isAway = $true; break } }
+        if ($isAway) { continue }
+        $safe = Resolve-TimelineGapFill @($gap) $gap.StartH $gap.EndH
+        if (-not $safe) { continue }
+        $out += [pscustomobject]@{
+            StartSecond = $safe.StartSecond; EndSecond = $safe.EndSecond
+            Previous = $previous[0].Name; Next = $next[0].Name
+            Choices = @($previous[0].Name, $next[0].Name | Select-Object -Unique)
+        }
+    }
+    return $out
+}
+
+function Apply-TidyDay([datetime]$day, $selections, [double]$maxMinutes) {
+    $chosen = @($selections)
+    if ($chosen.Count -eq 0) { return $false }
+    return (Invoke-LogChange 'tidy day' {
+        # Recheck everything after flushing pending sessions and before adding any rows.
+        $timeline = Get-DayTimeline $day
+        $fresh = @(Get-TidyDayCandidates $timeline $maxMinutes (Get-AwayOn $day (Get-Date)))
+        $keys = @{}
+        foreach ($selection in $chosen) {
+            $match = @($fresh | Where-Object {
+                $_.StartSecond -eq $selection.StartSecond -and $_.EndSecond -eq $selection.EndSecond -and
+                $_.Previous -eq $selection.Previous -and $_.Next -eq $selection.Next -and
+                $_.Choices -contains $selection.Account
+            })
+            $key = [string]$selection.StartSecond
+            if ($match.Count -ne 1 -or $keys.ContainsKey($key)) {
+                Show-Message 'The gaps have changed. Nothing was saved. Please reopen Tidy day.'
+                return $false
+            }
+            $keys[$key] = $true
+        }
+        foreach ($selection in $chosen) {
+            $from = $day.Date.AddSeconds($selection.StartSecond)
+            $seconds = $selection.EndSecond - $selection.StartSecond
+            [void]$logRows.Add((New-SessionRow $day.ToString('yyyy-MM-dd', $Inv) $selection.Account $from.ToString('HH:mm:ss', $Inv) 'added' $seconds))
+        }
+        return $true
+    })
+}
+
+function Populate-TidyDayGrid($grid, [datetime]$day, [double]$maxMinutes) {
+    $grid.Rows.Clear()
+    $timeline = Get-DayTimeline $day
+    foreach ($candidate in @(Get-TidyDayCandidates $timeline $maxMinutes (Get-AwayOn $day (Get-Date)))) {
+        $startText = $day.Date.AddSeconds($candidate.StartSecond).ToString('HH:mm:ss', $Inv)
+        $endText = $day.Date.AddSeconds($candidate.EndSecond).ToString('HH:mm:ss', $Inv)
+        $duration = '{0:0.##} min' -f (($candidate.EndSecond - $candidate.StartSecond) / 60.0)
+        $index = $grid.Rows.Add($startText, $endText, $duration, $null)
+        $row = $grid.Rows[$index]
+        $row.Tag = $candidate
+        $cell = New-Object System.Windows.Forms.DataGridViewComboBoxCell
+        [void]$cell.Items.Add('Leave gap')
+        foreach ($account in $candidate.Choices) { [void]$cell.Items.Add($account) }
+        $cell.Value = $candidate.Previous
+        $row.Cells[3] = $cell
+    }
+}
+
+function Show-TidyDay {
+    $day = $script:drawerDay.Date
+    $dlg = New-SettingsDialog ('Tidy day, ' + $day.ToString('d MMMM', $GB)) 660 440
+    try {
+        [void](Add-DialogControl $dlg (New-DialogLabel 'Review small gaps between completed account entries.') 14 14 0 0)
+        [void](Add-DialogControl $dlg (New-DialogLabel 'Fill adds credited time. Existing entries and their timestamps stay unchanged.') 14 38 0 0)
+        [void](Add-DialogControl $dlg (New-DialogLabel 'Maximum gap in minutes') 14 70 0 0)
+        $limit = Add-DialogControl $dlg (New-Object System.Windows.Forms.NumericUpDown) 190 66 65 28
+        $limit.Minimum = 1; $limit.Maximum = 30; $limit.Value = 5
+        $grid = Add-DialogControl $dlg (New-Object System.Windows.Forms.DataGridView) 14 108 632 270
+        $grid.AllowUserToAddRows = $false; $grid.AllowUserToDeleteRows = $false
+        $grid.RowHeadersVisible = $false; $grid.AutoSizeColumnsMode = 'Fill'
+        $grid.RowTemplate.Height = 32; $grid.Font = $dlg.Font
+        foreach ($name in @('Start', 'End', 'Gap', 'Assign to')) {
+            [void]$grid.Columns.Add($name, $name)
+        }
+        for ($i = 0; $i -lt 3; $i++) { $grid.Columns[$i].ReadOnly = $true }
+        $grid.Columns[3].FillWeight = 180
+        $limit.Tag = @{ Grid = $grid; Day = $day }
+        $limit.Add_ValueChanged({ Populate-TidyDayGrid $this.Tag.Grid $this.Tag.Day ([double]$this.Value) })
+        Populate-TidyDayGrid $grid $day 5
+        [void](Add-DialogControl $dlg (New-DialogLabel 'Choose Leave gap for any break. Lunch, away time and live entries are excluded.') 14 382 0 0)
+        Add-DialogButtons $dlg 406 $false ''
+        $dlg.AcceptButton.Text = 'Apply'
+        if ($dlg.ShowDialog() -ne 'OK') { return }
+        [void]$grid.EndEdit()
+        $selections = @()
+        foreach ($row in $grid.Rows) {
+            $account = [string]$row.Cells[3].Value
+            if ($account -eq 'Leave gap') { continue }
+            $candidate = $row.Tag
+            $selections += [pscustomobject]@{
+                StartSecond = $candidate.StartSecond; EndSecond = $candidate.EndSecond
+                Previous = $candidate.Previous; Next = $candidate.Next; Account = $account
+            }
+        }
+        if ($selections.Count -eq 0) { Show-Message 'No gaps selected. The day was left unchanged.'; return }
+        [void](Apply-TidyDay $day $selections ([double]$limit.Value))
+    } finally { $dlg.Dispose() }
+}
+
 function Complete-GapFill([string]$account, [string]$mode) {
     $fill = $script:tlFill
     $script:tlFill = $null
@@ -4979,6 +5100,7 @@ function Invoke-DrawerButton($id) {
             }
             elseif ($script:drawerWeek -lt (Get-WeekStart)) { $script:drawerWeek = $script:drawerWeek.AddDays(7); Update-DrawerContent }
         }
+        'tidy' { Show-TidyDay }
         'undo' { Undo-LogChange }
         'zoomin' { Set-TimelineZoom 1.25 $null; $script:tlHover = New-TimelineHover; Request-Redraw }
         'zoomout' { Set-TimelineZoom 0.8 $null; $script:tlHover = New-TimelineHover; Request-Redraw }

@@ -117,3 +117,7 @@ The drawer is 720 base pixels wide, with 14px body text, 15px timeline labels, 3
 ## v2.26 backdrop correction
 
 The rectangular combined outline is restored. Sync-RendererLayout extends the renderer BaseH to the drawer height while open; Get-DayBtnRect uses the same effective height. The logical PowerShell BaseH remains the natural account-list height, so closing the drawer returns to compact sizing. Blur stays enabled in compiled drawing with the drawer open. This supersedes the v2.25 cut-out and blur suppression described above. Renderer tests verify the filled backdrop and footer alignment in open and closed states.
+
+## v2.27 Tidy day
+
+Get-TidyDayCandidates recomputes gaps with a one-second minimum using the optional minSeconds parameter on Get-TimelineGaps (the default remains 60 seconds for existing callers). Only bounded gaps up to the selected threshold, with one completed non-lunch neighbour on each side and no away overlap, are eligible. Show-TidyDay previews choices in a dialog. Apply-TidyDay rechecks the entire selection after Invoke-LogChange flushes pending data, validating bounds, neighbour names, assignment and duplicate selections before creating any added rows. Existing rows are unchanged. One transaction supplies one Undo snapshot. tests/tidy-day.ps1 covers the calculation and edit callback with synthetic records.

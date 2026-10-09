@@ -6,9 +6,16 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.26 |
+| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.27 |
 | AccountTimer.ps1 | Historical predecessor, removed from current tree | 1.0 to 1.7 |
 | BillableTimer.ps1 | Historical predecessor, removed from current tree | 0.1 to 0.5 |
+
+## v2.27
+
+- Added Tidy day in the timeline drawer, with a preview of small gaps and per-gap choices of the preceding account, following account or Leave gap.
+- Uses a five-minute default threshold, adjustable from 1 to 30 minutes. Excludes lunch, away intervals, running neighbours and unbounded gaps.
+- Applies selected fills as one undoable batch of new credited entries without moving original timestamps, and rejects stale or invalid previews before adding any rows.
+- Added synthetic checks for sub-minute and fractional-second gaps, account choices, exclusions, stale previews and credited totals.
 
 ## v2.26
 
