@@ -22,16 +22,21 @@ public static class TimelineGestures
         card.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
-            if (e.ClickCount == 2) { model.OpenEntry(row); e.Handled = true; return; }
+            if (e.ClickCount == 2) { model.OpenEntryFromDoubleClick(row); e.Handled = true; return; }
             origin = e.GetPosition(canvas); delta = TimeSpan.Zero; dragging = false;
             oldTop = Canvas.GetTop(card); oldHeight = card.Height;
             var y = e.GetPosition(card).Y;
-            edge = oldHeight >= 24 ? y < 8 ? -1 : y > oldHeight - 8 ? 1 : 0 : 0;
+            edge = EdgeAt(y, oldHeight);
             e.Handled = true; e.Pointer.Capture(card);
         };
         card.PointerMoved += (_, e) =>
         {
-            if (origin is not { } start) return;
+            if (origin is not { } start)
+            {
+                // Show the resize cursor over an edge handle so short blocks are discoverable.
+                card.Cursor = new Cursor(EdgeAt(e.GetPosition(card).Y, card.Height) == 0 ? StandardCursorType.SizeAll : StandardCursorType.SizeNorthSouth);
+                return;
+            }
             var moved = e.GetPosition(canvas) - start;
             if (!dragging && Math.Abs(moved.Y) < 5) return;
             dragging = true;
@@ -39,7 +44,6 @@ public static class TimelineGestures
             RestoreNeighbours();
             var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero);
             var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
-            if (from < row.Day || until > row.Day.AddDays(1) || until <= from) return;
             Canvas.SetTop(card, oldTop + (edge <= 0 ? delta.TotalHours * pixelsPerHour : 0));
             card.Height = Math.Max(3, (until - from).TotalHours * pixelsPerHour - 4);
             card.Opacity = .75;
@@ -47,7 +51,7 @@ public static class TimelineGestures
             {
                 try
                 {
-                    foreach (var change in model.Editor.PlanTimeline(row, from, until, false, true))
+                    foreach (var change in model.Editor.PlanTimeline(row, from, until, true))
                     {
                         foreach (var neighbour in canvas.Children.OfType<Border>().Where(b => ReferenceEquals(b.Tag, change.Source)))
                         {
@@ -83,7 +87,31 @@ public static class TimelineGestures
         };
         card.Cursor = new Cursor(StandardCursorType.SizeAll);
     }
+    /// <summary>Which edge a press at <paramref name="y"/> grabs, -1 top, 1 bottom, 0 for moving the whole block.</summary>
+    public static int EdgeAt(double y, double height)
+    {
+        // Tall cards keep 8px handles. Shorter ones share the height in thirds so the middle still
+        // moves the block, and the very shortest are split in halves because resizing matters more
+        // than moving there (zooming in gives a block back its middle).
+        var zone = height >= 24 ? 8 : height >= 10 ? height / 3 : height / 2;
+        if (y < zone) return -1;
+        if (y > height - zone) return 1;
+        return 0;
+    }
+    /// <summary>Keeps a drag inside its day and above the minimum length, so the preview and the saved value always agree.</summary>
+    public static TimeSpan ClampToDay(SessionRow row, int edge, TimeSpan delta)
+    {
+        var minimum = TimeSpan.FromSeconds(3);
+        var low = edge <= 0 ? row.Day - row.From : (row.From + minimum) - row.To;
+        var high = edge >= 0 ? row.Day.AddDays(1) - row.To : (row.To - minimum) - row.From;
+        return delta < low ? low : delta > high ? high : delta;
+    }
     private static TimeSpan SnapDelta(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour, out bool nudge)
+    {
+        var snapped = Snap(model, row, edge, requested, pixelsPerHour, out nudge);
+        return ClampToDay(row, edge, snapped);
+    }
+    private static TimeSpan Snap(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour, out bool nudge)
     {
         nudge = false;
         var occupied = model.Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.IsPositioned && s.Duration > TimeSpan.Zero)

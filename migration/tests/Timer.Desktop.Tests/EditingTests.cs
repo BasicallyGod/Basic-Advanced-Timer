@@ -167,7 +167,7 @@ public sealed class EditingTests
             var point = card.TranslatePoint(new Point(80, 1), window)!.Value;
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
-            Assert.Equal(1, requests);
+            Assert.Equal(1, requests); Assert.Empty(model.SelectedRows); // A double-click edits without leaving the block selected.
             var nine = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
             var empty = nine.TranslatePoint(new Point(200, 55), window)!.Value;
             window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
@@ -230,5 +230,35 @@ public sealed class EditingTests
             Assert.Equal(3, engine.Sessions.Count); Assert.True(model.UndoEdit()); Assert.Equal(2, engine.Sessions.Count);
         }
         finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void DoubleClickRevertsOnlyTheToggleFromItsOwnFirstClick()
+    {
+        var engine = Engine(); var row = Row("09:00:00", "added", "30"); var other = Row("10:00:00", "added", "30"); engine.Sessions.AddRange(new[] { row, other });
+        var model = new TimerModel(engine); var opened = 0; model.EntryRequested += (_, _, _) => opened++;
+        model.ToggleSelection(new[] { other });
+        model.ToggleSelection(new[] { row }); model.OpenEntryFromDoubleClick(row);
+        Assert.Equal(1, opened); Assert.Same(other, Assert.Single(model.SelectedRows));
+        model.ToggleSelection(new[] { row }); model.ToggleSelection(new[] { row }); model.OpenEntryFromDoubleClick(row); // Selected before, so the first click deselected it and the double-click restores it.
+        Assert.Equal(2, opened); Assert.Contains(row, model.SelectedRows);
+    }
+
+    [Theory]
+    [InlineData(100, 0, -1)] [InlineData(100, 5, -1)] [InlineData(100, 95, 1)] [InlineData(100, 50, 0)]
+    [InlineData(18, 2, -1)] [InlineData(18, 9, 0)] [InlineData(18, 16, 1)]
+    [InlineData(6, 1, -1)] [InlineData(6, 5, 1)] [InlineData(3, 0.5, -1)] [InlineData(3, 2.5, 1)]
+    public void ShortCardsStillHaveBothEdgeHandles(double height, double y, int expected) => Assert.Equal(expected, TimelineGestures.EdgeAt(y, height));
+
+    [Fact]
+    public void DragsAreClampedToTheDayAndMinimumLength()
+    {
+        var row = Row("23:00:00", "added", "30");
+        Assert.Equal(row.Day.AddDays(1) - row.To, TimelineGestures.ClampToDay(row, 0, TimeSpan.FromHours(5)));
+        Assert.Equal(row.Day - row.From, TimelineGestures.ClampToDay(row, 0, TimeSpan.FromHours(-30)));
+        Assert.Equal(row.Day.AddDays(1) - row.To, TimelineGestures.ClampToDay(row, 1, TimeSpan.FromHours(5)));
+        Assert.Equal(TimeSpan.FromSeconds(3) - row.Duration, TimelineGestures.ClampToDay(row, 1, TimeSpan.FromHours(-2)));
+        Assert.Equal(row.Duration - TimeSpan.FromSeconds(3), TimelineGestures.ClampToDay(row, -1, TimeSpan.FromHours(2)));
+        Assert.Equal(TimeSpan.FromMinutes(5), TimelineGestures.ClampToDay(row, 0, TimeSpan.FromMinutes(5)));
     }
 }

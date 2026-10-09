@@ -4,12 +4,12 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
-## Migration click selection and deliberate nudging
+## Migration timeline editing fixes
 
-- Replaced Ctrl+click with normal click selection in Timeline and Week. Dragging does not select blocks; right-click offers editing/inspection and Merge selected, alongside the toolbar Merge action.
-- Kept forgiving neighbour snapping for small overshoots. Moving more than 24 display-independent pixels past a neighbour deliberately pushes it, rippling through additional blocks as needed.
-- Preview nudged source blocks during the drag, preserve their durations and notes, and save the complete move as one journalled edit with persistent Undo.
-- Reject pushes that would cross midnight or collide with positioned credit, running time or unresolved imported overlaps, without partially applying the move.
+- Double-clicking a block to edit it no longer leaves it selected or deselected by the click that began the double-click.
+- Short blocks can be resized. Cards under 24 pixels tall share their height in thirds, and the very shortest in halves, between the top edge, the bottom edge and (where there is room) moving. The pointer shows a resize cursor over an edge.
+- A drag past the start or end of the day now stops at midnight and keeps at least three seconds, so the preview and the saved time always agree.
+- Removed the old push behaviour, which could not be reached from the timeline. Dragging a whole block past a neighbour by more than 24 display-independent pixels inserts it between the blocks it crosses, which move into the space left behind. This keeps durations and notes, previews before release and is one undoable edit. Moves blocked by midnight, positioned credit, running time or unresolved imported overlaps apply nothing.
 
 ## Migration Undo history stored as small changes
 
@@ -20,18 +20,11 @@ The entries below follow the migration milestones, newest first. They describe t
 - Edit history from earlier migration builds is imported as its latest step only. The new history is schema 3 in `migration-edit-state.json`.
 - Added randomized tests that compare Undo against full snapshots taken before each edit, through restarts and later recordings, along with tests for the size limits, malformed history, outside changes and quiet checkpoints.
 
-## Migration drag insertion and multi-step Undo
+## Migration selection, Undo steps and timeline zoom
 
-- Dragged blocks insert between crossed neighbours, moving those entries into the space left behind instead of jumping past the entire run.
-- Small overshoots still nestle; resize edges remain clamped. Neighbour movements preview before release, preserve durations and notes, and commit as one undoable action.
-- Undo now retains up to 50 edits across restarts, imports the previous single-step history, and preserves subsequently recorded sessions. The Undo button shows the available step count.
-
-## Migration leapfrogging, selection and timeline zoom
-
-- Ordinary clicks toggle block selection; Merge remains available in the toolbar and right-click menu.
-- Small drag overshoots nestle against neighbours. Larger whole-block drags leapfrog occupied intervals without shifting neighbouring entries; resizing retains boundary clamping.
-- Ctrl+mousewheel zooms the timeline between 60 and 640 pixels per hour, keeping the time under the pointer anchored. Ordinary wheel scrolling remains available.
-- Timeline scale survives view refreshes; changing date resets the scroll position to the first entry.
+- Ordinary clicks toggle block selection in Timeline and Week. Dragging does not select, and Merge is in the toolbar and the right-click menu.
+- Undo keeps up to 50 edits across restarts and the Undo button shows how many are available.
+- Ctrl+mousewheel zooms the timeline between 60 and 640 pixels per hour, keeping the time under the pointer anchored. Ordinary wheel scrolling remains available. The scale survives refreshes, and changing date resets the scroll to the first entry.
 
 ## Migration drag snapping and merge-menu fixes
 

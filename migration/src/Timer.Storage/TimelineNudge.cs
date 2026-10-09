@@ -6,7 +6,7 @@ public sealed record TimelineChange(SessionRow Source, SessionRow Updated);
 
 public sealed partial class LedgerEditor
 {
-    public IReadOnlyList<TimelineChange> PlanTimeline(SessionRow source, DateTime start, DateTime end, bool nudge, bool insert = false)
+    public IReadOnlyList<TimelineChange> PlanTimeline(SessionRow source, DateTime start, DateTime end, bool insert = false)
     {
         Index(source);
         var changed = TimedRow(source.Account, start, end, "edited");
@@ -31,40 +31,6 @@ public sealed partial class LedgerEditor
                 }
             }
         }
-        else if (nudge)
-        {
-            // Work outwards from the moved block; a push can ripple through several neighbours.
-            if (changed.From < source.From)
-            {
-                var boundary = changed.From;
-                foreach (var other in neighbours.Where(s => s.To <= source.From).OrderByDescending(s => s.To))
-                {
-                    if (other.To > boundary)
-                    {
-                        var shift = TimeSpan.FromSeconds(Math.Floor((boundary - other.To).TotalSeconds));
-                        var moved = other with { Start = (other.From + shift).ToString("HH:mm:ss"), End = "edited" };
-                        if (other.From + shift < source.Day) throw new ArgumentException("There is not enough room before these blocks within this day.");
-                        plan[other] = moved; boundary = moved.From;
-                    }
-                    else boundary = other.From;
-                }
-            }
-            if (changed.To > source.To)
-            {
-                var boundary = changed.To;
-                foreach (var other in neighbours.Where(s => s.From >= source.To).OrderBy(s => s.From))
-                {
-                    if (other.From < boundary)
-                    {
-                        var shift = TimeSpan.FromSeconds(Math.Ceiling((boundary - other.From).TotalSeconds));
-                        var moved = other with { Start = (other.From + shift).ToString("HH:mm:ss"), End = "edited" };
-                        if (other.To + shift > source.Day.AddDays(1)) throw new ArgumentException("There is not enough room after these blocks within this day.");
-                        plan[other] = moved; boundary = moved.To;
-                    }
-                    else boundary = other.To;
-                }
-            }
-        }
         var final = engine.Sessions.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero).Select(s => plan.GetValueOrDefault(s, s)).ToArray();
         foreach (var pair in plan)
         {
@@ -77,16 +43,16 @@ public sealed partial class LedgerEditor
             if (final.Any(s => !ReferenceEquals(s, row) && s.From < row.To && s.To > row.From)
                 || Positions.Any(p => p.Start < row.To && p.End > row.From)
                 || (engine.Active is { } active && active.Start < row.To && engine.Now > row.From))
-                throw new ArgumentException("These blocks cannot be nudged into recorded, positioned or running time.");
+                throw new ArgumentException("These blocks cannot be moved into recorded, positioned or running time.");
         }
         return plan.Select(p => new TimelineChange(p.Key, p.Value)).ToArray();
     }
-    public void EditTimeline(SessionRow source, DateTime start, DateTime end, bool nudge, bool insert = false)
+    public void EditTimeline(SessionRow source, DateTime start, DateTime end, bool insert = false)
     {
-        var plan = PlanTimeline(source, start, end, nudge, insert);
+        var plan = PlanTimeline(source, start, end, insert);
         var notesBefore = plan.Select(p => Note(p.Source)).ToArray();
         var indices = plan.Select(p => Index(p.Source)).ToArray();
-        Change(insert ? "Insert and reorder blocks" : nudge ? "Move and nudge blocks" : "Edit entry", () =>
+        Change(insert ? "Insert and reorder blocks" : "Edit entry", () =>
         {
             for (var i = 0; i < plan.Count; i++)
             {

@@ -42,7 +42,17 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (rows.Count == 0 || rows.Any(s => s.IsMerged || !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
         var remove = IsSelected(rows);
         foreach (var row in rows) { if (remove) selectedRows.Remove(row); else selectedRows.Add(row); }
+        lastToggled = rows;
         EditError = null; Notify();
+    }
+    // The first click of a double-click has already toggled the block, and the timeline is
+    // rebuilt after it, so the model remembers that toggle and undoes it before opening the editor.
+    private IReadOnlyList<SessionRow>? lastToggled;
+    public void OpenEntryFromDoubleClick(SessionRow row)
+    {
+        if (lastToggled is { Count: 1 } last && ReferenceEquals(last[0], row)) { lastToggled = null; ToggleSelection(last); }
+        lastToggled = null;
+        OpenEntry(row);
     }
     public void ClearSelection() { if (selectedRows.Count == 0) return; selectedRows.Clear(); Notify(); }
     public bool MergeSelection()
@@ -218,8 +228,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note)
         => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note); });
-    public bool DragEntry(SessionRow row, DateTime start, DateTime end, bool nudge)
-        => ChangeLog(() => Editor.EditTimeline(row, start, end, false, nudge));
+    public bool DragEntry(SessionRow row, DateTime start, DateTime end, bool insert)
+        => ChangeLog(() => Editor.EditTimeline(row, start, end, insert));
     public bool DeleteEntry(SessionRow row) => ChangeLog(() => Editor.Delete(row));
     public bool UndoEdit() => ChangeLog(Editor.Undo);
     public void OpenPosition(CreditPosition? position = null) => PositionRequested?.Invoke(position);

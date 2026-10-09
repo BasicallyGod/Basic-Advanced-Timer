@@ -58,7 +58,7 @@ public sealed class UndoHistoryTests
                             case 1: if (row is not null) editor.Edit(row, row.Account, row.From, row.To, "note " + rnd.Next(1000)); break;
                             case 2: if (row is not null) editor.Edit(row, Accounts[rnd.Next(3)], row.From + shift, row.To + shift, rnd.Next(2) == 0 ? "" : "moved " + rnd.Next(1000)); break;
                             case 3: if (row is not null) editor.Delete(row); break;
-                            default: if (row is not null) editor.EditTimeline(row, row.From + shift, row.To + shift, false, rnd.Next(2) == 0); break;
+                            default: if (row is not null) editor.EditTimeline(row, row.From + shift, row.To + shift, rnd.Next(2) == 0); break;
                         }
                     }
                     catch (Exception e) when (e is ArgumentException or InvalidOperationException) { }
@@ -174,23 +174,25 @@ public sealed class UndoHistoryTests
     [Fact]
     public void HistoryIsCappedByBytesAndAlwaysKeepsTheNewestStep()
     {
-        // A small budget and a small ledger show the cap acting without the cost of a huge ripple.
+        // A small budget and a small ledger show the cap acting without the cost of a huge reorder.
         const int budget = 50_000;
         var engine = Engine();
         for (var k = 0; k < 100; k++) engine.Sessions.Add(Row(Clock(2 * 60 + k), "1"));
         var editor = new LedgerEditor(engine, maxHistoryBytes: budget);
         for (var i = 0; i < 45; i++)
         {
-            // Each move ripples through all 100 back to back entries, so every step is about 10 KB.
-            if (i % 2 == 0) editor.EditTimeline(engine.Sessions[0], engine.Sessions[0].From.AddMinutes(1), engine.Sessions[0].To.AddMinutes(1), true);
-            else editor.EditTimeline(engine.Sessions[99], engine.Sessions[99].From.AddMinutes(-1), engine.Sessions[99].To.AddMinutes(-1), true);
+            // Each move leapfrogs a block across all 99 others, so every step is about 10 KB.
+            var ordered = engine.Sessions.OrderBy(r => r.From).ToArray();
+            if (i % 2 == 0) editor.EditTimeline(ordered[0], ordered[0].From.AddMinutes(100), ordered[0].To.AddMinutes(100), true);
+            else editor.EditTimeline(ordered[99], ordered[99].From.AddMinutes(-100), ordered[99].To.AddMinutes(-100), true);
         }
         Assert.InRange(editor.UndoCount, 1, 8);
         Assert.True(Encoding.UTF8.GetByteCount(editor.StateJson) < budget + 5_000);
         Assert.True(editor.CanUndo); var first = engine.Sessions[0]; editor.Undo(); Assert.NotEqual(first, engine.Sessions[0]);
         // A single step larger than the whole budget is still kept, so the latest edit can always be undone.
         var tiny = new LedgerEditor(engine, maxHistoryBytes: 1);
-        tiny.EditTimeline(engine.Sessions[0], engine.Sessions[0].From.AddMinutes(1), engine.Sessions[0].To.AddMinutes(1), true);
+        var top = engine.Sessions.OrderBy(r => r.From).First();
+        tiny.EditTimeline(top, top.From.AddMinutes(100), top.To.AddMinutes(100), true);
         Assert.Equal(1, tiny.UndoCount); Assert.True(tiny.CanUndo);
     }
 

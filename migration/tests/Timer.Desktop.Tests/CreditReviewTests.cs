@@ -297,29 +297,15 @@ public sealed class CreditReviewTests
         Check("09:00:00", "30", "10:03:00", "30", 0, .99, 33, Day.AddHours(9), Day.AddHours(10).AddMinutes(3));
     }
     [Fact]
-    public void NudgeRipplesInBothDirectionsPreservesNotesAndIsOneUndoableChange()
-    {
-        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:00:00", "30") });
-        var editor = new LedgerEditor(engine); editor.Edit(engine.Sessions[1], "Account one", Day.AddHours(9.5), Day.AddHours(10), "Keep this note");
-        var csv = editor.SessionsCsv; var notes = editor.NotesCsv;
-        editor.EditTimeline(engine.Sessions[0], Day.AddHours(9).AddMinutes(20), Day.AddHours(9).AddMinutes(50), true);
-        Assert.Equal(Day.AddHours(9).AddMinutes(50), engine.Sessions[1].From); Assert.Equal(Day.AddHours(10).AddMinutes(20), engine.Sessions[2].From);
-        Assert.All(engine.Sessions, r => Assert.Equal(TimeSpan.FromMinutes(30), r.Duration)); Assert.Equal("Keep this note", editor.Note(engine.Sessions[1]));
-        editor.Undo(); Assert.Equal(csv, editor.SessionsCsv); Assert.Equal(notes, editor.NotesCsv);
-        editor.EditTimeline(engine.Sessions[2], Day.AddHours(9).AddMinutes(40), Day.AddHours(10).AddMinutes(10), true);
-        Assert.Equal(Day.AddHours(8).AddMinutes(40), engine.Sessions[0].From); Assert.Equal(Day.AddHours(9).AddMinutes(10), engine.Sessions[1].From);
-        editor.Undo(); Assert.Equal(csv, editor.SessionsCsv);
-    }
-    [Fact]
-    public void BlockedNudgeDoesNotChangeLedgerOrUndo()
+    public void BlockedInsertionDoesNotChangeLedgerOrUndo()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("00:00:00", "30"), Row("00:30:00", "30") });
         var editor = new LedgerEditor(engine); var csv = editor.SessionsCsv;
-        Assert.Throws<ArgumentException>(() => editor.EditTimeline(engine.Sessions[1], Day.AddMinutes(10), Day.AddMinutes(40), true));
+        Assert.Throws<ArgumentException>(() => editor.EditTimeline(engine.Sessions[1], Day.AddMinutes(-10), Day.AddMinutes(20), true));
         Assert.Equal(csv, editor.SessionsCsv); Assert.False(editor.CanUndo);
-        engine.Sessions.Clear(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("00:00:00", "30", "merged", "Account two") });
-        editor.Place("Account two", Day.AddHours(10), 30, "Fixed credit"); csv = editor.SessionsCsv; var undo = editor.StateJson;
-        Assert.Throws<ArgumentException>(() => editor.EditTimeline(engine.Sessions[0], Day.AddHours(9).AddMinutes(20), Day.AddHours(9).AddMinutes(50), true));
+        engine.Sessions.Clear(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:15:00", "30"), Row("00:00:00", "30", "merged", "Account two") });
+        editor.Place("Account two", Day.AddHours(10), 15, "Fixed credit"); csv = editor.SessionsCsv; var undo = editor.StateJson;
+        Assert.Throws<ArgumentException>(() => editor.EditTimeline(engine.Sessions[2], Day.AddHours(9).AddMinutes(10), Day.AddHours(9).AddMinutes(40), true));
         Assert.Equal(csv, editor.SessionsCsv); Assert.Equal(undo, editor.StateJson);
     }
     [Fact]
@@ -329,12 +315,12 @@ public sealed class CreditReviewTests
         var editor = new LedgerEditor(engine); var original = editor.SessionsCsv;
         editor.Edit(engine.Sessions[1], "Account one", Day.AddHours(9.5), Day.AddHours(10), "Keep note");
         var annotated = editor.SessionsCsv; var annotatedNotes = editor.NotesCsv;
-        editor.EditTimeline(engine.Sessions[2], Day.AddHours(9).AddMinutes(40), Day.AddHours(10).AddMinutes(10), false, true);
+        editor.EditTimeline(engine.Sessions[2], Day.AddHours(9).AddMinutes(40), Day.AddHours(10).AddMinutes(10), true);
         Assert.Equal(Day.AddHours(9.5), engine.Sessions[2].From);
         Assert.Equal(Day.AddHours(10), engine.Sessions[1].From);
         Assert.Equal("Keep note", editor.Note(engine.Sessions[1]));
         var firstMove = editor.SessionsCsv;
-        editor.EditTimeline(engine.Sessions[0], Day.AddHours(9).AddMinutes(20), Day.AddHours(9).AddMinutes(50), false, true);
+        editor.EditTimeline(engine.Sessions[0], Day.AddHours(9).AddMinutes(20), Day.AddHours(9).AddMinutes(50), true);
         Assert.Equal(Day.AddHours(9.5), engine.Sessions[0].From);
         Assert.Equal(Day.AddHours(9), engine.Sessions[2].From);
         var later = Row("11:00:00", "15"); engine.Sessions.Add(later);
