@@ -6,9 +6,17 @@ Version numbers were assigned after the fact, one per round of changes, all buil
 
 | Script | What it is | Versions |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.27 |
+| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.28 |
 | AccountTimer.ps1 | Historical predecessor, removed from current tree | 1.0 to 1.7 |
 | BillableTimer.ps1 | Historical predecessor, removed from current tree | 0.1 to 0.5 |
+
+## v2.28
+
+- Made the pill the default small tracking view and replaced the expanding full view with a fixed 960 by 640 dashboard, scaled to fit the screen.
+- Added today's date, current account, live recording dot, Pause, Start/Finish day and Back to pill in a stable dashboard header.
+- Kept account controls on the left and Timeline or Week on the right, with consistent action styling and no content-driven resizing.
+- Added budget utilisation rings, usage tooltips, Dashboard and Start/Finish day to the expanded pill. Rings honour each account's configured budget period.
+- Extended Windows rendering checks to cover maximum account capacity, both dashboard tabs, fixed sizing, navigation hit targets and actual pill rendering.
 
 ## v2.27
 

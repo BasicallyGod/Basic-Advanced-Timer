@@ -1,4 +1,4 @@
-# Basic's Advanced Timer v2.27
+# Basic's Advanced Timer v2.28
 #
 # Portable Windows PowerShell 5.1 application for client-account time tracking.
 # Launch from StartAccountTimer2.vbs in the same folder to avoid a console window.
@@ -353,7 +353,7 @@ namespace Win {
         public float Zoom = 1f, BaseW = 320f, BaseH = 380f, RowTop = 100f, RowH = 30f, LunchGap = 10f, OvertimeH = 32f;
         public float CollapseX = 306f, CollapseY = 9f, CollapseR = 6.5f, DrawerBtnX = 12f, DrawerBtnY = 9f;
         public float RoundR = 8f, RoundDownX = 150f, RoundUpX = 170f;
-        public float DrawerW = 520f, DrawerH = 0f, DrawerRowH = 30f;
+        public float DrawerW = 640f, DrawerH = 0f, DrawerRowH = 30f;
         // Heights within the drawer, which the PowerShell side uses to work out how tall the drawer must be
         public const float TabsH = 32f;
         public float Margin = 10f, TimerOffX = 0f, TimerOffY = 0f;
@@ -451,7 +451,7 @@ namespace Win {
         public Bitmap Render(int w, int h) {
             Bitmap bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb);
             Bitmap colourBmp = null, maskBmp = null;
-            bool seeThrough = ListAlpha < 255;
+            bool seeThrough = !Dashboard && ListAlpha < 255;
             using (Graphics g = Graphics.FromImage(bmp))
             using (GraphicsPath outline = GetOutline()) {
                 g.Clear(Color.Transparent);
@@ -560,7 +560,128 @@ namespace Win {
             g.Restore(st);
         }
 
+
+        public bool Dashboard;
+        public string DashboardDate = "", ActiveAccount = "";
+        public bool LiveDot;
+        public double DotPhase;
+        public const float DashboardWidth = 960f, DashboardHeight = 640f;
+
+        void DrawDashboardTimer(Graphics g, GraphicsPath clip) {
+            Color faint = A(215, Text);
+            using (SolidBrush bg = new SolidBrush(Panel)) { g.FillPath(bg, clip); }
+            using (Pen sep = new Pen(A(35, Text), 1f))
+            using (SolidBrush digits = new SolidBrush(Text)) {
+                ListText(g, DashboardDate, FontDrawerBold, Text, new RectangleF(20, 12, 640, 28), sfLeft);
+                RectangleF back = new RectangleF(800, 12, 140, 28);
+                using (GraphicsPath bp = RoundRect(back.X, back.Y, back.Width, back.Height, 8))
+                using (SolidBrush bb = new SolidBrush(CollapseHover ? CircleHot : Circle)) { g.FillPath(bb, bp); }
+                ListText(g, "Back to pill", FontDrawer, Text, back, sfCentre);
+                g.DrawLine(sep, 16, 52, 944, 52);
+                g.DrawString(H + ":" + M + ":" + S, FontDigits, digits, new RectangleF(20, 58, 260, 48), sfLeft);
+                string current = ActiveAccount.Length > 0 ? ActiveAccount : Status;
+                float ax = 300;
+                if (LiveDot && ActiveAccount.Length > 0) {
+                    using (SolidBrush dot = new SolidBrush(A((int)(140 + 115 * DotPhase), Fill))) { g.FillEllipse(dot, ax, 73, 7, 7); }
+                    ax += 15;
+                }
+                ListText(g, current, FontDrawerBold, Text, new RectangleF(ax, 60, 330, 26), sfName);
+                ListText(g, Status + "  " + Unallocated, FontDrawer, faint, new RectangleF(300, 88, 480, 24), sfLeft);
+                if (ActiveAccount.Length > 0) {
+                    RectangleF pause = new RectangleF(660, 60, 110, 28);
+                    using (GraphicsPath pp = RoundRect(pause.X, pause.Y, pause.Width, pause.Height, 8))
+                    using (SolidBrush pb = new SolidBrush(Circle)) { g.FillPath(pb, pp); }
+                    ListText(g, "Pause", FontDrawer, Text, pause, sfCentre);
+                }
+                RectangleF day = new RectangleF(790, 72, 150, 28);
+                using (GraphicsPath dp = RoundRect(day.X, day.Y, day.Width, day.Height, 8))
+                using (SolidBrush db = new SolidBrush(DayBtnHover ? CircleHot : Circle)) { g.FillPath(db, dp); }
+                ListText(g, DayBtnText, FontDrawerBold, Text, day, sfCentre);
+                g.DrawLine(sep, 16, 122, 944, 122);
+                ListText(g, "Accounts", FontDrawerBold, Text, new RectangleF(18, 130, 160, 24), sfLeft);
+                ListText(g, "TODAY", FontLabel, faint, new RectangleF(180, RowTop - 14, 70, 14), sfRight);
+                ListText(g, "WEEK", FontLabel, faint, new RectangleF(250, RowTop - 14, 60, 14), sfRight);
+                // Rows
+                for (int i = 0; i < Rows.Length; i++) {
+                    RowModel r = Rows[i];
+                    float y0 = RowTop + i * RowH + (r.IsLunch ? LunchGap : 0);
+                    float cy = y0 + RowH / 2;
+
+                    if (r.IsLunch) {
+                        using (SolidBrush lb = new SolidBrush(LunchBand)) { FillArea(g, lb, 0, y0, BaseW, BaseH - y0, clip); }
+                    }
+                    bool dragging = DraggingRow == i;
+                    int ha = dragging ? 60 : (r.Active ? 40 : (Hover == i ? 18 : 0));
+                    if (ha > 0) {
+                        using (SolidBrush hb = new SolidBrush(A(ha, Text))) { FillArea(g, hb, 0, y0, BaseW, RowH, clip); }
+                    }
+                    if (!r.IsLunch) {
+                        g.DrawLine(sep, 10, y0, 310, y0);
+                        using (SolidBrush gb = new SolidBrush((dragging || GripHover == i) ? Text : A(110, Text))) {
+                            foreach (float gx in new float[] { 6f, 10f }) {
+                                foreach (float gy in new float[] { -4f, 0f, 4f }) { g.FillEllipse(gb, gx - 1.1f, cy + gy - 1.1f, 2.2f, 2.2f); }
+                            }
+                        }
+                    }
+
+                    if (r.BudgetFrac.HasValue) {
+                        double frac = r.BudgetFrac.Value;
+                        using (Pen track = new Pen(A(45, Text), 2.5f)) { g.DrawArc(track, 14, cy - 14, 28, 28, -90, 360); }
+                        Color ringColour = frac >= 1 ? BudgetOver : (frac >= 0.8 ? BudgetWarn : Fill);
+                        using (Pen progress = new Pen(ringColour, 2.5f)) { g.DrawArc(progress, 14, cy - 14, 28, 28, -90, (float)(360 * Math.Min(1.0, Math.Max(0.0, frac)))); }
+                    }
+                    using (SolidBrush cb = new SolidBrush(r.Active ? CircleHot : Circle)) { g.FillEllipse(cb, 18, cy - 10, 20, 20); }
+                    if (r.Active) DrawPause(g, 28, cy);
+                    else if (r.IsLunch) DrawLunch(g, 28, cy);
+                    else DrawPlay(g, 28, cy);
+
+                    // Names use the full width, and only make room while the rounding buttons are showing
+                    bool showRound = r.CanRound && Hover == i && !Reordering;
+                    float nameW = 88f;
+                    if (!showRound) {
+                        float tw = g.MeasureString(r.TodayText, FontRow).Width;
+                        nameW = Math.Max(88f, 250f - tw - 8f - 46f);
+                    }
+                    float nameY = !Dashboard && r.BudgetFrac.HasValue ? y0 - 3 : y0;
+                    ListText(g, r.Name, FontRow, Text, new RectangleF(46, nameY, nameW, RowH), sfName);
+
+                    // Budget progress remains available alongside the budget ring.
+                    if (!Dashboard && r.BudgetFrac.HasValue) {
+                        double frac = r.BudgetFrac.Value;
+                        float barW = 60f, by = y0 + RowH - 7;
+                        using (SolidBrush track = new SolidBrush(A(40, Text))) { g.FillRectangle(track, 46, by, barW, 3); }
+                        Color bc = frac >= 1 ? BudgetOver : (frac >= 0.8 ? BudgetWarn : Fill);
+                        float fillW = (float)(barW * Math.Min(1.0, frac));
+                        if (frac > 0 && fillW < 2) fillW = 2;
+                        using (SolidBrush bb = new SolidBrush(bc)) { g.FillRectangle(bb, 46, by, fillW, 3); }
+                    }
+                    ListText(g, r.TodayText, FontRow, Text, new RectangleF(180, y0, 70, RowH), sfRight);
+                    ListText(g, r.WeekText, FontLabel, faint, new RectangleF(250, y0, 60, RowH), sfRight);
+
+                    // Round-down and round-up buttons
+                    if (showRound) {
+                        for (int k = 0; k < 2; k++) {
+                            string dir = k == 0 ? "down" : "up";
+                            float bx = k == 0 ? RoundDownX : RoundUpX;
+                            bool hot = RoundHover == (i.ToString() + ":" + dir);
+                            using (SolidBrush rb = new SolidBrush(hot ? CircleHot : Circle)) {
+                                g.FillEllipse(rb, bx - RoundR, cy - RoundR, 2 * RoundR, 2 * RoundR);
+                            }
+                            float tipY = dir == "up" ? -1.8f : 1.8f;
+                            using (Pen cp = new Pen(Text, 1.5f)) {
+                                cp.StartCap = LineCap.Round; cp.EndCap = LineCap.Round; cp.LineJoin = LineJoin.Round;
+                                g.DrawLines(cp, new PointF[] { new PointF(bx - 3.5f, cy - tipY), new PointF(bx, cy + tipY), new PointF(bx + 3.5f, cy - tipY) });
+                            }
+                        }
+                    }
+                }
+
+
+            }
+        }
+
         void DrawTimer(Graphics g, GraphicsPath clip) {
+            if (Dashboard) { DrawDashboardTimer(g, clip); return; }
             Color faint = A(215, Text);
             float split = RowTop - 17;
             using (SolidBrush b = new SolidBrush(Panel)) { FillArea(g, b, 0, 0, BaseW, split, clip); }
@@ -825,7 +946,8 @@ namespace Win {
             using (SolidBrush bg = new SolidBrush(Panel)) {
                 g.SetClip(outline);
                 g.SetClip(new RectangleF(mg + TimerOffX, mg + TimerOffY, BaseW, BaseH), CombineMode.Exclude);
-                g.FillRectangle(bg, 0, 0, 2 * mg + dW + BaseW, 2 * mg + colH);
+                if (Dashboard) g.FillRectangle(bg, dx, mg + 124, dW, colH - 124);
+                else g.FillRectangle(bg, 0, 0, 2 * mg + dW + BaseW, 2 * mg + colH);
                 g.ResetClip();
             }
 
@@ -841,7 +963,8 @@ namespace Win {
                 // Copied in pixel for pixel, kept just inside the drawer's rounded edges
                 GraphicsState st = g.Save();
                 g.ResetTransform();
-                g.SetClip(new RectangleF((dx + 4) * Zoom, (mg + 4) * Zoom, (dW - 8) * Zoom, (colH - 8) * Zoom));
+                float contentTop = Dashboard ? 124f : 4f;
+                g.SetClip(new RectangleF((dx + 4) * Zoom, (mg + contentTop) * Zoom, (dW - 8) * Zoom, (colH - contentTop - 4) * Zoom));
                 g.InterpolationMode = InterpolationMode.NearestNeighbor;
                 g.PixelOffsetMode = PixelOffsetMode.Half;
                 g.DrawImage(layer, new Rectangle(0, 0, w, h));
@@ -850,7 +973,7 @@ namespace Win {
 
             using (Pen sep = new Pen(A(35, Text), 1f)) {
                 float seamX = mg + (TimerOffX > 0 ? dW : BaseW);
-                g.DrawLine(sep, seamX, mg + 12, seamX, mg + BaseH - 12);
+                g.DrawLine(sep, seamX, mg + (Dashboard ? 124 : 12), seamX, mg + BaseH - 12);
             }
         }
 
@@ -862,7 +985,7 @@ namespace Win {
             Color faintC = Mix(Panel, Text, 215 / 255.0);
             // Lines and bars are drawn as solid colours, as the layer has no see-through areas
             using (Pen sep = new Pen(Mix(Panel, Text, 35 / 255.0), 1f)) {
-                float pad = 14f, x0 = dx + pad, xR = dx + dW - pad, y = mg + 10;
+                float pad = 14f, x0 = dx + pad, xR = dx + dW - pad, y = mg + (Dashboard ? 132 : 10);
                 bool timeline = d.Mode == "timeline" && d.Timeline != null;
                 QueueText(d.Title, fBold, textC, new RectangleF(x0, y, dW - 2 * pad, 24), DT_LEFT);
 
@@ -885,7 +1008,7 @@ namespace Win {
                     RectangleF rect = new RectangleF(bx, y + 1, tw, 28);
                     bool enabled = !(def[0] == "next" && !d.NextEnabled) && !(def[0] == "undo" && !d.UndoEnabled);
                     Color col = !enabled ? Mix(Panel, Circle, 0.45) : (DrawerHover == def[0] ? CircleHot : Circle);
-                    using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 11f))
+                    using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 8f))
                     using (SolidBrush bb = new SolidBrush(col)) { og.FillPath(bb, bp); }
                     QueueText(def[1], fBold, enabled ? textC : Mix(col, Text, 0.5), rect, DT_CENTER);
                     if (enabled) {
@@ -905,7 +1028,7 @@ namespace Win {
                     RectangleF rect = new RectangleF(tabX, y, tw, 28);
                     bool current = d.Mode == tab[0];
                     Color col = current ? CircleHot : (DrawerHover == tab[0] ? Circle : Mix(Panel, Circle, 0.45));
-                    using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 11f))
+                    using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 8f))
                     using (SolidBrush bb = new SolidBrush(col)) { og.FillPath(bb, bp); }
                     QueueText(tab[1], fBold, textC, rect, DT_CENTER);
                     if (!current) {
@@ -920,12 +1043,12 @@ namespace Win {
                     float zx = xR;
                     string[][] tools = new string[][] { new string[] { "now", "Now" }, new string[] { "zoomin", "+" }, new string[] { "zoomout", "-" } };
                     foreach (string[] tool in tools) {
-                        float tw = Math.Max(22f, og.MeasureString(tool[1], fBold).Width + 16);
+                        float tw = Math.Max(28f, og.MeasureString(tool[1], fBold).Width + 16);
                         zx -= tw;
                         RectangleF rect = new RectangleF(zx, y, tw, 28);
                         bool enabled = !(tool[0] == "now" && !d.IsToday);
                         Color col = !enabled ? Mix(Panel, Circle, 0.45) : (DrawerHover == tool[0] ? CircleHot : Circle);
-                        using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 11f))
+                        using (GraphicsPath bp = RoundRect(rect.X, rect.Y, rect.Width, rect.Height, 8f))
                         using (SolidBrush bb = new SolidBrush(col)) { og.FillPath(bb, bp); }
                         QueueText(tool[1], fBold, enabled ? textC : Mix(col, Text, 0.5), rect, DT_CENTER);
                         if (enabled) {
@@ -961,8 +1084,8 @@ namespace Win {
                     y += rowH;
                 }
 
-                // Budgets
-                if (d.Budgets.Count > 0) {
+                // Budget details are attached to the account controls in dashboard mode.
+                if (!Dashboard && d.Budgets.Count > 0) {
                     y += 8;
                     QueueText(d.BudgetsHeading, fBold, faintC, new RectangleF(x0, y, 260, 16), DT_LEFT);
                     y += 18;
@@ -3182,7 +3305,7 @@ function Update-View {
                  else { '{0}: {1}h {2}m' -f $script:AppName, [int]$script:view.H, $script:view.M }
 
     # Open or close the overtime section
-    $newTop = if ($overtime) { $BaseRowTop + $OvertimeH } else { $BaseRowTop }
+    $newTop = if ($script:useRenderer) { $BaseRowTop } elseif ($overtime) { $BaseRowTop + $OvertimeH } else { $BaseRowTop }
     $newFinishH = if ($showFinish) { $FinishAreaH } else { 0 }
     if ($newTop -ne $RowTop -or $newFinishH -ne $script:finishH) {
         $script:RowTop = $newTop
@@ -3201,29 +3324,31 @@ $script:SystemDpi = $g0.DpiX
 $g0.Dispose()
 
 $BaseW  = 320
-$BaseRowTop = 88
+$DashboardW = 960
+$DashboardH = 640
+$BaseRowTop = 170
 $OvertimeH  = 32     # height of the overtime section when it appears
 $RowTop = $BaseRowTop
-$RowH   = 30
+$RowH   = 34
 $LunchGap = 10   # space separating Lunch from the accounts
 $RoundXs  = @{ down = 150; up = 170 }   # positions of the round-down and round-up buttons
 $RoundR   = 8
 $RoundBlock = 15 * 60   # round up to the next 15 minutes
 
 # Compact pill view
-$PillW     = 240
+$PillW     = 320
 $PillH     = 42
-$PillTimeW = 74                    # the time area on the left (click to open the full view)
+$PillTimeW = 88                    # the time area on the left (click to open the full view)
 $PillBtnX  = $PillW - 22           # play/pause button
 $PillBtnR  = 14
-$PillRowH  = 28                    # rows in the pill's account list
+$PillRowH  = 34                    # rows in the pill's account list
 $PillLunchGap = 6
 # Collapse button in the full view
 $CollapseX = 304
 $CollapseY = 15
 $CollapseR = 7.5
 # Week drawer
-$DrawerSideW = 720                  # width of the week drawer beside the timer
+$DrawerSideW = 640                  # width of the week drawer beside the timer
 $DrawerBtnX = 16                    # week drawer button, top left (mirrors the compact view button)
 $DrawerBtnY = 15
 
@@ -3232,6 +3357,7 @@ $DrawerBtnY = 15
 $DayBtn = @{ W = 150; H = 22 }
 $FinishAreaH = 30
 function Get-DayBtnRect {
+    if ($script:useRenderer -and $script:mode -eq 'full') { return @{ X = 790; Y = 72; W = 150; H = 28 } }
     $bx = ($BaseW - $DayBtn.W) / 2
     $panelH = if ($script:useRenderer -and $script:drawerOpen) { [math]::Max($BaseH, $script:drawerH) } else { $BaseH }
     $by = $panelH - $DayBtn.H - 8
@@ -3239,7 +3365,7 @@ function Get-DayBtnRect {
 }
 
 function Get-PillListH {
-    return 4 + $script:slots.Count * $PillRowH + $PillLunchGap + 6
+    return 4 + $script:slots.Count * $PillRowH + $PillLunchGap + 6 + 40
 }
 
 function Get-BaseSize {
@@ -3249,6 +3375,7 @@ function Get-BaseSize {
         return ($PillW + $m2), ($PillH + $m2)
     }
     $fm2 = 2 * $script:fullMargin
+    if ($script:useRenderer) { return ($DashboardW + $fm2), ($DashboardH + $fm2) }
     if ($script:drawerOpen) { return ($DrawerSideW + $BaseW + $fm2), ($script:drawerH + $fm2) }
     return ($BaseW + $fm2), ($BaseH + $fm2)
 }
@@ -3589,11 +3716,11 @@ Apply-Theme $savedTheme
 
 $px = [System.Drawing.GraphicsUnit]::Pixel
 $fDigits = New-Object System.Drawing.Font('Segoe UI Semibold', 36, [System.Drawing.FontStyle]::Regular, $px)
-$fLabel  = New-Object System.Drawing.Font('Segoe UI', 9.5, [System.Drawing.FontStyle]::Bold, $px)
-$fRow    = New-Object System.Drawing.Font('Segoe UI Semibold', 12, [System.Drawing.FontStyle]::Regular, $px)
+$fLabel  = New-Object System.Drawing.Font('Segoe UI', 11.5, [System.Drawing.FontStyle]::Bold, $px)
+$fRow    = New-Object System.Drawing.Font('Segoe UI Semibold', 14, [System.Drawing.FontStyle]::Regular, $px)
 $fOvertime = New-Object System.Drawing.Font('Segoe UI Semibold', 24, [System.Drawing.FontStyle]::Regular, $px)
 $fPillTime = New-Object System.Drawing.Font('Segoe UI Semibold', 19, [System.Drawing.FontStyle]::Regular, $px)
-$fPillSub  = New-Object System.Drawing.Font('Segoe UI', 10.5, [System.Drawing.FontStyle]::Regular, $px)
+$fPillSub  = New-Object System.Drawing.Font('Segoe UI', 12, [System.Drawing.FontStyle]::Regular, $px)
 $fDrawerBtn = New-Object System.Drawing.Font('Segoe UI Semibold', 14, [System.Drawing.FontStyle]::Regular, $px)
 $fDrawerText = New-Object System.Drawing.Font('Segoe UI', 14, [System.Drawing.FontStyle]::Regular, $px)
 $fDrawerTextBold = New-Object System.Drawing.Font('Segoe UI Semibold', 14, [System.Drawing.FontStyle]::Regular, $px)
@@ -4278,6 +4405,7 @@ function Get-DayTimeline([datetime]$day) {
 
 function Measure-DrawerHeight {
     $d = $script:drawerData
+    if ($script:useRenderer) { return $DashboardH }
     if ((Get-DrawerMode) -eq 'timeline') {
         # A fixed height, with the day scrolling inside it (or taller if the account totals need more)
         $lines = @($script:drawerLegend).Count
@@ -4452,7 +4580,16 @@ function Get-TimerPoint($pt) {
 }
 
 # Size and place the window so the timer stays put and the drawer opens where there's room
+
+function Get-ViewZoom {
+    $normalZoom = $Scale * $script:SystemDpi / 96.0
+    if ($script:mode -ne 'full' -or -not $script:useRenderer) { return $normalZoom }
+    $area = [System.Windows.Forms.Screen]::FromControl($form).WorkingArea
+    return [math]::Min($normalZoom, [math]::Min($area.Width / ($DashboardW + 20.0), $area.Height / ($DashboardH + 20.0)))
+}
+
 function Update-DrawerGeometry($tl) {
+    if ($script:useRenderer -and $script:mode -eq 'full') { $script:Zoom = Get-ViewZoom }
     if (-not $tl) { $tl = Get-TimerScreenPos }
     if ($script:mode -eq 'full') { $script:fullMargin = Get-WantedFullMargin }
     if ($script:drawerOpen) {
@@ -4460,7 +4597,7 @@ function Update-DrawerGeometry($tl) {
         $area = [System.Windows.Forms.Screen]::FromPoint($tl).WorkingArea
         $leftRoom = ($tl.X - $DrawerSideW * $Zoom) -ge $area.Left
         $script:drawerUp = $false
-        $script:timerOffX = if ($leftRoom) { $DrawerSideW } else { 0 }
+        $script:timerOffX = if ($script:useRenderer) { 0 } elseif ($leftRoom) { $DrawerSideW } else { 0 }
         $script:timerOffY = 0
     } else {
         $script:timerOffX = 0; $script:timerOffY = 0; $script:drawerUp = $false
@@ -4472,6 +4609,7 @@ function Update-DrawerGeometry($tl) {
 
 function Set-DrawerOpen([bool]$open, [switch]$Starting) {
     if ($script:mode -ne 'full') { return }
+    if ($script:useRenderer -and -not $open -and -not $Starting) { Set-View 'pill'; return }
     $tl = Get-TimerScreenPos
     $script:drawerOpen = $open
     if ($open) {
@@ -4529,6 +4667,7 @@ function Update-DrawerContent {
 }
 
 function Test-InDrawer($pt) {
+    if ($script:useRenderer -and ($pt.Y / $Zoom - $script:fullMargin) -lt 124) { return $false }
     if (-not $script:drawerOpen) { return $false }
     $x = $pt.X / $Zoom - $script:fullMargin
     if ($script:timerOffX -gt 0) { return $x -lt $DrawerSideW }
@@ -5052,11 +5191,13 @@ function Test-HitDayBtn($tp) {
 }
 
 function Test-HitUnalloc($tp) {
+    if ($script:useRenderer) { return ($tp.X / $Zoom -ge 300 -and $tp.X / $Zoom -le 780 -and $tp.Y / $Zoom -ge 88 -and $tp.Y / $Zoom -le 112) }
     $x = $tp.X / $Zoom; $y = $tp.Y / $Zoom
     return ($x -ge 160 -and $x -le 312 -and $y -ge 48 -and $y -le 67)
 }
 
 function Test-HitHandle($tp) {
+    if ($script:useRenderer) { return $false }
     $x = $tp.X / $Zoom; $y = $tp.Y / $Zoom
     $dx = $x - $DrawerBtnX; $dy = $y - $DrawerBtnY
     $r = $CollapseR + 3
@@ -5361,6 +5502,15 @@ function Draw-Pill($g, [bool]$layered) {
                 if ($r.Active) { Fill-Area $g $bRowOn 6 $y0 ($PillW - 12) $PillRowH }
                 elseif ($script:pillHover -eq $key) { Fill-Area $g $bRowHover 6 $y0 ($PillW - 12) $PillRowH }
 
+                if ($null -ne $r.BudgetFrac -and -not $isLunch) {
+                    $usage = [double]$r.BudgetFrac
+                    $ringTrack = New-Object System.Drawing.Pen(($C::FromArgb(45, $cWhite)), [float]2.5)
+                    $ringColour = if ($usage -ge 1) { $BudgetOverColour } elseif ($usage -ge 0.8) { $BudgetWarnColour } else { $theme.Fill }
+                    $ringProgress = New-Object System.Drawing.Pen($ringColour, [float]2.5)
+                    $g.DrawArc($ringTrack, [float]12, [float]($rc - 12), [float]24, [float]24, [float]-90, [float]360)
+                    $g.DrawArc($ringProgress, [float]12, [float]($rc - 12), [float]24, [float]24, [float]-90, [float](360 * [math]::Min(1.0, [math]::Max(0.0, $usage))))
+                    $ringTrack.Dispose(); $ringProgress.Dispose()
+                }
                 $ccol = if ($r.Active) { $theme.CircleHot } else { $theme.Circle }
                 $cbr = New-Object System.Drawing.SolidBrush $ccol
                 $g.FillEllipse($cbr, 15, ($rc - 9), 18, 18)
@@ -5374,6 +5524,18 @@ function Draw-Pill($g, [bool]$layered) {
             }
         }
 
+
+        if ($script:pillOpen) {
+            $fy = $L.ListY + $L.ListH - 36
+            $g.DrawLine($pSep, 14, ($fy - 3), ($PillW - 14), ($fy - 3))
+            foreach ($footer in @(@{ X = 14; W = 136; Text = 'Dashboard' }, @{ X = 160; W = 146; Text = $v.DayBtnText })) {
+                $footerPath = New-RoundedPath $footer.X $fy $footer.W 28 8
+                $footerBrush = New-Object System.Drawing.SolidBrush $theme.Circle
+                $g.FillPath($footerBrush, $footerPath)
+                $g.DrawString($footer.Text, $fDrawerBtn, $bWhite, (New-Object $RF $footer.X, $fy, $footer.W, 28), $sfCentre)
+                $footerPath.Dispose(); $footerBrush.Dispose()
+            }
+        }
         if ($layered -and $PillShadow -and $script:shapePath) {
             $rimPen = New-Object System.Drawing.Pen(($C::FromArgb(60, $cWhite)), [float]1)
             $g.DrawPath($rimPen, $script:shapePath)
@@ -5485,9 +5647,14 @@ function Test-FullShadow {
 function Sync-RendererLayout {
     $r = $script:renderer
     $r.Zoom = [float]$Zoom
-    $r.BaseH = [float]$(if ($script:drawerOpen) { [math]::Max($BaseH, $script:drawerH) } else { $BaseH })
+    $r.Dashboard = $true
+    $r.BaseH = [float]$DashboardH
+    $r.DashboardDate = (Get-Date).ToString('dddd, d MMMM yyyy', $GB)
+    $r.ActiveAccount = [string]$script:view.ActiveName
+    $r.LiveDot = [bool]$PillLiveDot
+    $r.DotPhase = 0.5 - 0.5 * [math]::Cos(2 * [math]::PI * $script:animClock.Elapsed.TotalSeconds / 2.0)
     $r.RowTop = [float]$RowTop
-    $r.DrawerH = [float]$script:drawerH
+    $r.DrawerH = [float]$DashboardH
     $r.Margin = [float]$script:fullMargin
     $r.TimerOffX = [float]$script:timerOffX
     $r.TimerOffY = [float]$script:timerOffY
@@ -7356,6 +7523,7 @@ function Get-RowTop($i) {
 }
 
 function Get-HitRow($pt) {
+    if ($script:useRenderer -and ($pt.X / $Zoom -lt 0 -or $pt.X / $Zoom -gt $BaseW)) { return $null }
     $y = $pt.Y / $Zoom
     for ($i = 0; $i -lt $script:slots.Count; $i++) {
         $top = Get-RowTop $i
@@ -7545,6 +7713,7 @@ function Set-View($mode, [switch]$Starting) {
     $right = $form.Right
     $bottom = $form.Bottom
     $script:mode = $mode
+    $script:Zoom = Get-ViewZoom
     $bw, $bh = Get-BaseSize
     $form.ClientSize = New-Object System.Drawing.Size([int]($bw * $Zoom), [int]($bh * $Zoom))
     # Each view remembers where it was; the first time, it lines up with the other's bottom-right corner
@@ -7563,10 +7732,21 @@ function Set-View($mode, [switch]$Starting) {
     Keep-Visible
     Update-View
     Request-Redraw
-    if ($mode -eq 'full' -and $script:drawerReopen) { $script:drawerReopen = $false; Set-DrawerOpen $true -Starting }
+    if ($mode -eq 'full' -and $script:useRenderer) { Set-DrawerOpen $true -Starting }
+    elseif ($mode -eq 'full' -and $script:drawerReopen) { $script:drawerReopen = $false; Set-DrawerOpen $true -Starting }
+}
+
+function Test-HitDashboardPause($pt) {
+    if (-not $script:useRenderer -or -not $script:active) { return $false }
+    $xx = $pt.X / $Zoom; $yy = $pt.Y / $Zoom
+    return ($xx -ge 660 -and $xx -le 770 -and $yy -ge 60 -and $yy -le 88)
 }
 
 function Test-HitCollapse($pt) {
+    if ($script:useRenderer) {
+        $xx = $pt.X / $Zoom; $yy = $pt.Y / $Zoom
+        return ($xx -ge 800 -and $xx -le 940 -and $yy -ge 12 -and $yy -le 40)
+    }
     $x = $pt.X / $Zoom; $y = $pt.Y / $Zoom
     $dx = $x - $CollapseX; $dy = $y - $CollapseY
     $r = $CollapseR + 3
@@ -7611,6 +7791,11 @@ function Get-PillZone($pt) {
         return 'list'
     }
     if ($script:pillOpen) {
+        $fy = $L.ListY + $L.ListH - 36
+        if ($y -ge $fy -and $y -lt ($fy + 28)) {
+            if ($x -ge 14 -and $x -le 150) { return 'dashboard' }
+            if ($x -ge 160 -and $x -le 306) { return 'day' }
+        }
         for ($i = 0; $i -lt $script:slots.Count; $i++) {
             $top = Get-PillRowTop $i
             if ($y -ge $top -and $y -lt ($top + $PillRowH)) { return ('row:' + $i) }
@@ -7646,10 +7831,17 @@ function Pill-MouseMove($e) {
     $zone = Get-PillZone $e.Location
     if ($zone -ne $script:pillHover) {
         $script:pillHover = $zone
-        if ($script:pillOpen -or -not $zone) {
+        if ($zone -like 'row:*') {
+            $rowIndex = [int]$zone.Substring(4)
+            $budgetInfo = $script:view.Rows[$rowIndex].BudgetText
+            if ($budgetInfo) { $tip.Show($budgetInfo, $form, [int]$e.Location.X, [int]($e.Location.Y + 24), 2500) }
+            else { $tip.Hide($form) }
+        } elseif ($zone -eq 'dashboard' -or $zone -eq 'day') {
+            $tip.Hide($form)
+        } elseif ($script:pillOpen -or -not $zone) {
             $tip.Hide($form)
         } else {
-            $text = if ($zone -eq 'time') { 'Open full view' }
+            $text = if ($zone -eq 'time') { 'Open dashboard' }
                     elseif ($zone -eq 'list') { 'Switch account' }
                     elseif ($script:active) { 'Pause' }
                     else { 'Start an account' }
@@ -7667,8 +7859,11 @@ function Pill-MouseUp($e) {
     $tip.Hide($form)
     $zone = $d.Zone
     if (-not $zone -or $zone -ne (Get-PillZone $e.Location)) { return }
-    if ($zone -eq 'time') {
+    if ($zone -eq 'time' -or $zone -eq 'dashboard') {
         Set-View 'full'
+    } elseif ($zone -eq 'day') {
+        Switch-DayDone
+        Request-Redraw
     } elseif ($zone -eq 'list') {
         Set-PillOpen (-not $script:pillOpen)
     } elseif ($zone -eq 'button') {
@@ -7704,6 +7899,7 @@ $form.Add_MouseDown({
     $tp = Get-TimerPoint $_.Location
     if (Test-HitHandle $tp) { $script:pressedHandle = $true; return }
     if (Test-HitCollapse $tp) { $script:pressedCollapse = $true; return }
+    if (Test-HitDashboardPause $tp) { $script:pressedDashboardPause = $true; return }
     if (Test-HitDayBtn $tp) { $script:pressedDayBtn = $true; return }
     $grip = Get-HitGrip $tp
     if ($null -ne $grip) {
@@ -7803,7 +7999,7 @@ $form.Add_MouseMove({
         } elseif (-not $coll -and -not $handle) { $tip.Hide($form) }
     }
     $form.Cursor = if ($null -ne $grip) { [System.Windows.Forms.Cursors]::SizeNS }
-                   elseif ($null -ne $hit -or $coll -or $handle -or $dayHit) { [System.Windows.Forms.Cursors]::Hand }
+                   elseif ($null -ne $hit -or $coll -or $handle -or $dayHit -or (Test-HitDashboardPause $tp)) { [System.Windows.Forms.Cursors]::Hand }
                    else { [System.Windows.Forms.Cursors]::Default }
     if ($round -ne $script:roundHover) {
         if ($null -ne $round) {
@@ -7864,6 +8060,11 @@ $form.Add_MouseUp({
         if ($script:pressedCollapse) {
             $script:pressedCollapse = $false
             if (Test-HitCollapse $tp) { Set-View 'pill' }
+            return
+        }
+        if ($script:pressedDashboardPause) {
+            $script:pressedDashboardPause = $false
+            if (Test-HitDashboardPause $tp) { Stop-ByUser; Update-View; Update-DrawerContent; Request-Redraw }
             return
         }
         if ($script:pressedDayBtn) {
@@ -8061,7 +8262,7 @@ function Rename-Account($old) {
 # ---- Right-click menu ----
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
 
-$miView = $menu.Items.Add('Compact view')
+$miView = $menu.Items.Add('Back to pill')
 $miView.Add_Click({ if ($script:mode -eq 'pill') { Set-View 'full' } else { Set-View 'pill' } })
 $miDrawer = $menu.Items.Add('Show drawer')
 $miDrawer.Add_Click({ Set-DrawerOpen (-not $script:drawerOpen) })
@@ -8271,8 +8472,8 @@ function New-FilesMenu {
 [void]$menu.Items.Add('Close timer', $null, { $form.Close() })
 
 $menu.Add_Opening({
-    $miView.Text = if ($script:mode -eq 'pill') { 'Full view' } else { 'Compact view' }
-    $miDrawer.Visible = $script:mode -eq 'full'
+    $miView.Text = if ($script:mode -eq 'pill') { 'Dashboard' } else { 'Back to pill' }
+    $miDrawer.Visible = $script:mode -eq 'full' -and -not $script:useRenderer
     $miFormat.Text = if ($script:hoursFormat -eq 'decimal') { 'Show hours as h:mm' } else { 'Show hours as decimal' }
     $miDrawer.Text = if ($script:drawerOpen) { 'Hide drawer' } else { 'Show drawer' }
     $donePlan = Get-DayPlan ([datetime]::Today)
@@ -8406,7 +8607,7 @@ $savedBlur = $false
 if (Test-SettingSection 'blur') { try { $savedBlur = ((Read-SettingFirst 'blur').Trim() -eq '1') } catch {} }
 if ($savedBlur) { Set-Blur $true -Quiet }
 Load-Positions
-$savedView = 'full'
+$savedView = 'pill'
 if (Test-SettingSection 'view') { try { $savedView = (Read-SettingFirst 'view').Trim() } catch {} }
 $drawerWasOpen = $false
 if (Test-SettingSection 'drawer') {
@@ -8421,7 +8622,7 @@ if ($savedView -eq 'pill') {
     $script:drawerReopen = $drawerWasOpen
 } else {
     if ($script:positions.ContainsKey('full')) { Set-TimerScreenPos $script:positions['full'] }
-    if ($drawerWasOpen) { Set-DrawerOpen $true -Starting }
+    if ($script:useRenderer -or $drawerWasOpen) { Set-DrawerOpen $true -Starting }
     Keep-Visible
 }
 Request-Redraw

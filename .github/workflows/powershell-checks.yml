@@ -33,3 +33,10 @@ jobs:
       - name: Tidy day tests
         shell: powershell
         run: ./tests/tidy-day.ps1
+      - name: Upload dashboard previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-previews
+          path: ${{ runner.temp }}/timer-dashboard-previews/*.png
+          if-no-files-found: ignore

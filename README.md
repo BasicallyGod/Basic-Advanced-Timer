@@ -1,8 +1,8 @@
 # Basic’s Advanced Timer
 
-**Development status:** `main` contains the stable v2.22 release. The `experimental` branch contains v2.27 with settings consolidation, branding changes and all-day Start day / Finish day controls. Its automated tests have passed, but migration against a real Windows installation has not yet been verified. Keep everyday timesheets on the stable release until that check is complete.
+**Development status:** `main` contains the stable v2.22 release. The `experimental` branch contains v2.28 with settings consolidation, branding changes and all-day Start day / Finish day controls. Its automated tests have passed, but migration against a real Windows installation has not yet been verified. Keep everyday timesheets on the stable release until that check is complete.
 
-Basic’s Advanced Timer is a portable, always-on-top Windows time tracker for client accounts and weekly timesheets. The current application is **v2.27**. It runs from a folder using Windows PowerShell 5.1 and WinForms, with compiled C# rendering built into the script. No installer, administrator access, extra PowerShell modules or separate .NET runtime are required.
+Basic’s Advanced Timer is a portable, always-on-top Windows time tracker for client accounts and weekly timesheets. The current application is **v2.28**. It runs from a folder using Windows PowerShell 5.1 and WinForms, with compiled C# rendering built into the script. No installer, administrator access, extra PowerShell modules or separate .NET runtime are required.
 
 ## Getting started
 
@@ -19,7 +19,7 @@ Keep `StartAccountTimer2.vbs` and `AccountTimer2.ps1` together. The launcher use
 - Start, stop and switch between client accounts, with a dedicated Lunch timer, in the full window or compact pill.
 - Set usual working hours, different weekday shifts, days off and day-specific overrides. Start day and Finish day are available throughout the day, including before the usual start and after the usual finish. Starting early counts from the exact button press for that date without changing your usual hours. Finish day pauses the day and unallocated counters; Start day resumes them without counting the break. Choose a client account to allocate the time. Starting an account early also starts the day. The same controls are available from the right-click menu in compact view.
 - Track account budgets, record notes, and correct time through manual entries and round-up or round-down adjustments.
-- The week and timeline drawer uses larger text, spacious rows and a wider totals column. Navigation has its own row. When the drawer is taller, the normal timer panel extends to match it and keeps its Finish day button at the bottom. This rectangular backdrop preserves Windows blur.
+- The pill is the small tracking view. Expand it to switch accounts, inspect budget rings, open Dashboard or Start/Finish day. The dashboard has a fixed 960 by 640 layout with today's date and a live tracking dot, account controls on the left and Timeline or Week on the right. It scales down to fit the screen and uses a solid, consistent backdrop. Switching tabs or adding accounts does not resize it.
 - Review the week in the side drawer or separate weekly window. Scroll and zoom the daily timeline, drag session boundaries, and inspect short sessions and overlapping work.
 - Choose between **positioning existing credited time** and **adding new time** when filling a timeline gap. The first action does not increase account totals.
 - Group sessions in the weekly view without deleting the original recordings, and ungroup them to edit individual entries.
@@ -118,3 +118,7 @@ The interface, notification-area tooltip, windows and dialogs use **Basic’s Ad
 ## Tidy a completed day
 
 Open the Timeline tab and select **Tidy day**. Review gaps up to five minutes by default, or adjust the maximum from 1 to 30 minutes. Each row offers the account before the gap, the account after it, or **Leave gap**. The previous account is suggested initially. **Apply** adds new credited time for the selected gaps and leaves existing timestamps untouched; **Undo** reverses the whole batch. Cancel makes no changes. Lunch, finished-day intervals, ambiguous overlapping neighbours, future time and gaps beside a running timer are excluded. Only gaps between entries are offered, so larger unallocated stretches still need individual review. Fractional-second edges are rounded inward for CSV-safe positions.
+
+## Pill and dashboard (v2.28)
+
+New installations start in the pill. Existing installations keep their saved view; the saved full view now opens Dashboard. Click the pill's time or expand its list and select Dashboard. Back to pill returns to compact tracking without interrupting an active session. The expanded pill includes Start/Finish day and a budget ring around each account's play/pause control. Rings use the configured budget period, turn amber from 80% and red at 100%, and reveal precise usage on hover. Accounts without a budget have no ring. Dashboard maintains a fixed layout, fitting its display scaling to the available screen, with the existing timeline editing, Tidy day, weekly totals, exports, notes and Undo.
