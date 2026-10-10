@@ -326,14 +326,19 @@ public sealed class DashboardWindow : Window
         var body = Ui.Grid("300,1,*", "*");
         var sidebar = Ui.Grid("*", "Auto,Auto,*,Auto");
         var identity = new StackPanel { Margin = new Thickness(18, 16, 18, 8), Spacing = 2 };
-        identity.Children.Add(today); identity.Children.Add(clock);
+        // The date, with settings and minimise at the top right of this column.
+        var topRow = Ui.Grid("*,Auto");
+        Ui.Put(topRow, today);
+        var corner = Ui.Horizontal(Ui.SettingsButton(model), Ui.IconButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke()));
+        corner.Spacing = 0; corner.VerticalAlignment = VerticalAlignment.Top; Ui.Put(topRow, corner, 1);
+        identity.Children.Add(topRow); identity.Children.Add(clock);
         var live = new StackPanel { Spacing = 4, Margin = new Thickness(2, 2, 0, 10) };
         live.Children.Add(account); live.Children.Add(new TrackingLabels(model));
         identity.Children.Add(live);
         // Two figures side by side, a small label over each, with a hairline between them.
-        var stats = Ui.Grid("*,1,*"); stats.Margin = new Thickness(2, 0, 0, 0);
-        var allocatedStat = new StackPanel { Spacing = 1 }; allocatedStat.Children.Add(Ui.Text("Allocated", 12, "muted")); allocatedStat.Children.Add(allocatedValue);
-        var unallocatedStat = new StackPanel { Spacing = 1, Margin = new Thickness(18, 0, 0, 0) }; unallocatedStat.Children.Add(Ui.Text("Unallocated", 12, "muted")); unallocatedStat.Children.Add(unallocatedValue);
+        var stats = Ui.Grid("Auto,1,Auto"); stats.Margin = new Thickness(2, 0, 0, 0);
+        var allocatedStat = new StackPanel { Spacing = 1, Margin = new Thickness(0, 0, 16, 0) }; allocatedStat.Children.Add(Ui.Text("Allocated", 12, "muted")); allocatedStat.Children.Add(allocatedValue);
+        var unallocatedStat = new StackPanel { Spacing = 1, Margin = new Thickness(16, 0, 0, 0) }; unallocatedStat.Children.Add(Ui.Text("Unallocated", 12, "muted")); unallocatedStat.Children.Add(unallocatedValue);
         var statDivider = new Border { Width = 1, Margin = new Thickness(0, 2) }; statDivider.Classes.Add("rule");
         Ui.Put(stats, allocatedStat); Ui.Put(stats, statDivider, 1); Ui.Put(stats, unallocatedStat, 2);
         identity.Children.Add(stats);
@@ -349,12 +354,12 @@ public sealed class DashboardWindow : Window
         var summary = new StackPanel { Margin = new Thickness(18, 12, 18, 18), Spacing = 10 };
         // The break is its own control, apart from the account rows above it, because it stops time going to any account.
         breakButton = Ui.Button("", model.ToggleBreak, "DashboardBreak");
-        breakButton.Classes.Add("breakButton"); breakButton.HorizontalAlignment = HorizontalAlignment.Stretch; breakButton.Height = 42;
+        breakButton.Classes.Add("breakButton"); breakButton.Classes.Add("quiet"); breakButton.HorizontalAlignment = HorizontalAlignment.Stretch; breakButton.Height = 42;
         breakButton.Content = Ui.Horizontal(dashboardCup, dashboardBreakText);
         breakButton.PointerEntered += (_, _) => { hoverBreak = true; dashboardCup.SetSteaming(true); };
         breakButton.PointerExited += (_, _) => { hoverBreak = false; dashboardCup.SetSteaming(model.IsOnBreak || hoverBreak); }; // Steam rises under the pointer too.
         summary.Children.Add(breakButton);
-        day = Ui.Button("", model.ToggleDay, "DashboardDay"); day.Classes.Add("outlined");
+        day = Ui.Button("", model.ToggleDay, "DashboardDay"); day.Classes.Add("outlined"); day.Classes.Add("quiet");
         day.HorizontalAlignment = HorizontalAlignment.Stretch; day.Height = 42; day.Content = Ui.Horizontal(dayFlag, dayText);
         day.PointerEntered += (_, _) => dayFlag.Waving = true; day.PointerExited += (_, _) => dayFlag.Waving = false; // The flag waves under the pointer.
         summary.Children.Add(day);
@@ -364,7 +369,7 @@ public sealed class DashboardWindow : Window
         Ui.Put(body, panel);
         var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
         var review = Ui.Grid("*", "Auto,Auto,*");
-        review.Margin = new Thickness(22, 14, 22, 18);
+        review.Margin = new Thickness(22, 12, 22, 18);
         var nav = Ui.Grid("Auto,*,Auto"); nav.VerticalAlignment = VerticalAlignment.Bottom;
         // One row of tabs: the day's timeline, then the week's three parts, so there is no second row of tabs.
         timeline = Ui.Button("Timeline", () => SelectTab(false), "TimelineTab"); timeline.Classes.Add("tab");
@@ -397,13 +402,10 @@ public sealed class DashboardWindow : Window
         tools.Margin = new Thickness(0, 12);
         Ui.Put(review, tools, row: 1);
         Ui.Put(review, workspace, row: 2);
-        // Settings and minimise sit in the top corner of the review, on a hairline, and the corner drags the window.
-        var corner = Ui.Grid("*,Auto"); corner.Margin = new Thickness(22, 10);
-        Ui.Put(corner, Ui.Horizontal(Ui.SettingsButton(model), Ui.IconButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke())), 1);
-        corner.Height = 36; Ui.DragHeader(corner, this);
-        var cornerRule = Ui.Rule(); cornerRule.VerticalAlignment = VerticalAlignment.Bottom;
-        var rightColumn = Ui.Grid("*", "Auto,Auto,*,Auto");
-        Ui.Put(rightColumn, corner); Ui.Put(rightColumn, cornerRule, row: 1); Ui.Put(rightColumn, review, row: 2);
+        // The review fills the right column from the top, so the tabs get the height the old corner row used. The tab row's empty
+        // middle still drags the window.
+        var rightColumn = Ui.Grid("*", "*,Auto");
+        Ui.Put(rightColumn, review); Ui.DragHeader(nav, this);
         Ui.Put(body, rightColumn, 2);
         Ui.Put(root, body);
         // The bottom line appears only when there is something to say: a failed save, an edit that was refused, or the one-off note
@@ -413,7 +415,7 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += (_, _) => { var text = FooterText(); footer.Text = text ?? ""; footer.IsVisible = text is not null; };
         footer.Margin = new Thickness(24, 10);
         // Messages sit under the review only, so they never change the height of the left column.
-        footer.Margin = new Thickness(22, 4, 22, 10); Ui.Put(rightColumn, footer, row: 3);
+        footer.Margin = new Thickness(22, 4, 22, 10); Ui.Put(rightColumn, footer, row: 1);
         var surface = new Border { Name = "DashboardSurface", Child = root, ClipToBounds = true };
         surface.Classes.Add("surface");
         var host = Ui.Shadowed(surface, 20); Content = host;
@@ -479,6 +481,7 @@ public sealed class DashboardWindow : Window
         allocatedValue.Text = model.Format(model.Allocated);
         unallocatedValue.Text = model.Format(model.Unallocated);
         dayText.Text = model.DayStarted ? "Finish day" : "Start day";
+        dayFlag.TintKey = model.DayStarted ? "Finish" : "Live";
         day.Classes.Set("startDay", !model.DayStarted); // Green to start the day, red to finish it.
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.

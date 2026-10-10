@@ -566,6 +566,9 @@ public sealed class IconGlyph : Control
 {
     public IconKind Kind { get; }
     public IconGlyph(IconKind kind) { Kind = kind; Width = Height = 18; }
+    private string? tintKey;
+    /// <summary>The theme brush this icon is drawn in, when it should not follow the text colour of its button.</summary>
+    public string? TintKey { get => tintKey; set { if (tintKey == value) return; tintKey = value; InvalidateVisual(); } }
     // The icons are drawn in the theme's text colour, so they must redraw when the theme changes while they stay on screen.
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -630,7 +633,8 @@ public sealed class IconGlyph : Control
             case IconKind.Flag:
             {
                 // A pole with a pennant in the button's own text colour. The cloth ripples while Waving is on, fading back to still.
-                IBrush flagBrush = Avalonia.Controls.Documents.TextElement.GetForeground(this) ?? brush;
+                IBrush flagBrush = TintKey is not null && this.TryFindResource(TintKey, ActualThemeVariant, out var tint) && tint is IBrush tinted ? tinted
+                    : Avalonia.Controls.Documents.TextElement.GetForeground(this) ?? brush;
                 var flagPen = new Pen(flagBrush, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
                 context.DrawLine(flagPen, new Point(4, 2.5), new Point(4, 16));
                 double Wave(double x) => amplitude * 1.4 * Math.Sin(phase - (x - 4) * 0.7) * ((x - 4) / 10.5);

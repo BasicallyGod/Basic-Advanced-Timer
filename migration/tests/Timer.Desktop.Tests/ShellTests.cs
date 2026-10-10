@@ -241,13 +241,13 @@ public sealed class ShellTests
             {
                 window.Show(); Dispatcher.UIThread.RunJobs();
                 using var frame = window.CaptureRenderedFrame();
-                // The pill has one header. The dashboard has two drag areas: the identity block on the left and the corner on the right.
+                // The pill has one header. The dashboard has two drag areas: the identity block on the left and the empty middle of the tab row.
                 var headers = window.GetVisualDescendants().OfType<Panel>().Where(g => g.Name is "DragHeader" or "SidebarDragHeader").ToList();
                 Assert.Equal(window is DashboardWindow ? 2 : 1, headers.Count);
                 foreach (var header in headers)
                 {
                     Assert.NotNull(header.Background); Assert.True(Ui.IsDragSurface(header));
-                    if (header.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault() is { } label) Assert.Equal(window is DashboardWindow, Ui.IsDragSurface(label));
+                    if (header.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => !t.GetVisualAncestors().OfType<Button>().Any()) is { } label) Assert.Equal(window is DashboardWindow, Ui.IsDragSurface(label)); // Text outside a button drags.
                     if (header.GetVisualDescendants().OfType<Button>().FirstOrDefault() is { } button)
                     {
                         Assert.False(Ui.IsDragSurface(button));
