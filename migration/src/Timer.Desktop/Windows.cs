@@ -260,11 +260,15 @@ public sealed class PillWindow : Window
         overtime.Text = "OT +" + model.Format(model.Engine.Totals(model.Engine.Now).Overtime);
         pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
         breakButton.Classes.Set("onBreak", model.IsOnBreak); breakGlyph.Filled = model.IsOnBreak; breakGlyph.SetSteaming(model.IsOnBreak || pillHoverBreak); breakGlyph.InvalidateVisual();
-        ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Take a break");
+        ToolTip.SetTip(breakButton, model.IsOnBreak ? "Finish break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Start break");
         pause.IsEnabled = model.IsTracking || selected is not null;
         ToolTip.SetTip(pause, model.IsOnBreak ? "End break; drag to move" : model.IsTracking ? "Pause account; drag to move" : "Resume account; drag to move");
-        timer.Classes.Set("live", model.IsTracking && !model.IsOnBreak); timer.Classes.Set("break", model.IsOnBreak);
-        timer.Classes.Set("clockIdle", !model.IsTracking);
+        // The pill's clock follows the same order as the dashboard's: amber on a break, then red in overtime (even while an account is
+        // recording), then green while tracking, and full-strength text when nothing is running.
+        var pillBreak = model.IsOnBreak; var pillLate = model.IsOvertime && !pillBreak;
+        timer.Classes.Set("break", pillBreak); timer.Classes.Set("overtime", pillLate);
+        timer.Classes.Set("live", model.IsTracking && !pillBreak && !pillLate);
+        timer.Classes.Set("clockIdle", !model.IsTracking && !pillBreak && !pillLate);
         day.Content = model.DayStarted ? "Finish day" : "Start day";
         // Starting the day is the green main action; finishing it is red, so ending the day is never done by accident.
         day.Classes.Set("finishDay", model.DayStarted); day.Classes.Set("primary", !model.DayStarted);
@@ -317,6 +321,7 @@ public sealed class DashboardWindow : Window
         ContextMenu = Ui.SettingsMenu(model);
         Width = 960 + 2 * Ui.ShadowMargin;
         Height = 640 + 2 * Ui.ShadowMargin;
+        Topmost = true; // The dashboard stays in front of other windows, as the pill does.
         CanResize = false;
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
@@ -513,7 +518,7 @@ public sealed class DashboardWindow : Window
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
         undo.Content = "Undo";
         dashboardCup.Filled = model.IsOnBreak; dashboardCup.SetSteaming(model.IsOnBreak); dashboardCup.InvalidateVisual();
-        dashboardBreakText.Text = model.IsOnBreak ? "End break" : "Take a break";
+        dashboardBreakText.Text = model.IsOnBreak ? "Finish break" : "Start break";
         breakButton.Classes.Set("onBreak", model.IsOnBreak);
         ToolTip.SetTip(breakButton, model.IsOnBreak ? "End the break" + (model.ResumeAccount is { } resumeTo ? " and go back to " + resumeTo : "") : "Stop timing any account while you take a break");
         undo.IsEnabled = model.Editor.CanUndo;
