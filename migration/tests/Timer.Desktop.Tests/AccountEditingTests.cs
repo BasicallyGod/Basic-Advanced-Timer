@@ -164,10 +164,13 @@ public sealed class AccountEditingTests
             Assert.Equal("Account two", model.AccountSettings[0].Name);
             // The list was rebuilt in its new order, and the row that moved starts where the pointer left it, not in its slot.
             var moved = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account1");
-            var start = Assert.IsType<Avalonia.Media.Transformation.TransformOperations>(moved.RenderTransform);
-            Assert.True(Math.Abs(start.Value.M32) > 1, $"the moved row should start away from its slot, not at {start.Value.M32}"); // How far depends on the drawing scale, so only "not at rest" is checked.
+            // The glide begins on a background callback, which a slow machine can run before this line. So the row is either still
+            // away from its slot, or already gliding home (its transition is set). Either way it did not snap to its slot.
+            var start = moved.RenderTransform as Avalonia.Media.Transformation.TransformOperations;
+            var away = start is not null && Math.Abs(start.Value.M32) > 1; // How far depends on the drawing scale, so only "not at rest" is checked.
+            Assert.True(away || moved.Transitions is { Count: > 0 }, $"the moved row should start away from its slot or already be gliding, not at {start?.Value.M32}");
             Dispatcher.UIThread.RunJobs();
-            Assert.NotEmpty(moved.Transitions!); // Then it glides to rest.
+            Assert.True(moved.Transitions is { Count: > 0 } || moved.RenderTransform is null); // Then it glides to rest (and is cleared once there).
         }
         finally { window.Close(); }
     }
