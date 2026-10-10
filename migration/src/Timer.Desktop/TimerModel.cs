@@ -363,6 +363,9 @@ public sealed class TimerModel : INotifyPropertyChanged
         Engine.Schedule.Days = shifts.Keys.ToHashSet();
         Engine.Schedule.Shifts = new(shifts);
         if (resetToday) { Engine.Schedule.Overrides.Remove(Engine.Now.Date); Engine.DayStarts.Remove(Engine.Now.Date); }
+        // A manual start was only needed while the day was off. Once the new hours make today or a later day a working day, the
+        // usual start applies, so the old press must not keep overriding it.
+        foreach (var day in Engine.DayStarts.Where(p => p.Key >= Engine.Now.Date && Engine.Schedule.Scheduled(p.Key) is { Working: true } plan && p.Value >= plan.Start).Select(p => p.Key).ToList()) Engine.DayStarts.Remove(day);
         Save(); Notify();
     }
     public void OpenEntry(SessionRow row) => EntryRequested?.Invoke(row, row.From, row.To);

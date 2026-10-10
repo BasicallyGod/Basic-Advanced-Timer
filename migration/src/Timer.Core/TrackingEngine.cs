@@ -139,6 +139,8 @@ public sealed class TrackingEngine
         }
         var allocated = Sessions.Where(s => s.Day == day && !BreakAccount.Is(s.Account)).Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
         if (Active is { } active && !BreakAccount.Is(active.Account)) allocated += Intersection(active.Start, now, day, day.AddDays(1));
+        // On a day that is off in the schedule there is no working day to measure against, so the day is just the time actually tracked.
+        if (!Schedule.Scheduled(day).Working) return new(allocated, TimeSpan.Zero, allocated, TimeSpan.Zero);
         if (!plan.Working || cap <= plan.Start) return new(TimeSpan.Zero, TimeSpan.Zero, allocated, TimeSpan.Zero);
         var blocked = Sessions.Where(s => s.Day == day && BreakAccount.Is(s.Account) && s.IsPositioned && s.Duration > TimeSpan.Zero)
             .Select(s => (s.From, s.To)).ToList();

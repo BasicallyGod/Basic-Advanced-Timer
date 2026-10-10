@@ -1,3 +1,4 @@
+using Avalonia.Headless.XUnit;
 using System.Text.Json;
 using Timer.Core;
 using Timer.Storage;
@@ -62,13 +63,31 @@ public sealed class TrackingTests
     }
 
     [Fact]
-    public void DayOffLateStartDoesNotInventEarlierOvertime()
+    public void ADayOffCountsOnlyTheTimeActuallyTracked()
     {
-        var now = new DateTime(2026, 10, 10, 18, 0, 0);
+        var now = new DateTime(2026, 10, 10, 18, 0, 0); // A Saturday, which is off by default.
         var engine = new TrackingEngine(clock: () => now);
         Assert.False(engine.DayRunning);
-        engine.StartDay(); Assert.Equal(TimeSpan.Zero, engine.Totals(now).Overtime);
-        now = now.AddMinutes(5); Assert.Equal(TimeSpan.FromMinutes(5), engine.Totals(now).Overtime);
+        engine.StartDay(); Assert.Equal(TimeSpan.Zero, engine.Totals(now).Elapsed);
+        now = now.AddMinutes(5); Assert.Equal(TimeSpan.Zero, engine.Totals(now).Elapsed); // Time passing without tracking is not counted.
+        engine.ToggleAccount("A"); now = now.AddMinutes(7);
+        Assert.Equal(TimeSpan.FromMinutes(7), engine.Totals(now).Elapsed); Assert.Equal(TimeSpan.Zero, engine.Totals(now).Overtime);
+        engine.StopAccount(); now = now.AddHours(1);
+        Assert.Equal(TimeSpan.FromMinutes(7), engine.Totals(now).Elapsed); Assert.Equal(TimeSpan.Zero, engine.Totals(now).Unallocated);
+    }
+
+    [AvaloniaFact]
+    public void MakingADayAWorkingDayDropsTheStartPressedWhileItWasOffButKeepsAnEarlyStart()
+    {
+        var now = new DateTime(2026, 10, 10, 17, 23, 0); // A Saturday.
+        var engine = new TrackingEngine(clock: () => now); var model = new TimerModel(engine);
+        engine.StartDay(); Assert.Equal(now, engine.DayStarts[now.Date]); // Pressed while the day was off.
+        var shifts = new Dictionary<DayOfWeek, Shift>();
+        foreach (var d in new[] { DayOfWeek.Monday, DayOfWeek.Saturday }) shifts[d] = new(TimeSpan.FromHours(9), TimeSpan.FromHours(19));
+        engine.DayStarts[now.Date.AddDays(2)] = now.Date.AddDays(2).AddHours(8); // Monday, started before the usual 09:00.
+        model.SetShifts(shifts);
+        Assert.False(engine.DayStarts.ContainsKey(now.Date)); Assert.Equal(now.Date.AddHours(9), engine.Plan(now.Date).Start);
+        Assert.True(engine.DayStarts.ContainsKey(now.Date.AddDays(2))); // A real early start stays.
     }
 
     [Fact]

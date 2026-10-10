@@ -6,6 +6,9 @@ The entries below follow the migration milestones, newest first. They describe t
 
 ## Migration checklist fixes
 
+- The day clock read 00:31 at 17:55 on a Saturday that had since been made a working day. A start pressed while Saturday was still off had been saved as the day's start and kept overriding the 09:00 start. Changing the working hours now drops a manual start that the new hours make unnecessary, for today and later days. A genuine early start, before the usual one, is kept.
+- On a day that is off, the day is now just the time actually tracked. Time passing between presses is not counted and nothing counts as overtime, so the clock no longer runs from the first press. This replaces the earlier rule, which counted from the press.
+
 - The grey outlines looked wrong, so they are gone. A block, dot or week bar now gets an edge only when its colour is very dark, and the edge is that colour made lighter, drawn right at the block's edge and not inset. Palette colours and ordinary custom colours have no edge at all.
 
 - The colour dot beside each account in the Overview tab is a little larger (12 pixels) with a thicker grey outline, as is the dot in the Entries list, so a dark colour is easy to see on a dark background.
