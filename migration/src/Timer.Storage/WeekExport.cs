@@ -46,6 +46,23 @@ public sealed class WeekExport
         }
         EntryUnits = units; Accounts = accounts;
     }
+    /// <summary>
+    /// Checks the week's totals against the saved database, by account and day, before anything is written. The detail and summary
+    /// files are then known to describe what is stored, and an export is stopped rather than written from unsaved or inconsistent
+    /// records. Breaks are compared too, under their own name.
+    /// </summary>
+    public void VerifyAgainst(TimerDatabase database)
+    {
+        var stored = database.Query(@"SELECT COALESCE(a.name, $break), e.day, SUM(e.seconds) FROM entries e LEFT JOIN accounts a ON a.id = e.account_id
+            WHERE e.day >= $from AND e.day < $to GROUP BY 1, 2",
+            r => (Account: r.GetString(0), Day: r.GetString(1), Minutes: (decimal)r.GetDouble(2) / 60m),
+            ("$break", BreakAccount.Name), ("$from", week.ToString("yyyy-MM-dd")), ("$to", week.AddDays(7).ToString("yyyy-MM-dd")));
+        var shown = Entries.GroupBy(e => (Account: e.Account.ToUpperInvariant(), Day: e.Day.ToString("yyyy-MM-dd"))).ToDictionary(g => g.Key, g => g.Sum(e => e.Minutes));
+        var saved = stored.ToDictionary(r => (Account: r.Account.ToUpperInvariant(), r.Day), r => r.Minutes);
+        foreach (var key in shown.Keys.Union(saved.Keys))
+            if (Math.Abs(shown.GetValueOrDefault(key) - saved.GetValueOrDefault(key)) > 0.005m)
+                throw new InvalidDataException("The saved records do not match this week's totals, so the export was stopped. Nothing was written.");
+    }
     public static long[] Allocate(IReadOnlyList<decimal> ideal, long target)
     {
         var result = ideal.Select(n => (long)decimal.Floor(n)).ToArray();

@@ -150,4 +150,24 @@ public sealed class BreakTests
         }
         finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }
+
+    [Fact]
+    public void AnExportIsCheckedAgainstTheSavedRecordsAndStoppedWhenTheyDisagree()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-export-check-" + Guid.NewGuid());
+        try
+        {
+            using var store = new TimerStore(folder);
+            var engine = new TrackingEngine(clock: () => Day.AddHours(18)); var prefs = store.Load(engine);
+            engine.AddSession("Account one", Day.AddHours(9), Day.AddHours(10)); engine.AddSession(BreakAccount.Name, Day.AddHours(12), Day.AddHours(12.5));
+            engine.Sessions.Add(new(Day.ToString("yyyy-MM-dd"), "Account one", "15:00:00", "adjusted", "-10"));
+            store.Save(engine, prefs);
+            var export = new WeekExport(store.Editor!, engine, new DateTime(2026, 10, 5));
+            export.VerifyAgainst(store.Database); // Matches, including the break and the negative adjustment.
+            engine.AddSession("Account two", Day.AddHours(13), Day.AddHours(14)); // Not saved yet.
+            Assert.Throws<InvalidDataException>(() => new WeekExport(store.Editor!, engine, new DateTime(2026, 10, 5)).VerifyAgainst(store.Database));
+            store.Save(engine, prefs); new WeekExport(store.Editor!, engine, new DateTime(2026, 10, 5)).VerifyAgainst(store.Database);
+        }
+        finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+    }
 }

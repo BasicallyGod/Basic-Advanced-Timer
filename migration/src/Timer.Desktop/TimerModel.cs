@@ -429,10 +429,11 @@ public sealed class TimerModel : INotifyPropertyChanged
         {
             if (!Save()) return false;
             var export = new WeekExport(Editor, Engine, WeekStart(SelectedDate));
+            if (store is not null) export.VerifyAgainst(store.Database);
             ExportPath = export.Write(store?.ExportDirectory ?? Path.Combine(Path.GetTempPath(), "BasicsAdvancedTimer-demo-exports"), ReviewAccounts.Select(a => a.Name));
             EditError = null; Notify(); return true;
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or InvalidDataException)
         { EditError = error.Message; Notify(); return false; }
     }
     private void ValidateAccount(string account)

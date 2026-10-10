@@ -4,6 +4,11 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration exports checked against the database, step 7
+
+- Before the week export writes `Detail.csv` and `Summary.csv`, it now queries the saved database for each account's total on each day, breaks included, and compares them with the week's figures. If they disagree, the export is stopped with a message and nothing is written. The timer saves first, so this only trips on a real inconsistency.
+- The decimal-hour reconciliation (hundredths shared out so days, accounts and the weekly total add up exactly) is unchanged and still works from the week's entries, because grouped entries and credit positions are not tables yet. The files are therefore built the same way as before, with the database as the check.
+
 ## Migration database file release fix
 
 - The database class now disposes every command it runs. Without that, Windows kept `timer.db` locked after the timer closed until the garbage collector ran, which made three storage tests fail in CI when they tried to delete their temporary folder. It could also have made a copy or delete of the data folder fail right after closing the timer.
