@@ -225,7 +225,7 @@ public sealed class UndoHistoryTests
     }
 
     [Fact]
-    public void AQuietCheckpointDoesNotRewriteUnchangedRecordsButAnEditDoes()
+    public void AQuietCheckpointDoesNotRewriteUnchangedRecordsButAnEditDoesAndOnlyNewEditsAreAdded()
     {
         var folder = Path.Combine(Path.GetTempPath(), "timer-quiet-save-" + Guid.NewGuid());
         try
@@ -233,13 +233,35 @@ public sealed class UndoHistoryTests
             using var store = new TimerStore(folder);
             var engine = Engine(); var prefs = store.Load(engine);
             store.Editor!.Add("Account one", Day.AddHours(9), Day.AddHours(10), "first"); store.Save(engine, prefs);
-            Assert.Equal(1L, store.Database.Scalar("SELECT COUNT(*) FROM entries")); Assert.Equal(1L, store.Database.Scalar("SELECT COUNT(*) FROM meta WHERE key = 'editState'"));
+            Assert.Equal(1L, store.Database.Scalar("SELECT COUNT(*) FROM entries")); Assert.Equal(1L, store.Database.Scalar("SELECT COUNT(*) FROM edits"));
             // If a later save rewrote the records, the marker would disappear.
-            store.Database.Execute("UPDATE entries SET note = 'marker'"); store.Database.Execute("UPDATE meta SET value = 'marker' WHERE key = 'editState'");
+            store.Database.Execute("UPDATE entries SET note = 'marker'"); store.Database.Execute("UPDATE edits SET description = 'marker'");
             store.Save(engine, prefs); store.Save(engine, prefs);
-            Assert.Equal("marker", store.Database.Scalar("SELECT note FROM entries")); Assert.Equal("marker", store.Database.Scalar("SELECT value FROM meta WHERE key = 'editState'"));
+            Assert.Equal("marker", store.Database.Scalar("SELECT note FROM entries")); Assert.Equal("marker", store.Database.Scalar("SELECT description FROM edits ORDER BY id LIMIT 1"));
             store.Editor.Add("Account two", Day.AddHours(11), Day.AddHours(12), ""); store.Save(engine, prefs);
-            Assert.Equal(2L, store.Database.Scalar("SELECT COUNT(*) FROM entries")); Assert.Contains("Steps", (string)store.Database.Scalar("SELECT value FROM meta WHERE key = 'editState'")!);
+            Assert.Equal(2L, store.Database.Scalar("SELECT COUNT(*) FROM entries")); Assert.Equal(2L, store.Database.Scalar("SELECT COUNT(*) FROM edits")); Assert.Equal("marker", store.Database.Scalar("SELECT description FROM edits ORDER BY id LIMIT 1")); // Only the new edit was added.
+        }
+        finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+    }
+
+    [Fact]
+    public void UndoneAndTrimmedEditsLeaveTheDatabaseAndAFailedSaveKeepsTheListInStep()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-edits-table-" + Guid.NewGuid());
+        try
+        {
+            using var store = new TimerStore(folder);
+            var engine = Engine(); var prefs = store.Load(engine);
+            store.Editor!.Add("Account one", Day.AddHours(9), Day.AddHours(10), "a"); store.Save(engine, prefs);
+            store.Editor.Add("Account two", Day.AddHours(11), Day.AddHours(12), "b"); store.Save(engine, prefs);
+            Assert.Equal(2L, store.Database.Scalar("SELECT COUNT(*) FROM edits")); Assert.Equal(8L, store.Database.Scalar("SELECT COUNT(*) FROM edit_changes"));
+            store.Editor.Undo(); store.Save(engine, prefs);
+            Assert.Equal(1L, store.Database.Scalar("SELECT COUNT(*) FROM edits")); Assert.Equal(4L, store.Database.Scalar("SELECT COUNT(*) FROM edit_changes")); // The undone edit's parts went with it.
+            StorageFaults.Block(store);
+            store.Editor.Add("Account two", Day.AddHours(13), Day.AddHours(14), "c");
+            Assert.NotNull(Record.Exception(() => store.Save(engine, prefs)));
+            StorageFaults.Unblock(store); store.Save(engine, prefs);
+            Assert.Equal(2L, store.Database.Scalar("SELECT COUNT(*) FROM edits"));
         }
         finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }

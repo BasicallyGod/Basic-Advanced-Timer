@@ -4,6 +4,13 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration undo history in the database, step 4
+
+- The undo history now lives in the `edits` and `edit_changes` tables instead of one text record. Each edit is a row with its parts beside it. A save adds only the edits made since the last one and removes any that were undone or trimmed, so a quiet checkpoint no longer rewrites the whole history.
+- The 50 step and 2 MB limits, the checks that offer Undo only while the records still match, and the behaviour across a restart are unchanged. A failed save leaves the saved history as it was and the retry saves it.
+- The parts are still the existing change records for the ledger, notes, groups and credit positions, not row by row before and after values. That needs those last three to become tables first, which later steps do.
+- Undo history saved by the previous test build is not carried over.
+
 ## Migration storage moved to the database, step 3
 
 - The timer now saves to `timer.db` in its data folder instead of the CSV files, the write-ahead journal and the folder lock. Accounts (with colour, order, hidden flag and budget), time entries, away intervals, manual day starts and the running recording are real database tables, written together in one transaction. A failed save changes nothing and is retried, as before.

@@ -39,7 +39,7 @@ public sealed partial class LedgerEditor
         && UndoMath.HashText(PositionsCsv) == u.AfterPositionsHash;
     public string? UndoLabel => CanUndo ? UndoState?.Description : null;
     public LedgerEditor(TrackingEngine engine, string[]? headers = null, IEnumerable<Dictionary<string, string>>? rows = null,
-        string? notesCsv = null, string? groupsCsv = null, string? stateJson = null, string? positionsCsv = null, int maxHistoryBytes = MaxHistoryBytes)
+        string? notesCsv = null, string? groupsCsv = null, string? stateJson = null, string? positionsCsv = null, int maxHistoryBytes = MaxHistoryBytes, IEnumerable<UndoStep>? steps = null)
     {
         this.engine = engine; historyBudget = maxHistoryBytes; this.headers = headers ?? new[] { "Date", "Account", "Start", "End", "Minutes" };
         if (rows is not null) foreach (var pair in engine.Sessions.Zip(rows)) raw[pair.First] = new(pair.Second);
@@ -64,8 +64,15 @@ public sealed partial class LedgerEditor
             }
             TrimHistory();
         }
+        if (steps is not null)
+        {
+            foreach (var step in steps.TakeLast(MaxUndoSteps)) { CheckStep(step); history.Add(step); }
+            TrimHistory();
+        }
         ValidateCredits();
     }
+    /// <summary>The undo history, oldest first. Steps never change once made, so the store can tell which ones it has already saved.</summary>
+    public IReadOnlyList<UndoStep> Steps => history;
     private static void CheckStep(UndoStep? step)
     {
         if (step is null || step.Rows is null || step.Notes is null || step.Groups is null || step.Positions is null

@@ -100,7 +100,20 @@ public sealed class TimerStore : IDisposable
         if (shifts.Any(s => s.End <= s.Start)) throw new InvalidDataException("A working shift must finish after it starts.");
         engine.Sessions.AddRange(database.Query(
             "SELECT e.kind, a.name, e.day, e.start_at, e.end_at, e.seconds, e.origin, e.minutes_text FROM entries e LEFT JOIN accounts a ON a.id = e.account_id ORDER BY e.id", ToRow));
-        Editor = new LedgerEditor(engine, null, null, Meta("notes"), Meta("groups"), Meta("editState"), Meta("positions"));
+        persistedEdits.Clear();
+        var steps = new List<UndoStep>();
+        foreach (var edit in database.Query("SELECT id, description FROM edits ORDER BY id", r => (Id: r.GetInt64(0), Description: r.GetString(1))))
+        {
+            var parts = database.Query("SELECT table_name, before_json, after_json FROM edit_changes WHERE edit_id = $e", r => (Table: r.GetString(0), Before: r.GetString(1), After: r.GetString(2)), ("$e", edit.Id))
+                .ToDictionary(p => p.Table);
+            var ledger = JsonSerializer.Deserialize<LedgerPart>(parts["ledger"].After) ?? throw new InvalidDataException("Invalid edit history.");
+            var step = new UndoStep(edit.Description, ledger.Count, ledger.Hash, JsonSerializer.Deserialize<Splice<Dictionary<string, string>>>(parts["ledger"].Before)!,
+                JsonSerializer.Deserialize<TextChange>(parts["notes"].Before)!, JsonSerializer.Deserialize<TextChange>(parts["groups"].Before)!, JsonSerializer.Deserialize<TextChange>(parts["positions"].Before)!,
+                parts["notes"].After, parts["groups"].After, parts["positions"].After);
+            steps.Add(step); persistedEdits.Add((edit.Id, step));
+        }
+        Editor = new LedgerEditor(engine, null, null, Meta("notes"), Meta("groups"), null, Meta("positions"), steps: steps);
+        // The editor may have trimmed or refused steps it could not use, so what is saved is brought back in line on the next save.
         engine.Away.AddRange(database.Query("SELECT start_at, end_at FROM away ORDER BY id", r => new AwayInterval(ParseIso(r.GetString(0)), r.IsDBNull(1) ? null : ParseIso(r.GetString(1)))));
         var running = database.Query("SELECT kind, a.name, start_at, last_seen FROM running LEFT JOIN accounts a ON a.id = running.account_id",
             r => (Kind: r.GetString(0), Account: r.IsDBNull(1) ? BreakAccount.Name : r.GetString(1), Start: ParseIso(r.GetString(2)), Seen: ParseIso(r.GetString(3)))).FirstOrDefault();
@@ -124,8 +137,14 @@ public sealed class TimerStore : IDisposable
     public void Save(TrackingEngine engine, StoreSettings preferences)
     {
         // The caller already handles file errors, so a database error is reported the same way.
+        var edits = persistedEdits.ToList();
         try { SaveRecords(engine, preferences); }
-        catch (Microsoft.Data.Sqlite.SqliteException error) { throw new IOException("The timer's database could not be saved. " + error.Message, error); }
+        catch (Exception error)
+        {
+            persistedEdits.Clear(); persistedEdits.AddRange(edits); // The transaction rolled back, so the list must too.
+            if (error is Microsoft.Data.Sqlite.SqliteException) throw new IOException("The timer's database could not be saved. " + error.Message, error);
+            throw;
+        }
     }
     private void SaveRecords(TrackingEngine engine, StoreSettings preferences)
     {
@@ -154,13 +173,15 @@ public sealed class TimerStore : IDisposable
         foreach (var d in engine.DayStarts.OrderBy(d => d.Key)) records.Append(d.Key.Ticks).Append(d.Value.Ticks).Append('\n');
         var blobs = new Dictionary<string, string>
         {
-            ["notes"] = Editor.NotesCsv, ["groups"] = Editor.GroupsCsv ?? "GroupId,Date,Account,Start,End,Minutes\n", ["positions"] = Editor.PositionsCsv, ["editState"] = Editor.StateJson, ["accountsSeeded"] = "1"
+            ["notes"] = Editor.NotesCsv, ["groups"] = Editor.GroupsCsv ?? "GroupId,Date,Account,Start,End,Minutes\n", ["positions"] = Editor.PositionsCsv, ["accountsSeeded"] = "1"
         };
         foreach (var b in blobs) records.Append(b.Key).Append('=').Append(b.Value).Append('\n');
         var snapshot = records.ToString();
         database.InTransaction(() =>
         {
             if (!written.TryGetValue("records", out var last) || last != snapshot) WriteRecords(engine, preferences, blobs);
+            SaveEdits(engine);
+            database.Execute("DELETE FROM meta WHERE key = 'editState'");
             // The running timer is kept current on every save, so a crash is credited up to the last save.
             database.Execute("DELETE FROM running");
             if (engine.Active is { } active)
@@ -171,6 +192,26 @@ public sealed class TimerStore : IDisposable
             }
         });
         written["records"] = snapshot;
+    }
+    private sealed record LedgerPart(int Count, string Hash);
+    private readonly List<(long Id, UndoStep Step)> persistedEdits = new();
+    // Each edit is a row in edits with its parts in edit_changes. Saving adds only the edits made since the last save and
+    // removes the ones that were undone or trimmed, so the history is no longer rewritten whole at every checkpoint.
+    // The parts are still splices over the ledger and the notes, groups and positions text, because those are not tables yet.
+    private void SaveEdits(TrackingEngine engine)
+    {
+        var current = Editor!.Steps;
+        foreach (var gone in persistedEdits.Where(p => !current.Any(c => ReferenceEquals(c, p.Step))).ToList())
+        { database.Execute("DELETE FROM edits WHERE id = $i", ("$i", gone.Id)); persistedEdits.Remove(gone); }
+        foreach (var step in current.Where(c => !persistedEdits.Any(p => ReferenceEquals(p.Step, c))))
+        {
+            var id = database.Insert("INSERT INTO edits (at, description) VALUES ($a, $d)", ("$a", Iso(engine.Now)), ("$d", step.Description));
+            void Part(string table, object before, string after) => database.Execute("INSERT INTO edit_changes (edit_id, table_name, row_id, before_json, after_json) VALUES ($e, $t, 0, $b, $a)",
+                ("$e", id), ("$t", table), ("$b", JsonSerializer.Serialize(before)), ("$a", after));
+            Part("ledger", step.Rows, JsonSerializer.Serialize(new LedgerPart(step.AfterCount, step.AfterHash)));
+            Part("notes", step.Notes, step.AfterNotesHash); Part("groups", step.Groups, step.AfterGroupsHash); Part("positions", step.Positions, step.AfterPositionsHash);
+            persistedEdits.Add((id, step));
+        }
     }
     private void WriteRecords(TrackingEngine engine, StoreSettings preferences, Dictionary<string, string> blobs)
     {
