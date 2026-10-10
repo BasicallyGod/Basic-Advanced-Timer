@@ -25,6 +25,7 @@ public sealed class ThemeTests
             Assert.True(ThemeColours.Contrast(theme.Colour("Ink"), theme.Colour("Surface")) >= 7, $"{theme.Name} text on surface");
             Assert.True(ThemeColours.Contrast(theme.Colour("Ink"), theme.Colour("Panel")) >= 7, $"{theme.Name} text on panel");
             Assert.True(ThemeColours.Contrast(theme.Colour("Muted"), theme.Colour("Surface")) >= 3.5, $"{theme.Name} quiet text");
+            Assert.True(ThemeColours.Contrast(theme.Colour("AccentInk"), theme.Colour("Accent")) >= 4.5, $"{theme.Name} text on the accent");
             foreach (var state in new[] { ThemeDerivation.Break, ThemeDerivation.Overtime })
             {
                 var variant = ThemeDerivation.Variant(theme, state);
@@ -62,7 +63,7 @@ public sealed class ThemeTests
     {
         var mineColours = ThemeLibrary.Dark.Colours.ToDictionary(c => c.Key, c => c.Value); mineColours["Surface"] = "#102030";
         var mine = new ThemeDefinition("My blue", true, mineColours, false, ThemeBlockStyle.Softened);
-        var lines = new[] { ThemeStorage.ToLine(mine), "this is not json", ThemeStorage.ToLine(ThemeLibrary.Ocean with { Name = "Dark" }), "{\"Name\":\"Plain\",\"Dark\":false,\"Colours\":{\"Surface\":\"nonsense\",\"Ink\":\"#112233\"}}" };
+        var lines = new[] { ThemeStorage.ToLine(mine), "this is not json", ThemeStorage.ToLine(ThemeLibrary.Midnight with { Name = "Dark" }), "{\"Name\":\"Plain\",\"Dark\":false,\"Colours\":{\"Surface\":\"nonsense\",\"Ink\":\"#112233\"}}" };
         var loaded = ThemeStorage.FromLines(lines);
         Assert.Equal(new[] { "My blue", "Plain" }, loaded.Select(t => t.Name)); // The broken line and the one reusing a built-in name are left out.
         Assert.Equal("#102030", loaded[0].Colour("Surface")); Assert.Equal(ThemeBlockStyle.Softened, loaded[0].BlockStyle); Assert.True(loaded[0].Dark); Assert.False(loaded[0].BuiltIn);
@@ -85,7 +86,7 @@ public sealed class ThemeTests
     public void AUserThemeIsRegisteredSelectedStyledAndRemembered_AndAnUnknownNameFallsBackToSystem()
     {
         var colours = ThemeLibrary.Dark.Colours.ToDictionary(c => c.Key, c => c.Value); colours["Surface"] = "#102030"; colours["Ink"] = "#FAFAFA";
-        var mine = new ThemeDefinition("Midnight", true, colours);
+        var mine = new ThemeDefinition("Moonlit", true, colours);
         var folder = Path.Combine(Path.GetTempPath(), "timer-theme-" + Guid.NewGuid());
         try
         {
@@ -93,7 +94,7 @@ public sealed class ThemeTests
             {
                 var engine = new TrackingEngine(); var prefs = store.Load(engine) with { Themes = new[] { mine } };
                 var model = new TimerModel(engine, prefs, store);
-                Assert.Contains(model.Themes, t => t.Name == "Midnight"); model.SetTheme("Midnight");
+                Assert.Contains(model.Themes, t => t.Name == "Moonlit"); model.SetTheme("Moonlit");
                 Assert.Equal(ThemeEngine.VariantFor(mine), Avalonia.Application.Current!.RequestedThemeVariant);
                 Assert.True(((Avalonia.Controls.IResourceHost)Avalonia.Application.Current).TryGetResource("Surface", ThemeEngine.VariantFor(mine), out var surface)); Assert.Equal(Avalonia.Media.Color.Parse("#102030"), ((Avalonia.Media.ISolidColorBrush)surface!).Color);
                 Assert.NotEqual(ThemeEngine.VariantFor(mine), ThemeEngine.StateVariant(mine, ThemeDerivation.Break)); // The pill's break tint is its own variant.
@@ -103,7 +104,7 @@ public sealed class ThemeTests
             using (var store = new Timer.Storage.TimerStore(folder))
             {
                 var prefs = store.Load(new TrackingEngine());
-                Assert.Equal("Midnight", prefs.Theme); Assert.Equal("Midnight", Assert.Single(prefs.Themes!).Name); Assert.Equal("#102030", prefs.Themes![0].Colour("Surface"));
+                Assert.Equal("Moonlit", prefs.Theme); Assert.Equal("Moonlit", Assert.Single(prefs.Themes!).Name); Assert.Equal("#102030", prefs.Themes![0].Colour("Surface"));
             }
             // A theme name that no longer exists is not left selected.
             File.WriteAllText(Path.Combine(folder, "basics-advanced-timer.settings.json"), "{\"schemaVersion\":1,\"sections\":{\"migrationAppearance\":[\"Gone\",\"shadows=on\"]}}");

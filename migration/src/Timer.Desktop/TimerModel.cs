@@ -86,7 +86,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public TimerModel(TrackingEngine? engine = null, StoreSettings? preferences = null, TimerStore? store = null)
     {
         Engine = engine ?? new();
-        this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, "System", DayOfWeek.Monday);
+        this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, ThemeLibrary.Default, DayOfWeek.Monday);
         this.store = store;
         Editor = store?.Editor ?? new LedgerEditor(Engine);
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
@@ -350,7 +350,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         {
             new("Account one", 15), new("Account two", 4.5), new("Account three", 2.5), new("Account four", 20, "month"),
             new("Account five", 40, "quarter"), new("Account six"), new("Internal")
-        }, false, "System", DayOfWeek.Monday);
+        }, false, ThemeLibrary.Default, DayOfWeek.Monday);
         var start = anchor.Date.AddHours(9);
         // Today runs from 09:00 to the demo's 14:15, with a break in the middle and no gaps worth tidying except a few minutes.
         var today = new (string Account, int Minutes)[]

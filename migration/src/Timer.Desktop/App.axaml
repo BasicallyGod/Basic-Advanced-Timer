@@ -51,7 +51,18 @@
     <Style Selector="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
     <!-- The clock is the main thing on the screen, so when nothing is running it is full-strength text rather than the dim idle grey. -->
-    <Style Selector="TextBlock.clockIdle"><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="TextBlock.clockIdle"><Setter Property="Foreground" Value="{DynamicResource Clock}" /></Style>
+    <!-- The main call to action takes the theme accent, with its own text colour for contrast. -->
+    <Style Selector="Button.accentButton /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentInk}" />
+    </Style>
+    <Style Selector="Button.accentButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentInk}" />
+    </Style>
     <Style Selector="TextBlock.idle"><Setter Property="Foreground" Value="{DynamicResource Idle}" /></Style>
     <Style Selector="TextBlock.live"><Setter Property="Foreground" Value="{DynamicResource Live}" /></Style>
     <Style Selector="TextBlock.break"><Setter Property="Foreground" Value="{DynamicResource Break}" /></Style>
@@ -128,7 +139,7 @@
     </Style>
     <Style Selector="Button.tab.selected">
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
     </Style>
     <Style Selector="Button.tab.selected /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />

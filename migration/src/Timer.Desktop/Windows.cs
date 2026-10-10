@@ -399,6 +399,7 @@ public sealed class DashboardWindow : Window
         merge = Ui.Button("Merge", () => model.MergeSelection(), "MergeSelected");
         // Editing buttons sit on the left and only where they apply; Tools stays on the right. Hours and minutes is in Settings.
         addTime = Ui.Button("Add time", () => model.OpenGap(), "AddTime");
+        addTime.Classes.Add("accentButton");
         var edits = Ui.Horizontal(addTime, undo, merge);
         // Zoom and fit sit beside Tools in this row, applying to the timeline underneath. They show only on the Timeline tab.
         ScrollViewer? TimelineScroll() => workspace.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");

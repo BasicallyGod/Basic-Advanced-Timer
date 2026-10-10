@@ -119,7 +119,7 @@ public sealed class TimerStore : IDisposable
             r => (Kind: r.GetString(0), Account: r.IsDBNull(1) ? BreakAccount.Name : r.GetString(1), Start: ParseIso(r.GetString(2)), Seen: ParseIso(r.GetString(3)))).FirstOrDefault();
         if (running.Account is not null) engine.Recover(new(running.Account, running.Start), running.Seen);
         var appearance = Lines("migrationAppearance").ToList();
-        var theme = appearance.FirstOrDefault() ?? "System";
+        var theme = ThemeLibrary.Renamed(appearance.FirstOrDefault() ?? ThemeLibrary.Default);
         var shadows = !appearance.Skip(1).Contains("shadows=off");
         var themes = ThemeStorage.FromLines(Lines("migrationThemes"));
         // A name that is neither System, a built-in nor one of the user's own falls back to System, so a removed theme never leaves the app unstyled.
