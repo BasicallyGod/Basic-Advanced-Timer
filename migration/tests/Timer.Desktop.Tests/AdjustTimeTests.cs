@@ -123,7 +123,7 @@ public sealed class AdjustTimeTests
         {
             var items = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).ToList();
             var headers = items.Select(i => i is MenuItem m ? (string?)m.Header : "|").ToList();
-            Assert.Equal(new[] { "Decimal hours", "Accounts and budgets…", "Working hours…", "|", "Appearance", "Window shadows", "Start with Windows", "|", "Open sample-data demo", "Test overtime", "|", "Close timer" }, headers);
+            Assert.Equal(new[] { "Decimal hours", "Accounts and budgets…", "Working hours…", "|", "Appearance", "Window shadows", "Start with Windows", "|", "Open sample-data demo", "Test overtime", "|", BuildInfo.Current, "|", "Close timer" }, headers);
         }
         finally { window.Close(); }
     }
@@ -206,5 +206,27 @@ public sealed class AdjustTimeTests
             if (folder is not null) { Directory.CreateDirectory(folder); frame!.Save(Path.Combine(folder, "account-grips.png")); }
         }
         finally { pill.Close(); dashboard.Close(); }
+    }
+
+    [Theory]
+    [InlineData("0.1.77+aa17cdaf4ceb5540116abd71ca9124e24a6ad33", "Version 0.1.77 (aa17cda)")]
+    [InlineData("0.1.77", "Version 0.1.77")]
+    [InlineData("0.1.77+abc", "Version 0.1.77")] // A commit too short to be one is left off.
+    [InlineData("1.0.0", "Version: development build")]
+    [InlineData("1.0.0+aa17cdaf", "Version: development build")]
+    [InlineData("", "Version: development build")]
+    [InlineData(null, "Version: development build")]
+    public void TheBuildNumberReadsAsAVersionAndACommit(string? stamp, string expected) => Assert.Equal(expected, BuildInfo.Describe(stamp));
+
+    [AvaloniaFact]
+    public void TheMenuShowsWhichBuildIsRunningAsAGreyedItem()
+    {
+        var window = new DashboardWindow(new TimerModel(Engine())); window.Show();
+        try
+        {
+            var item = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().Single(m => m.Name == "BuildVersion");
+            Assert.False(item.IsEnabled); Assert.StartsWith("Version", (string)item.Header!);
+        }
+        finally { window.Close(); }
     }
 }

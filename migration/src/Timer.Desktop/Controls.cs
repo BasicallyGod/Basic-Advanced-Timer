@@ -181,12 +181,14 @@ public static class Ui
         startup.Click += (_, _) => model.SetAutoStart(model.AutoStart?.IsEnabled != true);
         var shadows = new MenuItem { Header = "Window shadows", ToggleType = MenuItemToggleType.CheckBox };
         shadows.Click += (_, _) => model.SetShadows(!model.Shadows);
+        // Which build this is, greyed out because it is information, not an action.
+        var version = new MenuItem { Header = BuildInfo.Current, IsEnabled = false, Name = "BuildVersion" };
         var quit = new MenuItem { Header = "Close timer" };
         quit.Click += (_, _) => model.RequestQuit();
         // Most used first: the hours format, then accounts and working hours; then how it looks and starts; then the demo; and
         // Close timer alone at the bottom, apart from everyday actions. Breaks and the day button live in the window, so they are not repeated here.
         var menu = new ContextMenu { ItemsSource = new Control[]
-        { format, accounts, shifts, new Separator(), new MenuItem { Header = "Appearance", ItemsSource = variants }, shadows, startup, new Separator(), demo, overtimeTest, new Separator(), quit } };
+        { format, accounts, shifts, new Separator(), new MenuItem { Header = "Appearance", ItemsSource = variants }, shadows, startup, new Separator(), demo, overtimeTest, new Separator(), version, new Separator(), quit } };
         menu.Opened += (_, _) =>
         {
             foreach (var item in variants) item.IsChecked = (string?)item.Header == model.Theme;
