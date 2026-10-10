@@ -141,14 +141,14 @@ public sealed class ShellTests
                 Assert.True(dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll").Offset.Y > 1000);
                 var nine = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
                 var ninePoint = nine.TranslatePoint(new Point(0, 0), dashboard)!.Value;
-                Assert.InRange(ninePoint.Y, 250, 400);
+                Assert.InRange(ninePoint.Y, 150, 400);
                 dashboard.SelectTab(true);
                 Save(dashboard, Path.Combine(output, $"dashboard-week-{theme}.png"));
                 Save(pill, Path.Combine(output, $"pill-{theme}.png"));
             }
             model.ToggleFormat();
             var texts = dashboard.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
-            Assert.Contains("Today allocated", texts); Assert.Contains("4.50h", texts);
+            Assert.Contains("Allocated", texts); Assert.Contains("4.50h", texts);
             Assert.Contains("Unallocated", texts); Assert.Contains("0.25h", texts);
             // The totals sit under the clock, in one line with it above them.
             var clockText = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 40); var figure = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "4.50h");
@@ -241,14 +241,19 @@ public sealed class ShellTests
             {
                 window.Show(); Dispatcher.UIThread.RunJobs();
                 using var frame = window.CaptureRenderedFrame();
-                var header = window.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "DragHeader");
-                Assert.NotNull(header.Background);
-                Assert.True(Ui.IsDragSurface(header));
-                var label = header.GetVisualDescendants().OfType<TextBlock>().First();
-                Assert.Equal(window is DashboardWindow, Ui.IsDragSurface(label));
-                var button = header.GetVisualDescendants().OfType<Button>().First();
-                Assert.False(Ui.IsDragSurface(button));
-                Assert.All(button.GetVisualDescendants(), child => Assert.False(Ui.IsDragSurface(child)));
+                // The pill has one header. The dashboard has two drag areas: the identity block on the left and the corner on the right.
+                var headers = window.GetVisualDescendants().OfType<Panel>().Where(g => g.Name is "DragHeader" or "SidebarDragHeader").ToList();
+                Assert.Equal(window is DashboardWindow ? 2 : 1, headers.Count);
+                foreach (var header in headers)
+                {
+                    Assert.NotNull(header.Background); Assert.True(Ui.IsDragSurface(header));
+                    if (header.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault() is { } label) Assert.Equal(window is DashboardWindow, Ui.IsDragSurface(label));
+                    if (header.GetVisualDescendants().OfType<Button>().FirstOrDefault() is { } button)
+                    {
+                        Assert.False(Ui.IsDragSurface(button));
+                        Assert.All(button.GetVisualDescendants(), child => Assert.False(Ui.IsDragSurface(child)));
+                    }
+                }
             }
         }
         finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
@@ -271,7 +276,7 @@ public sealed class ShellTests
             var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();
             Save(coordinator.Dashboard, Path.Combine(output, "demo-idle.png"));
             var nine = coordinator.Dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
-            Assert.InRange(nine.TranslatePoint(default, coordinator.Dashboard)!.Value.Y, 250, 400);
+            Assert.InRange(nine.TranslatePoint(default, coordinator.Dashboard)!.Value.Y, 150, 400);
             model.ToggleAccount("Account one");
             Save(coordinator.Dashboard, Path.Combine(output, "demo-tracking.png"));
             Assert.Contains(coordinator.Dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Classes.Contains("live") && t.Text == model.ClockText);

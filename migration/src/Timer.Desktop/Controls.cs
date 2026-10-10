@@ -119,10 +119,10 @@ public static class Ui
     }
     public static bool IsDragSurface(object? source) => source is Visual visual
         && visual is not Avalonia.Controls.Button && !visual.GetVisualAncestors().OfType<Button>().Any();
-    public static void DragHeader(Control header, Window window)
+    public static void DragHeader(Control header, Window window, string name = "DragHeader")
     {
         if (header is Panel panel) panel.Background = Brushes.Transparent;
-        header.Name = "DragHeader";
+        header.Name = name;
         header.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         {
             if (IsDragSurface(e.Source) && e.GetCurrentPoint(window).Properties.IsLeftButtonPressed)
@@ -559,7 +559,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -605,6 +605,11 @@ public sealed class IconGlyph : Control
             case IconKind.Minimise:
                 // The familiar low bar of a window's minimise button.
                 context.DrawLine(new Pen(brush, 1.8, lineCap: PenLineCap.Flat), new Point(3.5, 13), new Point(14.5, 13));
+                break;
+            case IconKind.Flag:
+                // A pole with a pennant: the end of the day.
+                context.DrawLine(pen, new Point(4, 2.5), new Point(4, 16));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 4,3.5 L 14.5,3.5 L 12,7 L 14.5,10.5 L 4,10.5"));
                 break;
             case IconKind.Copy:
                 // Two sheets, one behind the other: the usual sign for copy.
