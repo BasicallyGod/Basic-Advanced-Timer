@@ -21,32 +21,52 @@ public sealed class ThemesWindow : Window
     private string shown = ""; private bool filling;
     // The theme being edited, as plain values so each change is cheap to apply.
     private string name = ""; private bool dark; private string blockStyle = ThemeBlockStyle.AsChosen; private readonly Dictionary<string, string> colours = new(); private string? original;
-    private bool dirty;
+    private bool dirty, closeConfirmed;
+    // Shown in place of a dialog when a change would throw away edits that are not saved yet.
+    private readonly Border unsaved = new() { Name = "UnsavedPrompt", IsVisible = false, Padding = new Thickness(12), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Margin = new Thickness(0, 10, 0, 0) };
+    private Action? afterPrompt;
 
     public ThemesWindow(TimerModel model)
     {
         this.model = model;
         Title = "Themes"; Width = 800; Height = 680; MinHeight = 480;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        var root = Ui.Grid("230,*", "*,Auto"); root.Margin = new Thickness(24);
+        var root = Ui.Grid("230,*", "*,Auto,Auto"); root.Margin = new Thickness(24);
         var left = Ui.Grid("*", "Auto,*,Auto"); left.Margin = new Thickness(0, 0, 18, 0);
         left.Children.Add(Ui.Text("Themes", 22)); Grid.SetRow(list, 1); list.Margin = new Thickness(0, 10);
         left.Children.Add(list);
-        duplicate = Ui.Button("Duplicate", () => Run(() => { var copy = model.DuplicateTheme(shown); Refill(copy); }), "DuplicateTheme");
+        duplicate = Ui.Button("Duplicate", () => Guard(() => Run(() => { model.EndThemePreview(); var copy = model.DuplicateTheme(shown); Refill(copy); })), "DuplicateTheme");
         delete = Ui.Button("Delete", () => Run(() => { model.DeleteTheme(shown); Refill(model.Theme); }), "DeleteTheme");
         var buttons = Ui.Horizontal(duplicate, delete); Ui.Put(left, buttons, 0, 2);
+        unsaved.Classes.Add("chip");
         Ui.Put(root, left);
         Ui.Put(root, new ScrollViewer { Content = detail, AllowAutoHide = false, Padding = new Thickness(0, 0, 14, 0) }, 1);
-        var footer = Ui.Horizontal(Ui.Button("Close", Close, "CloseThemes")); footer.HorizontalAlignment = HorizontalAlignment.Right; footer.Margin = new Thickness(0, 12, 0, 0);
-        Grid.SetColumnSpan(footer, 2); Ui.Put(root, footer, 0, 1);
+        var promptText = new TextBlock { Name = "UnsavedText", TextWrapping = TextWrapping.Wrap };
+        var promptButtons = Ui.Horizontal(
+            Ui.Button("Save", () => Run(() => { SaveCurrent(); Proceed(); }), "UnsavedSave"),
+            Ui.Button("Discard", () => { model.EndThemePreview(); dirty = false; Proceed(); }, "UnsavedDiscard"),
+            Ui.Button("Keep editing", () => { afterPrompt = null; unsaved.IsVisible = false; }, "UnsavedKeep"));
+        var promptStack = new StackPanel { Spacing = 8 }; promptStack.Children.Add(promptText); promptStack.Children.Add(promptButtons);
+        unsaved.Child = promptStack; unsavedText = promptText;
+        Grid.SetColumnSpan(unsaved, 2); Ui.Put(root, unsaved, 0, 1);
+        var footer = Ui.Horizontal(Ui.Button("Close", () => Close(), "CloseThemes")); footer.HorizontalAlignment = HorizontalAlignment.Right; footer.Margin = new Thickness(0, 12, 0, 0);
+        Grid.SetColumnSpan(footer, 2); Ui.Put(root, footer, 0, 2);
         Content = root;
         list.SelectionChanged += (_, _) =>
         {
             if (filling || list.SelectedItem is not string chosen || chosen == shown) return;
-            Run(() => { model.EndThemePreview(); model.SetTheme(chosen); Show(chosen); });
+            // Put the highlight back on the theme being edited until it is clear whether its changes are kept.
+            var stay = shown; filling = true; list.SelectedItem = stay; filling = false;
+            Guard(() => Run(() => { model.EndThemePreview(); model.SetTheme(chosen); Refill(chosen); }));
         };
         // Closing without saving puts the saved look back.
         Closed += (_, _) => model.EndThemePreview();
+        // Closing with edits that are not saved asks first, rather than quietly losing them.
+        Closing += (_, e) =>
+        {
+            if (closeConfirmed || !dirty) return;
+            e.Cancel = true; Guard(() => { closeConfirmed = true; Close(); });
+        };
         Refill(model.Theme == ThemeLibrary.System ? model.CurrentTheme.Name : model.Theme);
     }
     private void Run(Action action)
@@ -63,6 +83,16 @@ public sealed class ThemesWindow : Window
         list.SelectedItem = select; filling = false;
         Show(select);
     }
+    private TextBlock unsavedText = new();
+    /// <summary>Runs the action now, or after the person decides what to do with edits that are not saved.</summary>
+    private void Guard(Action action)
+    {
+        if (!dirty) { action(); return; }
+        unsavedText.Text = "You have unsaved changes to " + (string.IsNullOrWhiteSpace(name) ? "this theme" : name + ". Save them first?");
+        afterPrompt = action; unsaved.IsVisible = true;
+    }
+    private void Proceed() { var next = afterPrompt; afterPrompt = null; unsaved.IsVisible = false; next?.Invoke(); }
+    private void SaveCurrent() { model.SaveTheme(Working(), original); original = name; shown = name; dirty = false; Refill(name); }
     private ThemeDefinition Working() => new(name, dark, new Dictionary<string, string>(colours), false, blockStyle);
     private void Show(string themeName)
     {
@@ -128,10 +158,7 @@ public sealed class ThemesWindow : Window
         detail.Children.Add(error);
         if (!locked)
         {
-            var save = Ui.Button("Save theme", () => Run(() =>
-            {
-                model.SaveTheme(Working(), original); original = name; shown = name; dirty = false; Refill(name);
-            }), "SaveTheme");
+            var save = Ui.Button("Save theme", () => Run(SaveCurrent), "SaveTheme");
             var revert = Ui.Button("Revert", () => Run(() => { model.EndThemePreview(); Show(shown); }), "RevertTheme");
             detail.Children.Add(Ui.Horizontal(save, revert));
         }

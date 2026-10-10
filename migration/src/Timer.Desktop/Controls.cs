@@ -123,6 +123,13 @@ public static class Ui
     public static bool IsPlainSurface(object? source) => source is Visual visual
         && visual is not (Avalonia.Controls.Button or TextBox or ComboBox or Avalonia.Controls.Slider or Avalonia.Controls.Primitives.ScrollBar or Avalonia.Controls.Primitives.Thumb or ListBox)
         && !visual.GetVisualAncestors().Any(a => a is Avalonia.Controls.Button or TextBox or ComboBox or Avalonia.Controls.Slider or Avalonia.Controls.Primitives.ScrollBar or Avalonia.Controls.Primitives.Thumb or ListBox);
+    /// <summary>Closes any open right-click menu in the window. A drag handler marks the press as handled, so the menu never sees the click that should dismiss it.</summary>
+    public static void CloseMenus(Window window)
+    {
+        if (window.ContextMenu is { IsOpen: true } own) own.Close();
+        foreach (var control in window.GetVisualDescendants().OfType<Control>())
+            if (control.ContextMenu is { IsOpen: true } menu) menu.Close();
+    }
     public static void DragHeader(Control header, Window window, string name = "DragHeader")
     {
         if (header is Panel panel) panel.Background = Brushes.Transparent;
@@ -130,7 +137,7 @@ public static class Ui
         header.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         {
             if (IsDragSurface(e.Source) && e.GetCurrentPoint(window).Properties.IsLeftButtonPressed)
-            { window.BeginMoveDrag(e); e.Handled = true; }
+            { CloseMenus(window); window.BeginMoveDrag(e); e.Handled = true; }
         }, RoutingStrategies.Tunnel);
     }
     public static void PillGestures(Control header, Window window)
@@ -143,7 +150,7 @@ public static class Ui
         header.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         {
             if (!e.GetCurrentPoint(window).Properties.IsLeftButtonPressed) return;
-            press = e; origin = e.GetPosition(header);
+            CloseMenus(window); press = e; origin = e.GetPosition(header);
             target = e.Source is Visual visual ? visual as Button ?? visual.GetVisualAncestors().OfType<Button>().FirstOrDefault() : null;
             // Stop the button from capturing/activating before intent is known.
             e.Handled = true; e.Pointer.Capture(header);
@@ -156,7 +163,7 @@ public static class Ui
             var start = press;
             press = null; target = null;
             e.Handled = true; e.Pointer.Capture(null);
-            window.BeginMoveDrag(start);
+            CloseMenus(window); window.BeginMoveDrag(start);
         }, RoutingStrategies.Tunnel);
         header.AddHandler(InputElement.PointerReleasedEvent, (_, e) =>
         {
@@ -171,11 +178,11 @@ public static class Ui
     }
     public static ContextMenu SettingsMenu(TimerModel model)
     {
-        // System first, then every theme the app has: the built-in ones and the user's own. The list is rebuilt each time the menu opens.
+        // Hawthorn (the default) and System first, then every theme the app has: the built-in ones and the user's own. The list is rebuilt each time the menu opens.
         List<MenuItem> ThemeItems()
         {
             var items = new List<MenuItem>();
-            foreach (var theme in new[] { ThemeLibrary.System }.Concat(model.Themes.Select(t => t.Name)))
+            foreach (var theme in new[] { ThemeLibrary.Default, ThemeLibrary.System }.Concat(model.Themes.Select(t => t.Name).Where(n => n != ThemeLibrary.Default)))
             {
                 var item = new MenuItem { Header = theme, IsChecked = model.Theme == theme, ToggleType = MenuItemToggleType.Radio };
                 item.Click += (_, _) => model.SetTheme(theme);

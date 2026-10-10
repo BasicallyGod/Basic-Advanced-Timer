@@ -443,7 +443,7 @@ public sealed class DashboardWindow : Window
         AddHandler(PointerPressedEvent, (_, e) =>
         {
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || !Ui.IsPlainSurface(e.Source) || !InDragZone(e.GetPosition(this))) return;
-            BeginMoveDrag(e); e.Handled = true;
+            Ui.CloseMenus(this); BeginMoveDrag(e); e.Handled = true;
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         // Left and right arrow keys step by a week or a day, like the buttons, unless a box is being typed in.
         AddHandler(KeyDownEvent, (_, e) =>

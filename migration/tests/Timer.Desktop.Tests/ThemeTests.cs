@@ -153,19 +153,66 @@ public sealed class ThemeTests
         finally { window.Close(); }
     }
 
+    private static void Edit(ThemesWindow window, string hexColour)
+    {
+        var picker = (Avalonia.Controls.Flyout)Find<Avalonia.Controls.Button>(window, "ColourSurface").Flyout!;
+        Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Avalonia.Controls.Control)picker.Content!).OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "HexSurface").Text = hexColour;
+    }
+    private static void Press(ThemesWindow window, string name)
+    {
+        Find<Avalonia.Controls.Button>(window, name).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+    }
+    private static Avalonia.Media.Color SurfaceOf(TimerModel model, string theme)
+    {
+        var variant = ThemeEngine.VariantFor(model.Themes.Single(t => t.Name == theme));
+        Assert.True(((Avalonia.Controls.IResourceHost)Avalonia.Application.Current!).TryGetResource("Surface", variant, out var surface));
+        return ((Avalonia.Media.ISolidColorBrush)surface!).Color;
+    }
+
     [Avalonia.Headless.XUnit.AvaloniaFact]
-    public void ClosingTheEditorWithoutSavingPutsTheSavedLookBack()
+    public void ClosingWithUnsavedEditsAsksAndDiscardPutsTheSavedLookBack()
     {
         var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
         var window = new ThemesWindow(model); window.Show();
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        var picker = (Avalonia.Controls.Flyout)Find<Avalonia.Controls.Button>(window, "ColourSurface").Flyout!;
-        Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Avalonia.Controls.Control)picker.Content!).OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "HexSurface").Text = "#FF00FF";
-        window.Close();
-        var variant = ThemeEngine.VariantFor(model.Themes.Single(t => t.Name == copy));
-        Assert.True(((Avalonia.Controls.IResourceHost)Avalonia.Application.Current!).TryGetResource("Surface", variant, out var surface));
-        Assert.Equal(Avalonia.Media.Color.Parse(ThemeLibrary.Dark.Colour("Surface")), ((Avalonia.Media.ISolidColorBrush)surface!).Color);
+        Edit(window, "#FF00FF");
+        window.Close(); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.True(window.IsVisible); Assert.True(Find<Avalonia.Controls.Border>(window, "UnsavedPrompt").IsVisible); // Asked instead of closing.
+        Press(window, "UnsavedKeep");
+        Assert.False(Find<Avalonia.Controls.Border>(window, "UnsavedPrompt").IsVisible); Assert.True(window.IsVisible);
+        Assert.Equal(Avalonia.Media.Color.Parse("#FF00FF"), SurfaceOf(model, copy)); // Still previewing the edit.
+        window.Close(); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Press(window, "UnsavedDiscard");
+        Assert.False(window.IsVisible);
+        Assert.Equal(Avalonia.Media.Color.Parse(ThemeLibrary.Dark.Colour("Surface")), SurfaceOf(model, copy));
         model.DeleteTheme(copy); model.SetTheme("System");
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void SavingFromThePromptKeepsTheEditThenClosesOrSwitches()
+    {
+        var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
+        var window = new ThemesWindow(model); window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Edit(window, "#112233");
+        // Choosing another theme in the list also asks, and the edited theme stays selected until it is answered.
+        var list = Find<Avalonia.Controls.ListBox>(window, "ThemeList"); list.SelectedItem = "Light"; Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.True(Find<Avalonia.Controls.Border>(window, "UnsavedPrompt").IsVisible); Assert.Equal(copy, list.SelectedItem); Assert.NotEqual("Light", model.Theme);
+        Press(window, "UnsavedSave");
+        Assert.Equal("#112233", model.Themes.Single(t => t.Name == copy).Colour("Surface")); Assert.Equal("Light", model.Theme);
+        window.Close(); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.False(window.IsVisible); // Nothing left unsaved, so it closes straight away.
+        model.DeleteTheme(copy); model.SetTheme("System");
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void TheThemeMenuListsHawthornAboveSystem()
+    {
+        var model = TimerModel.CreateDemo(); var menu = Ui.SettingsMenu(model);
+        var appearance = menu.Items.OfType<Avalonia.Controls.MenuItem>().First(i => (i.Header as string) == "Appearance");
+        var names = appearance.Items.OfType<Avalonia.Controls.MenuItem>().Select(i => (string)i.Header!).ToList();
+        Assert.Equal("Hawthorn", names[0]); Assert.Equal("System", names[1]); Assert.Single(names, n => n == "Hawthorn");
     }
 
     [Avalonia.Headless.XUnit.AvaloniaFact]
