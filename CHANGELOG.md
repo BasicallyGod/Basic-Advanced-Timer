@@ -4,6 +4,13 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration database class, step 2
+
+- Added `TimerDatabase`, the single data file from the data format proposal, with its eight tables (accounts, entries, groups, away, day starts, the running recording, and the undo history). Nothing in the app uses it yet, so no screen or data file changes.
+- Each entry kind says which columns it must have, so a malformed work entry, break or adjustment cannot be stored. Account names are unique whatever the capitals, and an account with entries cannot be deleted.
+- The database opens exclusively, so a second copy of the timer is turned away with a clear message. Every change is a transaction that lands whole or not at all. Closing writes everything into the one file.
+- The format is stamped with a version. A newer one is refused and left untouched, and an older one is upgraded by numbered steps after a copy is saved. The first launch each day saves a dated copy under Backups and the newest fourteen are kept.
+
 ## Migration build number in the menu
 
 - The right-click menu now shows which build is running, as a greyed item such as Version 0.1.77 (aa17cda), above Close timer. Each published build is stamped with its workflow run number and commit, so a glance tells you whether an update arrived. A build made on a developer's machine says development build.
