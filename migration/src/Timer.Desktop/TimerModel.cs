@@ -80,7 +80,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     public IReadOnlyList<AccountSettings> AccountSettings => preferences.Accounts.AsReadOnly();
     private TimerAccount[] Catalogue()
     {
-        var colours = new[] { "#91B7D5", "#94BF9B", "#D9A18A", "#BAA4CE", "#D6C48C" };
+        // Eight soft colours, so up to eight accounts each have their own before any repeat, none matching the break. They all take dark text.
+        var colours = new[] { "#91B7D5", "#94BF9B", "#D9A18A", "#BAA4CE", "#C9D17F", "#86C5C0", "#D79BB5", "#C4A38F" };
         return preferences.Accounts.Select((a, i) => new TimerAccount(a.Name, colours[i % colours.Length],
             a.BudgetHours is { } hours ? TimeSpan.FromHours(hours) : null, a.BudgetPeriod)).Append(new(BreakAccount.Name, "#D6C48C", null)).ToArray();
     }
@@ -254,22 +255,40 @@ public sealed class TimerModel : INotifyPropertyChanged
         var anchor = wallStart.Date.AddHours(14).AddMinutes(15);
         var engine = new TrackingEngine(clock: () => anchor + (realClock() - wallStart));
         engine.Schedule.Days.Add(anchor.DayOfWeek);
-        var prefs = new StoreSettings(new() { new("Account one", 15), new("Account two", 10), new("Account three", 5), new("Internal") }, false, "System", DayOfWeek.Monday);
-        var start = anchor.Date.AddHours(9);
-        var names = new[] { "Account one", "Account two", "Lunch", "Account three", "Internal" };
-        var minutes = new[] { 105, 90, 30, 45, 30 };
-        for (var i = 0; i < names.Length; i++)
+        // Seven accounts with a mix of budgets, so lists, rings and meters are tried at a realistic size: week, month and quarter
+        // budgets, two with none, and the weekly ones chosen so one is comfortable, one nearly used and one over.
+        var prefs = new StoreSettings(new()
         {
-            if (i == 0)
-            {
-                engine.AddSession(names[i], start, start.AddMinutes(50)); start = start.AddMinutes(53);
-                engine.AddSession(names[i], start, start.AddMinutes(55)); start = start.AddMinutes(55);
-            }
-            else { engine.AddSession(names[i], start, start.AddMinutes(minutes[i])); start = start.AddMinutes(minutes[i]); }
+            new("Account one", 15), new("Account two", 4.5), new("Account three", 2.5), new("Account four", 20, "month"),
+            new("Account five", 40, "quarter"), new("Account six"), new("Internal")
+        }, false, "System", DayOfWeek.Monday);
+        var start = anchor.Date.AddHours(9);
+        // Today runs from 09:00 to the demo's 14:15, with a break in the middle and no gaps worth tidying except a few minutes.
+        var today = new (string Account, int Minutes)[]
+        {
+            ("Account one", 50), ("Account one", 55), ("Account two", 60), ("Account four", 35), (BreakAccount.Name, 30),
+            ("Account three", 40), ("Account five", 30), ("Account six", 12)
+        };
+        for (var i = 0; i < today.Length; i++)
+        {
+            engine.AddSession(today[i].Account, start, start.AddMinutes(today[i].Minutes));
+            start = start.AddMinutes(today[i].Minutes + (i == 0 ? 3 : 0));
         }
         engine.Sessions.Add(new(anchor.ToString("yyyy-MM-dd"), "Account one", "00:00:00", "merged", "10.00"));
         var monday = anchor.Date.AddDays(-((7 + (int)anchor.DayOfWeek - 1) % 7));
         if (monday < anchor.Date) engine.AddSession("Account one", monday.AddHours(9), monday.AddHours(16));
+        // The days before today, so weekly, monthly and quarterly budgets and the week view have something to show.
+        var earlier = new (string Account, int Minutes)[]
+        {
+            ("Account two", 60), ("Account three", 45), ("Account four", 120), ("Account five", 90), ("Account six", 30), ("Internal", 60)
+        };
+        for (var back = 1; back <= 6; back++)
+        {
+            var day = anchor.Date.AddDays(-back);
+            if (day == monday) continue; // Monday already holds the long Account one stretch.
+            var at = day.AddHours(9);
+            foreach (var (account, minutes) in earlier) { engine.AddSession(account, at, at.AddMinutes(minutes)); at = at.AddMinutes(minutes + 5); }
+        }
         return new TimerModel(engine, prefs) { IsDemo = true };
     }
     public void ForceOvertime()

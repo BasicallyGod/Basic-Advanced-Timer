@@ -240,24 +240,24 @@ public static class ReviewViews
         for (var i = 0; i < accounts.Count; i++)
         {
             var account = accounts[i]; var row = table.Rows[i];
-            var line = Ui.Grid("14,*,70,190");
+            // Every row is one line with everything centred on it, so a budget meter always sits level with its account.
+            var line = Ui.Grid("14,*,64,120,150"); line.MinHeight = 34;
             var dot = new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = Brush.Parse(account.Colour), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
             Ui.Put(line, dot); Ui.Put(line, Ui.Text(account.Display, 14), 1);
             var total = Ui.Text(row.Total == "–" ? "0:00" : row.Total, 14); total.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(line, total, 2);
             var budget = table.Budgets.FirstOrDefault(b => b.Account == account.Display);
             if (budget is not null)
             {
-                var meter = Ui.Grid("*", "Auto,Auto"); meter.Margin = new Thickness(16, 0, 0, 0);
-                var track = Ui.Grid("0*,1*"); track.Height = 5;
+                var track = Ui.Grid("0*,1*"); track.Height = 6; track.Margin = new Thickness(18, 0, 0, 0); track.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
                 var fraction = Math.Clamp(budget.Fraction, 0.0, 1.0);
                 track.ColumnDefinitions[0].Width = new GridLength(fraction, GridUnitType.Star); track.ColumnDefinitions[1].Width = new GridLength(1.0 - fraction, GridUnitType.Star);
-                var rest = new Border { CornerRadius = new CornerRadius(3) }; rest.Classes.Add("rule"); Grid.SetColumn(rest, 1);
-                var fill = new Border { CornerRadius = new CornerRadius(3) }; fill.Classes.Add("budgetFill");
+                var rest = new Border { CornerRadius = new CornerRadius(3), Height = 6 }; rest.Classes.Add("rule"); Grid.SetColumn(rest, 1);
+                var fill = new Border { CornerRadius = new CornerRadius(3), Height = 6 }; fill.Classes.Add("budgetFill");
                 fill.Classes.Set("budgetWarn", budget.Fraction >= .8 && budget.Fraction < 1); fill.Classes.Set("budgetOver", budget.Fraction >= 1);
                 track.Children.Add(rest); track.Children.Add(fill);
-                Ui.Put(meter, track);
-                var caption = Ui.Text($"{budget.Used} of {budget.Budget}", 11, "muted"); caption.Margin = new Thickness(0, 3, 0, 0); Ui.Put(meter, caption, row: 1);
-                Ui.Put(line, meter, 3);
+                Ui.Put(line, track, 3);
+                var caption = Ui.Text($"{budget.Fraction * 100:0}% of {budget.Budget}", 12, budget.Fraction >= 1 ? "overtime" : budget.Fraction >= .8 ? "budgetWarning" : "muted");
+                caption.Margin = new Thickness(12, 0, 0, 0); caption.TextTrimming = TextTrimming.CharacterEllipsis; Ui.Put(line, caption, 4);
             }
             list.Children.Add(line);
         }

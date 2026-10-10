@@ -4,6 +4,11 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration overview alignment and larger demo
+
+- Fixed the Overview account lines. Each budget meter now sits level with its account, every row is the same height whether or not it has a budget, and the caption reads like 59% of 15:00 per week, coloured amber from 80% and red from 100%.
+- The demo now has seven accounts with a mix of weekly, monthly and quarterly budgets, a few days of history and a break, so lists and meters can be tried at a realistic size. Accounts have eight distinct colours before any repeat, none matching the break.
+
 ## Migration finish day colour and small fixes
 
 - Finish day is now red in the pill (filled) and the dashboard (outlined), and Start day stays green. The red is a Finish entry in each theme, ready for custom themes.

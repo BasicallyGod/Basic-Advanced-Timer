@@ -234,4 +234,35 @@ public sealed class WeekDashboardTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void DemoHasSevenAccountsWithSensibleBudgetsAndOverviewLinesUpWithEachAccount()
+    {
+        var model = TimerModel.CreateDemo(() => Day.AddHours(12)); // A Friday, so the week holds Monday to Thursday history.
+        var accounts = model.Accounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
+        Assert.Equal(7, accounts.Count);
+        Assert.Equal(5, accounts.Count(a => a.Budget is not null));
+        Assert.Equal(new[] { "week", "week", "week", "month", "quarter" }, accounts.Where(a => a.Budget is not null).Select(a => a.Period));
+        var fractions = accounts.Where(a => a.Budget is not null).Select(a => model.BudgetUsed(a).TotalSeconds / a.Budget!.Value.TotalSeconds).ToList();
+        Assert.All(fractions, f => Assert.True(f > .05)); // Every budget has something used, so no meter is empty.
+        Assert.Contains(fractions, f => f is >= .8 and < 1); Assert.Contains(fractions, f => f >= 1); Assert.Contains(fractions, f => f < .8); // Comfortable, nearly used and over.
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            window.SelectTab(true); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs();
+            var lines = window.GetVisualDescendants().OfType<Grid>().Where(g => g.ColumnDefinitions.Count == 5 && g.Children.Count >= 3 && g.MinHeight == 34).ToList();
+            Assert.Equal(7, lines.Count);
+            double Centre(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
+            foreach (var line in lines)
+            {
+                var name = line.Children.OfType<TextBlock>().First(t => Grid.GetColumn(t) == 1);
+                foreach (var other in line.Children.OfType<Control>().Where(c => Grid.GetColumn(c) is 0 or 2 or 3 or 4))
+                    Assert.True(Math.Abs(Centre(other) - Centre(name)) < 1.5, $"{name.Text}: column {Grid.GetColumn(other)} is {Centre(other) - Centre(name):0.0}px off");
+            }
+            Assert.Equal(1, lines.Select(l => Math.Round(l.Bounds.Height)).Distinct().Count()); // Rows are the same height with or without a budget.
+            var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
+            if (folder is not null) { Directory.CreateDirectory(folder); frame!.Save(Path.Combine(folder, "demo-overview.png")); }
+        }
+        finally { window.Close(); }
+    }
 }
