@@ -12,6 +12,7 @@ namespace Timer.Desktop;
 
 public static class ReviewViews
 {
+    public const double MinimumBlockHeight = 8;
     public static Control Timeline(TimerModel model)
     {
         var day = model.SelectedDate;
@@ -61,7 +62,8 @@ public static class ReviewViews
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
             var end = interval.End > day.AddDays(1) ? day.AddDays(1) : interval.End;
             var duration = interval.Group is { } groupDuration ? TimeSpan.FromMinutes((double)groupDuration.Minutes) : end - interval.Start;
-            var height = Math.Max(3, (end - interval.Start).TotalHours * pixelsPerHour - 4);
+            // Even a one-minute block is drawn at least eight pixels tall, so it can be seen and clicked. Zoom in for exact edges.
+            var height = Math.Max(MinimumBlockHeight, (end - interval.Start).TotalHours * pixelsPerHour - 4);
             var ink = Ui.InkOn(colour);
             var text = new StackPanel { Spacing = 6 };
             text.Children.Add(Ui.Text(model.Label(interval.Account) + (interval.Group is { } labelGroup ? $" · Group ({labelGroup.Sources.Count})" : ""), 15));
@@ -71,7 +73,14 @@ public static class ReviewViews
                 Width = 380, Height = height, Padding = new Thickness(14, height < 58 ? 2 : 10),
                 Child = height >= 24 ? text : null, ClipToBounds = true };
             var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
-            if (model.IsSelected(selectionSources)) { card.Classes.Add("mergeSelected"); text.Children.Insert(0, Ui.Text("✓ Selected", 12)); }
+            if (model.IsSelected(selectionSources))
+            {
+                card.Classes.Add("mergeSelected");
+                // A block too short for a second line shows the tick in front of its name instead, so nothing is pushed out of the block.
+                if (height >= 58) text.Children.Insert(0, Ui.Text("✓ Selected", 12));
+                else if (text.Children.Count > 0 && text.Children[0] is TextBlock title) title.Text = "✓ " + title.Text;
+                foreach (TextBlock child in text.Children) child.Foreground = Brush.Parse(ink);
+            }
             var note = interval.Group is { } groupNote ? "Grouped entries · " + groupNote.Note : interval.Row is null ? "Recording now · stop tracking to move or edit" : model.Editor.Note(interval.Row);
             if (height >= 90 && !string.IsNullOrWhiteSpace(note))
             {
@@ -91,7 +100,8 @@ public static class ReviewViews
                 // The block that is recording now. A green outline, a label and the stop menu make it clear why it can't be dragged.
                 card.Classes.Add("recording"); card.Name = "TimelineRecording"; card.Cursor = new Cursor(StandardCursorType.Arrow);
                 var live = Ui.Text("● Recording now", 12); live.Foreground = Brush.Parse(ink == "#FFFFFF" ? ink : "#1E5C38"); live.FontWeight = FontWeight.SemiBold;
-                text.Children.Insert(model.IsSelected(selectionSources) ? 1 : 0, live);
+                if (height >= 58) text.Children.Insert(model.IsSelected(selectionSources) ? 1 : 0, live);
+                else if (text.Children.Count > 0 && text.Children[0] is TextBlock liveTitle) liveTitle.Text = "● " + liveTitle.Text;
                 var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };
                 card.PointerPressed += (_, e) =>

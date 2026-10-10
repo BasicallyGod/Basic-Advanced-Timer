@@ -283,4 +283,22 @@ public sealed class EditingTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void VeryShortBlocksAreStillBigEnoughToSeeAndSelectAndShortSelectedBlocksKeepTheirTextInside()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "09:01:00", "1"), Row("10:00:00", "10:20:00", "20") });
+        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(b => Canvas.GetTop(b)).ToList();
+            Assert.True(cards[0].Height >= ReviewViews.MinimumBlockHeight); // One minute is only a few pixels at this zoom, but it can be clicked.
+            model.ToggleSelection(new[] { engine.Sessions[1] }); Dispatcher.UIThread.RunJobs(); using var again = window.CaptureRenderedFrame();
+            var selected = window.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is SessionRow row && ReferenceEquals(row, engine.Sessions[1]));
+            var lines = selected.GetVisualDescendants().OfType<TextBlock>().Where(t => !string.IsNullOrEmpty(t.Text)).ToList();
+            if (selected.Height < 58) { Assert.Single(lines); Assert.StartsWith("✓ ", lines[0].Text); } // The tick joins the name instead of adding a second line.
+        }
+        finally { window.Close(); }
+    }
 }

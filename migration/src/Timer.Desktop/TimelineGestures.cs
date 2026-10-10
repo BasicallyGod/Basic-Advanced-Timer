@@ -45,7 +45,7 @@ public static class TimelineGestures
             var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero);
             var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
             Canvas.SetTop(card, oldTop + (edge <= 0 ? delta.TotalHours * pixelsPerHour : 0));
-            card.Height = Math.Max(3, (until - from).TotalHours * pixelsPerHour - 4);
+            card.Height = Math.Max(ReviewViews.MinimumBlockHeight, (until - from).TotalHours * pixelsPerHour - 4);
             card.Opacity = .75;
             if (nudging)
             {

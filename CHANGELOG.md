@@ -4,6 +4,11 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration checklist fixes
+
+- Timeline blocks are drawn at least eight pixels tall, so a one-minute block can be seen and clicked at any zoom. Zoom in for exact edges.
+- On a block too short for a second line, the selection tick now joins the name ("✓ Account") instead of adding a line that spilled over the block's edge. The recording marker does the same with a dot, and the text colour follows the block's colour.
+
 ## Migration sixteen account colours
 
 - The palette grew from eight to sixteen soft colours, so up to sixteen accounts can each have their own before any repeat. The original eight keep their order and values, so existing accounts look the same, and the new eight were chosen to stay clear of those and of the break's amber. Every one still takes the usual dark text. The chooser shows them in two even rows of eight. After a first look, sky blue and orchid were replaced with a golden yellow and a rose, because they sat too close to the original blue and pink.
