@@ -201,7 +201,7 @@ public sealed partial class LedgerEditor
     public void Delete(SessionRow row)
     {
         var index = Index(row); CheckNoteKey(row);
-        if (!row.IsPositioned) throw new ArgumentException("Merged credit and adjustments cannot be deleted here.");
+        if (row.IsMerged) throw new ArgumentException("Merged credit cannot be deleted here.");
         Change("Delete entry", () => { engine.Sessions.RemoveAt(index); notes.Rows.RemoveAll(n => SameKey(n, row)); });
     }
     /// <summary>Moves every past entry, note, group and credit position from one account name to another.
@@ -237,6 +237,27 @@ public sealed partial class LedgerEditor
         });
         history.Clear(); stepBytes.Clear(); stateJson = null;
         return count;
+    }
+    /// <summary>
+    /// Adds or removes minutes on an account for one day, without touching any recorded stretch. It is stored as an
+    /// "adjusted" row, which the totals, the week table and the exports already count, and it can carry a note.
+    /// </summary>
+    public SessionRow Adjust(string account, DateTime day, decimal minutes, string note, DateTime now)
+    {
+        if (string.IsNullOrWhiteSpace(account) || account != account.Trim()) throw new ArgumentException("Choose an account.");
+        if (minutes == 0 || decimal.Round(minutes, 2) != minutes || Math.Abs(minutes) > 24 * 60)
+            throw new ArgumentException("Enter minutes to add or remove, such as +15 or -10, up to 24 hours.");
+        day = day.Date;
+        if (engine.Credited(account, day, day.AddDays(1)) + TimeSpan.FromMinutes((double)minutes) < TimeSpan.Zero)
+            throw new ArgumentException("That would take more time off than the account has on that day.");
+        // The row's start is only a label that keeps it apart from other rows, so a past day takes midday and today the time of the change.
+        var at = day == now.Date ? now.TimeOfDay : TimeSpan.FromHours(12);
+        var start = TimeSpan.FromSeconds(Math.Floor(at.TotalSeconds));
+        while (engine.Sessions.Any(s => s.Date == day.ToString("yyyy-MM-dd") && s.Account.Equals(account, StringComparison.OrdinalIgnoreCase) && s.Start == start.ToString(@"hh\:mm\:ss")))
+            start = start.Add(TimeSpan.FromSeconds(1));
+        var row = new SessionRow(day.ToString("yyyy-MM-dd"), account, start.ToString(@"hh\:mm\:ss"), "adjusted", minutes.ToString("0.##", CultureInfo.InvariantCulture));
+        Change("Adjust time", () => { engine.Sessions.Add(row); SetNote(null, row, note); });
+        return row;
     }
     /// <summary>Moves entries to another account, with their notes, as one edit. Times do not change, so nothing can overlap.</summary>
     public void Reassign(IReadOnlyList<SessionRow> rows, string account)
@@ -275,7 +296,7 @@ public sealed partial class LedgerEditor
         foreach (var row in rows)
         {
             Index(row); CheckNoteKey(row);
-            if (!row.IsPositioned) throw new ArgumentException("Merged credit and adjustments cannot be deleted here.");
+            if (row.IsMerged) throw new ArgumentException("Merged credit cannot be deleted here.");
         }
         Change(rows.Count == 1 ? "Delete entry" : "Delete entries", () =>
         {

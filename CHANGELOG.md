@@ -4,6 +4,12 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration adjust time and menu order
+
+- Added Adjust time today to the right-click menu of each account (dashboard list and expanded pill). It adds or removes minutes on an account for the day without changing any block, accepts +15, -10, 1:30 or 7.5, previews the new total, takes a note, and refuses to go below zero for the day.
+- Adjustments count in totals, the unallocated figure, the week table and exports, and show on the Timeline as chips above the hours. A chip's note can be edited by double-click, and the adjustment deleted from its right-click menu. Adjustments can now also be deleted from the entry editor.
+- Reordered the window's right-click menu by use, with hours format, accounts and working hours at the top, appearance, shadows and start with Windows next, the demo after that, and Close timer alone at the bottom.
+
 ## Migration overview alignment and larger demo
 
 - Fixed the Overview account lines. Each budget meter now sits level with its account, every row is the same height whether or not it has a budget, and the caption reads like 59% of 15:00 per week, coloured amber from 80% and red from 100%.

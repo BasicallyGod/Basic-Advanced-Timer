@@ -56,7 +56,7 @@ public sealed class EntryWindow : Window
             { error.Text = "Use HH:mm or HH:mm:ss, with an end after the start."; }
         }, "SaveEntry");
         var buttons = Ui.Horizontal(save, Ui.Button("Cancel", Close));
-        if (row is { IsPositioned: true }) buttons.Children.Add(Ui.Button("Delete", () =>
+        if (row is { IsMerged: false }) buttons.Children.Add(Ui.Button("Delete", () =>
         {
             if (applied) { if (model.Save()) Close(); else error.Text = model.LastError; return; }
             var previous = model.Editor.UndoState;

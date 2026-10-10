@@ -240,6 +240,9 @@ public sealed class TimerModel : INotifyPropertyChanged
         WeekSection = section; Notify();
     }
     public bool CanStepForwardAWeek => WeekStart(SelectedDate) < WeekStart(Engine.Now);
+    /// <summary>Adds or removes minutes on an account for a day, as one undoable edit.</summary>
+    public bool AdjustTime(string account, DateTime day, decimal minutes, string note)
+        => ChangeLog(() => { ValidateAccount(account); Editor.Adjust(account, day, minutes, note, Engine.Now); });
     /// <summary>Moves entries to another account as one undoable edit. Every selected block moves when the one clicked is selected.</summary>
     public bool MoveEntries(IReadOnlyList<SessionRow> rows, string account)
         => ChangeLog(() => { ValidateAccount(account); Editor.Reassign(rows, account); });

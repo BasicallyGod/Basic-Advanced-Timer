@@ -175,6 +175,10 @@
       <Setter Property="Background" Value="{DynamicResource Hover}" />
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
     </Style>
+    <Style Selector="Border.chip">
+      <Setter Property="Background" Value="{DynamicResource Panel}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    </Style>
     <Style Selector="Border.mergeSelected">
       <Setter Property="BorderThickness" Value="3" />
       <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />

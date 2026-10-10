@@ -184,7 +184,7 @@ public sealed class ShellTests
             Assert.Empty(window.GetVisualDescendants().OfType<ComboBox>());
             Assert.NotNull(window.ContextMenu);
             var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings");
-            var appearance = ((IEnumerable<Control>)button.ContextMenu!.ItemsSource!).OfType<MenuItem>().First();
+            var appearance = ((IEnumerable<Control>)button.ContextMenu!.ItemsSource!).OfType<MenuItem>().Single(m => (string?)m.Header == "Appearance");
             var dark = ((IEnumerable<MenuItem>)appearance.ItemsSource!).Single(item => (string?)item.Header == "Dark");
             var elapsed = model.Elapsed;
             dark.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));

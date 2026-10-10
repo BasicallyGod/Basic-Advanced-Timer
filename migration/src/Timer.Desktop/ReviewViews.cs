@@ -15,7 +15,7 @@ public static class ReviewViews
     public static Control Timeline(TimerModel model)
     {
         var day = model.SelectedDate;
-        var root = Ui.Grid("*", "Auto,*");
+        var root = Ui.Grid("*", "Auto,Auto,*");
         var unplaced = TimeSpan.FromMinutes((double)model.Editor.Unplaced(day).Values.Sum());
         var caption = Ui.Text(unplaced > TimeSpan.Zero ? "Unplaced legacy credit " + model.Format(unplaced) : "Recorded time", 12, "muted");
         if (model.SelectedBlockCount > 0) caption.Text += $" · {model.SelectedBlockCount} blocks selected · " + model.MergeHint;
@@ -23,6 +23,7 @@ public static class ReviewViews
         caption.TextWrapping = TextWrapping.Wrap;
         caption.Margin = new Thickness(0, 0, 0, 10);
         Ui.Put(root, caption);
+        Ui.Put(root, AdjustmentChips(model, day), row: 1);
         var pixelsPerHour = model.TimelinePixelsPerHour;
         var canvas = new Canvas { Height = 24 * pixelsPerHour, MinWidth = 460, Background = Brushes.Transparent };
         for (var hour = 0; hour < 24; hour++)
@@ -176,7 +177,7 @@ public static class ReviewViews
             model.ZoomTimeline(e.Delta.Y, e.GetPosition(scroll).Y, scroll.Offset.Y);
         }, RoutingStrategies.Tunnel);
         DeferOffset(scroll);
-        Ui.Put(root, scroll, row: 1);
+        Ui.Put(root, scroll, row: 2);
         return root;
     }
 
@@ -364,6 +365,30 @@ public static class ReviewViews
             }
             else root.Children.Add(button);
         }
+    }
+    // Time added or taken off an account for the day has no place on the clock, so it sits in a row above the timeline, one chip each.
+    private static Control AdjustmentChips(TimerModel model, DateTime day)
+    {
+        var rows = model.Engine.Sessions.Where(s => s.Day == day && s.IsAdjustment).OrderBy(s => s.Start).ToList();
+        var panel = new WrapPanel { Name = "Adjustments", IsVisible = rows.Count > 0, Margin = new Thickness(0, 0, 0, 10) };
+        foreach (var row in rows)
+        {
+            var minutes = TimeSpan.FromMinutes((double)decimal.Parse(row.Minutes, System.Globalization.CultureInfo.InvariantCulture));
+            var amount = (minutes < TimeSpan.Zero ? "" : "+") + model.FormatShort(minutes);
+            var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(row.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
+            var text = Ui.Horizontal(new Border { Width = 9, Height = 9, CornerRadius = new CornerRadius(5), Background = Brush.Parse(colour), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center },
+                Ui.Text($"{model.Label(row.Account)}  {amount}", 12, minutes < TimeSpan.Zero ? "overtime" : null));
+            var chip = new Border { Name = "Adjustment" + model.Engine.Sessions.IndexOf(row), Child = text, Padding = new Thickness(10, 5), Margin = new Thickness(0, 0, 8, 6), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Tag = row, Cursor = new Cursor(StandardCursorType.Hand) };
+            chip.Classes.Add("chip");
+            var note = model.Editor.Note(row);
+            ToolTip.SetTip(chip, $"Adjustment · {model.Label(row.Account)} · {amount}" + (note.Length > 0 ? "\n" + note : "") + "\nDouble-click to edit the note; right-click to delete.");
+            var edit = new MenuItem { Header = "Edit note…" }; edit.Click += (_, _) => model.OpenEntry(row);
+            var delete = new MenuItem { Header = "Delete adjustment" }; delete.Click += (_, _) => model.DeleteEntry(row);
+            chip.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, delete } };
+            chip.PointerPressed += (_, e) => { if (e.ClickCount == 2 && e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) { model.OpenEntry(row); e.Handled = true; } };
+            panel.Children.Add(chip);
+        }
+        return panel;
     }
     // Moves the clicked entry, or every selected block when the clicked one is selected, to another account.
     private static MenuItem MoveMenu(TimerModel model, IReadOnlyList<SessionRow> clicked)

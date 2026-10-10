@@ -180,9 +180,10 @@ public static class Ui
         shadows.Click += (_, _) => model.SetShadows(!model.Shadows);
         var quit = new MenuItem { Header = "Close timer" };
         quit.Click += (_, _) => model.RequestQuit();
-        // Closing sits alone at the bottom, apart from everyday actions, because the window has no close button.
+        // Most used first: the hours format, then accounts and working hours; then how it looks and starts; then the demo; and
+        // Close timer alone at the bottom, apart from everyday actions. Breaks and the day button live in the window, so they are not repeated here.
         var menu = new ContextMenu { ItemsSource = new Control[]
-        { new MenuItem { Header = "Appearance", ItemsSource = variants }, shadows, format, startup, shifts, accounts, demo, new Separator(), quit } };
+        { format, accounts, shifts, new Separator(), new MenuItem { Header = "Appearance", ItemsSource = variants }, shadows, startup, new Separator(), demo, new Separator(), quit } };
         menu.Opened += (_, _) =>
         {
             foreach (var item in variants) item.IsChecked = (string?)item.Header == model.Theme;
@@ -297,6 +298,13 @@ public sealed class AccountList : StackPanel
             row.Content = grid;
             row.Click += (_, _) => model.ToggleAccount(account.Name);
             if (reorderable && account.Name != "Lunch") AttachReorder(row, account.Name);
+            // The everyday thing to do with an account comes first, then the less frequent one.
+            var adjust = new MenuItem { Header = "Adjust time today…", Name = "AdjustTimeMenu" };
+            var accountName = account.Name;
+            adjust.Click += (_, _) => { if (TopLevel.GetTopLevel(row) is Window owner) new AdjustWindow(model, accountName).Show(owner); };
+            var settings = new MenuItem { Header = "Name and budget…", Name = "AccountSettingsMenu" };
+            settings.Click += (_, _) => { if (TopLevel.GetTopLevel(row) is Window owner) new AccountsWindow(model).Show(owner); };
+            row.ContextMenu = new ContextMenu { ItemsSource = new Control[] { adjust, new Separator(), settings } };
             Children.Add(row);
             rows.Add((account, row, today, budget, icon, dot));
         }
