@@ -57,44 +57,39 @@ public sealed class AccountEditingTests
     }
 
     [AvaloniaFact]
-    public void RenamingFromTheModelCanKeepOrRewriteHistoryAndSurvivesRestart()
+    public void RenamingAlwaysMovesTheHistoryKeepsTheColourAndSurvivesRestart()
     {
-        foreach (var rewrite in new[] { true, false })
+        var folder = Path.Combine(Path.GetTempPath(), "timer-rename-" + Guid.NewGuid());
+        var now = Day.AddHours(12); string colour;
+        try
         {
-            var folder = Path.Combine(Path.GetTempPath(), "timer-rename-" + Guid.NewGuid());
-            var now = Day.AddHours(12);
-            try
+            using (var store = new TimerStore(folder))
             {
-                using (var store = new TimerStore(folder))
-                {
-                    var engine = new TrackingEngine(clock: () => now);
-                    var model = new TimerModel(engine, store.Load(engine), store);
-                    model.ToggleAccount("Account one"); now = now.AddMinutes(20);
-                    Assert.Throws<ArgumentException>(() => model.SetAccounts(model.AccountSettings.Select(a => a.Name == "Account one" ? a with { Name = "internal" } : a),
-                        new Dictionary<string, string> { ["Account one"] = "internal" }, rewrite));
-                    model.SetAccounts(model.AccountSettings.Select(a => a.Name == "Account one" ? a with { Name = "Client A", BudgetHours = 5 } : a),
-                        new Dictionary<string, string> { ["Account one"] = "Client A" }, rewrite);
-                    Assert.False(model.IsTracking); // The renamed account was running, so it was stopped and saved first.
-                    Assert.Equal("Client A", model.Accounts[0].Name);
-                    Assert.Equal(TimeSpan.FromMinutes(rewrite ? 20 : 0), model.Today(model.Accounts[0]));
-                    Assert.Equal(rewrite, Directory.GetDirectories(Path.Combine(folder, "Backups"), "before-rename-*").Length == 1);
-                }
-                using (var store = new TimerStore(folder))
-                {
-                    var engine = new TrackingEngine(clock: () => now); var prefs = store.Load(engine);
-                    Assert.Equal("Client A", prefs.Accounts[0].Name);
-                    var model = new TimerModel(engine, prefs, store);
-                    Assert.Equal(rewrite ? 20 : 0, model.Today(model.Accounts[0]).TotalMinutes);
-                    Assert.Equal(!rewrite, model.ReviewAccounts.Any(a => a.Name == "Account one"));
-                    if (rewrite)
-                    {
-                        var backup = Directory.GetDirectories(Path.Combine(folder, "Backups"), "before-rename-*").Single();
-                        Assert.True(File.Exists(Path.Combine(backup, "timer.db")));
-                    }
-                }
+                var engine = new TrackingEngine(clock: () => now);
+                var model = new TimerModel(engine, store.Load(engine), store);
+                colour = model.AccountSettings[0].Colour!;
+                model.ToggleAccount("Account one"); now = now.AddMinutes(20);
+                Assert.Throws<ArgumentException>(() => model.SetAccounts(model.AccountSettings.Select(a => a.Name == "Account one" ? a with { Name = "internal" } : a),
+                    new Dictionary<string, string> { ["Account one"] = "internal" }));
+                model.SetAccounts(model.AccountSettings.Select(a => a.Name == "Account one" ? a with { Name = "Client A", BudgetHours = 5 } : a),
+                    new Dictionary<string, string> { ["Account one"] = "Client A" });
+                Assert.False(model.IsTracking); // The renamed account was running, so it was stopped and saved first.
+                Assert.Equal("Client A", model.Accounts[0].Name);
+                Assert.Equal(TimeSpan.FromMinutes(20), model.Today(model.Accounts[0]));
+                Assert.Single(Directory.GetDirectories(Path.Combine(folder, "Backups"), "before-rename-*"));
             }
-            finally { Directory.Delete(folder, true); }
+            using (var store = new TimerStore(folder))
+            {
+                var engine = new TrackingEngine(clock: () => now); var prefs = store.Load(engine);
+                Assert.Equal("Client A", prefs.Accounts[0].Name); Assert.Equal(colour, prefs.Accounts[0].Colour);
+                var model = new TimerModel(engine, prefs, store);
+                Assert.Equal(20, model.Today(model.Accounts[0]).TotalMinutes);
+                Assert.DoesNotContain(model.ReviewAccounts, a => a.Name == "Account one"); // No old name is left behind in the history.
+                var backup = Directory.GetDirectories(Path.Combine(folder, "Backups"), "before-rename-*").Single();
+                Assert.True(File.Exists(Path.Combine(backup, "timer.db")));
+            }
         }
+        finally { Directory.Delete(folder, true); }
     }
 
     [AvaloniaFact]
@@ -188,7 +183,7 @@ public sealed class AccountEditingTests
         Assert.All(first, p => Assert.Equal(p.Value, Colour(p.Key))); // Reordering changes nothing about colour.
         model.SetAccounts(model.AccountSettings.Select(a => a.Name == "B" ? a with { Hidden = true } : a));
         Assert.Equal(first["B"], Colour("B")); Assert.Equal(first["A"], Colour("A"));
-        model.SetAccounts(model.AccountSettings.Select(a => a.Name == "A" ? a with { Name = "Alpha" } : a), new Dictionary<string, string> { ["A"] = "Alpha" }, false);
+        model.SetAccounts(model.AccountSettings.Select(a => a.Name == "A" ? a with { Name = "Alpha" } : a), new Dictionary<string, string> { ["A"] = "Alpha" });
         Assert.Equal(first["A"], Colour("Alpha")); // A renamed account keeps its colour.
         model.SetAccounts(model.AccountSettings.Append(new("E")));
         Assert.Equal(TimerModel.Palette[4], Colour("E")); Assert.DoesNotContain(first.Values, v => v == Colour("E")); // A new one gets a colour not already used.

@@ -4,6 +4,12 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration account records, step 6
+
+- Renaming an account now always applies everywhere. All recorded time, notes, groups and positions move to the new name after a backup copy of the database is saved, and the rename dialog's second question (rename past entries or start afresh) is gone. To start afresh, add a new account.
+- A new name that already appears on another account or in the history is still refused, so two accounts cannot be combined by accident. The account keeps its colour, budget and place in the list through a rename, and Undo history is cleared.
+- The account's colour, order, hidden flag and budget are columns of the account record in the database (from step 3), so there is nothing separate to keep in step.
+
 ## Migration typed entries, step 5
 
 - Breaks are now their own kind of entry with no account, in memory and in the database. The reserved name is Break, and the old Lunch name is gone, so Lunch can be used as an ordinary account name. Break remains reserved, so no account can be called that.

@@ -61,14 +61,7 @@ public sealed class AccountsWindow : Window
                     (string?)e.Period.SelectedItem ?? "week", e.Visible.IsChecked != true, e.Original is { } original ? colours.GetValueOrDefault(original) : null)).ToList();
                 var renames = entries.Where(e => e.Original is not null).Zip(accounts, (e, a) => (From: e.Original!, To: a.Name))
                     .Where(r => r.From != r.To).ToDictionary(r => r.From, r => r.To);
-                var history = false;
-                if (renames.Count > 0)
-                {
-                    var answer = await new RenameChoiceWindow(renames).ShowDialog<string?>(this);
-                    if (answer is not ("all" or "new")) return;
-                    history = answer == "all";
-                }
-                model.SetAccounts(accounts, renames, history);
+                model.SetAccounts(accounts, renames);
                 if (model.LastError is not null) { error.Text = model.LastError; return; }
                 Close();
             }
@@ -78,25 +71,5 @@ public sealed class AccountsWindow : Window
             { error.Text = ex.Message; }
         }), Ui.Button("Cancel", Close)), row: 4);
         Content = root;
-    }
-}
-
-// Asks what a rename should do to the entries already recorded, since either choice is reasonable.
-public sealed class RenameChoiceWindow : Window
-{
-    public RenameChoiceWindow(IReadOnlyDictionary<string, string> renames)
-    {
-        Title = "Rename accounts"; Width = 520; SizeToContent = SizeToContent.Height; CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        var panel = new StackPanel { Spacing = 12, Margin = new Thickness(24) };
-        panel.Children.Add(Ui.Text("Rename past entries too?", 20));
-        panel.Children.Add(new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-            Text = string.Join("\n", renames.Select(r => $"{r.Key} to {r.Value}")) });
-        panel.Children.Add(new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap,
-            Text = "Renaming past entries moves all recorded time, notes, groups and positioned credit to the new name, so totals and exports carry on unbroken. A backup copy is saved first, and earlier Undo steps are cleared.\n\nStarting afresh leaves the past entries under the old name, which stays in Timeline, Week and exports as a separate historical account." });
-        var buttons = Ui.Horizontal(Ui.Button("Rename past entries", () => Close("all"), "RenameAll"),
-            Ui.Button("Start afresh from now", () => Close("new"), "RenameNew"), Ui.Button("Cancel", () => Close(null), "RenameCancel"));
-        panel.Children.Add(buttons);
-        Content = panel;
     }
 }

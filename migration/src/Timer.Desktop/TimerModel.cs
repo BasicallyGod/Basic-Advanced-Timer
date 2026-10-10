@@ -183,9 +183,9 @@ public sealed class TimerModel : INotifyPropertyChanged
         Save(); Notify();
     }
     /// <summary>Applies the account list. <paramref name="renames"/> maps an account's old name to its new one (the list holds the new
-    /// names). With <paramref name="renameHistory"/> the past entries move to the new name too, after a backup copy is saved; without
-    /// it the old name stays in the history as a separate historical account and the new name starts empty.</summary>
-    public void SetAccounts(IEnumerable<AccountSettings> accounts, IReadOnlyDictionary<string, string>? renames = null, bool renameHistory = false)
+    /// names). A rename always applies everywhere, so all recorded time, notes, groups and positions move to the new name after a backup
+    /// copy is saved. To start afresh, add a new account instead.</summary>
+    public void SetAccounts(IEnumerable<AccountSettings> accounts, IReadOnlyDictionary<string, string>? renames = null)
     {
         renames ??= new Dictionary<string, string>();
         var values = accounts.ToList();
@@ -208,7 +208,7 @@ public sealed class TimerModel : INotifyPropertyChanged
                 throw new ArgumentException($"\"{to}\" is already used by another account or in the history.");
         }
         if (ActiveAccount is { } active && (values.Any(a => a.Name == active && a.Hidden) || renamed.Any(r => r.Key == active))) Engine.StopAccount();
-        if (renamed.Count > 0 && renameHistory)
+        if (renamed.Count > 0)
         {
             // Save first so the backup holds the latest entries, then rewrite everything in one go.
             if (store is not null) { store.Save(Engine, preferences); store.Backup("before-rename"); }
