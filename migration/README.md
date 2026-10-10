@@ -31,6 +31,10 @@ The big clock shows elapsed working-day time from the configured or manual start
 
 Records live in `timer.db` (SQLite, write-ahead log), opened exclusively so two copies cannot share a folder, with daily backups. The settings file `basics-advanced-timer.settings.json` is replaced atomically with a `.bak` copy and preserves unknown sections. The running session checkpoints every 15 seconds, stops and saves on a normal close and, after a crash, credits time only up to the last checkpoint. A failed save keeps pending time and cancels closing. The app refuses a folder that holds the old PowerShell script, and deliberately never imports the old CSV timesheets.
 
+## Experimental Microsoft Store package
+
+The independent MSIX workflow and signing instructions are in [packaging/README.md](packaging/README.md). Portable data continues alongside its EXE, while packaged app data lives in per-user storage. The development MSIX is temporarily self-signed for testing and is **not** a published Store build.
+
 ## Architecture
 
 - `Timer.Core` is platform-independent C#: tracking engine, schedules, day calculations, credited sessions, recovery and the theme model and library.
