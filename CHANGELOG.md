@@ -4,6 +4,10 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration database library, step 1
+
+- First step of the move to a SQLite database (see the data format proposal): added the SQLite library and a small start-up check that opens a throwaway database, writes in a transaction and reads it back. The published-build smoke test now runs that check, and the Windows build fails early if the native library is missing from the published folder. No screens or data files changed.
+
 ## Migration pill progress line always shown
 
 - The pill's day progress line is now always there. On a day off it is an empty track with a tooltip, so the pill no longer shows a gap where the line would be.

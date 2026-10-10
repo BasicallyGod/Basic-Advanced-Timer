@@ -89,6 +89,9 @@ public sealed partial class App : Application
                 {
                     if (phase == 0)
                     {
+                        // The database library has to load and work from the published build, or later steps cannot rely on it.
+                        try { Timer.Storage.SqliteProbe.Check(); }
+                        catch (Exception error) { Console.Error.WriteLine("SQLite check failed: " + error); smoke.Stop(); desktop.Shutdown(1); return; }
                         if (!windows.Pill.IsVisible || windows.Pill.ClientSize.Width <= 0) { smoke.Stop(); desktop.Shutdown(1); return; }
                         windows.Pill.OpenDashboard!();
                     }
