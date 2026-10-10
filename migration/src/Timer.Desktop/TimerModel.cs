@@ -284,6 +284,49 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Moves entries to another account as one undoable edit. Every selected block moves when the one clicked is selected.</summary>
     public bool MoveEntries(IReadOnlyList<SessionRow> rows, string account)
         => ChangeLog(() => { ValidateAccount(account); Editor.Reassign(rows, account); });
+    /// <summary>Shows a theme as it is being edited, without saving it. <see cref="EndThemePreview"/> puts the saved look back.</summary>
+    public void PreviewTheme(ThemeDefinition theme)
+    {
+        if (Application.Current is not { } app || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;
+        ThemeEngine.Register(app, new[] { theme }); app.RequestedThemeVariant = ThemeEngine.VariantFor(theme); appliedVariant = null;
+    }
+    public void EndThemePreview()
+    {
+        if (Application.Current is { } app && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) ThemeEngine.Register(app, Themes);
+        appliedVariant = null; ApplyTheme(); Notify();
+    }
+    /// <summary>Saves one of the user's own themes. <paramref name="replacing"/> is its earlier name, so a rename replaces it, and the theme stays selected if it was.</summary>
+    public void SaveTheme(ThemeDefinition theme, string? replacing = null)
+    {
+        if (!ThemeStorage.IsUsableName(theme.Name)) throw new ArgumentException("Choose a name of up to 40 characters for the theme. System is reserved.");
+        if (ThemeLibrary.BuiltIn.Any(t => t.Name.Equals(theme.Name, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException($"\"{theme.Name}\" is a built-in theme. Choose another name.");
+        var own = (preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
+        if (own.Any(t => t.Name.Equals(theme.Name, StringComparison.OrdinalIgnoreCase) && !t.Name.Equals(replacing, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException($"There is already a theme called \"{theme.Name}\".");
+        if (ThemeTokens.Names.Any(n => !ThemeTokens.IsValid(n, theme.Colours.GetValueOrDefault(n)))) throw new ArgumentException("Every colour must be a valid hex colour.");
+        var index = own.FindIndex(t => t.Name.Equals(replacing ?? theme.Name, StringComparison.OrdinalIgnoreCase));
+        var saved = theme with { BuiltIn = false };
+        if (index >= 0) own[index] = saved; else own.Add(saved);
+        preferences = preferences with { Themes = own, Theme = Theme.Equals(replacing, StringComparison.OrdinalIgnoreCase) ? saved.Name : Theme };
+        if (Application.Current is { } app && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) ThemeEngine.Register(app, new[] { saved });
+        appliedVariant = null; ApplyTheme(); Save(); Notify();
+    }
+    /// <summary>Copies a theme under a new name, so a built-in one can be made your own. Returns the new name, and selects it.</summary>
+    public string DuplicateTheme(string name)
+    {
+        var source = Themes.First(t => t.Name == name);
+        var copy = source.Name + " copy"; var number = 2;
+        while (Themes.Any(t => t.Name.Equals(copy, StringComparison.OrdinalIgnoreCase))) copy = source.Name + " copy " + number++;
+        SaveTheme(source with { Name = copy, BuiltIn = false }); SetTheme(copy); return copy;
+    }
+    public void DeleteTheme(string name)
+    {
+        var own = (preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
+        if (own.RemoveAll(t => t.Name == name) == 0) throw new ArgumentException("Only your own themes can be deleted.");
+        preferences = preferences with { Themes = own, Theme = Theme == name ? ThemeLibrary.System : Theme };
+        appliedVariant = null; ApplyTheme(); Save(); Notify();
+    }
+    /// <summary>The colour to draw an account's blocks, dots and bars in: very dark colours lifted so they show, then softened if the theme asks for it.</summary>
+    public string BlockColour(string accountColour) => ThemeDerivation.Soften(CurrentTheme, Ui.Visible(accountColour));
     public void SetTheme(string theme)
     {
         if (theme != ThemeLibrary.System && Themes.All(t => t.Name != theme)) throw new ArgumentException("Unknown theme", nameof(theme));

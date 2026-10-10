@@ -111,4 +111,69 @@ public sealed class ThemeTests
         }
         finally { Avalonia.Application.Current!.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default; if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }
+
+    private static T Find<T>(Avalonia.Controls.Window window, string name) where T : Avalonia.Controls.Control
+        => Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<T>().Single(c => c.Name == name);
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void TheThemeEditorDuplicatesEditsPreviewsSavesAndDeletesYourOwnThemes_AndLocksBuiltInOnes()
+    {
+        var model = TimerModel.CreateDemo(); var window = new ThemesWindow(model); window.Show();
+        try
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            // A built-in theme is shown but cannot be edited.
+            Assert.False(Find<Avalonia.Controls.Button>(window, "ColourSurface").IsEnabled); Assert.False(Find<Avalonia.Controls.TextBox>(window, "ThemeName").IsEnabled);
+            Assert.DoesNotContain(Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.Button>(), b => b.Name == "SaveTheme");
+            Assert.False(Find<Avalonia.Controls.Button>(window, "DeleteTheme").IsEnabled);
+            var click = new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent);
+            // Duplicating makes your own, editable copy and selects it.
+            Find<Avalonia.Controls.Button>(window, "DuplicateTheme").RaiseEvent(click); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var copyName = model.Theme; Assert.EndsWith(" copy", copyName); Assert.False(model.Themes.Single(t => t.Name == copyName).BuiltIn);
+            Assert.True(Find<Avalonia.Controls.Button>(window, "ColourSurface").IsEnabled); Assert.True(Find<Avalonia.Controls.Button>(window, "DeleteTheme").IsEnabled);
+            // Typing a hex colour changes the app at once, before anything is saved.
+            var picker = (Avalonia.Controls.Flyout)Find<Avalonia.Controls.Button>(window, "ColourSurface").Flyout!;
+            var hex = Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Avalonia.Controls.Control)picker.Content!).OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "HexSurface");
+            hex.Text = "#102030";
+            var variant = ThemeEngine.VariantFor(model.Themes.Single(t => t.Name == copyName));
+            Assert.True(((Avalonia.Controls.IResourceHost)Avalonia.Application.Current!).TryGetResource("Surface", variant, out var live)); Assert.Equal(Avalonia.Media.Color.Parse("#102030"), ((Avalonia.Media.ISolidColorBrush)live!).Color);
+            Assert.NotEqual("#102030", model.Themes.Single(t => t.Name == copyName).Colour("Surface")); // Not kept yet.
+            // Saving keeps it, with a new name.
+            Find<Avalonia.Controls.TextBox>(window, "ThemeName").Text = "Evening";
+            Find<Avalonia.Controls.Button>(window, "SaveTheme").RaiseEvent(click); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Evening", model.Theme); Assert.Equal("#102030", model.Themes.Single(t => t.Name == "Evening").Colour("Surface")); Assert.DoesNotContain(model.Themes, t => t.Name == copyName);
+            // A built-in name is refused with a message.
+            Find<Avalonia.Controls.TextBox>(window, "ThemeName").Text = "Dark"; Find<Avalonia.Controls.Button>(window, "SaveTheme").RaiseEvent(click);
+            Assert.Equal("Evening", model.Theme);
+            // Deleting returns to System.
+            Find<Avalonia.Controls.Button>(window, "DeleteTheme").RaiseEvent(click); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(ThemeLibrary.System, model.Theme); Assert.DoesNotContain(model.Themes, t => t.Name == "Evening");
+        }
+        finally { window.Close(); }
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void ClosingTheEditorWithoutSavingPutsTheSavedLookBack()
+    {
+        var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
+        var window = new ThemesWindow(model); window.Show();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var picker = (Avalonia.Controls.Flyout)Find<Avalonia.Controls.Button>(window, "ColourSurface").Flyout!;
+        Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Avalonia.Controls.Control)picker.Content!).OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "HexSurface").Text = "#FF00FF";
+        window.Close();
+        var variant = ThemeEngine.VariantFor(model.Themes.Single(t => t.Name == copy));
+        Assert.True(((Avalonia.Controls.IResourceHost)Avalonia.Application.Current!).TryGetResource("Surface", variant, out var surface));
+        Assert.Equal(Avalonia.Media.Color.Parse(ThemeLibrary.Dark.Colour("Surface")), ((Avalonia.Media.ISolidColorBrush)surface!).Color);
+        model.DeleteTheme(copy); model.SetTheme("System");
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void SoftenedBlockColoursFollowTheSelectedTheme()
+    {
+        var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
+        Assert.Equal("#91B7D5", model.BlockColour("#91B7D5")); // As chosen.
+        model.SaveTheme(model.Themes.Single(t => t.Name == copy) with { BlockStyle = ThemeBlockStyle.Softened }, copy);
+        Assert.NotEqual("#91B7D5", model.BlockColour("#91B7D5"));
+        model.DeleteTheme(copy); model.SetTheme("System");
+    }
 }

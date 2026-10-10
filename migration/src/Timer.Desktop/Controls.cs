@@ -206,6 +206,9 @@ public static class Ui
         };
         var startup = new MenuItem { Header = "Start with Windows", ToggleType = MenuItemToggleType.CheckBox };
         startup.Click += (_, _) => model.SetAutoStart(model.AutoStart?.IsEnabled != true);
+        var themesEditor = new MenuItem { Header = "Themes…", Name = "ThemesMenu" };
+        themesEditor.Click += (_, _) => { if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life)
+            new ThemesWindow(model).Show(life.Windows.First(w => w.IsVisible)); };
         var shadows = new MenuItem { Header = "Window shadows", ToggleType = MenuItemToggleType.CheckBox };
         shadows.Click += (_, _) => model.SetShadows(!model.Shadows);
         // Which build this is, greyed out because it is information, not an action.
@@ -215,7 +218,7 @@ public static class Ui
         // Most used first: the hours format, then accounts and working hours; then how it looks and starts; then the demo; and
         // Close timer alone at the bottom, apart from everyday actions. Breaks and the day button live in the window, so they are not repeated here.
         var menu = new ContextMenu { ItemsSource = new Control[]
-        { format, accounts, shifts, new Separator(), appearanceMenu, shadows, startup, new Separator(), demo, overtimeTest, new Separator(), version, new Separator(), quit } };
+        { format, accounts, shifts, new Separator(), appearanceMenu, themesEditor, shadows, startup, new Separator(), demo, overtimeTest, new Separator(), version, new Separator(), quit } };
         menu.Opened += (_, _) =>
         {
             appearanceMenu.ItemsSource = ThemeItems();

@@ -230,6 +230,10 @@
     <Style Selector="Button.quiet.breakButton.onBreak:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Break}" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="{DynamicResource Break}" />
     </Style>
+    <!-- Lists take the theme's colours, so a chosen row reads as chosen in every theme. -->
+    <Style Selector="ListBox"><Setter Property="Background" Value="Transparent" /></Style>
+    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="Button.iconButton">
       <Setter Property="Width" Value="32" /><Setter Property="Height" Value="30" /><Setter Property="Padding" Value="0" />
       <Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" />

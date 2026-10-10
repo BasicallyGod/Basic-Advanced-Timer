@@ -121,7 +121,7 @@ public sealed class AdjustTimeTests
         {
             var items = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).ToList();
             var headers = items.Select(i => i is MenuItem m ? (string?)m.Header : "|").ToList();
-            Assert.Equal(new[] { "Decimal hours", "Accounts and budgets…", "Working hours…", "|", "Appearance", "Window shadows", "Start with Windows", "|", "Open sample-data demo", "Test overtime", "|", BuildInfo.Current, "|", "Close timer" }, headers);
+            Assert.Equal(new[] { "Decimal hours", "Accounts and budgets…", "Working hours…", "|", "Appearance", "Themes…", "Window shadows", "Start with Windows", "|", "Open sample-data demo", "Test overtime", "|", BuildInfo.Current, "|", "Close timer" }, headers);
         }
         finally { window.Close(); }
     }

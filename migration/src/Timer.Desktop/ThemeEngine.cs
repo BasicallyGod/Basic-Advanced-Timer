@@ -30,24 +30,25 @@ public static class ThemeEngine
             states[(theme.Name, state)] = variant = new ThemeVariant(state + " " + theme.Name, theme.Dark ? ThemeVariant.Dark : ThemeVariant.Light);
         return variant;
     }
-    private static ResourceDictionary Build(IReadOnlyDictionary<string, string> colours)
+    // Colours are written into the dictionary that is already registered when there is one, so screens that are open repaint at once.
+    private static void Write(Application app, ThemeVariant variant, IReadOnlyDictionary<string, string> colours)
     {
-        var dictionary = new ResourceDictionary();
+        if (!app.Resources.ThemeDictionaries.TryGetValue(variant, out var found) || found is not ResourceDictionary dictionary)
+            app.Resources.ThemeDictionaries[variant] = dictionary = new ResourceDictionary();
         foreach (var token in ThemeTokens.Names)
         {
             var colour = Color.Parse(colours[token]);
             if (token == "ShadowColor") dictionary[token] = colour; else dictionary[token] = new SolidColorBrush(colour);
         }
-        return dictionary;
     }
     /// <summary>Makes every theme, built-in and the user's own, available to the app. Safe to call again after a theme changes.</summary>
     public static void Register(Application app, IEnumerable<ThemeDefinition> themes)
     {
         foreach (var theme in themes)
         {
-            app.Resources.ThemeDictionaries[VariantFor(theme)] = Build(theme.Colours);
-            app.Resources.ThemeDictionaries[StateVariant(theme, ThemeDerivation.Break)] = Build(ThemeDerivation.Variant(theme, ThemeDerivation.Break));
-            app.Resources.ThemeDictionaries[StateVariant(theme, ThemeDerivation.Overtime)] = Build(ThemeDerivation.Variant(theme, ThemeDerivation.Overtime));
+            Write(app, VariantFor(theme), theme.Colours);
+            Write(app, StateVariant(theme, ThemeDerivation.Break), ThemeDerivation.Variant(theme, ThemeDerivation.Break));
+            Write(app, StateVariant(theme, ThemeDerivation.Overtime), ThemeDerivation.Variant(theme, ThemeDerivation.Overtime));
         }
     }
 }
