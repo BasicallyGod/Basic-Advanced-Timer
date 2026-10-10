@@ -22,11 +22,11 @@ Close the old application, then copy its settings, `Timesheets` directory and re
 .\BasicsAdvancedTimer.Preview.exe --data-dir "C:\Users\YourName\Documents\Timer migration test"
 ```
 
-The app refuses the old application folder when its script or launcher is present. A folder lock prevents two new builds using the same data folder. Do not run the old app against the migration copy simultaneously; the old process does not participate in the new lock.
+The app refuses the old application folder when its script or launcher is present. Records live in `timer.db`, which is opened exclusively so two new builds cannot use the same data folder. A new database starts empty and old Timesheets files are neither read nor changed. Do not run the old app against the migration copy simultaneously; the old process does not participate in the new lock.
 
 The storage adapter reads the existing schema-1 JSON sections, account visibility, budget periods, weekday shifts, days off, manual starts, CSV credited rows and away intervals. It preserves unknown settings sections/root properties and extra CSV columns. Notes now load and save in their existing CSV format. Editing a source interval prunes obsolete group references. Credit positions and grouping metadata now load in the existing formats. Legacy merged credit contributes to totals; placing that credit draws intervals without adding ledger rows. Legacy Undo files and exports remain in place.
 
-Sessions, manual starts, away intervals, preferences and crash recovery are saved together through an atomic write-ahead journal. Interrupted saves replay before loading. Files receive `.bak` copies. Active sessions checkpoint every 15 seconds and stop/save on a normal close. Crash recovery credits only up to the last successful checkpoint, not the time the app was closed. A save failure keeps pending time in memory, shows an error, retries, and prevents ordinary closing until saving succeeds. Invalid settings/CSV stop startup rather than resetting data.
+Entries, accounts, manual starts, away intervals and the running recording are saved together in one database transaction, and the settings file is replaced atomically with a `.bak` copy. Active sessions checkpoint every 15 seconds and stop/save on a normal close. Crash recovery credits only up to the last successful checkpoint, not the time the app was closed. A save failure keeps pending time in memory, shows an error, retries, and prevents ordinary closing until saving succeeds. Invalid settings/CSV stop startup rather than resetting data.
 
 ## Current scope
 

@@ -225,7 +225,7 @@ public sealed class UndoHistoryTests
     }
 
     [Fact]
-    public void AQuietCheckpointDoesNotRewriteUnchangedFilesButAnEditDoes()
+    public void AQuietCheckpointDoesNotRewriteUnchangedRecordsButAnEditDoes()
     {
         var folder = Path.Combine(Path.GetTempPath(), "timer-quiet-save-" + Guid.NewGuid());
         try
@@ -233,15 +233,13 @@ public sealed class UndoHistoryTests
             using var store = new TimerStore(folder);
             var engine = Engine(); var prefs = store.Load(engine);
             store.Editor!.Add("Account one", Day.AddHours(9), Day.AddHours(10), "first"); store.Save(engine, prefs);
-            var sessions = Path.Combine(folder, "Timesheets/sessions.csv"); var state = Path.Combine(folder, "migration-edit-state.json");
-            Assert.True(File.Exists(sessions) && File.Exists(state));
-            // If a later save rewrote these, the markers would disappear.
-            File.WriteAllText(sessions, "marker sessions"); File.WriteAllText(state, "marker state");
+            Assert.Equal(1L, store.Database.Scalar("SELECT COUNT(*) FROM entries")); Assert.Equal(1L, store.Database.Scalar("SELECT COUNT(*) FROM meta WHERE key = 'editState'"));
+            // If a later save rewrote the records, the marker would disappear.
+            store.Database.Execute("UPDATE entries SET note = 'marker'"); store.Database.Execute("UPDATE meta SET value = 'marker' WHERE key = 'editState'");
             store.Save(engine, prefs); store.Save(engine, prefs);
-            Assert.Equal("marker sessions", File.ReadAllText(sessions)); Assert.Equal("marker state", File.ReadAllText(state));
-            Assert.False(File.Exists(Path.Combine(folder, "migration-journal.json")));
+            Assert.Equal("marker", store.Database.Scalar("SELECT note FROM entries")); Assert.Equal("marker", store.Database.Scalar("SELECT value FROM meta WHERE key = 'editState'"));
             store.Editor.Add("Account two", Day.AddHours(11), Day.AddHours(12), ""); store.Save(engine, prefs);
-            Assert.Contains("Account two", File.ReadAllText(sessions)); Assert.Contains("Steps", File.ReadAllText(state));
+            Assert.Equal(2L, store.Database.Scalar("SELECT COUNT(*) FROM entries")); Assert.Contains("Steps", (string)store.Database.Scalar("SELECT value FROM meta WHERE key = 'editState'")!);
         }
         finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }

@@ -4,6 +4,16 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration storage moved to the database, step 3
+
+- The timer now saves to `timer.db` in its data folder instead of the CSV files, the write-ahead journal and the folder lock. Accounts (with colour, order, hidden flag and budget), time entries, away intervals, manual day starts and the running recording are real database tables, written together in one transaction. A failed save changes nothing and is retried, as before.
+- A new database starts empty, with the three starter accounts. Old `Timesheets` files are not read, changed or deleted. The first launch that finds them says so once in the dashboard footer.
+- The database is opened exclusively, so a second copy of the timer is turned away. Daily dated copies are kept under `Backups`, and Backup before a rename now copies the database and settings there.
+- Preferences (theme, shadows, working hours, day overrides, decimal hours) stay in `basics-advanced-timer.settings.json`.
+- Notes, group references, credit positions and the undo history are still held as small named records in a `meta` table, and each entry keeps its duration text, until the next steps move them into proper tables. Undo and its hash checks behave as before. Adjustments can now carry a start time as their place in the day, and adjust a break.
+- The sample-data demo now runs on a throwaway database in the temporary folder, removed on exit, so saving, editing and Undo go through the real storage. It no longer contains merged legacy credit.
+- Tests that depended on CSV files, the journal and the folder lock were replaced with database equivalents.
+
 ## Migration database class, step 2
 
 - Added `TimerDatabase`, the single data file from the data format proposal, with its eight tables (accounts, entries, groups, away, day starts, the running recording, and the undo history). Nothing in the app uses it yet, so no screen or data file changes.

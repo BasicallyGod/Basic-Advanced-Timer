@@ -77,7 +77,7 @@ public sealed class AccountEditingTests
                     Assert.False(model.IsTracking); // The renamed account was running, so it was stopped and saved first.
                     Assert.Equal("Client A", model.Accounts[0].Name);
                     Assert.Equal(TimeSpan.FromMinutes(rewrite ? 20 : 0), model.Today(model.Accounts[0]));
-                    Assert.Equal(rewrite, Directory.Exists(Path.Combine(folder, "Timesheets", "Backups")));
+                    Assert.Equal(rewrite, Directory.GetDirectories(Path.Combine(folder, "Backups"), "before-rename-*").Length == 1);
                 }
                 using (var store = new TimerStore(folder))
                 {
@@ -88,8 +88,8 @@ public sealed class AccountEditingTests
                     Assert.Equal(!rewrite, model.ReviewAccounts.Any(a => a.Name == "Account one"));
                     if (rewrite)
                     {
-                        var backup = Directory.GetDirectories(Path.Combine(folder, "Timesheets", "Backups")).Single();
-                        Assert.Contains("Account one", File.ReadAllText(Path.Combine(backup, "sessions.csv")));
+                        var backup = Directory.GetDirectories(Path.Combine(folder, "Backups"), "before-rename-*").Single();
+                        Assert.True(File.Exists(Path.Combine(backup, "timer.db")));
                     }
                 }
             }
@@ -199,32 +199,28 @@ public sealed class AccountEditingTests
     }
 
     [Fact]
-    public void ColoursSurviveARestartAndOlderFilesWithoutThemAreColouredInOrderAndStayCompatible()
+    public void ColoursOrderHidingAndBudgetsSurviveARestart()
     {
         var folder = Path.Combine(Path.GetTempPath(), "timer-colours-" + Guid.NewGuid());
         try
         {
-            Directory.CreateDirectory(folder);
-            File.WriteAllText(Path.Combine(folder, "basics-advanced-timer.settings.json"),
-                "{\"schemaVersion\":1,\"sections\":{\"accounts\":[\"Zed\",\"Amy\\thidden\",\"Bob\"]}}");
             string[] before;
             using (var store = new TimerStore(folder))
             {
                 var engine = new TrackingEngine(); var prefs = store.Load(engine);
-                Assert.All(prefs.Accounts, a => Assert.Null(a.Colour)); // The old file has none.
+                Assert.All(prefs.Accounts, a => Assert.Null(a.Colour)); // A new database has none yet.
                 var model = new TimerModel(engine, prefs, store);
                 before = model.AccountSettings.Select(a => a.Colour!).ToArray();
-                Assert.Equal(TimerModel.Palette.Take(3), before); // Coloured in the order they were already in, so nothing looks different.
-                model.MoveAccount("Bob", 0); model.Save();
+                Assert.Equal(TimerModel.Palette.Take(3), before); // Given in order, once.
+                model.SetAccounts(model.AccountSettings.Select(a => a.Name == "Account two" ? a with { Hidden = true, BudgetHours = 3, BudgetPeriod = "quarter" } : a));
+                model.MoveAccount("Internal", 0); model.Save();
             }
-            var text = File.ReadAllText(Path.Combine(folder, "basics-advanced-timer.settings.json"));
-            Assert.Contains("Amy\\t" + "hidden\\t" + TimerModel.Palette[1], text); // Name, hidden flag, colour: the old timer still reads the first two parts.
             using (var store = new TimerStore(folder))
             {
                 var prefs = store.Load(new TrackingEngine());
-                Assert.Equal(new[] { "Bob", "Amy", "Zed" }, prefs.Accounts.Select(a => a.Name)); // The hidden account keeps its place.
+                Assert.Equal(new[] { "Internal", "Account two", "Account one" }, prefs.Accounts.Select(a => a.Name)); // The hidden account keeps its slot.
                 Assert.Equal(new[] { before[2], before[1], before[0] }, prefs.Accounts.Select(a => a.Colour));
-                Assert.True(prefs.Accounts[1].Hidden);
+                Assert.True(prefs.Accounts[1].Hidden); Assert.Equal(3, prefs.Accounts[1].BudgetHours); Assert.Equal("quarter", prefs.Accounts[1].BudgetPeriod);
             }
         }
         finally { Directory.Delete(folder, true); }

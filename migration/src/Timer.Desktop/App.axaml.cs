@@ -31,13 +31,20 @@ public sealed partial class App : Application
                 if (index >= 0 && index + 1 >= args.Length) throw new ArgumentException("--data-dir requires a folder path.");
                 var folder = smokeMode ? Path.Combine(Path.GetTempPath(), "timer-smoke-" + Guid.NewGuid())
                     : index >= 0 ? args[index + 1] : Path.Combine(AppContext.BaseDirectory, "migration-data");
-                if (demoMode) model = TimerModel.CreateDemo();
+                if (demoMode)
+                {
+                    // The demo runs on a throwaway database in the temporary folder, removed when it closes.
+                    folder = Path.Combine(Path.GetTempPath(), "timer-demo-" + Guid.NewGuid());
+                    store = new TimerStore(folder);
+                    model = TimerModel.CreateDemo(store: store);
+                }
                 else
                 {
                 store = new TimerStore(folder);
                 var engine = new TrackingEngine();
                 var preferences = store.Load(engine);
                 model = new TimerModel(engine, preferences, store);
+                if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files found and left alone. This version starts with an empty database.";
                 if (!model.Save()) throw new IOException(model.LastError);
                 // Only an explicit data folder is remembered; the default one sits beside the program and needs no argument.
                 if (!smokeMode && !args.Contains("--test-build") && WindowsRunKey.Available)
@@ -50,7 +57,7 @@ public sealed partial class App : Application
                     if (released) return;
                     released = true;
                     openedStore?.Dispose();
-                    if (smokeMode && Directory.Exists(folder)) Directory.Delete(folder, true);
+                    if ((smokeMode || demoMode) && Directory.Exists(folder)) Directory.Delete(folder, true);
                 };
             }
             catch (Exception error)

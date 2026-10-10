@@ -96,34 +96,69 @@ public sealed class TrackingTests
     }
 
     [Fact]
-    public void CopiedLegacySettingsAndRowsRoundTripWithoutLosingMetadata()
+    public void RecordsRoundTripThroughTheDatabaseAndSettingsKeepUnknownSections()
     {
         using var folder = new TempFolder();
-        Directory.CreateDirectory(Path.Combine(folder.Path, "Timesheets"));
         File.WriteAllText(Path.Combine(folder.Path, "basics-advanced-timer.settings.json"), """
-        {"schemaVersion":1,"unknownRoot":"keep","sections":{"accounts":["A, quoted","Hidden\thidden"],"budgets":["A, quoted\t10\tmonth"],"workingHours":["start=09:30","end=18:00","days=Mon,Tue,Wed,Thu,Fri","hours=decimal","shift.fri=08:00,16:00"],"dayOverrides":["2026-10-10\toff"],"unrecognised":["keep me"]}}
+        {"schemaVersion":1,"unknownRoot":"keep","sections":{"workingHours":["start=09:30","end=18:00","days=Mon,Tue,Wed,Thu,Fri","hours=decimal","shift.fri=08:00,16:00"],"dayOverrides":["2026-10-10\toff"],"unrecognised":["keep me"]}}
         """);
-        File.WriteAllText(Path.Combine(folder.Path, "Timesheets", "sessions.csv"), "Date,Account,Start,End,Minutes,Extra\n2026-10-09,\"A, quoted\",09:00:00,merged,60,untouched\n2026-10-09,\"A, quoted\",09:00:00,rounded down,-5,keep\n");
-        var metadata = Path.Combine(folder.Path, "Timesheets", "entry-groups.csv"); File.WriteAllText(metadata, "unchanged metadata");
         using (var store = new TimerStore(folder.Path))
         {
             var engine = new TrackingEngine(clock: () => new(2026, 10, 9, 10, 0, 0));
             var settings = store.Load(engine);
-            Assert.Single(settings.Accounts.Where(a => !a.Hidden)); Assert.True(settings.Accounts.Single(a => a.Name == "Hidden").Hidden); Assert.Equal("month", settings.Accounts[0].BudgetPeriod);
-            Assert.Equal(8, engine.Plan(engine.Now).Start.Hour);
-            Assert.Equal(TimeSpan.FromMinutes(55), engine.Credited("A, quoted", engine.Now.Date, engine.Now.Date.AddDays(1)));
+            Assert.Equal(3, settings.Accounts.Count); Assert.Empty(engine.Sessions);
+            Assert.True(settings.DecimalHours); Assert.Equal(8, engine.Plan(engine.Now).Start.Hour);
+            settings = settings with { Accounts = new() { new("A, quoted", 10, "month"), new("Hidden", Hidden: true, Colour: "#112233") } };
             engine.AddSession("A, quoted", engine.Now.AddMinutes(-10), engine.Now);
+            engine.AddSession(BreakAccount.Name, engine.Now.AddMinutes(-30), engine.Now.AddMinutes(-20));
             store.Save(engine, settings with { Theme = "Dark" });
-            Assert.Throws<IOException>(() => new TimerStore(folder.Path));
+            Assert.ThrowsAny<IOException>(() => new TimerStore(folder.Path));
         }
         using (var store = new TimerStore(folder.Path))
         {
             var engine = new TrackingEngine(); var settings = store.Load(engine);
-            Assert.Equal("Dark", settings.Theme); Assert.Equal(3, engine.Sessions.Count);
-            Assert.Contains("untouched", File.ReadAllText(Path.Combine(folder.Path, "Timesheets", "sessions.csv")));
+            Assert.Equal("Dark", settings.Theme); Assert.Equal(2, engine.Sessions.Count);
+            Assert.Equal("month", settings.Accounts[0].BudgetPeriod); Assert.Equal(10, settings.Accounts[0].BudgetHours);
+            Assert.True(settings.Accounts[1].Hidden); Assert.Equal("#112233", settings.Accounts[1].Colour);
+            Assert.Equal(TimeSpan.FromMinutes(10), engine.Credited("A, quoted", new(2026, 10, 9), new(2026, 10, 10)));
+            Assert.Equal(BreakAccount.Name, engine.Sessions[1].Account);
             Assert.Contains("keep me", File.ReadAllText(Path.Combine(folder.Path, "basics-advanced-timer.settings.json")));
             Assert.Contains("unknownRoot", File.ReadAllText(Path.Combine(folder.Path, "basics-advanced-timer.settings.json")));
-            Assert.Equal("unchanged metadata", File.ReadAllText(metadata));
+        }
+    }
+
+    [Fact]
+    public void OldTimesheetFilesAreNeverReadChangedOrDeleted()
+    {
+        using var folder = new TempFolder();
+        Directory.CreateDirectory(Path.Combine(folder.Path, "Timesheets"));
+        var sessions = Path.Combine(folder.Path, "Timesheets", "sessions.csv");
+        File.WriteAllText(sessions, "Date,Account,Start,End,Minutes\n2026-10-09,A,09:00:00,10:00:00,60\n");
+        using (var store = new TimerStore(folder.Path))
+        {
+            var engine = new TrackingEngine(); var settings = store.Load(engine);
+            Assert.True(store.OldFilesFound); Assert.Empty(engine.Sessions);
+            engine.AddSession("Account one", new(2026, 10, 9, 9, 0, 0), new(2026, 10, 9, 9, 5, 0)); store.Save(engine, settings);
+        }
+        Assert.Equal("Date,Account,Start,End,Minutes\n2026-10-09,A,09:00:00,10:00:00,60\n", File.ReadAllText(sessions));
+        Assert.True(File.Exists(Path.Combine(folder.Path, "timer.db")));
+        using (var store = new TimerStore(folder.Path)) { Assert.True(store.TakeOldFilesNotice()); Assert.False(store.TakeOldFilesNotice()); }
+        using (var store = new TimerStore(folder.Path)) Assert.False(store.TakeOldFilesNotice()); // Said once, not on every launch.
+    }
+
+    [Fact]
+    public void TheDemoRunsThroughADatabaseAndReloadsTheSameWithNoMergedCredit()
+    {
+        using var folder = new TempFolder(); int count;
+        using (var store = new TimerStore(folder.Path))
+        {
+            var model = TimerModel.CreateDemo(store: store);
+            count = model.Engine.Sessions.Count; Assert.True(count > 20); Assert.DoesNotContain(model.Engine.Sessions, s => s.IsMerged);
+        }
+        using (var store = new TimerStore(folder.Path))
+        {
+            var engine = new TrackingEngine(); var prefs = store.Load(engine);
+            Assert.Equal(count, engine.Sessions.Count); Assert.Equal(7, prefs.Accounts.Count);
         }
     }
 
@@ -149,19 +184,9 @@ public sealed class TrackingTests
     }
 
     [Fact]
-    public void JournalReplayIsIdempotentAndMalformedFilesAreNotReset()
+    public void AMalformedSettingsFileIsNotReset()
     {
         using var folder = new TempFolder();
-        var files = new Dictionary<string, string>
-        {
-            ["Timesheets/sessions.csv"] = "Date,Account,Start,End,Minutes\n2026-10-09,A,09:00:00,09:01:00,1\n",
-            ["basics-advanced-timer.settings.json"] = "{\"schemaVersion\":1,\"sections\":{}}",
-            ["account-timer-away.txt"] = "", ["migration-recovery.json"] = JsonSerializer.Serialize(new RecoveryState(1, null, DateTime.Now)),
-            ["account-timer-state.txt"] = ""
-        };
-        File.WriteAllText(Path.Combine(folder.Path, "migration-journal.json"), JsonSerializer.Serialize(new SaveJournal(1, files)));
-        using (var store = new TimerStore(folder.Path)) { var engine = new TrackingEngine(); store.Load(engine); Assert.Single(engine.Sessions); }
-        Assert.False(File.Exists(Path.Combine(folder.Path, "migration-journal.json")));
         File.WriteAllText(Path.Combine(folder.Path, "basics-advanced-timer.settings.json"), "broken");
         using (var store = new TimerStore(folder.Path)) Assert.ThrowsAny<JsonException>(() => store.Load(new TrackingEngine()));
         Assert.Equal("broken", File.ReadAllText(Path.Combine(folder.Path, "basics-advanced-timer.settings.json")));

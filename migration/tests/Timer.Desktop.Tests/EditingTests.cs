@@ -13,44 +13,51 @@ using Xunit;
 
 namespace Timer.Desktop.Tests;
 
+// Makes the database refuse new entries, to stand in for a full disk or a locked file.
+internal static class StorageFaults
+{
+    public static void Block(TimerStore store) => store.Database.Execute("CREATE TRIGGER block_entries BEFORE INSERT ON entries BEGIN SELECT RAISE(ABORT, 'disk full'); END");
+    public static void Unblock(TimerStore store) => store.Database.Execute("DROP TRIGGER block_entries");
+    public static List<SessionRow> Saved(TimerStore store)
+    {
+        var engine = new TrackingEngine();
+        engine.Sessions.AddRange(store.Database.Query("SELECT day, start_at, seconds FROM entries ORDER BY id",
+            r => new SessionRow(r.GetString(0), "x", r.GetString(1)[11..], "y", (r.GetDouble(2) / 60).ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        return engine.Sessions;
+    }
+}
+
 public sealed class EditingTests
 {
     private static TrackingEngine Engine() => new(clock: () => new DateTime(2026, 10, 9, 14, 0, 0));
     private static SessionRow Row(string start = "09:00:00", string end = "10:00:00", string minutes = "60") => new("2026-10-09", "Account one", start, end, minutes);
 
     [Fact]
-    public void EditMovesNoteAndExtraFieldsAndUndoRetainsLaterRecordingAcrossRestart()
+    public void EditMovesNoteAndUndoRetainsLaterRecordingAcrossRestart()
     {
         var folder = Path.Combine(Path.GetTempPath(), "timer-edit-" + Guid.NewGuid());
-        Directory.CreateDirectory(Path.Combine(folder, "Timesheets"));
-        File.WriteAllText(Path.Combine(folder, "Timesheets/sessions.csv"), "Date,Account,Start,End,Minutes,Extra\n2026-10-09,Account one,09:00:00,10:00:00,60,keep-me\n");
-        File.WriteAllText(Path.Combine(folder, "Timesheets/notes.csv"), "Date,Account,Start,Note,Extra\n2026-10-09,Account one,09:00:00,\"Original, note\",note-extra\n");
-        File.WriteAllText(Path.Combine(folder, "Timesheets/entry-groups.csv"), "GroupId,Date,Account,Start,End,Minutes,Extra\ng1,2026-10-09,Account one,09:00:00,10:00:00,60,group-extra\n");
         try
         {
             using (var store = new TimerStore(folder))
             {
                 var engine = Engine(); var prefs = store.Load(engine); var editor = store.Editor!;
+                engine.Sessions.Add(Row()); store.Save(engine, prefs);
                 var old = engine.Sessions.Single();
                 editor.Edit(old, "Account two", old.From.AddMinutes(30), old.To.AddMinutes(45), "Revised, note\nSecond line");
                 store.Save(engine, prefs);
                 Assert.Equal(TimeSpan.FromMinutes(75), engine.Sessions.Single().Duration);
                 Assert.Equal("Revised, note\nSecond line", editor.Note(engine.Sessions.Single()));
-                Assert.Contains("keep-me", File.ReadAllText(Path.Combine(folder, "Timesheets/sessions.csv")));
-                Assert.Contains("note-extra", File.ReadAllText(Path.Combine(folder, "Timesheets/notes.csv")));
-                Assert.DoesNotContain("group-extra", File.ReadAllText(Path.Combine(folder, "Timesheets/entry-groups.csv")));
                 engine.AddSession("Internal", engine.Now.AddMinutes(-10), engine.Now);
                 store.Save(engine, prefs);
             }
             using (var store = new TimerStore(folder))
             {
                 var engine = Engine(); var prefs = store.Load(engine); var editor = store.Editor!;
+                Assert.Equal("Revised, note\nSecond line", editor.Note(engine.Sessions[0]));
                 Assert.True(editor.CanUndo); editor.Undo(); store.Save(engine, prefs);
                 Assert.Equal(2, engine.Sessions.Count); Assert.Equal(Row(), engine.Sessions[0]);
                 Assert.Equal("Internal", engine.Sessions[1].Account);
-                Assert.Equal("Original, note", editor.Note(engine.Sessions[0]));
-                Assert.Contains("group-extra", File.ReadAllText(Path.Combine(folder, "Timesheets/entry-groups.csv")));
-                Assert.Contains("keep-me", File.ReadAllText(Path.Combine(folder, "Timesheets/sessions.csv")));
+                Assert.Equal("", editor.Note(engine.Sessions[0]));
                 Assert.False(editor.CanUndo);
             }
         }
@@ -91,19 +98,19 @@ public sealed class EditingTests
     }
 
     [Fact]
-    public void InterruptedEditJournalReplaysNotesAndUndoTogether()
+    public void AFailedSaveChangesNothingAndTheRetrySavesEditNotesAndUndoTogether()
     {
-        var folder = Path.Combine(Path.GetTempPath(), "timer-edit-journal-" + Guid.NewGuid());
+        var folder = Path.Combine(Path.GetTempPath(), "timer-edit-failed-" + Guid.NewGuid());
         try
         {
             using (var store = new TimerStore(folder))
             {
                 var engine = Engine(); var prefs = store.Load(engine); engine.Sessions.Add(Row()); store.Save(engine, prefs);
                 var row = engine.Sessions.Single(); store.Editor!.Edit(row, row.Account, row.From, row.To.AddMinutes(15), "Checkpoint note");
-                Directory.CreateDirectory(Path.Combine(folder, "Timesheets/notes.csv.tmp"));
-                var error = Record.Exception(() => store.Save(engine, prefs)); Assert.True(error is IOException or UnauthorizedAccessException);
-                Assert.True(File.Exists(Path.Combine(folder, "migration-journal.json")));
-                Directory.Delete(Path.Combine(folder, "Timesheets/notes.csv.tmp"));
+                StorageFaults.Block(store);
+                Assert.NotNull(Record.Exception(() => store.Save(engine, prefs)));
+                Assert.Equal(TimeSpan.FromHours(1), StorageFaults.Saved(store).Single().Duration); // The failed save left the old records whole.
+                StorageFaults.Unblock(store); store.Save(engine, prefs);
             }
             using (var store = new TimerStore(folder))
             {
@@ -187,7 +194,7 @@ public sealed class EditingTests
             using var store = new TimerStore(folder);
             var engine = Engine(); var prefs = store.Load(engine); engine.Sessions.Add(Row());
             var model = new TimerModel(engine, prefs, store); Assert.True(model.Save());
-            Directory.CreateDirectory(Path.Combine(folder, "Timesheets/notes.csv.tmp"));
+            StorageFaults.Block(store);
             var row = engine.Sessions.Single();
             var dialog = new EntryWindow(model, null, row.To, row.To.AddMinutes(30)); dialog.Show();
             try
@@ -196,7 +203,7 @@ public sealed class EditingTests
                 var button = dialog.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry");
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.True(dialog.IsVisible); Assert.Equal(2, engine.Sessions.Count); Assert.NotNull(model.LastError);
-                Directory.Delete(Path.Combine(folder, "Timesheets/notes.csv.tmp"));
+                StorageFaults.Unblock(store);
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.False(dialog.IsVisible); Assert.Equal(2, engine.Sessions.Count); Assert.Null(model.LastError);
             }

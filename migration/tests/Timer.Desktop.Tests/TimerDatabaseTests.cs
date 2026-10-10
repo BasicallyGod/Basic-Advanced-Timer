@@ -23,7 +23,7 @@ public sealed class TimerDatabaseTests : IDisposable
         using var db = Open();
         Assert.Equal(TimerDatabase.SchemaVersion, db.Version); Assert.Equal((long)TimerDatabase.SchemaVersion, db.Scalar("PRAGMA user_version"));
         var tables = db.Query("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name", r => r.GetString(0));
-        Assert.Equal(new[] { "accounts", "away", "day_starts", "edit_changes", "edits", "entries", "groups", "running" }, tables);
+        Assert.Equal(new[] { "accounts", "away", "day_starts", "edit_changes", "edits", "entries", "groups", "meta", "running" }, tables);
         Assert.Equal("wal", db.Scalar("PRAGMA journal_mode")); Assert.Equal(1L, db.Scalar("PRAGMA foreign_keys"));
         Assert.True(File.Exists(Path.Combine(folder, TimerDatabase.FileName)));
     }
@@ -38,7 +38,7 @@ public sealed class TimerDatabaseTests : IDisposable
         Rejects(() => db.Execute("INSERT INTO entries (kind, day, start_at, end_at, seconds, created_at) VALUES ('work', '2026-10-10', 'a', 'b', 60, 'x')")); // Work needs an account.
         Rejects(() => Work(db, a, seconds: 0)); Rejects(() => Work(db, a, seconds: -5)); // And a positive length.
         Rejects(() => db.Execute("INSERT INTO entries (kind, account_id, day, start_at, end_at, seconds, created_at) VALUES ('break', $a, '2026-10-10', 'a', 'b', 60, 'x')", ("$a", a))); // A break has no account.
-        Rejects(() => db.Execute("INSERT INTO entries (kind, account_id, day, start_at, end_at, seconds, created_at) VALUES ('adjustment', $a, '2026-10-10', 'a', 'b', 60, 'x')", ("$a", a))); // An adjustment has no times.
+        Rejects(() => db.Execute("INSERT INTO entries (kind, account_id, day, start_at, end_at, seconds, created_at) VALUES ('adjustment', $a, '2026-10-10', 'a', 'b', 60, 'x')", ("$a", a))); // An adjustment has no end.
         Rejects(() => db.Execute("INSERT INTO entries (kind, account_id, day, seconds, created_at) VALUES ('adjustment', $a, '2026-10-10', 0, 'x')", ("$a", a))); // And is never zero.
         Rejects(() => db.Execute("INSERT INTO entries (kind, account_id, day, start_at, end_at, seconds, created_at) VALUES ('lunch', $a, '2026-10-10', 'a', 'b', 60, 'x')", ("$a", a)));
         Rejects(() => db.Execute("INSERT INTO entries (kind, account_id, day, start_at, end_at, seconds, origin, created_at) VALUES ('work', $a, '2026-10-10', 'a', 'b', 60, 'guess', 'x')", ("$a", a)));

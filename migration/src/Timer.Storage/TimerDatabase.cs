@@ -102,7 +102,7 @@ public sealed class TimerDatabase : IDisposable
         foreach (var old in Directory.GetFiles(backups, "timer-????????.db").OrderByDescending(f => f, StringComparer.Ordinal).Skip(DailyCopiesKept))
             File.Delete(old);
     }
-    private void CopyTo(string target)
+    public void CopyTo(string target)
     {
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target)!);
         if (File.Exists(target)) File.Delete(target);
@@ -183,9 +183,12 @@ public sealed class TimerDatabase : IDisposable
             note TEXT NOT NULL DEFAULT '',
             group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL,
             created_at TEXT NOT NULL,
+            -- The duration exactly as the current undo history wrote it. Temporary: step 4 replaces that history and this column goes.
+            minutes_text TEXT,
             CHECK (kind <> 'work' OR (account_id IS NOT NULL AND start_at IS NOT NULL AND end_at IS NOT NULL AND seconds > 0)),
             CHECK (kind <> 'break' OR (account_id IS NULL AND start_at IS NOT NULL AND end_at IS NOT NULL AND seconds > 0)),
-            CHECK (kind <> 'adjustment' OR (account_id IS NOT NULL AND start_at IS NULL AND end_at IS NULL AND seconds <> 0)))",
+            -- An adjustment has no end. It keeps a start time as its place in the day, and no account when it adjusts a break.
+            CHECK (kind <> 'adjustment' OR (end_at IS NULL AND seconds <> 0)))",
         "CREATE INDEX entries_by_day ON entries(day)",
         "CREATE INDEX entries_by_account ON entries(account_id, day)",
         @"CREATE TABLE away (
@@ -205,6 +208,10 @@ public sealed class TimerDatabase : IDisposable
             last_seen TEXT NOT NULL,
             CHECK (kind <> 'work' OR account_id IS NOT NULL),
             CHECK (kind <> 'break' OR account_id IS NULL))",
+        // Small named blobs for what has not yet moved into real tables (notes, groups, credit positions and the undo history).
+        @"CREATE TABLE meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL)",
         @"CREATE TABLE edits (
             id INTEGER PRIMARY KEY,
             at TEXT NOT NULL,

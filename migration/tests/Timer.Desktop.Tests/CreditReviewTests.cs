@@ -415,11 +415,14 @@ public sealed class CreditReviewTests
     [AvaloniaFact]
     public void OldNonconsecutiveGroupsRenderSeparateSectionsAndWeekClickSelects()
     {
-        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
+        var engine = Engine();
         var folder = Path.Combine(Path.GetTempPath(), "timer-old-group-" + Guid.NewGuid());
-        Directory.CreateDirectory(Path.Combine(folder, "Timesheets"));
-        File.WriteAllText(Path.Combine(folder, "Timesheets/sessions.csv"), "Date,Account,Start,End,Minutes\n2026-10-09,Account one,09:00:00,added,30\n2026-10-09,Account one,10:00:00,added,30\n");
-        File.WriteAllText(Path.Combine(folder, "Timesheets/entry-groups.csv"), "GroupId,Date,Account,Start,End,Minutes\ng,2026-10-09,Account one,09:00:00,added,30\ng,2026-10-09,Account one,10:00:00,added,30\n");
+        using (var seed = new TimerStore(folder))
+        {
+            var prefs = seed.Load(engine); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") }); seed.Save(engine, prefs);
+            seed.Database.Execute("INSERT INTO meta (key, value) VALUES ('groups', $g) ON CONFLICT(key) DO UPDATE SET value = $g",
+                ("$g", "GroupId,Date,Account,Start,End,Minutes\ng,2026-10-09,Account one,09:00:00,added,30\ng,2026-10-09,Account one,10:00:00,added,30\n"));
+        }
         try
         {
             using var store = new TimerStore(folder); engine = Engine(); var preferences = store.Load(engine); var model = new TimerModel(engine, preferences, store);

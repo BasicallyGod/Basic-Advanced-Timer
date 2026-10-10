@@ -131,6 +131,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     public DateTime SelectedDate { get; private set; }
     public string Theme => preferences.Theme;
     public string? LastError { get; private set; }
+    /// <summary>A one-off message for the footer, such as the note that old timesheet files are not used.</summary>
+    public string? Notice { get; set; }
     public bool IsDemo { get; private set; }
     public bool Persistent => store is not null;
     public TimeSpan Elapsed => Engine.Totals(Engine.Now).Elapsed;
@@ -282,12 +284,17 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (theme is not ("Light" or "Dark" or "System")) throw new ArgumentException("Unknown theme", nameof(theme));
         preferences = preferences with { Theme = theme }; ApplyTheme(); Save(); Notify();
     }
-    public static TimerModel CreateDemo(Func<DateTime>? clock = null)
+    /// <summary>
+    /// Builds the sample-data demo. Given a store, the demo runs through the real database (a throwaway one the caller deletes),
+    /// so saving, editing and undo behave as they do for real data. It has no merged legacy credit, as a new database holds none.
+    /// </summary>
+    public static TimerModel CreateDemo(Func<DateTime>? clock = null, TimerStore? store = null)
     {
         var realClock = clock ?? (() => DateTime.Now);
         var wallStart = realClock();
         var anchor = wallStart.Date.AddHours(14).AddMinutes(15);
         var engine = new TrackingEngine(clock: () => anchor + (realClock() - wallStart));
+        store?.Load(engine);
         engine.Schedule.Days.Add(anchor.DayOfWeek);
         // Seven accounts with a mix of budgets, so lists, rings and meters are tried at a realistic size: week, month and quarter
         // budgets, two with none, and the weekly ones chosen so one is comfortable, one nearly used and one over.
@@ -308,7 +315,6 @@ public sealed class TimerModel : INotifyPropertyChanged
             engine.AddSession(today[i].Account, start, start.AddMinutes(today[i].Minutes));
             start = start.AddMinutes(today[i].Minutes + (i == 0 ? 3 : 0));
         }
-        engine.Sessions.Add(new(anchor.ToString("yyyy-MM-dd"), "Account one", "00:00:00", "merged", "10.00"));
         var monday = anchor.Date.AddDays(-((7 + (int)anchor.DayOfWeek - 1) % 7));
         if (monday < anchor.Date) engine.AddSession("Account one", monday.AddHours(9), monday.AddHours(16));
         // The days before today, so weekly, monthly and quarterly budgets and the week view have something to show.
@@ -323,7 +329,8 @@ public sealed class TimerModel : INotifyPropertyChanged
             var at = day.AddHours(9);
             foreach (var (account, minutes) in earlier) { engine.AddSession(account, at, at.AddMinutes(minutes)); at = at.AddMinutes(minutes + 5); }
         }
-        return new TimerModel(engine, prefs) { IsDemo = true };
+        if (store is not null) store.Save(engine, prefs);
+        return new TimerModel(engine, prefs, store) { IsDemo = true };
     }
     // Overtime for testing: the demo's shift is cut short so the day is already past its end. It is only for the demo, and can be
     // switched off again, which puts back whatever shift was set for the day before.

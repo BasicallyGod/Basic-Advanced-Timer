@@ -208,11 +208,11 @@ public sealed class ShellTests
                 var model = new TimerModel(engine, prefs, store);
                 model.ToggleAccount("Account one");
                 now = now.AddMinutes(5);
-                Directory.CreateDirectory(Path.Combine(folder, "Timesheets", "sessions.csv.tmp"));
+                StorageFaults.Block(store);
                 Assert.False(model.StopForClose());
                 Assert.NotNull(model.LastError);
                 Assert.Single(engine.Sessions);
-                Directory.Delete(Path.Combine(folder, "Timesheets", "sessions.csv.tmp"));
+                StorageFaults.Unblock(store);
                 Assert.True(model.Save());
                 Assert.Null(model.LastError);
             }

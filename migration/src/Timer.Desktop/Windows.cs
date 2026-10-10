@@ -378,8 +378,9 @@ public sealed class DashboardWindow : Window
         Ui.Put(review, workspace, row: 2);
         Ui.Put(body, review, 2);
         Ui.Put(root, body, row: 2);
-        var footer = Ui.Text(model.Persistent ? "Migration build · saved locally" : model.IsDemo ? "Sample data · demo" : "Test session", 11, "muted");
-        model.PropertyChanged += (_, _) => footer.Text = model.LastError ?? model.EditError ?? (model.Persistent ? "Migration build · saved locally" : model.IsDemo ? "Sample data · demo" : "Test session");
+        string FooterText() => model.LastError ?? model.EditError ?? model.Notice ?? (model.IsDemo ? "Sample data · demo" : model.Persistent ? "Migration build · saved locally" : "Test session");
+        var footer = Ui.Text(FooterText(), 11, "muted");
+        model.PropertyChanged += (_, _) => footer.Text = FooterText();
         footer.Margin = new Thickness(24, 10);
         Ui.Put(root, footer, row: 3);
         var surface = new Border { Name = "DashboardSurface", Child = root, ClipToBounds = true };
