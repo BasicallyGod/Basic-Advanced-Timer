@@ -27,7 +27,7 @@ public sealed class WeekDashboardTests
     {
         var model = Model(false, out var engine, e =>
         {
-            e.Sessions.AddRange(new[] { Row("09:00:00", "90"), Row("11:00:00", "30", "Account two"), Row("12:00:00", "30", "Lunch"), Row("08:00:00", "60", date: "2026-10-06") });
+            e.Sessions.AddRange(new[] { Row("09:00:00", "90"), Row("11:00:00", "30", "Account two"), Row("12:00:00", "30", "Break"), Row("08:00:00", "60", date: "2026-10-06") });
         });
         var week = new DateTime(2026, 10, 5);
         var table = WeekTable.Build(model, new WeekExport(model.Editor, engine, week), week, new[] { 0, 1, 2, 3, 4 });
@@ -108,7 +108,7 @@ public sealed class WeekDashboardTests
         Assert.Equal("Move 2 entries to Account two", model.Editor.UndoLabel);
         Assert.True(model.UndoEdit());
         Assert.Equal(csv, model.Editor.SessionsCsv); Assert.Equal(notes, model.Editor.NotesCsv); Assert.Equal(groups, model.Editor.GroupsCsv);
-        Assert.True(model.MoveEntries(new[] { engine.Sessions[0] }, "Lunch")); Assert.Equal("Move to Break", model.Editor.UndoLabel);
+        Assert.True(model.MoveEntries(new[] { engine.Sessions[0] }, "Break")); Assert.Equal("Move to Break", model.Editor.UndoLabel);
     }
 
     [Fact]

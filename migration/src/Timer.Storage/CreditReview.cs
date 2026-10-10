@@ -190,8 +190,8 @@ public sealed partial class LedgerEditor
         for (var i = 1; i < ordered.Length; i++)
         {
             var previous = ordered[i - 1]; var next = ordered[i];
-            if (previous.Live || next.Live || previous.Account.Equals("Lunch", StringComparison.OrdinalIgnoreCase)
-                || next.Account.Equals("Lunch", StringComparison.OrdinalIgnoreCase) || next.Start > engine.Now
+            if (previous.Live || next.Live || BreakAccount.Is(previous.Account)
+                || BreakAccount.Is(next.Account) || next.Start > engine.Now
                 || next.Start - previous.End < TimeSpan.FromSeconds(3) || next.Start - previous.End > TimeSpan.FromMinutes(maximumMinutes)
                 || spans.Count(s => s.End == previous.End) != 1 || spans.Count(s => s.Start == next.Start) != 1
                 || spans.Any(s => s.Start < next.Start && s.End > previous.End)

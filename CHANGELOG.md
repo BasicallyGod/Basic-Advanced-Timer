@@ -4,6 +4,12 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration typed entries, step 5
+
+- Breaks are now their own kind of entry with no account, in memory and in the database. The reserved name is Break, and the old Lunch name is gone, so Lunch can be used as an ordinary account name. Break remains reserved, so no account can be called that.
+- The running recording stores the account to return to after a break, and the engine keeps it too, so ending a break no longer depends on finding the previous block from its recorded time. After a restart in the middle of a break, the break is still closed and credited up to the last checkpoint, as before.
+- Adjustments were already their own kind (with a signed amount and no end time) from step 3.
+
 ## Migration undo history in the database, step 4
 
 - The undo history now lives in the `edits` and `edit_changes` tables instead of one text record. Each edit is a row with its parts beside it. A save adds only the edits made since the last one and removes any that were undone or trimmed, so a quiet checkpoint no longer rewrites the whole history.

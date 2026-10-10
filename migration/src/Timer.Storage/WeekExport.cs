@@ -28,7 +28,7 @@ public sealed class WeekExport
         var units = new long[Entries.Count]; var accounts = new Dictionary<string, long[]>(StringComparer.OrdinalIgnoreCase);
         foreach (var lunch in new[] { false, true })
         {
-            var buckets = indexed.Where(p => p.Entry.Account.Equals("Lunch", StringComparison.OrdinalIgnoreCase) == lunch)
+            var buckets = indexed.Where(p => p.Entry.Account.Equals(BreakAccount.Name, StringComparison.OrdinalIgnoreCase) == lunch)
                 .GroupBy(p => (p.Entry.Day, Account: p.Entry.Account.ToUpperInvariant()))
                 .OrderBy(g => g.Key.Day).ThenBy(g => g.Key.Account, StringComparer.Ordinal).ToArray();
             var target = (long)decimal.Round(buckets.Sum(g => g.Sum(p => p.Entry.Minutes)) / 60m * 100m, 0, MidpointRounding.AwayFromZero);
@@ -64,7 +64,7 @@ public sealed class WeekExport
             ["Account"] = e.Account, ["Start"] = e.Start?.ToString("HH:mm:ss") ?? "", ["End"] = e.End == e.Day.AddDays(1) ? "24:00:00" : e.End?.ToString("HH:mm:ss") ?? "",
             ["Duration"] = Duration(e.Minutes), ["Hours"] = Hours(EntryUnits[i]), ["Type"] = e.Type,
             ["Parts"] = Math.Max(1, e.Sources.Count).ToString(CultureInfo.InvariantCulture), ["Note"] = e.Note
-        }).Where(r => !r["Account"].Equals("Lunch", StringComparison.OrdinalIgnoreCase)).ToList();
+        }).Where(r => !BreakAccount.Is(r["Account"])).ToList();
         return new CsvTable(headers, rows).Serialize();
     }
     private static string Duration(decimal minutes)
@@ -81,10 +81,10 @@ public sealed class WeekExport
             var row = new Dictionary<string, string> { ["Account"] = account, ["Total"] = Hours(units.Sum()) };
             for (var i = 0; i < 7; i++) row[labels[i]] = Hours(units[i]); return row;
         }
-        foreach (var account in configured.Concat(Accounts.Keys).Distinct(StringComparer.OrdinalIgnoreCase).Where(a => !a.Equals("Lunch", StringComparison.OrdinalIgnoreCase)))
+        foreach (var account in configured.Concat(Accounts.Keys).Distinct(StringComparer.OrdinalIgnoreCase).Where(a => !a.Equals(BreakAccount.Name, StringComparison.OrdinalIgnoreCase)))
             rows.Add(Row(account, Accounts.GetValueOrDefault(account) ?? new long[7]));
-        if (LunchUnits != 0) rows.Add(Row(BreakAccount.Label, Accounts.GetValueOrDefault("Lunch") ?? new long[7]));
-        rows.Add(Row("Total (excluding breaks)", Enumerable.Range(0, 7).Select(i => Accounts.Where(a => !a.Key.Equals("Lunch", StringComparison.OrdinalIgnoreCase)).Sum(a => a.Value[i])).ToArray()));
+        if (LunchUnits != 0) rows.Add(Row(BreakAccount.Label, Accounts.GetValueOrDefault(BreakAccount.Name) ?? new long[7]));
+        rows.Add(Row("Total (excluding breaks)", Enumerable.Range(0, 7).Select(i => Accounts.Where(a => !a.Key.Equals(BreakAccount.Name, StringComparison.OrdinalIgnoreCase)).Sum(a => a.Value[i])).ToArray()));
         return new CsvTable(headers, rows).Serialize();
     }
     public string Write(string directory, IEnumerable<string> configured)

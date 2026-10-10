@@ -165,21 +165,19 @@ public sealed class TimerModel : INotifyPropertyChanged
         {
             if (!IsOnBreak || Engine.Active is not { } active) return null;
             var before = Engine.Sessions.Where(s => s.IsPositioned && !BreakAccount.Is(s.Account) && Math.Abs((s.To - active.Start).TotalSeconds) <= 2)
-                .OrderByDescending(s => s.To).FirstOrDefault()?.Account ?? accountBeforeBreak;
+                .OrderByDescending(s => s.To).FirstOrDefault()?.Account ?? Engine.ResumeAfterBreak;
             return before is { } name && Accounts.Any(a => a.Name == name && !BreakAccount.Is(a.Name)) ? name : null;
         }
     }
-    private string? accountBeforeBreak;
     public void ToggleBreak()
     {
         if (IsOnBreak) { EndBreak(); return; }
-        accountBeforeBreak = Engine.Active?.Account;
         Engine.ToggleAccount(BreakAccount.Name);
         Save(); Notify();
     }
     private void EndBreak()
     {
-        var back = ResumeAccount; accountBeforeBreak = null;
+        var back = ResumeAccount;
         if (back is not null) { SelectedAccount = back; Engine.ToggleAccount(back); }
         else Engine.StopAccount();
         Save(); Notify();

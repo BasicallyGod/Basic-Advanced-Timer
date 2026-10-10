@@ -187,8 +187,8 @@ public sealed class TimerStore : IDisposable
             if (engine.Active is { } active)
             {
                 var isBreak = BreakAccount.Is(active.Account);
-                database.Execute("INSERT INTO running (id, kind, account_id, start_at, last_seen) VALUES (1, $k, (SELECT id FROM accounts WHERE name = $n), $s, $l)",
-                    ("$k", isBreak ? "break" : "work"), ("$n", isBreak ? null : active.Account), ("$s", Iso(active.Start)), ("$l", Iso(engine.Now)));
+                database.Execute("INSERT INTO running (id, kind, account_id, resume_account_id, start_at, last_seen) VALUES (1, $k, (SELECT id FROM accounts WHERE name = $n), (SELECT id FROM accounts WHERE name = $r), $s, $l)",
+                    ("$k", isBreak ? "break" : "work"), ("$n", isBreak ? null : active.Account), ("$r", isBreak ? engine.ResumeAfterBreak : null), ("$s", Iso(active.Start)), ("$l", Iso(engine.Now)));
             }
         });
         written["records"] = snapshot;

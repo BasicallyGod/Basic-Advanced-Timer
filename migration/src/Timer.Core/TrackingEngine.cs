@@ -76,11 +76,20 @@ public sealed class TrackingEngine
         StopAccount();
         Away.Add(new(Now, null));
     }
+    /// <summary>The account to go back to when the current break ends, or null when no break is running or nothing was running before it.</summary>
+    public string? ResumeAfterBreak { get; private set; }
     public void ToggleAccount(string account)
     {
         var stop = string.Equals(Active?.Account, account, StringComparison.OrdinalIgnoreCase);
+        var before = Active?.Account;
         StopAccount();
-        if (!stop) { StartDay(); Active = new(account, Now); }
+        ResumeAfterBreak = null;
+        if (!stop)
+        {
+            StartDay();
+            if (BreakAccount.Is(account) && before is not null && !BreakAccount.Is(before)) ResumeAfterBreak = before;
+            Active = new(account, Now);
+        }
     }
     public void StopAccount()
     {
@@ -128,15 +137,15 @@ public sealed class TrackingEngine
             var end = plan.Working && plan.End > lastActivity ? plan.End : lastActivity;
             cap = end < cap ? end : cap;
         }
-        var allocated = Sessions.Where(s => s.Day == day && !s.Account.Equals("Lunch", StringComparison.OrdinalIgnoreCase)).Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
-        if (Active is { Account: not "Lunch" } active) allocated += Intersection(active.Start, now, day, day.AddDays(1));
+        var allocated = Sessions.Where(s => s.Day == day && !BreakAccount.Is(s.Account)).Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
+        if (Active is { } active && !BreakAccount.Is(active.Account)) allocated += Intersection(active.Start, now, day, day.AddDays(1));
         if (!plan.Working || cap <= plan.Start) return new(TimeSpan.Zero, TimeSpan.Zero, allocated, TimeSpan.Zero);
-        var blocked = Sessions.Where(s => s.Day == day && s.Account.Equals("Lunch", StringComparison.OrdinalIgnoreCase) && s.IsPositioned && s.Duration > TimeSpan.Zero)
+        var blocked = Sessions.Where(s => s.Day == day && BreakAccount.Is(s.Account) && s.IsPositioned && s.Duration > TimeSpan.Zero)
             .Select(s => (s.From, s.To)).ToList();
         blocked.AddRange(Away.Select(a => (a.Start, a.End ?? (now < a.Start.Date.AddDays(1) ? now : a.Start.Date.AddDays(1)))));
-        if (Active is { Account: "Lunch" } lunch) blocked.Add((lunch.Start, now));
+        if (Active is { } lunch && BreakAccount.Is(lunch.Account)) blocked.Add((lunch.Start, now));
         var regularEnd = cap < plan.End ? cap : plan.End;
-        var lunchAdjustment = Sessions.Where(s => s.Day == day && s.Account.Equals("Lunch", StringComparison.OrdinalIgnoreCase) && s.IsAdjustment)
+        var lunchAdjustment = Sessions.Where(s => s.Day == day && BreakAccount.Is(s.Account) && s.IsAdjustment)
             .Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
         var work = Positive(regularEnd - plan.Start - Blocked(blocked, plan.Start, regularEnd) - lunchAdjustment);
         var overtime = cap > plan.End ? Positive(cap - plan.End - Blocked(blocked, plan.End, cap)) : TimeSpan.Zero;
@@ -163,12 +172,12 @@ public sealed class TrackingEngine
 }
 
 /// <summary>
-/// A break is a pause of any kind. It is stored under the name earlier timers used for lunch, so existing
-/// time files keep their meaning, and shown as "Break" everywhere.
+/// A break is a pause of any kind. In memory it is an entry under the reserved name Break, which no account may use.
+/// The database stores it as its own kind of entry with no account.
 /// </summary>
 public static class BreakAccount
 {
-    public const string Name = "Lunch";
+    public const string Name = "Break";
     public const string Label = "Break";
     public static bool Is(string? account) => string.Equals(account, Name, StringComparison.OrdinalIgnoreCase);
     public static string Display(string account) => Is(account) ? Label : account;

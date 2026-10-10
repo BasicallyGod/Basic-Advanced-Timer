@@ -103,7 +103,7 @@ public sealed class AccountEditingTests
         var model = new TimerModel(Engine(), new StoreSettings(new() { new("A"), new("B", Hidden: true), new("C"), new("D") }, false, "System", DayOfWeek.Monday));
         model.MoveAccount("D", 0);
         Assert.Equal(new[] { "D", "B", "A", "C" }, model.AccountSettings.Select(a => a.Name));
-        Assert.Equal(new[] { "D", "A", "C", "Lunch" }, model.Accounts.Select(a => a.Name));
+        Assert.Equal(new[] { "D", "A", "C", "Break" }, model.Accounts.Select(a => a.Name));
         model.MoveAccount("D", 99); Assert.Equal(new[] { "A", "B", "C", "D" }, model.AccountSettings.Select(a => a.Name));
         model.MoveAccount("B", 0); Assert.Equal(new[] { "A", "B", "C", "D" }, model.AccountSettings.Select(a => a.Name)); // Hidden: ignored.
     }

@@ -42,11 +42,11 @@ public sealed class VisualStateTests
         try
         {
             Dispatcher.UIThread.RunJobs(); var normal = Brush(pill, "Surface");
-            model.ToggleAccount("Lunch"); Dispatcher.UIThread.RunJobs();
+            model.ToggleAccount("Break"); Dispatcher.UIThread.RunJobs();
             Assert.True(model.IsOnBreak); Assert.NotEqual(normal, Brush(pill, "Surface"));
             Assert.Equal(normal, Brush(dashboard, "Surface")); // The dashboard keeps its own colours; its Break button turns amber instead.
             Assert.Equal(Color.Parse("#B07A12"), Brush(pill, "Break")); // The break colour is a theme token, not hard-coded.
-            model.ToggleAccount("Lunch"); Dispatcher.UIThread.RunJobs();
+            model.ToggleAccount("Break"); Dispatcher.UIThread.RunJobs();
             Assert.Equal(normal, Brush(pill, "Surface"));
         }
         finally { pill.Close(); dashboard.Close(); }
@@ -65,7 +65,7 @@ public sealed class VisualStateTests
             Assert.Equal("Overtime", model.ThemeState);
             var red = Brush(pill, "Surface"); Assert.NotEqual(normal, red);
             Assert.Equal(normal, Brush(dashboard, "Surface")); // The dashboard stays calm.
-            model.ToggleAccount("Lunch"); Dispatcher.UIThread.RunJobs();
+            model.ToggleAccount("Break"); Dispatcher.UIThread.RunJobs();
             Assert.Equal("Break", model.ThemeState);
             Assert.NotEqual(red, Brush(pill, "Surface")); Assert.NotEqual(normal, Brush(pill, "Surface"));
             Assert.Equal(normal, Brush(dashboard, "Surface")); // A break tints the pill only as well.
@@ -98,7 +98,7 @@ public sealed class VisualStateTests
             now = Day.AddHours(18); model.Tick(); model.SetShadows(true); Dispatcher.UIThread.RunJobs();
             Assert.True(model.IsOvertime); Assert.Equal(Brush(pill, "Overtime").R, host.BoxShadow[0].Color.R);
             Assert.Equal(1.0, bar.ColumnDefinitions[0].Width.Value, 2);
-            model.ToggleAccount("Lunch"); Dispatcher.UIThread.RunJobs();
+            model.ToggleAccount("Break"); Dispatcher.UIThread.RunJobs();
             Assert.Equal(Brush(pill, "Break").R, host.BoxShadow[0].Color.R); // Break outranks overtime.
             model.TogglePause(); Dispatcher.UIThread.RunJobs(); // Resume ends the break and returns to the account.
             Assert.False(model.IsOnBreak); Assert.Equal("Account one", model.ActiveAccount);

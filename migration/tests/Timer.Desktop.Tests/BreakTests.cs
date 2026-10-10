@@ -29,8 +29,8 @@ public sealed class BreakTests
         model.ToggleBreak(); now = now.AddMinutes(5); model.ToggleBreak(); // Take a second break; the same button ends it.
         Assert.Equal("Account one", model.ActiveAccount);
         now = now.AddMinutes(5); model.TogglePause();
-        Assert.Equal(new[] { "Account one", "Lunch", "Account one", "Lunch", "Account one" }, engine.Sessions.Select(s => s.Account));
-        Assert.Equal(TimeSpan.FromMinutes(25), engine.Credited("Lunch", Day, Day.AddDays(1)));
+        Assert.Equal(new[] { "Account one", "Break", "Account one", "Break", "Account one" }, engine.Sessions.Select(s => s.Account));
+        Assert.Equal(TimeSpan.FromMinutes(25), engine.Credited("Break", Day, Day.AddDays(1)));
         Assert.Equal(TimeSpan.FromMinutes(30 + 15 + 5), engine.Credited("Account one", Day, Day.AddDays(1)));
         Assert.Equal(TimeSpan.FromMinutes(50), engine.Totals(now).Allocated); // The break is not allocated to any account.
     }
@@ -48,7 +48,7 @@ public sealed class BreakTests
     {
         var now = Day.AddHours(10); var engine = new TrackingEngine(clock: () => now); var model = new TimerModel(engine);
         model.ToggleAccount("Account two"); now = now.AddMinutes(30);
-        engine.ToggleAccount("Lunch"); // Started by the engine, so the model remembers nothing about it.
+        engine.ToggleAccount("Break"); // Started by the engine, so the model remembers nothing about it.
         Assert.Equal("Account two", model.ResumeAccount);
         model.TogglePause(); Assert.Equal("Account two", model.ActiveAccount);
     }
@@ -64,7 +64,7 @@ public sealed class BreakTests
             model.ToggleAccount("Account one"); now = now.AddMinutes(10); Dispatcher.UIThread.RunJobs();
             var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.StartsWith("Account") == true && char.IsDigit(b.Name[^1])).ToList();
             Assert.Equal(model.Accounts.Count - 1, rows.Count);
-            Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Lunch");
+            Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Break");
             var dashboardBreak = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
             var pillBreak = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillBreak");
             Assert.Contains("breakButton", dashboardBreak.Classes); Assert.DoesNotContain("onBreak", dashboardBreak.Classes);
@@ -107,7 +107,7 @@ public sealed class BreakTests
             Assert.Contains("Break", items); Assert.DoesNotContain("Lunch", items);
             accounts.SelectedItem = "Break";
             editor.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-            Assert.Equal("Lunch", engine.Sessions.Single().Account);
+            Assert.Equal("Break", engine.Sessions.Single().Account);
         }
         finally { editor.Close(); }
     }
@@ -117,16 +117,37 @@ public sealed class BreakTests
     {
         var model = new TimerModel(new TrackingEngine());
         Assert.Throws<ArgumentException>(() => model.SetAccounts(model.AccountSettings.Append(new("break"))));
-        Assert.Throws<ArgumentException>(() => model.SetAccounts(model.AccountSettings.Append(new("Lunch"))));
+        Assert.Throws<ArgumentException>(() => model.SetAccounts(model.AccountSettings.Append(new("Break"))));
     }
 
     [Fact]
     public void ExportsCallItBreak()
     {
         var engine = new TrackingEngine(clock: () => Day.AddHours(15));
-        engine.Sessions.Add(new("2026-10-09", "Account one", "09:00:00", "added", "60")); engine.Sessions.Add(new("2026-10-09", "Lunch", "10:00:00", "added", "30"));
+        engine.Sessions.Add(new("2026-10-09", "Account one", "09:00:00", "added", "60")); engine.Sessions.Add(new("2026-10-09", "Break", "10:00:00", "added", "30"));
         var export = new WeekExport(new LedgerEditor(engine), engine, new DateTime(2026, 10, 5));
         var summary = export.SummaryCsv(new[] { "Account one" });
         Assert.Contains("\"Break\"", summary); Assert.Contains("Total (excluding breaks)", summary); Assert.DoesNotContain("Lunch", summary);
+    }
+
+    [Fact]
+    public void ABreakIsStoredAsItsOwnKindWithTheAccountToReturnTo_AndLunchIsAnOrdinaryName()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-break-kind-" + Guid.NewGuid());
+        var now = Day.AddHours(10);
+        try
+        {
+            using var store = new TimerStore(folder);
+            var engine = new TrackingEngine(clock: () => now); var prefs = store.Load(engine);
+            engine.ToggleAccount("Account one"); now = now.AddMinutes(30); engine.ToggleAccount(BreakAccount.Name);
+            Assert.Equal("Account one", engine.ResumeAfterBreak); store.Save(engine, prefs);
+            Assert.Equal("break", store.Database.Scalar("SELECT kind FROM running")); Assert.Equal("Account one", store.Database.Scalar("SELECT name FROM accounts WHERE id = (SELECT resume_account_id FROM running)"));
+            now = now.AddMinutes(15); engine.ToggleAccount("Account one"); Assert.Null(engine.ResumeAfterBreak); store.Save(engine, prefs);
+            Assert.Equal(1L, store.Database.Scalar("SELECT COUNT(*) FROM entries WHERE kind = 'break' AND account_id IS NULL"));
+            Assert.Equal(0L, store.Database.Scalar("SELECT COUNT(*) FROM accounts WHERE name IN ('Break', 'Lunch')"));
+            engine.AddSession("Lunch", now, now.AddMinutes(5)); // Now just a name, like any other.
+            Assert.Equal(TimeSpan.FromMinutes(5), engine.Totals(now.Date).Allocated - TimeSpan.FromMinutes(30));
+        }
+        finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }
 }

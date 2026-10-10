@@ -165,7 +165,7 @@ public sealed class ShellTests
         var now = new DateTime(2026, 10, 9, 14, 15, 0);
         var engine = new TrackingEngine(clock: () => now);
         var prefs = new StoreSettings(new() { new("Account one", 15), new("Account two", 10), new("Account three", 5), new("Internal") }, false, "System", DayOfWeek.Monday);
-        var names = new[] { "Account one", "Account two", "Lunch", "Account three", "Internal" };
+        var names = new[] { "Account one", "Account two", "Break", "Account three", "Internal" };
         var minutes = new[] { 105, 90, 30, 45, 30 };
         var start = now.Date.AddHours(9);
         for (var i = 0; i < names.Length; i++) { engine.AddSession(names[i], start, start.AddMinutes(minutes[i])); start = start.AddMinutes(minutes[i]); }

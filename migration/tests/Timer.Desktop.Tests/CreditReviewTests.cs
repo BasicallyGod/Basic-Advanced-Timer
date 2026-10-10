@@ -88,10 +88,10 @@ public sealed class CreditReviewTests
     public void LargestRemainderMakesDetailDailyAccountAndGrandTotalsAgreeIncludingNegatives()
     {
         var engine = Engine(); var random = new Random(123);
-        for (var i = 0; i < 200; i++) engine.Sessions.Add(new(Day.AddDays(-(i % 5)).ToString("yyyy-MM-dd"), i % 3 == 0 ? "Lunch" : "Account " + i % 7,
+        for (var i = 0; i < 200; i++) engine.Sessions.Add(new(Day.AddDays(-(i % 5)).ToString("yyyy-MM-dd"), i % 3 == 0 ? "Break" : "Account " + i % 7,
             "00:00:00", "adjusted", ((random.Next(-50, 300)) / 100m).ToString(CultureInfo.InvariantCulture)));
         var editor = new LedgerEditor(engine); var export = new WeekExport(editor, engine, Day.AddDays(-4));
-        Assert.Equal(export.TotalUnits, export.Accounts.Where(a => a.Key != "Lunch").Sum(a => a.Value.Sum()));
+        Assert.Equal(export.TotalUnits, export.Accounts.Where(a => a.Key != "Break").Sum(a => a.Value.Sum()));
         Assert.Equal(export.TotalUnits + export.LunchUnits, export.EntryUnits.Sum());
         for (var i = 0; i < export.Entries.Count; i++) Assert.InRange(Math.Abs(export.EntryUnits[i] - export.Entries[i].Minutes / 60m * 100m), 0, 1);
         foreach (var account in export.Accounts)
@@ -111,7 +111,7 @@ public sealed class CreditReviewTests
         Assert.Throws<InvalidOperationException>(() => editor.Tidy(choices)); Assert.Equal(3, engine.Sessions.Count);
         engine.Away.Clear(); editor.Tidy(choices); Assert.Equal(5, engine.Sessions.Count); Assert.Equal(90, engine.Sessions.Sum(s => decimal.Parse(s.Minutes, CultureInfo.InvariantCulture)));
         editor.Undo(); Assert.Equal(3, engine.Sessions.Count);
-        engine.Sessions[1] = engine.Sessions[1] with { Account = "Lunch" }; Assert.Empty(editor.TidyCandidates(Day));
+        engine.Sessions[1] = engine.Sessions[1] with { Account = "Break" }; Assert.Empty(editor.TidyCandidates(Day));
     }
     [Fact]
     public void ImportedPositionsKeepUnknownColumnsAndInvalidCreditFailsReview()

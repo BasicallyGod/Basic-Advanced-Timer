@@ -52,9 +52,9 @@ public sealed class TrackingTests
         engine.StartDay(); now = now.AddMinutes(20); engine.FinishDay();
         now = now.AddMinutes(10); Assert.Equal(TimeSpan.FromMinutes(20), engine.Totals(now).Elapsed);
         engine.StartDay(); now = now.AddMinutes(10); Assert.Equal(TimeSpan.FromMinutes(30), engine.Totals(now).Elapsed);
-        engine.ToggleAccount("Lunch"); now = now.AddMinutes(15);
+        engine.ToggleAccount("Break"); now = now.AddMinutes(15);
         Assert.Equal(TimeSpan.FromMinutes(30), engine.Totals(now).Elapsed);
-        engine.ToggleAccount("Lunch");
+        engine.ToggleAccount("Break");
         now = now.Date.AddHours(18); engine.FinishDay(); now = now.AddMinutes(15);
         Assert.Equal(TimeSpan.FromHours(1), engine.Totals(now).Overtime);
         engine.StartDay(); now = now.AddMinutes(10);
@@ -90,7 +90,7 @@ public sealed class TrackingTests
     {
         var now = new DateTime(2026, 10, 9, 11, 0, 0);
         var engine = new TrackingEngine(clock: () => now);
-        engine.AddSession("Lunch", now.Date.AddHours(10), now.Date.AddHours(10.5));
+        engine.AddSession("Break", now.Date.AddHours(10), now.Date.AddHours(10.5));
         engine.Away.Add(new(now.Date.AddHours(10.25), now.Date.AddHours(10.75)));
         Assert.Equal(TimeSpan.FromMinutes(75), engine.Totals(now).Elapsed);
     }

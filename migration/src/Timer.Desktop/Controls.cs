@@ -248,7 +248,7 @@ public sealed class AccountIndicator : Control
             context.DrawRectangle(ink, null, new Rect(15, 14, 4, 14), 1, 1);
             context.DrawRectangle(ink, null, new Rect(23, 14, 4, 14), 1, 1);
         }
-        else if (Account.Name == "Lunch")
+        else if (BreakAccount.Is(Account.Name))
         {
             var pen = new Pen(ink, 1.8);
             context.DrawLine(pen, new Point(15, 12), new Point(15, 29));
@@ -309,7 +309,7 @@ public sealed class AccountList : StackPanel
             var today = Ui.Put(grid, Ui.Text(model.Format(model.Today(account))), 2 + shift);
             row.Content = grid;
             row.Click += (_, _) => model.ToggleAccount(account.Name);
-            if (reorderable && account.Name != "Lunch") AttachReorder(row, account.Name);
+            if (reorderable && !BreakAccount.Is(account.Name)) AttachReorder(row, account.Name);
             // The everyday thing to do with an account comes first, then the less frequent one.
             var adjust = new MenuItem { Header = "Adjust time today…", Name = "AdjustTimeMenu" };
             var accountName = account.Name;
@@ -387,7 +387,7 @@ public sealed class AccountList : StackPanel
             }
             var from = Index(); var height = row.Bounds.Height;
             if (from < 0 || height <= 0) return;
-            var movable = rows.Count(r => r.Account.Name != "Lunch");
+            var movable = rows.Count(r => !BreakAccount.Is(r.Account.Name));
             target = Math.Clamp((int)Math.Round(from + dy / height), 0, Math.Max(0, movable - 1));
             for (var j = 0; j < rows.Count; j++)
             {
