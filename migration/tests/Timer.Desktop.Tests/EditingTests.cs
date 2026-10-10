@@ -288,12 +288,13 @@ public sealed class EditingTests
     public void VeryShortBlocksAreStillBigEnoughToSeeAndSelectAndShortSelectedBlocksKeepTheirTextInside()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "09:01:00", "1"), Row("10:00:00", "10:20:00", "20") });
-        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+        var model = new TimerModel(engine); model.SetAccounts(model.AccountSettings.Select(x => x.Name == "Account one" ? x with { Colour = "#102030" } : x));
+        var window = new DashboardWindow(model); window.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(b => Canvas.GetTop(b)).ToList();
-            Assert.All(cards, c => Assert.Single(c.GetVisualDescendants().OfType<Border>(), b => b.Name == "BlockOutline")); // Edges show even on a dark colour, with or without text.
+            Assert.All(cards, c => Assert.Single(c.GetVisualDescendants().OfType<Border>(), b => b.Name == "BlockOutline")); // A dark colour keeps a lighter edge, with or without text.
             Assert.True(cards[0].Height >= ReviewViews.MinimumBlockHeight); // One minute is only a few pixels at this zoom, but it can be clicked.
             model.ToggleSelection(new[] { engine.Sessions[1] }); Dispatcher.UIThread.RunJobs(); using var again = window.CaptureRenderedFrame();
             var selected = window.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is SessionRow row && ReferenceEquals(row, engine.Sessions[1]));
@@ -301,5 +302,14 @@ public sealed class EditingTests
             if (selected.Height < 58) { Assert.Single(lines); Assert.StartsWith("✓ ", lines[0].Text); } // The tick joins the name instead of adding a second line.
         }
         finally { window.Close(); }
+    }
+
+    [Fact]
+    public void OnlyVeryDarkColoursGetALighterEdge()
+    {
+        Assert.Null(Ui.EdgeFor("#91B7D5")); Assert.Null(Ui.EdgeFor("#FFFFFF")); Assert.Null(Ui.EdgeFor("nope"));
+        foreach (var colour in TimerModel.Palette) Assert.Null(Ui.EdgeFor(colour));
+        var edge = Ui.EdgeFor("#0F1F30"); Assert.NotNull(edge); Assert.NotEqual("#0F1F30", edge);
+        Assert.True(Convert.ToInt32(edge![1..3], 16) > 0x0F); // It is the same colour made lighter.
     }
 }

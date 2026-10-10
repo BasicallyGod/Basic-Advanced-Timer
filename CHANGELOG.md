@@ -6,6 +6,8 @@ The entries below follow the migration milestones, newest first. They describe t
 
 ## Migration checklist fixes
 
+- The grey outlines looked wrong, so they are gone. A block, dot or week bar now gets an edge only when its colour is very dark, and the edge is that colour made lighter, drawn right at the block's edge and not inset. Palette colours and ordinary custom colours have no edge at all.
+
 - The colour dot beside each account in the Overview tab is a little larger (12 pixels) with a thicker grey outline, as is the dot in the Entries list, so a dark colour is easy to see on a dark background.
 
 - Every timeline block now has a faint grey outline, drawn on top and ignored by the pointer, so a dark colour on a dark background still shows its edges even when the block is too short for any text. The colour dots beside accounts in the week views, and the week bars, use the same stronger grey outline.
