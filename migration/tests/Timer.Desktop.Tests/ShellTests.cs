@@ -150,9 +150,10 @@ public sealed class ShellTests
             var texts = dashboard.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
             Assert.Contains("Today allocated", texts); Assert.Contains("4.50h", texts);
             Assert.Contains("Unallocated", texts); Assert.Contains("0.25h", texts);
-            // The two figures are right-aligned in one column, so their hours and minutes line up.
-            var figure = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "4.50h"); var other = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "0.25h");
-            Assert.Equal(figure.TranslatePoint(new Point(figure.Bounds.Width, 0), dashboard)!.Value.X, other.TranslatePoint(new Point(other.Bounds.Width, 0), dashboard)!.Value.X, 0.5);
+            // The totals sit under the clock, in one line with it above them.
+            var clockText = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 40); var figure = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "4.50h");
+            Assert.True(figure.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y > clockText.TranslatePoint(new Point(0, clockText.Bounds.Height - 2), dashboard)!.Value.Y);
+            Assert.Equal(Avalonia.Media.FontWeight.SemiBold, clockText.FontWeight);
             Assert.Contains(texts, t => t is not null && t.Contains("9.00h / 15.00h"));
             model.ToggleAccount("Account three");
             pill.ToggleExpansion();

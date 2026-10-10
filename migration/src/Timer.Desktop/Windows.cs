@@ -103,7 +103,8 @@ public sealed class PillWindow : Window
     public Action? OpenDashboard { get; set; }
     private readonly TimerModel model;
     private readonly TextBlock account = Ui.Text("", 15);
-    private readonly TextBlock timer = Ui.Text("00:00:00", 22);
+    private readonly TextBlock timer = new TextBlock { Text = "00:00:00", FontSize = 22, FontWeight = Avalonia.Media.FontWeight.SemiBold };
+    private readonly TextBlock pillUnallocated = Ui.Text("", 10, "muted");
     private readonly StackPanel expansion = new() { IsVisible = false, Spacing = 8 };
     private readonly Button day;
     private bool expanded;
@@ -138,7 +139,11 @@ public sealed class PillWindow : Window
         // The progress line takes the bottom of the row, so the content is centred in what is left above it.
         head.Margin = new Thickness(16, 0, 16, 12);
         var timerButton = Ui.Button("", () => OpenDashboard?.Invoke(), "PillDashboard");
-        timerButton.Content = timer;
+        // A small unallocated figure sits under the clock, only while the day is running and there is some.
+        var timerColumn = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center };
+        pillUnallocated.HorizontalAlignment = HorizontalAlignment.Left; pillUnallocated.IsVisible = false;
+        timerColumn.Children.Add(timer); timerColumn.Children.Add(pillUnallocated);
+        timerButton.Content = timerColumn;
         timerButton.Classes.Add("pillAction");
         ToolTip.SetTip(timerButton, "Click for dashboard; drag to move");
         Ui.Put(head, timerButton).Margin = new Thickness(4, 0, 14, 0);
@@ -241,6 +246,9 @@ public sealed class PillWindow : Window
         ToolTip.SetTip(saved, model.LastError);
         account.Text = model.AccountLabel;
         timer.Text = model.ClockText;
+        var open = model.Unallocated;
+        pillUnallocated.IsVisible = model.DayStarted && open >= TimeSpan.FromMinutes(1);
+        pillUnallocated.Text = pillUnallocated.IsVisible ? model.Format(open) + " unallocated" : "";
         var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);
         account.Text = model.IsOnBreak ? model.AccountLabel : model.ActiveAccount ?? (selected?.Name ?? model.AccountLabel);
         credited.Text = model.IsTracking && selected is not null ? model.Format(model.Today(selected)) + " today" : model.Status;
@@ -277,11 +285,11 @@ public sealed class DashboardWindow : Window
 {
     public Action? OpenPill { get; set; }
     private readonly TimerModel model;
-    private readonly TextBlock clock = Ui.Text("00:00:00", 40);
+    private readonly TextBlock clock = new TextBlock { Text = "00:00:00", FontSize = 40, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly TextBlock account = Ui.Text("", 16);
-    private Border zoomControls = new(); private Button exportButton = new(); private Button zoomOut = new(), zoomIn = new();
-    private readonly TextBlock allocatedValue = Ui.Text("");
-    private readonly TextBlock unallocatedValue = Ui.Text("");
+    private Border zoomControls = new(); private Button zoomOut = new(), zoomIn = new();
+    private readonly TextBlock allocatedValue = Ui.Text("", 12);
+    private readonly TextBlock unallocatedValue = Ui.Text("", 12);
     private readonly TextBlock date = Ui.Text("", 14);
     private readonly TextBlock today = Ui.Text("", 23);
     private readonly ContentControl workspace = new();
@@ -316,7 +324,12 @@ public sealed class DashboardWindow : Window
         Ui.Put(root, header);
         var strip = Ui.Grid("Auto,*,Auto");
         strip.Margin = new Thickness(24, 0, 24, 18);
-        Ui.Put(strip, clock);
+        // The day's totals sit quietly under the clock: small and muted, with the figures a touch brighter than their labels.
+        var clockColumn = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center };
+        var totalsLine = Ui.Horizontal(Ui.Text("Today allocated", 12, "muted"), allocatedValue, Ui.Text("·", 12, "muted"), Ui.Text("Unallocated", 12, "muted"), unallocatedValue);
+        totalsLine.Spacing = 6; totalsLine.Margin = new Thickness(3, 0, 0, 0);
+        clockColumn.Children.Add(clock); clockColumn.Children.Add(totalsLine);
+        Ui.Put(strip, clockColumn);
         var live = new StackPanel { Spacing = 7, Margin = new Thickness(20, 0), VerticalAlignment = VerticalAlignment.Center };
         live.Children.Add(account);
         live.Children.Add(new TrackingLabels(model));
@@ -337,13 +350,6 @@ public sealed class DashboardWindow : Window
         breakButton.Classes.Add("breakButton"); breakButton.HorizontalAlignment = HorizontalAlignment.Stretch; breakButton.Height = 42;
         breakButton.Content = Ui.Horizontal(dashboardCup, dashboardBreakText);
         summary.Children.Add(breakButton);
-        summary.Children.Add(Ui.Rule());
-        // Labels on the left and figures on the right, so the hours and minutes of the two lines sit directly above one another.
-        var totals = Ui.Grid("*,Auto", "Auto,Auto"); totals.RowSpacing = 6;
-        allocatedValue.HorizontalAlignment = HorizontalAlignment.Right; unallocatedValue.HorizontalAlignment = HorizontalAlignment.Right;
-        Ui.Put(totals, Ui.Text("Today allocated")); Ui.Put(totals, allocatedValue, 1);
-        Ui.Put(totals, Ui.Text("Unallocated"), 0, 1); Ui.Put(totals, unallocatedValue, 1, 1);
-        summary.Children.Add(totals);
         Ui.Put(sidebar, summary, row: 2);
         var panel = new Border { Child = sidebar };
         panel.Classes.Add("panel");
@@ -354,8 +360,8 @@ public sealed class DashboardWindow : Window
         var nav = Ui.Grid("Auto,*,Auto"); nav.VerticalAlignment = VerticalAlignment.Bottom;
         // One row of tabs: the day's timeline, then the week's three parts, so there is no second row of tabs.
         timeline = Ui.Button("Timeline", () => SelectTab(false), "TimelineTab"); timeline.Classes.Add("tab");
-        overviewTab = Ui.Button("Overview", () => SelectSection("overview"), "WeekOverviewTab"); overviewTab.Classes.Add("tab");
-        hoursTab = Ui.Button("Hours table", () => SelectSection("hours"), "WeekHoursTab"); hoursTab.Classes.Add("tab");
+        overviewTab = Ui.Button("Week view", () => SelectSection("overview"), "WeekOverviewTab"); overviewTab.Classes.Add("tab");
+        hoursTab = Ui.Button("Overview", () => SelectSection("hours"), "WeekHoursTab"); hoursTab.Classes.Add("tab");
         entriesTab = Ui.Button("Entries", () => SelectSection("entries"), "WeekEntriesTab"); entriesTab.Classes.Add("tab");
         Ui.Put(nav, Ui.Horizontal(timeline, overviewTab, hoursTab, entriesTab));
         // In the Week tab the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
@@ -379,9 +385,7 @@ public sealed class DashboardWindow : Window
         var fit = Ui.IconButton(IconKind.FitDay, "Fit the day to the window", "TimelineFit", () => { if (TimelineScroll() is { } s) model.FitTimeline(s.Viewport.Height); });
         var zoomBar = new Border { Name = "TimelineControls", Child = Ui.Horizontal(zoomOut, zoomIn, fit), CornerRadius = new CornerRadius(8), Padding = new Thickness(2), BorderThickness = new Thickness(1) };
         ((StackPanel)zoomBar.Child).Spacing = 0; zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
-        var tools = Ui.Grid("*,Auto"); Ui.Put(tools, edits); // Exporting a week belongs to the week tabs, and zoom to the timeline, so each shows only where it applies.
-        exportButton = Ui.IconButton(IconKind.Export, "Export week…", "ExportWeek", () => new ExportWindow(model).Show(this));
-        Ui.Put(tools, Ui.Horizontal(zoomBar, exportButton), 1);
+        var tools = Ui.Grid("*,Auto"); Ui.Put(tools, edits); Ui.Put(tools, zoomBar, 1);
         tools.Margin = new Thickness(0, 12);
         Ui.Put(review, tools, row: 1);
         Ui.Put(review, workspace, row: 2);
@@ -462,7 +466,7 @@ public sealed class DashboardWindow : Window
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
         var editing = !weekMode || model.WeekSection == "entries";
-        zoomControls.IsVisible = !weekMode; exportButton.IsVisible = weekMode; zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
+        zoomControls.IsVisible = !weekMode; zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
         undo.Content = "Undo";

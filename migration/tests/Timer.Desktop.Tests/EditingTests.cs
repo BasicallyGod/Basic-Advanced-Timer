@@ -364,9 +364,13 @@ public sealed class EditingTests
             Assert.False(undo.IsEnabled); Assert.True(undo.Opacity < 1); // Dimmed by the style, keeping its outline, not a solid grey fill.
             model.SetWeekSection("overview"); dashboard.SelectTab(true); Dispatcher.UIThread.RunJobs();
             Assert.False(zoom.IsVisible); // Zoom belongs to the timeline only.
-            var export = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ExportWeek");
-            Assert.True(export.IsVisible); Assert.Equal(IconKind.Export, ((IconGlyph)export.Content!).Kind); Assert.Equal("Export week…", ToolTip.GetTip(export));
-            model.SetWeekSection("overview"); dashboard.SelectTab(false); Dispatcher.UIThread.RunJobs(); Assert.False(export.IsVisible);
+            Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "ExportWeek"); // Export lives only on the Overview tab.
+            model.SetWeekSection("hours"); Dispatcher.UIThread.RunJobs();
+            var export = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ExportWeek"); var copy = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CopyHours");
+            Assert.Equal(IconKind.Export, ((IconGlyph)export.Content!).Kind); Assert.Equal(IconKind.Copy, ((IconGlyph)copy.Content!).Kind); Assert.Equal("Export week…", ToolTip.GetTip(export));
+            Assert.InRange(Math.Abs(export.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y - copy.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y), 0, 2); // Same line.
+            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekOverviewTab" && b.Content as string == "Week view");
+            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekHoursTab" && b.Content as string == "Overview");
         }
         finally { dashboard.Close(); }
     }

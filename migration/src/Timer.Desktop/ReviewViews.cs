@@ -137,7 +137,7 @@ public static class ReviewViews
         canvas.SizeChanged += (_, _) => Resize();
         DateTime clicked = day.AddHours(9);
         DateTime At(double y) => day.AddMinutes(Math.Clamp(Math.Floor(y / pixelsPerHour * 60 / 5) * 5, 0, 1435));
-        var add = new MenuItem { Header = "Add new credited time…" }; add.Click += (_, _) => model.OpenGap(clicked);
+        var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);
         var tidy = new MenuItem { Header = "Tidy day…", Name = "TidyDayMenu" }; tidy.Click += (_, _) => model.OpenTidy();
         canvas.ContextMenu = new ContextMenu { ItemsSource = new[] { add, tidy, MergeMenu(model) } };
         bool OnBlock(object? source) => source is Visual visual && (visual is Border { Tag: SessionRow or ReviewEntry }
@@ -290,24 +290,30 @@ public static class ReviewViews
             Ui.Put(grid, Cell(item.Total, true), item.Cells.Length + 1, r + 1);
             if (item.Style == "bold") Ui.Put(grid, new Border { Height = 1, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Classes = { "rule" } }, 0, r + 1).SetValue(Grid.ColumnSpanProperty, table.Headers.Length);
         }
+        // Both headings on this tab are real headings, so the table and the budgets read as two distinct parts.
+        TextBlock Heading(string text) { var h = Ui.Text(text, 16); h.FontWeight = FontWeight.SemiBold; return h; }
         var heading2 = Ui.Grid("*,Auto");
-        Ui.Put(heading2, Ui.Text(model.DecimalHours ? "Decimal hours" : "Hours and minutes", 12, "muted"));
-        var copy = Ui.Button("Copy hours table", () => { }, "CopyHours"); ToolTip.SetTip(copy, "Copy the table to the clipboard, ready to paste into a timesheet");
+        Ui.Put(heading2, Heading(model.DecimalHours ? "Decimal hours" : "Hours and minutes"));
+        // Copy and export live on this line, with the table they act on. Both are icons with tooltips.
+        var copy = Ui.IconButton(IconKind.Copy, "Copy hours table", "CopyHours", () => { });
+        ToolTip.SetTip(copy, "Copy the table to the clipboard, ready to paste into a timesheet");
         copy.Click += async (_, _) =>
         {
             if (TopLevel.GetTopLevel(copy)?.Clipboard is not { } clipboard) return;
             await clipboard.SetTextAsync(table.ToTsv());
-            copy.Content = "Copied";
+            ToolTip.SetTip(copy, "Copied");
             var reset = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
-            reset.Tick += (_, _) => { reset.Stop(); copy.Content = "Copy hours table"; };
+            reset.Tick += (_, _) => { reset.Stop(); ToolTip.SetTip(copy, "Copy the table to the clipboard, ready to paste into a timesheet"); };
             reset.Start();
         };
-        Ui.Put(heading2, copy, 1);
+        var export = Ui.IconButton(IconKind.Export, "Export week…", "ExportWeek", () => { if (TopLevel.GetTopLevel(root) is Window owner) new ExportWindow(model).Show(owner); });
+        Ui.Put(heading2, Ui.Horizontal(copy, export), 1);
         root.Children.Add(heading2);
         root.Children.Add(grid);
         if (table.Budgets.Count > 0)
         {
-            root.Children.Add(Ui.Text("Budgets", 13, "muted"));
+            var split = Ui.Rule(); split.Margin = new Thickness(0, 14, 0, 2); root.Children.Add(split);
+            root.Children.Add(Heading("Budgets"));
             var budgets = Ui.Grid("150,*,*,*,60", "Auto," + string.Join(",", table.Budgets.Select(_ => "Auto")));
             foreach (var (text, c) in new[] { "Account", "Budget", "Used", "Left", "Used" }.Select((t, c) => (t, c)))
             {

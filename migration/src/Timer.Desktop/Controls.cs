@@ -559,7 +559,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -605,6 +605,11 @@ public sealed class IconGlyph : Control
             case IconKind.Minimise:
                 // The familiar low bar of a window's minimise button.
                 context.DrawLine(new Pen(brush, 1.8, lineCap: PenLineCap.Flat), new Point(3.5, 13), new Point(14.5, 13));
+                break;
+            case IconKind.Copy:
+                // Two sheets, one behind the other: the usual sign for copy.
+                context.DrawRectangle(null, pen, new Rect(6.5, 2.5, 8.5, 10.5), 2, 2);
+                context.DrawGeometry(null, pen, Geometry.Parse("M 11.5,15.5 L 4.5,15.5 Q 3,15.5 3,14 L 3,6.5"));
                 break;
             case IconKind.Export:
                 // An arrow dropping into a tray: save this week out as files.
