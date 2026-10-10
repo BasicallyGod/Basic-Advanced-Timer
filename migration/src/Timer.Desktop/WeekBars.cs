@@ -8,13 +8,11 @@ namespace Timer.Desktop;
 public sealed record BarSegment(string Account, Color Colour, double Hours);
 public sealed record DayBar(string Day, string Tooltip, string TotalText, double Hours, List<BarSegment> Segments);
 
-// A bar for each day of the week, split by account, with a faint line for the length of a working day. It is drawn here
+// A bar for each day of the week, split by account. It is drawn here
 // rather than built from controls so a week with many accounts stays light, and so the bars share one scale.
 public sealed class WeekBars : Control
 {
     public List<DayBar> Bars { get; init; } = new();
-    public double TargetHours { get; init; }
-    public string TargetText { get; init; } = "";
     public WeekBars() { Height = 170; HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch; Name = "WeekBars"; }
 
     private IBrush Resource(string key, IBrush fallback) => this.TryFindResource(key, ActualThemeVariant, out var value) && value is IBrush brush ? brush : fallback;
@@ -23,7 +21,7 @@ public sealed class WeekBars : Control
             new Typeface(Avalonia.Controls.Documents.TextElement.GetFontFamily(this), FontStyle.Normal, bold ? FontWeight.SemiBold : FontWeight.Normal), size, brush);
     private (double Left, double Slot, double Top, double Bottom, double Max) Layout()
     {
-        var max = Math.Max(Math.Max(TargetHours, Bars.Count == 0 ? 0 : Bars.Max(b => b.Hours)), 1.0);
+        var max = Math.Max(Bars.Count == 0 ? 0 : Bars.Max(b => b.Hours), 1.0);
         max = Math.Ceiling(max); // A whole number of hours at the top, so the scale reads easily.
         return (6, Bounds.Width > 12 && Bars.Count > 0 ? (Bounds.Width - 12) / Bars.Count : 1, 24, Bounds.Height - 26, max);
     }
@@ -35,12 +33,6 @@ public sealed class WeekBars : Control
         var (left, slot, top, bottom, max) = Layout();
         var height = bottom - top;
         context.DrawLine(new Pen(line, 1), new Point(left, bottom), new Point(left + slot * Bars.Count, bottom));
-        if (TargetHours > 0)
-        {
-            var y = bottom - TargetHours / max * height;
-            context.DrawLine(new Pen(muted, 1, new DashStyle(new double[] { 3, 4 }, 0)) { Brush = muted }, new Point(left, y), new Point(left + slot * Bars.Count, y));
-            var label = Text(TargetText, 10.5, muted); context.DrawText(label, new Point(left + slot * Bars.Count - label.Width, y - label.Height - 1));
-        }
         for (var i = 0; i < Bars.Count; i++)
         {
             var bar = Bars[i]; var width = Math.Min(54, slot * .62); var x = left + slot * i + (slot - width) / 2;

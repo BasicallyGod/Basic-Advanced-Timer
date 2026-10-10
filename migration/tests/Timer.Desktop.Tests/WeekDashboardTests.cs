@@ -155,7 +155,8 @@ public sealed class WeekDashboardTests
             window.SelectTab(true); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             Assert.Equal("overview", model.WeekSection);
             var bars = window.GetVisualDescendants().OfType<WeekBars>().Single();
-            Assert.Equal(5, bars.Bars.Count); Assert.Equal(8, bars.TargetHours); // A bar per working day, and the line for a working day.
+            Assert.Equal(5, bars.Bars.Count); // A bar per working day, with no working-day line.
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "By account");
             Assert.Equal(3, bars.Bars[4].Segments.Count);
             Assert.Equal(1.5, bars.Bars[4].Segments[0].Hours, 3); Assert.Equal("2:00", bars.Bars[4].TotalText); Assert.Equal("–", bars.Bars[0].TotalText);
             Assert.Contains("Account one  1:30", bars.Bars[4].Tooltip);

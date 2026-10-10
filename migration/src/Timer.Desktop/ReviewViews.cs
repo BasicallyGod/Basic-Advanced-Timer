@@ -223,8 +223,6 @@ public static class ReviewViews
         var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
         var bars = new WeekBars
         {
-            TargetHours = model.Engine.Schedule.Default.End.TotalHours - model.Engine.Schedule.Default.Start.TotalHours,
-            TargetText = "Working day " + model.FormatShort(model.Engine.Schedule.Default.End - model.Engine.Schedule.Default.Start),
             Bars = days.Select(i =>
             {
                 var date = day.AddDays(i);
@@ -236,6 +234,9 @@ public static class ReviewViews
             }).ToList()
         };
         root.Children.Add(bars);
+        // A rule and a heading set the accounts apart from the chart above them, with room either side.
+        var divide = Ui.Rule(); divide.Margin = new Thickness(0, 14, 0, 0); root.Children.Add(divide);
+        var byAccount = Ui.Text("By account", 12, "muted"); byAccount.Margin = new Thickness(0, 2, 0, -4); root.Children.Add(byAccount);
         // One line per account: its colour, its week, and its budget when it has one.
         var list = new StackPanel { Spacing = 10 };
         for (var i = 0; i < accounts.Count; i++)
