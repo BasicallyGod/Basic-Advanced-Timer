@@ -326,7 +326,7 @@ public sealed class DashboardWindow : Window
         var body = Ui.Grid("300,1,*", "*");
         var sidebar = Ui.Grid("*", "Auto,*,Auto");
         var title = Ui.Text("Client accounts", 13, "muted");
-        title.Margin = new Thickness(18, 16);
+        title.Margin = new Thickness(18, 12, 18, 6);
         Ui.Put(sidebar, title);
         Ui.Put(sidebar, new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 1);
@@ -350,7 +350,7 @@ public sealed class DashboardWindow : Window
         var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
         var review = Ui.Grid("*", "Auto,Auto,*");
         review.Margin = new Thickness(22, 14, 22, 18);
-        var nav = Ui.Grid("Auto,*,Auto");
+        var nav = Ui.Grid("Auto,*,Auto"); nav.VerticalAlignment = VerticalAlignment.Bottom;
         // One row of tabs: the day's timeline, then the week's three parts, so there is no second row of tabs.
         timeline = Ui.Button("Timeline", () => SelectTab(false), "TimelineTab"); timeline.Classes.Add("tab");
         overviewTab = Ui.Button("Overview", () => SelectSection("overview"), "WeekOverviewTab"); overviewTab.Classes.Add("tab");
@@ -359,11 +359,13 @@ public sealed class DashboardWindow : Window
         Ui.Put(nav, Ui.Horizontal(timeline, overviewTab, hoursTab, entriesTab));
         // In the Week tab the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
         // A fixed width, so the arrows stay put whatever the date or week text says.
-        date.Width = 150; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
-        previous = Ui.Button("‹", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }, "PreviousPeriod");
-        next = Ui.Button("›", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }, "NextPeriod");
+        date.Width = 112; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
+        previous = Ui.Button("‹", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }, "PreviousPeriod"); previous.Classes.Add("iconButton"); previous.Width = 30; previous.FontSize = 20;
+        next = Ui.Button("›", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }, "NextPeriod"); next.Classes.Add("iconButton"); next.Width = 30; next.FontSize = 20;
         Ui.Put(nav, Ui.Horizontal(previous, date, next), 2);
-        Ui.Put(review, nav);
+        // The tabs sit on a hairline that runs the width of the workspace, with the chosen tab's bar resting on it.
+        var navLine = new Border { Child = nav, BorderThickness = new Thickness(0, 0, 0, 1) }; navLine.Classes.Add("tabLine");
+        Ui.Put(review, navLine);
         undo = Ui.Button("Undo", () => model.UndoEdit(), "UndoEdit");
         merge = Ui.Button("Merge", () => model.MergeSelection(), "MergeSelected");
         var more = Ui.Button("Tools", () => { }, "ReviewTools");

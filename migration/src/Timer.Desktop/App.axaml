@@ -160,6 +160,7 @@
     <Style Selector="TextBlock.overtime"><Setter Property="Foreground" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.surface"><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
     <Style Selector="Border.panel"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
+    <Style Selector="Border.tabLine"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Border.rule"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Button">
       <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -207,8 +208,33 @@
     <Style Selector="Button.account.active">
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
+    <!-- Tabs are plain words along a hairline. The chosen one is brighter and has a green bar under it, which sits on the line. -->
+    <Style Selector="Button.tab">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource Muted}" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="BorderThickness" Value="0,0,0,3" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Padding" Value="12,10,12,9" />
+      <Setter Property="Margin" Value="0,0,4,-1" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+    </Style>
     <Style Selector="Button.tab.selected">
-      <Setter Property="Background" Value="{DynamicResource Selected}" />
+      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
+    </Style>
+    <Style Selector="Button.tab.selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+    </Style>
+    <!-- Dashboard account rows are shorter than the pill's, so more of them show before the list has to scroll. -->
+    <Style Selector="Button.account.compact">
+      <Setter Property="Height" Value="54" />
+      <Setter Property="Padding" Value="16,5" />
     </Style>
     <Style Selector="Button.pillAction">
       <Setter Property="Background" Value="Transparent" />

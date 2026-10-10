@@ -319,6 +319,7 @@ public sealed class AccountList : StackPanel
         foreach (var account in Listed(model))
         {
             var row = new Button { Name = "Account" + rows.Count, Classes = { "account" } };
+            if (reorderable) row.Classes.Add("compact");
             // Where rows can be dragged to reorder them, a grip at the left says so.
             var shift = reorderable ? 1 : 0;
             var grid = Ui.Grid(reorderable ? "14,44,*,Auto" : "44,*,Auto");

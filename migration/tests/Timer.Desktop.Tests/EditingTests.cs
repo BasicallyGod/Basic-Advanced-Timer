@@ -330,4 +330,20 @@ public sealed class EditingTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void DashboardAccountRowsAreShorterThanThePillsSoMoreFitAndTabsAreUnderlined()
+    {
+        var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
+            var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("account")).ToList();
+            Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(54, r.Bounds.Height, 0.5)); // The pill's rows stay 68.
+            var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
+            Assert.Equal(new Avalonia.Thickness(0, 0, 0, 3), tab.BorderThickness); Assert.Contains("selected", tab.Classes);
+            Assert.Equal(Avalonia.Media.Brushes.Transparent, tab.Background);
+        }
+        finally { dashboard.Close(); }
+    }
 }
