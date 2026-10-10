@@ -1,494 +1,106 @@
 # Changelog
 
-## Avalonia migration — 9 October 2026
+## Check your version
 
-The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
+The Avalonia preview on `migration` shows `Version 0.1.<build> (<commit>)` above Close timer in the right-click menu. The build number is the preview workflow run number; the commit identifies the exact source. Local builds show development build. The original PowerShell application remains v2.32.
 
-## Migration checklist fixes
+The milestones below are newest first. Commit links mark when each change landed; they are not release version numbers. Use the [migration commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/migration/) for individual changes and [preview builds](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to match a packaged version to its commit.
 
-- The lighter edges are gone too. A very dark account colour is now lifted a little towards white when it is drawn (blocks, week bars and dots), and only then, so it shows on a dark background without any outline. The saved colour is unchanged, and palette and ordinary colours are drawn exactly as chosen.
-- The selection tick and the recording marker only get their own line on a block tall enough for it (about 96 pixels). On shorter blocks they sit in front of the name, so nothing spills out of the block as it did on a medium-height selected block.
-- The pill no longer glows when it is not tracking. It keeps the ordinary soft shadow, which fixes the clash between the glow and the shadow. The break and overtime glows are unchanged.
+## Avalonia migration
 
-- The day clock read 00:31 at 17:55 on a Saturday that had since been made a working day. A start pressed while Saturday was still off had been saved as the day's start and kept overriding the 09:00 start. Changing the working hours now drops a manual start that the new hours make unnecessary, for today and later days. A genuine early start, before the usual one, is kept.
-- On a day that is off, the day is now just the time actually tracked. Time passing between presses is not counted and nothing counts as overtime, so the clock no longer runs from the first press. This replaces the earlier rule, which counted from the press.
+### 10 October 2026
 
-- The grey outlines looked wrong, so they are gone. A block, dot or week bar now gets an edge only when its colour is very dark, and the edge is that colour made lighter, drawn right at the block's edge and not inset. Palette colours and ordinary custom colours have no edge at all.
-
-- The colour dot beside each account in the Overview tab is a little larger (12 pixels) with a thicker grey outline, as is the dot in the Entries list, so a dark colour is easy to see on a dark background.
-
-- Every timeline block now has a faint grey outline, drawn on top and ignored by the pointer, so a dark colour on a dark background still shows its edges even when the block is too short for any text. The colour dots beside accounts in the week views, and the week bars, use the same stronger grey outline.
-
-- Timeline blocks are drawn at least eight pixels tall, so a one-minute block can be seen and clicked at any zoom. Zoom in for exact edges.
-- On a block too short for a second line, the selection tick now joins the name ("✓ Account") instead of adding a line that spilled over the block's edge. The recording marker does the same with a dot, and the text colour follows the block's colour.
-
-## Migration sixteen account colours
-
-- The palette grew from eight to sixteen soft colours, so up to sixteen accounts can each have their own before any repeat. The original eight keep their order and values, so existing accounts look the same, and the new eight were chosen to stay clear of those and of the break's amber. Every one still takes the usual dark text. The chooser shows them in two even rows of eight. After a first look, sky blue and orchid were replaced with a golden yellow and a rose, because they sat too close to the original blue and pink.
-- Week bars and the account dots now have a thin outline, so a very dark colour no longer disappears into the dark theme.
-
-## Migration colour chooser, step 9
-
-- Each account row in Accounts and budgets has a round colour swatch. It opens the sixteen palette colours, and a box for any other colour typed as #RRGGBB (a bad value is refused with a message). The choice is saved with the account and used everywhere it appears, so it survives renaming, reordering and restarts. A new account starts on the first palette colour not already in use.
-- Timeline blocks pick their text colour from the block's colour, dark ink on light colours and white on dark ones, so a custom dark colour stays readable. Every palette colour keeps the usual dark ink.
-
-## Migration old code removed, step 8
-
-- Credit positions are gone. That removes the "Position existing credit" window and Tools menu item, the outlined position blocks on the timeline, the "Unplaced legacy credit" caption, and the code that stored, validated and undid them. A new database has none, and an older test database simply ignores any it holds.
-- Merged legacy credit is gone. A row that had no clock position and stood for summed time can no longer exist, so every entry other than an adjustment sits at a place on the clock. "Merged credit" messages, checks and the matching menu rules went with it. Grouping and Merge (which fill blank gaps) are unchanged.
-- The old snapshot undo import and the whole-history text record are gone. Undo history is read and written only through the `edits` tables, and an earlier build's extra `positions` part is ignored when it is found. The hash checks that offer Undo only while the records still match stay, because notes and groups are not tables yet.
-- The database no longer allows a `merge` origin or keeps the positions record. Earlier test builds' leftover records are cleared on the next save.
-- Tests for placement, imported positions, merged credit and the old history formats were removed or rewritten for adjustments, and one new test covers loading a history that still has a positions part.
-
-## Migration exports checked against the database, step 7
-
-- Before the week export writes `Detail.csv` and `Summary.csv`, it now queries the saved database for each account's total on each day, breaks included, and compares them with the week's figures. If they disagree, the export is stopped with a message and nothing is written. The timer saves first, so this only trips on a real inconsistency.
-- The decimal-hour reconciliation (hundredths shared out so days, accounts and the weekly total add up exactly) is unchanged and still works from the week's entries, because grouped entries and credit positions are not tables yet. The files are therefore built the same way as before, with the database as the check.
-
-## Migration database file release fix
-
-- The database class now disposes every command it runs. Without that, Windows kept `timer.db` locked after the timer closed until the garbage collector ran, which made three storage tests fail in CI when they tried to delete their temporary folder. It could also have made a copy or delete of the data folder fail right after closing the timer.
-
-## Migration account records, step 6
-
-- Renaming an account now always applies everywhere. All recorded time, notes, groups and positions move to the new name after a backup copy of the database is saved, and the rename dialog's second question (rename past entries or start afresh) is gone. To start afresh, add a new account.
-- A new name that already appears on another account or in the history is still refused, so two accounts cannot be combined by accident. The account keeps its colour, budget and place in the list through a rename, and Undo history is cleared.
-- The account's colour, order, hidden flag and budget are columns of the account record in the database (from step 3), so there is nothing separate to keep in step.
-
-## Migration typed entries, step 5
-
-- Breaks are now their own kind of entry with no account, in memory and in the database. The reserved name is Break, and the old Lunch name is gone, so Lunch can be used as an ordinary account name. Break remains reserved, so no account can be called that.
-- The running recording stores the account to return to after a break, and the engine keeps it too, so ending a break no longer depends on finding the previous block from its recorded time. After a restart in the middle of a break, the break is still closed and credited up to the last checkpoint, as before.
-- Adjustments were already their own kind (with a signed amount and no end time) from step 3.
-
-## Migration undo history in the database, step 4
-
-- The undo history now lives in the `edits` and `edit_changes` tables instead of one text record. Each edit is a row with its parts beside it. A save adds only the edits made since the last one and removes any that were undone or trimmed, so a quiet checkpoint no longer rewrites the whole history.
-- The 50 step and 2 MB limits, the checks that offer Undo only while the records still match, and the behaviour across a restart are unchanged. A failed save leaves the saved history as it was and the retry saves it.
-- The parts are still the existing change records for the ledger, notes, groups and credit positions, not row by row before and after values. That needs those last three to become tables first, which later steps do.
-- Undo history saved by the previous test build is not carried over.
-
-## Migration storage moved to the database, step 3
-
-- The timer now saves to `timer.db` in its data folder instead of the CSV files, the write-ahead journal and the folder lock. Accounts (with colour, order, hidden flag and budget), time entries, away intervals, manual day starts and the running recording are real database tables, written together in one transaction. A failed save changes nothing and is retried, as before.
-- A new database starts empty, with the three starter accounts. Old `Timesheets` files are not read, changed or deleted. The first launch that finds them says so once in the dashboard footer.
-- The database is opened exclusively, so a second copy of the timer is turned away. Daily dated copies are kept under `Backups`, and Backup before a rename now copies the database and settings there.
-- Preferences (theme, shadows, working hours, day overrides, decimal hours) stay in `basics-advanced-timer.settings.json`.
-- Notes, group references, credit positions and the undo history are still held as small named records in a `meta` table, and each entry keeps its duration text, until the next steps move them into proper tables. Undo and its hash checks behave as before. Adjustments can now carry a start time as their place in the day, and adjust a break.
-- The sample-data demo now runs on a throwaway database in the temporary folder, removed on exit, so saving, editing and Undo go through the real storage. It no longer contains merged legacy credit.
-- Tests that depended on CSV files, the journal and the folder lock were replaced with database equivalents.
-
-## Migration database class, step 2
-
-- Added `TimerDatabase`, the single data file from the data format proposal, with its eight tables (accounts, entries, groups, away, day starts, the running recording, and the undo history). Nothing in the app uses it yet, so no screen or data file changes.
-- Each entry kind says which columns it must have, so a malformed work entry, break or adjustment cannot be stored. Account names are unique whatever the capitals, and an account with entries cannot be deleted.
-- The database opens exclusively, so a second copy of the timer is turned away with a clear message. Every change is a transaction that lands whole or not at all. Closing writes everything into the one file.
-- The format is stamped with a version. A newer one is refused and left untouched, and an older one is upgraded by numbered steps after a copy is saved. The first launch each day saves a dated copy under Backups and the newest fourteen are kept.
-
-## Migration build number in the menu
-
-- The right-click menu now shows which build is running, as a greyed item such as Version 0.1.77 (aa17cda), above Close timer. Each published build is stamped with its workflow run number and commit, so a glance tells you whether an update arrived. A build made on a developer's machine says development build.
-
-## Migration database library, step 1
-
-- First step of the move to a SQLite database (see the data format proposal): added the SQLite library and a small start-up check that opens a throwaway database, writes in a transaction and reads it back. The published-build smoke test now runs that check, and the Windows build fails early if the native library is missing from the published folder. No screens or data files changed.
-
-## Migration pill progress line always shown
-
-- The pill's day progress line is now always there. On a day off it is an empty track with a tooltip, so the pill no longer shows a gap where the line would be.
-
-## Migration delete menu and drag grip
-
-- Brought back Delete in the right-click menu of timeline blocks and week entries. It is last, below a separator, and deletes the whole selection when the block clicked is selected, as one undoable edit.
-- Account rows in the dashboard list now show a grip of six dots, with a tooltip, to say they can be dragged to reorder. The pill list has no grip because it cannot be reordered.
-
-## Migration stable account colours
-
-- Accounts now keep their timeline colour when reordered, hidden or renamed. A colour is given to an account once, as the first of eight that no other account uses, and saved with the account. Existing accounts keep the colours they had by position, so nothing changes at first. Choosing a colour is planned for the data format work.
-
-## Migration timeline controls and drag animations
-
-- Added a floating bar over the timeline with zoom out, zoom in and fit the day icons, each with a tooltip. Fit fills the window with the day's recorded time, or the working day when nothing is recorded, and the zoom icons dim at the limits.
-- Account rows now slide aside as you drag past them, and the dropped row glides into place instead of snapping, or back if the drag came to nothing.
-
-## Migration overview tidy
-
-- Removed the working-day line from the Overview bars, and set the accounts apart from the chart with a rule, space and a By account heading.
-
-## Migration overtime test switch
-
-- Replaced the one-way Force overtime item with a Test overtime switch in the demo's right-click menu, beside Open sample-data demo (which shows only outside the demo). Switching it on puts the demo day in overtime, and switching it off restores the usual shift. It cannot be used outside the demo.
-
-## Migration adjust time and menu order
-
-- Added Adjust time today to the right-click menu of each account (dashboard list and expanded pill). It adds or removes minutes on an account for the day without changing any block, accepts +15, -10, 1:30 or 7.5, previews the new total, takes a note, and refuses to go below zero for the day.
-- Adjustments count in totals, the unallocated figure, the week table and exports, and show on the Timeline as chips above the hours. A chip's note can be edited by double-click, and the adjustment deleted from its right-click menu. Adjustments can now also be deleted from the entry editor.
-- Reordered the window's right-click menu by use, with hours format, accounts and working hours at the top, appearance, shadows and start with Windows next, the demo after that, and Close timer alone at the bottom.
-
-## Migration overview alignment and larger demo
-
-- Fixed the Overview account lines. Each budget meter now sits level with its account, every row is the same height whether or not it has a budget, and the caption reads like 59% of 15:00 per week, coloured amber from 80% and red from 100%.
-- The demo now has seven accounts with a mix of weekly, monthly and quarterly budgets, a few days of history and a break, so lists and meters can be tried at a realistic size. Accounts have eight distinct colours before any repeat, none matching the break.
-
-## Migration finish day colour and small fixes
-
-- Finish day is now red in the pill (filled) and the dashboard (outlined), and Start day stays green. The red is a Finish entry in each theme, ready for custom themes.
-- The expanded pill no longer shows a scroll bar unless the screen is too short for its accounts.
-- Removed the time-now clock under the dashboard timer, and the Undo button no longer shows a count (its tooltip still names the edit and how many steps are available).
-
-## Migration dashboard declutter and pill tidy
-
-- The dashboard has one row of tabs, Timeline, Overview, Hours table and Entries, in place of the second row of week tabs. Hours and minutes moved to Settings only. Add time, Undo and Merge show only where they apply, and Merge only once blocks are selected.
-- The expanded pill is as tall as its content, ends with a wide filled Start day or Finish day button, and no longer has a Settings button (Settings are on the right-click menu).
-- Added a small time-now clock under the dashboard timer, and shifted the pill's content up so it is centred above the progress line.
-- The pill's shadow and glow now fade into each other, so pressing play or pause no longer makes the edge jump.
-- The week table no longer sits under the scroll bar, the working-day line no longer runs through the day totals above the bars, and End break text is white.
-
-## Migration week overview and break polish
-
-- Fixed unallocated time on past days. Overtime was counted from the end of the shift to midnight as though work continued, so an empty weekday showed 15 hours unallocated instead of 8. A past day's overtime now stops at its last recorded activity.
-- Split the Week tab into Overview, Hours table and Entries. Overview has the week's totals, a stacked bar per day with a working-day line, and a line per account with its budget meter. The table is compact (7:00, with a dash for nothing) and fits the width, and Copy hours table still copies the full wording.
-- The gap between the week arrows no longer changes with the text, and Left and Right arrow keys step a week in Week and a day in Timeline.
-- A break now tints the pill only, and the dashboard keeps its normal colours with an amber break button. Steam moves above the cup while a break is on.
-
-## Migration week tab
-
-- The hours table now ends with a bold Total (excluding breaks) row and faint Break and Unallocated rows, laid out with clearer weight. Decimal totals add up exactly.
-- Added a Budgets table (budget, used, remaining, used percentage, with amber and red warnings) and a Copy hours table button that copies tab separated text for a timesheet.
-- The Week tab arrows now move a whole week and stop at the current week. Timeline still moves a day.
-- Added Move to account to the right-click menu of timeline blocks and week entries, applying to the whole selection and keeping notes, as one undoable edit.
-
-## Migration break button
-
-- Replaced the Lunch row with a Break button that sits apart from the account rows and wears the amber break colour. It is in the dashboard sidebar and beside pause on the pill. Ending a break returns to the account that was running before it, found from the recorded time so it is not lost.
-- A break is called Break everywhere, including the timeline, week table, entry editor and exports (Summary now shows Break and Total excluding breaks). It is still stored as Lunch in the time file, so existing data is unchanged, and Break is now a reserved account name.
-- Pause on the pill resumes the earlier account while a break is on. The dashboard header says which account the break returns to.
-- The red overtime theme now applies to the pill only, so the dashboard stays calm. A break still tints both.
-
-## Migration overtime theme and pill layout
-
-- Overtime now turns the app red, as a break turns it amber, with its own light and dark variants. A break outranks overtime and overtime outranks normal, and not tracking keeps the ordinary theme with its grey glow.
-- Moved the live dot in the pill away from the edge of its button.
-- The expanded pill now ends in a row with Settings and the day button side by side along the bottom edge. A line under them appears only for a failed save or the demo.
-
-## Migration visual stability and lost visuals
-
-- Times now use fixed-width digits, so the clock, totals and budgets no longer shift as numbers change.
-- Brought back the day progress line in the pill, the glow for a break, overtime and not tracking, and the pulsing live dot, which now also appears beside the recording account in the list.
-- Brought back drop shadows on the pill and dashboard, with a Window shadows setting. The windows have a transparent margin to hold them.
-- Removed the close button from both windows. Close timer now sits alone at the bottom of the menu, and the tray icon hides the timer.
-- Lunch now turns the whole app amber while it is on, through new BreakLight and BreakDark theme variants. Colours for break, glow and shadow are theme names in `App.axaml`, ready for custom themes.
-
-## Migration start with Windows
-
-- Added a Start with Windows checkbox to the Settings menu. It uses the per-user sign-in list, needs no administrator rights and is removed by unticking. An explicit `--data-dir` folder is remembered, and the box shows as unticked if the saved entry points at a different copy of the program.
-
-## Migration tray icon
-
-- Added a notification area icon. The timer has no taskbar button, and the × button hides it to the tray with tracking still running.
-- The icon is green while recording and slate otherwise. The hover text gives the account, the day's time and any overtime. Left-click shows or hides the timer.
-- The tray menu offers Show timer, Dashboard, Pause or Resume, Start or Finish day, Reset position and Close timer, which saves and quits. Close timer is also in the Settings menu.
-- Windows shutting down still saves and closes the timer normally.
-
-## Migration recording block marked on the timeline
-
-- The block that is recording now has a green outline and a "Recording now" label, and keeps its pointer arrow instead of the move cursor. Clicking or dragging it explains that it is still recording and can be moved or edited once tracking stops, and right-click offers Stop tracking.
-
-## Migration account renaming and reordering
-
-- Account names can be edited in Accounts and budgets. Saving asks whether to rename the past entries too or start afresh under the new name. Renaming the past moves entries, notes, groups, positioned credit and the budget in one save after a backup copy to `Timesheets/Backups`, and clears the Undo history. Starting afresh keeps the old name as a historical account.
-- Names already used by another account or anywhere in the history are refused, so a rename can never combine two histories. A running account is stopped and saved before it is renamed.
-- Accounts can be reordered by dragging rows in the dashboard list. Lunch stays last, hidden accounts keep their places and a click without movement still tracks as before.
-
-## Migration timeline add and delete shortcuts
-
-- Adding time on the timeline now needs a double-click on empty space. A single click only clears the selection, so stray clicks no longer open the editor.
-- Backspace or Delete removes the selected blocks as one undoable edit, except while typing in a text box.
-- Dragging an edge across the other one now leaves a block of at least one minute instead of a three second sliver that looked as if it had vanished.
-
-## Migration timeline editing fixes
-
-- Double-clicking a block to edit it no longer leaves it selected or deselected by the click that began the double-click.
-- Short blocks can be resized. Cards under 24 pixels tall share their height in thirds, and the very shortest in halves, between the top edge, the bottom edge and (where there is room) moving. The pointer shows a resize cursor over an edge.
-- A drag past the start or end of the day now stops at midnight and keeps at least three seconds, so the preview and the saved time always agree.
-- Removed the old push behaviour, which could not be reached from the timeline. Dragging a whole block past a neighbour by more than 24 display-independent pixels inserts it between the blocks it crosses, which move into the space left behind. This keeps durations and notes, previews before release and is one undoable edit. Moves blocked by midnight, positioned credit, running time or unresolved imported overlaps apply nothing.
-
-## Migration Undo history stored as small changes
-
-- Each Undo step now stores only what its edit changed (a splice of rows, and of the notes, groups and positions lines) instead of a copy of the whole ledger before and after. With about a year of entries and a full 50 step history the edit state falls from about 30 MB to about 72 KB, and a 15 second checkpoint no longer spends hundreds of milliseconds on the UI thread serialising it.
-- The history is also limited to about 2 MB, dropping the oldest steps first and always keeping the newest, so a few very large edits cannot grow it without bound.
-- Saving writes only the files whose content changed, and a save journal may now list any subset of the known files, so an interrupted save still recovers.
-- Undo is offered only while the ledger, notes, groups and positions still match what the last edit left behind. A change made outside the app disables it instead of being silently overwritten. A missing groups file and an empty one count as the same, so Undo keeps working after a restart.
-- Edit history from earlier migration builds is imported as its latest step only. The new history is schema 3 in `migration-edit-state.json`.
-- Added randomized tests that compare Undo against full snapshots taken before each edit, through restarts and later recordings, along with tests for the size limits, malformed history, outside changes and quiet checkpoints.
-
-## Migration selection, Undo steps and timeline zoom
-
-- Ordinary clicks toggle block selection in Timeline and Week. Dragging does not select, and Merge is in the toolbar and the right-click menu.
-- Undo keeps up to 50 edits across restarts and the Undo button shows how many are available.
-- Ctrl+mousewheel zooms the timeline between 60 and 640 pixels per hour, keeping the time under the pointer anchored. Ordinary wheel scrolling remains available. The scale survives refreshes, and changing date resets the scroll to the first entry.
-
-## Migration drag snapping and merge-menu fixes
-
-- Fixed a selected block disappearing when its right-click menu opened. Pointer capture loss now restores a block's geometry only when a left-button gesture is actually in progress.
-- Made moving and resizing snap to neighbouring blocks' boundaries, including times such as 09:53 that fall between five-minute marks. Five-minute increments remain the default away from neighbours.
-- Made overshooting stop at the first neighbouring block instead of producing an overlap error or jumping past it. This applies to whole-block moves and both resize edges.
-- Kept real overlap validation and Undo, and accounted for fractional legacy end times when saving snapped entries.
-- Extended native input regression checks for menu capture loss, cancelled drags, exact-boundary snapping, substantial overshoots and Undo. All 49 tests pass on Windows, Linux and macOS; packaged Windows normal/demo launch checks also pass.
-
-## Migration block selection, gap merges and click-to-add
-
-- Added Ctrl+left-click selection in Timeline and Week, visible selection outlines, a toolbar Merge button and right-click → Merge selected.
-- Kept selection separate from moving/resizing and opening editors. Escape and date changes clear selection.
-- Initially restricted new merges to adjoining blocks and rendered older groups with gaps as separate linked sections, avoiding a continuous block over uncredited time.
-- Revised merging to allow blank gaps between blocks for the same account/day. Those gaps now become “Added by merge” credited entries and count towards the combined total. The selection hint previews the amount added.
-- Continue to reject merges across intervening entries, positioned credit, running time or overlaps. Existing groups can be extended when all their source parts are selected.
-- Preserve original source rows. One Undo removes the added gap time and restores prior grouping; Ungroup keeps the newly credited gap entries.
-- Added single-click entry creation on empty timeline space, with a five-minute-snapped start and a proposed 30-minute duration capped at the next occupied interval or midnight. Only one entry editor opens at a time.
-
-## Migration grouped-block presentation and dashboard polish
-
-- Made compatible grouped intervals appear as a combined timeline block and Week entry, with access to their original parts.
-- Added right-click Ungroup, a visible Week Ungroup action and existing-group access through Tools → Group entries.
-- Allowed future manual entries and credit placements; their time is credited immediately.
-- Replaced oversized scrollbars and arrow buttons with an eight-pixel track and slim draggable thumb.
-- Restored the dashboard's transparent rounded window surface to match the pill.
-
-## Migration credit review and weekly exports (repository development)
-
-- Restored non-destructive positioning of merged credit, with position notes, editing, unplacing and compatible metadata import.
-- Added same-day/account source grouping, grouped Week entries and ungrouping without rewriting credited sessions.
-- Added reviewed Tidy day gap fills, excluding lunch/away/running intervals, with stale-preview rejection and one batch Undo.
-- Reconciled integer hundredths across detailed entries, account/day summary cells and weekly totals, including negative adjustments and separate Lunch totals.
-- Saved export pairs to new folders and journalled position metadata with the ledger, notes, groups and persistent Undo.
-- Added synthetic accounting/storage checks and native UI input/rendering checks; sample data now includes merged credit and a short gap.
-
-## Migration timeline editing, notes and Undo (repository development)
-
-- Restored entry time/account/note editing and deletion, plus five-minute snapped timeline move/resize gestures and new credited time in free gaps.
-- Added individual entries beneath Week totals, including notes-only access for merged legacy credit and adjustments.
-- Preserved CSV extra columns and moved notes with edited source keys; pruned obsolete group references without changing positioned merged credit.
-- Added a persistent last-edit Undo snapshot that retains later recorded sessions, saved together with sessions, notes and group metadata through journal replay.
-- Retained exact credited durations when only notes change, including fractional-minute short segments.
-
-
-## Migration pill layout, dragging, settings and demo
-
-- Restored the familiar compact pill: timer on the left, account and today's credit in the middle, pause/resume on the right.
-- Clicking the timer opens the dashboard; clicking the account toggles the small account list. Back to pill returns from the dashboard.
-- Separated clicks from dragging with a five-pixel movement threshold, so dragging over timer, account and pause controls does not activate them. Added dashboard header dragging.
-- Made tracking and idle states visibly distinct, with a green tracking clock, grey idle clock and independent red overtime indication.
-- Corrected timeline startup scrolling and retained its position during updates.
-- Added an isolated, populated sample-data demo and a Force overtime setting for checking both themes and tracking states without saving personal data.
-- Added weekday working-hour/shift settings, account visibility/addition and budget editing, with persisted preferences in normal mode.
-
-## Migration tracking and storage (repository development)
-
-- Connected a platform-independent C# tracking core, separating the day clock from account session clocks.
-- Ported scheduled/early starts, lunch, finish/resume, overtime, midnight splitting and credited adjustments.
-- Added compatible copied-data loading and persistent sessions/settings/away/recovery with locking, atomic backups and journal replay.
-- Replaced illustrative Timeline/Week data with recorded entries and credited totals; preserved unplaced legacy credit.
-- Moved light/dark/system appearance into Settings and right-click menus.
-- Added synthetic core/storage regression cases. At this stage, editing, metadata presentation, exact export reconciliation and tray integration remained to be migrated; the subsequent milestones above restore the first three.
-
-## Migration foundation (repository development)
-
-- Created `migration` from experimental v2.32; kept the existing application and launcher intact.
-- Added an isolated Avalonia desktop preview with pill/dashboard windows, shared System/Light/Dark themes, vector budget indicators and illustrative Timeline/Week views.
-- Made Not tracking grey and overtime red, with independent recording/overtime indicators.
-- Added production-style headless input/rendering checks, cross-platform CI and self-contained Windows preview packaging.
-- Documented staged core/storage/editing migration and the preview's synthetic, non-persistent data boundary. No production tracking behaviour or file format is changed.
-
-Basic’s Advanced Timer grew from a single billable-hours counter into a full timesheet tracker. The original Windows application remains in `AccountTimer2.ps1`, alongside the separate Avalonia work under `migration/`. Earlier PowerShell implementations and their launchers are available in Git history.
-
-The PowerShell version numbers below were assigned after the fact, one per round of changes, all built in October 2026.
-
-| Script | What it is | Versions |
+| Milestone | Commit | What changed |
 | --- | --- | --- |
-| AccountTimer2.ps1 | Current app and only supported launcher target | 2.0 to 2.32 |
-| AccountTimer.ps1 | Historical predecessor, removed from current tree | 1.0 to 1.7 |
-| BillableTimer.ps1 | Historical predecessor, removed from current tree | 0.1 to 0.5 |
+| Short-block and colour visibility | [4e086c8](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/4e086c83e3d3b642f2bcdc0a6e1639b6ee6849da) | Short blocks remain selectable and keep labels inside their bounds. Very dark colours are brightened when drawn without changing saved colours; outlines and idle pill glow removed. |
+| Day-clock corrections | [7a6bb2d](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/7a6bb2d11694b2c567b21c493c6906a85bc73eb9) | Changing working hours clears unnecessary manual starts while preserving genuine early starts. Days off count only tracked work, with no unallocated time or overtime. |
+| Account colours, database step 9 | [2233e76](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/2233e7656a1afc8cdccb6933ebeae086de226005) | Sixteen palette colours and custom #RRGGBB colours, saved per account. Timeline text adapts for contrast. |
+| Legacy credit removal, database step 8 | [3cbe9d5](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/3cbe9d5a8d5553f9e8970d5aca9b32c07d8a096d) | Removed unpositioned merged credit, credit placement and old Undo imports. Every non-adjustment entry has a clock position. Grouping and gap-filling Merge remain. |
+| Export validation, database step 7 | [9d6c692](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/9d6c692716195b38dac73c6c36b4790385f651fe) | Weekly exports check saved database totals before writing. Decimal detail, daily and weekly totals still reconcile exactly. |
+| Database file release | [01a7af6](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/01a7af675c392f2c633ee32b4a894d988a864bd6) | Closing releases timer.db promptly on Windows so its folder can be copied or deleted. |
+| Account identity, database step 6 | [7ce1b1e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/7ce1b1ef544afcda0f7238012535056fb054abee) | Renames apply to all history after a backup and clear Undo. Existing names cannot be combined; add an account to start afresh. |
+| Typed breaks, database step 5 | [13d977a](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/13d977a0b9331b5f32271cb4421199e126a30210) | Breaks are separate entries with a saved return account. Break is reserved; Lunch is available as an ordinary account name. |
+| Database Undo, database step 4 | [ec26cff](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/ec26cff11d5e92f54205396fb3f8fdf939f3fe27) | History moves to edits tables and saves incrementally, retaining the 50-step/2 MB limits. Previous test-build history is not carried over. |
+| SQLite storage, database step 3 | [5b3a313](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/5b3a313ab0a06ad2c50c6b67a40538786d948f9c) | Accounts, entries and tracking state move to timer.db with transactional saves. New databases start empty; old Timesheets files are left untouched and are no longer imported. Preferences remain JSON. |
+| Database foundation, database step 2 | [a8c4204](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/a8c4204ec8adb50c953e3845db62a7edd9732b75) | Added schema validation, exclusive access, format upgrades and fourteen daily backups. Not yet connected to the app at this step. |
+| Visible build identity | [795fc7c](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/795fc7c2a62bc7d5d567a1d002d28addbb28b920) | Published previews show the workflow build number and source commit in the menu. |
+| SQLite dependency, database step 1 | [aa17cda](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/aa17cdaf4ceb5540116abd71ca9124e24a6ad330) | Added the library and a packaged startup check before changing storage. |
+| Test-build updater | [dfa8f63](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/dfa8f6361c19903d331154c12bb57498cd0ae268) | Added an isolated update, launch and rollback helper for Windows preview testing. |
+| Stable account colours and timeline controls | [356a9ca](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/356a9ca27cad38f13cbf8f68bbc61beaf6e90bd9) | Colours survive reordering and renaming; timeline zoom/fit controls and animated account reordering added. |
+| Adjust time today | [3637ecf](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/3637ecfc460e586b3e341df60674ed8982602352) | Signed daily adjustments with notes, included in totals and exports, with editable/deletable timeline chips. |
+| Dashboard and weekly review | [7988bdb](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/7988bdb82d8c79c7e3a8f56fecd1a100da824475) | Timeline, Overview, Hours table and Entries share one tab row. Budget meters, compact pill controls and a larger demo added. Past-day overtime stops at the last activity. |
 
-## v2.32
+### 9 October 2026
 
-- Made dashboard hover, active and drag highlights span the full account column.
-- Removed the top Pause action and its pointer handlers; account play/pause controls remain the tracking controls.
-- Integrated Lunch into the account list with the same row height and spacing.
-- Increased the dashboard timer from 28px to 40px while preserving the live status and day action.
-- Extended renderer checks with full-width active/hover assertions and a hover preview.
+| Milestone | Commit | What changed |
+| --- | --- | --- |
+| Weekly reporting and breaks | [d0851eb](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/d0851eb84b077fc1a8320fdf4f8d39bda6a37bfe) | Added weekly totals, budgets, copyable hours and Move to account. A separate Break button resumes the previous account; break and overtime tint the pill. |
+| Windows integration | [e49eb5e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/e49eb5ecffeebfc2363e91c8dfbf6f67573ceabe) | Added tray controls and optional start with Windows. Hiding keeps tracking; Close timer saves and exits. |
+| Account management | [723d125](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/723d12509f6f30acc7a9245a5636457f158729a1) | Added renaming and drag reordering. The original choice to rename history or start afresh is replaced by database step 6. |
+| Timeline editing | [07d16f0](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/07d16f0948caa2286b881346b2f08c4455a3620e) | Double-click empty space to add time; Delete/Backspace removes selections. Short-block resizing, day limits and recording-block protection improved. |
+| Compact persistent Undo | [a271c89](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/a271c892ad70ffd76b1cda5383f6bd54148f8471) | Undo stores small changes, survives restarts and refuses to overwrite outside edits. History is capped at 50 steps and about 2 MB. |
+| Selection, moves and zoom | [5275696](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/52756969ffaec7988a2335f36d5e11ec97f35815) | Click to select, batch Merge/Undo, pointer-anchored zoom and drag insertion between neighbours. Merge credits blank gaps; Ungroup keeps that added time. |
+| Review and exports | [e4604f3](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/e4604f31f8c3d0400b0535112eb370d9fabccc0d) | Restored grouping, reviewed Tidy day and reconciled weekly exports. Legacy credit placement introduced here is removed by database step 8. |
+| Editing and notes | [9363835](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/9363835f92195fb5394bc590840491d0b216553f) | Restored entry editing/deletion, timeline move/resize, gap additions, notes and persistent Undo. |
+| Pill, settings and demo | [378046f](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/378046fe1dd02251c93299cd497d8f6b5cb066bb) | Restored compact tracking controls, dashboard navigation, working hours, budgets and an isolated demo. |
+| Real tracking and storage | [a3cb0dd](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/a3cb0dd8f361925327d37f4c74e9f493e749d280) | Connected the C# tracking core, early starts, finish/resume, overtime and checkpoint recovery. Copied CSV storage introduced here is replaced by database step 3. |
+| Avalonia foundation | [7d7c2ed](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/7d7c2ed4c81b5c5e5553ec504f95dbf4d1d16792) | Separate pill/dashboard preview with shared themes, cross-platform checks and a portable Windows package, starting from PowerShell v2.32. |
 
-## v2.31
+## PowerShell version history
 
-- Separated dashboard drag grips from budget rings, removed the duplicate idle status, and centred the pill account details vertically.
-- Increased the initial Timeline zoom to 192 pixels per hour so short entries are easier to read and edit.
-- Applied the selected hours/minutes or decimal format to allocated/unallocated totals and both parts of budget usage.
-- Removed the extra Lunch separator and replaced the skewed cutlery icon with a shared upright glyph.
-- Made DPI updates use the same monitor-fit calculation as dashboard layout, and deferred drawing until a view switch is complete.
-- Added regression coverage for fractional budget formats, default timeline zoom, grip spacing and a fitted view transition without intermediate frames.
+These versions were assigned retrospectively to rounds of changes in October 2026. `AccountTimer2.ps1` covers v2.0 to v2.32; earlier scripts are preserved in Git history.
 
-## v2.30
+| Version | Main change |
+| --- | --- |
+| 2.32 | Full-width account highlights, integrated Lunch row and larger dashboard clock. |
+| 2.31 | Clearer spacing and hours formats, timeline zoom and monitor-fit transitions. |
+| 2.30 | Shared dashboard layout and typography; drawing and hit targets agree. |
+| 2.29 | Sage dashboard redesign with live strip, budget details and scrolling lists. |
+| 2.28 | Compact pill becomes the default; fixed dashboard and budget rings added. |
+| 2.27 | Reviewed Tidy day fills small gaps as one undoable edit. |
+| 2.26 | Restored drawer blur/backdrop and aligned day controls. |
+| 2.25 | Larger drawer text, spacing and navigation targets. |
+| 2.24 | Start/Finish day throughout the day; exact early starts and finish/resume accounting. |
+| 2.23 | Basic's Advanced Timer branding and one portable JSON settings file with safe migration/backups. |
+| 2.22 | Decimal weekly summaries and detailed exports reconcile exactly. |
+| 2.21 | Non-destructive groups, existing-credit placement and fractional-gap fixes. |
+| 2.20 | Separated recorded timeline positions from legacy credited totals; retained short sessions. |
+| 2.19 | Theme-aware timeline text and improved antialiasing. |
+| 2.18 | Overlapping timeline lanes and a persisted interface Size setting. |
+| 2.17 | Vertical, scrollable and zoomable day timeline. |
+| 2.16 | Unallocated time shown as h:mm; Finish day moved under Lunch. |
+| 2.15 | Weekday shift patterns and Finish/Carry on controls. |
+| 2.14 | Timeline edge editing, gap filling and Undo. |
+| 2.13 | First timeline view, day navigation and entry tooltips. |
+| 2.12 | Working hours/days, day overrides, overtime and decimal/h:mm formats. |
+| 2.11 | Clearer drawer text, controls and tooltips. |
+| 2.10 | Compiled C# full-view renderer, shadows and blur fixes. |
+| 2.9 | Drawing-speed report and cached week rendering. |
+| 2.8 | Week drawer with daily hours, budgets and copying. |
+| 2.7 | Application icon/identity and themed weekly view. |
+| 2.6 | Time-entry editing, merging, deletion, reassignment and Undo. |
+| 2.5 | Pill shadow, glow and live recording indicator. |
+| 2.4 | Detailed time-entry view and weekly entry exports. |
+| 2.3 | Fixed budget/progress bars and weekly-view startup. |
+| 2.2 | Account budgets, note prompts and weekly reporting. |
+| 2.1 | Expandable pill account list and input/rendering fixes. |
+| 2.0 | Compact pill, remembered positions, idle warning and single-instance protection. |
+| 1.7 | Transparent account list, sharper text and blur fixes. |
+| 1.6 | Editable themes. |
+| 1.5 | Manual totals and quarter-hour rounding. |
+| 1.4 | Overtime counter and colours. |
+| 1.3 | Separate Lunch row. |
+| 1.2 | Account drag reordering. |
+| 1.1 | Add/hide/restore accounts. |
+| 1.0 | Account tracking, CSV summaries, sleep handling and crash recovery. |
+| 0.5 | Monitor scaling and menu fixes. |
+| 0.4 | Compact panel redesign and visible lunch total. |
+| 0.3 | Tray icon, error log and window recovery. |
+| 0.2 | Persisted Lunch pause. |
+| 0.1 | Original always-on-top working-day counter. |
 
-- Refactored the dashboard into shared layout and typography services, separate chrome, live strip, account list, sidebar summary and Week components, alongside the existing Timeline component.
-- Centralised dashboard row bounds, scroll limits, button rectangles and timeline height. Drawing and pointer hit tests use the same geometry.
-- Fixed startup using 30px rendered rows with 48px hit targets. Renderer creation and every layout refresh now configure the dashboard from the shared layout.
-- Unified dashboard text on grayscale GDI+ antialiasing, including header, tabs, timeline labels and week cells. The working pill rendering remains unchanged.
-- Renderer tests now use the actual startup factory and font assignments, and exercise pointer positions above, within and below rows before/after scrolling at 80%, 100%, 125%, 150% and 200% scaling, with rendered previews for each view.
+Repository maintenance after v2.22 removed obsolete scripts and refreshed documentation without changing the runtime version. Full earlier notes remain in [Git history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/migration/CHANGELOG.md).
 
-## v2.29
+## Keeping this useful
 
-- Matched the approved dashboard concept: pale Sage surfaces, a distinct live timer strip, two-line account rows with budget details, and allocated/unallocated totals in the sidebar.
-- Placed Timeline/Week tabs beside date navigation, with actions on one tools row. Removed the duplicate timeline legend so cards use the full workspace; account and week lists scroll within the fixed window.
-- Added softer timeline cards with account-coloured edges and matching pill colours, a seconds clock and larger account spacing.
-- Disabled blur and hid obsolete transparency controls. Existing blur preferences cannot re-enable the backdrop effect.
-- Kept the date header, live dot, budgets, day controls, recording, editing and exports.
-
-## v2.28
-
-- Made the pill the default small tracking view and replaced the expanding full view with a fixed 960 by 640 dashboard, scaled to fit the screen.
-- Added today's date, current account, live recording dot, Pause, Start/Finish day and Back to pill in a stable dashboard header.
-- Kept account controls on the left and Timeline or Week on the right, with consistent action styling and no content-driven resizing.
-- Added budget utilisation rings, usage tooltips, Dashboard and Start/Finish day to the expanded pill. Rings honour each account's configured budget period.
-- Extended Windows rendering checks to cover maximum account capacity, both dashboard tabs, fixed sizing, navigation hit targets and actual pill rendering.
-
-## v2.27
-
-- Added Tidy day in the timeline drawer, with a preview of small gaps and per-gap choices of the preceding account, following account or Leave gap.
-- Uses a five-minute default threshold, adjustable from 1 to 30 minutes. Excludes lunch, away intervals, running neighbours and unbounded gaps.
-- Applies selected fills as one undoable batch of new credited entries without moving original timestamps, and rejects stale or invalid previews before adding any rows.
-- Added synthetic checks for sub-minute and fractional-second gaps, account choices, exclusions, stale previews and credited totals.
-
-## v2.26
-
-- Restored Windows blur with an open drawer by extending the normal timer backdrop to match the drawer height.
-- Kept the day button at the bottom of the extended panel with matching hit testing. Closing the drawer restores the compact normal height.
-- Updated renderer checks to verify the filled backdrop and footer alignment.
-
-## v2.25
-
-- Removed the filled blank corner below the timer when the drawer is taller, with correct shapes on either side.
-- Enlarged drawer text to 14px and timeline text to 15px, increased row spacing and widened the drawer and totals column.
-- Moved navigation onto a separate row, enlarged button targets, and increased text and rows in the separate weekly window.
-- Added Windows renderer compilation and drawing checks for transparent corners and button bounds.
-
-## v2.24
-
-- Start day and Finish day are available throughout the day in the full window and right-click menu, including before scheduled hours and during overtime.
-- Early starts count from the exact press time and persist for that date only. Starting a client account early also starts the day.
-- Finishing stops the active account and freezes unallocated time; restarting excludes the break and retains work already completed.
-- Added synthetic regression checks for early starts, persistence, finishing and resuming, days off and overtime.
-
-## Repository maintenance after v2.22
-
-- Removed the unused historical scripts `AccountTimer.ps1` and `BillableTimer.ps1`, together with `StartAccountTimer.vbs` and `StartTimer.vbs`. The current timer and its launcher never load these files.
-- Kept the existing filenames `AccountTimer2.ps1` and `StartAccountTimer2.vbs` so existing shortcuts and portable installations continue to work.
-- Refreshed `README.md`, `CLAUDE.md` and the application header to describe the current timeline, non-destructive groups, credited-time positions and decimal exports.
-- Kept `tests/`, Windows CI, `.gitignore` and `.gitattributes`. They are development and data-safety infrastructure, not dead files.
-- This was repository housekeeping only. **The application remains v2.22**, and historical sources remain accessible in Git history.
-
-## Version history
-
-| Version | Script | Type | Change |
-| --- | --- | --- | --- |
-| 2.23 | AccountTimer2 | Improved | Consolidate 13 preference files into one portable versioned JSON settings store; preserve the original text files in a migration backup |
-| 2.23 | AccountTimer2 | Improved | Use atomic settings updates with the previous JSON version retained as a backup; reject unreadable or unsupported settings instead of silently resetting |
-| 2.23 | AccountTimer2 | Improved | Rename the Windows application, dialogs, tray text and theme header to Basic’s Advanced Timer, while retaining script and launcher filenames for compatibility |
-| 2.23 | AccountTimer2 | Improved | Keep session records, theme definitions, away intervals and crash recovery separate from preferences |
-| 2.23 | AccountTimer2 | New | Added synthetic PowerShell settings migration and branding regression coverage to Windows CI |
-| 2.22 | AccountTimer2 | Fixed | Two-decimal weekly summary and detailed entry exports now reconcile exactly, including rounding, grouping, adjustments and positioned credit |
-| 2.22 | AccountTimer2 | Improved | Assign deterministic integer 0.01h increments across account/day and detailed rows rather than rounding each independently |
-| 2.22 | AccountTimer2 | Improved | Completed weekly views follow the exported decimal allocation; live active time remains provisional |
-| 2.22 | AccountTimer2 | Fixed | Reject exporting detailed totals if any credited source session is missing from the projected entries; handle Lunch separately |
-| 2.21 | AccountTimer2 | Fixed | Fractional-second session boundaries no longer cause valid timeline gaps to fail allocation validation; safely snap inward after verifying the unrounded selection |
-| 2.21 | AccountTimer2 | New | A timeline gap offers positioning existing merged credit without added hours, or adding new credited time |
-| 2.21 | AccountTimer2 | New | Position metadata projects original merged credit into the timeline and weekly entries without modifying the credited source rows |
-| 2.21 | AccountTimer2 | Improved | Manual weekly grouping preserves every original session and note rather than creating a destructive synthetic merged row |
-| 2.21 | AccountTimer2 | Improved | Group and credit-position metadata are portable CSV files with undo snapshots; positioned time can be adjusted in both editing views |
-| 2.21 | AccountTimer2 | Fixed | Removed clipped short-switch zoom badges; short intervals remain drawn at their recorded positions and can be inspected by zooming in |
-| 2.21 | AccountTimer2 | Fixed | Clearing today's account time now includes corresponding group/position metadata in the undoable edit |
-| 2.20 | AccountTimer2 | Fixed | Legacy merged credits are no longer drawn as imaginary continuous sessions; their total appears separately as unplaced time in the timeline totals |
-| 2.20 | AccountTimer2 | Improved | Added and edited entries keep their chosen time positions but have a dashed outline, while rounding stays out of the clock timeline |
-| 2.20 | AccountTimer2 | Fixed | Recorded stretches shorter than a minute are retained in timeline gap detection and weekly entries; automatic weekly grouping now requires adjacent real sessions |
-| 2.20 | AccountTimer2 | Improved | The weekly entries export identifies merged, added and edited rows, leaves unknown merged clock ranges blank, and warns before a destructive merge |
-| 2.20 | AccountTimer2 | Fixed | Timeline clock and duration labels use the same truncate-to-minute convention as the tooltips |
-| 2.19 | AccountTimer2 | Fixed | Timeline card text uses the selected theme where legible, with light or dark text chosen for contrast on each account colour |
-| 2.19 | AccountTimer2 | Improved | Timeline text uses greyscale GDI+ antialiasing at different sizes while the rest of the drawer keeps its Windows text rendering |
-| 2.18 | AccountTimer2 | Fixed | Stretches that overlap, such as merged or hand-edited entries, now sit side by side on the timeline instead of hiding each other, and dragging an edge only stops at the neighbour in its own lane |
-| 2.18 | AccountTimer2 | Fixed | An entry edited to run past midnight is drawn to the end of the day instead of going missing from the timeline |
-| 2.18 | AccountTimer2 | Improved | Pointing at a merged, edited or added entry on the timeline says how it was made, and that merged times are approximate |
-| 2.18 | AccountTimer2 | New | A Size setting under Appearance, from Smaller to Largest, that scales the whole timer and drawer, is remembered, and makes menus larger too |
-| 2.18 | AccountTimer2 | Improved | Larger text on the timeline and the drawer's buttons, and taller account totals rows |
-| 2.17 | AccountTimer2 | Improved | The timeline is now a vertical day view like a calendar, with hours down the left and each stretch of time as a card showing its name, times and length, so short stretches are readable and easy to drag |
-| 2.17 | AccountTimer2 | New | Scroll the timeline with the mouse wheel and zoom with Ctrl and the wheel or the plus and minus buttons. It opens with now in view, and a Now button jumps back to it |
-| 2.17 | AccountTimer2 | Improved | The timeline has an hour of room either side of the day for adding time, the account totals sit in a column beside it, and the drawer is at least 420 tall |
-| 2.16 | AccountTimer2 | Improved | Unallocated time, in the day and in overtime, is shown as h:mm (for example UNALLOCATED OT 0:45), whatever the hours setting is |
-| 2.16 | AccountTimer2 | Improved | The Finish day button now sits under the Lunch row and only appears from 30 minutes before the end of the day, staying as Carry on once the day is finished |
-| 2.15 | AccountTimer2 | New | Each working day can have its own start and finish times, for shift patterns, set under Working hours, Hours and days, with a Same every day button |
-| 2.15 | AccountTimer2 | New | A Finish day button appears in the overtime section, and Finish for the day is in the menu, to say the day is over. Unallocated time and overtime stop counting and the red not tracking state stays off, until an account is started or Carry on is pressed |
-| 2.15 | AccountTimer2 | Improved | The drawer opens on the Timeline tab, which is now the first tab, with the Week tab second |
-| 2.14 | AccountTimer2 | New | Drag the start or finish edge of a block on the timeline to change its time, snapping to 5 minutes (hold Shift for 1 minute) and stopping at its neighbours, and at now for today |
-| 2.14 | AccountTimer2 | New | Where two blocks touch, one drag moves the change-over between them, and a note stays with its block |
-| 2.14 | AccountTimer2 | New | Click a gap on the timeline to fill it with an account, or drag across part of the gap to fill just that stretch |
-| 2.14 | AccountTimer2 | New | An Undo button on the timeline, and Escape cancels a drag in progress |
-| 2.13 | AccountTimer2 | New | Timeline tab in the drawer, showing a day along a strip with a block for each stretch of time, Lunch as a hatched gap, working hours lightly shaded and a marker for now |
-| 2.13 | AccountTimer2 | New | Point at a block on the timeline to see the account, start and finish, length and note, and use Previous and Next to move between days |
-| 2.13 | AccountTimer2 | Improved | The drawer remembers whether it was showing the week or the timeline, and the menu now says Show drawer and Hide drawer |
-| 2.12 | AccountTimer2 | Fixed | Tooltips no longer hidden behind the timer when it brings itself to the front |
-| 2.12 | AccountTimer2 | New | Usual working hours and days, week start day, and a today-only box for different hours or a day off |
-| 2.12 | AccountTimer2 | New | Days off show DAY OFF and never count as unallocated, overtime or not tracking |
-| 2.12 | AccountTimer2 | New | Unallocated time split into working day and overtime, with both shown on hover |
-| 2.12 | AccountTimer2 | New | Overtime while tracking gets its own purple colours, separate from the red not tracking state |
-| 2.12 | AccountTimer2 | New | Hours shown as decimal (1.25) or hours and minutes (1:15), switchable from the menu or the week drawer |
-| 2.11 | AccountTimer2 | Improved | Budgets in the week drawer show the period once in the heading instead of on every row |
-| 2.11 | AccountTimer2 | Fixed | Week drawer text drawn by Windows, crisp and without ClearType colour fringing |
-| 2.11 | AccountTimer2 | Improved | HOURS, MINUTES and SECONDS labels removed, making the full view 12 pixels shorter |
-| 2.11 | AccountTimer2 | Improved | Clearer corner buttons, moved in from the edges |
-| 2.11 | AccountTimer2 | Improved | Tooltips in the theme's colours instead of black on beige |
-| 2.11 | AccountTimer2 | Fixed | Weekly view text no longer thickens when scrolling |
-| 2.10 | AccountTimer2 | Improved | Full view drawing moved to compiled C#, with automatic fallback to the old drawing |
-| 2.10 | AccountTimer2 | New | The timer draws its own soft shadow and rim, following whatever shape is showing |
-| 2.10 | AccountTimer2 | Fixed | Blur no longer shows as a frosted border, and stays on with the week drawer open |
-| 2.9 | AccountTimer2 | New | Drawing speed report under Appearance, timing each redraw by view |
-| 2.9 | AccountTimer2 | Improved | Week drawer drawn once and reused, cutting redraw time from 74 ms to 47 ms |
-| 2.8 | AccountTimer2 | New | Week drawer beside the full timer, with hours by account and day, budgets, week navigation and copying |
-| 2.8 | AccountTimer2 | Improved | Drawer button moved to the top left so it can't be confused with the Lunch row |
-| 2.8 | AccountTimer2 | Improved | Dragging the full view handed to Windows for smooth movement |
-| 2.8 | AccountTimer2 | Fixed | Grey corner beside the timer when the drawer was open |
-| 2.7 | AccountTimer2 | New | Its own icon in the theme's colours, its own taskbar identity and a themed weekly view title bar |
-| 2.7 | AccountTimer2 | Fixed | Weekly view buttons and table headings drawn smoothly, and chart text drawn by Windows |
-| 2.6 | AccountTimer2 | New | Time entries can be merged, deleted, moved to another account, re-timed or added, with Undo |
-| 2.5 | AccountTimer2 | New | Pill shadow, rim, breathing glow when not tracking and a live dot while recording |
-| 2.5 | AccountTimer2 | Improved | Right-click menu regrouped into Appearance and Open file submenus |
-| 2.4 | AccountTimer2 | New | Time entries tab showing each stretch of time by day, with consecutive stretches merged |
-| 2.4 | AccountTimer2 | New | Weekly entries file listing every stretch of time with its note |
-| 2.3 | AccountTimer2 | Fixed | Budget bars and the day progress bar stuck at empty or full, caused by a rounding quirk |
-| 2.3 | AccountTimer2 | Fixed | Weekly view failing to open, caused by a clashing variable name |
-| 2.2 | AccountTimer2 | New | Budgets per account, weekly, monthly or quarterly, shown as a bar with figures on hover |
-| 2.2 | AccountTimer2 | New | Optional note prompt after 15 minutes or more on an account |
-| 2.2 | AccountTimer2 | New | Weekly view with a chart, hours table, budgets and notes |
-| 2.1 | AccountTimer2 | New | Pill expands into its own account list instead of a Windows menu |
-| 2.1 | AccountTimer2 | Fixed | Pill corners showing the backdrop and jagged pill edges |
-| 2.1 | AccountTimer2 | Fixed | Right-clicking the pill's list picked the wrong account |
-| 2.0 | AccountTimer2 | New | Compact pill view, switchable with the full view, with each view's position remembered |
-| 2.0 | AccountTimer2 | New | Red not tracking state whenever nothing is running during the working day |
-| 2.0 | AccountTimer2 | New | Refuses to start a second copy, so time is never tracked twice |
-| 1.7 | AccountTimer | New | See-through account list with sharpened text and optional blur |
-| 1.7 | AccountTimer | Fixed | Red halo on see-through text, and a laggy snapshot blur replaced |
-| 1.7 | AccountTimer | Improved | Account names use the full width unless the rounding buttons are showing |
-| 1.6 | AccountTimer | New | Fourteen themes in an editable themes file, with reload from the menu |
-| 1.5 | AccountTimer | New | Round today's time up or down to 15 minutes, and set today's time by hand, for accounts and Lunch |
-| 1.4 | AccountTimer | New | Overtime mode after the end of the day, with its own counter and red colours |
-| 1.3 | AccountTimer | Improved | Lunch set apart from the accounts with a gap and a darker band |
-| 1.2 | AccountTimer | New | Drag handles to reorder accounts |
-| 1.1 | AccountTimer | New | Add, hide and bring back accounts, up to 12 showing at once |
-| 1.0 | AccountTimer | New | Account slots with play and pause, one running at a time, logged to sessions.csv with a weekly summary file |
-| 1.0 | AccountTimer | New | Running time pauses when the laptop sleeps, and is recovered after a crash |
-| 0.5 | BillableTimer | Fixed | Soft text on monitors with different scaling, and oversized menus on the 1080p screen |
-| 0.4 | BillableTimer | Improved | Redesigned as a compact panel with bold digits, circular buttons and green and orange states |
-| 0.4 | BillableTimer | New | WORKING status and an always-visible lunch total |
-| 0.3 | BillableTimer | New | Tray icon, error log, and recovery when the timer is hidden or off screen |
-| 0.2 | BillableTimer | New | Lunch button that pauses the count, remembered across restarts |
-| 0.1 | BillableTimer | New | Always-on-top timer counting from 08:30 to 17:30, resetting at midnight, with no install needed |
-
-## Possible future work
-
-- [ ] Investigate Windows-drawn text for the main timer's solid areas, matching the drawer's text rendering. This is an idea for evaluation, not a scheduled release.
+Record each meaningful behaviour, accounting, compatibility or storage change once, newest first, with a version or dated commit link and a short description. Group minor visual fixes together. Keep implementation details in engineering notes and test results in commits or pull requests. Keep plans in the migration documentation.
