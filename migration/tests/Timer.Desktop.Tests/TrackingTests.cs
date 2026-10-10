@@ -78,8 +78,8 @@ public sealed class TrackingTests
         engine.AddSession("A", new(2026, 10, 9, 23, 59, 0), new(2026, 10, 10, 0, 1, 0));
         Assert.Equal(2, engine.Sessions.Count);
         Assert.All(engine.Sessions, s => Assert.Equal(TimeSpan.FromMinutes(1), s.Duration));
-        var adjustment = new SessionRow("2026-10-09", "A", "10:00:00", "rounded down", "-5");
-        var merged = new SessionRow("2026-10-09", "a", "11:00:00", "Merged", "30");
+        var adjustment = new SessionRow("2026-10-09", "A", "10:00:00", "adjusted", "-5");
+        var merged = new SessionRow("2026-10-09", "a", "11:00:00", "adjusted", "30");
         engine.Sessions.Add(adjustment); engine.Sessions.Add(merged);
         Assert.False(adjustment.IsPositioned); Assert.False(merged.IsPositioned);
         Assert.Equal(TimeSpan.FromMinutes(26), engine.Credited("A", new(2026, 10, 9), new(2026, 10, 10)));
@@ -153,7 +153,7 @@ public sealed class TrackingTests
         using (var store = new TimerStore(folder.Path))
         {
             var model = TimerModel.CreateDemo(store: store);
-            count = model.Engine.Sessions.Count; Assert.True(count > 20); Assert.DoesNotContain(model.Engine.Sessions, s => s.IsMerged);
+            count = model.Engine.Sessions.Count; Assert.True(count > 20); Assert.DoesNotContain(model.Engine.Sessions, s => s.End == "merged");
         }
         using (var store = new TimerStore(folder.Path))
         {

@@ -29,7 +29,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         var day = SelectedDate.Date;
         var spans = Engine.Sessions.Where(s => s.Day == day && s.IsPositioned && s.Duration > TimeSpan.Zero).Select(s => (s.From, s.To)).ToList();
-        spans.AddRange(Editor.Positions.Where(p => p.Start.Date == day).Select(p => (p.Start, p.End)));
         if (Engine.Active is { } active && active.Start < day.AddDays(1) && Engine.Now > day) spans.Add((active.Start < day ? day : active.Start, Engine.Now < day.AddDays(1) ? Engine.Now : day.AddDays(1)));
         double start, end;
         if (spans.Count > 0) { start = (spans.Min(s => s.From) - day).TotalHours; end = (spans.Max(s => s.To) - day).TotalHours; }
@@ -44,7 +43,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     public LedgerEditor Editor { get; }
     public string? EditError { get; private set; }
     public event Action<SessionRow?, DateTime, DateTime>? EntryRequested;
-    public event Action<CreditPosition?>? PositionRequested;
     public event Action<string>? GroupRequested;
     public string? ExportPath { get; private set; }
     private readonly HashSet<SessionRow> selectedRows = new(ReferenceEqualityComparer.Instance);
@@ -58,7 +56,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         ? $"Merge {SelectedBlockCount} blocks · adds {Format(TimeSpan.FromMinutes((double)Editor.MergeGapMinutes(selectedRows.ToArray())))} of gap time." : "Select blocks for the same account/day, with only blank gaps between them.";
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
     {
-        if (rows.Count == 0 || rows.Any(s => s.IsMerged || !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
+        if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
         var remove = IsSelected(rows);
         foreach (var row in rows) { if (remove) selectedRows.Remove(row); else selectedRows.Add(row); }
         lastToggled = rows;
@@ -284,7 +282,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>
     /// Builds the sample-data demo. Given a store, the demo runs through the real database (a throwaway one the caller deletes),
-    /// so saving, editing and undo behave as they do for real data. It has no merged legacy credit, as a new database holds none.
+    /// so saving, editing and undo behave as they do for real data. Like a new database it holds no merged legacy credit.
     /// </summary>
     public static TimerModel CreateDemo(Func<DateTime>? clock = null, TimerStore? store = null)
     {
@@ -370,7 +368,6 @@ public sealed class TimerModel : INotifyPropertyChanged
         var start = at ?? (Engine.Plan(day).Working ? Engine.Plan(day).Start : day.AddHours(9));
         var occupied = Engine.Sessions.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero && s.From < day.AddDays(1) && s.To > day)
             .Select(s => (Start: s.From, End: s.To)).ToList();
-        occupied.AddRange(Editor.Positions.Select(p => (p.Start, p.End)));
         if (Engine.Active is { } active) occupied.Add((active.Start, Engine.Now));
         foreach (var span in occupied.OrderBy(s => s.Start))
         {
@@ -415,11 +412,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Deletes the given entries as one undoable edit.</summary>
     public bool DeleteEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Delete(rows));
     public bool UndoEdit() => ChangeLog(Editor.Undo);
-    public void OpenPosition(CreditPosition? position = null) => PositionRequested?.Invoke(position);
     public void OpenGroup(string id) => GroupRequested?.Invoke(id);
-    public bool PlaceCredit(string account, DateTime start, decimal minutes, string note, CreditPosition? old = null)
-        => ChangeLog(() => Editor.Place(account, start, minutes, note, old));
-    public bool UnplaceCredit(CreditPosition position) => ChangeLog(() => Editor.Unplace(position));
     public bool GroupEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Group(rows));
     public bool UngroupEntries(string id) => ChangeLog(() => Editor.Ungroup(id));
     public bool TidyDay(IReadOnlyList<GapChoice> choices, int limit) => ChangeLog(() => Editor.Tidy(choices, limit));

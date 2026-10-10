@@ -181,7 +181,7 @@ public sealed class TimerDatabase : IDisposable
             start_at TEXT,
             end_at TEXT,
             seconds INTEGER NOT NULL,
-            origin TEXT NOT NULL DEFAULT 'recorded' CHECK (origin IN ('recorded', 'added', 'edited', 'merge')),
+            origin TEXT NOT NULL DEFAULT 'recorded' CHECK (origin IN ('recorded', 'added', 'edited')),
             note TEXT NOT NULL DEFAULT '',
             group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL,
             created_at TEXT NOT NULL,

@@ -22,45 +22,6 @@ public sealed class CreditReviewTests
     private static TrackingEngine Engine() => new(clock: () => Day.AddHours(15));
     private static SessionRow Row(string start, string minutes, string end = "added", string account = "Account one") => new("2026-10-09", account, start, end, minutes);
     [Fact]
-    public void PlacementUsesExistingCreditAndUndoRestoresMetadataAcrossRestart()
-    {
-        var folder = Path.Combine(Path.GetTempPath(), "timer-credit-" + Guid.NewGuid());
-        try
-        {
-            using (var store = new TimerStore(folder))
-            {
-                var engine = Engine(); var prefs = store.Load(engine); engine.Sessions.Add(Row("00:00:00", "90", "merged"));
-                var editor = store.Editor!; var original = editor.SessionsCsv;
-                editor.Place("Account one", Day.AddHours(9), 30, "Review, note"); store.Save(engine, prefs);
-                Assert.Equal(original, editor.SessionsCsv); Assert.Equal(60, editor.Unplaced(Day)["Account one"]);
-                Assert.Contains("Review, note", editor.PositionsCsv);
-            }
-            using (var store = new TimerStore(folder))
-            {
-                var engine = Engine(); var prefs = store.Load(engine); var editor = store.Editor!;
-                Assert.Single(editor.Positions); Assert.True(editor.CanUndo); editor.Undo(); store.Save(engine, prefs);
-                Assert.Empty(editor.Positions); Assert.Equal(90, editor.Unplaced(Day)["Account one"]); Assert.Single(engine.Sessions);
-            }
-        }
-        finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
-    }
-    [Fact]
-    public void PlacementRejectsExcessOverlapAndStaleEditsWithoutChangingTotals()
-    {
-        var engine = Engine(); engine.Sessions.Add(Row("00:00:00", "60", "merged")); engine.Sessions.Add(Row("10:00:00", "60"));
-        var editor = new LedgerEditor(engine); var original = editor.SessionsCsv;
-        editor.Place("Account one", Day.AddHours(9), 30, ""); var position = editor.Positions.Single();
-        Assert.Throws<ArgumentException>(() => editor.Place("Account one", Day.AddHours(12), 31, ""));
-        Assert.Throws<ArgumentException>(() => editor.Place("Account one", Day.AddHours(10), 20, ""));
-        Assert.Throws<ArgumentException>(() => editor.Add("Internal", Day.AddHours(9), Day.AddHours(9.25), ""));
-        editor.Place("Account one", Day.AddHours(16), 20, "Future placement"); editor.Undo();
-        editor.Place("Account one", Day.AddHours(12), 60, "Moved", position);
-        Assert.Equal(0, editor.Unplaced(Day)["Account one"]);
-        Assert.Throws<InvalidOperationException>(() => editor.Unplace(position));
-        editor.Unplace(editor.Positions.Single()); Assert.Equal(60, editor.Unplaced(Day)["Account one"]);
-        Assert.Equal(original, editor.SessionsCsv);
-    }
-    [Fact]
     public void GroupsPreserveIntervalsNotesAndTotalsAndPruneAfterSourceEdits()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30") });
@@ -75,12 +36,12 @@ public sealed class CreditReviewTests
         editor.Undo(); Assert.Single(editor.Entries(Day, Day.AddDays(1)));
     }
     [Fact]
-    public void ProjectionReconcilesMultipleMergedRowsWithPartialPositionsAndNegativeAdjustments()
+    public void ProjectionReconcilesAdjustmentsIncludingNegativeOnes()
     {
-        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("00:00:00", "30", "merged"), Row("00:00:01", "40", "merged"), Row("00:00:02", "-2.33", "adjusted") });
-        var editor = new LedgerEditor(engine); editor.Place("Account one", Day.AddHours(9), 50, "placed");
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("00:00:00", "30", "adjusted"), Row("00:00:01", "40", "adjusted"), Row("00:00:02", "-2.33", "adjusted") });
+        var editor = new LedgerEditor(engine);
         var entries = editor.Entries(Day, Day.AddDays(1));
-        Assert.Equal(67.67m, entries.Sum(e => e.Minutes)); Assert.Equal(20, entries.Single(e => e.Type.Contains("unplaced")).Minutes);
+        Assert.Equal(67.67m, entries.Sum(e => e.Minutes)); Assert.All(entries, e => Assert.Equal("Adjustment", e.Type));
         var export = new WeekExport(editor, engine, Day.AddDays(-4));
         Assert.Equal(113, export.TotalUnits); Assert.Equal(export.TotalUnits, export.EntryUnits.Sum());
     }
@@ -113,33 +74,17 @@ public sealed class CreditReviewTests
         editor.Undo(); Assert.Equal(3, engine.Sessions.Count);
         engine.Sessions[1] = engine.Sessions[1] with { Account = "Break" }; Assert.Empty(editor.TidyCandidates(Day));
     }
-    [Fact]
-    public void ImportedPositionsKeepUnknownColumnsAndInvalidCreditFailsReview()
-    {
-        var engine = Engine(); engine.Sessions.Add(Row("00:00:00", "60", "merged"));
-        var csv = "Id,Date,Account,Start,Minutes,Extra\np1,2026-10-09,Account one,09:00:00,30,keep\n";
-        var editor = new LedgerEditor(engine, positionsCsv: csv); var p = editor.Positions.Single();
-        editor.Place(p.Account, p.Start.AddHours(1), p.Minutes, "New note", p);
-        Assert.Contains("keep", editor.PositionsCsv); Assert.Contains("New note", editor.PositionsCsv);
-        Assert.Throws<InvalidDataException>(() => new LedgerEditor(engine, positionsCsv: csv.Replace(",30,", ",90,")));
-    }
     [AvaloniaFact]
-    public void NativeReviewControlsPlaceGroupTidyAndExport()
+    public void NativeReviewControlsGroupTidyAndExport()
     {
-        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("00:00:00", "60", "merged"), Row("10:00:00", "30"), Row("10:33:00", "27") });
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("10:00:00", "30"), Row("10:33:00", "27") });
         var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
-        var place = new PositionWindow(model); place.Show(dashboard);
-        Find<TextBox>(place, "PositionStart").Text = "09:00";
-        Capture(place, "credit-position-editor");
-        Find<Button>(place, "SavePosition").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert.Single(model.Editor.Positions); Assert.False(place.IsVisible);
-        Capture(dashboard, "positioned-credit-timeline");
         var tidy = new TidyWindow(model); tidy.Show(dashboard);
         Dispatcher.UIThread.RunJobs(); using var tidyFrame = tidy.CaptureRenderedFrame();
         foreach (var box in tidy.GetVisualDescendants().OfType<ComboBox>()) box.SelectedIndex = 1;
         Capture(tidy, "tidy-day-review");
         Find<Button>(tidy, "ApplyTidy").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert.Equal(4, engine.Sessions.Count);
+        Assert.Equal(3, engine.Sessions.Count);
         var grouping = new GroupWindow(model); grouping.Show(dashboard);
         Dispatcher.UIThread.RunJobs(); using var groupFrame = grouping.CaptureRenderedFrame();
         foreach (var box in grouping.GetVisualDescendants().OfType<CheckBox>()) box.IsChecked = true;
@@ -154,16 +99,12 @@ public sealed class CreditReviewTests
     }
 
     [Fact]
-    public void FutureEntriesCanBeAddedMovedAndPlacedWithinOneDay()
+    public void FutureEntriesCanBeAddedAndMovedWithinOneDay()
     {
         var engine = Engine(); var editor = new LedgerEditor(engine);
         editor.Add("Account one", Day.AddDays(1).AddHours(9), Day.AddDays(1).AddHours(10), "Tomorrow");
         var row = engine.Sessions.Single(); editor.Edit(row, row.Account, row.From.AddHours(1), row.To.AddHours(1), "Moved");
         Assert.Equal(Day.AddDays(1).AddHours(10), engine.Sessions.Single().From);
-        engine.Sessions.Add(new("2026-10-10", "Account one", "00:00:00", "merged", "30"));
-        editor.Place("Account one", Day.AddDays(1).AddHours(12), 30, "Future credit");
-        Assert.Equal(0, editor.Unplaced(Day.AddDays(1))["Account one"]);
-        Assert.Throws<ArgumentException>(() => editor.Place("Account one", Day.AddDays(1).AddHours(10), 30, "Overlap", editor.Positions.Single()));
     }
     [AvaloniaFact]
     public void GroupIsOneTimelineCardAndWeekUngroupRestoresSourceCards()
@@ -303,10 +244,10 @@ public sealed class CreditReviewTests
         var editor = new LedgerEditor(engine); var csv = editor.SessionsCsv;
         Assert.Throws<ArgumentException>(() => editor.EditTimeline(engine.Sessions[1], Day.AddMinutes(-10), Day.AddMinutes(20), true));
         Assert.Equal(csv, editor.SessionsCsv); Assert.False(editor.CanUndo);
-        engine.Sessions.Clear(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:15:00", "30"), Row("00:00:00", "30", "merged", "Account two") });
-        editor.Place("Account two", Day.AddHours(10), 15, "Fixed credit"); csv = editor.SessionsCsv; var undo = editor.StateJson;
-        Assert.Throws<ArgumentException>(() => editor.EditTimeline(engine.Sessions[2], Day.AddHours(9).AddMinutes(10), Day.AddHours(9).AddMinutes(40), true));
-        Assert.Equal(csv, editor.SessionsCsv); Assert.Equal(undo, editor.StateJson);
+        engine.Sessions.Clear(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:15:00", "30") });
+        engine.ToggleAccount("Account two"); csv = editor.SessionsCsv; var undo = System.Text.Json.JsonSerializer.Serialize(editor.Steps); // Running from 15:00.
+        Assert.Throws<ArgumentException>(() => editor.EditTimeline(engine.Sessions[2], Day.AddHours(14).AddMinutes(50), Day.AddHours(15).AddMinutes(20), true));
+        Assert.Equal(csv, editor.SessionsCsv); Assert.Equal(undo, System.Text.Json.JsonSerializer.Serialize(editor.Steps));
     }
     [Fact]
     public void InsertionReordersBothWaysAndRepeatedUndoSurvivesRestartWithLaterRecording()
@@ -324,7 +265,7 @@ public sealed class CreditReviewTests
         Assert.Equal(Day.AddHours(9.5), engine.Sessions[0].From);
         Assert.Equal(Day.AddHours(9), engine.Sessions[2].From);
         var later = Row("11:00:00", "15"); engine.Sessions.Add(later);
-        editor = new LedgerEditor(engine, stateJson: editor.StateJson, notesCsv: editor.NotesCsv);
+        editor = new LedgerEditor(engine, notesCsv: editor.NotesCsv, steps: editor.Steps.ToList());
         Assert.Equal(3, editor.UndoCount);
         editor.Undo(); Assert.Equal(firstMove, new LedgerEditorPrefix(engine, 3).Csv);
         editor.Undo(); Assert.Equal(annotatedNotes, editor.NotesCsv);
@@ -337,21 +278,6 @@ public sealed class CreditReviewTests
         public string Csv { get; }
         public LedgerEditorPrefix(TrackingEngine source, int count)
         { var copy = Engine(); copy.Sessions.AddRange(source.Sessions.Take(count)); Csv = new LedgerEditor(copy).SessionsCsv; }
-    }
-    [Fact]
-    public void UndoImportsLegacyHistoryAndKeepsOnlyFiftySteps()
-    {
-        var engine = Engine(); var editor = new LedgerEditor(engine);
-        editor.Add("Account one", Day.AddHours(9), Day.AddHours(9.5), "first");
-        // A schema 1 file, as an earlier build wrote it: one whole-ledger snapshot of the state before the Add.
-        var blank = new LedgerEditor(Engine());
-        var legacy = System.Text.Json.JsonSerializer.Serialize(new LedgerEditState(1,
-            new LedgerUndo("Add time", new(), engine.Sessions.ToList(), blank.NotesCsv, null, blank.PositionsCsv)));
-        editor = new LedgerEditor(engine, stateJson: legacy); Assert.Equal(1, editor.UndoCount);
-        for (var i = 0; i < 55; i++) editor.Edit(engine.Sessions[0], "Account one", engine.Sessions[0].From, engine.Sessions[0].To, "note " + i);
-        Assert.Equal(50, editor.UndoCount);
-        for (var i = 0; i < 50; i++) editor.Undo();
-        Assert.False(editor.CanUndo); Assert.Equal("note 4", editor.Note(engine.Sessions[0]));
     }
     [AvaloniaFact]
     public void DashboardZoomRetainsPointerAnchorAfterRefresh()
@@ -453,7 +379,7 @@ public sealed class CreditReviewTests
         editor.Ungroup(group.GroupId!); Assert.Equal(150, engine.Sessions.Sum(s => decimal.Parse(s.Minutes, CultureInfo.InvariantCulture)));
     }
     [Fact]
-    public void GapMergeUndoSurvivesRestartAndRunningOrPositionedTimePreventsIt()
+    public void GapMergeUndoSurvivesRestartAndRunningOrRecordedTimePreventsIt()
     {
         var folder = Path.Combine(Path.GetTempPath(), "timer-gap-merge-" + Guid.NewGuid());
         try
@@ -468,8 +394,7 @@ public sealed class CreditReviewTests
             {
                 var engine = Engine(); var preferences = store.Load(engine); store.Editor!.Undo(); store.Save(engine, preferences);
                 Assert.Equal(2, engine.Sessions.Count); Assert.Equal(60, engine.Sessions.Sum(s => decimal.Parse(s.Minutes, CultureInfo.InvariantCulture)));
-                engine.Sessions.Add(Row("00:00:00", "30", "merged", "Account two"));
-                store.Editor.Place("Account two", Day.AddHours(9.5), 30, "In gap");
+                engine.Sessions.Add(Row("09:30:00", "30", "added", "Account two")); // Fills the gap between the two blocks.
                 Assert.False(store.Editor.CanCombine(engine.Sessions.Take(2).ToArray()));
             }
             var clock = Day.AddHours(9.5); var running = new TrackingEngine(clock: () => clock);

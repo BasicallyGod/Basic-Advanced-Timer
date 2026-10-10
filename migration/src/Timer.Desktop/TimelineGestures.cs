@@ -115,7 +115,7 @@ public static class TimelineGestures
     {
         nudge = false;
         var occupied = model.Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.IsPositioned && s.Duration > TimeSpan.Zero)
-            .Select(s => (Start: s.From, End: s.To)).Concat(model.Editor.Positions.Select(p => (Start: p.Start, End: p.End))).ToList();
+            .Select(s => (Start: s.From, End: s.To)).ToList();
         if (model.Engine.Active is { } active && model.Engine.Now > active.Start)
             occupied.Add((active.Start, model.Engine.Now));
         var grid = TimeSpan.FromMinutes(Math.Round(requested.TotalMinutes / 5) * 5);

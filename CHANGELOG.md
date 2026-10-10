@@ -4,6 +4,14 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration old code removed, step 8
+
+- Credit positions are gone. That removes the "Position existing credit" window and Tools menu item, the outlined position blocks on the timeline, the "Unplaced legacy credit" caption, and the code that stored, validated and undid them. A new database has none, and an older test database simply ignores any it holds.
+- Merged legacy credit is gone. A row that had no clock position and stood for summed time can no longer exist, so every entry other than an adjustment sits at a place on the clock. "Merged credit" messages, checks and the matching menu rules went with it. Grouping and Merge (which fill blank gaps) are unchanged.
+- The old snapshot undo import and the whole-history text record are gone. Undo history is read and written only through the `edits` tables, and an earlier build's extra `positions` part is ignored when it is found. The hash checks that offer Undo only while the records still match stay, because notes and groups are not tables yet.
+- The database no longer allows a `merge` origin or keeps the positions record. Earlier test builds' leftover records are cleared on the next save.
+- Tests for placement, imported positions, merged credit and the old history formats were removed or rewritten for adjustments, and one new test covers loading a history that still has a positions part.
+
 ## Migration exports checked against the database, step 7
 
 - Before the week export writes `Detail.csv` and `Summary.csv`, it now queries the saved database for each account's total on each day, breaks included, and compares them with the week's figures. If they disagree, the export is stopped with a message and nothing is written. The timer saves first, so this only trips on a real inconsistency.

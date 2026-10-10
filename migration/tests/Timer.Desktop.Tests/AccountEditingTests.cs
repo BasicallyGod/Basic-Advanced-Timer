@@ -19,22 +19,20 @@ public sealed class AccountEditingTests
     private static TrackingEngine Engine(Func<DateTime>? clock = null) => new(clock: clock ?? (() => Day.AddHours(15)));
 
     [Fact]
-    public void RenamingMovesEntriesNotesGroupsAndPositionsAndStartsFreshHistory()
+    public void RenamingMovesEntriesNotesAndGroupsAndStartsFreshHistory()
     {
         var engine = Engine();
-        engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("11:00:00", "30", account: "Account two"), Row("00:00:00", "60", "merged") });
+        engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("11:00:00", "30", account: "Account two") });
         var editor = new LedgerEditor(engine);
         editor.Edit(engine.Sessions[0], "Account one", Day.AddHours(9), Day.AddHours(9.5), "first note");
         editor.Group(new[] { engine.Sessions[0], engine.Sessions[1] });
-        editor.Place("Account one", Day.AddHours(13), 20, "placed");
         Assert.True(editor.CanUndo);
         var total = engine.Sessions.Count;
-        Assert.Equal(3, editor.RenameAccount("Account one", "Client A"));
+        Assert.Equal(2, editor.RenameAccount("Account one", "Client A"));
         Assert.DoesNotContain(engine.Sessions, s => s.Account == "Account one");
-        Assert.Equal(3, engine.Sessions.Count(s => s.Account == "Client A")); Assert.Equal(total, engine.Sessions.Count);
+        Assert.Equal(2, engine.Sessions.Count(s => s.Account == "Client A")); Assert.Equal(total, engine.Sessions.Count);
         Assert.Equal("first note", editor.Note(engine.Sessions[0]));
-        Assert.Equal("Client A", Assert.Single(editor.Positions).Account);
-        Assert.DoesNotContain("Account one", editor.NotesCsv + editor.GroupsCsv + editor.PositionsCsv);
+        Assert.DoesNotContain("Account one", editor.NotesCsv + editor.GroupsCsv);
         Assert.Contains("Client A", editor.GroupsCsv);
         Assert.Equal("Account two", engine.Sessions[2].Account);
         Assert.False(editor.CanUndo); Assert.Equal(0, editor.UndoCount); // Old steps would restore the old name.

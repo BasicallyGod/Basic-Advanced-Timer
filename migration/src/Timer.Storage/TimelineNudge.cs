@@ -41,9 +41,8 @@ public sealed partial class LedgerEditor
             if (final.Count(s => s.Date == row.Date && s.Start == row.Start && s.Account.Equals(row.Account, StringComparison.OrdinalIgnoreCase)) > 1)
                 throw new ArgumentException("Another entry uses that account and start time.");
             if (final.Any(s => !ReferenceEquals(s, row) && s.From < row.To && s.To > row.From)
-                || Positions.Any(p => p.Start < row.To && p.End > row.From)
                 || (engine.Active is { } active && active.Start < row.To && engine.Now > row.From))
-                throw new ArgumentException("These blocks cannot be moved into recorded, positioned or running time.");
+                throw new ArgumentException("These blocks cannot be moved into recorded or running time.");
         }
         return plan.Select(p => new TimelineChange(p.Key, p.Value)).ToArray();
     }

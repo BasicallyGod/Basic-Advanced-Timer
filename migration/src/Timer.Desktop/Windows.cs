@@ -363,11 +363,10 @@ public sealed class DashboardWindow : Window
         undo = Ui.Button("Undo", () => model.UndoEdit(), "UndoEdit");
         merge = Ui.Button("Merge", () => model.MergeSelection(), "MergeSelected");
         var more = Ui.Button("Tools", () => { }, "ReviewTools");
-        var place = new MenuItem { Header = "Position existing credit…" }; place.Click += (_, _) => new PositionWindow(model).Show(this);
         var group = new MenuItem { Header = "Group entries…" }; group.Click += (_, _) => new GroupWindow(model).Show(this);
         var tidy = new MenuItem { Header = "Tidy day…" }; tidy.Click += (_, _) => new TidyWindow(model).Show(this);
         var export = new MenuItem { Header = "Export week…" }; export.Click += (_, _) => new ExportWindow(model).Show(this);
-        more.ContextMenu = new ContextMenu { ItemsSource = new[] { place, group, tidy, export } };
+        more.ContextMenu = new ContextMenu { ItemsSource = new[] { group, tidy, export } };
         more.Click += (_, _) => more.ContextMenu.Open(more);
         // Editing buttons sit on the left and only where they apply; Tools stays on the right. Hours and minutes is in Settings.
         addTime = Ui.Button("Add time", () => model.OpenGap(), "AddTime");
@@ -413,8 +412,8 @@ public sealed class DashboardWindow : Window
         };
         model.PropertyChanged += Changed;
         model.EntryRequested += ShowEntry;
-        model.PositionRequested += ShowPosition; model.GroupRequested += ShowGroup;
-        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.PositionRequested -= ShowPosition; model.GroupRequested -= ShowGroup; };
+        model.GroupRequested += ShowGroup;
+        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; };
         Refresh(true);
     }
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
@@ -425,7 +424,6 @@ public sealed class DashboardWindow : Window
         entryEditor.Closed += (_, _) => entryEditor = null;
         entryEditor.Show(this);
     }
-    private void ShowPosition(Timer.Storage.CreditPosition? position) { if (IsVisible) new PositionWindow(model, position).Show(this); }
     private void ShowGroup(string id) { if (IsVisible) new GroupWindow(model, id).Show(this); }
     public void SelectTab(bool showWeek) { weekMode = showWeek; Refresh(true); }
     private void SelectSection(string section)

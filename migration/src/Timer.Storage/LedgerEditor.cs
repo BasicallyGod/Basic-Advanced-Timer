@@ -5,12 +5,6 @@ using Timer.Core;
 
 namespace Timer.Storage;
 
-// The full-snapshot form used by schema 1 and 2 edit history. It is only read now, to import an older
-// history; new steps are the much smaller UndoStep splices (schema 3).
-public sealed record LedgerUndo(string Description, List<Dictionary<string, string>> BeforeRows,
-    List<SessionRow> AfterRows, string BeforeNotes, string? BeforeGroups, string? BeforePositions = null);
-public sealed record LedgerEditState(int SchemaVersion, LedgerUndo? Undo, List<LedgerUndo>? History = null, List<UndoStep>? Steps = null);
-
 // Sessions remain the credited ledger. Extra CSV fields and reversible edits
 // travel with it; Undo restores the edited stretch and retains later recordings.
 public sealed partial class LedgerEditor
@@ -23,7 +17,6 @@ public sealed partial class LedgerEditor
     // Most recent step last. Each step stores only what its edit changed.
     private readonly List<UndoStep> history = new();
     private readonly Dictionary<UndoStep, int> stepBytes = new(ReferenceEqualityComparer.Instance);
-    private string? stateJson;
     public const int MaxUndoSteps = 50;
     // A few very large edits could still add up, so the saved history has a size limit as well.
     public const int MaxHistoryBytes = 2_000_000;
@@ -31,67 +24,34 @@ public sealed partial class LedgerEditor
     public UndoStep? UndoState => history.LastOrDefault();
     public int UndoCount => history.Count;
     public bool Changed { get; private set; }
-    // Offered only while the ledger, notes, groups and positions still match what the last edit left behind.
+    // Offered only while the ledger, notes, and groups still match what the last edit left behind.
     public bool CanUndo => UndoState is { } u && engine.Sessions.Count >= u.AfterCount
         && UndoMath.HashSessions(engine.Sessions, u.AfterCount) == u.AfterHash
         && UndoMath.HashText(NotesCsv) == u.AfterNotesHash
-        && UndoMath.HashGroups(groups) == u.AfterGroupsHash
-        && UndoMath.HashText(PositionsCsv) == u.AfterPositionsHash;
+        && UndoMath.HashGroups(groups) == u.AfterGroupsHash;
     public string? UndoLabel => CanUndo ? UndoState?.Description : null;
     public LedgerEditor(TrackingEngine engine, string[]? headers = null, IEnumerable<Dictionary<string, string>>? rows = null,
-        string? notesCsv = null, string? groupsCsv = null, string? stateJson = null, string? positionsCsv = null, int maxHistoryBytes = MaxHistoryBytes, IEnumerable<UndoStep>? steps = null)
+        string? notesCsv = null, string? groupsCsv = null, int maxHistoryBytes = MaxHistoryBytes, IEnumerable<UndoStep>? steps = null)
     {
         this.engine = engine; historyBudget = maxHistoryBytes; this.headers = headers ?? new[] { "Date", "Account", "Start", "End", "Minutes" };
         if (rows is not null) foreach (var pair in engine.Sessions.Zip(rows)) raw[pair.First] = new(pair.Second);
         notes = CsvTable.Parse(notesCsv ?? "Date,Account,Start,Note\n", new[] { "Date", "Account", "Start", "Note" });
         groups = groupsCsv;
-        positions = ParsePositions(positionsCsv);
-        if (stateJson is not null)
-        {
-            var state = JsonSerializer.Deserialize<LedgerEditState>(stateJson) ?? throw new InvalidDataException("Invalid edit history.");
-            switch (state.SchemaVersion)
-            {
-                case 1 or 2:
-                    // Older files kept whole-ledger snapshots. Only the latest step is carried over, as splices.
-                    var latest = state.History?.LastOrDefault() ?? state.Undo;
-                    if (latest is not null && FromSnapshot(latest) is { } converted) history.Add(converted);
-                    break;
-                case 3:
-                    foreach (var step in (state.Steps ?? new()).TakeLast(MaxUndoSteps))
-                    { CheckStep(step); history.Add(step); }
-                    break;
-                default: throw new InvalidDataException("Unsupported edit history.");
-            }
-            TrimHistory();
-        }
         if (steps is not null)
         {
             foreach (var step in steps.TakeLast(MaxUndoSteps)) { CheckStep(step); history.Add(step); }
             TrimHistory();
         }
-        ValidateCredits();
     }
     /// <summary>The undo history, oldest first. Steps never change once made, so the store can tell which ones it has already saved.</summary>
     public IReadOnlyList<UndoStep> Steps => history;
     private static void CheckStep(UndoStep? step)
     {
-        if (step is null || step.Rows is null || step.Notes is null || step.Groups is null || step.Positions is null
+        if (step is null || step.Rows is null || step.Notes is null || step.Groups is null
             || step.Rows.Before is null || step.Rows.Start < 0 || step.Rows.AfterLength < 0
             || step.Rows.Start + step.Rows.AfterLength > step.AfterCount
             || step.Rows.Before.Any(r => r is null || UndoMath.Core.Any(k => !r.ContainsKey(k))))
             throw new InvalidDataException("Invalid edit history.");
-    }
-    // Turn an old whole-ledger step into a splice against the current ledger, if the ledger still matches it.
-    private UndoStep? FromSnapshot(LedgerUndo old)
-    {
-        var count = old.AfterRows.Count;
-        if (engine.Sessions.Count < count || !engine.Sessions.Take(count).SequenceEqual(old.AfterRows)) return null;
-        var after = engine.Sessions.Take(count).Select(Fields).ToList();
-        return new(old.Description, count, UndoMath.HashSessions(engine.Sessions, count),
-            UndoMath.Diff(old.BeforeRows, after, UndoMath.SameCore),
-            UndoMath.DiffText(old.BeforeNotes, NotesCsv), UndoMath.DiffText(old.BeforeGroups, groups),
-            UndoMath.DiffText(old.BeforePositions ?? PositionsCsv, PositionsCsv),
-            UndoMath.HashText(NotesCsv), UndoMath.HashGroups(groups), UndoMath.HashText(PositionsCsv));
     }
     private int Bytes(UndoStep step)
     {
@@ -104,7 +64,6 @@ public sealed partial class LedgerEditor
         while (history.Count > MaxUndoSteps) history.RemoveAt(0);
         while (history.Count > 1 && history.Sum(Bytes) > historyBudget) history.RemoveAt(0);
         foreach (var gone in stepBytes.Keys.Where(k => !history.Contains(k)).ToList()) stepBytes.Remove(gone);
-        stateJson = null;
     }
     private static bool SameKey(Dictionary<string, string> item, SessionRow row) =>
         item["Date"] == row.Date && item["Start"] == row.Start && item["Account"].Equals(row.Account, StringComparison.OrdinalIgnoreCase);
@@ -120,8 +79,6 @@ public sealed partial class LedgerEditor
     public string SessionsCsv => new CsvTable(headers, Rows()).Serialize();
     public string NotesCsv => notes.Serialize();
     public string? GroupsCsv => groups;
-    private static readonly JsonSerializerOptions StateOptions = new() { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
-    public string StateJson => stateJson ??= JsonSerializer.Serialize(new LedgerEditState(3, null, null, history), StateOptions);
     private int Index(SessionRow row)
     {
         var index = engine.Sessions.FindIndex(s => ReferenceEquals(s, row));
@@ -138,7 +95,6 @@ public sealed partial class LedgerEditor
     private void ValidateInterval(SessionRow row, SessionRow? except)
     {
         if (engine.Sessions.Any(s => !ReferenceEquals(s, except) && s.IsPositioned && s.Duration > TimeSpan.Zero && s.From < row.To && s.To > row.From)
-            || Positions.Any(p => p.Start < row.To && p.End > row.From)
             || (engine.Active is { } active && active.Start < row.To && engine.Now > row.From))
             throw new ArgumentException("This interval overlaps recorded or running time. Choose a free gap.");
     }
@@ -161,7 +117,7 @@ public sealed partial class LedgerEditor
         => rows.Count >= step.AfterCount && UndoMath.HashRows(rows, step.AfterCount) == step.AfterHash;
     private void Change(string description, Action mutation)
     {
-        var before = Rows(); var beforeNotes = NotesCsv; var beforeGroups = groups; var beforePositions = PositionsCsv;
+        var before = Rows(); var beforeNotes = NotesCsv; var beforeGroups = groups;
         // Validate group metadata before touching the ledger; keep unrelated fields.
         CsvTable? table;
         try { table = groups is null ? null : CsvTable.Parse(groups, new[] { "GroupId", "Date", "Account", "Start", "End", "Minutes" }); }
@@ -176,11 +132,11 @@ public sealed partial class LedgerEditor
             groups = table.Serialize();
         }
         if (history.Count > 0 && !LedgerMatches(history[^1], before)) history.Clear();
-        var notesNow = NotesCsv; var positionsNow = PositionsCsv;
+        var notesNow = NotesCsv;
         history.Add(new(description, engine.Sessions.Count, UndoMath.HashSessions(engine.Sessions, engine.Sessions.Count),
             UndoMath.Diff(before, Rows(), UndoMath.SameFields),
-            UndoMath.DiffText(beforeNotes, notesNow), UndoMath.DiffText(beforeGroups, groups), UndoMath.DiffText(beforePositions, positionsNow),
-            UndoMath.HashText(notesNow), UndoMath.HashGroups(groups), UndoMath.HashText(positionsNow)));
+            UndoMath.DiffText(beforeNotes, notesNow), UndoMath.DiffText(beforeGroups, groups),
+            UndoMath.HashText(notesNow), UndoMath.HashGroups(groups)));
         TrimHistory();
         Changed = true;
     }
@@ -191,7 +147,7 @@ public sealed partial class LedgerEditor
         if (old.IsPositioned && (account != old.Account || start != old.From || end != old.To))
         { row = TimedRow(account, start, end, "edited"); ValidateInterval(row, old); }
         else if (!old.IsPositioned && (account != old.Account || start != old.From || end != old.To))
-            throw new ArgumentException("Merged credit and adjustments support notes only at this stage.");
+            throw new ArgumentException("Adjustments support notes only at this stage.");
         CheckNoteKey(old);
         if (engine.Sessions.Any(s => !ReferenceEquals(s, old) && s.Date == row.Date && s.Start == row.Start && s.Account.Equals(row.Account, StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("Another entry uses that account and start time.");
@@ -208,10 +164,9 @@ public sealed partial class LedgerEditor
     public void Delete(SessionRow row)
     {
         var index = Index(row); CheckNoteKey(row);
-        if (row.IsMerged) throw new ArgumentException("Merged credit cannot be deleted here.");
         Change("Delete entry", () => { engine.Sessions.RemoveAt(index); notes.Rows.RemoveAll(n => SameKey(n, row)); });
     }
-    /// <summary>Moves every past entry, note, group and credit position from one account name to another.
+    /// <summary>Moves every past entry, note and group from one account name to another.
     /// The new name must not already appear in the history, so two accounts can never be combined by accident.
     /// Earlier Undo steps would put the old name back under a new one, so the history starts afresh.</summary>
     public int RenameAccount(string oldName, string newName)
@@ -219,11 +174,11 @@ public sealed partial class LedgerEditor
         if (string.IsNullOrWhiteSpace(newName) || newName != newName.Trim()) throw new ArgumentException("Choose a name for the account.");
         bool Is(string name) => name.Equals(oldName, StringComparison.OrdinalIgnoreCase);
         if (!newName.Equals(oldName, StringComparison.OrdinalIgnoreCase) && (engine.Sessions.Any(r => r.Account.Equals(newName, StringComparison.OrdinalIgnoreCase))
-            || notes.Rows.Concat(positions.Rows).Any(r => r["Account"].Equals(newName, StringComparison.OrdinalIgnoreCase))))
+            || notes.Rows.Any(r => r["Account"].Equals(newName, StringComparison.OrdinalIgnoreCase))))
             throw new ArgumentException($"\"{newName}\" is already used in the history.");
         if (engine.Active is { } active && Is(active.Account)) throw new InvalidOperationException("Stop tracking this account before renaming it.");
         var count = engine.Sessions.Count(r => Is(r.Account));
-        if (count == 0 && !notes.Rows.Concat(positions.Rows).Any(r => Is(r["Account"]))) return 0;
+        if (count == 0 && !notes.Rows.Any(r => Is(r["Account"]))) return 0;
         Change("Rename account", () =>
         {
             for (var i = 0; i < engine.Sessions.Count; i++)
@@ -234,7 +189,7 @@ public sealed partial class LedgerEditor
                 raw[row] = Fields(old); raw[row]["Account"] = newName;
                 engine.Sessions[i] = row;
             }
-            foreach (var item in notes.Rows.Concat(positions.Rows).Where(r => Is(r["Account"]))) item["Account"] = newName;
+            foreach (var item in notes.Rows.Where(r => Is(r["Account"]))) item["Account"] = newName;
             if (groups is not null)
             {
                 var table = CsvTable.Parse(groups, groupHeaders);
@@ -242,7 +197,7 @@ public sealed partial class LedgerEditor
                 groups = table.Serialize();
             }
         });
-        history.Clear(); stepBytes.Clear(); stateJson = null;
+        history.Clear(); stepBytes.Clear();
         return count;
     }
     /// <summary>
@@ -276,7 +231,7 @@ public sealed partial class LedgerEditor
         foreach (var row in moving)
         {
             Index(row); CheckNoteKey(row);
-            if (!row.IsPositioned) throw new ArgumentException("Merged credit and adjustments cannot be moved to another account here.");
+            if (!row.IsPositioned) throw new ArgumentException("Adjustments cannot be moved to another account here.");
             if (engine.Sessions.Any(s => !moving.Any(m => ReferenceEquals(m, s)) && s.Date == row.Date && s.Start == row.Start && s.Account.Equals(account, StringComparison.OrdinalIgnoreCase)))
                 throw new ArgumentException("Another entry for that account starts at the same time.");
         }
@@ -303,8 +258,7 @@ public sealed partial class LedgerEditor
         foreach (var row in rows)
         {
             Index(row); CheckNoteKey(row);
-            if (row.IsMerged) throw new ArgumentException("Merged credit cannot be deleted here.");
-        }
+            }
         Change(rows.Count == 1 ? "Delete entry" : "Delete entries", () =>
         {
             engine.Sessions.RemoveAll(s => rows.Any(r => ReferenceEquals(r, s)));
@@ -327,13 +281,12 @@ public sealed partial class LedgerEditor
         }
         var restoredNotes = CsvTable.Parse(UndoMath.RevertText(NotesCsv, undo.Notes) ?? "Date,Account,Start,Note\n", new[] { "Date", "Account", "Start", "Note" });
         var restoredGroups = UndoMath.RevertText(groups, undo.Groups);
-        var restoredPositions = ParsePositions(UndoMath.RevertText(PositionsCsv, undo.Positions));
         var tail = engine.Sessions.Skip(undo.AfterCount).ToArray();
         var rows = new List<SessionRow>(engine.Sessions.Take(start));
         foreach (var item in restoredRows) { raw[item.Row] = item.Fields; rows.Add(item.Row); }
         rows.AddRange(engine.Sessions.Skip(after).Take(undo.AfterCount - after));
         engine.Sessions.Clear(); engine.Sessions.AddRange(rows); engine.Sessions.AddRange(tail);
-        notes = restoredNotes; groups = restoredGroups; positions = restoredPositions;
+        notes = restoredNotes; groups = restoredGroups;
         history.RemoveAt(history.Count - 1); TrimHistory(); Changed = true;
     }
 }

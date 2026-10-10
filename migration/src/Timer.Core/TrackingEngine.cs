@@ -27,16 +27,16 @@ public sealed class WorkSchedule
     }
 }
 
-// Minutes is the authoritative credited duration, including negative adjustments and merged credit.
+// Minutes is the authoritative credited duration, including negative adjustments.
 public sealed record SessionRow(string Date, string Account, string Start, string End, string Minutes)
 {
     public DateTime Day => DateTime.ParseExact(Date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
     public DateTime From => Day + TimeSpan.ParseExact(Start, "hh\\:mm\\:ss", CultureInfo.InvariantCulture);
     public TimeSpan Duration => TimeSpan.FromMinutes(double.Parse(Minutes, CultureInfo.InvariantCulture));
     public DateTime To => From + Duration;
-    public bool IsAdjustment => End.StartsWith("rounded", StringComparison.OrdinalIgnoreCase) || End.Equals("adjusted", StringComparison.OrdinalIgnoreCase);
-    public bool IsMerged => End.Equals("merged", StringComparison.OrdinalIgnoreCase);
-    public bool IsPositioned => !IsAdjustment && !IsMerged;
+    public bool IsAdjustment => End.Equals("adjusted", StringComparison.OrdinalIgnoreCase);
+    // Everything but an adjustment sits at a place on the clock.
+    public bool IsPositioned => !IsAdjustment;
 }
 
 public sealed class TrackingEngine

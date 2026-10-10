@@ -17,7 +17,7 @@ public sealed class UndoHistoryTests
     private static readonly string[] Accounts = { "Account one", "Account two", "Account three" };
     private static string Clock(int minutes) => $"{minutes / 60:00}:{minutes % 60:00}:00";
 
-    private sealed record Snapshot(List<Dictionary<string, string>> Rows, string Notes, string? Groups, string Positions, int AfterCount);
+    private sealed record Snapshot(List<Dictionary<string, string>> Rows, string Notes, string? Groups, int AfterCount);
 
     private static void AssertRowsEqual(List<Dictionary<string, string>> expected, IEnumerable<Dictionary<string, string>> actual, string where)
     {
@@ -28,7 +28,7 @@ public sealed class UndoHistoryTests
     }
 
     // An oracle that does not trust the editor: a full snapshot is taken before every successful edit, and every Undo
-    // must put the ledger, notes, groups and positions back exactly as that snapshot, with later recordings kept.
+    // must put the ledger, notes and groups back exactly as that snapshot, with later recordings kept.
     [Fact]
     public void RandomEditsUndoToTheExactEarlierStateAndKeepLaterRecordings()
     {
@@ -37,7 +37,7 @@ public sealed class UndoHistoryTests
         {
             var rnd = new Random(seed); var engine = Engine();
             for (var i = 0; i < 12; i++) engine.Sessions.Add(Row(Clock(8 * 60 + i * 40), "20", account: Accounts[i % 3]));
-            engine.Sessions.Add(Row("00:00:00", "30", "merged", "Account two"));
+            engine.Sessions.Add(Row("00:00:00", "30", "adjusted", "Account two"));
             var editor = new LedgerEditor(engine);
             var expected = new List<Snapshot>(); var recorded = 0;
             for (var step = 0; step < 120; step++)
@@ -45,7 +45,7 @@ public sealed class UndoHistoryTests
                 var roll = rnd.Next(100);
                 if (roll < 55)
                 {
-                    var before = new Snapshot(editor.Rows(), editor.NotesCsv, editor.GroupsCsv, editor.PositionsCsv, 0);
+                    var before = new Snapshot(editor.Rows(), editor.NotesCsv, editor.GroupsCsv, 0);
                     var marker = editor.UndoState;
                     try
                     {
@@ -80,12 +80,12 @@ public sealed class UndoHistoryTests
                     var after = editor.Rows();
                     AssertRowsEqual(snapshot.Rows, after.Take(snapshot.Rows.Count), $"seed {seed} step {step} restored rows");
                     AssertRowsEqual(tail, after.Skip(snapshot.Rows.Count), $"seed {seed} step {step} later recordings");
-                    Assert.Equal(snapshot.Notes, editor.NotesCsv); Assert.Equal(snapshot.Groups, editor.GroupsCsv); Assert.Equal(snapshot.Positions, editor.PositionsCsv);
+                    Assert.Equal(snapshot.Notes, editor.NotesCsv); Assert.Equal(snapshot.Groups, editor.GroupsCsv);
                 }
                 else
                 {
                     // A restart: everything the editor needs is rebuilt from what would have been saved.
-                    editor = new LedgerEditor(engine, null, editor.Rows(), editor.NotesCsv, editor.GroupsCsv, editor.StateJson, editor.PositionsCsv);
+                    editor = new LedgerEditor(engine, null, editor.Rows(), editor.NotesCsv, editor.GroupsCsv, steps: editor.Steps.ToList());
                     restarts++;
                     Assert.Equal(expected.Count, editor.UndoCount); Assert.Equal(expected.Count > 0, editor.CanUndo);
                 }
@@ -127,11 +127,11 @@ public sealed class UndoHistoryTests
         var editor = new LedgerEditor(engine);
         editor.Edit(engine.Sessions[0], "Account one", Day.AddHours(9), Day.AddHours(9.75), "a note");
         Assert.True(editor.CanUndo);
-        var state = editor.StateJson;
-        Assert.True(new LedgerEditor(engine, stateJson: state, notesCsv: editor.NotesCsv).CanUndo);
-        var otherNotes = new LedgerEditor(engine, stateJson: state, notesCsv: "Date,Account,Start,Note\n2026-10-09,Account one,09:00:00,changed elsewhere\n");
+        var state = editor.Steps.ToList();
+        Assert.True(new LedgerEditor(engine, steps: state, notesCsv: editor.NotesCsv).CanUndo);
+        var otherNotes = new LedgerEditor(engine, steps: state, notesCsv: "Date,Account,Start,Note\n2026-10-09,Account one,09:00:00,changed elsewhere\n");
         Assert.Equal(1, otherNotes.UndoCount); Assert.False(otherNotes.CanUndo);
-        var otherGroups = new LedgerEditor(engine, stateJson: state, notesCsv: editor.NotesCsv,
+        var otherGroups = new LedgerEditor(engine, steps: state, notesCsv: editor.NotesCsv,
             groupsCsv: "GroupId,Date,Account,Start,End,Minutes\ng1,2026-10-09,Account one,09:00:00,added,45\n");
         Assert.False(otherGroups.CanUndo);
         Assert.Throws<InvalidOperationException>(() => otherNotes.Undo());
@@ -168,7 +168,8 @@ public sealed class UndoHistoryTests
         }
         Assert.Equal(50, editor.UndoCount);
         // Snapshots of 3,000 rows each would be about 30 MB. Splices are a few hundred bytes per edit.
-        Assert.True(editor.StateJson.Length < 100_000, $"history was {editor.StateJson.Length} bytes");
+        var size = JsonSerializer.Serialize(editor.Steps).Length;
+        Assert.True(size < 100_000, $"history was {size} bytes");
     }
 
     [Fact]
@@ -187,7 +188,7 @@ public sealed class UndoHistoryTests
             else editor.EditTimeline(ordered[99], ordered[99].From.AddMinutes(-100), ordered[99].To.AddMinutes(-100), true);
         }
         Assert.InRange(editor.UndoCount, 1, 8);
-        Assert.True(Encoding.UTF8.GetByteCount(editor.StateJson) < budget + 5_000);
+        Assert.True(Encoding.UTF8.GetByteCount(JsonSerializer.Serialize(editor.Steps)) < budget + 5_000);
         Assert.True(editor.CanUndo); var first = engine.Sessions[0]; editor.Undo(); Assert.NotEqual(first, engine.Sessions[0]);
         // A single step larger than the whole budget is still kept, so the latest edit can always be undone.
         var tiny = new LedgerEditor(engine, maxHistoryBytes: 1);
@@ -197,31 +198,14 @@ public sealed class UndoHistoryTests
     }
 
     [Fact]
-    public void AnEarlierSnapshotHistoryImportsOnlyItsLatestStep()
-    {
-        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
-        var editor = new LedgerEditor(engine); var legacy = new List<LedgerUndo>();
-        for (var i = 0; i < 3; i++)
-        {
-            var rows = editor.Rows(); var notes = editor.NotesCsv; var groups = editor.GroupsCsv; var positions = editor.PositionsCsv;
-            editor.Edit(engine.Sessions[0], "Account one", engine.Sessions[0].From, engine.Sessions[0].To, "note " + i);
-            legacy.Add(new LedgerUndo("Edit entry", rows, engine.Sessions.ToList(), notes, groups, positions));
-        }
-        var json = JsonSerializer.Serialize(new LedgerEditState(2, legacy[^1], legacy));
-        var loaded = new LedgerEditor(engine, null, editor.Rows(), editor.NotesCsv, editor.GroupsCsv, json, editor.PositionsCsv);
-        Assert.Equal(1, loaded.UndoCount); Assert.True(loaded.CanUndo);
-        loaded.Undo(); Assert.Equal("note 1", loaded.Note(engine.Sessions[0])); Assert.False(loaded.CanUndo);
-    }
-
-    [Fact]
     public void AMalformedHistoryStopsLoadingInsteadOfBeingIgnored()
     {
         var engine = Engine(); engine.Sessions.Add(Row("09:00:00", "30"));
         var editor = new LedgerEditor(engine);
         editor.Edit(engine.Sessions[0], "Account one", Day.AddHours(9), Day.AddHours(9.75), "x");
-        var node = JsonNode.Parse(editor.StateJson)!; node["Steps"]![0]!["Rows"]!["Start"] = 999;
-        Assert.Throws<InvalidDataException>(() => new LedgerEditor(engine, stateJson: node.ToJsonString()));
-        Assert.Throws<InvalidDataException>(() => new LedgerEditor(engine, stateJson: "{\"SchemaVersion\":9}"));
+        var step = editor.Steps[0];
+        Assert.Throws<InvalidDataException>(() => new LedgerEditor(engine, steps: new[] { step with { Rows = step.Rows with { Start = 999 } } }));
+        Assert.Throws<InvalidDataException>(() => new LedgerEditor(engine, steps: new[] { step with { Rows = null! } }));
     }
 
     [Fact]
@@ -254,14 +238,37 @@ public sealed class UndoHistoryTests
             var engine = Engine(); var prefs = store.Load(engine);
             store.Editor!.Add("Account one", Day.AddHours(9), Day.AddHours(10), "a"); store.Save(engine, prefs);
             store.Editor.Add("Account two", Day.AddHours(11), Day.AddHours(12), "b"); store.Save(engine, prefs);
-            Assert.Equal(2L, store.Database.Scalar("SELECT COUNT(*) FROM edits")); Assert.Equal(8L, store.Database.Scalar("SELECT COUNT(*) FROM edit_changes"));
+            Assert.Equal(2L, store.Database.Scalar("SELECT COUNT(*) FROM edits")); Assert.Equal(6L, store.Database.Scalar("SELECT COUNT(*) FROM edit_changes"));
             store.Editor.Undo(); store.Save(engine, prefs);
-            Assert.Equal(1L, store.Database.Scalar("SELECT COUNT(*) FROM edits")); Assert.Equal(4L, store.Database.Scalar("SELECT COUNT(*) FROM edit_changes")); // The undone edit's parts went with it.
+            Assert.Equal(1L, store.Database.Scalar("SELECT COUNT(*) FROM edits")); Assert.Equal(3L, store.Database.Scalar("SELECT COUNT(*) FROM edit_changes")); // The undone edit's parts went with it.
             StorageFaults.Block(store);
             store.Editor.Add("Account two", Day.AddHours(13), Day.AddHours(14), "c");
             Assert.NotNull(Record.Exception(() => store.Save(engine, prefs)));
             StorageFaults.Unblock(store); store.Save(engine, prefs);
             Assert.Equal(2L, store.Database.Scalar("SELECT COUNT(*) FROM edits"));
+        }
+        finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+    }
+
+    [Fact]
+    public void AHistorySavedWithAPositionsPartByAnEarlierBuildStillLoads()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-old-positions-" + Guid.NewGuid());
+        try
+        {
+            using (var store = new TimerStore(folder))
+            {
+                var engine = Engine(); var prefs = store.Load(engine);
+                store.Editor!.Add("Account one", Day.AddHours(9), Day.AddHours(10), "a"); store.Save(engine, prefs);
+                var edit = store.Database.Scalar("SELECT id FROM edits");
+                store.Database.Execute("INSERT INTO edit_changes (edit_id, table_name, row_id, before_json, after_json) VALUES ($e, 'positions', 0, '{}', 'x')", ("$e", edit));
+                store.Database.Execute("INSERT INTO meta (key, value) VALUES ('positions', 'Id,Date,Account,Start,Minutes,Note')");
+            }
+            using (var store = new TimerStore(folder))
+            {
+                var engine = Engine(); store.Load(engine);
+                Assert.True(store.Editor!.CanUndo); store.Editor.Undo(); Assert.Empty(engine.Sessions);
+            }
         }
         finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }

@@ -35,54 +35,6 @@ public class ReviewWindow : Window
         => day.Date + TimeSpan.ParseExact(value ?? "", new[] { @"hh\:mm", @"hh\:mm\:ss" }, CultureInfo.InvariantCulture);
 }
 
-public sealed class PositionWindow : ReviewWindow
-{
-    public PositionWindow(TimerModel model, CreditPosition? old = null) : base(old is null ? "Position existing credit" : "Edit credit position")
-    {
-        var day = old?.Start.Date ?? model.SelectedDate;
-        var available = model.Editor.Unplaced(day).Where(p => p.Value > 0 || p.Key == old?.Account).Select(p => p.Key).ToList();
-        if (old is not null && !available.Contains(old.Account)) available.Add(old.Account);
-        Root.Children.Add(Ui.Text(day.ToString("dddd, d MMMM yyyy"), 13, "muted"));
-        Root.Children.Add(Info("Place merged credit on the timeline. This uses existing credit and keeps account totals unchanged."));
-        var accounts = new ComboBox { Name = "PositionAccount", ItemsSource = available.Select(BreakAccount.Display).ToList(), SelectedItem = BreakAccount.Display(old?.Account ?? available.FirstOrDefault() ?? ""), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
-        var remaining = Ui.Text("", 13, "muted");
-        void Update()
-        {
-            var account = BreakAccount.Stored((string?)accounts.SelectedItem ?? "");
-            var minutes = model.Editor.Unplaced(day).GetValueOrDefault(account) + (old?.Account == account ? old.Minutes : 0);
-            remaining.Text = minutes.ToString("0.00", CultureInfo.InvariantCulture) + " minutes available";
-        }
-        accounts.SelectionChanged += (_, _) => Update(); Update(); Root.Children.Add(accounts); Root.Children.Add(remaining);
-        var suggested = old?.Start ?? (model.Engine.Plan(day).Working ? model.Engine.Plan(day).Start : day.AddHours(9));
-        var suggestedMinutes = old?.Minutes ?? Math.Min(30m, model.Editor.Unplaced(day).GetValueOrDefault(BreakAccount.Stored((string?)accounts.SelectedItem ?? "")));
-        if (old is null)
-        {
-            var spans = model.Engine.Sessions.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero && s.Day == day).Select(s => (Start: s.From, End: s.To)).ToList();
-            spans.AddRange(model.Editor.Positions.Where(p => p.Start.Date == day).Select(p => (p.Start, p.End)));
-            if (model.Engine.Active is { } active) spans.Add((active.Start, model.Engine.Now));
-            foreach (var span in spans.OrderBy(s => s.Start))
-            {
-                if (span.End <= suggested) continue;
-                if (span.Start >= suggested.AddMinutes((double)suggestedMinutes)) break;
-                suggested = span.End;
-            }
-            // A saved credited duration may finish between seconds; move inward to a whole second.
-            suggested = day.AddSeconds(Math.Ceiling((suggested - day).TotalSeconds));
-            var cap = day.AddDays(1);
-            var next = spans.Where(s => s.Start > suggested).Select(s => s.Start).Append(cap).Min();
-            suggestedMinutes = Math.Max(0, Math.Min(suggestedMinutes, decimal.Floor((decimal)(next - suggested).TotalMinutes * 100m) / 100m));
-        }
-        var start = new TextBox { Name = "PositionStart", Width = 120, Text = suggested.ToString("HH:mm:ss"), Watermark = "Start (HH:mm)" };
-        var amount = new TextBox { Name = "PositionMinutes", Width = 120, Text = suggestedMinutes.ToString("0.00", CultureInfo.InvariantCulture), Watermark = "Minutes of existing credit" };
-        Root.Children.Add(Ui.Text("Start time and minutes to place", 12, "muted")); Root.Children.Add(Ui.Horizontal(start, amount));
-        var note = new TextBox { Name = "PositionNote", Text = old?.Note ?? "", Watermark = "Position note", AcceptsReturn = true, Height = 90, TextWrapping = TextWrapping.Wrap }; Root.Children.Add(note); Root.Children.Add(Error);
-        var buttons = Ui.Horizontal(Ui.Button("Save position", () => Apply(model, () => model.PlaceCredit(BreakAccount.Stored((string?)accounts.SelectedItem ?? ""), At(day, start.Text), decimal.Parse(amount.Text ?? "", CultureInfo.InvariantCulture), note.Text ?? "", old)), "SavePosition"), Ui.Button("Cancel", Close));
-        if (old is not null) buttons.Children.Add(Ui.Button("Unplace", () => Apply(model, () => model.UnplaceCredit(old)), "UnplaceCredit"));
-        Root.Children.Add(buttons);
-        if (available.Count == 0) Error.Text = "No unplaced merged credit on this day.";
-    }
-}
-
 public sealed class GroupWindow : ReviewWindow
 {
     public GroupWindow(TimerModel model, string? id = null) : base(id is null ? "Group entries" : "Grouped entries")
@@ -98,7 +50,7 @@ public sealed class GroupWindow : ReviewWindow
                 Root.Children.Add(Ui.Button($"{entry.Day:ddd d MMM} · {model.Label(entry.Account)} · {entry.Sources.Count} entries", () => { var owner = Owner; Close(); if (owner is Window window) new GroupWindow(model, entry.GroupId).Show(window); }));
         }
         var grouped = existing.SelectMany(e => e.Sources).ToHashSet();
-        var rows = group?.Sources ?? model.Engine.Sessions.Where(s => s.Day >= week && s.Day < week.AddDays(7) && !s.IsMerged && !grouped.Contains(s)).OrderBy(s => s.From).ToArray();
+        var rows = group?.Sources ?? model.Engine.Sessions.Where(s => s.Day >= week && s.Day < week.AddDays(7) && !grouped.Contains(s)).OrderBy(s => s.From).ToArray();
         Root.Children.Add(Info("Merge entries for the same account/day. Blank gaps are added as credited time. Overlapping or intervening blocks prevent a merge. Undo reverses the added time; Ungroup keeps it."));
         var choices = new List<(CheckBox Check, SessionRow Row)>();
         foreach (var row in rows)

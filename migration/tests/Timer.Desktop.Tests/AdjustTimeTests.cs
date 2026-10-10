@@ -53,15 +53,13 @@ public sealed class AdjustTimeTests
     }
 
     [Fact]
-    public void APastDayAdjustmentTakesMiddayAndAnAdjustmentCanBeDeletedButMergedCreditCannot()
+    public void APastDayAdjustmentTakesMiddayAndAnAdjustmentCanBeDeleted()
     {
         var engine = Engine(); var editor = new LedgerEditor(engine);
-        engine.Sessions.Add(new("2026-10-06", "Account one", "00:00:00", "merged", "60"));
         var row = editor.Adjust("Account one", new DateTime(2026, 10, 6), 20, "", engine.Now);
         Assert.Equal("12:00:00", row.Start);
         editor.Delete(row); Assert.DoesNotContain(engine.Sessions, s => s.IsAdjustment);
         Assert.True(editor.CanUndo); editor.Undo(); Assert.Contains(engine.Sessions, s => s.IsAdjustment);
-        Assert.Throws<ArgumentException>(() => editor.Delete(engine.Sessions[0]));
     }
 
     [Theory]

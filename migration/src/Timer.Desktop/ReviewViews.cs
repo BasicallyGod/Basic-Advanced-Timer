@@ -16,8 +16,7 @@ public static class ReviewViews
     {
         var day = model.SelectedDate;
         var root = Ui.Grid("*", "Auto,Auto,*");
-        var unplaced = TimeSpan.FromMinutes((double)model.Editor.Unplaced(day).Values.Sum());
-        var caption = Ui.Text(unplaced > TimeSpan.Zero ? "Unplaced legacy credit " + model.Format(unplaced) : "Recorded time", 12, "muted");
+        var caption = Ui.Text("Recorded time", 12, "muted");
         if (model.SelectedBlockCount > 0) caption.Text += $" · {model.SelectedBlockCount} blocks selected · " + model.MergeHint;
         else caption.Text += " · Click blocks to select";
         caption.TextWrapping = TextWrapping.Wrap;
@@ -36,10 +35,9 @@ public static class ReviewViews
         var groups = model.Editor.Entries(day, day.AddDays(1)).Where(e => e.GroupId is not null && e.Sources.Any(s => s.IsPositioned && s.Duration > TimeSpan.Zero)).ToArray();
         var grouped = groups.SelectMany(e => e.Sources).ToHashSet();
         var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.IsPositioned && s.Duration > TimeSpan.Zero && !grouped.Contains(s))
-            .Select(s => (s.Account, Start: s.From, End: s.To, Row: (SessionRow?)s, Position: (CreditPosition?)null, Group: (ReviewEntry?)null)).ToList();
+            .Select(s => (s.Account, Start: s.From, End: s.To, Row: (SessionRow?)s, Group: (ReviewEntry?)null)).ToList();
         if (model.Engine.Active is { } active && active.Start < day.AddDays(1) && model.Engine.Now > day)
-            intervals.Add((active.Account, active.Start < day ? day : active.Start, model.Engine.Now < day.AddDays(1) ? model.Engine.Now : day.AddDays(1), null, null, null));
-        intervals.AddRange(model.Editor.Positions.Where(p => p.Start.Date == day).Select(p => (p.Account, p.Start, p.End, (SessionRow?)null, (CreditPosition?)p, (ReviewEntry?)null)));
+            intervals.Add((active.Account, active.Start < day ? day : active.Start, model.Engine.Now < day.AddDays(1) ? model.Engine.Now : day.AddDays(1), null, null));
         foreach (var group in groups)
         {
             var sections = new List<List<SessionRow>>();
@@ -51,7 +49,7 @@ public static class ReviewViews
             foreach (var section in sections)
             {
                 var display = group with { Start = section.Min(s => s.From), End = section.Max(s => s.To), Minutes = section.Sum(s => decimal.Parse(s.Minutes, System.Globalization.CultureInfo.InvariantCulture)) };
-                intervals.Add((group.Account, display.Start!.Value, display.End!.Value, null, null, display));
+                intervals.Add((group.Account, display.Start!.Value, display.End!.Value, null, display));
             }
         }
         var ends = new List<DateTime>();
@@ -73,7 +71,7 @@ public static class ReviewViews
                 Child = height >= 24 ? text : null, ClipToBounds = true };
             var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
             if (model.IsSelected(selectionSources)) { card.Classes.Add("mergeSelected"); text.Children.Insert(0, Ui.Text("✓ Selected", 12)); }
-            var note = interval.Group is { } groupNote ? "Grouped entries · " + groupNote.Note : interval.Position is { } positionNote ? "Existing credit · " + positionNote.Note : interval.Row is null ? "Recording now · stop tracking to move or edit" : model.Editor.Note(interval.Row);
+            var note = interval.Group is { } groupNote ? "Grouped entries · " + groupNote.Note : interval.Row is null ? "Recording now · stop tracking to move or edit" : model.Editor.Note(interval.Row);
             if (height >= 90 && !string.IsNullOrWhiteSpace(note))
             {
                 var noteText = Ui.Text(note, 12); noteText.Foreground = Brush.Parse("#24312B");
@@ -87,7 +85,7 @@ public static class ReviewViews
                 card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, new[] { row }), MergeMenu(model), new Separator(), DeleteMenu(model, new[] { row }) } };
                 TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour);
             }
-            if (interval.Row is null && interval.Position is null && interval.Group is null)
+            if (interval.Row is null && interval.Group is null)
             {
                 // The block that is recording now. A green outline, a label and the stop menu make it clear why it can't be dragged.
                 card.Classes.Add("recording"); card.Name = "TimelineRecording"; card.Cursor = new Cursor(StandardCursorType.Arrow);
@@ -97,14 +95,6 @@ public static class ReviewViews
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };
                 card.PointerPressed += (_, e) =>
                 { if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) { model.ExplainRunning(); e.Handled = true; } };
-            }
-            if (interval.Position is { } position)
-            {
-                card.Tag = position; card.Name = "CreditPosition" + position.Id;
-                card.DoubleTapped += (_, e) => { model.OpenPosition(position); e.Handled = true; };
-                var editPosition = new MenuItem { Header = "Edit / unplace existing credit…" }; editPosition.Click += (_, _) => model.OpenPosition(position);
-                card.ContextMenu = new ContextMenu { ItemsSource = new[] { editPosition } };
-                card.BorderThickness = new Thickness(2); card.BorderBrush = Brush.Parse("#24312B");
             }
             if (interval.Group is { } group)
             {
@@ -142,8 +132,8 @@ public static class ReviewViews
         DateTime At(double y) => day.AddMinutes(Math.Clamp(Math.Floor(y / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var add = new MenuItem { Header = "Add new credited time…" }; add.Click += (_, _) => model.OpenGap(clicked);
         canvas.ContextMenu = new ContextMenu { ItemsSource = new[] { add, MergeMenu(model) } };
-        bool OnBlock(object? source) => source is Visual visual && (visual is Border { Tag: SessionRow or CreditPosition or ReviewEntry }
-            || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow or CreditPosition or ReviewEntry));
+        bool OnBlock(object? source) => source is Visual visual && (visual is Border { Tag: SessionRow or ReviewEntry }
+            || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow or ReviewEntry));
         Point? emptyPress = null;
         canvas.PointerPressed += (_, e) =>
         {
@@ -349,13 +339,12 @@ public static class ReviewViews
         {
             void Open()
             {
-                if (entry.PositionId is { } id) model.OpenPosition(model.Editor.Positions.Single(p => p.Id == id));
-                else if (entry.GroupId is { } group) model.OpenGroup(group);
+                if (entry.GroupId is { } group) model.OpenGroup(group);
                 else model.OpenEntry(entry.Sources[0]);
             }
             var caption = entry.GroupId is not null ? $"Group · {entry.Sources.Count} entries" : entry.Start is { } start && entry.End is { } end ? $"{start:HH:mm} – {end:HH:mm}" : entry.Type;
             var name = entry.Sources.Count == 1 ? "WeekEntry" + model.Engine.Sessions.IndexOf(entry.Sources[0]) : "WeekReviewEntry";
-            var selectable = entry.PositionId is null && entry.Sources.Count > 0 && entry.Sources.All(s => !s.IsMerged);
+            var selectable = entry.Sources.Count > 0;
             var button = Ui.Button("", () => { if (selectable) model.ToggleSelection(entry.Sources); else Open(); }, name);
             button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
             button.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
@@ -365,7 +354,7 @@ public static class ReviewViews
             labels.Children.Add(Ui.Text($"{entry.Day:ddd d MMM} · {model.Label(entry.Account)} · {caption} · {duration}", 12));
             if (!string.IsNullOrWhiteSpace(entry.Note)) labels.Children.Add(new TextBlock { Text = entry.Note, FontSize = 12, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
             button.Content = labels;
-            if (entry.PositionId is null && entry.Sources.Count > 0 && entry.Sources.All(s => !s.IsMerged))
+            if (entry.Sources.Count > 0)
             {
                 button.Classes.Set("mergeSelected", model.IsSelected(entry.Sources));
                 var edit = new MenuItem { Header = "Edit / inspect entry…" }; edit.Click += (_, _) => Open();
@@ -424,7 +413,7 @@ public static class ReviewViews
     {
         var selected = model.IsSelected(clicked);
         var rows = selected ? model.Engine.Sessions.Where(model.SelectedRows.Contains).ToList() : clicked.ToList();
-        var item = new MenuItem { Name = "DeleteMenu", Header = rows.Count > 1 ? $"Delete {rows.Count} blocks" : "Delete", IsEnabled = rows.Count > 0 && rows.All(r => !r.IsMerged) };
+        var item = new MenuItem { Name = "DeleteMenu", Header = rows.Count > 1 ? $"Delete {rows.Count} blocks" : "Delete", IsEnabled = rows.Count > 0 };
         item.Click += (_, _) => { if (selected) model.DeleteSelection(); else model.DeleteEntries(rows); };
         return item;
     }

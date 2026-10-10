@@ -108,11 +108,11 @@ public sealed class TimerStore : IDisposable
                 .ToDictionary(p => p.Table);
             var ledger = JsonSerializer.Deserialize<LedgerPart>(parts["ledger"].After) ?? throw new InvalidDataException("Invalid edit history.");
             var step = new UndoStep(edit.Description, ledger.Count, ledger.Hash, JsonSerializer.Deserialize<Splice<Dictionary<string, string>>>(parts["ledger"].Before)!,
-                JsonSerializer.Deserialize<TextChange>(parts["notes"].Before)!, JsonSerializer.Deserialize<TextChange>(parts["groups"].Before)!, JsonSerializer.Deserialize<TextChange>(parts["positions"].Before)!,
-                parts["notes"].After, parts["groups"].After, parts["positions"].After);
+                JsonSerializer.Deserialize<TextChange>(parts["notes"].Before)!, JsonSerializer.Deserialize<TextChange>(parts["groups"].Before)!,
+                parts["notes"].After, parts["groups"].After); // An older build also saved a positions part; it is ignored.
             steps.Add(step); persistedEdits.Add((edit.Id, step));
         }
-        Editor = new LedgerEditor(engine, null, null, Meta("notes"), Meta("groups"), null, Meta("positions"), steps: steps);
+        Editor = new LedgerEditor(engine, null, null, Meta("notes"), Meta("groups"), steps: steps);
         // The editor may have trimmed or refused steps it could not use, so what is saved is brought back in line on the next save.
         engine.Away.AddRange(database.Query("SELECT start_at, end_at FROM away ORDER BY id", r => new AwayInterval(ParseIso(r.GetString(0)), r.IsDBNull(1) ? null : ParseIso(r.GetString(1)))));
         var running = database.Query("SELECT kind, a.name, start_at, last_seen FROM running LEFT JOIN accounts a ON a.id = running.account_id",
@@ -131,7 +131,7 @@ public sealed class TimerStore : IDisposable
         var day = r.GetString(2); var origin = r.GetString(6);
         var minutes = r.IsDBNull(7) ? Math.Round(r.GetDouble(5) / 60.0, 2, MidpointRounding.ToEven).ToString("0.##", CultureInfo.InvariantCulture) : r.GetString(7);
         var start = r.IsDBNull(3) ? "00:00:00" : r.GetString(3)[11..];
-        var end = kind == "adjustment" ? "adjusted" : origin == "merge" ? "merged" : origin == "added" ? "added" : origin == "edited" ? "edited" : r.GetString(4)[11..];
+        var end = kind == "adjustment" ? "adjusted" : origin == "added" ? "added" : origin == "edited" ? "edited" : r.GetString(4)[11..];
         return new(day, account, start, end, minutes);
     }
     public void Save(TrackingEngine engine, StoreSettings preferences)
@@ -173,7 +173,7 @@ public sealed class TimerStore : IDisposable
         foreach (var d in engine.DayStarts.OrderBy(d => d.Key)) records.Append(d.Key.Ticks).Append(d.Value.Ticks).Append('\n');
         var blobs = new Dictionary<string, string>
         {
-            ["notes"] = Editor.NotesCsv, ["groups"] = Editor.GroupsCsv ?? "GroupId,Date,Account,Start,End,Minutes\n", ["positions"] = Editor.PositionsCsv, ["accountsSeeded"] = "1"
+            ["notes"] = Editor.NotesCsv, ["groups"] = Editor.GroupsCsv ?? "GroupId,Date,Account,Start,End,Minutes\n", ["accountsSeeded"] = "1"
         };
         foreach (var b in blobs) records.Append(b.Key).Append('=').Append(b.Value).Append('\n');
         var snapshot = records.ToString();
@@ -181,7 +181,7 @@ public sealed class TimerStore : IDisposable
         {
             if (!written.TryGetValue("records", out var last) || last != snapshot) WriteRecords(engine, preferences, blobs);
             SaveEdits(engine);
-            database.Execute("DELETE FROM meta WHERE key = 'editState'");
+            database.Execute("DELETE FROM meta WHERE key IN ('editState', 'positions')"); // Left by earlier test builds.
             // The running timer is kept current on every save, so a crash is credited up to the last save.
             database.Execute("DELETE FROM running");
             if (engine.Active is { } active)
@@ -209,7 +209,7 @@ public sealed class TimerStore : IDisposable
             void Part(string table, object before, string after) => database.Execute("INSERT INTO edit_changes (edit_id, table_name, row_id, before_json, after_json) VALUES ($e, $t, 0, $b, $a)",
                 ("$e", id), ("$t", table), ("$b", JsonSerializer.Serialize(before)), ("$a", after));
             Part("ledger", step.Rows, JsonSerializer.Serialize(new LedgerPart(step.AfterCount, step.AfterHash)));
-            Part("notes", step.Notes, step.AfterNotesHash); Part("groups", step.Groups, step.AfterGroupsHash); Part("positions", step.Positions, step.AfterPositionsHash);
+            Part("notes", step.Notes, step.AfterNotesHash); Part("groups", step.Groups, step.AfterGroupsHash);
             persistedEdits.Add((id, step));
         }
     }
@@ -236,7 +236,7 @@ public sealed class TimerStore : IDisposable
         {
             var isBreak = BreakAccount.Is(s.Account); var adjustment = s.IsAdjustment;
             var kind = adjustment ? "adjustment" : isBreak ? "break" : "work";
-            var origin = s.IsMerged ? "merge" : s.End.Equals("added", StringComparison.OrdinalIgnoreCase) ? "added" : s.End.Equals("edited", StringComparison.OrdinalIgnoreCase) ? "edited" : "recorded";
+            var origin = s.End.Equals("added", StringComparison.OrdinalIgnoreCase) ? "added" : s.End.Equals("edited", StringComparison.OrdinalIgnoreCase) ? "edited" : "recorded";
             var from = s.Date + "T" + s.Start;
             var end = adjustment ? null : s.End.Contains(':') ? s.Date + "T" + s.End : Iso(s.To);
             database.Execute(@"INSERT INTO entries (kind, account_id, day, start_at, end_at, seconds, origin, created_at, minutes_text) VALUES ($k, $a, $d, $s, $e, $x, $o, $c, $m)",

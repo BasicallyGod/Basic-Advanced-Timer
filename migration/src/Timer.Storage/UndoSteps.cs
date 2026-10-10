@@ -10,15 +10,15 @@ namespace Timer.Storage;
 // of the ledger.
 public sealed record Splice<T>(int Start, List<T> Before, int AfterLength);
 
-// A text file (notes, groups or positions) as a splice over its lines. A missing file is not the same as an
+// A text file (notes or groups) as a splice over its lines. A missing file is not the same as an
 // empty one, so whether it existed before the edit is kept too.
 public sealed record TextChange(bool BeforeIsNull, Splice<string> Lines);
 
 // One reversible edit. The hashes describe the state the edit left behind, so Undo is only offered while
-// the ledger, notes, groups and positions still match it.
+// the ledger, notes and groups still match it.
 public sealed record UndoStep(string Description, int AfterCount, string AfterHash,
-    Splice<Dictionary<string, string>> Rows, TextChange Notes, TextChange Groups, TextChange Positions,
-    string AfterNotesHash, string AfterGroupsHash, string AfterPositionsHash);
+    Splice<Dictionary<string, string>> Rows, TextChange Notes, TextChange Groups,
+    string AfterNotesHash, string AfterGroupsHash);
 
 internal static class UndoMath
 {

@@ -83,16 +83,15 @@ public sealed class EditingTests
     }
 
     [Fact]
-    public void LegacyCreditSupportsNotesWithoutInventingTimeAndAmbiguousKeysAreRejected()
+    public void AdjustmentsSupportNotesWithoutInventingTimeAndAmbiguousKeysAreRejected()
     {
-        var engine = Engine(); var merged = Row(end: "merged"); engine.Sessions.Add(merged);
+        var engine = Engine(); var merged = Row(end: "adjusted"); engine.Sessions.Add(merged);
         var editor = new LedgerEditor(engine);
         editor.Edit(merged, merged.Account, merged.From, merged.To, "Legacy note");
         Assert.Equal(merged, engine.Sessions.Single()); Assert.Equal("Legacy note", editor.Note(merged));
         Assert.Throws<ArgumentException>(() => editor.Edit(merged, merged.Account, merged.From.AddMinutes(5), merged.To, ""));
-        Assert.Throws<ArgumentException>(() => editor.Delete(merged));
         editor.Undo(); Assert.Equal("", editor.Note(engine.Sessions.Single()));
-        var copy = engine.Sessions.Single(); engine.Sessions.Add(copy with { End = "rounded up", Minutes = "5" });
+        var copy = engine.Sessions.Single(); engine.Sessions.Add(copy with { End = "adjusted", Minutes = "5" });
         Assert.Throws<ArgumentException>(() => editor.Edit(copy, copy.Account, copy.From, copy.To, "Ambiguous"));
         Assert.False(editor.CanUndo);
     }
@@ -213,9 +212,9 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void EntryDialogSavesNotesAndGapTimeAndWeekExposesLegacyRows()
+    public void EntryDialogSavesNotesAndGapTimeAndWeekShowsTheEditedEntry()
     {
-        var engine = Engine(); engine.Sessions.Add(Row()); engine.Sessions.Add(Row("08:00:00", "merged", "30"));
+        var engine = Engine(); engine.Sessions.Add(Row());
         var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
         try
         {
@@ -227,7 +226,6 @@ public sealed class EditingTests
             Assert.False(editor.IsVisible); Assert.Equal(TimeSpan.FromMinutes(75), engine.Sessions[0].Duration);
             Assert.Equal("Drafting\nClient review", model.Editor.Note(engine.Sessions[0]));
             window.SelectTab(true); model.SetWeekSection("entries"); Dispatcher.UIThread.RunJobs(); using var week = window.CaptureRenderedFrame();
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is not null && t.Text.Contains("Merged credit"));
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Drafting\nClient review");
             var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath(); Directory.CreateDirectory(output);
             using var settled = window.CaptureRenderedFrame(); settled!.Save(Path.Combine(output, "week-editable-entries.png"));
@@ -235,7 +233,7 @@ public sealed class EditingTests
             Dispatcher.UIThread.RunJobs(); using var addFrame = add.CaptureRenderedFrame(); addFrame!.Save(Path.Combine(output, "entry-editor.png"));
             add.Close();
             Assert.True(model.EditEntry(null, "Account two", row.To.AddMinutes(30), row.To.AddMinutes(45), "Gap note"));
-            Assert.Equal(3, engine.Sessions.Count); Assert.True(model.UndoEdit()); Assert.Equal(2, engine.Sessions.Count);
+            Assert.Equal(2, engine.Sessions.Count); Assert.True(model.UndoEdit()); Assert.Single(engine.Sessions);
         }
         finally { window.Close(); }
     }
