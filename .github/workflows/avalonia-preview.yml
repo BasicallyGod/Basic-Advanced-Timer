@@ -23,6 +23,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - name: Test standalone updater without network or launching an application
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./migration/updater/Test-Updater.ps1
       - name: Build and test production views and themes
         env:
           TIMER_PREVIEW_DIR: ${{ runner.temp }}/avalonia-timer-previews
@@ -43,11 +47,12 @@ jobs:
         run: |
           Copy-Item migration/README.md artifacts/windows-preview/README.md
           Copy-Item migration/Start-Demo.cmd artifacts/windows-preview/Start-Demo.cmd
+          '{"schemaVersion":1,"testBuildArgument":"--test-build"}' | Set-Content artifacts/windows-preview/test-build-support.json
       - name: Check the published native executable starts and switches views
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $preview = Start-Process ./artifacts/windows-preview/BasicsAdvancedTimer.Preview.exe -ArgumentList '--smoke-test' -PassThru -RedirectStandardError "$env:RUNNER_TEMP/timer-native-error.log"
+          $preview = Start-Process ./artifacts/windows-preview/BasicsAdvancedTimer.Preview.exe -ArgumentList '--smoke-test', '--test-build' -PassThru -RedirectStandardError "$env:RUNNER_TEMP/timer-native-error.log"
           if (-not $preview.WaitForExit(30000)) {
             $preview.Kill()
             throw 'Published preview did not finish its startup check.'
