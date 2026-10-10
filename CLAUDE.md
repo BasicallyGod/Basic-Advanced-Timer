@@ -11,6 +11,8 @@ Notes for contributors and coding assistants. The application is a C# Avalonia d
 | `migration/src/Timer.Desktop` | Avalonia views, `TimerModel` (UI adapter), `ThemeEngine`, styles in `App.axaml`. |
 | `migration/tests/Timer.Desktop.Tests` | xUnit tests, including headless Avalonia tests of production windows. |
 | `migration/updater` | Standalone Windows test-build updater with rollback. |
+| `migration/packaging` | MSIX packaging for the Microsoft Store (manifest template, `build-msix.ps1`, placeholder icons). Packaged builds keep data under `%LOCALAPPDATA%` via `PackageEnvironment`; portable builds keep it beside the exe. |
+| `.github/workflows/microsoft-store-msix.yml` | Builds a self-signed development MSIX on pushes. The unsigned Store candidate is built only when the workflow is run by hand with the Store candidate box ticked. |
 | `.github/workflows/avalonia-preview.yml` | Tests on Windows, Linux and macOS, then publishes the Windows build. |
 | `README.md`, `migration/README.md`, `CHANGELOG.md` | Overview, user guide and architecture, history. |
 

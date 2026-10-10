@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [migration, main]
   workflow_dispatch:
+    inputs:
+      store_candidate:
+        description: 'Also build the unsigned Microsoft Store candidate (for uploading to Partner Center)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -32,7 +37,9 @@ jobs:
             artifacts/msix/BasicsAdvancedTimer-Dev.msix
             artifacts/msix/BasicsAdvancedTimer-Dev.cer
           if-no-files-found: error
+      # Only on request, so ordinary pushes do not leave a trail of upload-ready packages. Run this workflow by hand on the commit you tested.
       - name: Package unsigned Microsoft Store candidate
+        if: github.event_name == 'workflow_dispatch' && inputs.store_candidate
         shell: pwsh
         env:
           STORE_PACKAGE_NAME: Basically.BasicsAdvancedTimer
@@ -47,6 +54,7 @@ jobs:
             -Publisher $env:STORE_PUBLISHER `
             -PublisherDisplayName $env:STORE_PUBLISHER_DISPLAY_NAME
       - name: Upload Store candidate MSIX (not a signed sideload build)
+        if: github.event_name == 'workflow_dispatch' && inputs.store_candidate
         uses: actions/upload-artifact@v4
         with:
           name: BasicsAdvancedTimer-MSIX-Store

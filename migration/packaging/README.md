@@ -1,10 +1,10 @@
 # Microsoft Store packaging (development)
 
-This is a **prototype** for Windows x64 MSIX distribution, separate from the current portable ZIP. No changes have been merged into `migration` or `main`; publishing to the Store requires a developer account and a reserved product identity.
+This is a **prototype** for Windows x64 MSIX distribution, separate from the current portable ZIP. Publishing to the Store requires a developer account and a reserved product identity.
 
 ## Builds
 
-The GitHub Actions workflow `.github/workflows/microsoft-store-msix.yml` runs unit tests on Windows and creates two **separate** artifacts:
+The GitHub Actions workflow `.github/workflows/microsoft-store-msix.yml` runs unit tests on Windows and builds the development package on every run. The Store candidate is built only when you start the workflow by hand (Actions, Microsoft Store MSIX packaging, Run workflow, tick the Store candidate box), so choose the branch or commit you have tested. It creates two **separate** artifacts:
 
 - `BasicsAdvancedTimer-MSIX-dev` contains a temporary self-signed testing MSIX **and** the public development certificate. **Do not upload either file to Partner Center.**
 - `BasicsAdvancedTimer-MSIX-Store` contains **only** `BasicsAdvancedTimer-Store-unsigned.msix`, an unsigned package with the Store product identity (see below). This is the file to upload under **Packages** in the Store submission.
@@ -20,14 +20,14 @@ This MSIX uses the **development-only** package identity `BasicsAdvancedTimer.De
 
 1. Make a backup of your existing `migration-data` folder (including `timer.db`, settings, and `Backups`) while the portable timer is closed.
 2. Download and extract the `BasicsAdvancedTimer-MSIX-dev` artifact from a **successful** workflow run.
-3. On a Windows test machine, in a PowerShell terminal run:
+3. On a Windows test machine, in an **administrator** PowerShell terminal (Windows only trusts a sideloaded package whose certificate is in the machine store) run:
    ```powershell
-   Import-Certificate -FilePath .\BasicsAdvancedTimer-Dev.cer -CertStoreLocation Cert:\CurrentUser\TrustedPeople
+   Import-Certificate -FilePath .\BasicsAdvancedTimer-Dev.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
    Add-AppxPackage -Path .\BasicsAdvancedTimer-Dev.msix
    ```
 4. Launch **Basic's Advanced Timer** from the Start menu. Confirm the tray icon, account switching, persistence across restart, timeline editing, undo, CSV export, and data backups.
 5. Check **Settings > Apps > Startup** (or Task Manager's Startup apps tab) after launching once. The packaged startup task is disabled by default. In-app registry startup is intentionally hidden in MSIX builds.
-6. Back up any data created in the installed MSIX **before uninstalling it**; Windows may delete package-local state on uninstall. When done testing, uninstall the test package and remove the *temporary* certificate from your Current User Trusted People store. Do not leave temporary development certificates trusted unnecessarily.
+6. Back up any data created in the installed MSIX **before uninstalling it**; Windows may delete package-local state on uninstall. When done testing, uninstall the test package and remove the *temporary* certificate from the Local Computer Trusted People store (`certlm.msc`). Do not leave temporary development certificates trusted unnecessarily.
 
 Do **not** expect a developer MSIX installation to be updated in place by the eventual Store version: Microsoft assigns a different package identity.
 

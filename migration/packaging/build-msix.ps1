@@ -19,7 +19,8 @@ $temporaryRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [System.IO.Pa
 $stage = Join-Path $temporaryRoot 'basics-msix-stage'
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force -Path $stage, $output | Out-Null
-$version = "0.1.$BuildNumber.0"
+# The Store needs a first part above 0, a fourth part of 0 and a number that rises with every submission, so the run number goes in the third part.
+$version = "1.0.$BuildNumber.0"
 
 # Store-only AssemblyName keeps the portable executable's existing filename.
 dotnet publish (Join-Path $repoRoot 'migration/src/Timer.Desktop/Timer.Desktop.csproj') --configuration Release --runtime win-x64 --self-contained true -p:StorePackage=true -p:PublishSingleFile=false "-p:Version=$version" -o $stage
@@ -52,8 +53,8 @@ if (-not $identityNode -or -not $displayNameNode -or
 
 $sdkBin = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/bin'
 if (-not (Test-Path $sdkBin)) { throw 'Windows SDK tools are missing.' }
-$makeAppx = Get-ChildItem $sdkBin -Recurse -Filter makeappx.exe -File | Where-Object { $_.DirectoryName -match '[\\/]x64$' } | Sort-Object FullName -Descending | Select-Object -First 1
-$signTool = Get-ChildItem $sdkBin -Recurse -Filter signtool.exe -File | Where-Object { $_.DirectoryName -match '[\\/]x64$' } | Sort-Object FullName -Descending | Select-Object -First 1
+$makeAppx = Get-ChildItem $sdkBin -Recurse -Filter makeappx.exe -File | Where-Object { $_.DirectoryName -match '[\\/]x64$' } | Sort-Object { try { [version](($_.FullName -split '[\\/]') | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1) } catch { [version]'0.0.0.0' } } -Descending | Select-Object -First 1
+$signTool = Get-ChildItem $sdkBin -Recurse -Filter signtool.exe -File | Where-Object { $_.DirectoryName -match '[\\/]x64$' } | Sort-Object { try { [version](($_.FullName -split '[\\/]') | Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -First 1) } catch { [version]'0.0.0.0' } } -Descending | Select-Object -First 1
 if (-not $makeAppx -or (-not $UnsignedForStore -and -not $signTool)) { throw 'Windows SDK MakeAppx/SignTool not found.' }
 
 $baseName = if ($UnsignedForStore) { 'BasicsAdvancedTimer-Store-unsigned' } else { 'BasicsAdvancedTimer-Dev' }
