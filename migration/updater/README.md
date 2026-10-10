@@ -12,6 +12,8 @@ One-time setup:
 
 The launcher bypasses execution policy for this single PowerShell process; it does not change your saved policy. Organization-enforced restrictions may still apply.
 
+**Start with Windows.** When the timer is started by the updater, its right-click menu offers Start with Windows. Ticking it adds a sign-in entry that runs the updater in its launch mode with no window, so it starts whichever build is current and keeps working after updates. It uses the same isolated test data folder. Unticking removes the entry. The entry is not offered for a build started any other way except directly from an extracted ZIP.
+
 **Launch Current.cmd** launches the downloaded build offline without GitHub CLI. **Rollback and Launch.cmd** switches to the previous downloaded build, then launches it. Rollback toggles the two build records; running Update afterward selects the latest successful build again. Errors stay visible in the launcher window.
 
 ## Verified pipeline and storage

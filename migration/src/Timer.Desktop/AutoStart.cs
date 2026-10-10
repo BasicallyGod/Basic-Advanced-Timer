@@ -39,13 +39,20 @@ public sealed class AutoStartSetting
 {
     public const string ValueName = "BasicsAdvancedTimer";
     private readonly IStartupRegistry registry;
-    private readonly string? executable, dataFolder;
-    public AutoStartSetting(IStartupRegistry registry, string? executable, string? dataFolder)
-    { this.registry = registry; this.executable = executable; this.dataFolder = dataFolder; }
+    private readonly string? executable, dataFolder, updaterScript;
+    // updaterScript is set when the updater started this build. Each update lives in its own folder, so the sign-in entry points at the
+    // updater's launch mode instead, which always starts whichever build is current.
+    public AutoStartSetting(IStartupRegistry registry, string? executable, string? dataFolder, string? updaterScript = null)
+    { this.registry = registry; this.executable = executable; this.dataFolder = dataFolder; this.updaterScript = updaterScript; }
     // Not offered when run through the dotnet host (a development run), because that would start a different program.
-    public bool Available => executable is not null
-        && !System.IO.Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase);
-    public string? Command => Available ? Build(executable!, dataFolder) : null;
+    public bool Available => updaterScript is not null || (executable is not null
+        && !System.IO.Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase));
+    public string? Command => updaterScript is not null ? BuildUpdaterLaunch(updaterScript) : Available ? Build(executable!, dataFolder) : null;
+    public static string BuildUpdaterLaunch(string script)
+        => "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + System.IO.Path.GetFullPath(script) + "\" -Mode Launch";
+    /// <summary>The updater passes its own script path; anything that is not an existing .ps1 file without quotes is ignored.</summary>
+    public static string? AcceptUpdaterScript(string? path)
+        => path is not null && !path.Contains('"') && path.EndsWith(".ps1", StringComparison.OrdinalIgnoreCase) && System.IO.File.Exists(path) ? path : null;
     public static string Build(string executable, string? dataFolder)
         => "\"" + executable + "\"" + (dataFolder is null ? "" : " --data-dir \"" + System.IO.Path.GetFullPath(dataFolder) + "\"");
     public bool IsEnabled => Command is { } expected && string.Equals(registry.Get(ValueName), expected, StringComparison.OrdinalIgnoreCase);

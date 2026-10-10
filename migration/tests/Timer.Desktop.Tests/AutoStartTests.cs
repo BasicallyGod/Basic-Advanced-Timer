@@ -62,4 +62,34 @@ public sealed class AutoStartTests
         registry.Fail = false; model.SetAutoStart(true);
         Assert.Null(model.LastError); Assert.True(model.AutoStart.IsEnabled);
     }
+
+    [Fact]
+    public void AnUpdaterInstallStartsThroughTheUpdaterSoItSurvivesUpdates()
+    {
+        var script = Path.Combine(Path.GetTempPath(), "Updater folder", "Update-TestBuild.ps1");
+        var registry = new FakeRegistry();
+        var first = new AutoStartSetting(registry, Path.Combine(Path.GetTempPath(), "versions", "run-1", "BasicsAdvancedTimer.Preview.exe"), "data", script);
+        Assert.True(first.Available); first.Set(true);
+        Assert.Contains("-File \"" + Path.GetFullPath(script) + "\" -Mode Launch", registry.Values[AutoStartSetting.ValueName]);
+        // After an update the program lives in a different folder, but the entry still counts as on.
+        var updated = new AutoStartSetting(registry, Path.Combine(Path.GetTempPath(), "versions", "run-2", "BasicsAdvancedTimer.Preview.exe"), "data", script);
+        Assert.True(updated.IsEnabled);
+        // Run from the dotnet host the updater route is still offered, because it does not depend on the running program.
+        Assert.True(new AutoStartSetting(registry, "/usr/bin/dotnet", null, script).Available);
+    }
+
+    [Fact]
+    public void OnlyAnExistingScriptWithoutQuotesIsTrustedFromTheCommandLine()
+    {
+        var real = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".ps1"); File.WriteAllText(real, "");
+        try
+        {
+            Assert.Equal(real, AutoStartSetting.AcceptUpdaterScript(real));
+            Assert.Null(AutoStartSetting.AcceptUpdaterScript(real + "\" -Mode Evil"));
+            Assert.Null(AutoStartSetting.AcceptUpdaterScript(Path.Combine(Path.GetTempPath(), "missing.ps1")));
+            Assert.Null(AutoStartSetting.AcceptUpdaterScript(Path.Combine(Path.GetTempPath(), Path.GetFileName(real).Replace(".ps1", ".cmd"))));
+            Assert.Null(AutoStartSetting.AcceptUpdaterScript(null));
+        }
+        finally { File.Delete(real); }
+    }
 }

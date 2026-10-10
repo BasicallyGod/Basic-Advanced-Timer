@@ -54,10 +54,13 @@ public sealed partial class App : Application
                 model = new TimerModel(engine, preferences, store);
                 if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files found and left alone. This version starts with an empty database.";
                 if (!model.Save()) throw new IOException(model.LastError);
-                // Portable builds retain the registry Run-key integration. The packaged build declares
-                // a Windows-managed startup task in its MSIX manifest instead.
-                if (!smokeMode && !args.Contains("--test-build") && WindowsRunKey.Available && !PackageEnvironment.IsPackaged())
-                    model.AutoStart = new AutoStartSetting(new WindowsRunKey(), Environment.ProcessPath, index >= 0 ? args[index + 1] : null);
+                // Only an explicit data folder is remembered; the default one sits beside the program and needs no argument.
+                // A test build started by the updater is offered the setting only when the updater says where to find itself, so the
+                // sign-in entry survives updates. A bare --test-build run still leaves the startup entry alone.
+                var scriptIndex = Array.IndexOf(args, "--updater-script");
+                var updaterScript = scriptIndex >= 0 && scriptIndex + 1 < args.Length ? AutoStartSetting.AcceptUpdaterScript(args[scriptIndex + 1]) : null;
+                if (!smokeMode && (!args.Contains("--test-build") || updaterScript is not null) && WindowsRunKey.Available && !PackageEnvironment.IsPackaged())
+                    model.AutoStart = new AutoStartSetting(new WindowsRunKey(), Environment.ProcessPath, index >= 0 ? args[index + 1] : null, updaterScript);
                 }
                 var openedStore = store;
                 var released = false;
