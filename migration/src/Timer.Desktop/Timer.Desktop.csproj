@@ -5,6 +5,9 @@
     <RootNamespace>Timer.Desktop</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(StorePackage)' == 'true'">
+    <AssemblyName>BasicsAdvancedTimer</AssemblyName>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Timer.Core/Timer.Core.csproj" />
     <ProjectReference Include="../Timer.Storage/Timer.Storage.csproj" />

@@ -35,7 +35,10 @@ public sealed partial class App : Application
                 if (demoMode && index >= 0) throw new ArgumentException("Demo mode cannot open a data folder.");
                 if (index >= 0 && index + 1 >= args.Length) throw new ArgumentException("--data-dir requires a folder path.");
                 var folder = smokeMode ? Path.Combine(Path.GetTempPath(), "timer-smoke-" + Guid.NewGuid())
-                    : index >= 0 ? args[index + 1] : Path.Combine(AppContext.BaseDirectory, "migration-data");
+                    : index >= 0 ? args[index + 1] : TimerDataFolders.DefaultDirectory(
+                        AppContext.BaseDirectory,
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        PackageEnvironment.IsPackaged());
                 if (demoMode)
                 {
                     // The demo runs on a throwaway database in the temporary folder, removed when it closes.
@@ -51,8 +54,9 @@ public sealed partial class App : Application
                 model = new TimerModel(engine, preferences, store);
                 if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files found and left alone. This version starts with an empty database.";
                 if (!model.Save()) throw new IOException(model.LastError);
-                // Only an explicit data folder is remembered; the default one sits beside the program and needs no argument.
-                if (!smokeMode && !args.Contains("--test-build") && WindowsRunKey.Available)
+                // Portable builds retain the registry Run-key integration. The packaged build declares
+                // a Windows-managed startup task in its MSIX manifest instead.
+                if (!smokeMode && !args.Contains("--test-build") && WindowsRunKey.Available && !PackageEnvironment.IsPackaged())
                     model.AutoStart = new AutoStartSetting(new WindowsRunKey(), Environment.ProcessPath, index >= 0 ? args[index + 1] : null);
                 }
                 var openedStore = store;

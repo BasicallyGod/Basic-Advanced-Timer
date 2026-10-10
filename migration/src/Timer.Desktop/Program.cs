@@ -9,7 +9,14 @@ public static class Program
     {
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {
-            try { File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "migration-startup-error.log"), e.ExceptionObject.ToString()); }
+            try
+            {
+                // Installed MSIX files are read-only; startup diagnostics must live in per-user data.
+                var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "BasicsAdvancedTimer", "Logs");
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(Path.Combine(folder, "startup-error.log"), e.ExceptionObject.ToString());
+            }
             catch { /* Preserve the original failure if the directory is not writable. */ }
         };
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
