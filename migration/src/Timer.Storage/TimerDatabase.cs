@@ -120,8 +120,10 @@ public sealed class TimerDatabase : IDisposable
         finally { transaction.Dispose(); transaction = null; }
     }
     public T InTransaction<T>(Func<T> work) { T result = default!; InTransaction((Action)(() => { result = work(); })); return result; }
-    public int Execute(string sql, params (string Name, object? Value)[] parameters) => Command(sql, parameters).ExecuteNonQuery();
-    public object? Scalar(string sql, params (string Name, object? Value)[] parameters) => Command(sql, parameters).ExecuteScalar();
+    public int Execute(string sql, params (string Name, object? Value)[] parameters)
+    { using var command = Command(sql, parameters); return command.ExecuteNonQuery(); } // Commands are disposed so the file is free to delete once the database closes (Windows keeps it locked otherwise).
+    public object? Scalar(string sql, params (string Name, object? Value)[] parameters)
+    { using var command = Command(sql, parameters); return command.ExecuteScalar(); }
     public long Insert(string sql, params (string Name, object? Value)[] parameters)
     { Execute(sql, parameters); return Convert.ToInt64(Scalar("SELECT last_insert_rowid()")); }
     public List<T> Query<T>(string sql, Func<SqliteDataReader, T> read, params (string Name, object? Value)[] parameters)

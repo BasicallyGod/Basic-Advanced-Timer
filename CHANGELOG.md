@@ -4,6 +4,10 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration database file release fix
+
+- The database class now disposes every command it runs. Without that, Windows kept `timer.db` locked after the timer closed until the garbage collector ran, which made three storage tests fail in CI when they tried to delete their temporary folder. It could also have made a copy or delete of the data folder fail right after closing the timer.
+
 ## Migration account records, step 6
 
 - Renaming an account now always applies everywhere. All recorded time, notes, groups and positions move to the new name after a backup copy of the database is saved, and the rename dialog's second question (rename past entries or start afresh) is gone. To start afresh, add a new account.
