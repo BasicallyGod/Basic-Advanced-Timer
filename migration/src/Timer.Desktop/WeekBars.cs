@@ -41,7 +41,7 @@ public sealed class WeekBars : Control
             {
                 var h = Math.Max(1.5, segment.Hours / max * height);
                 // A thin outline keeps a very dark or very light colour visible against either theme.
-                context.DrawRectangle(new SolidColorBrush(segment.Colour), new Pen(muted, 1), new Rect(x, y - h, width, h), 3, 3);
+                context.DrawRectangle(new SolidColorBrush(segment.Colour), new Pen(Brush.Parse(Ui.OutlineColour), 1), new Rect(x, y - h, width, h), 3, 3);
                 y -= h;
             }
             var total = Text(bar.TotalText, 12, bar.Hours > 0 ? ink : muted, bar.Hours > 0);

@@ -293,6 +293,7 @@ public sealed class EditingTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(b => Canvas.GetTop(b)).ToList();
+            Assert.All(cards, c => Assert.Single(c.GetVisualDescendants().OfType<Border>(), b => b.Name == "BlockOutline")); // Edges show even on a dark colour, with or without text.
             Assert.True(cards[0].Height >= ReviewViews.MinimumBlockHeight); // One minute is only a few pixels at this zoom, but it can be clicked.
             model.ToggleSelection(new[] { engine.Sessions[1] }); Dispatcher.UIThread.RunJobs(); using var again = window.CaptureRenderedFrame();
             var selected = window.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is SessionRow row && ReferenceEquals(row, engine.Sessions[1]));

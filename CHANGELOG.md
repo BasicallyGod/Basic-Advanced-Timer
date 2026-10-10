@@ -6,6 +6,8 @@ The entries below follow the migration milestones, newest first. They describe t
 
 ## Migration checklist fixes
 
+- Every timeline block now has a faint grey outline, drawn on top and ignored by the pointer, so a dark colour on a dark background still shows its edges even when the block is too short for any text. The colour dots beside accounts in the week views, and the week bars, use the same stronger grey outline.
+
 - Timeline blocks are drawn at least eight pixels tall, so a one-minute block can be seen and clicked at any zoom. Zoom in for exact edges.
 - On a block too short for a second line, the selection tick now joins the name ("✓ Account") instead of adding a line that spilled over the block's edge. The recording marker does the same with a dot, and the text colour follows the block's colour.
 

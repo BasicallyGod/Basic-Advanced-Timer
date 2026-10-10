@@ -71,7 +71,11 @@ public static class ReviewViews
             foreach (TextBlock child in text.Children) child.Foreground = Brush.Parse(ink);
             var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
                 Width = 380, Height = height, Padding = new Thickness(14, height < 58 ? 2 : 10),
-                Child = height >= 24 ? text : null, ClipToBounds = true };
+                ClipToBounds = true };
+            // A faint outline on every block, drawn on top and ignored by the pointer, so a dark colour on a dark background still shows its edges,
+            // even when the block is too short to hold any text. It is a child, so the selected and recording borders keep working.
+            var outline = new Border { BorderThickness = new Thickness(1), BorderBrush = Brush.Parse(Ui.OutlineColour), CornerRadius = card.CornerRadius, IsHitTestVisible = false, Name = "BlockOutline" };
+            if (height >= 24) { var content = new Grid(); content.Children.Add(text); content.Children.Add(outline); card.Child = content; } else card.Child = outline;
             var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
             if (model.IsSelected(selectionSources))
             {
@@ -258,7 +262,7 @@ public static class ReviewViews
             var account = accounts[i]; var row = table.Rows[i];
             // Every row is one line with everything centred on it, so a budget meter always sits level with its account.
             var line = Ui.Grid("14,*,64,120,150"); line.MinHeight = 34;
-            var dot = new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = Brush.Parse(account.Colour), BorderThickness = new Thickness(1), BorderBrush = Brush.Parse("#80808080"), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+            var dot = new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = Brush.Parse(account.Colour), BorderThickness = new Thickness(1), BorderBrush = Brush.Parse(Ui.OutlineColour), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
             Ui.Put(line, dot); Ui.Put(line, Ui.Text(account.Display, 14), 1);
             var total = Ui.Text(row.Total == "–" ? "0:00" : row.Total, 14); total.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(line, total, 2);
             var budget = table.Budgets.FirstOrDefault(b => b.Account == account.Display);
@@ -390,7 +394,7 @@ public static class ReviewViews
             var minutes = TimeSpan.FromMinutes((double)decimal.Parse(row.Minutes, System.Globalization.CultureInfo.InvariantCulture));
             var amount = (minutes < TimeSpan.Zero ? "" : "+") + model.FormatShort(minutes);
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(row.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
-            var text = Ui.Horizontal(new Border { Width = 9, Height = 9, CornerRadius = new CornerRadius(5), Background = Brush.Parse(colour), BorderThickness = new Thickness(1), BorderBrush = Brush.Parse("#80808080"), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center },
+            var text = Ui.Horizontal(new Border { Width = 9, Height = 9, CornerRadius = new CornerRadius(5), Background = Brush.Parse(colour), BorderThickness = new Thickness(1), BorderBrush = Brush.Parse(Ui.OutlineColour), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center },
                 Ui.Text($"{model.Label(row.Account)}  {amount}", 12, minutes < TimeSpan.Zero ? "overtime" : null));
             var chip = new Border { Name = "Adjustment" + model.Engine.Sessions.IndexOf(row), Child = text, Padding = new Thickness(10, 5), Margin = new Thickness(0, 0, 8, 6), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Tag = row, Cursor = new Cursor(StandardCursorType.Hand) };
             chip.Classes.Add("chip");

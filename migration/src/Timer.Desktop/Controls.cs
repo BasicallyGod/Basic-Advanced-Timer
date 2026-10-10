@@ -13,6 +13,8 @@ namespace Timer.Desktop;
 
 public static class Ui
 {
+    /// <summary>A mid grey that shows against both light and dark backgrounds, used to outline colour dots and blocks.</summary>
+    public const string OutlineColour = "#A0909090";
     public static bool IsColour(string? text) => text is not null && System.Text.RegularExpressions.Regex.IsMatch(text, "^#[0-9A-Fa-f]{6}$");
     /// <summary>The text colour that reads best on a block of this colour: the usual dark ink on light colours, white on dark ones.</summary>
     public static string InkOn(string colour)
