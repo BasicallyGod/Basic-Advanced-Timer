@@ -4,6 +4,12 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration finish day colour and small fixes
+
+- Finish day is now red in the pill (filled) and the dashboard (outlined), and Start day stays green. The red is a Finish entry in each theme, ready for custom themes.
+- The expanded pill no longer shows a scroll bar unless the screen is too short for its accounts.
+- Removed the time-now clock under the dashboard timer, and the Undo button no longer shows a count (its tooltip still names the edit and how many steps are available).
+
 ## Migration dashboard declutter and pill tidy
 
 - The dashboard has one row of tabs, Timeline, Overview, Hours table and Entries, in place of the second row of week tabs. Hours and minutes moved to Settings only. Add time, Undo and Merge show only where they apply, and Merge only once blocks are selected.

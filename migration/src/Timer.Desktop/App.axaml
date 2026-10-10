@@ -17,6 +17,7 @@
           <SolidColorBrush x:Key="Overtime">#B83B3B</SolidColorBrush>
           <SolidColorBrush x:Key="BudgetWarning">#9D6C13</SolidColorBrush>
           <SolidColorBrush x:Key="Break">#B07A12</SolidColorBrush>
+          <SolidColorBrush x:Key="Finish">#B83B3B</SolidColorBrush>
           <Color x:Key="ShadowColor">#59000000</Color>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
@@ -32,6 +33,7 @@
           <SolidColorBrush x:Key="Overtime">#FF9292</SolidColorBrush>
           <SolidColorBrush x:Key="BudgetWarning">#E8BD67</SolidColorBrush>
           <SolidColorBrush x:Key="Break">#F0C45A</SolidColorBrush>
+          <SolidColorBrush x:Key="Finish">#FF9292</SolidColorBrush>
           <Color x:Key="ShadowColor">#B3000000</Color>
         </ResourceDictionary>
         <!-- While a break is on, the whole app shifts to amber so it is obvious that no account is being timed.
@@ -49,6 +51,7 @@
           <SolidColorBrush x:Key="Overtime">#B83B3B</SolidColorBrush>
           <SolidColorBrush x:Key="BudgetWarning">#9D6C13</SolidColorBrush>
           <SolidColorBrush x:Key="Break">#B07A12</SolidColorBrush>
+          <SolidColorBrush x:Key="Finish">#B83B3B</SolidColorBrush>
           <Color x:Key="ShadowColor">#59000000</Color>
         </ResourceDictionary>
         <ResourceDictionary x:Key="{x:Static local:TimerModel.BreakDark}">
@@ -64,6 +67,7 @@
           <SolidColorBrush x:Key="Overtime">#FF9292</SolidColorBrush>
           <SolidColorBrush x:Key="BudgetWarning">#E8BD67</SolidColorBrush>
           <SolidColorBrush x:Key="Break">#F0C45A</SolidColorBrush>
+          <SolidColorBrush x:Key="Finish">#FF9292</SolidColorBrush>
           <Color x:Key="ShadowColor">#B3000000</Color>
         </ResourceDictionary>
         <!-- Overtime turns the app red in the same way a break turns it amber. -->
@@ -80,6 +84,7 @@
           <SolidColorBrush x:Key="Overtime">#B83B3B</SolidColorBrush>
           <SolidColorBrush x:Key="BudgetWarning">#9D6C13</SolidColorBrush>
           <SolidColorBrush x:Key="Break">#B07A12</SolidColorBrush>
+          <SolidColorBrush x:Key="Finish">#B83B3B</SolidColorBrush>
           <Color x:Key="ShadowColor">#59000000</Color>
         </ResourceDictionary>
         <ResourceDictionary x:Key="{x:Static local:TimerModel.OvertimeDark}">
@@ -95,6 +100,7 @@
           <SolidColorBrush x:Key="Overtime">#FF9292</SolidColorBrush>
           <SolidColorBrush x:Key="BudgetWarning">#E8BD67</SolidColorBrush>
           <SolidColorBrush x:Key="Break">#F0C45A</SolidColorBrush>
+          <SolidColorBrush x:Key="Finish">#FF9292</SolidColorBrush>
           <Color x:Key="ShadowColor">#B3000000</Color>
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
@@ -223,6 +229,29 @@
     </Style>
     <Style Selector="Button.breakButton.onBreak TextBlock"><Setter Property="Foreground" Value="White" /></Style>
     <!-- The main action of a window, filled so it is the first thing the eye finds. -->
+    <!-- Finishing the day is red. The colour is the Finish theme name, so each theme can set its own. -->
+    <Style Selector="Button.finishDay">
+      <Setter Property="Background" Value="{DynamicResource Finish}" />
+      <Setter Property="Foreground" Value="{DynamicResource Surface}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.finishDay:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Finish}" />
+      <Setter Property="Foreground" Value="{DynamicResource Surface}" />
+      <Setter Property="Opacity" Value="0.88" />
+    </Style>
+    <Style Selector="Button.finishDay.outlined">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource Finish}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Finish}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+    <Style Selector="Button.finishDay.outlined:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Hover}" />
+      <Setter Property="Foreground" Value="{DynamicResource Finish}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="{DynamicResource Live}" />
       <Setter Property="Foreground" Value="{DynamicResource Surface}" />

@@ -119,7 +119,8 @@ public sealed class VisualStateTests
             Assert.DoesNotContain(pill.GetVisualDescendants().OfType<Button>(), b => b.Name == "Settings"); // Settings are on the right-click menu.
             Assert.NotNull(pill.ContextMenu);
             var day = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDay");
-            Assert.Contains("primary", day.Classes); Assert.InRange(day.Bounds.Width, 350, 420);
+            Assert.Contains("finishDay", day.Classes); Assert.InRange(day.Bounds.Width, 350, 420); // 10:00 on a working day: finishing is red.
+            Assert.DoesNotContain(pill.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ScrollBar>(), b => b.IsVisible); // Nothing to scroll, so no scroll bar.
             var bottom = day.TranslatePoint(new Point(0, day.Bounds.Height), pill)!.Value.Y;
             var cardBottom = pill.Height - Ui.ShadowMargin;
             Assert.InRange(cardBottom - bottom, 0, 24); // Only the button's own margin below it, however many accounts there are.
@@ -165,5 +166,41 @@ public sealed class VisualStateTests
             }
         }
         finally { Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public void FinishDayIsRedAndStartDayIsGreenInBothWindows()
+    {
+        var now = Day.AddHours(6); var engine = new TrackingEngine(clock: () => now); var model = new TimerModel(engine);
+        var pill = new PillWindow(model); pill.Show(); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+            var pillDay = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDay");
+            var dashDay = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay");
+            Assert.Equal("Start day", pillDay.Content); Assert.Contains("primary", pillDay.Classes); Assert.DoesNotContain("finishDay", pillDay.Classes);
+            Assert.DoesNotContain("finishDay", dashDay.Classes);
+            now = Day.AddHours(10); model.ChangeDate(0); Dispatcher.UIThread.RunJobs(); // The scheduled start has passed, so the day is running.
+            Assert.Equal("Finish day", pillDay.Content); Assert.Contains("finishDay", pillDay.Classes); Assert.DoesNotContain("primary", pillDay.Classes);
+            Assert.Contains("finishDay", dashDay.Classes); Assert.Contains("outlined", dashDay.Classes);
+            Assert.Equal(Brush(pill, "Finish"), Color.Parse("#B83B3B")); // The colour is the theme's Finish entry, not hard-coded.
+        }
+        finally { pill.Close(); dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void UndoButtonStaysPlainAndTheDashboardHasNoSecondClock()
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => Day.AddHours(10)));
+        model.Engine.Sessions.Add(new("2026-10-09", "Account one", "09:00:00", "added", "30"));
+        var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            model.Editor.Edit(model.Engine.Sessions[0], "Account one", Day.AddHours(9), Day.AddHours(9.25), "note"); model.ChangeDate(0); Dispatcher.UIThread.RunJobs();
+            var undo = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "UndoEdit");
+            Assert.Equal("Undo", undo.Content); Assert.Contains("available", ToolTip.GetTip(undo)!.ToString());
+            Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { Length: 8 } x && x[2] == ':' && x[5] == ':' && x != dashboard.GetVisualDescendants().OfType<TextBlock>().First(c => c.FontSize == 40).Text);
+        }
+        finally { dashboard.Close(); }
     }
 }

@@ -119,6 +119,7 @@ public sealed class PillWindow : Window
     private readonly TextBlock saved = Ui.Text("", 11, "muted");
     private readonly Grid progressBar = new();
     private Border progressFill = null!, shadowHost = null!;
+    private ScrollViewer pillScroll = null!;
     private (bool, string?, Avalonia.Styling.ThemeVariant)? lastShadow;
     public PillWindow(TimerModel model)
     {
@@ -180,14 +181,15 @@ public sealed class PillWindow : Window
         expansion.Children.Add(new AccountList(model));
         day = Ui.Button("Start day", model.ToggleDay, "PillDay");
         // The day button is the one thing at the bottom, wide and filled so it is easy to find. Settings are on the right-click menu.
-        day.Classes.Add("primary"); day.HorizontalAlignment = HorizontalAlignment.Stretch; day.Height = 44;
+        day.HorizontalAlignment = HorizontalAlignment.Stretch; day.Height = 44;
         day.Margin = new Thickness(16, 6, 16, 16);
         expansion.Children.Add(day);
         saved.HorizontalAlignment = HorizontalAlignment.Center; saved.Margin = new Thickness(0, -8, 0, 12);
         expansion.Children.Add(saved);
-        Ui.Put(root, new ScrollViewer { Content = expansion,
-            AllowAutoHide = false,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 1);
+        pillScroll = new ScrollViewer { Content = expansion, AllowAutoHide = false,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+        Ui.Put(root, pillScroll, row: 1);
         var surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true };
         surface.Classes.Add("surface");
         shadowHost = Ui.Shadowed(surface, 24); Content = shadowHost;
@@ -210,13 +212,19 @@ public sealed class PillWindow : Window
         expanded = !expanded;
         expansion.IsVisible = expanded;
         expandedKey = (model.Accounts.Count(a => !BreakAccount.Is(a.Name)), saved.IsVisible);
-        Height = WantedHeight();
+        ApplyHeight();
         if (Screens.ScreenFromWindow(this) is { } screen)
-        {
-            Height = Math.Min(Height, screen.WorkingArea.Height / screen.Scaling);
             Position = new PixelPoint(Position.X, Math.Clamp(Position.Y, screen.WorkingArea.Y,
                 Math.Max(screen.WorkingArea.Y, screen.WorkingArea.Bottom - (int)(Height * screen.Scaling))));
-        }
+    }
+    // The window takes the height its content needs. Only when the screen is too short to hold it all does the list scroll,
+    // so there is never a scroll bar that has nothing to scroll.
+    private void ApplyHeight()
+    {
+        var wanted = WantedHeight(); var limit = wanted;
+        if (Screens.ScreenFromWindow(this) is { } screen) limit = screen.WorkingArea.Height / screen.Scaling;
+        Height = Math.Min(wanted, limit);
+        pillScroll.VerticalScrollBarVisibility = wanted > Height + 1 ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
     private void Refresh()
@@ -229,7 +237,7 @@ public sealed class PillWindow : Window
         saved.IsVisible = saved.Text.Length > 0;
         // The expanded pill follows its content: it resizes when the rows or the note under the button change.
         var key = (model.Accounts.Count(a => !BreakAccount.Is(a.Name)), saved.IsVisible);
-        if (expanded && key != expandedKey) { expandedKey = key; Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (expanded) Height = WantedHeight(); }); }
+        if (expanded && key != expandedKey) { expandedKey = key; Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (expanded) ApplyHeight(); }); }
         ToolTip.SetTip(saved, model.LastError);
         account.Text = model.AccountLabel;
         timer.Text = model.ClockText;
@@ -248,6 +256,8 @@ public sealed class PillWindow : Window
         timer.Classes.Set("live", model.IsTracking && !model.IsOnBreak); timer.Classes.Set("break", model.IsOnBreak);
         timer.Classes.Set("idle", !model.IsTracking);
         day.Content = model.DayStarted ? "Finish day" : "Start day";
+        // Starting the day is the green main action; finishing it is red, so ending the day is never done by accident.
+        day.Classes.Set("finishDay", model.DayStarted); day.Classes.Set("primary", !model.DayStarted);
         var progress = model.DayProgress;
         progressBar.IsVisible = progress is not null;
         if (progress is { } done)
@@ -277,7 +287,6 @@ public sealed class DashboardWindow : Window
     private readonly ContentControl workspace = new();
     private readonly Button day;
     private Button breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!;
-    private readonly TextBlock localTime = Ui.Text("", 12, "muted");
     private readonly BreakGlyph dashboardCup = new();
     private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly Button timeline;
@@ -307,14 +316,12 @@ public sealed class DashboardWindow : Window
         Ui.Put(root, header);
         var strip = Ui.Grid("Auto,*,Auto");
         strip.Margin = new Thickness(24, 0, 24, 18);
-        var clockStack = new StackPanel { Spacing = -2 }; clockStack.Children.Add(clock); clockStack.Children.Add(localTime);
-        ToolTip.SetTip(localTime, "The time now"); localTime.Margin = new Thickness(4, 0, 0, 0);
-        Ui.Put(strip, clockStack);
+        Ui.Put(strip, clock);
         var live = new StackPanel { Spacing = 7, Margin = new Thickness(20, 0), VerticalAlignment = VerticalAlignment.Center };
         live.Children.Add(account);
         live.Children.Add(new TrackingLabels(model));
         Ui.Put(strip, live, 1);
-        day = Ui.Button("Start day", model.ToggleDay, "DashboardDay");
+        day = Ui.Button("Start day", model.ToggleDay, "DashboardDay"); day.Classes.Add("outlined");
         Ui.Put(strip, day, 2);
         Ui.Put(root, strip, row: 1);
         var body = Ui.Grid("300,1,*", "*");
@@ -430,7 +437,6 @@ public sealed class DashboardWindow : Window
     private void Refresh(bool refreshWorkspace)
     {
         clock.Text = model.ClockText;
-        localTime.Text = model.Engine.Now.ToString("HH:mm:ss");
         clock.Classes.Set("live", model.IsTracking);
         clock.Classes.Set("idle", !model.IsTracking);
         account.Text = model.IsOnBreak ? (model.ResumeAccount is { } backTo ? "Then back to " + backTo : "No account running") : model.AccountLabel;
@@ -442,17 +448,18 @@ public sealed class DashboardWindow : Window
         allocated.Text = "Today allocated   " + model.Format(model.Allocated);
         unallocated.Text = "Unallocated   " + model.Format(model.Unallocated);
         day.Content = model.DayStarted ? "Finish day" : "Start day";
+        day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
         var editing = !weekMode || model.WeekSection == "entries";
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
-        undo.Content = model.Editor.CanUndo ? $"Undo ({model.Editor.UndoCount})" : "Undo";
+        undo.Content = "Undo";
         dashboardCup.Filled = model.IsOnBreak; dashboardCup.SetSteaming(model.IsOnBreak); dashboardCup.InvalidateVisual();
         dashboardBreakText.Text = model.IsOnBreak ? "End break" : "Take a break";
         breakButton.Classes.Set("onBreak", model.IsOnBreak);
         ToolTip.SetTip(breakButton, model.IsOnBreak ? "End the break" + (model.ResumeAccount is { } resumeTo ? " and go back to " + resumeTo : "") : "Stop timing any account while you take a break");
         undo.IsEnabled = model.Editor.CanUndo;
-        ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? "Undo: " + label : "No edit to undo");
+        ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
         timeline.Classes.Set("selected", !weekMode);
         overviewTab.Classes.Set("selected", weekMode && model.WeekSection == "overview");
         hoursTab.Classes.Set("selected", weekMode && model.WeekSection == "hours");
