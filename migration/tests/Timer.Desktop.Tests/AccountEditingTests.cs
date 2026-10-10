@@ -189,8 +189,8 @@ public sealed class AccountEditingTests
         model.SetAccounts(model.AccountSettings.Append(new("E")));
         Assert.Equal(TimerModel.Palette[4], Colour("E")); Assert.DoesNotContain(first.Values, v => v == Colour("E")); // A new one gets a colour not already used.
         Assert.All(first.Keys.Where(k => k != "A"), n => Assert.Equal(first[n], Colour(n)));
-        for (var i = 0; i < 6; i++) model.SetAccounts(model.AccountSettings.Append(new("X" + i)));
-        Assert.Equal(11, model.AccountSettings.Count); // Past eight accounts the colours have to repeat, but never change for the ones already there.
+        for (var i = 0; i < 14; i++) model.SetAccounts(model.AccountSettings.Append(new("X" + i)));
+        Assert.Equal(19, model.AccountSettings.Count); // Past sixteen accounts the colours have to repeat, but never change for the ones already there.
         Assert.Equal(first["D"], Colour("D"));
     }
 
@@ -247,6 +247,17 @@ public sealed class AccountEditingTests
             Assert.Equal("#3A7CA5", model.ReviewAccounts.Single(a => a.Name == "B").Colour);
         }
         finally { window.Close(); }
+    }
+
+    [Fact]
+    public void ThePaletteHasSixteenDistinctColoursThatKeepTheOriginalEightInOrder()
+    {
+        Assert.Equal(16, TimerModel.Palette.Length); Assert.Equal(16, TimerModel.Palette.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(new[] { "#91B7D5", "#94BF9B", "#D9A18A", "#BAA4CE", "#C9D17F", "#86C5C0", "#D79BB5", "#C4A38F" }, TimerModel.Palette.Take(8)); // Existing accounts keep their colours.
+        Assert.DoesNotContain("#D6C48C", TimerModel.Palette); // The break's amber.
+        Assert.All(TimerModel.Palette, c => Assert.True(Ui.IsColour(c)));
+        var model = new TimerModel(Engine(), new StoreSettings(Enumerable.Range(0, 16).Select(i => new AccountSettings("Client " + i)).ToList(), false, "System", DayOfWeek.Monday));
+        Assert.Equal(TimerModel.Palette, model.AccountSettings.Select(a => a.Colour)); // Sixteen accounts, sixteen colours, no repeat.
     }
 
     [Fact]

@@ -82,7 +82,7 @@ public sealed class AccountsWindow : Window
         ToolTip.SetTip(button, "Choose the colour for " + accountName);
         void Choose(string colour) { set(colour); swatch.Background = Avalonia.Media.Brush.Parse(colour); }
         var panel = new StackPanel { Spacing = 8, Margin = new Thickness(4) };
-        var grid = new WrapPanel { Width = 4 * 34 };
+        var grid = new WrapPanel { Width = 8 * 34 };
         var flyout = new Flyout { Content = panel };
         foreach (var colour in TimerModel.Palette)
         {

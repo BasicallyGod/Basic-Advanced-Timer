@@ -92,8 +92,13 @@ public sealed class TimerModel : INotifyPropertyChanged
         SelectedDate = Engine.Now.Date;
         ApplyTheme();
     }
-    // Eight soft colours, so up to eight accounts each have their own before any repeat, none matching the break. They all take dark text.
-    public static readonly string[] Palette = { "#91B7D5", "#94BF9B", "#D9A18A", "#BAA4CE", "#C9D17F", "#86C5C0", "#D79BB5", "#C4A38F" };
+    // Sixteen soft colours, so up to sixteen accounts each have their own before any repeat, none matching the break. The first eight are
+    // the original palette and keep their order, so existing accounts are unchanged. They all take dark text.
+    public static readonly string[] Palette =
+    {
+        "#91B7D5", "#94BF9B", "#D9A18A", "#BAA4CE", "#C9D17F", "#86C5C0", "#D79BB5", "#C4A38F",
+        "#E58F8F", "#E6A86B", "#7FC8E8", "#8F94E6", "#C08FE0", "#7FD18F", "#B8BDB0", "#E3A0D6"
+    };
     // An account keeps its colour for good: it is given the first colour no other account is using, once, and saved with it.
     // Reordering, hiding or renaming an account therefore never changes how its blocks look on the timeline.
     private static List<AccountSettings> WithColours(IEnumerable<AccountSettings> accounts)

@@ -82,7 +82,7 @@ Run **Start-Demo.cmd** from the Windows preview folder, or choose **Settings →
 
 **Start with Windows** is a checkbox in the Settings menu. It adds a per-user entry to the Windows sign-in list (the `Run` registry key), so it needs no administrator rights or installer, and unticking removes it. The timer then opens, showing the pill, whenever you sign in. If you launched it with `--data-dir`, that folder is remembered. The box counts as ticked only while the saved entry points at the program you are running now, so after moving the folder it shows as unticked until you tick it again. The option is hidden in the demo and when the program is run through the `dotnet` command.
 
-**Reorder accounts** by dragging a row up or down in the dashboard list. The rows it passes slide aside, Break stays at the bottom, hidden accounts keep their places, and a plain click still starts or stops tracking. Each account keeps its colour for good, and the swatch beside its name in Accounts and budgets changes it to a palette colour or any #RRGGBB colour, so its blocks look the same on the timeline however you reorder, hide or rename accounts.
+**Reorder accounts** by dragging a row up or down in the dashboard list. The rows it passes slide aside, Break stays at the bottom, hidden accounts keep their places, and a plain click still starts or stops tracking. Each account keeps its colour for good, and the swatch beside its name in Accounts and budgets changes it to one of sixteen palette colours or any #RRGGBB colour, so its blocks look the same on the timeline however you reorder, hide or rename accounts.
 
 ### Editing recorded time
 

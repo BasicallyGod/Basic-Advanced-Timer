@@ -4,9 +4,13 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration sixteen account colours
+
+- The palette grew from eight to sixteen soft colours, so up to sixteen accounts can each have their own before any repeat. The original eight keep their order and values, so existing accounts look the same, and the new eight were chosen to stay clear of those and of the break's amber. Every one still takes the usual dark text. The chooser shows them in two rows of eight.
+
 ## Migration colour chooser, step 9
 
-- Each account row in Accounts and budgets has a round colour swatch. It opens the eight palette colours, and a box for any other colour typed as #RRGGBB (a bad value is refused with a message). The choice is saved with the account and used everywhere it appears, so it survives renaming, reordering and restarts. A new account starts on the first palette colour not already in use.
+- Each account row in Accounts and budgets has a round colour swatch. It opens the sixteen palette colours, and a box for any other colour typed as #RRGGBB (a bad value is refused with a message). The choice is saved with the account and used everywhere it appears, so it survives renaming, reordering and restarts. A new account starts on the first palette colour not already in use.
 - Timeline blocks pick their text colour from the block's colour, dark ink on light colours and white on dark ones, so a custom dark colour stays readable. Every palette colour keeps the usual dark ink.
 
 ## Migration old code removed, step 8
