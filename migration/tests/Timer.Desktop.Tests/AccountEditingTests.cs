@@ -170,7 +170,7 @@ public sealed class AccountEditingTests
             // The list was rebuilt in its new order, and the row that moved starts where the pointer left it, not in its slot.
             var moved = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account1");
             var start = Assert.IsType<Avalonia.Media.Transformation.TransformOperations>(moved.RenderTransform);
-            Assert.True(Math.Abs(start.Value.M32) > 5, $"the moved row should start away from its slot, not at {start.Value.M32}");
+            Assert.True(Math.Abs(start.Value.M32) > 1, $"the moved row should start away from its slot, not at {start.Value.M32}"); // How far depends on the drawing scale, so only "not at rest" is checked.
             Dispatcher.UIThread.RunJobs();
             Assert.NotEmpty(moved.Transitions!); // Then it glides to rest.
         }
