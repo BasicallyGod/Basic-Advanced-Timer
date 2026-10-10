@@ -570,7 +570,28 @@ public sealed class IconGlyph : Control
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property.Name == nameof(ActualThemeVariant)) InvalidateVisual();
+        if (change.Property.Name == nameof(ActualThemeVariant) || change.Property == Avalonia.Controls.Documents.TextElement.ForegroundProperty) InvalidateVisual();
+    }
+    // Waving: the flag ripples while the pointer is over its button, and settles smoothly when it leaves.
+    private double amplitude, phase; private bool waving; private DispatcherTimer? waveTimer;
+    /// <summary>How far the flag is currently rippling, from 0 (still) to 1 (full).</summary>
+    public double WaveAmount => amplitude;
+    public bool Waving
+    {
+        get => waving;
+        set
+        {
+            waving = value;
+            if (waveTimer is not null || Kind != IconKind.Flag) return;
+            waveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
+            waveTimer.Tick += (_, _) =>
+            {
+                amplitude += ((waving ? 1.0 : 0.0) - amplitude) * 0.18; phase += 0.4;
+                if (!waving && amplitude < 0.02) { amplitude = 0; waveTimer!.Stop(); waveTimer = null; }
+                InvalidateVisual();
+            };
+            waveTimer.Start();
+        }
     }
     public override void Render(DrawingContext context)
     {
@@ -607,10 +628,25 @@ public sealed class IconGlyph : Control
                 context.DrawLine(new Pen(brush, 1.8, lineCap: PenLineCap.Flat), new Point(3.5, 13), new Point(14.5, 13));
                 break;
             case IconKind.Flag:
-                // A pole with a pennant: the end of the day.
-                context.DrawLine(pen, new Point(4, 2.5), new Point(4, 16));
-                context.DrawGeometry(null, pen, Geometry.Parse("M 4,3.5 L 14.5,3.5 L 12,7 L 14.5,10.5 L 4,10.5"));
+            {
+                // A pole with a pennant in the button's own text colour. The cloth ripples while Waving is on, fading back to still.
+                IBrush flagBrush = Avalonia.Controls.Documents.TextElement.GetForeground(this) ?? brush;
+                var flagPen = new Pen(flagBrush, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+                context.DrawLine(flagPen, new Point(4, 2.5), new Point(4, 16));
+                double Wave(double x) => amplitude * 1.4 * Math.Sin(phase - (x - 4) * 0.7) * ((x - 4) / 10.5);
+                var geometry = new StreamGeometry();
+                using (var g = geometry.Open())
+                {
+                    g.BeginFigure(new Point(4, 3.5), false);
+                    for (var x = 5.5; x <= 14.5; x += 1.5) g.LineTo(new Point(x, 3.5 + Wave(x)));
+                    g.LineTo(new Point(12, 7 + Wave(12)));
+                    g.LineTo(new Point(14.5, 10.5 + Wave(14.5)));
+                    for (var x = 13.0; x >= 4; x -= 1.5) g.LineTo(new Point(x, 10.5 + Wave(x)));
+                    g.LineTo(new Point(4, 10.5)); g.EndFigure(false);
+                }
+                context.DrawGeometry(null, flagPen, geometry);
                 break;
+            }
             case IconKind.Copy:
                 // Two sheets, one behind the other: the usual sign for copy.
                 context.DrawRectangle(null, pen, new Rect(6.5, 2.5, 8.5, 10.5), 2, 2);

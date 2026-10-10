@@ -116,7 +116,7 @@ public sealed class PillWindow : Window
     private readonly Button pause;
     private readonly PauseGlyph pauseGlyph = new();
     private readonly BreakGlyph breakGlyph = new();
-    private Button breakButton = null!;
+    private Button breakButton = null!; private bool pillHoverBreak;
     private readonly TextBlock saved = Ui.Text("", 11, "muted");
     private readonly Grid progressBar = new();
     private Border progressFill = null!, shadowHost = null!;
@@ -170,6 +170,8 @@ public sealed class PillWindow : Window
         breakButton = Ui.Button("", model.ToggleBreak, "PillBreak");
         breakButton.Content = breakGlyph; breakButton.Classes.Add("round"); breakButton.Classes.Add("breakButton");
         breakButton.Width = breakButton.Height = 36; breakButton.Margin = new Thickness(0, 0, 8, 0);
+        breakButton.PointerEntered += (_, _) => { pillHoverBreak = true; breakGlyph.SetSteaming(true); };
+        breakButton.PointerExited += (_, _) => { pillHoverBreak = false; breakGlyph.SetSteaming(model.IsOnBreak); };
         Ui.Put(head, breakButton, 3);
         Ui.PillGestures(head, this);
         Ui.Put(root, head);
@@ -257,12 +259,12 @@ public sealed class PillWindow : Window
         overtime.IsVisible = model.IsOvertime;
         overtime.Text = "OT +" + model.Format(model.Engine.Totals(model.Engine.Now).Overtime);
         pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
-        breakButton.Classes.Set("onBreak", model.IsOnBreak); breakGlyph.Filled = model.IsOnBreak; breakGlyph.SetSteaming(model.IsOnBreak); breakGlyph.InvalidateVisual();
+        breakButton.Classes.Set("onBreak", model.IsOnBreak); breakGlyph.Filled = model.IsOnBreak; breakGlyph.SetSteaming(model.IsOnBreak || pillHoverBreak); breakGlyph.InvalidateVisual();
         ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Take a break");
         pause.IsEnabled = model.IsTracking || selected is not null;
         ToolTip.SetTip(pause, model.IsOnBreak ? "End break; drag to move" : model.IsTracking ? "Pause account; drag to move" : "Resume account; drag to move");
         timer.Classes.Set("live", model.IsTracking && !model.IsOnBreak); timer.Classes.Set("break", model.IsOnBreak);
-        timer.Classes.Set("idle", !model.IsTracking);
+        timer.Classes.Set("clockIdle", !model.IsTracking);
         day.Content = model.DayStarted ? "Finish day" : "Start day";
         // Starting the day is the green main action; finishing it is red, so ending the day is never done by accident.
         day.Classes.Set("finishDay", model.DayStarted); day.Classes.Set("primary", !model.DayStarted);
@@ -288,16 +290,18 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock clock = new TextBlock { Text = "00:00:00", FontSize = 40, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly TextBlock account = Ui.Text("", 16);
     private Border zoomControls = new(); private Button zoomOut = new(), zoomIn = new();
-    private readonly TextBlock allocatedValue = new TextBlock { FontSize = 18, FontWeight = Avalonia.Media.FontWeight.SemiBold };
-    private readonly TextBlock unallocatedValue = new TextBlock { FontSize = 18, FontWeight = Avalonia.Media.FontWeight.SemiBold };
-    private readonly TextBlock dayText = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock allocatedValue = new TextBlock { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
+    private readonly TextBlock unallocatedValue = new TextBlock { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
+    private readonly TextBlock dayText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
+    private readonly IconGlyph dayFlag = new(IconKind.Flag);
+    private bool hoverBreak;
     private readonly TextBlock date = Ui.Text("", 14);
     private readonly TextBlock today = Ui.Text("", 16, "muted");
     private readonly ContentControl workspace = new();
     private readonly Button day;
     private Button breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!;
     private readonly BreakGlyph dashboardCup = new();
-    private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly Button timeline;
     private readonly Button undo;
     private readonly Button merge;
@@ -318,7 +322,7 @@ public sealed class DashboardWindow : Window
         Background = Avalonia.Media.Brushes.Transparent;
         // The day lives in the left column: the date, the clock, the state of tracking, the day's totals, then the accounts, with the
         // break and the day button at the foot. The right column is the review, with settings and minimise in its top corner.
-        var root = Ui.Grid("*", "*,Auto");
+        var root = Ui.Grid("*", "*");
         var body = Ui.Grid("300,1,*", "*");
         var sidebar = Ui.Grid("*", "Auto,Auto,*,Auto");
         var identity = new StackPanel { Margin = new Thickness(18, 16, 18, 8), Spacing = 2 };
@@ -347,9 +351,12 @@ public sealed class DashboardWindow : Window
         breakButton = Ui.Button("", model.ToggleBreak, "DashboardBreak");
         breakButton.Classes.Add("breakButton"); breakButton.HorizontalAlignment = HorizontalAlignment.Stretch; breakButton.Height = 42;
         breakButton.Content = Ui.Horizontal(dashboardCup, dashboardBreakText);
+        breakButton.PointerEntered += (_, _) => { hoverBreak = true; dashboardCup.SetSteaming(true); };
+        breakButton.PointerExited += (_, _) => { hoverBreak = false; dashboardCup.SetSteaming(model.IsOnBreak || hoverBreak); }; // Steam rises under the pointer too.
         summary.Children.Add(breakButton);
         day = Ui.Button("", model.ToggleDay, "DashboardDay"); day.Classes.Add("outlined");
-        day.HorizontalAlignment = HorizontalAlignment.Stretch; day.Height = 42; day.Content = Ui.Horizontal(new IconGlyph(IconKind.Flag), dayText);
+        day.HorizontalAlignment = HorizontalAlignment.Stretch; day.Height = 42; day.Content = Ui.Horizontal(dayFlag, dayText);
+        day.PointerEntered += (_, _) => dayFlag.Waving = true; day.PointerExited += (_, _) => dayFlag.Waving = false; // The flag waves under the pointer.
         summary.Children.Add(day);
         Ui.Put(sidebar, summary, row: 3);
         var panel = new Border { Child = sidebar };
@@ -395,7 +402,7 @@ public sealed class DashboardWindow : Window
         Ui.Put(corner, Ui.Horizontal(Ui.SettingsButton(model), Ui.IconButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke())), 1);
         corner.Height = 36; Ui.DragHeader(corner, this);
         var cornerRule = Ui.Rule(); cornerRule.VerticalAlignment = VerticalAlignment.Bottom;
-        var rightColumn = Ui.Grid("*", "Auto,Auto,*");
+        var rightColumn = Ui.Grid("*", "Auto,Auto,*,Auto");
         Ui.Put(rightColumn, corner); Ui.Put(rightColumn, cornerRule, row: 1); Ui.Put(rightColumn, review, row: 2);
         Ui.Put(body, rightColumn, 2);
         Ui.Put(root, body);
@@ -405,7 +412,8 @@ public sealed class DashboardWindow : Window
         var footer = Ui.Text(FooterText() ?? "", 11, "muted"); footer.IsVisible = FooterText() is not null;
         model.PropertyChanged += (_, _) => { var text = FooterText(); footer.Text = text ?? ""; footer.IsVisible = text is not null; };
         footer.Margin = new Thickness(24, 10);
-        Ui.Put(root, footer, row: 1);
+        // Messages sit under the review only, so they never change the height of the left column.
+        footer.Margin = new Thickness(22, 4, 22, 10); Ui.Put(rightColumn, footer, row: 3);
         var surface = new Border { Name = "DashboardSurface", Child = root, ClipToBounds = true };
         surface.Classes.Add("surface");
         var host = Ui.Shadowed(surface, 20); Content = host;
@@ -461,7 +469,7 @@ public sealed class DashboardWindow : Window
     {
         clock.Text = model.ClockText;
         clock.Classes.Set("live", model.IsTracking);
-        clock.Classes.Set("idle", !model.IsTracking);
+        clock.Classes.Set("clockIdle", !model.IsTracking);
         account.Text = model.IsOnBreak ? (model.ResumeAccount is { } backTo ? "Then back to " + backTo : "No account running") : model.AccountLabel;
         today.Text = model.Engine.Now.ToString("dddd", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + "\n" + model.Engine.Now.ToString("d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
         var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
@@ -471,6 +479,7 @@ public sealed class DashboardWindow : Window
         allocatedValue.Text = model.Format(model.Allocated);
         unallocatedValue.Text = model.Format(model.Unallocated);
         dayText.Text = model.DayStarted ? "Finish day" : "Start day";
+        day.Classes.Set("startDay", !model.DayStarted); // Green to start the day, red to finish it.
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
         var editing = !weekMode || model.WeekSection == "entries";

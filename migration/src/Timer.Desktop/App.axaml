@@ -150,6 +150,8 @@
     </Style>
     <Style Selector="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+    <!-- The clock is the main thing on the screen, so when nothing is running it is full-strength text rather than the dim idle grey. -->
+    <Style Selector="TextBlock.clockIdle"><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="TextBlock.idle"><Setter Property="Foreground" Value="{DynamicResource Idle}" /></Style>
     <Style Selector="TextBlock.live"><Setter Property="Foreground" Value="{DynamicResource Live}" /></Style>
     <Style Selector="TextBlock.break"><Setter Property="Foreground" Value="{DynamicResource Break}" /></Style>
@@ -283,6 +285,17 @@
       <Setter Property="Background" Value="{DynamicResource Hover}" />
       <Setter Property="Foreground" Value="{DynamicResource Finish}" />
       <Setter Property="Opacity" Value="1" />
+    </Style>
+    <!-- Starting the day is green: the same outlined button as Finish day, in the live colour. -->
+    <Style Selector="Button.startDay">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource Live}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+    <Style Selector="Button.startDay:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Hover}" />
+      <Setter Property="Foreground" Value="{DynamicResource Live}" />
     </Style>
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="{DynamicResource Live}" />

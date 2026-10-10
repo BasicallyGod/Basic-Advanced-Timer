@@ -389,4 +389,45 @@ public sealed class EditingTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheDayButtonIsGreenToStartAndRedToFinishWithMatchingTypeAndAWavingFlag()
+    {
+        var now = new DateTime(2026, 10, 9, 7, 0, 0); // Before the usual start, so the day has not begun.
+        var model = TimerModel.CreateDemo(() => now); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
+            var day = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay"); var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
+            var flag = day.GetVisualDescendants().OfType<IconGlyph>().Single(); var label = day.GetVisualDescendants().OfType<TextBlock>().Single(); var breakLabel = breakButton.GetVisualDescendants().OfType<TextBlock>().Single();
+            Assert.Equal(breakLabel.FontSize, label.FontSize); Assert.Equal(breakLabel.FontWeight, label.FontWeight); Assert.Equal(breakLabel.FontFamily, label.FontFamily); // The same type on both buttons.
+            void Check() { var started = model.DayStarted; Assert.Equal(started, day.Classes.Contains("finishDay")); Assert.Equal(!started, day.Classes.Contains("startDay")); } // Red once running, green before.
+            Check(); model.ToggleDay(); Dispatcher.UIThread.RunJobs(); Check(); model.ToggleDay(); Dispatcher.UIThread.RunJobs(); Check();
+            // The flag waves while the pointer is over the button, and the cup steams. (Headless tests do not run animation timers, so
+            // this checks the switches, not the frames.)
+            var over = day.TranslatePoint(new Point(day.Bounds.Width / 2, day.Bounds.Height / 2), dashboard)!.Value;
+            dashboard.MouseMove(over); Assert.True(flag.Waving);
+            dashboard.MouseMove(new Point(5, 5)); Assert.False(flag.Waving);
+            var cup = breakButton.GetVisualDescendants().OfType<BreakGlyph>().Single(); var cupSpot = breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, breakButton.Bounds.Height / 2), dashboard)!.Value;
+            var wasSteaming = cup.Steaming; dashboard.MouseMove(cupSpot); Assert.True(cup.Steaming);
+            dashboard.MouseMove(new Point(5, 5)); Assert.Equal(wasSteaming, cup.Steaming);
+        }
+        finally { dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void MessagesAppearUnderTheReviewOnlyAndNeverChangeTheLeftColumnHeight()
+    {
+        var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
+            var scroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "AccountScroll"); var before = scroll.Bounds.Height;
+            model.Notice = "A message for the footer"; model.ToggleFormat(); model.ToggleFormat(); Dispatcher.UIThread.RunJobs(); using var again = dashboard.CaptureRenderedFrame();
+            var message = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "A message for the footer" && t.IsVisible);
+            Assert.True(message.TranslatePoint(new Point(0, 0), dashboard)!.Value.X > 300); // In the right column, under the tabs' content.
+            Assert.Equal(before, scroll.Bounds.Height, 0.5);
+        }
+        finally { dashboard.Close(); }
+    }
 }
