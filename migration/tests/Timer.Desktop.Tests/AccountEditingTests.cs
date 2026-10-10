@@ -150,4 +150,30 @@ public sealed class AccountEditingTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void ADroppedRowGlidesIntoItsNewPlaceAndPassingRowsSlideAside()
+    {
+        var model = new TimerModel(Engine());
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            Button Row(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
+            var first = Row("Account0"); var height = first.Bounds.Height; var second = Row("Account1");
+            var from = first.TranslatePoint(new Point(100, height / 2), window)!.Value; var to = from + new Vector(0, height * 1.4); // Released a little past the middle of its new slot.
+            window.MouseDown(from, MouseButton.Left); window.MouseMove(from + new Vector(0, height * .6)); window.MouseMove(to);
+            Assert.NotNull(second.Transitions); Assert.NotEmpty(second.Transitions!); // The row being passed slides, rather than jumps.
+            Assert.Null(first.Transitions); // The dragged row follows the pointer exactly.
+            window.MouseUp(to, MouseButton.Left);
+            Assert.Equal("Account two", model.AccountSettings[0].Name);
+            // The list was rebuilt in its new order, and the row that moved starts where the pointer left it, not in its slot.
+            var moved = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account1");
+            var start = Assert.IsType<Avalonia.Media.Transformation.TransformOperations>(moved.RenderTransform);
+            Assert.True(Math.Abs(start.Value.M32) > 5, $"the moved row should start away from its slot, not at {start.Value.M32}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotEmpty(moved.Transitions!); // Then it glides to rest.
+        }
+        finally { window.Close(); }
+    }
 }

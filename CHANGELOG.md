@@ -4,6 +4,11 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration timeline controls and drag animations
+
+- Added a floating bar over the timeline with zoom out, zoom in and fit the day icons, each with a tooltip. Fit fills the window with the day's recorded time, or the working day when nothing is recorded, and the zoom icons dim at the limits.
+- Account rows now slide aside as you drag past them, and the dropped row glides into place instead of snapping, or back if the drag came to nothing.
+
 ## Migration overview tidy
 
 - Removed the working-day line from the Overview bars, and set the accounts apart from the chart with a rule, space and a By account heading.

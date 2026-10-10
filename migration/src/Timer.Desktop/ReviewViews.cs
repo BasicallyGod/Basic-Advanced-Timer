@@ -178,6 +178,19 @@ public static class ReviewViews
         }, RoutingStrategies.Tunnel);
         DeferOffset(scroll);
         Ui.Put(root, scroll, row: 2);
+        // Zoom and fit sit in a small bar over the timeline's top right, next to what they change. Icons only, with tooltips.
+        Button Icon(IconKind kind, string tip, string name, Action click)
+        {
+            var button = Ui.Button("", click, name); button.Content = new IconGlyph(kind); button.Classes.Add("iconButton"); ToolTip.SetTip(button, tip); return button;
+        }
+        var zoomOut = Icon(IconKind.ZoomOut, "Zoom out", "TimelineZoomOut", () => model.ZoomTimeline(-1, scroll.Viewport.Height / 2, scroll.Offset.Y));
+        var zoomIn = Icon(IconKind.ZoomIn, "Zoom in (or hold Ctrl and use the mouse wheel)", "TimelineZoomIn", () => model.ZoomTimeline(1, scroll.Viewport.Height / 2, scroll.Offset.Y));
+        var fit = Icon(IconKind.FitDay, "Fit the day to the window", "TimelineFit", () => model.FitTimeline(scroll.Viewport.Height));
+        zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
+        var bar = new Border { Name = "TimelineControls", Child = Ui.Horizontal(zoomOut, zoomIn, fit), CornerRadius = new CornerRadius(10), Padding = new Thickness(4), BorderThickness = new Thickness(1),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Margin = new Thickness(0, 6, 22, 0), Opacity = .96 };
+        ((StackPanel)bar.Child).Spacing = 2; bar.Classes.Add("chip");
+        Ui.Put(root, bar, row: 2);
         return root;
     }
 

@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.VisualTree;
 using Avalonia.Interactivity;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Timer.Core;
 
 namespace Timer.Desktop;
@@ -311,19 +312,55 @@ public sealed class AccountList : StackPanel
             rows.Add((account, row, today, budget, icon, dot));
         }
         Refresh();
+        if (pendingGlide is { } glide)
+        {
+            pendingGlide = null;
+            if (rows.FirstOrDefault(r => r.Account.Name == glide.Name).Row is { } moved)
+            {
+                moved.RenderTransform = Shift(glide.Offset); moved.ZIndex = 1; moved.Opacity = .85;
+                // On the next pass the transform returns to nothing, and the transition carries the row there smoothly.
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    moved.Transitions = Glide(220); moved.RenderTransform = Shift(0); moved.Opacity = 1;
+                    var done = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(260) };
+                    done.Tick += (_, _) => { done.Stop(); moved.Transitions = null; moved.RenderTransform = null; moved.ZIndex = 0; };
+                    done.Start();
+                }, Avalonia.Threading.DispatcherPriority.Background);
+            }
+        }
     }
     // Dragging a row up or down reorders the accounts. A press that never moves still starts or stops tracking as usual.
-    // Lunch stays at the bottom, and the rows it passes slide aside to show where the account will land.
+    // The rows it passes slide aside to show where the account will land, and on release it glides into its new place,
+    // or back to where it was if the drag came to nothing, instead of snapping.
+    private static Avalonia.Animation.Transitions Glide(int milliseconds) => new()
+    { new Avalonia.Animation.TransformOperationsTransition { Property = Visual.RenderTransformProperty, Duration = TimeSpan.FromMilliseconds(milliseconds), Easing = new Avalonia.Animation.Easings.CubicEaseOut() } };
+    private static Avalonia.Media.Transformation.TransformOperations Shift(double y)
+        => Avalonia.Media.Transformation.TransformOperations.Parse($"translateY({y.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px)");
+    private (string Name, double Offset)? pendingGlide;
     private void AttachReorder(Button row, string name)
     {
-        Point? press = null; var dragging = false; var target = 0;
+        Point? press = null; var dragging = false; var target = 0; var dragOffset = 0.0;
         int Index() => rows.FindIndex(r => r.Account.Name == name);
         void Finish(bool commit)
         {
-            var from = Index(); var to = target;
+            var from = Index(); var to = target; var height = row.Bounds.Height;
             press = null; dragging = false;
-            foreach (var r in rows) { r.Row.RenderTransform = null; r.Row.Opacity = 1; r.Row.ZIndex = 0; }
-            if (commit && from >= 0 && to != from) model.MoveAccount(name, to);
+            if (commit && from >= 0 && to != from)
+            {
+                // The list is rebuilt in its new order. The moved row starts where the pointer left it and glides to its slot.
+                pendingGlide = (name, from * height + dragOffset - to * height);
+                model.MoveAccount(name, to);
+                return;
+            }
+            // Nothing moved, or the drag was cancelled: everything glides back, then the animation machinery is cleared away.
+            foreach (var r in rows) { r.Row.Transitions = Glide(180); r.Row.RenderTransform = Shift(0); r.Row.Opacity = 1; }
+            var reset = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(230) };
+            reset.Tick += (_, _) =>
+            {
+                reset.Stop();
+                foreach (var r in rows) { r.Row.Transitions = null; r.Row.RenderTransform = null; r.Row.ZIndex = 0; }
+            };
+            reset.Start();
         }
         row.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         { if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) { press = e.GetPosition(this); dragging = false; } }, RoutingStrategies.Tunnel);
@@ -335,6 +372,9 @@ public sealed class AccountList : StackPanel
             {
                 if (Math.Abs(dy) < 6) return;
                 dragging = true; e.Pointer.Capture(row);
+                // The other rows slide when they move aside; the dragged row follows the pointer exactly, so it has no glide.
+                foreach (var r in rows) { r.Row.Transitions = null; r.Row.RenderTransform = Shift(0); }
+                foreach (var r in rows.Where(r => r.Account.Name != name)) r.Row.Transitions = Glide(140);
             }
             var from = Index(); var height = row.Bounds.Height;
             if (from < 0 || height <= 0) return;
@@ -344,9 +384,10 @@ public sealed class AccountList : StackPanel
             {
                 if (j == from) continue;
                 var shift = from < target && j > from && j <= target ? -height : target < from && j >= target && j < from ? height : 0;
-                rows[j].Row.RenderTransform = shift == 0 ? null : new TranslateTransform(0, shift);
+                rows[j].Row.RenderTransform = Shift(shift);
             }
-            row.RenderTransform = new TranslateTransform(0, Math.Clamp(dy, -from * height, (movable - 1 - from) * height));
+            dragOffset = Math.Clamp(dy, -from * height, (movable - 1 - from) * height);
+            row.RenderTransform = Shift(dragOffset);
             row.Opacity = .8; row.ZIndex = 1; e.Handled = true;
         }, RoutingStrategies.Tunnel);
         row.AddHandler(InputElement.PointerReleasedEvent, (_, e) =>
@@ -473,6 +514,35 @@ public sealed class BreakGlyph : Control
             var rise = phase * 3.5; var alpha = Steaming ? Math.Sin(phase * Math.PI) : 1.0;
             using (context.PushOpacity(Math.Clamp(alpha, 0.0, 1.0)))
                 context.DrawLine(pen, new Point(x, 4 - rise), new Point(x, 1.5 - rise + (Steaming ? 0 : 0)));
+        }
+    }
+}
+
+public enum IconKind { ZoomIn, ZoomOut, FitDay }
+
+// Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
+public sealed class IconGlyph : Control
+{
+    public IconKind Kind { get; }
+    public IconGlyph(IconKind kind) { Kind = kind; Width = Height = 18; }
+    public override void Render(DrawingContext context)
+    {
+        IBrush brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;
+        var pen = new Pen(brush, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        switch (Kind)
+        {
+            case IconKind.ZoomIn or IconKind.ZoomOut:
+                context.DrawEllipse(null, pen, new Point(8, 8), 6, 6);
+                context.DrawLine(pen, new Point(12.5, 12.5), new Point(16.5, 16.5));
+                context.DrawLine(pen, new Point(5.2, 8), new Point(10.8, 8));
+                if (Kind == IconKind.ZoomIn) context.DrawLine(pen, new Point(8, 5.2), new Point(8, 10.8));
+                break;
+            case IconKind.FitDay:
+                // Two bars with arrows between them pointing inwards: the day squeezed to fit the space.
+                context.DrawLine(pen, new Point(3, 2.5), new Point(15, 2.5)); context.DrawLine(pen, new Point(3, 15.5), new Point(15, 15.5));
+                context.DrawLine(pen, new Point(9, 5), new Point(9, 8.2)); context.DrawLine(pen, new Point(7, 6.4), new Point(9, 8.4)); context.DrawLine(pen, new Point(11, 6.4), new Point(9, 8.4));
+                context.DrawLine(pen, new Point(9, 13), new Point(9, 9.8)); context.DrawLine(pen, new Point(7, 11.6), new Point(9, 9.6)); context.DrawLine(pen, new Point(11, 11.6), new Point(9, 9.6));
+                break;
         }
     }
 }

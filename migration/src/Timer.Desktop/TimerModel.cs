@@ -24,6 +24,22 @@ public sealed class TimerModel : INotifyPropertyChanged
         TimelineOffset = Math.Max(0, (offset + pointerY) / previous * TimelinePixelsPerHour - pointerY);
         Notify();
     }
+    /// <summary>Zooms and scrolls so the day's recorded time, with a little room either side, fills the height given.</summary>
+    public void FitTimeline(double viewportHeight)
+    {
+        var day = SelectedDate.Date;
+        var spans = Engine.Sessions.Where(s => s.Day == day && s.IsPositioned && s.Duration > TimeSpan.Zero).Select(s => (s.From, s.To)).ToList();
+        spans.AddRange(Editor.Positions.Where(p => p.Start.Date == day).Select(p => (p.Start, p.End)));
+        if (Engine.Active is { } active && active.Start < day.AddDays(1) && Engine.Now > day) spans.Add((active.Start < day ? day : active.Start, Engine.Now < day.AddDays(1) ? Engine.Now : day.AddDays(1)));
+        double start, end;
+        if (spans.Count > 0) { start = (spans.Min(s => s.From) - day).TotalHours; end = (spans.Max(s => s.To) - day).TotalHours; }
+        else { var plan = Engine.Plan(day); start = plan.Working ? (plan.Start - day).TotalHours : 9; end = plan.Working ? (plan.End - day).TotalHours : 17; }
+        var padding = 0.25; start = Math.Max(0, start - padding); end = Math.Min(24, end + padding);
+        var hours = Math.Max(end - start, 1.0);
+        TimelinePixelsPerHour = Math.Clamp((viewportHeight > 0 ? viewportHeight : 400) / hours, 60, 640);
+        TimelineOffset = start * TimelinePixelsPerHour;
+        Notify();
+    }
     public TrackingEngine Engine { get; }
     public LedgerEditor Editor { get; }
     public string? EditError { get; private set; }
