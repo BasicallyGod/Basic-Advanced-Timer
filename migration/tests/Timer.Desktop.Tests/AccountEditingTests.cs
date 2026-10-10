@@ -221,4 +221,40 @@ public sealed class AccountEditingTests
         }
         finally { Directory.Delete(folder, true); }
     }
+
+    [AvaloniaFact]
+    public void TheColourChooserPicksFromThePaletteOrAnyHexColourAndKeepsItOnSave()
+    {
+        var model = new TimerModel(Engine(), new StoreSettings(new() { new("A"), new("B") }, false, "System", DayOfWeek.Monday));
+        var window = new AccountsWindow(model); window.Show();
+        try
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var buttons = window.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "AccountColour").ToList();
+            Assert.Equal(2, buttons.Count);
+            IEnumerable<Control> Flyout(Button b) => ((Avalonia.Controls.Flyout)b.Flyout!).Content is Control c ? Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(c).OfType<Control>() : Array.Empty<Control>();
+            // The first account takes the palette's last colour.
+            Flyout(buttons[0]).OfType<Button>().Single(x => x.Name == "Colour" + TimerModel.Palette[^1][1..]).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            // The second takes a colour typed in, and a bad one is refused with a message.
+            var hex = Flyout(buttons[1]).OfType<TextBox>().Single(x => x.Name == "ColourHex");
+            var use = Flyout(buttons[1]).OfType<Button>().Single(x => x.Name == "UseColour");
+            hex.Text = "12345"; use.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Contains(Flyout(buttons[1]).OfType<TextBlock>(), t => t.Text is not null && t.Text.Contains("six digits"));
+            hex.Text = "3a7ca5"; use.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Save").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(TimerModel.Palette[^1], model.AccountSettings[0].Colour); Assert.Equal("#3A7CA5", model.AccountSettings[1].Colour);
+            Assert.Equal("#3A7CA5", model.ReviewAccounts.Single(a => a.Name == "B").Colour);
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void TextOnAColourIsDarkOnLightAndWhiteOnDark()
+    {
+        Assert.Equal("#24312B", Ui.InkOn("#91B7D5")); Assert.Equal("#24312B", Ui.InkOn("#FFFFFF"));
+        Assert.Equal("#FFFFFF", Ui.InkOn("#102030")); Assert.Equal("#FFFFFF", Ui.InkOn("#000000"));
+        Assert.Equal("#24312B", Ui.InkOn("not a colour"));
+        foreach (var colour in TimerModel.Palette) Assert.Equal("#24312B", Ui.InkOn(colour)); // Every palette colour keeps the usual ink.
+    }
 }

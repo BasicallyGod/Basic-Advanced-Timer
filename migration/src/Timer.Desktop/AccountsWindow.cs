@@ -18,23 +18,26 @@ public sealed class AccountsWindow : Window
         intro.Children.Add(new TextBlock { Text = "Add accounts, rename them, show or hide them, and set budgets in hours. Drag accounts on the dashboard to reorder them.\nA blank budget means no limit. Hidden accounts keep their recorded time.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
         Ui.Put(root, intro);
         var list = new StackPanel { Spacing = 10 };
-        var entries = new List<(string? Original, TextBox Name, CheckBox Visible, TextBox Budget, ComboBox Period)>();
-        var headings = Ui.Grid("*,65,85,110");
-        Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Show", 12, "muted"), 1);
-        Ui.Put(headings, Ui.Text("Hours", 12, "muted"), 2); Ui.Put(headings, Ui.Text("Period", 12, "muted"), 3);
+        var entries = new List<(string? Original, TextBox Name, CheckBox Visible, TextBox Budget, ComboBox Period, Func<string> Colour)>();
+        var headings = Ui.Grid("*,50,65,85,110");
+        Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Colour", 12, "muted"), 1); Ui.Put(headings, Ui.Text("Show", 12, "muted"), 2);
+        Ui.Put(headings, Ui.Text("Hours", 12, "muted"), 3); Ui.Put(headings, Ui.Text("Period", 12, "muted"), 4);
         list.Children.Add(headings);
         void Add(AccountSettings account, bool existing = true)
         {
-            var row = Ui.Grid("*,65,85,110");
+            var row = Ui.Grid("*,50,65,85,110");
             var name = new TextBox { Text = account.Name, Margin = new Thickness(0, 0, 8, 0) };
             ToolTip.SetTip(name, "Edit the name to rename this account"); Ui.Put(row, name);
+            // A new account starts on the first palette colour nobody here is using, as the model would give it.
+            var chosen = account.Colour ?? TimerModel.Palette.FirstOrDefault(c => !entries.Any(e => e.Colour().Equals(c, StringComparison.OrdinalIgnoreCase))) ?? TimerModel.Palette[0];
+            Ui.Put(row, ColourButton(() => chosen, value => chosen = value, account.Name), 1);
             var visible = new CheckBox { IsChecked = !account.Hidden };
-            Ui.Put(row, visible, 1);
+            Ui.Put(row, visible, 2);
             var budget = new TextBox { Text = account.BudgetHours?.ToString("0.###", CultureInfo.InvariantCulture) ?? "", Margin = new Thickness(0, 0, 8, 0) };
-            Ui.Put(row, budget, 2);
+            Ui.Put(row, budget, 3);
             var period = new ComboBox { ItemsSource = new[] { "week", "month", "quarter" }, SelectedItem = account.BudgetPeriod, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
-            Ui.Put(row, period, 3);
-            list.Children.Add(row); entries.Add((existing ? account.Name : null, name, visible, budget, period));
+            Ui.Put(row, period, 4);
+            list.Children.Add(row); entries.Add((existing ? account.Name : null, name, visible, budget, period, () => chosen));
         }
         foreach (var account in model.AccountSettings) Add(account);
         bool Taken(string name) => entries.Any(e => (e.Name.Text ?? "").Trim().Equals(name, StringComparison.OrdinalIgnoreCase));
@@ -55,10 +58,9 @@ public sealed class AccountsWindow : Window
             try
             {
                 // An account keeps its colour through editing, renaming and reordering; a new one is given one by the model.
-                var colours = model.AccountSettings.ToDictionary(a => a.Name, a => a.Colour);
                 var accounts = entries.Select(e => new AccountSettings((e.Name.Text ?? "").Trim(),
                     string.IsNullOrWhiteSpace(e.Budget.Text) ? null : double.Parse(e.Budget.Text, NumberStyles.Float, CultureInfo.InvariantCulture),
-                    (string?)e.Period.SelectedItem ?? "week", e.Visible.IsChecked != true, e.Original is { } original ? colours.GetValueOrDefault(original) : null)).ToList();
+                    (string?)e.Period.SelectedItem ?? "week", e.Visible.IsChecked != true, e.Colour())).ToList();
                 var renames = entries.Where(e => e.Original is not null).Zip(accounts, (e, a) => (From: e.Original!, To: a.Name))
                     .Where(r => r.From != r.To).ToDictionary(r => r.From, r => r.To);
                 model.SetAccounts(accounts, renames);
@@ -71,5 +73,37 @@ public sealed class AccountsWindow : Window
             { error.Text = ex.Message; }
         }), Ui.Button("Cancel", Close)), row: 4);
         Content = root;
+    }
+    // A round swatch showing the account's colour. It opens the palette, and a box for any other colour as #RRGGBB.
+    private static Button ColourButton(Func<string> get, Action<string> set, string accountName)
+    {
+        var swatch = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Background = Avalonia.Media.Brush.Parse(get()), BorderThickness = new Thickness(1), BorderBrush = Avalonia.Media.Brushes.Gray };
+        var button = new Button { Content = swatch, Name = "AccountColour", Padding = new Thickness(4), Background = Avalonia.Media.Brushes.Transparent, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        ToolTip.SetTip(button, "Choose the colour for " + accountName);
+        void Choose(string colour) { set(colour); swatch.Background = Avalonia.Media.Brush.Parse(colour); }
+        var panel = new StackPanel { Spacing = 8, Margin = new Thickness(4) };
+        var grid = new WrapPanel { Width = 4 * 34 };
+        var flyout = new Flyout { Content = panel };
+        foreach (var colour in TimerModel.Palette)
+        {
+            var pick = new Button { Name = "Colour" + colour[1..], Width = 28, Height = 28, Margin = new Thickness(3), Padding = new Thickness(0), CornerRadius = new CornerRadius(14), Background = Avalonia.Media.Brush.Parse(colour) };
+            ToolTip.SetTip(pick, colour);
+            pick.Click += (_, _) => { Choose(colour); flyout.Hide(); };
+            grid.Children.Add(pick);
+        }
+        panel.Children.Add(grid);
+        var hex = new TextBox { Name = "ColourHex", Watermark = "#RRGGBB", Text = get(), Width = 120, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        var note = Ui.Text("", 12, "muted");
+        var apply = Ui.Button("Use", () =>
+        {
+            var text = (hex.Text ?? "").Trim();
+            if (!text.StartsWith('#')) text = "#" + text;
+            if (!Ui.IsColour(text)) { note.Text = "Use six digits, such as #3A7CA5."; return; }
+            Choose(text.ToUpperInvariant()); note.Text = ""; flyout.Hide();
+        }, "UseColour");
+        panel.Children.Add(Ui.Horizontal(hex, apply)); panel.Children.Add(note);
+        flyout.Opened += (_, _) => hex.Text = get();
+        button.Flyout = flyout;
+        return button;
     }
 }

@@ -62,10 +62,11 @@ public static class ReviewViews
             var end = interval.End > day.AddDays(1) ? day.AddDays(1) : interval.End;
             var duration = interval.Group is { } groupDuration ? TimeSpan.FromMinutes((double)groupDuration.Minutes) : end - interval.Start;
             var height = Math.Max(3, (end - interval.Start).TotalHours * pixelsPerHour - 4);
+            var ink = Ui.InkOn(colour);
             var text = new StackPanel { Spacing = 6 };
             text.Children.Add(Ui.Text(model.Label(interval.Account) + (interval.Group is { } labelGroup ? $" · Group ({labelGroup.Sources.Count})" : ""), 15));
             if (height >= 58) text.Children.Add(Ui.Text($"{interval.Start:HH:mm} – {end:HH:mm} · {model.Format(duration)}", 12));
-            foreach (TextBlock child in text.Children) child.Foreground = Brush.Parse("#24312B");
+            foreach (TextBlock child in text.Children) child.Foreground = Brush.Parse(ink);
             var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
                 Width = 380, Height = height, Padding = new Thickness(14, height < 58 ? 2 : 10),
                 Child = height >= 24 ? text : null, ClipToBounds = true };
@@ -74,7 +75,7 @@ public static class ReviewViews
             var note = interval.Group is { } groupNote ? "Grouped entries · " + groupNote.Note : interval.Row is null ? "Recording now · stop tracking to move or edit" : model.Editor.Note(interval.Row);
             if (height >= 90 && !string.IsNullOrWhiteSpace(note))
             {
-                var noteText = Ui.Text(note, 12); noteText.Foreground = Brush.Parse("#24312B");
+                var noteText = Ui.Text(note, 12); noteText.Foreground = Brush.Parse(ink);
                 noteText.TextTrimming = TextTrimming.CharacterEllipsis; text.Children.Add(noteText);
             }
             ToolTip.SetTip(card, $"{model.Label(interval.Account)} · {interval.Start:HH:mm:ss} – {end:HH:mm:ss} · {model.Format(duration)}\n{note}");
@@ -89,7 +90,7 @@ public static class ReviewViews
             {
                 // The block that is recording now. A green outline, a label and the stop menu make it clear why it can't be dragged.
                 card.Classes.Add("recording"); card.Name = "TimelineRecording"; card.Cursor = new Cursor(StandardCursorType.Arrow);
-                var live = Ui.Text("● Recording now", 12); live.Foreground = Brush.Parse("#1E5C38"); live.FontWeight = FontWeight.SemiBold;
+                var live = Ui.Text("● Recording now", 12); live.Foreground = Brush.Parse(ink == "#FFFFFF" ? ink : "#1E5C38"); live.FontWeight = FontWeight.SemiBold;
                 text.Children.Insert(model.IsSelected(selectionSources) ? 1 : 0, live);
                 var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };

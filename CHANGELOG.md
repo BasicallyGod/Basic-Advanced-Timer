@@ -4,6 +4,11 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration colour chooser, step 9
+
+- Each account row in Accounts and budgets has a round colour swatch. It opens the eight palette colours, and a box for any other colour typed as #RRGGBB (a bad value is refused with a message). The choice is saved with the account and used everywhere it appears, so it survives renaming, reordering and restarts. A new account starts on the first palette colour not already in use.
+- Timeline blocks pick their text colour from the block's colour, dark ink on light colours and white on dark ones, so a custom dark colour stays readable. Every palette colour keeps the usual dark ink.
+
 ## Migration old code removed, step 8
 
 - Credit positions are gone. That removes the "Position existing credit" window and Tools menu item, the outlined position blocks on the timeline, the "Unplaced legacy credit" caption, and the code that stored, validated and undid them. A new database has none, and an older test database simply ignores any it holds.

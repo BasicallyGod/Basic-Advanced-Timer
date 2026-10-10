@@ -13,6 +13,15 @@ namespace Timer.Desktop;
 
 public static class Ui
 {
+    public static bool IsColour(string? text) => text is not null && System.Text.RegularExpressions.Regex.IsMatch(text, "^#[0-9A-Fa-f]{6}$");
+    /// <summary>The text colour that reads best on a block of this colour: the usual dark ink on light colours, white on dark ones.</summary>
+    public static string InkOn(string colour)
+    {
+        if (!IsColour(colour)) return "#24312B";
+        double Channel(int at) { var v = Convert.ToInt32(colour.Substring(at, 2), 16) / 255.0; return v <= 0.03928 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4); }
+        var luminance = 0.2126 * Channel(1) + 0.7152 * Channel(3) + 0.0722 * Channel(5);
+        return luminance > 0.3 ? "#24312B" : "#FFFFFF";
+    }
     // Room around a borderless window for its soft shadow or glow, which are drawn outside the card.
     public const double ShadowMargin = 22;
     /// <summary>Wraps a window's card so it can cast a shadow or glow. The card clips its own content, so the shadow lives on a parent.</summary>
