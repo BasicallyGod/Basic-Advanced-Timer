@@ -7,6 +7,10 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(StorePackage)' == 'true'">
     <AssemblyName>BasicsAdvancedTimer</AssemblyName>
+    <!-- Only the Store package uses Windows APIs (the startup task), so everyday builds and tests stay cross-platform. -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <DefineConstants>$(DefineConstants);STORE_PACKAGE</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Timer.Core/Timer.Core.csproj" />

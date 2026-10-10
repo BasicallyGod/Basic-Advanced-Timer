@@ -59,7 +59,10 @@ public sealed partial class App : Application
                 // sign-in entry survives updates. A bare --test-build run still leaves the startup entry alone.
                 var scriptIndex = Array.IndexOf(args, "--updater-script");
                 var updaterScript = scriptIndex >= 0 && scriptIndex + 1 < args.Length ? AutoStartSetting.AcceptUpdaterScript(args[scriptIndex + 1]) : null;
-                if (!smokeMode && (!args.Contains("--test-build") || updaterScript is not null) && WindowsRunKey.Available && !PackageEnvironment.IsPackaged())
+                // The Store package starts through its manifest's startup task; everything else uses the sign-in registry entry.
+                if (!smokeMode && !args.Contains("--test-build") && PackageEnvironment.IsPackaged())
+                    model.AutoStart = PackagedStartup.TryCreate();
+                else if (!smokeMode && (!args.Contains("--test-build") || updaterScript is not null) && WindowsRunKey.Available && !PackageEnvironment.IsPackaged())
                     model.AutoStart = new AutoStartSetting(new WindowsRunKey(), Environment.ProcessPath, index >= 0 ? args[index + 1] : null, updaterScript);
                 }
                 var openedStore = store;

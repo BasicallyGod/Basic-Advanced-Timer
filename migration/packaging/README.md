@@ -26,7 +26,7 @@ This MSIX uses the **development-only** package identity `BasicsAdvancedTimer.De
    Add-AppxPackage -Path .\BasicsAdvancedTimer-Dev.msix
    ```
 4. Launch **Basic's Advanced Timer** from the Start menu. Confirm the tray icon, account switching, persistence across restart, timeline editing, undo, CSV export, and data backups.
-5. Check **Settings > Apps > Startup** (or Task Manager's Startup apps tab) after launching once. The packaged startup task is disabled by default. In-app registry startup is intentionally hidden in MSIX builds.
+5. Check **Settings > Apps > Startup** (or Task Manager's Startup apps tab) after launching once. The packaged startup task is disabled by default. The right-click menu's **Start with Windows** checkbox turns that task on and off through the Windows startup-task API (the registry entry used by the portable build would be virtualised and never run). If you switch it off in Windows Settings, the app cannot switch it back on and says so; turn it on there instead.
 6. Back up any data created in the installed MSIX **before uninstalling it**; Windows may delete package-local state on uninstall. When done testing, uninstall the test package and remove the *temporary* certificate from the Local Computer Trusted People store (`certlm.msc`). Do not leave temporary development certificates trusted unnecessarily.
 
 Do **not** expect a developer MSIX installation to be updated in place by the eventual Store version: Microsoft assigns a different package identity.
@@ -73,6 +73,6 @@ The `runFullTrust` restricted capability warning may continue to appear during P
 ### Outstanding before release
 
 - Install and run a development MSIX on Windows (the CI runner validates packaging but **cannot** replace a user-level launch and interaction test).
-- Verify startup task display/enablement, filesystem redirection, exports and automatic updates on the supported Windows version.
+- Verify the startup task (the menu checkbox, the Windows Settings switch and a real sign-in), filesystem redirection, exports and automatic updates on the supported Windows version.
 - Decide on an in-app **Import portable data** workflow before encouraging existing users to switch, with consent, backup, and collision checks.
 - Replace prototype icon artwork and check the Store certification report; the actual Store identity is now configured in CI.

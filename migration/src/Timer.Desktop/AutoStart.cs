@@ -1,5 +1,13 @@
 namespace Timer.Desktop;
 
+/// <summary>The "Start with Windows" switch, however the platform keeps it: the sign-in registry entry for the portable build, or the manifest's startup task for a Store package.</summary>
+public interface IAutoStart
+{
+    bool Available { get; }
+    bool IsEnabled { get; }
+    void Set(bool enabled);
+}
+
 // Where "start with Windows" is kept. The per-user Run key needs no administrator rights and no installer.
 public interface IStartupRegistry
 {
@@ -35,7 +43,7 @@ public sealed class WindowsRunKey : IStartupRegistry
 // Starts the timer when the user signs in. It remembers an explicit data folder, so a copied-data test setup restarts on
 // the same data. It counts as on only while the saved command is for the program that is running now, so moving the
 // folder shows it as off until it is switched on again.
-public sealed class AutoStartSetting
+public sealed class AutoStartSetting : IAutoStart
 {
     public const string ValueName = "BasicsAdvancedTimer";
     private readonly IStartupRegistry registry;
@@ -62,3 +70,71 @@ public sealed class AutoStartSetting
         if (enabled) registry.Set(ValueName, Command!); else registry.Remove(ValueName);
     }
 }
+
+// What Windows says about a packaged app's startup task. A person can switch the task off in Windows Settings, and then the app may not switch it back on.
+public enum StartupState { Disabled, DisabledByUser, DisabledByPolicy, Enabled, EnabledByPolicy }
+
+public interface IStartupTaskHost
+{
+    StartupState GetState();
+    StartupState RequestEnable();
+    void Disable();
+}
+
+// Start with Windows for the Store package, where the registry entry would be virtualised and never run. The task itself is declared in the manifest.
+public sealed class StartupTaskSetting : IAutoStart
+{
+    private readonly IStartupTaskHost host;
+    public StartupTaskSetting(IStartupTaskHost host) { this.host = host; }
+    public bool Available => true;
+    public bool IsEnabled => host.GetState() is StartupState.Enabled or StartupState.EnabledByPolicy;
+    public void Set(bool enabled)
+    {
+        var state = host.GetState();
+        if (enabled)
+        {
+            if (state is StartupState.Enabled or StartupState.EnabledByPolicy) return;
+            if (state == StartupState.DisabledByPolicy) throw new InvalidOperationException("Your organisation does not allow this app to start with Windows.");
+            if (state == StartupState.DisabledByUser) throw new InvalidOperationException("It is switched off in Windows. Turn it on under Settings, Apps, Startup.");
+            if (host.RequestEnable() is not (StartupState.Enabled or StartupState.EnabledByPolicy))
+                throw new InvalidOperationException("Windows did not allow it. Turn it on under Settings, Apps, Startup.");
+        }
+        else
+        {
+            if (state == StartupState.EnabledByPolicy) throw new InvalidOperationException("Your organisation turns this on, so it cannot be switched off here.");
+            if (state == StartupState.Enabled) host.Disable();
+        }
+    }
+}
+
+public static class PackagedStartup
+{
+    /// <summary>The Windows startup task for the Store package, or null in builds that are not Store packages.</summary>
+    public static IAutoStart? TryCreate()
+#if STORE_PACKAGE
+        => new StartupTaskSetting(new WinRtStartupTaskHost());
+#else
+        => null;
+#endif
+}
+
+#if STORE_PACKAGE
+// Talks to the Windows startup task named in AppxManifest.template.xml. The calls are quick, so they wait for the answer instead of making the menu asynchronous.
+internal sealed class WinRtStartupTaskHost : IStartupTaskHost
+{
+    private const string TaskId = "BasicsAdvancedTimerStartup";
+    private static global::Windows.ApplicationModel.StartupTask Task()
+        => global::Windows.ApplicationModel.StartupTask.GetAsync(TaskId).AsTask().GetAwaiter().GetResult();
+    private static StartupState Map(global::Windows.ApplicationModel.StartupTaskState state) => state switch
+    {
+        global::Windows.ApplicationModel.StartupTaskState.Enabled => StartupState.Enabled,
+        global::Windows.ApplicationModel.StartupTaskState.EnabledByPolicy => StartupState.EnabledByPolicy,
+        global::Windows.ApplicationModel.StartupTaskState.DisabledByUser => StartupState.DisabledByUser,
+        global::Windows.ApplicationModel.StartupTaskState.DisabledByPolicy => StartupState.DisabledByPolicy,
+        _ => StartupState.Disabled
+    };
+    public StartupState GetState() => Map(Task().State);
+    public StartupState RequestEnable() => Map(Task().RequestEnableAsync().AsTask().GetAwaiter().GetResult());
+    public void Disable() => Task().Disable();
+}
+#endif
