@@ -2,9 +2,9 @@
 
 ## Check your version
 
-The Avalonia preview on `migration` shows `Version 0.1.<build> (<commit>)` above Close timer in the right-click menu. The build number is the preview workflow run number; the commit identifies the exact source. Local builds show development build. The original PowerShell application remains v2.32.
+The app shows `Version 0.1.<build> (<commit>)` above Close timer in the right-click menu. The build number is the workflow run number and the commit identifies the exact source. Local builds show development build.
 
-The milestones below are newest first. Commit links mark when each change landed; they are not release version numbers. Use the [migration commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/migration/) for individual changes and [preview builds](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to match a packaged version to its commit.
+The milestones below are newest first. Commit links mark when each change landed; they are not release version numbers. Use the [commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/main/) for individual changes and the [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to match a packaged version to its commit.
 
 ## Avalonia migration
 
@@ -12,6 +12,7 @@ The milestones below are newest first. Commit links mark when each change landed
 
 | Milestone | Commit | What changed |
 | --- | --- | --- |
+| Avalonia app becomes the application | pending | The PowerShell application, its launcher, its six test scripts and their workflow are removed from the tree and remain in Git history. The README, engineering notes and user guide now describe the Avalonia app. The old CSV timesheets are not imported yet. |
 | Theme editor prompt and menu fixes | pending | The theme editor now asks before closing, switching theme or duplicating with unsaved edits, offering Save, Discard or Keep editing. Hawthorn is listed above System in the Appearance menu. Starting a window drag, or pressing on the pill, now closes any open right-click menu instead of leaving it open. |
 | Hawthorn and new built-in themes | pending | Built-in themes now follow the mock-ups. Hawthorn (deep green with lime) is the default for new installs, followed by Light, Dark, Sage, Graphite, Paper, Midnight, Sandstone and Aubergine, plus the two high contrast themes. Ocean becomes Midnight and Sunset becomes Sandstone on existing installs. Themes gain Accent, Accent text and Clock tokens, used for the tab bar, the Add time button and the idle clock. Block colours stay as chosen per account. Installs already set to System stay on System. |
 | Tab bar and compact account rows | [25e865a](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/25e865a3505b1dfc13d4ec17dbfce6a605ead23d) | Dashboard tabs are plain words on a hairline with a green bar under the chosen one, closer to the mock-up, and the day arrows are lighter. Dashboard account rows are 54 pixels instead of 68, so about two more accounts show before scrolling. The pill's rows are unchanged. |
@@ -62,7 +63,7 @@ The milestones below are newest first. Commit links mark when each change landed
 
 ## PowerShell version history
 
-These versions were assigned retrospectively to rounds of changes in October 2026. `AccountTimer2.ps1` covers v2.0 to v2.32; earlier scripts are preserved in Git history.
+This application has been retired and removed from the tree. These versions were assigned retrospectively to rounds of changes in October 2026. `AccountTimer2.ps1` covers v2.0 to v2.32; earlier scripts are preserved in Git history.
 
 | Version | Main change |
 | --- | --- |

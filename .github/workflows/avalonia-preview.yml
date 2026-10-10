@@ -2,9 +2,9 @@ name: Avalonia migration preview
 
 on:
   push:
-    branches: [migration]
+    branches: [main, migration]
   pull_request:
-    branches: [migration]
+    branches: [main, migration]
   workflow_dispatch:
 
 permissions:
