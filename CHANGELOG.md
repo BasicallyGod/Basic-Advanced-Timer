@@ -6,6 +6,12 @@ The entries below follow the migration milestones, newest first. They describe t
 
 ## Migration checklist fixes
 
+- Overview, By account, now has a wider column for the colour dot, so there is a clear gap between the dot and the account name.
+- A selected timeline block no longer gets a tick or a "Selected" line. The border alone shows it, and the block's text never moves or clips.
+- The bottom line of the dashboard and the pill's save line are gone unless there is something to say (a failed save, a refused edit, or the one-off note about old files). The "Sample data" and "saved locally" wording is removed.
+- Today allocated and Unallocated in the dashboard sidebar are in two columns, labels left and figures right, so the hours and minutes line up.
+- Settings is a gear icon and Back to pill is a minimise bar, both with tooltips and accessible names.
+
 - The lighter edges are gone too. A very dark account colour is now lifted a little towards white when it is drawn (blocks, week bars and dots), and only then, so it shows on a dark background without any outline. The saved colour is unchanged, and palette and ordinary colours are drawn exactly as chosen.
 - The selection tick and the recording marker only get their own line on a block tall enough for it (about 96 pixels). On shorter blocks they sit in front of the name, so nothing spills out of the block as it did on a medium-height selected block.
 - The pill no longer glows when it is not tracking. It keeps the ordinary soft shadow, which fixes the clash between the glow and the shadow. The break and overtime glows are unchanged.

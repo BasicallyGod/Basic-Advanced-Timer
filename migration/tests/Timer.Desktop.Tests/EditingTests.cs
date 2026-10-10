@@ -285,7 +285,7 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void VeryShortBlocksAreStillBigEnoughToSeeAndSelectAndShortSelectedBlocksKeepTheirTextInside()
+    public void VeryShortBlocksAreStillBigEnoughToSeeAndSelectAndSelectedBlocksAddNothingToTheirText()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "09:01:00", "1"), Row("10:00:00", "10:20:00", "20") });
         var model = new TimerModel(engine); model.SetAccounts(model.AccountSettings.Select(x => x.Name == "Account one" ? x with { Colour = "#102030" } : x));
@@ -298,8 +298,9 @@ public sealed class EditingTests
             Assert.True(cards[0].Height >= ReviewViews.MinimumBlockHeight); // One minute is only a few pixels at this zoom, but it can be clicked.
             model.ToggleSelection(new[] { engine.Sessions[1] }); Dispatcher.UIThread.RunJobs(); using var again = window.CaptureRenderedFrame();
             var selected = window.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is SessionRow row && ReferenceEquals(row, engine.Sessions[1]));
-            var lines = selected.GetVisualDescendants().OfType<TextBlock>().Where(t => !string.IsNullOrEmpty(t.Text)).ToList();
-            if (selected.Height < 58) { Assert.Single(lines); Assert.StartsWith("✓ ", lines[0].Text); } // The tick joins the name instead of adding a second line.
+            var lines = selected.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+            Assert.DoesNotContain(lines, t => t is not null && (t.Contains("✓") || t.Contains("Selected"))); // Selection is the border alone; the text is untouched.
+            Assert.Contains("mergeSelected", selected.Classes);
         }
         finally { window.Close(); }
     }
@@ -312,5 +313,21 @@ public sealed class EditingTests
         var lifted = Ui.Visible("#0F1F30"); Assert.NotEqual("#0F1F30", lifted);
         Assert.True(Convert.ToInt32(lifted[1..3], 16) > 0x0F); // The same colour, lighter.
         Assert.Equal("#FFFFFF", Ui.InkOn(lifted)); // Still takes white text.
+    }
+
+    [AvaloniaFact]
+    public void TheBottomLineAppearsOnlyForAMessageAndTheHeaderUsesIcons()
+    {
+        var engine = Engine(); var model = TimerModel.CreateDemo();
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsVisible), t => t.Text is not null && (t.Text.Contains("Sample data") || t.Text.Contains("saved locally") || t.Text.Contains("Test session")));
+            var settings = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings"); var back = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BackToPill");
+            Assert.IsType<IconGlyph>(settings.Content); Assert.IsType<IconGlyph>(back.Content); // A gear and a minimise bar, not words.
+            Assert.Equal(IconKind.Gear, ((IconGlyph)settings.Content!).Kind); Assert.Equal(IconKind.Minimise, ((IconGlyph)back.Content!).Kind);
+        }
+        finally { window.Close(); }
     }
 }

@@ -148,8 +148,11 @@ public sealed class ShellTests
             }
             model.ToggleFormat();
             var texts = dashboard.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
-            Assert.Contains(texts, t => t is not null && t.Contains("Today allocated") && t.Contains("4.50h"));
-            Assert.Contains(texts, t => t is not null && t.Contains("Unallocated") && t.Contains("0.25h"));
+            Assert.Contains("Today allocated", texts); Assert.Contains("4.50h", texts);
+            Assert.Contains("Unallocated", texts); Assert.Contains("0.25h", texts);
+            // The two figures are right-aligned in one column, so their hours and minutes line up.
+            var figure = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "4.50h"); var other = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "0.25h");
+            Assert.Equal(figure.TranslatePoint(new Point(figure.Bounds.Width, 0), dashboard)!.Value.X, other.TranslatePoint(new Point(other.Bounds.Width, 0), dashboard)!.Value.X, 0.5);
             Assert.Contains(texts, t => t is not null && t.Contains("9.00h / 15.00h"));
             model.ToggleAccount("Account three");
             pill.ToggleExpansion();

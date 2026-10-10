@@ -233,7 +233,7 @@ public sealed class PillWindow : Window
         var wanted = model.PillVariant;
         if (!ReferenceEquals(RequestedThemeVariant, wanted)) RequestedThemeVariant = wanted;
         // Only worth a line when something is unusual, so the bottom edge stays just the two buttons.
-        saved.Text = model.LastError is not null ? "Save failed; retrying" : model.IsDemo ? "Sample data · demo" : "";
+        saved.Text = model.LastError is not null ? "Save failed; retrying" : "";
         saved.IsVisible = saved.Text.Length > 0;
         // The expanded pill follows its content: it resizes when the rows or the note under the button change.
         var key = (model.Accounts.Count(a => !BreakAccount.Is(a.Name)), saved.IsVisible);
@@ -279,8 +279,8 @@ public sealed class DashboardWindow : Window
     private readonly TimerModel model;
     private readonly TextBlock clock = Ui.Text("00:00:00", 40);
     private readonly TextBlock account = Ui.Text("", 16);
-    private readonly TextBlock allocated = Ui.Text("");
-    private readonly TextBlock unallocated = Ui.Text("");
+    private readonly TextBlock allocatedValue = Ui.Text("");
+    private readonly TextBlock unallocatedValue = Ui.Text("");
     private readonly TextBlock date = Ui.Text("", 14);
     private readonly TextBlock today = Ui.Text("", 23);
     private readonly ContentControl workspace = new();
@@ -310,7 +310,7 @@ public sealed class DashboardWindow : Window
         var header = Ui.Grid("*,Auto");
         header.Margin = new Thickness(24, 18);
         Ui.Put(header, today);
-        Ui.Put(header, Ui.Horizontal(Ui.SettingsButton(model), Ui.Button("Back to pill", () => OpenPill?.Invoke(), "BackToPill")), 1);
+        Ui.Put(header, Ui.Horizontal(Ui.SettingsButton(model), Ui.IconButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke())), 1);
         Ui.DragHeader(header, this);
         Ui.Put(root, header);
         var strip = Ui.Grid("Auto,*,Auto");
@@ -337,8 +337,12 @@ public sealed class DashboardWindow : Window
         breakButton.Content = Ui.Horizontal(dashboardCup, dashboardBreakText);
         summary.Children.Add(breakButton);
         summary.Children.Add(Ui.Rule());
-        summary.Children.Add(allocated);
-        summary.Children.Add(unallocated);
+        // Labels on the left and figures on the right, so the hours and minutes of the two lines sit directly above one another.
+        var totals = Ui.Grid("*,Auto", "Auto,Auto"); totals.RowSpacing = 6;
+        allocatedValue.HorizontalAlignment = HorizontalAlignment.Right; unallocatedValue.HorizontalAlignment = HorizontalAlignment.Right;
+        Ui.Put(totals, Ui.Text("Today allocated")); Ui.Put(totals, allocatedValue, 1);
+        Ui.Put(totals, Ui.Text("Unallocated"), 0, 1); Ui.Put(totals, unallocatedValue, 1, 1);
+        summary.Children.Add(totals);
         Ui.Put(sidebar, summary, row: 2);
         var panel = new Border { Child = sidebar };
         panel.Classes.Add("panel");
@@ -377,9 +381,11 @@ public sealed class DashboardWindow : Window
         Ui.Put(review, workspace, row: 2);
         Ui.Put(body, review, 2);
         Ui.Put(root, body, row: 2);
-        string FooterText() => model.LastError ?? model.EditError ?? model.Notice ?? (model.IsDemo ? "Sample data · demo" : model.Persistent ? "Migration build · saved locally" : "Test session");
-        var footer = Ui.Text(FooterText(), 11, "muted");
-        model.PropertyChanged += (_, _) => footer.Text = FooterText();
+        // The bottom line appears only when there is something to say: a failed save, an edit that was refused, or the one-off note
+        // about old files. Otherwise it takes no room.
+        string? FooterText() => model.LastError ?? model.EditError ?? model.Notice;
+        var footer = Ui.Text(FooterText() ?? "", 11, "muted"); footer.IsVisible = FooterText() is not null;
+        model.PropertyChanged += (_, _) => { var text = FooterText(); footer.Text = text ?? ""; footer.IsVisible = text is not null; };
         footer.Margin = new Thickness(24, 10);
         Ui.Put(root, footer, row: 3);
         var surface = new Border { Name = "DashboardSurface", Child = root, ClipToBounds = true };
@@ -443,8 +449,8 @@ public sealed class DashboardWindow : Window
         date.Text = weekMode ? "Week of " + model.WeekStart(model.SelectedDate).ToString("d MMM", british) : model.SelectedDate.ToString("ddd d MMM", british);
         next.IsEnabled = !weekMode || model.CanStepForwardAWeek;
         ToolTip.SetTip(previous, weekMode ? "Previous week" : "Previous day"); ToolTip.SetTip(next, weekMode ? "Next week" : "Next day");
-        allocated.Text = "Today allocated   " + model.Format(model.Allocated);
-        unallocated.Text = "Unallocated   " + model.Format(model.Unallocated);
+        allocatedValue.Text = model.Format(model.Allocated);
+        unallocatedValue.Text = model.Format(model.Unallocated);
         day.Content = model.DayStarted ? "Finish day" : "Start day";
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.

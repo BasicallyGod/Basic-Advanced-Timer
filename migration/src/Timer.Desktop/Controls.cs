@@ -222,9 +222,17 @@ public static class Ui
     public static Button SettingsButton(TimerModel model)
     {
         var menu = SettingsMenu(model);
-        var button = new Button { Content = "Settings", Name = "Settings", ContextMenu = menu };
+        var button = new Button { Content = new IconGlyph(IconKind.Gear), Name = "Settings", ContextMenu = menu };
+        button.Classes.Add("iconButton"); ToolTip.SetTip(button, "Settings");
+        Avalonia.Automation.AutomationProperties.SetName(button, "Settings");
         button.Click += (_, _) => menu.Open(button);
         return button;
+    }
+    /// <summary>A button that shows only an icon, with its words as the tooltip and the accessible name.</summary>
+    public static Button IconButton(IconKind kind, string tip, string name, Action click)
+    {
+        var button = Button(tip, click, name); button.Content = new IconGlyph(kind); button.Classes.Add("iconButton");
+        ToolTip.SetTip(button, tip); Avalonia.Automation.AutomationProperties.SetName(button, tip); return button;
     }
 }
 
@@ -548,7 +556,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -571,6 +579,23 @@ public sealed class IconGlyph : Control
                 context.DrawLine(pen, new Point(12.5, 12.5), new Point(16.5, 16.5));
                 context.DrawLine(pen, new Point(5.2, 8), new Point(10.8, 8));
                 if (Kind == IconKind.ZoomIn) context.DrawLine(pen, new Point(8, 5.2), new Point(8, 10.8));
+                break;
+            case IconKind.Gear:
+            {
+                // A classic cog: eight teeth round a ring, with a hole in the middle.
+                var tooth = new Pen(brush, 2.6, lineCap: PenLineCap.Flat);
+                for (var i = 0; i < 8; i++)
+                {
+                    var angle = i * Math.PI / 4; var cos = Math.Cos(angle); var sin = Math.Sin(angle);
+                    context.DrawLine(tooth, new Point(9 + 5.6 * cos, 9 + 5.6 * sin), new Point(9 + 8.2 * cos, 9 + 8.2 * sin));
+                }
+                context.DrawEllipse(null, new Pen(brush, 2.0), new Point(9, 9), 5.2, 5.2);
+                context.DrawEllipse(null, pen, new Point(9, 9), 1.9, 1.9);
+                break;
+            }
+            case IconKind.Minimise:
+                // The familiar low bar of a window's minimise button.
+                context.DrawLine(new Pen(brush, 1.8, lineCap: PenLineCap.Flat), new Point(3.5, 13), new Point(14.5, 13));
                 break;
             case IconKind.FitDay:
                 // Two bars with arrows between them pointing inwards: the day squeezed to fit the space.
