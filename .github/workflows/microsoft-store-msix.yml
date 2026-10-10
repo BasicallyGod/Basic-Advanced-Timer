@@ -2,9 +2,9 @@ name: Microsoft Store MSIX (development)
 
 on:
   push:
-    branches: [feature/microsoft-store-packaging]
+    branches: [feature/microsoft-store-packaging, migration, main]
   pull_request:
-    branches: [migration]
+    branches: [migration, main]
   workflow_dispatch:
 
 permissions:

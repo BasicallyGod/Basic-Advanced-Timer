@@ -22,7 +22,7 @@ This MSIX uses the **development-only** package identity `BasicsAdvancedTimer.De
    ```
 4. Launch **Basic's Advanced Timer** from the Start menu. Confirm the tray icon, account switching, persistence across restart, timeline editing, undo, CSV export, and data backups.
 5. Check **Settings > Apps > Startup** (or Task Manager's Startup apps tab) after launching once. The packaged startup task is disabled by default. In-app registry startup is intentionally hidden in MSIX builds.
-6. When done testing, uninstall the test package and remove the *temporary* certificate from your Current User Trusted People store. Do not leave temporary development certificates trusted unnecessarily.
+6. Back up any data created in the installed MSIX **before uninstalling it**; Windows may delete package-local state on uninstall. When done testing, uninstall the test package and remove the *temporary* certificate from your Current User Trusted People store. Do not leave temporary development certificates trusted unnecessarily.
 
 Do **not** expect a developer MSIX installation to be updated in place by the eventual Store version: Microsoft assigns a different package identity.
 

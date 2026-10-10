@@ -22,7 +22,7 @@ foreach ($item in @(
         $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
         $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
         $center = [int]($size / 2)
-        $graphics.DrawLine($pen, $center, $center, [int]($size * 0.27))
+        $graphics.DrawLine($pen, $center, $center, $center, [int]($size * 0.27))
         $graphics.DrawLine($pen, $center, $center, [int]($size * 0.69), [int]($size * 0.60))
         $bitmap.Save((Join-Path $Destination $item.Name), [System.Drawing.Imaging.ImageFormat]::Png)
     }
