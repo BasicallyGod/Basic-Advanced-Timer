@@ -10,7 +10,12 @@ namespace Timer.Desktop;
 
 public sealed partial class App : Application
 {
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    public override void Initialize()
+    {
+        AvaloniaXamlLoader.Load(this);
+        // Colours are registered before any window exists, so every control finds them the first time it looks.
+        ThemeEngine.Register(this, ThemeLibrary.BuiltIn);
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {

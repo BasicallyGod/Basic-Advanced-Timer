@@ -167,14 +167,20 @@ public static class Ui
     }
     public static ContextMenu SettingsMenu(TimerModel model)
     {
-        var variants = new List<MenuItem>();
-        foreach (var theme in new[] { "System", "Light", "Dark" })
+        // System first, then every theme the app has: the built-in ones and the user's own. The list is rebuilt each time the menu opens.
+        List<MenuItem> ThemeItems()
         {
-            var item = new MenuItem { Header = theme, IsChecked = model.Theme == theme,
-                ToggleType = MenuItemToggleType.Radio };
-            item.Click += (_, _) => model.SetTheme(theme);
-            variants.Add(item);
+            var items = new List<MenuItem>();
+            foreach (var theme in new[] { ThemeLibrary.System }.Concat(model.Themes.Select(t => t.Name)))
+            {
+                var item = new MenuItem { Header = theme, IsChecked = model.Theme == theme, ToggleType = MenuItemToggleType.Radio };
+                item.Click += (_, _) => model.SetTheme(theme);
+                items.Add(item);
+            }
+            return items;
         }
+        var variants = ThemeItems();
+        var appearanceMenu = new MenuItem { Header = "Appearance", ItemsSource = variants };
         var format = new MenuItem { Header = "Decimal hours", IsChecked = model.DecimalHours, ToggleType = MenuItemToggleType.CheckBox };
         format.Click += (_, _) => model.ToggleFormat();
         var shifts = new MenuItem { Header = "Working hours…" };
@@ -209,10 +215,10 @@ public static class Ui
         // Most used first: the hours format, then accounts and working hours; then how it looks and starts; then the demo; and
         // Close timer alone at the bottom, apart from everyday actions. Breaks and the day button live in the window, so they are not repeated here.
         var menu = new ContextMenu { ItemsSource = new Control[]
-        { format, accounts, shifts, new Separator(), new MenuItem { Header = "Appearance", ItemsSource = variants }, shadows, startup, new Separator(), demo, overtimeTest, new Separator(), version, new Separator(), quit } };
+        { format, accounts, shifts, new Separator(), appearanceMenu, shadows, startup, new Separator(), demo, overtimeTest, new Separator(), version, new Separator(), quit } };
         menu.Opened += (_, _) =>
         {
-            foreach (var item in variants) item.IsChecked = (string?)item.Header == model.Theme;
+            appearanceMenu.ItemsSource = ThemeItems();
             format.IsChecked = model.DecimalHours; shadows.IsChecked = model.Shadows; overtimeTest.IsChecked = model.OvertimeTest;
             startup.IsVisible = model.AutoStart?.Available == true;
             startup.IsChecked = model.AutoStart?.IsEnabled == true;

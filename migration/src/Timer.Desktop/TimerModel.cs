@@ -92,6 +92,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
         SelectedDate = Engine.Now.Date;
+        // The user's own themes need their colours registered too. The built-in ones were registered when the app started.
+        if (Application.Current is { } current && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && this.preferences.Themes is { Count: > 0 } own) ThemeEngine.Register(current, own);
         ApplyTheme();
     }
     // Sixteen soft colours, so up to sixteen accounts each have their own before any repeat, none matching the break. The first eight are
@@ -284,7 +286,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         => ChangeLog(() => { ValidateAccount(account); Editor.Reassign(rows, account); });
     public void SetTheme(string theme)
     {
-        if (theme is not ("Light" or "Dark" or "System")) throw new ArgumentException("Unknown theme", nameof(theme));
+        if (theme != ThemeLibrary.System && Themes.All(t => t.Name != theme)) throw new ArgumentException("Unknown theme", nameof(theme));
         preferences = preferences with { Theme = theme }; ApplyTheme(); Save(); Notify();
     }
     /// <summary>
@@ -463,25 +465,28 @@ public sealed class TimerModel : INotifyPropertyChanged
     // the state you chose just now, and overtime outranks normal. Not tracking has no tint of its own: it keeps the ordinary
     // theme and shows itself through the grey glow, so it never fights the other two. Only the pill is tinted (see PillVariant),
     // so the dashboard stays calm: its own Break button turns amber to show a break is on.
-    public static readonly ThemeVariant BreakLight = new("BreakLight", ThemeVariant.Light);
-    public static readonly ThemeVariant BreakDark = new("BreakDark", ThemeVariant.Dark);
-    public static readonly ThemeVariant OvertimeLight = new("OvertimeLight", ThemeVariant.Light);
-    public static readonly ThemeVariant OvertimeDark = new("OvertimeDark", ThemeVariant.Dark);
     public string ThemeState => IsOnBreak ? "Break" : IsOvertime ? "Overtime" : "Normal";
     private ThemeVariant? appliedVariant;
-    private bool IsDark(Application app) => Theme switch
+    /// <summary>Every theme on offer: the built-in ones, then the user's own.</summary>
+    public IReadOnlyList<ThemeDefinition> Themes => ThemeLibrary.BuiltIn.Concat(preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
+    /// <summary>The theme actually in use. System is Light or Dark, whichever the computer is using.</summary>
+    public ThemeDefinition CurrentTheme
     {
-        "Light" => false, "Dark" => true,
-        _ => app.PlatformSettings?.GetColorValues().ThemeVariant == Avalonia.Platform.PlatformThemeVariant.Dark
-    };
-    /// <summary>The theme the pill wears by itself: amber on a break, red in overtime, otherwise null so it follows the rest of the app.</summary>
-    public ThemeVariant? PillVariant => ThemeState != "Normal" && Application.Current is { } app && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()
-        ? (ThemeState == "Break" ? (IsDark(app) ? BreakDark : BreakLight) : (IsDark(app) ? OvertimeDark : OvertimeLight)) : null;
+        get
+        {
+            if (Theme != ThemeLibrary.System && Themes.FirstOrDefault(t => t.Name == Theme) is { } chosen) return chosen;
+            var dark = Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant == Avalonia.Platform.PlatformThemeVariant.Dark;
+            return dark ? ThemeLibrary.Dark : ThemeLibrary.Light;
+        }
+    }
+    /// <summary>The theme the pill wears by itself: tinted amber on a break, red in overtime, otherwise null so it follows the rest of the app.</summary>
+    public ThemeVariant? PillVariant => ThemeState != "Normal" && Application.Current is not null && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()
+        ? ThemeEngine.StateVariant(CurrentTheme, ThemeState == "Break" ? ThemeDerivation.Break : ThemeDerivation.Overtime) : null;
     private void ApplyTheme()
     {
         if (Application.Current is not { } app || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;
         // Following the system when nothing is overriding keeps the default variant, so a change of system theme still applies.
-        var variant = Theme switch { "Light" => ThemeVariant.Light, "Dark" => ThemeVariant.Dark, _ => ThemeVariant.Default };
+        var variant = Theme == ThemeLibrary.System || Themes.All(t => t.Name != Theme) ? ThemeVariant.Default : ThemeEngine.VariantFor(Themes.First(t => t.Name == Theme));
         if (ReferenceEquals(variant, appliedVariant)) return;
         appliedVariant = variant; app.RequestedThemeVariant = variant;
     }
