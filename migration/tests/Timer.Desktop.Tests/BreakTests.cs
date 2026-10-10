@@ -75,6 +75,8 @@ public sealed class BreakTests
             Assert.True(model.IsOnBreak); Assert.Contains("onBreak", dashboardBreak.Classes); Assert.Contains("onBreak", pillBreak.Classes);
             Assert.Contains(dashboardBreak.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "End break");
             Assert.Contains(pill.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "On break");
+            Assert.True(pill.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming); // The steam moves while the break is on.
+            Assert.True(dashboard.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming);
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
             if (folder is not null)
             {
@@ -86,6 +88,7 @@ public sealed class BreakTests
             Assert.NotEmpty(timeline); // The running break block is labelled Break.
             pillBreak.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             Assert.False(model.IsOnBreak); Assert.Equal("Account one", model.ActiveAccount); Assert.DoesNotContain("onBreak", pillBreak.Classes);
+            Assert.False(pill.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming); // And it is still when the break ends.
         }
         finally { pill.Close(); dashboard.Close(); }
     }

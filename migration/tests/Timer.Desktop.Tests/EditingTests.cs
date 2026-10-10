@@ -219,7 +219,7 @@ public sealed class EditingTests
             editor.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.False(editor.IsVisible); Assert.Equal(TimeSpan.FromMinutes(75), engine.Sessions[0].Duration);
             Assert.Equal("Drafting\nClient review", model.Editor.Note(engine.Sessions[0]));
-            window.SelectTab(true); Dispatcher.UIThread.RunJobs(); using var week = window.CaptureRenderedFrame();
+            window.SelectTab(true); model.SetWeekSection("entries"); Dispatcher.UIThread.RunJobs(); using var week = window.CaptureRenderedFrame();
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is not null && t.Text.Contains("Merged credit"));
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Drafting\nClient review");
             var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath(); Directory.CreateDirectory(output);

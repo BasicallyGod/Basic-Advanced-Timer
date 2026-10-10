@@ -148,7 +148,7 @@ public sealed class CreditReviewTests
         Assert.Contains(model.Editor.Entries(Day, Day.AddDays(1)), e => e.GroupId is not null);
         var export = new ExportWindow(model); export.Show(dashboard); Find<Button>(export, "ExportCsv").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Capture(export, "weekly-export-result");
-        dashboard.SelectTab(true); Capture(dashboard, "grouped-credit-week");
+        dashboard.SelectTab(true); model.SetWeekSection("entries"); Capture(dashboard, "grouped-credit-week");
         Assert.NotNull(model.ExportPath); Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Detail.csv")));
         Directory.Delete(model.ExportPath!, true); export.Close(); dashboard.Close();
     }
@@ -173,7 +173,7 @@ public sealed class CreditReviewTests
         var dashboard = new DashboardWindow(model); dashboard.Show(); Capture(dashboard, "combined-group-timeline");
         Assert.Single(dashboard.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is ReviewEntry));
         Assert.Empty(dashboard.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow));
-        dashboard.SelectTab(true); Capture(dashboard, "explicit-ungroup-week");
+        dashboard.SelectTab(true); model.SetWeekSection("entries"); Capture(dashboard, "explicit-ungroup-week");
         var ungroup = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name?.StartsWith("Ungroup") == true);
         ungroup.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); dashboard.SelectTab(false); Capture(dashboard, "ungrouped-timeline");
         Assert.Equal(2, dashboard.GetVisualDescendants().OfType<Border>().Count(b => b.Tag is SessionRow));
@@ -425,7 +425,7 @@ public sealed class CreditReviewTests
             using var store = new TimerStore(folder); engine = Engine(); var preferences = store.Load(engine); var model = new TimerModel(engine, preferences, store);
             var window = new DashboardWindow(model); window.Show(); Capture(window, "legacy-group-sections");
             Assert.Equal(2, window.GetVisualDescendants().OfType<Border>().Count(b => b.Tag is ReviewEntry));
-            window.SelectTab(true); Capture(window, "week-ctrl-selection");
+            window.SelectTab(true); model.SetWeekSection("entries"); Capture(window, "week-ctrl-selection");
             var entry = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekReviewEntry");
             entry.BringIntoView(); Dispatcher.UIThread.RunJobs(); // The table above is taller now, so scroll the entry into view first.
             var point = entry.TranslatePoint(new Point(50, 15), window)!.Value;

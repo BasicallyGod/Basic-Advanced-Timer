@@ -4,6 +4,13 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration week overview and break polish
+
+- Fixed unallocated time on past days. Overtime was counted from the end of the shift to midnight as though work continued, so an empty weekday showed 15 hours unallocated instead of 8. A past day's overtime now stops at its last recorded activity.
+- Split the Week tab into Overview, Hours table and Entries. Overview has the week's totals, a stacked bar per day with a working-day line, and a line per account with its budget meter. The table is compact (7:00, with a dash for nothing) and fits the width, and Copy hours table still copies the full wording.
+- The gap between the week arrows no longer changes with the text, and Left and Right arrow keys step a week in Week and a day in Timeline.
+- A break now tints the pill only, and the dashboard keeps its normal colours with an amber break button. Steam moves above the cup while a break is on.
+
 ## Migration week tab
 
 - The hours table now ends with a bold Total (excluding breaks) row and faint Break and Unallocated rows, laid out with clearer weight. Decimal totals add up exactly.

@@ -213,6 +213,13 @@ public sealed class TimerModel : INotifyPropertyChanged
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
         return $"{sign}{(int)value.TotalHours}h {value.Minutes:00}m";
     }
+    /// <summary>The short form for crowded places such as the week table: 7:00, or 7.00 in decimal hours.</summary>
+    public string FormatShort(TimeSpan value)
+    {
+        if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB"));
+        var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
+        return $"{sign}{(int)value.TotalHours}:{value.Minutes:00}";
+    }
     public string BudgetText(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} of {Format(target)} this {a.Period}" : "No budget";
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
@@ -223,6 +230,13 @@ public sealed class TimerModel : INotifyPropertyChanged
         var target = WeekStart(SelectedDate).AddDays(7 * weeks);
         if (target > WeekStart(Engine.Now)) return;
         selectedRows.Clear(); TimelineOffset = null; SelectedDate = target; Notify();
+    }
+    /// <summary>Which part of the Week tab is showing: overview, hours or entries.</summary>
+    public string WeekSection { get; private set; } = "overview";
+    public void SetWeekSection(string section)
+    {
+        if (section is not ("overview" or "hours" or "entries") || section == WeekSection) return;
+        WeekSection = section; Notify();
     }
     public bool CanStepForwardAWeek => WeekStart(SelectedDate) < WeekStart(Engine.Now);
     /// <summary>Moves entries to another account as one undoable edit. Every selected block moves when the one clicked is selected.</summary>
@@ -366,8 +380,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     // Break and overtime themes are variants of Light and Dark that override colours. A break outranks overtime, because it is
     // the state you chose just now, and overtime outranks normal. Not tracking has no tint of its own: it keeps the ordinary
-    // theme and shows itself through the grey glow, so it never fights the other two. A break tints the whole app, but
-    // overtime tints only the pill (see PillVariant), so the dashboard stays calm while the pill warns.
+    // theme and shows itself through the grey glow, so it never fights the other two. Only the pill is tinted (see PillVariant),
+    // so the dashboard stays calm: its own Break button turns amber to show a break is on.
     public static readonly ThemeVariant BreakLight = new("BreakLight", ThemeVariant.Light);
     public static readonly ThemeVariant BreakDark = new("BreakDark", ThemeVariant.Dark);
     public static readonly ThemeVariant OvertimeLight = new("OvertimeLight", ThemeVariant.Light);
@@ -379,15 +393,14 @@ public sealed class TimerModel : INotifyPropertyChanged
         "Light" => false, "Dark" => true,
         _ => app.PlatformSettings?.GetColorValues().ThemeVariant == Avalonia.Platform.PlatformThemeVariant.Dark
     };
-    /// <summary>The theme the pill wears by itself: red in overtime, otherwise null so it follows the rest of the app.</summary>
-    public ThemeVariant? PillVariant => ThemeState == "Overtime" && Application.Current is { } app && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()
-        ? (IsDark(app) ? OvertimeDark : OvertimeLight) : null;
+    /// <summary>The theme the pill wears by itself: amber on a break, red in overtime, otherwise null so it follows the rest of the app.</summary>
+    public ThemeVariant? PillVariant => ThemeState != "Normal" && Application.Current is { } app && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()
+        ? (ThemeState == "Break" ? (IsDark(app) ? BreakDark : BreakLight) : (IsDark(app) ? OvertimeDark : OvertimeLight)) : null;
     private void ApplyTheme()
     {
         if (Application.Current is not { } app || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;
         // Following the system when nothing is overriding keeps the default variant, so a change of system theme still applies.
-        var variant = IsOnBreak ? (IsDark(app) ? BreakDark : BreakLight)
-            : Theme switch { "Light" => ThemeVariant.Light, "Dark" => ThemeVariant.Dark, _ => ThemeVariant.Default };
+        var variant = Theme switch { "Light" => ThemeVariant.Light, "Dark" => ThemeVariant.Dark, _ => ThemeVariant.Default };
         if (ReferenceEquals(variant, appliedVariant)) return;
         appliedVariant = variant; app.RequestedThemeVariant = variant;
     }

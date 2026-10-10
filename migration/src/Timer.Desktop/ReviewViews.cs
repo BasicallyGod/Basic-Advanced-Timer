@@ -189,9 +189,93 @@ public static class ReviewViews
         if (days.Length == 0) days = Enumerable.Range(0, 7).ToArray();
         var reconciled = new WeekExport(model.Editor, model.Engine, day);
         var table = WeekTable.Build(model, reconciled, day, days);
-        var grid = Ui.Grid("170," + string.Join(",", days.Select(_ => "*")) + ",85", "Auto," + string.Join(",", table.Rows.Select(_ => "Auto")));
-        grid.MinWidth = 255 + days.Length * 62;
-        // Account figures, then the bold total, then the faint break and unallocated rows beneath a rule.
+        // The week is split into three parts so no single screen is a wall of numbers: an overview first, the full table, and the entries.
+        var root = new StackPanel { Spacing = 16 };
+        root.Children.Add(WeekSections(model));
+        switch (model.WeekSection)
+        {
+            case "hours": HoursSection(model, table, days, root); break;
+            case "entries": EntriesSection(model, reconciled, root); break;
+            default: OverviewSection(model, table, day, days, root); break;
+        }
+        var scroll = new ScrollViewer { Content = root, AllowAutoHide = false, Tag = Vector.Zero,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+        DeferOffset(scroll);
+        return scroll;
+    }
+    private static Control WeekSections(TimerModel model)
+    {
+        Button Tab(string text, string section, string name)
+        {
+            var button = Ui.Button(text, () => model.SetWeekSection(section), name); button.Classes.Add("tab");
+            button.Classes.Set("selected", model.WeekSection == section); return button;
+        }
+        return Ui.Horizontal(Tab("Overview", "overview", "WeekOverviewTab"), Tab("Hours table", "hours", "WeekHoursTab"), Tab("Entries", "entries", "WeekEntriesTab"));
+    }
+    private static void OverviewSection(TimerModel model, WeekTable table, DateTime day, int[] days, StackPanel root)
+    {
+        TextBlock Tile(string caption, string value, string? style = null)
+        { return Ui.Text(value, 26, style); }
+        StackPanel Stat(string caption, string value, string? style = null)
+        {
+            var stat = new StackPanel { Spacing = 2 };
+            stat.Children.Add(Ui.Text(caption, 12, "muted")); stat.Children.Add(Tile(caption, value, style)); return stat;
+        }
+        WeekTableRow Find(string label) => table.Rows.First(r => r.Label.StartsWith(label));
+        var stats = Ui.Grid("*,*,*");
+        var worked = Stat("Worked this week", Find("Total").Total == "–" ? "0:00" : Find("Total").Total);
+        var breaks = Stat("Breaks", Find("Break").Total == "–" ? "0:00" : Find("Break").Total, "muted");
+        var unallocated = Stat("Unallocated", Find("Unallocated").Total == "–" ? "0:00" : Find("Unallocated").Total, "muted");
+        Ui.Put(stats, worked); Ui.Put(stats, breaks, 1); Ui.Put(stats, unallocated, 2);
+        root.Children.Add(stats);
+        var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
+        var bars = new WeekBars
+        {
+            TargetHours = model.Engine.Schedule.Default.End.TotalHours - model.Engine.Schedule.Default.Start.TotalHours,
+            TargetText = "Working day " + model.FormatShort(model.Engine.Schedule.Default.End - model.Engine.Schedule.Default.Start),
+            Bars = days.Select(i =>
+            {
+                var date = day.AddDays(i);
+                var segments = accounts.Select(a => new BarSegment(a.Display, Color.Parse(a.Colour), model.OnDay(a, date).TotalHours)).ToList();
+                var total = segments.Sum(s => s.Hours);
+                var detail = string.Join("\n", segments.Where(s => s.Hours > 0).Select(s => $"{s.Account}  {model.FormatShort(TimeSpan.FromHours(s.Hours))}"));
+                return new DayBar(date.ToString("ddd"), date.ToString("dddd d MMMM") + (detail.Length > 0 ? "\n" + detail : "\nNothing recorded"),
+                    total > 0 ? model.FormatShort(TimeSpan.FromHours(total)) : "–", total, segments);
+            }).ToList()
+        };
+        root.Children.Add(bars);
+        // One line per account: its colour, its week, and its budget when it has one.
+        var list = new StackPanel { Spacing = 10 };
+        for (var i = 0; i < accounts.Count; i++)
+        {
+            var account = accounts[i]; var row = table.Rows[i];
+            var line = Ui.Grid("14,*,70,190");
+            var dot = new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = Brush.Parse(account.Colour), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+            Ui.Put(line, dot); Ui.Put(line, Ui.Text(account.Display, 14), 1);
+            var total = Ui.Text(row.Total == "–" ? "0:00" : row.Total, 14); total.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(line, total, 2);
+            var budget = table.Budgets.FirstOrDefault(b => b.Account == account.Display);
+            if (budget is not null)
+            {
+                var meter = Ui.Grid("*", "Auto,Auto"); meter.Margin = new Thickness(16, 0, 0, 0);
+                var track = Ui.Grid("0*,1*"); track.Height = 5;
+                var fraction = Math.Clamp(budget.Fraction, 0.0, 1.0);
+                track.ColumnDefinitions[0].Width = new GridLength(fraction, GridUnitType.Star); track.ColumnDefinitions[1].Width = new GridLength(1.0 - fraction, GridUnitType.Star);
+                var rest = new Border { CornerRadius = new CornerRadius(3) }; rest.Classes.Add("rule"); Grid.SetColumn(rest, 1);
+                var fill = new Border { CornerRadius = new CornerRadius(3) }; fill.Classes.Add("budgetFill");
+                fill.Classes.Set("budgetWarn", budget.Fraction >= .8 && budget.Fraction < 1); fill.Classes.Set("budgetOver", budget.Fraction >= 1);
+                track.Children.Add(rest); track.Children.Add(fill);
+                Ui.Put(meter, track);
+                var caption = Ui.Text($"{budget.Used} of {budget.Budget}", 11, "muted"); caption.Margin = new Thickness(0, 3, 0, 0); Ui.Put(meter, caption, row: 1);
+                Ui.Put(line, meter, 3);
+            }
+            list.Children.Add(line);
+        }
+        root.Children.Add(list);
+    }
+    private static void HoursSection(TimerModel model, WeekTable table, int[] days, StackPanel root)
+    {
+        var grid = Ui.Grid("150," + string.Join(",", days.Select(_ => "*")) + ",70", "Auto," + string.Join(",", table.Rows.Select(_ => "Auto")));
+        grid.MinWidth = 220 + days.Length * 50;
         for (var c = 0; c < table.Headers.Length; c++)
         {
             var heading = Ui.Text(c == 0 ? table.Headers[c] : table.Headers[c].Split(' ')[0], 12, "muted");
@@ -203,20 +287,20 @@ public static class ReviewViews
             var item = table.Rows[r];
             TextBlock Cell(string text, bool right)
             {
-                var block = Ui.Text(text, item.Style == "bold" ? 14 : 13, item.Style == "faint" ? "muted" : null);
+                var block = Ui.Text(text, item.Style == "bold" ? 14 : 13, item.Style == "faint" || text == "–" ? "muted" : null);
                 if (item.Style == "bold") block.FontWeight = FontWeight.SemiBold;
-                block.Margin = new Thickness(0, item.Style == "normal" ? 12 : 9);
+                block.Margin = new Thickness(0, item.Style == "normal" ? 11 : 9);
                 if (right) block.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
                 return block;
             }
-            Ui.Put(grid, Cell(item.Label, false), 0, r + 1);
+            var shown = Ui.Put(grid, Cell(item.Style == "bold" ? "Total" : item.Label, false), 0, r + 1);
+            if (item.Style == "bold") ToolTip.SetTip(shown, item.Label);
             for (var i = 0; i < item.Cells.Length; i++) Ui.Put(grid, Cell(item.Cells[i], true), i + 1, r + 1);
             Ui.Put(grid, Cell(item.Total, true), item.Cells.Length + 1, r + 1);
             if (item.Style == "bold") Ui.Put(grid, new Border { Height = 1, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Classes = { "rule" } }, 0, r + 1).SetValue(Grid.ColumnSpanProperty, table.Headers.Length);
         }
-        var root = new StackPanel { Spacing = 16 };
         var heading2 = Ui.Grid("*,Auto");
-        Ui.Put(heading2, Ui.Text("Week commencing " + day.ToString("d MMMM"), 12, "muted"));
+        Ui.Put(heading2, Ui.Text(model.DecimalHours ? "Decimal hours" : "Hours and minutes", 12, "muted"));
         var copy = Ui.Button("Copy hours table", () => { }, "CopyHours"); ToolTip.SetTip(copy, "Copy the table to the clipboard, ready to paste into a timesheet");
         copy.Click += async (_, _) =>
         {
@@ -233,8 +317,8 @@ public static class ReviewViews
         if (table.Budgets.Count > 0)
         {
             root.Children.Add(Ui.Text("Budgets", 13, "muted"));
-            var budgets = Ui.Grid("170,*,*,*,70", "Auto," + string.Join(",", table.Budgets.Select(_ => "Auto")));
-            foreach (var (text, c) in new[] { "Account", "Budget", "Used", "Remaining", "Used" }.Select((t, c) => (t, c)))
+            var budgets = Ui.Grid("150,*,*,*,60", "Auto," + string.Join(",", table.Budgets.Select(_ => "Auto")));
+            foreach (var (text, c) in new[] { "Account", "Budget", "Used", "Left", "Used" }.Select((t, c) => (t, c)))
             {
                 var h = Ui.Text(text, 12, "muted"); if (c > 0) h.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(budgets, h, c);
             }
@@ -251,6 +335,9 @@ public static class ReviewViews
             }
             root.Children.Add(budgets);
         }
+    }
+    private static void EntriesSection(TimerModel model, WeekExport reconciled, StackPanel root)
+    {
         root.Children.Add(Ui.Text(model.SelectedBlockCount > 0 ? $"{model.SelectedBlockCount} blocks selected · " + model.MergeHint : "Entries · click to select · right-click to edit or merge", 12, "muted"));
         foreach (var entry in reconciled.Entries)
         {
@@ -286,10 +373,6 @@ public static class ReviewViews
             }
             else root.Children.Add(button);
         }
-        var scroll = new ScrollViewer { Content = root, AllowAutoHide = false, Tag = Vector.Zero,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
-        DeferOffset(scroll);
-        return scroll;
     }
     // Moves the clicked entry, or every selected block when the clicked one is selected, to another account.
     private static MenuItem MoveMenu(TimerModel model, IReadOnlyList<SessionRow> clicked)

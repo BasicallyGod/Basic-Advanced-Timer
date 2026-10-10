@@ -4,7 +4,8 @@ using Timer.Storage;
 
 namespace Timer.Desktop;
 
-public sealed record WeekTableRow(string Label, string[] Cells, string Total, string Style);
+// Cells and Total are the short forms shown on screen (7:00, with a dash for nothing). CopyCells and CopyTotal keep the full wording for pasting.
+public sealed record WeekTableRow(string Label, string[] Cells, string Total, string Style, string[] CopyCells, string CopyTotal);
 public sealed record BudgetTableRow(string Account, string Budget, string Used, string Remaining, double Fraction);
 
 // The hours table in the Week tab as plain data, so the screen and "Copy hours table" always show the same figures.
@@ -23,11 +24,15 @@ public sealed class WeekTable
         long[] UnitsFor(string name) => reconciled.Accounts.GetValueOrDefault(name) ?? new long[7];
         var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
 
+        // On screen the table uses the short form, so seven days fit the width, and a dash where nothing was recorded.
+        string Short(TimeSpan time) => time == TimeSpan.Zero ? "–" : model.FormatShort(time);
+        string ShortUnits(long value) => value == 0 ? "–" : WeekExport.Hours(value);
         void Add(string label, Func<int, TimeSpan> time, Func<int, long> units, string style)
         {
-            var cells = days.Select(i => exact ? Units(units(i)) : model.Format(time(i))).ToArray();
-            var total = exact ? Units(days.Sum(units)) : model.Format(days.Aggregate(TimeSpan.Zero, (sum, i) => sum + time(i)));
-            table.Rows.Add(new(label, cells, total, style));
+            var cells = days.Select(i => exact ? ShortUnits(units(i)) : Short(time(i))).ToArray();
+            var copy = days.Select(i => exact ? Units(units(i)) : model.Format(time(i))).ToArray();
+            var sum = days.Aggregate(TimeSpan.Zero, (acc, i) => acc + time(i));
+            table.Rows.Add(new(label, cells, exact ? ShortUnits(days.Sum(units)) : Short(sum), style, copy, exact ? Units(days.Sum(units)) : model.Format(sum)));
         }
         foreach (var account in accounts)
         {
@@ -41,18 +46,20 @@ public sealed class WeekTable
         Add(BreakAccount.Label, i => model.OnDay(breakAccount, weekStart.AddDays(i)), i => breakUnits[i], "faint");
         // Unallocated is working time not given to any account, so it is shown as time even in decimal mode.
         var unallocated = days.Select(i => model.Engine.Totals(weekStart.AddDays(i)).Unallocated).ToArray();
-        table.Rows.Add(new("Unallocated", unallocated.Select(model.Format).ToArray(), model.Format(unallocated.Aggregate(TimeSpan.Zero, (a, b) => a + b)), "faint"));
+        var unallocatedTotal = unallocated.Aggregate(TimeSpan.Zero, (a, b) => a + b);
+        table.Rows.Add(new("Unallocated", unallocated.Select(Short).ToArray(), Short(unallocatedTotal), "faint",
+            unallocated.Select(model.Format).ToArray(), model.Format(unallocatedTotal)));
 
         foreach (var account in accounts.Where(a => a.Budget is not null))
         {
             var used = model.BudgetUsed(account); var target = account.Budget!.Value;
-            table.Budgets.Add(new(account.Display, $"{model.Format(target)} per {account.Period}", model.Format(used),
-                model.Format(used >= target ? TimeSpan.Zero : target - used), used.TotalSeconds / target.TotalSeconds));
+            table.Budgets.Add(new(account.Display, $"{model.FormatShort(target)} per {account.Period}", model.FormatShort(used),
+                model.FormatShort(used >= target ? TimeSpan.Zero : target - used), used.TotalSeconds / target.TotalSeconds));
         }
         return table;
     }
 
     /// <summary>Tab separated, so it pastes into a spreadsheet or timesheet as separate cells.</summary>
     public string ToTsv() => string.Join("\r\n", new[] { string.Join("\t", Headers) }
-        .Concat(Rows.Select(r => string.Join("\t", new[] { r.Label }.Concat(r.Cells).Append(r.Total)))));
+        .Concat(Rows.Select(r => string.Join("\t", new[] { r.Label }.Concat(r.CopyCells).Append(r.CopyTotal)))));
 }

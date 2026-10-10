@@ -8,6 +8,23 @@ namespace Timer.Desktop.Tests;
 public sealed class TrackingTests
 {
     [Fact]
+    public void APastDaysOvertimeStopsAtItsLastActivityNotAtMidnight()
+    {
+        var now = new DateTime(2026, 10, 9, 14, 0, 0); // A Friday; the shift is 09:00 to 17:00.
+        var engine = new TrackingEngine(clock: () => now);
+        var tuesday = new DateTime(2026, 10, 6);
+        Assert.Equal(new DayTotals(TimeSpan.FromHours(8), TimeSpan.Zero, TimeSpan.Zero, TimeSpan.FromHours(8)), engine.Totals(tuesday)); // Nothing recorded.
+        engine.AddSession("A", tuesday.AddHours(9), tuesday.AddHours(12));
+        var worked = engine.Totals(tuesday);
+        Assert.Equal(TimeSpan.FromHours(8), worked.Working); Assert.Equal(TimeSpan.Zero, worked.Overtime); Assert.Equal(TimeSpan.FromHours(5), worked.Unallocated);
+        engine.AddSession("A", tuesday.AddHours(17), tuesday.AddHours(19)); // Two hours after the shift.
+        var late = engine.Totals(tuesday);
+        Assert.Equal(TimeSpan.FromHours(2), late.Overtime); Assert.Equal(TimeSpan.FromHours(5), late.Unallocated);
+        Assert.Equal(TimeSpan.Zero, engine.Totals(new DateTime(2026, 10, 10)).Working); // A day off is still empty.
+        Assert.Equal(TimeSpan.FromHours(5), engine.Totals(now.Date).Working); // Today still runs up to now, 09:00 to 14:00.
+    }
+
+    [Fact]
     public void DayClockContinuesWhileAccountsPauseOrSwitch()
     {
         var now = new DateTime(2026, 10, 9, 8, 0, 17);

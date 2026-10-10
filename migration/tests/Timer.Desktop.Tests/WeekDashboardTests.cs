@@ -33,12 +33,13 @@ public sealed class WeekDashboardTests
         var table = WeekTable.Build(model, new WeekExport(model.Editor, engine, week), week, new[] { 0, 1, 2, 3, 4 });
         Assert.Equal(new[] { "Account one", "Account two", "Internal", "Total (excluding breaks)", "Break", "Unallocated" }, table.Rows.Select(r => r.Label));
         Assert.Equal(new[] { "normal", "normal", "normal", "bold", "faint", "faint" }, table.Rows.Select(r => r.Style));
-        Assert.Equal("2h 30m", table.Rows[0].Total); Assert.Equal("0h 30m", table.Rows[1].Total);
-        Assert.Equal("3h 00m", table.Rows[3].Total); Assert.Equal("0h 30m", table.Rows[4].Total); // The break stays out of the total.
-        Assert.Equal("1h 00m", table.Rows[3].Cells[1]); Assert.Equal("2h 00m", table.Rows[3].Cells[4]);
+        Assert.Equal("2:30", table.Rows[0].Total); Assert.Equal("0:30", table.Rows[1].Total); Assert.Equal("–", table.Rows[2].Total); // Short forms, and a dash for nothing.
+        Assert.Equal("2h 30m", table.Rows[0].CopyTotal); Assert.Equal("0h 00m", table.Rows[2].CopyTotal); // Copying keeps the full wording.
+        Assert.Equal("3:00", table.Rows[3].Total); Assert.Equal("0:30", table.Rows[4].Total); // The break stays out of the total.
+        Assert.Equal("1:00", table.Rows[3].Cells[1]); Assert.Equal("2:00", table.Rows[3].Cells[4]); Assert.Equal("–", table.Rows[3].Cells[0]);
         var budget = Assert.Single(table.Budgets);
-        Assert.Equal("Account one", budget.Account); Assert.Equal("10h 00m per week", budget.Budget); Assert.Equal("2h 30m", budget.Used);
-        Assert.Equal("7h 30m", budget.Remaining); Assert.Equal(.25, budget.Fraction, 3);
+        Assert.Equal("Account one", budget.Account); Assert.Equal("10:00 per week", budget.Budget); Assert.Equal("2:30", budget.Used);
+        Assert.Equal("7:30", budget.Remaining); Assert.Equal(.25, budget.Fraction, 3);
     }
 
     [AvaloniaFact]
@@ -50,7 +51,7 @@ public sealed class WeekDashboardTests
         });
         var week = new DateTime(2026, 10, 5);
         var table = WeekTable.Build(model, new WeekExport(model.Editor, engine, week), week, new[] { 0, 1, 2, 3, 4 });
-        decimal Value(string text) => decimal.Parse(text.TrimEnd('h'), System.Globalization.CultureInfo.InvariantCulture);
+        decimal Value(string text) => text == "–" ? 0m : decimal.Parse(text.TrimEnd('h'), System.Globalization.CultureInfo.InvariantCulture);
         var accounts = table.Rows.Take(3).ToList(); var total = table.Rows[3];
         for (var d = 0; d < 5; d++) Assert.Equal(accounts.Sum(r => Value(r.Cells[d])), Value(total.Cells[d]));
         Assert.Equal(accounts.Sum(r => Value(r.Total)), Value(total.Total));
@@ -135,11 +136,101 @@ public sealed class WeekDashboardTests
             Assert.DoesNotContain("Account one", targets); Assert.Contains("Account two", targets); Assert.Contains("Break", targets);
             ((IEnumerable<MenuItem>)move.ItemsSource!).Single(m => (string)m.Header! == "Account two").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
             Assert.Equal("Account two", engine.Sessions[0].Account);
-            window.SelectTab(true); Dispatcher.UIThread.RunJobs(); using var weekFrame = window.CaptureRenderedFrame();
+            window.SelectTab(true); model.SetWeekSection("entries"); Dispatcher.UIThread.RunJobs(); using var weekFrame = window.CaptureRenderedFrame();
             var entry = window.GetVisualDescendants().OfType<Button>().First(b => b.Name?.StartsWith("WeekEntry") == true);
             Assert.Contains(((IEnumerable<Control>)entry.ContextMenu!.ItemsSource!).OfType<MenuItem>(), m => m.Name == "MoveToAccountMenu");
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
             if (folder is not null) { Directory.CreateDirectory(folder); weekFrame!.Save(Path.Combine(folder, "week-dashboard.png")); }
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void WeekIsSplitIntoOverviewHoursAndEntries()
+    {
+        var model = Model(false, out var engine, e => e.Sessions.AddRange(new[] { Row("09:00:00", "90"), Row("11:00:00", "30", "Account two"), Row("08:00:00", "60", date: "2026-10-06") }));
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            window.SelectTab(true); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            Assert.Equal("overview", model.WeekSection);
+            var bars = window.GetVisualDescendants().OfType<WeekBars>().Single();
+            Assert.Equal(5, bars.Bars.Count); Assert.Equal(8, bars.TargetHours); // A bar per working day, and the line for a working day.
+            Assert.Equal(3, bars.Bars[4].Segments.Count);
+            Assert.Equal(1.5, bars.Bars[4].Segments[0].Hours, 3); Assert.Equal("2:00", bars.Bars[4].TotalText); Assert.Equal("–", bars.Bars[0].TotalText);
+            Assert.Contains("Account one  1:30", bars.Bars[4].Tooltip);
+            var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+            Assert.Contains("Worked this week", texts); Assert.Contains("Unallocated", texts);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "CopyHours"); // No wall of numbers on the overview.
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekHoursTab").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("hours", model.WeekSection); Assert.Empty(window.GetVisualDescendants().OfType<WeekBars>());
+            Assert.Single(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "CopyHours");
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekEntriesTab").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("entries", model.WeekSection); Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.Name?.StartsWith("WeekEntry") == true);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void WeekTableFitsTheWidthInEveryFormat()
+    {
+        foreach (var decimalHours in new[] { false, true })
+        {
+            var model = Model(decimalHours, out _, e => { for (var d = 0; d < 7; d++) e.Sessions.Add(Row("09:00:00", "475.5", date: $"2026-10-{5 + d:00}")); });
+            var window = new DashboardWindow(model); window.Show();
+            try
+            {
+                window.SelectTab(true); model.SetWeekSection("hours"); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+                var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().First(s => s.Content is StackPanel);
+                Assert.True(scroll.Extent.Width <= scroll.Viewport.Width + 1, $"decimal {decimalHours}: table {scroll.Extent.Width} wider than {scroll.Viewport.Width}"); // No sideways scrolling, even with seven days.
+                var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
+                if (folder is not null) { Directory.CreateDirectory(folder); frame!.Save(Path.Combine(folder, $"week-hours-{(decimalHours ? "decimal" : "hm")}.png")); }
+            }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
+    public void DateTextHasAFixedWidthAndArrowKeysStepThePeriod()
+    {
+        var model = Model(false, out _);
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            Button Arrow(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
+            var before = Arrow("NextPeriod").TranslatePoint(default, window)!.Value.X;
+            window.SelectTab(true); Dispatcher.UIThread.RunJobs();
+            model.ChangeWeek(-1); Dispatcher.UIThread.RunJobs(); using var second = window.CaptureRenderedFrame();
+            var after = Arrow("NextPeriod").TranslatePoint(default, window)!.Value.X;
+            var one = Arrow("PreviousPeriod").TranslatePoint(default, window)!.Value.X; model.ChangeWeek(-1); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(one, Arrow("PreviousPeriod").TranslatePoint(default, window)!.Value.X, 1); // The left arrow does not move with the text.
+            Assert.Equal(after, Arrow("NextPeriod").TranslatePoint(default, window)!.Value.X, 1); Assert.True(Math.Abs(before - after) < 40);
+            var start = model.SelectedDate;
+            window.KeyPressQwerty(Avalonia.Input.PhysicalKey.ArrowRight, Avalonia.Input.RawInputModifiers.None); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(start.AddDays(7), model.SelectedDate); // A week in the Week tab.
+            window.KeyPressQwerty(Avalonia.Input.PhysicalKey.ArrowLeft, Avalonia.Input.RawInputModifiers.None); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(start, model.SelectedDate);
+            window.SelectTab(false); Dispatcher.UIThread.RunJobs();
+            window.KeyPressQwerty(Avalonia.Input.PhysicalKey.ArrowLeft, Avalonia.Input.RawInputModifiers.None); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(start.AddDays(-1), model.SelectedDate); // A day in Timeline.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ArrowKeysDoNothingWhileTypingInABox()
+    {
+        var model = Model(false, out _);
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); var start = model.SelectedDate;
+            var box = new TextBox(); var holder = new Window { Content = box }; holder.Show(); box.Focus();
+            holder.KeyPressQwerty(Avalonia.Input.PhysicalKey.ArrowLeft, Avalonia.Input.RawInputModifiers.None);
+            Assert.Equal(start, model.SelectedDate); holder.Close();
         }
         finally { window.Close(); }
     }

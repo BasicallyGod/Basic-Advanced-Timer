@@ -120,6 +120,14 @@ public sealed class TrackingEngine
         var plan = Plan(day);
         var now = Now;
         var cap = now < day.AddDays(1) ? now : day.AddDays(1);
+        // A past day has no "now" to run overtime up to. Without this it counted everything after the shift ended, right up to
+        // midnight, as overtime. Its overtime stops at the last recorded activity, or the end of the shift if that came later.
+        if (day < now.Date)
+        {
+            var lastActivity = Sessions.Where(s => s.Day == day && s.IsPositioned && s.Duration > TimeSpan.Zero).Select(s => s.To).DefaultIfEmpty(DateTime.MinValue).Max();
+            var end = plan.Working && plan.End > lastActivity ? plan.End : lastActivity;
+            cap = end < cap ? end : cap;
+        }
         var allocated = Sessions.Where(s => s.Day == day && !s.Account.Equals("Lunch", StringComparison.OrdinalIgnoreCase)).Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
         if (Active is { Account: not "Lunch" } active) allocated += Intersection(active.Start, now, day, day.AddDays(1));
         if (!plan.Working || cap <= plan.Start) return new(TimeSpan.Zero, TimeSpan.Zero, allocated, TimeSpan.Zero);

@@ -35,20 +35,21 @@ public sealed class VisualStateTests
     }
 
     [AvaloniaFact]
-    public void BreakTurnsTheWholeAppAmberAndBackAgain()
+    public void BreakTurnsOnlyThePillAmberAndBackAgain()
     {
         var now = Day.AddHours(10); var engine = new TrackingEngine(clock: () => now); var model = new TimerModel(engine);
-        var window = new DashboardWindow(model); window.Show();
+        var dashboard = new DashboardWindow(model); dashboard.Show(); var pill = new PillWindow(model); pill.Show();
         try
         {
-            Dispatcher.UIThread.RunJobs(); var normal = Brush(window, "Surface");
+            Dispatcher.UIThread.RunJobs(); var normal = Brush(pill, "Surface");
             model.ToggleAccount("Lunch"); Dispatcher.UIThread.RunJobs();
-            Assert.True(model.IsOnBreak); Assert.NotEqual(normal, Brush(window, "Surface"));
-            Assert.Equal(Color.Parse("#B07A12"), Brush(window, "Break")); // The break colour is a theme token, not hard-coded.
+            Assert.True(model.IsOnBreak); Assert.NotEqual(normal, Brush(pill, "Surface"));
+            Assert.Equal(normal, Brush(dashboard, "Surface")); // The dashboard keeps its own colours; its Break button turns amber instead.
+            Assert.Equal(Color.Parse("#B07A12"), Brush(pill, "Break")); // The break colour is a theme token, not hard-coded.
             model.ToggleAccount("Lunch"); Dispatcher.UIThread.RunJobs();
-            Assert.Equal(normal, Brush(window, "Surface"));
+            Assert.Equal(normal, Brush(pill, "Surface"));
         }
-        finally { window.Close(); }
+        finally { pill.Close(); dashboard.Close(); }
     }
 
     [AvaloniaFact]
@@ -67,7 +68,7 @@ public sealed class VisualStateTests
             model.ToggleAccount("Lunch"); Dispatcher.UIThread.RunJobs();
             Assert.Equal("Break", model.ThemeState);
             Assert.NotEqual(red, Brush(pill, "Surface")); Assert.NotEqual(normal, Brush(pill, "Surface"));
-            Assert.Equal(Brush(pill, "Surface"), Brush(dashboard, "Surface")); // A break tints both the same way.
+            Assert.Equal(normal, Brush(dashboard, "Surface")); // A break tints the pill only as well.
             model.TogglePause(); model.TogglePause(); Dispatcher.UIThread.RunJobs(); // Back on the account, then paused: still in overtime, not tracking.
             Assert.Equal("Overtime", model.ThemeState); Assert.Equal(red, Brush(pill, "Surface")); Assert.Equal(normal, Brush(dashboard, "Surface"));
         }

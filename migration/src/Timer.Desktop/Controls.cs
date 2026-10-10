@@ -420,10 +420,32 @@ public sealed class PauseGlyph : Control
 }
 
 // A cup, for the break button. It is drawn with the break colour, or the surface colour when it sits on a filled button.
+// While a break is on, two wisps of steam drift up from it and fade.
 public sealed class BreakGlyph : Control
 {
+    public static readonly StyledProperty<double> SteamProperty = AvaloniaProperty.Register<BreakGlyph, double>(nameof(Steam));
+    static BreakGlyph() => AffectsRender<BreakGlyph>(SteamProperty);
+    public double Steam { get => GetValue(SteamProperty); set => SetValue(SteamProperty, value); }
     public bool Filled { get; set; }
+    private CancellationTokenSource? steaming;
+    public bool Steaming => steaming is not null;
     public BreakGlyph() { Width = Height = 18; }
+    public void SetSteaming(bool on)
+    {
+        if (on == Steaming) return;
+        if (!on) { steaming!.Cancel(); steaming = null; Steam = 0; return; }
+        steaming = new CancellationTokenSource();
+        var animation = new Avalonia.Animation.Animation
+        {
+            Duration = TimeSpan.FromSeconds(1.8), IterationCount = Avalonia.Animation.IterationCount.Infinite,
+            Children =
+            {
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0), Setters = { new Setter(SteamProperty, 0.0) } },
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1), Setters = { new Setter(SteamProperty, 1.0) } },
+            }
+        };
+        _ = animation.RunAsync(this, steaming.Token);
+    }
     public override void Render(DrawingContext context)
     {
         IBrush? brush = null;
@@ -431,7 +453,13 @@ public sealed class BreakGlyph : Control
         var pen = new Pen(brush ?? Brushes.Gray, 1.8, lineCap: PenLineCap.Round);
         context.DrawGeometry(null, pen, Geometry.Parse("M 3,7 L 3,12 Q 3,15.5 6.5,15.5 L 9.5,15.5 Q 13,15.5 13,12 L 13,7 Z"));
         context.DrawGeometry(null, pen, Geometry.Parse("M 13,8 L 14.5,8 Q 16.5,8 16.5,10 Q 16.5,12 14.5,12 L 13,12"));
-        context.DrawLine(pen, new Point(6, 1.5), new Point(6, 4));
-        context.DrawLine(pen, new Point(10, 1.5), new Point(10, 4));
+        // Two wisps, half a cycle apart. Each rises a little and fades in and out; when still they sit where they always did.
+        for (var i = 0; i < 2; i++)
+        {
+            var x = 6.0 + 4 * i; var phase = Steaming ? (Steam + .5 * i) % 1.0 : 0;
+            var rise = phase * 3.5; var alpha = Steaming ? Math.Sin(phase * Math.PI) : 1.0;
+            using (context.PushOpacity(Math.Clamp(alpha, 0.0, 1.0)))
+                context.DrawLine(pen, new Point(x, 4 - rise), new Point(x, 1.5 - rise + (Steaming ? 0 : 0)));
+        }
     }
 }

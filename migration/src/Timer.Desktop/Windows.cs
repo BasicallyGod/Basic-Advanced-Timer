@@ -216,7 +216,7 @@ public sealed class PillWindow : Window
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
     private void Refresh()
     {
-        // Overtime tints the pill alone, so the dashboard stays calm.
+        // A break or overtime tints the pill alone, so the dashboard stays calm.
         var wanted = model.PillVariant;
         if (!ReferenceEquals(RequestedThemeVariant, wanted)) RequestedThemeVariant = wanted;
         // Only worth a line when something is unusual, so the bottom edge stays just the two buttons.
@@ -234,7 +234,7 @@ public sealed class PillWindow : Window
         overtime.IsVisible = model.IsOvertime;
         overtime.Text = "OT +" + model.Format(model.Engine.Totals(model.Engine.Now).Overtime);
         pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
-        breakButton.Classes.Set("onBreak", model.IsOnBreak); breakGlyph.Filled = model.IsOnBreak; breakGlyph.InvalidateVisual();
+        breakButton.Classes.Set("onBreak", model.IsOnBreak); breakGlyph.Filled = model.IsOnBreak; breakGlyph.SetSteaming(model.IsOnBreak); breakGlyph.InvalidateVisual();
         ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Take a break");
         pause.IsEnabled = model.IsTracking || selected is not null;
         ToolTip.SetTip(pause, model.IsOnBreak ? "End break; drag to move" : model.IsTracking ? "Pause account; drag to move" : "Resume account; drag to move");
@@ -337,6 +337,8 @@ public sealed class DashboardWindow : Window
         week = Ui.Button("Week", () => SelectTab(true), "WeekTab"); week.Classes.Add("tab");
         Ui.Put(nav, Ui.Horizontal(timeline, week));
         // In the Week tab the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
+        // A fixed width, so the arrows stay put whatever the date or week text says.
+        date.Width = 150; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
         previous = Ui.Button("‹", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }, "PreviousPeriod");
         next = Ui.Button("›", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }, "NextPeriod");
         Ui.Put(nav, Ui.Horizontal(previous, date, next), 2);
@@ -373,6 +375,15 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += (_, _) => UpdateShadow();
         ActualThemeVariantChanged += (_, _) => UpdateShadow();
         UpdateShadow();
+        // Left and right arrow keys step by a week or a day, like the buttons, unless a box is being typed in.
+        AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (e.KeyModifiers != Avalonia.Input.KeyModifiers.None || e.Key is not (Avalonia.Input.Key.Left or Avalonia.Input.Key.Right)) return;
+            if (FocusManager?.GetFocusedElement() is TextBox or ComboBox) return;
+            var step = e.Key == Avalonia.Input.Key.Left ? -1 : 1;
+            if (weekMode) { if (step < 0 || model.CanStepForwardAWeek) model.ChangeWeek(step); } else model.ChangeDate(step);
+            e.Handled = true;
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         KeyDown += (_, e) =>
         {
             if (e.Key == Avalonia.Input.Key.Escape) { model.ClearSelection(); e.Handled = true; }
@@ -414,7 +425,7 @@ public sealed class DashboardWindow : Window
         day.Content = model.DayStarted ? "Finish day" : "Start day";
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
         undo.Content = model.Editor.CanUndo ? $"Undo ({model.Editor.UndoCount})" : "Undo";
-        dashboardCup.Filled = model.IsOnBreak; dashboardCup.InvalidateVisual();
+        dashboardCup.Filled = model.IsOnBreak; dashboardCup.SetSteaming(model.IsOnBreak); dashboardCup.InvalidateVisual();
         dashboardBreakText.Text = model.IsOnBreak ? "End break" : "Take a break";
         breakButton.Classes.Set("onBreak", model.IsOnBreak);
         ToolTip.SetTip(breakButton, model.IsOnBreak ? "End the break" + (model.ResumeAccount is { } resumeTo ? " and go back to " + resumeTo : "") : "Stop timing any account while you take a break");
