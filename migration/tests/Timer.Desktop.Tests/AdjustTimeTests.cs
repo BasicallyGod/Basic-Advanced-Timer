@@ -123,8 +123,39 @@ public sealed class AdjustTimeTests
         {
             var items = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).ToList();
             var headers = items.Select(i => i is MenuItem m ? (string?)m.Header : "|").ToList();
-            Assert.Equal(new[] { "Decimal hours", "Accounts and budgets…", "Working hours…", "|", "Appearance", "Window shadows", "Start with Windows", "|", "Open sample-data demo", "|", "Close timer" }, headers);
+            Assert.Equal(new[] { "Decimal hours", "Accounts and budgets…", "Working hours…", "|", "Appearance", "Window shadows", "Start with Windows", "|", "Open sample-data demo", "Test overtime", "|", "Close timer" }, headers);
         }
         finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TestOvertimeIsADemoOnlyToggleThatSwitchesOnAndOff()
+    {
+        var plain = new TimerModel(Engine());
+        Assert.Throws<InvalidOperationException>(() => plain.SetOvertimeTest(true)); // Real data is never touched.
+        var now = new DateTime(2026, 10, 9, 14, 15, 0);
+        var model = TimerModel.CreateDemo(() => now);
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            var menu = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
+            Assert.False(menu.Single(m => (string?)m.Header == "Open sample-data demo").IsVisible); // Already in the demo.
+            var toggle = menu.Single(m => m.Name == "TestOvertime"); Assert.True(toggle.IsVisible);
+            Assert.False(model.IsOvertime); Assert.False(model.OvertimeTest);
+            toggle.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.True(model.OvertimeTest); Assert.True(model.IsOvertime); Assert.Equal("Overtime", model.ThemeState);
+            toggle.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.False(model.OvertimeTest); Assert.False(model.IsOvertime); Assert.Equal("Normal", model.ThemeState); // Back to the usual shift.
+            Assert.False(model.Engine.Schedule.Overrides.ContainsKey(now.Date));
+        }
+        finally { window.Close(); }
+        var real = new TimerModel(Engine());
+        var realWindow = new DashboardWindow(real); realWindow.Show();
+        try
+        {
+            var items = ((IEnumerable<Control>)realWindow.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
+            Assert.True(items.Single(m => (string?)m.Header == "Open sample-data demo").IsVisible); Assert.False(items.Single(m => m.Name == "TestOvertime").IsVisible);
+        }
+        finally { realWindow.Close(); }
     }
 }

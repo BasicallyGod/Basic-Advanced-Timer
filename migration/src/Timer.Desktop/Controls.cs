@@ -161,11 +161,13 @@ public static class Ui
         var accounts = new MenuItem { Header = "Accounts and budgets…" };
         accounts.Click += (_, _) => { if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life)
             new AccountsWindow(model).Show(life.Windows.First(w => w.IsVisible)); };
-        var demo = new MenuItem { Header = model.IsDemo ? "Force overtime" : "Open sample-data demo" };
+        // The demo and its overtime switch sit together: outside the demo you can open it, inside it you can switch overtime on and off.
+        var demo = new MenuItem { Header = "Open sample-data demo", IsVisible = !model.IsDemo };
+        var overtimeTest = new MenuItem { Header = "Test overtime", ToggleType = MenuItemToggleType.CheckBox, IsVisible = model.IsDemo, Name = "TestOvertime" };
+        overtimeTest.Click += (_, _) => model.SetOvertimeTest(!model.OvertimeTest);
         demo.Click += (_, _) =>
         {
-            if (model.IsDemo) model.ForceOvertime();
-            else if (Environment.ProcessPath is { } executable)
+            if (Environment.ProcessPath is { } executable)
             {
                 var start = new System.Diagnostics.ProcessStartInfo(executable) { UseShellExecute = true };
                 if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
@@ -183,11 +185,11 @@ public static class Ui
         // Most used first: the hours format, then accounts and working hours; then how it looks and starts; then the demo; and
         // Close timer alone at the bottom, apart from everyday actions. Breaks and the day button live in the window, so they are not repeated here.
         var menu = new ContextMenu { ItemsSource = new Control[]
-        { format, accounts, shifts, new Separator(), new MenuItem { Header = "Appearance", ItemsSource = variants }, shadows, startup, new Separator(), demo, new Separator(), quit } };
+        { format, accounts, shifts, new Separator(), new MenuItem { Header = "Appearance", ItemsSource = variants }, shadows, startup, new Separator(), demo, overtimeTest, new Separator(), quit } };
         menu.Opened += (_, _) =>
         {
             foreach (var item in variants) item.IsChecked = (string?)item.Header == model.Theme;
-            format.IsChecked = model.DecimalHours; shadows.IsChecked = model.Shadows;
+            format.IsChecked = model.DecimalHours; shadows.IsChecked = model.Shadows; overtimeTest.IsChecked = model.OvertimeTest;
             startup.IsVisible = model.AutoStart?.Available == true;
             startup.IsChecked = model.AutoStart?.IsEnabled == true;
         };

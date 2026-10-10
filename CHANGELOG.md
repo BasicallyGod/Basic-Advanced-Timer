@@ -4,6 +4,10 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration overtime test switch
+
+- Replaced the one-way Force overtime item with a Test overtime switch in the demo's right-click menu, beside Open sample-data demo (which shows only outside the demo). Switching it on puts the demo day in overtime, and switching it off restores the usual shift. It cannot be used outside the demo.
+
 ## Migration adjust time and menu order
 
 - Added Adjust time today to the right-click menu of each account (dashboard list and expanded pill). It adds or removes minutes on an account for the day without changing any block, accepts +15, -10, 1:30 or 7.5, previews the new total, takes a note, and refuses to go below zero for the day.

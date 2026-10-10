@@ -294,12 +294,29 @@ public sealed class TimerModel : INotifyPropertyChanged
         }
         return new TimerModel(engine, prefs) { IsDemo = true };
     }
-    public void ForceOvertime()
+    // Overtime for testing: the demo's shift is cut short so the day is already past its end. It is only for the demo, and can be
+    // switched off again, which puts back whatever shift was set for the day before.
+    private (DateTime Day, DayOverride? Previous)? overtimeTest;
+    public bool OvertimeTest => overtimeTest is not null;
+    public void SetOvertimeTest(bool on)
     {
-        if (!IsDemo) throw new InvalidOperationException("Overtime simulation is available only in the demo.");
-        Engine.Schedule.Overrides[Engine.Now.Date] = new(false, new(TimeSpan.FromHours(9), TimeSpan.FromHours(13)));
+        if (!IsDemo) throw new InvalidOperationException("Overtime testing is available only in the demo.");
+        if (on == OvertimeTest) return;
+        if (on)
+        {
+            var day = Engine.Now.Date;
+            overtimeTest = (day, Engine.Schedule.Overrides.TryGetValue(day, out var previous) ? previous : null);
+            Engine.Schedule.Overrides[day] = new(false, new(TimeSpan.FromHours(9), TimeSpan.FromHours(13)));
+        }
+        else
+        {
+            var (day, previous) = overtimeTest!.Value;
+            if (previous is null) Engine.Schedule.Overrides.Remove(day); else Engine.Schedule.Overrides[day] = previous;
+            overtimeTest = null;
+        }
         Notify();
     }
+    public void ForceOvertime() => SetOvertimeTest(true);
     public void SetShifts(Dictionary<DayOfWeek, Shift> shifts, bool resetToday = false)
     {
         if (shifts.Count == 0 || shifts.Values.Any(s => s.Start < TimeSpan.Zero || s.End >= TimeSpan.FromDays(1) || s.End <= s.Start))
