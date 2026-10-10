@@ -4,7 +4,12 @@ This is a **prototype** for Windows x64 MSIX distribution, separate from the cur
 
 ## Builds
 
-The GitHub Actions workflow `.github/workflows/microsoft-store-msix.yml` runs unit tests on Windows and creates `BasicsAdvancedTimer-MSIX-dev` containing:
+The GitHub Actions workflow `.github/workflows/microsoft-store-msix.yml` runs unit tests on Windows and creates two **separate** artifacts:
+
+- `BasicsAdvancedTimer-MSIX-dev` contains a temporary self-signed testing MSIX **and** the public development certificate. **Do not upload either file to Partner Center.**
+- `BasicsAdvancedTimer-MSIX-Store` contains **only** `BasicsAdvancedTimer-Store-unsigned.msix`, an unsigned package with the Store product identity (see below). This is the file to upload under **Packages** in the Store submission.
+
+The development artifact contains:
 
 - `BasicsAdvancedTimer-Dev.msix`, a temporary **self-signed** installable development package.
 - `BasicsAdvancedTimer-Dev.cer`, the corresponding **public** test certificate. The private key is never uploaded.
@@ -51,18 +56,23 @@ The packaging script publishes the Avalonia app with a production-style executab
 
 When a developer account is available:
 
-1. In [Partner Center](https://partner.microsoft.com/), create an **MSIX or PWA app**, reserve the product name, and open **Product management > Product identity**.
-2. Copy the exact **Package/Identity/Name**, **Package/Identity/Publisher**, and **PublisherDisplayName**. These must match the submission's manifest; the current development values must not be used.
-3. Build an **unsigned** Store candidate (the Store signs the submission). Example, replacing the placeholders with the exact Partner Center values:
+1. The Partner Center **Product identity** for this app is already configured in the CI workflow:
+   - `Package/Identity/Name`: `Basically.BasicsAdvancedTimer`
+   - `Package/Identity/Publisher`: `CN=BF422802-B4CA-4B00-A09A-2EDA3315C0DE`
+   - `Package/Properties/PublisherDisplayName`: `Basically`
+2. Download the `BasicsAdvancedTimer-MSIX-Store` artifact from a **successful** GitHub Actions workflow run; extract its ZIP and upload **only** `BasicsAdvancedTimer-Store-unsigned.msix` to the Store submission's **Packages** section. Do not upload `.cer` files.
+3. To build that candidate locally on Windows (the Store signs the submitted MSIX):
    ```powershell
-   ./migration/packaging/build-msix.ps1 -BuildNumber 2 -OutputDirectory artifacts/msix -UnsignedForStore -PackageName 'YOUR_PARTNER_CENTER_IDENTITY_NAME' -Publisher 'YOUR_PARTNER_CENTER_PUBLISHER' -PublisherDisplayName 'YOUR_PUBLISHER_DISPLAY_NAME'
+   ./migration/packaging/build-msix.ps1 -BuildNumber 2 -OutputDirectory artifacts/msix -UnsignedForStore -PackageName 'Basically.BasicsAdvancedTimer' -Publisher 'CN=BF422802-B4CA-4B00-A09A-2EDA3315C0DE' -PublisherDisplayName 'Basically'
    ```
 4. Replace the generated **placeholder** icons with production artwork and run the Windows App Certification Kit. Confirm display-name reservation, screenshots, listing text, privacy/support details, licensing, data portability and update behaviour before submission.
-5. Submit the final package in Partner Center. The Store signs Store-distributed MSIX packages, but it **does not sign** the self-signed development package or fix unsigned portable EXEs.
+5. Submit the final package in Partner Center only after testing. The Store signs Store-distributed MSIX packages; it **does not sign** unsigned portable EXEs.
+
+The `runFullTrust` restricted capability warning may continue to appear during Partner Center validation: the packaged full-trust Avalonia desktop app needs this capability, which Microsoft may require you to justify during certification.
 
 ### Outstanding before release
 
 - Install and run a development MSIX on Windows (the CI runner validates packaging but **cannot** replace a user-level launch and interaction test).
 - Verify startup task display/enablement, filesystem redirection, exports and automatic updates on the supported Windows version.
 - Decide on an in-app **Import portable data** workflow before encouraging existing users to switch, with consent, backup, and collision checks.
-- Replace prototype icon artwork, supply the actual Store identity, and check the Store certification report.
+- Replace prototype icon artwork and check the Store certification report; the actual Store identity is now configured in CI.

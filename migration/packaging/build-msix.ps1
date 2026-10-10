@@ -36,6 +36,17 @@ $replacements = @{
 foreach ($entry in $replacements.GetEnumerator()) { $manifest = $manifest.Replace($entry.Key, $entry.Value) }
 if ($manifest.Contains('{{')) { throw 'An MSIX manifest placeholder is unresolved.' }
 [xml]$parsedManifest = $manifest
+# Fail the build early if package metadata diverges from the reserved Partner Center identity.
+$ns = [System.Xml.XmlNamespaceManager]::new($parsedManifest.NameTable)
+$ns.AddNamespace('appx', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10')
+$identityNode = $parsedManifest.SelectSingleNode('/appx:Package/appx:Identity', $ns)
+$displayNameNode = $parsedManifest.SelectSingleNode('/appx:Package/appx:Properties/appx:PublisherDisplayName', $ns)
+if (-not $identityNode -or -not $displayNameNode -or
+    $identityNode.Attributes['Name'].Value -cne $PackageName -or
+    $identityNode.Attributes['Publisher'].Value -cne $Publisher -or
+    $displayNameNode.InnerText -cne $PublisherDisplayName) {
+    throw 'Generated manifest package identity does not match the requested publisher information.'
+}
 [System.IO.File]::WriteAllText((Join-Path $stage 'AppxManifest.xml'), $manifest, [System.Text.UTF8Encoding]::new($false))
 & (Join-Path $PSScriptRoot 'New-StoreIcons.ps1') -Destination (Join-Path $stage 'Assets')
 

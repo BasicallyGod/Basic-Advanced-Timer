@@ -1,4 +1,4 @@
-name: Microsoft Store MSIX (development)
+name: Microsoft Store MSIX packaging
 
 on:
   push:
@@ -31,4 +31,24 @@ jobs:
           path: |
             artifacts/msix/BasicsAdvancedTimer-Dev.msix
             artifacts/msix/BasicsAdvancedTimer-Dev.cer
+          if-no-files-found: error
+      - name: Package unsigned Microsoft Store candidate
+        shell: pwsh
+        env:
+          STORE_PACKAGE_NAME: Basically.BasicsAdvancedTimer
+          STORE_PUBLISHER: CN=BF422802-B4CA-4B00-A09A-2EDA3315C0DE
+          STORE_PUBLISHER_DISPLAY_NAME: Basically
+        run: |
+          ./migration/packaging/build-msix.ps1 `
+            -BuildNumber ${{ github.run_number }} `
+            -OutputDirectory artifacts/msix `
+            -UnsignedForStore `
+            -PackageName $env:STORE_PACKAGE_NAME `
+            -Publisher $env:STORE_PUBLISHER `
+            -PublisherDisplayName $env:STORE_PUBLISHER_DISPLAY_NAME
+      - name: Upload Store candidate MSIX (not a signed sideload build)
+        uses: actions/upload-artifact@v4
+        with:
+          name: BasicsAdvancedTimer-MSIX-Store
+          path: artifacts/msix/BasicsAdvancedTimer-Store-unsigned.msix
           if-no-files-found: error
