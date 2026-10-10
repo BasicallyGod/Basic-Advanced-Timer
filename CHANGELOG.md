@@ -6,6 +6,10 @@ The entries below follow the migration milestones, newest first. They describe t
 
 ## Migration checklist fixes
 
+- The lighter edges are gone too. A very dark account colour is now lifted a little towards white when it is drawn (blocks, week bars and dots), and only then, so it shows on a dark background without any outline. The saved colour is unchanged, and palette and ordinary colours are drawn exactly as chosen.
+- The selection tick and the recording marker only get their own line on a block tall enough for it (about 96 pixels). On shorter blocks they sit in front of the name, so nothing spills out of the block as it did on a medium-height selected block.
+- The pill no longer glows when it is not tracking. It keeps the ordinary soft shadow, which fixes the clash between the glow and the shadow. The break and overtime glows are unchanged.
+
 - The day clock read 00:31 at 17:55 on a Saturday that had since been made a working day. A start pressed while Saturday was still off had been saved as the day's start and kept overriding the 09:00 start. Changing the working hours now drops a manual start that the new hours make unnecessary, for today and later days. A genuine early start, before the usual one, is kept.
 - On a day that is off, the day is now just the time actually tracked. Time passing between presses is not counted and nothing counts as overtime, so the clock no longer runs from the first press. This replaces the earlier rule, which counted from the press.
 

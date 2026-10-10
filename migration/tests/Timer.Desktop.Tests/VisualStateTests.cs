@@ -88,8 +88,8 @@ public sealed class VisualStateTests
             host.Transitions = null; // Take the fade out here, so each state can be read as soon as it is set.
             var bar = pill.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "DayProgress");
             Assert.True(bar.IsVisible); Assert.Equal(.5, bar.ColumnDefinitions[0].Width.Value, 2); // 13:00 of a 09:00 to 17:00 day.
-            Assert.NotEqual(default, host.BoxShadow); // Not tracking glows in the idle colour.
-            Assert.Equal(Brush(pill, "Idle").R, host.BoxShadow[0].Color.R);
+            Assert.NotEqual(default, host.BoxShadow); // Not tracking keeps the plain drop shadow, with no glow.
+            Assert.Equal(6, host.BoxShadow[0].OffsetY);
             model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs();
             var dot = pill.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "●");
             Assert.True(Ui.IsPulsing(dot)); Assert.Equal(0, host.BoxShadow[0].OffsetX); Assert.Equal(6, host.BoxShadow[0].OffsetY); // Plain drop shadow.

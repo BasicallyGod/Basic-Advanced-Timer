@@ -266,8 +266,8 @@ public sealed class PillWindow : Window
         progressBar.ColumnDefinitions[1].Width = new GridLength(1.0 - done, GridUnitType.Star);
         progressFill.Classes.Set("progressOvertime", model.IsOvertime); progressFill.Classes.Set("progressBreak", model.IsOnBreak);
         ToolTip.SetTip(progressBar, progress is null ? "No working day today. The line fills as a working day goes by." : $"{(int)(done * 100)}% of the working day");
-        // The pill glows for a break, overtime and not tracking, so its state shows from across the room.
-        var glow = model.IsOnBreak ? "Break" : model.IsOvertime ? "Overtime" : !model.IsTracking ? "Idle" : null;
+        // The pill glows for a break and for overtime, so those show from across the room. Otherwise it keeps the ordinary shadow.
+        var glow = model.IsOnBreak ? "Break" : model.IsOvertime ? "Overtime" : null;
         var shadow = (model.Shadows, glow, ActualThemeVariant);
         if (lastShadow != shadow) { lastShadow = shadow; Ui.SetShadow(shadowHost, model.Shadows, glow); }
     }

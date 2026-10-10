@@ -60,6 +60,7 @@ public static class ReviewViews
             var lane = ends.FindIndex(end => end <= interval.Start);
             if (lane < 0) { lane = ends.Count; ends.Add(interval.End); } else ends[lane] = interval.End;
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
+            colour = Ui.Visible(colour);
             var end = interval.End > day.AddDays(1) ? day.AddDays(1) : interval.End;
             var duration = interval.Group is { } groupDuration ? TimeSpan.FromMinutes((double)groupDuration.Minutes) : end - interval.Start;
             // Even a one-minute block is drawn at least eight pixels tall, so it can be seen and clicked. Zoom in for exact edges.
@@ -72,21 +73,13 @@ public static class ReviewViews
             var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
                 Width = 380, Height = height, Padding = new Thickness(14, height < 58 ? 2 : 10),
                 ClipToBounds = true };
-            // A very dark colour gets a softer, lighter edge of its own colour, so it still shows on a dark background, even on a block too short
-            // for text. It is a child that ignores the pointer, pulled out over the padding to the block's edge, so the selected and recording borders still work.
-            if (Ui.EdgeFor(colour) is { } edge)
-            {
-                var outline = new Border { BorderThickness = new Thickness(1), BorderBrush = Brush.Parse(edge), CornerRadius = card.CornerRadius, IsHitTestVisible = false, Name = "BlockOutline",
-                    Margin = new Thickness(-14, height < 58 ? -2 : -10) };
-                if (height >= 24) { var content = new Grid(); content.Children.Add(text); content.Children.Add(outline); card.Child = content; } else card.Child = outline;
-            }
-            else if (height >= 24) card.Child = text;
+            if (height >= 24) card.Child = text;
             var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
             if (model.IsSelected(selectionSources))
             {
                 card.Classes.Add("mergeSelected");
                 // A block too short for a second line shows the tick in front of its name instead, so nothing is pushed out of the block.
-                if (height >= 58) text.Children.Insert(0, Ui.Text("✓ Selected", 12));
+                if (height >= 96) text.Children.Insert(0, Ui.Text("✓ Selected", 12));
                 else if (text.Children.Count > 0 && text.Children[0] is TextBlock title) title.Text = "✓ " + title.Text;
                 foreach (TextBlock child in text.Children) child.Foreground = Brush.Parse(ink);
             }
@@ -109,7 +102,7 @@ public static class ReviewViews
                 // The block that is recording now. A green outline, a label and the stop menu make it clear why it can't be dragged.
                 card.Classes.Add("recording"); card.Name = "TimelineRecording"; card.Cursor = new Cursor(StandardCursorType.Arrow);
                 var live = Ui.Text("● Recording now", 12); live.Foreground = Brush.Parse(ink == "#FFFFFF" ? ink : "#1E5C38"); live.FontWeight = FontWeight.SemiBold;
-                if (height >= 58) text.Children.Insert(model.IsSelected(selectionSources) ? 1 : 0, live);
+                if (height >= 96) text.Children.Insert(model.IsSelected(selectionSources) ? 1 : 0, live);
                 else if (text.Children.Count > 0 && text.Children[0] is TextBlock liveTitle) liveTitle.Text = "● " + liveTitle.Text;
                 var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };
@@ -249,7 +242,7 @@ public static class ReviewViews
             Bars = days.Select(i =>
             {
                 var date = day.AddDays(i);
-                var segments = accounts.Select(a => new BarSegment(a.Display, Color.Parse(a.Colour), model.OnDay(a, date).TotalHours)).ToList();
+                var segments = accounts.Select(a => new BarSegment(a.Display, Color.Parse(Ui.Visible(a.Colour)), model.OnDay(a, date).TotalHours)).ToList();
                 var total = segments.Sum(s => s.Hours);
                 var detail = string.Join("\n", segments.Where(s => s.Hours > 0).Select(s => $"{s.Account}  {model.FormatShort(TimeSpan.FromHours(s.Hours))}"));
                 return new DayBar(date.ToString("ddd"), date.ToString("dddd d MMMM") + (detail.Length > 0 ? "\n" + detail : "\nNothing recorded"),
@@ -267,7 +260,7 @@ public static class ReviewViews
             var account = accounts[i]; var row = table.Rows[i];
             // Every row is one line with everything centred on it, so a budget meter always sits level with its account.
             var line = Ui.Grid("14,*,64,120,150"); line.MinHeight = 34;
-            var dot = new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = Brush.Parse(account.Colour), BorderThickness = new Thickness(1.5), BorderBrush = Ui.EdgeFor(account.Colour) is { } dotEdge ? Brush.Parse(dotEdge) : Brushes.Transparent, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+            var dot = new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = Brush.Parse(Ui.Visible(account.Colour)), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
             Ui.Put(line, dot); Ui.Put(line, Ui.Text(account.Display, 14), 1);
             var total = Ui.Text(row.Total == "–" ? "0:00" : row.Total, 14); total.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(line, total, 2);
             var budget = table.Budgets.FirstOrDefault(b => b.Account == account.Display);
@@ -399,7 +392,7 @@ public static class ReviewViews
             var minutes = TimeSpan.FromMinutes((double)decimal.Parse(row.Minutes, System.Globalization.CultureInfo.InvariantCulture));
             var amount = (minutes < TimeSpan.Zero ? "" : "+") + model.FormatShort(minutes);
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(row.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
-            var text = Ui.Horizontal(new Border { Width = 11, Height = 11, CornerRadius = new CornerRadius(6), Background = Brush.Parse(colour), BorderThickness = new Thickness(1.5), BorderBrush = Ui.EdgeFor(colour) is { } entryEdge ? Brush.Parse(entryEdge) : Brushes.Transparent, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center },
+            var text = Ui.Horizontal(new Border { Width = 11, Height = 11, CornerRadius = new CornerRadius(6), Background = Brush.Parse(Ui.Visible(colour)), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center },
                 Ui.Text($"{model.Label(row.Account)}  {amount}", 12, minutes < TimeSpan.Zero ? "overtime" : null));
             var chip = new Border { Name = "Adjustment" + model.Engine.Sessions.IndexOf(row), Child = text, Padding = new Thickness(10, 5), Margin = new Thickness(0, 0, 8, 6), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Tag = row, Cursor = new Cursor(StandardCursorType.Hand) };
             chip.Classes.Add("chip");

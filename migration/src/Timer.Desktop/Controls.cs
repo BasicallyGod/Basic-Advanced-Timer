@@ -14,15 +14,15 @@ namespace Timer.Desktop;
 public static class Ui
 {
     /// <summary>
-    /// The edge colour for a block or dot of this colour, or null when it needs none. Only a very dark colour needs one, since it
-    /// would vanish on a dark background; it is the same colour made lighter, so it reads as a soft edge and not a grey line.
+    /// The colour to draw a block, dot or bar in. A very dark colour would vanish on a dark background, so it is lifted a little
+    /// towards white for display only (the saved colour is untouched). Ordinary and palette colours are returned as they are.
     /// </summary>
-    public static string? EdgeFor(string colour)
+    public static string Visible(string colour)
     {
-        if (!IsColour(colour)) return null;
+        if (!IsColour(colour)) return colour;
         double Channel(int at) { var v = Convert.ToInt32(colour.Substring(at, 2), 16) / 255.0; return v <= 0.03928 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4); }
-        if (0.2126 * Channel(1) + 0.7152 * Channel(3) + 0.0722 * Channel(5) >= 0.08) return null;
-        string Lift(int at) => ((int)Math.Round(Convert.ToInt32(colour.Substring(at, 2), 16) + (255 - Convert.ToInt32(colour.Substring(at, 2), 16)) * 0.38)).ToString("X2");
+        if (0.2126 * Channel(1) + 0.7152 * Channel(3) + 0.0722 * Channel(5) >= 0.08) return colour;
+        string Lift(int at) { var v = Convert.ToInt32(colour.Substring(at, 2), 16); return ((int)Math.Round(v + (255 - v) * 0.3)).ToString("X2"); }
         return "#" + Lift(1) + Lift(3) + Lift(5);
     }
     public static bool IsColour(string? text) => text is not null && System.Text.RegularExpressions.Regex.IsMatch(text, "^#[0-9A-Fa-f]{6}$");

@@ -294,7 +294,7 @@ public sealed class EditingTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(b => Canvas.GetTop(b)).ToList();
-            Assert.All(cards, c => Assert.Single(c.GetVisualDescendants().OfType<Border>(), b => b.Name == "BlockOutline")); // A dark colour keeps a lighter edge, with or without text.
+            Assert.NotEqual(Avalonia.Media.Color.Parse("#102030"), ((Avalonia.Media.ISolidColorBrush)cards[0].Background!).Color); // A very dark colour is lifted a little so it shows.
             Assert.True(cards[0].Height >= ReviewViews.MinimumBlockHeight); // One minute is only a few pixels at this zoom, but it can be clicked.
             model.ToggleSelection(new[] { engine.Sessions[1] }); Dispatcher.UIThread.RunJobs(); using var again = window.CaptureRenderedFrame();
             var selected = window.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is SessionRow row && ReferenceEquals(row, engine.Sessions[1]));
@@ -305,11 +305,12 @@ public sealed class EditingTests
     }
 
     [Fact]
-    public void OnlyVeryDarkColoursGetALighterEdge()
+    public void OnlyVeryDarkColoursAreLiftedForDisplay()
     {
-        Assert.Null(Ui.EdgeFor("#91B7D5")); Assert.Null(Ui.EdgeFor("#FFFFFF")); Assert.Null(Ui.EdgeFor("nope"));
-        foreach (var colour in TimerModel.Palette) Assert.Null(Ui.EdgeFor(colour));
-        var edge = Ui.EdgeFor("#0F1F30"); Assert.NotNull(edge); Assert.NotEqual("#0F1F30", edge);
-        Assert.True(Convert.ToInt32(edge![1..3], 16) > 0x0F); // It is the same colour made lighter.
+        Assert.Equal("#91B7D5", Ui.Visible("#91B7D5")); Assert.Equal("#FFFFFF", Ui.Visible("#FFFFFF")); Assert.Equal("nope", Ui.Visible("nope"));
+        foreach (var colour in TimerModel.Palette) Assert.Equal(colour, Ui.Visible(colour));
+        var lifted = Ui.Visible("#0F1F30"); Assert.NotEqual("#0F1F30", lifted);
+        Assert.True(Convert.ToInt32(lifted[1..3], 16) > 0x0F); // The same colour, lighter.
+        Assert.Equal("#FFFFFF", Ui.InkOn(lifted)); // Still takes white text.
     }
 }
