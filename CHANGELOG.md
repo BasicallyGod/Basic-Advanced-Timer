@@ -4,6 +4,11 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration delete menu and drag grip
+
+- Brought back Delete in the right-click menu of timeline blocks and week entries. It is last, below a separator, and deletes the whole selection when the block clicked is selected, as one undoable edit.
+- Account rows in the dashboard list now show a grip of six dots, with a tooltip, to say they can be dragged to reorder. The pill list has no grip because it cannot be reordered.
+
 ## Migration stable account colours
 
 - Accounts now keep their timeline colour when reordered, hidden or renamed. A colour is given to an account once, as the first of eight that no other account uses, and saved with the account. Existing accounts keep the colours they had by position, so nothing changes at first. Choosing a colour is planned for the data format work.

@@ -288,16 +288,23 @@ public sealed class AccountList : StackPanel
         foreach (var account in Listed(model))
         {
             var row = new Button { Name = "Account" + rows.Count, Classes = { "account" } };
-            var grid = Ui.Grid("44,*,Auto");
-            var icon = Ui.Put(grid, new AccountIndicator(account, model));
+            // Where rows can be dragged to reorder them, a grip at the left says so.
+            var shift = reorderable ? 1 : 0;
+            var grid = Ui.Grid(reorderable ? "14,44,*,Auto" : "44,*,Auto");
+            if (reorderable)
+            {
+                var grip = new IconGlyph(IconKind.Grip) { Cursor = new Cursor(StandardCursorType.SizeAll), Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, Name = "Grip" + rows.Count };
+                ToolTip.SetTip(grip, "Drag to change the order"); Ui.Put(grid, grip);
+            }
+            var icon = Ui.Put(grid, new AccountIndicator(account, model), shift);
             var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) };
             var dot = Ui.Text("●", 10, "live"); dot.IsVisible = false;
             labels.Children.Add(Ui.Horizontal(Ui.Text(account.Display, 15), dot));
             var budget = Ui.Text(model.BudgetSummary(account), 12, "muted");
             budget.TextTrimming = TextTrimming.CharacterEllipsis;
             labels.Children.Add(budget);
-            Ui.Put(grid, labels, 1);
-            var today = Ui.Put(grid, Ui.Text(model.Format(model.Today(account))), 2);
+            Ui.Put(grid, labels, 1 + shift);
+            var today = Ui.Put(grid, Ui.Text(model.Format(model.Today(account))), 2 + shift);
             row.Content = grid;
             row.Click += (_, _) => model.ToggleAccount(account.Name);
             if (reorderable && account.Name != "Lunch") AttachReorder(row, account.Name);
@@ -518,7 +525,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -531,6 +538,11 @@ public sealed class IconGlyph : Control
         var pen = new Pen(brush, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         switch (Kind)
         {
+            case IconKind.Grip:
+                // Two columns of three dots, the usual sign that something can be picked up and moved, drawn quietly.
+                IBrush quiet = this.TryFindResource("Muted", ActualThemeVariant, out var muted) && muted is IBrush mutedBrush ? mutedBrush : brush;
+                foreach (var x in new[] { 6.5, 11.5 }) foreach (var y in new[] { 4.5, 9.0, 13.5 }) context.DrawEllipse(quiet, null, new Point(x, y), 1.4, 1.4);
+                break;
             case IconKind.ZoomIn or IconKind.ZoomOut:
                 context.DrawEllipse(null, pen, new Point(8, 8), 6, 6);
                 context.DrawLine(pen, new Point(12.5, 12.5), new Point(16.5, 16.5));

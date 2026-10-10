@@ -407,6 +407,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (rows.Length == 0) return false;
         return ChangeLog(() => { Editor.Delete(rows); selectedRows.Clear(); });
     }
+    /// <summary>Deletes the given entries as one undoable edit.</summary>
+    public bool DeleteEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Delete(rows));
     public bool UndoEdit() => ChangeLog(Editor.Undo);
     public void OpenPosition(CreditPosition? position = null) => PositionRequested?.Invoke(position);
     public void OpenGroup(string id) => GroupRequested?.Invoke(id);

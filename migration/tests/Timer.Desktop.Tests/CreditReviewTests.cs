@@ -220,7 +220,7 @@ public sealed class CreditReviewTests
         dashboard.MouseDown(p, MouseButton.Left); dashboard.MouseUp(p, MouseButton.Left);
         Select(2); Assert.True(model.CanMergeSelection); Capture(dashboard, "merge-group-and-block");
         var last = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry2");
-        var menu = last.ContextMenu!.ItemsSource!.Cast<MenuItem>().Single(i => i.Name == "MergeSelectedMenu");
+        var menu = last.ContextMenu!.ItemsSource!.OfType<MenuItem>().Single(i => i.Name == "MergeSelectedMenu");
         Assert.True(menu.IsEnabled); menu.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         var combined = Assert.Single(model.Editor.Entries(Day, Day.AddDays(1))); Assert.Equal(90, combined.Minutes); Assert.Equal(3, combined.Sources.Count);
         Assert.Equal(csv, model.Editor.SessionsCsv); dashboard.Close();
@@ -244,7 +244,7 @@ public sealed class CreditReviewTests
         Assert.Equal(tops, cards.Select(Canvas.GetTop).ToArray()); Assert.Equal(heights, cards.Select(b => b.Height).ToArray());
         Assert.All(cards, b => { Assert.True(b.IsVisible); Assert.Equal(1, b.Opacity); });
         Assert.Equal(2, model.SelectedRows.Count); Assert.Equal(csv, model.Editor.SessionsCsv);
-        var menu = cards[1].ContextMenu!.ItemsSource!.Cast<MenuItem>().Single(item => item.Name == "MergeSelectedMenu");
+        var menu = cards[1].ContextMenu!.ItemsSource!.OfType<MenuItem>().Single(item => item.Name == "MergeSelectedMenu");
         menu.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         Assert.Equal(108, Assert.Single(model.Editor.Entries(Day, Day.AddDays(1))).Minutes); window.Close();
     }

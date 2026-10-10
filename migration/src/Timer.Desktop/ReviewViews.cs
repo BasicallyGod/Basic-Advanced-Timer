@@ -84,7 +84,7 @@ public static class ReviewViews
             {
                 card.Tag = row; card.Name = "TimelineEntry" + model.Engine.Sessions.IndexOf(row);
                 var edit = new MenuItem { Header = "Edit entry / note…" }; edit.Click += (_, _) => model.OpenEntry(row);
-                card.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, MoveMenu(model, new[] { row }), MergeMenu(model) } };
+                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, new[] { row }), MergeMenu(model), new Separator(), DeleteMenu(model, new[] { row }) } };
                 TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour);
             }
             if (interval.Row is null && interval.Position is null && interval.Group is null)
@@ -369,7 +369,7 @@ public static class ReviewViews
             {
                 button.Classes.Set("mergeSelected", model.IsSelected(entry.Sources));
                 var edit = new MenuItem { Header = "Edit / inspect entry…" }; edit.Click += (_, _) => Open();
-                button.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, MoveMenu(model, entry.Sources), MergeMenu(model) } };
+                button.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, entry.Sources), MergeMenu(model), new Separator(), DeleteMenu(model, entry.Sources) } };
             }
             if (entry.GroupId is { } groupId)
             {
@@ -417,6 +417,15 @@ public static class ReviewViews
             return target;
         }).ToList();
         item.IsEnabled = targets.Count > 0 && rows.All(r => r.IsPositioned);
+        return item;
+    }
+    // Deletes the clicked entry, or every selected block when the clicked one is selected, as one undoable edit. Backspace does the same.
+    private static MenuItem DeleteMenu(TimerModel model, IReadOnlyList<SessionRow> clicked)
+    {
+        var selected = model.IsSelected(clicked);
+        var rows = selected ? model.Engine.Sessions.Where(model.SelectedRows.Contains).ToList() : clicked.ToList();
+        var item = new MenuItem { Name = "DeleteMenu", Header = rows.Count > 1 ? $"Delete {rows.Count} blocks" : "Delete", IsEnabled = rows.Count > 0 && rows.All(r => !r.IsMerged) };
+        item.Click += (_, _) => { if (selected) model.DeleteSelection(); else model.DeleteEntries(rows); };
         return item;
     }
     private static MenuItem MergeMenu(TimerModel model)

@@ -158,4 +158,53 @@ public sealed class AdjustTimeTests
         }
         finally { realWindow.Close(); }
     }
+
+    [AvaloniaFact]
+    public void RightClickOnATimelineBlockOffersDeleteForItOrTheWholeSelection()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30"), Row("11:00:00", "30") });
+        var model = new TimerModel(engine);
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            MenuItem Delete(int index)
+            {
+                var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + index);
+                var items = ((IEnumerable<Control>)card.ContextMenu!.ItemsSource!).ToList();
+                Assert.IsType<Separator>(items[^2]); return (MenuItem)items[^1]; // Delete sits last, apart from the other actions.
+            }
+            Assert.Equal("Delete", Delete(1).Header);
+            Delete(1).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "09:00:00", "11:00:00" }, engine.Sessions.Select(s => s.Start)); // Only the clicked one went.
+            Assert.True(model.UndoEdit()); Assert.Equal(3, engine.Sessions.Count); Dispatcher.UIThread.RunJobs();
+            model.ToggleSelection(new[] { engine.Sessions[0] }); model.ToggleSelection(new[] { engine.Sessions[2] }); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Delete 2 blocks", Delete(0).Header); // On a selected block it speaks for the whole selection.
+            Delete(0).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("10:00:00", Assert.Single(engine.Sessions).Start); Assert.Empty(model.SelectedRows);
+            Assert.True(model.UndoEdit()); Assert.Equal(3, engine.Sessions.Count); // One Undo brings them all back.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ReorderableAccountRowsShowAGripAndThePillListDoesNot()
+    {
+        var model = new TimerModel(Engine());
+        var dashboard = new DashboardWindow(model); dashboard.Show(); var pill = new PillWindow(model); pill.Show(); pill.ToggleExpansion();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(); using var pillFrame = pill.CaptureRenderedFrame();
+            var grips = dashboard.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip).ToList();
+            Assert.Equal(model.Accounts.Count - 1, grips.Count); // One for each account row, none for the break.
+            Assert.All(grips, g => Assert.Equal("Drag to change the order", ToolTip.GetTip(g)));
+            Assert.Empty(pill.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip)); // The pill list cannot be reordered.
+            // The rest of the row keeps its shape: the account name and today's time are still both visible inside it.
+            var row = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account0");
+            Assert.All(row.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is { Length: > 0 }), t => Assert.True(t.TranslatePoint(default, row)!.Value.X >= 0 && t.TranslatePoint(new Point(t.Bounds.Width, 0), row)!.Value.X <= row.Bounds.Width + 1));
+            var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
+            if (folder is not null) { Directory.CreateDirectory(folder); frame!.Save(Path.Combine(folder, "account-grips.png")); }
+        }
+        finally { pill.Close(); dashboard.Close(); }
+    }
 }
