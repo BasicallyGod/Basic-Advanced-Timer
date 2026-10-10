@@ -245,11 +245,14 @@ public sealed class AccountIndicator : Control
     {
         Account = account;
         this.model = model;
-        Width = Height = 42;
+        Width = Height = Size;
     }
+    // Drawn on a 42 unit canvas and scaled down, so the ring, bars and play triangle stay in proportion at the smaller size.
+    public const double Size = 36;
     public override void Render(DrawingContext context)
     {
         base.Render(context);
+        using var scaled = context.PushTransform(Matrix.CreateScale(Size / 42, Size / 42));
         var centre = new Point(21, 21);
         var ink = Resource("Ink");
         if (Account.Budget is { } budget)
@@ -319,10 +322,9 @@ public sealed class AccountList : StackPanel
         foreach (var account in Listed(model))
         {
             var row = new Button { Name = "Account" + rows.Count, Classes = { "account" } };
-            if (reorderable) row.Classes.Add("compact");
             // Where rows can be dragged to reorder them, a grip at the left says so.
             var shift = reorderable ? 1 : 0;
-            var grid = Ui.Grid(reorderable ? "14,44,*,Auto" : "44,*,Auto");
+            var grid = Ui.Grid(reorderable ? "14,38,*,Auto" : "38,*,Auto");
             if (reorderable)
             {
                 var grip = new IconGlyph(IconKind.Grip) { Cursor = new Cursor(StandardCursorType.SizeAll), Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, Name = "Grip" + rows.Count };
@@ -564,6 +566,12 @@ public sealed class IconGlyph : Control
 {
     public IconKind Kind { get; }
     public IconGlyph(IconKind kind) { Kind = kind; Width = Height = 18; }
+    // The icons are drawn in the theme's text colour, so they must redraw when the theme changes while they stay on screen.
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property.Name == nameof(ActualThemeVariant)) InvalidateVisual();
+    }
     public override void Render(DrawingContext context)
     {
         IBrush brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;

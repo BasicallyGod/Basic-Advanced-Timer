@@ -279,6 +279,7 @@ public sealed class DashboardWindow : Window
     private readonly TimerModel model;
     private readonly TextBlock clock = Ui.Text("00:00:00", 40);
     private readonly TextBlock account = Ui.Text("", 16);
+    private Border zoomControls = new(); private Button zoomOut = new(), zoomIn = new();
     private readonly TextBlock allocatedValue = Ui.Text("");
     private readonly TextBlock unallocatedValue = Ui.Text("");
     private readonly TextBlock date = Ui.Text("", 14);
@@ -377,7 +378,14 @@ public sealed class DashboardWindow : Window
         // Editing buttons sit on the left and only where they apply; Tools stays on the right. Hours and minutes is in Settings.
         addTime = Ui.Button("Add time", () => model.OpenGap(), "AddTime");
         var edits = Ui.Horizontal(addTime, undo, merge);
-        var tools = Ui.Grid("*,Auto"); Ui.Put(tools, edits); Ui.Put(tools, more, 1);
+        // Zoom and fit sit beside Tools in this row, applying to the timeline underneath. They show only on the Timeline tab.
+        ScrollViewer? TimelineScroll() => workspace.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
+        zoomOut = Ui.IconButton(IconKind.ZoomOut, "Zoom out", "TimelineZoomOut", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Height / 2, s.Offset.Y); });
+        zoomIn = Ui.IconButton(IconKind.ZoomIn, "Zoom in (or hold Ctrl and use the mouse wheel)", "TimelineZoomIn", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Height / 2, s.Offset.Y); });
+        var fit = Ui.IconButton(IconKind.FitDay, "Fit the day to the window", "TimelineFit", () => { if (TimelineScroll() is { } s) model.FitTimeline(s.Viewport.Height); });
+        var zoomBar = new Border { Name = "TimelineControls", Child = Ui.Horizontal(zoomOut, zoomIn, fit), CornerRadius = new CornerRadius(8), Padding = new Thickness(2), BorderThickness = new Thickness(1) };
+        ((StackPanel)zoomBar.Child).Spacing = 0; zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
+        var tools = Ui.Grid("*,Auto"); Ui.Put(tools, edits); Ui.Put(tools, Ui.Horizontal(zoomBar, more), 1);
         tools.Margin = new Thickness(0, 12);
         Ui.Put(review, tools, row: 1);
         Ui.Put(review, workspace, row: 2);
@@ -457,6 +465,7 @@ public sealed class DashboardWindow : Window
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
         var editing = !weekMode || model.WeekSection == "entries";
+        zoomControls.IsVisible = !weekMode; zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
         undo.Content = "Undo";

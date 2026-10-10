@@ -332,17 +332,37 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void DashboardAccountRowsAreShorterThanThePillsSoMoreFitAndTabsAreUnderlined()
+    public void AccountRowsAreSlimSoMoreFitInTheDashboardAndPillAndTabsAreUnderlined()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("account")).ToList();
-            Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(54, r.Bounds.Height, 0.5)); // The pill's rows stay 68.
+            Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(52, r.Bounds.Height, 0.5)); // The pill's rows match.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
             Assert.Equal(new Avalonia.Thickness(0, 0, 0, 3), tab.BorderThickness); Assert.Contains("selected", tab.Classes);
             Assert.Equal(Avalonia.Media.Brushes.Transparent, tab.Background);
+        }
+        finally { dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ZoomAndFitSitBesideToolsTheHintLineIsGoneAndADisabledButtonStaysOutlined()
+    {
+        var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
+            var tools = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ReviewTools");
+            var zoom = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
+            Assert.InRange(Math.Abs(tools.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y + tools.Bounds.Height / 2 - (zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y + zoom.Bounds.Height / 2)), 0, 3); // Same row.
+            Assert.True(zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.X < tools.TranslatePoint(new Point(0, 0), dashboard)!.Value.X);
+            Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsVisible), t => t.Text is not null && t.Text.Contains("Click blocks to select"));
+            var undo = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "UndoEdit");
+            Assert.False(undo.IsEnabled); Assert.True(undo.Opacity < 1); // Dimmed by the style, keeping its outline, not a solid grey fill.
+            model.SetWeekSection("overview"); dashboard.SelectTab(true); Dispatcher.UIThread.RunJobs();
+            Assert.False(zoom.IsVisible); // Zoom belongs to the timeline only.
         }
         finally { dashboard.Close(); }
     }

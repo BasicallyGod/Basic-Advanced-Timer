@@ -202,8 +202,8 @@
       <Setter Property="CornerRadius" Value="0" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Height" Value="68" />
-      <Setter Property="Padding" Value="16,8" />
+      <Setter Property="Height" Value="52" />
+      <Setter Property="Padding" Value="16,6" />
     </Style>
     <Style Selector="Button.account.active">
       <Setter Property="Background" Value="{DynamicResource Selected}" />
@@ -231,11 +231,13 @@
     <Style Selector="Button.tab.selected /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
     </Style>
-    <!-- Dashboard account rows are shorter than the pill's, so more of them show before the list has to scroll. -->
-    <Style Selector="Button.account.compact">
-      <Setter Property="Height" Value="54" />
-      <Setter Property="Padding" Value="16,5" />
+    <!-- A button that cannot be used keeps the outlined look, only dimmer, so it never outshines the ones that can. -->
+    <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Panel}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="Foreground" Value="{DynamicResource Muted}" />
     </Style>
+    <Style Selector="Button:disabled"><Setter Property="Opacity" Value="0.55" /></Style>
     <Style Selector="Button.pillAction">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />

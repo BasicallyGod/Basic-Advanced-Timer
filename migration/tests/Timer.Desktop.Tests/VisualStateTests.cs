@@ -126,7 +126,7 @@ public sealed class VisualStateTests
             Assert.InRange(cardBottom - bottom, 0, 24); // Only the button's own margin below it, however many accounts there are.
             var accounts = model.Accounts.Count - 1;
             pill.ToggleExpansion(); pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs();
-            Assert.InRange(pill.Height - 2 * Ui.ShadowMargin, PillWindow.CollapsedHeight + accounts * 68, PillWindow.CollapsedHeight + accounts * 68 + 130);
+            Assert.InRange(pill.Height - 2 * Ui.ShadowMargin, PillWindow.CollapsedHeight + accounts * 52, PillWindow.CollapsedHeight + accounts * 52 + 130);
         }
         finally { pill.Close(); }
     }
