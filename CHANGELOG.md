@@ -4,6 +4,14 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration dashboard declutter and pill tidy
+
+- The dashboard has one row of tabs, Timeline, Overview, Hours table and Entries, in place of the second row of week tabs. Hours and minutes moved to Settings only. Add time, Undo and Merge show only where they apply, and Merge only once blocks are selected.
+- The expanded pill is as tall as its content, ends with a wide filled Start day or Finish day button, and no longer has a Settings button (Settings are on the right-click menu).
+- Added a small time-now clock under the dashboard timer, and shifted the pill's content up so it is centred above the progress line.
+- The pill's shadow and glow now fade into each other, so pressing play or pause no longer makes the edge jump.
+- The week table no longer sits under the scroll bar, the working-day line no longer runs through the day totals above the bars, and End break text is white.
+
 ## Migration week overview and break polish
 
 - Fixed unallocated time on past days. Overtime was counted from the end of the shift to midnight as though work continued, so an empty weekday showed 15 hours unallocated instead of 8. A past day's overtime now stops at its last recorded activity.

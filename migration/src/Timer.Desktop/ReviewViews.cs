@@ -190,8 +190,8 @@ public static class ReviewViews
         var reconciled = new WeekExport(model.Editor, model.Engine, day);
         var table = WeekTable.Build(model, reconciled, day, days);
         // The week is split into three parts so no single screen is a wall of numbers: an overview first, the full table, and the entries.
-        var root = new StackPanel { Spacing = 16 };
-        root.Children.Add(WeekSections(model));
+        // Room on the right so the scroll bar never sits over the figures.
+        var root = new StackPanel { Spacing = 16, Margin = new Thickness(0, 0, 16, 0) };
         switch (model.WeekSection)
         {
             case "hours": HoursSection(model, table, days, root); break;
@@ -202,15 +202,6 @@ public static class ReviewViews
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
         DeferOffset(scroll);
         return scroll;
-    }
-    private static Control WeekSections(TimerModel model)
-    {
-        Button Tab(string text, string section, string name)
-        {
-            var button = Ui.Button(text, () => model.SetWeekSection(section), name); button.Classes.Add("tab");
-            button.Classes.Set("selected", model.WeekSection == section); return button;
-        }
-        return Ui.Horizontal(Tab("Overview", "overview", "WeekOverviewTab"), Tab("Hours table", "hours", "WeekHoursTab"), Tab("Entries", "entries", "WeekEntriesTab"));
     }
     private static void OverviewSection(TimerModel model, WeekTable table, DateTime day, int[] days, StackPanel root)
     {

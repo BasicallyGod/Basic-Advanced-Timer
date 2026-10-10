@@ -31,7 +31,7 @@ public sealed class WeekBars : Control
     {
         base.Render(context);
         if (Bars.Count == 0 || Bounds.Width < 40) return;
-        var ink = Resource("Ink", Brushes.Black); var muted = Resource("Muted", Brushes.Gray); var line = Resource("Line", Brushes.LightGray);
+        var surface = Resource("Surface", Brushes.White); var ink = Resource("Ink", Brushes.Black); var muted = Resource("Muted", Brushes.Gray); var line = Resource("Line", Brushes.LightGray);
         var (left, slot, top, bottom, max) = Layout();
         var height = bottom - top;
         context.DrawLine(new Pen(line, 1), new Point(left, bottom), new Point(left + slot * Bars.Count, bottom));
@@ -52,7 +52,10 @@ public sealed class WeekBars : Control
                 y -= h;
             }
             var total = Text(bar.TotalText, 12, bar.Hours > 0 ? ink : muted, bar.Hours > 0);
-            context.DrawText(total, new Point(left + slot * i + (slot - total.Width) / 2, Math.Min(y, bottom) - total.Height - 3));
+            var at = new Point(left + slot * i + (slot - total.Width) / 2, Math.Min(y, bottom) - total.Height - 3);
+            // A patch of the page colour behind the figure, so the dashed working-day line never runs through it.
+            context.DrawRectangle(surface, null, new Rect(at.X - 3, at.Y - 1, total.Width + 6, total.Height + 2), 3, 3);
+            context.DrawText(total, at);
             var day = Text(bar.Day, 12, muted);
             context.DrawText(day, new Point(left + slot * i + (slot - day.Width) / 2, bottom + 5));
         }

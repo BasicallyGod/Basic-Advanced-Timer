@@ -84,6 +84,8 @@ public sealed class VisualStateTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
             var host = pill.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "ShadowHost");
+            Assert.NotEmpty(host.Transitions!); // The shadow fades between states, so the edge does not jump when play or pause is pressed.
+            host.Transitions = null; // Take the fade out here, so each state can be read as soon as it is set.
             var bar = pill.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "DayProgress");
             Assert.True(bar.IsVisible); Assert.Equal(.5, bar.ColumnDefinitions[0].Width.Value, 2); // 13:00 of a 09:00 to 17:00 day.
             Assert.NotEqual(default, host.BoxShadow); // Not tracking glows in the idle colour.
@@ -107,19 +109,23 @@ public sealed class VisualStateTests
     }
 
     [AvaloniaFact]
-    public void ExpandedPillKeepsSettingsAndDayButtonsSideBySideAlongTheBottom()
+    public void ExpandedPillEndsWithOneProminentDayButtonAndNoDeadSpace()
     {
         var model = new TimerModel(new TrackingEngine(clock: () => Day.AddHours(10)));
         var pill = new PillWindow(model); pill.Show();
         try
         {
-            pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
-            var settings = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings");
+            pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(pill.GetVisualDescendants().OfType<Button>(), b => b.Name == "Settings"); // Settings are on the right-click menu.
+            Assert.NotNull(pill.ContextMenu);
             var day = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDay");
-            Assert.Equal(settings.TranslatePoint(default, pill)!.Value.Y, day.TranslatePoint(default, pill)!.Value.Y, 1);
-            Assert.True(day.TranslatePoint(default, pill)!.Value.X > settings.TranslatePoint(new Point(settings.Bounds.Width, 0), pill)!.Value.X - 1);
-            Assert.InRange(settings.Bounds.Width, 150, 230); Assert.Equal(settings.Bounds.Width, day.Bounds.Width, 1);
-            Assert.True(day.TranslatePoint(new Point(0, day.Bounds.Height), pill)!.Value.Y <= pill.Height - Ui.ShadowMargin); // Inside the card, not clipped.
+            Assert.Contains("primary", day.Classes); Assert.InRange(day.Bounds.Width, 350, 420);
+            var bottom = day.TranslatePoint(new Point(0, day.Bounds.Height), pill)!.Value.Y;
+            var cardBottom = pill.Height - Ui.ShadowMargin;
+            Assert.InRange(cardBottom - bottom, 0, 24); // Only the button's own margin below it, however many accounts there are.
+            var accounts = model.Accounts.Count - 1;
+            pill.ToggleExpansion(); pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs();
+            Assert.InRange(pill.Height - 2 * Ui.ShadowMargin, PillWindow.CollapsedHeight + accounts * 68, PillWindow.CollapsedHeight + accounts * 68 + 130);
         }
         finally { pill.Close(); }
     }

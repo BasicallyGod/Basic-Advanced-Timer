@@ -215,11 +215,24 @@
     </Style>
     <Style Selector="Button.breakButton.onBreak">
       <Setter Property="Background" Value="{DynamicResource Break}" />
-      <Setter Property="Foreground" Value="{DynamicResource Surface}" />
+      <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.breakButton.onBreak:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Break}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.breakButton.onBreak TextBlock"><Setter Property="Foreground" Value="White" /></Style>
+    <!-- The main action of a window, filled so it is the first thing the eye finds. -->
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{DynamicResource Live}" />
       <Setter Property="Foreground" Value="{DynamicResource Surface}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Live}" />
+      <Setter Property="Foreground" Value="{DynamicResource Surface}" />
+      <Setter Property="Opacity" Value="0.88" />
     </Style>
     <Style Selector="Button.round">
       <Setter Property="CornerRadius" Value="24" />

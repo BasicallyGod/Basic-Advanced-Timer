@@ -18,7 +18,10 @@ public static class Ui
     public static Border Shadowed(Border card, double radius)
     {
         card.CornerRadius = new CornerRadius(radius);
-        return new Border { Margin = new Thickness(ShadowMargin), CornerRadius = new CornerRadius(radius), Child = card, Name = "ShadowHost" };
+        var host = new Border { Margin = new Thickness(ShadowMargin), CornerRadius = new CornerRadius(radius), Child = card, Name = "ShadowHost" };
+        // The shadow and the glow fade into each other, so pressing play or pause does not make the edge jump.
+        host.Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.BoxShadowsTransition { Property = Border.BoxShadowProperty, Duration = TimeSpan.FromMilliseconds(350) } };
+        return host;
     }
     public static Color ThemeColour(Control control, string key, Color fallback)
     {
@@ -449,7 +452,7 @@ public sealed class BreakGlyph : Control
     public override void Render(DrawingContext context)
     {
         IBrush? brush = null;
-        if (this.TryFindResource(Filled ? "Surface" : "Break", ActualThemeVariant, out var value)) brush = value as IBrush;
+        if (Filled) brush = Brushes.White; else if (this.TryFindResource("Break", ActualThemeVariant, out var value)) brush = value as IBrush;
         var pen = new Pen(brush ?? Brushes.Gray, 1.8, lineCap: PenLineCap.Round);
         context.DrawGeometry(null, pen, Geometry.Parse("M 3,7 L 3,12 Q 3,15.5 6.5,15.5 L 9.5,15.5 Q 13,15.5 13,12 L 13,7 Z"));
         context.DrawGeometry(null, pen, Geometry.Parse("M 13,8 L 14.5,8 Q 16.5,8 16.5,10 Q 16.5,12 14.5,12 L 13,12"));
