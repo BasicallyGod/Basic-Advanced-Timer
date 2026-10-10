@@ -276,8 +276,9 @@ public sealed class PillWindow : Window
         progressBar.ColumnDefinitions[1].Width = new GridLength(1.0 - done, GridUnitType.Star);
         progressFill.Classes.Set("progressOvertime", model.IsOvertime); progressFill.Classes.Set("progressBreak", model.IsOnBreak);
         ToolTip.SetTip(progressBar, progress is null ? "No working day today. The line fills as a working day goes by." : $"{(int)(done * 100)}% of the working day");
-        // The pill glows for a break and for overtime, so those show from across the room. Otherwise it keeps the ordinary shadow.
-        var glow = model.IsOnBreak ? "Break" : model.IsOvertime ? "Overtime" : null;
+        // The pill glows while an account is recording (in the theme's live colour), for a break and for overtime, so its state shows from across the room.
+        // When nothing is running it keeps the ordinary shadow.
+        var glow = model.IsOnBreak ? "Break" : model.IsOvertime ? "Overtime" : model.IsTracking ? "Live" : null;
         var shadow = (model.Shadows, glow, ActualThemeVariant);
         if (lastShadow != shadow) { lastShadow = shadow; Ui.SetShadow(shadowHost, model.Shadows, glow); }
     }
@@ -289,7 +290,7 @@ public sealed class DashboardWindow : Window
     private readonly TimerModel model;
     private readonly TextBlock clock = new TextBlock { Text = "00:00:00", FontSize = 40, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly TextBlock account = Ui.Text("", 16);
-    private Border zoomControls = new(); private Button zoomOut = new(), zoomIn = new();
+    private Border zoomControls = new(); private Control? identityBlock, accountsHeadBlock, toolsRow; private Button zoomOut = new(), zoomIn = new();
     private readonly TextBlock allocatedValue = new TextBlock { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly TextBlock unallocatedValue = new TextBlock { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly TextBlock dayText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
@@ -342,12 +343,12 @@ public sealed class DashboardWindow : Window
         var statDivider = new Border { Width = 1, Margin = new Thickness(0, 2) }; statDivider.Classes.Add("rule");
         Ui.Put(stats, allocatedStat); Ui.Put(stats, statDivider, 1); Ui.Put(stats, unallocatedStat, 2);
         identity.Children.Add(stats);
-        Ui.DragHeader(identity, this, "SidebarDragHeader");
+        Ui.DragHeader(identity, this, "SidebarDragHeader"); identityBlock = identity;
         Ui.Put(sidebar, identity);
         var title = Ui.Text("Client accounts", 13, "muted");
         title.Margin = new Thickness(18, 12, 18, 6);
         var titleRule = Ui.Rule(); titleRule.Margin = new Thickness(18, 0);
-        var accountsHead = new StackPanel(); accountsHead.Children.Add(titleRule); accountsHead.Children.Add(title);
+        var accountsHead = new StackPanel(); accountsHead.Children.Add(titleRule); accountsHead.Children.Add(title); accountsHeadBlock = accountsHead;
         Ui.Put(sidebar, accountsHead, row: 1);
         Ui.Put(sidebar, new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 2);
@@ -358,11 +359,14 @@ public sealed class DashboardWindow : Window
         breakButton.Content = Ui.Horizontal(dashboardCup, dashboardBreakText);
         breakButton.PointerEntered += (_, _) => { hoverBreak = true; dashboardCup.SetSteaming(true); };
         breakButton.PointerExited += (_, _) => { hoverBreak = false; dashboardCup.SetSteaming(model.IsOnBreak || hoverBreak); }; // Steam rises under the pointer too.
-        summary.Children.Add(breakButton);
         day = Ui.Button("", model.ToggleDay, "DashboardDay"); day.Classes.Add("outlined"); day.Classes.Add("quiet");
         day.HorizontalAlignment = HorizontalAlignment.Stretch; day.Height = 42; day.Content = Ui.Horizontal(dayFlag, dayText);
         day.PointerEntered += (_, _) => dayFlag.Waving = true; day.PointerExited += (_, _) => dayFlag.Waving = false; // The flag waves under the pointer.
-        summary.Children.Add(day);
+        // Side by side, so the pair takes one row at the foot of the column.
+        var pair = Ui.Grid("*,*"); breakButton.Margin = new Thickness(0, 0, 4, 0); day.Margin = new Thickness(4, 0, 0, 0);
+        breakButton.Padding = new Thickness(6, 0); day.Padding = new Thickness(6, 0);
+        Ui.Put(pair, breakButton); Ui.Put(pair, day, 1);
+        summary.Children.Add(pair);
         Ui.Put(sidebar, summary, row: 3);
         var panel = new Border { Child = sidebar };
         panel.Classes.Add("panel");
@@ -398,7 +402,7 @@ public sealed class DashboardWindow : Window
         var fit = Ui.IconButton(IconKind.FitDay, "Fit the day to the window", "TimelineFit", () => { if (TimelineScroll() is { } s) model.FitTimeline(s.Viewport.Height); });
         var zoomBar = new Border { Name = "TimelineControls", Child = Ui.Horizontal(zoomOut, zoomIn, fit), CornerRadius = new CornerRadius(8), Padding = new Thickness(2), BorderThickness = new Thickness(1) };
         ((StackPanel)zoomBar.Child).Spacing = 0; zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
-        var tools = Ui.Grid("*,Auto"); Ui.Put(tools, edits); Ui.Put(tools, zoomBar, 1);
+        var tools = Ui.Grid("*,Auto"); toolsRow = tools; Ui.Put(tools, edits); Ui.Put(tools, zoomBar, 1);
         tools.Margin = new Thickness(0, 12);
         Ui.Put(review, tools, row: 1);
         Ui.Put(review, workspace, row: 2);
@@ -428,6 +432,13 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += (_, _) => UpdateShadow();
         ActualThemeVariantChanged += (_, _) => UpdateShadow();
         UpdateShadow();
+        // The window can be picked up by any bare part of its top: the whole identity block and the accounts heading on the left, and the tab
+        // and action rows on the right, not only the thin strips between the controls. Buttons, boxes and the timeline itself are left alone.
+        AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || !Ui.IsPlainSurface(e.Source) || !InDragZone(e.GetPosition(this))) return;
+            BeginMoveDrag(e); e.Handled = true;
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         // Left and right arrow keys step by a week or a day, like the buttons, unless a box is being typed in.
         AddHandler(KeyDownEvent, (_, e) =>
         {
@@ -450,6 +461,14 @@ public sealed class DashboardWindow : Window
         Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; };
         Refresh(true);
     }
+    /// <summary>Whether a point (in window coordinates) is in the part of the dashboard that drags the window.</summary>
+    public bool InDragZone(Point point)
+    {
+        if (identityBlock is null || accountsHeadBlock is null || toolsRow is null) return false;
+        double Bottom(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), this)?.Y ?? 0;
+        var sidebarRight = identityBlock.TranslatePoint(new Point(identityBlock.Bounds.Width, 0), this)?.X ?? 0;
+        return point.X <= sidebarRight + 18 ? point.Y <= Bottom(accountsHeadBlock) : point.Y <= Bottom(toolsRow);
+    }
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
     {
         if (!IsVisible) return;
@@ -470,8 +489,11 @@ public sealed class DashboardWindow : Window
     private void Refresh(bool refreshWorkspace)
     {
         clock.Text = model.ClockText;
-        clock.Classes.Set("live", model.IsTracking);
-        clock.Classes.Set("clockIdle", !model.IsTracking);
+        // Amber on a break, red in overtime, green while tracking, full-strength text otherwise. A break outranks overtime.
+        var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
+        clock.Classes.Set("break", onBreak); clock.Classes.Set("overtime", late);
+        clock.Classes.Set("live", model.IsTracking && !onBreak && !late);
+        clock.Classes.Set("clockIdle", !model.IsTracking && !onBreak && !late);
         account.Text = model.IsOnBreak ? (model.ResumeAccount is { } backTo ? "Then back to " + backTo : "No account running") : model.AccountLabel;
         today.Text = model.Engine.Now.ToString("dddd", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + "\n" + model.Engine.Now.ToString("d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
         var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");

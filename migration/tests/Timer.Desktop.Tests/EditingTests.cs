@@ -430,4 +430,41 @@ public sealed class EditingTests
         }
         finally { dashboard.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheDashboardClockFollowsBreakAndOvertimeTheBreakButtonsSitSideBySideWithAnOutlineAndTheTopDragsTheWindow()
+    {
+        var now = new DateTime(2026, 10, 9, 12, 0, 0);
+        var model = TimerModel.CreateDemo(() => now); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
+            var clock = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 40);
+            void Settle() { Dispatcher.UIThread.RunJobs(); using var f = dashboard.CaptureRenderedFrame(); }
+            // The clock is amber on a break, with the status line amber too, and red in overtime.
+            if (model.IsOnBreak) model.ToggleBreak();
+            model.ToggleBreak(); Settle(); Assert.Contains("break", clock.Classes); Assert.DoesNotContain("live", clock.Classes);
+            var status = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text is not null && t.Text.StartsWith("● On break")); Assert.Contains("break", status.Classes);
+            model.ToggleBreak(); Settle(); Assert.DoesNotContain("break", clock.Classes);
+            model.SetOvertimeTest(true); Settle(); Assert.True(model.IsOvertime); Assert.Contains("overtime", clock.Classes); Assert.DoesNotContain("clockIdle", clock.Classes);
+            model.ToggleBreak(); Settle(); Assert.Contains("break", clock.Classes); Assert.DoesNotContain("overtime", clock.Classes); // A break outranks overtime.
+            model.ToggleBreak(); model.SetOvertimeTest(false); Settle();
+            // Break and day buttons share a row and rest with an outline.
+            var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak"); var day = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay");
+            Assert.InRange(Math.Abs(breakButton.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y - day.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y), 0, 1);
+            Assert.True(day.TranslatePoint(new Point(0, 0), dashboard)!.Value.X > breakButton.TranslatePoint(new Point(breakButton.Bounds.Width - 1, 0), dashboard)!.Value.X - 1);
+            Assert.NotEqual(Avalonia.Media.Brushes.Transparent, breakButton.BorderBrush); Assert.True(breakButton.BorderThickness.Left > 0);
+            // The window can be picked up by the identity block, the accounts heading, and the tab and action rows, but not by a button or the timeline.
+            var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
+            var tabAt = tab.TranslatePoint(new Point(tab.Bounds.Width / 2, tab.Bounds.Height / 2), dashboard)!.Value;
+            Assert.True(dashboard.InDragZone(new Point(tabAt.X + 200, tabAt.Y))); // Empty space beside the tabs.
+            Assert.True(dashboard.InDragZone(clock.TranslatePoint(new Point(10, 10), dashboard)!.Value));
+            var timelineScroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
+            Assert.False(dashboard.InDragZone(timelineScroll.TranslatePoint(new Point(100, 100), dashboard)!.Value));
+            var accountRow = dashboard.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("account"));
+            Assert.False(dashboard.InDragZone(accountRow.TranslatePoint(new Point(50, 10), dashboard)!.Value));
+            Assert.False(Ui.IsPlainSurface(tab)); Assert.True(Ui.IsPlainSurface(clock));
+        }
+        finally { dashboard.Close(); }
+    }
 }

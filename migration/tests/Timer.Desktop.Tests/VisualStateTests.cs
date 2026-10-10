@@ -92,9 +92,12 @@ public sealed class VisualStateTests
             Assert.Equal(6, host.BoxShadow[0].OffsetY);
             model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs();
             var dot = pill.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "●");
-            Assert.True(Ui.IsPulsing(dot)); Assert.Equal(0, host.BoxShadow[0].OffsetX); Assert.Equal(6, host.BoxShadow[0].OffsetY); // Plain drop shadow.
+            Assert.True(Ui.IsPulsing(dot)); Assert.Equal(Brush(pill, "Live").R, host.BoxShadow[0].Color.R); Assert.Equal(0, host.BoxShadow[0].OffsetY); // A recording account gives the pill a glow in the live colour.
             model.SetShadows(false); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Brush(pill, "Live").R, host.BoxShadow[0].Color.R); // The glow is a signal, so it stays when plain shadows are off.
+            model.TogglePause(); Dispatcher.UIThread.RunJobs(); // Paused: no glow, and no shadow either.
             Assert.Equal(default, host.BoxShadow);
+            model.TogglePause(); Dispatcher.UIThread.RunJobs();
             now = Day.AddHours(18); model.Tick(); model.SetShadows(true); Dispatcher.UIThread.RunJobs();
             Assert.True(model.IsOvertime); Assert.Equal(Brush(pill, "Overtime").R, host.BoxShadow[0].Color.R);
             Assert.Equal(1.0, bar.ColumnDefinitions[0].Width.Value, 2);

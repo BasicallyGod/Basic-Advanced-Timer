@@ -208,11 +208,11 @@
       <Setter Property="Foreground" Value="{DynamicResource Surface}" />
       <Setter Property="Opacity" Value="0.88" />
     </Style>
-    <!-- The dashboard's break and day buttons show no outline until the pointer is over them. Their icons keep their colour either way. -->
+    <!-- The dashboard's break and day buttons rest with a quiet outline and take on their own colour when the pointer is over them. Their icons keep their colour either way. -->
     <Style Selector="Button.quiet.breakButton, Button.quiet.finishDay.outlined, Button.quiet.startDay">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
-      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
       <Setter Property="BorderThickness" Value="1.5" />
     </Style>
     <Style Selector="Button.quiet.breakButton:pointerover /template/ ContentPresenter">

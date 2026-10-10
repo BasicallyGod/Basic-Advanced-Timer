@@ -119,6 +119,10 @@ public static class Ui
     }
     public static bool IsDragSurface(object? source) => source is Visual visual
         && visual is not Avalonia.Controls.Button && !visual.GetVisualAncestors().OfType<Button>().Any();
+    /// <summary>True for anything that is not a control you use: the bare panel and plain text, not buttons, boxes, lists, sliders or scroll bars.</summary>
+    public static bool IsPlainSurface(object? source) => source is Visual visual
+        && visual is not (Avalonia.Controls.Button or TextBox or ComboBox or Avalonia.Controls.Slider or Avalonia.Controls.Primitives.ScrollBar or Avalonia.Controls.Primitives.Thumb or ListBox)
+        && !visual.GetVisualAncestors().Any(a => a is Avalonia.Controls.Button or TextBox or ComboBox or Avalonia.Controls.Slider or Avalonia.Controls.Primitives.ScrollBar or Avalonia.Controls.Primitives.Thumb or ListBox);
     public static void DragHeader(Control header, Window window, string name = "DragHeader")
     {
         if (header is Panel panel) panel.Background = Brushes.Transparent;
@@ -482,7 +486,9 @@ public sealed class TrackingLabels : StackPanel
         void Refresh()
         {
             status.Text = "● " + model.Status;
-            status.Classes.Set("live", model.IsTracking);
+            // A break turns the status line, dot included, amber; otherwise it is green while tracking and grey when not.
+            status.Classes.Set("break", model.IsOnBreak);
+            status.Classes.Set("live", model.IsTracking && !model.IsOnBreak);
             status.Classes.Set("idle", !model.IsTracking);
             overtime.IsVisible = model.IsOvertime;
             overtime.Text = "Overtime +" + model.Format(model.Engine.Totals(model.Engine.Now).Overtime);
