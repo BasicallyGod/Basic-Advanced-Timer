@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Timer.Storage;
 
 namespace Timer.Desktop;
@@ -82,11 +83,11 @@ public sealed class AccountsWindow : Window
         ToolTip.SetTip(button, "Choose the colour for " + accountName);
         void Choose(string colour) { set(colour); swatch.Background = Avalonia.Media.Brush.Parse(colour); }
         var panel = new StackPanel { Spacing = 8, Margin = new Thickness(4) };
-        var grid = new WrapPanel { Width = 8 * 34 };
+        var grid = new UniformGrid { Columns = 8, Width = 8 * 34 }; // Two even rows of eight.
         var flyout = new Flyout { Content = panel };
         foreach (var colour in TimerModel.Palette)
         {
-            var pick = new Button { Name = "Colour" + colour[1..], Width = 28, Height = 28, Margin = new Thickness(3), Padding = new Thickness(0), CornerRadius = new CornerRadius(14), Background = Avalonia.Media.Brush.Parse(colour) };
+            var pick = new Button { Name = "Colour" + colour[1..], Width = 28, Height = 28, Margin = new Thickness(3), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, Padding = new Thickness(0), CornerRadius = new CornerRadius(14), Background = Avalonia.Media.Brush.Parse(colour) };
             ToolTip.SetTip(pick, colour);
             pick.Click += (_, _) => { Choose(colour); flyout.Hide(); };
             grid.Children.Add(pick);

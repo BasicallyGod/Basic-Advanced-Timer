@@ -97,7 +97,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public static readonly string[] Palette =
     {
         "#91B7D5", "#94BF9B", "#D9A18A", "#BAA4CE", "#C9D17F", "#86C5C0", "#D79BB5", "#C4A38F",
-        "#E58F8F", "#E6A86B", "#7FC8E8", "#8F94E6", "#C08FE0", "#7FD18F", "#B8BDB0", "#E3A0D6"
+        "#E58F8F", "#E6A86B", "#F0D060", "#8F94E6", "#C08FE0", "#7FD18F", "#B8BDB0", "#E87FA0"
     };
     // An account keeps its colour for good: it is given the first colour no other account is using, once, and saved with it.
     // Reordering, hiding or renaming an account therefore never changes how its blocks look on the timeline.

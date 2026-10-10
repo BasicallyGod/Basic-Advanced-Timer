@@ -6,7 +6,8 @@ The entries below follow the migration milestones, newest first. They describe t
 
 ## Migration sixteen account colours
 
-- The palette grew from eight to sixteen soft colours, so up to sixteen accounts can each have their own before any repeat. The original eight keep their order and values, so existing accounts look the same, and the new eight were chosen to stay clear of those and of the break's amber. Every one still takes the usual dark text. The chooser shows them in two rows of eight.
+- The palette grew from eight to sixteen soft colours, so up to sixteen accounts can each have their own before any repeat. The original eight keep their order and values, so existing accounts look the same, and the new eight were chosen to stay clear of those and of the break's amber. Every one still takes the usual dark text. The chooser shows them in two even rows of eight. After a first look, sky blue and orchid were replaced with a golden yellow and a rose, because they sat too close to the original blue and pink.
+- Week bars and the account dots now have a thin outline, so a very dark colour no longer disappears into the dark theme.
 
 ## Migration colour chooser, step 9
 

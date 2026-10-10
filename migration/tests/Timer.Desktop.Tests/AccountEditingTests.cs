@@ -233,6 +233,8 @@ public sealed class AccountEditingTests
             var buttons = window.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "AccountColour").ToList();
             Assert.Equal(2, buttons.Count);
             IEnumerable<Control> Flyout(Button b) => ((Avalonia.Controls.Flyout)b.Flyout!).Content is Control c ? Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(c).OfType<Control>() : Array.Empty<Control>();
+            var layout = Flyout(buttons[0]).OfType<Avalonia.Controls.Primitives.UniformGrid>().Single();
+            Assert.Equal(8, layout.Columns); Assert.Equal(16, layout.Children.Count); // Two even rows of eight.
             // The first account takes the palette's last colour.
             Flyout(buttons[0]).OfType<Button>().Single(x => x.Name == "Colour" + TimerModel.Palette[^1][1..]).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             // The second takes a colour typed in, and a bad one is refused with a message.
