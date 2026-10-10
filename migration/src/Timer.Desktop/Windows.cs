@@ -259,14 +259,13 @@ public sealed class PillWindow : Window
         // Starting the day is the green main action; finishing it is red, so ending the day is never done by accident.
         day.Classes.Set("finishDay", model.DayStarted); day.Classes.Set("primary", !model.DayStarted);
         var progress = model.DayProgress;
-        progressBar.IsVisible = progress is not null;
-        if (progress is { } done)
-        {
-            progressBar.ColumnDefinitions[0].Width = new GridLength(done, GridUnitType.Star);
-            progressBar.ColumnDefinitions[1].Width = new GridLength(1.0 - done, GridUnitType.Star);
-            progressFill.Classes.Set("progressOvertime", model.IsOvertime); progressFill.Classes.Set("progressBreak", model.IsOnBreak);
-            ToolTip.SetTip(progressBar, $"{(int)(done * 100)}% of the working day");
-        }
+        // The line is always there, so the pill never changes height or leaves a gap: on a day off it is simply an empty track.
+        progressBar.IsVisible = true;
+        var done = progress ?? 0.0;
+        progressBar.ColumnDefinitions[0].Width = new GridLength(done, GridUnitType.Star);
+        progressBar.ColumnDefinitions[1].Width = new GridLength(1.0 - done, GridUnitType.Star);
+        progressFill.Classes.Set("progressOvertime", model.IsOvertime); progressFill.Classes.Set("progressBreak", model.IsOnBreak);
+        ToolTip.SetTip(progressBar, progress is null ? "No working day today. The line fills as a working day goes by." : $"{(int)(done * 100)}% of the working day");
         // The pill glows for a break, overtime and not tracking, so its state shows from across the room.
         var glow = model.IsOnBreak ? "Break" : model.IsOvertime ? "Overtime" : !model.IsTracking ? "Idle" : null;
         var shadow = (model.Shadows, glow, ActualThemeVariant);

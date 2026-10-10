@@ -203,4 +203,23 @@ public sealed class VisualStateTests
         }
         finally { dashboard.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheDayProgressLineIsAlwaysShownEvenOnADayOff()
+    {
+        var now = Day.AddDays(1).AddHours(10); // The Saturday: not a working day.
+        var model = new TimerModel(new TrackingEngine(clock: () => now));
+        Assert.Null(model.DayProgress);
+        var pill = new PillWindow(model); pill.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+            var bar = pill.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "DayProgress");
+            Assert.True(bar.IsVisible); Assert.True(bar.Bounds.Height >= 3); // The row keeps its shape, with an empty track.
+            Assert.Equal(0.0, bar.ColumnDefinitions[0].Width.Value); Assert.Contains("No working day", ToolTip.GetTip(bar)!.ToString());
+            now = Day.AddDays(3).AddHours(13); model.ChangeDate(0); Dispatcher.UIThread.RunJobs(); // Monday, halfway through the day.
+            Assert.True(bar.IsVisible); Assert.Equal(.5, bar.ColumnDefinitions[0].Width.Value, 2);
+        }
+        finally { pill.Close(); }
+    }
 }

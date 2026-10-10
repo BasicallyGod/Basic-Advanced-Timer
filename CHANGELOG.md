@@ -4,6 +4,10 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration pill progress line always shown
+
+- The pill's day progress line is now always there. On a day off it is an empty track with a tooltip, so the pill no longer shows a gap where the line would be.
+
 ## Migration delete menu and drag grip
 
 - Brought back Delete in the right-click menu of timeline blocks and week entries. It is last, below a separator, and deletes the whole selection when the block clicked is selected, as one undoable edit.
