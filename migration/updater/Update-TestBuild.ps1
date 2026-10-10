@@ -1,11 +1,14 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-param([ValidateSet('Update', 'Launch', 'Rollback')][string]$Mode = 'Update')
+param(
+    [ValidateSet('Update', 'Launch', 'Rollback')][string]$Mode = 'Update',
+    # Which branch to take the newest successful build from. The picker window passes this; double-clicking the cmd files uses main.
+    [string]$Branch = 'main'
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $Repository = 'BasicallyGod/Basic-Advanced-Timer'
-$Branch = 'migration'
 $Workflow = 'avalonia-preview.yml'
 $ArtifactName = 'BasicsAdvancedTimer-Windows-preview'
 $Executable = 'BasicsAdvancedTimer.Preview.exe'
@@ -15,6 +18,11 @@ $Root = Join-Path $PSScriptRoot 'test-install'
 $Versions = Join-Path $Root 'versions'
 $Data = Join-Path $Root 'data'
 $StatePath = Join-Path $Root 'state.json'
+
+function Assert-BranchName([string]$Name) {
+    # Branch names go into a web address and a record on disk, so only ordinary characters are accepted.
+    if ($Name -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$' -or $Name -match '\.\.|//|/$|\.lock$') { throw "Not a usable branch name: $Name" }
+}
 
 function Invoke-GhJson([string]$Endpoint) {
     $output = & gh api --hostname github.com $Endpoint
@@ -104,7 +112,7 @@ function Start-Build($Build) {
 function Get-LatestBuild {
     # Only this workflow on this branch; PR merge builds and unrelated successful checks are excluded.
     for ($page = 1; ; $page++) {
-        $response = Invoke-GhJson "repos/$Repository/actions/workflows/$Workflow/runs?branch=$Branch&status=success&per_page=100&page=$page"
+        $response = Invoke-GhJson "repos/$Repository/actions/workflows/$Workflow/runs?branch=$([uri]::EscapeDataString($Branch))&status=success&per_page=100&page=$page"
         $runs = @($response.workflow_runs)
         foreach ($run in $runs) {
             if ($run.head_branch -ne $Branch -or $run.event -notin @('push', 'workflow_dispatch') -or
@@ -119,11 +127,12 @@ function Get-LatestBuild {
             if ($artifacts.Count -ne 1) { throw 'Ambiguous portable artifacts for one run; refusing to choose.' }
             return [pscustomobject]@{ run = $run; artifact = $artifacts[0] }
         }
-        if ($runs.Count -lt 100) { throw 'No successful migration portable build with an unexpired artifact is available.' }
+        if ($runs.Count -lt 100) { throw 'No successful portable build for this branch with with an unexpired artifact is available.' }
     }
 }
 
 function Invoke-TestUpdater {
+    Assert-BranchName $Branch
     # Reject junctions into production, including any parent of the standalone updater.
     $item = Get-Item -LiteralPath $UpdaterDirectory
     while ($null -ne $item) {

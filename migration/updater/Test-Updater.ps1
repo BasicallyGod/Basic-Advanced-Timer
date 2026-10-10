@@ -8,6 +8,10 @@ if ($errors.Count) { throw ($errors | Out-String) }
 foreach ($definition in $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     Invoke-Expression $definition.Extent.Text
 }
+# The picker window cannot be opened in a test, but it must at least parse.
+$windowTokens = $null; $windowErrors = $null
+$null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'Timer-Updater-Window.ps1'), [ref]$windowTokens, [ref]$windowErrors)
+if ($windowErrors.Count) { throw ($windowErrors | Out-String) }
 $Repository = 'BasicallyGod/Basic-Advanced-Timer'; $Branch = 'migration'; $Workflow = 'avalonia-preview.yml'
 $UpdaterDirectory = $PSScriptRoot
 $ArtifactName = 'BasicsAdvancedTimer-Windows-preview'; $Executable = 'BasicsAdvancedTimer.Preview.exe'
@@ -27,9 +31,9 @@ function Invoke-GhJson($Endpoint) {
     if ($Endpoint -match '/artifacts\?') {
         return [pscustomobject]@{ artifacts = @([pscustomobject]@{ id = $script:ArtifactId; name = $ArtifactName; expired = $false; created_at = '2026-10-10T12:32:16Z' }) }
     }
-    Assert ($Endpoint -match 'workflows/avalonia-preview.yml/runs\?branch=migration&status=success') 'Wrong workflow/branch filter.'
+    Assert ($Endpoint -match ('workflows/avalonia-preview.yml/runs\?branch=' + [regex]::Escape([uri]::EscapeDataString($Branch)) + '&status=success')) 'Wrong workflow/branch filter.'
     return [pscustomobject]@{ workflow_runs = @([pscustomobject]@{
-        id = $script:RunId; run_attempt = 1; head_branch = 'migration'; head_sha = ('a' * 40)
+        id = $script:RunId; run_attempt = 1; head_branch = $Branch; head_sha = ('a' * 40)
         event = 'push'; status = 'completed'; conclusion = 'success'
     }) }
 }
@@ -87,6 +91,12 @@ try {
     $handle = [IO.File]::Open((Join-Path $Data '.migration.lock'), 'Open', 'ReadWrite', 'None')
     try { Expect-Failure { Wait-TestClosed } } finally { $handle.Dispose() }
     Expect-Failure { Get-BuildFolder ([pscustomobject]@{ folder = '../production' }) }
+    foreach ($bad in @('', '..', 'a/../b', 'x y', 'main;calc', '-flag', 'a//b', 'a/', 'x.lock')) { Expect-Failure { Assert-BranchName $bad } }
+    foreach ($good in @('main', 'migration', 'feature/new-theme', 'release-1.2')) { Assert-BranchName $good }
+    # Choosing a different branch asks GitHub for that branch and records it with the build.
+    $Mode = 'Update'; $script:Offline = $false; $script:RunId = 20; $script:ArtifactId = 200; $Branch = 'feature/new-theme'
+    Invoke-TestUpdater
+    Assert ((Read-State).current.runId -eq 20 -and (Read-State).current.branch -eq 'feature/new-theme') 'Other branch was not recorded.'
     Write-Host 'PASS: install, no-download launch, partial download, validation, data preservation, rollback, offline launch, locks and path rejection.'
 } finally {
     # Only delete the exact temporary directory created by this test.

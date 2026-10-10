@@ -6,7 +6,9 @@ One-time setup:
 
 1. Install [GitHub CLI](https://cli.github.com/) and open a fresh terminal so `gh` is on PATH.
 2. Run `gh auth login --hostname github.com` and sign in with access to the private `BasicallyGod/Basic-Advanced-Timer` repository. The account/token must be able to read repository contents and Actions artifacts. No token is stored by this script.
-3. Double-click **Update and Launch.cmd**. A shortcut to that file also works; use Windows' Send to > Desktop (create shortcut) if desired.
+3. Double-click **Timer Updater.cmd**. It opens a small window with a list of the repository's branches (the last one you used is remembered). Choose a branch, then **Update and launch** to install and start the newest successful build from it, **Launch current** to start what is already installed without GitHub, or **Roll back and launch** for the previous build. A console window shows progress and stays open if something goes wrong. A shortcut to the cmd file also works.
+
+**Update and Launch.cmd** still works as a no-window shortcut and takes builds from `main`. Builds from different branches share one test data folder, so a branch that changes the database layout may not open again on an older build. Take a copy of `test-install/data` first when trying an experimental branch; the updater also snapshots it before every update.
 
 The launcher bypasses execution policy for this single PowerShell process; it does not change your saved policy. Organization-enforced restrictions may still apply.
 
@@ -14,9 +16,9 @@ The launcher bypasses execution policy for this single PowerShell process; it do
 
 ## Verified pipeline and storage
 
-Inspected `migration` at commit `356a9ca27cad38f13cbf8f68bbc61beaf6e90bd9` on 10 October 2026:
+Inspected on 10 October 2026 (the details below predate the move to a SQLite database, so `timer.db` replaces the CSV files and `.migration.lock` is no longer used; the running-process check protects the data instead):
 
-- Workflow: `.github/workflows/avalonia-preview.yml`, **Avalonia migration preview**, triggered by migration pushes, PRs, or manual dispatch. The updater accepts successful completed push/manual runs on `migration`, excludes PR merge builds, and paginates past expired/missing artifacts. It does not select the separate PowerShell checks or PNG preview artifacts.
+- Workflow: `.github/workflows/avalonia-preview.yml`, **Avalonia migration preview**, triggered by pushes to `main` and `migration`, PRs, or manual dispatch. The updater accepts successful completed push/manual runs on the chosen branch, excludes PR merge builds, and paginates past expired/missing artifacts. It does not select the separate PowerShell checks or PNG preview artifacts.
 - Portable artifact: `BasicsAdvancedTimer-Windows-preview`. Windows publishes `Timer.Desktop.csproj` in Release, win-x64, self-contained, multiple files, to `artifacts/windows-preview/`. Uploading this directory places its contents at the artifact root; `gh run download` with one named artifact extracts directly into the requested directory ([CLI documentation](https://cli.github.com/manual/gh_run_download)). The executable is `BasicsAdvancedTimer.Preview.exe`, alongside managed assemblies, runtime/native libraries, README and `Start-Demo.cmd`.
 - Latest inspected portable artifact: run `38052164486`, commit above, uploaded `2026-10-10T12:32:16Z`. The artifact had not expired at inspection. Runtime selection queries GitHub each time; this ID is not hard-coded.
 - `App.axaml.cs` normally uses `migration-data` beside the executable, or accepts `--data-dir`. `--demo` is nonpersistent. This updater always passes `--data-dir` pointing to its fixed `test-install/data` directory, with quoted paths. It never imports production data automatically.

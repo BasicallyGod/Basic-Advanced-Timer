@@ -8,7 +8,7 @@ The earlier PowerShell application (v2.32) has been retired. Its source remains 
 
 1. Open the latest successful run of the [Avalonia preview workflow](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) and download **BasicsAdvancedTimer-Windows-preview**.
 2. Extract the whole ZIP into its own folder and run `BasicsAdvancedTimer.Preview.exe`. Keep its DLLs together.
-3. For a one-click update and rollback routine, see [migration/updater](migration/updater/README.md).
+3. To update, copy [migration/updater](migration/updater/README.md) somewhere writable and run `Timer Updater.cmd`. It lists the branches, installs the newest successful build from the one you pick and can roll back.
 
 Run `Start-Demo.cmd` to try the app with sample accounts and history, without touching real data. Data is saved to a `migration-data` folder beside the executable, or to a folder you choose with `--data-dir`.
 
@@ -28,7 +28,7 @@ Everything is kept in `timer.db` (SQLite) with a small `basics-advanced-timer.se
 
 ## Moving from the PowerShell version
 
-The new app does not import the old CSV timesheets yet. If it finds `Timesheets/sessions.csv` in its data folder it says so, leaves the files alone and starts with an empty database. Keep your old `Timesheets` folder as an archive, or recover the old app from Git history if you need to run it again. It refuses to use a folder that still holds the old script, so the two never share data.
+The new app deliberately does not import the old CSV timesheets. If it finds `Timesheets/sessions.csv` in its data folder it says so, leaves the files alone and starts with an empty database. Keep your old `Timesheets` folder as an archive, or recover the old app from Git history if you need to run it again. It refuses to use a folder that still holds the old script, so the two never share data.
 
 ## Building
 

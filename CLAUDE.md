@@ -26,7 +26,7 @@ The `migration` folder name is historical and kept so updater and workflow paths
 
 ## Storage
 
-`TimerDatabase` holds accounts, entries, groups, away, day_starts, running, edits, edit_changes and meta. It takes an exclusive lock, uses WAL and `user_version`, and makes daily backups. Dispose every `SqliteCommand` or Windows keeps the file locked, which fails tests on CI. `TimerStore` rewrites `entries` when a snapshot changes. Notes, groups and `accountsSeeded` are blobs in `meta`. The settings JSON preserves unknown sections and is swapped in atomically with a `.bak`. Sessions checkpoint every 15 seconds and recovery stops at the last checkpoint. `TimerStore` refuses a folder holding the old `AccountTimer2.ps1` or launcher, and there is no importer for the old CSV files. Never auto-open another app's data folder. Never commit `migration-data`, `timer.db`, settings JSON or logs (`.gitignore` excludes them).
+`TimerDatabase` holds accounts, entries, groups, away, day_starts, running, edits, edit_changes and meta. It takes an exclusive lock, uses WAL and `user_version`, and makes daily backups. Dispose every `SqliteCommand` or Windows keeps the file locked, which fails tests on CI. `TimerStore` rewrites `entries` when a snapshot changes. Notes, groups and `accountsSeeded` are blobs in `meta`. The settings JSON preserves unknown sections and is swapped in atomically with a `.bak`. Sessions checkpoint every 15 seconds and recovery stops at the last checkpoint. `TimerStore` refuses a folder holding the old `AccountTimer2.ps1` or launcher, and the old CSV files are deliberately never imported. Never auto-open another app's data folder. Never commit `migration-data`, `timer.db`, settings JSON or logs (`.gitignore` excludes them).
 
 ## Themes
 
@@ -55,4 +55,4 @@ Run `dotnet test migration/tests/Timer.Desktop.Tests -c Release`. CI runs it on 
 
 ## Not done yet
 
-Overnight shifts, importing the old PowerShell CSV timesheets, theme import and export, per-theme block colour palettes, and the pill's break and overtime tint during theme preview.
+Overnight shifts, theme import and export, per-theme block colour palettes, and the pill's break and overtime tint during theme preview.
