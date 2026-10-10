@@ -54,9 +54,11 @@ public sealed class AccountsWindow : Window
         {
             try
             {
+                // An account keeps its colour through editing, renaming and reordering; a new one is given one by the model.
+                var colours = model.AccountSettings.ToDictionary(a => a.Name, a => a.Colour);
                 var accounts = entries.Select(e => new AccountSettings((e.Name.Text ?? "").Trim(),
                     string.IsNullOrWhiteSpace(e.Budget.Text) ? null : double.Parse(e.Budget.Text, NumberStyles.Float, CultureInfo.InvariantCulture),
-                    (string?)e.Period.SelectedItem ?? "week", e.Visible.IsChecked != true)).ToList();
+                    (string?)e.Period.SelectedItem ?? "week", e.Visible.IsChecked != true, e.Original is { } original ? colours.GetValueOrDefault(original) : null)).ToList();
                 var renames = entries.Where(e => e.Original is not null).Zip(accounts, (e, a) => (From: e.Original!, To: a.Name))
                     .Where(r => r.From != r.To).ToDictionary(r => r.From, r => r.To);
                 var history = false;

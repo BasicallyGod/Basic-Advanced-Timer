@@ -176,4 +176,57 @@ public sealed class AccountEditingTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void AccountsKeepTheirColourWhenReorderedHiddenRenamedOrOthersAreAdded()
+    {
+        var model = new TimerModel(Engine(), new StoreSettings(new() { new("A"), new("B"), new("C"), new("D") }, false, "System", DayOfWeek.Monday));
+        string Colour(string name) => model.ReviewAccounts.Single(a => a.Name == name).Colour;
+        var first = new[] { "A", "B", "C", "D" }.ToDictionary(n => n, Colour);
+        Assert.Equal(TimerModel.Palette.Take(4), first.Values); // New accounts take the first colours nobody is using, in order.
+        model.MoveAccount("D", 0); model.MoveAccount("C", 1);
+        Assert.All(first, p => Assert.Equal(p.Value, Colour(p.Key))); // Reordering changes nothing about colour.
+        model.SetAccounts(model.AccountSettings.Select(a => a.Name == "B" ? a with { Hidden = true } : a));
+        Assert.Equal(first["B"], Colour("B")); Assert.Equal(first["A"], Colour("A"));
+        model.SetAccounts(model.AccountSettings.Select(a => a.Name == "A" ? a with { Name = "Alpha" } : a), new Dictionary<string, string> { ["A"] = "Alpha" }, false);
+        Assert.Equal(first["A"], Colour("Alpha")); // A renamed account keeps its colour.
+        model.SetAccounts(model.AccountSettings.Append(new("E")));
+        Assert.Equal(TimerModel.Palette[4], Colour("E")); Assert.DoesNotContain(first.Values, v => v == Colour("E")); // A new one gets a colour not already used.
+        Assert.All(first.Keys.Where(k => k != "A"), n => Assert.Equal(first[n], Colour(n)));
+        for (var i = 0; i < 6; i++) model.SetAccounts(model.AccountSettings.Append(new("X" + i)));
+        Assert.Equal(11, model.AccountSettings.Count); // Past eight accounts the colours have to repeat, but never change for the ones already there.
+        Assert.Equal(first["D"], Colour("D"));
+    }
+
+    [Fact]
+    public void ColoursSurviveARestartAndOlderFilesWithoutThemAreColouredInOrderAndStayCompatible()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-colours-" + Guid.NewGuid());
+        try
+        {
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "basics-advanced-timer.settings.json"),
+                "{\"schemaVersion\":1,\"sections\":{\"accounts\":[\"Zed\",\"Amy\\thidden\",\"Bob\"]}}");
+            string[] before;
+            using (var store = new TimerStore(folder))
+            {
+                var engine = new TrackingEngine(); var prefs = store.Load(engine);
+                Assert.All(prefs.Accounts, a => Assert.Null(a.Colour)); // The old file has none.
+                var model = new TimerModel(engine, prefs, store);
+                before = model.AccountSettings.Select(a => a.Colour!).ToArray();
+                Assert.Equal(TimerModel.Palette.Take(3), before); // Coloured in the order they were already in, so nothing looks different.
+                model.MoveAccount("Bob", 0); model.Save();
+            }
+            var text = File.ReadAllText(Path.Combine(folder, "basics-advanced-timer.settings.json"));
+            Assert.Contains("Amy\\t" + "hidden\\t" + TimerModel.Palette[1], text); // Name, hidden flag, colour: the old timer still reads the first two parts.
+            using (var store = new TimerStore(folder))
+            {
+                var prefs = store.Load(new TrackingEngine());
+                Assert.Equal(new[] { "Bob", "Amy", "Zed" }, prefs.Accounts.Select(a => a.Name)); // The hidden account keeps its place.
+                Assert.Equal(new[] { before[2], before[1], before[0] }, prefs.Accounts.Select(a => a.Colour));
+                Assert.True(prefs.Accounts[1].Hidden);
+            }
+        }
+        finally { Directory.Delete(folder, true); }
+    }
 }

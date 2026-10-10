@@ -4,6 +4,10 @@
 
 The entries below follow the migration milestones, newest first. They describe the separate Avalonia preview on `migration`; the original PowerShell application remains v2.32. Migration builds have not yet been assigned release version numbers.
 
+## Migration stable account colours
+
+- Accounts now keep their timeline colour when reordered, hidden or renamed. A colour is given to an account once, as the first of eight that no other account uses, and saved with the account. Existing accounts keep the colours they had by position, so nothing changes at first. Choosing a colour is planned for the data format work.
+
 ## Migration timeline controls and drag animations
 
 - Added a floating bar over the timeline with zoom out, zoom in and fit the day icons, each with a tooltip. Fit fills the window with the day's recorded time, or the working day when nothing is recorded, and the zoom icons dim at the limits.

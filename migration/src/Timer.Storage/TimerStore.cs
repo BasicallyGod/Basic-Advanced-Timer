@@ -7,7 +7,7 @@ using Timer.Core;
 
 namespace Timer.Storage;
 
-public sealed record AccountSettings(string Name, double? BudgetHours = null, string BudgetPeriod = "week", bool Hidden = false);
+public sealed record AccountSettings(string Name, double? BudgetHours = null, string BudgetPeriod = "week", bool Hidden = false, string? Colour = null);
 public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true);
 public sealed record RecoveryState(int SchemaVersion, ActiveSession? Active, DateTime LastSeen);
 public sealed record SaveJournal(int SchemaVersion, Dictionary<string, string> Files);
@@ -58,7 +58,8 @@ public sealed class TimerStore : IDisposable
         }
         else settings = new() { ["schemaVersion"] = 1, ["sections"] = new JsonObject() };
         var accounts = Lines("accounts").Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Split('\t'))
-            .Where(s => !s[0].Equals("Lunch", StringComparison.OrdinalIgnoreCase)).Select(s => new AccountSettings(s[0], Hidden: s.Length >= 2 && s[1].Trim() == "hidden")).DistinctBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            .Where(s => !s[0].Equals("Lunch", StringComparison.OrdinalIgnoreCase)).Select(s => new AccountSettings(s[0], Hidden: s.Length >= 2 && s[1].Trim() == "hidden",
+                Colour: s.Length >= 3 && System.Text.RegularExpressions.Regex.IsMatch(s[2].Trim(), "^#[0-9A-Fa-f]{6}$") ? s[2].Trim().ToUpperInvariant() : null)).DistinctBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
         if (accounts.Count == 0 && !Lines("accounts").Any()) accounts = new() { new("Account one"), new("Account two"), new("Internal") };
         foreach (var line in Lines("budgets"))
         {
@@ -153,7 +154,8 @@ public sealed class TimerStore : IDisposable
         sections["dayOverrides"] = Array(engine.Schedule.Overrides.OrderBy(p => p.Key).Select(p => p.Value.Off
             ? $"{p.Key:yyyy-MM-dd}\toff" : $"{p.Key:yyyy-MM-dd}\t{p.Value.Shift!.Start:hh\\:mm}\t{p.Value.Shift.End:hh\\:mm}"));
         sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off" });
-        sections["accounts"] = Array(preferences.Accounts.Select(a => a.Name + (a.Hidden ? "\thidden" : "")));
+        // A name, then "hidden" or nothing, then the account's colour. Older timers read only the first two parts and ignore the colour.
+        sections["accounts"] = Array(preferences.Accounts.Select(a => a.Colour is { } colour ? $"{a.Name}\t{(a.Hidden ? "hidden" : "")}\t{colour}" : a.Name + (a.Hidden ? "\thidden" : "")));
         var configured = preferences.Accounts.Select(a => a.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var budgets = Lines("budgets").Where(line => !configured.Contains(line.Split('\t')[0])).ToList();
         budgets.AddRange(preferences.Accounts.Where(a => a.BudgetHours is not null).Select(a =>

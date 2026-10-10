@@ -89,16 +89,31 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, "System", DayOfWeek.Monday);
         this.store = store;
         Editor = store?.Editor ?? new LedgerEditor(Engine);
+        this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
         SelectedDate = Engine.Now.Date;
         ApplyTheme();
     }
+    // Eight soft colours, so up to eight accounts each have their own before any repeat, none matching the break. They all take dark text.
+    public static readonly string[] Palette = { "#91B7D5", "#94BF9B", "#D9A18A", "#BAA4CE", "#C9D17F", "#86C5C0", "#D79BB5", "#C4A38F" };
+    // An account keeps its colour for good: it is given the first colour no other account is using, once, and saved with it.
+    // Reordering, hiding or renaming an account therefore never changes how its blocks look on the timeline.
+    private static List<AccountSettings> WithColours(IEnumerable<AccountSettings> accounts)
+    {
+        var list = accounts.ToList();
+        foreach (var index in Enumerable.Range(0, list.Count).Where(i => list[i].Colour is null).ToList())
+        {
+            var used = list.Where(a => a.Colour is not null).Select(a => a.Colour!).ToList();
+            var colour = Palette.FirstOrDefault(c => !used.Contains(c, StringComparer.OrdinalIgnoreCase))
+                ?? Palette.OrderBy(c => used.Count(u => u.Equals(c, StringComparison.OrdinalIgnoreCase))).First();
+            list[index] = list[index] with { Colour = colour };
+        }
+        return list;
+    }
     public IReadOnlyList<AccountSettings> AccountSettings => preferences.Accounts.AsReadOnly();
     private TimerAccount[] Catalogue()
     {
-        // Eight soft colours, so up to eight accounts each have their own before any repeat, none matching the break. They all take dark text.
-        var colours = new[] { "#91B7D5", "#94BF9B", "#D9A18A", "#BAA4CE", "#C9D17F", "#86C5C0", "#D79BB5", "#C4A38F" };
-        return preferences.Accounts.Select((a, i) => new TimerAccount(a.Name, colours[i % colours.Length],
+        return preferences.Accounts.Select(a => new TimerAccount(a.Name, a.Colour ?? Palette[0],
             a.BudgetHours is { } hours ? TimeSpan.FromHours(hours) : null, a.BudgetPeriod)).Append(new(BreakAccount.Name, "#D6C48C", null)).ToArray();
     }
     public IReadOnlyList<TimerAccount> ReviewAccounts => Catalogue().Concat(Engine.Sessions.Select(s => s.Account).Distinct(StringComparer.OrdinalIgnoreCase)
@@ -199,7 +214,7 @@ public sealed class TimerModel : INotifyPropertyChanged
             if (store is not null) { store.Save(Engine, preferences); store.Backup("before-rename"); }
             foreach (var (from, to) in renamed) Editor.RenameAccount(from, to);
         }
-        preferences = preferences with { Accounts = values };
+        preferences = preferences with { Accounts = WithColours(values) };
         if (renamed.Count > 0 && SelectedAccount is { } picked && renames.TryGetValue(picked, out var now)) SelectedAccount = now;
         if (!Accounts.Any(a => a.Name == SelectedAccount)) SelectedAccount = values.FirstOrDefault(a => !a.Hidden)?.Name;
         Save(); Notify();
