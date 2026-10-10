@@ -13,6 +13,8 @@ $Workflow = 'avalonia-preview.yml'
 $ArtifactName = 'BasicsAdvancedTimer-Windows-preview'
 $Executable = 'BasicsAdvancedTimer.Preview.exe'
 $UpdaterDirectory = $PSScriptRoot
+# Handed to the timer so its Start with Windows setting can point back here and survive updates.
+$UpdaterScript = Join-Path $PSScriptRoot 'Update-TestBuild.ps1'
 # Fixed private installation alongside this standalone script. Never accept a production data path.
 $Root = Join-Path $PSScriptRoot 'test-install'
 $Versions = Join-Path $Root 'versions'
@@ -106,7 +108,7 @@ function Start-Build($Build) {
     Write-Host "Run: $($Build.runId), attempt $($Build.runAttempt)"
     Write-Host "Build date (artifact upload, local): $(([datetimeoffset]$Build.buildDate).ToLocalTime())"
     Write-Host "Test data: $Data"
-    Start-Process -FilePath (Join-Path $folder $Executable) -WorkingDirectory $Data -ArgumentList @('--test-build', '--data-dir', ('"' + $Data + '"'))
+    Start-Process -FilePath (Join-Path $folder $Executable) -WorkingDirectory $Data -ArgumentList @('--test-build', '--data-dir', ('"' + $Data + '"'), '--updater-script', ('"' + $UpdaterScript + '"'))
 }
 
 function Get-LatestBuild {

@@ -14,6 +14,7 @@ $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptR
 if ($windowErrors.Count) { throw ($windowErrors | Out-String) }
 $Repository = 'BasicallyGod/Basic-Advanced-Timer'; $Branch = 'migration'; $Workflow = 'avalonia-preview.yml'
 $UpdaterDirectory = $PSScriptRoot
+$UpdaterScript = Join-Path $PSScriptRoot 'Update-TestBuild.ps1'
 $ArtifactName = 'BasicsAdvancedTimer-Windows-preview'; $Executable = 'BasicsAdvancedTimer.Preview.exe'
 $Root = Join-Path ([IO.Path]::GetTempPath()) ('timer-updater-tests-' + [guid]::NewGuid().ToString('N'))
 $Versions = Join-Path $Root 'versions'; $Data = Join-Path $Root 'data'; $StatePath = Join-Path $Root 'state.json'
@@ -54,6 +55,7 @@ function Start-Process {
     Assert ($WorkingDirectory -eq $Data) 'Wrong working directory.'
     Assert ($ArgumentList[0] -eq '--test-build' -and $ArgumentList[1] -eq '--data-dir') 'Missing isolation arguments.'
     Assert ($ArgumentList[2] -eq ('"' + $Data + '"')) 'Data path was not quoted.'
+    Assert ($ArgumentList[3] -eq '--updater-script' -and $ArgumentList[4] -match 'Update-TestBuild\.ps1"$') 'Missing updater script path.'
     $script:Launches++
 }
 try {
