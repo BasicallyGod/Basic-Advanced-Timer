@@ -138,7 +138,8 @@ public static class ReviewViews
         DateTime clicked = day.AddHours(9);
         DateTime At(double y) => day.AddMinutes(Math.Clamp(Math.Floor(y / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var add = new MenuItem { Header = "Add new credited time…" }; add.Click += (_, _) => model.OpenGap(clicked);
-        canvas.ContextMenu = new ContextMenu { ItemsSource = new[] { add, MergeMenu(model) } };
+        var tidy = new MenuItem { Header = "Tidy day…", Name = "TidyDayMenu" }; tidy.Click += (_, _) => model.OpenTidy();
+        canvas.ContextMenu = new ContextMenu { ItemsSource = new[] { add, tidy, MergeMenu(model) } };
         bool OnBlock(object? source) => source is Visual visual && (visual is Border { Tag: SessionRow or ReviewEntry }
             || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow or ReviewEntry));
         Point? emptyPress = null;

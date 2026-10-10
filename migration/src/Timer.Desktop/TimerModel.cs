@@ -44,6 +44,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string? EditError { get; private set; }
     public event Action<SessionRow?, DateTime, DateTime>? EntryRequested;
     public event Action<string>? GroupRequested;
+    public event Action? TidyRequested;
+    public void OpenTidy() => TidyRequested?.Invoke();
     public string? ExportPath { get; private set; }
     private readonly HashSet<SessionRow> selectedRows = new(ReferenceEqualityComparer.Instance);
     public IReadOnlyCollection<SessionRow> SelectedRows => selectedRows;

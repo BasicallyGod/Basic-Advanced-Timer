@@ -279,7 +279,7 @@ public sealed class DashboardWindow : Window
     private readonly TimerModel model;
     private readonly TextBlock clock = Ui.Text("00:00:00", 40);
     private readonly TextBlock account = Ui.Text("", 16);
-    private Border zoomControls = new(); private Button zoomOut = new(), zoomIn = new();
+    private Border zoomControls = new(); private Button exportButton = new(); private Button zoomOut = new(), zoomIn = new();
     private readonly TextBlock allocatedValue = Ui.Text("");
     private readonly TextBlock unallocatedValue = Ui.Text("");
     private readonly TextBlock date = Ui.Text("", 14);
@@ -369,12 +369,6 @@ public sealed class DashboardWindow : Window
         Ui.Put(review, navLine);
         undo = Ui.Button("Undo", () => model.UndoEdit(), "UndoEdit");
         merge = Ui.Button("Merge", () => model.MergeSelection(), "MergeSelected");
-        var more = Ui.Button("Tools", () => { }, "ReviewTools");
-        var group = new MenuItem { Header = "Group entries…" }; group.Click += (_, _) => new GroupWindow(model).Show(this);
-        var tidy = new MenuItem { Header = "Tidy day…" }; tidy.Click += (_, _) => new TidyWindow(model).Show(this);
-        var export = new MenuItem { Header = "Export week…" }; export.Click += (_, _) => new ExportWindow(model).Show(this);
-        more.ContextMenu = new ContextMenu { ItemsSource = new[] { group, tidy, export } };
-        more.Click += (_, _) => more.ContextMenu.Open(more);
         // Editing buttons sit on the left and only where they apply; Tools stays on the right. Hours and minutes is in Settings.
         addTime = Ui.Button("Add time", () => model.OpenGap(), "AddTime");
         var edits = Ui.Horizontal(addTime, undo, merge);
@@ -385,7 +379,9 @@ public sealed class DashboardWindow : Window
         var fit = Ui.IconButton(IconKind.FitDay, "Fit the day to the window", "TimelineFit", () => { if (TimelineScroll() is { } s) model.FitTimeline(s.Viewport.Height); });
         var zoomBar = new Border { Name = "TimelineControls", Child = Ui.Horizontal(zoomOut, zoomIn, fit), CornerRadius = new CornerRadius(8), Padding = new Thickness(2), BorderThickness = new Thickness(1) };
         ((StackPanel)zoomBar.Child).Spacing = 0; zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
-        var tools = Ui.Grid("*,Auto"); Ui.Put(tools, edits); Ui.Put(tools, Ui.Horizontal(zoomBar, more), 1);
+        var tools = Ui.Grid("*,Auto"); Ui.Put(tools, edits); // Exporting a week belongs to the week tabs, and zoom to the timeline, so each shows only where it applies.
+        exportButton = Ui.IconButton(IconKind.Export, "Export week…", "ExportWeek", () => new ExportWindow(model).Show(this));
+        Ui.Put(tools, Ui.Horizontal(zoomBar, exportButton), 1);
         tools.Margin = new Thickness(0, 12);
         Ui.Put(review, tools, row: 1);
         Ui.Put(review, workspace, row: 2);
@@ -428,8 +424,8 @@ public sealed class DashboardWindow : Window
         };
         model.PropertyChanged += Changed;
         model.EntryRequested += ShowEntry;
-        model.GroupRequested += ShowGroup;
-        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; };
+        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy;
+        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; };
         Refresh(true);
     }
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
@@ -440,6 +436,7 @@ public sealed class DashboardWindow : Window
         entryEditor.Closed += (_, _) => entryEditor = null;
         entryEditor.Show(this);
     }
+    private void ShowTidy() { if (IsVisible) new TidyWindow(model).Show(this); }
     private void ShowGroup(string id) { if (IsVisible) new GroupWindow(model, id).Show(this); }
     public void SelectTab(bool showWeek) { weekMode = showWeek; Refresh(true); }
     private void SelectSection(string section)
@@ -465,7 +462,7 @@ public sealed class DashboardWindow : Window
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
         var editing = !weekMode || model.WeekSection == "entries";
-        zoomControls.IsVisible = !weekMode; zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
+        zoomControls.IsVisible = !weekMode; exportButton.IsVisible = weekMode; zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
         undo.Content = "Undo";

@@ -348,22 +348,41 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void ZoomAndFitSitBesideToolsTheHintLineIsGoneAndADisabledButtonStaysOutlined()
+    public void ZoomAndFitSitInTheActionRowTheHintLineIsGoneAndADisabledButtonStaysOutlined()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
-            var tools = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ReviewTools");
+            Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "ReviewTools"); // The Tools menu is gone.
+            var undoButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "UndoEdit");
             var zoom = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
-            Assert.InRange(Math.Abs(tools.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y + tools.Bounds.Height / 2 - (zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y + zoom.Bounds.Height / 2)), 0, 3); // Same row.
-            Assert.True(zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.X < tools.TranslatePoint(new Point(0, 0), dashboard)!.Value.X);
+            Assert.InRange(Math.Abs(undoButton.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y + undoButton.Bounds.Height / 2 - (zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y + zoom.Bounds.Height / 2)), 0, 3); // Same row.
+            Assert.True(zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.X > undoButton.TranslatePoint(new Point(0, 0), dashboard)!.Value.X); // On the right of the row.
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsVisible), t => t.Text is not null && t.Text.Contains("Click blocks to select"));
             var undo = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "UndoEdit");
             Assert.False(undo.IsEnabled); Assert.True(undo.Opacity < 1); // Dimmed by the style, keeping its outline, not a solid grey fill.
             model.SetWeekSection("overview"); dashboard.SelectTab(true); Dispatcher.UIThread.RunJobs();
             Assert.False(zoom.IsVisible); // Zoom belongs to the timeline only.
+            var export = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ExportWeek");
+            Assert.True(export.IsVisible); Assert.Equal(IconKind.Export, ((IconGlyph)export.Content!).Kind); Assert.Equal("Export week…", ToolTip.GetTip(export));
+            model.SetWeekSection("overview"); dashboard.SelectTab(false); Dispatcher.UIThread.RunJobs(); Assert.False(export.IsVisible);
         }
         finally { dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TidyDayIsOfferedWhenYouRightClickEmptyTimelineSpace()
+    {
+        var model = TimerModel.CreateDemo(); var raised = 0; model.TidyRequested += () => raised++;
+        var window = new Window { Width = 700, Height = 600, Content = ReviewViews.Timeline(model) }; window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            var canvas = window.GetVisualDescendants().OfType<Canvas>().First(c => c.ContextMenu is not null);
+            var tidy = canvas.ContextMenu!.Items.OfType<MenuItem>().Single(i => i.Name == "TidyDayMenu");
+            tidy.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent)); Assert.Equal(1, raised);
+        }
+        finally { window.Close(); }
     }
 }
