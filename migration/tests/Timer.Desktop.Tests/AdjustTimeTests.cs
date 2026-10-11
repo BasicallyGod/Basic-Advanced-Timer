@@ -30,8 +30,8 @@ public sealed class AdjustTimeTests
         var adjustment = engine.Sessions[^1];
         Assert.Equal("adjusted", adjustment.End); Assert.Equal("14:00:00", adjustment.Start); Assert.Equal("15", adjustment.Minutes); Assert.False(adjustment.IsPositioned);
         Assert.Equal("Rounded for the call", editor.Note(adjustment));
-        editor.Adjust("Account one", Day, -10.5m, "", engine.Now); // The same second: it moves on a second rather than clashing.
-        Assert.Equal("14:00:01", engine.Sessions[^1].Start); Assert.Equal("-10.5", engine.Sessions[^1].Minutes);
+        editor.Adjust("Account one", Day, -10.5m, "", engine.Now); // The same moment: it settles flush against the first adjustment rather than lying on it.
+        Assert.Equal("13:49:30", engine.Sessions[^1].Start); Assert.Equal("-10.5", engine.Sessions[^1].Minutes);
         Assert.Equal(TimeSpan.FromMinutes(64.5), engine.Credited("Account one", Day, Day.AddDays(1)));
         var export = new WeekExport(editor, engine, new DateTime(2026, 10, 5)); // The export counts them and still adds up.
         Assert.Equal(export.TotalUnits, export.Accounts["Account one"].Sum());
@@ -246,12 +246,46 @@ public sealed class AdjustTimeTests
     }
 
     [Fact]
-    public void ADragOfAnAdjustmentSnapsToFiveMinutesAndStaysInsideItsDay()
+    public void ADragOfAnAdjustmentSnapsToFiveMinutesStaysInItsDayAndNeverLiesAcrossOtherTime()
     {
         var row = new SessionRow(Day.ToString("yyyy-MM-dd"), "Account one", "14:00:00", "adjusted", "-10");
-        Assert.Equal(TimeSpan.FromMinutes(30), TimelineGestures.AdjustmentDelta(row, TimeSpan.FromMinutes(32)));
-        Assert.Equal(TimeSpan.FromHours(-14), TimelineGestures.AdjustmentDelta(row, TimeSpan.FromHours(-20)));
-        Assert.Equal(TimeSpan.FromHours(10) - TimeSpan.FromMinutes(5), TimelineGestures.AdjustmentDelta(row, TimeSpan.FromHours(30)));
+        var none = new List<(DateTime From, DateTime To)>();
+        Assert.Equal(TimeSpan.FromMinutes(30), TimelineGestures.AdjustmentDelta(row, TimeSpan.FromMinutes(32), none, 192));
+        Assert.Equal(TimeSpan.FromHours(-14), TimelineGestures.AdjustmentDelta(row, TimeSpan.FromHours(-20), none, 192));
+        Assert.Equal(TimeSpan.FromHours(10) - TimeSpan.FromMinutes(10), TimelineGestures.AdjustmentDelta(row, TimeSpan.FromHours(30), none, 192)); // Its own ten minutes still fit before midnight.
+        // A block from 15:00 to 16:00: dropping the adjustment on it settles it flush against the end or the start, never across it.
+        var block = new List<(DateTime From, DateTime To)> { (Day.AddHours(15), Day.AddHours(16)) };
+        Assert.Equal(Day.AddHours(16) - row.From, TimelineGestures.AdjustmentDelta(row, TimeSpan.FromHours(1.8), block, 192)); // Nearer the end.
+        Assert.Equal(Day.AddHours(15) - TimeSpan.FromMinutes(10) - row.From, TimelineGestures.AdjustmentDelta(row, TimeSpan.FromHours(1.1), block, 192)); // Nearer the start, its own length before it.
+        Assert.Equal(Day.AddHours(16) - row.From, TimelineGestures.AdjustmentDelta(row, TimeSpan.FromMinutes(121), block, 192)); // Close to the end, so it nestles against it.
+    }
+
+    [Fact]
+    public void ANewAdjustmentSettlesAgainstTheBlockBeforeItAndNeverOverlapsRecordedTime()
+    {
+        // Close after a block: it nestles flush against the block's end.
+        var now = Day.AddHours(14).AddMinutes(5); var engine = Engine(() => now); engine.Sessions.Add(Row("13:00:00", "60"));
+        var editor = new LedgerEditor(engine);
+        Assert.Equal("14:00:00", editor.Adjust("Account one", Day, 15, "", now).Start);
+        // Made in the middle of a block: it goes to the nearest free place beside it.
+        var later = Day.AddHours(13).AddMinutes(30); var other = Engine(() => later); other.Sessions.Add(Row("13:00:00", "60"));
+        var placed = new LedgerEditor(other).Adjust("Account two", Day, 20, "", later);
+        Assert.Equal("14:00:00", placed.Start);
+        // A second adjustment never lands on the first.
+        var second = new LedgerEditor(other).Adjust("Account two", Day, 20, "", later);
+        Assert.True(second.From >= placed.From + AdjustmentSpace.Length(placed) || second.From + AdjustmentSpace.Length(second) <= placed.From);
+        Assert.DoesNotContain(AdjustmentSpace.Occupied(other, Day, second), o => o.From < second.From + AdjustmentSpace.Length(second) && o.To > second.From);
+        // Nothing recorded moved.
+        Assert.Equal("13:00:00", other.Sessions.First(s => s.IsPositioned).Start);
+    }
+
+    [Fact]
+    public void MovingAnAdjustmentOntoRecordedTimeIsRefused()
+    {
+        var engine = Engine(); engine.Sessions.Add(Row("09:00:00", "60"));
+        var editor = new LedgerEditor(engine); var row = editor.Adjust("Account one", Day, 15, "", Day.AddHours(14));
+        Assert.Contains("taken", Assert.Throws<ArgumentException>(() => editor.MoveAdjustment(row, TimeSpan.FromHours(9.5))).Message);
+        Assert.Equal("10:00:00", editor.MoveAdjustment(row, TimeSpan.FromHours(10)).Start); // Flush against the end is fine.
     }
 
     [AvaloniaFact]

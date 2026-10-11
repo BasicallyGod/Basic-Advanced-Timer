@@ -436,6 +436,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note)
         => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note); });
+    /// <summary>The time on this adjustment's day that it has to stay clear of, for snapping a drag to its neighbours.</summary>
+    public List<(DateTime From, DateTime To)> AdjustmentOccupied(SessionRow row) => AdjustmentSpace.Occupied(Engine, row.Day, row);
     public bool MoveAdjustment(SessionRow row, TimeSpan start) => ChangeLog(() => Editor.MoveAdjustment(row, start));
     public bool DragEntry(SessionRow row, DateTime start, DateTime end, bool insert)
         => ChangeLog(() => Editor.EditTimeline(row, start, end, insert));

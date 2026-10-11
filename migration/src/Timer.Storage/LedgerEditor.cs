@@ -212,9 +212,12 @@ public sealed partial class LedgerEditor
         day = day.Date;
         if (engine.Credited(account, day, day.AddDays(1)) + TimeSpan.FromMinutes((double)minutes) < TimeSpan.Zero)
             throw new ArgumentException("That would take more time off than the account has on that day.");
-        // The row's start is only a label that keeps it apart from other rows, so a past day takes midday and today the time of the change.
-        var at = day == now.Date ? now.TimeOfDay : TimeSpan.FromHours(12);
-        var start = TimeSpan.FromSeconds(Math.Floor(at.TotalSeconds));
+        // The row's start is where its block sits on the timeline. It begins at the time of the change (midday for a past day) and then settles
+        // against the blocks around it, so it does not lie across recorded time. When the day has no room that big it keeps the wanted time.
+        var wanted = day + (day == now.Date ? now.TimeOfDay : TimeSpan.FromHours(12));
+        var length = TimeSpan.FromMinutes(Math.Min(24 * 60, Math.Abs((double)minutes)));
+        var placed = AdjustmentSpace.Choose(wanted, length, day, AdjustmentSpace.Occupied(engine, day, null), TimeSpan.FromMinutes(10), null) ?? wanted;
+        var start = TimeSpan.FromSeconds(Math.Floor((placed - day).TotalSeconds));
         while (engine.Sessions.Any(s => s.Date == day.ToString("yyyy-MM-dd") && s.Account.Equals(account, StringComparison.OrdinalIgnoreCase) && s.Start == start.ToString(@"hh\:mm\:ss")))
             start = start.Add(TimeSpan.FromSeconds(1));
         var row = new SessionRow(day.ToString("yyyy-MM-dd"), account, start.ToString(@"hh\:mm\:ss"), "adjusted", minutes.ToString("0.##", CultureInfo.InvariantCulture));
@@ -233,6 +236,8 @@ public sealed partial class LedgerEditor
         if (start < TimeSpan.Zero || start >= TimeSpan.FromDays(1)) throw new ArgumentException("Keep the adjustment within its own day.");
         var row = old with { Start = start.ToString(@"hh\:mm\:ss") };
         if (row == old) return old;
+        if (!AdjustmentSpace.IsFree(row.From, AdjustmentSpace.Length(row), row.Day, AdjustmentSpace.Occupied(engine, row.Day, old)))
+            throw new ArgumentException("That place on the day is taken. An adjustment has to sit in free time.");
         if (engine.Sessions.Any(s => !ReferenceEquals(s, old) && s.Date == row.Date && s.Start == row.Start && s.Account.Equals(row.Account, StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("Another entry for that account starts at that time.");
         var note = Note(old);

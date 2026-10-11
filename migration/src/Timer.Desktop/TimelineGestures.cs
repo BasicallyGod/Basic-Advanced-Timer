@@ -107,7 +107,7 @@ public static class TimelineGestures
             if (origin is not { } start) return;
             var moved = e.GetPosition(canvas) - start;
             if (!dragging && Math.Abs(moved.Y) < 5) return;
-            dragging = true; delta = AdjustmentDelta(row, TimeSpan.FromHours(moved.Y / pixelsPerHour));
+            dragging = true; delta = AdjustmentDelta(row, TimeSpan.FromHours(moved.Y / pixelsPerHour), model.AdjustmentOccupied(row), pixelsPerHour);
             Canvas.SetTop(card, oldTop + delta.TotalHours * pixelsPerHour); card.Opacity = .75; e.Handled = true;
         };
         card.PointerReleased += (_, e) =>
@@ -120,13 +120,15 @@ public static class TimelineGestures
         };
         card.PointerCaptureLost += (_, _) => { if (origin is null) return; origin = null; dragging = false; card.Opacity = 1; Canvas.SetTop(card, oldTop); };
     }
-    /// <summary>Snaps an adjustment's move to five minutes on the clock and keeps it inside its day.</summary>
-    public static TimeSpan AdjustmentDelta(SessionRow row, TimeSpan requested)
+    /// <summary>
+    /// Where an adjustment dragged by <paramref name="requested"/> lands: in five minute steps, flush against a neighbour when it is near one, never
+    /// across recorded time or another adjustment, and inside its day. When there is nowhere free it stays where it is.
+    /// </summary>
+    public static TimeSpan AdjustmentDelta(SessionRow row, TimeSpan requested, IReadOnlyList<(DateTime From, DateTime To)> occupied, double pixelsPerHour)
     {
-        var wanted = (row.From + requested).TimeOfDay.TotalMinutes;
-        if (row.From + requested < row.Day) wanted = 0; else if (row.From + requested >= row.Day.AddDays(1)) wanted = 24 * 60 - 5;
-        var snapped = Math.Clamp(Math.Round(wanted / 5) * 5, 0, 24 * 60 - 5);
-        return row.Day + TimeSpan.FromMinutes(snapped) - row.From;
+        var landed = AdjustmentSpace.Choose(row.From + requested, AdjustmentSpace.Length(row), row.Day, occupied, TimeSpan.FromHours(8 / pixelsPerHour), TimeSpan.FromMinutes(5));
+        // The start is kept in whole seconds, as everywhere else.
+        return landed is { } place ? new DateTime((place.Ticks / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond) - row.From : TimeSpan.Zero;
     }
     /// <summary>Which edge a press at <paramref name="y"/> grabs, -1 top, 1 bottom, 0 for moving the whole block.</summary>
     public static int EdgeAt(double y, double height)
