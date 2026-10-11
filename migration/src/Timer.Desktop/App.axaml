@@ -20,7 +20,7 @@
               <Thumb Name="PART_Thumb">
                 <Thumb.Template>
                   <ControlTemplate>
-                    <Border Background="{DynamicResource Muted}" CornerRadius="3" Margin="1" Opacity="0.55" />
+                    <Border Background="{DynamicResource Muted}" CornerRadius="3" Margin="1" Opacity="0.5" />
                   </ControlTemplate>
                 </Thumb.Template>
               </Thumb>
@@ -32,12 +32,18 @@
       </Setter>
     </Style>
     <Style Selector="ScrollBar:vertical">
-      <Setter Property="Width" Value="8" /><Setter Property="MinWidth" Value="8" /><Setter Property="MaxWidth" Value="8" />
+      <Setter Property="Width" Value="7" /><Setter Property="MinWidth" Value="7" /><Setter Property="MaxWidth" Value="7" />
     </Style>
-    <Style Selector="ScrollBar:vertical /template/ Thumb"><Setter Property="MinHeight" Value="24" /><Setter Property="MinWidth" Value="6" /></Style>
+    <Style Selector="ScrollBar:vertical /template/ Thumb"><Setter Property="MinHeight" Value="24" /><Setter Property="MinWidth" Value="5" /></Style>
+    <!-- Scroll bars stay out of sight until the pointer is over the area they belong to, so they never distract from the content. -->
+    <Style Selector="ScrollViewer ScrollBar">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Transitions"><Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.18" /></Transitions></Setter>
+    </Style>
+    <Style Selector="ScrollViewer:pointerover ScrollBar"><Setter Property="Opacity" Value="1" /></Style>
     <Style Selector="ScrollBar:vertical /template/ Track"><Setter Property="IsDirectionReversed" Value="True" /></Style>
     <Style Selector="ScrollBar:horizontal">
-      <Setter Property="Height" Value="8" /><Setter Property="MinHeight" Value="8" /><Setter Property="MaxHeight" Value="8" />
+      <Setter Property="Height" Value="7" /><Setter Property="MinHeight" Value="7" /><Setter Property="MaxHeight" Value="7" />
     </Style>
     <Style Selector="ScrollBar:horizontal /template/ Thumb"><Setter Property="MinHeight" Value="6" /><Setter Property="MinWidth" Value="24" /></Style>
     <Style Selector="Window">
@@ -290,6 +296,16 @@
     <Style Selector="Button.quiet.startDay:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BorderBrush" Value="{DynamicResource Start}" />
     </Style>
+    <!-- Add time, Undo and Merge use the same resting outline as the break and day buttons, and light up their border under the pointer. -->
+    <Style Selector="Button.toolButton">
+      <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Ink}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="Padding" Value="14,0" /><Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.toolButton:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
+    </Style>
+    <Style Selector="Button.toolButton.addButton:pointerover /template/ ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Button.quiet.breakButton.onBreak">
       <Setter Property="Background" Value="{DynamicResource Break}" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="{DynamicResource Break}" />
     </Style>

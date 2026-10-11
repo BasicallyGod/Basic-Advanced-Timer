@@ -116,4 +116,28 @@ public sealed class ToolbarAndTrackingTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheEditButtonsShareTheBreakButtonsOutlineAndThePageHasRoomUnderItsTitle()
+    {
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Settle(window);
+            foreach (var name in new[] { "AddTime", "UndoEdit" })
+            {
+                var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
+                Assert.Contains("quiet", button.Classes); Assert.Contains("toolButton", button.Classes); Assert.Equal(new Thickness(1.5), button.BorderThickness);
+                Assert.Single(button.GetVisualDescendants().OfType<IconGlyph>()); Assert.NotEmpty(button.GetVisualDescendants().OfType<TextBlock>().Single().Text!);
+            }
+            var title = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Timeline" && t.Classes.Contains("clock"));
+            var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
+            var gap = scroll.TranslatePoint(new Point(0, 0), window)!.Value.Y - (title.TranslatePoint(new Point(0, title.Bounds.Height), window)!.Value.Y);
+            Assert.True(gap >= 14, $"only {gap:0}px between the title and the timeline");
+            // The card's account dot sits close to the name beside it.
+            var dot = window.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().First(e => e.Width == 10 && e.Margin == default);
+            Assert.Equal(default, dot.Margin);
+        }
+        finally { window.Close(); }
+    }
 }

@@ -328,7 +328,7 @@ public sealed class DashboardWindow : Window
     private readonly TimerModel model;
     private readonly ClockText clock = new(46, 26) { Text = "00:00:00" };
     private readonly TextBlock workspaceTitle = new() { FontSize = 26, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Center };
-    private readonly Avalonia.Controls.Shapes.Ellipse accountDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+    private readonly Avalonia.Controls.Shapes.Ellipse accountDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
     private Button todayButton = null!;
     private readonly TextBlock account = Ui.Text("", 16);
     private Border zoomControls = new(); private Control? identityBlock, accountsHeadBlock, toolsRow; private Button zoomOut = new(), zoomIn = new();
@@ -456,11 +456,19 @@ public sealed class DashboardWindow : Window
         todayButton = Ui.Button("Today", () => model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days), "GoToToday"); todayButton.Classes.Add("outlined"); todayButton.Height = 34; todayButton.Padding = new Thickness(14, 4); todayButton.Margin = new Thickness(10, 0, 0, 0);
         Ui.Put(nav, Ui.Horizontal(previous, date, next, todayButton), 1);
         Ui.Put(review, nav);
-        undo = Ui.Button("Undo", () => model.UndoEdit(), "UndoEdit");
-        merge = Ui.Button("Merge", () => model.MergeSelection(), "MergeSelected");
+        undo = Ui.Button("", () => model.UndoEdit(), "UndoEdit");
+        merge = Ui.Button("", () => model.MergeSelection(), "MergeSelected");
         // Editing buttons sit on the left and only where they apply; Tools stays on the right. Hours and minutes is in Settings.
-        addTime = Ui.Button("Add time", () => model.OpenGap(), "AddTime");
-        addTime.Classes.Add("accentButton");
+        addTime = Ui.Button("", () => model.OpenGap(), "AddTime");
+        // The same quiet outlined look as Start break and Finish day, each with a small icon: a plus in the accent colour, and plain ones for the rest.
+        (Button Button, IconKind Icon, string Words, string? Tint)[] toolSpecs = { (addTime, IconKind.Plus, "Add time", "Accent"), (undo, IconKind.Undo, "Undo", null), (merge, IconKind.Merge, "Merge", null) };
+        foreach (var (toolButton, icon, words, tint) in toolSpecs)
+        {
+            toolButton.Classes.Add("toolButton"); toolButton.Classes.Add("quiet");
+            toolButton.Content = Ui.Horizontal(new IconGlyph(icon) { TintKey = tint }, new TextBlock { Text = words, VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
+            Avalonia.Automation.AutomationProperties.SetName(toolButton, words);
+        }
+        addTime.Classes.Add("addButton");
         var edits = Ui.Horizontal(addTime, undo, merge);
         // Zoom and fit sit beside Tools in this row, applying to the timeline underneath. They show only on the Timeline tab.
         ScrollViewer? TimelineScroll() => workspace.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
@@ -482,6 +490,7 @@ public sealed class DashboardWindow : Window
         addTime.Height = ControlBarHeight; undo.Height = ControlBarHeight; merge.Height = ControlBarHeight;
         var tools = Ui.Grid("*,Auto"); toolsRow = tools; Ui.Put(tools, edits); Ui.Put(tools, zoomBar, 1);
         tools.Margin = new Thickness(0, 12, 0, 0);
+        workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
         Ui.Put(review, workspace, row: 1);
         Ui.Put(review, tools, row: 2);
         // The title row's empty middle still drags the window.
@@ -592,7 +601,6 @@ public sealed class DashboardWindow : Window
         zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
-        undo.Content = "Undo";
         dashboardCup.Filled = model.IsOnBreak; dashboardCup.SetSteaming(model.IsOnBreak); dashboardCup.InvalidateVisual();
         dashboardBreakText.Text = model.IsOnBreak ? "Finish break" : "Start break";
         breakButton.Classes.Set("onBreak", model.IsOnBreak);

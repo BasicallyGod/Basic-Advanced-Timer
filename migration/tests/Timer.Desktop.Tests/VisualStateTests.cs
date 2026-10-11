@@ -200,8 +200,8 @@ public sealed class VisualStateTests
         {
             model.Editor.Edit(model.Engine.Sessions[0], "Account one", Day.AddHours(9), Day.AddHours(9.25), "note"); model.ChangeDate(0); Dispatcher.UIThread.RunJobs();
             var undo = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "UndoEdit");
-            Assert.Equal("Undo", undo.Content); Assert.Contains("available", ToolTip.GetTip(undo)!.ToString());
-            Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { Length: 8 } x && x[2] == ':' && x[5] == ':' && x != dashboard.GetVisualDescendants().OfType<TextBlock>().First(c => c.FontSize == 40).Text);
+            Assert.Equal("Undo", undo.GetVisualDescendants().OfType<TextBlock>().Single().Text); Assert.Contains("toolButton", undo.Classes); Assert.Contains("available", ToolTip.GetTip(undo)!.ToString());
+            Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { Length: 8 } x && x[2] == ':' && x[5] == ':' && x != dashboard.GetVisualDescendants().OfType<TextBlock>().First(c => c.FontSize == 46 && c.Classes.Contains("clock")).Text);
         }
         finally { dashboard.Close(); }
     }

@@ -683,7 +683,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -727,13 +727,25 @@ public sealed class IconGlyph : Control
         switch (Kind)
         {
             case IconKind.Timeline:
-                // A spine with three dots and a short bar beside each: the day as a list of moments.
-                context.DrawLine(pen, new Point(4.5, 2.5), new Point(4.5, 15.5));
-                foreach (var (y, end) in new[] { (4.5, 15.0), (9.0, 12.5), (13.5, 15.0) })
-                {
-                    context.DrawEllipse(brush, null, new Point(4.5, y), 1.7, 1.7);
-                    context.DrawLine(pen, new Point(8.5, y), new Point(end, y));
-                }
+                // A spine with three blocks of different lengths beside it, drawn apart from each other: the day as a column of time.
+                context.DrawLine(pen, new Point(3.5, 2), new Point(3.5, 16));
+                // Solid bars rather than outlines, so the gaps between them stay open at button size.
+                context.DrawRectangle(brush, null, new Rect(7.5, 2.5, 8, 3), 1.2, 1.2);
+                context.DrawRectangle(brush, null, new Rect(7.5, 7.5, 8, 3), 1.2, 1.2);
+                context.DrawRectangle(brush, null, new Rect(7.5, 12.5, 8, 3), 1.2, 1.2);
+                break;
+            case IconKind.Plus:
+                context.DrawLine(pen, new Point(9, 3.5), new Point(9, 14.5)); context.DrawLine(pen, new Point(3.5, 9), new Point(14.5, 9));
+                break;
+            case IconKind.Undo:
+                // A hook of an arrow curling back to the left.
+                context.DrawGeometry(null, pen, Geometry.Parse("M 7,4.5 L 3.5,8 L 7,11.5"));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 3.8,8 L 10.5,8 Q 14.5,8 14.5,11.2 Q 14.5,14.2 10.5,14.2 L 8.5,14.2"));
+                break;
+            case IconKind.Merge:
+                // Two lines running together into one.
+                context.DrawGeometry(null, pen, Geometry.Parse("M 3.5,3.5 L 3.5,6 Q 3.5,9 9,9 M 14.5,3.5 L 14.5,6 Q 14.5,9 9,9 M 9,9 L 9,14.5"));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 6.5,12 L 9,14.5 L 11.5,12"));
                 break;
             case IconKind.Week:
                 // A calendar page with two rings at the top.
@@ -815,11 +827,9 @@ public sealed class IconGlyph : Control
                 context.DrawLine(pen, new Point(3, 12), new Point(3, 15.5)); context.DrawLine(pen, new Point(3, 15.5), new Point(15, 15.5)); context.DrawLine(pen, new Point(15, 15.5), new Point(15, 12));
                 break;
             case IconKind.FitDay:
-                // Two bars with a double-headed arrow between them, long enough that the heads and the shaft stay apart at button size.
-                context.DrawLine(pen, new Point(2.5, 1.5), new Point(15.5, 1.5)); context.DrawLine(pen, new Point(2.5, 16.5), new Point(15.5, 16.5));
-                context.DrawLine(pen, new Point(9, 4.6), new Point(9, 13.4));
-                context.DrawLine(pen, new Point(5.6, 8), new Point(9, 4.6)); context.DrawLine(pen, new Point(12.4, 8), new Point(9, 4.6));
-                context.DrawLine(pen, new Point(5.6, 10), new Point(9, 13.4)); context.DrawLine(pen, new Point(12.4, 10), new Point(9, 13.4));
+                // Two arrows pointing away from each other across the corner: the day stretched to fill the space.
+                context.DrawLine(pen, new Point(10, 8), new Point(15, 3)); context.DrawGeometry(null, pen, Geometry.Parse("M 10.6,3 L 15,3 L 15,7.4"));
+                context.DrawLine(pen, new Point(8, 10), new Point(3, 15)); context.DrawGeometry(null, pen, Geometry.Parse("M 7.4,15 L 3,15 L 3,10.6"));
                 break;
         }
     }
