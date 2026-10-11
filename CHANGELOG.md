@@ -2,18 +2,25 @@
 
 ## Check your version
 
-The app shows `Version 0.1.<build> (<commit>)` above Close timer in the right-click menu. The build number is the workflow run number and the commit identifies the exact source. Local builds show development build.
+The app shows `Version 0.1.<build> (<commit>)` above Close timer in the right-click menu, followed by the channel name for experimental and alpha builds. The build number is the workflow run number and the commit identifies the exact source. Local builds show development build.
 
 The milestones below are newest first. Commit links mark when each change landed; they are not release version numbers. Use the [commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/main/) for individual changes and the [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to match a packaged version to its commit.
 
 ## Avalonia migration
+
+### 11 October 2026
+
+| Milestone | Commit | What changed |
+| --- | --- | --- |
+| Stable, experimental and alpha channels | [2e6b81a](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/2e6b81a69eaa133807009134504325877de706da) | `main` is now the Microsoft Store release, with `experimental` for everyday testing and `alpha` for risky prototypes. Each channel builds its own portable ZIP, and the old `migration` branch is retired. The Store build is an unsigned MSIX built only from `main`, with a Windows startup task for Start with Windows, per-user data and no sample-data demo. See BRANCHES.md. |
+| Updater channels | [49c1014](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/49c1014531784b5044ffcb245df88187d663252a) | Timer Updater.cmd now offers the experimental and alpha channels. Each keeps its own data, builds, backups and startup entry under `test-install/channels`, so an alpha database never meets the experimental build. The picker opens without GitHub CLI and has a window test. |
 
 ### 10 October 2026
 
 | Milestone | Commit | What changed |
 | --- | --- | --- |
 | Start with Windows through the updater | [5d0fa98](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/5d0fa9894b4c3af1ddb2c817c48de6c0765f6afb) | The Start with Windows setting is now offered when the timer was started by the updater. It signs in through the updater's launch mode instead of a fixed build folder, so it keeps working after updates. Builds run directly from a ZIP are unchanged. |
-| Branch picker updater | [651eac2](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/651eac2aef5f767776befbf6390185b610373147) | A small window, Timer Updater.cmd, lists the repository's branches and updates and launches the newest successful build from the one you pick, with Launch current and Roll back beside it. The older cmd files take builds from main. The build workflow also runs on main. |
+| Branch picker updater (since replaced by channels) | [651eac2](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/651eac2aef5f767776befbf6390185b610373147) | A small window, Timer Updater.cmd, lists the repository's branches and updates and launches the newest successful build from the one you pick, with Launch current and Roll back beside it. The older cmd files take builds from main. The build workflow also runs on main. |
 | Avalonia app becomes the application | [2ad1c1c](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/2ad1c1cbefd7181863ab2a19c8ffab3f384bed55) | The PowerShell application, its launcher, its six test scripts and their workflow are removed from the tree and remain in Git history. The README, engineering notes and user guide now describe the Avalonia app. The old CSV timesheets are deliberately not imported. |
 | Theme editor prompt and menu fixes | [c80fb25](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/c80fb25d6bf839f24a7af5ca2cdf90a02bf127a3) | The theme editor now asks before closing, switching theme or duplicating with unsaved edits, offering Save, Discard or Keep editing. The default theme is listed above System in the Appearance menu. Starting a window drag, or pressing on the pill, now closes any open right-click menu instead of leaving it open. |
 | New built-in themes and a new default | [f75071c](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/f75071c8f6cc262bc5565d0d1ec6887f6bd21a44) | Built-in themes now follow the mock-ups. A deep green and lime theme is the default for new installs, followed by Light, Dark, Sage, Graphite, Paper, Midnight, Sandstone and Aubergine, plus the two high contrast themes. Ocean becomes Midnight and Sunset becomes Sandstone on existing installs. Themes gain Accent, Accent text and Clock tokens, used for the tab bar, the Add time button and the idle clock. Block colours stay as chosen per account. Installs already set to System stay on System. |

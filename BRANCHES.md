@@ -8,9 +8,9 @@ Three long-lived branches keep Stable, Experimental and Alpha releases separate.
 | `experimental` | Everyday feature and regression testing | `BasicsAdvancedTimer-Windows-experimental` (portable ZIP) | `test-install/channels/experimental/data` |
 | `alpha` | Prototypes and potentially breaking changes | `BasicsAdvancedTimer-Windows-alpha` (portable ZIP) | `test-install/channels/alpha/data` |
 
-`main` remains the repository default and the **release gate**. The old `migration` branch and feature branch are historical and should not be selected for new work. Do not delete either until the Store smoke test, branch transition and user-data backups are complete.
+`main` remains the repository default and the **release gate**. The old `migration` branch and the `feature/microsoft-store-packaging` branch have been removed; their work lives in `experimental` and `main`. Do not recreate them.
 
-**Transition status:** Store packaging and main's release workflow are staged on experimental but have **not yet been merged into main**. Until the stable-promotion PR is merged, main continues to hold the existing baseline rather than generating the new Store artifact.
+The Store packaging and the release workflow are merged into `main`. Installed-app checks on a real Windows machine (first launch, persistence, tray, startup task, export, update and backup handling) are still needed before each Store submission.
 
 ## Daily workflow
 
@@ -31,5 +31,5 @@ Stable builds show a normal version and retain the release MSIX identity. Experi
 
 - Configure main branch protections under **Settings → Branches / Rulesets**: require passing automated checks, disallow force pushes and deletion, and use PRs to merge into main. Administrative access might be required to set these rules.
 - Back up stored data before changing database schemas; rollback is not a schema downgrade.
-- Promote MSIX packaging and the release workflow to `main` only **after** installation, startup, export and data-persistence checks pass. The existing Partner Center submission is not changed by GitHub commits.
+- Run the installation, startup, export and data-persistence checks on the packaged build before each Store submission. The existing Partner Center submission is not changed by GitHub commits.
 - The older updater's `test-install/data` tree is retained without automatic migration.

@@ -12,11 +12,16 @@ Notes for contributors and coding assistants. The application is a C# Avalonia d
 | `migration/tests/Timer.Desktop.Tests` | xUnit tests, including headless Avalonia tests of production windows. |
 | `migration/updater` | Standalone Windows test-build updater with rollback. |
 | `migration/packaging` | MSIX packaging for the Microsoft Store (manifest template, `build-msix.ps1`, placeholder icons). Packaged builds keep data under `%LOCALAPPDATA%` via `PackageEnvironment`; portable builds keep it beside the exe. Store builds compile for `net8.0-windows10.0.19041.0` (`StorePackage=true`, `STORE_PACKAGE` defined) so the Start with Windows menu item can use the WinRT startup task; everyday builds stay `net8.0`. |
-| `.github/workflows/microsoft-store-msix.yml` | Builds a self-signed development MSIX on pushes. The unsigned Store candidate is built only when the workflow is run by hand with the Store candidate box ticked. |
-| `.github/workflows/avalonia-preview.yml` | Tests on Windows, Linux and macOS, then publishes the Windows build. |
+| `.github/workflows/microsoft-store-msix.yml` | Store release workflow for `main`. Pull requests compile the Store target and run tests only; a push to `main` builds the unsigned `BasicsAdvancedTimer-MSIX-Store` package. |
+| `.github/workflows/avalonia-preview.yml` | Development builds for `experimental` and `alpha`: updater tests, then app tests on Windows, Linux and macOS, then a channel-named portable Windows ZIP. |
+| `BRANCHES.md` | The three release channels and how changes are promoted. |
 | `README.md`, `migration/README.md`, `CHANGELOG.md` | Overview, user guide and architecture, history. |
 
 The `migration` folder name is historical and kept so updater and workflow paths still work. Renaming it is a separate change.
+
+## Branches and releases
+
+`main` is the Store release, `experimental` is everyday testing and `alpha` is for risky prototypes. Work on `experimental` or a `feature/...` branch from it, promote alpha to experimental and experimental to main by pull request, and never push straight to `main`. Builds show their channel beside the version, and only non-Store builds offer the sample-data demo. The updater serves experimental and alpha only, each with its own data, versions and backups. See `BRANCHES.md`.
 
 ## Behaviour to preserve
 

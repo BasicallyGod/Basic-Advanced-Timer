@@ -24,16 +24,16 @@ The big clock shows elapsed working-day time from the configured or manual start
 - **Tidy day.** Previews small gaps (up to five minutes by default), lets you give each to the previous or next account, rechecks everything on apply and adds credited time as one undoable edit.
 - **Undo.** Reverses the latest time or note edit, up to 50 steps, kept across restarts.
 - **Export.** Writes `Detail.csv` and `Summary.csv` to a new folder under `Timesheets/Exports` in the data folder. Decimal hours are apportioned so daily, weekly and detail figures add up exactly. Only saved entries are included, so pause first to include the running interval.
-- **Themes.** Settings, Appearance lists Hawthorn (the default), System, then every other theme. Settings, Themes opens the editor: built-in themes can be duplicated, and a copy can be renamed and have any colour changed, previewed live. The editor asks before throwing away unsaved edits.
+- **Themes.** Settings, Appearance lists the default theme first, then System, then every other theme. Settings, Themes opens the editor: built-in themes can be duplicated, and a copy can be renamed and have any colour changed, previewed live. The editor asks before throwing away unsaved edits.
 - **Tray and start-up.** No taskbar button, no close button. Left-click the tray icon to hide or show the timer; the icon is green while recording. Start with Windows adds a per-user sign-in entry and needs no administrator rights.
 
 ## Data and safety
 
 Records live in `timer.db` (SQLite, write-ahead log), opened exclusively so two copies cannot share a folder, with daily backups. The settings file `basics-advanced-timer.settings.json` is replaced atomically with a `.bak` copy and preserves unknown sections. The running session checkpoints every 15 seconds, stops and saves on a normal close and, after a crash, credits time only up to the last checkpoint. A failed save keeps pending time and cancels closing. The app refuses a folder that holds the old PowerShell script, and deliberately never imports the old CSV timesheets.
 
-## Experimental Microsoft Store package
+## Microsoft Store package
 
-The independent MSIX workflow and signing instructions are in [packaging/README.md](packaging/README.md). Release promotion rules are in [../BRANCHES.md](../BRANCHES.md). Portable data continues alongside its EXE, while packaged app data lives in per-user storage. The development MSIX is temporarily self-signed for testing and is **not** a published Store build.
+The MSIX build and signing instructions are in [packaging/README.md](packaging/README.md). Release promotion rules and the three channels (`main`, `experimental`, `alpha`) are in [../BRANCHES.md](../BRANCHES.md). Portable data stays beside the exe, while packaged app data lives in per-user storage. The Store build hides the sample-data demo and rejects `--demo`. A locally built development MSIX is self-signed for testing only and is not a published Store build.
 
 ## Architecture
 
