@@ -12,6 +12,12 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <DefineConstants>$(DefineConstants);STORE_PACKAGE</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(BuildChannel)' == 'experimental'">
+    <DefineConstants>$(DefineConstants);EXPERIMENTAL_BUILD</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(BuildChannel)' == 'alpha'">
+    <DefineConstants>$(DefineConstants);ALPHA_BUILD</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Timer.Core/Timer.Core.csproj" />
     <ProjectReference Include="../Timer.Storage/Timer.Storage.csproj" />
