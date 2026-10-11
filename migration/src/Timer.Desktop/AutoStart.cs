@@ -45,7 +45,14 @@ public sealed class WindowsRunKey : IStartupRegistry
 // folder shows it as off until it is switched on again.
 public sealed class AutoStartSetting : IAutoStart
 {
+    // Development channels can start independently without overwriting one another's Run-key entry.
+#if ALPHA_BUILD
+    public const string ValueName = "BasicsAdvancedTimerAlpha";
+#elif EXPERIMENTAL_BUILD
+    public const string ValueName = "BasicsAdvancedTimerExperimental";
+#else
     public const string ValueName = "BasicsAdvancedTimer";
+#endif
     private readonly IStartupRegistry registry;
     private readonly string? executable, dataFolder, updaterScript;
     // updaterScript is set when the updater started this build. Each update lives in its own folder, so the sign-in entry points at the
