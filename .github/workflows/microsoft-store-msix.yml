@@ -1,22 +1,17 @@
-name: Microsoft Store MSIX packaging
+name: Microsoft Store release MSIX
 
 on:
   push:
-    branches: [feature/microsoft-store-packaging, migration, main]
+    branches: [main]
   pull_request:
-    branches: [migration, main]
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      store_candidate:
-        description: 'Also build the unsigned Microsoft Store candidate (for uploading to Partner Center)'
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 jobs:
-  msix-dev:
+  msix-store:
     runs-on: windows-latest
     timeout-minutes: 25
     steps:
@@ -26,20 +21,8 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Run desktop tests
         run: dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release --verbosity minimal
-      - name: Package and sign temporary development MSIX
-        shell: pwsh
-        run: ./migration/packaging/build-msix.ps1 -BuildNumber ${{ github.run_number }} -OutputDirectory artifacts/msix
-      - name: Upload development installer and public certificate
-        uses: actions/upload-artifact@v4
-        with:
-          name: BasicsAdvancedTimer-MSIX-dev
-          path: |
-            artifacts/msix/BasicsAdvancedTimer-Dev.msix
-            artifacts/msix/BasicsAdvancedTimer-Dev.cer
-          if-no-files-found: error
-      # Only on request, so ordinary pushes do not leave a trail of upload-ready packages. Run this workflow by hand on the commit you tested.
-      - name: Package unsigned Microsoft Store candidate
-        if: github.event_name == 'workflow_dispatch' && inputs.store_candidate
+      - name: Create Microsoft Store release MSIX
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           STORE_PACKAGE_NAME: Basically.BasicsAdvancedTimer
@@ -53,8 +36,8 @@ jobs:
             -PackageName $env:STORE_PACKAGE_NAME `
             -Publisher $env:STORE_PUBLISHER `
             -PublisherDisplayName $env:STORE_PUBLISHER_DISPLAY_NAME
-      - name: Upload Store candidate MSIX (not a signed sideload build)
-        if: github.event_name == 'workflow_dispatch' && inputs.store_candidate
+      - name: Upload Store-ready release package
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: BasicsAdvancedTimer-MSIX-Store
