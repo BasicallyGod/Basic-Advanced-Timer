@@ -177,6 +177,20 @@ public static class Ui
         }, RoutingStrategies.Tunnel);
         header.PointerCaptureLost += (_, _) => { press = null; target = null; };
     }
+    /// <summary>
+    /// Whether tooltips show. A tooltip is cancelled as it opens when this is off, which is the one switch that covers every control,
+    /// including ones made later. The words stay as the controls' accessible names either way.
+    /// </summary>
+    public static bool TooltipsOn { get; private set; } = true;
+    private static bool tooltipHandlerAdded;
+    public static void ApplyTooltips(bool on)
+    {
+        TooltipsOn = on;
+        // The opening event is direct, so it is not seen by a window above the control. A class handler is the way to watch every control at once.
+        if (tooltipHandlerAdded) return;
+        tooltipHandlerAdded = true;
+        ToolTip.ToolTipOpeningEvent.AddClassHandler<Control>((_, e) => { if (!TooltipsOn) e.Cancel = true; });
+    }
     /// <summary>Starts a second copy of the app on the sample-data demo, which saves nothing real.</summary>
     public static void StartDemo()
     {
@@ -564,8 +578,8 @@ public sealed class ClockText : StackPanel
     {
         main.Classes.Set("break", onBreak); main.Classes.Set("overtime", late); main.Classes.Set("live", live);
         main.Classes.Set("clockIdle", !onBreak && !late && !live);
-        // The seconds take the same colour as the rest of the clock on a break or in overtime, only lighter.
-        seconds.Classes.Set("break", onBreak); seconds.Classes.Set("overtime", late); seconds.Opacity = onBreak || late ? .6 : 1;
+        // The seconds take the same colour as the rest of the clock when it is tracking, on a break or in overtime, only lighter.
+        seconds.Classes.Set("break", onBreak); seconds.Classes.Set("overtime", late); seconds.Classes.Set("live", live); seconds.Opacity = onBreak || late || live ? .6 : 1;
     }
     /// <summary>The whole clock, as hours:minutes:seconds. Setting it splits the seconds off to be drawn lighter.</summary>
     public string Text
@@ -801,10 +815,12 @@ public sealed class IconGlyph : Control
                 context.DrawLine(pen, new Point(3, 12), new Point(3, 15.5)); context.DrawLine(pen, new Point(3, 15.5), new Point(15, 15.5)); context.DrawLine(pen, new Point(15, 15.5), new Point(15, 12));
                 break;
             case IconKind.FitDay:
-                // Two bars with arrows between them pointing inwards: the day squeezed to fit the space.
-                context.DrawLine(pen, new Point(3, 2.5), new Point(15, 2.5)); context.DrawLine(pen, new Point(3, 15.5), new Point(15, 15.5));
-                context.DrawLine(pen, new Point(9, 5), new Point(9, 8.2)); context.DrawLine(pen, new Point(7, 6.4), new Point(9, 8.4)); context.DrawLine(pen, new Point(11, 6.4), new Point(9, 8.4));
-                context.DrawLine(pen, new Point(9, 13), new Point(9, 9.8)); context.DrawLine(pen, new Point(7, 11.6), new Point(9, 9.6)); context.DrawLine(pen, new Point(11, 11.6), new Point(9, 9.6));
+                // Two bars with a double-headed arrow between them: the day stretched to fill the space from edge to edge. Drawn with room round the
+                // arrowheads, so it stays clear at small sizes.
+                context.DrawLine(pen, new Point(3.5, 2.5), new Point(14.5, 2.5)); context.DrawLine(pen, new Point(3.5, 15.5), new Point(14.5, 15.5));
+                context.DrawLine(pen, new Point(9, 5.5), new Point(9, 12.5));
+                context.DrawLine(pen, new Point(6.6, 7.9), new Point(9, 5.5)); context.DrawLine(pen, new Point(11.4, 7.9), new Point(9, 5.5));
+                context.DrawLine(pen, new Point(6.6, 10.1), new Point(9, 12.5)); context.DrawLine(pen, new Point(11.4, 10.1), new Point(9, 12.5));
                 break;
         }
     }

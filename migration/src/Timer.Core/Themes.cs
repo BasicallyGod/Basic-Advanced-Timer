@@ -121,9 +121,15 @@ public static class ThemeDerivation
             ["Surface"] = surface, ["Panel"] = ThemeColours.Mix(surface, ink, .10), ["Ink"] = ink, ["Muted"] = ThemeColours.Mix(surface, ink, .84),
             ["Line"] = ThemeColours.Mix(surface, ink, .30), ["Hover"] = ThemeColours.Mix(surface, ink, .16), ["Selected"] = ThemeColours.Mix(surface, ink, .22),
             ["Idle"] = ThemeColours.Mix(surface, ink, .84), ["Clock"] = ink, ["Overtime"] = ink, ["Break"] = ink,
-            ["Live"] = state == Recording ? theme.Colour("Accent") : ink
+            ["Live"] = state == Recording ? Lift(theme.Colour("Live"), surface, 9) : ink
         };
         return result;
+    }
+    /// <summary>A colour made lighter until it reads on a dark surface at the contrast asked for, so green tracking text holds up on the recording pill.</summary>
+    private static string Lift(string colour, string surface, double contrast)
+    {
+        for (var step = 0; step < 8 && ThemeColours.Contrast(colour, surface) < contrast; step++) colour = ThemeColours.Mix(colour, "#FFFFFF", .2);
+        return colour;
     }
     /// <summary>What a timeline block is drawn with: its fill, the colour of the edge down its left side, and the text on it.</summary>
     public readonly record struct BlockLook(string Fill, string Edge, string Text);
@@ -176,10 +182,10 @@ public static class ThemeLibrary
     private const string DarkShadow = "#B3000000", LightShadow = "#59000000";
     /// <summary>Light: a neutral dashboard with an orange accent, and tinted blocks with a stronger edge on the left.</summary>
     public static readonly ThemeDefinition Light = Make("Light", false, "#FBFBFC", "#F2F3F5", "#17181C", "#6A6F78", "#E3E5E9", "#EDEFF2", "#FDEAD3",
-        "#E8700A", "#C0243F", "#D9890B", "#E8790E", "#D7263D", "#F27A0D", "#1B1209", "#17181C", LightShadow, "#1F8F4E") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .55, BlockEdge = 0 };
+        "#1F8F4E", "#C0243F", "#D9890B", "#E8790E", "#D7263D", "#F27A0D", "#1B1209", "#17181C", LightShadow, "#1F8F4E") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .55, BlockEdge = 0 };
     /// <summary>Dark: cool charcoal surfaces with the same orange accent. Blocks take a little more of the account colour than in the light version, so they hold against the dark.</summary>
     public static readonly ThemeDefinition Dark = Make("Dark", true, "#14161A", "#1C1F24", "#EEF0F3", "#9CA3AD", "#2E333A", "#262A31", "#33281D",
-        "#FF9A3C", "#FF7A8A", "#F2B84B", "#FF9A3C", "#FF6B6B", "#FF8A1F", "#1B1209", "#EEF0F3", DarkShadow, "#4CD48A") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .45, BlockEdge = 0 };
+        "#4CD48A", "#FF7A8A", "#F2B84B", "#FF9A3C", "#FF6B6B", "#FF8A1F", "#1B1209", "#EEF0F3", DarkShadow, "#4CD48A") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .45, BlockEdge = 0 };
     // Only these two ship for now. More can be added here later, and the editor and settings page list whatever is in this array.
     public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark };
     /// <summary>"System" is not a theme of its own: it picks Light or Dark to match the computer.</summary>

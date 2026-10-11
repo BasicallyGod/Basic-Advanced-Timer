@@ -107,7 +107,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         SelectedDate = Engine.Now.Date;
         // The user's own themes need their colours registered too. The built-in ones were registered when the app started.
         if (Application.Current is { } current && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && this.preferences.Themes is { Count: > 0 } own) ThemeEngine.Register(current, own);
-        ApplyTheme();
+        ApplyTheme(); Ui.ApplyTooltips(this.preferences.Tooltips);
         // When the computer switches between light and dark, System follows it.
         if (Application.Current?.PlatformSettings is { } platform)
             platform.ColorValuesChanged += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => { appliedVariant = null; Notify(); });
@@ -562,6 +562,9 @@ public sealed class TimerModel : INotifyPropertyChanged
         appliedVariant = variant; app.RequestedThemeVariant = variant;
     }
     public bool IsOnBreak => BreakAccount.Is(ActiveAccount);
+    /// <summary>Whether hovering a control shows its tooltip. Switched off, the words are still the accessible names.</summary>
+    public bool Tooltips => preferences.Tooltips;
+    public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
     public bool Shadows => preferences.Shadows;
     public void SetShadows(bool on) { preferences = preferences with { Shadows = on }; Save(); Notify(); }
     /// <summary>Whether the timer has a taskbar button. Turn it off to run from the notification area alone.</summary>

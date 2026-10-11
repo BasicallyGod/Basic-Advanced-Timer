@@ -15,7 +15,7 @@ public static class ReviewViews
 {
     public const double MinimumBlockHeight = 8;
     // Where the spine runs and where blocks start, from the left of the timeline.
-    private const double SpineX = 58, CardLeft = 80;
+    private const double SpineX = 58, CardLeft = 80, LabelRight = 40;
     public static Control Timeline(TimerModel model)
     {
         var day = model.SelectedDate;
@@ -39,8 +39,9 @@ public static class ReviewViews
         }
         for (var hour = 0; hour < 24; hour++)
         {
-            var label = Ui.Text($"{hour:00}:00", 12, "muted"); label.Classes.Add("figures");
-            Canvas.SetTop(label, hour * pixelsPerHour - 5); canvas.Children.Add(label);
+            // The hour labels share one right edge with the now chip, so the current time lines up with the hours instead of staggering against them.
+            var label = Ui.Text($"{hour:00}:00", 12, "muted"); label.Classes.Add("figures"); label.Width = LabelRight; label.TextAlignment = TextAlignment.Right;
+            Canvas.SetTop(label, hour * pixelsPerHour - 6); canvas.Children.Add(label);
             Tick(hour, 10, 1);
             if (pixelsPerHour >= 100) Tick(hour + .5, 6, .8);
             if (pixelsPerHour >= 260) { Tick(hour + .25, 4, .6); Tick(hour + .75, 4, .6); }
@@ -160,8 +161,9 @@ public static class ReviewViews
         {
             var nowLine = new Border { Name = "NowMarker", Height = 2, Tag = "NowLine", IsHitTestVisible = false }; nowLine.Classes.Add("nowLine");
             var nowDot = new Avalonia.Controls.Shapes.Ellipse { Width = 13, Height = 13, Tag = "NowDot", IsHitTestVisible = false }; nowDot.Classes.Add("nowDot");
-            var nowText = new TextBlock { FontSize = 11, FontWeight = FontWeight.SemiBold, Classes = { "figures", "nowChipText" } };
-            var nowChip = new Border { Name = "NowChip", Child = nowText, CornerRadius = new CornerRadius(8), Padding = new Thickness(6, 1), IsHitTestVisible = false }; nowChip.Classes.Add("nowChip");
+            var nowText = new TextBlock { FontSize = 12, FontWeight = FontWeight.SemiBold, TextAlignment = TextAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Classes = { "figures", "nowChipText" } };
+            // The chip is wider than its text, with the text's right edge where the hour labels' right edges are.
+            var nowChip = new Border { Name = "NowChip", Child = nowText, CornerRadius = new CornerRadius(10), Width = LabelRight + 8, Height = 20, Padding = new Thickness(0, 0, 8, 0), IsHitTestVisible = false }; nowChip.Classes.Add("nowChip");
             canvas.Children.Add(nowLine); canvas.Children.Add(nowDot); canvas.Children.Add(nowChip);
             void PlaceNow()
             {

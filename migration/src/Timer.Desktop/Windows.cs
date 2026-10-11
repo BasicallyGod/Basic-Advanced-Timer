@@ -277,6 +277,10 @@ public sealed class PillWindow : Window
         if (expanded && key != expandedKey) { expandedKey = key; Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (expanded) ApplyHeight(); }); }
         ToolTip.SetTip(saved, model.LastError);
         timer.Text = model.ClockText;
+        // Green while tracking, with the seconds a lighter green. The break and overtime capsules wear their own colour, so their text stays plain.
+        var pillBreak = model.IsOnBreak; var pillLate = model.IsOvertime && !pillBreak; var pillLive = model.IsTracking && !pillBreak && !pillLate;
+        timer.SetState(pillBreak, pillLate, pillLive);
+        credited.Classes.Set("live", pillLive); // The line saying what is happening is green too while tracking.
         var open = model.Unallocated;
         pillUnallocated.IsVisible = model.DayStarted && open >= TimeSpan.FromMinutes(1);
         pillUnallocated.Text = pillUnallocated.IsVisible ? model.Format(open) + " unallocated" : "";
@@ -437,7 +441,7 @@ public sealed class DashboardWindow : Window
         panel.Classes.Add("panel");
         Ui.Put(body, panel);
         var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
-        var review = Ui.Grid("*", "Auto,Auto,*,Auto");
+        var review = Ui.Grid("*", "Auto,*,Auto");
         review.Margin = new Thickness(22, 16, 22, 18);
         // The workspace's name on the left; on the right the date to step through and a button back to today.
         // In Week views the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
@@ -469,13 +473,13 @@ public sealed class DashboardWindow : Window
             if (e.Property != Avalonia.Controls.Primitives.RangeBase.ValueProperty || settingZoom) return;
             if (TimelineScroll() is { } s) model.SetTimelineScale(TimerModel.ScaleAt(zoomSlider.Value), s.Viewport.Height / 2, s.Offset.Y);
         };
-        var zoomBar = new Border { Name = "TimelineControls", Child = Ui.Horizontal(fit, zoomOut, zoomSlider, zoomIn), CornerRadius = new CornerRadius(12), Padding = new Thickness(8, 4), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
+        var zoomBar = new Border { Name = "TimelineControls", Child = Ui.Horizontal(fit, zoomOut, zoomSlider, zoomIn), CornerRadius = new CornerRadius(12), Padding = new Thickness(8, 4), BorderThickness = new Thickness(1), };
         ((StackPanel)zoomBar.Child).Spacing = 4; zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
-        Ui.Put(review, zoomBar, row: 3);
-        var tools = Ui.Grid("*,Auto"); toolsRow = tools; Ui.Put(tools, edits);
-        tools.Margin = new Thickness(0, 14, 0, 12);
-        Ui.Put(review, tools, row: 1);
-        Ui.Put(review, workspace, row: 2);
+        // Add time, Undo and Merge sit on the left of a bar under the workspace, and the zoom controls on its right, so the working area has the whole height above.
+        var tools = Ui.Grid("*,Auto"); toolsRow = tools; Ui.Put(tools, edits); Ui.Put(tools, zoomBar, 1);
+        tools.Margin = new Thickness(0, 12, 0, 0);
+        Ui.Put(review, workspace, row: 1);
+        Ui.Put(review, tools, row: 2);
         // The title row's empty middle still drags the window.
         var rightColumn = Ui.Grid("*", "*,Auto");
         Ui.Put(rightColumn, review); Ui.DragHeader(nav, this);
@@ -536,7 +540,7 @@ public sealed class DashboardWindow : Window
         if (identityBlock is null || accountsHeadBlock is null || toolsRow is null) return false;
         double Bottom(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), this)?.Y ?? 0;
         var sidebarRight = identityBlock.TranslatePoint(new Point(identityBlock.Bounds.Width, 0), this)?.X ?? 0;
-        return point.X <= sidebarRight + 18 ? point.Y <= Bottom(accountsHeadBlock) : point.Y <= Bottom(settingsMode && headerRow is not null ? headerRow : toolsRow);
+        return point.X <= sidebarRight + 18 ? point.Y <= Bottom(accountsHeadBlock) : point.Y <= Bottom(headerRow ?? toolsRow);
     }
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
     {
@@ -599,7 +603,7 @@ public sealed class DashboardWindow : Window
         Rail(settingsRail, settingsMode);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
         foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = !settingsMode;
-        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode;
+        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
         workspaceTitle.Text = settingsMode ? "Settings" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
