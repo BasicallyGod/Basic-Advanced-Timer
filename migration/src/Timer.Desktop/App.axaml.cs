@@ -31,6 +31,7 @@ public sealed partial class App : Application
             {
                 var args = desktop.Args ?? Array.Empty<string>();
                 var index = Array.IndexOf(args, "--data-dir");
+                if (args.Contains("--demo") && !BuildInfo.DeveloperFeatures) throw new ArgumentException("Sample-data demo is not available in Store releases.");
                 var demoMode = args.Contains("--demo");
                 if (demoMode && index >= 0) throw new ArgumentException("Demo mode cannot open a data folder.");
                 if (index >= 0 && index + 1 >= args.Length) throw new ArgumentException("--data-dir requires a folder path.");
