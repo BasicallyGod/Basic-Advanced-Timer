@@ -29,7 +29,7 @@ public sealed class MenuAndShellTests
         {
             var items = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).ToList();
             var headers = items.Select(i => i is MenuItem m ? (string?)m.Header : "|").ToList();
-            Assert.Equal(new[] { "Decimal hours", "Accounts and budgets…", "Working hours…", "|", "Appearance", "Themes…", "Window shadows", "Show in taskbar", "Start with Windows", "|", "Open sample-data demo", "Test overtime", "|", BuildInfo.Current, "|", "Close timer" }, headers);
+            Assert.Equal(new[] { "Decimal hours", "Test overtime", "|", BuildInfo.Current, "|", "Close timer" }, headers);
         }
         finally { window.Close(); }
     }
@@ -45,7 +45,6 @@ public sealed class MenuAndShellTests
         try
         {
             var menu = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
-            Assert.False(menu.Single(m => (string?)m.Header == "Open sample-data demo").IsVisible); // Already in the demo.
             var toggle = menu.Single(m => m.Name == "TestOvertime"); Assert.True(toggle.IsVisible);
             Assert.False(model.IsOvertime); Assert.False(model.OvertimeTest);
             toggle.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
@@ -60,7 +59,7 @@ public sealed class MenuAndShellTests
         try
         {
             var items = ((IEnumerable<Control>)realWindow.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
-            Assert.True(items.Single(m => (string?)m.Header == "Open sample-data demo").IsVisible); Assert.False(items.Single(m => m.Name == "TestOvertime").IsVisible);
+            Assert.False(items.Single(m => m.Name == "TestOvertime").IsVisible); // Only the demo has an overtime tester.
         }
         finally { realWindow.Close(); }
     }

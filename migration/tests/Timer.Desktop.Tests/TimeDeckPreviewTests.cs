@@ -11,8 +11,8 @@ namespace Timer.Desktop.Tests;
 public sealed class TimeDeckPreviewTests
 {
     [AvaloniaTheory]
-    [InlineData("Time Deck", "timedeck-light")]
-    [InlineData("Time Deck Dark", "timedeck-dark")]
+    [InlineData("Light", "timedeck-light")]
+    [InlineData("Dark", "timedeck-dark")]
     public void TheDashboardDrawsInEachTimeDeckTheme(string theme, string file)
     {
         var model = TimerModel.CreateDemo(); model.SetTheme(theme);
@@ -28,8 +28,8 @@ public sealed class TimeDeckPreviewTests
     }
 
     [AvaloniaTheory]
-    [InlineData("Time Deck", "pill-light")]
-    [InlineData("Time Deck Dark", "pill-dark")]
+    [InlineData("Light", "pill-light")]
+    [InlineData("Dark", "pill-dark")]
     public void ThePillDrawsInEachState(string theme, string file)
     {
         var model = TimerModel.CreateDemo(); model.SetTheme(theme);
@@ -52,5 +52,29 @@ public sealed class TimeDeckPreviewTests
             pill.ToggleExpansion(); Shot("expanded");
         }
         finally { pill.Close(); model.SetTheme("System"); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData("Light")]
+    [InlineData("Dark")]
+    public void TheSettingsPageOvertimeAndWeekOverviewDraw(string theme)
+    {
+        var model = TimerModel.CreateDemo(); model.SetTheme(theme);
+        var window = new DashboardWindow(model); window.Show();
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
+        void Shot(string name)
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            if (folder is not null) { Directory.CreateDirectory(folder); using var shot = window.CaptureRenderedFrame(); shot!.Save(Path.Combine(folder, $"{name}-{theme}.png")); }
+        }
+        try
+        {
+            model.SetOvertimeTest(true); model.ToggleAccount("Account one"); Shot("dash-overtime"); model.SetOvertimeTest(false);
+            model.ToggleBreak(); Shot("dash-break"); model.ToggleBreak();
+            window.SelectTab(true); Shot("week");
+            Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.Button>().Single(b => b.Name == "Settings").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+            Shot("settings");
+        }
+        finally { window.Close(); model.SetTheme("System"); }
     }
 }

@@ -226,7 +226,7 @@ public static class ReviewViews
             Bars = days.Select(i =>
             {
                 var date = day.AddDays(i);
-                var segments = accounts.Select(a => new BarSegment(a.Display, Color.Parse(model.BlockColour(a.Colour)), model.OnDay(a, date).TotalHours)).ToList();
+                var segments = accounts.Select(a => new BarSegment(a.Display, Color.Parse(model.ChartColour(a.Colour)), model.OnDay(a, date).TotalHours)).ToList();
                 var total = segments.Sum(s => s.Hours);
                 var detail = string.Join("\n", segments.Where(s => s.Hours > 0).Select(s => $"{s.Account}  {model.FormatShort(TimeSpan.FromHours(s.Hours))}"));
                 return new DayBar(date.ToString("ddd"), date.ToString("dddd d MMMM") + (detail.Length > 0 ? "\n" + detail : "\nNothing recorded"),
@@ -244,7 +244,7 @@ public static class ReviewViews
             var account = accounts[i]; var row = table.Rows[i];
             // Every row is one line with everything centred on it, so a budget meter always sits level with its account.
             var line = Ui.Grid("30,*,64,120,150"); line.MinHeight = 34;
-            var dot = new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = Brush.Parse(model.BlockColour(account.Colour)), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+            var dot = new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = Brush.Parse(model.ChartColour(account.Colour)), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
             Ui.Put(line, dot); Ui.Put(line, Ui.Text(account.Display, 14), 1);
             var total = Ui.Text(row.Total == "–" ? "0:00" : row.Total, 14); total.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(line, total, 2);
             var budget = table.Budgets.FirstOrDefault(b => b.Account == account.Display);

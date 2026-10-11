@@ -137,9 +137,9 @@
     </Style>
     <!-- The rail's icons sit in soft tiles. The chosen one is filled, and the rest are muted until the pointer arrives. -->
     <Style Selector="Button.rail">
-      <Setter Property="Width" Value="48" /><Setter Property="Height" Value="48" />
+      <Setter Property="Width" Value="44" /><Setter Property="Height" Value="44" />
       <Setter Property="Padding" Value="0" />
-      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="CornerRadius" Value="13" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -293,7 +293,7 @@
     <Style Selector="Button.iconButton:disabled"><Setter Property="Opacity" Value="0.4" /></Style>
     <!-- The round buttons on the pill: a filled circle for pause and play, an outlined one for the break. They grow a little under the pointer. -->
     <Style Selector="Button.pillRound">
-      <Setter Property="Width" Value="56" /><Setter Property="Height" Value="56" /><Setter Property="CornerRadius" Value="28" />
+      <Setter Property="Width" Value="52" /><Setter Property="Height" Value="52" /><Setter Property="CornerRadius" Value="26" />
       <Setter Property="Padding" Value="0" /><Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="BorderThickness" Value="2" /><Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="RenderTransform" Value="scale(1)" />
@@ -306,6 +306,13 @@
     <Style Selector="Button.pillRound.outlined /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="Button.pillRound:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
     <Style Selector="Button.pillRound.outlined:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /></Style>
+    <!-- The break button on the pill has no disc or outline of its own; only its cup shows, and the cup lights up under the pointer. -->
+    <Style Selector="Button.pillRound.bare, Button.pillRound.bare:pointerover">
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.pillRound.bare /template/ ContentPresenter#PART_ContentPresenter, Button.pillRound.bare:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.pillRound.bare:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /><Setter Property="BorderThickness" Value="0" />
+    </Style>
     <Style Selector="Button.round">
       <Setter Property="CornerRadius" Value="24" />
       <Setter Property="Width" Value="40" />

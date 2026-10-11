@@ -173,42 +173,25 @@ public static class ThemeLibrary
         return ThemeColours.FromHsl(hue, Math.Max(saturation, .8), .55);
     }
     private const string DarkShadow = "#B3000000", LightShadow = "#59000000";
-    /// <summary>The default: deep green with a lime accent.</summary>
-    public static readonly ThemeDefinition Hawthorn = Make("Hawthorn", true, "#0A4A2C", "#0D5632", "#F6FBF3", "#A9C8B1", "#2E7A52", "#11603A", "#1A7248",
-        "#C5F63C", "#FF9A9A", "#FFD166", "#F6CB4D", "#FF7B7B", "#C5F63C", "#0A2E1B", "#C5F63C", DarkShadow);
-    public static readonly ThemeDefinition Light = Make("Light", false, "#FAFAFB", "#EEF0F2", "#1B1F24", "#646A73", "#D8DBE0", "#E4E7EB", "#D8E4F8",
-        "#2E7D4F", "#C0392B", "#9A6200", "#A87400", "#C62828", "#2F5FCF", "#FFFFFF", "#1B1F24", LightShadow);
-    public static readonly ThemeDefinition Dark = Make("Dark", true, "#1E2227", "#272C33", "#ECEFF3", "#A3AAB4", "#3A414A", "#313842", "#2F4560",
-        "#7FD6A6", "#FF9494", "#E8BD67", "#F0C45A", "#FF8A8A", "#2F6FDB", "#FFFFFF", "#ECEFF3", DarkShadow);
-    /// <summary>Time Deck: a light, neutral dashboard with an orange accent, and tinted blocks with a stronger edge on the left.</summary>
-    public static readonly ThemeDefinition TimeDeck = Make("Time Deck", false, "#FBFBFC", "#F2F3F5", "#17181C", "#6A6F78", "#E3E5E9", "#EDEFF2", "#FDEAD3",
+    /// <summary>Light: a neutral dashboard with an orange accent, and tinted blocks with a stronger edge on the left.</summary>
+    public static readonly ThemeDefinition Light = Make("Light", false, "#FBFBFC", "#F2F3F5", "#17181C", "#6A6F78", "#E3E5E9", "#EDEFF2", "#FDEAD3",
         "#E8700A", "#C0243F", "#D9890B", "#E8790E", "#D7263D", "#F27A0D", "#1B1209", "#17181C", LightShadow) with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .55, BlockEdge = 0 };
-    /// <summary>Time Deck dark: cool charcoal surfaces with the same orange accent. Blocks take a little more of the account colour than in the light version, so they hold against the dark.</summary>
-    public static readonly ThemeDefinition TimeDeckDark = Make("Time Deck Dark", true, "#14161A", "#1C1F24", "#EEF0F3", "#9CA3AD", "#2E333A", "#262A31", "#33281D",
-        "#FF9A3C", "#FF7A8A", "#F2B84B", "#FF9A3C", "#FF6B6B", "#FF8A1F", "#1B1209", "#EEF0F3", DarkShadow) with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .38, BlockEdge = 0 };
-    public static readonly ThemeDefinition Sage = Make("Sage", true, "#14201B", "#1C2B24", "#E8F2EA", "#A8BBAE", "#34493D", "#26382E", "#35523F",
-        "#7FDC9A", "#FF9292", "#E8BD67", "#F0C45A", "#FF9292", "#7FDC9A", "#0F2218", "#E8F2EA", DarkShadow);
-    public static readonly ThemeDefinition Graphite = Make("Graphite", true, "#1F2226", "#2A2E34", "#EDEEF0", "#A7ABB2", "#3B4047", "#32363C", "#3C4A60",
-        "#8FD3B0", "#FF8F96", "#E8BD67", "#F0C45A", "#FF8F96", "#A9C1E6", "#141A24", "#EDEEF0", DarkShadow);
-    public static readonly ThemeDefinition Paper = Make("Paper", false, "#F8F9FC", "#E9ECF2", "#1E2430", "#5F6877", "#D6DBE5", "#E1E6EE", "#D3E1F6",
-        "#2E7D5B", "#C0392B", "#946000", "#A06F00", "#C62828", "#3F6FB6", "#FFFFFF", "#1E2430", LightShadow);
-    public static readonly ThemeDefinition Midnight = Make("Midnight", true, "#101E33", "#1A2E4A", "#E6EEFA", "#9FB4CF", "#2C4468", "#213A5B", "#2C4F80",
-        "#6FD6C8", "#FF9494", "#F2C66B", "#F2C66B", "#FF9494", "#8AB0FF", "#0B1730", "#E6EEFA", DarkShadow);
-    public static readonly ThemeDefinition Sandstone = Make("Sandstone", false, "#FAF4EA", "#F0E7D7", "#3A2F25", "#766857", "#E0D3BE", "#EADFCB", "#E6D3B0",
-        "#4F7F58", "#B5392A", "#946000", "#A56F00", "#B5392A", "#B25A3B", "#FFFFFF", "#3A2F25", LightShadow);
-    public static readonly ThemeDefinition Aubergine = Make("Aubergine", true, "#271B2D", "#382741", "#F2EAF6", "#BBA9C7", "#503860", "#43304D", "#5A3F6C",
-        "#8FD7A3", "#FF9BA3", "#E8BD67", "#F0C45A", "#FF9BA3", "#C7A6F0", "#1F1228", "#F2EAF6", DarkShadow);
-    public static readonly ThemeDefinition HighContrastLight = Make("High contrast light", false, "#FFFFFF", "#FFFFFF", "#000000", "#333333", "#595959", "#E6E6E6", "#BFD9FF",
-        "#006B2D", "#B30000", "#7A4B00", "#7A4B00", "#B30000", "#0050C8", "#FFFFFF", "#000000", "#80000000");
-    public static readonly ThemeDefinition HighContrastDark = Make("High contrast dark", true, "#000000", "#0D0D0D", "#FFFFFF", "#D0D0D0", "#8C8C8C", "#262626", "#003C78",
-        "#4DFF88", "#FF6B6B", "#FFD23F", "#FFD23F", "#FF6B6B", "#4DFF88", "#000000", "#FFFFFF", "#E6000000");
-    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark, TimeDeck, TimeDeckDark, Hawthorn, Sage, Graphite, Paper, Midnight, Sandstone, Aubergine, HighContrastLight, HighContrastDark };
-    /// <summary>"System" is not a theme of its own: it picks Time Deck or Time Deck Dark to match the computer.</summary>
+    /// <summary>Dark: cool charcoal surfaces with the same orange accent. Blocks take a little more of the account colour than in the light version, so they hold against the dark.</summary>
+    public static readonly ThemeDefinition Dark = Make("Dark", true, "#14161A", "#1C1F24", "#EEF0F3", "#9CA3AD", "#2E333A", "#262A31", "#33281D",
+        "#FF9A3C", "#FF7A8A", "#F2B84B", "#FF9A3C", "#FF6B6B", "#FF8A1F", "#1B1209", "#EEF0F3", DarkShadow) with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .45, BlockEdge = 0 };
+    // Only these two ship for now. More can be added here later, and the editor and settings page list whatever is in this array.
+    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark };
+    /// <summary>"System" is not a theme of its own: it picks Light or Dark to match the computer.</summary>
     public const string System = "System";
     /// <summary>What a new installation starts on.</summary>
     public const string Default = System;
-    /// <summary>A built-in theme that was renamed keeps working under its old name in saved settings.</summary>
-    public static string Renamed(string name) => name switch { "Ocean" => "Midnight", "Sunset" => "Sandstone", _ => name };
+    /// <summary>A built-in theme that was renamed or removed keeps working under its old name in saved settings, by landing on the light or dark theme it was closest to.</summary>
+    public static string Renamed(string name) => name switch
+    {
+        "Time Deck" or "Paper" or "Sandstone" or "Sunset" or "High contrast light" => "Light",
+        "Time Deck Dark" or "Hawthorn" or "Sage" or "Graphite" or "Midnight" or "Ocean" or "Aubergine" or "High contrast dark" => "Dark",
+        _ => name
+    };
 }
 
 /// <summary>Reads and writes a user's own themes as one JSON line each, which is how the settings file keeps lists.</summary>

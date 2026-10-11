@@ -65,7 +65,7 @@ public sealed class ShellTests
         }
         model.SetTheme("System");
         Assert.Equal(ThemeEngine.VariantFor(model.CurrentTheme), Application.Current!.RequestedThemeVariant); // System is Time Deck, by the computer's light or dark.
-        Assert.Contains(model.CurrentTheme.Name, new[] { "Time Deck", "Time Deck Dark" });
+        Assert.Contains(model.CurrentTheme.Name, new[] { "Light", "Dark" });
     }
 
     [AvaloniaFact]
@@ -186,13 +186,14 @@ public sealed class ShellTests
         window.Show();
         try
         {
-            Assert.Empty(window.GetVisualDescendants().OfType<ComboBox>());
+            Assert.Empty(window.GetVisualDescendants().OfType<ComboBox>()); // Nothing to choose until the settings page is opened.
             Assert.NotNull(window.ContextMenu);
-            var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings");
-            var appearance = ((IEnumerable<Control>)button.ContextMenu!.ItemsSource!).OfType<MenuItem>().Single(m => (string?)m.Header == "Appearance");
-            var dark = ((IEnumerable<MenuItem>)appearance.ItemsSource!).Single(item => (string?)item.Header == "Dark");
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var choice = window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "ThemeChoice");
+            Assert.Equal(new[] { "System", "Light", "Dark" }, choice.Items.Cast<string>());
             var elapsed = model.Elapsed;
-            dark.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            choice.SelectedItem = "Dark";
             Assert.Equal("Dark", model.Theme);
             Assert.Equal(elapsed, model.Elapsed);
         }

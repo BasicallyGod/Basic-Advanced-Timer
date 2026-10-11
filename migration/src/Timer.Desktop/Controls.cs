@@ -177,80 +177,34 @@ public static class Ui
         }, RoutingStrategies.Tunnel);
         header.PointerCaptureLost += (_, _) => { press = null; target = null; };
     }
+    /// <summary>Starts a second copy of the app on the sample-data demo, which saves nothing real.</summary>
+    public static void StartDemo()
+    {
+        if (Environment.ProcessPath is not { } executable) return;
+        var start = new System.Diagnostics.ProcessStartInfo(executable) { UseShellExecute = true };
+        if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+            start.ArgumentList.Add(typeof(App).Assembly.Location);
+        start.ArgumentList.Add("--demo");
+        System.Diagnostics.Process.Start(start);
+    }
+    /// <summary>
+    /// The right-click menu is kept short on purpose: the hours format, which build this is, the overtime tester (demo only) and Close timer.
+    /// Everything else lives on the settings page.
+    /// </summary>
     public static ContextMenu SettingsMenu(TimerModel model)
     {
-        // System first, then every theme the app has (Light and Dark lead the built-in ones), then the user's own. The list is rebuilt each time the menu opens.
-        List<MenuItem> ThemeItems()
-        {
-            var items = new List<MenuItem>();
-            foreach (var theme in new[] { ThemeLibrary.System }.Concat(model.Themes.Select(t => t.Name)))
-            {
-                var item = new MenuItem { Header = theme, IsChecked = model.Theme == theme, ToggleType = MenuItemToggleType.Radio };
-                item.Click += (_, _) => model.SetTheme(theme);
-                items.Add(item);
-            }
-            return items;
-        }
-        var variants = ThemeItems();
-        var appearanceMenu = new MenuItem { Header = "Appearance", ItemsSource = variants };
         var format = new MenuItem { Header = "Decimal hours", IsChecked = model.DecimalHours, ToggleType = MenuItemToggleType.CheckBox };
         format.Click += (_, _) => model.ToggleFormat();
-        var shifts = new MenuItem { Header = "Working hours…" };
-        shifts.Click += (_, _) => { if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life)
-            new ShiftWindow(model).Show(life.Windows.First(w => w.IsVisible)); };
-        var accounts = new MenuItem { Header = "Accounts and budgets…" };
-        accounts.Click += (_, _) => { if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life)
-            new AccountsWindow(model).Show(life.Windows.First(w => w.IsVisible)); };
-        // The demo and its overtime switch sit together: outside the demo you can open it, inside it you can switch overtime on and off.
-        var demo = new MenuItem { Header = "Open sample-data demo", IsVisible = !model.IsDemo && BuildInfo.DeveloperFeatures };
+        // Inside the demo you can switch overtime on and off to see how it looks.
         var overtimeTest = new MenuItem { Header = "Test overtime", ToggleType = MenuItemToggleType.CheckBox, IsVisible = model.IsDemo && BuildInfo.DeveloperFeatures, Name = "TestOvertime" };
         overtimeTest.Click += (_, _) => model.SetOvertimeTest(!model.OvertimeTest);
-        demo.Click += (_, _) =>
-        {
-            if (Environment.ProcessPath is { } executable)
-            {
-                var start = new System.Diagnostics.ProcessStartInfo(executable) { UseShellExecute = true };
-                if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
-                    start.ArgumentList.Add(typeof(App).Assembly.Location);
-                start.ArgumentList.Add("--demo");
-                System.Diagnostics.Process.Start(start);
-            }
-        };
-        var startup = new MenuItem { Header = "Start with Windows", ToggleType = MenuItemToggleType.CheckBox };
-        startup.Click += (_, _) => model.SetAutoStart(model.AutoStart?.IsEnabled != true);
-        var themesEditor = new MenuItem { Header = "Themes…", Name = "ThemesMenu" };
-        themesEditor.Click += (_, _) => { if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life)
-            new ThemesWindow(model).Show(life.Windows.First(w => w.IsVisible)); };
-        var taskbar = new MenuItem { Header = "Show in taskbar", ToggleType = MenuItemToggleType.CheckBox, Name = "TaskbarMenu" };
-        taskbar.Click += (_, _) => model.SetTaskbarButton(!model.TaskbarButton);
-        var shadows = new MenuItem { Header = "Window shadows", ToggleType = MenuItemToggleType.CheckBox };
-        shadows.Click += (_, _) => model.SetShadows(!model.Shadows);
         // Which build this is, greyed out because it is information, not an action.
         var version = new MenuItem { Header = BuildInfo.Current, IsEnabled = false, Name = "BuildVersion" };
         var quit = new MenuItem { Header = "Close timer" };
         quit.Click += (_, _) => model.RequestQuit();
-        // Most used first: the hours format, then accounts and working hours; then how it looks and starts; then the demo; and
-        // Close timer alone at the bottom, apart from everyday actions. Breaks and the day button live in the window, so they are not repeated here.
-        var menu = new ContextMenu { ItemsSource = new Control[]
-        { format, accounts, shifts, new Separator(), appearanceMenu, themesEditor, shadows, taskbar, startup, new Separator(), demo, overtimeTest, new Separator(), version, new Separator(), quit } };
-        menu.Opened += (_, _) =>
-        {
-            appearanceMenu.ItemsSource = ThemeItems();
-            format.IsChecked = model.DecimalHours; shadows.IsChecked = model.Shadows; overtimeTest.IsChecked = model.OvertimeTest;
-            taskbar.IsVisible = model.TrayAvailable; taskbar.IsChecked = model.TaskbarButton;
-            startup.IsVisible = model.AutoStart?.Available == true;
-            startup.IsChecked = model.AutoStart?.IsEnabled == true;
-        };
+        var menu = new ContextMenu { ItemsSource = new Control[] { format, overtimeTest, new Separator(), version, new Separator(), quit } };
+        menu.Opened += (_, _) => { format.IsChecked = model.DecimalHours; overtimeTest.IsChecked = model.OvertimeTest; };
         return menu;
-    }
-    public static Button SettingsButton(TimerModel model)
-    {
-        var menu = SettingsMenu(model);
-        var button = new Button { Content = new IconGlyph(IconKind.Gear), Name = "Settings", ContextMenu = menu };
-        button.Classes.Add("iconButton"); ToolTip.SetTip(button, "Settings");
-        Avalonia.Automation.AutomationProperties.SetName(button, "Settings");
-        button.Click += (_, _) => menu.Open(button);
-        return button;
     }
     /// <summary>A button that shows only an icon, with its words as the tooltip and the accessible name.</summary>
     public static Button IconButton(IconKind kind, string tip, string name, Action click)
@@ -377,7 +331,8 @@ public sealed class BudgetBar : Control
         // Green while there is room, amber from 80%, red once the budget is spent.
         var colour = Ratio >= 1 ? Resource("Overtime") : Ratio >= .8 ? Resource("BudgetWarning") : Resource("Live");
         if (fill > 0) context.DrawRectangle(colour, null, new Rect(0, top, Math.Max(fill, height), height), 3, 3);
-        using (context.PushOpacity(.65)) context.DrawRectangle(Resource("Ink"), null, new Rect(Math.Clamp(Pace, 0, 1) * (width - 2), 0, 2, 10), 1, 1);
+        // The marker says where an even spread of the budget would have got to by now. Once the budget is spent there is nothing left to pace, so it goes.
+        if (Ratio < 1) using (context.PushOpacity(.7)) context.DrawRectangle(Resource("Ink"), null, new Rect(Math.Clamp(Pace, 0, 1) * (width - 2), 0, 2, 10), 1, 1);
     }
 }
 
@@ -427,7 +382,7 @@ public sealed class AccountList : StackPanel
                 var sub = Ui.Grid("*,Auto"); Ui.Put(sub, budget); Ui.Put(sub, percent, 1); percent.Margin = new Thickness(8, 0, 0, 0);
                 labels.Children.Add(sub);
                 if (account.Budget is not null) { bar = new BudgetBar(); labels.Children.Add(bar); }
-                today = Ui.Text(model.Format(model.Today(account)), 15); today.Classes.Add("figures"); today.VerticalAlignment = VerticalAlignment.Center; today.Margin = new Thickness(0, 0, 8, 0); today.Width = 50; today.TextAlignment = Avalonia.Media.TextAlignment.Right; // Fixed, so every play circle lines up.
+                today = Ui.Text(model.Format(model.Today(account)), 15); today.Classes.Add("figures"); today.VerticalAlignment = VerticalAlignment.Center; today.Margin = new Thickness(0, 0, 6, 0); today.Width = 68; today.TextAlignment = Avalonia.Media.TextAlignment.Right; // Fixed, so every play circle lines up.
                 var right = Ui.Horizontal(today, icon); right.VerticalAlignment = VerticalAlignment.Center;
                 Ui.Put(grid, labels, shift); Ui.Put(grid, right, 1 + shift);
                 row.Height = 66;
@@ -553,6 +508,8 @@ public sealed class AccountList : StackPanel
             if (row.Bar is { } bar && model.BudgetRatio(row.Account) is { } ratio)
             {
                 bar.Set(ratio, model.BudgetPace(row.Account));
+                var period = row.Account.Period is "month" or "quarter" ? row.Account.Period : "week";
+                ToolTip.SetTip(bar, $"The line marks how far through the {period} it is. A bar past the line is ahead of an even spread of the budget.");
                 // A spent budget shows its percentage in red, so overrunning reads at a glance.
                 row.Percent.Text = Math.Round(ratio * 100) + "%"; row.Percent.Classes.Set("overtime", ratio >= 1); row.Percent.Classes.Set("muted", ratio < 1);
             }
@@ -607,6 +564,8 @@ public sealed class ClockText : StackPanel
     {
         main.Classes.Set("break", onBreak); main.Classes.Set("overtime", late); main.Classes.Set("live", live);
         main.Classes.Set("clockIdle", !onBreak && !late && !live);
+        // The seconds take the same colour as the rest of the clock on a break or in overtime, only lighter.
+        seconds.Classes.Set("break", onBreak); seconds.Classes.Set("overtime", late); seconds.Opacity = onBreak || late ? .6 : 1;
     }
     /// <summary>The whole clock, as hours:minutes:seconds. Setting it splits the seconds off to be drawn lighter.</summary>
     public string Text
@@ -667,6 +626,11 @@ public sealed class BreakGlyph : Control
     static BreakGlyph() => AffectsRender<BreakGlyph>(SteamProperty);
     public double Steam { get => GetValue(SteamProperty); set => SetValue(SteamProperty, value); }
     public bool Filled { get; set; }
+    /// <summary>Draws the cup in plain text colour, and in <see cref="HotKey"/> only while the pointer is over its button.</summary>
+    public bool Mono { get; set; }
+    private bool hot;
+    public bool Hot { get => hot; set { if (hot == value) return; hot = value; InvalidateVisual(); } }
+    public string HotKey { get; set; } = "Break";
     private CancellationTokenSource? steaming;
     public bool Steaming => steaming is not null;
     public BreakGlyph() { Width = Height = 18; }
@@ -689,7 +653,8 @@ public sealed class BreakGlyph : Control
     public override void Render(DrawingContext context)
     {
         IBrush? brush = null;
-        if (Filled) brush = Brushes.White; else if (this.TryFindResource("Break", ActualThemeVariant, out var value)) brush = value as IBrush;
+        var key = Mono ? (Hot ? HotKey : "Ink") : "Break";
+        if (Filled) brush = Brushes.White; else if (this.TryFindResource(key, ActualThemeVariant, out var value)) brush = value as IBrush;
         var pen = new Pen(brush ?? Brushes.Gray, 1.8, lineCap: PenLineCap.Round);
         context.DrawGeometry(null, pen, Geometry.Parse("M 3,7 L 3,12 Q 3,15.5 6.5,15.5 L 9.5,15.5 Q 13,15.5 13,12 L 13,7 Z"));
         context.DrawGeometry(null, pen, Geometry.Parse("M 13,8 L 14.5,8 Q 16.5,8 16.5,10 Q 16.5,12 14.5,12 L 13,12"));

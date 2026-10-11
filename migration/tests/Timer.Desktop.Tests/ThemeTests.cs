@@ -35,7 +35,6 @@ public sealed class ThemeTests
                 Assert.True(ThemeColours.Contrast(variant["Muted"], variant["Surface"]) >= 3.0, $"{theme.Name} {state} quiet text");
             }
         }
-        foreach (var theme in new[] { ThemeLibrary.HighContrastDark, ThemeLibrary.HighContrastLight }) Assert.True(ThemeColours.Contrast(theme.Colour("Ink"), theme.Colour("Surface")) >= 15);
     }
 
     [Fact]
@@ -68,7 +67,7 @@ public sealed class ThemeTests
     {
         var mineColours = ThemeLibrary.Dark.Colours.ToDictionary(c => c.Key, c => c.Value); mineColours["Surface"] = "#102030";
         var mine = new ThemeDefinition("My blue", true, mineColours, false, ThemeBlockStyle.Softened);
-        var lines = new[] { ThemeStorage.ToLine(mine), "this is not json", ThemeStorage.ToLine(ThemeLibrary.Midnight with { Name = "Dark" }), "{\"Name\":\"Plain\",\"Dark\":false,\"Colours\":{\"Surface\":\"nonsense\",\"Ink\":\"#112233\"}}" };
+        var lines = new[] { ThemeStorage.ToLine(mine), "this is not json", ThemeStorage.ToLine(ThemeLibrary.Dark with { Name = "Dark" }), "{\"Name\":\"Plain\",\"Dark\":false,\"Colours\":{\"Surface\":\"nonsense\",\"Ink\":\"#112233\"}}" };
         var loaded = ThemeStorage.FromLines(lines);
         Assert.Equal(new[] { "My blue", "Plain" }, loaded.Select(t => t.Name)); // The broken line and the one reusing a built-in name are left out.
         Assert.Equal("#102030", loaded[0].Colour("Surface")); Assert.Equal(ThemeBlockStyle.Softened, loaded[0].BlockStyle); Assert.True(loaded[0].Dark); Assert.False(loaded[0].BuiltIn);
@@ -211,19 +210,21 @@ public sealed class ThemeTests
         model.DeleteTheme(copy); model.SetTheme("System");
     }
 
-    [Avalonia.Headless.XUnit.AvaloniaFact]
-    public void TheThemeMenuListsSystemFirstThenLightAndDarkBeforeTheColourfulThemes()
+    [Fact]
+    public void OnlyLightAndDarkShipAndAnythingRemovedLandsOnTheNearestOne()
     {
-        var model = TimerModel.CreateDemo(); var menu = Ui.SettingsMenu(model);
-        var appearance = menu.Items.OfType<Avalonia.Controls.MenuItem>().First(i => (i.Header as string) == "Appearance");
-        var names = appearance.Items.OfType<Avalonia.Controls.MenuItem>().Select(i => (string)i.Header!).ToList();
-        Assert.Equal(new[] { "System", "Light", "Dark", "Time Deck" }, names.Take(4)); Assert.Single(names, n => n == "Hawthorn");
+        Assert.Equal(new[] { "Light", "Dark" }, ThemeLibrary.BuiltIn.Select(t => t.Name));
+        Assert.False(ThemeLibrary.Light.Dark); Assert.True(ThemeLibrary.Dark.Dark);
+        Assert.Equal("Light", ThemeLibrary.Renamed("Time Deck")); Assert.Equal("Dark", ThemeLibrary.Renamed("Time Deck Dark"));
+        Assert.Equal("Dark", ThemeLibrary.Renamed("Hawthorn")); Assert.Equal("Light", ThemeLibrary.Renamed("Sandstone")); Assert.Equal("Dark", ThemeLibrary.Renamed("Ocean"));
+        Assert.Equal("My own", ThemeLibrary.Renamed("My own"));
     }
 
     [Avalonia.Headless.XUnit.AvaloniaFact]
     public void SoftenedBlockColoursFollowTheSelectedTheme()
     {
         var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
+        model.SaveTheme(model.Themes.Single(t => t.Name == copy) with { BlockStyle = ThemeBlockStyle.AsChosen }, copy); model.SetTheme(copy);
         Assert.Equal("#91B7D5", model.BlockColour("#91B7D5")); // As chosen.
         model.SaveTheme(model.Themes.Single(t => t.Name == copy) with { BlockStyle = ThemeBlockStyle.Softened }, copy);
         Assert.NotEqual("#91B7D5", model.BlockColour("#91B7D5"));
@@ -235,17 +236,17 @@ public sealed class ThemeTests
     {
         foreach (var colour in TimerModel.Palette)
         {
-            var look = ThemeDerivation.Block(ThemeLibrary.TimeDeck, colour);
+            var look = ThemeDerivation.Block(ThemeLibrary.Light, colour);
             Assert.True(ThemeColours.Contrast(look.Text, look.Fill) >= 4.5, $"{colour}: text {look.Text} on fill {look.Fill}");
-            Assert.Equal(colour.ToUpperInvariant(), look.Edge.ToUpperInvariant()); // Time Deck leaves the edge as the account's own colour.
+            Assert.Equal(colour.ToUpperInvariant(), look.Edge.ToUpperInvariant()); // The light theme leaves the edge as the account's own colour.
             Assert.NotEqual(colour.ToUpperInvariant(), look.Fill.ToUpperInvariant()); // The fill is a tint, not the colour itself.
         }
         // A theme can push the edge towards its text colour, and take more or less of the account colour into the fill.
-        var stronger = ThemeLibrary.TimeDeck with { BlockEdge = .5, BlockTint = .9 };
-        var a = ThemeDerivation.Block(ThemeLibrary.TimeDeck, "#91B7D5"); var b = ThemeDerivation.Block(stronger, "#91B7D5");
+        var stronger = ThemeLibrary.Light with { BlockEdge = .5, BlockTint = .9 };
+        var a = ThemeDerivation.Block(ThemeLibrary.Light, "#91B7D5"); var b = ThemeDerivation.Block(stronger, "#91B7D5");
         Assert.NotEqual(a.Edge, b.Edge); Assert.True(ThemeColours.Luminance(b.Edge) < ThemeColours.Luminance(a.Edge)); Assert.True(ThemeColours.Luminance(b.Fill) < ThemeColours.Luminance(a.Fill));
         // The older styles still work: solid blocks keep the account colour, softened ones blend towards the surface.
-        Assert.Equal("#91B7D5", ThemeDerivation.Block(ThemeLibrary.Light, "#91B7D5").Fill);
+        Assert.Equal("#91B7D5", ThemeDerivation.Block(ThemeLibrary.Light with { BlockStyle = ThemeBlockStyle.AsChosen }, "#91B7D5").Fill);
         Assert.NotEqual("#91B7D5", ThemeDerivation.Block(ThemeLibrary.Light with { BlockStyle = ThemeBlockStyle.Softened }, "#91B7D5").Fill);
     }
 
@@ -264,7 +265,7 @@ public sealed class ThemeTests
     [Avalonia.Headless.XUnit.AvaloniaFact]
     public void TheEditorShowsTheBlockRuleSlidersForATintedThemeAndSavesThem()
     {
-        var model = TimerModel.CreateDemo(); model.SetTheme("Time Deck"); var copy = model.DuplicateTheme("Time Deck");
+        var model = TimerModel.CreateDemo(); model.SetTheme("Light"); var copy = model.DuplicateTheme("Light");
         var window = new ThemesWindow(model); window.Show();
         try
         {

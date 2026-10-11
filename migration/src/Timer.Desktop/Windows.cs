@@ -111,13 +111,13 @@ public sealed class PillWindow : Window
 {
     public Action? OpenDashboard { get; set; }
     private readonly TimerModel model;
-    private readonly TextBlock account = Ui.Text("", 15);
-    private readonly ClockText timer = new(46, 28) { Text = "00:00:00" };
+    private readonly TextBlock account = Ui.Text("", 14);
+    private readonly ClockText timer = new(42, 26) { Text = "00:00:00" };
     private readonly TextBlock pillUnallocated = Ui.Text("", 13, "muted");
     private readonly StackPanel expansion = new() { IsVisible = false, Spacing = 8 };
     private readonly Button day;
     private bool expanded;
-    public const double CollapsedHeight = 90, PillWidth = 560, CapsuleRadius = 45, CardRadius = 30;
+    public const double CollapsedHeight = 82, PillWidth = 516, CapsuleRadius = 41, CardRadius = 28;
     public static double CollapsedWindowHeight => CollapsedHeight + 2 * Ui.ShadowMargin;
     private readonly TextBlock credited = Ui.Text("", 13, "muted");
     private readonly Avalonia.Controls.Shapes.Ellipse dot = new() { Width = 16, Height = 16, StrokeThickness = 2, VerticalAlignment = VerticalAlignment.Center };
@@ -144,9 +144,9 @@ public sealed class PillWindow : Window
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
-        var root = Ui.Grid("*", "90,*");
+        var root = Ui.Grid("*", "82,*");
         var head = Ui.Grid("Auto,1,*,Auto,Auto", "*");
-        head.Margin = new Thickness(26, 0, 22, 0);
+        head.Margin = new Thickness(24, 0, 20, 0);
         var timerButton = Ui.Button("", () => OpenDashboard?.Invoke(), "PillDashboard");
         // A small unallocated figure sits under the clock, only while the day is running and there is some.
         var timerColumn = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center };
@@ -155,8 +155,8 @@ public sealed class PillWindow : Window
         timerButton.Content = timerColumn;
         timerButton.Classes.Add("pillAction");
         ToolTip.SetTip(timerButton, "Click for dashboard; drag to move");
-        Ui.Put(head, timerButton).Margin = new Thickness(0, 0, 18, 0);
-        var divider = new Border { Width = 1, Height = 46 }; divider.Classes.Add("rule");
+        Ui.Put(head, timerButton).Margin = new Thickness(0, 0, 16, 0);
+        var divider = new Border { Width = 1, Height = 42 }; divider.Classes.Add("rule");
         Ui.Put(head, divider, 1);
         // The account, with its colour dot and a chevron that opens the list, the line under it that says what is happening, and how far through the day it is.
         account.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis; account.FontWeight = Avalonia.Media.FontWeight.SemiBold;
@@ -179,15 +179,16 @@ public sealed class PillWindow : Window
         accountButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         accountButton.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         ToolTip.SetTip(accountButton, "Click for accounts; drag to move");
-        Ui.Put(head, accountButton, 2).Margin = new Thickness(18, 0, 18, 0);
+        Ui.Put(head, accountButton, 2).Margin = new Thickness(16, 0, 16, 0);
         breakButton = Ui.Button("", model.ToggleBreak, "PillBreak");
-        breakButton.Content = new Viewbox { Width = 30, Height = 30, Child = breakGlyph }; breakButton.Classes.Add("pillRound"); breakButton.Classes.Add("outlined");
-        breakButton.Margin = new Thickness(0, 0, 12, 0);
-        breakButton.PointerEntered += (_, _) => { pillHoverBreak = true; breakGlyph.SetSteaming(true); };
-        breakButton.PointerExited += (_, _) => { pillHoverBreak = false; breakGlyph.SetSteaming(model.IsOnBreak); };
+        breakGlyph.Mono = true; // Plain text colour at rest, and the accent only under the pointer.
+        breakButton.Content = new Viewbox { Width = 28, Height = 28, Child = breakGlyph }; breakButton.Classes.Add("pillRound"); breakButton.Classes.Add("bare");
+        breakButton.Margin = new Thickness(0, 0, 10, 0);
+        breakButton.PointerEntered += (_, _) => { pillHoverBreak = true; breakGlyph.Hot = true; breakGlyph.SetSteaming(true); };
+        breakButton.PointerExited += (_, _) => { pillHoverBreak = false; breakGlyph.Hot = false; breakGlyph.SetSteaming(model.IsOnBreak); };
         Ui.Put(head, breakButton, 3);
         pause = Ui.Button("", model.TogglePause, "PillPause");
-        pause.Content = new Viewbox { Width = 24, Height = 24, Child = pauseGlyph };
+        pause.Content = new Viewbox { Width = 22, Height = 22, Child = pauseGlyph };
         pause.PointerEntered += (_, _) => pauseGlyph.Glow = 1;
         pause.PointerExited += (_, _) => pauseGlyph.Glow = 0;
         pause.Classes.Add("pillRound");
@@ -284,7 +285,7 @@ public sealed class PillWindow : Window
         dot.Fill = new Avalonia.Media.SolidColorBrush(dotColour); dot.Stroke = this.TryFindResource("Ink", ActualThemeVariant, out var ring) && ring is Avalonia.Media.IBrush ringBrush ? ringBrush : Avalonia.Media.Brushes.Gray;
         Ui.Pulse(dot, model.IsTracking);
         pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
-        breakGlyph.Filled = false; breakGlyph.SetSteaming(model.IsOnBreak || pillHoverBreak); breakGlyph.InvalidateVisual();
+        breakGlyph.Filled = false; breakGlyph.HotKey = model.ThemeState == "Recording" ? "Accent" : "Break"; breakGlyph.SetSteaming(model.IsOnBreak || pillHoverBreak); breakGlyph.InvalidateVisual();
         ToolTip.SetTip(breakButton, model.IsOnBreak ? "Finish break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Start break");
         pause.IsEnabled = model.IsTracking || selected is not null;
         ToolTip.SetTip(pause, model.IsOnBreak ? "End break; drag to move" : model.IsTracking ? "Pause account; drag to move" : "Resume account; drag to move");
@@ -332,7 +333,8 @@ public sealed class DashboardWindow : Window
     private readonly Button undo;
     private readonly Button merge;
     private EntryWindow? entryEditor;
-    private bool weekMode;
+    private bool weekMode, settingsMode, renderedSettings;
+    private Button settingsRail = null!; private Control? headerRow;
     private bool? renderedWeekMode;
     private DateTime? renderedDate;
     public DashboardWindow(TimerModel model)
@@ -349,8 +351,8 @@ public sealed class DashboardWindow : Window
         Background = Avalonia.Media.Brushes.Transparent;
         // A narrow rail of icons picks the view and holds settings, then the day lives in the left column (the Day elapsed card, the accounts,
         // and the break and day buttons at the foot). The right column is a titled workspace with the date to step through.
-        var root = Ui.Grid("72,*", "*");
-        var rail = new Border { Width = 72 }; rail.Classes.Add("panel");
+        var root = Ui.Grid("60,*", "*");
+        var rail = new Border { Width = 60 }; rail.Classes.Add("panel");
         var railGrid = Ui.Grid("*", "*,Auto");
         var railTop = new StackPanel { Margin = new Thickness(0, 18, 0, 0), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
         Button RailButton(IconKind kind, string tip, string name, Action click)
@@ -366,7 +368,8 @@ public sealed class DashboardWindow : Window
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center };
         railFoot.Children.Add(Ui.IconButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke()));
-        railFoot.Children.Add(Ui.SettingsButton(model));
+        settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);
+        railFoot.Children.Add(settingsRail);
         Ui.Put(railGrid, railFoot, row: 1);
         rail.Child = railGrid; Ui.Put(root, rail);
         Ui.DragHeader(railTop, this);
@@ -384,6 +387,8 @@ public sealed class DashboardWindow : Window
         var live = new StackPanel { Spacing = 4, Margin = new Thickness(0, 4, 0, 12) };
         live.Children.Add(Ui.Horizontal(accountDot, account)); live.Children.Add(new TrackingLabels(model));
         identity.Children.Add(live);
+        // A hairline keeps the clock and who is running apart from the day's totals under it.
+        var cardRule = Ui.Rule(); cardRule.Margin = new Thickness(0, 0, 0, 10); identity.Children.Add(cardRule);
         // Two figures side by side, a small label over each, with a hairline between them.
         var stats = Ui.Grid("*,1,*");
         var allocatedStat = new StackPanel { Spacing = 1 }; allocatedStat.Children.Add(Ui.Text("Allocated", 12, "muted")); allocatedStat.Children.Add(allocatedValue);
@@ -392,12 +397,14 @@ public sealed class DashboardWindow : Window
         Ui.Put(stats, allocatedStat); Ui.Put(stats, statDivider, 1); Ui.Put(stats, unallocatedStat, 2);
         identity.Children.Add(stats);
         cardStack.Children.Add(identity); dayCard.Child = cardStack;
-        var identityHost = new Border { Padding = new Thickness(16, 18, 16, 6), Child = dayCard };
+        var identityHost = new Border { Padding = new Thickness(12, 18, 16, 6), Child = dayCard };
         Ui.DragHeader(identityHost, this, "SidebarDragHeader"); identityBlock = identityHost;
         Ui.Put(sidebar, identityHost);
         var title = Ui.Text("Client accounts", 13, "muted");
         title.Margin = new Thickness(20, 12, 20, 6);
-        var accountsHead = new StackPanel(); accountsHead.Children.Add(title); accountsHeadBlock = accountsHead;
+        // A rule and a heading set the accounts apart from the card above them.
+        var titleRule = Ui.Rule(); titleRule.Margin = new Thickness(16, 0);
+        var accountsHead = new StackPanel(); accountsHead.Children.Add(titleRule); accountsHead.Children.Add(title); accountsHeadBlock = accountsHead;
         Ui.Put(sidebar, accountsHead, row: 1);
         Ui.Put(sidebar, new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 2);
@@ -427,7 +434,7 @@ public sealed class DashboardWindow : Window
         // In Week views the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
         // The date has a fixed width, so the arrows stay put whatever its text says.
         var nav = Ui.Grid("*,Auto"); nav.VerticalAlignment = VerticalAlignment.Center;
-        Ui.Put(nav, workspaceTitle);
+        Ui.Put(nav, workspaceTitle); headerRow = nav;
         date.Width = 112; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
         previous = Ui.Button("‹", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }, "PreviousPeriod"); previous.Classes.Add("iconButton"); previous.Width = 30; previous.FontSize = 20;
         next = Ui.Button("›", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }, "NextPeriod"); next.Classes.Add("iconButton"); next.Width = 30; next.FontSize = 20;
@@ -486,7 +493,7 @@ public sealed class DashboardWindow : Window
         // Left and right arrow keys step by a week or a day, like the buttons, unless a box is being typed in.
         AddHandler(KeyDownEvent, (_, e) =>
         {
-            if (e.KeyModifiers != Avalonia.Input.KeyModifiers.None || e.Key is not (Avalonia.Input.Key.Left or Avalonia.Input.Key.Right)) return;
+            if (settingsMode || e.KeyModifiers != Avalonia.Input.KeyModifiers.None || e.Key is not (Avalonia.Input.Key.Left or Avalonia.Input.Key.Right)) return;
             if (FocusManager?.GetFocusedElement() is TextBox or ComboBox) return;
             var step = e.Key == Avalonia.Input.Key.Left ? -1 : 1;
             if (weekMode) { if (step < 0 || model.CanStepForwardAWeek) model.ChangeWeek(step); } else model.ChangeDate(step);
@@ -511,7 +518,7 @@ public sealed class DashboardWindow : Window
         if (identityBlock is null || accountsHeadBlock is null || toolsRow is null) return false;
         double Bottom(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), this)?.Y ?? 0;
         var sidebarRight = identityBlock.TranslatePoint(new Point(identityBlock.Bounds.Width, 0), this)?.X ?? 0;
-        return point.X <= sidebarRight + 18 ? point.Y <= Bottom(accountsHeadBlock) : point.Y <= Bottom(toolsRow);
+        return point.X <= sidebarRight + 18 ? point.Y <= Bottom(accountsHeadBlock) : point.Y <= Bottom(settingsMode && headerRow is not null ? headerRow : toolsRow);
     }
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
     {
@@ -523,10 +530,11 @@ public sealed class DashboardWindow : Window
     }
     private void ShowTidy() { if (IsVisible) new TidyWindow(model).Show(this); }
     private void ShowGroup(string id) { if (IsVisible) new GroupWindow(model, id).Show(this); }
-    public void SelectTab(bool showWeek) { weekMode = showWeek; Refresh(true); }
+    public void SelectTab(bool showWeek) { settingsMode = false; weekMode = showWeek; Refresh(true); }
+    private void ShowSettings() { settingsMode = true; Refresh(true); }
     private void SelectSection(string section)
     {
-        weekMode = true;
+        settingsMode = false; weekMode = true;
         if (model.WeekSection != section) model.SetWeekSection(section); else Refresh(true);
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
@@ -563,26 +571,31 @@ public sealed class DashboardWindow : Window
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); if (button.Content is IconGlyph glyph) glyph.TintKey = selected ? "Ink" : "Muted"; }
-        Rail(timelineRail, !weekMode);
-        Rail(overviewTab, weekMode && model.WeekSection == "overview");
-        Rail(hoursTab, weekMode && model.WeekSection == "hours");
-        Rail(entriesTab, weekMode && model.WeekSection == "entries");
-        workspaceTitle.Text = !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
+        Rail(timelineRail, !weekMode && !settingsMode);
+        Rail(overviewTab, !settingsMode && weekMode && model.WeekSection == "overview");
+        Rail(hoursTab, !settingsMode && weekMode && model.WeekSection == "hours");
+        Rail(entriesTab, !settingsMode && weekMode && model.WeekSection == "entries");
+        Rail(settingsRail, settingsMode);
+        // The settings page has no date to step through and no editing buttons, so the header shows only its name.
+        foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = !settingsMode;
+        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode;
+        workspaceTitle.Text = settingsMode ? "Settings" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
-        if (refreshWorkspace)
+        // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
+        if (settingsMode ? !renderedSettings : refreshWorkspace)
         {
             var oldScroll = workspace.Content is ScrollViewer directOld ? directOld
                 : (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
-            var previous = renderedWeekMode == weekMode && renderedDate == model.SelectedDate
+            var previous = renderedSettings == settingsMode && !settingsMode && renderedWeekMode == weekMode && renderedDate == model.SelectedDate
                 ? !weekMode && model.TimelineOffset is double timelineOffset ? new Vector(0, timelineOffset)
                     : oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset : null;
-            workspace.Content = weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
+            workspace.Content = settingsMode ? new SettingsView(model) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
             if (previous is { } offset && workspace.Content is Control control)
             {
                 var scroll = control is ScrollViewer direct ? direct : control.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();
                 if (scroll is not null) scroll.Tag = offset;
             }
-            renderedWeekMode = weekMode;
+            renderedWeekMode = weekMode; renderedSettings = settingsMode;
             renderedDate = model.SelectedDate;
         }
     }
