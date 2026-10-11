@@ -16,7 +16,13 @@ public static class BuildInfo
         var commit = parts.Length == 2 && parts[1].Trim().Length >= 7 ? " (" + parts[1].Trim()[..7] + ")" : "";
         return "Version " + number + commit;
     }
-    public static bool DeveloperFeatures =>
+    /// <summary>
+    /// Lets a test behave as the Store build does, since the tests themselves are built without the Store flag. Nothing in the app sets it.
+    /// </summary>
+    public static bool? DeveloperFeaturesOverride { get; set; }
+    /// <summary>Whether this build offers the developer features at all. A Store package never does, whatever the settings file says.</summary>
+    public static bool DeveloperFeatures => DeveloperFeaturesOverride ?? CompiledDeveloperFeatures;
+    private static bool CompiledDeveloperFeatures =>
 #if STORE_PACKAGE
         false;
 #else
