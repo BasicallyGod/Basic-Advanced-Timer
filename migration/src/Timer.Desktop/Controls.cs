@@ -815,12 +815,11 @@ public sealed class IconGlyph : Control
                 context.DrawLine(pen, new Point(3, 12), new Point(3, 15.5)); context.DrawLine(pen, new Point(3, 15.5), new Point(15, 15.5)); context.DrawLine(pen, new Point(15, 15.5), new Point(15, 12));
                 break;
             case IconKind.FitDay:
-                // Two bars with a double-headed arrow between them: the day stretched to fill the space from edge to edge. Drawn with room round the
-                // arrowheads, so it stays clear at small sizes.
-                context.DrawLine(pen, new Point(3.5, 2.5), new Point(14.5, 2.5)); context.DrawLine(pen, new Point(3.5, 15.5), new Point(14.5, 15.5));
-                context.DrawLine(pen, new Point(9, 5.5), new Point(9, 12.5));
-                context.DrawLine(pen, new Point(6.6, 7.9), new Point(9, 5.5)); context.DrawLine(pen, new Point(11.4, 7.9), new Point(9, 5.5));
-                context.DrawLine(pen, new Point(6.6, 10.1), new Point(9, 12.5)); context.DrawLine(pen, new Point(11.4, 10.1), new Point(9, 12.5));
+                // Two bars with a double-headed arrow between them, long enough that the heads and the shaft stay apart at button size.
+                context.DrawLine(pen, new Point(2.5, 1.5), new Point(15.5, 1.5)); context.DrawLine(pen, new Point(2.5, 16.5), new Point(15.5, 16.5));
+                context.DrawLine(pen, new Point(9, 4.6), new Point(9, 13.4));
+                context.DrawLine(pen, new Point(5.6, 8), new Point(9, 4.6)); context.DrawLine(pen, new Point(12.4, 8), new Point(9, 4.6));
+                context.DrawLine(pen, new Point(5.6, 10), new Point(9, 13.4)); context.DrawLine(pen, new Point(12.4, 10), new Point(9, 13.4));
                 break;
         }
     }

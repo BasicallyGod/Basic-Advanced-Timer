@@ -322,6 +322,8 @@ public sealed class DashboardWindow : Window
 {
     /// <summary>The dashboard's fixed size, before the room kept around it for its shadow.</summary>
     public const double DashboardWidth = 1080, DashboardHeight = 680;
+    /// <summary>The height of the Start break and Finish day buttons, and of the bar under the timeline.</summary>
+    public const double ControlBarHeight = 42;
     public Action? OpenPill { get; set; }
     private readonly TimerModel model;
     private readonly ClockText clock = new(46, 26) { Text = "00:00:00" };
@@ -424,12 +426,12 @@ public sealed class DashboardWindow : Window
         var summary = new StackPanel { Margin = new Thickness(18, 12, 18, 18), Spacing = 10 };
         // The break is its own control, apart from the account rows above it, because it stops time going to any account.
         breakButton = Ui.Button("", model.ToggleBreak, "DashboardBreak");
-        breakButton.Classes.Add("breakButton"); breakButton.Classes.Add("quiet"); breakButton.HorizontalAlignment = HorizontalAlignment.Stretch; breakButton.Height = 42;
+        breakButton.Classes.Add("breakButton"); breakButton.Classes.Add("quiet"); breakButton.HorizontalAlignment = HorizontalAlignment.Stretch; breakButton.Height = ControlBarHeight;
         breakButton.Content = Ui.Horizontal(dashboardCup, dashboardBreakText);
         breakButton.PointerEntered += (_, _) => { hoverBreak = true; dashboardCup.SetSteaming(true); };
         breakButton.PointerExited += (_, _) => { hoverBreak = false; dashboardCup.SetSteaming(model.IsOnBreak || hoverBreak); }; // Steam rises under the pointer too.
         day = Ui.Button("", model.ToggleDay, "DashboardDay"); day.Classes.Add("outlined"); day.Classes.Add("quiet");
-        day.HorizontalAlignment = HorizontalAlignment.Stretch; day.Height = 42; day.Content = Ui.Horizontal(dayFlag, dayText);
+        day.HorizontalAlignment = HorizontalAlignment.Stretch; day.Height = ControlBarHeight; day.Content = Ui.Horizontal(dayFlag, dayText);
         day.PointerEntered += (_, _) => dayFlag.Waving = true; day.PointerExited += (_, _) => dayFlag.Waving = false; // The flag waves under the pointer.
         // Side by side, so the pair takes one row at the foot of the column.
         var pair = Ui.Grid("*,*"); breakButton.Margin = new Thickness(0, 0, 4, 0); day.Margin = new Thickness(4, 0, 0, 0);
@@ -473,9 +475,11 @@ public sealed class DashboardWindow : Window
             if (e.Property != Avalonia.Controls.Primitives.RangeBase.ValueProperty || settingZoom) return;
             if (TimelineScroll() is { } s) model.SetTimelineScale(TimerModel.ScaleAt(zoomSlider.Value), s.Viewport.Height / 2, s.Offset.Y);
         };
-        var zoomBar = new Border { Name = "TimelineControls", Child = Ui.Horizontal(fit, zoomOut, zoomSlider, zoomIn), CornerRadius = new CornerRadius(12), Padding = new Thickness(8, 4), BorderThickness = new Thickness(1), };
+        var zoomBar = new Border { Name = "TimelineControls", Child = Ui.Horizontal(fit, zoomOut, zoomSlider, zoomIn), CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 0), Height = ControlBarHeight, BorderThickness = new Thickness(1), };
         ((StackPanel)zoomBar.Child).Spacing = 4; zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
         // Add time, Undo and Merge sit on the left of a bar under the workspace, and the zoom controls on its right, so the working area has the whole height above.
+        // The bar is as tall as the Start break and Finish day buttons beside it, so the two bottom rows line up. Its buttons fill that height.
+        addTime.Height = ControlBarHeight; undo.Height = ControlBarHeight; merge.Height = ControlBarHeight;
         var tools = Ui.Grid("*,Auto"); toolsRow = tools; Ui.Put(tools, edits); Ui.Put(tools, zoomBar, 1);
         tools.Margin = new Thickness(0, 12, 0, 0);
         Ui.Put(review, workspace, row: 1);

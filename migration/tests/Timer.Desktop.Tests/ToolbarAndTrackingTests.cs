@@ -99,4 +99,21 @@ public sealed class ToolbarAndTrackingTests
             var (r, g, b) = ThemeColours.Rgb(variant["Live"]); Assert.True(g > r && g > b, theme.Name + " stays green");
         }
     }
+
+    [AvaloniaFact]
+    public void TheBarUnderTheTimelineIsAsTallAsTheBreakAndDayButtonsAndLevelWithThem()
+    {
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Settle(window);
+            var bar = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
+            var breakButton = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
+            var add = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "AddTime");
+            Assert.Equal(breakButton.Bounds.Height, bar.Bounds.Height, 0.5); Assert.Equal(breakButton.Bounds.Height, add.Bounds.Height, 0.5);
+            double Bottom(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), window)!.Value.Y;
+            Assert.Equal(Bottom(breakButton), Bottom(bar), 0.5); Assert.Equal(Bottom(breakButton), Bottom(add), 0.5);
+        }
+        finally { window.Close(); }
+    }
 }
