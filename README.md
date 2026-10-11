@@ -19,7 +19,7 @@ Run `Start-Demo.cmd` to try the app with sample accounts and history, without to
 - Track budgets by week, month or quarter, with a ring on each account.
 - Review each day on a scrollable, zoomable timeline. Drag blocks to move or resize them, add, merge, group and delete time, tidy small gaps, add or remove minutes for the day, and keep notes. Every edit can be undone, and the history survives a restart.
 - Review the week as an overview, an hours table and a list of entries. Export a summary and detailed CSV with decimal hours that add up exactly.
-- Choose from eleven themes (Hawthorn by default), or make your own in the theme editor. Choose decimal hours or hours and minutes, and the size of the interface.
+- Choose from eleven themes (a deep green one is the default), or make your own in the theme editor. Choose decimal hours or hours and minutes, and the size of the interface.
 - Start with Windows, with a notification area icon. The window has no close button, so it cannot be closed by accident.
 
 ## Data

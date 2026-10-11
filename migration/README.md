@@ -24,7 +24,7 @@ The big clock shows elapsed working-day time from the configured or manual start
 - **Tidy day.** Previews small gaps (up to five minutes by default), lets you give each to the previous or next account, rechecks everything on apply and adds credited time as one undoable edit.
 - **Undo.** Reverses the latest time or note edit, up to 50 steps, kept across restarts.
 - **Export.** Writes `Detail.csv` and `Summary.csv` to a new folder under `Timesheets/Exports` in the data folder. Decimal hours are apportioned so daily, weekly and detail figures add up exactly. Only saved entries are included, so pause first to include the running interval.
-- **Themes.** Settings, Appearance lists Hawthorn (the default), System, then every other theme. Settings, Themes opens the editor: built-in themes can be duplicated, and a copy can be renamed and have any colour changed, previewed live. The editor asks before throwing away unsaved edits.
+- **Themes.** Settings, Appearance lists the default theme first, then System, then every other theme. Settings, Themes opens the editor: built-in themes can be duplicated, and a copy can be renamed and have any colour changed, previewed live. The editor asks before throwing away unsaved edits.
 - **Tray and start-up.** No taskbar button, no close button. Left-click the tray icon to hide or show the timer; the icon is green while recording. Start with Windows adds a per-user sign-in entry and needs no administrator rights.
 
 ## Data and safety
