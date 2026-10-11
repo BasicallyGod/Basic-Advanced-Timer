@@ -59,12 +59,16 @@ public static class ReviewViews
                 intervals.Add((group.Account, display.Start!.Value, display.End!.Value, null, display));
             }
         }
-        var ends = new List<DateTime>();
-        var cards = new List<(Border Card, int Lane)>();
+        // Real time shares the left of the timeline in lanes. Adjustments get lanes of their own to the right of it, so they never sit among, or
+        // under, real time blocks, whatever the clock says.
+        var ends = new List<DateTime>(); var adjustmentEnds = new List<DateTime>();
+        var cards = new List<(Border Card, int Lane, bool Adjustment)>();
         foreach (var interval in intervals.OrderBy(s => s.Start))
         {
-            var lane = ends.FindIndex(end => end <= interval.Start);
-            if (lane < 0) { lane = ends.Count; ends.Add(interval.End); } else ends[lane] = interval.End;
+            var isAdjustment = interval.Row is { IsAdjustment: true };
+            var laneEnds = isAdjustment ? adjustmentEnds : ends;
+            var lane = laneEnds.FindIndex(end => end <= interval.Start);
+            if (lane < 0) { lane = laneEnds.Count; laneEnds.Add(interval.End); } else laneEnds[lane] = interval.End;
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
             colour = model.BlockColour(colour);
             var end = interval.End > day.AddDays(1) ? day.AddDays(1) : interval.End;
@@ -72,7 +76,7 @@ public static class ReviewViews
             {
                 var adjustmentCard = AdjustmentCard(model, canvas, adjusted, colour, interval.Start, end, pixelsPerHour);
                 Canvas.SetTop(adjustmentCard, (interval.Start - day).TotalHours * pixelsPerHour + 2);
-                canvas.Children.Add(adjustmentCard); cards.Add((adjustmentCard, lane));
+                canvas.Children.Add(adjustmentCard); cards.Add((adjustmentCard, lane, true));
                 continue;
             }
             var duration = interval.Group is { } groupDuration ? TimeSpan.FromMinutes((double)groupDuration.Minutes) : end - interval.Start;
@@ -139,13 +143,21 @@ public static class ReviewViews
                 ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} grouped entries · {model.Format(duration)} credited\nSeparate sections preserve any gaps. Double-click to inspect; right-click to ungroup.");
             }
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
-            canvas.Children.Add(card); cards.Add((card, lane));
+            canvas.Children.Add(card); cards.Add((card, lane, false));
         }
         void Resize()
         {
             foreach (var rule in canvas.Children.OfType<Border>().Where(b => b.Classes.Contains("rule"))) rule.Width = Math.Max(220, canvas.Bounds.Width - 70);
-            var width = Math.Max(220, canvas.Bounds.Width - 80) / Math.Max(1, ends.Count);
-            foreach (var card in cards) { card.Card.Width = Math.Max(40, width - 6); Canvas.SetLeft(card.Card, 64 + card.Lane * width); }
+            var available = Math.Max(220, canvas.Bounds.Width - 80);
+            // The adjustment column is a little over a quarter of the width, and only exists on a day that has adjustments.
+            var adjustmentArea = adjustmentEnds.Count > 0 ? Math.Clamp(available * .28, 110, available * .45) : 0;
+            var realArea = available - adjustmentArea - (adjustmentArea > 0 ? 8 : 0);
+            var width = realArea / Math.Max(1, ends.Count); var adjustmentWidth = adjustmentArea / Math.Max(1, adjustmentEnds.Count);
+            foreach (var card in cards)
+            {
+                if (card.Adjustment) { card.Card.Width = Math.Max(40, adjustmentWidth - 6); Canvas.SetLeft(card.Card, 64 + realArea + 8 + card.Lane * adjustmentWidth); }
+                else { card.Card.Width = Math.Max(40, width - 6); Canvas.SetLeft(card.Card, 64 + card.Lane * width); }
+            }
         }
         canvas.SizeChanged += (_, _) => Resize();
         DateTime clicked = day.AddHours(9);
@@ -399,11 +411,12 @@ public static class ReviewViews
         var ink = Ui.InkOn(ThemeColours.Mix(strong, soft, .5));
         var text = new StackPanel { Spacing = 4 };
         // A short block has room for one line only, so the account and the amount share it.
-        if (height < 52) text.Children.Add(Ui.Text($"{model.Label(row.Account)} · Adjustment {amount}", 13));
+        // The amount comes first, so a narrow column trims the account name and never the figure.
+        if (height < 52) text.Children.Add(Ui.Text($"{amount} · {model.Label(row.Account)}", 13));
         else { text.Children.Add(Ui.Text(model.Label(row.Account), 15)); text.Children.Add(Ui.Text($"Adjustment {amount}", 12)); }
         var note = model.Editor.Note(row);
         if (height >= 70 && !string.IsNullOrWhiteSpace(note)) { var noteText = Ui.Text(note, 12); noteText.TextTrimming = TextTrimming.CharacterEllipsis; text.Children.Add(noteText); }
-        foreach (TextBlock child in text.Children) child.Foreground = Brush.Parse(ink);
+        foreach (TextBlock child in text.Children) { child.Foreground = Brush.Parse(ink); child.TextTrimming = TextTrimming.CharacterEllipsis; }
         var card = new Border { Name = "Adjustment" + model.Engine.Sessions.IndexOf(row), Tag = row, Background = stripes, CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
             Width = 380, Height = height, Padding = new Thickness(14, height < 52 ? 3 : 8), ClipToBounds = true };
         card.Classes.Add("adjustment");

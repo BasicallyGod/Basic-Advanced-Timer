@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -96,7 +97,7 @@ public sealed class AdjustTimeTests
             Assert.False(dialog.IsVisible);
             Assert.Equal(TimeSpan.FromMinutes(80), model.Today(model.Accounts[0]));
             var chip = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name?.StartsWith("Adjustment") == true);
-            Assert.Contains(chip.GetVisualDescendants().OfType<TextBlock>(), t => t.Text!.Contains("Account one") && t.Text.Contains("Adjustment +0:20"));
+            Assert.Contains(chip.GetVisualDescendants().OfType<TextBlock>(), t => t.Text!.Contains("Account one") && t.Text.Contains("+0:20"));
             // It is a striped block that is as tall as the minutes it adds, so it reads as a correction and not as recorded time.
             Assert.IsType<Avalonia.Media.LinearGradientBrush>(chip.Background); Assert.Equal(Avalonia.Media.GradientSpreadMethod.Repeat, ((Avalonia.Media.LinearGradientBrush)chip.Background!).SpreadMethod);
             Assert.True(chip.Height >= 20 * Math.Max(1, 1) / 2.0 || chip.Height >= ReviewViews.MinimumBlockHeight); Assert.Contains("adjustment", chip.Classes);
@@ -301,9 +302,34 @@ public sealed class AdjustTimeTests
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             var blocks = window.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("Adjustment") == true).ToList();
             Assert.Equal(2, blocks.Count); Assert.All(blocks, b => Assert.IsType<Avalonia.Media.LinearGradientBrush>(b.Background));
-            Assert.Contains(blocks.SelectMany(b => b.GetVisualDescendants().OfType<TextBlock>()), t => t.Text!.Contains("Adjustment -0:15"));
+            Assert.Contains(blocks.SelectMany(b => b.GetVisualDescendants().OfType<TextBlock>()), t => t.Text!.Contains("-0:15") && t.Text.Contains("Account two"));
+            // However the clock overlaps, adjustments sit in their own column to the right of every real time block.
+            var real = window.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("TimelineEntry") == true).ToList();
+            Assert.NotEmpty(real);
+            var realRight = real.Max(b => Canvas.GetLeft(b) + b.Width);
+            Assert.All(blocks, b => Assert.True(Canvas.GetLeft(b) >= realRight, $"{b.Name} starts at {Canvas.GetLeft(b)} but real time reaches {realRight}"));
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
             if (folder is not null) { Directory.CreateDirectory(folder); using var shot = window.CaptureRenderedFrame(); shot!.Save(Path.Combine(folder, "adjustment-blocks.png")); }
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheBarUnderTheChosenTabStaysUnderThePointer()
+    {
+        var model = TimerModel.CreateDemo(); model.SetTheme("Light");
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            var tab = window.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("tab") && b.Classes.Contains("selected"));
+            var presenter = tab.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First(p => p.Name == "PART_ContentPresenter");
+            var accent = Color.Parse(model.CurrentTheme.Colour("Accent"));
+            Assert.Equal(accent, ((ISolidColorBrush)presenter.BorderBrush!).Color);
+            ((IPseudoClasses)tab.Classes).Set(":pointerover", true); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(accent, ((ISolidColorBrush)presenter.BorderBrush!).Color);
+            ((IPseudoClasses)tab.Classes).Set(":pressed", true); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(accent, ((ISolidColorBrush)presenter.BorderBrush!).Color);
         }
         finally { window.Close(); }
     }
