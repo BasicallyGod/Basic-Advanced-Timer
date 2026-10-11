@@ -29,7 +29,7 @@ public sealed class AdjustWindow : Window
     public AdjustWindow(TimerModel model, string account, DateTime? day = null)
     {
         var date = (day ?? model.Engine.Now).Date;
-        Title = "Adjust time"; Width = 460; SizeToContent = SizeToContent.Height; CanResize = false;
+        Title = "Adjust time"; WindowChrome.Attach(this); Width = 460; SizeToContent = SizeToContent.Height; CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var label = BreakAccount.Display(account);
         var root = new StackPanel { Margin = new Thickness(24), Spacing = 12 };

@@ -10,7 +10,7 @@ public sealed class AccountsWindow : Window
 {
     public AccountsWindow(TimerModel model)
     {
-        Title = "Accounts and budgets";
+        Title = "Accounts and budgets"; WindowChrome.Attach(this);
         Width = 640; Height = 500; CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var root = Ui.Grid("*", "Auto,*,Auto,Auto,Auto"); root.Margin = new Thickness(24);

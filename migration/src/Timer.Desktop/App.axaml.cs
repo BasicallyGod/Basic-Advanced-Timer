@@ -96,7 +96,7 @@ public sealed partial class App : Application
                 // The tray icon keeps the timer reachable when its windows are hidden, and closing a window hides it there.
                 var tray = new TrayController(model, windows);
                 TrayIcon.SetIcons(this, tray.Icons);
-                windows.HideToTray = true;
+                model.TrayAvailable = true; windows.HideToTray = true;
                 desktop.Exit += (_, _) => tray.Dispose();
             }
             var ticker = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };

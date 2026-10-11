@@ -537,6 +537,17 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool IsOnBreak => BreakAccount.Is(ActiveAccount);
     public bool Shadows => preferences.Shadows;
     public void SetShadows(bool on) { preferences = preferences with { Shadows = on }; Save(); Notify(); }
+    /// <summary>Whether the timer has a taskbar button. Turn it off to run from the notification area alone.</summary>
+    public bool TaskbarButton => preferences.TaskbarButton;
+    /// <summary>Set once the tray icon exists. Without a tray there would be no way back to a hidden timer, so the taskbar button is then always on.</summary>
+    public bool TrayAvailable { get; set; }
+    public void SetTaskbarButton(bool on)
+    {
+        if (!TrayAvailable && !on) return;
+        preferences = preferences with { TaskbarButton = on };
+        if (!on) Notice = "The timer now runs from the notification area. Click its icon to bring the timer back.";
+        Save(); Notify();
+    }
     /// <summary>How far through the working day it is, from 0 to 1, or null on a day off.</summary>
     public double? DayProgress
     {

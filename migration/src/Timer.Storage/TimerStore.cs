@@ -7,7 +7,7 @@ using Timer.Core;
 namespace Timer.Storage;
 
 public sealed record AccountSettings(string Name, double? BudgetHours = null, string BudgetPeriod = "week", bool Hidden = false, string? Colour = null);
-public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true, IReadOnlyList<ThemeDefinition>? Themes = null);
+public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true, IReadOnlyList<ThemeDefinition>? Themes = null, bool TaskbarButton = true);
 
 // The timer's records live in one SQLite file (timer.db). Preferences stay in the settings JSON beside it.
 // The in-memory model is unchanged: Load fills the engine from the database and Save writes it back in one transaction.
@@ -121,11 +121,12 @@ public sealed class TimerStore : IDisposable
         var appearance = Lines("migrationAppearance").ToList();
         var theme = ThemeLibrary.Renamed(appearance.FirstOrDefault() ?? ThemeLibrary.Default);
         var shadows = !appearance.Skip(1).Contains("shadows=off");
+        var taskbar = !appearance.Skip(1).Contains("taskbar=off");
         var themes = ThemeStorage.FromLines(Lines("migrationThemes"));
         // A name that is neither System, a built-in nor one of the user's own falls back to System, so a removed theme never leaves the app unstyled.
         if (theme != ThemeLibrary.System && !ThemeLibrary.BuiltIn.Concat(themes).Any(t => t.Name == theme)) theme = ThemeLibrary.System;
         // Written back on the first save, so a brand new database does not start with the sample accounts every launch.
-        return new(accounts, decimalHours, theme, weekStart, shadows, themes);
+        return new(accounts, decimalHours, theme, weekStart, shadows, themes, taskbar);
     }
     private static SessionRow ToRow(Microsoft.Data.Sqlite.SqliteDataReader r)
     {
@@ -154,7 +155,7 @@ public sealed class TimerStore : IDisposable
         var sections = (JsonObject)settings["sections"]!;
         sections["dayOverrides"] = Array(engine.Schedule.Overrides.OrderBy(p => p.Key).Select(p => p.Value.Off
             ? $"{p.Key:yyyy-MM-dd}\toff" : $"{p.Key:yyyy-MM-dd}\t{p.Value.Shift!.Start:hh\\:mm}\t{p.Value.Shift.End:hh\\:mm}"));
-        sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off" });
+        sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off", preferences.TaskbarButton ? "taskbar=on" : "taskbar=off" });
         sections["migrationThemes"] = Array((preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).Select(ThemeStorage.ToLine));
         var hours = Lines("workingHours").Where(s =>
         {

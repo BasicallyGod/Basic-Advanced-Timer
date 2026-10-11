@@ -10,7 +10,7 @@ public sealed class ShiftWindow : Window
 {
     public ShiftWindow(TimerModel model)
     {
-        Title = "Working hours";
+        Title = "Working hours"; WindowChrome.Attach(this);
         Width = 480; Height = 560; CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var root = new StackPanel { Margin = new Thickness(24), Spacing = 12 };

@@ -15,15 +15,24 @@ public sealed class WindowCoordinator
     private readonly TimerModel model;
     private bool quitting, dashboardWasShown;
     // Whether closing a window hides the timer to the tray. Without a tray the window really closes, as it always did.
-    public bool HideToTray { get; set; }
+    public bool HideToTray { get => hideToTray; set { hideToTray = value; ApplyTaskbar(); } }
+    private bool hideToTray;
+    private void ApplyTaskbar()
+    {
+        // Only a timer that can hide in the tray may leave the taskbar.
+        var show = model.TaskbarButton || !hideToTray;
+        if (Pill.ShowInTaskbar != show) Pill.ShowInTaskbar = show;
+        if (Dashboard.ShowInTaskbar != show) Dashboard.ShowInTaskbar = show;
+    }
     public bool IsShown => Pill.IsVisible || Dashboard.IsVisible;
     public WindowCoordinator(TimerModel model, Action exit)
     {
         this.model = model;
         Pill = new PillWindow(model);
         Dashboard = new DashboardWindow(model);
-        // The timer lives in the tray, so neither window needs a taskbar button.
-        Pill.ShowInTaskbar = false; Dashboard.ShowInTaskbar = false;
+        // A taskbar button by default, so the timer can be pinned and launched like any app. It can be switched off to run from the tray alone.
+        ApplyTaskbar();
+        model.PropertyChanged += (_, _) => ApplyTaskbar();
         Pill.OpenDashboard = () =>
         {
             Fit(Dashboard, Pill, 960 + 2 * Ui.ShadowMargin, 640 + 2 * Ui.ShadowMargin);
@@ -125,7 +134,7 @@ public sealed class PillWindow : Window
     public PillWindow(TimerModel model)
     {
         this.model = model;
-        Title = "Basic’s Advanced Timer migration";
+        Title = "Basic’s Advanced Timer"; WindowChrome.Attach(this);
         ContextMenu = Ui.SettingsMenu(model);
         Width = 420 + 2 * Ui.ShadowMargin;
         Height = CollapsedHeight + 2 * Ui.ShadowMargin;
@@ -319,7 +328,7 @@ public sealed class DashboardWindow : Window
     public DashboardWindow(TimerModel model)
     {
         this.model = model;
-        Title = "Basic’s Advanced Timer migration";
+        Title = "Basic’s Advanced Timer"; WindowChrome.Attach(this);
         ContextMenu = Ui.SettingsMenu(model);
         Width = 960 + 2 * Ui.ShadowMargin;
         Height = 640 + 2 * Ui.ShadowMargin;

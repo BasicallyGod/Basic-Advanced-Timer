@@ -161,11 +161,11 @@ public sealed class VisualStateTests
             using (var store = new TimerStore(folder))
             {
                 var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.True(prefs.Shadows);
-                store.Save(engine, prefs with { Shadows = false, Theme = "Dark" });
+                Assert.True(prefs.TaskbarButton); store.Save(engine, prefs with { Shadows = false, Theme = "Dark", TaskbarButton = false });
             }
             using (var store = new TimerStore(folder))
             {
-                var prefs = store.Load(new TrackingEngine()); Assert.False(prefs.Shadows); Assert.Equal("Dark", prefs.Theme);
+                var prefs = store.Load(new TrackingEngine()); Assert.False(prefs.Shadows); Assert.Equal("Dark", prefs.Theme); Assert.False(prefs.TaskbarButton);
             }
         }
         finally { Directory.Delete(folder, true); }

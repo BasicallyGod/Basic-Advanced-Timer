@@ -9,7 +9,7 @@ public sealed class EntryWindow : Window
 {
     public EntryWindow(TimerModel model, SessionRow? row, DateTime start, DateTime end)
     {
-        Title = row is null ? "Add time" : "Edit entry";
+        Title = row is null ? "Add time" : "Edit entry"; WindowChrome.Attach(this);
         Width = 480; Height = 460; CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var root = new StackPanel { Margin = new Thickness(24), Spacing = 12 };

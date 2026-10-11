@@ -29,7 +29,7 @@ public sealed class ThemesWindow : Window
     public ThemesWindow(TimerModel model)
     {
         this.model = model;
-        Title = "Themes"; Width = 800; Height = 680; MinHeight = 480;
+        Title = "Themes"; WindowChrome.Attach(this); Width = 800; Height = 680; MinHeight = 480;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var root = Ui.Grid("230,*", "*,Auto,Auto"); root.Margin = new Thickness(24);
         var left = Ui.Grid("*", "Auto,*,Auto"); left.Margin = new Thickness(0, 0, 18, 0);

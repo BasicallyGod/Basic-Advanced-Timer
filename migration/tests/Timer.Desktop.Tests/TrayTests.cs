@@ -16,7 +16,7 @@ public sealed class TrayTests
         var now = Day.AddHours(10);
         var engine = new TrackingEngine(clock: () => now); var model = new TimerModel(engine);
         var exits = 0; var windows = new WindowCoordinator(model, () => exits++) { HideToTray = true };
-        Assert.False(windows.Pill.ShowInTaskbar); Assert.False(windows.Dashboard.ShowInTaskbar);
+        Assert.True(windows.Pill.ShowInTaskbar); Assert.True(windows.Dashboard.ShowInTaskbar); // A taskbar button by default.
         windows.Pill.Show(); model.ToggleAccount("Account one");
         windows.Pill.Close(); Dispatcher.UIThread.RunJobs();
         Assert.False(windows.Pill.IsVisible); Assert.False(windows.IsShown); Assert.True(model.IsTracking); Assert.Equal(0, exits);
@@ -54,5 +54,40 @@ public sealed class TrayTests
         Assert.NotNull(TrayController.Draw(true)); Assert.NotNull(TrayController.Draw(false));
         var windows = new WindowCoordinator(model, () => { });
         using var tray = new TrayController(model, windows); tray.RefreshMenu();
+    }
+
+    [AvaloniaFact]
+    public void TheTaskbarButtonCanBeSwitchedOffOnlyWhileTheTrayCanBringTheTimerBack()
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => Day.AddHours(10)));
+        var windows = new WindowCoordinator(model, () => { });
+        model.SetTaskbarButton(false); // No tray yet, so there would be no way back.
+        Assert.True(model.TaskbarButton); Assert.True(windows.Pill.ShowInTaskbar);
+        model.TrayAvailable = true; windows.HideToTray = true;
+        model.SetTaskbarButton(false);
+        Assert.False(model.TaskbarButton); Assert.False(windows.Pill.ShowInTaskbar); Assert.False(windows.Dashboard.ShowInTaskbar); Assert.Contains("notification area", model.Notice);
+        model.SetTaskbarButton(true);
+        Assert.True(windows.Pill.ShowInTaskbar); Assert.True(windows.Dashboard.ShowInTaskbar);
+        windows.Quit();
+    }
+
+    [AvaloniaFact]
+    public void EveryWindowWearsTheAppIconAndItsTitleBarFollowsTheTheme()
+    {
+        var model = TimerModel.CreateDemo(); model.SetTheme("Dark");
+        var windows = new WindowCoordinator(model, () => { });
+        var dialog = new AdjustWindow(model, "Account one"); dialog.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(windows.Pill.Icon); Assert.NotNull(windows.Dashboard.Icon); Assert.NotNull(dialog.Icon);
+            var dark = WindowChrome.Colours(dialog)!.Value;
+            Assert.True(dark.Dark); Assert.Equal(Timer.Core.ThemeLibrary.Dark.Colour("Surface").ToUpperInvariant(), dark.Caption.ToUpperInvariant());
+            Assert.Equal(Timer.Core.ThemeLibrary.Dark.Colour("Ink").ToUpperInvariant(), dark.Text.ToUpperInvariant());
+            model.SetTheme("Light"); Dispatcher.UIThread.RunJobs();
+            var light = WindowChrome.Colours(dialog)!.Value;
+            Assert.False(light.Dark); Assert.Equal(Timer.Core.ThemeLibrary.Light.Colour("Surface").ToUpperInvariant(), light.Caption.ToUpperInvariant());
+        }
+        finally { dialog.Close(); windows.Quit(); }
     }
 }

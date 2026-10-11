@@ -4,6 +4,7 @@
     <AssemblyName>BasicsAdvancedTimer.Preview</AssemblyName>
     <RootNamespace>Timer.Desktop</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/AppIcon.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup Condition="'$(StorePackage)' == 'true'">
     <AssemblyName>BasicsAdvancedTimer</AssemblyName>
@@ -18,6 +19,9 @@
   <PropertyGroup Condition="'$(BuildChannel)' == 'alpha'">
     <DefineConstants>$(DefineConstants);ALPHA_BUILD</DefineConstants>
   </PropertyGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/AppIcon.png" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Timer.Core/Timer.Core.csproj" />
     <ProjectReference Include="../Timer.Storage/Timer.Storage.csproj" />

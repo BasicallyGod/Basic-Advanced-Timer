@@ -12,6 +12,10 @@ The milestones below are newest first. Commit links mark when each change landed
 
 | Milestone | Commit | What changed |
 | --- | --- | --- |
+| App icon, taskbar button and themed dialogs | pending | The timer has an app icon (window, taskbar, executable) and a taskbar button, which Settings can switch off to run from the tray alone. On Windows 11 dialog title bars take the theme's colours and follow theme changes. |
+| Adjustments on the timeline | pending | Adjust time today now draws a striped, muted block in the account's colour, as tall as the minutes it adds or removes. It can be dragged to move where it sits without changing any total, double-clicked to edit the note and right-clicked to delete. The chips above the timeline are gone. |
+| System is the default theme again | pending | New installs follow Windows light or dark. Light and Dark now lead the theme list, ahead of the colourful themes. |
+| Play button hover | pending | Account and pill play and pause buttons ease into an accent-coloured glow under the pointer, so it is clear they do something. |
 | Stable, experimental and alpha channels | [2e6b81a](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/2e6b81a69eaa133807009134504325877de706da) | `main` is now the Microsoft Store release, with `experimental` for everyday testing and `alpha` for risky prototypes. Each channel builds its own portable ZIP, and the old `migration` branch is retired. The Store build is an unsigned MSIX built only from `main`, with a Windows startup task for Start with Windows, per-user data and no sample-data demo. See BRANCHES.md. |
 | Updater channels | [49c1014](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/49c1014531784b5044ffcb245df88187d663252a) | Timer Updater.cmd now offers the experimental and alpha channels. Each keeps its own data, builds, backups and startup entry under `test-install/channels`, so an alpha database never meets the experimental build. The picker opens without GitHub CLI and has a window test. |
 

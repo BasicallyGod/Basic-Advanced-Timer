@@ -41,6 +41,8 @@ public static class ThemeEngine
             if (token == "ShadowColor") dictionary[token] = colour; else dictionary[token] = new SolidColorBrush(colour);
         }
     }
+    /// <summary>Raised after theme colours are written, so windows with their own chrome (title bars) can follow a change or a preview.</summary>
+    public static event Action? Applied;
     /// <summary>Makes every theme, built-in and the user's own, available to the app. Safe to call again after a theme changes.</summary>
     public static void Register(Application app, IEnumerable<ThemeDefinition> themes)
     {
@@ -50,5 +52,6 @@ public static class ThemeEngine
             Write(app, StateVariant(theme, ThemeDerivation.Break), ThemeDerivation.Variant(theme, ThemeDerivation.Break));
             Write(app, StateVariant(theme, ThemeDerivation.Overtime), ThemeDerivation.Variant(theme, ThemeDerivation.Overtime));
         }
+        Applied?.Invoke();
     }
 }
