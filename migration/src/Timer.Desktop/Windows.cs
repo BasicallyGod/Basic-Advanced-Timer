@@ -292,6 +292,14 @@ public sealed class PillWindow : Window
         day.Content = model.DayStarted ? "Finish day" : "Start day";
         // Starting the day is the green main action; finishing it is red, so ending the day is never done by accident.
         day.Classes.Set("finishDay", model.DayStarted); day.Classes.Set("primary", !model.DayStarted);
+        // Inside a recording, break or overtime pill the surface is a strong colour, so the red button gets text that reads on red and a hairline
+        // that keeps it visible against a crimson pill. In the ordinary look the style does it all.
+        if (model.DayStarted && model.ThemeState != "Normal")
+        {
+            day.Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse(Timer.Core.ThemeColours.ReadableOn(model.CurrentTheme.Colour("Finish"))));
+            day.BorderThickness = new Thickness(1.5); day.BorderBrush = new Avalonia.Media.SolidColorBrush(ThemeColourOr("Ink", "#FFFFFF"));
+        }
+        else { day.ClearValue(ForegroundProperty); day.ClearValue(BorderThicknessProperty); day.ClearValue(BorderBrushProperty); }
         var progress = model.DayProgress;
         // The line is always there, so the pill never changes height or leaves a gap: on a day off it is simply an empty track.
         progressBar.IsVisible = true;
@@ -334,7 +342,7 @@ public sealed class DashboardWindow : Window
     private readonly Button merge;
     private EntryWindow? entryEditor;
     private bool weekMode, settingsMode, renderedSettings;
-    private Button settingsRail = null!; private Control? headerRow;
+    private Button settingsRail = null!; private Control? headerRow; private Grid body = null!; private Border sidebarPanel = null!, sidebarDivider = null!;
     private bool? renderedWeekMode;
     private DateTime? renderedDate;
     public DashboardWindow(TimerModel model)
@@ -366,14 +374,14 @@ public sealed class DashboardWindow : Window
         entriesTab = RailButton(IconKind.Entries, "Entries", "WeekEntriesTab", () => SelectSection("entries"));
         foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
-        var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center };
-        railFoot.Children.Add(Ui.IconButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke()));
+        var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+        railFoot.Children.Add(RailButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke()));
         settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);
         railFoot.Children.Add(settingsRail);
         Ui.Put(railGrid, railFoot, row: 1);
         rail.Child = railGrid; Ui.Put(root, rail);
         Ui.DragHeader(railTop, this);
-        var body = Ui.Grid("340,1,*", "*");
+        body = Ui.Grid("340,1,*", "*");
         var sidebar = Ui.Grid("*", "Auto,Auto,*,Auto");
         // The Day elapsed card, with a bar of the accent colour along its top edge.
         var dayCard = new Border { CornerRadius = new CornerRadius(18), ClipToBounds = true, BorderThickness = new Thickness(1) }; dayCard.Classes.Add("dayCard");
@@ -424,10 +432,10 @@ public sealed class DashboardWindow : Window
         Ui.Put(pair, breakButton); Ui.Put(pair, day, 1);
         summary.Children.Add(pair);
         Ui.Put(sidebar, summary, row: 3);
-        var panel = new Border { Child = sidebar };
+        var panel = new Border { Child = sidebar }; sidebarPanel = panel;
         panel.Classes.Add("panel");
         Ui.Put(body, panel);
-        var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
+        var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1); sidebarDivider = divider;
         var review = Ui.Grid("*", "Auto,Auto,*");
         review.Margin = new Thickness(22, 16, 22, 18);
         // The workspace's name on the left; on the right the date to step through and a button back to today.
@@ -516,6 +524,7 @@ public sealed class DashboardWindow : Window
     public bool InDragZone(Point point)
     {
         if (identityBlock is null || accountsHeadBlock is null || toolsRow is null) return false;
+        if (settingsMode && headerRow is not null) return point.Y <= (headerRow.TranslatePoint(new Point(0, headerRow.Bounds.Height), this)?.Y ?? 0);
         double Bottom(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), this)?.Y ?? 0;
         var sidebarRight = identityBlock.TranslatePoint(new Point(identityBlock.Bounds.Width, 0), this)?.X ?? 0;
         return point.X <= sidebarRight + 18 ? point.Y <= Bottom(accountsHeadBlock) : point.Y <= Bottom(settingsMode && headerRow is not null ? headerRow : toolsRow);
@@ -531,7 +540,8 @@ public sealed class DashboardWindow : Window
     private void ShowTidy() { if (IsVisible) new TidyWindow(model).Show(this); }
     private void ShowGroup(string id) { if (IsVisible) new GroupWindow(model, id).Show(this); }
     public void SelectTab(bool showWeek) { settingsMode = false; weekMode = showWeek; Refresh(true); }
-    private void ShowSettings() { settingsMode = true; Refresh(true); }
+    // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
+    private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
     private void SelectSection(string section)
     {
         settingsMode = false; weekMode = true;
@@ -576,6 +586,9 @@ public sealed class DashboardWindow : Window
         Rail(hoursTab, !settingsMode && weekMode && model.WeekSection == "hours");
         Rail(entriesTab, !settingsMode && weekMode && model.WeekSection == "entries");
         Rail(settingsRail, settingsMode);
+        // The settings page takes the whole window beside the rail, so the day column steps aside for it.
+        body.ColumnDefinitions[0].Width = settingsMode ? new GridLength(0) : new GridLength(340); body.ColumnDefinitions[1].Width = settingsMode ? new GridLength(0) : new GridLength(1);
+        sidebarPanel.IsVisible = !settingsMode; sidebarDivider.IsVisible = !settingsMode;
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
         foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = !settingsMode;
         if (toolsRow is not null) toolsRow.IsVisible = !settingsMode;

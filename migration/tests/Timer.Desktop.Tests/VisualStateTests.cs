@@ -222,4 +222,29 @@ public sealed class VisualStateTests
         }
         finally { pill.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheFinishDayButtonStaysRedInsideARecordingBreakOrOvertimePill()
+    {
+        var model = TimerModel.CreateDemo(); var pill = new PillWindow(model); pill.Show();
+        try
+        {
+            pill.ToggleExpansion();
+            var red = Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("Finish"));
+            model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs(); using var f1 = pill.CaptureRenderedFrame();
+            void Check(string state)
+            {
+                Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+                Assert.Equal(state, model.ThemeState);
+                var day = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDay");
+                Assert.Contains("finishDay", day.Classes);
+                var presenter = day.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First(p => p.Name == "PART_ContentPresenter");
+                Assert.Equal(red, ((Avalonia.Media.ISolidColorBrush)presenter.Background!).Color); // Red, not the pill's text colour.
+            }
+            Check("Recording");
+            model.ToggleBreak(); Check("Break"); model.ToggleBreak();
+            model.SetOvertimeTest(true); Check("Overtime"); model.SetOvertimeTest(false);
+        }
+        finally { pill.Close(); }
+    }
 }

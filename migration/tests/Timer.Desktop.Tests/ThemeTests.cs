@@ -46,7 +46,7 @@ public sealed class ThemeTests
             Assert.Equal(theme.Colour("PillSurface"), recording["Surface"]); Assert.Equal(theme.Colour("PillInk"), recording["Ink"]);
             Assert.Equal(theme.Colour("PillBreak"), amber["Surface"]); Assert.Equal(theme.Colour("PillOvertime"), red["Surface"]);
             // The colours that normally mean something become the pill's text colour, since the whole pill already says it.
-            foreach (var variant in new[] { recording, amber, red }) foreach (var token in new[] { "Break", "Overtime", "Finish" }) Assert.Equal(variant["Ink"], variant[token]);
+            foreach (var variant in new[] { recording, amber, red }) foreach (var token in new[] { "Break", "Overtime" }) Assert.Equal(variant["Ink"], variant[token]);
             foreach (var token in new[] { "Accent", "AccentInk", "BudgetWarning", "ShadowColor" }) { Assert.Equal(theme.Colour(token), amber[token]); Assert.Equal(theme.Colour(token), red[token]); }
             Assert.NotEqual(amber["Surface"], red["Surface"]); Assert.NotEqual(recording["Surface"], amber["Surface"]);
             // A dark theme's overtime colour is made for text, so the pill deepens it: white text on it must still read.

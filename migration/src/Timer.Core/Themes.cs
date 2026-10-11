@@ -109,7 +109,8 @@ public static class ThemeDerivation
     /// <summary>
     /// The colours the pill wears in a state, so everything inside it reads naturally on its colour. Recording uses the theme's pill colour, a break its Break
     /// colour and overtime its Overtime colour. Text, lines and hovers are mixed from the colour and the text on it, and the colours that normally mean
-    /// something (break, overtime, finish) become plain text colour, because the whole pill already says it.
+    /// something (break, overtime) become plain text colour, because the whole pill already says it. Finish keeps its own red, since the
+    /// Finish day button must stay red whatever the pill is doing.
     /// </summary>
     public static IReadOnlyDictionary<string, string> Variant(ThemeDefinition theme, string state)
     {
@@ -119,7 +120,7 @@ public static class ThemeDerivation
         {
             ["Surface"] = surface, ["Panel"] = ThemeColours.Mix(surface, ink, .10), ["Ink"] = ink, ["Muted"] = ThemeColours.Mix(surface, ink, .84),
             ["Line"] = ThemeColours.Mix(surface, ink, .30), ["Hover"] = ThemeColours.Mix(surface, ink, .16), ["Selected"] = ThemeColours.Mix(surface, ink, .22),
-            ["Idle"] = ThemeColours.Mix(surface, ink, .84), ["Clock"] = ink, ["Overtime"] = ink, ["Break"] = ink, ["Finish"] = ink,
+            ["Idle"] = ThemeColours.Mix(surface, ink, .84), ["Clock"] = ink, ["Overtime"] = ink, ["Break"] = ink,
             ["Live"] = state == Recording ? theme.Colour("Accent") : ink
         };
         return result;

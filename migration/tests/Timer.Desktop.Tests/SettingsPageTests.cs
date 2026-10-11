@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Headless;
 using Xunit;
 using Avalonia.Controls;
@@ -68,6 +69,44 @@ public sealed class SettingsPageTests
             var page = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "SettingsPage");
             model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs();
             Assert.Same(page, window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "SettingsPage")); // Typing in the hours boxes is safe.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheSettingsPageScrollsFillsTheWindowAndClosesWithTheSameButton()
+    {
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var first = window.CaptureRenderedFrame();
+            OpenSettings(window); using var frame = window.CaptureRenderedFrame();
+            var page = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "SettingsPage");
+            Assert.True(page.Extent.Height > page.Viewport.Height, $"extent {page.Extent} viewport {page.Viewport}"); // There is more than fits, and it can scroll.
+            Assert.True(page.Viewport.Height > 400);
+            page.Offset = new Avalonia.Vector(0, 5000); Dispatcher.UIThread.RunJobs();
+            Assert.True(page.Offset.Y > 0);
+            // The day column steps aside, so the page starts just beside the rail.
+            Assert.True(page.TranslatePoint(new Avalonia.Point(0, 0), window)!.Value.X < 120);
+            // The same button closes it again and the timeline returns.
+            OpenSettings(window); using var closed = window.CaptureRenderedFrame();
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<ScrollViewer>(), s => s.Name == "SettingsPage");
+            Assert.Contains(window.GetVisualDescendants().OfType<ScrollViewer>(), s => s.Name == "TimelineScroll");
+            Assert.True(window.GetVisualDescendants().OfType<Control>().First(c => c.Name == "SidebarDragHeader").Bounds.Width > 100);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheSettingsAndPillButtonsShareACentreLine()
+    {
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            double Centre(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Avalonia.Point(b.Bounds.Width / 2, 0), window)!.Value.X; }
+            Assert.Equal(Centre("Settings"), Centre("BackToPill"), 0.5);
+            Assert.Equal(Centre("Settings"), Centre("TimelineTab"), 0.5);
         }
         finally { window.Close(); }
     }

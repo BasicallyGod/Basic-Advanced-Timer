@@ -11,6 +11,8 @@ namespace Timer.Desktop;
 /// </summary>
 public sealed class SettingsView : ScrollViewer
 {
+    // Styles and the scrolling template are found by exact type, so a subclass must borrow ScrollViewer's or it draws no scroll bar and never scrolls.
+    protected override Type StyleKeyOverride => typeof(ScrollViewer);
     private readonly TimerModel model;
     private readonly List<Action> syncs = new();
     public SettingsView(TimerModel model)
@@ -18,7 +20,7 @@ public sealed class SettingsView : ScrollViewer
         this.model = model;
         Name = "SettingsPage"; AllowAutoHide = false;
         HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
-        var page = new StackPanel { Spacing = 16, Margin = new Thickness(0, 0, 14, 8), MaxWidth = 660, HorizontalAlignment = HorizontalAlignment.Left };
+        var page = new StackPanel { Spacing = 16, Margin = new Thickness(0, 0, 14, 8), MaxWidth = 820, HorizontalAlignment = HorizontalAlignment.Left };
 
         // Working hours, with the same form as its window.
         page.Children.Add(Section("Working hours", new ShiftEditor(model, () => { }, null)));
