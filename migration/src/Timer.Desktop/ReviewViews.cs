@@ -411,7 +411,9 @@ public static class ReviewViews
             Ui.Put(header, title); Ui.Put(header, total, 1);
             root.Children.Add(header);
             var rows = new StackPanel { Spacing = 2 };
-            foreach (var (entry, index) in dayGroup)
+            // The entries come from the export in account order, which keeps exports tidy but reads oddly on screen. Within a day they run by start time instead,
+            // with anything that has no clock time (a plain added entry) after the timed ones.
+            foreach (var (entry, index) in dayGroup.OrderBy(x => x.entry.Start ?? DateTime.MaxValue).ThenBy(x => x.index))
             {
                 void Open()
                 {
