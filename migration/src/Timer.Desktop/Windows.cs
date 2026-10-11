@@ -482,7 +482,9 @@ public sealed class DashboardWindow : Window
         zoomIn = Ui.IconButton(IconKind.ZoomIn, "Zoom in (or hold Ctrl and use the mouse wheel)", "TimelineZoomIn", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Height / 2, s.Offset.Y); });
         var fit = Ui.IconButton(IconKind.FitDay, "Fit the day to the window", "TimelineFit", () => { if (TimelineScroll() is { } s) model.FitTimeline(s.Viewport.Height); });
         // The zoom controls sit in a bar under the timeline: fit the day, zoom out, a slider, zoom in. They show only on the Timeline view.
-        zoomSlider = new Slider { Name = "TimelineZoom", Minimum = 0, Maximum = 1, Width = 170, VerticalAlignment = VerticalAlignment.Center, Value = model.TimelineZoomFraction };
+        zoomSlider = new Slider { Name = "TimelineZoom", Minimum = 0, Maximum = 1, Width = 170, VerticalAlignment = VerticalAlignment.Center, Value = model.TimelineZoomFraction,
+            // The standard slider draws its track a little below the middle of its own box, so the box is lifted by the same amount (drawing only, no layout change) to put the track on the bar's centre line.
+            RenderTransform = new Avalonia.Media.TranslateTransform(0, -5) };
         Avalonia.Automation.AutomationProperties.SetName(zoomSlider, "Zoom"); ToolTip.SetTip(zoomSlider, "Zoom the timeline");
         zoomSlider.PropertyChanged += (_, e) =>
         {
