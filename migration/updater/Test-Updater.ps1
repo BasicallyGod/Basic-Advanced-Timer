@@ -12,12 +12,12 @@ foreach ($definition in $ast.FindAll({ param($node) $node -is [Management.Automa
 $windowTokens = $null; $windowErrors = $null
 $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'Timer-Updater-Window.ps1'), [ref]$windowTokens, [ref]$windowErrors)
 if ($windowErrors.Count) { throw ($windowErrors | Out-String) }
-$Repository = 'BasicallyGod/Basic-Advanced-Timer'; $Branch = 'migration'; $Workflow = 'avalonia-preview.yml'
+$Repository = 'BasicallyGod/Basic-Advanced-Timer'; $Branch = 'experimental'; $Workflow = 'avalonia-preview.yml'
 $UpdaterDirectory = $PSScriptRoot
 $UpdaterScript = Join-Path $PSScriptRoot 'Update-TestBuild.ps1'
-$ArtifactName = 'BasicsAdvancedTimer-Windows-preview'; $Executable = 'BasicsAdvancedTimer.Preview.exe'
+$ArtifactName = 'BasicsAdvancedTimer-Windows-experimental'; $Executable = 'BasicsAdvancedTimer.Preview.exe'
 $Root = Join-Path ([IO.Path]::GetTempPath()) ('timer-updater-tests-' + [guid]::NewGuid().ToString('N'))
-$Versions = Join-Path $Root 'versions'; $Data = Join-Path $Root 'data'; $StatePath = Join-Path $Root 'state.json'
+Select-Channel $Branch
 $Mode = 'Update'; $script:Downloads = 0; $script:Launches = 0; $script:FailDownload = $false; $script:BadMarker = $false
 $script:Offline = $false; $script:RunId = 10; $script:ArtifactId = 100
 $null = New-Item -ItemType Directory -Path $Root
@@ -86,7 +86,7 @@ try {
     $Mode = 'Update'
     Expect-Failure { Invoke-TestUpdater }
     Assert ((Read-State).current.runId -eq 10) 'Offline error changed installed version.'
-    $handle = [IO.File]::Open((Join-Path $Root 'updater.lock'), 'Open', 'ReadWrite', 'None')
+    $handle = [IO.File]::Open((Join-Path $ChannelRoot 'updater.lock'), 'Open', 'ReadWrite', 'None')
     try { Expect-Failure { Invoke-TestUpdater } } finally { $handle.Dispose() }
     # A busy timer must prompt, and cancelling must leave the build untouched.
     function Read-Host { param($Prompt) return 'Q' }
@@ -95,11 +95,22 @@ try {
     Expect-Failure { Get-BuildFolder ([pscustomobject]@{ folder = '../production' }) }
     foreach ($bad in @('', '..', 'a/../b', 'x y', 'main;calc', '-flag', 'a//b', 'a/', 'x.lock')) { Expect-Failure { Assert-BranchName $bad } }
     foreach ($good in @('main', 'migration', 'feature/new-theme', 'release-1.2')) { Assert-BranchName $good }
-    # Choosing a different branch asks GitHub for that branch and records it with the build.
-    $Mode = 'Update'; $script:Offline = $false; $script:RunId = 20; $script:ArtifactId = 200; $Branch = 'feature/new-theme'
+    # Alpha must not see or modify experimental's installed build, database, rollback or backups.
+    $experimentalRoot = $ChannelRoot; $experimentalState = $StatePath; $experimentalData = $Data
+    $Mode = 'Update'; $script:Offline = $false; $script:RunId = 20; $script:ArtifactId = 200; $Branch = 'alpha'
+    Select-Channel $Branch
+    Assert ($ChannelRoot -ne $experimentalRoot -and $Data -ne $experimentalData) 'Alpha shares experimental data.'
+    Assert (!(Test-Path $StatePath)) 'Alpha inherited experimental state.'
+    Assert (!(Test-Path $Data)) 'Alpha inherited experimental data.'
     Invoke-TestUpdater
-    Assert ((Read-State).current.runId -eq 20 -and (Read-State).current.branch -eq 'feature/new-theme') 'Other branch was not recorded.'
-    Write-Host 'PASS: install, no-download launch, partial download, validation, data preservation, rollback, offline launch, locks and path rejection.'
+    Assert ((Read-State).current.runId -eq 20 -and (Read-State).current.branch -eq 'alpha') 'Alpha branch build was not installed.'
+    Assert ($ArtifactName -eq 'BasicsAdvancedTimer-Windows-alpha') 'Alpha artifact name is wrong.'
+    $Branch = 'experimental'; Select-Channel $Branch
+    Assert ($StatePath -eq $experimentalState -and (Read-State).current.runId -eq 10) 'Alpha changed experimental build state.'
+    Assert ((Get-Content -LiteralPath $sentinel -Raw) -eq 'persistent settings') 'Alpha touched experimental data.'
+    $Branch = 'main'
+    Expect-Failure { Select-Channel $Branch }
+    Write-Host 'PASS: branch-separated install, data and rollback; offline launch; locking and validation.'
 } finally {
     # Only delete the exact temporary directory created by this test.
     $resolved = [IO.Path]::GetFullPath($Root)
