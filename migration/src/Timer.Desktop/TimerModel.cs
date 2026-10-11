@@ -28,7 +28,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void FitTimeline(double viewportHeight)
     {
         var day = SelectedDate.Date;
-        var spans = Engine.Sessions.Where(s => s.Day == day && s.IsPositioned && s.Duration > TimeSpan.Zero).Select(s => (s.From, s.To)).ToList();
+        var spans = Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero).Select(s => (s.From, s.To)).ToList();
         if (Engine.Active is { } active && active.Start < day.AddDays(1) && Engine.Now > day) spans.Add((active.Start < day ? day : active.Start, Engine.Now < day.AddDays(1) ? Engine.Now : day.AddDays(1)));
         double start, end;
         if (spans.Count > 0) { start = (spans.Min(s => s.From) - day).TotalHours; end = (spans.Max(s => s.To) - day).TotalHours; }
@@ -171,7 +171,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         get
         {
             if (!IsOnBreak || Engine.Active is not { } active) return null;
-            var before = Engine.Sessions.Where(s => s.IsPositioned && !BreakAccount.Is(s.Account) && Math.Abs((s.To - active.Start).TotalSeconds) <= 2)
+            var before = Engine.Sessions.Where(s => !BreakAccount.Is(s.Account) && Math.Abs((s.To - active.Start).TotalSeconds) <= 2)
                 .OrderByDescending(s => s.To).FirstOrDefault()?.Account ?? Engine.ResumeAfterBreak;
             return before is { } name && Accounts.Any(a => a.Name == name && !BreakAccount.Is(a.Name)) ? name : null;
         }
@@ -278,8 +278,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool CanStepForwardAWeek => WeekStart(SelectedDate) < WeekStart(Engine.Now);
     /// <summary>Adds or removes minutes on an account for a day, as one undoable edit.</summary>
-    public bool AdjustTime(string account, DateTime day, decimal minutes, string note)
-        => ChangeLog(() => { ValidateAccount(account); Editor.Adjust(account, day, minutes, note, Engine.Now); });
     /// <summary>Moves entries to another account as one undoable edit. Every selected block moves when the one clicked is selected.</summary>
     public bool MoveEntries(IReadOnlyList<SessionRow> rows, string account)
         => ChangeLog(() => { ValidateAccount(account); Editor.Reassign(rows, account); });
@@ -420,7 +418,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         var day = SelectedDate;
         var limit = day.AddDays(1);
         var start = at ?? (Engine.Plan(day).Working ? Engine.Plan(day).Start : day.AddHours(9));
-        var occupied = Engine.Sessions.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero && s.From < day.AddDays(1) && s.To > day)
+        var occupied = Engine.Sessions.Where(s => s.Duration > TimeSpan.Zero && s.From < day.AddDays(1) && s.To > day)
             .Select(s => (Start: s.From, End: s.To)).ToList();
         if (Engine.Active is { } active) occupied.Add((active.Start, Engine.Now));
         foreach (var span in occupied.OrderBy(s => s.Start))
@@ -436,9 +434,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note)
         => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note); });
-    /// <summary>The time on this adjustment's day that it has to stay clear of, for snapping a drag to its neighbours.</summary>
-    public List<(DateTime From, DateTime To)> AdjustmentOccupied(SessionRow row) => AdjustmentSpace.Occupied(Engine, row.Day, row);
-    public bool MoveAdjustment(SessionRow row, TimeSpan start) => ChangeLog(() => Editor.MoveAdjustment(row, start));
     /// <summary>What lengthening a block to a later end would move, or an explanation when it cannot be done. Nothing is changed.</summary>
     public IReadOnlyList<TimelineChange> PlanExtend(SessionRow row, DateTime end) => Editor.PlanExtend(row, end);
     public bool ExtendEntry(SessionRow row, DateTime end, string note) => ChangeLog(() => Editor.ExtendEnd(row, end, note));

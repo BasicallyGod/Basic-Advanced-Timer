@@ -23,6 +23,8 @@ public sealed class TimerStore : IDisposable
     /// <summary>The open database, for tests that need to cause or check a storage state.</summary>
     public TimerDatabase Database => database;
     public string ExportDirectory => Path.Combine(directory, "Timesheets", "Exports");
+    /// <summary>How many adjustments from an earlier version were removed when the database was opened. Zero for everyone else.</summary>
+    public int AdjustmentsRemoved { get; private set; }
     /// <summary>True when the folder holds timesheet files from an older timer. They are never read, changed or deleted.</summary>
     public bool OldFilesFound { get; }
     /// <summary>True once per database: the first launch that finds old files, so the app can say they are unused. Asking marks it as told.</summary>
@@ -98,8 +100,18 @@ public sealed class TimerStore : IDisposable
         var shifts = engine.Schedule.Shifts.Values.Append(engine.Schedule.Default)
             .Concat(engine.Schedule.Overrides.Values.Where(o => !o.Off).Select(o => o.Shift!));
         if (shifts.Any(s => s.End <= s.Start)) throw new InvalidDataException("A working shift must finish after it starts.");
+        // An earlier version let you adjust an account's time without a block on the clock. That feature is gone, so those rows are left out here and
+        // fall away on the next save. A copy of the database is kept first, and the undo history (which could bring them back) is cleared.
+        var adjustments = database.Query("SELECT a.name, e.day, e.start_at FROM entries e LEFT JOIN accounts a ON a.id = e.account_id WHERE e.kind = 'adjustment'",
+            r => (Account: r.IsDBNull(0) ? BreakAccount.Name : r.GetString(0), Day: r.GetString(1), Start: r.IsDBNull(2) ? "00:00:00" : r.GetString(2)[11..]));
+        if (adjustments.Count > 0)
+        {
+            Backup("before-removing-adjustments");
+            database.Execute("DELETE FROM edit_changes"); database.Execute("DELETE FROM edits");
+            AdjustmentsRemoved = adjustments.Count;
+        }
         engine.Sessions.AddRange(database.Query(
-            "SELECT e.kind, a.name, e.day, e.start_at, e.end_at, e.seconds, e.origin, e.minutes_text FROM entries e LEFT JOIN accounts a ON a.id = e.account_id ORDER BY e.id", ToRow));
+            "SELECT e.kind, a.name, e.day, e.start_at, e.end_at, e.seconds, e.origin, e.minutes_text FROM entries e LEFT JOIN accounts a ON a.id = e.account_id WHERE e.kind <> 'adjustment' ORDER BY e.id", ToRow));
         persistedEdits.Clear();
         var steps = new List<UndoStep>();
         foreach (var edit in database.Query("SELECT id, description FROM edits ORDER BY id", r => (Id: r.GetInt64(0), Description: r.GetString(1))))
@@ -113,6 +125,7 @@ public sealed class TimerStore : IDisposable
             steps.Add(step); persistedEdits.Add((edit.Id, step));
         }
         Editor = new LedgerEditor(engine, null, null, Meta("notes"), Meta("groups"), steps: steps);
+        if (adjustments.Count > 0) Editor.DropNotes(adjustments);
         // The editor may have trimmed or refused steps it could not use, so what is saved is brought back in line on the next save.
         engine.Away.AddRange(database.Query("SELECT start_at, end_at FROM away ORDER BY id", r => new AwayInterval(ParseIso(r.GetString(0)), r.IsDBNull(1) ? null : ParseIso(r.GetString(1)))));
         var running = database.Query("SELECT kind, a.name, start_at, last_seen FROM running LEFT JOIN accounts a ON a.id = running.account_id",
@@ -134,7 +147,7 @@ public sealed class TimerStore : IDisposable
         var day = r.GetString(2); var origin = r.GetString(6);
         var minutes = r.IsDBNull(7) ? Math.Round(r.GetDouble(5) / 60.0, 2, MidpointRounding.ToEven).ToString("0.##", CultureInfo.InvariantCulture) : r.GetString(7);
         var start = r.IsDBNull(3) ? "00:00:00" : r.GetString(3)[11..];
-        var end = kind == "adjustment" ? "adjusted" : origin == "added" ? "added" : origin == "edited" ? "edited" : r.GetString(4)[11..];
+        var end = origin == "added" ? "added" : origin == "edited" ? "edited" : r.GetString(4)[11..];
         return new(day, account, start, end, minutes);
     }
     public void Save(TrackingEngine engine, StoreSettings preferences)
@@ -238,11 +251,11 @@ public sealed class TimerStore : IDisposable
         var now = Iso(engine.Now);
         foreach (var s in engine.Sessions)
         {
-            var isBreak = BreakAccount.Is(s.Account); var adjustment = s.IsAdjustment;
-            var kind = adjustment ? "adjustment" : isBreak ? "break" : "work";
+            var isBreak = BreakAccount.Is(s.Account);
+            var kind = isBreak ? "break" : "work";
             var origin = s.End.Equals("added", StringComparison.OrdinalIgnoreCase) ? "added" : s.End.Equals("edited", StringComparison.OrdinalIgnoreCase) ? "edited" : "recorded";
             var from = s.Date + "T" + s.Start;
-            var end = adjustment ? null : s.End.Contains(':') ? s.Date + "T" + s.End : Iso(s.To);
+            var end = s.End.Contains(':') ? s.Date + "T" + s.End : Iso(s.To);
             database.Execute(@"INSERT INTO entries (kind, account_id, day, start_at, end_at, seconds, origin, created_at, minutes_text) VALUES ($k, $a, $d, $s, $e, $x, $o, $c, $m)",
                 ("$k", kind), ("$a", isBreak ? null : ids[s.Account]), ("$d", s.Date), ("$s", from), ("$e", end),
                 ("$x", s.Duration.TotalSeconds), ("$o", origin), ("$c", now), ("$m", s.Minutes));

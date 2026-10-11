@@ -76,7 +76,7 @@ public sealed class TrayTests
     {
         var model = TimerModel.CreateDemo(); model.SetTheme("Dark");
         var windows = new WindowCoordinator(model, () => { });
-        var dialog = new AdjustWindow(model, "Account one"); dialog.Show();
+        var dialog = new ShiftWindow(model); dialog.Show();
         try
         {
             Dispatcher.UIThread.RunJobs();

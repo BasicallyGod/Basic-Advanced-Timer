@@ -25,7 +25,7 @@ The `migration` folder name is historical and kept so updater and workflow paths
 
 ## Behaviour to preserve
 
-- **Credited totals.** Entries hold credited durations. Totals come from credited seconds, never from clock spans. Positioning credit never adds hours; "Add time" does. Merged and adjustment rows are not recorded timeline intervals.
+- **Credited totals.** Entries hold credited durations. Totals come from credited seconds, never from clock spans. Positioning credit never adds hours; "Add time" does.
 - **Day clock.** The main clock is working plus overtime time, excluding Lunch, breaks and away. Stopping or switching an account does not reset it. Scheduled starts are automatic. A day off counts only tracked time. `SetShifts` drops manual starts the new hours make unnecessary. `ResumeAfterBreak` is stored with the running row. `BreakAccount.Name = "Break"` is reserved.
 - **Exact decimal hours.** Exports apportion hundredths of an hour by largest remainder, first across account/day totals and then within each bucket, so every sum is exact. Running totals are provisional until saved.
 - **Gaps.** Selected gaps are validated against the unrounded current gap before being moved to whole seconds, because durations use hundredths of a minute. Tidy day rechecks the whole selection before adding anything, as one undo step.
@@ -42,7 +42,7 @@ Each theme is a `ThemeDefinition` (name, Light or Dark base, colour tokens, bloc
 ## UI conventions and pitfalls
 
 - Every window calls `WindowChrome.Attach(this)`, which gives it the app icon and, on Windows 11, a title bar in the theme's colours that follows theme changes and previews (`ThemeEngine.Applied`). Older Windows keeps its normal title bar.
-- Adjustments are credited rows with no clock position. The timeline draws them as striped blocks at their stored start, in their own lane column to the right of every real time block (never sharing a lane with real time), as tall as their minutes, and `LedgerEditor.MoveAdjustment` only changes that start. They never take part in gaps, merging or ripple. `AdjustmentSpace` picks their place: flush against a neighbour or the nearest free spot, never across recorded time, the running stretch or another adjustment, and nothing recorded moves. Only a day with no room that big keeps the wanted time. Older adjustments that already overlap stay until they are moved.
+- There is no Adjust time feature. Databases made while it existed are cleaned when they open: `TimerStore` leaves `adjustment` rows out, keeps a `before-removing-adjustments` backup, drops their notes and clears the undo history (`AdjustmentsRemoved` drives a notice). The schema's `adjustment` kind is left in place, since SQLite cannot drop a CHECK value cheaply.
 - The taskbar button is on by default and `TaskbarButton` can be switched off only once the tray exists (`TrayAvailable`).
 - Use the helpers in `Controls.cs` (`Ui.Grid`, `Ui.Put`, `Ui.Button`, `Ui.IconButton`, `Ui.Text`). Style through classes in `App.axaml` and `DynamicResource` theme tokens rather than hard-coded colours.
 - `Ui.Visible` lifts very dark account colours so dots and blocks stay visible on dark themes; `Ui.InkOn` picks text for a block.

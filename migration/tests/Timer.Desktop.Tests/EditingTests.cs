@@ -83,20 +83,6 @@ public sealed class EditingTests
     }
 
     [Fact]
-    public void AdjustmentsSupportNotesWithoutInventingTimeAndAmbiguousKeysAreRejected()
-    {
-        var engine = Engine(); var merged = Row(end: "adjusted"); engine.Sessions.Add(merged);
-        var editor = new LedgerEditor(engine);
-        editor.Edit(merged, merged.Account, merged.From, merged.To, "Legacy note");
-        Assert.Equal(merged, engine.Sessions.Single()); Assert.Equal("Legacy note", editor.Note(merged));
-        Assert.Throws<ArgumentException>(() => editor.Edit(merged, merged.Account, merged.From.AddMinutes(5), merged.To, ""));
-        editor.Undo(); Assert.Equal("", editor.Note(engine.Sessions.Single()));
-        var copy = engine.Sessions.Single(); engine.Sessions.Add(copy with { End = "adjusted", Minutes = "5" });
-        Assert.Throws<ArgumentException>(() => editor.Edit(copy, copy.Account, copy.From, copy.To, "Ambiguous"));
-        Assert.False(editor.CanUndo);
-    }
-
-    [Fact]
     public void AFailedSaveChangesNothingAndTheRetrySavesEditNotesAndUndoTogether()
     {
         var folder = Path.Combine(Path.GetTempPath(), "timer-edit-failed-" + Guid.NewGuid());

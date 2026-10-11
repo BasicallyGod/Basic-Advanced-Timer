@@ -27,16 +27,13 @@ public sealed class WorkSchedule
     }
 }
 
-// Minutes is the authoritative credited duration, including negative adjustments.
+// Minutes is the authoritative credited duration.
 public sealed record SessionRow(string Date, string Account, string Start, string End, string Minutes)
 {
     public DateTime Day => DateTime.ParseExact(Date, "yyyy-MM-dd", CultureInfo.InvariantCulture);
     public DateTime From => Day + TimeSpan.ParseExact(Start, "hh\\:mm\\:ss", CultureInfo.InvariantCulture);
     public TimeSpan Duration => TimeSpan.FromMinutes(double.Parse(Minutes, CultureInfo.InvariantCulture));
     public DateTime To => From + Duration;
-    public bool IsAdjustment => End.Equals("adjusted", StringComparison.OrdinalIgnoreCase);
-    // Everything but an adjustment sits at a place on the clock.
-    public bool IsPositioned => !IsAdjustment;
 }
 
 public sealed class TrackingEngine
@@ -133,7 +130,7 @@ public sealed class TrackingEngine
         // midnight, as overtime. Its overtime stops at the last recorded activity, or the end of the shift if that came later.
         if (day < now.Date)
         {
-            var lastActivity = Sessions.Where(s => s.Day == day && s.IsPositioned && s.Duration > TimeSpan.Zero).Select(s => s.To).DefaultIfEmpty(DateTime.MinValue).Max();
+            var lastActivity = Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero).Select(s => s.To).DefaultIfEmpty(DateTime.MinValue).Max();
             var end = plan.Working && plan.End > lastActivity ? plan.End : lastActivity;
             cap = end < cap ? end : cap;
         }
@@ -142,14 +139,12 @@ public sealed class TrackingEngine
         // On a day that is off in the schedule there is no working day to measure against, so the day is just the time actually tracked.
         if (!Schedule.Scheduled(day).Working) return new(allocated, TimeSpan.Zero, allocated, TimeSpan.Zero);
         if (!plan.Working || cap <= plan.Start) return new(TimeSpan.Zero, TimeSpan.Zero, allocated, TimeSpan.Zero);
-        var blocked = Sessions.Where(s => s.Day == day && BreakAccount.Is(s.Account) && s.IsPositioned && s.Duration > TimeSpan.Zero)
+        var blocked = Sessions.Where(s => s.Day == day && BreakAccount.Is(s.Account) && s.Duration > TimeSpan.Zero)
             .Select(s => (s.From, s.To)).ToList();
         blocked.AddRange(Away.Select(a => (a.Start, a.End ?? (now < a.Start.Date.AddDays(1) ? now : a.Start.Date.AddDays(1)))));
         if (Active is { } lunch && BreakAccount.Is(lunch.Account)) blocked.Add((lunch.Start, now));
         var regularEnd = cap < plan.End ? cap : plan.End;
-        var lunchAdjustment = Sessions.Where(s => s.Day == day && BreakAccount.Is(s.Account) && s.IsAdjustment)
-            .Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
-        var work = Positive(regularEnd - plan.Start - Blocked(blocked, plan.Start, regularEnd) - lunchAdjustment);
+        var work = Positive(regularEnd - plan.Start - Blocked(blocked, plan.Start, regularEnd));
         var overtime = cap > plan.End ? Positive(cap - plan.End - Blocked(blocked, plan.End, cap)) : TimeSpan.Zero;
         return new(work, overtime, allocated, Positive(work + overtime - allocated));
     }

@@ -67,6 +67,12 @@ public sealed partial class LedgerEditor
     }
     private static bool SameKey(Dictionary<string, string> item, SessionRow row) =>
         item["Date"] == row.Date && item["Start"] == row.Start && item["Account"].Equals(row.Account, StringComparison.OrdinalIgnoreCase);
+    /// <summary>Forgets the notes of entries that no longer exist, so one cannot reappear on a new entry that starts at the same time.</summary>
+    public void DropNotes(IEnumerable<(string Account, string Day, string Start)> entries)
+    {
+        var keys = entries.Select(e => (e.Day, e.Account.ToLowerInvariant(), e.Start)).ToHashSet();
+        if (notes.Rows.RemoveAll(n => keys.Contains((n["Date"], n["Account"].ToLowerInvariant(), n["Start"]))) > 0) Changed = true;
+    }
     public string Note(SessionRow row) => notes.Rows.LastOrDefault(n => SameKey(n, row))?.GetValueOrDefault("Note", "") ?? "";
     public List<Dictionary<string, string>> Rows() => engine.Sessions.Select(Fields).ToList();
     private Dictionary<string, string> Fields(SessionRow row)
@@ -94,7 +100,7 @@ public sealed partial class LedgerEditor
     }
     private void ValidateInterval(SessionRow row, SessionRow? except)
     {
-        if (engine.Sessions.Any(s => !ReferenceEquals(s, except) && s.IsPositioned && s.Duration > TimeSpan.Zero && s.From < row.To && s.To > row.From)
+        if (engine.Sessions.Any(s => !ReferenceEquals(s, except) && s.Duration > TimeSpan.Zero && s.From < row.To && s.To > row.From)
             || (engine.Active is { } active && active.Start < row.To && engine.Now > row.From))
             throw new ArgumentException("This interval overlaps recorded or running time. Choose a free gap.");
     }
@@ -144,10 +150,8 @@ public sealed partial class LedgerEditor
     {
         var index = Index(old);
         var row = old;
-        if (old.IsPositioned && (account != old.Account || start != old.From || end != old.To))
+        if (account != old.Account || start != old.From || end != old.To)
         { row = TimedRow(account, start, end, "edited"); ValidateInterval(row, old); }
-        else if (!old.IsPositioned && (account != old.Account || start != old.From || end != old.To))
-            throw new ArgumentException("Adjustments support notes only at this stage.");
         CheckNoteKey(old);
         if (engine.Sessions.Any(s => !ReferenceEquals(s, old) && s.Date == row.Date && s.Start == row.Start && s.Account.Equals(row.Account, StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("Another entry uses that account and start time.");
@@ -200,50 +204,6 @@ public sealed partial class LedgerEditor
         history.Clear(); stepBytes.Clear();
         return count;
     }
-    /// <summary>
-    /// Adds or removes minutes on an account for one day, without touching any recorded stretch. It is stored as an
-    /// "adjusted" row, which the totals, the week table and the exports already count, and it can carry a note.
-    /// </summary>
-    public SessionRow Adjust(string account, DateTime day, decimal minutes, string note, DateTime now)
-    {
-        if (string.IsNullOrWhiteSpace(account) || account != account.Trim()) throw new ArgumentException("Choose an account.");
-        if (minutes == 0 || decimal.Round(minutes, 2) != minutes || Math.Abs(minutes) > 24 * 60)
-            throw new ArgumentException("Enter minutes to add or remove, such as +15 or -10, up to 24 hours.");
-        day = day.Date;
-        if (engine.Credited(account, day, day.AddDays(1)) + TimeSpan.FromMinutes((double)minutes) < TimeSpan.Zero)
-            throw new ArgumentException("That would take more time off than the account has on that day.");
-        // The row's start is where its block sits on the timeline. It begins at the time of the change (midday for a past day) and then settles
-        // against the blocks around it, so it does not lie across recorded time. When the day has no room that big it keeps the wanted time.
-        var wanted = day + (day == now.Date ? now.TimeOfDay : TimeSpan.FromHours(12));
-        var length = TimeSpan.FromMinutes(Math.Min(24 * 60, Math.Abs((double)minutes)));
-        var placed = AdjustmentSpace.Choose(wanted, length, day, AdjustmentSpace.Occupied(engine, day, null), TimeSpan.FromMinutes(10), null) ?? wanted;
-        var start = TimeSpan.FromSeconds(Math.Floor((placed - day).TotalSeconds));
-        while (engine.Sessions.Any(s => s.Date == day.ToString("yyyy-MM-dd") && s.Account.Equals(account, StringComparison.OrdinalIgnoreCase) && s.Start == start.ToString(@"hh\:mm\:ss")))
-            start = start.Add(TimeSpan.FromSeconds(1));
-        var row = new SessionRow(day.ToString("yyyy-MM-dd"), account, start.ToString(@"hh\:mm\:ss"), "adjusted", minutes.ToString("0.##", CultureInfo.InvariantCulture));
-        Change("Adjust time", () => { engine.Sessions.Add(row); SetNote(null, row, note); });
-        return row;
-    }
-    /// <summary>
-    /// Moves an adjustment to another place on the day's clock. Its credited minutes do not change, so no total moves; the start is only where
-    /// the adjustment is drawn on the timeline. It may overlap recorded time, because it is a correction and not a stretch of the clock.
-    /// </summary>
-    public SessionRow MoveAdjustment(SessionRow old, TimeSpan start)
-    {
-        if (!old.IsAdjustment) throw new ArgumentException("Only an adjustment can be moved this way.");
-        var index = Index(old); CheckNoteKey(old);
-        start = TimeSpan.FromSeconds(Math.Floor(start.TotalSeconds));
-        if (start < TimeSpan.Zero || start >= TimeSpan.FromDays(1)) throw new ArgumentException("Keep the adjustment within its own day.");
-        var row = old with { Start = start.ToString(@"hh\:mm\:ss") };
-        if (row == old) return old;
-        if (!AdjustmentSpace.IsFree(row.From, AdjustmentSpace.Length(row), row.Day, AdjustmentSpace.Occupied(engine, row.Day, old)))
-            throw new ArgumentException("That place on the day is taken. An adjustment has to sit in free time.");
-        if (engine.Sessions.Any(s => !ReferenceEquals(s, old) && s.Date == row.Date && s.Start == row.Start && s.Account.Equals(row.Account, StringComparison.OrdinalIgnoreCase)))
-            throw new ArgumentException("Another entry for that account starts at that time.");
-        var note = Note(old);
-        Change("Move adjustment", () => { raw[row] = Fields(old); engine.Sessions[index] = row; SetNote(old, row, note); });
-        return row;
-    }
     /// <summary>Moves entries to another account, with their notes, as one edit. Times do not change, so nothing can overlap.</summary>
     public void Reassign(IReadOnlyList<SessionRow> rows, string account)
     {
@@ -254,7 +214,6 @@ public sealed partial class LedgerEditor
         foreach (var row in moving)
         {
             Index(row); CheckNoteKey(row);
-            if (!row.IsPositioned) throw new ArgumentException("Adjustments cannot be moved to another account here.");
             if (engine.Sessions.Any(s => !moving.Any(m => ReferenceEquals(m, s)) && s.Date == row.Date && s.Start == row.Start && s.Account.Equals(account, StringComparison.OrdinalIgnoreCase)))
                 throw new ArgumentException("Another entry for that account starts at the same time.");
         }

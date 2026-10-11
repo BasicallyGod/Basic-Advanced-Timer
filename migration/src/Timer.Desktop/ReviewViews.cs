@@ -32,23 +32,16 @@ public static class ReviewViews
             var rule = Ui.Rule(); rule.Width = 390;
             Canvas.SetLeft(rule, 60); Canvas.SetTop(rule, hour * pixelsPerHour + 8); canvas.Children.Add(rule);
         }
-        var groups = model.Editor.Entries(day, day.AddDays(1)).Where(e => e.GroupId is not null && e.Sources.Any(s => s.IsPositioned && s.Duration > TimeSpan.Zero)).ToArray();
+        var groups = model.Editor.Entries(day, day.AddDays(1)).Where(e => e.GroupId is not null && e.Sources.Any(s => s.Duration > TimeSpan.Zero)).ToArray();
         var grouped = groups.SelectMany(e => e.Sources).ToHashSet();
-        var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.IsPositioned && s.Duration > TimeSpan.Zero && !grouped.Contains(s))
+        var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero && !grouped.Contains(s))
             .Select(s => (s.Account, Start: s.From, End: s.To, Row: (SessionRow?)s, Group: (ReviewEntry?)null)).ToList();
-        // Time added or taken off an account for the day sits on the timeline too, as a striped block that can be moved but not stretched.
-        foreach (var adjustment in model.Engine.Sessions.Where(s => s.Day == day && s.IsAdjustment))
-        {
-            var length = TimeSpan.FromMinutes(Math.Abs((double)decimal.Parse(adjustment.Minutes, System.Globalization.CultureInfo.InvariantCulture)));
-            var from = adjustment.From; var until = from + length > day.AddDays(1) ? day.AddDays(1) : from + length;
-            intervals.Add((adjustment.Account, from, until, adjustment, null));
-        }
         if (model.Engine.Active is { } active && active.Start < day.AddDays(1) && model.Engine.Now > day)
             intervals.Add((active.Account, active.Start < day ? day : active.Start, model.Engine.Now < day.AddDays(1) ? model.Engine.Now : day.AddDays(1), null, null));
         foreach (var group in groups)
         {
             var sections = new List<List<SessionRow>>();
-            foreach (var row in group.Sources.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero).OrderBy(s => s.From))
+            foreach (var row in group.Sources.Where(s => s.Duration > TimeSpan.Zero).OrderBy(s => s.From))
             {
                 if (sections.Count == 0 || Math.Abs((row.From - sections[^1][^1].To).TotalSeconds) > 1 + 1e-8) sections.Add(new());
                 sections[^1].Add(row);
@@ -59,26 +52,15 @@ public static class ReviewViews
                 intervals.Add((group.Account, display.Start!.Value, display.End!.Value, null, display));
             }
         }
-        // Real time shares the left of the timeline in lanes. Adjustments get lanes of their own to the right of it, so they never sit among, or
-        // under, real time blocks, whatever the clock says.
-        var ends = new List<DateTime>(); var adjustmentEnds = new List<DateTime>();
-        var cards = new List<(Border Card, int Lane, bool Adjustment)>();
+        var ends = new List<DateTime>();
+        var cards = new List<(Border Card, int Lane)>();
         foreach (var interval in intervals.OrderBy(s => s.Start))
         {
-            var isAdjustment = interval.Row is { IsAdjustment: true };
-            var laneEnds = isAdjustment ? adjustmentEnds : ends;
-            var lane = laneEnds.FindIndex(end => end <= interval.Start);
-            if (lane < 0) { lane = laneEnds.Count; laneEnds.Add(interval.End); } else laneEnds[lane] = interval.End;
+            var lane = ends.FindIndex(end => end <= interval.Start);
+            if (lane < 0) { lane = ends.Count; ends.Add(interval.End); } else ends[lane] = interval.End;
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
             colour = model.BlockColour(colour);
             var end = interval.End > day.AddDays(1) ? day.AddDays(1) : interval.End;
-            if (interval.Row is { IsAdjustment: true } adjusted)
-            {
-                var adjustmentCard = AdjustmentCard(model, canvas, adjusted, colour, interval.Start, end, pixelsPerHour);
-                Canvas.SetTop(adjustmentCard, (interval.Start - day).TotalHours * pixelsPerHour + 2);
-                canvas.Children.Add(adjustmentCard); cards.Add((adjustmentCard, lane, true));
-                continue;
-            }
             var duration = interval.Group is { } groupDuration ? TimeSpan.FromMinutes((double)groupDuration.Minutes) : end - interval.Start;
             // Even a one-minute block is drawn at least eight pixels tall, so it can be seen and clicked. Zoom in for exact edges.
             var height = Math.Max(MinimumBlockHeight, (end - interval.Start).TotalHours * pixelsPerHour - 4);
@@ -143,21 +125,13 @@ public static class ReviewViews
                 ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} grouped entries · {model.Format(duration)} credited\nSeparate sections preserve any gaps. Double-click to inspect; right-click to ungroup.");
             }
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
-            canvas.Children.Add(card); cards.Add((card, lane, false));
+            canvas.Children.Add(card); cards.Add((card, lane));
         }
         void Resize()
         {
             foreach (var rule in canvas.Children.OfType<Border>().Where(b => b.Classes.Contains("rule"))) rule.Width = Math.Max(220, canvas.Bounds.Width - 70);
-            var available = Math.Max(220, canvas.Bounds.Width - 80);
-            // The adjustment column is a little over a quarter of the width, and only exists on a day that has adjustments.
-            var adjustmentArea = adjustmentEnds.Count > 0 ? Math.Clamp(available * .28, 110, available * .45) : 0;
-            var realArea = available - adjustmentArea - (adjustmentArea > 0 ? 8 : 0);
-            var width = realArea / Math.Max(1, ends.Count); var adjustmentWidth = adjustmentArea / Math.Max(1, adjustmentEnds.Count);
-            foreach (var card in cards)
-            {
-                if (card.Adjustment) { card.Card.Width = Math.Max(40, adjustmentWidth - 6); Canvas.SetLeft(card.Card, 64 + realArea + 8 + card.Lane * adjustmentWidth); }
-                else { card.Card.Width = Math.Max(40, width - 6); Canvas.SetLeft(card.Card, 64 + card.Lane * width); }
-            }
+            var width = Math.Max(220, canvas.Bounds.Width - 80) / Math.Max(1, ends.Count);
+            foreach (var card in cards) { card.Card.Width = Math.Max(40, width - 6); Canvas.SetLeft(card.Card, 64 + card.Lane * width); }
         }
         canvas.SizeChanged += (_, _) => Resize();
         DateTime clicked = day.AddHours(9);
@@ -395,40 +369,6 @@ public static class ReviewViews
             else root.Children.Add(button);
         }
     }
-    // A correction is drawn as a striped block of the account's colour, muted towards grey, so it is plainly not recorded time. It is as tall as the
-    // minutes it adds or removes and sits where it was made (or where it was dragged to). A negative one carries the overtime colour on its label.
-    private static Border AdjustmentCard(TimerModel model, Canvas canvas, SessionRow row, string accountColour, DateTime start, DateTime end, double pixelsPerHour)
-    {
-        var minutes = TimeSpan.FromMinutes((double)decimal.Parse(row.Minutes, System.Globalization.CultureInfo.InvariantCulture));
-        var amount = (minutes < TimeSpan.Zero ? "-" : "+") + model.FormatShort(minutes < TimeSpan.Zero ? -minutes : minutes);
-        var strong = ThemeColours.Mix(accountColour, "#8C9096", .6); var soft = ThemeColours.Mix(accountColour, "#8C9096", .15);
-        var stripes = new LinearGradientBrush
-        {
-            StartPoint = new RelativePoint(0, 0, RelativeUnit.Absolute), EndPoint = new RelativePoint(14, 14, RelativeUnit.Absolute), SpreadMethod = GradientSpreadMethod.Repeat,
-            GradientStops = { new GradientStop(Color.Parse(strong), 0), new GradientStop(Color.Parse(strong), .5), new GradientStop(Color.Parse(soft), .5), new GradientStop(Color.Parse(soft), 1) }
-        };
-        var height = Math.Max(MinimumBlockHeight, (end - start).TotalHours * pixelsPerHour - 4);
-        var ink = Ui.InkOn(ThemeColours.Mix(strong, soft, .5));
-        var text = new StackPanel { Spacing = 4 };
-        // A short block has room for one line only, so the account and the amount share it.
-        // The amount comes first, so a narrow column trims the account name and never the figure.
-        if (height < 52) text.Children.Add(Ui.Text($"{amount} · {model.Label(row.Account)}", 13));
-        else { text.Children.Add(Ui.Text(model.Label(row.Account), 15)); text.Children.Add(Ui.Text($"Adjustment {amount}", 12)); }
-        var note = model.Editor.Note(row);
-        if (height >= 70 && !string.IsNullOrWhiteSpace(note)) { var noteText = Ui.Text(note, 12); noteText.TextTrimming = TextTrimming.CharacterEllipsis; text.Children.Add(noteText); }
-        foreach (TextBlock child in text.Children) { child.Foreground = Brush.Parse(ink); child.TextTrimming = TextTrimming.CharacterEllipsis; }
-        var card = new Border { Name = "Adjustment" + model.Engine.Sessions.IndexOf(row), Tag = row, Background = stripes, CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
-            Width = 380, Height = height, Padding = new Thickness(14, height < 52 ? 3 : 8), ClipToBounds = true };
-        card.Classes.Add("adjustment");
-        if (height >= 24) card.Child = text;
-        ToolTip.SetTip(card, $"Adjustment · {model.Label(row.Account)} · {amount} credited, no recorded time" + (note.Length > 0 ? "\n" + note : "")
-            + "\nDrag to move it on the timeline. Double-click to edit the note; right-click to delete.");
-        var edit = new MenuItem { Header = "Edit note…" }; edit.Click += (_, _) => model.OpenEntry(row);
-        var delete = new MenuItem { Header = "Delete adjustment" }; delete.Click += (_, _) => model.DeleteEntry(row);
-        card.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, delete } };
-        TimelineGestures.AttachAdjustment(card, canvas, model, row, pixelsPerHour);
-        return card;
-    }
     // Moves the clicked entry, or every selected block when the clicked one is selected, to another account.
     private static MenuItem MoveMenu(TimerModel model, IReadOnlyList<SessionRow> clicked)
     {
@@ -441,7 +381,7 @@ public static class ReviewViews
             target.Click += (_, _) => model.MoveEntries(rows, a.Name);
             return target;
         }).ToList();
-        item.IsEnabled = targets.Count > 0 && rows.All(r => r.IsPositioned);
+        item.IsEnabled = targets.Count > 0;
         return item;
     }
     // Deletes the clicked entry, or every selected block when the clicked one is selected, as one undoable edit. Backspace does the same.

@@ -112,12 +112,11 @@ public sealed class WeekDashboardTests
     }
 
     [Fact]
-    public void MovingRefusesConflictsAdjustmentsAndUnknownAccountsWithoutChangingAnything()
+    public void MovingRefusesConflictsAndUnknownAccountsWithoutChangingAnything()
     {
-        var model = Model(false, out var engine, e => e.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:00:00", "30", "Account two"), new("2026-10-09", "Account one", "00:00:00", "adjusted", "60") }));
+        var model = Model(false, out var engine, e => e.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:00:00", "30", "Account two") }));
         var csv = model.Editor.SessionsCsv;
         Assert.False(model.MoveEntries(new[] { engine.Sessions[0] }, "Account two")); Assert.Contains("same time", model.EditError);
-        Assert.False(model.MoveEntries(new[] { engine.Sessions[2] }, "Internal")); Assert.Contains("Adjustments", model.EditError);
         Assert.False(model.MoveEntries(new[] { engine.Sessions[0] }, "No such account"));
         Assert.Equal(csv, model.Editor.SessionsCsv); Assert.False(model.Editor.CanUndo);
     }

@@ -394,13 +394,9 @@ public sealed class AccountList : StackPanel
             row.PointerEntered += (_, _) => icon.Glow = 1;
             row.PointerExited += (_, _) => icon.Glow = 0;
             if (reorderable && !BreakAccount.Is(account.Name)) AttachReorder(row, account.Name);
-            // The everyday thing to do with an account comes first, then the less frequent one.
-            var adjust = new MenuItem { Header = "Adjust time today…", Name = "AdjustTimeMenu" };
-            var accountName = account.Name;
-            adjust.Click += (_, _) => { if (TopLevel.GetTopLevel(row) is Window owner) new AdjustWindow(model, accountName).Show(owner); };
             var settings = new MenuItem { Header = "Name and budget…", Name = "AccountSettingsMenu" };
             settings.Click += (_, _) => { if (TopLevel.GetTopLevel(row) is Window owner) new AccountsWindow(model).Show(owner); };
-            row.ContextMenu = new ContextMenu { ItemsSource = new Control[] { adjust, new Separator(), settings } };
+            row.ContextMenu = new ContextMenu { ItemsSource = new Control[] { settings } };
             Children.Add(row);
             rows.Add((account, row, today, budget, icon, dot));
         }

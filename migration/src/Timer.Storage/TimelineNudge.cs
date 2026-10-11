@@ -11,7 +11,7 @@ public sealed partial class LedgerEditor
         Index(source);
         var changed = TimedRow(source.Account, start, end, "edited");
         var plan = new Dictionary<SessionRow, SessionRow>(ReferenceEqualityComparer.Instance) { [source] = changed };
-        var neighbours = engine.Sessions.Where(s => !ReferenceEquals(s, source) && s.IsPositioned && s.Duration > TimeSpan.Zero && s.Day == source.Day).ToArray();
+        var neighbours = engine.Sessions.Where(s => !ReferenceEquals(s, source) && s.Duration > TimeSpan.Zero && s.Day == source.Day).ToArray();
         if (insert)
         {
             var crossed = start < source.From
@@ -31,7 +31,7 @@ public sealed partial class LedgerEditor
                 }
             }
         }
-        var final = engine.Sessions.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero).Select(s => plan.GetValueOrDefault(s, s)).ToArray();
+        var final = engine.Sessions.Where(s => s.Duration > TimeSpan.Zero).Select(s => plan.GetValueOrDefault(s, s)).ToArray();
         foreach (var pair in plan)
         {
             var row = pair.Value;
@@ -53,10 +53,10 @@ public sealed partial class LedgerEditor
     public IReadOnlyList<TimelineChange> PlanExtend(SessionRow source, DateTime end)
     {
         Index(source);
-        if (!source.IsPositioned || end <= source.To) throw new ArgumentException("Choose an end later than the current one.");
+        if (end <= source.To) throw new ArgumentException("Choose an end later than the current one.");
         var plan = new Dictionary<SessionRow, SessionRow>(ReferenceEqualityComparer.Instance) { [source] = TimedRow(source.Account, source.From, end, "edited") };
         var cursor = end;
-        foreach (var later in engine.Sessions.Where(s => !ReferenceEquals(s, source) && s.IsPositioned && s.Duration > TimeSpan.Zero && s.Day == source.Day && s.From >= source.To)
+        foreach (var later in engine.Sessions.Where(s => !ReferenceEquals(s, source) && s.Duration > TimeSpan.Zero && s.Day == source.Day && s.From >= source.To)
             .OrderBy(s => s.From))
         {
             if (later.From >= cursor) break;
@@ -64,7 +64,7 @@ public sealed partial class LedgerEditor
             var moved = later with { Start = start.ToString("HH:mm:ss"), End = "edited" };
             plan[later] = moved; cursor = moved.To;
         }
-        var final = engine.Sessions.Where(s => s.IsPositioned && s.Duration > TimeSpan.Zero).Select(s => plan.GetValueOrDefault(s, s)).ToArray();
+        var final = engine.Sessions.Where(s => s.Duration > TimeSpan.Zero).Select(s => plan.GetValueOrDefault(s, s)).ToArray();
         foreach (var pair in plan)
         {
             var row = pair.Value;

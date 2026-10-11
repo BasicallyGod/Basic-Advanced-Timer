@@ -53,7 +53,9 @@ public sealed partial class App : Application
                 var engine = new TrackingEngine();
                 var preferences = store.Load(engine);
                 model = new TimerModel(engine, preferences, store);
-                if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files found and left alone. This version starts with an empty database.";
+                if (store.AdjustmentsRemoved > 0)
+                    model.Notice = $"{store.AdjustmentsRemoved} time adjustment{(store.AdjustmentsRemoved == 1 ? " was" : "s were")} removed with the Adjust time feature. Your database was copied to Backups first.";
+                else if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files found and left alone. This version starts with an empty database.";
                 if (!model.Save()) throw new IOException(model.LastError);
                 // Only an explicit data folder is remembered; the default one sits beside the program and needs no argument.
                 // A test build started by the updater is offered the setting only when the updater says where to find itself, so the

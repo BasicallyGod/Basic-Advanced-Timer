@@ -13,19 +13,18 @@ public sealed class EntryWindow : Window
         Width = 480; Height = 540; CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var root = new StackPanel { Margin = new Thickness(24), Spacing = 12 };
-        var editableTime = row is null || row.IsPositioned;
         root.Children.Add(Ui.Text(Title, 22));
         root.Children.Add(Ui.Text(start.ToString("dddd, d MMMM yyyy"), 13, "muted"));
         var names = model.ReviewAccounts.Select(a => a.Name).Concat(model.Engine.Sessions.Select(s => s.Account)).Distinct(StringComparer.OrdinalIgnoreCase).Select(BreakAccount.Display).ToArray();
         var initialAccount = names.FirstOrDefault(n => n.Equals(BreakAccount.Display(row?.Account ?? model.SelectedAccount ?? ""), StringComparison.OrdinalIgnoreCase)) ?? names.First();
-        var accounts = new ComboBox { Name = "EntryAccount", ItemsSource = names, SelectedItem = initialAccount, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch, IsEnabled = editableTime };
+        var accounts = new ComboBox { Name = "EntryAccount", ItemsSource = names, SelectedItem = initialAccount, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
         root.Children.Add(accounts);
         var times = Ui.Grid("*,24,*");
-        var from = new TextBox { Name = "EntryStart", Text = start.ToString("HH:mm:ss"), IsEnabled = editableTime };
-        var until = new TextBox { Name = "EntryEnd", Text = end == start.Date.AddDays(1) ? "24:00:00" : end.ToString("HH:mm:ss"), IsEnabled = editableTime };
+        var from = new TextBox { Name = "EntryStart", Text = start.ToString("HH:mm:ss") };
+        var until = new TextBox { Name = "EntryEnd", Text = end == start.Date.AddDays(1) ? "24:00:00" : end.ToString("HH:mm:ss") };
         var initialStart = from.Text; var initialEnd = until.Text;
         Ui.Put(times, from); Ui.Put(times, Ui.Dash(), 1); Ui.Put(times, until, 2); root.Children.Add(times);
-        root.Children.Add(Ui.Text(editableTime ? "Start/end use HH:mm or HH:mm:ss. Time changes affect credited totals." : "Adjustments: notes only; credited time stays unchanged.", 11, "muted"));
+        root.Children.Add(Ui.Text("Start/end use HH:mm or HH:mm:ss. Time changes affect credited totals.", 11, "muted"));
         var note = new TextBox { Name = "EntryNote", Watermark = "Entry note", AcceptsReturn = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Height = 110, Text = row is null ? "" : model.Editor.Note(row) };
         root.Children.Add(note);
         var error = new TextBlock { Name = "EntryError", TextWrapping = Avalonia.Media.TextWrapping.Wrap, Classes = { "overtime" } };
@@ -59,7 +58,7 @@ public sealed class EntryWindow : Window
             {
                 if (applied) { if (model.Save()) Close(); else error.Text = model.LastError; return; }
                 // Only the end later on the same account and start can shove, so that is the only case offered.
-                if (row is not null && editableTime && until.Text != initialEnd && from.Text == initialStart && (string?)accounts.SelectedItem == initialAccount && Parse(until.Text, true) > row.To)
+                if (row is not null && until.Text != initialEnd && from.Text == initialStart && (string?)accounts.SelectedItem == initialAccount && Parse(until.Text, true) > row.To)
                 {
                     var newEnd = Parse(until.Text, true);
                     IReadOnlyList<Timer.Storage.TimelineChange> plan;
@@ -75,8 +74,8 @@ public sealed class EntryWindow : Window
                     }
                 }
                 var previous = model.Editor.UndoState;
-                if (model.EditEntry(row, row is not null && (string?)accounts.SelectedItem == initialAccount ? row.Account : BreakAccount.Stored((string?)accounts.SelectedItem ?? row?.Account ?? ""), editableTime && from.Text != initialStart ? Parse(from.Text, false) : start,
-                    editableTime && until.Text != initialEnd ? Parse(until.Text, true) : end, note.Text ?? "")) Close();
+                if (model.EditEntry(row, row is not null && (string?)accounts.SelectedItem == initialAccount ? row.Account : BreakAccount.Stored((string?)accounts.SelectedItem ?? row?.Account ?? ""), from.Text != initialStart ? Parse(from.Text, false) : start,
+                    until.Text != initialEnd ? Parse(until.Text, true) : end, note.Text ?? "")) Close();
                 else
                 {
                     applied = model.LastError is not null && !ReferenceEquals(previous, model.Editor.UndoState);

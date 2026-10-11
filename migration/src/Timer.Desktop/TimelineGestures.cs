@@ -87,49 +87,6 @@ public static class TimelineGestures
         };
         card.Cursor = new Cursor(StandardCursorType.SizeAll);
     }
-    /// <summary>
-    /// Dragging an adjustment moves where it sits on the day, in five minute steps. It cannot be stretched, because its length is the minutes it
-    /// credits, and it may cross recorded time. Double-click edits the note.
-    /// </summary>
-    public static void AttachAdjustment(Border card, Canvas canvas, TimerModel model, SessionRow row, double pixelsPerHour)
-    {
-        Point? origin = null; var dragging = false; var delta = TimeSpan.Zero; var oldTop = 0.0;
-        card.Cursor = new Cursor(StandardCursorType.SizeAll);
-        card.PointerPressed += (_, e) =>
-        {
-            if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
-            if (e.ClickCount == 2) { model.OpenEntry(row); e.Handled = true; return; }
-            origin = e.GetPosition(canvas); delta = TimeSpan.Zero; dragging = false; oldTop = Canvas.GetTop(card);
-            e.Handled = true; e.Pointer.Capture(card);
-        };
-        card.PointerMoved += (_, e) =>
-        {
-            if (origin is not { } start) return;
-            var moved = e.GetPosition(canvas) - start;
-            if (!dragging && Math.Abs(moved.Y) < 5) return;
-            dragging = true; delta = AdjustmentDelta(row, TimeSpan.FromHours(moved.Y / pixelsPerHour), model.AdjustmentOccupied(row), pixelsPerHour);
-            Canvas.SetTop(card, oldTop + delta.TotalHours * pixelsPerHour); card.Opacity = .75; e.Handled = true;
-        };
-        card.PointerReleased += (_, e) =>
-        {
-            if (origin is null) return;
-            var commit = dragging && delta != TimeSpan.Zero; var change = delta;
-            origin = null; dragging = false; e.Pointer.Capture(null); card.Opacity = 1; Canvas.SetTop(card, oldTop);
-            if (commit) model.MoveAdjustment(row, (row.From + change).TimeOfDay);
-            e.Handled = true;
-        };
-        card.PointerCaptureLost += (_, _) => { if (origin is null) return; origin = null; dragging = false; card.Opacity = 1; Canvas.SetTop(card, oldTop); };
-    }
-    /// <summary>
-    /// Where an adjustment dragged by <paramref name="requested"/> lands: in five minute steps, flush against a neighbour when it is near one, never
-    /// across recorded time or another adjustment, and inside its day. When there is nowhere free it stays where it is.
-    /// </summary>
-    public static TimeSpan AdjustmentDelta(SessionRow row, TimeSpan requested, IReadOnlyList<(DateTime From, DateTime To)> occupied, double pixelsPerHour)
-    {
-        var landed = AdjustmentSpace.Choose(row.From + requested, AdjustmentSpace.Length(row), row.Day, occupied, TimeSpan.FromHours(8 / pixelsPerHour), TimeSpan.FromMinutes(5));
-        // The start is kept in whole seconds, as everywhere else.
-        return landed is { } place ? new DateTime((place.Ticks / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond) - row.From : TimeSpan.Zero;
-    }
     /// <summary>Which edge a press at <paramref name="y"/> grabs, -1 top, 1 bottom, 0 for moving the whole block.</summary>
     public static int EdgeAt(double y, double height)
     {
@@ -157,7 +114,7 @@ public static class TimelineGestures
     private static TimeSpan Snap(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour, out bool nudge)
     {
         nudge = false;
-        var occupied = model.Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.IsPositioned && s.Duration > TimeSpan.Zero)
+        var occupied = model.Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero)
             .Select(s => (Start: s.From, End: s.To)).ToList();
         if (model.Engine.Active is { } active && model.Engine.Now > active.Start)
             occupied.Add((active.Start, model.Engine.Now));
