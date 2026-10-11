@@ -186,4 +186,31 @@ public sealed class PolishTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void ANameThatDoesNotFitSlidesOnHoverAndGoesBackOnLeave()
+    {
+        var narrow = new MarqueeText("A very long client account name that cannot fit", 15) { Width = 90 };
+        var short_ = new MarqueeText("Short", 15) { Width = 90 };
+        var window = new Window { Width = 300, Height = 120, Content = new StackPanel { Children = { narrow, short_ } } }; window.Show();
+        try
+        {
+            Settle(window);
+            Assert.Equal(Avalonia.Media.TextTrimming.CharacterEllipsis, narrow.Label.TextTrimming); Assert.False(narrow.Scrolling);
+            narrow.Hover(true);
+            Assert.True(narrow.Scrolling); Assert.Equal(Avalonia.Media.TextTrimming.None, narrow.Label.TextTrimming); Assert.True(narrow.Label.Width > 90); // The whole name, in a clipped window.
+            narrow.Hover(false);
+            Assert.False(narrow.Scrolling); Assert.Equal(Avalonia.Media.TextTrimming.CharacterEllipsis, narrow.Label.TextTrimming); Assert.Null(narrow.Label.RenderTransform); Assert.True(double.IsNaN(narrow.Label.Width));
+            short_.Hover(true); Assert.False(short_.Scrolling); // A name that fits stays put.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void EveryAccountRowNameCanSlide()
+    {
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        try { Settle(window); Assert.True(window.GetVisualDescendants().OfType<MarqueeText>().Count(m => m.Name == "AccountName") >= 7); }
+        finally { window.Close(); }
+    }
 }

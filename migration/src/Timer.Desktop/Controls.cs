@@ -357,6 +357,53 @@ public sealed class BudgetBar : Control
     }
 }
 
+/// <summary>
+/// A name that is cut short with an ellipsis when it does not fit, and slides sideways to show the rest while the pointer is over its row.
+/// Hover(false) puts it back at once, so a name is never left half scrolled.
+/// </summary>
+public sealed class MarqueeText : Border
+{
+    private readonly TextBlock text;
+    private DispatcherTimer? timer;
+    private double offset, hold;
+    public MarqueeText(string value, double size)
+    {
+        ClipToBounds = true;
+        text = Ui.Text(value, size); text.TextTrimming = TextTrimming.CharacterEllipsis; text.HorizontalAlignment = HorizontalAlignment.Left;
+        Child = text;
+        DetachedFromVisualTree += (_, _) => Reset();
+    }
+    public TextBlock Label => text;
+    /// <summary>Whether the name is sliding now, which only happens while hovered and only when it did not fit.</summary>
+    public bool Scrolling { get; private set; }
+    public void Hover(bool on)
+    {
+        Reset();
+        if (!on) return;
+        // Measured without trimming, to learn how wide the whole name is against the room it has.
+        text.TextTrimming = TextTrimming.None; text.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var full = text.DesiredSize.Width; var room = Bounds.Width;
+        if (full <= room + .5) { text.TextTrimming = TextTrimming.CharacterEllipsis; return; }
+        text.Width = full; Scrolling = true; hold = .35;
+        var distance = full - room + 4; var last = DateTime.UtcNow;
+        timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        timer.Tick += (_, _) =>
+        {
+            var now = DateTime.UtcNow; var seconds = Math.Min(.1, (now - last).TotalSeconds); last = now;
+            if (hold > 0) { hold -= seconds; return; }
+            offset = Math.Min(distance, offset + 55 * seconds);
+            text.RenderTransform = new Avalonia.Media.TranslateTransform(-offset, 0);
+            if (offset >= distance) timer?.Stop();
+        };
+        timer.Start();
+    }
+    private void Reset()
+    {
+        timer?.Stop(); timer = null; offset = 0; hold = 0; Scrolling = false;
+        text.RenderTransform = null; text.ClearValue(Layoutable.WidthProperty); text.TextTrimming = TextTrimming.CharacterEllipsis;
+    }
+}
+
 public sealed class AccountList : StackPanel
 {
     private readonly TimerModel model;
@@ -391,6 +438,7 @@ public sealed class AccountList : StackPanel
             var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(bars ? 8 : 10, 0, 10, 0) };
             var budget = Ui.Text(bars ? model.BudgetLine(account) : model.BudgetSummary(account), 12, "muted");
             budget.TextTrimming = TextTrimming.CharacterEllipsis;
+            MarqueeText? marquee = null;
             BudgetBar? bar = null; var percent = Ui.Text("", 12, "muted");
             TextBlock today;
             if (bars)
@@ -401,7 +449,7 @@ public sealed class AccountList : StackPanel
                 labels.Spacing = 3;
                 // The percentage sits at the end of the name line, which leaves the whole line under it for the budget in words.
                 var nameLine = Ui.Grid("*,34"); var nameStack = Ui.Grid("Auto,*,Auto");
-                var nameText = Ui.Text(account.Display, 15); nameText.TextTrimming = TextTrimming.CharacterEllipsis; dot.Margin = new Thickness(8, 0, 0, 0);
+                marquee = new MarqueeText(account.Display, 15) { Name = "AccountName" }; var nameText = marquee; dot.Margin = new Thickness(8, 0, 0, 0);
                 Ui.Put(nameStack, swatch); Ui.Put(nameStack, nameText, 1); Ui.Put(nameStack, dot, 2);
                 Ui.Put(nameLine, nameStack); Ui.Put(nameLine, percent, 1); percent.TextAlignment = Avalonia.Media.TextAlignment.Right; percent.VerticalAlignment = VerticalAlignment.Center; // A fixed column, so the rows never shift.
                 labels.Children.Add(nameLine); labels.Children.Add(budget);
@@ -422,8 +470,8 @@ public sealed class AccountList : StackPanel
             }
             row.Content = grid;
             row.Click += (_, _) => model.ToggleAccount(account.Name);
-            row.PointerEntered += (_, _) => icon.Glow = 1;
-            row.PointerExited += (_, _) => icon.Glow = 0;
+            row.PointerEntered += (_, _) => { icon.Glow = 1; marquee?.Hover(true); };
+            row.PointerExited += (_, _) => { icon.Glow = 0; marquee?.Hover(false); };
             if (reorderable && !BreakAccount.Is(account.Name)) AttachReorder(row, account.Name);
             var settings = new MenuItem { Header = "Name and budget…", Name = "AccountSettingsMenu" };
             settings.Click += (_, _) => { if (TopLevel.GetTopLevel(row) is Window owner) new AccountsWindow(model).Show(owner); };
