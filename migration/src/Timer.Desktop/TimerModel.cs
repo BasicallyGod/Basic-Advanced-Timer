@@ -259,7 +259,6 @@ public sealed class TimerModel : INotifyPropertyChanged
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
         return $"{sign}{(int)value.TotalHours}:{value.Minutes:00}";
     }
-    public string BudgetText(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} of {Format(target)} this {a.Period}" : "No budget";
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
     public void ChangeDate(int days) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }

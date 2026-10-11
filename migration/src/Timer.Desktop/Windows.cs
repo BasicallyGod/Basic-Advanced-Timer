@@ -393,8 +393,8 @@ public sealed class DashboardWindow : Window
         var nav = Ui.Grid("Auto,*,Auto"); nav.VerticalAlignment = VerticalAlignment.Bottom;
         // One row of tabs: the day's timeline, then the week's three parts, so there is no second row of tabs.
         timeline = Ui.Button("Timeline", () => SelectTab(false), "TimelineTab"); timeline.Classes.Add("tab");
-        overviewTab = Ui.Button("Week view", () => SelectSection("overview"), "WeekOverviewTab"); overviewTab.Classes.Add("tab");
-        hoursTab = Ui.Button("Overview", () => SelectSection("hours"), "WeekHoursTab"); hoursTab.Classes.Add("tab");
+        overviewTab = Ui.Button("Week overview", () => SelectSection("overview"), "WeekOverviewTab"); overviewTab.Classes.Add("tab");
+        hoursTab = Ui.Button("Hours table", () => SelectSection("hours"), "WeekHoursTab"); hoursTab.Classes.Add("tab");
         entriesTab = Ui.Button("Entries", () => SelectSection("entries"), "WeekEntriesTab"); entriesTab.Classes.Add("tab");
         Ui.Put(nav, Ui.Horizontal(timeline, overviewTab, hoursTab, entriesTab));
         // In the Week tab the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.

@@ -12,6 +12,7 @@ The milestones below are newest first. Commit links mark when each change landed
 
 | Milestone | Commit | What changed |
 | --- | --- | --- |
+| Tab names and account tooltips | pending | The dashboard tabs are now Timeline, Week overview, Hours table and Entries. The budget tooltip on account rows is gone, since the row already shows it. |
 | App icon, taskbar button and themed dialogs | [f3f6883](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/f3f688310ac475ac65c686c2bbca20a710af9ad3) | The timer has an app icon (window, taskbar, executable) and a taskbar button, which Settings can switch off to run from the tray alone. On Windows 11 dialog title bars take the theme's colours and follow theme changes. |
 | Adjustments on the timeline | [9f97959](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/9f979597edfef31efd1b02b9419523298fb7c810) | Adjust time today now draws a striped, muted block in the account's colour, as tall as the minutes it adds or removes. It can be dragged to move where it sits without changing any total, double-clicked to edit the note and right-clicked to delete. The chips above the timeline are gone. |
 | System is the default theme again | [032fd87](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/032fd871b2f74b3ac36167d55e5b5181f3a2fd02) | New installs follow Windows light or dark. Light and Dark now lead the theme list, ahead of the colourful themes. |

@@ -495,7 +495,6 @@ public sealed class AccountList : StackPanel
             row.Row.Classes.Set("active", model.ActiveAccount == row.Account.Name);
             row.Today.Text = model.Format(model.Today(row.Account));
             row.Budget.Text = model.BudgetSummary(row.Account);
-            ToolTip.SetTip(row.Row, model.BudgetText(row.Account));
             row.Icon.InvalidateVisual();
             // The live dot pulses beside the account that is recording.
             var live = model.ActiveAccount == row.Account.Name;
