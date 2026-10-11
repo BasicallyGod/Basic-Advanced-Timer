@@ -1,13 +1,13 @@
-# Microsoft Store packaging (development)
+# Microsoft Store packaging
 
-This is a **prototype** for Windows x64 MSIX distribution, separate from the current portable ZIP. Publishing to the Store requires a developer account and a reserved product identity.
+This builds the Windows x64 MSIX that is submitted to the Microsoft Store from `main`, separate from the portable development ZIPs. The Partner Center product identity is already set in the workflow. The artwork is still placeholder.
 
 ## Builds
 
-The dedicated GitHub Actions workflow `.github/workflows/microsoft-store-msix.yml` is configured to build the unsigned Store candidate on a successful push to `main`. On pull requests targeting `main`, it tests the code without producing a release package. **This workflow is staged on experimental until the stable-promotion PR is approved and merged.** Development channels use a separate portable ZIP workflow instead.
+The dedicated GitHub Actions workflow `.github/workflows/microsoft-store-msix.yml` is configured to build the unsigned Store candidate on a successful push to `main`. On pull requests targeting `main`, it tests the code without producing a release package. Development channels use a separate portable ZIP workflow instead.
 
 - `BasicsAdvancedTimer-MSIX-Store` contains **only** `BasicsAdvancedTimer-Store-unsigned.msix`, an unsigned package using the Partner Center identity. This is the file to upload under **Packages** in the Store submission.
-- The test-only signed `BasicsAdvancedTimer-Dev.msix` and public certificate may be built locally for development as described below. Neither belongs in Partner Center. The private signing key is never exported.
+- The test-only signed `BasicsAdvancedTimer-Dev.msix` and public certificate are not built by CI any more. Build them locally for development as described below. Neither belongs in Partner Center. The private signing key is never exported.
 
 ## Safe local installation test
 
