@@ -114,6 +114,11 @@
     <!-- On a break or in overtime the whole pill is that colour, so the bar is drawn in the pill's text colour. -->
     <Style Selector="Border#DayProgressFill.progressOvertime"><Setter Property="Background" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="Border#DayProgressFill.progressBreak"><Setter Property="Background" Value="{DynamicResource Ink}" /></Style>
+    <!-- The now marker on today's timeline is drawn in the accent colour, with its chip's text in the accent's own text colour. -->
+    <Style Selector="Border.nowLine"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Ellipse.nowDot"><Setter Property="Fill" Value="{DynamicResource Accent}" /><Setter Property="Stroke" Value="{DynamicResource Surface}" /><Setter Property="StrokeThickness" Value="2" /></Style>
+    <Style Selector="Border.nowChip"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="TextBlock.nowChipText"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
     <Style Selector="Border.recording">
       <Setter Property="BorderThickness" Value="3" />
       <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
@@ -241,13 +246,13 @@
     <!-- Starting the day is green: the same outlined button as Finish day, in the live colour. -->
     <Style Selector="Button.startDay">
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource Live}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
+      <Setter Property="Foreground" Value="{DynamicResource Start}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Start}" />
       <Setter Property="BorderThickness" Value="1.5" />
     </Style>
     <Style Selector="Button.startDay:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Hover}" />
-      <Setter Property="Foreground" Value="{DynamicResource Live}" />
+      <Setter Property="Foreground" Value="{DynamicResource Start}" />
     </Style>
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="{DynamicResource Live}" />
@@ -274,7 +279,7 @@
       <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BorderBrush" Value="{DynamicResource Finish}" />
     </Style>
     <Style Selector="Button.quiet.startDay:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BorderBrush" Value="{DynamicResource Live}" />
+      <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BorderBrush" Value="{DynamicResource Start}" />
     </Style>
     <Style Selector="Button.quiet.breakButton.onBreak">
       <Setter Property="Background" Value="{DynamicResource Break}" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="{DynamicResource Break}" />

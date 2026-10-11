@@ -298,7 +298,7 @@ public sealed class PillWindow : Window
         ToolTip.SetTip(pause, model.IsOnBreak ? "End break; drag to move" : model.IsTracking ? "Pause account; drag to move" : "Resume account; drag to move");
         pillDayText.Text = model.DayStarted ? "Finish day" : "Start day";
         // The same quiet outline as the dashboard's button, with a flag that is green to start the day and red to finish it, so ending the day is never done by accident.
-        pillDayFlag.TintKey = model.DayStarted ? "Finish" : "Live";
+        pillDayFlag.TintKey = model.DayStarted ? "Finish" : "Start";
         day.Classes.Set("finishDay", model.DayStarted); day.Classes.Set("startDay", !model.DayStarted);
         var progress = model.DayProgress;
         // The line is always there, so the pill never changes height or leaves a gap: on a day off it is simply an empty track.
@@ -341,7 +341,8 @@ public sealed class DashboardWindow : Window
     private readonly Button undo;
     private readonly Button merge;
     private EntryWindow? entryEditor;
-    private bool weekMode, settingsMode, renderedSettings;
+    private bool weekMode, settingsMode, renderedSettings, settingZoom;
+    private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
     private bool? renderedWeekMode;
     private DateTime? renderedDate;
@@ -436,7 +437,7 @@ public sealed class DashboardWindow : Window
         panel.Classes.Add("panel");
         Ui.Put(body, panel);
         var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
-        var review = Ui.Grid("*", "Auto,Auto,*");
+        var review = Ui.Grid("*", "Auto,Auto,*,Auto");
         review.Margin = new Thickness(22, 16, 22, 18);
         // The workspace's name on the left; on the right the date to step through and a button back to today.
         // In Week views the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
@@ -460,9 +461,18 @@ public sealed class DashboardWindow : Window
         zoomOut = Ui.IconButton(IconKind.ZoomOut, "Zoom out", "TimelineZoomOut", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Height / 2, s.Offset.Y); });
         zoomIn = Ui.IconButton(IconKind.ZoomIn, "Zoom in (or hold Ctrl and use the mouse wheel)", "TimelineZoomIn", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Height / 2, s.Offset.Y); });
         var fit = Ui.IconButton(IconKind.FitDay, "Fit the day to the window", "TimelineFit", () => { if (TimelineScroll() is { } s) model.FitTimeline(s.Viewport.Height); });
-        var zoomBar = new Border { Name = "TimelineControls", Child = Ui.Horizontal(zoomOut, zoomIn, fit), CornerRadius = new CornerRadius(8), Padding = new Thickness(2), BorderThickness = new Thickness(1) };
-        ((StackPanel)zoomBar.Child).Spacing = 0; zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
-        var tools = Ui.Grid("*,Auto"); toolsRow = tools; Ui.Put(tools, edits); Ui.Put(tools, zoomBar, 1);
+        // The zoom controls sit in a bar under the timeline: fit the day, zoom out, a slider, zoom in. They show only on the Timeline view.
+        zoomSlider = new Slider { Name = "TimelineZoom", Minimum = 0, Maximum = 1, Width = 170, VerticalAlignment = VerticalAlignment.Center, Value = model.TimelineZoomFraction };
+        Avalonia.Automation.AutomationProperties.SetName(zoomSlider, "Zoom"); ToolTip.SetTip(zoomSlider, "Zoom the timeline");
+        zoomSlider.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != Avalonia.Controls.Primitives.RangeBase.ValueProperty || settingZoom) return;
+            if (TimelineScroll() is { } s) model.SetTimelineScale(TimerModel.ScaleAt(zoomSlider.Value), s.Viewport.Height / 2, s.Offset.Y);
+        };
+        var zoomBar = new Border { Name = "TimelineControls", Child = Ui.Horizontal(fit, zoomOut, zoomSlider, zoomIn), CornerRadius = new CornerRadius(12), Padding = new Thickness(8, 4), BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
+        ((StackPanel)zoomBar.Child).Spacing = 4; zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
+        Ui.Put(review, zoomBar, row: 3);
+        var tools = Ui.Grid("*,Auto"); toolsRow = tools; Ui.Put(tools, edits);
         tools.Margin = new Thickness(0, 14, 0, 12);
         Ui.Put(review, tools, row: 1);
         Ui.Put(review, workspace, row: 2);
@@ -564,12 +574,14 @@ public sealed class DashboardWindow : Window
         allocatedValue.Text = model.Format(model.Allocated);
         unallocatedValue.Text = model.Format(model.Unallocated);
         dayText.Text = model.DayStarted ? "Finish day" : "Start day";
-        dayFlag.TintKey = model.DayStarted ? "Finish" : "Live";
+        dayFlag.TintKey = model.DayStarted ? "Finish" : "Start";
         day.Classes.Set("startDay", !model.DayStarted); // Green to start the day, red to finish it.
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
         var editing = !weekMode || model.WeekSection == "entries";
-        zoomControls.IsVisible = !weekMode; zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
+        zoomControls.IsVisible = !weekMode && !settingsMode;
+        settingZoom = true; zoomSlider.Value = model.TimelineZoomFraction; settingZoom = false; // Follows the wheel and the buttons too.
+        zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
         undo.Content = "Undo";

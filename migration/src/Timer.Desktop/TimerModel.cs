@@ -24,6 +24,19 @@ public sealed class TimerModel : INotifyPropertyChanged
         TimelineOffset = Math.Max(0, (offset + pointerY) / previous * TimelinePixelsPerHour - pointerY);
         Notify();
     }
+    public const double MinTimelineScale = 60, MaxTimelineScale = 640;
+    /// <summary>Sets the zoom to an exact scale (as the slider does), keeping the time at the pointer's height where it was.</summary>
+    public void SetTimelineScale(double pixelsPerHour, double pointerY, double offset)
+    {
+        var previous = TimelinePixelsPerHour; var target = Math.Clamp(pixelsPerHour, MinTimelineScale, MaxTimelineScale);
+        if (Math.Abs(target - previous) < .01) return;
+        TimelinePixelsPerHour = target;
+        TimelineOffset = Math.Max(0, (offset + pointerY) / previous * target - pointerY);
+        Notify();
+    }
+    /// <summary>Where the current zoom sits from 0 (most zoomed out) to 1, on the logarithmic scale a zoom slider should use.</summary>
+    public double TimelineZoomFraction => Math.Log(TimelinePixelsPerHour / MinTimelineScale) / Math.Log(MaxTimelineScale / MinTimelineScale);
+    public static double ScaleAt(double fraction) => MinTimelineScale * Math.Pow(MaxTimelineScale / MinTimelineScale, Math.Clamp(fraction, 0, 1));
     /// <summary>Zooms and scrolls so the day's recorded time, with a little room either side, fills the height given.</summary>
     public void FitTimeline(double viewportHeight)
     {

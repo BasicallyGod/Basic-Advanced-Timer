@@ -179,6 +179,8 @@ public sealed class VisualStateTests
             var pillDay = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDay");
             var dashDay = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay");
             Assert.Equal("Start day", pillDay.GetVisualDescendants().OfType<TextBlock>().Single().Text); Assert.Contains("startDay", pillDay.Classes); Assert.DoesNotContain("finishDay", pillDay.Classes);
+            Assert.Equal("Start", pillDay.GetVisualDescendants().OfType<IconGlyph>().Single().TintKey); Assert.Equal("Start", dashDay.GetVisualDescendants().OfType<IconGlyph>().Single().TintKey);
+            foreach (var theme in Timer.Core.ThemeLibrary.BuiltIn) { var (r, g, b) = Timer.Core.ThemeColours.Rgb(theme.Colour("Start")); Assert.True(g > r + 20 && g > b + 20, theme.Name + " Start day is green"); }
             Assert.DoesNotContain("finishDay", dashDay.Classes);
             now = Day.AddHours(10); model.ChangeDate(0); Dispatcher.UIThread.RunJobs(); // The scheduled start has passed, so the day is running.
             Assert.Equal("Finish day", pillDay.GetVisualDescendants().OfType<TextBlock>().Single().Text); Assert.Contains("finishDay", pillDay.Classes); Assert.DoesNotContain("startDay", pillDay.Classes);

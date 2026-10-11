@@ -35,13 +35,13 @@ public static class ThemeTokens
     /// <summary>The coloured parts of the app a theme sets, in the order the editor lists them.</summary>
     public static readonly string[] Names =
     {
-        "Surface", "Panel", "Ink", "Muted", "Line", "Hover", "Selected", "Live", "Idle", "Overtime", "BudgetWarning", "Break", "Finish", "Accent", "AccentInk", "Clock", "PillSurface", "PillInk", "PillBreak", "PillOvertime", "ShadowColor"
+        "Surface", "Panel", "Ink", "Muted", "Line", "Hover", "Selected", "Live", "Idle", "Overtime", "BudgetWarning", "Break", "Finish", "Start", "Accent", "AccentInk", "Clock", "PillSurface", "PillInk", "PillBreak", "PillOvertime", "ShadowColor"
     };
     public static string Describe(string token) => token switch
     {
         "Surface" => "Window background", "Panel" => "Side panel and controls", "Ink" => "Text", "Muted" => "Quiet text", "Line" => "Lines and borders",
-        "Hover" => "Hovered row", "Selected" => "Selected row", "Live" => "Tracking and start", "Idle" => "Not tracking", "Overtime" => "Overtime",
-        "BudgetWarning" => "Budget nearly used", "Break" => "Breaks", "Finish" => "Finish day", "Accent" => "Accent (tabs, main button)", "AccentInk" => "Text on the accent", "Clock" => "Clock when idle", "PillSurface" => "Pill while recording", "PillInk" => "Text on the pill while recording", "PillBreak" => "Pill on a break", "PillOvertime" => "Pill in overtime", "ShadowColor" => "Window shadow", _ => token
+        "Hover" => "Hovered row", "Selected" => "Selected row", "Live" => "Tracking", "Idle" => "Not tracking", "Overtime" => "Overtime",
+        "BudgetWarning" => "Budget nearly used", "Break" => "Breaks", "Finish" => "Finish day", "Start" => "Start day", "Accent" => "Accent (tabs, main button)", "AccentInk" => "Text on the accent", "Clock" => "Clock when idle", "PillSurface" => "Pill while recording", "PillInk" => "Text on the pill while recording", "PillBreak" => "Pill on a break", "PillOvertime" => "Pill in overtime", "ShadowColor" => "Window shadow", _ => token
     };
     /// <summary>#RRGGBB for every colour, or #AARRGGBB for the shadow, which needs transparency.</summary>
     public static bool IsValid(string token, string? value)
@@ -155,11 +155,11 @@ public static class ThemeDerivation
 public static class ThemeLibrary
 {
     private static ThemeDefinition Make(string name, bool dark, string surface, string panel, string ink, string muted, string line, string hover, string selected,
-        string live, string overtime, string warning, string breakColour, string finish, string accent, string accentInk, string clock, string shadow)
+        string live, string overtime, string warning, string breakColour, string finish, string accent, string accentInk, string clock, string shadow, string start = "#2E9E5B")
         => new(name, dark, new Dictionary<string, string>
         {
             ["Surface"] = surface, ["Panel"] = panel, ["Ink"] = ink, ["Muted"] = muted, ["Line"] = line, ["Hover"] = hover, ["Selected"] = selected, ["Live"] = live,
-            ["Idle"] = muted, ["Overtime"] = overtime, ["BudgetWarning"] = warning, ["Break"] = breakColour, ["Finish"] = finish, ["Accent"] = accent, ["AccentInk"] = accentInk,
+            ["Idle"] = muted, ["Overtime"] = overtime, ["BudgetWarning"] = warning, ["Break"] = breakColour, ["Finish"] = finish, ["Start"] = start, ["Accent"] = accent, ["AccentInk"] = accentInk,
             ["Clock"] = clock, ["ShadowColor"] = shadow,
             // The recording pill is the strongest object on screen. On a light theme it is dark, on a dark theme a lifted version of the panel, so it stands out either way.
             ["PillSurface"] = dark ? ThemeColours.Mix(panel, "#FFFFFF", .08) : ink, ["PillInk"] = dark ? ink : surface,
@@ -176,10 +176,10 @@ public static class ThemeLibrary
     private const string DarkShadow = "#B3000000", LightShadow = "#59000000";
     /// <summary>Light: a neutral dashboard with an orange accent, and tinted blocks with a stronger edge on the left.</summary>
     public static readonly ThemeDefinition Light = Make("Light", false, "#FBFBFC", "#F2F3F5", "#17181C", "#6A6F78", "#E3E5E9", "#EDEFF2", "#FDEAD3",
-        "#E8700A", "#C0243F", "#D9890B", "#E8790E", "#D7263D", "#F27A0D", "#1B1209", "#17181C", LightShadow) with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .55, BlockEdge = 0 };
+        "#E8700A", "#C0243F", "#D9890B", "#E8790E", "#D7263D", "#F27A0D", "#1B1209", "#17181C", LightShadow, "#1F8F4E") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .55, BlockEdge = 0 };
     /// <summary>Dark: cool charcoal surfaces with the same orange accent. Blocks take a little more of the account colour than in the light version, so they hold against the dark.</summary>
     public static readonly ThemeDefinition Dark = Make("Dark", true, "#14161A", "#1C1F24", "#EEF0F3", "#9CA3AD", "#2E333A", "#262A31", "#33281D",
-        "#FF9A3C", "#FF7A8A", "#F2B84B", "#FF9A3C", "#FF6B6B", "#FF8A1F", "#1B1209", "#EEF0F3", DarkShadow) with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .45, BlockEdge = 0 };
+        "#FF9A3C", "#FF7A8A", "#F2B84B", "#FF9A3C", "#FF6B6B", "#FF8A1F", "#1B1209", "#EEF0F3", DarkShadow, "#4CD48A") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .45, BlockEdge = 0 };
     // Only these two ship for now. More can be added here later, and the editor and settings page list whatever is in this array.
     public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark };
     /// <summary>"System" is not a theme of its own: it picks Light or Dark to match the computer.</summary>

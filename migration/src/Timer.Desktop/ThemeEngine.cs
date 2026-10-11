@@ -40,6 +40,14 @@ public static class ThemeEngine
             var colour = Color.Parse(colours[token]);
             if (token == "ShadowColor") dictionary[token] = colour; else dictionary[token] = new SolidColorBrush(colour);
         }
+        // The standard controls take their colours from their own named resources, which default to the computer's accent colour. Pointing the ones that
+        // show "on" or "filled" at the theme's accent keeps sliders and tick boxes in step with the rest of the app.
+        var accent = new SolidColorBrush(Color.Parse(colours["Accent"])); var accentInk = new SolidColorBrush(Color.Parse(colours["AccentInk"])); var line = new SolidColorBrush(Color.Parse(colours["Line"]));
+        foreach (var key in new[] { "SliderTrackValueFill", "SliderTrackValueFillPointerOver", "SliderTrackValueFillPressed", "SliderThumbBackground", "SliderThumbBackgroundPointerOver", "SliderThumbBackgroundPressed",
+            "CheckBoxCheckBackgroundFillChecked", "CheckBoxCheckBackgroundFillCheckedPointerOver", "CheckBoxCheckBackgroundFillCheckedPressed",
+            "CheckBoxCheckBackgroundStrokeChecked", "CheckBoxCheckBackgroundStrokeCheckedPointerOver", "CheckBoxCheckBackgroundStrokeCheckedPressed" }) dictionary[key] = accent;
+        foreach (var key in new[] { "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver", "CheckBoxCheckGlyphForegroundCheckedPressed" }) dictionary[key] = accentInk;
+        foreach (var key in new[] { "SliderTrackFill", "SliderTrackFillPointerOver", "SliderTrackFillPressed" }) dictionary[key] = line;
     }
     /// <summary>Raised after theme colours are written, so windows with their own chrome (title bars) can follow a change or a preview.</summary>
     public static event Action? Applied;

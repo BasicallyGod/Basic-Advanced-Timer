@@ -1,3 +1,4 @@
+using Avalonia.LogicalTree;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -13,6 +14,8 @@ namespace Timer.Desktop;
 public static class ReviewViews
 {
     public const double MinimumBlockHeight = 8;
+    // Where the spine runs and where blocks start, from the left of the timeline.
+    private const double SpineX = 58, CardLeft = 80;
     public static Control Timeline(TimerModel model)
     {
         var day = model.SelectedDate;
@@ -24,13 +27,26 @@ public static class ReviewViews
         caption.Margin = new Thickness(0, 0, 0, 10);
         Ui.Put(root, caption);
         var pixelsPerHour = model.TimelinePixelsPerHour;
-        var canvas = new Canvas { Height = 24 * pixelsPerHour, MinWidth = 460, Background = Brushes.Transparent };
+        // The hours run down a spine with a tick for each hour, and for each half and quarter hour as you zoom in. Blocks sit to the right of it,
+        // each with a dot on the spine where it starts. A little room above and below lets the first and last labels sit fully in view.
+        var canvas = new Canvas { Height = 24 * pixelsPerHour + 4, MinWidth = 460, Background = Brushes.Transparent, Margin = new Thickness(0, 10, 0, 10) };
+        var spine = new Border { Name = "TimelineSpine", Width = 2, Height = 24 * pixelsPerHour, CornerRadius = new CornerRadius(1) }; spine.Classes.Add("rule");
+        Canvas.SetLeft(spine, SpineX - 1); Canvas.SetTop(spine, 2); canvas.Children.Add(spine);
+        void Tick(double hours, double width, double opacity)
+        {
+            var tick = new Border { Width = width, Height = 1.5, Opacity = opacity, Tag = "Tick" }; tick.Classes.Add("rule");
+            Canvas.SetLeft(tick, SpineX - width - 3); Canvas.SetTop(tick, hours * pixelsPerHour + 1.5); canvas.Children.Add(tick);
+        }
         for (var hour = 0; hour < 24; hour++)
         {
-            var label = Ui.Text($"{hour:00}:00", 12, "muted");
-            Canvas.SetTop(label, hour * pixelsPerHour); canvas.Children.Add(label);
-            var rule = Ui.Rule(); rule.Width = 390;
-            Canvas.SetLeft(rule, 60); Canvas.SetTop(rule, hour * pixelsPerHour + 8); canvas.Children.Add(rule);
+            var label = Ui.Text($"{hour:00}:00", 12, "muted"); label.Classes.Add("figures");
+            Canvas.SetTop(label, hour * pixelsPerHour - 5); canvas.Children.Add(label);
+            Tick(hour, 10, 1);
+            if (pixelsPerHour >= 100) Tick(hour + .5, 6, .8);
+            if (pixelsPerHour >= 260) { Tick(hour + .25, 4, .6); Tick(hour + .75, 4, .6); }
+            // A faint guide across, so a block far from the spine can still be read against the hours.
+            var guide = Ui.Rule(); guide.Width = 390; guide.Opacity = .35; guide.Tag = "HourGuide";
+            Canvas.SetLeft(guide, CardLeft - 6); Canvas.SetTop(guide, hour * pixelsPerHour + 1.5); canvas.Children.Add(guide);
         }
         var groups = model.Editor.Entries(day, day.AddDays(1)).Where(e => e.GroupId is not null && e.Sources.Any(s => s.Duration > TimeSpan.Zero)).ToArray();
         var grouped = groups.SelectMany(e => e.Sources).ToHashSet();
@@ -65,11 +81,20 @@ public static class ReviewViews
             // Even a one-minute block is drawn at least eight pixels tall, so it can be seen and clicked. Zoom in for exact edges.
             var height = Math.Max(MinimumBlockHeight, (end - interval.Start).TotalHours * pixelsPerHour - 4);
             var ink = look.Text;
-            var text = new StackPanel { Spacing = 6, Margin = new Thickness(12, height < 58 ? 2 : 10, 14, height < 58 ? 2 : 10) };
-            text.Children.Add(Ui.Text(model.Label(interval.Account) + (interval.Group is { } labelGroup ? $" · Group ({labelGroup.Sources.Count})" : ""), 15));
-            if (height >= 58) text.Children.Add(Ui.Text($"{interval.Start:HH:mm} – {end:HH:mm} · {model.Format(duration)}", 12));
-            foreach (TextBlock child in text.Children) child.Foreground = Brush.Parse(ink);
-            var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
+            var text = new StackPanel { Spacing = 5, Margin = new Thickness(12, height < 58 ? 2 : 10, 14, height < 58 ? 2 : 10) };
+            var title = Ui.Text(model.Label(interval.Account) + (interval.Group is { } labelGroup ? $" · Group ({labelGroup.Sources.Count})" : ""), 15); title.FontWeight = FontWeight.SemiBold;
+            title.TextTrimming = TextTrimming.CharacterEllipsis;
+            text.Children.Add(title);
+            // The time range sits quietly, and the credited duration beside it is the figure that matters.
+            if (height >= 58)
+            {
+                var range = Ui.Text($"{interval.Start:HH:mm} – {end:HH:mm}", 12); range.Opacity = .78;
+                var length = Ui.Text(model.Format(duration), 12); length.FontWeight = FontWeight.SemiBold; length.Classes.Add("figures");
+                var detail = Ui.Horizontal(range, length); detail.Spacing = 8; detail.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
+                text.Children.Add(detail);
+            }
+            foreach (var child in text.GetLogicalDescendants().OfType<TextBlock>()) child.Foreground = Brush.Parse(ink);
+            var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 12),
                 Width = 380, Height = height, ClipToBounds = true };
             // A strip down the left side in the account's own colour, so a block can be told apart at a glance whatever its fill is.
             var content = new Grid { ColumnDefinitions = new ColumnDefinitions("5,*") };
@@ -129,12 +154,37 @@ public static class ReviewViews
             }
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
             canvas.Children.Add(card); cards.Add((card, lane));
+            // A dot on the spine at the moment the block starts, in the account's own colour with a ring of the page colour round it.
+            var dot = new Avalonia.Controls.Shapes.Ellipse { Width = 11, Height = 11, Fill = Brush.Parse(look.Edge), StrokeThickness = 2, Tag = "SpineDot", IsHitTestVisible = false };
+            dot.Bind(Avalonia.Controls.Shapes.Shape.StrokeProperty, dot.GetResourceObservable("Surface"));
+            Canvas.SetLeft(dot, SpineX - 5.5); Canvas.SetTop(dot, (interval.Start - day).TotalHours * pixelsPerHour + 2 - 3); canvas.Children.Add(dot);
+        }
+        // For today, a line across at the current time with a chip in the margin saying what it is. It moves on every half minute while the timeline is on screen.
+        if (day == model.Engine.Now.Date)
+        {
+            var nowLine = new Border { Name = "NowMarker", Height = 2, Tag = "NowLine", IsHitTestVisible = false }; nowLine.Classes.Add("nowLine");
+            var nowDot = new Avalonia.Controls.Shapes.Ellipse { Width = 13, Height = 13, Tag = "NowDot", IsHitTestVisible = false }; nowDot.Classes.Add("nowDot");
+            var nowText = new TextBlock { FontSize = 11, FontWeight = FontWeight.SemiBold, Classes = { "figures", "nowChipText" } };
+            var nowChip = new Border { Name = "NowChip", Child = nowText, CornerRadius = new CornerRadius(8), Padding = new Thickness(6, 1), IsHitTestVisible = false }; nowChip.Classes.Add("nowChip");
+            canvas.Children.Add(nowLine); canvas.Children.Add(nowDot); canvas.Children.Add(nowChip);
+            void PlaceNow()
+            {
+                var now = model.Engine.Now; var y = (now - day).TotalHours * pixelsPerHour + 2;
+                Canvas.SetLeft(nowLine, SpineX); Canvas.SetTop(nowLine, y - 1);
+                Canvas.SetLeft(nowDot, SpineX - 6.5); Canvas.SetTop(nowDot, y - 6.5);
+                nowText.Text = now.ToString("HH:mm"); Canvas.SetLeft(nowChip, 0); Canvas.SetTop(nowChip, y - 10);
+            }
+            PlaceNow();
+            DispatcherTimer? nowTimer = null;
+            canvas.AttachedToVisualTree += (_, _) => { nowTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) }; nowTimer.Tick += (_, _) => PlaceNow(); nowTimer.Start(); };
+            canvas.DetachedFromVisualTree += (_, _) => { nowTimer?.Stop(); nowTimer = null; };
         }
         void Resize()
         {
-            foreach (var rule in canvas.Children.OfType<Border>().Where(b => b.Classes.Contains("rule"))) rule.Width = Math.Max(220, canvas.Bounds.Width - 70);
-            var width = Math.Max(220, canvas.Bounds.Width - 80) / Math.Max(1, ends.Count);
-            foreach (var card in cards) { card.Card.Width = Math.Max(40, width - 6); Canvas.SetLeft(card.Card, 64 + card.Lane * width); }
+            foreach (var guide in canvas.Children.OfType<Border>().Where(b => b.Tag is "HourGuide")) guide.Width = Math.Max(220, canvas.Bounds.Width - CardLeft);
+            var width = Math.Max(220, canvas.Bounds.Width - CardLeft - 10) / Math.Max(1, ends.Count);
+            foreach (var card in cards) { card.Card.Width = Math.Max(40, width - 6); Canvas.SetLeft(card.Card, CardLeft + card.Lane * width); }
+            foreach (var marker in canvas.Children.OfType<Border>().Where(b => b.Tag is "NowLine")) marker.Width = Math.Max(220, canvas.Bounds.Width - SpineX);
         }
         canvas.SizeChanged += (_, _) => Resize();
         DateTime clicked = day.AddHours(9);
