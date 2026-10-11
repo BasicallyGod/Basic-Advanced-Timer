@@ -112,16 +112,17 @@ public sealed class PillWindow : Window
     public Action? OpenDashboard { get; set; }
     private readonly TimerModel model;
     private readonly TextBlock account = Ui.Text("", 15);
-    private readonly TextBlock timer = new TextBlock { Text = "00:00:00", FontSize = 22, Classes = { "clock" } };
-    private readonly TextBlock pillUnallocated = Ui.Text("", 10, "muted");
+    private readonly ClockText timer = new(46, 28) { Text = "00:00:00" };
+    private readonly TextBlock pillUnallocated = Ui.Text("", 13, "muted");
     private readonly StackPanel expansion = new() { IsVisible = false, Spacing = 8 };
     private readonly Button day;
     private bool expanded;
-    public const double CollapsedHeight = 80;
+    public const double CollapsedHeight = 90, PillWidth = 560, CapsuleRadius = 45, CardRadius = 30;
     public static double CollapsedWindowHeight => CollapsedHeight + 2 * Ui.ShadowMargin;
-    private readonly TextBlock credited = Ui.Text("", 12, "muted");
-    private readonly TextBlock dot = Ui.Text("●", 11);
-    private readonly TextBlock overtime = Ui.Text("", 11, "overtime");
+    private readonly TextBlock credited = Ui.Text("", 13, "muted");
+    private readonly Avalonia.Controls.Shapes.Ellipse dot = new() { Width = 16, Height = 16, StrokeThickness = 2, VerticalAlignment = VerticalAlignment.Center };
+    private readonly Chevron chevron = new() { VerticalAlignment = VerticalAlignment.Center };
+    private Border surfaceBorder = null!;
     private readonly Button pause;
     private readonly PauseGlyph pauseGlyph = new();
     private readonly BreakGlyph breakGlyph = new();
@@ -136,17 +137,16 @@ public sealed class PillWindow : Window
         this.model = model;
         Title = "Basic’s Advanced Timer"; WindowChrome.Attach(this);
         ContextMenu = Ui.SettingsMenu(model);
-        Width = 420 + 2 * Ui.ShadowMargin;
+        Width = PillWidth + 2 * Ui.ShadowMargin;
         Height = CollapsedHeight + 2 * Ui.ShadowMargin;
         CanResize = false;
         Topmost = true;
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
-        var root = Ui.Grid("*", "80,*");
-        var head = Ui.Grid("Auto,1,*,36,36", "*");
-        // The progress line takes the bottom of the row, so the content is centred in what is left above it.
-        head.Margin = new Thickness(16, 0, 16, 12);
+        var root = Ui.Grid("*", "90,*");
+        var head = Ui.Grid("Auto,1,*,Auto,Auto", "*");
+        head.Margin = new Thickness(26, 0, 22, 0);
         var timerButton = Ui.Button("", () => OpenDashboard?.Invoke(), "PillDashboard");
         // A small unallocated figure sits under the clock, only while the day is running and there is some.
         var timerColumn = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center };
@@ -155,46 +155,45 @@ public sealed class PillWindow : Window
         timerButton.Content = timerColumn;
         timerButton.Classes.Add("pillAction");
         ToolTip.SetTip(timerButton, "Click for dashboard; drag to move");
-        Ui.Put(head, timerButton).Margin = new Thickness(4, 0, 14, 0);
-        var divider = new Border { Width = 1, Height = 36 }; divider.Classes.Add("rule");
+        Ui.Put(head, timerButton).Margin = new Thickness(0, 0, 18, 0);
+        var divider = new Border { Width = 1, Height = 46 }; divider.Classes.Add("rule");
         Ui.Put(head, divider, 1);
+        // The account, with its colour dot and a chevron that opens the list, the line under it that says what is happening, and how far through the day it is.
+        account.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis; account.FontWeight = Avalonia.Media.FontWeight.SemiBold;
+        credited.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis;
+        var nameRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 9 };
+        nameRow.Children.Add(dot); nameRow.Children.Add(account); nameRow.Children.Add(chevron);
+        // How far through the working day it is, as a thin bar under the account.
+        progressBar.Height = 5; progressBar.Margin = new Thickness(0, 7, 0, 0);
+        progressBar.ColumnDefinitions = new ColumnDefinitions("0*,1*");
+        var fill = new Border { Name = "DayProgressFill", CornerRadius = new CornerRadius(3) };
+        var rest = new Border { CornerRadius = new CornerRadius(3), Opacity = .9 }; rest.Classes.Add("rule");
+        progressFill = fill; Grid.SetColumn(fill, 0); Grid.SetColumn(rest, 1);
+        progressBar.Children.Add(rest); progressBar.Children.Add(fill);
+        progressBar.Name = "DayProgress"; progressBar.IsHitTestVisible = false;
         var labels = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
-        account.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis;
-        labels.Children.Add(account); labels.Children.Add(credited); labels.Children.Add(overtime);
-        var accountContent = Ui.Grid("24,*");
-        dot.VerticalAlignment = VerticalAlignment.Top; dot.Margin = new Thickness(8, 3, 0, 0);
-        Ui.Put(accountContent, dot); Ui.Put(accountContent, labels, 1);
+        labels.Children.Add(nameRow); labels.Children.Add(credited); labels.Children.Add(progressBar);
         var accountButton = Ui.Button("", ToggleExpansion, "PillAccounts");
-        accountButton.Content = accountContent;
+        accountButton.Content = labels;
         accountButton.Classes.Add("pillAction");
         accountButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         accountButton.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         ToolTip.SetTip(accountButton, "Click for accounts; drag to move");
-        Ui.Put(head, accountButton, 2).Margin = new Thickness(10, 0);
-        pause = Ui.Button("", model.TogglePause, "PillPause");
-        pause.Content = pauseGlyph;
-        pause.PointerEntered += (_, _) => pauseGlyph.Glow = 1;
-        pause.PointerExited += (_, _) => pauseGlyph.Glow = 0;
-        pause.Classes.Add("round");
-        pause.Width = pause.Height = 36;
-        Ui.Put(head, pause, 4);
+        Ui.Put(head, accountButton, 2).Margin = new Thickness(18, 0, 18, 0);
         breakButton = Ui.Button("", model.ToggleBreak, "PillBreak");
-        breakButton.Content = breakGlyph; breakButton.Classes.Add("round"); breakButton.Classes.Add("breakButton");
-        breakButton.Width = breakButton.Height = 36; breakButton.Margin = new Thickness(0, 0, 8, 0);
+        breakButton.Content = new Viewbox { Width = 30, Height = 30, Child = breakGlyph }; breakButton.Classes.Add("pillRound"); breakButton.Classes.Add("outlined");
+        breakButton.Margin = new Thickness(0, 0, 12, 0);
         breakButton.PointerEntered += (_, _) => { pillHoverBreak = true; breakGlyph.SetSteaming(true); };
         breakButton.PointerExited += (_, _) => { pillHoverBreak = false; breakGlyph.SetSteaming(model.IsOnBreak); };
         Ui.Put(head, breakButton, 3);
+        pause = Ui.Button("", model.TogglePause, "PillPause");
+        pause.Content = new Viewbox { Width = 24, Height = 24, Child = pauseGlyph };
+        pause.PointerEntered += (_, _) => pauseGlyph.Glow = 1;
+        pause.PointerExited += (_, _) => pauseGlyph.Glow = 0;
+        pause.Classes.Add("pillRound");
+        Ui.Put(head, pause, 4);
         Ui.PillGestures(head, this);
         Ui.Put(root, head);
-        // How far through the working day it is, as a thin line along the bottom of the pill's main row.
-        progressBar.Height = 4; progressBar.VerticalAlignment = VerticalAlignment.Bottom; progressBar.Margin = new Thickness(22, 0, 22, 6);
-        progressBar.ColumnDefinitions = new ColumnDefinitions("0*,1*");
-        var fill = new Border { Name = "DayProgressFill", CornerRadius = new CornerRadius(2) };
-        var rest = new Border { CornerRadius = new CornerRadius(2), Opacity = .8 }; rest.Classes.Add("rule");
-        progressFill = fill; Grid.SetColumn(fill, 0); Grid.SetColumn(rest, 1);
-        progressBar.Children.Add(rest); progressBar.Children.Add(fill);
-        progressBar.Name = "DayProgress"; progressBar.IsHitTestVisible = false;
-        Ui.Put(root, progressBar);
         expansion.Children.Add(Ui.Rule());
         expansion.Children.Add(new AccountList(model));
         day = Ui.Button("Start day", model.ToggleDay, "PillDay");
@@ -210,18 +209,27 @@ public sealed class PillWindow : Window
         Ui.Put(root, pillScroll, row: 1);
         var surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true };
         surface.Classes.Add("surface");
-        shadowHost = Ui.Shadowed(surface, 24); Content = shadowHost;
+        shadowHost = Ui.Shadowed(surface, CapsuleRadius); Content = shadowHost; surfaceBorder = surface;
+        // The capsule changes colour with what is happening, and grows from a capsule into a rounded card as it opens, both eased.
+        var ease = TimeSpan.FromMilliseconds(260);
+        surface.Transitions = new Avalonia.Animation.Transitions
+        {
+            new Avalonia.Animation.BrushTransition { Property = Border.BackgroundProperty, Duration = ease },
+            new Avalonia.Animation.CornerRadiusTransition { Property = Border.CornerRadiusProperty, Duration = ease }
+        };
+        shadowHost.Transitions!.Add(new Avalonia.Animation.CornerRadiusTransition { Property = Border.CornerRadiusProperty, Duration = ease });
         model.PropertyChanged += Changed;
         ActualThemeVariantChanged += (_, _) => { lastShadow = null; Refresh(); };
         Closed += (_, _) => model.PropertyChanged -= Changed;
         Refresh();
     }
+    private Avalonia.Media.Color ThemeColourOr(string key, string fallback) => Ui.ThemeColour(this, key, Avalonia.Media.Color.Parse(fallback));
     // The expanded pill grows by a line when a note such as a failed save is showing under the buttons.
     private double WantedHeight()
     {
         if (!expanded) return CollapsedHeight + 2 * Ui.ShadowMargin;
         // Measured, so there is no dead space whatever the number of accounts or notes showing.
-        expansion.Measure(new Size(420, double.PositiveInfinity));
+        expansion.Measure(new Size(PillWidth, double.PositiveInfinity));
         return CollapsedHeight + expansion.DesiredSize.Height + 2 * Ui.ShadowMargin;
     }
     private (int, bool) expandedKey;
@@ -229,6 +237,9 @@ public sealed class PillWindow : Window
     {
         expanded = !expanded;
         expansion.IsVisible = expanded;
+        chevron.Expanded = expanded; chevron.InvalidateVisual();
+        var radius = new CornerRadius(expanded ? CardRadius : CapsuleRadius);
+        surfaceBorder.CornerRadius = radius; shadowHost.CornerRadius = radius;
         expandedKey = (model.Accounts.Count(a => !BreakAccount.Is(a.Name)), saved.IsVisible);
         ApplyHeight();
         if (Screens.ScreenFromWindow(this) is { } screen)
@@ -257,29 +268,26 @@ public sealed class PillWindow : Window
         var key = (model.Accounts.Count(a => !BreakAccount.Is(a.Name)), saved.IsVisible);
         if (expanded && key != expandedKey) { expandedKey = key; Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (expanded) ApplyHeight(); }); }
         ToolTip.SetTip(saved, model.LastError);
-        account.Text = model.AccountLabel;
         timer.Text = model.ClockText;
         var open = model.Unallocated;
         pillUnallocated.IsVisible = model.DayStarted && open >= TimeSpan.FromMinutes(1);
         pillUnallocated.Text = pillUnallocated.IsVisible ? model.Format(open) + " unallocated" : "";
         var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);
         account.Text = model.IsOnBreak ? model.AccountLabel : model.ActiveAccount ?? (selected?.Name ?? model.AccountLabel);
-        credited.Text = model.IsTracking && selected is not null ? model.Format(model.Today(selected)) + " today" : model.Status;
-        dot.Classes.Set("live", model.IsTracking && !model.IsOnBreak); dot.Classes.Set("break", model.IsOnBreak); dot.Classes.Set("idle", !model.IsTracking);
+        // What is happening, in one line. A break says where it will go back to, overtime adds how much there is, and an idle timer says what it is waiting for.
+        var overtimeText = model.IsOvertime ? " · OT " + model.Format(model.Engine.Totals(model.Engine.Now).Overtime) : "";
+        credited.Text = model.IsOnBreak ? (model.ResumeAccount is { } returnTo ? "Returns to " + returnTo : "On a break") + overtimeText
+            : model.IsTracking && selected is not null ? "Today " + model.Format(model.Today(selected)) + overtimeText : model.Status + overtimeText;
+        // The dot is the account's own colour, with a ring in the pill's text colour so it shows on any capsule. A break is amber and an idle timer is grey.
+        var shown = model.Accounts.FirstOrDefault(a => a.Name == (model.IsOnBreak ? null : model.ActiveAccount ?? selected?.Name));
+        var dotColour = model.IsOnBreak ? ThemeColourOr("BudgetWarning", "#F2B84B") : !model.IsTracking ? ThemeColourOr("Muted", "#8A8F98") : shown?.Colour is { } own ? Avalonia.Media.Color.Parse(Ui.Visible(own)) : ThemeColourOr("Accent", "#F27A0D");
+        dot.Fill = new Avalonia.Media.SolidColorBrush(dotColour); dot.Stroke = this.TryFindResource("Ink", ActualThemeVariant, out var ring) && ring is Avalonia.Media.IBrush ringBrush ? ringBrush : Avalonia.Media.Brushes.Gray;
         Ui.Pulse(dot, model.IsTracking);
-        overtime.IsVisible = model.IsOvertime;
-        overtime.Text = "OT +" + model.Format(model.Engine.Totals(model.Engine.Now).Overtime);
         pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
-        breakButton.Classes.Set("onBreak", model.IsOnBreak); breakGlyph.Filled = model.IsOnBreak; breakGlyph.SetSteaming(model.IsOnBreak || pillHoverBreak); breakGlyph.InvalidateVisual();
+        breakGlyph.Filled = false; breakGlyph.SetSteaming(model.IsOnBreak || pillHoverBreak); breakGlyph.InvalidateVisual();
         ToolTip.SetTip(breakButton, model.IsOnBreak ? "Finish break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Start break");
         pause.IsEnabled = model.IsTracking || selected is not null;
         ToolTip.SetTip(pause, model.IsOnBreak ? "End break; drag to move" : model.IsTracking ? "Pause account; drag to move" : "Resume account; drag to move");
-        // The pill's clock follows the same order as the dashboard's: amber on a break, then red in overtime (even while an account is
-        // recording), then green while tracking, and full-strength text when nothing is running.
-        var pillBreak = model.IsOnBreak; var pillLate = model.IsOvertime && !pillBreak;
-        timer.Classes.Set("break", pillBreak); timer.Classes.Set("overtime", pillLate);
-        timer.Classes.Set("live", model.IsTracking && !pillBreak && !pillLate);
-        timer.Classes.Set("clockIdle", !model.IsTracking && !pillBreak && !pillLate);
         day.Content = model.DayStarted ? "Finish day" : "Start day";
         // Starting the day is the green main action; finishing it is red, so ending the day is never done by accident.
         day.Classes.Set("finishDay", model.DayStarted); day.Classes.Set("primary", !model.DayStarted);
@@ -289,13 +297,11 @@ public sealed class PillWindow : Window
         var done = progress ?? 0.0;
         progressBar.ColumnDefinitions[0].Width = new GridLength(done, GridUnitType.Star);
         progressBar.ColumnDefinitions[1].Width = new GridLength(1.0 - done, GridUnitType.Star);
-        progressFill.Classes.Set("progressOvertime", model.IsOvertime); progressFill.Classes.Set("progressBreak", model.IsOnBreak);
+        progressFill.Classes.Set("progressOvertime", model.IsOvertime && !model.IsOnBreak); progressFill.Classes.Set("progressBreak", model.IsOnBreak);
         ToolTip.SetTip(progressBar, progress is null ? "No working day today. The line fills as a working day goes by." : $"{(int)(done * 100)}% of the working day");
-        // The pill glows while an account is recording (in the theme's live colour), for a break and for overtime, so its state shows from across the room.
-        // When nothing is running it keeps the ordinary shadow.
-        var glow = model.IsOnBreak ? "Break" : model.IsOvertime ? "Overtime" : model.IsTracking ? "Live" : null;
-        var shadow = (model.Shadows, glow, ActualThemeVariant);
-        if (lastShadow != shadow) { lastShadow = shadow; Ui.SetShadow(shadowHost, model.Shadows, glow); }
+        // The capsule's own colour says what is happening, so the pill keeps the ordinary shadow in every state.
+        var shadow = (model.Shadows, (string?)null, ActualThemeVariant);
+        if (lastShadow != shadow) { lastShadow = shadow; Ui.SetShadow(shadowHost, model.Shadows, null); }
     }
 }
 

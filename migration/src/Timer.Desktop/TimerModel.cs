@@ -511,9 +511,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     // Break and overtime themes are variants of Light and Dark that override colours. A break outranks overtime, because it is
     // the state you chose just now, and overtime outranks normal. Not tracking has no tint of its own: it keeps the ordinary
-    // theme and shows itself through the grey glow, so it never fights the other two. Only the pill is tinted (see PillVariant),
-    // so the dashboard stays calm: its own Break button turns amber to show a break is on.
-    public string ThemeState => IsOnBreak ? "Break" : IsOvertime ? "Overtime" : "Normal";
+    // theme. Only the pill is coloured by state (see PillVariant): dark while recording, and a break or overtime colours the whole capsule.
+    // The dashboard stays calm, and its own Break button and clock change colour to show those states.
+    public string ThemeState => IsOnBreak ? "Break" : IsOvertime ? "Overtime" : IsTracking ? "Recording" : "Normal";
     private ThemeVariant? appliedVariant;
     /// <summary>Every theme on offer: the built-in ones, then the user's own.</summary>
     public IReadOnlyList<ThemeDefinition> Themes => ThemeLibrary.BuiltIn.Concat(preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
@@ -529,7 +529,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>The theme the pill wears by itself: tinted amber on a break, red in overtime, otherwise null so it follows the rest of the app.</summary>
     public ThemeVariant? PillVariant => ThemeState != "Normal" && Application.Current is not null && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()
-        ? ThemeEngine.StateVariant(CurrentTheme, ThemeState == "Break" ? ThemeDerivation.Break : ThemeDerivation.Overtime) : null;
+        ? ThemeEngine.StateVariant(CurrentTheme, ThemeState) : null;
     private void ApplyTheme()
     {
         if (Application.Current is not { } app || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;

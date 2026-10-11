@@ -527,6 +527,25 @@ public sealed class TrackingLabels : StackPanel
     }
 }
 
+/// <summary>A clock whose hours and minutes are heavy and whose seconds are lighter and dimmer, so the figure that matters stands out.</summary>
+public sealed class ClockText : StackPanel
+{
+    private readonly TextBlock main, seconds;
+    public ClockText(double size, double secondsSize)
+    {
+        Orientation = Orientation.Horizontal;
+        main = new TextBlock { FontSize = size, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Bottom };
+        seconds = new TextBlock { FontSize = secondsSize, Classes = { "clockLight", "muted" }, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(1, 0, 0, size * .12) };
+        Children.Add(main); Children.Add(seconds);
+    }
+    /// <summary>The whole clock, as hours:minutes:seconds. Setting it splits the seconds off to be drawn lighter.</summary>
+    public string Text
+    {
+        get => main.Text + seconds.Text;
+        set { var cut = value.LastIndexOf(':'); main.Text = cut > 0 ? value[..cut] : value; seconds.Text = cut > 0 ? value[cut..] : ""; }
+    }
+}
+
 public sealed class Chevron : Control
 {
     public bool Expanded { get; set; }

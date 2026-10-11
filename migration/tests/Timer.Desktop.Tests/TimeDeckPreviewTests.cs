@@ -26,4 +26,31 @@ public sealed class TimeDeckPreviewTests
         }
         finally { window.Close(); model.SetTheme("System"); }
     }
+
+    [AvaloniaTheory]
+    [InlineData("Time Deck", "pill-light")]
+    [InlineData("Time Deck Dark", "pill-dark")]
+    public void ThePillDrawsInEachState(string theme, string file)
+    {
+        var model = TimerModel.CreateDemo(); model.SetTheme(theme);
+        var pill = new PillWindow(model); pill.Show();
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
+        // Animations do not tick in the headless renderer, so the eased colour change would never arrive. Switch the easing off to see each state as it settles.
+        Dispatcher.UIThread.RunJobs();
+        foreach (var border in Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(pill).OfType<Avalonia.Controls.Border>()) if (border.Name == "PillSurface") border.Transitions = null;
+        void Shot(string state)
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+            if (folder is not null) { Directory.CreateDirectory(folder); using var shot = pill.CaptureRenderedFrame(); shot!.Save(Path.Combine(folder, $"{file}-{state}.png")); }
+        }
+        try
+        {
+            Shot("idle");
+            model.ToggleAccount("Account three"); Shot("recording");
+            model.SetOvertimeTest(true); Shot("overtime"); model.SetOvertimeTest(false);
+            model.ToggleBreak(); Shot("break"); model.ToggleBreak();
+            pill.ToggleExpansion(); Shot("expanded");
+        }
+        finally { pill.Close(); model.SetTheme("System"); }
+    }
 }

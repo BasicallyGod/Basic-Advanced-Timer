@@ -35,13 +35,13 @@ public static class ThemeTokens
     /// <summary>The coloured parts of the app a theme sets, in the order the editor lists them.</summary>
     public static readonly string[] Names =
     {
-        "Surface", "Panel", "Ink", "Muted", "Line", "Hover", "Selected", "Live", "Idle", "Overtime", "BudgetWarning", "Break", "Finish", "Accent", "AccentInk", "Clock", "ShadowColor"
+        "Surface", "Panel", "Ink", "Muted", "Line", "Hover", "Selected", "Live", "Idle", "Overtime", "BudgetWarning", "Break", "Finish", "Accent", "AccentInk", "Clock", "PillSurface", "PillInk", "PillBreak", "PillOvertime", "ShadowColor"
     };
     public static string Describe(string token) => token switch
     {
         "Surface" => "Window background", "Panel" => "Side panel and controls", "Ink" => "Text", "Muted" => "Quiet text", "Line" => "Lines and borders",
         "Hover" => "Hovered row", "Selected" => "Selected row", "Live" => "Tracking and start", "Idle" => "Not tracking", "Overtime" => "Overtime",
-        "BudgetWarning" => "Budget nearly used", "Break" => "Breaks", "Finish" => "Finish day", "Accent" => "Accent (tabs, main button)", "AccentInk" => "Text on the accent", "Clock" => "Clock when idle", "ShadowColor" => "Window shadow", _ => token
+        "BudgetWarning" => "Budget nearly used", "Break" => "Breaks", "Finish" => "Finish day", "Accent" => "Accent (tabs, main button)", "AccentInk" => "Text on the accent", "Clock" => "Clock when idle", "PillSurface" => "Pill while recording", "PillInk" => "Text on the pill while recording", "PillBreak" => "Pill on a break", "PillOvertime" => "Pill in overtime", "ShadowColor" => "Window shadow", _ => token
     };
     /// <summary>#RRGGBB for every colour, or #AARRGGBB for the shadow, which needs transparency.</summary>
     public static bool IsValid(string token, string? value)
@@ -105,24 +105,23 @@ public static class ThemeColours
 public static class ThemeDerivation
 {
     public const string Break = "Break", Overtime = "Overtime";
-    // How strongly each part takes on the state's hue: the same lightness as the theme's own colour, with this much of the hue's
-    // saturation, so a break feels amber and overtime red in any theme without hiding what the theme set.
-    private static readonly (string Token, double Light, double Dark)[] Tinted =
-    {
-        ("Surface", .62, .32), ("Panel", .70, .30), ("Ink", .45, .45), ("Muted", .28, .22), ("Line", .50, .30), ("Hover", .55, .30), ("Selected", .55, .35), ("Idle", .22, .20)
-    };
-    /// <summary>The colours the pill wears during a break or overtime: the theme's own, with its backgrounds, lines and text tinted towards the accent.</summary>
+    public const string Recording = "Recording";
+    /// <summary>
+    /// The colours the pill wears in a state, so everything inside it reads naturally on its colour. Recording uses the theme's pill colour, a break its Break
+    /// colour and overtime its Overtime colour. Text, lines and hovers are mixed from the colour and the text on it, and the colours that normally mean
+    /// something (break, overtime, finish) become plain text colour, because the whole pill already says it.
+    /// </summary>
     public static IReadOnlyDictionary<string, string> Variant(ThemeDefinition theme, string state)
     {
-        var accent = theme.Colour(state == Break ? "Break" : "Overtime");
-        var hue = ThemeColours.Hsl(accent).H;
-        var result = new Dictionary<string, string>(theme.Colours);
-        foreach (var (token, light, dark) in Tinted)
+        var surface = state switch { Break => theme.Colour("PillBreak"), Overtime => theme.Colour("PillOvertime"), _ => theme.Colour("PillSurface") };
+        var ink = state == Recording ? theme.Colour("PillInk") : ThemeColours.ReadableOn(surface);
+        var result = new Dictionary<string, string>(theme.Colours)
         {
-            var own = ThemeColours.Hsl(theme.Colour(token));
-            // Pure black and white have no hue to tint, so lightness is kept just inside the extremes and the state still shows.
-            result[token] = ThemeColours.FromHsl(hue, theme.Dark ? dark : light, Math.Clamp(own.L, .04, .96));
-        }
+            ["Surface"] = surface, ["Panel"] = ThemeColours.Mix(surface, ink, .10), ["Ink"] = ink, ["Muted"] = ThemeColours.Mix(surface, ink, .84),
+            ["Line"] = ThemeColours.Mix(surface, ink, .30), ["Hover"] = ThemeColours.Mix(surface, ink, .16), ["Selected"] = ThemeColours.Mix(surface, ink, .22),
+            ["Idle"] = ThemeColours.Mix(surface, ink, .84), ["Clock"] = ink, ["Overtime"] = ink, ["Break"] = ink, ["Finish"] = ink,
+            ["Live"] = state == Recording ? theme.Colour("Accent") : ink
+        };
         return result;
     }
     /// <summary>What a timeline block is drawn with: its fill, the colour of the edge down its left side, and the text on it.</summary>
@@ -160,8 +159,19 @@ public static class ThemeLibrary
         {
             ["Surface"] = surface, ["Panel"] = panel, ["Ink"] = ink, ["Muted"] = muted, ["Line"] = line, ["Hover"] = hover, ["Selected"] = selected, ["Live"] = live,
             ["Idle"] = muted, ["Overtime"] = overtime, ["BudgetWarning"] = warning, ["Break"] = breakColour, ["Finish"] = finish, ["Accent"] = accent, ["AccentInk"] = accentInk,
-            ["Clock"] = clock, ["ShadowColor"] = shadow
+            ["Clock"] = clock, ["ShadowColor"] = shadow,
+            // The recording pill is the strongest object on screen. On a light theme it is dark, on a dark theme a lifted version of the panel, so it stands out either way.
+            ["PillSurface"] = dark ? ThemeColours.Mix(panel, "#FFFFFF", .08) : ink, ["PillInk"] = dark ? ink : surface,
+            // Overtime wants a deep, strong red under white text. A dark theme's overtime colour is a light one made for text, so it is deepened for the pill.
+            ["PillBreak"] = Capsule(breakColour), ["PillOvertime"] = dark ? ThemeColours.FromHsl(ThemeColours.Hsl(overtime).H, .62, .36) : Capsule(overtime)
         }, true);
+    // A colour that is fine for text on the theme's window can be too dull to carry text itself as a capsule, so it is brightened until text reads on it.
+    private static string Capsule(string colour)
+    {
+        if (Math.Max(ThemeColours.Contrast(colour, "#FFFFFF"), ThemeColours.Contrast(colour, "#24312B")) >= 4.5) return colour;
+        var (hue, saturation, _) = ThemeColours.Hsl(colour);
+        return ThemeColours.FromHsl(hue, Math.Max(saturation, .8), .55);
+    }
     private const string DarkShadow = "#B3000000", LightShadow = "#59000000";
     /// <summary>The default: deep green with a lime accent.</summary>
     public static readonly ThemeDefinition Hawthorn = Make("Hawthorn", true, "#0A4A2C", "#0D5632", "#F6FBF3", "#A9C8B1", "#2E7A52", "#11603A", "#1A7248",

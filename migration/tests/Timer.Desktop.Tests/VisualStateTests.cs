@@ -45,7 +45,7 @@ public sealed class VisualStateTests
             model.ToggleAccount("Break"); Dispatcher.UIThread.RunJobs();
             Assert.True(model.IsOnBreak); Assert.NotEqual(normal, Brush(pill, "Surface"));
             Assert.Equal(normal, Brush(dashboard, "Surface")); // The dashboard keeps its own colours; its Break button turns amber instead.
-            Assert.Equal(Color.Parse(model.CurrentTheme.Colour("Break")), Brush(pill, "Break")); // The break colour is a theme token, not hard-coded.
+            Assert.Equal(Color.Parse(model.CurrentTheme.Colour("PillBreak")), Brush(pill, "Surface")); // The whole capsule takes the theme's break colour, not a hard-coded one.
             model.ToggleAccount("Break"); Dispatcher.UIThread.RunJobs();
             Assert.Equal(normal, Brush(pill, "Surface"));
         }
@@ -76,33 +76,30 @@ public sealed class VisualStateTests
     }
 
     [AvaloniaFact]
-    public void PillShowsDayProgressGlowsForItsStatesAndPulsesItsDot()
+    public void PillShowsDayProgressWearsItsStatesColourAndPulsesItsDot()
     {
         var now = Day.AddHours(13); var engine = new TrackingEngine(clock: () => now); var model = new TimerModel(engine);
         var pill = new PillWindow(model); pill.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+            var surface = pill.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PillSurface");
+            Assert.Contains(surface.Transitions!, x => x is Avalonia.Animation.BrushTransition); Assert.Contains(surface.Transitions!, x => x is Avalonia.Animation.CornerRadiusTransition); // The colour and the shape ease.
+            surface.Transitions = null; // Take the easing out here, so each state can be read as soon as it is set.
             var host = pill.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "ShadowHost");
-            Assert.NotEmpty(host.Transitions!); // The shadow fades between states, so the edge does not jump when play or pause is pressed.
-            host.Transitions = null; // Take the fade out here, so each state can be read as soon as it is set.
             var bar = pill.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "DayProgress");
             Assert.True(bar.IsVisible); Assert.Equal(.5, bar.ColumnDefinitions[0].Width.Value, 2); // 13:00 of a 09:00 to 17:00 day.
-            Assert.NotEqual(default, host.BoxShadow); // Not tracking keeps the plain drop shadow, with no glow.
-            Assert.Equal(6, host.BoxShadow[0].OffsetY);
+            var theme = model.CurrentTheme; var idle = Brush(pill, "Surface");
+            Assert.NotEqual(default, host.BoxShadow); Assert.Equal(6, host.BoxShadow[0].OffsetY); // The pill keeps the ordinary shadow in every state.
             model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs();
-            var dot = pill.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "●");
-            Assert.True(Ui.IsPulsing(dot)); Assert.Equal(Brush(pill, "Live").R, host.BoxShadow[0].Color.R); Assert.Equal(0, host.BoxShadow[0].OffsetY); // A recording account gives the pill a glow in the live colour.
-            model.SetShadows(false); Dispatcher.UIThread.RunJobs();
-            Assert.Equal(Brush(pill, "Live").R, host.BoxShadow[0].Color.R); // The glow is a signal, so it stays when plain shadows are off.
-            model.TogglePause(); Dispatcher.UIThread.RunJobs(); // Paused: no glow, and no shadow either.
-            Assert.Equal(default, host.BoxShadow);
-            model.TogglePause(); Dispatcher.UIThread.RunJobs();
-            now = Day.AddHours(18); model.Tick(); model.SetShadows(true); Dispatcher.UIThread.RunJobs();
-            Assert.True(model.IsOvertime); Assert.Equal(Brush(pill, "Overtime").R, host.BoxShadow[0].Color.R);
+            var dot = pill.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().First();
+            Assert.True(Ui.IsPulsing(dot)); Assert.Equal(Color.Parse(theme.Colour("PillSurface")), Brush(pill, "Surface")); Assert.NotEqual(idle, Brush(pill, "Surface")); // Recording is the dark capsule.
+            Assert.Equal(6, host.BoxShadow[0].OffsetY);
+            now = Day.AddHours(18); model.Tick(); Dispatcher.UIThread.RunJobs();
+            Assert.True(model.IsOvertime); Assert.Equal(Color.Parse(theme.Colour("PillOvertime")), Brush(pill, "Surface")); // Overtime colours the capsule, even while an account records.
             Assert.Equal(1.0, bar.ColumnDefinitions[0].Width.Value, 2);
             model.ToggleAccount("Break"); Dispatcher.UIThread.RunJobs();
-            Assert.Equal(Brush(pill, "Break").R, host.BoxShadow[0].Color.R); // Break outranks overtime.
+            Assert.Equal(Color.Parse(theme.Colour("PillBreak")), Brush(pill, "Surface")); // Break outranks overtime.
             model.TogglePause(); Dispatcher.UIThread.RunJobs(); // Resume ends the break and returns to the account.
             Assert.False(model.IsOnBreak); Assert.Equal("Account one", model.ActiveAccount);
             model.TogglePause(); Dispatcher.UIThread.RunJobs();
@@ -122,7 +119,7 @@ public sealed class VisualStateTests
             Assert.DoesNotContain(pill.GetVisualDescendants().OfType<Button>(), b => b.Name == "Settings"); // Settings are on the right-click menu.
             Assert.NotNull(pill.ContextMenu);
             var day = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDay");
-            Assert.Contains("finishDay", day.Classes); Assert.InRange(day.Bounds.Width, 350, 420); // 10:00 on a working day: finishing is red.
+            Assert.Contains("finishDay", day.Classes); Assert.InRange(day.Bounds.Width, 450, 560); // 10:00 on a working day: finishing is red.
             Assert.DoesNotContain(pill.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ScrollBar>(), b => b.IsVisible); // Nothing to scroll, so no scroll bar.
             var bottom = day.TranslatePoint(new Point(0, day.Bounds.Height), pill)!.Value.Y;
             var cardBottom = pill.Height - Ui.ShadowMargin;

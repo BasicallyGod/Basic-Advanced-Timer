@@ -110,9 +110,10 @@
       <Setter Property="BorderThickness" Value="3" />
       <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
     </Style>
-    <Style Selector="Border#DayProgressFill"><Setter Property="Background" Value="{DynamicResource Live}" /></Style>
-    <Style Selector="Border#DayProgressFill.progressOvertime"><Setter Property="Background" Value="{DynamicResource Overtime}" /></Style>
-    <Style Selector="Border#DayProgressFill.progressBreak"><Setter Property="Background" Value="{DynamicResource Break}" /></Style>
+    <Style Selector="Border#DayProgressFill"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
+    <!-- On a break or in overtime the whole pill is that colour, so the bar is drawn in the pill's text colour. -->
+    <Style Selector="Border#DayProgressFill.progressOvertime"><Setter Property="Background" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="Border#DayProgressFill.progressBreak"><Setter Property="Background" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="Border.recording">
       <Setter Property="BorderThickness" Value="3" />
       <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
@@ -270,6 +271,21 @@
       <Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" />
     </Style>
     <Style Selector="Button.iconButton:disabled"><Setter Property="Opacity" Value="0.4" /></Style>
+    <!-- The round buttons on the pill: a filled circle for pause and play, an outlined one for the break. They grow a little under the pointer. -->
+    <Style Selector="Button.pillRound">
+      <Setter Property="Width" Value="56" /><Setter Property="Height" Value="56" /><Setter Property="CornerRadius" Value="28" />
+      <Setter Property="Padding" Value="0" /><Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="BorderThickness" Value="2" /><Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="RenderTransform" Value="scale(1)" />
+      <Setter Property="Transitions"><Transitions><TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.16" /></Transitions></Setter>
+    </Style>
+    <Style Selector="Button.pillRound.outlined"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="Button.pillRound:pointerover"><Setter Property="RenderTransform" Value="scale(1.07)" /></Style>
+    <Style Selector="Button.pillRound:pressed"><Setter Property="RenderTransform" Value="scale(0.95)" /></Style>
+    <Style Selector="Button.pillRound /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+    <Style Selector="Button.pillRound.outlined /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="Button.pillRound:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
+    <Style Selector="Button.pillRound.outlined:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="Button.round">
       <Setter Property="CornerRadius" Value="24" />
       <Setter Property="Width" Value="40" />

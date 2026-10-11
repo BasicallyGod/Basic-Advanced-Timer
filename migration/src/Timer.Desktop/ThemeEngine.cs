@@ -49,6 +49,7 @@ public static class ThemeEngine
         foreach (var theme in themes)
         {
             Write(app, VariantFor(theme), theme.Colours);
+            Write(app, StateVariant(theme, ThemeDerivation.Recording), ThemeDerivation.Variant(theme, ThemeDerivation.Recording));
             Write(app, StateVariant(theme, ThemeDerivation.Break), ThemeDerivation.Variant(theme, ThemeDerivation.Break));
             Write(app, StateVariant(theme, ThemeDerivation.Overtime), ThemeDerivation.Variant(theme, ThemeDerivation.Overtime));
         }

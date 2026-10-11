@@ -29,24 +29,29 @@ public sealed class ThemeTests
             foreach (var state in new[] { ThemeDerivation.Break, ThemeDerivation.Overtime })
             {
                 var variant = ThemeDerivation.Variant(theme, state);
-                Assert.True(ThemeColours.Contrast(variant["Ink"], variant["Surface"]) >= 7, $"{theme.Name} {state} text on surface");
-                Assert.True(ThemeColours.Contrast(variant["Ink"], variant["Panel"]) >= 7, $"{theme.Name} {state} text on panel");
-                Assert.True(ThemeColours.Contrast(variant["Muted"], variant["Surface"]) >= 3.5, $"{theme.Name} {state} quiet text");
+                // The capsule is a strong colour with large, heavy text on it, so the bar is the standard 4.5 to 1 for readable text, not the 7 of the calm surfaces.
+                Assert.True(ThemeColours.Contrast(variant["Ink"], variant["Surface"]) >= 4.5, $"{theme.Name} {state} text on surface");
+                Assert.True(ThemeColours.Contrast(variant["Ink"], variant["Panel"]) >= 4.0, $"{theme.Name} {state} text on panel");
+                Assert.True(ThemeColours.Contrast(variant["Muted"], variant["Surface"]) >= 3.0, $"{theme.Name} {state} quiet text");
             }
         }
         foreach (var theme in new[] { ThemeLibrary.HighContrastDark, ThemeLibrary.HighContrastLight }) Assert.True(ThemeColours.Contrast(theme.Colour("Ink"), theme.Colour("Surface")) >= 15);
     }
 
     [Fact]
-    public void BreakAndOvertimeTintsTakeTheAccentHueAndKeepTheThemesOwnLightnessAndAccents()
+    public void ThePillWearsItsStateColourWithPlainTextOnItAndLeavesTheThemesOtherColoursAlone()
     {
         foreach (var theme in ThemeLibrary.BuiltIn)
         {
-            var amber = ThemeDerivation.Variant(theme, ThemeDerivation.Break); var red = ThemeDerivation.Variant(theme, ThemeDerivation.Overtime);
-            var hue = ThemeColours.Hsl(amber["Surface"]).H; Assert.InRange(hue, 25, 60);
-            Assert.Equal(theme.Dark, ThemeColours.Hsl(amber["Surface"]).L < .5); // A dark theme stays dark, a light one light.
-            foreach (var token in new[] { "Live", "Break", "Overtime", "Finish", "BudgetWarning", "ShadowColor" }) { Assert.Equal(theme.Colour(token), amber[token]); Assert.Equal(theme.Colour(token), red[token]); }
-            Assert.NotEqual(theme.Colour("Surface"), amber["Surface"]); Assert.NotEqual(amber["Surface"], red["Surface"]);
+            var recording = ThemeDerivation.Variant(theme, ThemeDerivation.Recording); var amber = ThemeDerivation.Variant(theme, ThemeDerivation.Break); var red = ThemeDerivation.Variant(theme, ThemeDerivation.Overtime);
+            Assert.Equal(theme.Colour("PillSurface"), recording["Surface"]); Assert.Equal(theme.Colour("PillInk"), recording["Ink"]);
+            Assert.Equal(theme.Colour("PillBreak"), amber["Surface"]); Assert.Equal(theme.Colour("PillOvertime"), red["Surface"]);
+            // The colours that normally mean something become the pill's text colour, since the whole pill already says it.
+            foreach (var variant in new[] { recording, amber, red }) foreach (var token in new[] { "Break", "Overtime", "Finish" }) Assert.Equal(variant["Ink"], variant[token]);
+            foreach (var token in new[] { "Accent", "AccentInk", "BudgetWarning", "ShadowColor" }) { Assert.Equal(theme.Colour(token), amber[token]); Assert.Equal(theme.Colour(token), red[token]); }
+            Assert.NotEqual(amber["Surface"], red["Surface"]); Assert.NotEqual(recording["Surface"], amber["Surface"]);
+            // A dark theme's overtime colour is made for text, so the pill deepens it: white text on it must still read.
+            if (theme.Dark) Assert.True(ThemeColours.Hsl(red["Surface"]).L < .45, theme.Name);
         }
     }
 

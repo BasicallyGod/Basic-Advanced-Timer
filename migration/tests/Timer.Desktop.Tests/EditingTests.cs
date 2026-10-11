@@ -455,7 +455,7 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void TheDashboardStaysOnTopAndThePillClockStaysRedInOvertimeEvenWhileRecording()
+    public void TheDashboardStaysOnTopAndThePillStaysTheOvertimeColourEvenWhileRecording()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); var pill = new PillWindow(model); dashboard.Show(); pill.Show();
         try
@@ -463,10 +463,9 @@ public sealed class EditingTests
             Assert.True(dashboard.Topmost); Assert.True(pill.Topmost);
             model.SetOvertimeTest(true); model.ToggleAccount("Account three"); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
             Assert.True(model.IsOvertime); Assert.True(model.IsTracking);
-            var timer = pill.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 22);
-            Assert.Contains("overtime", timer.Classes); Assert.DoesNotContain("live", timer.Classes); Assert.DoesNotContain("clockIdle", timer.Classes);
-            var overtimeText = pill.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text is not null && t.Text.StartsWith("OT +"));
-            Assert.Equal(((Avalonia.Media.ISolidColorBrush)overtimeText.Foreground!).Color, ((Avalonia.Media.ISolidColorBrush)timer.Foreground!).Color); // The same red as the overtime text.
+            // The whole capsule is the overtime colour while recording, and its line says how much overtime there is.
+            Assert.Equal("Overtime", model.ThemeState); Assert.Equal(ThemeEngine.StateVariant(model.CurrentTheme, ThemeDerivation.Overtime), pill.RequestedThemeVariant);
+            Assert.Contains(pill.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is not null && t.Text.Contains("· OT "));
             Assert.Equal("Start break", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak").GetVisualDescendants().OfType<TextBlock>().Single().Text);
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs();
             Assert.Equal("Finish break", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak").GetVisualDescendants().OfType<TextBlock>().Single().Text);
