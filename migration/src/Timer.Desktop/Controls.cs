@@ -259,6 +259,10 @@ public static class Ui
 // Vector geometry keeps the budget ring and cutlery crisp at any display scale.
 public sealed class AccountIndicator : Control
 {
+    // 0 at rest, 1 while the pointer is over the row. It eases in and out, so the button visibly answers the pointer and reads as pressable.
+    public static readonly StyledProperty<double> GlowProperty = AvaloniaProperty.Register<AccountIndicator, double>(nameof(Glow));
+    static AccountIndicator() => AffectsRender<AccountIndicator>(GlowProperty);
+    public double Glow { get => GetValue(GlowProperty); set => SetValue(GlowProperty, value); }
     public TimerAccount Account { get; }
     private readonly TimerModel model;
     public AccountIndicator(TimerAccount account, TimerModel model)
@@ -266,6 +270,7 @@ public sealed class AccountIndicator : Control
         Account = account;
         this.model = model;
         Width = Height = Size;
+        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = TimeSpan.FromMilliseconds(160) } };
     }
     // Drawn on a 42 unit canvas and scaled down, so the ring, bars and play triangle stay in proportion at the smaller size.
     public const double Size = 36;
@@ -295,10 +300,20 @@ public sealed class AccountIndicator : Control
                 context.DrawGeometry(null, new Pen(colour, 3), geometry);
             }
         }
+        // Under the hand, the button fills with the accent colour and its symbol grows a little and turns to the accent's own text colour.
+        var glow = Math.Clamp(Glow, 0, 1);
+        var accent = Resource("Accent"); var accentInk = Resource("AccentInk");
+        if (glow > 0 && !BreakAccount.Is(Account.Name))
+        {
+            using (context.PushOpacity(glow)) context.DrawEllipse(accent, null, centre, 15, 15);
+        }
+        using var grow = context.PushTransform(Matrix.CreateTranslation(-21, -21) * Matrix.CreateScale(1 + .18 * glow, 1 + .18 * glow) * Matrix.CreateTranslation(21, 21));
         if (model.ActiveAccount == Account.Name)
         {
             context.DrawRectangle(ink, null, new Rect(15, 14, 4, 14), 1, 1);
             context.DrawRectangle(ink, null, new Rect(23, 14, 4, 14), 1, 1);
+            if (glow > 0)
+                using (context.PushOpacity(glow)) { context.DrawRectangle(accentInk, null, new Rect(15, 14, 4, 14), 1, 1); context.DrawRectangle(accentInk, null, new Rect(23, 14, 4, 14), 1, 1); }
         }
         else if (BreakAccount.Is(Account.Name))
         {
@@ -311,7 +326,12 @@ public sealed class AccountIndicator : Control
             context.DrawLine(pen, new Point(23, 12), new Point(23, 21));
             context.DrawLine(pen, new Point(23, 21), new Point(26, 21));
         }
-        else context.DrawGeometry(ink, null, Geometry.Parse("M 17,13 L 28,21 L 17,29 Z"));
+        else
+        {
+            var triangle = Geometry.Parse("M 17,13 L 28,21 L 17,29 Z");
+            context.DrawGeometry(ink, null, triangle);
+            if (glow > 0) using (context.PushOpacity(glow)) context.DrawGeometry(accentInk, null, triangle);
+        }
     }
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -361,6 +381,8 @@ public sealed class AccountList : StackPanel
             var today = Ui.Put(grid, Ui.Text(model.Format(model.Today(account))), 2 + shift);
             row.Content = grid;
             row.Click += (_, _) => model.ToggleAccount(account.Name);
+            row.PointerEntered += (_, _) => icon.Glow = 1;
+            row.PointerExited += (_, _) => icon.Glow = 0;
             if (reorderable && !BreakAccount.Is(account.Name)) AttachReorder(row, account.Name);
             // The everyday thing to do with an account comes first, then the less frequent one.
             var adjust = new MenuItem { Header = "Adjust time today…", Name = "AdjustTimeMenu" };
@@ -522,11 +544,24 @@ public sealed class Chevron : Control
 
 public sealed class PauseGlyph : Control
 {
+    // Eases from 0 to 1 while the pointer is over the button, growing the symbol and tinting it with the accent so it reads as pressable.
+    public static readonly StyledProperty<double> GlowProperty = AvaloniaProperty.Register<PauseGlyph, double>(nameof(Glow));
+    static PauseGlyph() => AffectsRender<PauseGlyph>(GlowProperty);
+    public double Glow { get => GetValue(GlowProperty); set => SetValue(GlowProperty, value); }
     public bool Playing { get; set; }
-    public PauseGlyph() { Width = Height = 14; }
+    public PauseGlyph()
+    {
+        Width = Height = 14;
+        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = TimeSpan.FromMilliseconds(160) } };
+    }
     public override void Render(DrawingContext context)
     {
-        var brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
+        var glow = Math.Clamp(Glow, 0, 1);
+        using var grow = context.PushTransform(Matrix.CreateTranslation(-7, -7) * Matrix.CreateScale(1 + .25 * glow, 1 + .25 * glow) * Matrix.CreateTranslation(7, 7));
+        var normal = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
+        var tint = this.TryFindResource("Accent", ActualThemeVariant, out var accentValue) ? accentValue as IBrush : normal;
+        // The accent can be too faint on a theme's panel, so it is only mixed in as the pointer arrives and the shape itself is what grows.
+        var brush = glow > .5 ? tint : normal;
         if (Playing)
         {
             context.DrawRectangle(brush, null, new Rect(2, 1, 4, 12), 1, 1);

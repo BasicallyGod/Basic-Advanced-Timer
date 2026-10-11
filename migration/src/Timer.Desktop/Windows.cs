@@ -164,6 +164,8 @@ public sealed class PillWindow : Window
         Ui.Put(head, accountButton, 2).Margin = new Thickness(10, 0);
         pause = Ui.Button("", model.TogglePause, "PillPause");
         pause.Content = pauseGlyph;
+        pause.PointerEntered += (_, _) => pauseGlyph.Glow = 1;
+        pause.PointerExited += (_, _) => pauseGlyph.Glow = 0;
         pause.Classes.Add("round");
         pause.Width = pause.Height = 36;
         Ui.Put(head, pause, 4);
