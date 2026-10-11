@@ -86,8 +86,10 @@ public sealed class SettingsPageTests
             Assert.True(page.Viewport.Height > 400);
             page.Offset = new Avalonia.Vector(0, 5000); Dispatcher.UIThread.RunJobs();
             Assert.True(page.Offset.Y > 0);
-            // The day column steps aside, so the page starts just beside the rail.
-            Assert.True(page.TranslatePoint(new Avalonia.Point(0, 0), window)!.Value.X < 120);
+            // The day column stays in view, and the page runs out to the window's right edge.
+            Assert.True(page.TranslatePoint(new Avalonia.Point(0, 0), window)!.Value.X > 300);
+            Assert.True(page.TranslatePoint(new Avalonia.Point(page.Bounds.Width, 0), window)!.Value.X > window.Bounds.Width - 2 * Ui.ShadowMargin - 40);
+            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "DashboardDay" && b.IsVisible);
             // The same button closes it again and the timeline returns.
             OpenSettings(window); using var closed = window.CaptureRenderedFrame();
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<ScrollViewer>(), s => s.Name == "SettingsPage");

@@ -20,7 +20,7 @@ public sealed class SettingsView : ScrollViewer
         this.model = model;
         Name = "SettingsPage"; AllowAutoHide = false;
         HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
-        var page = new StackPanel { Spacing = 16, Margin = new Thickness(0, 0, 14, 8), MaxWidth = 820, HorizontalAlignment = HorizontalAlignment.Left };
+        var page = new StackPanel { Spacing = 16, Margin = new Thickness(0, 0, 14, 8), HorizontalAlignment = HorizontalAlignment.Stretch };
 
         // Working hours, with the same form as its window.
         page.Children.Add(Section("Working hours", new ShiftEditor(model, () => { }, null)));

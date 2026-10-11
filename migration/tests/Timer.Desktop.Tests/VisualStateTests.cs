@@ -178,10 +178,10 @@ public sealed class VisualStateTests
             pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
             var pillDay = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDay");
             var dashDay = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay");
-            Assert.Equal("Start day", pillDay.Content); Assert.Contains("primary", pillDay.Classes); Assert.DoesNotContain("finishDay", pillDay.Classes);
+            Assert.Equal("Start day", pillDay.GetVisualDescendants().OfType<TextBlock>().Single().Text); Assert.Contains("startDay", pillDay.Classes); Assert.DoesNotContain("finishDay", pillDay.Classes);
             Assert.DoesNotContain("finishDay", dashDay.Classes);
             now = Day.AddHours(10); model.ChangeDate(0); Dispatcher.UIThread.RunJobs(); // The scheduled start has passed, so the day is running.
-            Assert.Equal("Finish day", pillDay.Content); Assert.Contains("finishDay", pillDay.Classes); Assert.DoesNotContain("primary", pillDay.Classes);
+            Assert.Equal("Finish day", pillDay.GetVisualDescendants().OfType<TextBlock>().Single().Text); Assert.Contains("finishDay", pillDay.Classes); Assert.DoesNotContain("startDay", pillDay.Classes);
             Assert.Contains("finishDay", dashDay.Classes); Assert.Contains("outlined", dashDay.Classes);
             Assert.Equal(Brush(pill, "Finish"), Color.Parse(model.CurrentTheme.Colour("Finish"))); // The colour is the theme's Finish entry, not hard-coded.
         }
@@ -224,27 +224,43 @@ public sealed class VisualStateTests
     }
 
     [AvaloniaFact]
-    public void TheFinishDayButtonStaysRedInsideARecordingBreakOrOvertimePill()
+    public void ThePillsDayButtonMatchesTheDashboardsWithARedOrGreenFlagInEveryPillState()
     {
         var model = TimerModel.CreateDemo(); var pill = new PillWindow(model); pill.Show();
         try
         {
             pill.ToggleExpansion();
-            var red = Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("Finish"));
             model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs(); using var f1 = pill.CaptureRenderedFrame();
-            void Check(string state)
+            void Check(string state, string tint)
             {
                 Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
                 Assert.Equal(state, model.ThemeState);
                 var day = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDay");
-                Assert.Contains("finishDay", day.Classes);
-                var presenter = day.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First(p => p.Name == "PART_ContentPresenter");
-                Assert.Equal(red, ((Avalonia.Media.ISolidColorBrush)presenter.Background!).Color); // Red, not the pill's text colour.
+                Assert.Contains("quiet", day.Classes); Assert.Contains("outlined", day.Classes); Assert.Contains(tint == "Finish" ? "finishDay" : "startDay", day.Classes);
+                Assert.Equal(tint, day.GetVisualDescendants().OfType<IconGlyph>().Single().TintKey);
+                // The Finish colour is the theme's own red even while the pill is wearing a state colour.
+                Assert.Equal(model.CurrentTheme.Colour("Finish"), Timer.Core.ThemeDerivation.Variant(model.CurrentTheme, state)["Finish"]);
             }
-            Check("Recording");
-            model.ToggleBreak(); Check("Break"); model.ToggleBreak();
-            model.SetOvertimeTest(true); Check("Overtime"); model.SetOvertimeTest(false);
+            Check("Recording", "Finish");
+            model.ToggleBreak(); Check("Break", "Finish"); model.ToggleBreak();
+            model.SetOvertimeTest(true); Check("Overtime", "Finish"); model.SetOvertimeTest(false);
         }
         finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void AnOpenPillIsACapsuleAgainWhenYouComeBackFromTheDashboard()
+    {
+        var model = TimerModel.CreateDemo(); var windows = new WindowCoordinator(model, () => { });
+        windows.Pill.Show();
+        try
+        {
+            windows.Pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs();
+            Assert.True(windows.Pill.Height > PillWindow.CollapsedWindowHeight + 50);
+            windows.Pill.OpenDashboard!(); Dispatcher.UIThread.RunJobs();
+            windows.Dashboard.OpenPill!(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(PillWindow.CollapsedWindowHeight, windows.Pill.Height, 0.5);
+        }
+        finally { windows.Pill.Close(); windows.Dashboard.Close(); }
     }
 }
