@@ -186,8 +186,29 @@ public static class ThemeLibrary
     /// <summary>Dark: cool charcoal surfaces with the same orange accent. Blocks take a little more of the account colour than in the light version, so they hold against the dark.</summary>
     public static readonly ThemeDefinition Dark = Make("Dark", true, "#14161A", "#1C1F24", "#EEF0F3", "#9CA3AD", "#2E333A", "#262A31", "#33281D",
         "#4CD48A", "#FF7A8A", "#F2B84B", "#FF9A3C", "#FF6B6B", "#FF8A1F", "#1B1209", "#EEF0F3", DarkShadow, "#4CD48A") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .45, BlockEdge = 0 };
-    // Only these two ship for now. More can be added here later, and the editor and settings page list whatever is in this array.
-    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark };
+    // The colours a mock-up gives (surface, panel, text, accent, break and overtime) are the ones set by hand. The rest are worked out from them, so
+    // every theme gets quiet text, lines, hovers and a selection tint that suit its own surface, and holds the same contrast the tests ask of all.
+    private static ThemeDefinition Themed(string name, bool dark, string surface, string panel, string ink, string accent, string live, string breakColour, string overtime, double tint)
+    {
+        var muted = surface;
+        for (var weight = .5; weight <= 1.0; weight += .05) { muted = ThemeColours.Mix(surface, ink, weight); if (ThemeColours.Contrast(muted, surface) >= 4.5) break; }
+        // On a dark surface the overtime red is lightened until it reads as text, while the pill derives its deep red from the original.
+        var overtimeText = overtime;
+        for (var step = 0; dark && step < 6 && ThemeColours.Contrast(overtimeText, surface) < 4.5; step++) overtimeText = ThemeColours.Mix(overtimeText, "#FFFFFF", .2);
+        var line = ThemeColours.Mix(panel, ink, .14); var hover = ThemeColours.Mix(panel, ink, .07); var selected = ThemeColours.Mix(surface, accent, dark ? .30 : .18);
+        return Make(name, dark, surface, panel, ink, muted, line, hover, selected, live, overtimeText, dark ? "#F2B84B" : "#D9890B", breakColour, dark ? "#FF7A8A" : "#C0243F",
+            accent, ThemeColours.ReadableOn(accent), ink, dark ? DarkShadow : LightShadow, live) with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = tint, BlockEdge = 0 };
+    }
+    /// <summary>Studio: cool and precise, a pale blue-grey with a strong blue accent.</summary>
+    public static readonly ThemeDefinition Studio = Themed("Studio", false, "#F3F6FA", "#E5EBF2", "#202C3D", "#4169C1", "#1F8F4E", "#E07A10", "#B92D43", .55);
+    /// <summary>After Hours: deep and electric, a navy surface with a soft violet accent.</summary>
+    public static readonly ThemeDefinition AfterHours = Themed("After Hours", true, "#111827", "#1C2638", "#EDF2FA", "#A5A0FF", "#4CD48A", "#F28A24", "#B92D43", .42);
+    /// <summary>Botanical: soft and grounded, a pale sage surface with a deep green accent.</summary>
+    public static readonly ThemeDefinition Botanical = Themed("Botanical", false, "#F0F3EB", "#E2E9DA", "#24382D", "#38654B", "#2E7D4F", "#E07A10", "#B92D43", .55);
+    /// <summary>Hawthorn: forest and luminous, deep green with a lime accent. It is the old default theme, back as a choice.</summary>
+    public static readonly ThemeDefinition Hawthorn = Themed("Hawthorn", true, "#073D29", "#105237", "#F5F8ED", "#C5FF42", "#6FE39A", "#F28A24", "#B92D43", .38);
+    // Light and Dark lead the list, then the studies. More can be added here later, and the editor and settings page list whatever is in this array.
+    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark, Studio, AfterHours, Botanical, Hawthorn };
     /// <summary>"System" is not a theme of its own: it picks Light or Dark to match the computer.</summary>
     public const string System = "System";
     /// <summary>What a new installation starts on.</summary>
@@ -196,7 +217,7 @@ public static class ThemeLibrary
     public static string Renamed(string name) => name switch
     {
         "Time Deck" or "Paper" or "Sandstone" or "Sunset" or "High contrast light" => "Light",
-        "Time Deck Dark" or "Hawthorn" or "Sage" or "Graphite" or "Midnight" or "Ocean" or "Aubergine" or "High contrast dark" => "Dark",
+        "Time Deck Dark" or "Sage" or "Graphite" or "Midnight" or "Ocean" or "Aubergine" or "High contrast dark" => "Dark",
         _ => name
     };
 }

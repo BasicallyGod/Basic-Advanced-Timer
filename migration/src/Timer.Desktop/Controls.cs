@@ -209,15 +209,22 @@ public static class Ui
     {
         var format = new MenuItem { Header = "Decimal hours", IsChecked = model.DecimalHours, ToggleType = MenuItemToggleType.CheckBox };
         format.Click += (_, _) => model.ToggleFormat();
-        // Inside the demo you can switch overtime on and off to see how it looks.
-        var overtimeTest = new MenuItem { Header = "Test overtime", ToggleType = MenuItemToggleType.CheckBox, IsVisible = model.IsDemo && BuildInfo.DeveloperFeatures, Name = "TestOvertime" };
+        // Inside the demo you can switch overtime on and off to see how it looks. Like the version, it shows only once developer features are unlocked.
+        var overtimeTest = new MenuItem { Header = "Test overtime", ToggleType = MenuItemToggleType.CheckBox, IsVisible = false, Name = "TestOvertime" };
         overtimeTest.Click += (_, _) => model.SetOvertimeTest(!model.OvertimeTest);
         // Which build this is, greyed out because it is information, not an action.
-        var version = new MenuItem { Header = BuildInfo.Current, IsEnabled = false, Name = "BuildVersion" };
+        var version = new MenuItem { Header = BuildInfo.Current, IsEnabled = false, IsVisible = false, Name = "BuildVersion" };
         var quit = new MenuItem { Header = "Close timer" };
         quit.Click += (_, _) => model.RequestQuit();
-        var menu = new ContextMenu { ItemsSource = new Control[] { format, overtimeTest, new Separator(), version, new Separator(), quit } };
-        menu.Opened += (_, _) => { format.IsChecked = model.DecimalHours; overtimeTest.IsChecked = model.OvertimeTest; };
+        var versionRule = new Separator { IsVisible = false };
+        var menu = new ContextMenu { ItemsSource = new Control[] { format, overtimeTest, versionRule, version, new Separator(), quit } };
+        void Sync()
+        {
+            var developer = model.DeveloperUnlocked;
+            format.IsChecked = model.DecimalHours; overtimeTest.IsChecked = model.OvertimeTest;
+            overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer; versionRule.IsVisible = developer;
+        }
+        menu.Opened += (_, _) => Sync(); Sync();
         return menu;
     }
     /// <summary>A button that shows only an icon, with its words as the tooltip and the accessible name.</summary>
@@ -389,14 +396,17 @@ public sealed class AccountList : StackPanel
             if (bars)
             {
                 // The account's own colour leads the name, then the budget line with its percentage, then the bar.
-                var swatch = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0),
+                var swatch = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0),
                     Fill = Avalonia.Media.Brush.Parse(Ui.Visible(account.Colour)) };
                 labels.Spacing = 3;
-                labels.Children.Add(Ui.Horizontal(swatch, Ui.Text(account.Display, 15), dot));
-                var sub = Ui.Grid("*,Auto"); Ui.Put(sub, budget); Ui.Put(sub, percent, 1); percent.Margin = new Thickness(8, 0, 0, 0);
-                labels.Children.Add(sub);
+                // The percentage sits at the end of the name line, which leaves the whole line under it for the budget in words.
+                var nameLine = Ui.Grid("*,34"); var nameStack = Ui.Grid("Auto,*,Auto");
+                var nameText = Ui.Text(account.Display, 15); nameText.TextTrimming = TextTrimming.CharacterEllipsis; dot.Margin = new Thickness(8, 0, 0, 0);
+                Ui.Put(nameStack, swatch); Ui.Put(nameStack, nameText, 1); Ui.Put(nameStack, dot, 2);
+                Ui.Put(nameLine, nameStack); Ui.Put(nameLine, percent, 1); percent.TextAlignment = Avalonia.Media.TextAlignment.Right; percent.VerticalAlignment = VerticalAlignment.Center; // A fixed column, so the rows never shift.
+                labels.Children.Add(nameLine); labels.Children.Add(budget);
                 if (account.Budget is not null) { bar = new BudgetBar(); labels.Children.Add(bar); }
-                today = Ui.Text(model.Format(model.Today(account)), 15); today.Classes.Add("figures"); today.VerticalAlignment = VerticalAlignment.Center; today.Margin = new Thickness(0, 0, 6, 0); today.Width = 68; today.TextAlignment = Avalonia.Media.TextAlignment.Right; // Fixed, so every play circle lines up.
+                today = Ui.Text(model.Format(model.Today(account)), 15); today.Classes.Add("figures"); today.VerticalAlignment = VerticalAlignment.Center; today.Margin = new Thickness(0, 0, 6, 0); today.Width = 62; today.TextAlignment = Avalonia.Media.TextAlignment.Right; // Fixed, so every play circle lines up.
                 var right = Ui.Horizontal(today, icon); right.VerticalAlignment = VerticalAlignment.Center;
                 Ui.Put(grid, labels, shift); Ui.Put(grid, right, 1 + shift);
                 row.Height = 66;
@@ -540,19 +550,27 @@ public sealed class TrackingLabels : StackPanel
 {
     private readonly TextBlock status = Ui.Text("", 12);
     private readonly TextBlock overtime = Ui.Text("Overtime", 12, "overtime");
+    private readonly Avalonia.Controls.Shapes.Ellipse dot = new() { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center };
     public TrackingLabels(TimerModel model)
     {
         Orientation = Orientation.Vertical;
         Spacing = 3;
-        Children.Add(status);
+        // The status dot is a real shape in a box as wide as the account's colour dot above it, so the two dots share one centre line.
+        var dotBox = new Border { Width = 10, Child = dot, VerticalAlignment = VerticalAlignment.Center };
+        var line = Ui.Horizontal(dotBox, status); line.Spacing = 8;
+        Children.Add(line);
         Children.Add(overtime);
+        overtime.Margin = new Thickness(18, 0, 0, 0); // Lined up under the status words.
         void Refresh()
         {
-            status.Text = "● " + model.Status;
+            status.Text = model.Status;
             // A break turns the status line, dot included, amber; otherwise it is green while tracking and grey when not.
-            status.Classes.Set("break", model.IsOnBreak);
-            status.Classes.Set("live", model.IsTracking && !model.IsOnBreak);
-            status.Classes.Set("idle", !model.IsTracking);
+            foreach (Control control in new Control[] { status, dot })
+            {
+                control.Classes.Set("break", model.IsOnBreak);
+                control.Classes.Set("live", model.IsTracking && !model.IsOnBreak);
+                control.Classes.Set("idle", !model.IsTracking);
+            }
             overtime.IsVisible = model.IsOvertime;
             overtime.Text = "Overtime +" + model.Format(model.Engine.Totals(model.Engine.Now).Overtime);
         }
@@ -579,7 +597,7 @@ public sealed class ClockText : StackPanel
         main.Classes.Set("break", onBreak); main.Classes.Set("overtime", late); main.Classes.Set("live", live);
         main.Classes.Set("clockIdle", !onBreak && !late && !live);
         // The seconds take the same colour as the rest of the clock when it is tracking, on a break or in overtime, only lighter.
-        seconds.Classes.Set("break", onBreak); seconds.Classes.Set("overtime", late); seconds.Classes.Set("live", live); seconds.Opacity = onBreak || late || live ? .6 : 1;
+        seconds.Classes.Set("break", onBreak); seconds.Classes.Set("overtime", late); seconds.Classes.Set("live", live); seconds.Opacity = onBreak || late || live ? .78 : 1; // Quieter than the main digits, but still easy to read.
     }
     /// <summary>The whole clock, as hours:minutes:seconds. Setting it splits the seconds off to be drawn lighter.</summary>
     public string Text
@@ -596,7 +614,7 @@ public sealed class Chevron : Control
     public override void Render(DrawingContext context)
     {
         var brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
-        var pen = new Pen(brush, 1.8);
+        var pen = new Pen(brush, 2.2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         var y = Expanded ? 9 : 5;
         context.DrawLine(pen, new Point(2, y), new Point(7, Expanded ? 4 : 10));
         context.DrawLine(pen, new Point(7, Expanded ? 4 : 10), new Point(12, y));

@@ -90,7 +90,7 @@ public static class ReviewViews
             if (height >= 58)
             {
                 var range = Ui.Text($"{interval.Start:HH:mm} – {end:HH:mm}", 12); range.Opacity = .78;
-                var length = Ui.Text(model.Format(duration), 12); length.FontWeight = FontWeight.SemiBold; length.Classes.Add("figures");
+                var length = Ui.Text(model.Format(duration), 12); // Plain weight, so it reads easily on a tinted block in either theme.
                 var detail = Ui.Horizontal(range, length); detail.Spacing = 8; detail.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
                 text.Children.Add(detail);
             }

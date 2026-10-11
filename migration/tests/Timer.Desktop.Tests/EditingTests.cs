@@ -432,7 +432,7 @@ public sealed class EditingTests
             // The clock is amber on a break, with the status line amber too, and red in overtime.
             if (model.IsOnBreak) model.ToggleBreak();
             model.ToggleBreak(); Settle(); Assert.Contains("break", clock.Classes); Assert.DoesNotContain("live", clock.Classes);
-            var status = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text is not null && t.Text.StartsWith("● On break")); Assert.Contains("break", status.Classes);
+            var status = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "On break"); Assert.Contains("break", status.Classes);
             model.ToggleBreak(); Settle(); Assert.DoesNotContain("break", clock.Classes);
             model.SetOvertimeTest(true); Settle(); Assert.True(model.IsOvertime); Assert.Contains("overtime", clock.Classes); Assert.DoesNotContain("clockIdle", clock.Classes);
             model.ToggleBreak(); Settle(); Assert.Contains("break", clock.Classes); Assert.DoesNotContain("overtime", clock.Classes); // A break outranks overtime.

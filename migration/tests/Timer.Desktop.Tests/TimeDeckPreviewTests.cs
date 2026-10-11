@@ -13,6 +13,10 @@ public sealed class TimeDeckPreviewTests
     [AvaloniaTheory]
     [InlineData("Light", "timedeck-light")]
     [InlineData("Dark", "timedeck-dark")]
+    [InlineData("Studio", "timedeck-studio")]
+    [InlineData("After Hours", "timedeck-afterhours")]
+    [InlineData("Botanical", "timedeck-botanical")]
+    [InlineData("Hawthorn", "timedeck-hawthorn")]
     public void TheDashboardDrawsInEachTimeDeckTheme(string theme, string file)
     {
         var model = TimerModel.CreateDemo(); model.SetTheme(theme);
@@ -30,6 +34,10 @@ public sealed class TimeDeckPreviewTests
     [AvaloniaTheory]
     [InlineData("Light", "pill-light")]
     [InlineData("Dark", "pill-dark")]
+    [InlineData("Studio", "pill-studio")]
+    [InlineData("After Hours", "pill-afterhours")]
+    [InlineData("Botanical", "pill-botanical")]
+    [InlineData("Hawthorn", "pill-hawthorn")]
     public void ThePillDrawsInEachState(string theme, string file)
     {
         var model = TimerModel.CreateDemo(); model.SetTheme(theme);

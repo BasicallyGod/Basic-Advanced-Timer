@@ -288,7 +288,9 @@ public sealed class PillWindow : Window
         account.Text = model.IsOnBreak ? model.AccountLabel : model.ActiveAccount ?? (selected?.Name ?? model.AccountLabel);
         // What is happening, in one line. A break says where it will go back to, overtime adds how much there is, and an idle timer says what it is waiting for.
         var overtimeText = model.IsOvertime ? " · OT " + model.Format(model.Engine.Totals(model.Engine.Now).Overtime) : "";
-        credited.Text = model.IsOnBreak ? (model.ResumeAccount is { } returnTo ? "Returns to " + returnTo : "On a break") + overtimeText
+        // On a break the first line already says so, so the second says something new: where it goes back to, or when the break began.
+        var breakSince = model.Engine.Active is { } running && BreakAccount.Is(running.Account) ? running.Start : (DateTime?)null;
+        credited.Text = model.IsOnBreak ? (model.ResumeAccount is { } returnTo ? "Returns to " + returnTo : breakSince is { } since ? "Since " + since.ToString("HH:mm") : "Nothing running") + overtimeText
             : model.IsTracking && selected is not null ? "Today " + model.Format(model.Today(selected)) + overtimeText : model.Status + overtimeText;
         // The dot is the account's own colour, with a ring in the pill's text colour so it shows on any capsule. A break is amber and an idle timer is grey.
         var shown = model.Accounts.FirstOrDefault(a => a.Name == (model.IsOnBreak ? null : model.ActiveAccount ?? selected?.Name));
@@ -296,7 +298,7 @@ public sealed class PillWindow : Window
         dot.Fill = new Avalonia.Media.SolidColorBrush(dotColour); dot.Stroke = this.TryFindResource("Ink", ActualThemeVariant, out var ring) && ring is Avalonia.Media.IBrush ringBrush ? ringBrush : Avalonia.Media.Brushes.Gray;
         Ui.Pulse(dot, model.IsTracking);
         pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
-        breakGlyph.Filled = false; breakGlyph.HotKey = model.ThemeState == "Recording" ? "Accent" : "Break"; breakGlyph.SetSteaming(model.IsOnBreak || pillHoverBreak); breakGlyph.InvalidateVisual();
+        breakButton.Classes.Set("onBreak", model.IsOnBreak); breakGlyph.Filled = false; breakGlyph.HotKey = model.ThemeState == "Recording" ? "Accent" : "Break"; breakGlyph.SetSteaming(model.IsOnBreak || pillHoverBreak); breakGlyph.InvalidateVisual();
         ToolTip.SetTip(breakButton, model.IsOnBreak ? "Finish break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Start break");
         pause.IsEnabled = model.IsTracking || selected is not null;
         ToolTip.SetTip(pause, model.IsOnBreak ? "End break; drag to move" : model.IsTracking ? "Pause account; drag to move" : "Resume account; drag to move");
@@ -419,7 +421,11 @@ public sealed class DashboardWindow : Window
         title.Margin = new Thickness(20, 12, 20, 6);
         // A rule and a heading set the accounts apart from the card above them.
         var titleRule = Ui.Rule(); titleRule.Margin = new Thickness(16, 0);
-        var accountsHead = new StackPanel(); accountsHead.Children.Add(titleRule); accountsHead.Children.Add(title); accountsHeadBlock = accountsHead;
+        // "Today" sits over the bold daily totals, since each row also shows a weekly or monthly figure and the two could be mistaken for each other.
+        var todayHead = Ui.Text("Today", 11, "muted"); todayHead.HorizontalAlignment = HorizontalAlignment.Right; todayHead.VerticalAlignment = VerticalAlignment.Bottom;
+        todayHead.Margin = new Thickness(0, 12, 58, 6); todayHead.Name = "TodayHeading";
+        var headLine = Ui.Grid("*,Auto"); Ui.Put(headLine, title); Ui.Put(headLine, todayHead, 1);
+        var accountsHead = new StackPanel(); accountsHead.Children.Add(titleRule); accountsHead.Children.Add(headLine); accountsHeadBlock = accountsHead;
         Ui.Put(sidebar, accountsHead, row: 1);
         Ui.Put(sidebar, new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 2);

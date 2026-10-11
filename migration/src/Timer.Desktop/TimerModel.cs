@@ -281,8 +281,16 @@ public sealed class TimerModel : INotifyPropertyChanged
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
         return $"{sign}{(int)value.TotalHours}:{value.Minutes:00}";
     }
-    /// <summary>The budget in words for an account row, such as "8h 45m of 15h 00m". A weekly budget needs no more, and a longer one says so.</summary>
-    public string BudgetLine(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} of {Format(target)}" + (a.Period is "month" or "quarter" ? " a " + a.Period : "") : "No budget";
+    /// <summary>A compact form for tight rows: 10h35, or 20h when there are no minutes, or 10.58h in decimal hours.</summary>
+    public string FormatCompact(TimeSpan value)
+    {
+        if (DecimalHours) return value.TotalHours.ToString("0.##", CultureInfo.GetCultureInfo("en-GB")) + "h";
+        var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
+        return value.Minutes == 0 ? $"{sign}{(int)value.TotalHours}h" : $"{sign}{(int)value.TotalHours}h{value.Minutes:00}";
+    }
+    /// <summary>The budget for an account row, such as "10h35 / 20h monthly". The period is always said, since it matters when comparing accounts.</summary>
+    public string BudgetLine(TimerAccount a) => a.Budget is { } target
+        ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)} {(a.Period switch { "month" => "monthly", "quarter" => "quarterly", _ => "weekly" })}" : "No budget";
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
     public void ChangeDate(int days) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
@@ -565,6 +573,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Whether hovering a control shows its tooltip. Switched off, the words are still the accessible names.</summary>
     public bool Tooltips => preferences.Tooltips;
     public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
+    /// <summary>Whether the developer features are switched on: the sample-data demo, the overtime tester and the version on the right-click menu. Off until unlocked from the About section.</summary>
+    public bool DeveloperUnlocked => (preferences.Developer || IsDemo) && BuildInfo.DeveloperFeatures; // The demo is itself a developer tool, so it always shows them.
+    public void SetDeveloper(bool on) { if (on && !BuildInfo.DeveloperFeatures) return; preferences = preferences with { Developer = on }; Save(); Notify(); }
     public bool Shadows => preferences.Shadows;
     public void SetShadows(bool on) { preferences = preferences with { Shadows = on }; Save(); Notify(); }
     /// <summary>Whether the timer has a taskbar button. Turn it off to run from the notification area alone.</summary>

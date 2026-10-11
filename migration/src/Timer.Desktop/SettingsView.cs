@@ -13,6 +13,9 @@ public sealed class SettingsView : ScrollViewer
 {
     // Styles and the scrolling template are found by exact type, so a subclass must borrow ScrollViewer's or it draws no scroll bar and never scrolls.
     protected override Type StyleKeyOverride => typeof(ScrollViewer);
+    /// <summary>How many quick clicks on the About tile unlock the developer features, and the longest pause allowed between them.</summary>
+    public const int UnlockClicks = 10;
+    public static readonly TimeSpan UnlockWindow = TimeSpan.FromMilliseconds(700);
     private readonly TimerModel model;
     private readonly List<Action> syncs = new();
     public SettingsView(TimerModel model)
@@ -45,10 +48,28 @@ public sealed class SettingsView : ScrollViewer
         general.Children.Add(Row("Client accounts", Ui.Button("Accounts and budgets…", () => { if (TopLevel.GetTopLevel(this) is Window owner) new AccountsWindow(model).Show(owner); }, "EditAccounts")));
         page.Children.Add(Section("Hours and accounts", general));
 
-        if (BuildInfo.DeveloperFeatures && !model.IsDemo)
-            page.Children.Add(Section("Development", Row("Sample data", Ui.Button("Open sample-data demo", Ui.StartDemo, "OpenDemo"))));
-        var about = Ui.Text(BuildInfo.Current, 13, "muted"); about.Name = "AboutVersion";
-        page.Children.Add(Section("About", about));
+        // Hidden until unlocked: ten quick clicks on the About tile. Once unlocked it holds the sample-data demo and a switch to hide the features again.
+        var developer = new StackPanel { Spacing = 10 };
+        developer.Children.Add(Row("Sample data", Ui.Button("Open sample-data demo", Ui.StartDemo, "OpenDemo")));
+        developer.Children.Add(Toggle("Developer features (overtime tester and version on the right-click menu)", "DeveloperFeatures", () => model.DeveloperUnlocked, v => model.SetDeveloper(v)));
+        var developerSection = Section("Development", developer); developerSection.Name = "DevelopmentSection";
+        developerSection.IsVisible = model.DeveloperUnlocked && !model.IsDemo;
+        syncs.Add(() => developerSection.IsVisible = model.DeveloperUnlocked && !model.IsDemo);
+        page.Children.Add(developerSection);
+        var aboutText = new StackPanel { Spacing = 4 };
+        var about = Ui.Text(BuildInfo.Current, 13, "muted"); about.Name = "AboutVersion"; aboutText.Children.Add(about);
+        var unlockHint = Ui.Text("", 12, "muted"); unlockHint.Name = "UnlockHint"; unlockHint.IsVisible = false; aboutText.Children.Add(unlockHint);
+        var aboutSection = Section("About", aboutText); aboutSection.Name = "AboutSection";
+        // Ten presses, each soon after the one before, unlock the developer features. A pause starts the count again, so ordinary clicks never do it.
+        var presses = 0; var lastPress = DateTime.MinValue;
+        aboutSection.PointerPressed += (_, e) =>
+        {
+            if (!BuildInfo.DeveloperFeatures || model.DeveloperUnlocked) return;
+            var now = DateTime.UtcNow; presses = now - lastPress <= UnlockWindow ? presses + 1 : 1; lastPress = now;
+            if (presses >= UnlockClicks) { model.SetDeveloper(true); presses = 0; unlockHint.Text = "Developer features unlocked."; unlockHint.IsVisible = true; }
+            else if (presses >= UnlockClicks - 4) { unlockHint.Text = $"{UnlockClicks - presses} more clicks to unlock developer features."; unlockHint.IsVisible = true; }
+        };
+        page.Children.Add(aboutSection);
         Content = page;
 
         // The page is built once, so it listens for changes made elsewhere (the right-click menu's decimal hours, a theme edit) and keeps its boxes true.
