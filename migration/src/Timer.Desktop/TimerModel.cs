@@ -576,6 +576,15 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Whether the developer features are switched on: the sample-data demo, the overtime tester and the version on the right-click menu. Off until unlocked from the About section.</summary>
     public bool DeveloperUnlocked => (preferences.Developer || IsDemo) && BuildInfo.DeveloperFeatures; // The demo is itself a developer tool, so it always shows them.
     public void SetDeveloper(bool on) { if (on && !BuildInfo.DeveloperFeatures) return; preferences = preferences with { Developer = on }; Save(); Notify(); }
+    /// <summary>Whether the getting started setup is finished or skipped. A brand new database starts without it, and it can be run again from settings.</summary>
+    public bool SetupDone => preferences.SetupDone;
+    /// <summary>Where this timer keeps its data, or null for a throwaway copy such as the demo.</summary>
+    public string? DataFolder => IsDemo ? null : store?.DataFolder;
+    public void CompleteSetup() { if (preferences.SetupDone) return; preferences = preferences with { SetupDone = true }; Save(); Notify(); }
+    public void RestartSetup() { if (!preferences.SetupDone) return; preferences = preferences with { SetupDone = false }; Save(); Notify(); }
+    public void SetDecimalHours(bool on) { if (preferences.DecimalHours == on) return; preferences = preferences with { DecimalHours = on }; Save(); Notify(); }
+    public DayOfWeek WeekStartsOn => preferences.WeekStart;
+    public void SetWeekStart(DayOfWeek day) { if (preferences.WeekStart == day) return; preferences = preferences with { WeekStart = day }; selectedRows.Clear(); TimelineOffset = null; Save(); Notify(); }
     public bool Shadows => preferences.Shadows;
     public void SetShadows(bool on) { preferences = preferences with { Shadows = on }; Save(); Notify(); }
     /// <summary>Whether the timer has a taskbar button. Turn it off to run from the notification area alone.</summary>

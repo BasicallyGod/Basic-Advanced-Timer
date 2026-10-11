@@ -48,6 +48,8 @@ public sealed class SettingsView : ScrollViewer
         general.Children.Add(Row("Client accounts", Ui.Button("Accounts and budgets…", () => { if (TopLevel.GetTopLevel(this) is Window owner) new AccountsWindow(model).Show(owner); }, "EditAccounts")));
         page.Children.Add(Section("Hours and accounts", general));
 
+        // The getting started setup, for anyone who skipped it or wants to look again. Nothing is lost: it starts from the current settings.
+        page.Children.Add(Section("Getting started", Row("Setup", Ui.Button("Run setup again", () => model.RestartSetup(), "RunSetup"))));
         // Hidden until unlocked: ten quick clicks on the About tile. Once unlocked it holds the sample-data demo and a switch to hide the features again.
         var developer = new StackPanel { Spacing = 10 };
         // In the demo the developer features are simply on: there is no demo to open from inside it, and the switch is fixed on and greyed out.

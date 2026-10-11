@@ -299,6 +299,18 @@
     <Style Selector="Button.quiet.startDay:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BorderBrush" Value="{DynamicResource Start}" />
     </Style>
+    <!-- A plain text button, for quiet actions such as Skip setup. -->
+    <Style Selector="Button.flat"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /><Setter Property="Padding" Value="8,4" /></Style>
+    <Style Selector="Button.flat:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
+    <!-- The two big choices in the getting started setup. The chosen one has an accent border and the selection tint. -->
+    <Style Selector="Button.choiceTile">
+      <Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="CornerRadius" Value="14" /><Setter Property="Padding" Value="18,14" /><Setter Property="Foreground" Value="{DynamicResource Ink}" />
+    </Style>
+    <Style Selector="Button.choiceTile:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="Button.choiceTile.selected /template/ ContentPresenter, Button.choiceTile.selected:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="2" />
+    </Style>
     <!-- Add time, Undo and Merge use the same resting outline as the break and day buttons, and light up their border under the pointer. -->
     <Style Selector="Button.toolButton">
       <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Ink}" />

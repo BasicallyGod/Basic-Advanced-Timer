@@ -86,4 +86,25 @@ public sealed class TimeDeckPreviewTests
         }
         finally { window.Close(); model.SetTheme("System"); }
     }
+
+    [AvaloniaTheory]
+    [InlineData("Light")]
+    [InlineData("Dark")]
+    public void TheSetupDrawsEachStep(string theme)
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 9, 10, 0, 0)), new Timer.Storage.StoreSettings(new() { new("Account one", 7.5), new("Account two"), new("Internal") }, false, theme, DayOfWeek.Monday, SetupDone: false));
+        model.SetTheme(theme);
+        var window = new DashboardWindow(model); window.Show();
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
+        try
+        {
+            for (var i = 0; i < 4; i++)
+            {
+                Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+                if (folder is not null) { Directory.CreateDirectory(folder); using var shot = window.CaptureRenderedFrame(); shot!.Save(Path.Combine(folder, $"setup{i + 1}-{theme}.png")); }
+                Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.Button>().Single(b => b.Name == "SetupNext").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+            }
+        }
+        finally { window.Close(); model.SetTheme("System"); }
+    }
 }

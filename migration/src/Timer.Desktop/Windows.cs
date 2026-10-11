@@ -352,6 +352,7 @@ public sealed class DashboardWindow : Window
     private bool weekMode, settingsMode, renderedSettings, settingZoom;
     private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
+    private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
     private bool? renderedWeekMode;
     private DateTime? renderedDate;
     public DashboardWindow(TimerModel model)
@@ -514,7 +515,9 @@ public sealed class DashboardWindow : Window
         footer.Margin = new Thickness(24, 10);
         // Messages sit under the review only, so they never change the height of the left column.
         footer.Margin = new Thickness(22, 4, 22, 10); Ui.Put(rightColumn, footer, row: 1);
-        var surface = new Border { Name = "DashboardSurface", Child = root, ClipToBounds = true };
+        // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
+        layers.Children.Add(root); dashboardBody = root;
+        var surface = new Border { Name = "DashboardSurface", Child = layers, ClipToBounds = true };
         surface.Classes.Add("surface");
         var host = Ui.Shadowed(surface, 20); Content = host;
         (bool, Avalonia.Styling.ThemeVariant)? lastShadow = null;
@@ -550,10 +553,32 @@ public sealed class DashboardWindow : Window
             { if (model.SelectedRows.Count > 0) { model.DeleteSelection(); e.Handled = true; } }
         };
         model.PropertyChanged += Changed;
+        model.PropertyChanged += (_, _) => UpdateOnboarding();
         model.EntryRequested += ShowEntry;
         model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy;
         Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; };
         Refresh(true);
+        UpdateOnboarding();
+    }
+    /// <summary>Whether the getting started setup is showing over the dashboard.</summary>
+    public bool SetupShowing => onboarding is not null;
+    // The setup shows for as long as the model says it is not done, over a blurred dashboard that cannot be clicked, and goes when it is finished or skipped.
+    private void UpdateOnboarding()
+    {
+        var wanted = !model.SetupDone;
+        if (wanted && onboarding is null && dashboardBody is not null)
+        {
+            onboarding = new OnboardingView(model);
+            onboarding.Finished += () => { model.CompleteSetup(); UpdateOnboarding(); };
+            dashboardBody.Effect = new Avalonia.Media.BlurEffect { Radius = 7 }; dashboardBody.IsHitTestVisible = false;
+            layers.Children.Add(onboarding);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => onboarding?.Focus());
+        }
+        else if (!wanted && onboarding is not null && dashboardBody is not null)
+        {
+            layers.Children.Remove(onboarding); onboarding = null;
+            dashboardBody.Effect = null; dashboardBody.IsHitTestVisible = true;
+        }
     }
     /// <summary>Whether a point (in window coordinates) is in the part of the dashboard that drags the window.</summary>
     public bool InDragZone(Point point)

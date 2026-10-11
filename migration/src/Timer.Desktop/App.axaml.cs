@@ -61,7 +61,7 @@ public sealed partial class App : Application
                 model = new TimerModel(engine, preferences, store);
                 if (store.AdjustmentsRemoved > 0)
                     model.Notice = $"{store.AdjustmentsRemoved} time adjustment{(store.AdjustmentsRemoved == 1 ? " was" : "s were")} removed with the Adjust time feature. Your database was copied to Backups first.";
-                else if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files found and left alone. This version starts with an empty database.";
+                else if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files were found and left alone. They are not imported, so this version starts with an empty database. Keep the old Timesheets folder as an archive.";
                 if (!model.Save()) throw new IOException(model.LastError);
                 // Only an explicit data folder is remembered; the default one sits beside the program and needs no argument.
                 // A test build started by the updater is offered the setting only when the updater says where to find itself, so the
@@ -99,6 +99,8 @@ public sealed partial class App : Application
             // Native Closed callbacks can arrive after lifetime Exit; do not request shutdown again.
             var windows = new WindowCoordinator(model, () => { if (!lifetimeEnded) desktop.Shutdown(); });
             desktop.MainWindow = windows.Pill;
+            // A new database opens on the dashboard, where the getting started setup is waiting. After that the pill is the usual start.
+            if (!model.SetupDone && !smokeMode) windows.Pill.Opened += (_, _) => windows.ShowDashboard();
             if (!smokeMode)
             {
                 // The tray icon keeps the timer reachable when its windows are hidden, and closing a window hides it there.

@@ -342,6 +342,7 @@ public sealed class CreditReviewTests
         try
         {
             using var store = new TimerStore(folder); engine = Engine(); var preferences = store.Load(engine); var model = new TimerModel(engine, preferences, store);
+            model.CompleteSetup(); // A new database opens with the getting started setup over the dashboard, which would catch these clicks.
             var window = new DashboardWindow(model); window.Show(); Capture(window, "legacy-group-sections");
             Assert.Equal(2, window.GetVisualDescendants().OfType<Border>().Count(b => b.Tag is ReviewEntry));
             window.SelectTab(true); model.SetWeekSection("entries"); Capture(window, "week-ctrl-selection");
