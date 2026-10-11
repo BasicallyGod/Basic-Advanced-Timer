@@ -31,11 +31,15 @@ public sealed partial class App : Application
             {
                 var args = desktop.Args ?? Array.Empty<string>();
                 var index = Array.IndexOf(args, "--data-dir");
+                if (args.Contains("--demo") && !BuildInfo.DeveloperFeatures) throw new ArgumentException("Sample-data demo is not available in Store releases.");
                 var demoMode = args.Contains("--demo");
                 if (demoMode && index >= 0) throw new ArgumentException("Demo mode cannot open a data folder.");
                 if (index >= 0 && index + 1 >= args.Length) throw new ArgumentException("--data-dir requires a folder path.");
                 var folder = smokeMode ? Path.Combine(Path.GetTempPath(), "timer-smoke-" + Guid.NewGuid())
-                    : index >= 0 ? args[index + 1] : Path.Combine(AppContext.BaseDirectory, "migration-data");
+                    : index >= 0 ? args[index + 1] : TimerDataFolders.DefaultDirectory(
+                        AppContext.BaseDirectory,
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        PackageEnvironment.IsPackaged());
                 if (demoMode)
                 {
                     // The demo runs on a throwaway database in the temporary folder, removed when it closes.
@@ -56,7 +60,10 @@ public sealed partial class App : Application
                 // sign-in entry survives updates. A bare --test-build run still leaves the startup entry alone.
                 var scriptIndex = Array.IndexOf(args, "--updater-script");
                 var updaterScript = scriptIndex >= 0 && scriptIndex + 1 < args.Length ? AutoStartSetting.AcceptUpdaterScript(args[scriptIndex + 1]) : null;
-                if (!smokeMode && (!args.Contains("--test-build") || updaterScript is not null) && WindowsRunKey.Available)
+                // The Store package starts through its manifest's startup task; everything else uses the sign-in registry entry.
+                if (!smokeMode && !args.Contains("--test-build") && PackageEnvironment.IsPackaged())
+                    model.AutoStart = PackagedStartup.TryCreate();
+                else if (!smokeMode && (!args.Contains("--test-build") || updaterScript is not null) && WindowsRunKey.Available && !PackageEnvironment.IsPackaged())
                     model.AutoStart = new AutoStartSetting(new WindowsRunKey(), Environment.ProcessPath, index >= 0 ? args[index + 1] : null, updaterScript);
                 }
                 var openedStore = store;

@@ -1,0 +1,52 @@
+name: Microsoft Store release MSIX
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: microsoft-store-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  msix-store:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run desktop tests
+        run: dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release --verbosity minimal
+      - name: Compile Windows Store target during release review
+        if: github.event_name == 'pull_request'
+        run: dotnet publish migration/src/Timer.Desktop/Timer.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true -p:StorePackage=true -p:PublishSingleFile=false -o artifacts/store-pr-compile
+      - name: Create Microsoft Store release MSIX
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          STORE_PACKAGE_NAME: Basically.BasicsAdvancedTimer
+          STORE_PUBLISHER: CN=BF422802-B4CA-4B00-A09A-2EDA3315C0DE
+          STORE_PUBLISHER_DISPLAY_NAME: Basically
+        run: |
+          ./migration/packaging/build-msix.ps1 `
+            -BuildNumber ${{ github.run_number }} `
+            -OutputDirectory artifacts/msix `
+            -UnsignedForStore `
+            -PackageName $env:STORE_PACKAGE_NAME `
+            -Publisher $env:STORE_PUBLISHER `
+            -PublisherDisplayName $env:STORE_PUBLISHER_DISPLAY_NAME
+      - name: Upload Store-ready release package
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BasicsAdvancedTimer-MSIX-Store
+          path: artifacts/msix/BasicsAdvancedTimer-Store-unsigned.msix
+          if-no-files-found: error

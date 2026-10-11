@@ -1,11 +1,15 @@
-name: Avalonia migration preview
+name: Development builds (experimental and alpha)
 
 on:
   push:
-    branches: [main, migration]
+    branches: [experimental, alpha]
   pull_request:
-    branches: [main, migration]
+    branches: [experimental, alpha]
   workflow_dispatch:
+
+concurrency:
+  group: development-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -26,7 +30,9 @@ jobs:
       - name: Test standalone updater without network or launching an application
         if: runner.os == 'Windows'
         shell: powershell
-        run: ./migration/updater/Test-Updater.ps1
+        run: |
+          ./migration/updater/Test-Updater.ps1
+          ./migration/updater/Test-UpdaterWindow.ps1
       - name: Build and test production views and themes
         env:
           TIMER_PREVIEW_DIR: ${{ runner.temp }}/avalonia-timer-previews
@@ -40,7 +46,7 @@ jobs:
           if-no-files-found: ignore
       - name: Publish self-contained Windows preview
         if: runner.os == 'Windows'
-        run: dotnet publish migration/src/Timer.Desktop/Timer.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=false -p:Version=0.1.${{ github.run_number }} -p:InformationalVersion=0.1.${{ github.run_number }}+${{ github.sha }} -o artifacts/windows-preview
+        run: dotnet publish migration/src/Timer.Desktop/Timer.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=false -p:BuildChannel=${{ github.ref_name }} -p:Version=0.1.${{ github.run_number }} -p:InformationalVersion=0.1.${{ github.run_number }}+${{ github.sha }} -o artifacts/windows-preview
       - name: Check the database library is in the published folder
         if: runner.os == 'Windows'
         shell: pwsh
@@ -79,10 +85,17 @@ jobs:
             throw 'Demo did not finish its startup check.'
           }
           if ($demo.ExitCode -ne 0) { throw "Demo exited with code $($demo.ExitCode)." }
-      - name: Upload portable Windows preview
-        if: runner.os == 'Windows'
+      - name: Upload experimental Windows build
+        if: runner.os == 'Windows' && github.ref_name == 'experimental' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: BasicsAdvancedTimer-Windows-preview
+          name: BasicsAdvancedTimer-Windows-experimental
+          path: artifacts/windows-preview/
+          if-no-files-found: error
+      - name: Upload alpha Windows build
+        if: runner.os == 'Windows' && github.ref_name == 'alpha' && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BasicsAdvancedTimer-Windows-alpha
           path: artifacts/windows-preview/
           if-no-files-found: error

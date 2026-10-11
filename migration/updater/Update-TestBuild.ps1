@@ -2,28 +2,39 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Update', 'Launch', 'Rollback')][string]$Mode = 'Update',
-    # Which branch to take the newest successful build from. The picker window passes this; double-clicking the cmd files uses main.
-    [string]$Branch = 'main'
+    # Which branch to take the newest successful build from. The console shortcut defaults to experimental.
+    [string]$Branch = 'experimental'
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $Repository = 'BasicallyGod/Basic-Advanced-Timer'
 $Workflow = 'avalonia-preview.yml'
-$ArtifactName = 'BasicsAdvancedTimer-Windows-preview'
+$ArtifactName = $null
 $Executable = 'BasicsAdvancedTimer.Preview.exe'
 $UpdaterDirectory = $PSScriptRoot
 # Handed to the timer so its Start with Windows setting can point back here and survive updates.
 $UpdaterScript = Join-Path $PSScriptRoot 'Update-TestBuild.ps1'
 # Fixed private installation alongside this standalone script. Never accept a production data path.
 $Root = Join-Path $PSScriptRoot 'test-install'
-$Versions = Join-Path $Root 'versions'
-$Data = Join-Path $Root 'data'
-$StatePath = Join-Path $Root 'state.json'
+$ChannelRoot = $null
+$Versions = $null
+$Data = $null
+$StatePath = $null
 
 function Assert-BranchName([string]$Name) {
     # Branch names go into a web address and a record on disk, so only ordinary characters are accepted.
     if ($Name -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$' -or $Name -match '\.\.|//|/$|\.lock$') { throw "Not a usable branch name: $Name" }
+}
+
+function Select-Channel([string]$Name) {
+    Assert-BranchName $Name
+    if ($Name -notin @('experimental', 'alpha')) { throw 'Select experimental or alpha. Stable releases are installed through Microsoft Store.' }
+    $script:ChannelRoot = Join-Path (Join-Path $Root 'channels') $Name
+    $script:Versions = Join-Path $ChannelRoot 'versions'
+    $script:Data = Join-Path $ChannelRoot 'data'
+    $script:StatePath = Join-Path $ChannelRoot 'state.json'
+    $script:ArtifactName = "BasicsAdvancedTimer-Windows-$Name"
 }
 
 function Invoke-GhJson([string]$Endpoint) {
@@ -68,10 +79,10 @@ function Read-State {
 }
 
 function Write-State($Current, $Previous) {
-    $temporary = Join-Path $Root ('state-' + [guid]::NewGuid().ToString('N') + '.tmp')
+    $temporary = Join-Path $ChannelRoot ('state-' + [guid]::NewGuid().ToString('N') + '.tmp')
     $json = [ordered]@{ schemaVersion = 1; current = $Current; previous = $Previous } | ConvertTo-Json -Depth 6
     [IO.File]::WriteAllText($temporary, $json, [Text.UTF8Encoding]::new($false))
-    if (Test-Path -LiteralPath $StatePath) { [IO.File]::Replace($temporary, $StatePath, (Join-Path $Root 'state.json.bak')) }
+    if (Test-Path -LiteralPath $StatePath) { [IO.File]::Replace($temporary, $StatePath, (Join-Path $ChannelRoot 'state.json.bak')) }
     else { [IO.File]::Move($temporary, $StatePath) }
 }
 
@@ -93,7 +104,7 @@ function Wait-TestClosed {
 }
 
 function Backup-TestData {
-    $backup = Join-Path $Root ('data-backups/' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N'))
+    $backup = Join-Path $ChannelRoot ('data-backups/' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N'))
     $null = New-Item -ItemType Directory -Path $backup
     Get-ChildItem -LiteralPath $Data -Force | Where-Object Name -ne '.migration.lock' | Copy-Item -Destination $backup -Recurse
     Write-Host "Test data snapshot: $backup"
@@ -134,7 +145,7 @@ function Get-LatestBuild {
 }
 
 function Invoke-TestUpdater {
-    Assert-BranchName $Branch
+    Select-Channel $Branch
     # Reject junctions into production, including any parent of the standalone updater.
     $item = Get-Item -LiteralPath $UpdaterDirectory
     while ($null -ne $item) {
@@ -147,8 +158,8 @@ function Invoke-TestUpdater {
     if ((Test-Path -LiteralPath $Root) -and @(Get-ChildItem -LiteralPath $Root -Recurse -Force | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }).Count) {
         throw 'Updater installation contains a junction or symbolic link.'
     }
-    foreach ($path in @($Root, $Versions, $Data)) { $null = New-Item -ItemType Directory -Path $path -Force }
-    $lock = [IO.File]::Open((Join-Path $Root 'updater.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    foreach ($path in @($Root, $ChannelRoot, $Versions, $Data)) { $null = New-Item -ItemType Directory -Path $path -Force }
+    $lock = [IO.File]::Open((Join-Path $ChannelRoot 'updater.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
     try {
         $state = Read-State
         if ($Mode -eq 'Launch') { Start-Build $state.current; return }

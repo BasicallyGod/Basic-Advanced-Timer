@@ -201,8 +201,8 @@ public static class Ui
         accounts.Click += (_, _) => { if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life)
             new AccountsWindow(model).Show(life.Windows.First(w => w.IsVisible)); };
         // The demo and its overtime switch sit together: outside the demo you can open it, inside it you can switch overtime on and off.
-        var demo = new MenuItem { Header = "Open sample-data demo", IsVisible = !model.IsDemo };
-        var overtimeTest = new MenuItem { Header = "Test overtime", ToggleType = MenuItemToggleType.CheckBox, IsVisible = model.IsDemo, Name = "TestOvertime" };
+        var demo = new MenuItem { Header = "Open sample-data demo", IsVisible = !model.IsDemo && BuildInfo.DeveloperFeatures };
+        var overtimeTest = new MenuItem { Header = "Test overtime", ToggleType = MenuItemToggleType.CheckBox, IsVisible = model.IsDemo && BuildInfo.DeveloperFeatures, Name = "TestOvertime" };
         overtimeTest.Click += (_, _) => model.SetOvertimeTest(!model.OvertimeTest);
         demo.Click += (_, _) =>
         {

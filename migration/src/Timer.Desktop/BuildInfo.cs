@@ -16,5 +16,25 @@ public static class BuildInfo
         var commit = parts.Length == 2 && parts[1].Trim().Length >= 7 ? " (" + parts[1].Trim()[..7] + ")" : "";
         return "Version " + number + commit;
     }
-    public static string Current => Describe(typeof(BuildInfo).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+    public static bool DeveloperFeatures =>
+#if STORE_PACKAGE
+        false;
+#else
+        true;
+#endif
+
+    public static string Current
+    {
+        get
+        {
+            var version = Describe(typeof(BuildInfo).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+#if ALPHA_BUILD
+            return version + " — Alpha";
+#elif EXPERIMENTAL_BUILD
+            return version + " — Experimental";
+#else
+            return version;
+#endif
+        }
+    }
 }

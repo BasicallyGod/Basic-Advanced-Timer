@@ -559,7 +559,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         { LastError = "Could not save. Time remains in memory; retrying. " + error.Message; return false; }
     }
     /// <summary>Whether to start with Windows. Null in demo mode and tests, where it is not offered.</summary>
-    public AutoStartSetting? AutoStart { get; set; }
+    public IAutoStart? AutoStart { get; set; }
     public void SetAutoStart(bool enabled)
     {
         try { AutoStart?.Set(enabled); LastError = null; }
