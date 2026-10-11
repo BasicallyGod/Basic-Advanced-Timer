@@ -28,7 +28,7 @@ public static class ReviewViews
         Ui.Put(root, caption);
         var pixelsPerHour = model.TimelinePixelsPerHour;
         // The hours run down a spine with a tick for each hour, and for each half and quarter hour as you zoom in. Blocks sit to the right of it,
-        // each with a dot on the spine where it starts. A little room above and below lets the first and last labels sit fully in view.
+        // A little room above and below lets the first and last labels sit fully in view.
         var canvas = new Canvas { Height = 24 * pixelsPerHour + 4, MinWidth = 460, Background = Brushes.Transparent, Margin = new Thickness(0, 10, 0, 10) };
         var spine = new Border { Name = "TimelineSpine", Width = 2, Height = 24 * pixelsPerHour, CornerRadius = new CornerRadius(1) }; spine.Classes.Add("rule");
         Canvas.SetLeft(spine, SpineX - 1); Canvas.SetTop(spine, 2); canvas.Children.Add(spine);
@@ -154,10 +154,6 @@ public static class ReviewViews
             }
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
             canvas.Children.Add(card); cards.Add((card, lane));
-            // A dot on the spine at the moment the block starts, in the account's own colour with a ring of the page colour round it.
-            var dot = new Avalonia.Controls.Shapes.Ellipse { Width = 11, Height = 11, Fill = Brush.Parse(look.Edge), StrokeThickness = 2, Tag = "SpineDot", IsHitTestVisible = false };
-            dot.Bind(Avalonia.Controls.Shapes.Shape.StrokeProperty, dot.GetResourceObservable("Surface"));
-            Canvas.SetLeft(dot, SpineX - 5.5); Canvas.SetTop(dot, (interval.Start - day).TotalHours * pixelsPerHour + 2 - 3); canvas.Children.Add(dot);
         }
         // For today, a line across at the current time with a chip in the margin saying what it is. It moves on every half minute while the timeline is on screen.
         if (day == model.Engine.Now.Date)

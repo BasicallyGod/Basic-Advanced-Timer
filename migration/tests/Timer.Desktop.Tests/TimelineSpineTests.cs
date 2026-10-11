@@ -21,7 +21,7 @@ public sealed class TimelineSpineTests
     }
 
     [AvaloniaFact]
-    public void TheTimelineHasASpineWithHourTicksMoreOfThemAsYouZoomAndADotWhereEachBlockStarts()
+    public void TheTimelineHasASpineWithHourTicksMoreOfThemAsYouZoomAndNoDotsOnIt()
     {
         var model = TimerModel.CreateDemo(); var window = Open(model);
         try
@@ -34,9 +34,7 @@ public sealed class TimelineSpineTests
             Assert.Equal(48, Ticks()); // Halves appear.
             model.SetTimelineScale(400, 200, 0); Dispatcher.UIThread.RunJobs(); using var f2 = window.CaptureRenderedFrame();
             Assert.Equal(96, Ticks()); // And quarters.
-            var dots = window.GetVisualDescendants().OfType<Ellipse>().Count(e => e.Tag is "SpineDot");
-            var blocks = window.GetVisualDescendants().OfType<Border>().Count(b => b.Name is { } n && (n.StartsWith("TimelineEntry") || n.StartsWith("TimelineGroup") || n == "TimelineRecording"));
-            Assert.True(blocks > 0); Assert.Equal(blocks, dots);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Ellipse>(), e => e.Tag is "SpineDot"); // The block's own edge strip already carries the account colour.
         }
         finally { window.Close(); }
     }
