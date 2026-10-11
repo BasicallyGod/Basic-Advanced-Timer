@@ -7,6 +7,10 @@ on:
     branches: [experimental, alpha]
   workflow_dispatch:
 
+concurrency:
+  group: development-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
