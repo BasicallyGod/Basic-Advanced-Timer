@@ -439,6 +439,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>The time on this adjustment's day that it has to stay clear of, for snapping a drag to its neighbours.</summary>
     public List<(DateTime From, DateTime To)> AdjustmentOccupied(SessionRow row) => AdjustmentSpace.Occupied(Engine, row.Day, row);
     public bool MoveAdjustment(SessionRow row, TimeSpan start) => ChangeLog(() => Editor.MoveAdjustment(row, start));
+    /// <summary>What lengthening a block to a later end would move, or an explanation when it cannot be done. Nothing is changed.</summary>
+    public IReadOnlyList<TimelineChange> PlanExtend(SessionRow row, DateTime end) => Editor.PlanExtend(row, end);
+    public bool ExtendEntry(SessionRow row, DateTime end, string note) => ChangeLog(() => Editor.ExtendEnd(row, end, note));
     public bool DragEntry(SessionRow row, DateTime start, DateTime end, bool insert)
         => ChangeLog(() => Editor.EditTimeline(row, start, end, insert));
     /// <summary>Moves an account to a new place among the accounts (hidden ones keep their own places).</summary>

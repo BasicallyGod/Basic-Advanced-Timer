@@ -93,6 +93,13 @@ public static class Ui
         if (style is not null) control.Classes.Add(style);
         return control;
     }
+    /// <summary>The dash between a start and an end box, centred in the gap between them.</summary>
+    public static TextBlock Dash()
+    {
+        var dash = Text("–");
+        dash.HorizontalAlignment = HorizontalAlignment.Center; dash.TextAlignment = TextAlignment.Center;
+        return dash;
+    }
     public static Button Button(string text, Action click, string? name = null)
     {
         var button = new Button { Content = text, Name = name, VerticalAlignment = VerticalAlignment.Center };

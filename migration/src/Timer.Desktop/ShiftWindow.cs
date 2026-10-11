@@ -24,7 +24,7 @@ public sealed class ShiftWindow : Window
             var start = new TextBox { Text = shift.Start.ToString(@"hh\:mm"), Width = 80 };
             var end = new TextBox { Text = shift.End.ToString(@"hh\:mm"), Width = 80 };
             var row = Ui.Grid("*,80,24,80");
-            Ui.Put(row, on); Ui.Put(row, start, 1); Ui.Put(row, Ui.Text("–"), 2); Ui.Put(row, end, 3);
+            Ui.Put(row, on); Ui.Put(row, start, 1); Ui.Put(row, Ui.Dash(), 2); Ui.Put(row, end, 3);
             root.Children.Add(row); entries.Add((day, on, start, end));
         }
         var today = new CheckBox { Content = "Also reset today to its new scheduled start/end" };
