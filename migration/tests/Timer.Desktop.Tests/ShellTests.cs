@@ -85,7 +85,7 @@ public sealed class ShellTests
                 window.MouseUp(point, MouseButton.Left);
                 Assert.True(model.Accounts[i].Name == model.ActiveAccount,
                     $"Row {i}: bounds {row.Bounds}, point {point}, hit {window.GetVisualAt(point)?.GetType().Name}, active {model.ActiveAccount ?? "none"}");
-                Assert.InRange(row.Bounds.Width, 280, 300);
+                Assert.InRange(row.Bounds.Width, 320, 340);
             }
             model.TogglePause(); // Nothing recording, so the scrolled click below starts an account.
             var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "AccountScroll");
@@ -113,7 +113,7 @@ public sealed class ShellTests
             coordinator.Pill.OpenDashboard!();
             Assert.True(coordinator.Dashboard.IsVisible);
             Assert.False(coordinator.Pill.IsVisible);
-            Assert.InRange(coordinator.Dashboard.Width, 1, 960 + 2 * Ui.ShadowMargin);
+            Assert.InRange(coordinator.Dashboard.Width, 1, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin);
             coordinator.Dashboard.OpenPill!();
             Assert.Equal("Account one", model.ActiveAccount);
             Assert.True(coordinator.Pill.IsVisible);
@@ -152,15 +152,15 @@ public sealed class ShellTests
             Assert.Contains("Allocated", texts); Assert.Contains("4.50h", texts);
             Assert.Contains("Unallocated", texts); Assert.Contains("0.25h", texts);
             // The totals sit under the clock, in one line with it above them.
-            var clockText = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 40); var figure = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "4.50h");
+            var clockText = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 46 && t.Classes.Contains("clock")); var figure = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "4.50h");
             Assert.True(figure.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y > clockText.TranslatePoint(new Point(0, clockText.Bounds.Height - 2), dashboard)!.Value.Y);
             Assert.Contains("clock", clockText.Classes); Assert.Equal("Bricolage Display", clockText.FontFamily.Name); // The big clock wears the bundled display face.
-            Assert.Contains(texts, t => t is not null && t.Contains("9.00h / 15.00h"));
+            Assert.Contains(texts, t => t is not null && t.Contains("9.00h of 15.00h"));
             model.ToggleAccount("Account three");
             pill.ToggleExpansion();
             Save(pill, Path.Combine(output, "pill-expanded-Dark.png"));
-            Assert.Equal(960 + 2 * Ui.ShadowMargin, dashboard.Width);
-            Assert.Equal(640 + 2 * Ui.ShadowMargin, dashboard.Height);
+            Assert.Equal(DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, dashboard.Width);
+            Assert.Equal(DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin, dashboard.Height);
         }
         finally { dashboard.Close(); pill.Close(); model.SetTheme("System"); }
     }
@@ -280,7 +280,7 @@ public sealed class ShellTests
             Assert.InRange(nine.TranslatePoint(default, coordinator.Dashboard)!.Value.Y, 150, 400);
             model.ToggleAccount("Account one");
             Save(coordinator.Dashboard, Path.Combine(output, "demo-tracking.png"));
-            Assert.Contains(coordinator.Dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Classes.Contains("live") && t.Text == model.ClockText);
+            Assert.Contains(coordinator.Dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Classes.Contains("live") && t.Text is { Length: > 0 } && model.ClockText.StartsWith(t.Text));
             model.ForceOvertime(); Assert.True(model.IsOvertime);
             Save(coordinator.Dashboard, Path.Combine(output, "demo-overtime.png"));
             coordinator.Dashboard.OpenPill!(); coordinator.Pill.ToggleExpansion();

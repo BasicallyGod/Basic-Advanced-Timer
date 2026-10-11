@@ -47,6 +47,7 @@ Each theme is a `ThemeDefinition` (name, Light or Dark base, colour tokens, bloc
 - Use the helpers in `Controls.cs` (`Ui.Grid`, `Ui.Put`, `Ui.Button`, `Ui.IconButton`, `Ui.Text`). Style through classes in `App.axaml` and `DynamicResource` theme tokens rather than hard-coded colours.
 - `Ui.Visible` lifts very dark account colours so dots and blocks stay visible on dark themes; `Ui.InkOn` picks text for a block.
 - Drag handlers mark presses as handled, so they must call `Ui.CloseMenus` first or an open right-click menu stays open.
+- The dashboard is a fixed 1080 by 680 (`DashboardWindow.DashboardWidth` and `DashboardHeight`). An icon rail picks the view (the buttons keep the names `TimelineTab`, `WeekOverviewTab`, `WeekHoursTab` and `WeekEntriesTab`, with their words as the tooltip), the left column is the Day elapsed card over `AccountList` in `bars` mode (`BudgetBar` with a pace tick, plain `AccountIndicator` circle with `Ring` off), and the clock is a `ClockText` coloured through `SetState`.
 - Pill and dashboard are separate windows sharing one model. Do not resize a visible window to change views. The dashboard is `Topmost`.
 - Headless tests: `DispatcherTimer` and animations do not tick, so test state not frames. `TextBox.TextChanged` does not fire, so listen to `PropertyChanged` on `TextBox.TextProperty`.
 - Fault-injection helper `StorageFaults` (in `EditingTests.cs`) uses triggers to make saves fail.
@@ -65,4 +66,4 @@ Run `dotnet test migration/tests/Timer.Desktop.Tests -c Release`. CI runs it on 
 
 ## Not done yet
 
-Overnight shifts, theme import and export, per-theme block colour palettes, and the pill's break and overtime tint during theme preview.
+Overnight shifts, theme import and export, per-theme block colour palettes, the pill's break and overtime tint during theme preview, and the Time Deck redesign of the timeline spine, Week overview, Hours table and Entries.

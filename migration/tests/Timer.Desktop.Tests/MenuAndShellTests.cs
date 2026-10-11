@@ -137,21 +137,21 @@ public sealed class MenuAndShellTests
     }
 
     [AvaloniaFact]
-    public void TheBarUnderTheChosenTabStaysUnderThePointer()
+    public void TheChosenRailIconKeepsItsTileUnderThePointer()
     {
         var model = TimerModel.CreateDemo(); model.SetTheme("Light");
         var window = new DashboardWindow(model); window.Show();
         try
         {
             Dispatcher.UIThread.RunJobs();
-            var tab = window.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("tab") && b.Classes.Contains("selected"));
+            var tab = window.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("rail") && b.Classes.Contains("selected"));
             var presenter = tab.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First(p => p.Name == "PART_ContentPresenter");
-            var accent = Color.Parse(model.CurrentTheme.Colour("Accent"));
-            Assert.Equal(accent, ((ISolidColorBrush)presenter.BorderBrush!).Color);
+            var tile = Color.Parse(model.CurrentTheme.Colour("Selected"));
+            Assert.Equal(tile, ((ISolidColorBrush)presenter.Background!).Color);
             ((IPseudoClasses)tab.Classes).Set(":pointerover", true); Dispatcher.UIThread.RunJobs();
-            Assert.Equal(accent, ((ISolidColorBrush)presenter.BorderBrush!).Color);
+            Assert.Equal(tile, ((ISolidColorBrush)presenter.Background!).Color);
             ((IPseudoClasses)tab.Classes).Set(":pressed", true); Dispatcher.UIThread.RunJobs();
-            Assert.Equal(accent, ((ISolidColorBrush)presenter.BorderBrush!).Color);
+            Assert.Equal(tile, ((ISolidColorBrush)presenter.Background!).Color);
         }
         finally { window.Close(); }
     }

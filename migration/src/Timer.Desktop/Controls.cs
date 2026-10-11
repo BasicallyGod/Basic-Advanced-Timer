@@ -268,6 +268,8 @@ public sealed class AccountIndicator : Control
     static AccountIndicator() => AffectsRender<AccountIndicator>(GlowProperty);
     public double Glow { get => GetValue(GlowProperty); set => SetValue(GlowProperty, value); }
     public TimerAccount Account { get; }
+    /// <summary>Whether the budget ring is drawn. The dashboard shows the budget as a bar instead, so its button is a plain circle.</summary>
+    public bool Ring { get; init; } = true;
     private readonly TimerModel model;
     public AccountIndicator(TimerAccount account, TimerModel model)
     {
@@ -284,7 +286,9 @@ public sealed class AccountIndicator : Control
         using var scaled = context.PushTransform(Matrix.CreateScale(Size / 42, Size / 42));
         var centre = new Point(21, 21);
         var ink = Resource("Ink");
-        if (Account.Budget is { } budget)
+        var running = model.ActiveAccount == Account.Name;
+        if (!Ring) context.DrawEllipse(running ? Resource("Accent") : null, running ? null : new Pen(Resource("Line"), 2), centre, 19, 19);
+        if (Ring && Account.Budget is { } budget)
         {
             context.DrawEllipse(null, new Pen(Resource("Line"), 3), centre, 19, 19);
             var ratio = Math.Clamp(model.BudgetUsed(Account).TotalSeconds / budget.TotalSeconds, 0, 1);
@@ -309,8 +313,10 @@ public sealed class AccountIndicator : Control
         var accent = Resource("Accent"); var accentInk = Resource("AccentInk");
         if (glow > 0 && !BreakAccount.Is(Account.Name))
         {
-            using (context.PushOpacity(glow)) context.DrawEllipse(accent, null, centre, 15, 15);
+            using (context.PushOpacity(glow)) context.DrawEllipse(accent, null, centre, Ring ? 15 : 19, Ring ? 15 : 19);
         }
+        // On the plain circle a running account is already filled with the accent, so its pause bars are drawn in the accent's own text colour.
+        if (!Ring && running) ink = accentInk;
         using var grow = context.PushTransform(Matrix.CreateTranslation(-21, -21) * Matrix.CreateScale(1 + .18 * glow, 1 + .18 * glow) * Matrix.CreateTranslation(21, 21));
         if (model.ActiveAccount == Account.Name)
         {
@@ -346,14 +352,44 @@ public sealed class AccountIndicator : Control
         ? brush : Brushes.Gray;
 }
 
+/// <summary>A thin bar for how much of a budget is used, with a small tick where the budget period has got to, so pace is easy to judge.</summary>
+public sealed class BudgetBar : Control
+{
+    public double Ratio { get; private set; }
+    public double Pace { get; private set; }
+    public BudgetBar() { Height = 10; }
+    public void Set(double ratio, double pace)
+    {
+        if (ratio == Ratio && pace == Pace) return;
+        Ratio = ratio; Pace = pace; InvalidateVisual();
+    }
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property.Name == nameof(ActualThemeVariant)) InvalidateVisual();
+    }
+    private IBrush Resource(string key) => this.TryFindResource(key, ActualThemeVariant, out var value) && value is IBrush brush ? brush : Brushes.Gray;
+    public override void Render(DrawingContext context)
+    {
+        var width = Bounds.Width; var top = 2.0; var height = 6.0;
+        context.DrawRectangle(Resource("Line"), null, new Rect(0, top, width, height), 3, 3);
+        var fill = Math.Clamp(Ratio, 0, 1) * width;
+        // Green while there is room, amber from 80%, red once the budget is spent.
+        var colour = Ratio >= 1 ? Resource("Overtime") : Ratio >= .8 ? Resource("BudgetWarning") : Resource("Live");
+        if (fill > 0) context.DrawRectangle(colour, null, new Rect(0, top, Math.Max(fill, height), height), 3, 3);
+        using (context.PushOpacity(.65)) context.DrawRectangle(Resource("Ink"), null, new Rect(Math.Clamp(Pace, 0, 1) * (width - 2), 0, 2, 10), 1, 1);
+    }
+}
+
 public sealed class AccountList : StackPanel
 {
     private readonly TimerModel model;
-    private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot)> rows = new();
-    private readonly bool reorderable;
-    public AccountList(TimerModel model, bool reorderable = false)
+    private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Percent)> rows = new();
+    private readonly bool reorderable, bars;
+    /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
+    public AccountList(TimerModel model, bool reorderable = false, bool bars = false)
     {
-        this.model = model; this.reorderable = reorderable;
+        this.model = model; this.reorderable = reorderable; this.bars = bars;
         Rebuild();
         AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
@@ -368,21 +404,43 @@ public sealed class AccountList : StackPanel
             var row = new Button { Name = "Account" + rows.Count, Classes = { "account" } };
             // Where rows can be dragged to reorder them, a grip at the left says so.
             var shift = reorderable ? 1 : 0;
-            var grid = Ui.Grid(reorderable ? "14,38,*,Auto" : "38,*,Auto");
+            var grid = Ui.Grid(reorderable ? "14,*,Auto" : bars ? "*,Auto" : "38,*,Auto");
             if (reorderable)
             {
                 var grip = new IconGlyph(IconKind.Grip) { Cursor = new Cursor(StandardCursorType.SizeAll), Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, Name = "Grip" + rows.Count };
                 ToolTip.SetTip(grip, "Drag to change the order"); Ui.Put(grid, grip);
             }
-            var icon = Ui.Put(grid, new AccountIndicator(account, model), shift);
-            var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) };
+            var icon = new AccountIndicator(account, model) { Ring = !bars };
             var dot = Ui.Text("●", 10, "live"); dot.IsVisible = false;
-            labels.Children.Add(Ui.Horizontal(Ui.Text(account.Display, 15), dot));
-            var budget = Ui.Text(model.BudgetSummary(account), 12, "muted");
+            var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(bars ? 8 : 10, 0, 10, 0) };
+            var budget = Ui.Text(bars ? model.BudgetLine(account) : model.BudgetSummary(account), 12, "muted");
             budget.TextTrimming = TextTrimming.CharacterEllipsis;
-            labels.Children.Add(budget);
-            Ui.Put(grid, labels, 1 + shift);
-            var today = Ui.Put(grid, Ui.Text(model.Format(model.Today(account))), 2 + shift);
+            BudgetBar? bar = null; var percent = Ui.Text("", 12, "muted");
+            TextBlock today;
+            if (bars)
+            {
+                // The account's own colour leads the name, then the budget line with its percentage, then the bar.
+                var swatch = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0),
+                    Fill = Avalonia.Media.Brush.Parse(Ui.Visible(account.Colour)) };
+                labels.Spacing = 3;
+                labels.Children.Add(Ui.Horizontal(swatch, Ui.Text(account.Display, 15), dot));
+                var sub = Ui.Grid("*,Auto"); Ui.Put(sub, budget); Ui.Put(sub, percent, 1); percent.Margin = new Thickness(8, 0, 0, 0);
+                labels.Children.Add(sub);
+                if (account.Budget is not null) { bar = new BudgetBar(); labels.Children.Add(bar); }
+                today = Ui.Text(model.Format(model.Today(account)), 15); today.Classes.Add("figures"); today.VerticalAlignment = VerticalAlignment.Center; today.Margin = new Thickness(0, 0, 8, 0); today.Width = 50; today.TextAlignment = Avalonia.Media.TextAlignment.Right; // Fixed, so every play circle lines up.
+                var right = Ui.Horizontal(today, icon); right.VerticalAlignment = VerticalAlignment.Center;
+                Ui.Put(grid, labels, shift); Ui.Put(grid, right, 1 + shift);
+                row.Height = 66;
+            }
+            else
+            {
+                Ui.Put(grid, icon, shift);
+                labels.Margin = new Thickness(10, 0);
+                labels.Children.Add(Ui.Horizontal(Ui.Text(account.Display, 15), dot));
+                labels.Children.Add(budget);
+                Ui.Put(grid, labels, 1 + shift);
+                today = Ui.Put(grid, Ui.Text(model.Format(model.Today(account))), 2 + shift);
+            }
             row.Content = grid;
             row.Click += (_, _) => model.ToggleAccount(account.Name);
             row.PointerEntered += (_, _) => icon.Glow = 1;
@@ -392,7 +450,7 @@ public sealed class AccountList : StackPanel
             settings.Click += (_, _) => { if (TopLevel.GetTopLevel(row) is Window owner) new AccountsWindow(model).Show(owner); };
             row.ContextMenu = new ContextMenu { ItemsSource = new Control[] { settings } };
             Children.Add(row);
-            rows.Add((account, row, today, budget, icon, dot));
+            rows.Add((account, row, today, budget, icon, dot, bar, percent));
         }
         Refresh();
         if (pendingGlide is { } glide)
@@ -491,7 +549,13 @@ public sealed class AccountList : StackPanel
         {
             row.Row.Classes.Set("active", model.ActiveAccount == row.Account.Name);
             row.Today.Text = model.Format(model.Today(row.Account));
-            row.Budget.Text = model.BudgetSummary(row.Account);
+            row.Budget.Text = bars ? model.BudgetLine(row.Account) : model.BudgetSummary(row.Account);
+            if (row.Bar is { } bar && model.BudgetRatio(row.Account) is { } ratio)
+            {
+                bar.Set(ratio, model.BudgetPace(row.Account));
+                // A spent budget shows its percentage in red, so overrunning reads at a glance.
+                row.Percent.Text = Math.Round(ratio * 100) + "%"; row.Percent.Classes.Set("overtime", ratio >= 1); row.Percent.Classes.Set("muted", ratio < 1);
+            }
             row.Icon.InvalidateVisual();
             // The live dot pulses beside the account that is recording.
             var live = model.ActiveAccount == row.Account.Name;
@@ -537,6 +601,12 @@ public sealed class ClockText : StackPanel
         main = new TextBlock { FontSize = size, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Bottom };
         seconds = new TextBlock { FontSize = secondsSize, Classes = { "clockLight", "muted" }, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(1, 0, 0, size * .12) };
         Children.Add(main); Children.Add(seconds);
+    }
+    /// <summary>Colours the hours and minutes by a style class (break, overtime, live or clockIdle). The seconds stay dim.</summary>
+    public void SetState(bool onBreak, bool late, bool live)
+    {
+        main.Classes.Set("break", onBreak); main.Classes.Set("overtime", late); main.Classes.Set("live", live);
+        main.Classes.Set("clockIdle", !onBreak && !late && !live);
     }
     /// <summary>The whole clock, as hours:minutes:seconds. Setting it splits the seconds off to be drawn lighter.</summary>
     public string Text
@@ -634,7 +704,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -673,10 +743,39 @@ public sealed class IconGlyph : Control
     }
     public override void Render(DrawingContext context)
     {
-        IBrush brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;
+        IBrush brush = this.TryFindResource(TintKey ?? "Ink", ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;
         var pen = new Pen(brush, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         switch (Kind)
         {
+            case IconKind.Timeline:
+                // A spine with three dots and a short bar beside each: the day as a list of moments.
+                context.DrawLine(pen, new Point(4.5, 2.5), new Point(4.5, 15.5));
+                foreach (var (y, end) in new[] { (4.5, 15.0), (9.0, 12.5), (13.5, 15.0) })
+                {
+                    context.DrawEllipse(brush, null, new Point(4.5, y), 1.7, 1.7);
+                    context.DrawLine(pen, new Point(8.5, y), new Point(end, y));
+                }
+                break;
+            case IconKind.Week:
+                // A calendar page with two rings at the top.
+                context.DrawRectangle(null, pen, new Rect(2.5, 3.5, 13, 12), 2.5, 2.5);
+                context.DrawLine(pen, new Point(2.5, 7.5), new Point(15.5, 7.5));
+                context.DrawLine(pen, new Point(6, 2), new Point(6, 5)); context.DrawLine(pen, new Point(12, 2), new Point(12, 5));
+                break;
+            case IconKind.Table:
+                // A grid of cells: hours by account.
+                context.DrawRectangle(null, pen, new Rect(2.5, 3, 13, 12), 2.5, 2.5);
+                context.DrawLine(pen, new Point(2.5, 7), new Point(15.5, 7)); context.DrawLine(pen, new Point(2.5, 11), new Point(15.5, 11));
+                context.DrawLine(pen, new Point(8, 7), new Point(8, 15));
+                break;
+            case IconKind.Entries:
+                // Three lines each led by a dot: the entries as a plain list.
+                foreach (var y in new[] { 4.5, 9.0, 13.5 })
+                {
+                    context.DrawEllipse(brush, null, new Point(3.8, y), 1.3, 1.3);
+                    context.DrawLine(pen, new Point(7.5, y), new Point(15.5, y));
+                }
+                break;
             case IconKind.Grip:
                 // Two columns of three dots, the usual sign that something can be picked up and moved, drawn quietly.
                 IBrush quiet = this.TryFindResource("Muted", ActualThemeVariant, out var muted) && muted is IBrush mutedBrush ? mutedBrush : brush;

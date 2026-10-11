@@ -238,7 +238,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     public TimeSpan Today(TimerAccount a) => Engine.Credited(a.Name, Engine.Now.Date, Engine.Now.Date.AddDays(1));
     public TimeSpan OnDay(TimerAccount a, DateTime day) => Engine.Credited(a.Name, day, day.AddDays(1));
     public TimeSpan Week(TimerAccount a) { var start = WeekStart(SelectedDate); return Engine.Credited(a.Name, start, start.AddDays(7)); }
-    public TimeSpan BudgetUsed(TimerAccount a)
+    /// <summary>The span a budget covers right now, from the account's own period (this week, month or quarter).</summary>
+    private (DateTime Start, DateTime End) BudgetWindow(TimerAccount a)
     {
         var now = Engine.Now;
         var start = a.Period switch
@@ -247,8 +248,13 @@ public sealed class TimerModel : INotifyPropertyChanged
             "quarter" => new DateTime(now.Year, ((now.Month - 1) / 3) * 3 + 1, 1), _ => WeekStart(now)
         };
         var end = a.Period switch { "month" => start.AddMonths(1), "quarter" => start.AddMonths(3), _ => start.AddDays(7) };
-        return Engine.Credited(a.Name, start, end);
+        return (start, end);
     }
+    public TimeSpan BudgetUsed(TimerAccount a) { var (start, end) = BudgetWindow(a); return Engine.Credited(a.Name, start, end); }
+    /// <summary>How much of the budget is used, where 1 is all of it. Null when the account has no budget.</summary>
+    public double? BudgetRatio(TimerAccount a) => a.Budget is { } target && target > TimeSpan.Zero ? BudgetUsed(a).TotalSeconds / target.TotalSeconds : null;
+    /// <summary>How far through the budget's period it is now, from 0 to 1. The bar's tick sits here, so a bar past the tick is running ahead of pace.</summary>
+    public double BudgetPace(TimerAccount a) { var (start, end) = BudgetWindow(a); return Math.Clamp((Engine.Now - start).TotalSeconds / (end - start).TotalSeconds, 0, 1); }
     public string Format(TimeSpan value)
     {
         if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) + "h";
@@ -262,6 +268,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
         return $"{sign}{(int)value.TotalHours}:{value.Minutes:00}";
     }
+    /// <summary>The budget in words for an account row, such as "8h 45m of 15h 00m". A weekly budget needs no more, and a longer one says so.</summary>
+    public string BudgetLine(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} of {Format(target)}" + (a.Period is "month" or "quarter" ? " a " + a.Period : "") : "No budget";
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
     public void ChangeDate(int days) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }

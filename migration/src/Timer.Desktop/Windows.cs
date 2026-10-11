@@ -35,7 +35,7 @@ public sealed class WindowCoordinator
         model.PropertyChanged += (_, _) => ApplyTaskbar();
         Pill.OpenDashboard = () =>
         {
-            Fit(Dashboard, Pill, 960 + 2 * Ui.ShadowMargin, 640 + 2 * Ui.ShadowMargin);
+            Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin);
             Dashboard.Show();
             Pill.Hide();
             Dashboard.Activate();
@@ -64,7 +64,7 @@ public sealed class WindowCoordinator
     }
     public void ShowDashboard()
     {
-        if (!Dashboard.IsVisible) { Fit(Dashboard, Pill, 960 + 2 * Ui.ShadowMargin, 640 + 2 * Ui.ShadowMargin); Dashboard.Show(); }
+        if (!Dashboard.IsVisible) { Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin); Dashboard.Show(); }
         Pill.Hide(); BringToFront(Dashboard);
     }
     // The tray icon's left click shows the timer, or hides it when it is already in front.
@@ -307,9 +307,14 @@ public sealed class PillWindow : Window
 
 public sealed class DashboardWindow : Window
 {
+    /// <summary>The dashboard's fixed size, before the room kept around it for its shadow.</summary>
+    public const double DashboardWidth = 1080, DashboardHeight = 680;
     public Action? OpenPill { get; set; }
     private readonly TimerModel model;
-    private readonly TextBlock clock = new TextBlock { Text = "00:00:00", FontSize = 40, Classes = { "clock" } };
+    private readonly ClockText clock = new(46, 26) { Text = "00:00:00" };
+    private readonly TextBlock workspaceTitle = new() { FontSize = 26, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Center };
+    private readonly Avalonia.Controls.Shapes.Ellipse accountDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+    private Button todayButton = null!;
     private readonly TextBlock account = Ui.Text("", 16);
     private Border zoomControls = new(); private Control? identityBlock, accountsHeadBlock, toolsRow; private Button zoomOut = new(), zoomIn = new();
     private readonly TextBlock allocatedValue = new TextBlock { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
@@ -318,13 +323,12 @@ public sealed class DashboardWindow : Window
     private readonly IconGlyph dayFlag = new(IconKind.Flag);
     private bool hoverBreak;
     private readonly TextBlock date = Ui.Text("", 14);
-    private readonly TextBlock today = Ui.Text("", 16, "muted");
+    private readonly TextBlock today = Ui.Text("", 12, "muted");
     private readonly ContentControl workspace = new();
     private readonly Button day;
-    private Button breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!;
+    private Button timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!;
     private readonly BreakGlyph dashboardCup = new();
     private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
-    private readonly Button timeline;
     private readonly Button undo;
     private readonly Button merge;
     private EntryWindow? entryEditor;
@@ -336,43 +340,66 @@ public sealed class DashboardWindow : Window
         this.model = model;
         Title = "Basic’s Advanced Timer"; WindowChrome.Attach(this);
         ContextMenu = Ui.SettingsMenu(model);
-        Width = 960 + 2 * Ui.ShadowMargin;
-        Height = 640 + 2 * Ui.ShadowMargin;
+        Width = DashboardWidth + 2 * Ui.ShadowMargin;
+        Height = DashboardHeight + 2 * Ui.ShadowMargin;
         Topmost = true; // The dashboard stays in front of other windows, as the pill does.
         CanResize = false;
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
-        // The day lives in the left column: the date, the clock, the state of tracking, the day's totals, then the accounts, with the
-        // break and the day button at the foot. The right column is the review, with settings and minimise in its top corner.
-        var root = Ui.Grid("*", "*");
-        var body = Ui.Grid("300,1,*", "*");
+        // A narrow rail of icons picks the view and holds settings, then the day lives in the left column (the Day elapsed card, the accounts,
+        // and the break and day buttons at the foot). The right column is a titled workspace with the date to step through.
+        var root = Ui.Grid("72,*", "*");
+        var rail = new Border { Width = 72 }; rail.Classes.Add("panel");
+        var railGrid = Ui.Grid("*", "*,Auto");
+        var railTop = new StackPanel { Margin = new Thickness(0, 18, 0, 0), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+        Button RailButton(IconKind kind, string tip, string name, Action click)
+        {
+            var button = Ui.Button("", click, name); button.Classes.Add("rail"); button.Content = new IconGlyph(kind);
+            ToolTip.SetTip(button, tip); Avalonia.Automation.AutomationProperties.SetName(button, tip); return button;
+        }
+        timelineRail = RailButton(IconKind.Timeline, "Timeline", "TimelineTab", () => SelectTab(false));
+        overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectSection("overview"));
+        hoursTab = RailButton(IconKind.Table, "Hours table", "WeekHoursTab", () => SelectSection("hours"));
+        entriesTab = RailButton(IconKind.Entries, "Entries", "WeekEntriesTab", () => SelectSection("entries"));
+        foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
+        Ui.Put(railGrid, railTop);
+        var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center };
+        railFoot.Children.Add(Ui.IconButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke()));
+        railFoot.Children.Add(Ui.SettingsButton(model));
+        Ui.Put(railGrid, railFoot, row: 1);
+        rail.Child = railGrid; Ui.Put(root, rail);
+        Ui.DragHeader(railTop, this);
+        var body = Ui.Grid("340,1,*", "*");
         var sidebar = Ui.Grid("*", "Auto,Auto,*,Auto");
-        var identity = new StackPanel { Margin = new Thickness(18, 16, 18, 8), Spacing = 2 };
-        // The date, with settings and minimise at the top right of this column.
+        // The Day elapsed card, with a bar of the accent colour along its top edge.
+        var dayCard = new Border { CornerRadius = new CornerRadius(18), ClipToBounds = true, BorderThickness = new Thickness(1) }; dayCard.Classes.Add("dayCard");
+        var cardStack = new StackPanel();
+        var accentEdge = new Border { Height = 4 }; accentEdge.Classes.Add("accentEdge");
+        cardStack.Children.Add(accentEdge);
+        var identity = new StackPanel { Margin = new Thickness(18, 14, 18, 16), Spacing = 2 };
         var topRow = Ui.Grid("*,Auto");
-        Ui.Put(topRow, today);
-        var corner = Ui.Horizontal(Ui.SettingsButton(model), Ui.IconButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke()));
-        corner.Spacing = 0; corner.VerticalAlignment = VerticalAlignment.Top; Ui.Put(topRow, corner, 1);
+        Ui.Put(topRow, Ui.Text("Day elapsed", 12, "muted")); Ui.Put(topRow, today, 1);
         identity.Children.Add(topRow); identity.Children.Add(clock);
-        var live = new StackPanel { Spacing = 4, Margin = new Thickness(2, 2, 0, 10) };
-        live.Children.Add(account); live.Children.Add(new TrackingLabels(model));
+        var live = new StackPanel { Spacing = 4, Margin = new Thickness(0, 4, 0, 12) };
+        live.Children.Add(Ui.Horizontal(accountDot, account)); live.Children.Add(new TrackingLabels(model));
         identity.Children.Add(live);
         // Two figures side by side, a small label over each, with a hairline between them.
-        var stats = Ui.Grid("Auto,1,Auto"); stats.Margin = new Thickness(2, 0, 0, 0);
-        var allocatedStat = new StackPanel { Spacing = 1, Margin = new Thickness(0, 0, 16, 0) }; allocatedStat.Children.Add(Ui.Text("Allocated", 12, "muted")); allocatedStat.Children.Add(allocatedValue);
+        var stats = Ui.Grid("*,1,*");
+        var allocatedStat = new StackPanel { Spacing = 1 }; allocatedStat.Children.Add(Ui.Text("Allocated", 12, "muted")); allocatedStat.Children.Add(allocatedValue);
         var unallocatedStat = new StackPanel { Spacing = 1, Margin = new Thickness(16, 0, 0, 0) }; unallocatedStat.Children.Add(Ui.Text("Unallocated", 12, "muted")); unallocatedStat.Children.Add(unallocatedValue);
         var statDivider = new Border { Width = 1, Margin = new Thickness(0, 2) }; statDivider.Classes.Add("rule");
         Ui.Put(stats, allocatedStat); Ui.Put(stats, statDivider, 1); Ui.Put(stats, unallocatedStat, 2);
         identity.Children.Add(stats);
-        Ui.DragHeader(identity, this, "SidebarDragHeader"); identityBlock = identity;
-        Ui.Put(sidebar, identity);
+        cardStack.Children.Add(identity); dayCard.Child = cardStack;
+        var identityHost = new Border { Padding = new Thickness(16, 18, 16, 6), Child = dayCard };
+        Ui.DragHeader(identityHost, this, "SidebarDragHeader"); identityBlock = identityHost;
+        Ui.Put(sidebar, identityHost);
         var title = Ui.Text("Client accounts", 13, "muted");
-        title.Margin = new Thickness(18, 12, 18, 6);
-        var titleRule = Ui.Rule(); titleRule.Margin = new Thickness(18, 0);
-        var accountsHead = new StackPanel(); accountsHead.Children.Add(titleRule); accountsHead.Children.Add(title); accountsHeadBlock = accountsHead;
+        title.Margin = new Thickness(20, 12, 20, 6);
+        var accountsHead = new StackPanel(); accountsHead.Children.Add(title); accountsHeadBlock = accountsHead;
         Ui.Put(sidebar, accountsHead, row: 1);
-        Ui.Put(sidebar, new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true), AllowAutoHide = false,
+        Ui.Put(sidebar, new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 2);
         var summary = new StackPanel { Margin = new Thickness(18, 12, 18, 18), Spacing = 10 };
         // The break is its own control, apart from the account rows above it, because it stops time going to any account.
@@ -395,23 +422,18 @@ public sealed class DashboardWindow : Window
         Ui.Put(body, panel);
         var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
         var review = Ui.Grid("*", "Auto,Auto,*");
-        review.Margin = new Thickness(22, 12, 22, 18);
-        var nav = Ui.Grid("Auto,*,Auto"); nav.VerticalAlignment = VerticalAlignment.Bottom;
-        // One row of tabs: the day's timeline, then the week's three parts, so there is no second row of tabs.
-        timeline = Ui.Button("Timeline", () => SelectTab(false), "TimelineTab"); timeline.Classes.Add("tab");
-        overviewTab = Ui.Button("Week overview", () => SelectSection("overview"), "WeekOverviewTab"); overviewTab.Classes.Add("tab");
-        hoursTab = Ui.Button("Hours table", () => SelectSection("hours"), "WeekHoursTab"); hoursTab.Classes.Add("tab");
-        entriesTab = Ui.Button("Entries", () => SelectSection("entries"), "WeekEntriesTab"); entriesTab.Classes.Add("tab");
-        Ui.Put(nav, Ui.Horizontal(timeline, overviewTab, hoursTab, entriesTab));
-        // In the Week tab the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
-        // A fixed width, so the arrows stay put whatever the date or week text says.
+        review.Margin = new Thickness(22, 16, 22, 18);
+        // The workspace's name on the left; on the right the date to step through and a button back to today.
+        // In Week views the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
+        // The date has a fixed width, so the arrows stay put whatever its text says.
+        var nav = Ui.Grid("*,Auto"); nav.VerticalAlignment = VerticalAlignment.Center;
+        Ui.Put(nav, workspaceTitle);
         date.Width = 112; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
         previous = Ui.Button("‹", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }, "PreviousPeriod"); previous.Classes.Add("iconButton"); previous.Width = 30; previous.FontSize = 20;
         next = Ui.Button("›", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }, "NextPeriod"); next.Classes.Add("iconButton"); next.Width = 30; next.FontSize = 20;
-        Ui.Put(nav, Ui.Horizontal(previous, date, next), 2);
-        // The tabs sit on a hairline that runs the width of the workspace, with the chosen tab's bar resting on it.
-        var navLine = new Border { Child = nav, BorderThickness = new Thickness(0, 0, 0, 1) }; navLine.Classes.Add("tabLine");
-        Ui.Put(review, navLine);
+        todayButton = Ui.Button("Today", () => model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days), "GoToToday"); todayButton.Classes.Add("outlined"); todayButton.Height = 34; todayButton.Padding = new Thickness(14, 4); todayButton.Margin = new Thickness(10, 0, 0, 0);
+        Ui.Put(nav, Ui.Horizontal(previous, date, next, todayButton), 1);
+        Ui.Put(review, nav);
         undo = Ui.Button("Undo", () => model.UndoEdit(), "UndoEdit");
         merge = Ui.Button("Merge", () => model.MergeSelection(), "MergeSelected");
         // Editing buttons sit on the left and only where they apply; Tools stays on the right. Hours and minutes is in Settings.
@@ -426,15 +448,14 @@ public sealed class DashboardWindow : Window
         var zoomBar = new Border { Name = "TimelineControls", Child = Ui.Horizontal(zoomOut, zoomIn, fit), CornerRadius = new CornerRadius(8), Padding = new Thickness(2), BorderThickness = new Thickness(1) };
         ((StackPanel)zoomBar.Child).Spacing = 0; zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
         var tools = Ui.Grid("*,Auto"); toolsRow = tools; Ui.Put(tools, edits); Ui.Put(tools, zoomBar, 1);
-        tools.Margin = new Thickness(0, 12);
+        tools.Margin = new Thickness(0, 14, 0, 12);
         Ui.Put(review, tools, row: 1);
         Ui.Put(review, workspace, row: 2);
-        // The review fills the right column from the top, so the tabs get the height the old corner row used. The tab row's empty
-        // middle still drags the window.
+        // The title row's empty middle still drags the window.
         var rightColumn = Ui.Grid("*", "*,Auto");
         Ui.Put(rightColumn, review); Ui.DragHeader(nav, this);
         Ui.Put(body, rightColumn, 2);
-        Ui.Put(root, body);
+        Ui.Put(root, body, 1);
         // The bottom line appears only when there is something to say: a failed save, an edit that was refused, or the one-off note
         // about old files. Otherwise it takes no room.
         string? FooterText() => model.LastError ?? model.EditError ?? model.Notice;
@@ -514,11 +535,11 @@ public sealed class DashboardWindow : Window
         clock.Text = model.ClockText;
         // Amber on a break, red in overtime, green while tracking, full-strength text otherwise. A break outranks overtime.
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
-        clock.Classes.Set("break", onBreak); clock.Classes.Set("overtime", late);
-        clock.Classes.Set("live", model.IsTracking && !onBreak && !late);
-        clock.Classes.Set("clockIdle", !model.IsTracking && !onBreak && !late);
+        clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
+        var shownAccount = onBreak ? null : model.Accounts.FirstOrDefault(a => a.Name == (model.ActiveAccount ?? model.SelectedAccount));
+        accountDot.IsVisible = shownAccount is not null; if (shownAccount is not null) accountDot.Fill = Avalonia.Media.Brush.Parse(Ui.Visible(shownAccount.Colour));
         account.Text = model.IsOnBreak ? (model.ResumeAccount is { } backTo ? "Then back to " + backTo : "No account running") : model.AccountLabel;
-        today.Text = model.Engine.Now.ToString("dddd", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + "\n" + model.Engine.Now.ToString("d MMMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
+        today.Text = model.Engine.Now.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
         var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
         date.Text = weekMode ? "Week of " + model.WeekStart(model.SelectedDate).ToString("d MMM", british) : model.SelectedDate.ToString("ddd d MMM", british);
         next.IsEnabled = !weekMode || model.CanStepForwardAWeek;
@@ -541,10 +562,13 @@ public sealed class DashboardWindow : Window
         ToolTip.SetTip(breakButton, model.IsOnBreak ? "End the break" + (model.ResumeAccount is { } resumeTo ? " and go back to " + resumeTo : "") : "Stop timing any account while you take a break");
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
-        timeline.Classes.Set("selected", !weekMode);
-        overviewTab.Classes.Set("selected", weekMode && model.WeekSection == "overview");
-        hoursTab.Classes.Set("selected", weekMode && model.WeekSection == "hours");
-        entriesTab.Classes.Set("selected", weekMode && model.WeekSection == "entries");
+        void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); if (button.Content is IconGlyph glyph) glyph.TintKey = selected ? "Ink" : "Muted"; }
+        Rail(timelineRail, !weekMode);
+        Rail(overviewTab, weekMode && model.WeekSection == "overview");
+        Rail(hoursTab, weekMode && model.WeekSection == "hours");
+        Rail(entriesTab, weekMode && model.WeekSection == "entries");
+        workspaceTitle.Text = !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
+        todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
         if (refreshWorkspace)
         {
             var oldScroll = workspace.Content is ScrollViewer directOld ? directOld

@@ -318,17 +318,16 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void AccountRowsAreSlimSoMoreFitInTheDashboardAndPillAndTabsAreUnderlined()
+    public void AccountRowsHoldABudgetBarAndTheRailMarksTheChosenView()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("account")).ToList();
-            Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(52, r.Bounds.Height, 0.5)); // The pill's rows match.
+            Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(66, r.Bounds.Height, 0.5)); // Tall enough for the name, the budget line and its bar.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
-            Assert.Equal(new Avalonia.Thickness(0, 0, 0, 3), tab.BorderThickness); Assert.Contains("selected", tab.Classes);
-            Assert.Equal(Avalonia.Media.Brushes.Transparent, tab.Background);
+            Assert.Contains("rail", tab.Classes); Assert.Contains("selected", tab.Classes);
         }
         finally { dashboard.Close(); }
     }
@@ -355,8 +354,8 @@ public sealed class EditingTests
             var export = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ExportWeek"); var copy = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CopyHours");
             Assert.Equal(IconKind.Export, ((IconGlyph)export.Content!).Kind); Assert.Equal(IconKind.Copy, ((IconGlyph)copy.Content!).Kind); Assert.Equal("Export week…", ToolTip.GetTip(export));
             Assert.InRange(Math.Abs(export.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y - copy.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y), 0, 2); // Same line.
-            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekOverviewTab" && b.Content as string == "Week overview");
-            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekHoursTab" && b.Content as string == "Hours table");
+            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekOverviewTab" && ToolTip.GetTip(b) as string == "Week overview");
+            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekHoursTab" && ToolTip.GetTip(b) as string == "Hours table");
         }
         finally { dashboard.Close(); }
     }
@@ -425,7 +424,7 @@ public sealed class EditingTests
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
-            var clock = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 40);
+            var clock = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 46 && t.Classes.Contains("clock"));
             void Settle() { Dispatcher.UIThread.RunJobs(); using var f = dashboard.CaptureRenderedFrame(); }
             // The clock is amber on a break, with the status line amber too, and red in overtime.
             if (model.IsOnBreak) model.ToggleBreak();
