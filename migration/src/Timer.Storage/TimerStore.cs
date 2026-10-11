@@ -7,7 +7,7 @@ using Timer.Core;
 namespace Timer.Storage;
 
 public sealed record AccountSettings(string Name, double? BudgetHours = null, string BudgetPeriod = "week", bool Hidden = false, string? Colour = null);
-public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true, IReadOnlyList<ThemeDefinition>? Themes = null);
+public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true, IReadOnlyList<ThemeDefinition>? Themes = null, bool TaskbarButton = true, bool Tooltips = true, bool Developer = false, bool SetupDone = true);
 
 // The timer's records live in one SQLite file (timer.db). Preferences stay in the settings JSON beside it.
 // The in-memory model is unchanged: Load fills the engine from the database and Save writes it back in one transaction.
@@ -22,7 +22,11 @@ public sealed class TimerStore : IDisposable
     public LedgerEditor? Editor { get; private set; }
     /// <summary>The open database, for tests that need to cause or check a storage state.</summary>
     public TimerDatabase Database => database;
+    /// <summary>The folder holding the database, its backups and exports.</summary>
+    public string DataFolder => directory;
     public string ExportDirectory => Path.Combine(directory, "Timesheets", "Exports");
+    /// <summary>How many adjustments from an earlier version were removed when the database was opened. Zero for everyone else.</summary>
+    public int AdjustmentsRemoved { get; private set; }
     /// <summary>True when the folder holds timesheet files from an older timer. They are never read, changed or deleted.</summary>
     public bool OldFilesFound { get; }
     /// <summary>True once per database: the first launch that finds old files, so the app can say they are unused. Asking marks it as told.</summary>
@@ -68,8 +72,9 @@ public sealed class TimerStore : IDisposable
         else settings = new() { ["schemaVersion"] = 1, ["sections"] = new JsonObject() };
         var accounts = database.Query("SELECT name, hidden, colour, budget_seconds, budget_period FROM accounts ORDER BY position, id",
             r => new AccountSettings(r.GetString(0), r.IsDBNull(3) ? null : r.GetDouble(3) / 3600.0, r.GetString(4), r.GetInt64(1) == 1, r.GetString(2).ToUpperInvariant()));
+        var firstRun = false; // A brand new database, which gets the getting started setup.
         if (accounts.Count == 0 && Meta("accountsSeeded") is null)
-            accounts = new() { new("Account one"), new("Account two"), new("Internal") };
+            { accounts = new() { new("Account one"), new("Account two"), new("Internal") }; firstRun = true; }
         var decimalHours = false;
         var weekStart = DayOfWeek.Monday;
         foreach (var line in Lines("workingHours"))
@@ -98,8 +103,18 @@ public sealed class TimerStore : IDisposable
         var shifts = engine.Schedule.Shifts.Values.Append(engine.Schedule.Default)
             .Concat(engine.Schedule.Overrides.Values.Where(o => !o.Off).Select(o => o.Shift!));
         if (shifts.Any(s => s.End <= s.Start)) throw new InvalidDataException("A working shift must finish after it starts.");
+        // An earlier version let you adjust an account's time without a block on the clock. That feature is gone, so those rows are left out here and
+        // fall away on the next save. A copy of the database is kept first, and the undo history (which could bring them back) is cleared.
+        var adjustments = database.Query("SELECT a.name, e.day, e.start_at FROM entries e LEFT JOIN accounts a ON a.id = e.account_id WHERE e.kind = 'adjustment'",
+            r => (Account: r.IsDBNull(0) ? BreakAccount.Name : r.GetString(0), Day: r.GetString(1), Start: r.IsDBNull(2) ? "00:00:00" : r.GetString(2)[11..]));
+        if (adjustments.Count > 0)
+        {
+            Backup("before-removing-adjustments");
+            database.Execute("DELETE FROM edit_changes"); database.Execute("DELETE FROM edits");
+            AdjustmentsRemoved = adjustments.Count;
+        }
         engine.Sessions.AddRange(database.Query(
-            "SELECT e.kind, a.name, e.day, e.start_at, e.end_at, e.seconds, e.origin, e.minutes_text FROM entries e LEFT JOIN accounts a ON a.id = e.account_id ORDER BY e.id", ToRow));
+            "SELECT e.kind, a.name, e.day, e.start_at, e.end_at, e.seconds, e.origin, e.minutes_text FROM entries e LEFT JOIN accounts a ON a.id = e.account_id WHERE e.kind <> 'adjustment' ORDER BY e.id", ToRow));
         persistedEdits.Clear();
         var steps = new List<UndoStep>();
         foreach (var edit in database.Query("SELECT id, description FROM edits ORDER BY id", r => (Id: r.GetInt64(0), Description: r.GetString(1))))
@@ -113,6 +128,7 @@ public sealed class TimerStore : IDisposable
             steps.Add(step); persistedEdits.Add((edit.Id, step));
         }
         Editor = new LedgerEditor(engine, null, null, Meta("notes"), Meta("groups"), steps: steps);
+        if (adjustments.Count > 0) Editor.DropNotes(adjustments);
         // The editor may have trimmed or refused steps it could not use, so what is saved is brought back in line on the next save.
         engine.Away.AddRange(database.Query("SELECT start_at, end_at FROM away ORDER BY id", r => new AwayInterval(ParseIso(r.GetString(0)), r.IsDBNull(1) ? null : ParseIso(r.GetString(1)))));
         var running = database.Query("SELECT kind, a.name, start_at, last_seen FROM running LEFT JOIN accounts a ON a.id = running.account_id",
@@ -121,11 +137,16 @@ public sealed class TimerStore : IDisposable
         var appearance = Lines("migrationAppearance").ToList();
         var theme = ThemeLibrary.Renamed(appearance.FirstOrDefault() ?? ThemeLibrary.Default);
         var shadows = !appearance.Skip(1).Contains("shadows=off");
+        var taskbar = !appearance.Skip(1).Contains("taskbar=off");
+        var tooltips = !appearance.Skip(1).Contains("tooltips=off");
+        var developer = appearance.Skip(1).Contains("developer=on");
+        // The setup is done once it says so. A database from before it existed counts as done, and a new one is pending until it is finished or skipped.
+        var setupDone = appearance.Skip(1).Contains("setup=done") || (!appearance.Skip(1).Contains("setup=pending") && !firstRun);
         var themes = ThemeStorage.FromLines(Lines("migrationThemes"));
         // A name that is neither System, a built-in nor one of the user's own falls back to System, so a removed theme never leaves the app unstyled.
         if (theme != ThemeLibrary.System && !ThemeLibrary.BuiltIn.Concat(themes).Any(t => t.Name == theme)) theme = ThemeLibrary.System;
         // Written back on the first save, so a brand new database does not start with the sample accounts every launch.
-        return new(accounts, decimalHours, theme, weekStart, shadows, themes);
+        return new(accounts, decimalHours, theme, weekStart, shadows, themes, taskbar, tooltips, developer, setupDone);
     }
     private static SessionRow ToRow(Microsoft.Data.Sqlite.SqliteDataReader r)
     {
@@ -133,7 +154,7 @@ public sealed class TimerStore : IDisposable
         var day = r.GetString(2); var origin = r.GetString(6);
         var minutes = r.IsDBNull(7) ? Math.Round(r.GetDouble(5) / 60.0, 2, MidpointRounding.ToEven).ToString("0.##", CultureInfo.InvariantCulture) : r.GetString(7);
         var start = r.IsDBNull(3) ? "00:00:00" : r.GetString(3)[11..];
-        var end = kind == "adjustment" ? "adjusted" : origin == "added" ? "added" : origin == "edited" ? "edited" : r.GetString(4)[11..];
+        var end = origin == "added" ? "added" : origin == "edited" ? "edited" : r.GetString(4)[11..];
         return new(day, account, start, end, minutes);
     }
     public void Save(TrackingEngine engine, StoreSettings preferences)
@@ -154,17 +175,18 @@ public sealed class TimerStore : IDisposable
         var sections = (JsonObject)settings["sections"]!;
         sections["dayOverrides"] = Array(engine.Schedule.Overrides.OrderBy(p => p.Key).Select(p => p.Value.Off
             ? $"{p.Key:yyyy-MM-dd}\toff" : $"{p.Key:yyyy-MM-dd}\t{p.Value.Shift!.Start:hh\\:mm}\t{p.Value.Shift.End:hh\\:mm}"));
-        sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off" });
+        sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off", preferences.TaskbarButton ? "taskbar=on" : "taskbar=off", preferences.Tooltips ? "tooltips=on" : "tooltips=off", preferences.Developer ? "developer=on" : "developer=off", preferences.SetupDone ? "setup=done" : "setup=pending" });
         sections["migrationThemes"] = Array((preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).Select(ThemeStorage.ToLine));
         var hours = Lines("workingHours").Where(s =>
         {
             var key = s.Split('=')[0];
-            return key is not ("start" or "end" or "days" or "hours") && !key.StartsWith("shift.", StringComparison.OrdinalIgnoreCase);
+            return key is not ("start" or "end" or "days" or "hours" or "weekstart") && !key.StartsWith("shift.", StringComparison.OrdinalIgnoreCase);
         }).ToList();
         hours.Add($"start={engine.Schedule.Default.Start:hh\\:mm}");
         hours.Add($"end={engine.Schedule.Default.End:hh\\:mm}");
         hours.Add("days=" + string.Join(",", engine.Schedule.Days.OrderBy(d => (int)d).Select(d => d.ToString()[..3].ToLowerInvariant())));
         hours.AddRange(engine.Schedule.Shifts.OrderBy(p => (int)p.Key).Select(p => $"shift.{p.Key.ToString()[..3].ToLowerInvariant()}={p.Value.Start:hh\\:mm},{p.Value.End:hh\\:mm}"));
+        hours.Add("weekstart=" + preferences.WeekStart.ToString()[..3].ToLowerInvariant());
         hours.Add("hours=" + (preferences.DecimalHours ? "decimal" : "hm")); sections["workingHours"] = Array(hours);
         var settingsText = settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
         if (!written.TryGetValue(SettingsFile, out var previous) || previous != settingsText) { AtomicSettings(settingsText); written[SettingsFile] = settingsText; }
@@ -237,11 +259,11 @@ public sealed class TimerStore : IDisposable
         var now = Iso(engine.Now);
         foreach (var s in engine.Sessions)
         {
-            var isBreak = BreakAccount.Is(s.Account); var adjustment = s.IsAdjustment;
-            var kind = adjustment ? "adjustment" : isBreak ? "break" : "work";
+            var isBreak = BreakAccount.Is(s.Account);
+            var kind = isBreak ? "break" : "work";
             var origin = s.End.Equals("added", StringComparison.OrdinalIgnoreCase) ? "added" : s.End.Equals("edited", StringComparison.OrdinalIgnoreCase) ? "edited" : "recorded";
             var from = s.Date + "T" + s.Start;
-            var end = adjustment ? null : s.End.Contains(':') ? s.Date + "T" + s.End : Iso(s.To);
+            var end = s.End.Contains(':') ? s.Date + "T" + s.End : Iso(s.To);
             database.Execute(@"INSERT INTO entries (kind, account_id, day, start_at, end_at, seconds, origin, created_at, minutes_text) VALUES ($k, $a, $d, $s, $e, $x, $o, $c, $m)",
                 ("$k", kind), ("$a", isBreak ? null : ids[s.Account]), ("$d", s.Date), ("$s", from), ("$e", end),
                 ("$x", s.Duration.TotalSeconds), ("$o", origin), ("$c", now), ("$m", s.Minutes));

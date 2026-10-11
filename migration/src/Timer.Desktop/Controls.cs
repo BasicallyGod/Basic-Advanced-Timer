@@ -27,13 +27,7 @@ public static class Ui
     }
     public static bool IsColour(string? text) => text is not null && System.Text.RegularExpressions.Regex.IsMatch(text, "^#[0-9A-Fa-f]{6}$");
     /// <summary>The text colour that reads best on a block of this colour: the usual dark ink on light colours, white on dark ones.</summary>
-    public static string InkOn(string colour)
-    {
-        if (!IsColour(colour)) return "#24312B";
-        double Channel(int at) { var v = Convert.ToInt32(colour.Substring(at, 2), 16) / 255.0; return v <= 0.03928 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4); }
-        var luminance = 0.2126 * Channel(1) + 0.7152 * Channel(3) + 0.0722 * Channel(5);
-        return luminance > 0.3 ? "#24312B" : "#FFFFFF";
-    }
+    public static string InkOn(string colour) => IsColour(colour) ? ThemeColours.ReadableOn(colour) : "#24312B";
     // Room around a borderless window for its soft shadow or glow, which are drawn outside the card.
     public const double ShadowMargin = 22;
     /// <summary>Wraps a window's card so it can cast a shadow or glow. The card clips its own content, so the shadow lives on a parent.</summary>
@@ -92,6 +86,13 @@ public static class Ui
         var control = new TextBlock { Text = text, FontSize = size, VerticalAlignment = VerticalAlignment.Center };
         if (style is not null) control.Classes.Add(style);
         return control;
+    }
+    /// <summary>The dash between a start and an end box, centred in the gap between them.</summary>
+    public static TextBlock Dash()
+    {
+        var dash = Text("–");
+        dash.HorizontalAlignment = HorizontalAlignment.Center; dash.TextAlignment = TextAlignment.Center;
+        return dash;
     }
     public static Button Button(string text, Action click, string? name = null)
     {
@@ -176,77 +177,55 @@ public static class Ui
         }, RoutingStrategies.Tunnel);
         header.PointerCaptureLost += (_, _) => { press = null; target = null; };
     }
+    /// <summary>
+    /// Whether tooltips show. A tooltip is cancelled as it opens when this is off, which is the one switch that covers every control,
+    /// including ones made later. The words stay as the controls' accessible names either way.
+    /// </summary>
+    public static bool TooltipsOn { get; private set; } = true;
+    private static bool tooltipHandlerAdded;
+    public static void ApplyTooltips(bool on)
+    {
+        TooltipsOn = on;
+        // The opening event is direct, so it is not seen by a window above the control. A class handler is the way to watch every control at once.
+        if (tooltipHandlerAdded) return;
+        tooltipHandlerAdded = true;
+        ToolTip.ToolTipOpeningEvent.AddClassHandler<Control>((_, e) => { if (!TooltipsOn) e.Cancel = true; });
+    }
+    /// <summary>Starts a second copy of the app on the sample-data demo, which saves nothing real.</summary>
+    public static void StartDemo()
+    {
+        if (Environment.ProcessPath is not { } executable) return;
+        var start = new System.Diagnostics.ProcessStartInfo(executable) { UseShellExecute = true };
+        if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+            start.ArgumentList.Add(typeof(App).Assembly.Location);
+        start.ArgumentList.Add("--demo");
+        System.Diagnostics.Process.Start(start);
+    }
+    /// <summary>
+    /// The right-click menu is kept short on purpose: the hours format, which build this is, the overtime tester (demo only) and Close timer.
+    /// Everything else lives on the settings page.
+    /// </summary>
     public static ContextMenu SettingsMenu(TimerModel model)
     {
-        // Hawthorn (the default) and System first, then every theme the app has: the built-in ones and the user's own. The list is rebuilt each time the menu opens.
-        List<MenuItem> ThemeItems()
-        {
-            var items = new List<MenuItem>();
-            foreach (var theme in new[] { ThemeLibrary.Default, ThemeLibrary.System }.Concat(model.Themes.Select(t => t.Name).Where(n => n != ThemeLibrary.Default)))
-            {
-                var item = new MenuItem { Header = theme, IsChecked = model.Theme == theme, ToggleType = MenuItemToggleType.Radio };
-                item.Click += (_, _) => model.SetTheme(theme);
-                items.Add(item);
-            }
-            return items;
-        }
-        var variants = ThemeItems();
-        var appearanceMenu = new MenuItem { Header = "Appearance", ItemsSource = variants };
         var format = new MenuItem { Header = "Decimal hours", IsChecked = model.DecimalHours, ToggleType = MenuItemToggleType.CheckBox };
         format.Click += (_, _) => model.ToggleFormat();
-        var shifts = new MenuItem { Header = "Working hours…" };
-        shifts.Click += (_, _) => { if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life)
-            new ShiftWindow(model).Show(life.Windows.First(w => w.IsVisible)); };
-        var accounts = new MenuItem { Header = "Accounts and budgets…" };
-        accounts.Click += (_, _) => { if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life)
-            new AccountsWindow(model).Show(life.Windows.First(w => w.IsVisible)); };
-        // The demo and its overtime switch sit together: outside the demo you can open it, inside it you can switch overtime on and off.
-        var demo = new MenuItem { Header = "Open sample-data demo", IsVisible = !model.IsDemo && BuildInfo.DeveloperFeatures };
-        var overtimeTest = new MenuItem { Header = "Test overtime", ToggleType = MenuItemToggleType.CheckBox, IsVisible = model.IsDemo && BuildInfo.DeveloperFeatures, Name = "TestOvertime" };
+        // Inside the demo you can switch overtime on and off to see how it looks. Like the version, it shows only once developer features are unlocked.
+        var overtimeTest = new MenuItem { Header = "Test overtime", ToggleType = MenuItemToggleType.CheckBox, IsVisible = false, Name = "TestOvertime" };
         overtimeTest.Click += (_, _) => model.SetOvertimeTest(!model.OvertimeTest);
-        demo.Click += (_, _) =>
-        {
-            if (Environment.ProcessPath is { } executable)
-            {
-                var start = new System.Diagnostics.ProcessStartInfo(executable) { UseShellExecute = true };
-                if (Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
-                    start.ArgumentList.Add(typeof(App).Assembly.Location);
-                start.ArgumentList.Add("--demo");
-                System.Diagnostics.Process.Start(start);
-            }
-        };
-        var startup = new MenuItem { Header = "Start with Windows", ToggleType = MenuItemToggleType.CheckBox };
-        startup.Click += (_, _) => model.SetAutoStart(model.AutoStart?.IsEnabled != true);
-        var themesEditor = new MenuItem { Header = "Themes…", Name = "ThemesMenu" };
-        themesEditor.Click += (_, _) => { if (Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime life)
-            new ThemesWindow(model).Show(life.Windows.First(w => w.IsVisible)); };
-        var shadows = new MenuItem { Header = "Window shadows", ToggleType = MenuItemToggleType.CheckBox };
-        shadows.Click += (_, _) => model.SetShadows(!model.Shadows);
         // Which build this is, greyed out because it is information, not an action.
-        var version = new MenuItem { Header = BuildInfo.Current, IsEnabled = false, Name = "BuildVersion" };
+        var version = new MenuItem { Header = BuildInfo.Current, IsEnabled = false, IsVisible = false, Name = "BuildVersion" };
         var quit = new MenuItem { Header = "Close timer" };
         quit.Click += (_, _) => model.RequestQuit();
-        // Most used first: the hours format, then accounts and working hours; then how it looks and starts; then the demo; and
-        // Close timer alone at the bottom, apart from everyday actions. Breaks and the day button live in the window, so they are not repeated here.
-        var menu = new ContextMenu { ItemsSource = new Control[]
-        { format, accounts, shifts, new Separator(), appearanceMenu, themesEditor, shadows, startup, new Separator(), demo, overtimeTest, new Separator(), version, new Separator(), quit } };
-        menu.Opened += (_, _) =>
+        var versionRule = new Separator { IsVisible = false };
+        var menu = new ContextMenu { ItemsSource = new Control[] { format, overtimeTest, versionRule, version, new Separator(), quit } };
+        void Sync()
         {
-            appearanceMenu.ItemsSource = ThemeItems();
-            format.IsChecked = model.DecimalHours; shadows.IsChecked = model.Shadows; overtimeTest.IsChecked = model.OvertimeTest;
-            startup.IsVisible = model.AutoStart?.Available == true;
-            startup.IsChecked = model.AutoStart?.IsEnabled == true;
-        };
+            var developer = model.DeveloperUnlocked;
+            format.IsChecked = model.DecimalHours; overtimeTest.IsChecked = model.OvertimeTest;
+            overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer; versionRule.IsVisible = developer;
+        }
+        menu.Opened += (_, _) => Sync(); Sync();
         return menu;
-    }
-    public static Button SettingsButton(TimerModel model)
-    {
-        var menu = SettingsMenu(model);
-        var button = new Button { Content = new IconGlyph(IconKind.Gear), Name = "Settings", ContextMenu = menu };
-        button.Classes.Add("iconButton"); ToolTip.SetTip(button, "Settings");
-        Avalonia.Automation.AutomationProperties.SetName(button, "Settings");
-        button.Click += (_, _) => menu.Open(button);
-        return button;
     }
     /// <summary>A button that shows only an icon, with its words as the tooltip and the accessible name.</summary>
     public static Button IconButton(IconKind kind, string tip, string name, Action click)
@@ -259,13 +238,20 @@ public static class Ui
 // Vector geometry keeps the budget ring and cutlery crisp at any display scale.
 public sealed class AccountIndicator : Control
 {
+    // 0 at rest, 1 while the pointer is over the row. It eases in and out, so the button visibly answers the pointer and reads as pressable.
+    public static readonly StyledProperty<double> GlowProperty = AvaloniaProperty.Register<AccountIndicator, double>(nameof(Glow));
+    static AccountIndicator() => AffectsRender<AccountIndicator>(GlowProperty);
+    public double Glow { get => GetValue(GlowProperty); set => SetValue(GlowProperty, value); }
     public TimerAccount Account { get; }
+    /// <summary>Whether the budget ring is drawn. The dashboard shows the budget as a bar instead, so its button is a plain circle.</summary>
+    public bool Ring { get; init; } = true;
     private readonly TimerModel model;
     public AccountIndicator(TimerAccount account, TimerModel model)
     {
         Account = account;
         this.model = model;
         Width = Height = Size;
+        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = TimeSpan.FromMilliseconds(160) } };
     }
     // Drawn on a 42 unit canvas and scaled down, so the ring, bars and play triangle stay in proportion at the smaller size.
     public const double Size = 36;
@@ -275,7 +261,9 @@ public sealed class AccountIndicator : Control
         using var scaled = context.PushTransform(Matrix.CreateScale(Size / 42, Size / 42));
         var centre = new Point(21, 21);
         var ink = Resource("Ink");
-        if (Account.Budget is { } budget)
+        var running = model.ActiveAccount == Account.Name;
+        if (!Ring) context.DrawEllipse(running ? Resource("Accent") : null, running ? null : new Pen(Resource("Line"), 2), centre, 19, 19);
+        if (Ring && Account.Budget is { } budget)
         {
             context.DrawEllipse(null, new Pen(Resource("Line"), 3), centre, 19, 19);
             var ratio = Math.Clamp(model.BudgetUsed(Account).TotalSeconds / budget.TotalSeconds, 0, 1);
@@ -295,10 +283,22 @@ public sealed class AccountIndicator : Control
                 context.DrawGeometry(null, new Pen(colour, 3), geometry);
             }
         }
+        // Under the hand, the button fills with the accent colour and its symbol grows a little and turns to the accent's own text colour.
+        var glow = Math.Clamp(Glow, 0, 1);
+        var accent = Resource("Accent"); var accentInk = Resource("AccentInk");
+        if (glow > 0 && !BreakAccount.Is(Account.Name))
+        {
+            using (context.PushOpacity(glow)) context.DrawEllipse(accent, null, centre, Ring ? 15 : 19, Ring ? 15 : 19);
+        }
+        // On the plain circle a running account is already filled with the accent, so its pause bars are drawn in the accent's own text colour.
+        if (!Ring && running) ink = accentInk;
+        using var grow = context.PushTransform(Matrix.CreateTranslation(-21, -21) * Matrix.CreateScale(1 + .18 * glow, 1 + .18 * glow) * Matrix.CreateTranslation(21, 21));
         if (model.ActiveAccount == Account.Name)
         {
             context.DrawRectangle(ink, null, new Rect(15, 14, 4, 14), 1, 1);
             context.DrawRectangle(ink, null, new Rect(23, 14, 4, 14), 1, 1);
+            if (glow > 0)
+                using (context.PushOpacity(glow)) { context.DrawRectangle(accentInk, null, new Rect(15, 14, 4, 14), 1, 1); context.DrawRectangle(accentInk, null, new Rect(23, 14, 4, 14), 1, 1); }
         }
         else if (BreakAccount.Is(Account.Name))
         {
@@ -311,7 +311,12 @@ public sealed class AccountIndicator : Control
             context.DrawLine(pen, new Point(23, 12), new Point(23, 21));
             context.DrawLine(pen, new Point(23, 21), new Point(26, 21));
         }
-        else context.DrawGeometry(ink, null, Geometry.Parse("M 17,13 L 28,21 L 17,29 Z"));
+        else
+        {
+            var triangle = Geometry.Parse("M 17,13 L 28,21 L 17,29 Z");
+            context.DrawGeometry(ink, null, triangle);
+            if (glow > 0) using (context.PushOpacity(glow)) context.DrawGeometry(accentInk, null, triangle);
+        }
     }
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -322,14 +327,92 @@ public sealed class AccountIndicator : Control
         ? brush : Brushes.Gray;
 }
 
+/// <summary>A thin bar for how much of a budget is used, with a small tick where the budget period has got to, so pace is easy to judge.</summary>
+public sealed class BudgetBar : Control
+{
+    public double Ratio { get; private set; }
+    public double Pace { get; private set; }
+    public BudgetBar() { Height = 10; }
+    public void Set(double ratio, double pace)
+    {
+        if (ratio == Ratio && pace == Pace) return;
+        Ratio = ratio; Pace = pace; InvalidateVisual();
+    }
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property.Name == nameof(ActualThemeVariant)) InvalidateVisual();
+    }
+    private IBrush Resource(string key) => this.TryFindResource(key, ActualThemeVariant, out var value) && value is IBrush brush ? brush : Brushes.Gray;
+    public override void Render(DrawingContext context)
+    {
+        var width = Bounds.Width; var top = 2.0; var height = 6.0;
+        context.DrawRectangle(Resource("Line"), null, new Rect(0, top, width, height), 3, 3);
+        var fill = Math.Clamp(Ratio, 0, 1) * width;
+        // Green while there is room, amber from 80%, red once the budget is spent.
+        var colour = Ratio >= 1 ? Resource("Overtime") : Ratio >= .8 ? Resource("BudgetWarning") : Resource("Live");
+        if (fill > 0) context.DrawRectangle(colour, null, new Rect(0, top, Math.Max(fill, height), height), 3, 3);
+        // The marker says where an even spread of the budget would have got to by now. Once the budget is spent there is nothing left to pace, so it goes.
+        if (Ratio < 1) using (context.PushOpacity(.7)) context.DrawRectangle(Resource("Ink"), null, new Rect(Math.Clamp(Pace, 0, 1) * (width - 2), 0, 2, 10), 1, 1);
+    }
+}
+
+/// <summary>
+/// A name that is cut short with an ellipsis when it does not fit, and slides sideways to show the rest while the pointer is over its row.
+/// Hover(false) puts it back at once, so a name is never left half scrolled.
+/// </summary>
+public sealed class MarqueeText : Border
+{
+    private readonly TextBlock text;
+    private DispatcherTimer? timer;
+    private double offset, hold;
+    public MarqueeText(string value, double size)
+    {
+        ClipToBounds = true;
+        text = Ui.Text(value, size); text.TextTrimming = TextTrimming.CharacterEllipsis; text.HorizontalAlignment = HorizontalAlignment.Left;
+        Child = text;
+        DetachedFromVisualTree += (_, _) => Reset();
+    }
+    public TextBlock Label => text;
+    /// <summary>Whether the name is sliding now, which only happens while hovered and only when it did not fit.</summary>
+    public bool Scrolling { get; private set; }
+    public void Hover(bool on)
+    {
+        Reset();
+        if (!on) return;
+        // Measured without trimming, to learn how wide the whole name is against the room it has.
+        text.TextTrimming = TextTrimming.None; text.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var full = text.DesiredSize.Width; var room = Bounds.Width;
+        if (full <= room + .5) { text.TextTrimming = TextTrimming.CharacterEllipsis; return; }
+        text.Width = full; Scrolling = true; hold = .35;
+        var distance = full - room + 4; var last = DateTime.UtcNow;
+        timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        timer.Tick += (_, _) =>
+        {
+            var now = DateTime.UtcNow; var seconds = Math.Min(.1, (now - last).TotalSeconds); last = now;
+            if (hold > 0) { hold -= seconds; return; }
+            offset = Math.Min(distance, offset + 55 * seconds);
+            text.RenderTransform = new Avalonia.Media.TranslateTransform(-offset, 0);
+            if (offset >= distance) timer?.Stop();
+        };
+        timer.Start();
+    }
+    private void Reset()
+    {
+        timer?.Stop(); timer = null; offset = 0; hold = 0; Scrolling = false;
+        text.RenderTransform = null; text.ClearValue(Layoutable.WidthProperty); text.TextTrimming = TextTrimming.CharacterEllipsis;
+    }
+}
+
 public sealed class AccountList : StackPanel
 {
     private readonly TimerModel model;
-    private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot)> rows = new();
-    private readonly bool reorderable;
-    public AccountList(TimerModel model, bool reorderable = false)
+    private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Percent)> rows = new();
+    private readonly bool reorderable, bars;
+    /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
+    public AccountList(TimerModel model, bool reorderable = false, bool bars = false)
     {
-        this.model = model; this.reorderable = reorderable;
+        this.model = model; this.reorderable = reorderable; this.bars = bars;
         Rebuild();
         AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
@@ -344,33 +427,57 @@ public sealed class AccountList : StackPanel
             var row = new Button { Name = "Account" + rows.Count, Classes = { "account" } };
             // Where rows can be dragged to reorder them, a grip at the left says so.
             var shift = reorderable ? 1 : 0;
-            var grid = Ui.Grid(reorderable ? "14,38,*,Auto" : "38,*,Auto");
+            var grid = Ui.Grid(reorderable ? "14,*,Auto" : bars ? "*,Auto" : "38,*,Auto");
             if (reorderable)
             {
                 var grip = new IconGlyph(IconKind.Grip) { Cursor = new Cursor(StandardCursorType.SizeAll), Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, Name = "Grip" + rows.Count };
                 ToolTip.SetTip(grip, "Drag to change the order"); Ui.Put(grid, grip);
             }
-            var icon = Ui.Put(grid, new AccountIndicator(account, model), shift);
-            var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0) };
+            var icon = new AccountIndicator(account, model) { Ring = !bars };
             var dot = Ui.Text("●", 10, "live"); dot.IsVisible = false;
-            labels.Children.Add(Ui.Horizontal(Ui.Text(account.Display, 15), dot));
-            var budget = Ui.Text(model.BudgetSummary(account), 12, "muted");
+            var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(bars ? 8 : 10, 0, 10, 0) };
+            var budget = Ui.Text(bars ? model.BudgetLine(account) : model.BudgetSummary(account), 12, "muted");
             budget.TextTrimming = TextTrimming.CharacterEllipsis;
-            labels.Children.Add(budget);
-            Ui.Put(grid, labels, 1 + shift);
-            var today = Ui.Put(grid, Ui.Text(model.Format(model.Today(account))), 2 + shift);
+            MarqueeText? marquee = null;
+            BudgetBar? bar = null; var percent = Ui.Text("", 12, "muted");
+            TextBlock today;
+            if (bars)
+            {
+                // The account's own colour leads the name, then the budget line with its percentage, then the bar.
+                var swatch = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0),
+                    Fill = Avalonia.Media.Brush.Parse(Ui.Visible(account.Colour)) };
+                labels.Spacing = 3;
+                // The percentage sits at the end of the name line, which leaves the whole line under it for the budget in words.
+                var nameLine = Ui.Grid("*,34"); var nameStack = Ui.Grid("Auto,*,Auto");
+                marquee = new MarqueeText(account.Display, 15) { Name = "AccountName" }; var nameText = marquee; dot.Margin = new Thickness(8, 0, 0, 0);
+                Ui.Put(nameStack, swatch); Ui.Put(nameStack, nameText, 1); Ui.Put(nameStack, dot, 2);
+                Ui.Put(nameLine, nameStack); Ui.Put(nameLine, percent, 1); percent.TextAlignment = Avalonia.Media.TextAlignment.Right; percent.VerticalAlignment = VerticalAlignment.Center; // A fixed column, so the rows never shift.
+                labels.Children.Add(nameLine); labels.Children.Add(budget);
+                if (account.Budget is not null) { bar = new BudgetBar(); labels.Children.Add(bar); }
+                today = Ui.Text(model.Format(model.Today(account)), 15); today.Classes.Add("figures"); today.VerticalAlignment = VerticalAlignment.Center; today.Margin = new Thickness(0, 0, 6, 0); today.Width = 62; today.TextAlignment = Avalonia.Media.TextAlignment.Right; // Fixed, so every play circle lines up.
+                var right = Ui.Horizontal(today, icon); right.VerticalAlignment = VerticalAlignment.Center;
+                Ui.Put(grid, labels, shift); Ui.Put(grid, right, 1 + shift);
+                row.Height = 66;
+            }
+            else
+            {
+                Ui.Put(grid, icon, shift);
+                labels.Margin = new Thickness(10, 0);
+                labels.Children.Add(Ui.Horizontal(Ui.Text(account.Display, 15), dot));
+                labels.Children.Add(budget);
+                Ui.Put(grid, labels, 1 + shift);
+                today = Ui.Put(grid, Ui.Text(model.Format(model.Today(account))), 2 + shift);
+            }
             row.Content = grid;
             row.Click += (_, _) => model.ToggleAccount(account.Name);
+            row.PointerEntered += (_, _) => { icon.Glow = 1; marquee?.Hover(true); };
+            row.PointerExited += (_, _) => { icon.Glow = 0; marquee?.Hover(false); };
             if (reorderable && !BreakAccount.Is(account.Name)) AttachReorder(row, account.Name);
-            // The everyday thing to do with an account comes first, then the less frequent one.
-            var adjust = new MenuItem { Header = "Adjust time today…", Name = "AdjustTimeMenu" };
-            var accountName = account.Name;
-            adjust.Click += (_, _) => { if (TopLevel.GetTopLevel(row) is Window owner) new AdjustWindow(model, accountName).Show(owner); };
             var settings = new MenuItem { Header = "Name and budget…", Name = "AccountSettingsMenu" };
             settings.Click += (_, _) => { if (TopLevel.GetTopLevel(row) is Window owner) new AccountsWindow(model).Show(owner); };
-            row.ContextMenu = new ContextMenu { ItemsSource = new Control[] { adjust, new Separator(), settings } };
+            row.ContextMenu = new ContextMenu { ItemsSource = new Control[] { settings } };
             Children.Add(row);
-            rows.Add((account, row, today, budget, icon, dot));
+            rows.Add((account, row, today, budget, icon, dot, bar, percent));
         }
         Refresh();
         if (pendingGlide is { } glide)
@@ -469,8 +576,15 @@ public sealed class AccountList : StackPanel
         {
             row.Row.Classes.Set("active", model.ActiveAccount == row.Account.Name);
             row.Today.Text = model.Format(model.Today(row.Account));
-            row.Budget.Text = model.BudgetSummary(row.Account);
-            ToolTip.SetTip(row.Row, model.BudgetText(row.Account));
+            row.Budget.Text = bars ? model.BudgetLine(row.Account) : model.BudgetSummary(row.Account);
+            if (row.Bar is { } bar && model.BudgetRatio(row.Account) is { } ratio)
+            {
+                bar.Set(ratio, model.BudgetPace(row.Account));
+                var period = row.Account.Period is "month" or "quarter" ? row.Account.Period : "week";
+                ToolTip.SetTip(bar, $"The line marks how far through the {period} it is. A bar past the line is ahead of an even spread of the budget.");
+                // A spent budget shows its percentage in red, so overrunning reads at a glance.
+                row.Percent.Text = Math.Round(ratio * 100) + "%"; row.Percent.Classes.Set("overtime", ratio >= 1); row.Percent.Classes.Set("muted", ratio < 1);
+            }
             row.Icon.InvalidateVisual();
             // The live dot pulses beside the account that is recording.
             var live = model.ActiveAccount == row.Account.Name;
@@ -484,25 +598,60 @@ public sealed class TrackingLabels : StackPanel
 {
     private readonly TextBlock status = Ui.Text("", 12);
     private readonly TextBlock overtime = Ui.Text("Overtime", 12, "overtime");
+    private readonly Avalonia.Controls.Shapes.Ellipse dot = new() { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center };
     public TrackingLabels(TimerModel model)
     {
         Orientation = Orientation.Vertical;
         Spacing = 3;
-        Children.Add(status);
+        // The status dot is a real shape in a box as wide as the account's colour dot above it, so the two dots share one centre line.
+        var dotBox = new Border { Width = 10, Child = dot, VerticalAlignment = VerticalAlignment.Center };
+        var line = Ui.Horizontal(dotBox, status); line.Spacing = 8;
+        Children.Add(line);
         Children.Add(overtime);
+        overtime.Margin = new Thickness(18, 0, 0, 0); // Lined up under the status words.
         void Refresh()
         {
-            status.Text = "● " + model.Status;
+            status.Text = model.Status;
             // A break turns the status line, dot included, amber; otherwise it is green while tracking and grey when not.
-            status.Classes.Set("break", model.IsOnBreak);
-            status.Classes.Set("live", model.IsTracking && !model.IsOnBreak);
-            status.Classes.Set("idle", !model.IsTracking);
+            foreach (Control control in new Control[] { status, dot })
+            {
+                control.Classes.Set("break", model.IsOnBreak);
+                control.Classes.Set("live", model.IsTracking && !model.IsOnBreak);
+                control.Classes.Set("idle", !model.IsTracking);
+            }
             overtime.IsVisible = model.IsOvertime;
             overtime.Text = "Overtime +" + model.Format(model.Engine.Totals(model.Engine.Now).Overtime);
         }
         void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Refresh(); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
+    }
+}
+
+/// <summary>A clock whose hours and minutes are heavy and whose seconds are lighter and dimmer, so the figure that matters stands out.</summary>
+public sealed class ClockText : StackPanel
+{
+    private readonly TextBlock main, seconds;
+    public ClockText(double size, double secondsSize)
+    {
+        Orientation = Orientation.Horizontal;
+        main = new TextBlock { FontSize = size, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Bottom };
+        seconds = new TextBlock { FontSize = secondsSize, Classes = { "clockLight", "muted" }, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(1, 0, 0, size * .12) };
+        Children.Add(main); Children.Add(seconds);
+    }
+    /// <summary>Colours the hours and minutes by a style class (break, overtime, live or clockIdle). The seconds stay dim.</summary>
+    public void SetState(bool onBreak, bool late, bool live)
+    {
+        main.Classes.Set("break", onBreak); main.Classes.Set("overtime", late); main.Classes.Set("live", live);
+        main.Classes.Set("clockIdle", !onBreak && !late && !live);
+        // The seconds take the same colour as the rest of the clock when it is tracking, on a break or in overtime, only lighter.
+        seconds.Classes.Set("break", onBreak); seconds.Classes.Set("overtime", late); seconds.Classes.Set("live", live); seconds.Opacity = onBreak || late || live ? .78 : 1; // Quieter than the main digits, but still easy to read.
+    }
+    /// <summary>The whole clock, as hours:minutes:seconds. Setting it splits the seconds off to be drawn lighter.</summary>
+    public string Text
+    {
+        get => main.Text + seconds.Text;
+        set { var cut = value.LastIndexOf(':'); main.Text = cut > 0 ? value[..cut] : value; seconds.Text = cut > 0 ? value[cut..] : ""; }
     }
 }
 
@@ -513,7 +662,7 @@ public sealed class Chevron : Control
     public override void Render(DrawingContext context)
     {
         var brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
-        var pen = new Pen(brush, 1.8);
+        var pen = new Pen(brush, 2.2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         var y = Expanded ? 9 : 5;
         context.DrawLine(pen, new Point(2, y), new Point(7, Expanded ? 4 : 10));
         context.DrawLine(pen, new Point(7, Expanded ? 4 : 10), new Point(12, y));
@@ -522,11 +671,24 @@ public sealed class Chevron : Control
 
 public sealed class PauseGlyph : Control
 {
+    // Eases from 0 to 1 while the pointer is over the button, growing the symbol and tinting it with the accent so it reads as pressable.
+    public static readonly StyledProperty<double> GlowProperty = AvaloniaProperty.Register<PauseGlyph, double>(nameof(Glow));
+    static PauseGlyph() => AffectsRender<PauseGlyph>(GlowProperty);
+    public double Glow { get => GetValue(GlowProperty); set => SetValue(GlowProperty, value); }
     public bool Playing { get; set; }
-    public PauseGlyph() { Width = Height = 14; }
+    public PauseGlyph()
+    {
+        Width = Height = 14;
+        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = TimeSpan.FromMilliseconds(160) } };
+    }
     public override void Render(DrawingContext context)
     {
-        var brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
+        var glow = Math.Clamp(Glow, 0, 1);
+        using var grow = context.PushTransform(Matrix.CreateTranslation(-7, -7) * Matrix.CreateScale(1 + .25 * glow, 1 + .25 * glow) * Matrix.CreateTranslation(7, 7));
+        var normal = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
+        var tint = this.TryFindResource("Accent", ActualThemeVariant, out var accentValue) ? accentValue as IBrush : normal;
+        // The accent can be too faint on a theme's panel, so it is only mixed in as the pointer arrives and the shape itself is what grows.
+        var brush = glow > .5 ? tint : normal;
         if (Playing)
         {
             context.DrawRectangle(brush, null, new Rect(2, 1, 4, 12), 1, 1);
@@ -544,6 +706,11 @@ public sealed class BreakGlyph : Control
     static BreakGlyph() => AffectsRender<BreakGlyph>(SteamProperty);
     public double Steam { get => GetValue(SteamProperty); set => SetValue(SteamProperty, value); }
     public bool Filled { get; set; }
+    /// <summary>Draws the cup in plain text colour, and in <see cref="HotKey"/> only while the pointer is over its button.</summary>
+    public bool Mono { get; set; }
+    private bool hot;
+    public bool Hot { get => hot; set { if (hot == value) return; hot = value; InvalidateVisual(); } }
+    public string HotKey { get; set; } = "Break";
     private CancellationTokenSource? steaming;
     public bool Steaming => steaming is not null;
     public BreakGlyph() { Width = Height = 18; }
@@ -566,7 +733,8 @@ public sealed class BreakGlyph : Control
     public override void Render(DrawingContext context)
     {
         IBrush? brush = null;
-        if (Filled) brush = Brushes.White; else if (this.TryFindResource("Break", ActualThemeVariant, out var value)) brush = value as IBrush;
+        var key = Mono ? (Hot ? HotKey : "Ink") : "Break";
+        if (Filled) brush = Brushes.White; else if (this.TryFindResource(key, ActualThemeVariant, out var value)) brush = value as IBrush;
         var pen = new Pen(brush ?? Brushes.Gray, 1.8, lineCap: PenLineCap.Round);
         context.DrawGeometry(null, pen, Geometry.Parse("M 3,7 L 3,12 Q 3,15.5 6.5,15.5 L 9.5,15.5 Q 13,15.5 13,12 L 13,7 Z"));
         context.DrawGeometry(null, pen, Geometry.Parse("M 13,8 L 14.5,8 Q 16.5,8 16.5,10 Q 16.5,12 14.5,12 L 13,12"));
@@ -581,7 +749,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -620,10 +788,57 @@ public sealed class IconGlyph : Control
     }
     public override void Render(DrawingContext context)
     {
-        IBrush brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;
+        IBrush brush = this.TryFindResource(TintKey ?? "Ink", ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;
         var pen = new Pen(brush, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         switch (Kind)
         {
+            case IconKind.Timeline:
+                // A spine with three blocks of different lengths beside it, drawn apart from each other: the day as a column of time.
+                context.DrawLine(pen, new Point(3.5, 2), new Point(3.5, 16));
+                // Solid bars rather than outlines, so the gaps between them stay open at button size.
+                context.DrawRectangle(brush, null, new Rect(7.5, 2.5, 8, 3), 1.2, 1.2);
+                context.DrawRectangle(brush, null, new Rect(7.5, 7.5, 8, 3), 1.2, 1.2);
+                context.DrawRectangle(brush, null, new Rect(7.5, 12.5, 8, 3), 1.2, 1.2);
+                break;
+            case IconKind.Trash:
+                // A bin: a lid with a handle, and a tapering body with two slats.
+                context.DrawLine(pen, new Point(3, 5), new Point(15, 5)); context.DrawLine(pen, new Point(7, 5), new Point(7, 3)); context.DrawLine(pen, new Point(7, 3), new Point(11, 3)); context.DrawLine(pen, new Point(11, 3), new Point(11, 5));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 4.5,5 L 5.3,15 Q 5.4,16 6.4,16 L 11.6,16 Q 12.6,16 12.7,15 L 13.5,5"));
+                context.DrawLine(pen, new Point(7.6, 8), new Point(7.8, 13)); context.DrawLine(pen, new Point(10.4, 8), new Point(10.2, 13));
+                break;
+            case IconKind.Plus:
+                context.DrawLine(pen, new Point(9, 3.5), new Point(9, 14.5)); context.DrawLine(pen, new Point(3.5, 9), new Point(14.5, 9));
+                break;
+            case IconKind.Undo:
+                // A hook of an arrow curling back to the left.
+                context.DrawGeometry(null, pen, Geometry.Parse("M 7,4.5 L 3.5,8 L 7,11.5"));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 3.8,8 L 10.5,8 Q 14.5,8 14.5,11.2 Q 14.5,14.2 10.5,14.2 L 8.5,14.2"));
+                break;
+            case IconKind.Merge:
+                // Two lines running together into one.
+                context.DrawGeometry(null, pen, Geometry.Parse("M 3.5,3.5 L 3.5,6 Q 3.5,9 9,9 M 14.5,3.5 L 14.5,6 Q 14.5,9 9,9 M 9,9 L 9,14.5"));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 6.5,12 L 9,14.5 L 11.5,12"));
+                break;
+            case IconKind.Week:
+                // A calendar page with two rings at the top.
+                context.DrawRectangle(null, pen, new Rect(2.5, 3.5, 13, 12), 2.5, 2.5);
+                context.DrawLine(pen, new Point(2.5, 7.5), new Point(15.5, 7.5));
+                context.DrawLine(pen, new Point(6, 2), new Point(6, 5)); context.DrawLine(pen, new Point(12, 2), new Point(12, 5));
+                break;
+            case IconKind.Table:
+                // A grid of cells: hours by account.
+                context.DrawRectangle(null, pen, new Rect(2.5, 3, 13, 12), 2.5, 2.5);
+                context.DrawLine(pen, new Point(2.5, 7), new Point(15.5, 7)); context.DrawLine(pen, new Point(2.5, 11), new Point(15.5, 11));
+                context.DrawLine(pen, new Point(8, 7), new Point(8, 15));
+                break;
+            case IconKind.Entries:
+                // Three lines each led by a dot: the entries as a plain list.
+                foreach (var y in new[] { 4.5, 9.0, 13.5 })
+                {
+                    context.DrawEllipse(brush, null, new Point(3.8, y), 1.3, 1.3);
+                    context.DrawLine(pen, new Point(7.5, y), new Point(15.5, y));
+                }
+                break;
             case IconKind.Grip:
                 // Two columns of three dots, the usual sign that something can be picked up and moved, drawn quietly.
                 IBrush quiet = this.TryFindResource("Muted", ActualThemeVariant, out var muted) && muted is IBrush mutedBrush ? mutedBrush : brush;
@@ -684,10 +899,9 @@ public sealed class IconGlyph : Control
                 context.DrawLine(pen, new Point(3, 12), new Point(3, 15.5)); context.DrawLine(pen, new Point(3, 15.5), new Point(15, 15.5)); context.DrawLine(pen, new Point(15, 15.5), new Point(15, 12));
                 break;
             case IconKind.FitDay:
-                // Two bars with arrows between them pointing inwards: the day squeezed to fit the space.
-                context.DrawLine(pen, new Point(3, 2.5), new Point(15, 2.5)); context.DrawLine(pen, new Point(3, 15.5), new Point(15, 15.5));
-                context.DrawLine(pen, new Point(9, 5), new Point(9, 8.2)); context.DrawLine(pen, new Point(7, 6.4), new Point(9, 8.4)); context.DrawLine(pen, new Point(11, 6.4), new Point(9, 8.4));
-                context.DrawLine(pen, new Point(9, 13), new Point(9, 9.8)); context.DrawLine(pen, new Point(7, 11.6), new Point(9, 9.6)); context.DrawLine(pen, new Point(11, 11.6), new Point(9, 9.6));
+                // Two arrows pointing away from each other across the corner: the day stretched to fill the space.
+                context.DrawLine(pen, new Point(10, 8), new Point(15, 3)); context.DrawGeometry(null, pen, Geometry.Parse("M 10.6,3 L 15,3 L 15,7.4"));
+                context.DrawLine(pen, new Point(8, 10), new Point(3, 15)); context.DrawGeometry(null, pen, Geometry.Parse("M 7.4,15 L 3,15 L 3,10.6"));
                 break;
         }
     }

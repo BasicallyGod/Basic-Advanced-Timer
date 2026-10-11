@@ -18,17 +18,17 @@ public sealed partial class LedgerEditor
     // minutes. Permit only that sub-second representation error at a join.
     public static bool Adjoining(IReadOnlyList<SessionRow> rows)
     {
-        if (rows.Count == 0 || rows.Any(s => !s.IsPositioned || s.Duration <= TimeSpan.Zero)) return false;
+        if (rows.Count == 0 || rows.Any(s => s.Duration <= TimeSpan.Zero)) return false;
         var ordered = rows.OrderBy(s => s.From).ToArray();
         return ordered.Skip(1).Select((s, i) => Math.Abs((s.From - ordered[i].To).TotalSeconds)).All(gap => gap <= .6 + 1e-8);
     }
     public bool CanCombine(IReadOnlyList<SessionRow> rows)
     {
-        if (rows.Count == 0 || rows.Any(s => !s.IsPositioned || s.Duration <= TimeSpan.Zero)) return false;
+        if (rows.Count == 0 || rows.Any(s => s.Duration <= TimeSpan.Zero)) return false;
         var ordered = rows.OrderBy(s => s.From).ToArray();
         if (ordered.Skip(1).Select((s, i) => (s.From - ordered[i].To).TotalSeconds).Any(gap => gap < -.6 - 1e-8)) return false;
         var from = rows.Min(s => s.From); var until = rows.Max(s => s.To);
-        return !engine.Sessions.Any(s => !rows.Any(r => ReferenceEquals(r, s)) && s.IsPositioned && s.Duration > TimeSpan.Zero && s.From < until && s.To > from)
+        return !engine.Sessions.Any(s => !rows.Any(r => ReferenceEquals(r, s)) && s.Duration > TimeSpan.Zero && s.From < until && s.To > from)
             && !(engine.Active is { } active && active.Start < until && engine.Now > from);
     }
     public IReadOnlyList<SessionRow> MergeGapRows(IReadOnlyList<SessionRow> rows)
@@ -98,15 +98,15 @@ public sealed partial class LedgerEditor
             }
         }
         foreach (var row in relevant.Where(s => !used.Contains(s)))
-            result.Add(new(row.Account, row.Day, row.IsPositioned ? row.From : null, row.IsPositioned ? row.To : null, Minutes(row),
-                row.IsAdjustment ? "Adjustment" : row.End == "edited" ? "Edited by hand" : row.End == "added" ? "Added by hand" : "Time", Note(row), new[] { row }));
+            result.Add(new(row.Account, row.Day, row.From, row.To, Minutes(row),
+                row.End == "edited" ? "Edited by hand" : row.End == "added" ? "Added by hand" : "Time", Note(row), new[] { row }));
         return result.OrderBy(r => r.Day).ThenBy(r => r.Account, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.Start).ToArray();
     }
     public IReadOnlyList<TidyGap> TidyCandidates(DateTime day, int maximumMinutes = 5)
     {
         if (maximumMinutes is < 1 or > 60) throw new ArgumentException("Choose a gap limit of 1–60 minutes.");
         if (day.Date > engine.Now.Date) return Array.Empty<TidyGap>();
-        var spans = engine.Sessions.Where(s => s.Day == day.Date && s.IsPositioned && s.Duration > TimeSpan.Zero)
+        var spans = engine.Sessions.Where(s => s.Day == day.Date && s.Duration > TimeSpan.Zero)
             .Select(s => (Start: s.From, End: s.To, s.Account, Live: false)).ToList();
         if (engine.Active is { } active && active.Start < day.Date.AddDays(1) && engine.Now > day.Date)
             spans.Add((active.Start, engine.Now, active.Account, true));

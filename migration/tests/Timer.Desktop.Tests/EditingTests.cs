@@ -83,20 +83,6 @@ public sealed class EditingTests
     }
 
     [Fact]
-    public void AdjustmentsSupportNotesWithoutInventingTimeAndAmbiguousKeysAreRejected()
-    {
-        var engine = Engine(); var merged = Row(end: "adjusted"); engine.Sessions.Add(merged);
-        var editor = new LedgerEditor(engine);
-        editor.Edit(merged, merged.Account, merged.From, merged.To, "Legacy note");
-        Assert.Equal(merged, engine.Sessions.Single()); Assert.Equal("Legacy note", editor.Note(merged));
-        Assert.Throws<ArgumentException>(() => editor.Edit(merged, merged.Account, merged.From.AddMinutes(5), merged.To, ""));
-        editor.Undo(); Assert.Equal("", editor.Note(engine.Sessions.Single()));
-        var copy = engine.Sessions.Single(); engine.Sessions.Add(copy with { End = "adjusted", Minutes = "5" });
-        Assert.Throws<ArgumentException>(() => editor.Edit(copy, copy.Account, copy.From, copy.To, "Ambiguous"));
-        Assert.False(editor.CanUndo);
-    }
-
-    [Fact]
     public void AFailedSaveChangesNothingAndTheRetrySavesEditNotesAndUndoTogether()
     {
         var folder = Path.Combine(Path.GetTempPath(), "timer-edit-failed-" + Guid.NewGuid());
@@ -175,7 +161,7 @@ public sealed class EditingTests
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             Assert.Equal(1, requests); Assert.Empty(model.SelectedRows); // A double-click edits without leaving the block selected.
             var nine = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
-            var empty = nine.TranslatePoint(new Point(200, 55), window)!.Value;
+            var empty = nine.TranslatePoint(new Point(200, 60), window)!.Value; // The label sits five pixels above its hour's tick.
             window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
             Assert.Null(gap); // One click adds nothing.
             window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
@@ -332,23 +318,22 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void AccountRowsAreSlimSoMoreFitInTheDashboardAndPillAndTabsAreUnderlined()
+    public void AccountRowsHoldABudgetBarAndTheRailMarksTheChosenView()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("account")).ToList();
-            Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(52, r.Bounds.Height, 0.5)); // The pill's rows match.
+            Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(66, r.Bounds.Height, 0.5)); // Tall enough for the name, the budget line and its bar.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
-            Assert.Equal(new Avalonia.Thickness(0, 0, 0, 3), tab.BorderThickness); Assert.Contains("selected", tab.Classes);
-            Assert.Equal(Avalonia.Media.Brushes.Transparent, tab.Background);
+            Assert.Contains("rail", tab.Classes); Assert.Contains("selected", tab.Classes);
         }
         finally { dashboard.Close(); }
     }
 
     [AvaloniaFact]
-    public void ZoomAndFitSitInTheActionRowTheHintLineIsGoneAndADisabledButtonStaysOutlined()
+    public void ZoomAndFitSitInABarUnderTheTimelineTheHintLineIsGoneAndADisabledButtonStaysOutlined()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
@@ -357,8 +342,11 @@ public sealed class EditingTests
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "ReviewTools"); // The Tools menu is gone.
             var undoButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "UndoEdit");
             var zoom = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
-            Assert.InRange(Math.Abs(undoButton.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y + undoButton.Bounds.Height / 2 - (zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y + zoom.Bounds.Height / 2)), 0, 3); // Same row.
-            Assert.True(zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.X > undoButton.TranslatePoint(new Point(0, 0), dashboard)!.Value.X); // On the right of the row.
+            var scrollAbove = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(x => x.Name == "TimelineScroll");
+            // One bar under the timeline: Undo (and Add time) on the left, the zoom controls on the right, on the same line.
+            Assert.True(undoButton.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y >= scrollAbove.TranslatePoint(new Point(0, scrollAbove.Bounds.Height - 1), dashboard)!.Value.Y);
+            Assert.InRange(Math.Abs(undoButton.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y + undoButton.Bounds.Height / 2 - (zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y + zoom.Bounds.Height / 2)), 0, 3);
+            Assert.True(zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.X > undoButton.TranslatePoint(new Point(0, 0), dashboard)!.Value.X);
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsVisible), t => t.Text is not null && t.Text.Contains("Click blocks to select"));
             var undo = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "UndoEdit");
             Assert.False(undo.IsEnabled); Assert.True(undo.Opacity < 1); // Dimmed by the style, keeping its outline, not a solid grey fill.
@@ -369,8 +357,8 @@ public sealed class EditingTests
             var export = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ExportWeek"); var copy = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CopyHours");
             Assert.Equal(IconKind.Export, ((IconGlyph)export.Content!).Kind); Assert.Equal(IconKind.Copy, ((IconGlyph)copy.Content!).Kind); Assert.Equal("Export week…", ToolTip.GetTip(export));
             Assert.InRange(Math.Abs(export.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y - copy.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y), 0, 2); // Same line.
-            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekOverviewTab" && b.Content as string == "Week view");
-            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekHoursTab" && b.Content as string == "Overview");
+            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekOverviewTab" && ToolTip.GetTip(b) as string == "Week overview");
+            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekHoursTab" && ToolTip.GetTip(b) as string == "Hours table");
         }
         finally { dashboard.Close(); }
     }
@@ -439,12 +427,12 @@ public sealed class EditingTests
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
-            var clock = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 40);
+            var clock = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 46 && t.Classes.Contains("clock"));
             void Settle() { Dispatcher.UIThread.RunJobs(); using var f = dashboard.CaptureRenderedFrame(); }
             // The clock is amber on a break, with the status line amber too, and red in overtime.
             if (model.IsOnBreak) model.ToggleBreak();
             model.ToggleBreak(); Settle(); Assert.Contains("break", clock.Classes); Assert.DoesNotContain("live", clock.Classes);
-            var status = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text is not null && t.Text.StartsWith("● On break")); Assert.Contains("break", status.Classes);
+            var status = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "On break"); Assert.Contains("break", status.Classes);
             model.ToggleBreak(); Settle(); Assert.DoesNotContain("break", clock.Classes);
             model.SetOvertimeTest(true); Settle(); Assert.True(model.IsOvertime); Assert.Contains("overtime", clock.Classes); Assert.DoesNotContain("clockIdle", clock.Classes);
             model.ToggleBreak(); Settle(); Assert.Contains("break", clock.Classes); Assert.DoesNotContain("overtime", clock.Classes); // A break outranks overtime.
@@ -469,7 +457,7 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void TheDashboardStaysOnTopAndThePillClockStaysRedInOvertimeEvenWhileRecording()
+    public void TheDashboardStaysOnTopAndThePillStaysTheOvertimeColourEvenWhileRecording()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); var pill = new PillWindow(model); dashboard.Show(); pill.Show();
         try
@@ -477,10 +465,9 @@ public sealed class EditingTests
             Assert.True(dashboard.Topmost); Assert.True(pill.Topmost);
             model.SetOvertimeTest(true); model.ToggleAccount("Account three"); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
             Assert.True(model.IsOvertime); Assert.True(model.IsTracking);
-            var timer = pill.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 22);
-            Assert.Contains("overtime", timer.Classes); Assert.DoesNotContain("live", timer.Classes); Assert.DoesNotContain("clockIdle", timer.Classes);
-            var overtimeText = pill.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text is not null && t.Text.StartsWith("OT +"));
-            Assert.Equal(((Avalonia.Media.ISolidColorBrush)overtimeText.Foreground!).Color, ((Avalonia.Media.ISolidColorBrush)timer.Foreground!).Color); // The same red as the overtime text.
+            // The whole capsule is the overtime colour while recording, and its line says how much overtime there is.
+            Assert.Equal("Overtime", model.ThemeState); Assert.Equal(ThemeEngine.StateVariant(model.CurrentTheme, ThemeDerivation.Overtime), pill.RequestedThemeVariant);
+            Assert.Contains(pill.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is not null && t.Text.Contains("· OT "));
             Assert.Equal("Start break", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak").GetVisualDescendants().OfType<TextBlock>().Single().Text);
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs();
             Assert.Equal("Finish break", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak").GetVisualDescendants().OfType<TextBlock>().Single().Text);

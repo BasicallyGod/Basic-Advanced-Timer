@@ -114,7 +114,7 @@ public static class TimelineGestures
     private static TimeSpan Snap(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour, out bool nudge)
     {
         nudge = false;
-        var occupied = model.Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.IsPositioned && s.Duration > TimeSpan.Zero)
+        var occupied = model.Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero)
             .Select(s => (Start: s.From, End: s.To)).ToList();
         if (model.Engine.Active is { } active && model.Engine.Now > active.Start)
             occupied.Add((active.Start, model.Engine.Now));

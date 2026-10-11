@@ -49,7 +49,7 @@ public sealed class UndoHistoryTests
                     var marker = editor.UndoState;
                     try
                     {
-                        var positioned = engine.Sessions.Where(s => s.IsPositioned).ToList();
+                        var positioned = engine.Sessions.ToList();
                         var row = positioned.Count == 0 ? null : positioned[rnd.Next(positioned.Count)];
                         var shift = TimeSpan.FromMinutes(rnd.Next(-8, 9) * 5);
                         switch (rnd.Next(5))

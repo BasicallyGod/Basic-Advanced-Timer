@@ -72,7 +72,7 @@ public sealed class BreakTests
             var point = dashboardBreak.TranslatePoint(new Point(dashboardBreak.Bounds.Width / 2, dashboardBreak.Bounds.Height / 2), dashboard)!.Value;
             dashboard.MouseDown(point, MouseButton.Left); dashboard.MouseUp(point, MouseButton.Left); Dispatcher.UIThread.RunJobs();
             now = now.AddMinutes(30); model.ChangeDate(0); Dispatcher.UIThread.RunJobs();
-            Assert.True(model.IsOnBreak); Assert.Contains("onBreak", dashboardBreak.Classes); Assert.Contains("onBreak", pillBreak.Classes);
+            Assert.True(model.IsOnBreak); Assert.Contains("onBreak", dashboardBreak.Classes); Assert.Equal("Break", model.ThemeState); Assert.Equal(ThemeEngine.StateVariant(model.CurrentTheme, ThemeDerivation.Break), pill.RequestedThemeVariant);
             Assert.Contains(dashboardBreak.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Finish break");
             Assert.Contains(pill.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "On break");
             Assert.True(pill.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming); // The steam moves while the break is on.
@@ -160,10 +160,9 @@ public sealed class BreakTests
             using var store = new TimerStore(folder);
             var engine = new TrackingEngine(clock: () => Day.AddHours(18)); var prefs = store.Load(engine);
             engine.AddSession("Account one", Day.AddHours(9), Day.AddHours(10)); engine.AddSession(BreakAccount.Name, Day.AddHours(12), Day.AddHours(12.5));
-            engine.Sessions.Add(new(Day.ToString("yyyy-MM-dd"), "Account one", "15:00:00", "adjusted", "-10"));
             store.Save(engine, prefs);
             var export = new WeekExport(store.Editor!, engine, new DateTime(2026, 10, 5));
-            export.VerifyAgainst(store.Database); // Matches, including the break and the negative adjustment.
+            export.VerifyAgainst(store.Database); // Matches, including the break.
             engine.AddSession("Account two", Day.AddHours(13), Day.AddHours(14)); // Not saved yet.
             Assert.Throws<InvalidDataException>(() => new WeekExport(store.Editor!, engine, new DateTime(2026, 10, 5)).VerifyAgainst(store.Database));
             store.Save(engine, prefs); new WeekExport(store.Editor!, engine, new DateTime(2026, 10, 5)).VerifyAgainst(store.Database);

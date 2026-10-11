@@ -7,7 +7,8 @@ namespace Timer.Core;
 /// A theme is a name, whether it sits on a light or a dark base (so the standard controls know what to expect), and a colour for each
 /// named part of the app. Everything else about how a theme looks, including the pill's break and overtime tints, is worked out from these.
 /// </summary>
-public sealed record ThemeDefinition(string Name, bool Dark, IReadOnlyDictionary<string, string> Colours, bool BuiltIn = false, string BlockStyle = ThemeBlockStyle.AsChosen)
+public sealed record ThemeDefinition(string Name, bool Dark, IReadOnlyDictionary<string, string> Colours, bool BuiltIn = false, string BlockStyle = ThemeBlockStyle.AsChosen,
+    double BlockTint = ThemeBlockStyle.DefaultTint, double BlockEdge = ThemeBlockStyle.DefaultEdge)
 {
     public string Colour(string token) => Colours.TryGetValue(token, out var value) ? value : throw new KeyNotFoundException("The theme has no colour for " + token);
 }
@@ -19,7 +20,14 @@ public static class ThemeBlockStyle
     public const string AsChosen = "asChosen";
     /// <summary>The account's colour softened towards the theme's surface, so blocks sit calmly in it.</summary>
     public const string Softened = "softened";
-    public static bool IsKnown(string? style) => style is AsChosen or Softened;
+    /// <summary>
+    /// A calm, tinted block: the theme's surface with a little of the account's colour in it, and a stronger edge down the left side in the account's own colour.
+    /// <see cref="ThemeDefinition.BlockTint"/> is how much account colour the fill takes, and <see cref="ThemeDefinition.BlockEdge"/> how far the edge is pushed
+    /// towards the theme's text colour (0 keeps the account's colour exactly).
+    /// </summary>
+    public const string Tinted = "tinted";
+    public const double DefaultTint = .3, DefaultEdge = .2;
+    public static bool IsKnown(string? style) => style is AsChosen or Softened or Tinted;
 }
 
 public static class ThemeTokens
@@ -27,13 +35,13 @@ public static class ThemeTokens
     /// <summary>The coloured parts of the app a theme sets, in the order the editor lists them.</summary>
     public static readonly string[] Names =
     {
-        "Surface", "Panel", "Ink", "Muted", "Line", "Hover", "Selected", "Live", "Idle", "Overtime", "BudgetWarning", "Break", "Finish", "Accent", "AccentInk", "Clock", "ShadowColor"
+        "Surface", "Panel", "Ink", "Muted", "Line", "Hover", "Selected", "Live", "Idle", "Overtime", "BudgetWarning", "Break", "Finish", "Start", "Accent", "AccentInk", "Clock", "PillSurface", "PillInk", "PillBreak", "PillOvertime", "ShadowColor"
     };
     public static string Describe(string token) => token switch
     {
         "Surface" => "Window background", "Panel" => "Side panel and controls", "Ink" => "Text", "Muted" => "Quiet text", "Line" => "Lines and borders",
-        "Hover" => "Hovered row", "Selected" => "Selected row", "Live" => "Tracking and start", "Idle" => "Not tracking", "Overtime" => "Overtime",
-        "BudgetWarning" => "Budget nearly used", "Break" => "Breaks", "Finish" => "Finish day", "Accent" => "Accent (tabs, main button)", "AccentInk" => "Text on the accent", "Clock" => "Clock when idle", "ShadowColor" => "Window shadow", _ => token
+        "Hover" => "Hovered row", "Selected" => "Selected row", "Live" => "Tracking", "Idle" => "Not tracking", "Overtime" => "Overtime",
+        "BudgetWarning" => "Budget nearly used", "Break" => "Breaks", "Finish" => "Finish day", "Start" => "Start day", "Accent" => "Accent (tabs, main button)", "AccentInk" => "Text on the accent", "Clock" => "Clock when idle", "PillSurface" => "Pill while recording", "PillInk" => "Text on the pill while recording", "PillBreak" => "Pill on a break", "PillOvertime" => "Pill in overtime", "ShadowColor" => "Window shadow", _ => token
     };
     /// <summary>#RRGGBB for every colour, or #AARRGGBB for the shadow, which needs transparency.</summary>
     public static bool IsValid(string token, string? value)
@@ -82,6 +90,12 @@ public static class ThemeColours
         return 0.2126 * C(r) + 0.7152 * C(g) + 0.0722 * C(b);
     }
     /// <summary>The WCAG contrast ratio between two colours, from 1 (none) to 21. Text wants about 4.5 or more.</summary>
+    /// <summary>Dark text or white text, whichever reads better on this colour.</summary>
+    public static string ReadableOn(string hex)
+    {
+        double Channel(int at) { var v = Convert.ToInt32(hex.Substring(at, 2), 16) / 255.0; return v <= 0.03928 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4); }
+        return 0.2126 * Channel(1) + 0.7152 * Channel(3) + 0.0722 * Channel(5) > 0.3 ? "#24312B" : "#FFFFFF";
+    }
     public static double Contrast(string a, string b)
     {
         var x = Luminance(a); var y = Luminance(b); return (Math.Max(x, y) + .05) / (Math.Min(x, y) + .05);
@@ -91,25 +105,53 @@ public static class ThemeColours
 public static class ThemeDerivation
 {
     public const string Break = "Break", Overtime = "Overtime";
-    // How strongly each part takes on the state's hue: the same lightness as the theme's own colour, with this much of the hue's
-    // saturation, so a break feels amber and overtime red in any theme without hiding what the theme set.
-    private static readonly (string Token, double Light, double Dark)[] Tinted =
-    {
-        ("Surface", .62, .32), ("Panel", .70, .30), ("Ink", .45, .45), ("Muted", .28, .22), ("Line", .50, .30), ("Hover", .55, .30), ("Selected", .55, .35), ("Idle", .22, .20)
-    };
-    /// <summary>The colours the pill wears during a break or overtime: the theme's own, with its backgrounds, lines and text tinted towards the accent.</summary>
+    public const string Recording = "Recording";
+    /// <summary>
+    /// The colours the pill wears in a state, so everything inside it reads naturally on its colour. Recording uses the theme's pill colour, a break its Break
+    /// colour and overtime its Overtime colour. Text, lines and hovers are mixed from the colour and the text on it, and the colours that normally mean
+    /// something (break, overtime) become plain text colour, because the whole pill already says it. Finish keeps its own red, since the
+    /// Finish day button must stay red whatever the pill is doing.
+    /// </summary>
     public static IReadOnlyDictionary<string, string> Variant(ThemeDefinition theme, string state)
     {
-        var accent = theme.Colour(state == Break ? "Break" : "Overtime");
-        var hue = ThemeColours.Hsl(accent).H;
-        var result = new Dictionary<string, string>(theme.Colours);
-        foreach (var (token, light, dark) in Tinted)
+        var surface = state switch { Break => theme.Colour("PillBreak"), Overtime => theme.Colour("PillOvertime"), _ => theme.Colour("PillSurface") };
+        var ink = state == Recording ? theme.Colour("PillInk") : ThemeColours.ReadableOn(surface);
+        var result = new Dictionary<string, string>(theme.Colours)
         {
-            var own = ThemeColours.Hsl(theme.Colour(token));
-            // Pure black and white have no hue to tint, so lightness is kept just inside the extremes and the state still shows.
-            result[token] = ThemeColours.FromHsl(hue, theme.Dark ? dark : light, Math.Clamp(own.L, .04, .96));
-        }
+            ["Surface"] = surface, ["Panel"] = ThemeColours.Mix(surface, ink, .10), ["Ink"] = ink, ["Muted"] = ThemeColours.Mix(surface, ink, .84),
+            ["Line"] = ThemeColours.Mix(surface, ink, .30), ["Hover"] = ThemeColours.Mix(surface, ink, .16), ["Selected"] = ThemeColours.Mix(surface, ink, .22),
+            ["Idle"] = ThemeColours.Mix(surface, ink, .84), ["Clock"] = ink, ["Overtime"] = ink, ["Break"] = ink,
+            ["Live"] = state == Recording ? Lift(theme.Colour("Live"), surface, 9) : ink
+        };
         return result;
+    }
+    /// <summary>A colour made lighter until it reads on a dark surface at the contrast asked for, so green tracking text holds up on the recording pill.</summary>
+    private static string Lift(string colour, string surface, double contrast)
+    {
+        for (var step = 0; step < 8 && ThemeColours.Contrast(colour, surface) < contrast; step++) colour = ThemeColours.Mix(colour, "#FFFFFF", .2);
+        return colour;
+    }
+    /// <summary>What a timeline block is drawn with: its fill, the colour of the edge down its left side, and the text on it.</summary>
+    public readonly record struct BlockLook(string Fill, string Edge, string Text);
+    /// <summary>Turns an account colour (already lifted if it was very dark) into a block for this theme, by the theme's own block rules.</summary>
+    public static BlockLook Block(ThemeDefinition theme, string accountColour)
+    {
+        var ink = theme.Colour("Ink");
+        switch (theme.BlockStyle)
+        {
+            case ThemeBlockStyle.Tinted:
+            {
+                var fill = ThemeColours.Mix(theme.Colour("Surface"), accountColour, Math.Clamp(theme.BlockTint, 0, 1));
+                return new(fill, ThemeColours.Mix(accountColour, ink, Math.Clamp(theme.BlockEdge, 0, 1)), ink);
+            }
+            case ThemeBlockStyle.Softened:
+            {
+                var fill = Soften(theme, accountColour);
+                return new(fill, ThemeColours.Mix(fill, ink, .18), ThemeColours.ReadableOn(fill));
+            }
+            default:
+                return new(accountColour, ThemeColours.Mix(accountColour, ink, .18), ThemeColours.ReadableOn(accountColour));
+        }
     }
     /// <summary>A block colour softened towards the theme's surface, for themes that ask for it. Dark colours are lifted first so they show.</summary>
     public static string Soften(ThemeDefinition theme, string colour)
@@ -119,52 +161,73 @@ public static class ThemeDerivation
 public static class ThemeLibrary
 {
     private static ThemeDefinition Make(string name, bool dark, string surface, string panel, string ink, string muted, string line, string hover, string selected,
-        string live, string overtime, string warning, string breakColour, string finish, string accent, string accentInk, string clock, string shadow)
+        string live, string overtime, string warning, string breakColour, string finish, string accent, string accentInk, string clock, string shadow, string start = "#2E9E5B")
         => new(name, dark, new Dictionary<string, string>
         {
             ["Surface"] = surface, ["Panel"] = panel, ["Ink"] = ink, ["Muted"] = muted, ["Line"] = line, ["Hover"] = hover, ["Selected"] = selected, ["Live"] = live,
-            ["Idle"] = muted, ["Overtime"] = overtime, ["BudgetWarning"] = warning, ["Break"] = breakColour, ["Finish"] = finish, ["Accent"] = accent, ["AccentInk"] = accentInk,
-            ["Clock"] = clock, ["ShadowColor"] = shadow
+            ["Idle"] = muted, ["Overtime"] = overtime, ["BudgetWarning"] = warning, ["Break"] = breakColour, ["Finish"] = finish, ["Start"] = start, ["Accent"] = accent, ["AccentInk"] = accentInk,
+            ["Clock"] = clock, ["ShadowColor"] = shadow,
+            // The recording pill is the strongest object on screen. On a light theme it is dark, on a dark theme a lifted version of the panel, so it stands out either way.
+            ["PillSurface"] = dark ? ThemeColours.Mix(panel, "#FFFFFF", .08) : ink, ["PillInk"] = dark ? ink : surface,
+            // Overtime wants a deep, strong red under white text. A dark theme's overtime colour is a light one made for text, so it is deepened for the pill.
+            ["PillBreak"] = Capsule(breakColour), ["PillOvertime"] = dark ? ThemeColours.FromHsl(ThemeColours.Hsl(overtime).H, .62, .36) : Capsule(overtime)
         }, true);
+    // A colour that is fine for text on the theme's window can be too dull to carry text itself as a capsule, so it is brightened until text reads on it.
+    private static string Capsule(string colour)
+    {
+        if (Math.Max(ThemeColours.Contrast(colour, "#FFFFFF"), ThemeColours.Contrast(colour, "#24312B")) >= 4.5) return colour;
+        var (hue, saturation, _) = ThemeColours.Hsl(colour);
+        return ThemeColours.FromHsl(hue, Math.Max(saturation, .8), .55);
+    }
     private const string DarkShadow = "#B3000000", LightShadow = "#59000000";
-    /// <summary>The default: deep green with a lime accent.</summary>
-    public static readonly ThemeDefinition Hawthorn = Make("Hawthorn", true, "#0A4A2C", "#0D5632", "#F6FBF3", "#A9C8B1", "#2E7A52", "#11603A", "#1A7248",
-        "#C5F63C", "#FF9A9A", "#FFD166", "#F6CB4D", "#FF7B7B", "#C5F63C", "#0A2E1B", "#C5F63C", DarkShadow);
-    public static readonly ThemeDefinition Light = Make("Light", false, "#FAFAFB", "#EEF0F2", "#1B1F24", "#646A73", "#D8DBE0", "#E4E7EB", "#D8E4F8",
-        "#2E7D4F", "#C0392B", "#9A6200", "#A87400", "#C62828", "#2F5FCF", "#FFFFFF", "#1B1F24", LightShadow);
-    public static readonly ThemeDefinition Dark = Make("Dark", true, "#1E2227", "#272C33", "#ECEFF3", "#A3AAB4", "#3A414A", "#313842", "#2F4560",
-        "#7FD6A6", "#FF9494", "#E8BD67", "#F0C45A", "#FF8A8A", "#2F6FDB", "#FFFFFF", "#ECEFF3", DarkShadow);
-    public static readonly ThemeDefinition Sage = Make("Sage", true, "#14201B", "#1C2B24", "#E8F2EA", "#A8BBAE", "#34493D", "#26382E", "#35523F",
-        "#7FDC9A", "#FF9292", "#E8BD67", "#F0C45A", "#FF9292", "#7FDC9A", "#0F2218", "#E8F2EA", DarkShadow);
-    public static readonly ThemeDefinition Graphite = Make("Graphite", true, "#1F2226", "#2A2E34", "#EDEEF0", "#A7ABB2", "#3B4047", "#32363C", "#3C4A60",
-        "#8FD3B0", "#FF8F96", "#E8BD67", "#F0C45A", "#FF8F96", "#A9C1E6", "#141A24", "#EDEEF0", DarkShadow);
-    public static readonly ThemeDefinition Paper = Make("Paper", false, "#F8F9FC", "#E9ECF2", "#1E2430", "#5F6877", "#D6DBE5", "#E1E6EE", "#D3E1F6",
-        "#2E7D5B", "#C0392B", "#946000", "#A06F00", "#C62828", "#3F6FB6", "#FFFFFF", "#1E2430", LightShadow);
-    public static readonly ThemeDefinition Midnight = Make("Midnight", true, "#101E33", "#1A2E4A", "#E6EEFA", "#9FB4CF", "#2C4468", "#213A5B", "#2C4F80",
-        "#6FD6C8", "#FF9494", "#F2C66B", "#F2C66B", "#FF9494", "#8AB0FF", "#0B1730", "#E6EEFA", DarkShadow);
-    public static readonly ThemeDefinition Sandstone = Make("Sandstone", false, "#FAF4EA", "#F0E7D7", "#3A2F25", "#766857", "#E0D3BE", "#EADFCB", "#E6D3B0",
-        "#4F7F58", "#B5392A", "#946000", "#A56F00", "#B5392A", "#B25A3B", "#FFFFFF", "#3A2F25", LightShadow);
-    public static readonly ThemeDefinition Aubergine = Make("Aubergine", true, "#271B2D", "#382741", "#F2EAF6", "#BBA9C7", "#503860", "#43304D", "#5A3F6C",
-        "#8FD7A3", "#FF9BA3", "#E8BD67", "#F0C45A", "#FF9BA3", "#C7A6F0", "#1F1228", "#F2EAF6", DarkShadow);
-    public static readonly ThemeDefinition HighContrastLight = Make("High contrast light", false, "#FFFFFF", "#FFFFFF", "#000000", "#333333", "#595959", "#E6E6E6", "#BFD9FF",
-        "#006B2D", "#B30000", "#7A4B00", "#7A4B00", "#B30000", "#0050C8", "#FFFFFF", "#000000", "#80000000");
-    public static readonly ThemeDefinition HighContrastDark = Make("High contrast dark", true, "#000000", "#0D0D0D", "#FFFFFF", "#D0D0D0", "#8C8C8C", "#262626", "#003C78",
-        "#4DFF88", "#FF6B6B", "#FFD23F", "#FFD23F", "#FF6B6B", "#4DFF88", "#000000", "#FFFFFF", "#E6000000");
-    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Hawthorn, Light, Dark, Sage, Graphite, Paper, Midnight, Sandstone, Aubergine, HighContrastLight, HighContrastDark };
+    /// <summary>Light: a neutral dashboard with an orange accent, and tinted blocks with a stronger edge on the left.</summary>
+    public static readonly ThemeDefinition Light = Make("Light", false, "#FBFBFC", "#F2F3F5", "#17181C", "#6A6F78", "#E3E5E9", "#EDEFF2", "#FDEAD3",
+        "#1F8F4E", "#C0243F", "#D9890B", "#E8790E", "#D7263D", "#F27A0D", "#1B1209", "#17181C", LightShadow, "#1F8F4E") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .55, BlockEdge = 0 };
+    /// <summary>Dark: cool charcoal surfaces with the same orange accent. Blocks take a little more of the account colour than in the light version, so they hold against the dark.</summary>
+    public static readonly ThemeDefinition Dark = Make("Dark", true, "#14161A", "#1C1F24", "#EEF0F3", "#9CA3AD", "#2E333A", "#262A31", "#33281D",
+        "#4CD48A", "#FF7A8A", "#F2B84B", "#FF9A3C", "#FF6B6B", "#FF8A1F", "#1B1209", "#EEF0F3", DarkShadow, "#4CD48A") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .45, BlockEdge = 0 };
+    // The colours a mock-up gives (surface, panel, text, accent, break and overtime) are the ones set by hand. The rest are worked out from them, so
+    // every theme gets quiet text, lines, hovers and a selection tint that suit its own surface, and holds the same contrast the tests ask of all.
+    private static ThemeDefinition Themed(string name, bool dark, string surface, string panel, string ink, string accent, string live, string breakColour, string overtime, double tint)
+    {
+        var muted = surface;
+        for (var weight = .5; weight <= 1.0; weight += .05) { muted = ThemeColours.Mix(surface, ink, weight); if (ThemeColours.Contrast(muted, surface) >= 4.5) break; }
+        // On a dark surface the overtime red is lightened until it reads as text, while the pill derives its deep red from the original.
+        var overtimeText = overtime;
+        for (var step = 0; dark && step < 6 && ThemeColours.Contrast(overtimeText, surface) < 4.5; step++) overtimeText = ThemeColours.Mix(overtimeText, "#FFFFFF", .2);
+        var line = ThemeColours.Mix(panel, ink, .14); var hover = ThemeColours.Mix(panel, ink, .07); var selected = ThemeColours.Mix(surface, accent, dark ? .30 : .18);
+        return Make(name, dark, surface, panel, ink, muted, line, hover, selected, live, overtimeText, dark ? "#F2B84B" : "#D9890B", breakColour, dark ? "#FF7A8A" : "#C0243F",
+            accent, ThemeColours.ReadableOn(accent), ink, dark ? DarkShadow : LightShadow, live) with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = tint, BlockEdge = 0 };
+    }
+    /// <summary>Studio: cool and precise, a pale blue-grey with a strong blue accent.</summary>
+    public static readonly ThemeDefinition Studio = Themed("Studio", false, "#F3F6FA", "#E5EBF2", "#202C3D", "#4169C1", "#1F8F4E", "#E07A10", "#B92D43", .55);
+    /// <summary>After Hours: deep and electric, a navy surface with a soft violet accent.</summary>
+    public static readonly ThemeDefinition AfterHours = Themed("After Hours", true, "#111827", "#1C2638", "#EDF2FA", "#A5A0FF", "#4CD48A", "#F28A24", "#B92D43", .42);
+    /// <summary>Botanical: soft and grounded, a pale sage surface with a deep green accent.</summary>
+    public static readonly ThemeDefinition Botanical = Themed("Botanical", false, "#F0F3EB", "#E2E9DA", "#24382D", "#38654B", "#2E7D4F", "#E07A10", "#B92D43", .55);
+    /// <summary>Hawthorn: forest and luminous, deep green with a lime accent. It is the old default theme, back as a choice.</summary>
+    public static readonly ThemeDefinition Hawthorn = Themed("Hawthorn", true, "#073D29", "#105237", "#F5F8ED", "#C5FF42", "#6FE39A", "#F28A24", "#B92D43", .38);
+    // Light and Dark lead the list, then the studies. More can be added here later, and the editor and settings page list whatever is in this array.
+    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark, Studio, AfterHours, Botanical, Hawthorn };
     /// <summary>"System" is not a theme of its own: it picks Light or Dark to match the computer.</summary>
     public const string System = "System";
     /// <summary>What a new installation starts on.</summary>
-    public const string Default = "Hawthorn";
-    /// <summary>A built-in theme that was renamed keeps working under its old name in saved settings.</summary>
-    public static string Renamed(string name) => name switch { "Ocean" => "Midnight", "Sunset" => "Sandstone", _ => name };
+    public const string Default = System;
+    /// <summary>A built-in theme that was renamed or removed keeps working under its old name in saved settings, by landing on the light or dark theme it was closest to.</summary>
+    public static string Renamed(string name) => name switch
+    {
+        "Time Deck" or "Paper" or "Sandstone" or "Sunset" or "High contrast light" => "Light",
+        "Time Deck Dark" or "Sage" or "Graphite" or "Midnight" or "Ocean" or "Aubergine" or "High contrast dark" => "Dark",
+        _ => name
+    };
 }
 
 /// <summary>Reads and writes a user's own themes as one JSON line each, which is how the settings file keeps lists.</summary>
 public static class ThemeStorage
 {
-    private sealed record Saved(string Name, bool Dark, Dictionary<string, string> Colours, string? BlockStyle);
+    private sealed record Saved(string Name, bool Dark, Dictionary<string, string> Colours, string? BlockStyle, double? BlockTint = null, double? BlockEdge = null);
     public static string ToLine(ThemeDefinition theme)
-        => JsonSerializer.Serialize(new Saved(theme.Name, theme.Dark, new Dictionary<string, string>(theme.Colours), theme.BlockStyle));
+        => JsonSerializer.Serialize(new Saved(theme.Name, theme.Dark, new Dictionary<string, string>(theme.Colours), theme.BlockStyle, theme.BlockTint, theme.BlockEdge));
     /// <summary>Returns the themes in the lines that are sound. A damaged line is skipped, so one bad theme never costs the others.</summary>
     public static List<ThemeDefinition> FromLines(IEnumerable<string> lines)
     {
@@ -181,7 +244,8 @@ public static class ThemeStorage
                 foreach (var token in ThemeTokens.Names)
                     colours[token] = saved.Colours is not null && saved.Colours.TryGetValue(token, out var value) && ThemeTokens.IsValid(token, value) ? value.ToUpperInvariant() : basis.Colour(token);
                 if (result.Any(t => t.Name.Equals(saved.Name, StringComparison.OrdinalIgnoreCase)) || ThemeLibrary.BuiltIn.Any(t => t.Name.Equals(saved.Name, StringComparison.OrdinalIgnoreCase))) continue;
-                result.Add(new ThemeDefinition(saved.Name.Trim(), saved.Dark, colours, false, ThemeBlockStyle.IsKnown(saved.BlockStyle) ? saved.BlockStyle! : ThemeBlockStyle.AsChosen));
+                result.Add(new ThemeDefinition(saved.Name.Trim(), saved.Dark, colours, false, ThemeBlockStyle.IsKnown(saved.BlockStyle) ? saved.BlockStyle! : ThemeBlockStyle.AsChosen,
+                    Math.Clamp(saved.BlockTint ?? ThemeBlockStyle.DefaultTint, 0, 1), Math.Clamp(saved.BlockEdge ?? ThemeBlockStyle.DefaultEdge, 0, 1)));
             }
             catch (JsonException) { }
         }

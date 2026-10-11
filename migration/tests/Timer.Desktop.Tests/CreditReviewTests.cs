@@ -36,16 +36,6 @@ public sealed class CreditReviewTests
         editor.Undo(); Assert.Single(editor.Entries(Day, Day.AddDays(1)));
     }
     [Fact]
-    public void ProjectionReconcilesAdjustmentsIncludingNegativeOnes()
-    {
-        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("00:00:00", "30", "adjusted"), Row("00:00:01", "40", "adjusted"), Row("00:00:02", "-2.33", "adjusted") });
-        var editor = new LedgerEditor(engine);
-        var entries = editor.Entries(Day, Day.AddDays(1));
-        Assert.Equal(67.67m, entries.Sum(e => e.Minutes)); Assert.All(entries, e => Assert.Equal("Adjustment", e.Type));
-        var export = new WeekExport(editor, engine, Day.AddDays(-4));
-        Assert.Equal(113, export.TotalUnits); Assert.Equal(export.TotalUnits, export.EntryUnits.Sum());
-    }
-    [Fact]
     public void LargestRemainderMakesDetailDailyAccountAndGrandTotalsAgreeIncludingNegatives()
     {
         var engine = Engine(); var random = new Random(123);
@@ -352,6 +342,7 @@ public sealed class CreditReviewTests
         try
         {
             using var store = new TimerStore(folder); engine = Engine(); var preferences = store.Load(engine); var model = new TimerModel(engine, preferences, store);
+            model.CompleteSetup(); // A new database opens with the getting started setup over the dashboard, which would catch these clicks.
             var window = new DashboardWindow(model); window.Show(); Capture(window, "legacy-group-sections");
             Assert.Equal(2, window.GetVisualDescendants().OfType<Border>().Count(b => b.Tag is ReviewEntry));
             window.SelectTab(true); model.SetWeekSection("entries"); Capture(window, "week-ctrl-selection");

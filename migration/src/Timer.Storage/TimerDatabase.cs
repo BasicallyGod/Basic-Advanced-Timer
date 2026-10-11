@@ -189,7 +189,7 @@ public sealed class TimerDatabase : IDisposable
             minutes_text TEXT,
             CHECK (kind <> 'work' OR (account_id IS NOT NULL AND start_at IS NOT NULL AND end_at IS NOT NULL AND seconds > 0)),
             CHECK (kind <> 'break' OR (account_id IS NULL AND start_at IS NOT NULL AND end_at IS NOT NULL AND seconds > 0)),
-            -- An adjustment has no end. It keeps a start time as its place in the day, and no account when it adjusts a break.
+            -- Adjustments were removed from the app. Older databases may still hold such rows, and the store drops them when it opens one.
             CHECK (kind <> 'adjustment' OR (end_at IS NULL AND seconds <> 0)))",
         "CREATE INDEX entries_by_day ON entries(day)",
         "CREATE INDEX entries_by_account ON entries(account_id, day)",

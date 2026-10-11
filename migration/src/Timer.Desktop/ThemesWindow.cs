@@ -22,6 +22,7 @@ public sealed class ThemesWindow : Window
     // The theme being edited, as plain values so each change is cheap to apply.
     private string name = ""; private bool dark; private string blockStyle = ThemeBlockStyle.AsChosen; private readonly Dictionary<string, string> colours = new(); private string? original;
     private bool dirty, closeConfirmed;
+    private double blockTint = ThemeBlockStyle.DefaultTint, blockEdge = ThemeBlockStyle.DefaultEdge;
     // Shown in place of a dialog when a change would throw away edits that are not saved yet.
     private readonly Border unsaved = new() { Name = "UnsavedPrompt", IsVisible = false, Padding = new Thickness(12), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Margin = new Thickness(0, 10, 0, 0) };
     private Action? afterPrompt;
@@ -29,7 +30,7 @@ public sealed class ThemesWindow : Window
     public ThemesWindow(TimerModel model)
     {
         this.model = model;
-        Title = "Themes"; Width = 800; Height = 680; MinHeight = 480;
+        Title = "Themes"; WindowChrome.Attach(this); Width = 800; Height = 680; MinHeight = 480;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var root = Ui.Grid("230,*", "*,Auto,Auto"); root.Margin = new Thickness(24);
         var left = Ui.Grid("*", "Auto,*,Auto"); left.Margin = new Thickness(0, 0, 18, 0);
@@ -93,12 +94,12 @@ public sealed class ThemesWindow : Window
     }
     private void Proceed() { var next = afterPrompt; afterPrompt = null; unsaved.IsVisible = false; next?.Invoke(); }
     private void SaveCurrent() { model.SaveTheme(Working(), original); original = name; shown = name; dirty = false; Refill(name); }
-    private ThemeDefinition Working() => new(name, dark, new Dictionary<string, string>(colours), false, blockStyle);
+    private ThemeDefinition Working() => new(name, dark, new Dictionary<string, string>(colours), false, blockStyle, blockTint, blockEdge);
     private void Show(string themeName)
     {
         var theme = model.Themes.First(t => t.Name == themeName);
         shown = themeName; original = theme.BuiltIn ? null : theme.Name; dirty = false;
-        name = theme.Name; dark = theme.Dark; blockStyle = theme.BlockStyle; colours.Clear();
+        name = theme.Name; dark = theme.Dark; blockStyle = theme.BlockStyle; blockTint = theme.BlockTint; blockEdge = theme.BlockEdge; colours.Clear();
         foreach (var token in ThemeTokens.Names) colours[token] = theme.Colour(token);
         duplicate.IsEnabled = true; delete.IsEnabled = !theme.BuiltIn;
         Rebuild(theme.BuiltIn);
@@ -119,9 +120,23 @@ public sealed class ThemesWindow : Window
         var baseBox = new ComboBox { Name = "ThemeBase", ItemsSource = new[] { "Light base", "Dark base" }, SelectedIndex = dark ? 1 : 0, IsEnabled = !locked, Width = 200 };
         baseBox.SelectionChanged += (_, _) => { dark = baseBox.SelectedIndex == 1; if (!locked) Changed(); };
         detail.Children.Add(Ui.Text("Base (decides how standard controls draw)", 12, "muted")); detail.Children.Add(baseBox);
-        var styleBox = new ComboBox { Name = "ThemeBlockStyle", ItemsSource = new[] { "Account colours as chosen", "Softened to suit the theme" }, SelectedIndex = blockStyle == ThemeBlockStyle.Softened ? 1 : 0, IsEnabled = !locked, Width = 260 };
-        styleBox.SelectionChanged += (_, _) => { blockStyle = styleBox.SelectedIndex == 1 ? ThemeBlockStyle.Softened : ThemeBlockStyle.AsChosen; if (!locked) Changed(); };
+        var styleBox = new ComboBox { Name = "ThemeBlockStyle", ItemsSource = new[] { "Account colours as chosen", "Softened to suit the theme", "Tinted with a coloured edge" },
+            SelectedIndex = blockStyle == ThemeBlockStyle.Tinted ? 2 : blockStyle == ThemeBlockStyle.Softened ? 1 : 0, IsEnabled = !locked, Width = 260 };
         detail.Children.Add(Ui.Text("Account colours on the timeline and week", 12, "muted")); detail.Children.Add(styleBox);
+        // The tinted rules, shown only when they apply: how much of the account's colour is in the fill, and how far the edge moves towards the text colour.
+        var tint = new Slider { Minimum = 0, Maximum = 1, Value = blockTint, Width = 220, IsEnabled = !locked, Name = "BlockTint" };
+        var edge = new Slider { Minimum = 0, Maximum = 1, Value = blockEdge, Width = 220, IsEnabled = !locked, Name = "BlockEdge" };
+        var rules = new StackPanel { Spacing = 6, IsVisible = blockStyle == ThemeBlockStyle.Tinted, Name = "BlockRules" };
+        rules.Children.Add(Ui.Text("How much account colour is in the fill", 12, "muted")); rules.Children.Add(tint);
+        rules.Children.Add(Ui.Text("How far the edge moves towards the text colour", 12, "muted")); rules.Children.Add(edge);
+        styleBox.SelectionChanged += (_, _) =>
+        {
+            blockStyle = styleBox.SelectedIndex == 2 ? ThemeBlockStyle.Tinted : styleBox.SelectedIndex == 1 ? ThemeBlockStyle.Softened : ThemeBlockStyle.AsChosen;
+            rules.IsVisible = blockStyle == ThemeBlockStyle.Tinted; if (!locked) Changed();
+        };
+        tint.PropertyChanged += (_, e) => { if (e.Property != RangeBase.ValueProperty || filling) return; blockTint = Math.Round(tint.Value, 2); if (!locked) Changed(); };
+        edge.PropertyChanged += (_, e) => { if (e.Property != RangeBase.ValueProperty || filling) return; blockEdge = Math.Round(edge.Value, 2); if (!locked) Changed(); };
+        detail.Children.Add(rules);
         detail.Children.Add(Ui.Text("Colours", 12, "muted"));
         var grid = Ui.Grid("200,Auto,*", string.Join(",", ThemeTokens.Names.Select(_ => "Auto"))); grid.RowSpacing = 6;
         var contrast = new StackPanel { Spacing = 3 };

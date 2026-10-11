@@ -14,7 +14,7 @@ public class ReviewWindow : Window
     private bool applied;
     protected ReviewWindow(string title)
     {
-        Title = title; Width = 560; Height = 520; MinHeight = 360;
+        Title = title; WindowChrome.Attach(this); Width = 560; Height = 520; MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Root.Children.Add(Ui.Text(title, 22)); Content = new ScrollViewer { Content = Root };
     }

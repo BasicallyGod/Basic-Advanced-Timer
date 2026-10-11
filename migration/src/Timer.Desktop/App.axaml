@@ -20,7 +20,7 @@
               <Thumb Name="PART_Thumb">
                 <Thumb.Template>
                   <ControlTemplate>
-                    <Border Background="{DynamicResource Muted}" CornerRadius="3" Margin="1" Opacity="0.55" />
+                    <Border Background="{DynamicResource Muted}" CornerRadius="3" Margin="1" Opacity="0.5" />
                   </ControlTemplate>
                 </Thumb.Template>
               </Thumb>
@@ -32,12 +32,18 @@
       </Setter>
     </Style>
     <Style Selector="ScrollBar:vertical">
-      <Setter Property="Width" Value="8" /><Setter Property="MinWidth" Value="8" /><Setter Property="MaxWidth" Value="8" />
+      <Setter Property="Width" Value="7" /><Setter Property="MinWidth" Value="7" /><Setter Property="MaxWidth" Value="7" />
     </Style>
-    <Style Selector="ScrollBar:vertical /template/ Thumb"><Setter Property="MinHeight" Value="24" /><Setter Property="MinWidth" Value="6" /></Style>
+    <Style Selector="ScrollBar:vertical /template/ Thumb"><Setter Property="MinHeight" Value="24" /><Setter Property="MinWidth" Value="5" /></Style>
+    <!-- Scroll bars stay out of sight until the pointer is over the area they belong to, so they never distract from the content. -->
+    <Style Selector="ScrollViewer ScrollBar">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Transitions"><Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.18" /></Transitions></Setter>
+    </Style>
+    <Style Selector="ScrollViewer:pointerover ScrollBar"><Setter Property="Opacity" Value="1" /></Style>
     <Style Selector="ScrollBar:vertical /template/ Track"><Setter Property="IsDirectionReversed" Value="True" /></Style>
     <Style Selector="ScrollBar:horizontal">
-      <Setter Property="Height" Value="8" /><Setter Property="MinHeight" Value="8" /><Setter Property="MaxHeight" Value="8" />
+      <Setter Property="Height" Value="7" /><Setter Property="MinHeight" Value="7" /><Setter Property="MaxHeight" Value="7" />
     </Style>
     <Style Selector="ScrollBar:horizontal /template/ Thumb"><Setter Property="MinHeight" Value="6" /><Setter Property="MinWidth" Value="24" /></Style>
     <Style Selector="Window">
@@ -51,6 +57,19 @@
     <Style Selector="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
     <!-- The clock is the main thing on the screen, so when nothing is running it is full-strength text rather than the dim idle grey. -->
+    <!-- Clocks and the big numbers use Bricolage Grotesque, in instances cut from its variable font so each weight is its own family. -->
+    <Style Selector="TextBlock.clock">
+      <Setter Property="FontFamily" Value="{DynamicResource ClockFont}" />
+      <Setter Property="FontWeight" Value="Normal" />
+    </Style>
+    <Style Selector="TextBlock.clockLight">
+      <Setter Property="FontFamily" Value="{DynamicResource ClockLightFont}" />
+      <Setter Property="FontWeight" Value="Normal" />
+    </Style>
+    <Style Selector="TextBlock.figures">
+      <Setter Property="FontFamily" Value="{DynamicResource FiguresFont}" />
+      <Setter Property="FontWeight" Value="Normal" />
+    </Style>
     <Style Selector="TextBlock.clockIdle"><Setter Property="Foreground" Value="{DynamicResource Clock}" /></Style>
     <!-- The main call to action takes the theme accent, with its own text colour for contrast. -->
     <Style Selector="Button.accentButton /template/ ContentPresenter#PART_ContentPresenter">
@@ -64,6 +83,9 @@
       <Setter Property="Foreground" Value="{DynamicResource AccentInk}" />
     </Style>
     <Style Selector="TextBlock.idle"><Setter Property="Foreground" Value="{DynamicResource Idle}" /></Style>
+    <Style Selector="Ellipse.live"><Setter Property="Fill" Value="{DynamicResource Live}" /></Style>
+    <Style Selector="Ellipse.break"><Setter Property="Fill" Value="{DynamicResource Break}" /></Style>
+    <Style Selector="Ellipse.idle"><Setter Property="Fill" Value="{DynamicResource Idle}" /></Style>
     <Style Selector="TextBlock.live"><Setter Property="Foreground" Value="{DynamicResource Live}" /></Style>
     <Style Selector="TextBlock.break"><Setter Property="Foreground" Value="{DynamicResource Break}" /></Style>
     <Style Selector="Border.budgetFill"><Setter Property="Background" Value="{DynamicResource Live}" /></Style>
@@ -97,9 +119,15 @@
       <Setter Property="BorderThickness" Value="3" />
       <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
     </Style>
-    <Style Selector="Border#DayProgressFill"><Setter Property="Background" Value="{DynamicResource Live}" /></Style>
-    <Style Selector="Border#DayProgressFill.progressOvertime"><Setter Property="Background" Value="{DynamicResource Overtime}" /></Style>
-    <Style Selector="Border#DayProgressFill.progressBreak"><Setter Property="Background" Value="{DynamicResource Break}" /></Style>
+    <Style Selector="Border#DayProgressFill"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
+    <!-- On a break or in overtime the whole pill is that colour, so the bar is drawn in the pill's text colour. -->
+    <Style Selector="Border#DayProgressFill.progressOvertime"><Setter Property="Background" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="Border#DayProgressFill.progressBreak"><Setter Property="Background" Value="{DynamicResource Ink}" /></Style>
+    <!-- The now marker on today's timeline is drawn in the accent colour, with its chip's text in the accent's own text colour. -->
+    <Style Selector="Border.nowLine"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Ellipse.nowDot"><Setter Property="Fill" Value="{DynamicResource Accent}" /><Setter Property="Stroke" Value="{DynamicResource Surface}" /><Setter Property="StrokeThickness" Value="2" /></Style>
+    <Style Selector="Border.nowChip"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="TextBlock.nowChipText"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
     <Style Selector="Border.recording">
       <Setter Property="BorderThickness" Value="3" />
       <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
@@ -118,9 +146,38 @@
       <Setter Property="Height" Value="52" />
       <Setter Property="Padding" Value="16,6" />
     </Style>
+    <!-- A row of the Entries view: flat, rounded, and lit by the hover colour like the account rows. -->
+    <Style Selector="Button.entryRow">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="52" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
     <Style Selector="Button.account.active">
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
+    <!-- The rail's icons sit in soft tiles. The chosen one is filled, and the rest are muted until the pointer arrives. -->
+    <Style Selector="Button.rail">
+      <Setter Property="Width" Value="44" /><Setter Property="Height" Value="44" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="13" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.rail.selected /template/ ContentPresenter#PART_ContentPresenter, Button.rail.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Selected}" />
+    </Style>
+    <!-- The Day elapsed card is a raised tile with a bar of the accent colour along its top edge. -->
+    <Style Selector="Border.dayCard">
+      <Setter Property="Background" Value="{DynamicResource Surface}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+    </Style>
+    <Style Selector="Border.accentEdge"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <!-- Tabs are plain words along a hairline. The chosen one is brighter and has a green bar under it, which sits on the line. -->
     <Style Selector="Button.tab">
       <Setter Property="Background" Value="Transparent" />
@@ -136,6 +193,13 @@
     <Style Selector="Button.tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+    </Style>
+    <!-- The standard button style swaps the border colour under the pointer and while pressed, which would wipe the bar under the chosen tab. These keep it. -->
+    <Style Selector="Button.tab:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.tab:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.tab.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.tab.selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
     </Style>
     <Style Selector="Button.tab.selected">
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
@@ -200,13 +264,13 @@
     <!-- Starting the day is green: the same outlined button as Finish day, in the live colour. -->
     <Style Selector="Button.startDay">
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource Live}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
+      <Setter Property="Foreground" Value="{DynamicResource Start}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Start}" />
       <Setter Property="BorderThickness" Value="1.5" />
     </Style>
     <Style Selector="Button.startDay:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Hover}" />
-      <Setter Property="Foreground" Value="{DynamicResource Live}" />
+      <Setter Property="Foreground" Value="{DynamicResource Start}" />
     </Style>
     <Style Selector="Button.primary">
       <Setter Property="Background" Value="{DynamicResource Live}" />
@@ -233,8 +297,30 @@
       <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BorderBrush" Value="{DynamicResource Finish}" />
     </Style>
     <Style Selector="Button.quiet.startDay:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BorderBrush" Value="{DynamicResource Live}" />
+      <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BorderBrush" Value="{DynamicResource Start}" />
     </Style>
+    <!-- A plain text button, for quiet actions such as Skip setup. -->
+    <Style Selector="Button.flat"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /><Setter Property="Padding" Value="8,4" /></Style>
+    <Style Selector="Button.flat:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
+    <!-- The two big choices in the getting started setup. The chosen one has an accent border and the selection tint. -->
+    <Style Selector="Button.choiceTile">
+      <Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="CornerRadius" Value="14" /><Setter Property="Padding" Value="18,14" /><Setter Property="Foreground" Value="{DynamicResource Ink}" />
+    </Style>
+    <Style Selector="Button.choiceTile:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="Button.choiceTile.selected /template/ ContentPresenter, Button.choiceTile.selected:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <!-- Add time, Undo and Merge use the same resting outline as the break and day buttons, and light up their border under the pointer. -->
+    <Style Selector="Button.toolButton">
+      <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Ink}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="Padding" Value="14,0" /><Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.toolButton:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
+    </Style>
+    <Style Selector="Button.toolButton.addButton:pointerover /template/ ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Button.quiet.breakButton.onBreak">
       <Setter Property="Background" Value="{DynamicResource Break}" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="{DynamicResource Break}" />
     </Style>
@@ -250,6 +336,35 @@
       <Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" />
     </Style>
     <Style Selector="Button.iconButton:disabled"><Setter Property="Opacity" Value="0.4" /></Style>
+    <!-- The round buttons on the pill: a filled circle for pause and play, an outlined one for the break. They grow a little under the pointer. -->
+    <Style Selector="Button.pillRound">
+      <Setter Property="Width" Value="52" /><Setter Property="Height" Value="52" /><Setter Property="CornerRadius" Value="26" />
+      <Setter Property="Padding" Value="0" /><Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="BorderThickness" Value="2" /><Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="RenderTransform" Value="scale(1)" />
+      <Setter Property="Transitions"><Transitions><TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.16" /></Transitions></Setter>
+    </Style>
+    <Style Selector="Button.pillRound.outlined"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="Button.pillRound:pointerover"><Setter Property="RenderTransform" Value="scale(1.07)" /></Style>
+    <Style Selector="Button.pillRound:pressed"><Setter Property="RenderTransform" Value="scale(0.95)" /></Style>
+    <Style Selector="Button.pillRound /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+    <Style Selector="Button.pillRound.outlined /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="Button.pillRound:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
+    <Style Selector="Button.pillRound.outlined:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /></Style>
+    <!-- The break button on the pill has no disc or outline of its own; only its cup shows, and the cup lights up under the pointer. -->
+    <Style Selector="Button.pillRound.bare, Button.pillRound.bare:pointerover">
+      <Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+    <!-- A faint ring the size of the play button, so the cup reads as a button without competing with it. It lifts to the full text colour under the pointer and goes while a break is on. -->
+    <Style Selector="Button.pillRound.bare /template/ ContentPresenter#PART_ContentPresenter, Button.pillRound.bare:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+    <Style Selector="Button.pillRound.bare:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /><Setter Property="BorderThickness" Value="1.5" />
+    </Style>
+    <Style Selector="Button.pillRound.bare.onBreak /template/ ContentPresenter#PART_ContentPresenter, Button.pillRound.bare.onBreak:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
     <Style Selector="Button.round">
       <Setter Property="CornerRadius" Value="24" />
       <Setter Property="Width" Value="40" />

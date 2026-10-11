@@ -10,23 +10,24 @@ public sealed class AccountsWindow : Window
 {
     public AccountsWindow(TimerModel model)
     {
-        Title = "Accounts and budgets";
-        Width = 640; Height = 500; CanResize = false;
+        Title = "Accounts and budgets"; WindowChrome.Attach(this);
+        Width = 700; Height = 540; CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        var root = Ui.Grid("*", "Auto,*,Auto,Auto,Auto"); root.Margin = new Thickness(24);
+        var root = Ui.Grid("*", "Auto,*,Auto,Auto,Auto,Auto"); root.Margin = new Thickness(24);
         var intro = new StackPanel { Spacing = 8, Margin = new Thickness(0, 0, 0, 16) };
         intro.Children.Add(Ui.Text("Accounts and budgets", 22));
-        intro.Children.Add(new TextBlock { Text = "Add accounts, rename them, show or hide them, and set budgets in hours. Drag accounts on the dashboard to reorder them.\nA blank budget means no limit. Hidden accounts keep their recorded time.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        intro.Children.Add(new TextBlock { Text = "Add accounts, rename them, show or hide them, and set budgets in hours. Drag accounts on the dashboard to reorder them.\nA blank budget means no limit. Hidden accounts keep their recorded time. The bin deletes an account and everything recorded against it.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
         Ui.Put(root, intro);
+        var confirm = new StackPanel { Name = "DeleteConfirm", Spacing = 8, IsVisible = false, Margin = new Thickness(0, 8, 0, 0) };
         var list = new StackPanel { Spacing = 10 };
-        var entries = new List<(string? Original, TextBox Name, CheckBox Visible, TextBox Budget, ComboBox Period, Func<string> Colour)>();
-        var headings = Ui.Grid("*,50,65,85,110");
+        var entries = new List<AccountRow>();
+        var headings = Ui.Grid("*,50,65,85,110,44");
         Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Colour", 12, "muted"), 1); Ui.Put(headings, Ui.Text("Show", 12, "muted"), 2);
         Ui.Put(headings, Ui.Text("Hours", 12, "muted"), 3); Ui.Put(headings, Ui.Text("Period", 12, "muted"), 4);
         list.Children.Add(headings);
         void Add(AccountSettings account, bool existing = true)
         {
-            var row = Ui.Grid("*,50,65,85,110");
+            var row = Ui.Grid("*,50,65,85,110,44");
             var name = new TextBox { Text = account.Name, Margin = new Thickness(0, 0, 8, 0) };
             ToolTip.SetTip(name, "Edit the name to rename this account"); Ui.Put(row, name);
             // A new account starts on the first palette colour nobody here is using, as the model would give it.
@@ -38,7 +39,20 @@ public sealed class AccountsWindow : Window
             Ui.Put(row, budget, 3);
             var period = new ComboBox { ItemsSource = new[] { "week", "month", "quarter" }, SelectedItem = account.BudgetPeriod, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
             Ui.Put(row, period, 4);
-            list.Children.Add(row); entries.Add((existing ? account.Name : null, name, visible, budget, period, () => chosen));
+            var entry = new AccountRow { Original = existing ? account.Name : null, Name = name, Visible = visible, Budget = budget, Period = period, Colour = () => chosen, Grid = row };
+            // The bin removes a new row at once. For an existing account it marks the row for deleting, dimmed, and a second press takes the mark off.
+            var bin = Ui.IconButton(IconKind.Trash, existing ? "Delete this account and everything recorded against it" : "Remove this row", "DeleteAccount" + entries.Count, () =>
+            {
+                if (entry.Original is null) { list.Children.Remove(entry.Grid); entries.Remove(entry); return; }
+                entry.Deleting = !entry.Deleting;
+                // The row dims, apart from the bin, so it is clear what will go and the same button can take the mark off again.
+                foreach (var child in entry.Grid.Children.Where(c => !ReferenceEquals(c, entry.Bin))) { child.Opacity = entry.Deleting ? .4 : 1; child.IsEnabled = !entry.Deleting; }
+                ((IconGlyph)entry.Bin!.Content!).TintKey = entry.Deleting ? "Overtime" : null; ((IconGlyph)entry.Bin.Content).InvalidateVisual();
+                ToolTip.SetTip(entry.Bin, entry.Deleting ? "Keep this account after all" : "Delete this account and everything recorded against it");
+                confirm.IsVisible = false;
+            });
+            entry.Bin = bin; Ui.Put(row, bin, 5);
+            list.Children.Add(row); entries.Add(entry);
         }
         foreach (var account in model.AccountSettings) Add(account);
         bool Taken(string name) => entries.Any(e => (e.Name.Text ?? "").Trim().Equals(name, StringComparison.OrdinalIgnoreCase));
@@ -54,17 +68,31 @@ public sealed class AccountsWindow : Window
             Add(new(name), false); input.Text = ""; error.Text = "";
         }));
         add.Margin = new Thickness(0, 14, 0, 0); Ui.Put(root, add, row: 2); Ui.Put(root, error, row: 3);
-        Ui.Put(root, Ui.Horizontal(Ui.Button("Save", async () =>
+        // Saves the list. Anything marked for deleting that has recorded time asks first, in a panel above the buttons, and only goes once confirmed.
+        void Commit(bool confirmed)
         {
             try
             {
+                var kept = entries.Where(e => !e.Deleting).ToList(); var deleted = entries.Where(e => e.Deleting && e.Original is not null).Select(e => e.Original!).ToList();
+                if (kept.Count == 0) { error.Text = "Keep at least one account."; return; }
+                var withHistory = deleted.Select(d => (Name: d, History: model.AccountHistory(d))).Where(d => d.History.Entries > 0).ToList();
+                if (withHistory.Count > 0 && !confirmed)
+                {
+                    var entriesGone = withHistory.Sum(d => d.History.Entries); var timeGone = withHistory.Aggregate(TimeSpan.Zero, (sum, d) => sum + d.History.Time);
+                    confirm.Children.Clear();
+                    confirm.Children.Add(new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontWeight = Avalonia.Media.FontWeight.SemiBold,
+                        Text = $"Delete {string.Join(", ", withHistory.Select(d => d.Name))}? This removes {entriesGone} recorded {(entriesGone == 1 ? "entry" : "entries")} ({model.Format(timeGone)}) and any notes on them, for good. A backup copy is saved first, but Undo cannot bring them back." });
+                    var yes = Ui.Button("Delete for good", () => { confirm.IsVisible = false; Commit(true); }, "ConfirmDeleteAccounts"); yes.Classes.Add("finishDay"); yes.Classes.Add("outlined"); yes.Height = 36; yes.Padding = new Thickness(16, 0);
+                    confirm.Children.Add(Ui.Horizontal(yes, Ui.Button("Cancel", () => confirm.IsVisible = false, "CancelDeleteAccounts")));
+                    confirm.IsVisible = true; error.Text = ""; return;
+                }
                 // An account keeps its colour through editing, renaming and reordering; a new one is given one by the model.
-                var accounts = entries.Select(e => new AccountSettings((e.Name.Text ?? "").Trim(),
+                var accounts = kept.Select(e => new AccountSettings((e.Name.Text ?? "").Trim(),
                     string.IsNullOrWhiteSpace(e.Budget.Text) ? null : double.Parse(e.Budget.Text, NumberStyles.Float, CultureInfo.InvariantCulture),
                     (string?)e.Period.SelectedItem ?? "week", e.Visible.IsChecked != true, e.Colour())).ToList();
-                var renames = entries.Where(e => e.Original is not null).Zip(accounts, (e, a) => (From: e.Original!, To: a.Name))
+                var renames = kept.Where(e => e.Original is not null).Zip(accounts, (e, a) => (From: e.Original!, To: a.Name))
                     .Where(r => r.From != r.To).ToDictionary(r => r.From, r => r.To);
-                model.SetAccounts(accounts, renames);
+                model.SetAccounts(accounts, renames, deleted);
                 if (model.LastError is not null) { error.Text = model.LastError; return; }
                 Close();
             }
@@ -72,8 +100,15 @@ public sealed class AccountsWindow : Window
             { error.Text = "Use positive budget hours, such as 7.5, or leave the budget blank."; }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or InvalidDataException or IOException)
             { error.Text = ex.Message; }
-        }), Ui.Button("Cancel", Close)), row: 4);
+        }
+        Ui.Put(root, confirm, row: 4);
+        Ui.Put(root, Ui.Horizontal(Ui.Button("Save", () => Commit(false), "SaveAccounts"), Ui.Button("Cancel", Close)), row: 5);
         Content = root;
+    }
+    private sealed class AccountRow
+    {
+        public string? Original; public TextBox Name = null!; public CheckBox Visible = null!; public TextBox Budget = null!; public ComboBox Period = null!;
+        public Func<string> Colour = null!; public Grid Grid = null!; public Button? Bin; public bool Deleting;
     }
     // A round swatch showing the account's colour. It opens the palette, and a box for any other colour as #RRGGBB.
     private static Button ColourButton(Func<string> get, Action<string> set, string accountName)

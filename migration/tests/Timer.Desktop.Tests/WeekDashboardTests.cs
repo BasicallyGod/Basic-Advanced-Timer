@@ -112,12 +112,11 @@ public sealed class WeekDashboardTests
     }
 
     [Fact]
-    public void MovingRefusesConflictsAdjustmentsAndUnknownAccountsWithoutChangingAnything()
+    public void MovingRefusesConflictsAndUnknownAccountsWithoutChangingAnything()
     {
-        var model = Model(false, out var engine, e => e.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:00:00", "30", "Account two"), new("2026-10-09", "Account one", "00:00:00", "adjusted", "60") }));
+        var model = Model(false, out var engine, e => e.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:00:00", "30", "Account two") }));
         var csv = model.Editor.SessionsCsv;
         Assert.False(model.MoveEntries(new[] { engine.Sessions[0] }, "Account two")); Assert.Contains("same time", model.EditError);
-        Assert.False(model.MoveEntries(new[] { engine.Sessions[2] }, "Internal")); Assert.Contains("Adjustments", model.EditError);
         Assert.False(model.MoveEntries(new[] { engine.Sessions[0] }, "No such account"));
         Assert.Equal(csv, model.Editor.SessionsCsv); Assert.False(model.Editor.CanUndo);
     }
@@ -251,7 +250,7 @@ public sealed class WeekDashboardTests
         try
         {
             window.SelectTab(true); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs();
-            var lines = window.GetVisualDescendants().OfType<Grid>().Where(g => g.ColumnDefinitions.Count == 5 && g.Children.Count >= 3 && g.MinHeight == 34).ToList();
+            var lines = window.GetVisualDescendants().OfType<Grid>().Where(g => g.ColumnDefinitions.Count == 5 && g.Children.Count >= 3 && g.MinHeight == 36).ToList();
             Assert.Equal(7, lines.Count);
             double Centre(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
             foreach (var line in lines)
