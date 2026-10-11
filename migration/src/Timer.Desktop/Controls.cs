@@ -178,11 +178,11 @@ public static class Ui
     }
     public static ContextMenu SettingsMenu(TimerModel model)
     {
-        // Hawthorn (the default) and System first, then every theme the app has: the built-in ones and the user's own. The list is rebuilt each time the menu opens.
+        // System first, then every theme the app has (Light and Dark lead the built-in ones), then the user's own. The list is rebuilt each time the menu opens.
         List<MenuItem> ThemeItems()
         {
             var items = new List<MenuItem>();
-            foreach (var theme in new[] { ThemeLibrary.Default, ThemeLibrary.System }.Concat(model.Themes.Select(t => t.Name).Where(n => n != ThemeLibrary.Default)))
+            foreach (var theme in new[] { ThemeLibrary.System }.Concat(model.Themes.Select(t => t.Name)))
             {
                 var item = new MenuItem { Header = theme, IsChecked = model.Theme == theme, ToggleType = MenuItemToggleType.Radio };
                 item.Click += (_, _) => model.SetTheme(theme);

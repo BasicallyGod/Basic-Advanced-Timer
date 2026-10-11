@@ -150,11 +150,11 @@ public static class ThemeLibrary
         "#006B2D", "#B30000", "#7A4B00", "#7A4B00", "#B30000", "#0050C8", "#FFFFFF", "#000000", "#80000000");
     public static readonly ThemeDefinition HighContrastDark = Make("High contrast dark", true, "#000000", "#0D0D0D", "#FFFFFF", "#D0D0D0", "#8C8C8C", "#262626", "#003C78",
         "#4DFF88", "#FF6B6B", "#FFD23F", "#FFD23F", "#FF6B6B", "#4DFF88", "#000000", "#FFFFFF", "#E6000000");
-    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Hawthorn, Light, Dark, Sage, Graphite, Paper, Midnight, Sandstone, Aubergine, HighContrastLight, HighContrastDark };
+    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark, Hawthorn, Sage, Graphite, Paper, Midnight, Sandstone, Aubergine, HighContrastLight, HighContrastDark };
     /// <summary>"System" is not a theme of its own: it picks Light or Dark to match the computer.</summary>
     public const string System = "System";
     /// <summary>What a new installation starts on.</summary>
-    public const string Default = "Hawthorn";
+    public const string Default = System;
     /// <summary>A built-in theme that was renamed keeps working under its old name in saved settings.</summary>
     public static string Renamed(string name) => name switch { "Ocean" => "Midnight", "Sunset" => "Sandstone", _ => name };
 }

@@ -207,12 +207,12 @@ public sealed class ThemeTests
     }
 
     [Avalonia.Headless.XUnit.AvaloniaFact]
-    public void TheThemeMenuListsHawthornAboveSystem()
+    public void TheThemeMenuListsSystemFirstThenLightAndDarkBeforeTheColourfulThemes()
     {
         var model = TimerModel.CreateDemo(); var menu = Ui.SettingsMenu(model);
         var appearance = menu.Items.OfType<Avalonia.Controls.MenuItem>().First(i => (i.Header as string) == "Appearance");
         var names = appearance.Items.OfType<Avalonia.Controls.MenuItem>().Select(i => (string)i.Header!).ToList();
-        Assert.Equal("Hawthorn", names[0]); Assert.Equal("System", names[1]); Assert.Single(names, n => n == "Hawthorn");
+        Assert.Equal(new[] { "System", "Light", "Dark", "Hawthorn" }, names.Take(4)); Assert.Single(names, n => n == "Hawthorn");
     }
 
     [Avalonia.Headless.XUnit.AvaloniaFact]

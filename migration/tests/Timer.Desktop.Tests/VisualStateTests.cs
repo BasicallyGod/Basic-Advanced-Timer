@@ -45,7 +45,7 @@ public sealed class VisualStateTests
             model.ToggleAccount("Break"); Dispatcher.UIThread.RunJobs();
             Assert.True(model.IsOnBreak); Assert.NotEqual(normal, Brush(pill, "Surface"));
             Assert.Equal(normal, Brush(dashboard, "Surface")); // The dashboard keeps its own colours; its Break button turns amber instead.
-            Assert.Equal(Color.Parse(ThemeLibrary.Hawthorn.Colour("Break")), Brush(pill, "Break")); // The break colour is a theme token, not hard-coded.
+            Assert.Equal(Color.Parse(model.CurrentTheme.Colour("Break")), Brush(pill, "Break")); // The break colour is a theme token, not hard-coded.
             model.ToggleAccount("Break"); Dispatcher.UIThread.RunJobs();
             Assert.Equal(normal, Brush(pill, "Surface"));
         }
@@ -186,7 +186,7 @@ public sealed class VisualStateTests
             now = Day.AddHours(10); model.ChangeDate(0); Dispatcher.UIThread.RunJobs(); // The scheduled start has passed, so the day is running.
             Assert.Equal("Finish day", pillDay.Content); Assert.Contains("finishDay", pillDay.Classes); Assert.DoesNotContain("primary", pillDay.Classes);
             Assert.Contains("finishDay", dashDay.Classes); Assert.Contains("outlined", dashDay.Classes);
-            Assert.Equal(Brush(pill, "Finish"), Color.Parse(ThemeLibrary.Hawthorn.Colour("Finish"))); // The colour is the theme's Finish entry, not hard-coded.
+            Assert.Equal(Brush(pill, "Finish"), Color.Parse(model.CurrentTheme.Colour("Finish"))); // The colour is the theme's Finish entry, not hard-coded.
         }
         finally { pill.Close(); dashboard.Close(); }
     }
