@@ -40,7 +40,8 @@ public sealed class WeekBars : Control
             foreach (var segment in bar.Segments.Where(s => s.Hours > 0))
             {
                 var h = Math.Max(1.5, segment.Hours / max * height);
-                context.DrawRectangle(new SolidColorBrush(segment.Colour), null, new Rect(x, y - h, width, h), 3, 3);
+                // A hairline of the page colour between slices keeps neighbours apart even when two accounts have similar colours.
+                context.DrawRectangle(new SolidColorBrush(segment.Colour), new Pen(surface, 1), new Rect(x, y - h, width, h), 3, 3);
                 y -= h;
             }
             var total = Text(bar.TotalText, 12, bar.Hours > 0 ? ink : muted, bar.Hours > 0);

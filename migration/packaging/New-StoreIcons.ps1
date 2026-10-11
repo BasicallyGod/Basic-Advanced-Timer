@@ -3,7 +3,18 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 
-# Placeholder artwork for local packaging checks; replace before a Store submission.
+# The real artwork is committed in StoreAssets, cut from the app icon at each size and scale the manifest and Windows ask for.
+# It is copied as it is. The placeholder drawing below is only a fallback for a checkout that lacks that folder.
+$artwork = Join-Path $PSScriptRoot 'StoreAssets'
+if (Test-Path -LiteralPath $artwork) {
+    Copy-Item -Path (Join-Path $artwork '*.png') -Destination $Destination -Force
+    foreach ($required in 'Square44x44Logo.png', 'Square150x150Logo.png', 'StoreLogo.png') {
+        if (-not (Test-Path -LiteralPath (Join-Path $Destination $required))) { throw "Store artwork is missing $required." }
+    }
+    return
+}
+
+# Placeholder artwork, used only when StoreAssets is missing.
 foreach ($item in @(
     @{ Name = 'Square44x44Logo.png'; Size = 44 },
     @{ Name = 'Square150x150Logo.png'; Size = 150 },

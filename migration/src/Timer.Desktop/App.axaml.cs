@@ -15,6 +15,12 @@ public sealed partial class App : Application
         AvaloniaXamlLoader.Load(this);
         // Colours are registered before any window exists, so every control finds them the first time it looks.
         ThemeEngine.Register(this, ThemeLibrary.BuiltIn);
+        // The clock typeface is bundled as three instances of Bricolage Grotesque (display, figures and light), each its own family. The assembly name
+        // differs between the portable and Store builds, so the address is built from it.
+        var assets = new Uri("avares://" + typeof(App).Assembly.GetName().Name + "/");
+        Resources["ClockFont"] = new Avalonia.Media.FontFamily(assets, "/Assets/Fonts#Bricolage Display");
+        Resources["FiguresFont"] = new Avalonia.Media.FontFamily(assets, "/Assets/Fonts#Bricolage Figures");
+        Resources["ClockLightFont"] = new Avalonia.Media.FontFamily(assets, "/Assets/Fonts#Bricolage Light");
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -55,7 +61,7 @@ public sealed partial class App : Application
                 model = new TimerModel(engine, preferences, store);
                 if (store.AdjustmentsRemoved > 0)
                     model.Notice = $"{store.AdjustmentsRemoved} time adjustment{(store.AdjustmentsRemoved == 1 ? " was" : "s were")} removed with the Adjust time feature. Your database was copied to Backups first.";
-                else if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files found and left alone. This version starts with an empty database.";
+                else if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files were found and left alone. They are not imported, so this version starts with an empty database. Keep the old Timesheets folder as an archive.";
                 if (!model.Save()) throw new IOException(model.LastError);
                 // Only an explicit data folder is remembered; the default one sits beside the program and needs no argument.
                 // A test build started by the updater is offered the setting only when the updater says where to find itself, so the
@@ -93,6 +99,8 @@ public sealed partial class App : Application
             // Native Closed callbacks can arrive after lifetime Exit; do not request shutdown again.
             var windows = new WindowCoordinator(model, () => { if (!lifetimeEnded) desktop.Shutdown(); });
             desktop.MainWindow = windows.Pill;
+            // A new database opens on the dashboard, where the getting started setup is waiting. After that the pill is the usual start.
+            if (!model.SetupDone && !smokeMode) windows.Pill.Opened += (_, _) => windows.ShowDashboard();
             if (!smokeMode)
             {
                 // The tray icon keeps the timer reachable when its windows are hidden, and closing a window hides it there.
@@ -122,7 +130,7 @@ public sealed partial class App : Application
                     }
                     else if (phase == 1)
                     {
-                        if (!windows.Dashboard.IsVisible || windows.Dashboard.ClientSize.Width > 960 + 2 * Ui.ShadowMargin) { smoke.Stop(); desktop.Shutdown(1); return; }
+                        if (!windows.Dashboard.IsVisible || windows.Dashboard.ClientSize.Width > DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin) { smoke.Stop(); desktop.Shutdown(1); return; }
                         windows.Dashboard.OpenPill!();
                     }
                     else { smoke.Stop(); desktop.Shutdown(windows.Pill.IsVisible ? 0 : 1); }

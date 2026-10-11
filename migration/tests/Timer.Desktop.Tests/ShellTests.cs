@@ -55,7 +55,7 @@ public sealed class ShellTests
             Dispatcher.UIThread.RunJobs();
             using var initialFrame = window.CaptureRenderedFrame();
             var labels = window.GetVisualDescendants().OfType<TextBlock>().ToArray();
-            var idle = labels.Single(x => x.Text == "● Not tracking");
+            var idle = labels.Single(x => x.Text == "Not tracking");
             var overtime = labels.Single(x => x.Text is not null && x.Text.StartsWith("Overtime"));
             Assert.NotEqual(idle.Foreground, overtime.Foreground);
             var overtimeColour = ((ISolidColorBrush)overtime.Foreground!).Color;
@@ -64,7 +64,8 @@ public sealed class ShellTests
             Assert.Equal(theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark, Application.Current!.ActualThemeVariant);
         }
         model.SetTheme("System");
-        Assert.Equal(ThemeVariant.Default, Application.Current!.RequestedThemeVariant);
+        Assert.Equal(ThemeEngine.VariantFor(model.CurrentTheme), Application.Current!.RequestedThemeVariant); // System is Time Deck, by the computer's light or dark.
+        Assert.Contains(model.CurrentTheme.Name, new[] { "Light", "Dark" });
     }
 
     [AvaloniaFact]
@@ -84,7 +85,7 @@ public sealed class ShellTests
                 window.MouseUp(point, MouseButton.Left);
                 Assert.True(model.Accounts[i].Name == model.ActiveAccount,
                     $"Row {i}: bounds {row.Bounds}, point {point}, hit {window.GetVisualAt(point)?.GetType().Name}, active {model.ActiveAccount ?? "none"}");
-                Assert.InRange(row.Bounds.Width, 280, 300);
+                Assert.InRange(row.Bounds.Width, 320, 340);
             }
             model.TogglePause(); // Nothing recording, so the scrolled click below starts an account.
             var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "AccountScroll");
@@ -112,7 +113,7 @@ public sealed class ShellTests
             coordinator.Pill.OpenDashboard!();
             Assert.True(coordinator.Dashboard.IsVisible);
             Assert.False(coordinator.Pill.IsVisible);
-            Assert.InRange(coordinator.Dashboard.Width, 1, 960 + 2 * Ui.ShadowMargin);
+            Assert.InRange(coordinator.Dashboard.Width, 1, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin);
             coordinator.Dashboard.OpenPill!();
             Assert.Equal("Account one", model.ActiveAccount);
             Assert.True(coordinator.Pill.IsVisible);
@@ -141,7 +142,7 @@ public sealed class ShellTests
                 Assert.True(dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll").Offset.Y > 1000);
                 var nine = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
                 var ninePoint = nine.TranslatePoint(new Point(0, 0), dashboard)!.Value;
-                Assert.InRange(ninePoint.Y, 150, 400);
+                Assert.InRange(ninePoint.Y, 100, 400);
                 dashboard.SelectTab(true);
                 Save(dashboard, Path.Combine(output, $"dashboard-week-{theme}.png"));
                 Save(pill, Path.Combine(output, $"pill-{theme}.png"));
@@ -151,15 +152,15 @@ public sealed class ShellTests
             Assert.Contains("Allocated", texts); Assert.Contains("4.50h", texts);
             Assert.Contains("Unallocated", texts); Assert.Contains("0.25h", texts);
             // The totals sit under the clock, in one line with it above them.
-            var clockText = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 40); var figure = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "4.50h");
+            var clockText = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 46 && t.Classes.Contains("clock")); var figure = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "4.50h");
             Assert.True(figure.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y > clockText.TranslatePoint(new Point(0, clockText.Bounds.Height - 2), dashboard)!.Value.Y);
-            Assert.Equal(Avalonia.Media.FontWeight.SemiBold, clockText.FontWeight);
-            Assert.Contains(texts, t => t is not null && t.Contains("9.00h / 15.00h"));
+            Assert.Contains("clock", clockText.Classes); Assert.Equal("Bricolage Display", clockText.FontFamily.Name); // The big clock wears the bundled display face.
+            Assert.Contains(texts, t => t is not null && t.Contains("9h / 15h weekly"));
             model.ToggleAccount("Account three");
             pill.ToggleExpansion();
             Save(pill, Path.Combine(output, "pill-expanded-Dark.png"));
-            Assert.Equal(960 + 2 * Ui.ShadowMargin, dashboard.Width);
-            Assert.Equal(640 + 2 * Ui.ShadowMargin, dashboard.Height);
+            Assert.Equal(DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, dashboard.Width);
+            Assert.Equal(DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin, dashboard.Height);
         }
         finally { dashboard.Close(); pill.Close(); model.SetTheme("System"); }
     }
@@ -185,13 +186,14 @@ public sealed class ShellTests
         window.Show();
         try
         {
-            Assert.Empty(window.GetVisualDescendants().OfType<ComboBox>());
+            Assert.Empty(window.GetVisualDescendants().OfType<ComboBox>()); // Nothing to choose until the settings page is opened.
             Assert.NotNull(window.ContextMenu);
-            var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings");
-            var appearance = ((IEnumerable<Control>)button.ContextMenu!.ItemsSource!).OfType<MenuItem>().Single(m => (string?)m.Header == "Appearance");
-            var dark = ((IEnumerable<MenuItem>)appearance.ItemsSource!).Single(item => (string?)item.Header == "Dark");
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var choice = window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "ThemeChoice");
+            Assert.Equal(new[] { "System", "Light", "Dark", "Studio", "After Hours", "Botanical", "Hawthorn" }, choice.Items.Cast<string>());
             var elapsed = model.Elapsed;
-            dark.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            choice.SelectedItem = "Dark";
             Assert.Equal("Dark", model.Theme);
             Assert.Equal(elapsed, model.Elapsed);
         }
@@ -276,10 +278,10 @@ public sealed class ShellTests
             var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();
             Save(coordinator.Dashboard, Path.Combine(output, "demo-idle.png"));
             var nine = coordinator.Dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
-            Assert.InRange(nine.TranslatePoint(default, coordinator.Dashboard)!.Value.Y, 150, 400);
+            Assert.InRange(nine.TranslatePoint(default, coordinator.Dashboard)!.Value.Y, 100, 400);
             model.ToggleAccount("Account one");
             Save(coordinator.Dashboard, Path.Combine(output, "demo-tracking.png"));
-            Assert.Contains(coordinator.Dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Classes.Contains("live") && t.Text == model.ClockText);
+            Assert.Contains(coordinator.Dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Classes.Contains("live") && t.Text is { Length: > 0 } && model.ClockText.StartsWith(t.Text));
             model.ForceOvertime(); Assert.True(model.IsOvertime);
             Save(coordinator.Dashboard, Path.Combine(output, "demo-overtime.png"));
             coordinator.Dashboard.OpenPill!(); coordinator.Pill.ToggleExpansion();

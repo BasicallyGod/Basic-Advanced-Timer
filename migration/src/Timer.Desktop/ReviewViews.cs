@@ -1,3 +1,4 @@
+using Avalonia.LogicalTree;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -13,6 +14,8 @@ namespace Timer.Desktop;
 public static class ReviewViews
 {
     public const double MinimumBlockHeight = 8;
+    // Where the spine runs and where blocks start, from the left of the timeline.
+    private const double SpineX = 58, CardLeft = 80, LabelRight = 40;
     public static Control Timeline(TimerModel model)
     {
         var day = model.SelectedDate;
@@ -24,13 +27,27 @@ public static class ReviewViews
         caption.Margin = new Thickness(0, 0, 0, 10);
         Ui.Put(root, caption);
         var pixelsPerHour = model.TimelinePixelsPerHour;
-        var canvas = new Canvas { Height = 24 * pixelsPerHour, MinWidth = 460, Background = Brushes.Transparent };
+        // The hours run down a spine with a tick for each hour, and for each half and quarter hour as you zoom in. Blocks sit to the right of it,
+        // A little room above and below lets the first and last labels sit fully in view.
+        var canvas = new Canvas { Height = 24 * pixelsPerHour + 4, MinWidth = 460, Background = Brushes.Transparent, Margin = new Thickness(0, 10, 0, 10) };
+        var spine = new Border { Name = "TimelineSpine", Width = 2, Height = 24 * pixelsPerHour, CornerRadius = new CornerRadius(1) }; spine.Classes.Add("rule");
+        Canvas.SetLeft(spine, SpineX - 1); Canvas.SetTop(spine, 2); canvas.Children.Add(spine);
+        void Tick(double hours, double width, double opacity)
+        {
+            var tick = new Border { Width = width, Height = 1.5, Opacity = opacity, Tag = "Tick" }; tick.Classes.Add("rule");
+            Canvas.SetLeft(tick, SpineX - width - 3); Canvas.SetTop(tick, hours * pixelsPerHour + 1.5); canvas.Children.Add(tick);
+        }
         for (var hour = 0; hour < 24; hour++)
         {
-            var label = Ui.Text($"{hour:00}:00", 12, "muted");
-            Canvas.SetTop(label, hour * pixelsPerHour); canvas.Children.Add(label);
-            var rule = Ui.Rule(); rule.Width = 390;
-            Canvas.SetLeft(rule, 60); Canvas.SetTop(rule, hour * pixelsPerHour + 8); canvas.Children.Add(rule);
+            // The hour labels share one right edge with the now chip, so the current time lines up with the hours instead of staggering against them.
+            var label = Ui.Text($"{hour:00}:00", 12, "muted"); label.Classes.Add("figures"); label.Width = LabelRight; label.TextAlignment = TextAlignment.Right;
+            Canvas.SetTop(label, hour * pixelsPerHour - 6); canvas.Children.Add(label);
+            Tick(hour, 10, 1);
+            if (pixelsPerHour >= 100) Tick(hour + .5, 6, .8);
+            if (pixelsPerHour >= 260) { Tick(hour + .25, 4, .6); Tick(hour + .75, 4, .6); }
+            // A faint guide across, so a block far from the spine can still be read against the hours.
+            var guide = Ui.Rule(); guide.Width = 390; guide.Opacity = .35; guide.Tag = "HourGuide";
+            Canvas.SetLeft(guide, CardLeft - 6); Canvas.SetTop(guide, hour * pixelsPerHour + 1.5); canvas.Children.Add(guide);
         }
         var groups = model.Editor.Entries(day, day.AddDays(1)).Where(e => e.GroupId is not null && e.Sources.Any(s => s.Duration > TimeSpan.Zero)).ToArray();
         var grouped = groups.SelectMany(e => e.Sources).ToHashSet();
@@ -59,20 +76,32 @@ public static class ReviewViews
             var lane = ends.FindIndex(end => end <= interval.Start);
             if (lane < 0) { lane = ends.Count; ends.Add(interval.End); } else ends[lane] = interval.End;
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
-            colour = model.BlockColour(colour);
+            var look = model.BlockLook(colour); colour = look.Fill;
             var end = interval.End > day.AddDays(1) ? day.AddDays(1) : interval.End;
             var duration = interval.Group is { } groupDuration ? TimeSpan.FromMinutes((double)groupDuration.Minutes) : end - interval.Start;
             // Even a one-minute block is drawn at least eight pixels tall, so it can be seen and clicked. Zoom in for exact edges.
             var height = Math.Max(MinimumBlockHeight, (end - interval.Start).TotalHours * pixelsPerHour - 4);
-            var ink = Ui.InkOn(colour);
-            var text = new StackPanel { Spacing = 6 };
-            text.Children.Add(Ui.Text(model.Label(interval.Account) + (interval.Group is { } labelGroup ? $" · Group ({labelGroup.Sources.Count})" : ""), 15));
-            if (height >= 58) text.Children.Add(Ui.Text($"{interval.Start:HH:mm} – {end:HH:mm} · {model.Format(duration)}", 12));
-            foreach (TextBlock child in text.Children) child.Foreground = Brush.Parse(ink);
-            var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
-                Width = 380, Height = height, Padding = new Thickness(14, height < 58 ? 2 : 10),
-                ClipToBounds = true };
-            if (height >= 24) card.Child = text;
+            var ink = look.Text;
+            var text = new StackPanel { Spacing = 5, Margin = new Thickness(12, height < 58 ? 2 : 10, 14, height < 58 ? 2 : 10) };
+            var title = Ui.Text(model.Label(interval.Account) + (interval.Group is { } labelGroup ? $" · Group ({labelGroup.Sources.Count})" : ""), 15); title.FontWeight = FontWeight.SemiBold;
+            title.TextTrimming = TextTrimming.CharacterEllipsis;
+            text.Children.Add(title);
+            // The time range sits quietly, and the credited duration beside it is the figure that matters.
+            if (height >= 58)
+            {
+                var range = Ui.Text($"{interval.Start:HH:mm} – {end:HH:mm}", 12); range.Opacity = .78;
+                var length = Ui.Text(model.Format(duration), 12); // Plain weight, so it reads easily on a tinted block in either theme.
+                var detail = Ui.Horizontal(range, length); detail.Spacing = 8; detail.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
+                text.Children.Add(detail);
+            }
+            foreach (var child in text.GetLogicalDescendants().OfType<TextBlock>()) child.Foreground = Brush.Parse(ink);
+            var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 12),
+                Width = 380, Height = height, ClipToBounds = true };
+            // A strip down the left side in the account's own colour, so a block can be told apart at a glance whatever its fill is.
+            var content = new Grid { ColumnDefinitions = new ColumnDefinitions("5,*") };
+            content.Children.Add(new Border { Name = "BlockEdge", Background = Brush.Parse(look.Edge) });
+            if (height >= 24) { Grid.SetColumn(text, 1); content.Children.Add(text); }
+            card.Child = content;
             var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
             // A selected block is shown by its border alone. Nothing is added to the text, so the block never shifts or clips.
             if (model.IsSelected(selectionSources)) card.Classes.Add("mergeSelected");
@@ -127,11 +156,33 @@ public static class ReviewViews
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
             canvas.Children.Add(card); cards.Add((card, lane));
         }
+        // For today, a line across at the current time with a chip in the margin saying what it is. It moves on every half minute while the timeline is on screen.
+        if (day == model.Engine.Now.Date)
+        {
+            var nowLine = new Border { Name = "NowMarker", Height = 2, Tag = "NowLine", IsHitTestVisible = false }; nowLine.Classes.Add("nowLine");
+            var nowDot = new Avalonia.Controls.Shapes.Ellipse { Width = 13, Height = 13, Tag = "NowDot", IsHitTestVisible = false }; nowDot.Classes.Add("nowDot");
+            var nowText = new TextBlock { FontSize = 12, FontWeight = FontWeight.SemiBold, TextAlignment = TextAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Classes = { "figures", "nowChipText" } };
+            // The chip is wider than its text, with the text's right edge where the hour labels' right edges are.
+            var nowChip = new Border { Name = "NowChip", Child = nowText, CornerRadius = new CornerRadius(10), Width = LabelRight + 8, Height = 20, Padding = new Thickness(0, 0, 8, 0), IsHitTestVisible = false }; nowChip.Classes.Add("nowChip");
+            canvas.Children.Add(nowLine); canvas.Children.Add(nowDot); canvas.Children.Add(nowChip);
+            void PlaceNow()
+            {
+                var now = model.Engine.Now; var y = (now - day).TotalHours * pixelsPerHour + 2;
+                Canvas.SetLeft(nowLine, SpineX); Canvas.SetTop(nowLine, y - 1);
+                Canvas.SetLeft(nowDot, SpineX - 6.5); Canvas.SetTop(nowDot, y - 6.5);
+                nowText.Text = now.ToString("HH:mm"); Canvas.SetLeft(nowChip, 0); Canvas.SetTop(nowChip, y - 10);
+            }
+            PlaceNow();
+            DispatcherTimer? nowTimer = null;
+            canvas.AttachedToVisualTree += (_, _) => { nowTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) }; nowTimer.Tick += (_, _) => PlaceNow(); nowTimer.Start(); };
+            canvas.DetachedFromVisualTree += (_, _) => { nowTimer?.Stop(); nowTimer = null; };
+        }
         void Resize()
         {
-            foreach (var rule in canvas.Children.OfType<Border>().Where(b => b.Classes.Contains("rule"))) rule.Width = Math.Max(220, canvas.Bounds.Width - 70);
-            var width = Math.Max(220, canvas.Bounds.Width - 80) / Math.Max(1, ends.Count);
-            foreach (var card in cards) { card.Card.Width = Math.Max(40, width - 6); Canvas.SetLeft(card.Card, 64 + card.Lane * width); }
+            foreach (var guide in canvas.Children.OfType<Border>().Where(b => b.Tag is "HourGuide")) guide.Width = Math.Max(220, canvas.Bounds.Width - CardLeft);
+            var width = Math.Max(220, canvas.Bounds.Width - CardLeft - 10) / Math.Max(1, ends.Count);
+            foreach (var card in cards) { card.Card.Width = Math.Max(40, width - 6); Canvas.SetLeft(card.Card, CardLeft + card.Lane * width); }
+            foreach (var marker in canvas.Children.OfType<Border>().Where(b => b.Tag is "NowLine")) marker.Width = Math.Max(220, canvas.Bounds.Width - SpineX);
         }
         canvas.SizeChanged += (_, _) => Resize();
         DateTime clicked = day.AddHours(9);
@@ -178,6 +229,13 @@ public static class ReviewViews
         return root;
     }
 
+    /// <summary>A raised tile in the Time Deck style, used to set the parts of the week views apart.</summary>
+    private static Border Card(Control child, Thickness padding)
+    {
+        var card = new Border { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = padding, Child = child };
+        card.Classes.Add("dayCard");
+        return card;
+    }
     public static Control Week(TimerModel model)
     {
         var day = model.WeekStart(model.SelectedDate);
@@ -189,7 +247,7 @@ public static class ReviewViews
         var table = WeekTable.Build(model, reconciled, day, days);
         // The week is split into three parts so no single screen is a wall of numbers: an overview first, the full table, and the entries.
         // Room on the right so the scroll bar never sits over the figures.
-        var root = new StackPanel { Spacing = 16, Margin = new Thickness(0, 0, 16, 0) };
+        var root = new StackPanel { Spacing = 16, Margin = new Thickness(0, 16, 16, 12) };
         switch (model.WeekSection)
         {
             case "hours": HoursSection(model, table, days, root); break;
@@ -204,17 +262,20 @@ public static class ReviewViews
     private static void OverviewSection(TimerModel model, WeekTable table, DateTime day, int[] days, StackPanel root)
     {
         TextBlock Tile(string caption, string value, string? style = null)
-        { return Ui.Text(value, 26, style); }
-        StackPanel Stat(string caption, string value, string? style = null)
+        { var tile = Ui.Text(value, 30, style); tile.Classes.Add("figures"); return tile; }
+        Border Stat(string caption, string value, string? style = null)
         {
-            var stat = new StackPanel { Spacing = 2 };
-            stat.Children.Add(Ui.Text(caption, 12, "muted")); stat.Children.Add(Tile(caption, value, style)); return stat;
+            var stat = new StackPanel { Spacing = 4 };
+            stat.Children.Add(Ui.Text(caption, 12, "muted")); stat.Children.Add(Tile(caption, value, style));
+            return Card(stat, new Thickness(18, 14));
         }
         WeekTableRow Find(string label) => table.Rows.First(r => r.Label.StartsWith(label));
+        // Three figures, each on its own tile: the week's work, its breaks and what was never given to an account.
         var stats = Ui.Grid("*,*,*");
         var worked = Stat("Worked this week", Find("Total").Total == "–" ? "0:00" : Find("Total").Total);
         var breaks = Stat("Breaks", Find("Break").Total == "–" ? "0:00" : Find("Break").Total, "muted");
         var unallocated = Stat("Unallocated", Find("Unallocated").Total == "–" ? "0:00" : Find("Unallocated").Total, "muted");
+        breaks.Margin = new Thickness(6, 0); worked.Margin = new Thickness(0, 0, 6, 0); unallocated.Margin = new Thickness(6, 0, 0, 0);
         Ui.Put(stats, worked); Ui.Put(stats, breaks, 1); Ui.Put(stats, unallocated, 2);
         root.Children.Add(stats);
         var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
@@ -223,27 +284,25 @@ public static class ReviewViews
             Bars = days.Select(i =>
             {
                 var date = day.AddDays(i);
-                var segments = accounts.Select(a => new BarSegment(a.Display, Color.Parse(model.BlockColour(a.Colour)), model.OnDay(a, date).TotalHours)).ToList();
+                var segments = accounts.Select(a => new BarSegment(a.Display, Color.Parse(model.ChartColour(a.Colour)), model.OnDay(a, date).TotalHours)).ToList();
                 var total = segments.Sum(s => s.Hours);
                 var detail = string.Join("\n", segments.Where(s => s.Hours > 0).Select(s => $"{s.Account}  {model.FormatShort(TimeSpan.FromHours(s.Hours))}"));
                 return new DayBar(date.ToString("ddd"), date.ToString("dddd d MMMM") + (detail.Length > 0 ? "\n" + detail : "\nNothing recorded"),
                     total > 0 ? model.FormatShort(TimeSpan.FromHours(total)) : "–", total, segments);
             }).ToList()
         };
-        root.Children.Add(bars);
-        // A rule and a heading set the accounts apart from the chart above them, with room either side.
-        var divide = Ui.Rule(); divide.Margin = new Thickness(0, 14, 0, 0); root.Children.Add(divide);
-        var byAccount = Ui.Text("By account", 12, "muted"); byAccount.Margin = new Thickness(0, 2, 0, -4); root.Children.Add(byAccount);
-        // One line per account: its colour, its week, and its budget when it has one.
-        var list = new StackPanel { Spacing = 10 };
+        root.Children.Add(Card(bars, new Thickness(14, 10, 14, 6)));
+        // The accounts sit on their own tile under the chart, one line each: its colour, its week, and its budget when it has one.
+        var byAccount = Ui.Text("By account", 12, "muted");
+        var list = new StackPanel { Spacing = 6 }; list.Children.Add(byAccount);
         for (var i = 0; i < accounts.Count; i++)
         {
             var account = accounts[i]; var row = table.Rows[i];
             // Every row is one line with everything centred on it, so a budget meter always sits level with its account.
-            var line = Ui.Grid("30,*,64,120,150"); line.MinHeight = 34;
-            var dot = new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = Brush.Parse(model.BlockColour(account.Colour)), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+            var line = Ui.Grid("30,*,64,110,200"); line.MinHeight = 36;
+            var dot = new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = Brush.Parse(model.ChartColour(account.Colour)), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
             Ui.Put(line, dot); Ui.Put(line, Ui.Text(account.Display, 14), 1);
-            var total = Ui.Text(row.Total == "–" ? "0:00" : row.Total, 14); total.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(line, total, 2);
+            var total = Ui.Text(row.Total == "–" ? "0:00" : row.Total, 14); total.Classes.Add("figures"); total.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(line, total, 2);
             var budget = table.Budgets.FirstOrDefault(b => b.Account == account.Display);
             if (budget is not null)
             {
@@ -260,16 +319,18 @@ public static class ReviewViews
             }
             list.Children.Add(line);
         }
-        root.Children.Add(list);
+        root.Children.Add(Card(list, new Thickness(18, 14, 18, 8)));
     }
     private static void HoursSection(TimerModel model, WeekTable table, int[] days, StackPanel root)
     {
         var grid = Ui.Grid("150," + string.Join(",", days.Select(_ => "*")) + ",70", "Auto," + string.Join(",", table.Rows.Select(_ => "Auto")));
-        grid.MinWidth = 220 + days.Length * 50;
+        grid.MinWidth = 150 + days.Length * 46;
+        // Each row is one line with a hairline under it, and the figures use the display face's even-width digits so the columns read straight down.
         for (var c = 0; c < table.Headers.Length; c++)
         {
             var heading = Ui.Text(c == 0 ? table.Headers[c] : table.Headers[c].Split(' ')[0], 12, "muted");
             if (c > 0) heading.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
+            heading.Margin = new Thickness(0, 0, 0, 6);
             Ui.Put(grid, heading, c);
         }
         for (var r = 0; r < table.Rows.Count; r++)
@@ -279,7 +340,8 @@ public static class ReviewViews
             {
                 var block = Ui.Text(text, item.Style == "bold" ? 14 : 13, item.Style == "faint" || text == "–" ? "muted" : null);
                 if (item.Style == "bold") block.FontWeight = FontWeight.SemiBold;
-                block.Margin = new Thickness(0, item.Style == "normal" ? 11 : 9);
+                if (right) block.Classes.Add("figures");
+                block.Margin = new Thickness(0, 10);
                 if (right) block.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
                 return block;
             }
@@ -287,7 +349,9 @@ public static class ReviewViews
             if (item.Style == "bold") ToolTip.SetTip(shown, item.Label);
             for (var i = 0; i < item.Cells.Length; i++) Ui.Put(grid, Cell(item.Cells[i], true), i + 1, r + 1);
             Ui.Put(grid, Cell(item.Total, true), item.Cells.Length + 1, r + 1);
+            // A strong rule above the total, and a faint hairline under every other row.
             if (item.Style == "bold") Ui.Put(grid, new Border { Height = 1, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Classes = { "rule" } }, 0, r + 1).SetValue(Grid.ColumnSpanProperty, table.Headers.Length);
+            else if (r < table.Rows.Count - 1) Ui.Put(grid, new Border { Height = 1, Opacity = .45, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom, Classes = { "rule" } }, 0, r + 1).SetValue(Grid.ColumnSpanProperty, table.Headers.Length);
         }
         // Both headings on this tab are real headings, so the table and the budgets read as two distinct parts.
         TextBlock Heading(string text) { var h = Ui.Text(text, 16); h.FontWeight = FontWeight.SemiBold; return h; }
@@ -308,10 +372,9 @@ public static class ReviewViews
         var export = Ui.IconButton(IconKind.Export, "Export week…", "ExportWeek", () => { if (TopLevel.GetTopLevel(root) is Window owner) new ExportWindow(model).Show(owner); });
         Ui.Put(heading2, Ui.Horizontal(copy, export), 1);
         root.Children.Add(heading2);
-        root.Children.Add(grid);
+        root.Children.Add(Card(grid, new Thickness(16, 12, 16, 6)));
         if (table.Budgets.Count > 0)
         {
-            var split = Ui.Rule(); split.Margin = new Thickness(0, 14, 0, 2); root.Children.Add(split);
             root.Children.Add(Heading("Budgets"));
             var budgets = Ui.Grid("150,*,*,*,60", "Auto," + string.Join(",", table.Budgets.Select(_ => "Auto")));
             foreach (var (text, c) in new[] { "Account", "Budget", "Used", "Left", "Used" }.Select((t, c) => (t, c)))
@@ -325,48 +388,70 @@ public static class ReviewViews
                 for (var c = 0; c < cells.Length; c++)
                 {
                     var block = Ui.Text(cells[c], 13, c == 4 ? (b.Fraction >= 1 ? "overtime" : b.Fraction >= .8 ? "budgetWarning" : null) : null);
-                    block.Margin = new Thickness(0, 8); if (c > 0) block.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
+                    block.Margin = new Thickness(0, 8); if (c > 0) { block.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; block.Classes.Add("figures"); }
                     Ui.Put(budgets, block, c, r + 1);
                 }
             }
-            root.Children.Add(budgets);
+            root.Children.Add(Card(budgets, new Thickness(16, 12, 16, 6)));
         }
     }
     private static void EntriesSection(TimerModel model, WeekExport reconciled, StackPanel root)
     {
-        root.Children.Add(Ui.Text(model.SelectedBlockCount > 0 ? $"{model.SelectedBlockCount} blocks selected · " + model.MergeHint : "Entries · click to select · right-click to edit or merge", 12, "muted"));
-        foreach (var entry in reconciled.Entries)
+        root.Children.Add(Ui.Text(model.SelectedBlockCount > 0 ? $"{model.SelectedBlockCount} blocks selected · " + model.MergeHint : "Click an entry to select it, double-click to edit, right-click to edit or merge", 12, "muted"));
+        var entries = reconciled.Entries.ToList();
+        string Length(int index) => model.DecimalHours ? WeekExport.Hours(reconciled.EntryUnits[index]) + "h" : model.Format(TimeSpan.FromMinutes((double)entries[index].Minutes));
+        // Entries are grouped under their day, each day on its own tile with its total, so a week reads as seven short lists rather than one long one.
+        foreach (var dayGroup in entries.Select((entry, index) => (entry, index)).GroupBy(x => x.entry.Day))
         {
-            void Open()
+            var header = Ui.Grid("*,Auto"); header.Margin = new Thickness(4, 6, 4, 0);
+            var title = Ui.Text(dayGroup.Key.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), 14); title.FontWeight = FontWeight.SemiBold;
+            var counted = dayGroup.Where(x => !BreakAccount.Is(x.entry.Account)).ToList();
+            var dayTotal = model.DecimalHours ? WeekExport.Hours(counted.Sum(x => reconciled.EntryUnits[x.index])) + "h" : model.Format(TimeSpan.FromMinutes((double)counted.Sum(x => x.entry.Minutes)));
+            var total = Ui.Text(dayTotal, 13, "muted"); total.Classes.Add("figures");
+            Ui.Put(header, title); Ui.Put(header, total, 1);
+            root.Children.Add(header);
+            var rows = new StackPanel { Spacing = 2 };
+            // The entries come from the export in account order, which keeps exports tidy but reads oddly on screen. Within a day they run by start time instead,
+            // with anything that has no clock time (a plain added entry) after the timed ones.
+            foreach (var (entry, index) in dayGroup.OrderBy(x => x.entry.Start ?? DateTime.MaxValue).ThenBy(x => x.index))
             {
-                if (entry.GroupId is { } group) model.OpenGroup(group);
-                else model.OpenEntry(entry.Sources[0]);
+                void Open()
+                {
+                    if (entry.GroupId is { } group) model.OpenGroup(group);
+                    else model.OpenEntry(entry.Sources[0]);
+                }
+                var caption = entry.GroupId is not null ? $"Group · {entry.Sources.Count} entries" : entry.Start is { } start && entry.End is { } end ? $"{start:HH:mm} – {end:HH:mm}" : entry.Type;
+                var name = entry.Sources.Count == 1 ? "WeekEntry" + model.Engine.Sessions.IndexOf(entry.Sources[0]) : "WeekReviewEntry";
+                var selectable = entry.Sources.Count > 0;
+                var button = Ui.Button("", () => { if (selectable) model.ToggleSelection(entry.Sources); else Open(); }, name);
+                button.Classes.Add("entryRow");
+                button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+                button.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+                // The account's colour runs down the left as a strip, as on a timeline block, then the account and when, then the credited time.
+                var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(entry.Account, StringComparison.OrdinalIgnoreCase))?.Colour;
+                var edge = new Border { Width = 4, CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 8), Background = colour is null ? Brushes.Transparent : Brush.Parse(model.BlockLook(colour).Edge) };
+                var labels = new StackPanel { Spacing = 2, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = new Thickness(12, 6) };
+                var accountText = Ui.Text(model.Label(entry.Account), 14); accountText.FontWeight = FontWeight.SemiBold;
+                labels.Children.Add(accountText); labels.Children.Add(Ui.Text(caption, 12, "muted"));
+                if (!string.IsNullOrWhiteSpace(entry.Note)) labels.Children.Add(new TextBlock { Text = entry.Note, FontSize = 12, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
+                var length = Ui.Text(Length(index), 14); length.FontWeight = FontWeight.SemiBold; length.Classes.Add("figures"); length.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center; length.Margin = new Thickness(0, 0, 14, 0);
+                var content = Ui.Grid("4,*,Auto"); Ui.Put(content, edge); Ui.Put(content, labels, 1); Ui.Put(content, length, 2);
+                button.Content = content;
+                if (entry.Sources.Count > 0)
+                {
+                    button.Classes.Set("mergeSelected", model.IsSelected(entry.Sources));
+                    var edit = new MenuItem { Header = "Edit / inspect entry…" }; edit.Click += (_, _) => Open();
+                    button.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, entry.Sources), MergeMenu(model), new Separator(), DeleteMenu(model, entry.Sources) } };
+                }
+                if (entry.GroupId is { } groupId)
+                {
+                    var combined = Ui.Grid("*,Auto"); Ui.Put(combined, button);
+                    Ui.Put(combined, Ui.Button("Ungroup", () => model.UngroupEntries(groupId), "Ungroup" + groupId), 1).Margin = new Thickness(8, 0, 6, 0);
+                    rows.Children.Add(combined);
+                }
+                else rows.Children.Add(button);
             }
-            var caption = entry.GroupId is not null ? $"Group · {entry.Sources.Count} entries" : entry.Start is { } start && entry.End is { } end ? $"{start:HH:mm} – {end:HH:mm}" : entry.Type;
-            var name = entry.Sources.Count == 1 ? "WeekEntry" + model.Engine.Sessions.IndexOf(entry.Sources[0]) : "WeekReviewEntry";
-            var selectable = entry.Sources.Count > 0;
-            var button = Ui.Button("", () => { if (selectable) model.ToggleSelection(entry.Sources); else Open(); }, name);
-            button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
-            button.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
-            var labels = new StackPanel { Spacing = 5 };
-            var index = reconciled.Entries.ToList().IndexOf(entry);
-            var duration = model.DecimalHours ? WeekExport.Hours(reconciled.EntryUnits[index]) + "h" : model.Format(TimeSpan.FromMinutes((double)entry.Minutes));
-            labels.Children.Add(Ui.Text($"{entry.Day:ddd d MMM} · {model.Label(entry.Account)} · {caption} · {duration}", 12));
-            if (!string.IsNullOrWhiteSpace(entry.Note)) labels.Children.Add(new TextBlock { Text = entry.Note, FontSize = 12, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
-            button.Content = labels;
-            if (entry.Sources.Count > 0)
-            {
-                button.Classes.Set("mergeSelected", model.IsSelected(entry.Sources));
-                var edit = new MenuItem { Header = "Edit / inspect entry…" }; edit.Click += (_, _) => Open();
-                button.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, entry.Sources), MergeMenu(model), new Separator(), DeleteMenu(model, entry.Sources) } };
-            }
-            if (entry.GroupId is { } groupId)
-            {
-                var combined = Ui.Grid("*,Auto"); Ui.Put(combined, button);
-                Ui.Put(combined, Ui.Button("Ungroup", () => model.UngroupEntries(groupId), "Ungroup" + groupId), 1).Margin = new Thickness(8, 0, 0, 0);
-                root.Children.Add(combined);
-            }
-            else root.Children.Add(button);
+            root.Children.Add(Card(rows, new Thickness(6)));
         }
     }
     // Moves the clicked entry, or every selected block when the clicked one is selected, to another account.

@@ -204,6 +204,30 @@ public sealed partial class LedgerEditor
         history.Clear(); stepBytes.Clear();
         return count;
     }
+    /// <summary>
+    /// Removes an account's whole history: its entries, their notes and its groups. Earlier Undo steps would bring back entries for an account that
+    /// no longer exists, so the history starts afresh, as it does for a rename. Returns how many entries went.
+    /// </summary>
+    public int DeleteAccount(string name)
+    {
+        bool Is(string other) => other.Equals(name, StringComparison.OrdinalIgnoreCase);
+        if (engine.Active is { } active && Is(active.Account)) throw new InvalidOperationException("Stop tracking this account before deleting it.");
+        var count = engine.Sessions.Count(r => Is(r.Account));
+        if (count == 0 && !notes.Rows.Any(r => Is(r["Account"])) && (groups is null || !CsvTable.Parse(groups, groupHeaders).Rows.Any(r => Is(r["Account"])))) return 0;
+        Change("Delete account", () =>
+        {
+            engine.Sessions.RemoveAll(r => Is(r.Account));
+            notes.Rows.RemoveAll(r => Is(r["Account"]));
+            if (groups is not null)
+            {
+                var table = CsvTable.Parse(groups, groupHeaders);
+                table.Rows.RemoveAll(r => Is(r["Account"]));
+                groups = table.Serialize();
+            }
+        });
+        history.Clear(); stepBytes.Clear();
+        return count;
+    }
     /// <summary>Moves entries to another account, with their notes, as one edit. Times do not change, so nothing can overlap.</summary>
     public void Reassign(IReadOnlyList<SessionRow> rows, string account)
     {

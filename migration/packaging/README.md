@@ -1,6 +1,6 @@
 # Microsoft Store packaging
 
-This builds the Windows x64 MSIX that is submitted to the Microsoft Store from `main`, separate from the portable development ZIPs. The Partner Center product identity is already set in the workflow. The artwork is still placeholder.
+This builds the Windows x64 MSIX that is submitted to the Microsoft Store from `main`, separate from the portable development ZIPs. The Partner Center product identity is already set in the workflow. The Store tile artwork is the app icon, cut to each size in `StoreAssets`.
 
 ## Builds
 
@@ -43,7 +43,7 @@ dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --con
 ./migration/packaging/build-msix.ps1 -BuildNumber 1 -OutputDirectory artifacts/msix
 ```
 
-The packaging script publishes the Avalonia app with a production-style executable name, creates a manifest and temporary logo assets, assembles the MSIX with MakeAppx, and checks that required SQLite DLLs are packaged. It signs with a temporary certificate only for local dev builds. Experimental and alpha ZIP workflows remain independent.
+The packaging script publishes the Avalonia app with a production-style executable name, creates a manifest and copies the logo assets from `StoreAssets`, assembles the MSIX with MakeAppx, and checks that required SQLite DLLs are packaged. It signs with a temporary certificate only for local dev builds. Experimental and alpha ZIP workflows remain independent.
 
 ## Moving to the Microsoft Store
 
@@ -58,7 +58,7 @@ When a developer account is available:
    ```powershell
    ./migration/packaging/build-msix.ps1 -BuildNumber 2 -OutputDirectory artifacts/msix -UnsignedForStore -PackageName 'Basically.BasicsAdvancedTimer' -Publisher 'CN=BF422802-B4CA-4B00-A09A-2EDA3315C0DE' -PublisherDisplayName 'Basically'
    ```
-4. Replace the generated **placeholder** icons with production artwork and run the Windows App Certification Kit. Confirm display-name reservation, screenshots, listing text, privacy/support details, licensing, data portability and update behaviour before submission.
+4. Check the Store artwork in `StoreAssets` (the app icon at each size) and run the Windows App Certification Kit. Confirm display-name reservation, screenshots, listing text, privacy/support details, licensing, data portability and update behaviour before submission.
 5. Submit the final package in Partner Center only after testing. The Store signs Store-distributed MSIX packages; it **does not sign** unsigned portable EXEs.
 
 The `runFullTrust` restricted capability warning may continue to appear during Partner Center validation: the packaged full-trust Avalonia desktop app needs this capability, which Microsoft may require you to justify during certification.
@@ -69,3 +69,7 @@ The `runFullTrust` restricted capability warning may continue to appear during P
 - Verify the startup task (the menu checkbox, the Windows Settings switch and a real sign-in), filesystem redirection, exports and automatic updates on the supported Windows version.
 - Decide on an in-app **Import portable data** workflow before encouraging existing users to switch, with consent, backup, and collision checks.
 - Replace prototype icon artwork and check the Store certification report; the actual Store identity is now configured in CI.
+
+## Store artwork
+
+`StoreAssets` holds the tile and logo PNGs the manifest uses (Square44x44Logo, Square150x150Logo and StoreLogo, with 200 and 400 percent scales and the unplated 16 to 256 pixel target sizes for the taskbar and Start list), cut from `migration/src/Timer.Desktop/Assets/AppIcon.png`. That icon is 256 pixels square, so the 150 pixel tile at 200 percent is slightly enlarged and there is no 400 percent version of it. For a sharper result, redraw the icon from a vector master and regenerate these files. The Store listing's own screenshots and promotional images are uploaded in Partner Center and are not part of the package.

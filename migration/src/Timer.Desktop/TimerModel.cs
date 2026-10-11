@@ -24,6 +24,19 @@ public sealed class TimerModel : INotifyPropertyChanged
         TimelineOffset = Math.Max(0, (offset + pointerY) / previous * TimelinePixelsPerHour - pointerY);
         Notify();
     }
+    public const double MinTimelineScale = 60, MaxTimelineScale = 640;
+    /// <summary>Sets the zoom to an exact scale (as the slider does), keeping the time at the pointer's height where it was.</summary>
+    public void SetTimelineScale(double pixelsPerHour, double pointerY, double offset)
+    {
+        var previous = TimelinePixelsPerHour; var target = Math.Clamp(pixelsPerHour, MinTimelineScale, MaxTimelineScale);
+        if (Math.Abs(target - previous) < .01) return;
+        TimelinePixelsPerHour = target;
+        TimelineOffset = Math.Max(0, (offset + pointerY) / previous * target - pointerY);
+        Notify();
+    }
+    /// <summary>Where the current zoom sits from 0 (most zoomed out) to 1, on the logarithmic scale a zoom slider should use.</summary>
+    public double TimelineZoomFraction => Math.Log(TimelinePixelsPerHour / MinTimelineScale) / Math.Log(MaxTimelineScale / MinTimelineScale);
+    public static double ScaleAt(double fraction) => MinTimelineScale * Math.Pow(MaxTimelineScale / MinTimelineScale, Math.Clamp(fraction, 0, 1));
     /// <summary>Zooms and scrolls so the day's recorded time, with a little room either side, fills the height given.</summary>
     public void FitTimeline(double viewportHeight)
     {
@@ -94,7 +107,10 @@ public sealed class TimerModel : INotifyPropertyChanged
         SelectedDate = Engine.Now.Date;
         // The user's own themes need their colours registered too. The built-in ones were registered when the app started.
         if (Application.Current is { } current && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && this.preferences.Themes is { Count: > 0 } own) ThemeEngine.Register(current, own);
-        ApplyTheme();
+        ApplyTheme(); Ui.ApplyTooltips(this.preferences.Tooltips);
+        // When the computer switches between light and dark, System follows it.
+        if (Application.Current?.PlatformSettings is { } platform)
+            platform.ColorValuesChanged += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => { appliedVariant = null; Notify(); });
     }
     // Sixteen soft colours, so up to sixteen accounts each have their own before any repeat, none matching the break. The first eight are
     // the original palette and keep their order, so existing accounts are unchanged. They all take dark text.
@@ -192,9 +208,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Applies the account list. <paramref name="renames"/> maps an account's old name to its new one (the list holds the new
     /// names). A rename always applies everywhere, so all recorded time, notes, groups and positions move to the new name after a backup
     /// copy is saved. To start afresh, add a new account instead.</summary>
-    public void SetAccounts(IEnumerable<AccountSettings> accounts, IReadOnlyDictionary<string, string>? renames = null)
+    public void SetAccounts(IEnumerable<AccountSettings> accounts, IReadOnlyDictionary<string, string>? renames = null, IReadOnlyCollection<string>? deleted = null)
     {
-        renames ??= new Dictionary<string, string>();
+        renames ??= new Dictionary<string, string>(); deleted ??= Array.Empty<string>();
         var values = accounts.ToList();
         if (values.Count == 0 || values.Any(a => string.IsNullOrWhiteSpace(a.Name) || a.Name != a.Name.Trim()
             || a.Name.IndexOfAny(new[] { '\t', '\r', '\n' }) >= 0 || (a.Name.Equals(BreakAccount.Name, StringComparison.OrdinalIgnoreCase) || a.Name.Equals(BreakAccount.Label, StringComparison.OrdinalIgnoreCase))
@@ -202,8 +218,11 @@ public sealed class TimerModel : INotifyPropertyChanged
             || (a.BudgetHours is { } h && (!double.IsFinite(h) || h <= 0)))
             || values.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Count)
             throw new ArgumentException("Use unique account names and positive budgets; Break is reserved.");
-        if (preferences.Accounts.Any(a => !values.Any(v => v.Name == (renames.TryGetValue(a.Name, out var to) ? to : a.Name))))
+        // An account can leave the list only when it is deleted on purpose, which also removes its history. Otherwise it has to be hidden.
+        if (preferences.Accounts.Any(a => !deleted.Contains(a.Name) && !values.Any(v => v.Name == (renames.TryGetValue(a.Name, out var to) ? to : a.Name))))
             throw new ArgumentException("Hide existing accounts instead of removing them.");
+        if (deleted.Any(d => !preferences.Accounts.Any(a => a.Name == d) || values.Any(v => v.Name.Equals(d, StringComparison.OrdinalIgnoreCase)) || renames.ContainsKey(d)))
+            throw new ArgumentException("Choose accounts to delete from the existing list, and do not keep or rename them as well.");
         var renamed = renames.Where(r => !r.Value.Equals(r.Key, StringComparison.Ordinal)).ToList();
         foreach (var (from, to) in renamed)
         {
@@ -214,7 +233,13 @@ public sealed class TimerModel : INotifyPropertyChanged
                 || renamed.Any(r => r.Key != from && r.Value.Equals(to, StringComparison.OrdinalIgnoreCase))))
                 throw new ArgumentException($"\"{to}\" is already used by another account or in the history.");
         }
-        if (ActiveAccount is { } active && (values.Any(a => a.Name == active && a.Hidden) || renamed.Any(r => r.Key == active))) Engine.StopAccount();
+        if (ActiveAccount is { } active && (values.Any(a => a.Name == active && a.Hidden) || renamed.Any(r => r.Key == active) || deleted.Contains(active))) Engine.StopAccount();
+        if (deleted.Count > 0)
+        {
+            // Save first so the backup holds everything about to go, then remove each account's entries, notes and groups.
+            if (store is not null && deleted.Any(d => AccountHistory(d).Entries > 0)) { store.Save(Engine, preferences); store.Backup("before-delete"); }
+            foreach (var name in deleted) Editor.DeleteAccount(name);
+        }
         if (renamed.Count > 0)
         {
             // Save first so the backup holds the latest entries, then rewrite everything in one go.
@@ -226,6 +251,12 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (!Accounts.Any(a => a.Name == SelectedAccount)) SelectedAccount = values.FirstOrDefault(a => !a.Hidden)?.Name;
         Save(); Notify();
     }
+    /// <summary>How much recorded time an account has, so deleting one can say what will go.</summary>
+    public (int Entries, TimeSpan Time) AccountHistory(string account)
+    {
+        var rows = Engine.Sessions.Where(s => s.Account.Equals(account, StringComparison.OrdinalIgnoreCase)).ToList();
+        return (rows.Count, rows.Aggregate(TimeSpan.Zero, (sum, row) => sum + row.Duration));
+    }
     public void ToggleDay()
     {
         if (Engine.DayRunning) Engine.FinishDay(); else Engine.StartDay();
@@ -235,7 +266,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     public TimeSpan Today(TimerAccount a) => Engine.Credited(a.Name, Engine.Now.Date, Engine.Now.Date.AddDays(1));
     public TimeSpan OnDay(TimerAccount a, DateTime day) => Engine.Credited(a.Name, day, day.AddDays(1));
     public TimeSpan Week(TimerAccount a) { var start = WeekStart(SelectedDate); return Engine.Credited(a.Name, start, start.AddDays(7)); }
-    public TimeSpan BudgetUsed(TimerAccount a)
+    /// <summary>The span a budget covers right now, from the account's own period (this week, month or quarter).</summary>
+    private (DateTime Start, DateTime End) BudgetWindow(TimerAccount a)
     {
         var now = Engine.Now;
         var start = a.Period switch
@@ -244,8 +276,13 @@ public sealed class TimerModel : INotifyPropertyChanged
             "quarter" => new DateTime(now.Year, ((now.Month - 1) / 3) * 3 + 1, 1), _ => WeekStart(now)
         };
         var end = a.Period switch { "month" => start.AddMonths(1), "quarter" => start.AddMonths(3), _ => start.AddDays(7) };
-        return Engine.Credited(a.Name, start, end);
+        return (start, end);
     }
+    public TimeSpan BudgetUsed(TimerAccount a) { var (start, end) = BudgetWindow(a); return Engine.Credited(a.Name, start, end); }
+    /// <summary>How much of the budget is used, where 1 is all of it. Null when the account has no budget.</summary>
+    public double? BudgetRatio(TimerAccount a) => a.Budget is { } target && target > TimeSpan.Zero ? BudgetUsed(a).TotalSeconds / target.TotalSeconds : null;
+    /// <summary>How far through the budget's period it is now, from 0 to 1. The bar's tick sits here, so a bar past the tick is running ahead of pace.</summary>
+    public double BudgetPace(TimerAccount a) { var (start, end) = BudgetWindow(a); return Math.Clamp((Engine.Now - start).TotalSeconds / (end - start).TotalSeconds, 0, 1); }
     public string Format(TimeSpan value)
     {
         if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) + "h";
@@ -259,6 +296,16 @@ public sealed class TimerModel : INotifyPropertyChanged
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
         return $"{sign}{(int)value.TotalHours}:{value.Minutes:00}";
     }
+    /// <summary>A compact form for tight rows: 10h35, or 20h when there are no minutes, or 10.58h in decimal hours.</summary>
+    public string FormatCompact(TimeSpan value)
+    {
+        if (DecimalHours) return value.TotalHours.ToString("0.##", CultureInfo.GetCultureInfo("en-GB")) + "h";
+        var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
+        return value.Minutes == 0 ? $"{sign}{(int)value.TotalHours}h" : $"{sign}{(int)value.TotalHours}h{value.Minutes:00}";
+    }
+    /// <summary>The budget for an account row, such as "10h35 / 20h monthly". The period is always said, since it matters when comparing accounts.</summary>
+    public string BudgetLine(TimerAccount a) => a.Budget is { } target
+        ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)} {(a.Period switch { "month" => "monthly", "quarter" => "quarterly", _ => "weekly" })}" : "No budget";
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
     public void ChangeDate(int days) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
@@ -323,7 +370,11 @@ public sealed class TimerModel : INotifyPropertyChanged
         appliedVariant = null; ApplyTheme(); Save(); Notify();
     }
     /// <summary>The colour to draw an account's blocks, dots and bars in: very dark colours lifted so they show, then softened if the theme asks for it.</summary>
-    public string BlockColour(string accountColour) => ThemeDerivation.Soften(CurrentTheme, Ui.Visible(accountColour));
+    public string BlockColour(string accountColour) => BlockLook(accountColour).Fill;
+    /// <summary>The colour for an account's slice in a chart or its legend dot. A dark theme tints its blocks down into the surface, which makes thin slices vanish, so charts there use the account's own colour (the block's edge).</summary>
+    public string ChartColour(string accountColour) { var look = BlockLook(accountColour); return CurrentTheme.Dark ? look.Edge : look.Fill; }
+    /// <summary>The fill, left edge and text colour of a timeline block for an account colour, by the selected theme's block rules.</summary>
+    public ThemeDerivation.BlockLook BlockLook(string accountColour) => ThemeDerivation.Block(CurrentTheme, Ui.Visible(accountColour));
     public void SetTheme(string theme)
     {
         if (theme != ThemeLibrary.System && Themes.All(t => t.Name != theme)) throw new ArgumentException("Unknown theme", nameof(theme));
@@ -506,9 +557,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     // Break and overtime themes are variants of Light and Dark that override colours. A break outranks overtime, because it is
     // the state you chose just now, and overtime outranks normal. Not tracking has no tint of its own: it keeps the ordinary
-    // theme and shows itself through the grey glow, so it never fights the other two. Only the pill is tinted (see PillVariant),
-    // so the dashboard stays calm: its own Break button turns amber to show a break is on.
-    public string ThemeState => IsOnBreak ? "Break" : IsOvertime ? "Overtime" : "Normal";
+    // theme. Only the pill is coloured by state (see PillVariant): dark while recording, and a break or overtime colours the whole capsule.
+    // The dashboard stays calm, and its own Break button and clock change colour to show those states.
+    public string ThemeState => IsOnBreak ? "Break" : IsOvertime ? "Overtime" : IsTracking ? "Recording" : "Normal";
     private ThemeVariant? appliedVariant;
     /// <summary>Every theme on offer: the built-in ones, then the user's own.</summary>
     public IReadOnlyList<ThemeDefinition> Themes => ThemeLibrary.BuiltIn.Concat(preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
@@ -524,16 +575,31 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>The theme the pill wears by itself: tinted amber on a break, red in overtime, otherwise null so it follows the rest of the app.</summary>
     public ThemeVariant? PillVariant => ThemeState != "Normal" && Application.Current is not null && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()
-        ? ThemeEngine.StateVariant(CurrentTheme, ThemeState == "Break" ? ThemeDerivation.Break : ThemeDerivation.Overtime) : null;
+        ? ThemeEngine.StateVariant(CurrentTheme, ThemeState) : null;
     private void ApplyTheme()
     {
         if (Application.Current is not { } app || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;
-        // Following the system when nothing is overriding keeps the default variant, so a change of system theme still applies.
-        var variant = Theme == ThemeLibrary.System || Themes.All(t => t.Name != Theme) ? ThemeVariant.Default : ThemeEngine.VariantFor(Themes.First(t => t.Name == Theme));
+        // System is Light or Dark by the computer's own setting, so the variant is chosen here and re-chosen when that setting changes.
+        var variant = ThemeEngine.VariantFor(CurrentTheme);
         if (ReferenceEquals(variant, appliedVariant)) return;
         appliedVariant = variant; app.RequestedThemeVariant = variant;
     }
     public bool IsOnBreak => BreakAccount.Is(ActiveAccount);
+    /// <summary>Whether hovering a control shows its tooltip. Switched off, the words are still the accessible names.</summary>
+    public bool Tooltips => preferences.Tooltips;
+    public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
+    /// <summary>Whether the developer features are switched on: the sample-data demo, the overtime tester and the version on the right-click menu. Off until unlocked from the About section.</summary>
+    public bool DeveloperUnlocked => (preferences.Developer || IsDemo) && BuildInfo.DeveloperFeatures; // The demo is itself a developer tool, so it always shows them.
+    public void SetDeveloper(bool on) { if (on && !BuildInfo.DeveloperFeatures) return; preferences = preferences with { Developer = on }; Save(); Notify(); }
+    /// <summary>Whether the getting started setup is finished or skipped. A brand new database starts without it, and it can be run again from settings.</summary>
+    public bool SetupDone => preferences.SetupDone;
+    /// <summary>Where this timer keeps its data, or null for a throwaway copy such as the demo.</summary>
+    public string? DataFolder => IsDemo ? null : store?.DataFolder;
+    public void CompleteSetup() { if (preferences.SetupDone) return; preferences = preferences with { SetupDone = true }; Save(); Notify(); }
+    public void RestartSetup() { if (!preferences.SetupDone) return; preferences = preferences with { SetupDone = false }; Save(); Notify(); }
+    public void SetDecimalHours(bool on) { if (preferences.DecimalHours == on) return; preferences = preferences with { DecimalHours = on }; Save(); Notify(); }
+    public DayOfWeek WeekStartsOn => preferences.WeekStart;
+    public void SetWeekStart(DayOfWeek day) { if (preferences.WeekStart == day) return; preferences = preferences with { WeekStart = day }; selectedRows.Clear(); TimelineOffset = null; Save(); Notify(); }
     public bool Shadows => preferences.Shadows;
     public void SetShadows(bool on) { preferences = preferences with { Shadows = on }; Save(); Notify(); }
     /// <summary>Whether the timer has a taskbar button. Turn it off to run from the notification area alone.</summary>
