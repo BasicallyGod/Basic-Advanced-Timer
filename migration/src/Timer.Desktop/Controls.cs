@@ -749,7 +749,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -799,6 +799,12 @@ public sealed class IconGlyph : Control
                 context.DrawRectangle(brush, null, new Rect(7.5, 2.5, 8, 3), 1.2, 1.2);
                 context.DrawRectangle(brush, null, new Rect(7.5, 7.5, 8, 3), 1.2, 1.2);
                 context.DrawRectangle(brush, null, new Rect(7.5, 12.5, 8, 3), 1.2, 1.2);
+                break;
+            case IconKind.Trash:
+                // A bin: a lid with a handle, and a tapering body with two slats.
+                context.DrawLine(pen, new Point(3, 5), new Point(15, 5)); context.DrawLine(pen, new Point(7, 5), new Point(7, 3)); context.DrawLine(pen, new Point(7, 3), new Point(11, 3)); context.DrawLine(pen, new Point(11, 3), new Point(11, 5));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 4.5,5 L 5.3,15 Q 5.4,16 6.4,16 L 11.6,16 Q 12.6,16 12.7,15 L 13.5,5"));
+                context.DrawLine(pen, new Point(7.6, 8), new Point(7.8, 13)); context.DrawLine(pen, new Point(10.4, 8), new Point(10.2, 13));
                 break;
             case IconKind.Plus:
                 context.DrawLine(pen, new Point(9, 3.5), new Point(9, 14.5)); context.DrawLine(pen, new Point(3.5, 9), new Point(14.5, 9));

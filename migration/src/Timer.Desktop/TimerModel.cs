@@ -208,9 +208,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Applies the account list. <paramref name="renames"/> maps an account's old name to its new one (the list holds the new
     /// names). A rename always applies everywhere, so all recorded time, notes, groups and positions move to the new name after a backup
     /// copy is saved. To start afresh, add a new account instead.</summary>
-    public void SetAccounts(IEnumerable<AccountSettings> accounts, IReadOnlyDictionary<string, string>? renames = null)
+    public void SetAccounts(IEnumerable<AccountSettings> accounts, IReadOnlyDictionary<string, string>? renames = null, IReadOnlyCollection<string>? deleted = null)
     {
-        renames ??= new Dictionary<string, string>();
+        renames ??= new Dictionary<string, string>(); deleted ??= Array.Empty<string>();
         var values = accounts.ToList();
         if (values.Count == 0 || values.Any(a => string.IsNullOrWhiteSpace(a.Name) || a.Name != a.Name.Trim()
             || a.Name.IndexOfAny(new[] { '\t', '\r', '\n' }) >= 0 || (a.Name.Equals(BreakAccount.Name, StringComparison.OrdinalIgnoreCase) || a.Name.Equals(BreakAccount.Label, StringComparison.OrdinalIgnoreCase))
@@ -218,8 +218,11 @@ public sealed class TimerModel : INotifyPropertyChanged
             || (a.BudgetHours is { } h && (!double.IsFinite(h) || h <= 0)))
             || values.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Count)
             throw new ArgumentException("Use unique account names and positive budgets; Break is reserved.");
-        if (preferences.Accounts.Any(a => !values.Any(v => v.Name == (renames.TryGetValue(a.Name, out var to) ? to : a.Name))))
+        // An account can leave the list only when it is deleted on purpose, which also removes its history. Otherwise it has to be hidden.
+        if (preferences.Accounts.Any(a => !deleted.Contains(a.Name) && !values.Any(v => v.Name == (renames.TryGetValue(a.Name, out var to) ? to : a.Name))))
             throw new ArgumentException("Hide existing accounts instead of removing them.");
+        if (deleted.Any(d => !preferences.Accounts.Any(a => a.Name == d) || values.Any(v => v.Name.Equals(d, StringComparison.OrdinalIgnoreCase)) || renames.ContainsKey(d)))
+            throw new ArgumentException("Choose accounts to delete from the existing list, and do not keep or rename them as well.");
         var renamed = renames.Where(r => !r.Value.Equals(r.Key, StringComparison.Ordinal)).ToList();
         foreach (var (from, to) in renamed)
         {
@@ -230,7 +233,13 @@ public sealed class TimerModel : INotifyPropertyChanged
                 || renamed.Any(r => r.Key != from && r.Value.Equals(to, StringComparison.OrdinalIgnoreCase))))
                 throw new ArgumentException($"\"{to}\" is already used by another account or in the history.");
         }
-        if (ActiveAccount is { } active && (values.Any(a => a.Name == active && a.Hidden) || renamed.Any(r => r.Key == active))) Engine.StopAccount();
+        if (ActiveAccount is { } active && (values.Any(a => a.Name == active && a.Hidden) || renamed.Any(r => r.Key == active) || deleted.Contains(active))) Engine.StopAccount();
+        if (deleted.Count > 0)
+        {
+            // Save first so the backup holds everything about to go, then remove each account's entries, notes and groups.
+            if (store is not null && deleted.Any(d => AccountHistory(d).Entries > 0)) { store.Save(Engine, preferences); store.Backup("before-delete"); }
+            foreach (var name in deleted) Editor.DeleteAccount(name);
+        }
         if (renamed.Count > 0)
         {
             // Save first so the backup holds the latest entries, then rewrite everything in one go.
@@ -241,6 +250,12 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (renamed.Count > 0 && SelectedAccount is { } picked && renames.TryGetValue(picked, out var now)) SelectedAccount = now;
         if (!Accounts.Any(a => a.Name == SelectedAccount)) SelectedAccount = values.FirstOrDefault(a => !a.Hidden)?.Name;
         Save(); Notify();
+    }
+    /// <summary>How much recorded time an account has, so deleting one can say what will go.</summary>
+    public (int Entries, TimeSpan Time) AccountHistory(string account)
+    {
+        var rows = Engine.Sessions.Where(s => s.Account.Equals(account, StringComparison.OrdinalIgnoreCase)).ToList();
+        return (rows.Count, rows.Aggregate(TimeSpan.Zero, (sum, row) => sum + row.Duration));
     }
     public void ToggleDay()
     {
