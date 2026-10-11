@@ -72,6 +72,7 @@ public sealed class TimeDeckPreviewTests
             model.SetOvertimeTest(true); model.ToggleAccount("Account one"); Shot("dash-overtime"); model.SetOvertimeTest(false);
             model.ToggleBreak(); Shot("dash-break"); model.ToggleBreak();
             window.SelectTab(true); Shot("week");
+            model.SetWeekSection("hours"); Shot("hours"); model.SetWeekSection("entries"); Shot("entries"); model.SetWeekSection("overview");
             Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.Button>().Single(b => b.Name == "Settings").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
             Shot("settings");
         }

@@ -137,6 +137,15 @@
       <Setter Property="Height" Value="52" />
       <Setter Property="Padding" Value="16,6" />
     </Style>
+    <!-- A row of the Entries view: flat, rounded, and lit by the hover colour like the account rows. -->
+    <Style Selector="Button.entryRow">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="52" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
     <Style Selector="Button.account.active">
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
