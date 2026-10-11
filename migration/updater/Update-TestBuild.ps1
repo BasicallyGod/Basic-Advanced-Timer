@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Update', 'Launch', 'Rollback')][string]$Mode = 'Update',
-    # Which branch to take the newest successful build from. The picker window passes this; double-clicking the cmd files uses main.
+    # Which branch to take the newest successful build from. The console shortcut defaults to experimental.
     [string]$Branch = 'experimental'
 )
 
@@ -82,7 +82,7 @@ function Write-State($Current, $Previous) {
     $temporary = Join-Path $ChannelRoot ('state-' + [guid]::NewGuid().ToString('N') + '.tmp')
     $json = [ordered]@{ schemaVersion = 1; current = $Current; previous = $Previous } | ConvertTo-Json -Depth 6
     [IO.File]::WriteAllText($temporary, $json, [Text.UTF8Encoding]::new($false))
-    if (Test-Path -LiteralPath $StatePath) { [IO.File]::Replace($temporary, $StatePath, (Join-Path $Root 'state.json.bak')) }
+    if (Test-Path -LiteralPath $StatePath) { [IO.File]::Replace($temporary, $StatePath, (Join-Path $ChannelRoot 'state.json.bak')) }
     else { [IO.File]::Move($temporary, $StatePath) }
 }
 

@@ -30,7 +30,9 @@ jobs:
       - name: Test standalone updater without network or launching an application
         if: runner.os == 'Windows'
         shell: powershell
-        run: ./migration/updater/Test-Updater.ps1
+        run: |
+          ./migration/updater/Test-Updater.ps1
+          ./migration/updater/Test-UpdaterWindow.ps1
       - name: Build and test production views and themes
         env:
           TIMER_PREVIEW_DIR: ${{ runner.temp }}/avalonia-timer-previews

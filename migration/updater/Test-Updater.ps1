@@ -108,6 +108,8 @@ try {
     $Branch = 'experimental'; Select-Channel $Branch
     Assert ($StatePath -eq $experimentalState -and (Read-State).current.runId -eq 10) 'Alpha changed experimental build state.'
     Assert ((Get-Content -LiteralPath $sentinel -Raw) -eq 'persistent settings') 'Alpha touched experimental data.'
+    Assert (Test-Path -LiteralPath (Join-Path $ChannelRoot 'state.json.bak')) 'Experimental state backup is missing from its channel.'
+    Assert (!(Test-Path -LiteralPath (Join-Path $Root 'state.json.bak'))) 'Channels share a state backup.'
     $Branch = 'main'
     Expect-Failure { Select-Channel $Branch }
     Write-Host 'PASS: branch-separated install, data and rollback; offline launch; locking and validation.'
