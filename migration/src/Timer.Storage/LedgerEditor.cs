@@ -221,6 +221,24 @@ public sealed partial class LedgerEditor
         Change("Adjust time", () => { engine.Sessions.Add(row); SetNote(null, row, note); });
         return row;
     }
+    /// <summary>
+    /// Moves an adjustment to another place on the day's clock. Its credited minutes do not change, so no total moves; the start is only where
+    /// the adjustment is drawn on the timeline. It may overlap recorded time, because it is a correction and not a stretch of the clock.
+    /// </summary>
+    public SessionRow MoveAdjustment(SessionRow old, TimeSpan start)
+    {
+        if (!old.IsAdjustment) throw new ArgumentException("Only an adjustment can be moved this way.");
+        var index = Index(old); CheckNoteKey(old);
+        start = TimeSpan.FromSeconds(Math.Floor(start.TotalSeconds));
+        if (start < TimeSpan.Zero || start >= TimeSpan.FromDays(1)) throw new ArgumentException("Keep the adjustment within its own day.");
+        var row = old with { Start = start.ToString(@"hh\:mm\:ss") };
+        if (row == old) return old;
+        if (engine.Sessions.Any(s => !ReferenceEquals(s, old) && s.Date == row.Date && s.Start == row.Start && s.Account.Equals(row.Account, StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException("Another entry for that account starts at that time.");
+        var note = Note(old);
+        Change("Move adjustment", () => { raw[row] = Fields(old); engine.Sessions[index] = row; SetNote(old, row, note); });
+        return row;
+    }
     /// <summary>Moves entries to another account, with their notes, as one edit. Times do not change, so nothing can overlap.</summary>
     public void Reassign(IReadOnlyList<SessionRow> rows, string account)
     {

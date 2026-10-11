@@ -23,7 +23,6 @@ public static class ReviewViews
         caption.TextWrapping = TextWrapping.Wrap;
         caption.Margin = new Thickness(0, 0, 0, 10);
         Ui.Put(root, caption);
-        Ui.Put(root, AdjustmentChips(model, day), row: 1);
         var pixelsPerHour = model.TimelinePixelsPerHour;
         var canvas = new Canvas { Height = 24 * pixelsPerHour, MinWidth = 460, Background = Brushes.Transparent };
         for (var hour = 0; hour < 24; hour++)
@@ -37,6 +36,13 @@ public static class ReviewViews
         var grouped = groups.SelectMany(e => e.Sources).ToHashSet();
         var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.IsPositioned && s.Duration > TimeSpan.Zero && !grouped.Contains(s))
             .Select(s => (s.Account, Start: s.From, End: s.To, Row: (SessionRow?)s, Group: (ReviewEntry?)null)).ToList();
+        // Time added or taken off an account for the day sits on the timeline too, as a striped block that can be moved but not stretched.
+        foreach (var adjustment in model.Engine.Sessions.Where(s => s.Day == day && s.IsAdjustment))
+        {
+            var length = TimeSpan.FromMinutes(Math.Abs((double)decimal.Parse(adjustment.Minutes, System.Globalization.CultureInfo.InvariantCulture)));
+            var from = adjustment.From; var until = from + length > day.AddDays(1) ? day.AddDays(1) : from + length;
+            intervals.Add((adjustment.Account, from, until, adjustment, null));
+        }
         if (model.Engine.Active is { } active && active.Start < day.AddDays(1) && model.Engine.Now > day)
             intervals.Add((active.Account, active.Start < day ? day : active.Start, model.Engine.Now < day.AddDays(1) ? model.Engine.Now : day.AddDays(1), null, null));
         foreach (var group in groups)
@@ -62,6 +68,13 @@ public static class ReviewViews
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
             colour = model.BlockColour(colour);
             var end = interval.End > day.AddDays(1) ? day.AddDays(1) : interval.End;
+            if (interval.Row is { IsAdjustment: true } adjusted)
+            {
+                var adjustmentCard = AdjustmentCard(model, canvas, adjusted, colour, interval.Start, end, pixelsPerHour);
+                Canvas.SetTop(adjustmentCard, (interval.Start - day).TotalHours * pixelsPerHour + 2);
+                canvas.Children.Add(adjustmentCard); cards.Add((adjustmentCard, lane));
+                continue;
+            }
             var duration = interval.Group is { } groupDuration ? TimeSpan.FromMinutes((double)groupDuration.Minutes) : end - interval.Start;
             // Even a one-minute block is drawn at least eight pixels tall, so it can be seen and clicked. Zoom in for exact edges.
             var height = Math.Max(MinimumBlockHeight, (end - interval.Start).TotalHours * pixelsPerHour - 4);
@@ -370,29 +383,38 @@ public static class ReviewViews
             else root.Children.Add(button);
         }
     }
-    // Time added or taken off an account for the day has no place on the clock, so it sits in a row above the timeline, one chip each.
-    private static Control AdjustmentChips(TimerModel model, DateTime day)
+    // A correction is drawn as a striped block of the account's colour, muted towards grey, so it is plainly not recorded time. It is as tall as the
+    // minutes it adds or removes and sits where it was made (or where it was dragged to). A negative one carries the overtime colour on its label.
+    private static Border AdjustmentCard(TimerModel model, Canvas canvas, SessionRow row, string accountColour, DateTime start, DateTime end, double pixelsPerHour)
     {
-        var rows = model.Engine.Sessions.Where(s => s.Day == day && s.IsAdjustment).OrderBy(s => s.Start).ToList();
-        var panel = new WrapPanel { Name = "Adjustments", IsVisible = rows.Count > 0, Margin = new Thickness(0, 0, 0, 10) };
-        foreach (var row in rows)
+        var minutes = TimeSpan.FromMinutes((double)decimal.Parse(row.Minutes, System.Globalization.CultureInfo.InvariantCulture));
+        var amount = (minutes < TimeSpan.Zero ? "-" : "+") + model.FormatShort(minutes < TimeSpan.Zero ? -minutes : minutes);
+        var strong = ThemeColours.Mix(accountColour, "#8C9096", .6); var soft = ThemeColours.Mix(accountColour, "#8C9096", .15);
+        var stripes = new LinearGradientBrush
         {
-            var minutes = TimeSpan.FromMinutes((double)decimal.Parse(row.Minutes, System.Globalization.CultureInfo.InvariantCulture));
-            var amount = (minutes < TimeSpan.Zero ? "" : "+") + model.FormatShort(minutes);
-            var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(row.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
-            var text = Ui.Horizontal(new Border { Width = 11, Height = 11, CornerRadius = new CornerRadius(6), Background = Brush.Parse(model.BlockColour(colour)), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center },
-                Ui.Text($"{model.Label(row.Account)}  {amount}", 12, minutes < TimeSpan.Zero ? "overtime" : null));
-            var chip = new Border { Name = "Adjustment" + model.Engine.Sessions.IndexOf(row), Child = text, Padding = new Thickness(10, 5), Margin = new Thickness(0, 0, 8, 6), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Tag = row, Cursor = new Cursor(StandardCursorType.Hand) };
-            chip.Classes.Add("chip");
-            var note = model.Editor.Note(row);
-            ToolTip.SetTip(chip, $"Adjustment · {model.Label(row.Account)} · {amount}" + (note.Length > 0 ? "\n" + note : "") + "\nDouble-click to edit the note; right-click to delete.");
-            var edit = new MenuItem { Header = "Edit note…" }; edit.Click += (_, _) => model.OpenEntry(row);
-            var delete = new MenuItem { Header = "Delete adjustment" }; delete.Click += (_, _) => model.DeleteEntry(row);
-            chip.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, delete } };
-            chip.PointerPressed += (_, e) => { if (e.ClickCount == 2 && e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) { model.OpenEntry(row); e.Handled = true; } };
-            panel.Children.Add(chip);
-        }
-        return panel;
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Absolute), EndPoint = new RelativePoint(14, 14, RelativeUnit.Absolute), SpreadMethod = GradientSpreadMethod.Repeat,
+            GradientStops = { new GradientStop(Color.Parse(strong), 0), new GradientStop(Color.Parse(strong), .5), new GradientStop(Color.Parse(soft), .5), new GradientStop(Color.Parse(soft), 1) }
+        };
+        var height = Math.Max(MinimumBlockHeight, (end - start).TotalHours * pixelsPerHour - 4);
+        var ink = Ui.InkOn(ThemeColours.Mix(strong, soft, .5));
+        var text = new StackPanel { Spacing = 4 };
+        // A short block has room for one line only, so the account and the amount share it.
+        if (height < 52) text.Children.Add(Ui.Text($"{model.Label(row.Account)} · Adjustment {amount}", 13));
+        else { text.Children.Add(Ui.Text(model.Label(row.Account), 15)); text.Children.Add(Ui.Text($"Adjustment {amount}", 12)); }
+        var note = model.Editor.Note(row);
+        if (height >= 70 && !string.IsNullOrWhiteSpace(note)) { var noteText = Ui.Text(note, 12); noteText.TextTrimming = TextTrimming.CharacterEllipsis; text.Children.Add(noteText); }
+        foreach (TextBlock child in text.Children) child.Foreground = Brush.Parse(ink);
+        var card = new Border { Name = "Adjustment" + model.Engine.Sessions.IndexOf(row), Tag = row, Background = stripes, CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
+            Width = 380, Height = height, Padding = new Thickness(14, height < 52 ? 3 : 8), ClipToBounds = true };
+        card.Classes.Add("adjustment");
+        if (height >= 24) card.Child = text;
+        ToolTip.SetTip(card, $"Adjustment · {model.Label(row.Account)} · {amount} credited, no recorded time" + (note.Length > 0 ? "\n" + note : "")
+            + "\nDrag to move it on the timeline. Double-click to edit the note; right-click to delete.");
+        var edit = new MenuItem { Header = "Edit note…" }; edit.Click += (_, _) => model.OpenEntry(row);
+        var delete = new MenuItem { Header = "Delete adjustment" }; delete.Click += (_, _) => model.DeleteEntry(row);
+        card.ContextMenu = new ContextMenu { ItemsSource = new[] { edit, delete } };
+        TimelineGestures.AttachAdjustment(card, canvas, model, row, pixelsPerHour);
+        return card;
     }
     // Moves the clicked entry, or every selected block when the clicked one is selected, to another account.
     private static MenuItem MoveMenu(TimerModel model, IReadOnlyList<SessionRow> clicked)

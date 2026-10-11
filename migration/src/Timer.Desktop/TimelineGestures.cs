@@ -87,6 +87,47 @@ public static class TimelineGestures
         };
         card.Cursor = new Cursor(StandardCursorType.SizeAll);
     }
+    /// <summary>
+    /// Dragging an adjustment moves where it sits on the day, in five minute steps. It cannot be stretched, because its length is the minutes it
+    /// credits, and it may cross recorded time. Double-click edits the note.
+    /// </summary>
+    public static void AttachAdjustment(Border card, Canvas canvas, TimerModel model, SessionRow row, double pixelsPerHour)
+    {
+        Point? origin = null; var dragging = false; var delta = TimeSpan.Zero; var oldTop = 0.0;
+        card.Cursor = new Cursor(StandardCursorType.SizeAll);
+        card.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
+            if (e.ClickCount == 2) { model.OpenEntry(row); e.Handled = true; return; }
+            origin = e.GetPosition(canvas); delta = TimeSpan.Zero; dragging = false; oldTop = Canvas.GetTop(card);
+            e.Handled = true; e.Pointer.Capture(card);
+        };
+        card.PointerMoved += (_, e) =>
+        {
+            if (origin is not { } start) return;
+            var moved = e.GetPosition(canvas) - start;
+            if (!dragging && Math.Abs(moved.Y) < 5) return;
+            dragging = true; delta = AdjustmentDelta(row, TimeSpan.FromHours(moved.Y / pixelsPerHour));
+            Canvas.SetTop(card, oldTop + delta.TotalHours * pixelsPerHour); card.Opacity = .75; e.Handled = true;
+        };
+        card.PointerReleased += (_, e) =>
+        {
+            if (origin is null) return;
+            var commit = dragging && delta != TimeSpan.Zero; var change = delta;
+            origin = null; dragging = false; e.Pointer.Capture(null); card.Opacity = 1; Canvas.SetTop(card, oldTop);
+            if (commit) model.MoveAdjustment(row, (row.From + change).TimeOfDay);
+            e.Handled = true;
+        };
+        card.PointerCaptureLost += (_, _) => { if (origin is null) return; origin = null; dragging = false; card.Opacity = 1; Canvas.SetTop(card, oldTop); };
+    }
+    /// <summary>Snaps an adjustment's move to five minutes on the clock and keeps it inside its day.</summary>
+    public static TimeSpan AdjustmentDelta(SessionRow row, TimeSpan requested)
+    {
+        var wanted = (row.From + requested).TimeOfDay.TotalMinutes;
+        if (row.From + requested < row.Day) wanted = 0; else if (row.From + requested >= row.Day.AddDays(1)) wanted = 24 * 60 - 5;
+        var snapped = Math.Clamp(Math.Round(wanted / 5) * 5, 0, 24 * 60 - 5);
+        return row.Day + TimeSpan.FromMinutes(snapped) - row.From;
+    }
     /// <summary>Which edge a press at <paramref name="y"/> grabs, -1 top, 1 bottom, 0 for moving the whole block.</summary>
     public static int EdgeAt(double y, double height)
     {

@@ -437,6 +437,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note)
         => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note); });
+    public bool MoveAdjustment(SessionRow row, TimeSpan start) => ChangeLog(() => Editor.MoveAdjustment(row, start));
     public bool DragEntry(SessionRow row, DateTime start, DateTime end, bool insert)
         => ChangeLog(() => Editor.EditTimeline(row, start, end, insert));
     /// <summary>Moves an account to a new place among the accounts (hidden ones keep their own places).</summary>

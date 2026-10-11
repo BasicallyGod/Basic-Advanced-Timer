@@ -96,14 +96,17 @@ public sealed class AdjustTimeTests
             Assert.False(dialog.IsVisible);
             Assert.Equal(TimeSpan.FromMinutes(80), model.Today(model.Accounts[0]));
             var chip = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name?.StartsWith("Adjustment") == true);
-            Assert.Contains(chip.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Account one  +0:20");
+            Assert.Contains(chip.GetVisualDescendants().OfType<TextBlock>(), t => t.Text!.Contains("Account one") && t.Text.Contains("Adjustment +0:20"));
+            // It is a striped block that is as tall as the minutes it adds, so it reads as a correction and not as recorded time.
+            Assert.IsType<Avalonia.Media.LinearGradientBrush>(chip.Background); Assert.Equal(Avalonia.Media.GradientSpreadMethod.Repeat, ((Avalonia.Media.LinearGradientBrush)chip.Background!).SpreadMethod);
+            Assert.True(chip.Height >= 20 * Math.Max(1, 1) / 2.0 || chip.Height >= ReviewViews.MinimumBlockHeight); Assert.Contains("adjustment", chip.Classes);
             Assert.True(chip.IsEffectivelyVisible); Assert.Contains("Call ran over", ToolTip.GetTip(chip)!.ToString());
             Assert.Equal("Adjust time", model.Editor.UndoLabel);
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
             using var shot = window.CaptureRenderedFrame(); if (folder is not null) { Directory.CreateDirectory(folder); shot!.Save(Path.Combine(folder, "adjustment-timeline.png")); }
             // A bad entry stays in the dialog with a message.
             model.AdjustTime("Account one", Day, -500, ""); Assert.Contains("more time off", model.EditError);
-            // Deleting the chip's adjustment takes it off the timeline and the total.
+            // Deleting the adjustment takes it off the timeline and the total.
             var menu = ((IEnumerable<Control>)chip.ContextMenu!.ItemsSource!).OfType<MenuItem>().Single(m => (string?)m.Header == "Delete adjustment");
             menu.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
             Assert.Equal(TimeSpan.FromMinutes(60), model.Today(model.Accounts[0]));
@@ -224,6 +227,49 @@ public sealed class AdjustTimeTests
         {
             var item = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().Single(m => m.Name == "BuildVersion");
             Assert.False(item.IsEnabled); Assert.StartsWith("Version", (string)item.Header!);
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void AnAdjustmentCanBeMovedOnTheDayWithoutChangingAnyTotalAndUndoPutsItBack()
+    {
+        var engine = Engine(); var editor = new LedgerEditor(engine); var row = editor.Adjust("Account one", Day, 15, "Call ran over", Day.AddHours(14));
+        var before = engine.Credited("Account one", Day, Day.AddDays(1));
+        var moved = editor.MoveAdjustment(row, TimeSpan.FromHours(10.5));
+        Assert.Equal("10:30:00", moved.Start); Assert.Equal("adjusted", moved.End); Assert.Equal("15", moved.Minutes);
+        Assert.Equal(before, engine.Credited("Account one", Day, Day.AddDays(1))); Assert.Equal("Call ran over", editor.Note(moved));
+        Assert.Equal("Move adjustment", editor.UndoLabel); editor.Undo();
+        Assert.Contains(engine.Sessions, s => s.IsAdjustment && s.Start == "14:00:00"); Assert.Equal("Call ran over", editor.Note(engine.Sessions.Single(s => s.IsAdjustment)));
+        Assert.Throws<ArgumentException>(() => editor.MoveAdjustment(new SessionRow(Day.ToString("yyyy-MM-dd"), "Account one", "09:00:00", "09:30:00", "30"), TimeSpan.FromHours(1)));
+        Assert.Throws<ArgumentException>(() => editor.MoveAdjustment(engine.Sessions.Single(s => s.IsAdjustment), TimeSpan.FromHours(25)));
+    }
+
+    [Fact]
+    public void ADragOfAnAdjustmentSnapsToFiveMinutesAndStaysInsideItsDay()
+    {
+        var row = new SessionRow(Day.ToString("yyyy-MM-dd"), "Account one", "14:00:00", "adjusted", "-10");
+        Assert.Equal(TimeSpan.FromMinutes(30), TimelineGestures.AdjustmentDelta(row, TimeSpan.FromMinutes(32)));
+        Assert.Equal(TimeSpan.FromHours(-14), TimelineGestures.AdjustmentDelta(row, TimeSpan.FromHours(-20)));
+        Assert.Equal(TimeSpan.FromHours(10) - TimeSpan.FromMinutes(5), TimelineGestures.AdjustmentDelta(row, TimeSpan.FromHours(30)));
+    }
+
+    [AvaloniaFact]
+    public void AdjustmentsAreDrawnAsStripedBlocksBesideRecordedTime()
+    {
+        var now = Day.AddHours(14); var engine = Engine(() => now); engine.Sessions.Add(Row("09:00:00", "60"));
+        engine.Sessions.Add(new(Day.ToString("yyyy-MM-dd"), "Account one", "09:20:00", "adjusted", "25"));
+        engine.Sessions.Add(new(Day.ToString("yyyy-MM-dd"), "Account two", "10:30:00", "adjusted", "-15"));
+        var model = new TimerModel(engine, new StoreSettings(new() { new("Account one", 10), new("Account two") }, false, "Light", DayOfWeek.Monday));
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            var blocks = window.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("Adjustment") == true).ToList();
+            Assert.Equal(2, blocks.Count); Assert.All(blocks, b => Assert.IsType<Avalonia.Media.LinearGradientBrush>(b.Background));
+            Assert.Contains(blocks.SelectMany(b => b.GetVisualDescendants().OfType<TextBlock>()), t => t.Text!.Contains("Adjustment -0:15"));
+            var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
+            if (folder is not null) { Directory.CreateDirectory(folder); using var shot = window.CaptureRenderedFrame(); shot!.Save(Path.Combine(folder, "adjustment-blocks.png")); }
         }
         finally { window.Close(); }
     }
