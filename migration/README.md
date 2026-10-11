@@ -4,7 +4,7 @@ This folder holds the whole application. The name `migration` is historical and 
 
 ## Running it
 
-Download **BasicsAdvancedTimer-Windows-preview** from the latest successful **Avalonia migration preview** run, extract the whole ZIP into its own folder and run `BasicsAdvancedTimer.Preview.exe`. The package includes the .NET runtime and needs no administrator rights. Data goes to **migration-data** beside the executable, or to the folder given with `--data-dir`. `Start-Demo.cmd` (or Settings, Open sample-data demo) runs a simulated 14:15 day with seven accounts and does not save anything real.
+Download **BasicsAdvancedTimer-Windows-experimental** from the latest successful **Development builds** workflow run, extract the whole ZIP into its own folder and run `BasicsAdvancedTimer.Preview.exe`. The package includes the .NET runtime and needs no administrator rights. Data goes to **migration-data** beside the executable, or to the folder given with `--data-dir`. `Start-Demo.cmd` (or Settings, Open sample-data demo) runs a simulated 14:15 day with seven accounts and does not save anything real.
 
 The right-click menu shows the running build, for example `Version 0.1.77 (aa17cda)`: the workflow run number and the first seven characters of the commit. Local builds show development build.
 
@@ -33,7 +33,7 @@ Records live in `timer.db` (SQLite, write-ahead log), opened exclusively so two 
 
 ## Experimental Microsoft Store package
 
-The independent MSIX workflow and signing instructions are in [packaging/README.md](packaging/README.md). Portable data continues alongside its EXE, while packaged app data lives in per-user storage. The development MSIX is temporarily self-signed for testing and is **not** a published Store build.
+The independent MSIX workflow and signing instructions are in [packaging/README.md](packaging/README.md). Release promotion rules are in [../BRANCHES.md](../BRANCHES.md). Portable data continues alongside its EXE, while packaged app data lives in per-user storage. The development MSIX is temporarily self-signed for testing and is **not** a published Store build.
 
 ## Architecture
 
