@@ -54,6 +54,13 @@ public sealed class PolishTests
             window.ContextMenu!.Open(); Dispatcher.UIThread.RunJobs();
             var menu = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
             Assert.True(menu.Single(m => m.Name == "TestOvertime").IsVisible); Assert.True(menu.Single(m => m.Name == "BuildVersion").IsVisible);
+            // The settings page shows the Development section already open, with its switch fixed on and no button to open a demo from inside one.
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            Assert.True(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);
+            var toggle = window.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Name == "DeveloperFeatures");
+            Assert.True(toggle.IsChecked); Assert.False(toggle.IsEnabled);
+            Assert.False(window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "OpenDemo").IsVisible == true && window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "OpenDemo").GetVisualAncestors().OfType<Grid>().First().IsVisible);
+            Assert.True(window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "InDemoNote").IsVisible);
         }
         finally { window.Close(); }
     }

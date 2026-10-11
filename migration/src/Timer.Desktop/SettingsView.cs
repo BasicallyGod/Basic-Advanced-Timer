@@ -50,11 +50,17 @@ public sealed class SettingsView : ScrollViewer
 
         // Hidden until unlocked: ten quick clicks on the About tile. Once unlocked it holds the sample-data demo and a switch to hide the features again.
         var developer = new StackPanel { Spacing = 10 };
-        developer.Children.Add(Row("Sample data", Ui.Button("Open sample-data demo", Ui.StartDemo, "OpenDemo")));
-        developer.Children.Add(Toggle("Developer features (overtime tester and version on the right-click menu)", "DeveloperFeatures", () => model.DeveloperUnlocked, v => model.SetDeveloper(v)));
+        // In the demo the developer features are simply on: there is no demo to open from inside it, and the switch is fixed on and greyed out.
+        var openDemo = Row("Sample data", Ui.Button("Open sample-data demo", Ui.StartDemo, "OpenDemo")); openDemo.IsVisible = !model.IsDemo;
+        developer.Children.Add(openDemo);
+        var inDemo = Ui.Text("You are in the sample-data demo, so the developer features are on. Nothing here is saved.", 13, "muted"); inDemo.Name = "InDemoNote"; inDemo.TextWrapping = Avalonia.Media.TextWrapping.Wrap; inDemo.IsVisible = model.IsDemo;
+        developer.Children.Add(inDemo);
+        var developerToggle = Toggle("Developer features (overtime tester and version on the right-click menu)", "DeveloperFeatures", () => model.DeveloperUnlocked, v => model.SetDeveloper(v));
+        developerToggle.IsEnabled = !model.IsDemo;
+        developer.Children.Add(developerToggle);
         var developerSection = Section("Development", developer); developerSection.Name = "DevelopmentSection";
-        developerSection.IsVisible = model.DeveloperUnlocked && !model.IsDemo;
-        syncs.Add(() => developerSection.IsVisible = model.DeveloperUnlocked && !model.IsDemo);
+        developerSection.IsVisible = model.DeveloperUnlocked;
+        syncs.Add(() => developerSection.IsVisible = model.DeveloperUnlocked);
         page.Children.Add(developerSection);
         var aboutText = new StackPanel { Spacing = 4 };
         var about = Ui.Text(BuildInfo.Current, 13, "muted"); about.Name = "AboutVersion"; aboutText.Children.Add(about);
