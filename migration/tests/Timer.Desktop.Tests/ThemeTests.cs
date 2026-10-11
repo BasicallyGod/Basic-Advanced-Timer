@@ -212,7 +212,7 @@ public sealed class ThemeTests
         var model = TimerModel.CreateDemo(); var menu = Ui.SettingsMenu(model);
         var appearance = menu.Items.OfType<Avalonia.Controls.MenuItem>().First(i => (i.Header as string) == "Appearance");
         var names = appearance.Items.OfType<Avalonia.Controls.MenuItem>().Select(i => (string)i.Header!).ToList();
-        Assert.Equal(new[] { "System", "Light", "Dark", "Hawthorn" }, names.Take(4)); Assert.Single(names, n => n == "Hawthorn");
+        Assert.Equal(new[] { "System", "Light", "Dark", "Time Deck" }, names.Take(4)); Assert.Single(names, n => n == "Hawthorn");
     }
 
     [Avalonia.Headless.XUnit.AvaloniaFact]
@@ -223,5 +223,56 @@ public sealed class ThemeTests
         model.SaveTheme(model.Themes.Single(t => t.Name == copy) with { BlockStyle = ThemeBlockStyle.Softened }, copy);
         Assert.NotEqual("#91B7D5", model.BlockColour("#91B7D5"));
         model.DeleteTheme(copy); model.SetTheme("System");
+    }
+
+    [Fact]
+    public void TintedBlocksKeepTheirTextReadableForEveryPresetColourAndTheEdgeKeepsTheAccountColour()
+    {
+        foreach (var colour in TimerModel.Palette)
+        {
+            var look = ThemeDerivation.Block(ThemeLibrary.TimeDeck, colour);
+            Assert.True(ThemeColours.Contrast(look.Text, look.Fill) >= 4.5, $"{colour}: text {look.Text} on fill {look.Fill}");
+            Assert.Equal(colour.ToUpperInvariant(), look.Edge.ToUpperInvariant()); // Time Deck leaves the edge as the account's own colour.
+            Assert.NotEqual(colour.ToUpperInvariant(), look.Fill.ToUpperInvariant()); // The fill is a tint, not the colour itself.
+        }
+        // A theme can push the edge towards its text colour, and take more or less of the account colour into the fill.
+        var stronger = ThemeLibrary.TimeDeck with { BlockEdge = .5, BlockTint = .9 };
+        var a = ThemeDerivation.Block(ThemeLibrary.TimeDeck, "#91B7D5"); var b = ThemeDerivation.Block(stronger, "#91B7D5");
+        Assert.NotEqual(a.Edge, b.Edge); Assert.True(ThemeColours.Luminance(b.Edge) < ThemeColours.Luminance(a.Edge)); Assert.True(ThemeColours.Luminance(b.Fill) < ThemeColours.Luminance(a.Fill));
+        // The older styles still work: solid blocks keep the account colour, softened ones blend towards the surface.
+        Assert.Equal("#91B7D5", ThemeDerivation.Block(ThemeLibrary.Light, "#91B7D5").Fill);
+        Assert.NotEqual("#91B7D5", ThemeDerivation.Block(ThemeLibrary.Light with { BlockStyle = ThemeBlockStyle.Softened }, "#91B7D5").Fill);
+    }
+
+    [Fact]
+    public void BlockRulesSurviveSavingAndAnOlderThemeLineGetsTheDefaults()
+    {
+        var mine = ThemeLibrary.Light with { Name = "Mine", BuiltIn = false, BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .45, BlockEdge = .1 };
+        var back = ThemeStorage.FromLines(new[] { ThemeStorage.ToLine(mine) }).Single();
+        Assert.Equal(ThemeBlockStyle.Tinted, back.BlockStyle); Assert.Equal(.45, back.BlockTint); Assert.Equal(.1, back.BlockEdge);
+        var old = ThemeStorage.FromLines(new[] { "{\"Name\":\"Older\",\"Dark\":false,\"Colours\":{},\"BlockStyle\":\"softened\"}" }).Single();
+        Assert.Equal(ThemeBlockStyle.DefaultTint, old.BlockTint); Assert.Equal(ThemeBlockStyle.DefaultEdge, old.BlockEdge); Assert.Equal(ThemeBlockStyle.Softened, old.BlockStyle);
+        var wild = ThemeStorage.FromLines(new[] { ThemeStorage.ToLine(mine with { Name = "Wild", BlockTint = 9, BlockEdge = -3 }) }).Single();
+        Assert.Equal(1, wild.BlockTint); Assert.Equal(0, wild.BlockEdge); // Kept within sensible limits.
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void TheEditorShowsTheBlockRuleSlidersForATintedThemeAndSavesThem()
+    {
+        var model = TimerModel.CreateDemo(); model.SetTheme("Time Deck"); var copy = model.DuplicateTheme("Time Deck");
+        var window = new ThemesWindow(model); window.Show();
+        try
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var rules = Find<Avalonia.Controls.StackPanel>(window, "BlockRules"); Assert.True(rules.IsVisible);
+            var tint = Find<Avalonia.Controls.Slider>(window, "BlockTint"); Assert.Equal(.55, tint.Value, 2);
+            tint.Value = .8; Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(.55, model.CurrentTheme.BlockTint, 2); // Only previewed so far, not kept.
+            Press(window, "SaveTheme");
+            Assert.Equal(.8, model.Themes.Single(x => x.Name == copy).BlockTint, 2);
+            var style = Find<Avalonia.Controls.ComboBox>(window, "ThemeBlockStyle"); style.SelectedIndex = 0; Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.False(Find<Avalonia.Controls.StackPanel>(window, "BlockRules").IsVisible);
+        }
+        finally { window.Close(); model.DeleteTheme(copy); model.SetTheme("System"); }
     }
 }

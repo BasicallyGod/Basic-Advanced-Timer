@@ -59,20 +59,23 @@ public static class ReviewViews
             var lane = ends.FindIndex(end => end <= interval.Start);
             if (lane < 0) { lane = ends.Count; ends.Add(interval.End); } else ends[lane] = interval.End;
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
-            colour = model.BlockColour(colour);
+            var look = model.BlockLook(colour); colour = look.Fill;
             var end = interval.End > day.AddDays(1) ? day.AddDays(1) : interval.End;
             var duration = interval.Group is { } groupDuration ? TimeSpan.FromMinutes((double)groupDuration.Minutes) : end - interval.Start;
             // Even a one-minute block is drawn at least eight pixels tall, so it can be seen and clicked. Zoom in for exact edges.
             var height = Math.Max(MinimumBlockHeight, (end - interval.Start).TotalHours * pixelsPerHour - 4);
-            var ink = Ui.InkOn(colour);
-            var text = new StackPanel { Spacing = 6 };
+            var ink = look.Text;
+            var text = new StackPanel { Spacing = 6, Margin = new Thickness(12, height < 58 ? 2 : 10, 14, height < 58 ? 2 : 10) };
             text.Children.Add(Ui.Text(model.Label(interval.Account) + (interval.Group is { } labelGroup ? $" · Group ({labelGroup.Sources.Count})" : ""), 15));
             if (height >= 58) text.Children.Add(Ui.Text($"{interval.Start:HH:mm} – {end:HH:mm} · {model.Format(duration)}", 12));
             foreach (TextBlock child in text.Children) child.Foreground = Brush.Parse(ink);
             var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 10),
-                Width = 380, Height = height, Padding = new Thickness(14, height < 58 ? 2 : 10),
-                ClipToBounds = true };
-            if (height >= 24) card.Child = text;
+                Width = 380, Height = height, ClipToBounds = true };
+            // A strip down the left side in the account's own colour, so a block can be told apart at a glance whatever its fill is.
+            var content = new Grid { ColumnDefinitions = new ColumnDefinitions("5,*") };
+            content.Children.Add(new Border { Name = "BlockEdge", Background = Brush.Parse(look.Edge) });
+            if (height >= 24) { Grid.SetColumn(text, 1); content.Children.Add(text); }
+            card.Child = content;
             var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
             // A selected block is shown by its border alone. Nothing is added to the text, so the block never shifts or clips.
             if (model.IsSelected(selectionSources)) card.Classes.Add("mergeSelected");

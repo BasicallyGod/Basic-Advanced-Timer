@@ -7,7 +7,8 @@ namespace Timer.Core;
 /// A theme is a name, whether it sits on a light or a dark base (so the standard controls know what to expect), and a colour for each
 /// named part of the app. Everything else about how a theme looks, including the pill's break and overtime tints, is worked out from these.
 /// </summary>
-public sealed record ThemeDefinition(string Name, bool Dark, IReadOnlyDictionary<string, string> Colours, bool BuiltIn = false, string BlockStyle = ThemeBlockStyle.AsChosen)
+public sealed record ThemeDefinition(string Name, bool Dark, IReadOnlyDictionary<string, string> Colours, bool BuiltIn = false, string BlockStyle = ThemeBlockStyle.AsChosen,
+    double BlockTint = ThemeBlockStyle.DefaultTint, double BlockEdge = ThemeBlockStyle.DefaultEdge)
 {
     public string Colour(string token) => Colours.TryGetValue(token, out var value) ? value : throw new KeyNotFoundException("The theme has no colour for " + token);
 }
@@ -19,7 +20,14 @@ public static class ThemeBlockStyle
     public const string AsChosen = "asChosen";
     /// <summary>The account's colour softened towards the theme's surface, so blocks sit calmly in it.</summary>
     public const string Softened = "softened";
-    public static bool IsKnown(string? style) => style is AsChosen or Softened;
+    /// <summary>
+    /// A calm, tinted block: the theme's surface with a little of the account's colour in it, and a stronger edge down the left side in the account's own colour.
+    /// <see cref="ThemeDefinition.BlockTint"/> is how much account colour the fill takes, and <see cref="ThemeDefinition.BlockEdge"/> how far the edge is pushed
+    /// towards the theme's text colour (0 keeps the account's colour exactly).
+    /// </summary>
+    public const string Tinted = "tinted";
+    public const double DefaultTint = .3, DefaultEdge = .2;
+    public static bool IsKnown(string? style) => style is AsChosen or Softened or Tinted;
 }
 
 public static class ThemeTokens
@@ -82,6 +90,12 @@ public static class ThemeColours
         return 0.2126 * C(r) + 0.7152 * C(g) + 0.0722 * C(b);
     }
     /// <summary>The WCAG contrast ratio between two colours, from 1 (none) to 21. Text wants about 4.5 or more.</summary>
+    /// <summary>Dark text or white text, whichever reads better on this colour.</summary>
+    public static string ReadableOn(string hex)
+    {
+        double Channel(int at) { var v = Convert.ToInt32(hex.Substring(at, 2), 16) / 255.0; return v <= 0.03928 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4); }
+        return 0.2126 * Channel(1) + 0.7152 * Channel(3) + 0.0722 * Channel(5) > 0.3 ? "#24312B" : "#FFFFFF";
+    }
     public static double Contrast(string a, string b)
     {
         var x = Luminance(a); var y = Luminance(b); return (Math.Max(x, y) + .05) / (Math.Min(x, y) + .05);
@@ -111,6 +125,28 @@ public static class ThemeDerivation
         }
         return result;
     }
+    /// <summary>What a timeline block is drawn with: its fill, the colour of the edge down its left side, and the text on it.</summary>
+    public readonly record struct BlockLook(string Fill, string Edge, string Text);
+    /// <summary>Turns an account colour (already lifted if it was very dark) into a block for this theme, by the theme's own block rules.</summary>
+    public static BlockLook Block(ThemeDefinition theme, string accountColour)
+    {
+        var ink = theme.Colour("Ink");
+        switch (theme.BlockStyle)
+        {
+            case ThemeBlockStyle.Tinted:
+            {
+                var fill = ThemeColours.Mix(theme.Colour("Surface"), accountColour, Math.Clamp(theme.BlockTint, 0, 1));
+                return new(fill, ThemeColours.Mix(accountColour, ink, Math.Clamp(theme.BlockEdge, 0, 1)), ink);
+            }
+            case ThemeBlockStyle.Softened:
+            {
+                var fill = Soften(theme, accountColour);
+                return new(fill, ThemeColours.Mix(fill, ink, .18), ThemeColours.ReadableOn(fill));
+            }
+            default:
+                return new(accountColour, ThemeColours.Mix(accountColour, ink, .18), ThemeColours.ReadableOn(accountColour));
+        }
+    }
     /// <summary>A block colour softened towards the theme's surface, for themes that ask for it. Dark colours are lifted first so they show.</summary>
     public static string Soften(ThemeDefinition theme, string colour)
         => theme.BlockStyle == ThemeBlockStyle.Softened ? ThemeColours.Mix(colour, theme.Colour("Surface"), theme.Dark ? .38 : .22) : colour;
@@ -134,6 +170,9 @@ public static class ThemeLibrary
         "#2E7D4F", "#C0392B", "#9A6200", "#A87400", "#C62828", "#2F5FCF", "#FFFFFF", "#1B1F24", LightShadow);
     public static readonly ThemeDefinition Dark = Make("Dark", true, "#1E2227", "#272C33", "#ECEFF3", "#A3AAB4", "#3A414A", "#313842", "#2F4560",
         "#7FD6A6", "#FF9494", "#E8BD67", "#F0C45A", "#FF8A8A", "#2F6FDB", "#FFFFFF", "#ECEFF3", DarkShadow);
+    /// <summary>Time Deck: a light, neutral dashboard with an orange accent, and tinted blocks with a stronger edge on the left.</summary>
+    public static readonly ThemeDefinition TimeDeck = Make("Time Deck", false, "#FBFBFC", "#F2F3F5", "#17181C", "#6A6F78", "#E3E5E9", "#EDEFF2", "#FDEAD3",
+        "#E8700A", "#C0243F", "#D9890B", "#E8790E", "#D7263D", "#F27A0D", "#1B1209", "#17181C", LightShadow) with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .55, BlockEdge = 0 };
     public static readonly ThemeDefinition Sage = Make("Sage", true, "#14201B", "#1C2B24", "#E8F2EA", "#A8BBAE", "#34493D", "#26382E", "#35523F",
         "#7FDC9A", "#FF9292", "#E8BD67", "#F0C45A", "#FF9292", "#7FDC9A", "#0F2218", "#E8F2EA", DarkShadow);
     public static readonly ThemeDefinition Graphite = Make("Graphite", true, "#1F2226", "#2A2E34", "#EDEEF0", "#A7ABB2", "#3B4047", "#32363C", "#3C4A60",
@@ -150,7 +189,7 @@ public static class ThemeLibrary
         "#006B2D", "#B30000", "#7A4B00", "#7A4B00", "#B30000", "#0050C8", "#FFFFFF", "#000000", "#80000000");
     public static readonly ThemeDefinition HighContrastDark = Make("High contrast dark", true, "#000000", "#0D0D0D", "#FFFFFF", "#D0D0D0", "#8C8C8C", "#262626", "#003C78",
         "#4DFF88", "#FF6B6B", "#FFD23F", "#FFD23F", "#FF6B6B", "#4DFF88", "#000000", "#FFFFFF", "#E6000000");
-    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark, Hawthorn, Sage, Graphite, Paper, Midnight, Sandstone, Aubergine, HighContrastLight, HighContrastDark };
+    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark, TimeDeck, Hawthorn, Sage, Graphite, Paper, Midnight, Sandstone, Aubergine, HighContrastLight, HighContrastDark };
     /// <summary>"System" is not a theme of its own: it picks Light or Dark to match the computer.</summary>
     public const string System = "System";
     /// <summary>What a new installation starts on.</summary>
@@ -162,9 +201,9 @@ public static class ThemeLibrary
 /// <summary>Reads and writes a user's own themes as one JSON line each, which is how the settings file keeps lists.</summary>
 public static class ThemeStorage
 {
-    private sealed record Saved(string Name, bool Dark, Dictionary<string, string> Colours, string? BlockStyle);
+    private sealed record Saved(string Name, bool Dark, Dictionary<string, string> Colours, string? BlockStyle, double? BlockTint = null, double? BlockEdge = null);
     public static string ToLine(ThemeDefinition theme)
-        => JsonSerializer.Serialize(new Saved(theme.Name, theme.Dark, new Dictionary<string, string>(theme.Colours), theme.BlockStyle));
+        => JsonSerializer.Serialize(new Saved(theme.Name, theme.Dark, new Dictionary<string, string>(theme.Colours), theme.BlockStyle, theme.BlockTint, theme.BlockEdge));
     /// <summary>Returns the themes in the lines that are sound. A damaged line is skipped, so one bad theme never costs the others.</summary>
     public static List<ThemeDefinition> FromLines(IEnumerable<string> lines)
     {
@@ -181,7 +220,8 @@ public static class ThemeStorage
                 foreach (var token in ThemeTokens.Names)
                     colours[token] = saved.Colours is not null && saved.Colours.TryGetValue(token, out var value) && ThemeTokens.IsValid(token, value) ? value.ToUpperInvariant() : basis.Colour(token);
                 if (result.Any(t => t.Name.Equals(saved.Name, StringComparison.OrdinalIgnoreCase)) || ThemeLibrary.BuiltIn.Any(t => t.Name.Equals(saved.Name, StringComparison.OrdinalIgnoreCase))) continue;
-                result.Add(new ThemeDefinition(saved.Name.Trim(), saved.Dark, colours, false, ThemeBlockStyle.IsKnown(saved.BlockStyle) ? saved.BlockStyle! : ThemeBlockStyle.AsChosen));
+                result.Add(new ThemeDefinition(saved.Name.Trim(), saved.Dark, colours, false, ThemeBlockStyle.IsKnown(saved.BlockStyle) ? saved.BlockStyle! : ThemeBlockStyle.AsChosen,
+                    Math.Clamp(saved.BlockTint ?? ThemeBlockStyle.DefaultTint, 0, 1), Math.Clamp(saved.BlockEdge ?? ThemeBlockStyle.DefaultEdge, 0, 1)));
             }
             catch (JsonException) { }
         }

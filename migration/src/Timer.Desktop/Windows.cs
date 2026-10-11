@@ -112,7 +112,7 @@ public sealed class PillWindow : Window
     public Action? OpenDashboard { get; set; }
     private readonly TimerModel model;
     private readonly TextBlock account = Ui.Text("", 15);
-    private readonly TextBlock timer = new TextBlock { Text = "00:00:00", FontSize = 22, FontWeight = Avalonia.Media.FontWeight.SemiBold };
+    private readonly TextBlock timer = new TextBlock { Text = "00:00:00", FontSize = 22, Classes = { "clock" } };
     private readonly TextBlock pillUnallocated = Ui.Text("", 10, "muted");
     private readonly StackPanel expansion = new() { IsVisible = false, Spacing = 8 };
     private readonly Button day;
@@ -303,7 +303,7 @@ public sealed class DashboardWindow : Window
 {
     public Action? OpenPill { get; set; }
     private readonly TimerModel model;
-    private readonly TextBlock clock = new TextBlock { Text = "00:00:00", FontSize = 40, FontWeight = Avalonia.Media.FontWeight.SemiBold };
+    private readonly TextBlock clock = new TextBlock { Text = "00:00:00", FontSize = 40, Classes = { "clock" } };
     private readonly TextBlock account = Ui.Text("", 16);
     private Border zoomControls = new(); private Control? identityBlock, accountsHeadBlock, toolsRow; private Button zoomOut = new(), zoomIn = new();
     private readonly TextBlock allocatedValue = new TextBlock { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };

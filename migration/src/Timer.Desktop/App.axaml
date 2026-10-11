@@ -51,6 +51,19 @@
     <Style Selector="TextBlock"><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
     <!-- The clock is the main thing on the screen, so when nothing is running it is full-strength text rather than the dim idle grey. -->
+    <!-- Clocks and the big numbers use Bricolage Grotesque, in instances cut from its variable font so each weight is its own family. -->
+    <Style Selector="TextBlock.clock">
+      <Setter Property="FontFamily" Value="{DynamicResource ClockFont}" />
+      <Setter Property="FontWeight" Value="Normal" />
+    </Style>
+    <Style Selector="TextBlock.clockLight">
+      <Setter Property="FontFamily" Value="{DynamicResource ClockLightFont}" />
+      <Setter Property="FontWeight" Value="Normal" />
+    </Style>
+    <Style Selector="TextBlock.figures">
+      <Setter Property="FontFamily" Value="{DynamicResource FiguresFont}" />
+      <Setter Property="FontWeight" Value="Normal" />
+    </Style>
     <Style Selector="TextBlock.clockIdle"><Setter Property="Foreground" Value="{DynamicResource Clock}" /></Style>
     <!-- The main call to action takes the theme accent, with its own text colour for contrast. -->
     <Style Selector="Button.accentButton /template/ ContentPresenter#PART_ContentPresenter">

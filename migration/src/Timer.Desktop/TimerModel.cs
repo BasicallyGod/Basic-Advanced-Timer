@@ -323,7 +323,9 @@ public sealed class TimerModel : INotifyPropertyChanged
         appliedVariant = null; ApplyTheme(); Save(); Notify();
     }
     /// <summary>The colour to draw an account's blocks, dots and bars in: very dark colours lifted so they show, then softened if the theme asks for it.</summary>
-    public string BlockColour(string accountColour) => ThemeDerivation.Soften(CurrentTheme, Ui.Visible(accountColour));
+    public string BlockColour(string accountColour) => BlockLook(accountColour).Fill;
+    /// <summary>The fill, left edge and text colour of a timeline block for an account colour, by the selected theme's block rules.</summary>
+    public ThemeDerivation.BlockLook BlockLook(string accountColour) => ThemeDerivation.Block(CurrentTheme, Ui.Visible(accountColour));
     public void SetTheme(string theme)
     {
         if (theme != ThemeLibrary.System && Themes.All(t => t.Name != theme)) throw new ArgumentException("Unknown theme", nameof(theme));

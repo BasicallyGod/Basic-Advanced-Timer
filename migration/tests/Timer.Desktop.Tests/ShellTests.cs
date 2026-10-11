@@ -153,7 +153,7 @@ public sealed class ShellTests
             // The totals sit under the clock, in one line with it above them.
             var clockText = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 40); var figure = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "4.50h");
             Assert.True(figure.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y > clockText.TranslatePoint(new Point(0, clockText.Bounds.Height - 2), dashboard)!.Value.Y);
-            Assert.Equal(Avalonia.Media.FontWeight.SemiBold, clockText.FontWeight);
+            Assert.Contains("clock", clockText.Classes); Assert.Equal("Bricolage Display", clockText.FontFamily.Name); // The big clock wears the bundled display face.
             Assert.Contains(texts, t => t is not null && t.Contains("9.00h / 15.00h"));
             model.ToggleAccount("Account three");
             pill.ToggleExpansion();
