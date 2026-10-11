@@ -4,22 +4,15 @@ This is a **prototype** for Windows x64 MSIX distribution, separate from the cur
 
 ## Builds
 
-The GitHub Actions workflow `.github/workflows/microsoft-store-msix.yml` runs unit tests on Windows and builds the development package on every run. The Store candidate is built only when you start the workflow by hand (Actions, Microsoft Store MSIX packaging, Run workflow, tick the Store candidate box), so choose the branch or commit you have tested. It creates two **separate** artifacts:
+The dedicated GitHub Actions workflow `.github/workflows/microsoft-store-msix.yml` is configured to build the unsigned Store candidate on a successful push to `main`. On pull requests targeting `main`, it tests the code without producing a release package. **This workflow is staged on experimental until the stable-promotion PR is approved and merged.** Development channels use a separate portable ZIP workflow instead.
 
-- `BasicsAdvancedTimer-MSIX-dev` contains a temporary self-signed testing MSIX **and** the public development certificate. **Do not upload either file to Partner Center.**
-- `BasicsAdvancedTimer-MSIX-Store` contains **only** `BasicsAdvancedTimer-Store-unsigned.msix`, an unsigned package with the Store product identity (see below). This is the file to upload under **Packages** in the Store submission.
-
-The development artifact contains:
-
-- `BasicsAdvancedTimer-Dev.msix`, a temporary **self-signed** installable development package.
-- `BasicsAdvancedTimer-Dev.cer`, the corresponding **public** test certificate. The private key is never uploaded.
-
-This MSIX uses the **development-only** package identity `BasicsAdvancedTimer.Dev`. It is not a Store submission and is not signed by Microsoft. A unique temporary certificate is created for each CI run, so an update may require trusting that run's certificate. Do not treat temporary developer certificates as production signing.
+- `BasicsAdvancedTimer-MSIX-Store` contains **only** `BasicsAdvancedTimer-Store-unsigned.msix`, an unsigned package using the Partner Center identity. This is the file to upload under **Packages** in the Store submission.
+- The test-only signed `BasicsAdvancedTimer-Dev.msix` and public certificate may be built locally for development as described below. Neither belongs in Partner Center. The private signing key is never exported.
 
 ## Safe local installation test
 
 1. Make a backup of your existing `migration-data` folder (including `timer.db`, settings, and `Backups`) while the portable timer is closed.
-2. Download and extract the `BasicsAdvancedTimer-MSIX-dev` artifact from a **successful** workflow run.
+2. On a Windows development PC, run `./migration/packaging/build-msix.ps1 -BuildNumber 1` and use the signed development files it creates. This needs .NET 8 and the Windows SDK.
 3. On a Windows test machine, in an **administrator** PowerShell terminal (Windows only trusts a sideloaded package whose certificate is in the machine store) run:
    ```powershell
    Import-Certificate -FilePath .\BasicsAdvancedTimer-Dev.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
@@ -50,7 +43,7 @@ dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --con
 ./migration/packaging/build-msix.ps1 -BuildNumber 1 -OutputDirectory artifacts/msix
 ```
 
-The packaging script publishes the Avalonia app with a production-style executable name, creates a manifest and temporary logo assets, assembles the MSIX with MakeAppx, checks that the database DLLs are packaged, and signs with a temporary certificate. The traditional preview workflow and published ZIP are unchanged.
+The packaging script publishes the Avalonia app with a production-style executable name, creates a manifest and temporary logo assets, assembles the MSIX with MakeAppx, and checks that required SQLite DLLs are packaged. It signs with a temporary certificate only for local dev builds. Experimental and alpha ZIP workflows remain independent.
 
 ## Moving to the Microsoft Store
 
@@ -60,7 +53,7 @@ When a developer account is available:
    - `Package/Identity/Name`: `Basically.BasicsAdvancedTimer`
    - `Package/Identity/Publisher`: `CN=BF422802-B4CA-4B00-A09A-2EDA3315C0DE`
    - `Package/Properties/PublisherDisplayName`: `Basically`
-2. Download the `BasicsAdvancedTimer-MSIX-Store` artifact from a **successful** GitHub Actions workflow run; extract its ZIP and upload **only** `BasicsAdvancedTimer-Store-unsigned.msix` to the Store submission's **Packages** section. Do not upload `.cer` files.
+2. Following approved promotion into `main`, download `BasicsAdvancedTimer-MSIX-Store` from a **successful main GitHub Actions run**; extract its ZIP and upload **only** `BasicsAdvancedTimer-Store-unsigned.msix` to the Store submission's **Packages** section. Do not upload `.cer` files.
 3. To build that candidate locally on Windows (the Store signs the submitted MSIX):
    ```powershell
    ./migration/packaging/build-msix.ps1 -BuildNumber 2 -OutputDirectory artifacts/msix -UnsignedForStore -PackageName 'Basically.BasicsAdvancedTimer' -Publisher 'CN=BF422802-B4CA-4B00-A09A-2EDA3315C0DE' -PublisherDisplayName 'Basically'
