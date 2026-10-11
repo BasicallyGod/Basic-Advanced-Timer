@@ -6,7 +6,7 @@ The earlier PowerShell application (v2.32) has been retired. Its source remains 
 
 ## Getting started
 
-1. Open the latest successful run of the [Avalonia preview workflow](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) and download **BasicsAdvancedTimer-Windows-preview**.
+1. Open the latest successful run of the [Development builds workflow](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) and download **BasicsAdvancedTimer-Windows-experimental** (or the alpha artifact if intentionally testing alpha).
 2. Extract the whole ZIP into its own folder and run `BasicsAdvancedTimer.Preview.exe`. Keep its DLLs together.
 3. To update, copy [migration/updater](migration/updater/README.md) somewhere writable and run `Timer Updater.cmd`. It lists the branches, installs the newest successful build from the one you pick and can roll back.
 
@@ -30,9 +30,11 @@ Everything is kept in `timer.db` (SQLite) with a small `basics-advanced-timer.se
 
 The new app deliberately does not import the old CSV timesheets. If it finds `Timesheets/sessions.csv` in its data folder it says so, leaves the files alone and starts with an empty database. Keep your old `Timesheets` folder as an archive, or recover the old app from Git history if you need to run it again. It refuses to use a folder that still holds the old script, so the two never share data.
 
-## Windows Store packaging (experimental)
+## Release channels
 
-A separate `feature/microsoft-store-packaging` branch adds a developer-signed Windows MSIX build. It does **not** change the portable ZIP or publish to the Store. See [MSIX packaging guide](migration/packaging/README.md) for installation, security, data storage, and the Partner Center steps.
+The repository uses `main` (Microsoft Store stable), `experimental` (everyday testing) and `alpha` (unstable prototypes). Development builds use separate portable artifacts and isolated updater data. See [BRANCHES.md](BRANCHES.md) and [updater guide](migration/updater/README.md).
+
+Store packaging is staged in the development branch pending a stable-promotion review and installed-app testing. See [MSIX packaging guide](migration/packaging/README.md) for Microsoft Partner Center instructions.
 
 ## Building
 
