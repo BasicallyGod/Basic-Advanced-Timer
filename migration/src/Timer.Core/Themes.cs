@@ -173,6 +173,9 @@ public static class ThemeLibrary
     /// <summary>Time Deck: a light, neutral dashboard with an orange accent, and tinted blocks with a stronger edge on the left.</summary>
     public static readonly ThemeDefinition TimeDeck = Make("Time Deck", false, "#FBFBFC", "#F2F3F5", "#17181C", "#6A6F78", "#E3E5E9", "#EDEFF2", "#FDEAD3",
         "#E8700A", "#C0243F", "#D9890B", "#E8790E", "#D7263D", "#F27A0D", "#1B1209", "#17181C", LightShadow) with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .55, BlockEdge = 0 };
+    /// <summary>Time Deck dark: cool charcoal surfaces with the same orange accent. Blocks take a little more of the account colour than in the light version, so they hold against the dark.</summary>
+    public static readonly ThemeDefinition TimeDeckDark = Make("Time Deck Dark", true, "#14161A", "#1C1F24", "#EEF0F3", "#9CA3AD", "#2E333A", "#262A31", "#33281D",
+        "#FF9A3C", "#FF7A8A", "#F2B84B", "#FF9A3C", "#FF6B6B", "#FF8A1F", "#1B1209", "#EEF0F3", DarkShadow) with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .38, BlockEdge = 0 };
     public static readonly ThemeDefinition Sage = Make("Sage", true, "#14201B", "#1C2B24", "#E8F2EA", "#A8BBAE", "#34493D", "#26382E", "#35523F",
         "#7FDC9A", "#FF9292", "#E8BD67", "#F0C45A", "#FF9292", "#7FDC9A", "#0F2218", "#E8F2EA", DarkShadow);
     public static readonly ThemeDefinition Graphite = Make("Graphite", true, "#1F2226", "#2A2E34", "#EDEEF0", "#A7ABB2", "#3B4047", "#32363C", "#3C4A60",
@@ -189,8 +192,8 @@ public static class ThemeLibrary
         "#006B2D", "#B30000", "#7A4B00", "#7A4B00", "#B30000", "#0050C8", "#FFFFFF", "#000000", "#80000000");
     public static readonly ThemeDefinition HighContrastDark = Make("High contrast dark", true, "#000000", "#0D0D0D", "#FFFFFF", "#D0D0D0", "#8C8C8C", "#262626", "#003C78",
         "#4DFF88", "#FF6B6B", "#FFD23F", "#FFD23F", "#FF6B6B", "#4DFF88", "#000000", "#FFFFFF", "#E6000000");
-    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark, TimeDeck, Hawthorn, Sage, Graphite, Paper, Midnight, Sandstone, Aubergine, HighContrastLight, HighContrastDark };
-    /// <summary>"System" is not a theme of its own: it picks Light or Dark to match the computer.</summary>
+    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark, TimeDeck, TimeDeckDark, Hawthorn, Sage, Graphite, Paper, Midnight, Sandstone, Aubergine, HighContrastLight, HighContrastDark };
+    /// <summary>"System" is not a theme of its own: it picks Time Deck or Time Deck Dark to match the computer.</summary>
     public const string System = "System";
     /// <summary>What a new installation starts on.</summary>
     public const string Default = System;

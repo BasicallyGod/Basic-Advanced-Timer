@@ -95,6 +95,9 @@ public sealed class TimerModel : INotifyPropertyChanged
         // The user's own themes need their colours registered too. The built-in ones were registered when the app started.
         if (Application.Current is { } current && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && this.preferences.Themes is { Count: > 0 } own) ThemeEngine.Register(current, own);
         ApplyTheme();
+        // When the computer switches between light and dark, System follows it.
+        if (Application.Current?.PlatformSettings is { } platform)
+            platform.ColorValuesChanged += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => { appliedVariant = null; Notify(); });
     }
     // Sixteen soft colours, so up to sixteen accounts each have their own before any repeat, none matching the break. The first eight are
     // the original palette and keep their order, so existing accounts are unchanged. They all take dark text.
@@ -514,14 +517,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     private ThemeVariant? appliedVariant;
     /// <summary>Every theme on offer: the built-in ones, then the user's own.</summary>
     public IReadOnlyList<ThemeDefinition> Themes => ThemeLibrary.BuiltIn.Concat(preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
-    /// <summary>The theme actually in use. System is Light or Dark, whichever the computer is using.</summary>
+    /// <summary>The theme actually in use. System is Time Deck or Time Deck Dark, whichever the computer is using.</summary>
     public ThemeDefinition CurrentTheme
     {
         get
         {
             if (Theme != ThemeLibrary.System && Themes.FirstOrDefault(t => t.Name == Theme) is { } chosen) return chosen;
             var dark = Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant == Avalonia.Platform.PlatformThemeVariant.Dark;
-            return dark ? ThemeLibrary.Dark : ThemeLibrary.Light;
+            return dark ? ThemeLibrary.TimeDeckDark : ThemeLibrary.TimeDeck;
         }
     }
     /// <summary>The theme the pill wears by itself: tinted amber on a break, red in overtime, otherwise null so it follows the rest of the app.</summary>
@@ -530,8 +533,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     private void ApplyTheme()
     {
         if (Application.Current is not { } app || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;
-        // Following the system when nothing is overriding keeps the default variant, so a change of system theme still applies.
-        var variant = Theme == ThemeLibrary.System || Themes.All(t => t.Name != Theme) ? ThemeVariant.Default : ThemeEngine.VariantFor(Themes.First(t => t.Name == Theme));
+        // System is Time Deck or Time Deck Dark by the computer's own setting, so the variant is chosen here and re-chosen when that setting changes.
+        var variant = ThemeEngine.VariantFor(CurrentTheme);
         if (ReferenceEquals(variant, appliedVariant)) return;
         appliedVariant = variant; app.RequestedThemeVariant = variant;
     }

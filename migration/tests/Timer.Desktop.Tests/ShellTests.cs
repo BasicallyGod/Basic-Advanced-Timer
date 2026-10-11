@@ -64,7 +64,8 @@ public sealed class ShellTests
             Assert.Equal(theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark, Application.Current!.ActualThemeVariant);
         }
         model.SetTheme("System");
-        Assert.Equal(ThemeVariant.Default, Application.Current!.RequestedThemeVariant);
+        Assert.Equal(ThemeEngine.VariantFor(model.CurrentTheme), Application.Current!.RequestedThemeVariant); // System is Time Deck, by the computer's light or dark.
+        Assert.Contains(model.CurrentTheme.Name, new[] { "Time Deck", "Time Deck Dark" });
     }
 
     [AvaloniaFact]
