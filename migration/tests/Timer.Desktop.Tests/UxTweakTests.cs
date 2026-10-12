@@ -118,4 +118,19 @@ public sealed class UxTweakTests
         var model = new TimerModel(new TrackingEngine()); var bar = new MessageBar(model);
         Assert.Contains("messageBar", bar.Classes); Assert.DoesNotContain("chip", bar.Classes);
     }
+
+    [AvaloniaFact]
+    public void TheFloatingMessageReallyGetsABackgroundAndAnOutline()
+    {
+        var model = new TimerModel(new TrackingEngine()); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            model.ExplainRunning(); Settle(dashboard);
+            var bar = dashboard.GetVisualDescendants().OfType<MessageBar>().Single();
+            Assert.True(bar.IsVisible);
+            Assert.IsAssignableFrom<ISolidColorBrush>(bar.Background); // A style that names Border alone skips a subclass, which once left it see-through.
+            Assert.NotNull(bar.BorderBrush); Assert.True(bar.BorderThickness.Left > 1);
+        }
+        finally { dashboard.Close(); }
+    }
 }
