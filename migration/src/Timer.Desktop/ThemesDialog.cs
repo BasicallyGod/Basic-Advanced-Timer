@@ -11,7 +11,7 @@ namespace Timer.Desktop;
 /// Pick a theme, or make your own. Choosing a theme in the list applies it. Built-in themes cannot be changed, but can be duplicated;
 /// the copy can be renamed and have any colour changed, and the app shows each change as it is made. Nothing is kept until Save.
 /// </summary>
-public sealed class ThemesWindow : Window
+public sealed class ThemesDialog : Dialog
 {
     private readonly TimerModel model;
     private readonly ListBox list = new() { Name = "ThemeList" };
@@ -27,11 +27,10 @@ public sealed class ThemesWindow : Window
     private readonly Border unsaved = new() { Name = "UnsavedPrompt", IsVisible = false, Padding = new Thickness(12), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Margin = new Thickness(0, 10, 0, 0) };
     private Action? afterPrompt;
 
-    public ThemesWindow(TimerModel model)
+    public ThemesDialog(TimerModel model)
     {
         this.model = model;
-        Title = "Themes"; WindowChrome.Attach(this); Width = 800; Height = 680; MinHeight = 480;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Title = "Themes"; Width = 800; Height = 680;
         var root = Ui.Grid("230,*", "*,Auto,Auto"); root.Margin = new Thickness(24);
         var left = Ui.Grid("*", "Auto,*,Auto"); left.Margin = new Thickness(0, 0, 18, 0);
         left.Children.Add(Ui.Text("Themes", 22)); Grid.SetRow(list, 1); list.Margin = new Thickness(0, 10);

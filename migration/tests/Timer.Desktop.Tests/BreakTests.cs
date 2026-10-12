@@ -98,7 +98,7 @@ public sealed class BreakTests
     {
         var engine = new TrackingEngine(clock: () => Day.AddHours(14)); var row = new SessionRow("2026-10-09", "Account one", "09:00:00", "added", "30"); engine.Sessions.Add(row);
         var model = new TimerModel(engine);
-        var editor = new EntryWindow(model, row, row.From, row.To); editor.Show();
+        var editor = new EntryDialog(model, row, row.From, row.To).Open(model);
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = editor.CaptureRenderedFrame();

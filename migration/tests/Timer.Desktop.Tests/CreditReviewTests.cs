@@ -69,19 +69,19 @@ public sealed class CreditReviewTests
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("10:00:00", "30"), Row("10:33:00", "27") });
         var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
-        var tidy = new TidyWindow(model); tidy.Show(dashboard);
+        var tidy = new TidyDialog(model).Open(dashboard);
         Dispatcher.UIThread.RunJobs(); using var tidyFrame = tidy.CaptureRenderedFrame();
         foreach (var box in tidy.GetVisualDescendants().OfType<ComboBox>()) box.SelectedIndex = 1;
         Capture(tidy, "tidy-day-review");
         Find<Button>(tidy, "ApplyTidy").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(3, engine.Sessions.Count);
-        var grouping = new GroupWindow(model); grouping.Show(dashboard);
+        var grouping = new GroupDialog(model).Open(dashboard);
         Dispatcher.UIThread.RunJobs(); using var groupFrame = grouping.CaptureRenderedFrame();
         foreach (var box in grouping.GetVisualDescendants().OfType<CheckBox>()) box.IsChecked = true;
         Capture(grouping, "group-editor");
         Find<Button>(grouping, "SaveGroup").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Contains(model.Editor.Entries(Day, Day.AddDays(1)), e => e.GroupId is not null);
-        var export = new ExportWindow(model); export.Show(dashboard); Find<Button>(export, "ExportCsv").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var export = new ExportDialog(model).Open(dashboard); Find<Button>(export, "ExportCsv").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Capture(export, "weekly-export-result");
         dashboard.SelectTab(true); model.SetWeekSection("entries"); Capture(dashboard, "grouped-credit-week");
         Assert.NotNull(model.ExportPath); Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Detail.csv")));
@@ -402,14 +402,15 @@ public sealed class CreditReviewTests
         var ten = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "10:00");
         var point = ten.TranslatePoint(new Point(180, 168), window)!.Value; // 11:00
         window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
-        Assert.Empty(window.OwnedWindows.OfType<EntryWindow>()); // A single click adds nothing.
+        Assert.Empty(window.Dialogs.Dialogs.OfType<EntryDialog>()); // A single click adds nothing.
         window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
-        var editor = Assert.Single(window.OwnedWindows.OfType<EntryWindow>()); Capture(editor, "click-to-add-editor");
+        var editor = Assert.Single(window.Dialogs.Dialogs.OfType<EntryDialog>()); Capture(editor, "click-to-add-editor");
         Assert.Equal("11:00:00", Find<TextBox>(editor, "EntryStart").Text); Assert.Equal("11:30:00", Find<TextBox>(editor, "EntryEnd").Text);
         Find<Button>(editor, "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(2, engine.Sessions.Count); Assert.Equal("added", engine.Sessions[1].End); window.Close();
     }
-    private static T Find<T>(Window window, string name) where T : Control => window.GetLogicalDescendants().OfType<T>().Single(c => c.Name == name);
+    private static T Find<T>(Control window, string name) where T : Control => window.GetLogicalDescendants().OfType<T>().Single(c => c.Name == name);
+    private static void Capture(Dialog dialog, string name) => Capture((Window)TopLevel.GetTopLevel(dialog)!, name);
     private static void Capture(Window window, string name)
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.Combine(Path.GetTempPath(), "timer-credit-previews");

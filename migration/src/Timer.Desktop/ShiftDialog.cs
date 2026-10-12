@@ -6,18 +6,17 @@ using Timer.Core;
 
 namespace Timer.Desktop;
 
-public sealed class ShiftWindow : Window
+public sealed class ShiftDialog : Dialog
 {
-    public ShiftWindow(TimerModel model)
+    public ShiftDialog(TimerModel model)
     {
-        Title = "Working hours"; WindowChrome.Attach(this);
-        Width = 480; Height = 560; CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Title = "Working hours";
+        Width = 480; // The height follows the content, up to the window.
         Content = new ScrollViewer { Content = new ShiftEditor(model, Close, Close, heading: true) };
     }
 }
 
-/// <summary>The working days and hours form. It sits in its own window and in the settings page, so it is one control with two ways of being finished.</summary>
+/// <summary>The working days and hours form. It sits in its own dialog and in the settings page, so it is one control with two ways of being finished.</summary>
 public sealed class ShiftEditor : StackPanel
 {
     /// <param name="saved">Called after the hours are saved.</param>

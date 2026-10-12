@@ -41,6 +41,7 @@ public sealed class WindowCoordinator
             Pill.Hide();
             Dashboard.Activate();
         };
+        Dashboard.Reveal = ShowDashboard;
         Dashboard.OpenPill = () => { Pill.Collapse(); Pill.Show(); Dashboard.Hide(); Pill.Activate(); };
         Pill.Closed += (_, _) => exit();
         Dashboard.Closed += (_, _) => exit();
@@ -124,10 +125,17 @@ public sealed class PillWindow : Window
     private bool expanded;
     public const double CollapsedHeight = 82, PillWidth = 516, CapsuleRadius = 41, CardRadius = 28;
     public static double CollapsedWindowHeight => CollapsedHeight + 2 * Ui.ShadowMargin;
-    // The whole pill is drawn smaller than its design size on every screen, and smaller again on small ones, so it never takes a big share of a display.
-    // Its width is a 1800th of the screen's width in device independent pixels, never above 85 per cent and never below 70 per cent of the design size.
-    public const double ScreenWidthDivisor = 1800, LargestScale = 0.85, SmallestScale = 0.7;
-    public static double ScaleFor(double screenWidth) => Math.Clamp(screenWidth / ScreenWidthDivisor, SmallestScale, LargestScale);
+    // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
+    // A narrow screen (its width in device independent pixels over 1800, never above 85 per cent or below 70 per cent), and a screen with a low
+    // Windows scale, because it has fewer pixels to the inch, so the same pill looks bigger on it. Windows scale 125 per cent or more gives the
+    // largest pill, and 100 per cent the smallest, with the steps between spread evenly. The smaller of the two wins.
+    public const double ScreenWidthDivisor = 1800, LargestScale = 0.85, SmallestScale = 0.7, LargestScaleFromDisplayScale = 1.25;
+    public static double ScaleFor(double screenWidth, double displayScale = LargestScaleFromDisplayScale)
+    {
+        var byWidth = Math.Clamp(screenWidth / ScreenWidthDivisor, SmallestScale, LargestScale);
+        var byDensity = SmallestScale + Math.Clamp((displayScale - 1.0) / (LargestScaleFromDisplayScale - 1.0), 0, 1) * (LargestScale - SmallestScale);
+        return Math.Min(byWidth, byDensity);
+    }
     private readonly Avalonia.Media.ScaleTransform pillScale = new(1, 1);
     public double Scale => pillScale.ScaleX;
     /// <summary>The window height of a closed pill at the size it is drawn on this screen.</summary>
@@ -135,7 +143,7 @@ public sealed class PillWindow : Window
     /// <summary>Sizes the pill for the screen it is on. The window keeps the pill's proportions, so the content only needs the scale.</summary>
     public void FitToScreen(Avalonia.Platform.Screen? screen)
     {
-        var scale = screen is null ? 1 : ScaleFor(screen.WorkingArea.Width / screen.Scaling);
+        var scale = screen is null ? 1 : ScaleFor(screen.WorkingArea.Width / screen.Scaling, screen.Scaling);
         if (Math.Abs(scale - pillScale.ScaleX) < 0.001 && Width > 0) { ApplyWidth(); return; }
         pillScale.ScaleX = scale; pillScale.ScaleY = scale;
         ApplyWidth(); if (IsLoaded || IsVisible) ApplyHeight();
@@ -374,11 +382,13 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly Button undo;
     private readonly Button merge;
-    private EntryWindow? entryEditor;
+    private EntryDialog? entryEditor;
     private bool weekMode, settingsMode, renderedSettings, settingZoom;
     private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
     private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
+    /// <summary>The pop-ups open over the dashboard. They share its blurred backdrop with the getting started setup.</summary>
+    public DialogHost Dialogs { get; } = new();
     private bool? renderedWeekMode;
     private DateTime? renderedDate;
     public DashboardWindow(TimerModel model)
@@ -533,30 +543,15 @@ public sealed class DashboardWindow : Window
         Ui.Put(review, workspace, row: 1);
         Ui.Put(review, tools, row: 2);
         // The title row's empty middle still drags the window.
-        var rightColumn = Ui.Grid("*", "*,Auto");
+        var rightColumn = Ui.Grid("*", "*");
         Ui.Put(rightColumn, review); Ui.DragHeader(nav, this);
         Ui.Put(body, rightColumn, 2);
         Ui.Put(root, body, 1);
-        // The bottom line appears only when there is something to say: a failed save, an edit that was refused, or the one-off note
-        // about old files. Otherwise it takes no room.
-        string? FooterText() => model.LastError ?? model.EditError ?? model.Notice;
-        var footer = Ui.Text(FooterText() ?? "", 11, "muted"); footer.VerticalAlignment = VerticalAlignment.Center;
-        // After a quick slip from one account to another and back, the earlier block can be picked up again from here for a few minutes.
-        var continueButton = Ui.Button("", () => model.ContinuePrevious(), "ContinuePrevious");
-        continueButton.Classes.Add("toolButton"); continueButton.Classes.Add("quiet"); continueButton.Height = 30; continueButton.Padding = new Thickness(12, 0); continueButton.FontSize = 13;
-        var footerRow = Ui.Horizontal(footer, continueButton); footerRow.Spacing = 12;
-        void SyncFooter()
-        {
-            var text = FooterText(); footer.Text = text ?? ""; footer.IsVisible = text is not null;
-            var offer = model.ContinuePreviousText; continueButton.IsVisible = offer is not null; if (offer is not null) continueButton.Content = offer;
-            footerRow.IsVisible = text is not null || offer is not null;
-        }
-        SyncFooter();
-        model.PropertyChanged += (_, _) => SyncFooter();
-        // Messages sit under the review only, so they never change the height of the left column.
-        footerRow.Margin = new Thickness(22, 4, 22, 10); Ui.Put(rightColumn, footerRow, row: 1);
+        // Notes, refused edits and failed saves float over the lowest part of the workspace, above the buttons, so they never push the buttons up.
+        Ui.Put(review, new MessageBar(model), row: 1);
         // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
         layers.Children.Add(root); dashboardBody = root;
+        layers.Children.Add(Dialogs); Dialogs.OpenChanged += UpdateBackdrop; // Last, so a dialog is above the setup too.
         var surface = new Border { Name = "DashboardSurface", Child = layers, ClipToBounds = true };
         surface.Classes.Add("surface");
         var host = Ui.Shadowed(surface, 20); Content = host;
@@ -587,7 +582,8 @@ public sealed class DashboardWindow : Window
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         KeyDown += (_, e) =>
         {
-            if (e.Key == Avalonia.Input.Key.Escape) { model.ClearSelection(); e.Handled = true; }
+            // Escape takes the top dialog away first, and only then clears the selection.
+            if (e.Key == Avalonia.Input.Key.Escape) { if (!Dialogs.CloseTop()) model.ClearSelection(); e.Handled = true; }
             // Ctrl+C copies the selected blocks and Ctrl+V pastes them on the timeline, but never while typing in a text box.
             else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key is Avalonia.Input.Key.C or Avalonia.Input.Key.V && !settingsMode && FocusManager?.GetFocusedElement() is not TextBox)
             {
@@ -601,8 +597,8 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += Changed;
         model.PropertyChanged += (_, _) => UpdateOnboarding();
         model.EntryRequested += ShowEntry;
-        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy;
-        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; };
+        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy; model.AccountsRequested += ShowAccounts;
+        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; model.AccountsRequested -= ShowAccounts; };
         Refresh(true);
         UpdateOnboarding();
     }
@@ -616,15 +612,22 @@ public sealed class DashboardWindow : Window
         {
             onboarding = new OnboardingView(model);
             onboarding.Finished += () => { model.CompleteSetup(); UpdateOnboarding(); };
-            dashboardBody.Effect = new Avalonia.Media.BlurEffect { Radius = 7 }; dashboardBody.IsHitTestVisible = false;
-            layers.Children.Add(onboarding);
+            layers.Children.Insert(layers.Children.IndexOf(Dialogs), onboarding);
+            UpdateBackdrop();
             Avalonia.Threading.Dispatcher.UIThread.Post(() => onboarding?.Focus());
         }
         else if (!wanted && onboarding is not null && dashboardBody is not null)
         {
             layers.Children.Remove(onboarding); onboarding = null;
-            dashboardBody.Effect = null; dashboardBody.IsHitTestVisible = true;
+            UpdateBackdrop();
         }
+    }
+    // The dashboard is blurred and cannot be clicked while the setup or any dialog is over it.
+    private void UpdateBackdrop()
+    {
+        if (dashboardBody is null) return;
+        var covered = onboarding is not null || Dialogs.Any;
+        dashboardBody.Effect = covered ? new Avalonia.Media.BlurEffect { Radius = 7 } : null; dashboardBody.IsHitTestVisible = !covered;
     }
     /// <summary>Whether a point (in window coordinates) is in the part of the dashboard that drags the window.</summary>
     public bool InDragZone(Point point)
@@ -637,13 +640,20 @@ public sealed class DashboardWindow : Window
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
     {
         if (!IsVisible) return;
-        if (entryEditor is { IsVisible: true }) { entryEditor.Activate(); return; }
-        entryEditor = new EntryWindow(model, row, start, end);
+        if (entryEditor is { IsVisible: true }) return;
+        entryEditor = new EntryDialog(model, row, start, end);
         entryEditor.Closed += (_, _) => entryEditor = null;
-        entryEditor.Show(this);
+        Dialogs.Show(entryEditor);
     }
-    private void ShowTidy() { if (IsVisible) new TidyWindow(model).Show(this); }
-    private void ShowGroup(string id) { if (IsVisible) new GroupWindow(model, id).Show(this); }
+    /// <summary>Set by the coordinator so a request that arrives while only the pill is showing can bring the dashboard up first.</summary>
+    public Action? Reveal { get; set; }
+    private void ShowAccounts()
+    {
+        if (!IsVisible) Reveal?.Invoke();
+        if (IsVisible && !Dialogs.Dialogs.OfType<AccountsDialog>().Any()) Dialogs.Show(new AccountsDialog(model));
+    }
+    private void ShowTidy() { if (IsVisible) Dialogs.Show(new TidyDialog(model)); }
+    private void ShowGroup(string id) { if (IsVisible) Dialogs.Show(new GroupDialog(model, id)); }
     public void SelectTab(bool showWeek) { settingsMode = false; weekMode = showWeek; Refresh(true); }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }

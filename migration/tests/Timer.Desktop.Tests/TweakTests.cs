@@ -25,6 +25,11 @@ public sealed class TweakTests
         Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(1920));
         Assert.InRange(PillWindow.ScaleFor(1366), 0.75, 0.77); // A common laptop screen.
         Assert.Equal(PillWindow.SmallestScale, PillWindow.ScaleFor(800));
+        // A 2560 by 1600 display at 125 per cent Windows scale keeps the largest pill, and a 1080p one at 100 per cent gets the smallest.
+        Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(2560 / 1.25, 1.25));
+        Assert.Equal(PillWindow.SmallestScale, PillWindow.ScaleFor(1920, 1.0));
+        Assert.InRange(PillWindow.ScaleFor(1920 / 1.1, 1.1), 0.75, 0.78); // In between at 110 per cent.
+        Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(1706, 1.5)); // More scaling than 125 per cent never makes it smaller.
     }
 
     [AvaloniaFact]
@@ -38,10 +43,10 @@ public sealed class TweakTests
     }
 
     [AvaloniaFact]
-    public void FooterNotesFadeAfterThirtySecondsButAFailedSaveDoesNot()
+    public void FooterNotesFadeAfterFifteenSecondsButAFailedSaveDoesNot()
     {
         var model = TimerModel.CreateDemo();
-        Assert.Equal(TimeSpan.FromSeconds(30), TimerModel.MessageLifetime);
+        Assert.Equal(TimeSpan.FromSeconds(15), TimerModel.MessageLifetime);
         model.ExplainRunning();
         Assert.NotNull(model.EditError);
         model.ExpireMessages();
@@ -82,10 +87,10 @@ public sealed class TweakTests
     }
 
     [AvaloniaFact]
-    public void TheExportWindowOffersAWeekOrAWholeMonthAndWritesTheMonth()
+    public void TheExportDialogOffersAWeekOrAWholeMonthAndWritesTheMonth()
     {
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));
-        var window = new ExportWindow(model); window.Show(); Settle(window);
+        var window = new ExportDialog(model).Open(model);
         var week = window.GetVisualDescendants().OfType<RadioButton>().Single(b => b.Name == "ExportWeekChoice");
         var month = window.GetVisualDescendants().OfType<RadioButton>().Single(b => b.Name == "ExportMonthChoice");
         Assert.True(week.IsChecked); Assert.Contains("October 2026", (string)month.Content!);

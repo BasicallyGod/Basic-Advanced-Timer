@@ -58,6 +58,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     public event Action<SessionRow?, DateTime, DateTime>? EntryRequested;
     public event Action<string>? GroupRequested;
     public event Action? TidyRequested;
+    public event Action? AccountsRequested;
+    /// <summary>Asks for the accounts and budgets dialog. The dashboard shows it, and comes up first if only the pill is showing.</summary>
+    public void OpenAccounts() => AccountsRequested?.Invoke();
     public void OpenTidy() => TidyRequested?.Invoke();
     public string? ExportPath { get; private set; }
     private readonly HashSet<SessionRow> selectedRows = new(ReferenceEqualityComparer.Instance);
@@ -722,7 +725,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     { Engine.StopAccount(); var saved = Save(); if (!saved) Notify(); return saved; }
     // Notes and refused-edit messages in the footer fade after a while, so a stale one is never left sitting there.
     // A failed save is not one of these, because it stays until a save works.
-    public static readonly TimeSpan MessageLifetime = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan MessageLifetime = TimeSpan.FromSeconds(15);
     private Avalonia.Threading.DispatcherTimer? messageTimer;
     private (string?, string?) messageSeen;
     private void WatchMessages()
