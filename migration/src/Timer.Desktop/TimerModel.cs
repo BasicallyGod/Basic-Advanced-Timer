@@ -70,8 +70,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         .Count(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains));
     public bool CanMergeSelection => SelectedBlockCount >= 2 && selectedRows.Select(s => s.Day).Distinct().Count() == 1
         && selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() == 1 && Editor.CanCombine(selectedRows.ToArray());
-    public string MergeHint => SelectedBlockCount < 2 ? "Shift+click at least two blocks to merge." : CanMergeSelection
-        ? $"Merge {SelectedBlockCount} blocks · adds {Format(TimeSpan.FromMinutes((double)Editor.MergeGapMinutes(selectedRows.ToArray())))} of gap time." : "Select blocks for the same account/day, with only blank gaps between them.";
+    public string MergeHint => SelectedBlockCount < 2 ? "Select two or more blocks to merge." : CanMergeSelection
+        ? $"Merge {SelectedBlockCount} blocks · adds {Format(TimeSpan.FromMinutes((double)Editor.MergeGapMinutes(selectedRows.ToArray())))} of gap time." : "Blocks must share an account and day, with only gaps between.";
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
     {
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
@@ -79,8 +79,17 @@ public sealed class TimerModel : INotifyPropertyChanged
         foreach (var row in rows) { if (remove) selectedRows.Remove(row); else selectedRows.Add(row); }
         EditError = null; Notify();
     }
-    // A plain click no longer selects, so a double-click has nothing to undo before it opens the editor.
-    public void OpenEntryFromDoubleClick(SessionRow row) => OpenEntry(row);
+    // Clicking a block selects it, and the Edit button (or Enter) opens the one that is selected, so there is no double-click to tell apart from two clicks.
+    private ReviewEntry? SelectedEntry => SelectedBlockCount == 1
+        ? Editor.Entries(WeekStart(SelectedDate), WeekStart(SelectedDate).AddDays(7)).FirstOrDefault(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains)) : null;
+    public bool CanEditSelection => SelectedEntry is not null;
+    /// <summary>The button's word, which is Inspect for a group of entries.</summary>
+    public string EditText => SelectedEntry?.GroupId is not null ? "Inspect" : "Edit";
+    public void EditSelection()
+    {
+        if (SelectedEntry is not { } entry) return;
+        if (entry.GroupId is { } group) OpenGroup(group); else OpenEntry(entry.Sources[0]);
+    }
     public void ClearSelection() { if (selectedRows.Count == 0) return; selectedRows.Clear(); Notify(); }
     // After a quick slip from one account to another and back, the earlier block can be picked up again. Blocks in a group are left alone, since
     // taking one out of a group would break the group.
