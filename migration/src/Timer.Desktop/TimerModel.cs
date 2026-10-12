@@ -96,7 +96,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Takes back a switch made by mistake. The short block between is dropped and the earlier block carries on as one, including the time of the slip.</summary>
     public bool ContinuePrevious()
     {
-        if (ContinuableNow() is null) { EditError = "There is no recent switch to take back."; Notify(); return false; }
+        if (ContinuableNow() is null) { EditError = "Nothing recent to take back."; Notify(); return false; }
         if (!Save()) { EditError = LastError; Notify(); return false; }
         var removed = Engine.ContinuePrevious();
         if (removed is { } blocks) Editor.DropNotes(new[] { (blocks.Between.Account, blocks.Between.Date, blocks.Between.Start) });
@@ -118,7 +118,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (chosen.Select(s => s.Day).Distinct().Count() > 1) { EditError = "Copy blocks from one day at a time."; Notify(); return false; }
         var first = chosen[0].From;
         copied = chosen.Select(s => new LedgerEditor.ClipBlock(s.Account, s.From - first, s.Minutes, Editor.Note(s))).ToList();
-        EditError = null; Notice = copied.Count == 1 ? "Copied 1 block. Right-click the timeline, or press Ctrl+V, to paste it." : $"Copied {copied.Count} blocks. Right-click the timeline, or press Ctrl+V, to paste them.";
+        EditError = null; Notice = copied.Count == 1 ? "Copied 1 block." : $"Copied {copied.Count} blocks.";
         Notify(); return true;
     }
     public bool CopySelection() => CopyBlocks(Engine.Sessions.Where(selectedRows.Contains).ToList());
@@ -228,7 +228,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (Engine.ContinuedBlock is { } block) { selectedRows.Clear(); Notice = $"Carrying on with the {Label(block.Account)} block from {block.From:HH:mm}."; }
     }
     // The block being recorded has no ledger row yet, so it cannot be dragged or edited until tracking stops.
-    public void ExplainRunning() { EditError = "This block is still recording. Stop tracking to move or edit it."; Notify(); }
+    public void ExplainRunning() { EditError = "Still recording. Stop tracking to edit."; Notify(); }
     public void TogglePause()
     {
         // On a break, resume ends the break and goes back to the account that was running before it.
@@ -717,6 +717,9 @@ public sealed class TimerModel : INotifyPropertyChanged
         { LastError = "Could not change starting with Windows. " + error.Message; }
         Notify();
     }
+    public event Action? HideRequested;
+    /// <summary>Asks for the timer to tuck itself away in the tray (or the taskbar when there is no tray), with tracking carrying on.</summary>
+    public void RequestHide() => HideRequested?.Invoke();
     public event Action? QuitRequested;
     public void RequestQuit() => QuitRequested?.Invoke();
     // Closing the pill closes the dashboard straight after it, and by then the first close may have let the app shut down and

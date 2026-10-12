@@ -47,6 +47,27 @@ public sealed class WindowCoordinator
         Dashboard.Closed += (_, _) => exit();
         Pill.Closing += OnClosing; Dashboard.Closing += OnClosing;
         model.QuitRequested += Quit;
+        // Tucks the timer away with tracking still running. Without a tray it goes to the taskbar instead, so it can never be lost.
+        model.HideRequested += () =>
+        {
+            if (HideToTray) Hide();
+            else foreach (var window in new Window[] { Pill, Dashboard }) if (window.IsVisible) window.WindowState = WindowState.Minimized;
+        };
+        KeepInFront();
+    }
+    // Snapping another window over the timer, or a window that is itself on top, can leave the pill or dashboard behind it. So whenever one loses focus
+    // it is put back at the front of the topmost windows, and a slow check does the same for one that was covered without a focus change.
+    private void KeepInFront()
+    {
+        void Reassert(Window window) { if (window.IsVisible && !window.IsActive && window.WindowState != WindowState.Minimized) { window.Topmost = false; window.Topmost = true; } }
+        foreach (var window in new Window[] { Pill, Dashboard })
+        {
+            var self = window;
+            self.Deactivated += (_, _) => Avalonia.Threading.DispatcherTimer.RunOnce(() => Reassert(self), TimeSpan.FromMilliseconds(250));
+        }
+        var check = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        check.Tick += (_, _) => { Reassert(Pill); Reassert(Dashboard); };
+        check.Start();
     }
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
@@ -233,7 +254,7 @@ public sealed class PillWindow : Window
         timerColumn.Children.Add(timer); timerColumn.Children.Add(pillUnallocated);
         timerButton.Content = timerColumn;
         timerButton.Classes.Add("pillAction");
-        ToolTip.SetTip(timerButton, "Click for dashboard; drag to move");
+        ToolTip.SetTip(timerButton, "Open dashboard");
         Ui.Put(head, timerButton).Margin = new Thickness(0, 0, 16, 0);
         var divider = new Border { Width = 1, Height = 42 }; divider.Classes.Add("rule");
         Ui.Put(head, divider, 1);
@@ -257,7 +278,7 @@ public sealed class PillWindow : Window
         accountButton.Classes.Add("pillAction");
         accountButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         accountButton.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-        ToolTip.SetTip(accountButton, "Click for accounts; drag to move");
+        ToolTip.SetTip(accountButton, "Accounts");
         Ui.Put(head, accountButton, 2).Margin = new Thickness(16, 0, 16, 0);
         breakButton = Ui.Button("", model.ToggleBreak, "PillBreak");
         breakGlyph.Mono = true; // Plain text colour at rest, and the accent only under the pointer.
@@ -387,9 +408,9 @@ public sealed class PillWindow : Window
         Ui.Pulse(dot, model.IsTracking);
         pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
         breakButton.Classes.Set("onBreak", model.IsOnBreak); breakGlyph.Filled = false; breakGlyph.HotKey = model.ThemeState == "Recording" ? "Accent" : "Break"; breakGlyph.SetSteaming(model.IsOnBreak || pillHoverBreak); breakGlyph.InvalidateVisual();
-        ToolTip.SetTip(breakButton, model.IsOnBreak ? "Finish break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Start break");
+        ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Start break");
         pause.IsEnabled = model.IsTracking || selected is not null;
-        ToolTip.SetTip(pause, model.IsOnBreak ? "End break; drag to move" : model.IsTracking ? "Pause account; drag to move" : "Resume account; drag to move");
+        ToolTip.SetTip(pause, model.IsOnBreak ? "End break" : model.IsTracking ? "Pause" : "Resume");
         pillDayText.Text = model.DayStarted ? "Finish day" : "Start day";
         // The same quiet outline as the dashboard's button, with a flag that is green to start the day and red to finish it, so ending the day is never done by accident.
         pillDayFlag.TintKey = model.DayStarted ? "Finish" : "Start";
@@ -401,7 +422,7 @@ public sealed class PillWindow : Window
         progressBar.ColumnDefinitions[0].Width = new GridLength(done, GridUnitType.Star);
         progressBar.ColumnDefinitions[1].Width = new GridLength(1.0 - done, GridUnitType.Star);
         progressFill.Classes.Set("progressOvertime", model.IsOvertime && !model.IsOnBreak); progressFill.Classes.Set("progressBreak", model.IsOnBreak);
-        ToolTip.SetTip(progressBar, progress is null ? "No working day today. The line fills as a working day goes by." : $"{(int)(done * 100)}% of the working day");
+        ToolTip.SetTip(progressBar, progress is null ? "No working day today" : $"{(int)(done * 100)}% of the working day");
         // The capsule's own colour says what is happening, so the pill keeps the ordinary shadow in every state.
         var shadow = (model.Shadows, (string?)null, ActualThemeVariant);
         if (lastShadow != shadow) { lastShadow = shadow; Ui.SetShadow(shadowHost, model.Shadows, null); }
@@ -472,12 +493,20 @@ public sealed class DashboardWindow : Window
         overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectSection("overview"));
         hoursTab = RailButton(IconKind.Table, "Hours table", "WeekHoursTab", () => SelectSection("hours"));
         entriesTab = RailButton(IconKind.Entries, "Entries", "WeekEntriesTab", () => SelectSection("entries"));
+        // The way back to the pill is the first thing on the rail, at the top left.
+        var backToPill = RailButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke());
+        railTop.Children.Add(backToPill);
+        var backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
         foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
-        railFoot.Children.Add(RailButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke()));
         settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);
         railFoot.Children.Add(settingsRail);
+        // Closes the timer for good. It goes red under the pointer, so it is never pressed by accident.
+        var quit = RailButton(IconKind.Close, "Close timer", "QuitTimer", () => model.RequestQuit()); quit.Classes.Add("quit");
+        var quitGlyph = (IconGlyph)quit.Content!;
+        quit.PointerEntered += (_, _) => quitGlyph.TintKey = "Finish"; quit.PointerExited += (_, _) => quitGlyph.TintKey = null;
+        railFoot.Children.Add(quit);
         Ui.Put(railGrid, railFoot, row: 1);
         rail.Child = railGrid; Ui.Put(root, rail);
         Ui.DragHeader(railTop, this);
@@ -490,7 +519,7 @@ public sealed class DashboardWindow : Window
         cardStack.Children.Add(accentEdge);
         var identity = new StackPanel { Margin = new Thickness(18, 14, 18, 16), Spacing = 2 };
         var topRow = Ui.Grid("*,Auto");
-        Ui.Put(topRow, Ui.Text("Day elapsed", 12, "muted")); Ui.Put(topRow, today, 1);
+        Ui.Put(topRow, Ui.Text("Working time", 12, "muted")); Ui.Put(topRow, today, 1);
         identity.Children.Add(topRow); identity.Children.Add(clock);
         var live = new StackPanel { Spacing = 4, Margin = new Thickness(0, 4, 0, 12) };
         live.Children.Add(Ui.Horizontal(accountDot, account)); live.Children.Add(new TrackingLabels(model));
@@ -747,7 +776,7 @@ public sealed class DashboardWindow : Window
         dashboardCup.Filled = model.IsOnBreak; dashboardCup.SetSteaming(model.IsOnBreak); dashboardCup.InvalidateVisual();
         dashboardBreakText.Text = model.IsOnBreak ? "Finish break" : "Start break";
         breakButton.Classes.Set("onBreak", model.IsOnBreak);
-        ToolTip.SetTip(breakButton, model.IsOnBreak ? "End the break" + (model.ResumeAccount is { } resumeTo ? " and go back to " + resumeTo : "") : "Stop timing any account while you take a break");
+        ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Take a break");
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); if (button.Content is IconGlyph glyph) glyph.TintKey = selected ? "Ink" : "Muted"; }

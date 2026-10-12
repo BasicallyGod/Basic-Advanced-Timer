@@ -160,7 +160,7 @@ public static class ReviewViews
                 var editGroup = new MenuItem { Header = "Inspect / edit grouped entries…" }; editGroup.Click += (_, _) => model.OpenGroup(group.GroupId!);
                 var ungroup = new MenuItem { Header = "Ungroup" }; ungroup.Click += (_, _) => model.UngroupEntries(group.GroupId!);
                 card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { editGroup, ungroup, CopyMenu(model, group.Sources), MergeMenu(model) } };
-                ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} grouped entries · {model.Format(duration)} credited\nSeparate sections preserve any gaps. Double-click to inspect; right-click to ungroup.");
+                ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} grouped entries · {model.Format(duration)}\nDouble-click to inspect");
             }
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
             canvas.Children.Add(card); cards.Add((card, lane));
@@ -374,7 +374,7 @@ public static class ReviewViews
         Ui.Put(heading2, Heading(model.DecimalHours ? "Decimal hours" : "Hours and minutes"));
         // Copy and export live on this line, with the table they act on. Both are icons with tooltips.
         var copy = Ui.IconButton(IconKind.Copy, "Copy hours table", "CopyHours", () => { });
-        ToolTip.SetTip(copy, "Copy the table to the clipboard, ready to paste into a timesheet");
+        ToolTip.SetTip(copy, "Copy table");
         copy.Click += async (_, _) =>
         {
             if (TopLevel.GetTopLevel(copy)?.Clipboard is not { } clipboard) return;

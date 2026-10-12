@@ -48,7 +48,7 @@ public sealed class StoreBuildTests
             window.ContextMenu!.Open(); Dispatcher.UIThread.RunJobs();
             var menu = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
             Assert.False(menu.Single(m => m.Name == "BuildVersion").IsVisible); Assert.False(menu.Single(m => m.Name == "TestOvertime").IsVisible);
-            Assert.True(menu.Single(m => (string?)m.Header == "Close timer").IsVisible);
+            Assert.True(menu.Single(m => (string?)m.Header == "Collapse to tray").IsVisible);
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window);
             Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "OpenDemo" && b.IsVisible && b.GetVisualAncestors().All(a => a is not Control c || c.IsVisible));

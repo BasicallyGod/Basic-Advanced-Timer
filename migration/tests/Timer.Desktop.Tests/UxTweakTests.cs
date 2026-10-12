@@ -61,4 +61,61 @@ public sealed class UxTweakTests
             }
         }
     }
+
+    [AvaloniaFact]
+    public void BackToPillIsFirstOnTheRailAndCloseTimerIsAtTheFootBelowSettings()
+    {
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Settle(window);
+            double Top(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Point(0, 0), window)!.Value.Y; }
+            Assert.True(Top("BackToPill") < Top("TimelineTab"));
+            Assert.True(Top("QuitTimer") > Top("Settings"));
+            var quits = 0; model.QuitRequested += () => quits++;
+            window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "QuitTimer").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(1, quits);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Working time");
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Day elapsed");
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheRightClickMenuCollapsesToTheTrayInsteadOfClosing()
+    {
+        var model = new TimerModel(new TrackingEngine()); var hides = 0; var quits = 0; model.HideRequested += () => hides++; model.QuitRequested += () => quits++;
+        var menu = Ui.SettingsMenu(model); var items = ((IEnumerable<Control>)menu.ItemsSource!).OfType<MenuItem>().ToList();
+        Assert.DoesNotContain(items, m => (string?)m.Header == "Decimal hours"); Assert.DoesNotContain(items, m => (string?)m.Header == "Close timer");
+        items.Single(m => (string?)m.Header == "Collapse to tray").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        Assert.Equal(1, hides); Assert.Equal(0, quits);
+    }
+
+    [AvaloniaFact]
+    public void CollapsingWithoutATrayMinimisesInsteadOfLosingTheTimer()
+    {
+        var model = new TimerModel(new TrackingEngine()); var windows = new WindowCoordinator(model, () => { });
+        windows.Pill.Show();
+        try { model.RequestHide(); Assert.Equal(WindowState.Minimized, windows.Pill.WindowState); }
+        finally { windows.Pill.WindowState = WindowState.Normal; windows.Pill.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void DialogAndSettingsHeadingsUseTheDisplayFace()
+    {
+        var model = new TimerModel(new TrackingEngine()); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            dashboard.Dialogs.Show(new ThemesDialog(model)); Settle(dashboard);
+            Assert.Contains("clock", dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "DialogTitle").Classes);
+        }
+        finally { dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheFloatingMessageHasItsOwnRaisedLookAgainstTheTimeline()
+    {
+        var model = new TimerModel(new TrackingEngine()); var bar = new MessageBar(model);
+        Assert.Contains("messageBar", bar.Classes); Assert.DoesNotContain("chip", bar.Classes);
+    }
 }
