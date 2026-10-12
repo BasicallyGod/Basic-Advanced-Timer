@@ -128,7 +128,7 @@ public sealed class OnboardingView : Grid
     {
         var name = new TextBox { Text = account.Name, Watermark = "Client name", Margin = new Thickness(0, 0, 8, 0), Name = "SetupName" + accountRows.Count };
         var budget = new TextBox { Text = account.BudgetHours?.ToString("0.###", CultureInfo.InvariantCulture) ?? "", Watermark = "none", Margin = new Thickness(0, 0, 8, 0), Name = "SetupBudget" + accountRows.Count };
-        var period = new ComboBox { ItemsSource = new[] { "week", "month", "quarter" }, SelectedItem = account.BudgetPeriod, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 8, 0) };
+        var period = new ComboBox { ItemsSource = new[] { "day", "week", "month", "quarter" }, SelectedItem = account.BudgetPeriod, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 8, 0) };
         var show = new CheckBox { IsChecked = !account.Hidden, HorizontalAlignment = HorizontalAlignment.Center };
         var row = (existing ? account.Name : null, account.Colour, name, budget, period, show);
         accountRows.Add(row);

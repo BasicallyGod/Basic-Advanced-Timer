@@ -115,8 +115,9 @@
       <Setter Property="Background" Value="{DynamicResource Panel}" />
       <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
     </Style>
+    <!-- The left side has no border, because the block's coloured strip is its left edge and a border beside it looked like interference. -->
     <Style Selector="Border.mergeSelected">
-      <Setter Property="BorderThickness" Value="3" />
+      <Setter Property="BorderThickness" Value="0,3,3,3" />
       <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
     </Style>
     <Style Selector="Border#DayProgressFill"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
@@ -129,7 +130,7 @@
     <Style Selector="Border.nowChip"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="TextBlock.nowChipText"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
     <Style Selector="Border.recording">
-      <Setter Property="BorderThickness" Value="3" />
+      <Setter Property="BorderThickness" Value="0,3,3,3" />
       <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
     </Style>
     <Style Selector="Button.mergeSelected">

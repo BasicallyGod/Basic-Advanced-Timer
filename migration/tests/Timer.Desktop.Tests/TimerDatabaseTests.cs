@@ -152,30 +152,33 @@ public sealed class TimerDatabaseTests : IDisposable
     public void AnUpgradeRunsOnceAfterACopyIsSavedAndKeepsTheData()
     {
         using (var db = Open(Today)) { Work(db, Account(db, "Account one")); }
-        var steps = new[] { "ALTER TABLE accounts ADD COLUMN owner TEXT", "ALTER TABLE entries ADD COLUMN billable INTEGER NOT NULL DEFAULT 1" };
-        using (var db = TimerDatabase.Open(folder, () => Today.AddDays(1), steps, targetVersion: 3))
+        // Two further steps after the built-in ones, so the test keeps working whatever format the app is on.
+        var first = TimerDatabase.SchemaVersion; var target = first + 2;
+        var steps = TimerDatabase.Upgrades.Concat(new[] { "ALTER TABLE accounts ADD COLUMN owner TEXT", "ALTER TABLE entries ADD COLUMN billable INTEGER NOT NULL DEFAULT 1" }).ToArray();
+        using (var db = TimerDatabase.Open(folder, () => Today.AddDays(1), steps, targetVersion: target))
         {
-            Assert.Equal(3, db.Version); Assert.Equal(3L, db.Scalar("PRAGMA user_version"));
+            Assert.Equal(target, db.Version); Assert.Equal((long)target, db.Scalar("PRAGMA user_version"));
             Assert.Equal(1L, db.Scalar("SELECT COUNT(*) FROM entries")); Assert.Equal(1L, db.Scalar("SELECT billable FROM entries"));
             db.Execute("UPDATE accounts SET owner = 'me'");
         }
-        Assert.Single(Directory.GetFiles(Path.Combine(folder, "Backups"), "timer-before-format-3-*.db"));
-        // The saved copy is the data as it was before: format 1, without the new columns.
-        var copy = Directory.GetFiles(Path.Combine(folder, "Backups"), "timer-before-format-3-*.db").Single();
+        Assert.Single(Directory.GetFiles(Path.Combine(folder, "Backups"), $"timer-before-format-{target}-*.db"));
+        // The saved copy is the data as it was before: the earlier format, without the new columns.
+        var copy = Directory.GetFiles(Path.Combine(folder, "Backups"), $"timer-before-format-{target}-*.db").Single();
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = copy, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
-        connection.Open(); using var command = connection.CreateCommand(); command.CommandText = "PRAGMA user_version"; Assert.Equal(1L, command.ExecuteScalar());
+        connection.Open(); using var command = connection.CreateCommand(); command.CommandText = "PRAGMA user_version"; Assert.Equal((long)first, command.ExecuteScalar());
         SqliteConnection.ClearAllPools();
-        using var reopened = TimerDatabase.Open(folder, () => Today.AddDays(2), steps, targetVersion: 3); // Already at 3: nothing runs again.
-        Assert.Equal(3, reopened.Version); Assert.Single(Directory.GetFiles(Path.Combine(folder, "Backups"), "timer-before-format-*.db"));
+        using var reopened = TimerDatabase.Open(folder, () => Today.AddDays(2), steps, targetVersion: target); // Already there: nothing runs again.
+        Assert.Equal(target, reopened.Version); Assert.Single(Directory.GetFiles(Path.Combine(folder, "Backups"), "timer-before-format-*.db"));
     }
 
     [Fact]
     public void AMissingUpgradeStepIsRefusedWithoutHalfUpgrading()
     {
         using (var db = Open()) { Account(db, "Account one"); }
-        Assert.Throws<InvalidDataException>(() => TimerDatabase.Open(folder, () => Today, new[] { "ALTER TABLE accounts ADD COLUMN owner TEXT" }, targetVersion: 4));
+        var first = TimerDatabase.SchemaVersion;
+        Assert.Throws<InvalidDataException>(() => TimerDatabase.Open(folder, () => Today, new[] { "ALTER TABLE accounts ADD COLUMN owner TEXT" }, targetVersion: first + 3));
         SqliteConnection.ClearAllPools();
-        using var db2 = Open(); Assert.Equal(1, db2.Version); // The first step was not left applied.
+        using var db2 = Open(); Assert.Equal(first, db2.Version); // The first step was not left applied.
         Assert.Equal(0L, db2.Scalar("SELECT COUNT(*) FROM pragma_table_info('accounts') WHERE name = 'owner'"));
     }
 
