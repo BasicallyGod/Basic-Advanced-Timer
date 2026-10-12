@@ -939,6 +939,7 @@ public sealed class IconGlyph : Control
                 break;
             }
             case IconKind.Minimise:
+            {
                 // A miniature timer pill: its dot and timer are visible before hovering.
                 var width = 14 + hover * 2;
                 context.DrawRectangle(null, pen, new Rect(9 - width / 2, 4.5, width, 9), 4.5, 4.5);
@@ -946,13 +947,16 @@ public sealed class IconGlyph : Control
                 context.DrawLine(pen, new Point(8, 8), new Point(12.5 + hover * .5, 8));
                 context.DrawLine(new Pen(brush, 1, lineCap: PenLineCap.Round), new Point(8, 10.5), new Point(11, 10.5));
                 break;
+            }
             case IconKind.Previous:
             case IconKind.Next:
+            {
                 var direction = Kind == IconKind.Previous ? -1 : 1;
                 var x = 9 + direction * hover;
                 context.DrawLine(pen, new Point(x - direction * 2.5, 4), new Point(x + direction * 2.5, 9));
                 context.DrawLine(pen, new Point(x + direction * 2.5, 9), new Point(x - direction * 2.5, 14));
                 break;
+            }
             case IconKind.Flag:
             {
                 // A pole with a pennant in the button's own text colour. The cloth ripples while Waving is on, fading back to still.
