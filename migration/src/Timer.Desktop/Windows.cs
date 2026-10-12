@@ -143,10 +143,22 @@ public sealed class PillWindow : Window
     /// <summary>Sizes the pill for the screen it is on. The window keeps the pill's proportions, so the content only needs the scale.</summary>
     public void FitToScreen(Avalonia.Platform.Screen? screen)
     {
-        var scale = screen is null ? 1 : ScaleFor(screen.WorkingArea.Width / screen.Scaling, screen.Scaling);
+        // A size chosen in settings wins. Otherwise it is worked out from the screen, and with no screen to measure (a hidden window) it stays as it is.
+        var chosen = model.PillScalePercent;
+        var scale = chosen is { } percent ? percent / 100.0 : screen is null ? pillScale.ScaleX : ScaleFor(screen.WorkingArea.Width / screen.Scaling, screen.Scaling);
+        appliedChoice = chosen; if (screen is not null) lastScreen = (screen.Bounds, screen.Scaling);
         if (Math.Abs(scale - pillScale.ScaleX) < 0.001 && Width > 0) { ApplyWidth(); return; }
         pillScale.ScaleX = scale; pillScale.ScaleY = scale;
         ApplyWidth(); if (IsLoaded || IsVisible) ApplyHeight();
+    }
+    private int? appliedChoice;
+    private (Avalonia.PixelRect Bounds, double Scaling)? lastScreen;
+    // Dragging the pill onto another screen, or Windows changing a screen's scale, sizes it for that screen at once, without waiting for it to be shown again.
+    public void FitIfScreenChanged()
+    {
+        if (Screens.ScreenFromWindow(this) is not { } screen) return;
+        if (lastScreen is { } known && known.Bounds == screen.Bounds && known.Scaling == screen.Scaling) return;
+        FitToScreen(screen);
     }
     private void ApplyWidth() => Width = (PillWidth + 2 * Ui.ShadowMargin) * pillScale.ScaleX;
     private readonly TextBlock credited = Ui.Text("", 13, "muted");
@@ -249,6 +261,8 @@ public sealed class PillWindow : Window
         shadowHost = Ui.Shadowed(surface, CapsuleRadius); surfaceBorder = surface;
         Content = new Avalonia.Controls.LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
         Opened += (_, _) => FitToScreen(Screens.ScreenFromWindow(this));
+        PositionChanged += (_, _) => FitIfScreenChanged();
+        ScalingChanged += (_, _) => FitIfScreenChanged();
         // The capsule changes colour with what is happening, and grows from a capsule into a rounded card as it opens, both eased.
         var ease = TimeSpan.FromMilliseconds(260);
         surface.Transitions = new Avalonia.Animation.Transitions
@@ -296,7 +310,12 @@ public sealed class PillWindow : Window
         Height = Math.Min(wanted * Scale, limit);
         pillScroll.VerticalScrollBarVisibility = wanted * Scale > Height + 1 ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
     }
-    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
+    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        // A new pill size from settings takes effect straight away, even while the pill is hidden behind the dashboard.
+        if (model.PillScalePercent != appliedChoice) FitToScreen(Screens.ScreenFromWindow(this));
+        Refresh();
+    }
     private void Refresh()
     {
         // A break or overtime tints the pill alone, so the dashboard stays calm.

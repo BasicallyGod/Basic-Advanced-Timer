@@ -36,6 +36,18 @@ public sealed class SettingsView : ScrollViewer
         var editThemes = Ui.Button("Edit themes…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new ThemesDialog(model)); }, "EditThemes");
         var appearance = new StackPanel { Spacing = 10 };
         appearance.Children.Add(Row("Theme", Ui.Horizontal(theme, editThemes)));
+        // The pill is sized for the screen it is on. This overrides that with a size of your own.
+        var pillChoices = new List<string> { "Automatic" }; pillChoices.AddRange(TimerModel.PillScaleChoices.Select(p => p + "%"));
+        string PillText(int? percent) => percent is { } p ? p + "%" : "Automatic";
+        var pillSize = new ComboBox { Name = "PillSize", ItemsSource = pillChoices, SelectedItem = PillText(model.PillScalePercent), MinWidth = 140 };
+        ToolTip.SetTip(pillSize, "Automatic sizes the pill for the screen it is on and its Windows scale. Choose a percentage to set it yourself.");
+        pillSize.SelectionChanged += (_, _) =>
+        {
+            if (pillSize.SelectedItem is not string chosen || chosen == PillText(model.PillScalePercent)) return;
+            model.SetPillScale(chosen == "Automatic" ? null : int.Parse(chosen.TrimEnd('%'), System.Globalization.CultureInfo.InvariantCulture));
+        };
+        syncs.Add(() => { if (!Equals(pillSize.SelectedItem, PillText(model.PillScalePercent))) pillSize.SelectedItem = PillText(model.PillScalePercent); });
+        appearance.Children.Add(Row("Pill size", pillSize));
         appearance.Children.Add(Toggle("Window shadows", "WindowShadows", () => model.Shadows, v => model.SetShadows(v)));
         appearance.Children.Add(Toggle("Show tooltips", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v)));
         if (model.TrayAvailable) appearance.Children.Add(Toggle("Show in taskbar", "ShowInTaskbar", () => model.TaskbarButton, v => model.SetTaskbarButton(v)));

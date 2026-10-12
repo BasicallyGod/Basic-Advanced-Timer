@@ -11,8 +11,7 @@ public sealed class EntryDialog : Dialog
     {
         Title = row is null ? "Add time" : "Edit entry";
         Width = 480; // The height follows the content, up to the window.
-        var root = new StackPanel { Margin = new Thickness(24), Spacing = 12 };
-        root.Children.Add(Ui.Text(Title, 22));
+        var root = new StackPanel { Margin = new Thickness(24, 4, 24, 24), Spacing = 12 };
         root.Children.Add(Ui.Text(start.ToString("dddd, d MMMM yyyy"), 13, "muted"));
         var names = model.ReviewAccounts.Select(a => a.Name).Concat(model.Engine.Sessions.Select(s => s.Account)).Distinct(StringComparer.OrdinalIgnoreCase).Select(BreakAccount.Display).ToArray();
         var initialAccount = names.FirstOrDefault(n => n.Equals(BreakAccount.Display(row?.Account ?? model.SelectedAccount ?? ""), StringComparison.OrdinalIgnoreCase)) ?? names.First();
@@ -40,19 +39,19 @@ public sealed class EntryDialog : Dialog
         // Ticking this keeps the choice, so a longer entry moves the blocks after it without asking again. Settings has the same switch.
         var always = new CheckBox { Name = "AlwaysShove", Content = "Always move later blocks, without asking" };
         var shoveButtons = Ui.Horizontal(
-            Ui.Button("Move later blocks", () =>
+            Ui.DialogButton("Move later blocks", () =>
             {
                 shove.IsVisible = false;
                 if (always.IsChecked == true) model.SetMoveLaterAlways(true);
                 if (row is not null && model.ExtendEntry(row, shoveEnd, note.Text ?? "")) Close(); else error.Text = model.LastError ?? model.EditError;
             }, "ShoveConfirm"),
             // The longer entry goes in as it is, over the top of the blocks after it. Those hours are then counted twice, which is for the person to decide.
-            Ui.Button("Allow overlap", () =>
+            Ui.DialogButton("Allow overlap", () =>
             {
                 shove.IsVisible = false;
                 if (row is not null && model.EditEntry(row, row.Account, row.From, shoveEnd, note.Text ?? "", allowOverlap: true)) Close(); else error.Text = model.LastError ?? model.EditError;
             }, "ShoveOverlap"),
-            Ui.Button("Keep editing", () => shove.IsVisible = false, "ShoveCancel"));
+            Ui.DialogButton("Keep editing", () => shove.IsVisible = false, "ShoveCancel"));
         var shoveStack = new StackPanel { Spacing = 8 }; shoveStack.Children.Add(shoveText); shoveStack.Children.Add(always); shoveStack.Children.Add(shoveButtons); shove.Child = shoveStack;
         root.Children.Add(shove);
         until.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) shove.IsVisible = false; };
@@ -95,7 +94,7 @@ public sealed class EntryDialog : Dialog
             try { until.Text = finish == start.Date.AddDays(1) ? "24:00:00" : finish.ToString("HH:mm:ss"); } finally { syncing = false; }
         };
         var applied = false;
-        var save = Ui.Button("Save", () =>
+        var save = Ui.DialogButton("Save", () =>
         {
             try
             {
@@ -131,8 +130,8 @@ public sealed class EntryDialog : Dialog
             catch (Exception ex) when (ex is FormatException or OverflowException)
             { error.Text = "Use HH:mm or HH:mm:ss, with an end after the start."; }
         }, "SaveEntry");
-        var buttons = Ui.Horizontal(save, Ui.Button("Cancel", Close));
-        if (row is not null) buttons.Children.Add(Ui.Button("Delete", () =>
+        var buttons = Ui.Horizontal(save, Ui.DialogButton("Cancel", Close));
+        if (row is not null) buttons.Children.Add(Ui.DialogButton("Delete", () =>
         {
             if (applied) { if (model.Save()) Close(); else error.Text = model.LastError; return; }
             var previous = model.Editor.UndoState;

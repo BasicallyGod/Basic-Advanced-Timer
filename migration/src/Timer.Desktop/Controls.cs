@@ -100,6 +100,16 @@ public static class Ui
         button.Click += (_, _) => click();
         return button;
     }
+    // The buttons in dialogs wear the same quiet outlined look as the dashboard's (Add time, Undo, Start break). The main action of a dialog,
+    // such as Save or Export, has an accent outline so it reads as the one to press.
+    private static readonly string[] MainActions = { "Save", "Export CSV files", "Apply selected fills", "Group selected", "Move later blocks" };
+    public static Button DialogButton(string text, Action click, string? name = null, bool? main = null)
+    {
+        var button = Button(text, click, name);
+        button.Classes.Add("toolButton"); button.Classes.Add("quiet"); button.Classes.Add("dialogButton");
+        if (main ?? MainActions.Contains(text)) button.Classes.Add("mainAction");
+        return button;
+    }
     public static Grid Grid(string columns, string rows = "Auto") => new()
     {
         ColumnDefinitions = new ColumnDefinitions(columns), RowDefinitions = new RowDefinitions(rows)

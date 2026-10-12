@@ -141,4 +141,33 @@ public sealed class DialogTests
         refuse = false; dashboard.Dialogs.CloseTop(); Assert.False(dashboard.Dialogs.Any);
         dashboard.Close();
     }
+
+    [AvaloniaFact]
+    public void TheCrossAndTitleSitInAHeaderAboveTheContentSoAScrollBarNeverRunsUnderTheCross()
+    {
+        var model = Model(out var engine); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        var accounts = new AccountsDialog(model); dashboard.Dialogs.Show(accounts); Settle(dashboard);
+        Assert.Equal("Accounts and budgets", Find<TextBlock>(dashboard, "DialogTitle").Text);
+        var close = Find<Button>(dashboard, "CloseDialog");
+        var crossBottom = close.TranslatePoint(new Point(0, close.Bounds.Height), dashboard)!.Value.Y;
+        var contentTop = accounts.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y;
+        Assert.True(contentTop >= crossBottom - 0.5, $"The content starts at {contentTop} but the cross ends at {crossBottom}.");
+        // Only one copy of the title: the dialog's own content no longer repeats it.
+        Assert.Single(dashboard.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text == "Accounts and budgets"));
+        dashboard.Dialogs.CloseTop(); dashboard.Close();
+    }
+
+    [AvaloniaFact]
+    public void ButtonsInDialogsWearTheDashboardsOutlinedLookAndTheMainActionHasAnAccentOutline()
+    {
+        var model = Model(out var engine); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        dashboard.Dialogs.Show(new EntryDialog(model, engine.Sessions[0], engine.Sessions[0].From, engine.Sessions[0].To)); Settle(dashboard);
+        var save = Find<Button>(dashboard, "SaveEntry"); var delete = Find<Button>(dashboard, "DeleteEntry");
+        var cancel = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Cancel");
+        foreach (var button in new[] { save, delete, cancel }) Assert.True(button.Classes.Contains("toolButton") && button.Classes.Contains("quiet"), $"{button.Content} is not in the dashboard's style.");
+        Assert.Contains("mainAction", save.Classes); Assert.DoesNotContain("mainAction", cancel.Classes); Assert.DoesNotContain("mainAction", delete.Classes);
+        var addTime = Find<Button>(dashboard, "AddTime"); // The dashboard's own button shares the class, so the two match.
+        Assert.Contains("toolButton", addTime.Classes);
+        dashboard.Dialogs.CloseTop(); dashboard.Close();
+    }
 }
