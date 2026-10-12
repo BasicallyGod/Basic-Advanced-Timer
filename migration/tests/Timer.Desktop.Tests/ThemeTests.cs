@@ -137,9 +137,7 @@ public sealed class ThemeTests
             var copyName = model.Theme; Assert.EndsWith(" copy", copyName); Assert.False(model.Themes.Single(t => t.Name == copyName).BuiltIn);
             Assert.True(Find<Avalonia.Controls.Button>(window, "ColourSurface").IsEnabled); Assert.True(Find<Avalonia.Controls.Button>(window, "DeleteTheme").IsEnabled);
             // Typing a hex colour changes the app at once, before anything is saved.
-            var picker = (Avalonia.Controls.Flyout)Find<Avalonia.Controls.Button>(window, "ColourSurface").Flyout!;
-            var hex = Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Avalonia.Controls.Control)picker.Content!).OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "HexSurface");
-            hex.Text = "#102030";
+            Edit(window, "#102030");
             var variant = ThemeEngine.VariantFor(model.Themes.Single(t => t.Name == copyName));
             Assert.True(((Avalonia.Controls.IResourceHost)Avalonia.Application.Current!).TryGetResource("Surface", variant, out var live)); Assert.Equal(Avalonia.Media.Color.Parse("#102030"), ((Avalonia.Media.ISolidColorBrush)live!).Color);
             Assert.NotEqual("#102030", model.Themes.Single(t => t.Name == copyName).Colour("Surface")); // Not kept yet.
@@ -159,7 +157,10 @@ public sealed class ThemeTests
 
     private static void Edit(ThemesDialog window, string hexColour)
     {
-        var picker = (Avalonia.Controls.Flyout)Find<Avalonia.Controls.Button>(window, "ColourSurface").Flyout!;
+        // The picker is built the first time it opens, so it is opened (and put away again) before its box is typed in.
+        var button = Find<Avalonia.Controls.Button>(window, "ColourSurface");
+        var picker = (Avalonia.Controls.Flyout)button.Flyout!;
+        if (picker.Content is null) { picker.ShowAt(button); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); picker.Hide(); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); }
         Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Avalonia.Controls.Control)picker.Content!).OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "HexSurface").Text = hexColour;
     }
     private static void Press(ThemesDialog window, string name)

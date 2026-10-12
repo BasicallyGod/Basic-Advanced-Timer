@@ -133,4 +133,21 @@ public sealed class UxTweakTests
         }
         finally { dashboard.Close(); }
     }
+
+    [AvaloniaFact]
+    public void WritingATwiceLeavesUnchangedColoursAloneAndAPreviewWritesOnlyTheMainVariant()
+    {
+        var theme = ThemeLibrary.BuiltIn.First(t => t.Name == "Studio"); var app = Application.Current!;
+        ThemeEngine.Register(app, new[] { theme });
+        var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
+        var ink = dictionary["Ink"]; var accent = dictionary["Accent"];
+        ThemeEngine.Register(app, new[] { theme });
+        Assert.Same(ink, dictionary["Ink"]); Assert.Same(accent, dictionary["Accent"]); // Nothing changed, so nothing was replaced.
+        var edited = new Dictionary<string, string>(theme.Colours) { ["Accent"] = "#123456" };
+        var recording = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.StateVariant(theme, ThemeDerivation.Recording)]; var recordingAccent = recording["Accent"];
+        ThemeEngine.RegisterPreview(app, theme with { Colours = edited });
+        Assert.NotSame(accent, dictionary["Accent"]); Assert.Same(ink, dictionary["Ink"]); // Only the colour that moved was replaced.
+        Assert.Same(recordingAccent, recording["Accent"]); // A preview leaves the pill's tinted variants alone.
+        ThemeEngine.Register(app, new[] { theme }); // Put back.
+    }
 }
