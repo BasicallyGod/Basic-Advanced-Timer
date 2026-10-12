@@ -11,6 +11,47 @@ namespace Timer.Desktop.Tests;
 
 public sealed class HoverTests
 {
+    [AvaloniaFact]
+    public void IconMotionFollowsItsButtonEvenWhenNestedAndStopsWhenDisabled()
+    {
+        var glyph = new IconGlyph(IconKind.Gear) { Transitions = null };
+        var button = new Button { Content = new StackPanel { Children = { glyph } } };
+        var window = new Window { Content = button, Width = 100, Height = 100 }; window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            button.Focus(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, glyph.Hover);
+            button.IsEnabled = false; Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, glyph.Hover);
+            button.IsEnabled = true; button.Focus(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, glyph.Hover);
+            button.Content = null; Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, glyph.Hover);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void PillAndNavigationIconsChangeOnHoverAndReturnToTheSameRestingDrawing()
+    {
+        foreach (var kind in new[] { IconKind.Minimise, IconKind.Gear, IconKind.Timeline, IconKind.Week, IconKind.Undo, IconKind.Previous, IconKind.Next })
+        {
+            var glyph = new IconGlyph(kind) { Transitions = null };
+            var window = new Window { Content = glyph, Width = 72, Height = 72 }; window.Show();
+            try
+            {
+                Dispatcher.UIThread.RunJobs();
+                var resting = Pixels(glyph);
+                glyph.Hover = 1; Dispatcher.UIThread.RunJobs();
+                Assert.NotEqual(resting, Pixels(glyph));
+                glyph.Hover = 0; Dispatcher.UIThread.RunJobs();
+                Assert.Equal(resting, Pixels(glyph));
+            }
+            finally { window.Close(); }
+        }
+    }
+
     private static byte[] Pixels(Control control)
     {
         var bitmap = new RenderTargetBitmap(new PixelSize(72, 72));
