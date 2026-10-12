@@ -179,4 +179,22 @@ public sealed class UxTweakTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void ThePillIconsDotTakesTheStatusColourOfTheDay()
+    {
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Settle(window);
+            var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BackToPill");
+            var glyph = (IconGlyph)button.Content!;
+            Assert.Equal(IconKind.Minimise, glyph.Kind); Assert.Equal("Switch to pill", ToolTip.GetTip(button));
+            if (!model.IsTracking) model.ToggleAccount("Account one"); Settle(window);
+            Assert.Equal("Live", glyph.DotKey);
+            model.TogglePause(); Settle(window); Assert.Equal("Accent", glyph.DotKey);
+            model.ToggleBreak(); Settle(window); Assert.Equal("Break", glyph.DotKey);
+        }
+        finally { window.Close(); }
+    }
 }
