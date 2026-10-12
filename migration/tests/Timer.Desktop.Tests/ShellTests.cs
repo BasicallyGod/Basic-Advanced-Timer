@@ -201,6 +201,22 @@ public sealed class ShellTests
     }
 
     [AvaloniaFact]
+    public void ClosingTheSecondWindowAfterTheStoreIsDisposedDoesNotSaveAgain()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-double-close-" + Guid.NewGuid());
+        try
+        {
+            var store = new TimerStore(folder);
+            var engine = new TrackingEngine();
+            var model = new TimerModel(engine, store.Load(engine), store);
+            Assert.True(model.StopForClose()); // The pill closes and the app shuts down, which disposes the database.
+            store.Dispose();
+            Assert.True(model.StopForClose()); // The dashboard's close follows and must not touch the closed database.
+        }
+        finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
+    }
+
+    [AvaloniaFact]
     public void FailedSaveKeepsStoppedTimeAndRetriesWithoutDuplicatingIt()
     {
         var folder = Path.Combine(Path.GetTempPath(), "timer-failed-save-" + Guid.NewGuid());

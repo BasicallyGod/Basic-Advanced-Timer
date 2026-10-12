@@ -727,8 +727,15 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public event Action? QuitRequested;
     public void RequestQuit() => QuitRequested?.Invoke();
+    // Closing the pill closes the dashboard straight after it, and by then the first close may have let the app shut down and
+    // dispose the database, so a close that has already saved is not allowed to save again.
+    private bool savedForClose;
     public bool StopForClose()
-    { Engine.StopAccount(); var saved = Save(); if (!saved) Notify(); return saved; }
+    {
+        if (savedForClose) return true;
+        Engine.StopAccount(); var saved = Save(); if (!saved) Notify();
+        savedForClose = saved; return saved;
+    }
     // Notes and refused-edit messages in the footer fade after a while, so a stale one is never left sitting there.
     // A failed save is not one of these, because it stays until a save works.
     public static readonly TimeSpan MessageLifetime = TimeSpan.FromSeconds(15);
