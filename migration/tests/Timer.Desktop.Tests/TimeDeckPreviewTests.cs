@@ -26,7 +26,7 @@ public sealed class TimeDeckPreviewTests
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             Assert.Equal(theme, model.CurrentTheme.Name);
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
-            if (folder is not null) { Directory.CreateDirectory(folder); using var shot = window.CaptureRenderedFrame(); shot!.Save(Path.Combine(folder, file + ".png")); }
+            if (folder is not null) { Directory.CreateDirectory(folder); using var shot = window.CaptureRenderedFrame(); shot?.Save(Path.Combine(folder, file + ".png")); }
         }
         finally { window.Close(); model.SetTheme("System"); }
     }
@@ -49,7 +49,7 @@ public sealed class TimeDeckPreviewTests
         void Shot(string state)
         {
             Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
-            if (folder is not null) { Directory.CreateDirectory(folder); using var shot = pill.CaptureRenderedFrame(); shot!.Save(Path.Combine(folder, $"{file}-{state}.png")); }
+            if (folder is not null) { Directory.CreateDirectory(folder); using var shot = pill.CaptureRenderedFrame(); shot?.Save(Path.Combine(folder, $"{file}-{state}.png")); }
         }
         try
         {
@@ -73,7 +73,7 @@ public sealed class TimeDeckPreviewTests
         void Shot(string name)
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
-            if (folder is not null) { Directory.CreateDirectory(folder); using var shot = window.CaptureRenderedFrame(); shot!.Save(Path.Combine(folder, $"{name}-{theme}.png")); }
+            if (folder is not null) { Directory.CreateDirectory(folder); using var shot = window.CaptureRenderedFrame(); shot?.Save(Path.Combine(folder, $"{name}-{theme}.png")); }
         }
         try
         {
@@ -101,7 +101,7 @@ public sealed class TimeDeckPreviewTests
             for (var i = 0; i < 4; i++)
             {
                 Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
-                if (folder is not null) { Directory.CreateDirectory(folder); using var shot = window.CaptureRenderedFrame(); shot!.Save(Path.Combine(folder, $"setup{i + 1}-{theme}.png")); }
+                if (folder is not null) { Directory.CreateDirectory(folder); using var shot = window.CaptureRenderedFrame(); shot?.Save(Path.Combine(folder, $"setup{i + 1}-{theme}.png")); }
                 Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.Button>().Single(b => b.Name == "SetupNext").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
             }
         }

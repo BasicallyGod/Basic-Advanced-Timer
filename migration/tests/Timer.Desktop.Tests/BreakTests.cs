@@ -81,8 +81,8 @@ public sealed class BreakTests
             if (folder is not null)
             {
                 Directory.CreateDirectory(folder);
-                using var dashboardFrame = dashboard.CaptureRenderedFrame(); dashboardFrame!.Save(Path.Combine(folder, "break-dashboard.png"));
-                using var pillFrame = pill.CaptureRenderedFrame(); pillFrame!.Save(Path.Combine(folder, "break-pill.png"));
+                using var dashboardFrame = dashboard.CaptureRenderedFrame(); dashboardFrame?.Save(Path.Combine(folder, "break-dashboard.png"));
+                using var pillFrame = pill.CaptureRenderedFrame(); pillFrame?.Save(Path.Combine(folder, "break-pill.png"));
             }
             var timeline = dashboard.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is "Break" or "● Break").ToList(); // A short recording block puts its dot in front of the name.
             Assert.NotEmpty(timeline); // The running break block is labelled Break.
