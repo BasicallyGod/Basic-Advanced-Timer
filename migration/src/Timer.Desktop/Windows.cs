@@ -118,6 +118,7 @@ public sealed class PillWindow : Window
     private readonly TextBlock pillUnallocated = Ui.Text("", 13, "muted");
     private readonly StackPanel expansion = new() { IsVisible = false, Spacing = 8 };
     private readonly Button day;
+    private Button pillContinue = null!;
     private readonly IconGlyph pillDayFlag = new(IconKind.Flag);
     private readonly TextBlock pillDayText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private bool expanded;
@@ -218,6 +219,10 @@ public sealed class PillWindow : Window
         Ui.Put(root, head);
         expansion.Children.Add(Ui.Rule());
         expansion.Children.Add(new AccountList(model));
+        // After a quick slip from one account to another and back, the earlier block can be picked up again, for a few minutes.
+        pillContinue = Ui.Button("", () => model.ContinuePrevious(), "PillContinue"); pillContinue.Classes.Add("flat"); pillContinue.IsVisible = false;
+        pillContinue.HorizontalAlignment = HorizontalAlignment.Center; pillContinue.Margin = new Thickness(0, 4, 0, 0);
+        expansion.Children.Add(pillContinue);
         day = Ui.Button("", model.ToggleDay, "PillDay"); day.Classes.Add("outlined"); day.Classes.Add("quiet");
         day.Content = Ui.Horizontal(pillDayFlag, pillDayText);
         day.PointerEntered += (_, _) => pillDayFlag.Waving = true; day.PointerExited += (_, _) => pillDayFlag.Waving = false; // The flag waves under the pointer.
@@ -258,7 +263,7 @@ public sealed class PillWindow : Window
         expansion.Measure(new Size(PillWidth, double.PositiveInfinity));
         return CollapsedHeight + expansion.DesiredSize.Height + 2 * Ui.ShadowMargin;
     }
-    private (int, bool) expandedKey;
+    private (int, bool, bool) expandedKey;
     /// <summary>Closes the list if it is open, so the pill is always a plain capsule when it comes back from the dashboard.</summary>
     public void Collapse() { if (expanded) ToggleExpansion(); }
     public void ToggleExpansion()
@@ -268,7 +273,7 @@ public sealed class PillWindow : Window
         chevron.Expanded = expanded; chevron.InvalidateVisual();
         var radius = new CornerRadius(expanded ? CardRadius : CapsuleRadius);
         surfaceBorder.CornerRadius = radius; shadowHost.CornerRadius = radius;
-        expandedKey = (model.Accounts.Count(a => !BreakAccount.Is(a.Name)), saved.IsVisible);
+        expandedKey = (model.Accounts.Count(a => !BreakAccount.Is(a.Name)), saved.IsVisible, pillContinue.IsVisible);
         ApplyHeight();
         if (Screens.ScreenFromWindow(this) is { } screen)
             Position = new PixelPoint(Position.X, Math.Clamp(Position.Y, screen.WorkingArea.Y,
@@ -293,7 +298,8 @@ public sealed class PillWindow : Window
         saved.Text = model.LastError is not null ? "Save failed; retrying" : "";
         saved.IsVisible = saved.Text.Length > 0;
         // The expanded pill follows its content: it resizes when the rows or the note under the button change.
-        var key = (model.Accounts.Count(a => !BreakAccount.Is(a.Name)), saved.IsVisible);
+        var offer = model.ContinuePreviousText; pillContinue.IsVisible = offer is not null; if (offer is not null) pillContinue.Content = offer;
+        var key = (model.Accounts.Count(a => !BreakAccount.Is(a.Name)), saved.IsVisible, pillContinue.IsVisible);
         if (expanded && key != expandedKey) { expandedKey = key; Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (expanded) ApplyHeight(); }); }
         ToolTip.SetTip(saved, model.LastError);
         timer.Text = model.ClockText;
@@ -480,7 +486,11 @@ public sealed class DashboardWindow : Window
         date.Width = 112; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
         previous = Ui.Button("‹", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }, "PreviousPeriod"); previous.Classes.Add("iconButton"); previous.Width = 30; previous.FontSize = 20;
         next = Ui.Button("›", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }, "NextPeriod"); next.Classes.Add("iconButton"); next.Width = 30; next.FontSize = 20;
-        todayButton = Ui.Button("Today", () => model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days), "GoToToday"); todayButton.Classes.Add("outlined"); todayButton.Height = 34; todayButton.Padding = new Thickness(14, 4); todayButton.Margin = new Thickness(10, 0, 0, 0);
+        // The same quiet outlined look, with a small icon, as Add time, Undo and Merge.
+        todayButton = Ui.Button("", () => model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days), "GoToToday");
+        todayButton.Classes.Add("toolButton"); todayButton.Classes.Add("quiet"); todayButton.Height = 34; todayButton.Margin = new Thickness(10, 0, 0, 0); todayButton.Padding = new Thickness(12, 0);
+        todayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), new TextBlock { Text = "Today", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
+        Avalonia.Automation.AutomationProperties.SetName(todayButton, "Today");
         Ui.Put(nav, Ui.Horizontal(previous, date, next, todayButton), 1);
         Ui.Put(review, nav);
         undo = Ui.Button("", () => model.UndoEdit(), "UndoEdit");
@@ -530,11 +540,21 @@ public sealed class DashboardWindow : Window
         // The bottom line appears only when there is something to say: a failed save, an edit that was refused, or the one-off note
         // about old files. Otherwise it takes no room.
         string? FooterText() => model.LastError ?? model.EditError ?? model.Notice;
-        var footer = Ui.Text(FooterText() ?? "", 11, "muted"); footer.IsVisible = FooterText() is not null;
-        model.PropertyChanged += (_, _) => { var text = FooterText(); footer.Text = text ?? ""; footer.IsVisible = text is not null; };
-        footer.Margin = new Thickness(24, 10);
+        var footer = Ui.Text(FooterText() ?? "", 11, "muted"); footer.VerticalAlignment = VerticalAlignment.Center;
+        // After a quick slip from one account to another and back, the earlier block can be picked up again from here for a few minutes.
+        var continueButton = Ui.Button("", () => model.ContinuePrevious(), "ContinuePrevious");
+        continueButton.Classes.Add("toolButton"); continueButton.Classes.Add("quiet"); continueButton.Height = 30; continueButton.Padding = new Thickness(12, 0); continueButton.FontSize = 13;
+        var footerRow = Ui.Horizontal(footer, continueButton); footerRow.Spacing = 12;
+        void SyncFooter()
+        {
+            var text = FooterText(); footer.Text = text ?? ""; footer.IsVisible = text is not null;
+            var offer = model.ContinuePreviousText; continueButton.IsVisible = offer is not null; if (offer is not null) continueButton.Content = offer;
+            footerRow.IsVisible = text is not null || offer is not null;
+        }
+        SyncFooter();
+        model.PropertyChanged += (_, _) => SyncFooter();
         // Messages sit under the review only, so they never change the height of the left column.
-        footer.Margin = new Thickness(22, 4, 22, 10); Ui.Put(rightColumn, footer, row: 1);
+        footerRow.Margin = new Thickness(22, 4, 22, 10); Ui.Put(rightColumn, footerRow, row: 1);
         // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
         layers.Children.Add(root); dashboardBody = root;
         var surface = new Border { Name = "DashboardSurface", Child = layers, ClipToBounds = true };

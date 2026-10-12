@@ -14,6 +14,8 @@ namespace Timer.Desktop;
 public static class ReviewViews
 {
     public const double MinimumBlockHeight = 8;
+    // Every block has the same small corner at every zoom level, only a block too short to hold it is rounded as far as it can be.
+    public const double BlockRadius = 6;
     // Where the spine runs and where blocks start, from the left of the timeline.
     private const double SpineX = 58, CardLeft = 80, LabelRight = 40;
     public static Control Timeline(TimerModel model)
@@ -73,7 +75,8 @@ public static class ReviewViews
         var cards = new List<(Border Card, int Lane)>();
         foreach (var interval in intervals.OrderBy(s => s.Start))
         {
-            var lane = ends.FindIndex(end => end <= interval.Start);
+            // Blocks that overlap by a second or two, which older recordings can have, still count as meeting, so they share a lane instead of splitting the whole day in two.
+            var lane = ends.FindIndex(end => end <= interval.Start.AddSeconds(2));
             if (lane < 0) { lane = ends.Count; ends.Add(interval.End); } else ends[lane] = interval.End;
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
             var look = model.BlockLook(colour); colour = look.Fill;
@@ -95,7 +98,7 @@ public static class ReviewViews
                 text.Children.Add(detail);
             }
             foreach (var child in text.GetLogicalDescendants().OfType<TextBlock>()) child.Foreground = Brush.Parse(ink);
-            var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 12),
+            var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(Math.Min(BlockRadius, height / 2)),
                 Width = 380, Height = height, ClipToBounds = true };
             // A strip down the left side in the account's own colour, so a block can be told apart at a glance whatever its fill is.
             var content = new Grid { ColumnDefinitions = new ColumnDefinitions("5,*") };
@@ -127,7 +130,9 @@ public static class ReviewViews
                 if (height >= 96) text.Children.Insert(model.IsSelected(selectionSources) ? 1 : 0, live);
                 else if (text.Children.Count > 0 && text.Children[0] is TextBlock liveTitle) liveTitle.Text = "● " + liveTitle.Text;
                 var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
-                card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };
+                var again = new MenuItem { Name = "ContinuePreviousBlockMenu", Header = model.ContinuePreviousText ?? "Continue earlier block", IsVisible = model.CanContinuePrevious };
+                again.Click += (_, _) => model.ContinuePrevious();
+                card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop, again } };
                 card.PointerPressed += (_, e) =>
                 { if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) { model.ExplainRunning(); e.Handled = true; } };
             }

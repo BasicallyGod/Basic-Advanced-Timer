@@ -79,19 +79,62 @@ public sealed class TrackingEngine
     {
         var stop = string.Equals(Active?.Account, account, StringComparison.OrdinalIgnoreCase);
         var before = Active?.Account;
+        var stoppedEnd = Active is null ? (DateTime?)null : Now;
         StopAccount();
         ResumeAfterBreak = null;
         if (!stop)
         {
             StartDay();
             if (BreakAccount.Is(account) && before is not null && !BreakAccount.Is(before)) ResumeAfterBreak = before;
-            Active = new(account, Now);
+            var start = Now;
+            // A block's length is kept to hundredths of a minute and its start to the second, so the block just stopped can end a fraction of a second
+            // after the new one begins, which drew the two side by side as if they overlapped. The new block starts at the whole second
+            // after the old one's end instead (a second or so later at most), so consecutive blocks always meet cleanly.
+            if (stoppedEnd is not null && LastStoredEnd is { } end && end.Date == start.Date && WholeSecond(start) < end) start = WholeSecond(end, up: true);
+            Active = new(account, start);
         }
+    }
+    private static DateTime WholeSecond(DateTime time, bool up = false)
+    {
+        var whole = new DateTime(time.Ticks - time.Ticks % TimeSpan.TicksPerSecond, time.Kind);
+        return up && whole < time ? whole.AddSeconds(1) : whole;
     }
     public void StopAccount()
     {
         if (Active is { } active) AddSession(active.Account, active.Start, Now);
         Active = null;
+    }
+    /// <summary>Where the last block written by <see cref="AddSession"/> ends, which can be a little after the moment it was stopped.</summary>
+    public DateTime? LastStoredEnd { get; private set; }
+
+    /// <summary>
+    /// How short a block and how recent a switch back count as a slip of the finger, for continuing the earlier block.
+    /// </summary>
+    public static readonly TimeSpan MistakeWindow = TimeSpan.FromMinutes(3);
+    /// <summary>
+    /// After going from one account to another and back again within <see cref="MistakeWindow"/>, the earlier block of the account now running
+    /// and the short block between, or null when the recent history does not look like that. The short block can be a break.
+    /// </summary>
+    public (SessionRow Earlier, SessionRow Between)? ContinuableBlocks()
+    {
+        if (Active is not { } active || BreakAccount.Is(active.Account) || Now - active.Start > MistakeWindow) return null;
+        var between = Sessions.LastOrDefault(s => s.Duration > TimeSpan.Zero && s.Duration <= MistakeWindow && Math.Abs((s.To - active.Start).TotalSeconds) <= 2
+            && !s.Account.Equals(active.Account, StringComparison.OrdinalIgnoreCase));
+        if (between is null) return null;
+        var earlier = Sessions.LastOrDefault(s => s.Duration > TimeSpan.Zero && s.Account.Equals(active.Account, StringComparison.OrdinalIgnoreCase) && s.Day == between.Day
+            && Math.Abs((s.To - between.From).TotalSeconds) <= 2);
+        return earlier is null ? null : (earlier, between);
+    }
+    /// <summary>
+    /// Takes back the switch: the short block between is dropped and the earlier block is reopened, so the account carries on as one block
+    /// that includes the time of the slip. The earlier block's note, which is kept by its start, stays with it. Returns the two blocks removed.
+    /// </summary>
+    public (SessionRow Earlier, SessionRow Between)? ContinuePrevious()
+    {
+        if (ContinuableBlocks() is not { } blocks || Active is not { } active) return null;
+        Sessions.Remove(blocks.Between); Sessions.Remove(blocks.Earlier);
+        Active = new(active.Account, blocks.Earlier.From);
+        return blocks;
     }
     public void Recover(ActiveSession? active, DateTime? lastSeen)
     {
@@ -107,8 +150,12 @@ public sealed class TrackingEngine
         {
             var cap = end < start.Date.AddDays(1) ? end : start.Date.AddDays(1);
             var minutes = (cap - start).TotalMinutes;
-            if (minutes >= .05) Sessions.Add(new(start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), account, start.ToString("HH:mm:ss", CultureInfo.InvariantCulture), cap.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
-                Math.Round(minutes, 2, MidpointRounding.ToEven).ToString(CultureInfo.InvariantCulture)));
+            if (minutes >= .05)
+            {
+                var row = new SessionRow(start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), account, start.ToString("HH:mm:ss", CultureInfo.InvariantCulture), cap.ToString("HH:mm:ss", CultureInfo.InvariantCulture),
+                    Math.Round(minutes, 2, MidpointRounding.ToEven).ToString(CultureInfo.InvariantCulture));
+                Sessions.Add(row); LastStoredEnd = row.To;
+            }
             start = cap;
         }
     }

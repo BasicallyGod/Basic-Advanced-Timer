@@ -87,6 +87,29 @@ public sealed class TimerModel : INotifyPropertyChanged
         OpenEntry(row);
     }
     public void ClearSelection() { if (selectedRows.Count == 0) return; selectedRows.Clear(); Notify(); }
+    // After a quick slip from one account to another and back, the earlier block can be picked up again. Blocks in a group are left alone, since
+    // taking one out of a group would break the group.
+    private (SessionRow Earlier, SessionRow Between)? ContinuableNow()
+    {
+        if (Engine.ContinuableBlocks() is not { } blocks) return null;
+        var grouped = Editor.Entries(blocks.Earlier.Day, blocks.Earlier.Day.AddDays(1)).Where(e => e.GroupId is not null).SelectMany(e => e.Sources).ToHashSet();
+        return grouped.Contains(blocks.Earlier) || grouped.Contains(blocks.Between) ? null : blocks;
+    }
+    public bool CanContinuePrevious => ContinuableNow() is not null;
+    /// <summary>What the option says, such as the account and the time its earlier block began, or null when it is not on offer.</summary>
+    public string? ContinuePreviousText => ContinuableNow() is { } blocks ? $"Continue {Label(blocks.Earlier.Account)} from {blocks.Earlier.From:HH:mm}" : null;
+    /// <summary>Takes back a switch made by mistake. The short block between is dropped and the earlier block carries on as one, including the time of the slip.</summary>
+    public bool ContinuePrevious()
+    {
+        if (ContinuableNow() is null) { EditError = "There is no recent switch to take back."; Notify(); return false; }
+        if (!Save()) { EditError = LastError; Notify(); return false; }
+        var removed = Engine.ContinuePrevious();
+        if (removed is { } blocks) Editor.DropNotes(new[] { (blocks.Between.Account, blocks.Between.Date, blocks.Between.Start) });
+        selectedRows.Clear();
+        var saved = Save();
+        Notice = removed is { } done ? $"Carrying on with {Label(done.Earlier.Account)} from {done.Earlier.From:HH:mm}." : null;
+        Notify(); return saved;
+    }
     // Copied blocks stay inside the app, not on the system clipboard, so they can carry their credited minutes and notes exactly.
     private IReadOnlyList<LedgerEditor.ClipBlock> copied = Array.Empty<LedgerEditor.ClipBlock>();
     public bool CanPaste => copied.Count > 0;
