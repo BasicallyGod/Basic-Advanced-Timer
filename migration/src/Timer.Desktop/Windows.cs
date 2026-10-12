@@ -147,20 +147,57 @@ public sealed class PillWindow : Window
         var chosen = model.PillScalePercent;
         var scale = chosen is { } percent ? percent / 100.0 : screen is null ? pillScale.ScaleX : ScaleFor(screen.WorkingArea.Width / screen.Scaling, screen.Scaling);
         appliedChoice = chosen; if (screen is not null) lastScreen = (screen.Bounds, screen.Scaling);
-        if (Math.Abs(scale - pillScale.ScaleX) < 0.001 && Width > 0) { ApplyWidth(); return; }
         pillScale.ScaleX = scale; pillScale.ScaleY = scale;
-        ApplyWidth(); if (IsLoaded || IsVisible) ApplyHeight();
+        // Whether or not the scale moved, the window is brought to the size it calls for. Skipping this when the scale was already right left the
+        // height at its old unscaled value, a white card under the capsule, whenever the scale had been set before the window was showing.
+        EnsureSize();
     }
+    // After the last move of a drag (nothing for a moment) the size is checked once more, since Windows does not take size changes during the drag.
+    private Avalonia.Threading.DispatcherTimer? settleTimer;
+    private void SettleSoon()
+    {
+        settleTimer ??= new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        settleTimer.Tick -= OnSettled; settleTimer.Tick += OnSettled; settleTimer.Stop(); settleTimer.Start();
+    }
+    private void OnSettled(object? sender, EventArgs e) { settleTimer?.Stop(); if (IsVisible && !closedWindow) { FitIfScreenChanged(); EnsureSize(); } }
     private int? appliedChoice;
     private (Avalonia.PixelRect Bounds, double Scaling)? lastScreen;
     // Dragging the pill onto another screen, or Windows changing a screen's scale, sizes it for that screen at once, without waiting for it to be shown again.
     public void FitIfScreenChanged()
     {
-        if (Screens.ScreenFromWindow(this) is not { } screen) return;
+        if (closedWindow || Screens.ScreenFromWindow(this) is not { } screen) return;
         if (lastScreen is { } known && known.Bounds == screen.Bounds && known.Scaling == screen.Scaling) return;
         FitToScreen(screen);
     }
-    private void ApplyWidth() => Width = (PillWidth + 2 * Ui.ShadowMargin) * pillScale.ScaleX;
+    private double DesiredWidth => (PillWidth + 2 * Ui.ShadowMargin) * pillScale.ScaleX;
+    private double DesiredHeight()
+    {
+        var wanted = WantedHeight(); var limit = wanted;
+        if (!closedWindow && Screens.ScreenFromWindow(this) is { } screen) limit = screen.WorkingArea.Height / screen.Scaling;
+        return Math.Min(wanted * Scale, limit);
+    }
+    private bool ensuring, closedWindow;
+    /// <summary>
+    /// Gives the window the size the pill's scale and state call for, and does it even when the window already has that size asked of it but not
+    /// the real one. Windows ignores a size change while the window is being dragged, which left a pill dragged onto another screen with big contents
+    /// in a window of the old size, so when the real size is wrong the request is nudged and made again.
+    /// </summary>
+    public void EnsureSize()
+    {
+        if (closedWindow) return;
+        var wantWidth = DesiredWidth; var wantHeight = DesiredHeight();
+        Width = wantWidth; Height = wantHeight;
+        pillScroll.VerticalScrollBarVisibility = WantedHeight() * Scale > wantHeight + 1 ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+        // A correction is already on its way. It will use the size wanted when it runs, so this change is not lost.
+        if (ensuring || !IsVisible || (Math.Abs(ClientSize.Width - wantWidth) <= 1.5 && Math.Abs(ClientSize.Height - wantHeight) <= 1.5)) return;
+        ensuring = true;
+        Width = wantWidth + 1; Height = wantHeight + 1;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            ensuring = false;
+            if (!closedWindow) { Width = DesiredWidth; Height = DesiredHeight(); }
+        }, Avalonia.Threading.DispatcherPriority.Background);
+    }
     private readonly TextBlock credited = Ui.Text("", 13, "muted");
     private readonly Avalonia.Controls.Shapes.Ellipse dot = new() { Width = 16, Height = 16, StrokeThickness = 2, VerticalAlignment = VerticalAlignment.Center };
     private readonly Chevron chevron = new() { VerticalAlignment = VerticalAlignment.Center };
@@ -261,8 +298,12 @@ public sealed class PillWindow : Window
         shadowHost = Ui.Shadowed(surface, CapsuleRadius); surfaceBorder = surface;
         Content = new Avalonia.Controls.LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
         Opened += (_, _) => FitToScreen(Screens.ScreenFromWindow(this));
-        PositionChanged += (_, _) => FitIfScreenChanged();
+        PositionChanged += (_, _) => { FitIfScreenChanged(); SettleSoon(); };
         ScalingChanged += (_, _) => FitIfScreenChanged();
+        // Whenever the real size is not the wanted one, say after a drag or a change made while hidden, it is put right.
+        Closed += (_, _) => { closedWindow = true; settleTimer?.Stop(); };
+        SizeChanged += (_, _) => { if (IsVisible && !ensuring && !closedWindow && (Math.Abs(ClientSize.Width - DesiredWidth) > 1.5 || Math.Abs(ClientSize.Height - DesiredHeight()) > 1.5)) EnsureSize(); };
+        Activated += (_, _) => EnsureSize();
         // The capsule changes colour with what is happening, and grows from a capsule into a rounded card as it opens, both eased.
         var ease = TimeSpan.FromMilliseconds(260);
         surface.Transitions = new Avalonia.Animation.Transitions
@@ -303,13 +344,7 @@ public sealed class PillWindow : Window
     }
     // The window takes the height its content needs. Only when the screen is too short to hold it all does the list scroll,
     // so there is never a scroll bar that has nothing to scroll.
-    private void ApplyHeight()
-    {
-        var wanted = WantedHeight(); var limit = wanted;
-        if (Screens.ScreenFromWindow(this) is { } screen) limit = screen.WorkingArea.Height / screen.Scaling;
-        Height = Math.Min(wanted * Scale, limit);
-        pillScroll.VerticalScrollBarVisibility = wanted * Scale > Height + 1 ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
-    }
+    private void ApplyHeight() => EnsureSize();
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         // A new pill size from settings takes effect straight away, even while the pill is hidden behind the dashboard.
