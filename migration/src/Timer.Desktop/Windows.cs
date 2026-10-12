@@ -41,11 +41,33 @@ public sealed class WindowCoordinator
             Pill.Hide();
             Dashboard.Activate();
         };
+        Dashboard.Reveal = ShowDashboard;
         Dashboard.OpenPill = () => { Pill.Collapse(); Pill.Show(); Dashboard.Hide(); Pill.Activate(); };
         Pill.Closed += (_, _) => exit();
         Dashboard.Closed += (_, _) => exit();
         Pill.Closing += OnClosing; Dashboard.Closing += OnClosing;
         model.QuitRequested += Quit;
+        // Tucks the timer away with tracking still running. Without a tray it goes to the taskbar instead, so it can never be lost.
+        model.HideRequested += () =>
+        {
+            if (HideToTray) Hide();
+            else foreach (var window in new Window[] { Pill, Dashboard }) if (window.IsVisible) window.WindowState = WindowState.Minimized;
+        };
+        KeepInFront();
+    }
+    // Snapping another window over the timer, or a window that is itself on top, can leave the pill or dashboard behind it. So whenever one loses focus
+    // it is put back at the front of the topmost windows, and a slow check does the same for one that was covered without a focus change.
+    private void KeepInFront()
+    {
+        void Reassert(Window window) { if (window.IsVisible && !window.IsActive && window.WindowState != WindowState.Minimized) { window.Topmost = false; window.Topmost = true; } }
+        foreach (var window in new Window[] { Pill, Dashboard })
+        {
+            var self = window;
+            self.Deactivated += (_, _) => Avalonia.Threading.DispatcherTimer.RunOnce(() => Reassert(self), TimeSpan.FromMilliseconds(250));
+        }
+        var check = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        check.Tick += (_, _) => { Reassert(Pill); Reassert(Dashboard); };
+        check.Start();
     }
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
@@ -84,6 +106,7 @@ public sealed class WindowCoordinator
         if (screen is not null)
         {
             var area = screen.WorkingArea;
+            Pill.FitToScreen(screen);
             Pill.Position = new PixelPoint(area.Right - (int)(Pill.Width * screen.Scaling) - 24, area.Y + 24);
         }
         Dashboard.Hide(); Pill.Show(); BringToFront(Pill);
@@ -117,11 +140,85 @@ public sealed class PillWindow : Window
     private readonly TextBlock pillUnallocated = Ui.Text("", 13, "muted");
     private readonly StackPanel expansion = new() { IsVisible = false, Spacing = 8 };
     private readonly Button day;
+    private Button pillContinue = null!;
     private readonly IconGlyph pillDayFlag = new(IconKind.Flag);
     private readonly TextBlock pillDayText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private bool expanded;
     public const double CollapsedHeight = 82, PillWidth = 516, CapsuleRadius = 41, CardRadius = 28;
     public static double CollapsedWindowHeight => CollapsedHeight + 2 * Ui.ShadowMargin;
+    // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
+    // A narrow screen (its width in device independent pixels over 1800, never above 85 per cent or below 70 per cent), and a screen with a low
+    // Windows scale, because it has fewer pixels to the inch, so the same pill looks bigger on it. Windows scale 125 per cent or more gives the
+    // largest pill, and 100 per cent the smallest, with the steps between spread evenly. The smaller of the two wins.
+    public const double ScreenWidthDivisor = 1800, LargestScale = 0.85, SmallestScale = 0.7, LargestScaleFromDisplayScale = 1.25;
+    public static double ScaleFor(double screenWidth, double displayScale = LargestScaleFromDisplayScale)
+    {
+        var byWidth = Math.Clamp(screenWidth / ScreenWidthDivisor, SmallestScale, LargestScale);
+        var byDensity = SmallestScale + Math.Clamp((displayScale - 1.0) / (LargestScaleFromDisplayScale - 1.0), 0, 1) * (LargestScale - SmallestScale);
+        return Math.Min(byWidth, byDensity);
+    }
+    private readonly Avalonia.Media.ScaleTransform pillScale = new(1, 1);
+    public double Scale => pillScale.ScaleX;
+    /// <summary>The window height of a closed pill at the size it is drawn on this screen.</summary>
+    public double CollapsedWindowHeightNow => CollapsedWindowHeight * Scale;
+    /// <summary>Sizes the pill for the screen it is on. The window keeps the pill's proportions, so the content only needs the scale.</summary>
+    public void FitToScreen(Avalonia.Platform.Screen? screen)
+    {
+        // A size chosen in settings wins. Otherwise it is worked out from the screen, and with no screen to measure (a hidden window) it stays as it is.
+        var chosen = model.PillScalePercent;
+        var scale = chosen is { } percent ? percent / 100.0 : screen is null ? pillScale.ScaleX : ScaleFor(screen.WorkingArea.Width / screen.Scaling, screen.Scaling);
+        appliedChoice = chosen; if (screen is not null) lastScreen = (screen.Bounds, screen.Scaling);
+        pillScale.ScaleX = scale; pillScale.ScaleY = scale;
+        // Whether or not the scale moved, the window is brought to the size it calls for. Skipping this when the scale was already right left the
+        // height at its old unscaled value, a white card under the capsule, whenever the scale had been set before the window was showing.
+        EnsureSize();
+    }
+    // After the last move of a drag (nothing for a moment) the size is checked once more, since Windows does not take size changes during the drag.
+    private Avalonia.Threading.DispatcherTimer? settleTimer;
+    private void SettleSoon()
+    {
+        settleTimer ??= new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        settleTimer.Tick -= OnSettled; settleTimer.Tick += OnSettled; settleTimer.Stop(); settleTimer.Start();
+    }
+    private void OnSettled(object? sender, EventArgs e) { settleTimer?.Stop(); if (IsVisible && !closedWindow) { FitIfScreenChanged(); EnsureSize(); } }
+    private int? appliedChoice;
+    private (Avalonia.PixelRect Bounds, double Scaling)? lastScreen;
+    // Dragging the pill onto another screen, or Windows changing a screen's scale, sizes it for that screen at once, without waiting for it to be shown again.
+    public void FitIfScreenChanged()
+    {
+        if (closedWindow || Screens.ScreenFromWindow(this) is not { } screen) return;
+        if (lastScreen is { } known && known.Bounds == screen.Bounds && known.Scaling == screen.Scaling) return;
+        FitToScreen(screen);
+    }
+    private double DesiredWidth => (PillWidth + 2 * Ui.ShadowMargin) * pillScale.ScaleX;
+    private double DesiredHeight()
+    {
+        var wanted = WantedHeight(); var limit = wanted;
+        if (!closedWindow && Screens.ScreenFromWindow(this) is { } screen) limit = screen.WorkingArea.Height / screen.Scaling;
+        return Math.Min(wanted * Scale, limit);
+    }
+    private bool ensuring, closedWindow;
+    /// <summary>
+    /// Gives the window the size the pill's scale and state call for, and does it even when the window already has that size asked of it but not
+    /// the real one. Windows ignores a size change while the window is being dragged, which left a pill dragged onto another screen with big contents
+    /// in a window of the old size, so when the real size is wrong the request is nudged and made again.
+    /// </summary>
+    public void EnsureSize()
+    {
+        if (closedWindow) return;
+        var wantWidth = DesiredWidth; var wantHeight = DesiredHeight();
+        Width = wantWidth; Height = wantHeight;
+        pillScroll.VerticalScrollBarVisibility = WantedHeight() * Scale > wantHeight + 1 ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+        // A correction is already on its way. It will use the size wanted when it runs, so this change is not lost.
+        if (ensuring || !IsVisible || (Math.Abs(ClientSize.Width - wantWidth) <= 1.5 && Math.Abs(ClientSize.Height - wantHeight) <= 1.5)) return;
+        ensuring = true;
+        Width = wantWidth + 1; Height = wantHeight + 1;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            ensuring = false;
+            if (!closedWindow) { Width = DesiredWidth; Height = DesiredHeight(); }
+        }, Avalonia.Threading.DispatcherPriority.Background);
+    }
     private readonly TextBlock credited = Ui.Text("", 13, "muted");
     private readonly Avalonia.Controls.Shapes.Ellipse dot = new() { Width = 16, Height = 16, StrokeThickness = 2, VerticalAlignment = VerticalAlignment.Center };
     private readonly Chevron chevron = new() { VerticalAlignment = VerticalAlignment.Center };
@@ -157,15 +254,15 @@ public sealed class PillWindow : Window
         timerColumn.Children.Add(timer); timerColumn.Children.Add(pillUnallocated);
         timerButton.Content = timerColumn;
         timerButton.Classes.Add("pillAction");
-        ToolTip.SetTip(timerButton, "Click for dashboard; drag to move");
+        ToolTip.SetTip(timerButton, "Open dashboard");
         Ui.Put(head, timerButton).Margin = new Thickness(0, 0, 16, 0);
         var divider = new Border { Width = 1, Height = 42 }; divider.Classes.Add("rule");
         Ui.Put(head, divider, 1);
         // The account, with its colour dot and a chevron that opens the list, the line under it that says what is happening, and how far through the day it is.
-        account.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis; account.FontWeight = Avalonia.Media.FontWeight.SemiBold;
-        credited.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis;
-        var nameRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 9 };
-        nameRow.Children.Add(dot); nameRow.Children.Add(account); nameRow.Children.Add(chevron);
+        // A name or line too long for the room slides to its end and back (AutoScrollText) instead of being cut off.
+        account.FontWeight = Avalonia.Media.FontWeight.SemiBold;
+        var nameRow = new NameRow();
+        nameRow.Children.Add(dot); nameRow.Children.Add(new AutoScrollText(account)); nameRow.Children.Add(chevron);
         // How far through the working day it is, as a thin bar under the account.
         progressBar.Height = 5; progressBar.Margin = new Thickness(0, 7, 0, 0);
         progressBar.ColumnDefinitions = new ColumnDefinitions("0*,1*");
@@ -175,13 +272,13 @@ public sealed class PillWindow : Window
         progressBar.Children.Add(rest); progressBar.Children.Add(fill);
         progressBar.Name = "DayProgress"; progressBar.IsHitTestVisible = false;
         var labels = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
-        labels.Children.Add(nameRow); labels.Children.Add(credited); labels.Children.Add(progressBar);
+        labels.Children.Add(nameRow); labels.Children.Add(new AutoScrollText(credited)); labels.Children.Add(progressBar);
         var accountButton = Ui.Button("", ToggleExpansion, "PillAccounts");
         accountButton.Content = labels;
         accountButton.Classes.Add("pillAction");
         accountButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         accountButton.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-        ToolTip.SetTip(accountButton, "Click for accounts; drag to move");
+        ToolTip.SetTip(accountButton, "Accounts");
         Ui.Put(head, accountButton, 2).Margin = new Thickness(16, 0, 16, 0);
         breakButton = Ui.Button("", model.ToggleBreak, "PillBreak");
         breakGlyph.Mono = true; // Plain text colour at rest, and the accent only under the pointer.
@@ -200,6 +297,10 @@ public sealed class PillWindow : Window
         Ui.Put(root, head);
         expansion.Children.Add(Ui.Rule());
         expansion.Children.Add(new AccountList(model));
+        // After a quick slip from one account to another and back, the earlier block can be picked up again, for a few minutes.
+        pillContinue = Ui.Button("", () => model.ContinuePrevious(), "PillContinue"); pillContinue.Classes.Add("flat"); pillContinue.IsVisible = false;
+        pillContinue.HorizontalAlignment = HorizontalAlignment.Center; pillContinue.Margin = new Thickness(0, 4, 0, 0);
+        expansion.Children.Add(pillContinue);
         day = Ui.Button("", model.ToggleDay, "PillDay"); day.Classes.Add("outlined"); day.Classes.Add("quiet");
         day.Content = Ui.Horizontal(pillDayFlag, pillDayText);
         day.PointerEntered += (_, _) => pillDayFlag.Waving = true; day.PointerExited += (_, _) => pillDayFlag.Waving = false; // The flag waves under the pointer.
@@ -215,7 +316,15 @@ public sealed class PillWindow : Window
         Ui.Put(root, pillScroll, row: 1);
         var surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true };
         surface.Classes.Add("surface");
-        shadowHost = Ui.Shadowed(surface, CapsuleRadius); Content = shadowHost; surfaceBorder = surface;
+        shadowHost = Ui.Shadowed(surface, CapsuleRadius); surfaceBorder = surface;
+        Content = new Avalonia.Controls.LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
+        Opened += (_, _) => FitToScreen(Screens.ScreenFromWindow(this));
+        PositionChanged += (_, _) => { FitIfScreenChanged(); SettleSoon(); };
+        ScalingChanged += (_, _) => FitIfScreenChanged();
+        // Whenever the real size is not the wanted one, say after a drag or a change made while hidden, it is put right.
+        Closed += (_, _) => { closedWindow = true; settleTimer?.Stop(); };
+        SizeChanged += (_, _) => { if (IsVisible && !ensuring && !closedWindow && (Math.Abs(ClientSize.Width - DesiredWidth) > 1.5 || Math.Abs(ClientSize.Height - DesiredHeight()) > 1.5)) EnsureSize(); };
+        Activated += (_, _) => EnsureSize();
         // The capsule changes colour with what is happening, and grows from a capsule into a rounded card as it opens, both eased.
         var ease = TimeSpan.FromMilliseconds(260);
         surface.Transitions = new Avalonia.Animation.Transitions
@@ -238,7 +347,7 @@ public sealed class PillWindow : Window
         expansion.Measure(new Size(PillWidth, double.PositiveInfinity));
         return CollapsedHeight + expansion.DesiredSize.Height + 2 * Ui.ShadowMargin;
     }
-    private (int, bool) expandedKey;
+    private (int, bool, bool) expandedKey;
     /// <summary>Closes the list if it is open, so the pill is always a plain capsule when it comes back from the dashboard.</summary>
     public void Collapse() { if (expanded) ToggleExpansion(); }
     public void ToggleExpansion()
@@ -248,7 +357,7 @@ public sealed class PillWindow : Window
         chevron.Expanded = expanded; chevron.InvalidateVisual();
         var radius = new CornerRadius(expanded ? CardRadius : CapsuleRadius);
         surfaceBorder.CornerRadius = radius; shadowHost.CornerRadius = radius;
-        expandedKey = (model.Accounts.Count(a => !BreakAccount.Is(a.Name)), saved.IsVisible);
+        expandedKey = (model.Accounts.Count(a => !BreakAccount.Is(a.Name)), saved.IsVisible, pillContinue.IsVisible);
         ApplyHeight();
         if (Screens.ScreenFromWindow(this) is { } screen)
             Position = new PixelPoint(Position.X, Math.Clamp(Position.Y, screen.WorkingArea.Y,
@@ -256,14 +365,13 @@ public sealed class PillWindow : Window
     }
     // The window takes the height its content needs. Only when the screen is too short to hold it all does the list scroll,
     // so there is never a scroll bar that has nothing to scroll.
-    private void ApplyHeight()
+    private void ApplyHeight() => EnsureSize();
+    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        var wanted = WantedHeight(); var limit = wanted;
-        if (Screens.ScreenFromWindow(this) is { } screen) limit = screen.WorkingArea.Height / screen.Scaling;
-        Height = Math.Min(wanted, limit);
-        pillScroll.VerticalScrollBarVisibility = wanted > Height + 1 ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+        // A new pill size from settings takes effect straight away, even while the pill is hidden behind the dashboard.
+        if (model.PillScalePercent != appliedChoice) FitToScreen(Screens.ScreenFromWindow(this));
+        Refresh();
     }
-    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
     private void Refresh()
     {
         // A break or overtime tints the pill alone, so the dashboard stays calm.
@@ -273,7 +381,8 @@ public sealed class PillWindow : Window
         saved.Text = model.LastError is not null ? "Save failed; retrying" : "";
         saved.IsVisible = saved.Text.Length > 0;
         // The expanded pill follows its content: it resizes when the rows or the note under the button change.
-        var key = (model.Accounts.Count(a => !BreakAccount.Is(a.Name)), saved.IsVisible);
+        var offer = model.ContinuePreviousText; pillContinue.IsVisible = offer is not null; if (offer is not null) pillContinue.Content = offer;
+        var key = (model.Accounts.Count(a => !BreakAccount.Is(a.Name)), saved.IsVisible, pillContinue.IsVisible);
         if (expanded && key != expandedKey) { expandedKey = key; Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (expanded) ApplyHeight(); }); }
         ToolTip.SetTip(saved, model.LastError);
         timer.Text = model.ClockText;
@@ -299,9 +408,9 @@ public sealed class PillWindow : Window
         Ui.Pulse(dot, model.IsTracking);
         pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
         breakButton.Classes.Set("onBreak", model.IsOnBreak); breakGlyph.Filled = false; breakGlyph.HotKey = model.ThemeState == "Recording" ? "Accent" : "Break"; breakGlyph.SetSteaming(model.IsOnBreak || pillHoverBreak); breakGlyph.InvalidateVisual();
-        ToolTip.SetTip(breakButton, model.IsOnBreak ? "Finish break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Start break");
+        ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Start break");
         pause.IsEnabled = model.IsTracking || selected is not null;
-        ToolTip.SetTip(pause, model.IsOnBreak ? "End break; drag to move" : model.IsTracking ? "Pause account; drag to move" : "Resume account; drag to move");
+        ToolTip.SetTip(pause, model.IsOnBreak ? "End break" : model.IsTracking ? "Pause" : "Resume");
         pillDayText.Text = model.DayStarted ? "Finish day" : "Start day";
         // The same quiet outline as the dashboard's button, with a flag that is green to start the day and red to finish it, so ending the day is never done by accident.
         pillDayFlag.TintKey = model.DayStarted ? "Finish" : "Start";
@@ -313,7 +422,7 @@ public sealed class PillWindow : Window
         progressBar.ColumnDefinitions[0].Width = new GridLength(done, GridUnitType.Star);
         progressBar.ColumnDefinitions[1].Width = new GridLength(1.0 - done, GridUnitType.Star);
         progressFill.Classes.Set("progressOvertime", model.IsOvertime && !model.IsOnBreak); progressFill.Classes.Set("progressBreak", model.IsOnBreak);
-        ToolTip.SetTip(progressBar, progress is null ? "No working day today. The line fills as a working day goes by." : $"{(int)(done * 100)}% of the working day");
+        ToolTip.SetTip(progressBar, progress is null ? "No working day today" : $"{(int)(done * 100)}% of the working day");
         // The capsule's own colour says what is happening, so the pill keeps the ordinary shadow in every state.
         var shadow = (model.Shadows, (string?)null, ActualThemeVariant);
         if (lastShadow != shadow) { lastShadow = shadow; Ui.SetShadow(shadowHost, model.Shadows, null); }
@@ -343,16 +452,19 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock today = Ui.Text("", 12, "muted");
     private readonly ContentControl workspace = new();
     private readonly Button day;
-    private Button timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!;
+    private Button timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
+    private IconGlyph pillGlyph = null!;
     private readonly BreakGlyph dashboardCup = new();
     private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly Button undo;
     private readonly Button merge;
-    private EntryWindow? entryEditor;
+    private EntryDialog? entryEditor;
     private bool weekMode, settingsMode, renderedSettings, settingZoom;
     private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
     private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
+    /// <summary>The pop-ups open over the dashboard. They share its blurred backdrop with the getting started setup.</summary>
+    public DialogHost Dialogs { get; } = new();
     private bool? renderedWeekMode;
     private DateTime? renderedDate;
     public DashboardWindow(TimerModel model)
@@ -382,12 +494,21 @@ public sealed class DashboardWindow : Window
         overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectSection("overview"));
         hoursTab = RailButton(IconKind.Table, "Hours table", "WeekHoursTab", () => SelectSection("hours"));
         entriesTab = RailButton(IconKind.Entries, "Entries", "WeekEntriesTab", () => SelectSection("entries"));
+        // The way back to the pill is the first thing on the rail, at the top left.
+        var backToPill = RailButton(IconKind.Minimise, "Switch to pill", "BackToPill", () => OpenPill?.Invoke());
+        pillGlyph = (IconGlyph)backToPill.Content!;
+        railTop.Children.Add(backToPill);
+        var backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
         foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
-        railFoot.Children.Add(RailButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke()));
         settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);
         railFoot.Children.Add(settingsRail);
+        // Closes the timer for good. It goes red under the pointer, so it is never pressed by accident.
+        var quit = RailButton(IconKind.Close, "Close timer", "QuitTimer", () => model.RequestQuit()); quit.Classes.Add("quit");
+        var quitGlyph = (IconGlyph)quit.Content!;
+        quit.PointerEntered += (_, _) => quitGlyph.TintKey = "Finish"; quit.PointerExited += (_, _) => quitGlyph.TintKey = null;
+        railFoot.Children.Add(quit);
         Ui.Put(railGrid, railFoot, row: 1);
         rail.Child = railGrid; Ui.Put(root, rail);
         Ui.DragHeader(railTop, this);
@@ -400,7 +521,7 @@ public sealed class DashboardWindow : Window
         cardStack.Children.Add(accentEdge);
         var identity = new StackPanel { Margin = new Thickness(18, 14, 18, 16), Spacing = 2 };
         var topRow = Ui.Grid("*,Auto");
-        Ui.Put(topRow, Ui.Text("Day elapsed", 12, "muted")); Ui.Put(topRow, today, 1);
+        Ui.Put(topRow, Ui.Text("Working time", 12, "muted")); Ui.Put(topRow, today, 1);
         identity.Children.Add(topRow); identity.Children.Add(clock);
         var live = new StackPanel { Spacing = 4, Margin = new Thickness(0, 4, 0, 12) };
         live.Children.Add(Ui.Horizontal(accountDot, account)); live.Children.Add(new TrackingLabels(model));
@@ -458,17 +579,22 @@ public sealed class DashboardWindow : Window
         var nav = Ui.Grid("*,Auto"); nav.VerticalAlignment = VerticalAlignment.Center;
         Ui.Put(nav, workspaceTitle); headerRow = nav;
         date.Width = 112; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
-        previous = Ui.Button("‹", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }, "PreviousPeriod"); previous.Classes.Add("iconButton"); previous.Width = 30; previous.FontSize = 20;
-        next = Ui.Button("›", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }, "NextPeriod"); next.Classes.Add("iconButton"); next.Width = 30; next.FontSize = 20;
-        todayButton = Ui.Button("Today", () => model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days), "GoToToday"); todayButton.Classes.Add("outlined"); todayButton.Height = 34; todayButton.Padding = new Thickness(14, 4); todayButton.Margin = new Thickness(10, 0, 0, 0);
+        previous = Ui.IconButton(IconKind.Previous, "Previous day or week", "PreviousPeriod", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }); previous.Width = 30;
+        next = Ui.IconButton(IconKind.Next, "Next day or week", "NextPeriod", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }); next.Width = 30;
+        // The same quiet outlined look, with a small icon, as Add time, Undo and Merge.
+        todayButton = Ui.Button("", () => model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days), "GoToToday");
+        todayButton.Classes.Add("toolButton"); todayButton.Classes.Add("quiet"); todayButton.Height = 34; todayButton.Margin = new Thickness(10, 0, 0, 0); todayButton.Padding = new Thickness(12, 0);
+        todayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), new TextBlock { Text = "Today", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
+        Avalonia.Automation.AutomationProperties.SetName(todayButton, "Today");
         Ui.Put(nav, Ui.Horizontal(previous, date, next, todayButton), 1);
         Ui.Put(review, nav);
         undo = Ui.Button("", () => model.UndoEdit(), "UndoEdit");
         merge = Ui.Button("", () => model.MergeSelection(), "MergeSelected");
+        edit = Ui.Button("", () => model.EditSelection(), "EditSelected");
         // Editing buttons sit on the left and only where they apply; Tools stays on the right. Hours and minutes is in Settings.
         addTime = Ui.Button("", () => model.OpenGap(), "AddTime");
         // The same quiet outlined look as Start break and Finish day, each with a small icon: a plus in the accent colour, and plain ones for the rest.
-        (Button Button, IconKind Icon, string Words, string? Tint)[] toolSpecs = { (addTime, IconKind.Plus, "Add time", "Accent"), (undo, IconKind.Undo, "Undo", null), (merge, IconKind.Merge, "Merge", null) };
+        (Button Button, IconKind Icon, string Words, string? Tint)[] toolSpecs = { (addTime, IconKind.Plus, "Add time", "Accent"), (undo, IconKind.Undo, "Undo", null), (merge, IconKind.Merge, "Merge", null), (edit, IconKind.Edit, "Edit", null) };
         foreach (var (toolButton, icon, words, tint) in toolSpecs)
         {
             toolButton.Classes.Add("toolButton"); toolButton.Classes.Add("quiet");
@@ -476,14 +602,14 @@ public sealed class DashboardWindow : Window
             Avalonia.Automation.AutomationProperties.SetName(toolButton, words);
         }
         addTime.Classes.Add("addButton");
-        var edits = Ui.Horizontal(addTime, undo, merge);
+        var edits = Ui.Horizontal(addTime, undo, merge, edit);
         // Zoom and fit sit beside Tools in this row, applying to the timeline underneath. They show only on the Timeline tab.
         ScrollViewer? TimelineScroll() => workspace.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
         zoomOut = Ui.IconButton(IconKind.ZoomOut, "Zoom out", "TimelineZoomOut", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Height / 2, s.Offset.Y); });
         zoomIn = Ui.IconButton(IconKind.ZoomIn, "Zoom in (or hold Ctrl and use the mouse wheel)", "TimelineZoomIn", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Height / 2, s.Offset.Y); });
         var fit = Ui.IconButton(IconKind.FitDay, "Fit the day to the window", "TimelineFit", () => { if (TimelineScroll() is { } s) model.FitTimeline(s.Viewport.Height); });
         // The zoom controls sit in a bar under the timeline: fit the day, zoom out, a slider, zoom in. They show only on the Timeline view.
-        zoomSlider = new Slider { Name = "TimelineZoom", Minimum = 0, Maximum = 1, Width = 170, VerticalAlignment = VerticalAlignment.Center, Value = model.TimelineZoomFraction,
+        zoomSlider = new Slider { Name = "TimelineZoom", Minimum = 0, Maximum = 1, Width = 130, VerticalAlignment = VerticalAlignment.Center, Value = model.TimelineZoomFraction,
             // The standard slider draws its track a little below the middle of its own box, so the box is lifted by the same amount (drawing only, no layout change) to put the track on the bar's centre line.
             RenderTransform = new Avalonia.Media.TranslateTransform(0, -5) };
         Avalonia.Automation.AutomationProperties.SetName(zoomSlider, "Zoom"); ToolTip.SetTip(zoomSlider, "Zoom the timeline");
@@ -496,27 +622,22 @@ public sealed class DashboardWindow : Window
         ((StackPanel)zoomBar.Child).Spacing = 4; zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
         // Add time, Undo and Merge sit on the left of a bar under the workspace, and the zoom controls on its right, so the working area has the whole height above.
         // The bar is as tall as the Start break and Finish day buttons beside it, so the two bottom rows line up. Its buttons fill that height.
-        addTime.Height = ControlBarHeight; undo.Height = ControlBarHeight; merge.Height = ControlBarHeight;
+        addTime.Height = ControlBarHeight; undo.Height = ControlBarHeight; merge.Height = ControlBarHeight; edit.Height = ControlBarHeight;
         var tools = Ui.Grid("*,Auto"); toolsRow = tools; Ui.Put(tools, edits); Ui.Put(tools, zoomBar, 1);
-        tools.Margin = new Thickness(0, 12, 0, 0);
+        tools.Margin = new Thickness(0, 12, 0, 0); zoomBar.Margin = new Thickness(12, 0, 0, 0); // Clear space between Merge and the zoom bar.
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
         Ui.Put(review, workspace, row: 1);
         Ui.Put(review, tools, row: 2);
         // The title row's empty middle still drags the window.
-        var rightColumn = Ui.Grid("*", "*,Auto");
+        var rightColumn = Ui.Grid("*", "*");
         Ui.Put(rightColumn, review); Ui.DragHeader(nav, this);
         Ui.Put(body, rightColumn, 2);
         Ui.Put(root, body, 1);
-        // The bottom line appears only when there is something to say: a failed save, an edit that was refused, or the one-off note
-        // about old files. Otherwise it takes no room.
-        string? FooterText() => model.LastError ?? model.EditError ?? model.Notice;
-        var footer = Ui.Text(FooterText() ?? "", 11, "muted"); footer.IsVisible = FooterText() is not null;
-        model.PropertyChanged += (_, _) => { var text = FooterText(); footer.Text = text ?? ""; footer.IsVisible = text is not null; };
-        footer.Margin = new Thickness(24, 10);
-        // Messages sit under the review only, so they never change the height of the left column.
-        footer.Margin = new Thickness(22, 4, 22, 10); Ui.Put(rightColumn, footer, row: 1);
+        // Notes, refused edits and failed saves float over the lowest part of the workspace, above the buttons, so they never push the buttons up.
+        Ui.Put(review, new MessageBar(model), row: 1);
         // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
         layers.Children.Add(root); dashboardBody = root;
+        layers.Children.Add(Dialogs); Dialogs.OpenChanged += UpdateBackdrop; // Last, so a dialog is above the setup too.
         var surface = new Border { Name = "DashboardSurface", Child = layers, ClipToBounds = true };
         surface.Classes.Add("surface");
         var host = Ui.Shadowed(surface, 20); Content = host;
@@ -547,7 +668,18 @@ public sealed class DashboardWindow : Window
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         KeyDown += (_, e) =>
         {
-            if (e.Key == Avalonia.Input.Key.Escape) { model.ClearSelection(); e.Handled = true; }
+            // Escape takes the top dialog away first, and only then clears the selection.
+            if (e.Key == Avalonia.Input.Key.Escape) { if (!Dialogs.CloseTop()) model.ClearSelection(); e.Handled = true; }
+            // Ctrl+C copies the selected blocks and Ctrl+V pastes them on the timeline, but never while typing in a text box.
+            else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key is Avalonia.Input.Key.C or Avalonia.Input.Key.V && !settingsMode && FocusManager?.GetFocusedElement() is not TextBox)
+            {
+                if (e.Key == Avalonia.Input.Key.C) model.CopySelection(); else if (!weekMode) model.PasteBlocks(model.DefaultPasteTime());
+                e.Handled = true;
+            }
+            // Enter opens the one selected block, but never while typing in a box or with a button focused (Enter presses that instead).
+            else if (e.Key == Avalonia.Input.Key.Enter && e.KeyModifiers == Avalonia.Input.KeyModifiers.None && !settingsMode && Dialogs.Any == false
+                && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox or Button) && model.CanEditSelection)
+            { model.EditSelection(); e.Handled = true; }
             // Backspace and Delete remove the selected blocks, but never while typing in a text box.
             else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete && FocusManager?.GetFocusedElement() is not TextBox)
             { if (model.SelectedRows.Count > 0) { model.DeleteSelection(); e.Handled = true; } }
@@ -555,8 +687,8 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += Changed;
         model.PropertyChanged += (_, _) => UpdateOnboarding();
         model.EntryRequested += ShowEntry;
-        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy;
-        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; };
+        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy; model.AccountsRequested += ShowAccounts;
+        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; model.AccountsRequested -= ShowAccounts; };
         Refresh(true);
         UpdateOnboarding();
     }
@@ -570,15 +702,22 @@ public sealed class DashboardWindow : Window
         {
             onboarding = new OnboardingView(model);
             onboarding.Finished += () => { model.CompleteSetup(); UpdateOnboarding(); };
-            dashboardBody.Effect = new Avalonia.Media.BlurEffect { Radius = 7 }; dashboardBody.IsHitTestVisible = false;
-            layers.Children.Add(onboarding);
+            layers.Children.Insert(layers.Children.IndexOf(Dialogs), onboarding);
+            UpdateBackdrop();
             Avalonia.Threading.Dispatcher.UIThread.Post(() => onboarding?.Focus());
         }
         else if (!wanted && onboarding is not null && dashboardBody is not null)
         {
             layers.Children.Remove(onboarding); onboarding = null;
-            dashboardBody.Effect = null; dashboardBody.IsHitTestVisible = true;
+            UpdateBackdrop();
         }
+    }
+    // The dashboard is blurred and cannot be clicked while the setup or any dialog is over it.
+    private void UpdateBackdrop()
+    {
+        if (dashboardBody is null) return;
+        var covered = onboarding is not null || Dialogs.Any;
+        dashboardBody.Effect = covered ? new Avalonia.Media.BlurEffect { Radius = 7 } : null; dashboardBody.IsHitTestVisible = !covered;
     }
     /// <summary>Whether a point (in window coordinates) is in the part of the dashboard that drags the window.</summary>
     public bool InDragZone(Point point)
@@ -591,13 +730,20 @@ public sealed class DashboardWindow : Window
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
     {
         if (!IsVisible) return;
-        if (entryEditor is { IsVisible: true }) { entryEditor.Activate(); return; }
-        entryEditor = new EntryWindow(model, row, start, end);
+        if (entryEditor is { IsVisible: true }) return;
+        entryEditor = new EntryDialog(model, row, start, end);
         entryEditor.Closed += (_, _) => entryEditor = null;
-        entryEditor.Show(this);
+        Dialogs.Show(entryEditor);
     }
-    private void ShowTidy() { if (IsVisible) new TidyWindow(model).Show(this); }
-    private void ShowGroup(string id) { if (IsVisible) new GroupWindow(model, id).Show(this); }
+    /// <summary>Set by the coordinator so a request that arrives while only the pill is showing can bring the dashboard up first.</summary>
+    public Action? Reveal { get; set; }
+    private void ShowAccounts()
+    {
+        if (!IsVisible) Reveal?.Invoke();
+        if (IsVisible && !Dialogs.Dialogs.OfType<AccountsDialog>().Any()) Dialogs.Show(new AccountsDialog(model));
+    }
+    private void ShowTidy() { if (IsVisible) Dialogs.Show(new TidyDialog(model)); }
+    private void ShowGroup(string id) { if (IsVisible) Dialogs.Show(new GroupDialog(model, id)); }
     public void SelectTab(bool showWeek) { settingsMode = false; weekMode = showWeek; Refresh(true); }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
@@ -634,10 +780,12 @@ public sealed class DashboardWindow : Window
         zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
+        edit.IsVisible = editing && model.CanEditSelection; if (edit.IsVisible && edit.Content is Panel editRow && editRow.Children.OfType<TextBlock>().FirstOrDefault() is { } editText) editText.Text = model.EditText;
+        pillGlyph.DotKey = model.IsOnBreak ? "Break" : model.IsTracking ? "Live" : "Accent";
         dashboardCup.Filled = model.IsOnBreak; dashboardCup.SetSteaming(model.IsOnBreak); dashboardCup.InvalidateVisual();
         dashboardBreakText.Text = model.IsOnBreak ? "Finish break" : "Start break";
         breakButton.Classes.Set("onBreak", model.IsOnBreak);
-        ToolTip.SetTip(breakButton, model.IsOnBreak ? "End the break" + (model.ResumeAccount is { } resumeTo ? " and go back to " + resumeTo : "") : "Stop timing any account while you take a break");
+        ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Take a break");
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); if (button.Content is IconGlyph glyph) glyph.TintKey = selected ? "Ink" : "Muted"; }

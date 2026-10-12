@@ -117,13 +117,13 @@ public sealed class ThemeTests
         finally { Avalonia.Application.Current!.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default; if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }
 
-    private static T Find<T>(Avalonia.Controls.Window window, string name) where T : Avalonia.Controls.Control
+    private static T Find<T>(Avalonia.Controls.Control window, string name) where T : Avalonia.Controls.Control
         => Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<T>().Single(c => c.Name == name);
 
     [Avalonia.Headless.XUnit.AvaloniaFact]
     public void TheThemeEditorDuplicatesEditsPreviewsSavesAndDeletesYourOwnThemes_AndLocksBuiltInOnes()
     {
-        var model = TimerModel.CreateDemo(); var window = new ThemesWindow(model); window.Show();
+        var model = TimerModel.CreateDemo(); var window = new ThemesDialog(model).Open(model);
         try
         {
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -137,9 +137,7 @@ public sealed class ThemeTests
             var copyName = model.Theme; Assert.EndsWith(" copy", copyName); Assert.False(model.Themes.Single(t => t.Name == copyName).BuiltIn);
             Assert.True(Find<Avalonia.Controls.Button>(window, "ColourSurface").IsEnabled); Assert.True(Find<Avalonia.Controls.Button>(window, "DeleteTheme").IsEnabled);
             // Typing a hex colour changes the app at once, before anything is saved.
-            var picker = (Avalonia.Controls.Flyout)Find<Avalonia.Controls.Button>(window, "ColourSurface").Flyout!;
-            var hex = Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Avalonia.Controls.Control)picker.Content!).OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "HexSurface");
-            hex.Text = "#102030";
+            Edit(window, "#102030");
             var variant = ThemeEngine.VariantFor(model.Themes.Single(t => t.Name == copyName));
             Assert.True(((Avalonia.Controls.IResourceHost)Avalonia.Application.Current!).TryGetResource("Surface", variant, out var live)); Assert.Equal(Avalonia.Media.Color.Parse("#102030"), ((Avalonia.Media.ISolidColorBrush)live!).Color);
             Assert.NotEqual("#102030", model.Themes.Single(t => t.Name == copyName).Colour("Surface")); // Not kept yet.
@@ -157,12 +155,37 @@ public sealed class ThemeTests
         finally { window.Close(); }
     }
 
-    private static void Edit(ThemesWindow window, string hexColour)
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void TheColourWheelAndLightnessBarMoveTheColourAndTheHexBoxFollowsThem()
     {
-        var picker = (Avalonia.Controls.Flyout)Find<Avalonia.Controls.Button>(window, "ColourSurface").Flyout!;
+        var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
+        var window = new ThemesDialog(model).Open(model);
+        try
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Edit(window, "#336699"); // Opens the picker and puts a first colour in.
+            var picker = Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Avalonia.Controls.Control)((Avalonia.Controls.Flyout)Find<Avalonia.Controls.Button>(window, "ColourSurface").Flyout!).Content!).ToList();
+            var wheel = picker.OfType<Avalonia.Controls.Primitives.ColorSpectrum>().Single(); var bar = picker.OfType<Avalonia.Controls.Primitives.ColorSlider>().Single(); var hex = picker.OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "HexSurface");
+            Assert.Equal(Avalonia.Media.Color.Parse("#336699"), wheel.HsvColor.ToRgb()); Assert.Equal(wheel.HsvColor.V, bar.HsvColor.V, 3); // Typing a colour moves both.
+            wheel.HsvColor = new Avalonia.Media.HsvColor(1, 120, 1, 1); // Pure green, from the wheel.
+            Assert.Equal("#00FF00", hex.Text); // The app repaints a moment later (repaints are gathered while a control moves), so only the box is checked here.
+            var swatch = (Avalonia.Controls.Border)Find<Avalonia.Controls.Button>(window, "ColourSurface").Content!;
+            Assert.Equal(Avalonia.Media.Color.Parse("#00FF00"), ((Avalonia.Media.ISolidColorBrush)swatch.Background!).Color);
+            bar.HsvColor = new Avalonia.Media.HsvColor(1, 120, 1, 0.5); // Half as light, from the bar.
+            Assert.Equal(wheel.HsvColor.V, 0.5, 2); Assert.Equal(hex.Text, $"#{wheel.HsvColor.ToRgb().R:X2}{wheel.HsvColor.ToRgb().G:X2}{wheel.HsvColor.ToRgb().B:X2}");
+        }
+        finally { window.Close(); model.DeleteTheme(copy); model.SetTheme("System"); }
+    }
+
+    private static void Edit(ThemesDialog window, string hexColour)
+    {
+        // The picker is built the first time it opens, so it is opened (and put away again) before its box is typed in.
+        var button = Find<Avalonia.Controls.Button>(window, "ColourSurface");
+        var picker = (Avalonia.Controls.Flyout)button.Flyout!;
+        if (picker.Content is null) { picker.ShowAt(button); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); picker.Hide(); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); }
         Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Avalonia.Controls.Control)picker.Content!).OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "HexSurface").Text = hexColour;
     }
-    private static void Press(ThemesWindow window, string name)
+    private static void Press(ThemesDialog window, string name)
     {
         Find<Avalonia.Controls.Button>(window, name).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -178,7 +201,7 @@ public sealed class ThemeTests
     public void ClosingWithUnsavedEditsAsksAndDiscardPutsTheSavedLookBack()
     {
         var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
-        var window = new ThemesWindow(model); window.Show();
+        var window = new ThemesDialog(model).Open(model);
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Edit(window, "#FF00FF");
         window.Close(); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -197,7 +220,7 @@ public sealed class ThemeTests
     public void SavingFromThePromptKeepsTheEditThenClosesOrSwitches()
     {
         var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
-        var window = new ThemesWindow(model); window.Show();
+        var window = new ThemesDialog(model).Open(model);
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Edit(window, "#112233");
         // Choosing another theme in the list also asks, and the edited theme stays selected until it is answered.
@@ -266,7 +289,7 @@ public sealed class ThemeTests
     public void TheEditorShowsTheBlockRuleSlidersForATintedThemeAndSavesThem()
     {
         var model = TimerModel.CreateDemo(); model.SetTheme("Light"); var copy = model.DuplicateTheme("Light");
-        var window = new ThemesWindow(model); window.Show();
+        var window = new ThemesDialog(model).Open(model);
         try
         {
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();

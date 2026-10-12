@@ -29,7 +29,7 @@ public sealed class MenuAndShellTests
         {
             var items = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).ToList();
             var headers = items.Select(i => i is MenuItem m ? (string?)m.Header : "|").ToList();
-            Assert.Equal(new[] { "Decimal hours", "Test overtime", "|", BuildInfo.Current, "|", "Close timer" }, headers);
+            Assert.Equal(new[] { "Continue earlier block", "Test overtime", "|", BuildInfo.Current, "|", "Collapse to tray" }, headers);
         }
         finally { window.Close(); }
     }
@@ -108,7 +108,7 @@ public sealed class MenuAndShellTests
             var row = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account0");
             Assert.All(row.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is { Length: > 0 }), t => Assert.True(t.TranslatePoint(default, row)!.Value.X >= 0 && t.TranslatePoint(new Point(t.Bounds.Width, 0), row)!.Value.X <= row.Bounds.Width + 1));
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
-            if (folder is not null) { Directory.CreateDirectory(folder); frame!.Save(Path.Combine(folder, "account-grips.png")); }
+            if (folder is not null) { Directory.CreateDirectory(folder); frame?.Save(Path.Combine(folder, "account-grips.png")); }
         }
         finally { pill.Close(); dashboard.Close(); }
     }

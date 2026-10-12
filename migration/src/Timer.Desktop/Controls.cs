@@ -29,7 +29,7 @@ public static class Ui
     /// <summary>The text colour that reads best on a block of this colour: the usual dark ink on light colours, white on dark ones.</summary>
     public static string InkOn(string colour) => IsColour(colour) ? ThemeColours.ReadableOn(colour) : "#24312B";
     // Room around a borderless window for its soft shadow or glow, which are drawn outside the card.
-    public const double ShadowMargin = 22;
+    public const double ShadowMargin = 30;
     /// <summary>Wraps a window's card so it can cast a shadow or glow. The card clips its own content, so the shadow lives on a parent.</summary>
     public static Border Shadowed(Border card, double radius)
     {
@@ -81,6 +81,11 @@ public static class Ui
         _ = animation.RunAsync(control, source.Token);
     }
     public static bool IsPulsing(Control control) => pulses.TryGetValue(control, out _);
+    /// <summary>A heading in the app's display face, the same as the dashboard's workspace title, so every page and pop-up names itself alike.</summary>
+    public static TextBlock Heading(string text, double size = 20)
+    {
+        var heading = Text(text, size, "clock"); return heading;
+    }
     public static TextBlock Text(string text, double size = 14, string? style = null)
     {
         var control = new TextBlock { Text = text, FontSize = size, VerticalAlignment = VerticalAlignment.Center };
@@ -98,6 +103,16 @@ public static class Ui
     {
         var button = new Button { Content = text, Name = name, VerticalAlignment = VerticalAlignment.Center };
         button.Click += (_, _) => click();
+        return button;
+    }
+    // The buttons in dialogs wear the same quiet outlined look as the dashboard's (Add time, Undo, Start break). The main action of a dialog,
+    // such as Save or Export, has an accent outline so it reads as the one to press.
+    private static readonly string[] MainActions = { "Save", "Export CSV files", "Apply selected fills", "Group selected", "Move later blocks" };
+    public static Button DialogButton(string text, Action click, string? name = null, bool? main = null)
+    {
+        var button = Button(text, click, name);
+        button.Classes.Add("toolButton"); button.Classes.Add("quiet"); button.Classes.Add("dialogButton");
+        if (main ?? MainActions.Contains(text)) button.Classes.Add("mainAction");
         return button;
     }
     public static Grid Grid(string columns, string rows = "Auto") => new()
@@ -207,22 +222,25 @@ public static class Ui
     /// </summary>
     public static ContextMenu SettingsMenu(TimerModel model)
     {
-        var format = new MenuItem { Header = "Decimal hours", IsChecked = model.DecimalHours, ToggleType = MenuItemToggleType.CheckBox };
-        format.Click += (_, _) => model.ToggleFormat();
         // Inside the demo you can switch overtime on and off to see how it looks. Like the version, it shows only once developer features are unlocked.
         var overtimeTest = new MenuItem { Header = "Test overtime", ToggleType = MenuItemToggleType.CheckBox, IsVisible = false, Name = "TestOvertime" };
         overtimeTest.Click += (_, _) => model.SetOvertimeTest(!model.OvertimeTest);
         // Which build this is, greyed out because it is information, not an action.
         var version = new MenuItem { Header = BuildInfo.Current, IsEnabled = false, IsVisible = false, Name = "BuildVersion" };
-        var quit = new MenuItem { Header = "Close timer" };
-        quit.Click += (_, _) => model.RequestQuit();
+        // Shown for a few minutes after going from one account to another and back, to pick the earlier block up again.
+        var continueItem = new MenuItem { Name = "ContinuePreviousMenu", Header = "Continue earlier block", IsVisible = false };
+        continueItem.Click += (_, _) => model.ContinuePrevious();
+        // Tucks the timer away without stopping it. Closing it for good is the cross at the foot of the dashboard's rail.
+        var collapse = new MenuItem { Header = "Collapse to tray", Name = "CollapseToTray" };
+        collapse.Click += (_, _) => model.RequestHide();
         var versionRule = new Separator { IsVisible = false };
-        var menu = new ContextMenu { ItemsSource = new Control[] { format, overtimeTest, versionRule, version, new Separator(), quit } };
+        var menu = new ContextMenu { ItemsSource = new Control[] { continueItem, overtimeTest, versionRule, version, new Separator(), collapse } };
         void Sync()
         {
             var developer = model.DeveloperUnlocked;
-            format.IsChecked = model.DecimalHours; overtimeTest.IsChecked = model.OvertimeTest;
+            overtimeTest.IsChecked = model.OvertimeTest;
             overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer; versionRule.IsVisible = developer;
+            var offer = model.ContinuePreviousText; continueItem.IsVisible = offer is not null; if (offer is not null) continueItem.Header = offer;
         }
         menu.Opened += (_, _) => Sync(); Sync();
         return menu;
@@ -251,7 +269,7 @@ public sealed class AccountIndicator : Control
         Account = account;
         this.model = model;
         Width = Height = Size;
-        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = TimeSpan.FromMilliseconds(160) } };
+        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = IconGlyph.HoverDuration } };
     }
     // Drawn on a 42 unit canvas and scaled down, so the ring, bars and play triangle stay in proportion at the smaller size.
     public const double Size = 36;
@@ -292,7 +310,7 @@ public sealed class AccountIndicator : Control
         }
         // On the plain circle a running account is already filled with the accent, so its pause bars are drawn in the accent's own text colour.
         if (!Ring && running) ink = accentInk;
-        using var grow = context.PushTransform(Matrix.CreateTranslation(-21, -21) * Matrix.CreateScale(1 + .18 * glow, 1 + .18 * glow) * Matrix.CreateTranslation(21, 21));
+        using var grow = context.PushTransform(Matrix.CreateTranslation(-21, -21) * Matrix.CreateScale(1 + .08 * glow, 1 + .08 * glow) * Matrix.CreateTranslation(21, 21));
         if (model.ActiveAccount == Account.Name)
         {
             context.DrawRectangle(ink, null, new Rect(15, 14, 4, 14), 1, 1);
@@ -474,7 +492,8 @@ public sealed class AccountList : StackPanel
             row.PointerExited += (_, _) => { icon.Glow = 0; marquee?.Hover(false); };
             if (reorderable && !BreakAccount.Is(account.Name)) AttachReorder(row, account.Name);
             var settings = new MenuItem { Header = "Name and budget…", Name = "AccountSettingsMenu" };
-            settings.Click += (_, _) => { if (TopLevel.GetTopLevel(row) is Window owner) new AccountsWindow(model).Show(owner); };
+            // The pill has no room for a dialog, so the dashboard shows it, and comes up first when it is hidden.
+            settings.Click += (_, _) => model.OpenAccounts();
             row.ContextMenu = new ContextMenu { ItemsSource = new Control[] { settings } };
             Children.Add(row);
             rows.Add((account, row, today, budget, icon, dot, bar, percent));
@@ -580,8 +599,8 @@ public sealed class AccountList : StackPanel
             if (row.Bar is { } bar && model.BudgetRatio(row.Account) is { } ratio)
             {
                 bar.Set(ratio, model.BudgetPace(row.Account));
-                var period = row.Account.Period is "month" or "quarter" ? row.Account.Period : "week";
-                ToolTip.SetTip(bar, $"The line marks how far through the {period} it is. A bar past the line is ahead of an even spread of the budget.");
+                var period = row.Account.Period is "day" or "month" or "quarter" ? row.Account.Period : "week";
+                ToolTip.SetTip(bar, $"The line is how far through the {(period == "day" ? "working day" : period)} you are.");
                 // A spent budget shows its percentage in red, so overrunning reads at a glance.
                 row.Percent.Text = Math.Round(ratio * 100) + "%"; row.Percent.Classes.Set("overtime", ratio >= 1); row.Percent.Classes.Set("muted", ratio < 1);
             }
@@ -659,10 +678,16 @@ public sealed class Chevron : Control
 {
     public bool Expanded { get; set; }
     public Chevron() { Width = 14; Height = 14; }
+    // Drawn in the theme's text colour, which changes when the pill turns to a recording, break or overtime look, so it must be drawn again then.
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property.Name == nameof(ActualThemeVariant)) InvalidateVisual();
+    }
     public override void Render(DrawingContext context)
     {
         var brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
-        var pen = new Pen(brush, 2.2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        var pen = new Pen(brush, IconGlyph.StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         var y = Expanded ? 9 : 5;
         context.DrawLine(pen, new Point(2, y), new Point(7, Expanded ? 4 : 10));
         context.DrawLine(pen, new Point(7, Expanded ? 4 : 10), new Point(12, y));
@@ -679,12 +704,18 @@ public sealed class PauseGlyph : Control
     public PauseGlyph()
     {
         Width = Height = 14;
-        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = TimeSpan.FromMilliseconds(160) } };
+        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = IconGlyph.HoverDuration } };
+    }
+    // Drawn in the theme's text colour, which changes when the pill turns to a recording, break or overtime look, so it must be drawn again then.
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property.Name == nameof(ActualThemeVariant)) InvalidateVisual();
     }
     public override void Render(DrawingContext context)
     {
         var glow = Math.Clamp(Glow, 0, 1);
-        using var grow = context.PushTransform(Matrix.CreateTranslation(-7, -7) * Matrix.CreateScale(1 + .25 * glow, 1 + .25 * glow) * Matrix.CreateTranslation(7, 7));
+        using var grow = context.PushTransform(Matrix.CreateTranslation(-7, -7) * Matrix.CreateScale(1 + .08 * glow, 1 + .08 * glow) * Matrix.CreateTranslation(7, 7));
         var normal = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
         var tint = this.TryFindResource("Accent", ActualThemeVariant, out var accentValue) ? accentValue as IBrush : normal;
         // The accent can be too faint on a theme's panel, so it is only mixed in as the pointer arrives and the shape itself is what grows.
@@ -730,12 +761,18 @@ public sealed class BreakGlyph : Control
         };
         _ = animation.RunAsync(this, steaming.Token);
     }
+    // Drawn in the theme's text colour, which changes when the pill turns to a recording, break or overtime look, so it must be drawn again then.
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property.Name == nameof(ActualThemeVariant)) InvalidateVisual();
+    }
     public override void Render(DrawingContext context)
     {
         IBrush? brush = null;
         var key = Mono ? (Hot ? HotKey : "Ink") : "Break";
         if (Filled) brush = Brushes.White; else if (this.TryFindResource(key, ActualThemeVariant, out var value)) brush = value as IBrush;
-        var pen = new Pen(brush ?? Brushes.Gray, 1.8, lineCap: PenLineCap.Round);
+        var pen = new Pen(brush ?? Brushes.Gray, IconGlyph.StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         context.DrawGeometry(null, pen, Geometry.Parse("M 3,7 L 3,12 Q 3,15.5 6.5,15.5 L 9.5,15.5 Q 13,15.5 13,12 L 13,7 Z"));
         context.DrawGeometry(null, pen, Geometry.Parse("M 13,8 L 14.5,8 Q 16.5,8 16.5,10 Q 16.5,12 14.5,12 L 13,12"));
         // Two wisps, half a cycle apart. Each rises a little and fades in and out; when still they sit where they always did.
@@ -749,13 +786,46 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
 {
+    public const double StrokeWidth = 1.6;
+    public static readonly TimeSpan HoverDuration = TimeSpan.FromMilliseconds(200);
+    public static readonly StyledProperty<double> HoverProperty = AvaloniaProperty.Register<IconGlyph, double>(nameof(Hover));
+    static IconGlyph() => AffectsRender<IconGlyph>(HoverProperty);
+    public double Hover { get => GetValue(HoverProperty); set => SetValue(HoverProperty, value); }
     public IconKind Kind { get; }
-    public IconGlyph(IconKind kind) { Kind = kind; Width = Height = 18; }
+    public IconGlyph(IconKind kind)
+    {
+        Kind = kind; Width = Height = 18;
+        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = HoverProperty, Duration = HoverDuration } };
+    }
+    private Button? owner;
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        owner = this.GetVisualAncestors().OfType<Button>().FirstOrDefault();
+        if (owner is null) return;
+        owner.PropertyChanged += OwnerChanged;
+        UpdateHover();
+    }
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        if (owner is not null) owner.PropertyChanged -= OwnerChanged;
+        owner = null; Hover = 0;
+        Waving = false;
+        base.OnDetachedFromVisualTree(e);
+    }
+    private void OwnerChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == IsPointerOverProperty || e.Property == IsKeyboardFocusWithinProperty || e.Property == IsEffectivelyEnabledProperty) UpdateHover();
+    }
+    private void UpdateHover() => Hover = owner is { IsEffectivelyEnabled: true } && (owner.IsPointerOver || owner.IsKeyboardFocusWithin) ? 1 : 0;
+    private string? dotKey;
+    /// <summary>The theme brush the pill icon's dot turns to under the pointer, such as Live while tracking, so the icon says how the day is going.</summary>
+    public string? DotKey { get => dotKey; set { if (dotKey == value) return; dotKey = value; InvalidateVisual(); } }
     private string? tintKey;
     /// <summary>The theme brush this icon is drawn in, when it should not follow the text colour of its button.</summary>
     public string? TintKey { get => tintKey; set { if (tintKey == value) return; tintKey = value; InvalidateVisual(); } }
@@ -789,16 +859,22 @@ public sealed class IconGlyph : Control
     public override void Render(DrawingContext context)
     {
         IBrush brush = this.TryFindResource(TintKey ?? "Ink", ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;
-        var pen = new Pen(brush, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        var pen = new Pen(brush, StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        var hover = Math.Clamp(Hover, 0, 1);
+        // Every icon keeps its hit target and layout still. Only a small part of the drawing moves.
+        var angle = Kind == IconKind.Gear ? hover * Math.PI / 9 : Kind == IconKind.Undo ? -hover * Math.PI / 15 : 0;
+        using var turn = context.PushTransform(Matrix.CreateTranslation(-9, -9) * Matrix.CreateRotation(angle) * Matrix.CreateTranslation(9, 9));
         switch (Kind)
         {
             case IconKind.Timeline:
                 // A spine with three blocks of different lengths beside it, drawn apart from each other: the day as a column of time.
                 context.DrawLine(pen, new Point(3.5, 2), new Point(3.5, 16));
                 // Solid bars rather than outlines, so the gaps between them stay open at button size.
-                context.DrawRectangle(brush, null, new Rect(7.5, 2.5, 8, 3), 1.2, 1.2);
-                context.DrawRectangle(brush, null, new Rect(7.5, 7.5, 8, 3), 1.2, 1.2);
-                context.DrawRectangle(brush, null, new Rect(7.5, 12.5, 8, 3), 1.2, 1.2);
+                for (var i = 0; i < 3; i++)
+                {
+                    var shift = hover * (i == 1 ? -1 : 1);
+                    context.DrawLine(pen, new Point(7.5 + shift, 3 + i * 6), new Point(14.5 + shift - (i == 1 ? 2 : 0), 3 + i * 6));
+                }
                 break;
             case IconKind.Trash:
                 // A bin: a lid with a handle, and a tapering body with two slats.
@@ -820,10 +896,25 @@ public sealed class IconGlyph : Control
                 context.DrawGeometry(null, pen, Geometry.Parse("M 6.5,12 L 9,14.5 L 11.5,12"));
                 break;
             case IconKind.Week:
-                // A calendar page with two rings at the top.
+                // Three bars of different heights on a baseline: an overview of the week, not a calendar.
+                context.DrawLine(pen, new Point(2.5, 15.5), new Point(15.5, 15.5));
+                context.DrawLine(pen, new Point(4.5, 13), new Point(4.5, 9 - hover));
+                context.DrawLine(pen, new Point(9, 13), new Point(9, 3.5 - hover));
+                context.DrawLine(pen, new Point(13.5, 13), new Point(13.5, 6.5 - hover));
+                break;
+            case IconKind.Close:
+                context.DrawLine(pen, new Point(4.5, 4.5), new Point(13.5, 13.5)); context.DrawLine(pen, new Point(13.5, 4.5), new Point(4.5, 13.5));
+                break;
+            case IconKind.Edit:
+                // A pencil.
+                context.DrawGeometry(null, pen, Geometry.Parse("M 3,15 L 3.8,11.6 L 12.6,2.8 Q 13.4,2 14.2,2.8 L 15.2,3.8 Q 16,4.6 15.2,5.4 L 6.4,14.2 Z M 11,4.4 L 13.6,7"));
+                break;
+            case IconKind.Today:
+                // A calendar page with two rings, and a dot on the day.
                 context.DrawRectangle(null, pen, new Rect(2.5, 3.5, 13, 12), 2.5, 2.5);
                 context.DrawLine(pen, new Point(2.5, 7.5), new Point(15.5, 7.5));
                 context.DrawLine(pen, new Point(6, 2), new Point(6, 5)); context.DrawLine(pen, new Point(12, 2), new Point(12, 5));
+                context.DrawEllipse(brush, null, new Point(9, 11.5), 1.4, 1.4);
                 break;
             case IconKind.Table:
                 // A grid of cells: hours by account.
@@ -852,27 +943,53 @@ public sealed class IconGlyph : Control
                 break;
             case IconKind.Gear:
             {
-                // A classic cog: eight teeth round a ring, with a hole in the middle.
-                var tooth = new Pen(brush, 2.6, lineCap: PenLineCap.Flat);
-                for (var i = 0; i < 8; i++)
+                // One continuous outline, with the same rounded stroke as the rest of the set.
+                var cog = new StreamGeometry();
+                using (var g = cog.Open())
                 {
-                    var angle = i * Math.PI / 4; var cos = Math.Cos(angle); var sin = Math.Sin(angle);
-                    context.DrawLine(tooth, new Point(9 + 5.6 * cos, 9 + 5.6 * sin), new Point(9 + 8.2 * cos, 9 + 8.2 * sin));
+                    for (var i = 0; i < 32; i++)
+                    {
+                        var theta = i * Math.PI / 16; var radius = i % 4 is 1 or 2 ? 7.3 : 5.7;
+                        var point = new Point(9 + radius * Math.Cos(theta), 9 + radius * Math.Sin(theta));
+                        if (i == 0) g.BeginFigure(point, false); else g.LineTo(point);
+                    }
+                    g.EndFigure(true);
                 }
-                context.DrawEllipse(null, new Pen(brush, 2.0), new Point(9, 9), 5.2, 5.2);
-                context.DrawEllipse(null, pen, new Point(9, 9), 1.9, 1.9);
+                context.DrawGeometry(null, pen, cog);
+                context.DrawEllipse(null, pen, new Point(9, 9), 2.2, 2.2);
                 break;
             }
             case IconKind.Minimise:
-                // The familiar low bar of a window's minimise button.
-                context.DrawLine(new Pen(brush, 1.8, lineCap: PenLineCap.Flat), new Point(3.5, 13), new Point(14.5, 13));
+            {
+                // A miniature timer pill: its dot and timer are visible before hovering. Under the pointer it behaves like the real pill coming forward:
+                // the outline fills with a soft tint, it widens a little about its middle, and the dot turns to the colour of how the day is going.
+                var width = 14 + hover * 3;
+                var body = new Rect(9 - width / 2, 4.5, width, 9);
+                IBrush? tint = hover > 0 && brush is ISolidColorBrush ink ? new SolidColorBrush(ink.Color, .16 * hover) : null;
+                context.DrawRectangle(tint, pen, body, 4.5, 4.5);
+                var dotCentre = new Point(body.Left + 3.6, 9);
+                context.DrawEllipse(brush, null, dotCentre, .9, .9);
+                if (hover > 0.02 && this.TryFindResource(DotKey ?? "Accent", ActualThemeVariant, out var statusFound) && statusFound is IBrush status)
+                    using (context.PushOpacity(hover)) context.DrawEllipse(status, null, dotCentre, 1.5, 1.5);
+                context.DrawLine(pen, new Point(body.Left + 6.5, 8), new Point(body.Right - 3.1, 8));
+                context.DrawLine(new Pen(brush, 1, lineCap: PenLineCap.Round), new Point(body.Left + 6.5, 10.5), new Point(body.Left + 9.5, 10.5));
                 break;
+            }
+            case IconKind.Previous:
+            case IconKind.Next:
+            {
+                var direction = Kind == IconKind.Previous ? -1 : 1;
+                var x = 9 + direction * hover;
+                context.DrawLine(pen, new Point(x - direction * 2.5, 4), new Point(x + direction * 2.5, 9));
+                context.DrawLine(pen, new Point(x + direction * 2.5, 9), new Point(x - direction * 2.5, 14));
+                break;
+            }
             case IconKind.Flag:
             {
                 // A pole with a pennant in the button's own text colour. The cloth ripples while Waving is on, fading back to still.
                 IBrush flagBrush = TintKey is not null && this.TryFindResource(TintKey, ActualThemeVariant, out var tint) && tint is IBrush tinted ? tinted
                     : Avalonia.Controls.Documents.TextElement.GetForeground(this) ?? brush;
-                var flagPen = new Pen(flagBrush, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+                var flagPen = new Pen(flagBrush, StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
                 context.DrawLine(flagPen, new Point(4, 2.5), new Point(4, 16));
                 double Wave(double x) => amplitude * 1.4 * Math.Sin(phase - (x - 4) * 0.7) * ((x - 4) / 10.5);
                 var geometry = new StreamGeometry();

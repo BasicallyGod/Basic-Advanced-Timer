@@ -6,17 +6,15 @@ using Timer.Storage;
 
 namespace Timer.Desktop;
 
-public sealed class AccountsWindow : Window
+public sealed class AccountsDialog : Dialog
 {
-    public AccountsWindow(TimerModel model)
+    public AccountsDialog(TimerModel model)
     {
-        Title = "Accounts and budgets"; WindowChrome.Attach(this);
-        Width = 700; Height = 540; CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        var root = Ui.Grid("*", "Auto,*,Auto,Auto,Auto,Auto"); root.Margin = new Thickness(24);
+        Title = "Accounts and budgets";
+        Width = 700; Height = 540;
+        var root = Ui.Grid("*", "Auto,*,Auto,Auto,Auto,Auto"); root.Margin = new Thickness(24, 4, 24, 24);
         var intro = new StackPanel { Spacing = 8, Margin = new Thickness(0, 0, 0, 16) };
-        intro.Children.Add(Ui.Text("Accounts and budgets", 22));
-        intro.Children.Add(new TextBlock { Text = "Add accounts, rename them, show or hide them, and set budgets in hours. Drag accounts on the dashboard to reorder them.\nA blank budget means no limit. Hidden accounts keep their recorded time. The bin deletes an account and everything recorded against it.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        intro.Children.Add(new TextBlock { Text = "Rename, hide or delete accounts and set budgets in hours. A blank budget means no limit.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
         Ui.Put(root, intro);
         var confirm = new StackPanel { Name = "DeleteConfirm", Spacing = 8, IsVisible = false, Margin = new Thickness(0, 8, 0, 0) };
         var list = new StackPanel { Spacing = 10 };
@@ -37,11 +35,11 @@ public sealed class AccountsWindow : Window
             Ui.Put(row, visible, 2);
             var budget = new TextBox { Text = account.BudgetHours?.ToString("0.###", CultureInfo.InvariantCulture) ?? "", Margin = new Thickness(0, 0, 8, 0) };
             Ui.Put(row, budget, 3);
-            var period = new ComboBox { ItemsSource = new[] { "week", "month", "quarter" }, SelectedItem = account.BudgetPeriod, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
+            var period = new ComboBox { ItemsSource = new[] { "day", "week", "month", "quarter" }, SelectedItem = account.BudgetPeriod, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
             Ui.Put(row, period, 4);
             var entry = new AccountRow { Original = existing ? account.Name : null, Name = name, Visible = visible, Budget = budget, Period = period, Colour = () => chosen, Grid = row };
             // The bin removes a new row at once. For an existing account it marks the row for deleting, dimmed, and a second press takes the mark off.
-            var bin = Ui.IconButton(IconKind.Trash, existing ? "Delete this account and everything recorded against it" : "Remove this row", "DeleteAccount" + entries.Count, () =>
+            var bin = Ui.IconButton(IconKind.Trash, existing ? "Delete account and its time" : "Remove this row", "DeleteAccount" + entries.Count, () =>
             {
                 if (entry.Original is null) { list.Children.Remove(entry.Grid); entries.Remove(entry); return; }
                 entry.Deleting = !entry.Deleting;
@@ -59,7 +57,7 @@ public sealed class AccountsWindow : Window
         Ui.Put(root, new ScrollViewer { Content = list, AllowAutoHide = false }, row: 1);
         var error = new TextBlock { Classes = { "overtime" }, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new Thickness(0, 10) };
         var input = new TextBox { Watermark = "New account name", Width = 280 };
-        var add = Ui.Horizontal(input, Ui.Button("Add account", () =>
+        var add = Ui.Horizontal(input, Ui.DialogButton("Add account", () =>
         {
             var name = input.Text?.Trim() ?? "";
             if (name.Length == 0 || name.IndexOfAny(new[] { '\t', '\r', '\n' }) >= 0 || name.Equals(Timer.Core.BreakAccount.Name, StringComparison.OrdinalIgnoreCase) || name.Equals(Timer.Core.BreakAccount.Label, StringComparison.OrdinalIgnoreCase)
@@ -82,8 +80,8 @@ public sealed class AccountsWindow : Window
                     confirm.Children.Clear();
                     confirm.Children.Add(new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontWeight = Avalonia.Media.FontWeight.SemiBold,
                         Text = $"Delete {string.Join(", ", withHistory.Select(d => d.Name))}? This removes {entriesGone} recorded {(entriesGone == 1 ? "entry" : "entries")} ({model.Format(timeGone)}) and any notes on them, for good. A backup copy is saved first, but Undo cannot bring them back." });
-                    var yes = Ui.Button("Delete for good", () => { confirm.IsVisible = false; Commit(true); }, "ConfirmDeleteAccounts"); yes.Classes.Add("finishDay"); yes.Classes.Add("outlined"); yes.Height = 36; yes.Padding = new Thickness(16, 0);
-                    confirm.Children.Add(Ui.Horizontal(yes, Ui.Button("Cancel", () => confirm.IsVisible = false, "CancelDeleteAccounts")));
+                    var yes = Ui.DialogButton("Delete for good", () => { confirm.IsVisible = false; Commit(true); }, "ConfirmDeleteAccounts"); yes.Classes.Add("finishDay"); yes.Classes.Add("outlined"); yes.Height = 36; yes.Padding = new Thickness(16, 0);
+                    confirm.Children.Add(Ui.Horizontal(yes, Ui.DialogButton("Cancel", () => confirm.IsVisible = false, "CancelDeleteAccounts")));
                     confirm.IsVisible = true; error.Text = ""; return;
                 }
                 // An account keeps its colour through editing, renaming and reordering; a new one is given one by the model.
@@ -102,7 +100,7 @@ public sealed class AccountsWindow : Window
             { error.Text = ex.Message; }
         }
         Ui.Put(root, confirm, row: 4);
-        Ui.Put(root, Ui.Horizontal(Ui.Button("Save", () => Commit(false), "SaveAccounts"), Ui.Button("Cancel", Close)), row: 5);
+        Ui.Put(root, Ui.Horizontal(Ui.DialogButton("Save", () => Commit(false), "SaveAccounts"), Ui.DialogButton("Cancel", Close)), row: 5);
         Content = root;
     }
     private sealed class AccountRow
@@ -130,7 +128,7 @@ public sealed class AccountsWindow : Window
         panel.Children.Add(grid);
         var hex = new TextBox { Name = "ColourHex", Watermark = "#RRGGBB", Text = get(), Width = 120, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
         var note = Ui.Text("", 12, "muted");
-        var apply = Ui.Button("Use", () =>
+        var apply = Ui.DialogButton("Use", () =>
         {
             var text = (hex.Text ?? "").Trim();
             if (!text.StartsWith('#')) text = "#" + text;

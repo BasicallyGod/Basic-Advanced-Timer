@@ -11,7 +11,7 @@ namespace Timer.Desktop;
 /// Pick a theme, or make your own. Choosing a theme in the list applies it. Built-in themes cannot be changed, but can be duplicated;
 /// the copy can be renamed and have any colour changed, and the app shows each change as it is made. Nothing is kept until Save.
 /// </summary>
-public sealed class ThemesWindow : Window
+public sealed class ThemesDialog : Dialog
 {
     private readonly TimerModel model;
     private readonly ListBox list = new() { Name = "ThemeList" };
@@ -27,30 +27,29 @@ public sealed class ThemesWindow : Window
     private readonly Border unsaved = new() { Name = "UnsavedPrompt", IsVisible = false, Padding = new Thickness(12), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1), Margin = new Thickness(0, 10, 0, 0) };
     private Action? afterPrompt;
 
-    public ThemesWindow(TimerModel model)
+    public ThemesDialog(TimerModel model)
     {
         this.model = model;
-        Title = "Themes"; WindowChrome.Attach(this); Width = 800; Height = 680; MinHeight = 480;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        var root = Ui.Grid("230,*", "*,Auto,Auto"); root.Margin = new Thickness(24);
+        Title = "Themes"; Width = 800; Height = 680;
+        var root = Ui.Grid("230,*", "*,Auto,Auto"); root.Margin = new Thickness(24, 4, 24, 24);
         var left = Ui.Grid("*", "Auto,*,Auto"); left.Margin = new Thickness(0, 0, 18, 0);
-        left.Children.Add(Ui.Text("Themes", 22)); Grid.SetRow(list, 1); list.Margin = new Thickness(0, 10);
+        Grid.SetRow(list, 1); list.Margin = new Thickness(0, 10);
         left.Children.Add(list);
-        duplicate = Ui.Button("Duplicate", () => Guard(() => Run(() => { model.EndThemePreview(); var copy = model.DuplicateTheme(shown); Refill(copy); })), "DuplicateTheme");
-        delete = Ui.Button("Delete", () => Run(() => { model.DeleteTheme(shown); Refill(model.Theme); }), "DeleteTheme");
+        duplicate = Ui.DialogButton("Duplicate", () => Guard(() => Run(() => { model.EndThemePreview(); var copy = model.DuplicateTheme(shown); Refill(copy); })), "DuplicateTheme");
+        delete = Ui.DialogButton("Delete", () => Run(() => { model.DeleteTheme(shown); Refill(model.Theme); }), "DeleteTheme");
         var buttons = Ui.Horizontal(duplicate, delete); Ui.Put(left, buttons, 0, 2);
         unsaved.Classes.Add("chip");
         Ui.Put(root, left);
         Ui.Put(root, new ScrollViewer { Content = detail, AllowAutoHide = false, Padding = new Thickness(0, 0, 14, 0) }, 1);
         var promptText = new TextBlock { Name = "UnsavedText", TextWrapping = TextWrapping.Wrap };
         var promptButtons = Ui.Horizontal(
-            Ui.Button("Save", () => Run(() => { SaveCurrent(); Proceed(); }), "UnsavedSave"),
-            Ui.Button("Discard", () => { model.EndThemePreview(); dirty = false; Proceed(); }, "UnsavedDiscard"),
-            Ui.Button("Keep editing", () => { afterPrompt = null; unsaved.IsVisible = false; }, "UnsavedKeep"));
+            Ui.DialogButton("Save", () => Run(() => { SaveCurrent(); Proceed(); }), "UnsavedSave"),
+            Ui.DialogButton("Discard", () => { model.EndThemePreview(); dirty = false; Proceed(); }, "UnsavedDiscard"),
+            Ui.DialogButton("Keep editing", () => { afterPrompt = null; unsaved.IsVisible = false; }, "UnsavedKeep"));
         var promptStack = new StackPanel { Spacing = 8 }; promptStack.Children.Add(promptText); promptStack.Children.Add(promptButtons);
         unsaved.Child = promptStack; unsavedText = promptText;
         Grid.SetColumnSpan(unsaved, 2); Ui.Put(root, unsaved, 0, 1);
-        var footer = Ui.Horizontal(Ui.Button("Close", () => Close(), "CloseThemes")); footer.HorizontalAlignment = HorizontalAlignment.Right; footer.Margin = new Thickness(0, 12, 0, 0);
+        var footer = Ui.Horizontal(Ui.DialogButton("Close", () => Close(), "CloseThemes")); footer.HorizontalAlignment = HorizontalAlignment.Right; footer.Margin = new Thickness(0, 12, 0, 0);
         Grid.SetColumnSpan(footer, 2); Ui.Put(root, footer, 0, 2);
         Content = root;
         list.SelectionChanged += (_, _) =>
@@ -104,16 +103,25 @@ public sealed class ThemesWindow : Window
         duplicate.IsEnabled = true; delete.IsEnabled = !theme.BuiltIn;
         Rebuild(theme.BuiltIn);
     }
+    // Dragging a slider reports many changes a second, and each preview repaints the whole app. So the first shows at once and the rest are
+    // gathered, with the latest shown a moment later, which feels the same and keeps the slider smooth.
+    private static readonly TimeSpan PreviewGap = TimeSpan.FromMilliseconds(70);
+    private DateTime lastPreview = DateTime.MinValue; private Avalonia.Threading.DispatcherTimer? pendingPreview;
     private void Changed()
     {
         dirty = true; error.Text = "";
-        model.PreviewTheme(Working());
+        var wait = PreviewGap - (DateTime.UtcNow - lastPreview);
+        if (wait <= TimeSpan.Zero && pendingPreview is not { IsEnabled: true }) { lastPreview = DateTime.UtcNow; model.PreviewTheme(Working()); return; }
+        if (pendingPreview is { IsEnabled: true }) return; // The one already waiting will show the latest values.
+        pendingPreview = new Avalonia.Threading.DispatcherTimer { Interval = wait > TimeSpan.Zero ? wait : PreviewGap };
+        pendingPreview.Tick += (_, _) => { pendingPreview!.Stop(); if (dirty && Host is not null) { lastPreview = DateTime.UtcNow; model.PreviewTheme(Working()); } };
+        pendingPreview.Start();
     }
     private void Rebuild(bool locked)
     {
         detail.Children.Clear();
-        detail.Children.Add(Ui.Text(locked ? name + " (built in)" : "Edit theme", 18));
-        if (locked) detail.Children.Add(new TextBlock { Text = "Built-in themes cannot be changed. Duplicate this one to make your own, then change any colour.", TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
+        detail.Children.Add(Ui.Heading(locked ? name + " (built in)" : "Edit theme", 20));
+        if (locked) detail.Children.Add(new TextBlock { Text = "Built in. Duplicate it to make your own.", TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
         var nameBox = new TextBox { Text = name, Name = "ThemeName", IsEnabled = !locked, MaxLength = 40, Width = 280, HorizontalAlignment = HorizontalAlignment.Left };
         nameBox.PropertyChanged += (_, e) => { if (e.Property != TextBox.TextProperty) return; name = nameBox.Text ?? ""; if (!filling) dirty = true; };
         detail.Children.Add(Ui.Text("Name", 12, "muted")); detail.Children.Add(nameBox);
@@ -173,8 +181,8 @@ public sealed class ThemesWindow : Window
         detail.Children.Add(error);
         if (!locked)
         {
-            var save = Ui.Button("Save theme", () => Run(SaveCurrent), "SaveTheme");
-            var revert = Ui.Button("Revert", () => Run(() => { model.EndThemePreview(); Show(shown); }), "RevertTheme");
+            var save = Ui.DialogButton("Save theme", () => Run(SaveCurrent), "SaveTheme");
+            var revert = Ui.DialogButton("Revert", () => Run(() => { model.EndThemePreview(); Show(shown); }), "RevertTheme");
             detail.Children.Add(Ui.Horizontal(save, revert));
         }
     }
@@ -182,28 +190,50 @@ public sealed class ThemesWindow : Window
     private Button ThemeColourButton(string token, bool locked, Action changed)
     {
         var swatch = new Border { Width = 56, Height = 24, CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), BorderBrush = Brushes.Gray, Background = Brush.Parse(colours[token]) };
-        var hex = new TextBox { Text = colours[token], Width = 100, IsEnabled = !locked, Name = "Hex" + token };
         var button = new Button { Content = swatch, Name = "Colour" + token, Padding = new Thickness(4), IsEnabled = !locked, Background = Brushes.Transparent };
-        void Apply(string value, bool fromHex)
+        // A colour wheel (hue around it, strength out from the middle), a bar beside it for how light, and a box for the hex value. It is built the
+        // first time it opens, since there are two dozen of them and most are never looked at.
+        ColorSpectrum? wheel = null; ColorSlider? lightness = null; TextBox? hex = null; var syncing = false;
+        void Apply(string value)
         {
-            value = value.ToUpperInvariant(); colours[token] = value; swatch.Background = Brush.Parse(value);
-            if (!fromHex) hex.Text = value;
+            value = value.ToUpperInvariant(); if (value == colours[token]) return;
+            colours[token] = value; swatch.Background = Brush.Parse(value);
             changed();
         }
-        var hue = new Slider { Minimum = 0, Maximum = 360, Width = 220 }; var sat = new Slider { Minimum = 0, Maximum = 1, Width = 220 }; var lit = new Slider { Minimum = 0, Maximum = 1, Width = 220 };
-        void Load() { var (h, s, l) = ThemeColours.Hsl(colours[token]); filling = true; hue.Value = h; sat.Value = s; lit.Value = l; filling = false; }
-        void FromSliders(object? sender, AvaloniaPropertyChangedEventArgs e) { if (e.Property == RangeBase.ValueProperty && !filling) Apply(ThemeColours.FromHsl(hue.Value, sat.Value, lit.Value), false); }
-        hue.PropertyChanged += FromSliders; sat.PropertyChanged += FromSliders; lit.PropertyChanged += FromSliders;
-        hex.PropertyChanged += (_, e) =>
+        static string Hex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+        void Show(Color colour)
         {
-            if (e.Property != TextBox.TextProperty) return;
-            var text = (hex.Text ?? "").Trim(); if (!text.StartsWith('#')) text = "#" + text;
-            if (ThemeTokens.IsValid(token, text) && !text.Equals(colours[token], StringComparison.OrdinalIgnoreCase)) { Apply(text, true); Load(); }
+            if (wheel is null || lightness is null || hex is null) return;
+            syncing = true; var hsv = colour.ToHsv(); wheel.HsvColor = hsv; lightness.HsvColor = hsv; hex.Text = Hex(colour); syncing = false;
+        }
+        var flyout = new Flyout();
+        flyout.Opening += (_, _) =>
+        {
+            if (flyout.Content is not null) return;
+            wheel = new ColorSpectrum { Name = "Wheel" + token, Shape = ColorSpectrumShape.Ring, Components = ColorSpectrumComponents.HueSaturation, Width = 240, Height = 240, IsEnabled = !locked };
+            lightness = new ColorSlider { Name = "Lightness" + token, ColorModel = ColorModel.Hsva, ColorComponent = ColorComponent.Component3, IsAlphaVisible = false,
+                Orientation = Avalonia.Layout.Orientation.Vertical, Width = 26, Height = 240, Margin = new Thickness(0, 0, 14, 0), IsEnabled = !locked };
+            hex = new TextBox { Text = colours[token], Width = 120, IsEnabled = !locked, Name = "Hex" + token, HorizontalAlignment = HorizontalAlignment.Left };
+            // Moving either one moves the other and the box, and typing a valid colour moves both.
+            void FromPicker(object source, AvaloniaPropertyChangedEventArgs e)
+            {
+                if (syncing || e.Property.Name != "HsvColor" || wheel is null || lightness is null || hex is null) return;
+                var hsv = ReferenceEquals(source, wheel) ? wheel.HsvColor : lightness.HsvColor;
+                syncing = true; wheel.HsvColor = hsv; lightness.HsvColor = hsv; syncing = false;
+                var colour = hsv.ToRgb(); hex.Text = Hex(colour); Apply(Hex(colour));
+            }
+            wheel.PropertyChanged += (_, e) => FromPicker(wheel, e); lightness.PropertyChanged += (_, e) => FromPicker(lightness, e);
+            hex.PropertyChanged += (_, e) =>
+            {
+                if (e.Property != TextBox.TextProperty || syncing) return;
+                var text = (hex.Text ?? "").Trim(); if (!text.StartsWith('#')) text = "#" + text;
+                if (ThemeTokens.IsValid(token, text) && !text.Equals(colours[token], StringComparison.OrdinalIgnoreCase)) { Apply(text); syncing = true; var hsv = Color.Parse(text).ToHsv(); wheel.HsvColor = hsv; lightness.HsvColor = hsv; syncing = false; }
+            };
+            var row = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Children = { lightness, wheel } };
+            flyout.Content = new StackPanel { Spacing = 10, Margin = new Thickness(6), Children = { row, hex } };
+            Show(Color.Parse(colours[token]));
         };
-        var panel = new StackPanel { Spacing = 6, Margin = new Thickness(4) };
-        panel.Children.Add(Ui.Text("Hue", 12, "muted")); panel.Children.Add(hue); panel.Children.Add(Ui.Text("Saturation", 12, "muted")); panel.Children.Add(sat);
-        panel.Children.Add(Ui.Text("Lightness", 12, "muted")); panel.Children.Add(lit); panel.Children.Add(hex);
-        var flyout = new Flyout { Content = panel }; flyout.Opened += (_, _) => { hex.Text = colours[token]; Load(); };
+        flyout.Opened += (_, _) => Show(Color.Parse(colours[token]));
         button.Flyout = flyout;
         return button;
     }

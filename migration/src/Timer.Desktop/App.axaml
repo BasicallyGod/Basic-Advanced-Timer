@@ -8,6 +8,8 @@
   </Application.Resources>
   <Application.Styles>
     <FluentTheme />
+    <!-- The colour picker is a separate package whose look is not part of FluentTheme. -->
+    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
     <Style Selector="ScrollBar">
       <Setter Property="Theme">
         <ControlTheme TargetType="ScrollBar">
@@ -115,10 +117,11 @@
       <Setter Property="Background" Value="{DynamicResource Panel}" />
       <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
     </Style>
-    <Style Selector="Border.mergeSelected">
-      <Setter Property="BorderThickness" Value="3" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
-    </Style>
+    <!-- The left side has no border, because the block's coloured strip is its left edge and a border beside it looked like interference. -->
+    <!-- The dim layer behind a dialog, in the theme's shadow colour. -->
+    <Style Selector="Border.scrim"><Setter Property="Background" Value="{DynamicResource ShadowColor}" /></Style>
+    <!-- A selected block is shown by its left strip, in the accent colour, and not by an outline. The class stays on the block so it can be found. -->
+    <Style Selector="Border.selectedEdge"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Border#DayProgressFill"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <!-- On a break or in overtime the whole pill is that colour, so the bar is drawn in the pill's text colour. -->
     <Style Selector="Border#DayProgressFill.progressOvertime"><Setter Property="Background" Value="{DynamicResource Ink}" /></Style>
@@ -129,12 +132,10 @@
     <Style Selector="Border.nowChip"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="TextBlock.nowChipText"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
     <Style Selector="Border.recording">
-      <Setter Property="BorderThickness" Value="3" />
+      <Setter Property="BorderThickness" Value="0,3,3,3" />
       <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
     </Style>
     <Style Selector="Button.mergeSelected">
-      <Setter Property="BorderThickness" Value="2" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
     <Style Selector="Button.account">
@@ -171,6 +172,18 @@
     </Style>
     <Style Selector="Button.rail.selected /template/ ContentPresenter#PART_ContentPresenter, Button.rail.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Selected}" />
+    </Style>
+    <!-- The close icon stays still, with the same soft hover surface as the other rail controls. -->
+    <Style Selector="Button.quit:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
+    <Style Selector="Button.rail /template/ ContentPresenter#PART_ContentPresenter, Button.iconButton /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Transitions"><Transitions><BrushTransition Property="Background" Duration="0:0:0.2" /></Transitions></Setter>
+    </Style>
+    <!-- The floating message is raised off the timeline, with the accent for an outline, so it is easy to see against any block. -->
+    <Style Selector=":is(Border).messageBar">
+      <Setter Property="Background" Value="{DynamicResource Panel}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="BoxShadow" Value="0 6 20 0 #88000000" />
     </Style>
     <!-- The Day elapsed card is a raised tile with a bar of the accent colour along its top edge. -->
     <Style Selector="Border.dayCard">
@@ -321,6 +334,10 @@
       <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
     </Style>
     <Style Selector="Button.toolButton.addButton:pointerover /template/ ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <!-- Buttons in dialogs: the same outline, a little more room, and an accent outline on the main action. -->
+    <Style Selector="Button.toolButton.dialogButton"><Setter Property="MinHeight" Value="36" /><Setter Property="Padding" Value="16,0" /><Setter Property="FontSize" Value="14" /></Style>
+    <Style Selector="Button.toolButton.mainAction"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Button.toolButton.mainAction:pointerover /template/ ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Button.quiet.breakButton.onBreak">
       <Setter Property="Background" Value="{DynamicResource Break}" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="{DynamicResource Break}" />
     </Style>

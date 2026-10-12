@@ -139,7 +139,7 @@ public sealed class WeekDashboardTests
             var entry = window.GetVisualDescendants().OfType<Button>().First(b => b.Name?.StartsWith("WeekEntry") == true);
             Assert.Contains(((IEnumerable<Control>)entry.ContextMenu!.ItemsSource!).OfType<MenuItem>(), m => m.Name == "MoveToAccountMenu");
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
-            if (folder is not null) { Directory.CreateDirectory(folder); weekFrame!.Save(Path.Combine(folder, "week-dashboard.png")); }
+            if (folder is not null) { Directory.CreateDirectory(folder); weekFrame?.Save(Path.Combine(folder, "week-dashboard.png")); }
         }
         finally { window.Close(); }
     }
@@ -186,7 +186,7 @@ public sealed class WeekDashboardTests
                 var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().First(s => s.Content is StackPanel);
                 Assert.True(scroll.Extent.Width <= scroll.Viewport.Width + 1, $"decimal {decimalHours}: table {scroll.Extent.Width} wider than {scroll.Viewport.Width}"); // No sideways scrolling, even with seven days.
                 var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
-                if (folder is not null) { Directory.CreateDirectory(folder); frame!.Save(Path.Combine(folder, $"week-hours-{(decimalHours ? "decimal" : "hm")}.png")); }
+                if (folder is not null) { Directory.CreateDirectory(folder); frame?.Save(Path.Combine(folder, $"week-hours-{(decimalHours ? "decimal" : "hm")}.png")); }
             }
             finally { window.Close(); }
         }
@@ -261,7 +261,7 @@ public sealed class WeekDashboardTests
             }
             Assert.Equal(1, lines.Select(l => Math.Round(l.Bounds.Height)).Distinct().Count()); // Rows are the same height with or without a budget.
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
-            if (folder is not null) { Directory.CreateDirectory(folder); frame!.Save(Path.Combine(folder, "demo-overview.png")); }
+            if (folder is not null) { Directory.CreateDirectory(folder); frame?.Save(Path.Combine(folder, "demo-overview.png")); }
         }
         finally { window.Close(); }
     }

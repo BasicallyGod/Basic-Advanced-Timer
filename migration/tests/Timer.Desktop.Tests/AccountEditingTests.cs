@@ -138,7 +138,7 @@ public sealed class AccountEditingTests
             Assert.Contains(card.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "● Recording now");
             var point = card.TranslatePoint(new Point(80, 30), window)!.Value;
             window.MouseDown(point, MouseButton.Left); window.MouseMove(point + new Vector(0, 40)); window.MouseUp(point + new Vector(0, 40), MouseButton.Left);
-            Assert.Contains("still recording", model.EditError);
+            Assert.Contains("Still recording", model.EditError);
             Assert.Equal(TimeSpan.FromMinutes(45), engine.Active is { } a ? now - a.Start : TimeSpan.Zero); // Nothing moved.
         }
         finally { window.Close(); }
@@ -226,7 +226,7 @@ public sealed class AccountEditingTests
     public void TheColourChooserPicksFromThePaletteOrAnyHexColourAndKeepsItOnSave()
     {
         var model = new TimerModel(Engine(), new StoreSettings(new() { new("A"), new("B") }, false, "System", DayOfWeek.Monday));
-        var window = new AccountsWindow(model); window.Show();
+        var window = new AccountsDialog(model).Open(model);
         try
         {
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();

@@ -14,6 +14,8 @@ namespace Timer.Desktop;
 public static class ReviewViews
 {
     public const double MinimumBlockHeight = 8;
+    // Every block has the same small corner at every zoom level, only a block too short to hold it is rounded as far as it can be.
+    public const double BlockRadius = 6;
     // Where the spine runs and where blocks start, from the left of the timeline.
     private const double SpineX = 58, CardLeft = 80, LabelRight = 40;
     public static Control Timeline(TimerModel model)
@@ -73,7 +75,8 @@ public static class ReviewViews
         var cards = new List<(Border Card, int Lane)>();
         foreach (var interval in intervals.OrderBy(s => s.Start))
         {
-            var lane = ends.FindIndex(end => end <= interval.Start);
+            // Blocks that overlap by a second or two, which older recordings can have, still count as meeting, so they share a lane instead of splitting the whole day in two.
+            var lane = ends.FindIndex(end => end <= interval.Start.AddSeconds(2));
             if (lane < 0) { lane = ends.Count; ends.Add(interval.End); } else ends[lane] = interval.End;
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
             var look = model.BlockLook(colour); colour = look.Fill;
@@ -95,16 +98,19 @@ public static class ReviewViews
                 text.Children.Add(detail);
             }
             foreach (var child in text.GetLogicalDescendants().OfType<TextBlock>()) child.Foreground = Brush.Parse(ink);
-            var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(height < 20 ? 2 : 12),
+            var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(Math.Min(BlockRadius, height / 2)),
                 Width = 380, Height = height, ClipToBounds = true };
+            var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
+            var isSelected = model.IsSelected(selectionSources);
             // A strip down the left side in the account's own colour, so a block can be told apart at a glance whatever its fill is.
-            var content = new Grid { ColumnDefinitions = new ColumnDefinitions("5,*") };
-            content.Children.Add(new Border { Name = "BlockEdge", Background = Brush.Parse(look.Edge) });
+            // A selected block shows it in the theme's accent colour instead, a little wider. Nothing is added to the text, so the block never shifts or clips.
+            var content = new Grid { ColumnDefinitions = new ColumnDefinitions(isSelected ? "8,*" : "5,*") };
+            var edgeStrip = new Border { Name = "BlockEdge" };
+            if (isSelected) edgeStrip.Classes.Add("selectedEdge"); else edgeStrip.Background = Brush.Parse(look.Edge);
+            content.Children.Add(edgeStrip);
             if (height >= 24) { Grid.SetColumn(text, 1); content.Children.Add(text); }
             card.Child = content;
-            var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
-            // A selected block is shown by its border alone. Nothing is added to the text, so the block never shifts or clips.
-            if (model.IsSelected(selectionSources)) card.Classes.Add("mergeSelected");
+            if (isSelected) card.Classes.Add("mergeSelected");
             var note = interval.Group is { } groupNote ? "Grouped entries · " + groupNote.Note : interval.Row is null ? "Recording now · stop tracking to move or edit" : model.Editor.Note(interval.Row);
             if (height >= 90 && !string.IsNullOrWhiteSpace(note))
             {
@@ -116,18 +122,21 @@ public static class ReviewViews
             {
                 card.Tag = row; card.Name = "TimelineEntry" + model.Engine.Sessions.IndexOf(row);
                 var edit = new MenuItem { Header = "Edit entry / note…" }; edit.Click += (_, _) => model.OpenEntry(row);
-                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, new[] { row }), MergeMenu(model), new Separator(), DeleteMenu(model, new[] { row }) } };
+                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, new[] { row }), CopyMenu(model, new[] { row }), MergeMenu(model), new Separator(), DeleteMenu(model, new[] { row }) } };
                 TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour);
             }
             if (interval.Row is null && interval.Group is null)
             {
                 // The block that is recording now. A green outline, a label and the stop menu make it clear why it can't be dragged.
                 card.Classes.Add("recording"); card.Name = "TimelineRecording"; card.Cursor = new Cursor(StandardCursorType.Arrow);
-                var live = Ui.Text("● Recording now", 12); live.Foreground = Brush.Parse(ink == "#FFFFFF" ? ink : "#1E5C38"); live.FontWeight = FontWeight.SemiBold;
+                var live = Ui.Text("● Recording now", 12); live.Foreground = Brush.Parse(ThemeColours.Contrast("#1E5C38", colour) >= 4.5 ? "#1E5C38" : ink); live.FontWeight = FontWeight.SemiBold;
+                // The green only where it reads on the block, otherwise the block's own text colour, which always does.
                 if (height >= 96) text.Children.Insert(model.IsSelected(selectionSources) ? 1 : 0, live);
                 else if (text.Children.Count > 0 && text.Children[0] is TextBlock liveTitle) liveTitle.Text = "● " + liveTitle.Text;
                 var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
-                card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };
+                var again = new MenuItem { Name = "ContinuePreviousBlockMenu", Header = model.ContinuePreviousText ?? "Continue earlier block", IsVisible = model.CanContinuePrevious };
+                again.Click += (_, _) => model.ContinuePrevious();
+                card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop, again } };
                 card.PointerPressed += (_, e) =>
                 { if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) { model.ExplainRunning(); e.Handled = true; } };
             }
@@ -137,8 +146,7 @@ public static class ReviewViews
                 card.PointerPressed += (_, e) =>
                 {
                     if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
-                    if (e.ClickCount == 2) { model.OpenGroup(group.GroupId!); groupPress = null; }
-                    else groupPress = e.GetPosition(canvas);
+                    groupPress = e.GetPosition(canvas);
                     e.Handled = true;
                 };
                 card.PointerReleased += (_, e) =>
@@ -150,8 +158,8 @@ public static class ReviewViews
                 card.Tag = group; card.Name = "TimelineGroup" + group.GroupId + "-" + interval.Start.ToString("HHmmss");
                 var editGroup = new MenuItem { Header = "Inspect / edit grouped entries…" }; editGroup.Click += (_, _) => model.OpenGroup(group.GroupId!);
                 var ungroup = new MenuItem { Header = "Ungroup" }; ungroup.Click += (_, _) => model.UngroupEntries(group.GroupId!);
-                card.ContextMenu = new ContextMenu { ItemsSource = new[] { editGroup, ungroup, MergeMenu(model) } };
-                ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} grouped entries · {model.Format(duration)} credited\nSeparate sections preserve any gaps. Double-click to inspect; right-click to ungroup.");
+                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { editGroup, ungroup, CopyMenu(model, group.Sources), MergeMenu(model) } };
+                ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} grouped entries · {model.Format(duration)}\nClick to select");
             }
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
             canvas.Children.Add(card); cards.Add((card, lane));
@@ -189,7 +197,13 @@ public static class ReviewViews
         DateTime At(double y) => day.AddMinutes(Math.Clamp(Math.Floor(y / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);
         var tidy = new MenuItem { Header = "Tidy day…", Name = "TidyDayMenu" }; tidy.Click += (_, _) => model.OpenTidy();
-        canvas.ContextMenu = new ContextMenu { ItemsSource = new[] { add, tidy, MergeMenu(model) } };
+        // Paste puts the copied blocks with the first at the time that was right-clicked, snapped to five minutes like Add time.
+        var paste = new MenuItem { Header = "Paste here", Name = "PasteHereMenu", InputGesture = new KeyGesture(Key.V, KeyModifiers.Control), IsEnabled = model.CanPaste };
+        paste.Click += (_, _) => model.PasteBlocks(clicked);
+        canvas.ContextMenu = new ContextMenu { ItemsSource = new Control[] { add, paste, tidy, MergeMenu(model) } };
+        // Ctrl+V pastes where the pointer last was on this timeline.
+        canvas.PointerMoved += (_, e) => model.PasteTime = At(e.GetPosition(canvas).Y);
+        canvas.PointerExited += (_, _) => model.PasteTime = null;
         bool OnBlock(object? source) => source is Visual visual && (visual is Border { Tag: SessionRow or ReviewEntry }
             || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow or ReviewEntry));
         Point? emptyPress = null;
@@ -359,7 +373,7 @@ public static class ReviewViews
         Ui.Put(heading2, Heading(model.DecimalHours ? "Decimal hours" : "Hours and minutes"));
         // Copy and export live on this line, with the table they act on. Both are icons with tooltips.
         var copy = Ui.IconButton(IconKind.Copy, "Copy hours table", "CopyHours", () => { });
-        ToolTip.SetTip(copy, "Copy the table to the clipboard, ready to paste into a timesheet");
+        ToolTip.SetTip(copy, "Copy table");
         copy.Click += async (_, _) =>
         {
             if (TopLevel.GetTopLevel(copy)?.Clipboard is not { } clipboard) return;
@@ -369,7 +383,7 @@ public static class ReviewViews
             reset.Tick += (_, _) => { reset.Stop(); ToolTip.SetTip(copy, "Copy the table to the clipboard, ready to paste into a timesheet"); };
             reset.Start();
         };
-        var export = Ui.IconButton(IconKind.Export, "Export week…", "ExportWeek", () => { if (TopLevel.GetTopLevel(root) is Window owner) new ExportWindow(model).Show(owner); });
+        var export = Ui.IconButton(IconKind.Export, "Export hours…", "ExportWeek", () => { if (TopLevel.GetTopLevel(root) is DashboardWindow dashboard) dashboard.Dialogs.Show(new ExportDialog(model)); });
         Ui.Put(heading2, Ui.Horizontal(copy, export), 1);
         root.Children.Add(heading2);
         root.Children.Add(Card(grid, new Thickness(16, 12, 16, 6)));
@@ -429,19 +443,22 @@ public static class ReviewViews
                 button.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
                 // The account's colour runs down the left as a strip, as on a timeline block, then the account and when, then the credited time.
                 var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(entry.Account, StringComparison.OrdinalIgnoreCase))?.Colour;
-                var edge = new Border { Width = 4, CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 8), Background = colour is null ? Brushes.Transparent : Brush.Parse(model.BlockLook(colour).Edge) };
+                var selected = entry.Sources.Count > 0 && model.IsSelected(entry.Sources);
+                var edge = new Border { Width = selected ? 6 : 4, CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 8) };
+                // A selected entry's strip is the theme's accent colour, as on the timeline.
+                if (selected) edge.Classes.Add("selectedEdge"); else edge.Background = colour is null ? Brushes.Transparent : Brush.Parse(model.BlockLook(colour).Edge);
                 var labels = new StackPanel { Spacing = 2, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = new Thickness(12, 6) };
                 var accountText = Ui.Text(model.Label(entry.Account), 14); accountText.FontWeight = FontWeight.SemiBold;
                 labels.Children.Add(accountText); labels.Children.Add(Ui.Text(caption, 12, "muted"));
                 if (!string.IsNullOrWhiteSpace(entry.Note)) labels.Children.Add(new TextBlock { Text = entry.Note, FontSize = 12, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
                 var length = Ui.Text(Length(index), 14); length.FontWeight = FontWeight.SemiBold; length.Classes.Add("figures"); length.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center; length.Margin = new Thickness(0, 0, 14, 0);
-                var content = Ui.Grid("4,*,Auto"); Ui.Put(content, edge); Ui.Put(content, labels, 1); Ui.Put(content, length, 2);
+                var content = Ui.Grid(selected ? "6,*,Auto" : "4,*,Auto"); Ui.Put(content, edge); Ui.Put(content, labels, 1); Ui.Put(content, length, 2);
                 button.Content = content;
                 if (entry.Sources.Count > 0)
                 {
                     button.Classes.Set("mergeSelected", model.IsSelected(entry.Sources));
                     var edit = new MenuItem { Header = "Edit / inspect entry…" }; edit.Click += (_, _) => Open();
-                    button.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, entry.Sources), MergeMenu(model), new Separator(), DeleteMenu(model, entry.Sources) } };
+                    button.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, entry.Sources), CopyMenu(model, entry.Sources), MergeMenu(model), new Separator(), DeleteMenu(model, entry.Sources) } };
                 }
                 if (entry.GroupId is { } groupId)
                 {
@@ -476,6 +493,14 @@ public static class ReviewViews
         var rows = selected ? model.Engine.Sessions.Where(model.SelectedRows.Contains).ToList() : clicked.ToList();
         var item = new MenuItem { Name = "DeleteMenu", Header = rows.Count > 1 ? $"Delete {rows.Count} blocks" : "Delete", IsEnabled = rows.Count > 0 };
         item.Click += (_, _) => { if (selected) model.DeleteSelection(); else model.DeleteEntries(rows); };
+        return item;
+    }
+    // Copies the clicked block, or every selected block when the clicked one is selected. Ctrl+C does the same for the selection.
+    private static MenuItem CopyMenu(TimerModel model, IReadOnlyList<SessionRow> clicked)
+    {
+        var rows = model.IsSelected(clicked) ? model.Engine.Sessions.Where(model.SelectedRows.Contains).ToList() : clicked.ToList();
+        var item = new MenuItem { Name = "CopyBlocksMenu", Header = rows.Count > 1 ? $"Copy {rows.Count} blocks" : "Copy", InputGesture = new KeyGesture(Key.C, KeyModifiers.Control), IsEnabled = rows.Count > 0 };
+        item.Click += (_, _) => model.CopyBlocks(rows);
         return item;
     }
     private static MenuItem MergeMenu(TimerModel model)

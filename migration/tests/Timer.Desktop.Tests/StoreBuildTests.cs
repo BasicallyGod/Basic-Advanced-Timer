@@ -16,7 +16,8 @@ namespace Timer.Desktop.Tests;
 // The tests are built without the Store flag, so these switch the developer features off the way a Store package has them, and check that nothing leaks.
 public sealed class StoreBuildTests
 {
-    private static void Settle(Window window) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); }
+    // A few passes, because a new page's visuals appear only after a layout and render pass, and a slow Windows runner has been seen to need more than one.
+    private static void Settle(Window window) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
     private static StoreSettings WithDeveloperOn() => new(new() { new("Account one") }, false, ThemeLibrary.Default, DayOfWeek.Monday, Developer: true);
 
     [AvaloniaFact]
@@ -47,7 +48,7 @@ public sealed class StoreBuildTests
             window.ContextMenu!.Open(); Dispatcher.UIThread.RunJobs();
             var menu = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
             Assert.False(menu.Single(m => m.Name == "BuildVersion").IsVisible); Assert.False(menu.Single(m => m.Name == "TestOvertime").IsVisible);
-            Assert.True(menu.Single(m => (string?)m.Header == "Close timer").IsVisible);
+            Assert.True(menu.Single(m => (string?)m.Header == "Collapse to tray").IsVisible);
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window);
             Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "OpenDemo" && b.IsVisible && b.GetVisualAncestors().All(a => a is not Control c || c.IsVisible));

@@ -35,19 +35,45 @@ public static class ThemeEngine
     {
         if (!app.Resources.ThemeDictionaries.TryGetValue(variant, out var found) || found is not ResourceDictionary dictionary)
             app.Resources.ThemeDictionaries[variant] = dictionary = new ResourceDictionary();
+        // A resource that already holds this colour is left alone. Replacing a resource tells every control using it to look again, so rewriting
+        // the whole set on every slider move made editing a theme crawl, when only one colour had changed.
+        void Put(string key, Color colour)
+        {
+            if (dictionary.TryGetValue(key, out var existing) && existing is SolidColorBrush current && current.Color == colour) return;
+            dictionary[key] = new SolidColorBrush(colour);
+        }
         foreach (var token in ThemeTokens.Names)
         {
             var colour = Color.Parse(colours[token]);
-            if (token == "ShadowColor") dictionary[token] = colour; else dictionary[token] = new SolidColorBrush(colour);
+            if (token == "ShadowColor") { if (!(dictionary.TryGetValue(token, out var shadow) && shadow is Color same && same == colour)) dictionary[token] = colour; }
+            else Put(token, colour);
         }
         // The standard controls take their colours from their own named resources, which default to the computer's accent colour. Pointing the ones that
         // show "on" or "filled" at the theme's accent keeps sliders and tick boxes in step with the rest of the app.
-        var accent = new SolidColorBrush(Color.Parse(colours["Accent"])); var accentInk = new SolidColorBrush(Color.Parse(colours["AccentInk"])); var line = new SolidColorBrush(Color.Parse(colours["Line"]));
+        var accent = Color.Parse(colours["Accent"]); var accentInk = Color.Parse(colours["AccentInk"]); var line = Color.Parse(colours["Line"]);
         foreach (var key in new[] { "SliderTrackValueFill", "SliderTrackValueFillPointerOver", "SliderTrackValueFillPressed", "SliderThumbBackground", "SliderThumbBackgroundPointerOver", "SliderThumbBackgroundPressed",
             "CheckBoxCheckBackgroundFillChecked", "CheckBoxCheckBackgroundFillCheckedPointerOver", "CheckBoxCheckBackgroundFillCheckedPressed",
-            "CheckBoxCheckBackgroundStrokeChecked", "CheckBoxCheckBackgroundStrokeCheckedPointerOver", "CheckBoxCheckBackgroundStrokeCheckedPressed" }) dictionary[key] = accent;
-        foreach (var key in new[] { "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver", "CheckBoxCheckGlyphForegroundCheckedPressed" }) dictionary[key] = accentInk;
-        foreach (var key in new[] { "SliderTrackFill", "SliderTrackFillPointerOver", "SliderTrackFillPressed" }) dictionary[key] = line;
+            "CheckBoxCheckBackgroundStrokeChecked", "CheckBoxCheckBackgroundStrokeCheckedPointerOver", "CheckBoxCheckBackgroundStrokeCheckedPressed",
+            // The export dialog's week and month choices are radio buttons, which follow the theme too.
+            "RadioButtonOuterEllipseCheckedFill", "RadioButtonOuterEllipseCheckedFillPointerOver", "RadioButtonOuterEllipseCheckedFillPressed",
+            "RadioButtonOuterEllipseCheckedStroke", "RadioButtonOuterEllipseCheckedStrokePointerOver", "RadioButtonOuterEllipseCheckedStrokePressed" }) Put(key, accent);
+        foreach (var key in new[] { "RadioButtonCheckGlyphFill", "RadioButtonCheckGlyphFillPointerOver", "RadioButtonCheckGlyphFillPressed", "RadioButtonCheckGlyphStroke", "RadioButtonCheckGlyphStrokePointerOver", "RadioButtonCheckGlyphStrokePressed" }) Put(key, accentInk);
+        foreach (var key in new[] { "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver", "CheckBoxCheckGlyphForegroundCheckedPressed" }) Put(key, accentInk);
+        // Tooltips are drawn by a pop-up that otherwise takes the computer's own light or dark colours, which left dark text on a dark tooltip (or the reverse)
+        // when the theme and the computer disagreed, and in the recording pill. They wear the theme's surface, text and line instead.
+        Put("ToolTipBackground", Color.Parse(colours["Surface"]));
+        Put("ToolTipForeground", Color.Parse(colours["Ink"]));
+        Put("ToolTipBorderBrush", line);
+        foreach (var key in new[] { "SliderTrackFill", "SliderTrackFillPointerOver", "SliderTrackFillPressed" }) Put(key, line);
+    }
+    /// <summary>
+    /// Writes only the colours the windows are drawn in, not the pill's recording, break and overtime tints. While a theme is being edited every
+    /// slider move writes the theme again, and the three tints made that four times the work for nothing anybody could see.
+    /// </summary>
+    public static void RegisterPreview(Application app, ThemeDefinition theme)
+    {
+        Write(app, VariantFor(theme), theme.Colours);
+        Applied?.Invoke();
     }
     /// <summary>Raised after theme colours are written, so windows with their own chrome (title bars) can follow a change or a preview.</summary>
     public static event Action? Applied;

@@ -136,14 +136,13 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void NoteOnlyDialogPreservesFractionalCreditAndDoubleClickRequestsAnEditor()
+    public void NoteOnlyDialogPreservesFractionalCreditAndEditingTheSelectionRequestsAnEditor()
     {
         var engine = Engine(); var row = Row(end: "09:01:01", minutes: "1.01") with { Account = "ACCOUNT ONE" }; engine.Sessions.Add(row);
         var model = new TimerModel(engine);
-        var editor = new EntryWindow(model, row, row.From, row.To); editor.Show();
+        var editor = new EntryDialog(model, row, row.From, row.To).Open(model);
         try
         {
-            Dispatcher.UIThread.RunJobs(); using var frame = editor.CaptureRenderedFrame();
             editor.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryNote").Text = "Short entry note";
             editor.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Same(row, engine.Sessions.Single()); Assert.Equal("1.01", engine.Sessions.Single().Minutes);
@@ -159,7 +158,10 @@ public sealed class EditingTests
             var point = card.TranslatePoint(new Point(80, 1), window)!.Value;
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
-            Assert.Equal(1, requests); Assert.Empty(model.SelectedRows); // A double-click edits without leaving the block selected.
+            Assert.Equal(0, requests); Assert.Empty(model.SelectedRows); // Two clicks select and deselect. There is no double-click edit any more.
+            window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
+            Assert.True(model.CanEditSelection); model.EditSelection();
+            Assert.Equal(1, requests); model.ClearSelection(); Dispatcher.UIThread.RunJobs();
             var nine = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
             var empty = nine.TranslatePoint(new Point(200, 60), window)!.Value; // The label sits five pixels above its hour's tick.
             window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
@@ -181,10 +183,9 @@ public sealed class EditingTests
             var model = new TimerModel(engine, prefs, store); Assert.True(model.Save());
             StorageFaults.Block(store);
             var row = engine.Sessions.Single();
-            var dialog = new EntryWindow(model, null, row.To, row.To.AddMinutes(30)); dialog.Show();
+            var dialog = new EntryDialog(model, null, row.To, row.To.AddMinutes(30)).Open(model);
             try
             {
-                Dispatcher.UIThread.RunJobs(); using var frame = dialog.CaptureRenderedFrame();
                 var button = dialog.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry");
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.True(dialog.IsVisible); Assert.Equal(2, engine.Sessions.Count); Assert.NotNull(model.LastError);
@@ -204,8 +205,7 @@ public sealed class EditingTests
         var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
         try
         {
-            var row = engine.Sessions[0]; var editor = new EntryWindow(model, row, row.From, row.To); editor.Show(window);
-            Dispatcher.UIThread.RunJobs(); using var frame = editor.CaptureRenderedFrame();
+            var row = engine.Sessions[0]; var editor = new EntryDialog(model, row, row.From, row.To).Open(window);
             var end = editor.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryEnd"); end.Text = "10:15";
             editor.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryNote").Text = "Drafting\nClient review";
             editor.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -214,26 +214,14 @@ public sealed class EditingTests
             window.SelectTab(true); model.SetWeekSection("entries"); Dispatcher.UIThread.RunJobs(); using var week = window.CaptureRenderedFrame();
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Drafting\nClient review");
             var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath(); Directory.CreateDirectory(output);
-            using var settled = window.CaptureRenderedFrame(); settled!.Save(Path.Combine(output, "week-editable-entries.png"));
-            var add = new EntryWindow(model, null, row.To.AddMinutes(30), row.To.AddMinutes(45)); add.Show(window);
-            Dispatcher.UIThread.RunJobs(); using var addFrame = add.CaptureRenderedFrame(); addFrame!.Save(Path.Combine(output, "entry-editor.png"));
+            using var settled = window.CaptureRenderedFrame(); settled?.Save(Path.Combine(output, "week-editable-entries.png"));
+            var add = new EntryDialog(model, null, row.To.AddMinutes(30), row.To.AddMinutes(45)).Open(window);
+            Dispatcher.UIThread.RunJobs(); using var addFrame = add.CaptureRenderedFrame(); addFrame?.Save(Path.Combine(output, "entry-editor.png"));
             add.Close();
             Assert.True(model.EditEntry(null, "Account two", row.To.AddMinutes(30), row.To.AddMinutes(45), "Gap note"));
             Assert.Equal(2, engine.Sessions.Count); Assert.True(model.UndoEdit()); Assert.Single(engine.Sessions);
         }
         finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void DoubleClickRevertsOnlyTheToggleFromItsOwnFirstClick()
-    {
-        var engine = Engine(); var row = Row("09:00:00", "added", "30"); var other = Row("10:00:00", "added", "30"); engine.Sessions.AddRange(new[] { row, other });
-        var model = new TimerModel(engine); var opened = 0; model.EntryRequested += (_, _, _) => opened++;
-        model.ToggleSelection(new[] { other });
-        model.ToggleSelection(new[] { row }); model.OpenEntryFromDoubleClick(row);
-        Assert.Equal(1, opened); Assert.Same(other, Assert.Single(model.SelectedRows));
-        model.ToggleSelection(new[] { row }); model.ToggleSelection(new[] { row }); model.OpenEntryFromDoubleClick(row); // Selected before, so the first click deselected it and the double-click restores it.
-        Assert.Equal(2, opened); Assert.Contains(row, model.SelectedRows);
     }
 
     [Theory]
@@ -355,7 +343,7 @@ public sealed class EditingTests
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "ExportWeek"); // Export lives only on the Overview tab.
             model.SetWeekSection("hours"); Dispatcher.UIThread.RunJobs();
             var export = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ExportWeek"); var copy = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CopyHours");
-            Assert.Equal(IconKind.Export, ((IconGlyph)export.Content!).Kind); Assert.Equal(IconKind.Copy, ((IconGlyph)copy.Content!).Kind); Assert.Equal("Export week…", ToolTip.GetTip(export));
+            Assert.Equal(IconKind.Export, ((IconGlyph)export.Content!).Kind); Assert.Equal(IconKind.Copy, ((IconGlyph)copy.Content!).Kind); Assert.Equal("Export hours…", ToolTip.GetTip(export));
             Assert.InRange(Math.Abs(export.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y - copy.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y), 0, 2); // Same line.
             Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekOverviewTab" && ToolTip.GetTip(b) as string == "Week overview");
             Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekHoursTab" && ToolTip.GetTip(b) as string == "Hours table");

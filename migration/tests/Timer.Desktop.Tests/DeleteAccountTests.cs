@@ -24,9 +24,10 @@ public sealed class DeleteAccountTests
         engine.AddSession("Account two", Now.Date.AddHours(12), Now.Date.AddHours(13));
         return new TimerModel(engine);
     }
-    private static void Settle(Window window) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); }
-    private static T Find<T>(Window w, string name) where T : Control => w.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
-    private static void Press(Window w, string name) { Find<Button>(w, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+    // A few passes, because a new page's visuals appear only after a layout and render pass, and a slow Windows runner has been seen to need more than one.
+    private static void Settle(Control control) { var window = (Window)TopLevel.GetTopLevel(control)!; for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
+    private static T Find<T>(Control w, string name) where T : Control => w.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+    private static void Press(Control w, string name) { Find<Button>(w, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
 
     [Fact]
     public void DeletingAnAccountRemovesItsHistoryAndNothingElse()
@@ -74,7 +75,7 @@ public sealed class DeleteAccountTests
     [AvaloniaFact]
     public void AnUnusedAccountIsDeletedAtOnceAndOneWithTimeAsksFirst()
     {
-        var model = Model(); var window = new AccountsWindow(model); window.Show();
+        var model = Model(); var window = new AccountsDialog(model).Open(model);
         try
         {
             Settle(window);
@@ -87,7 +88,7 @@ public sealed class DeleteAccountTests
             Assert.DoesNotContain(model.AccountSettings, a => a.Name == "Internal"); Assert.Equal(2, model.AccountSettings.Count);
         }
         finally { window.Close(); }
-        var second = Model(); var again = new AccountsWindow(second); again.Show();
+        var second = Model(); var again = new AccountsDialog(second).Open(second);
         try
         {
             Settle(again);
@@ -105,7 +106,7 @@ public sealed class DeleteAccountTests
     [AvaloniaFact]
     public void TheMarkCanBeTakenOffNewRowsJustVanishAndTheLastAccountCannotGo()
     {
-        var model = Model(); var window = new AccountsWindow(model); window.Show();
+        var model = Model(); var window = new AccountsDialog(model).Open(model);
         try
         {
             Settle(window);
@@ -114,7 +115,7 @@ public sealed class DeleteAccountTests
             Assert.Equal(3, model.AccountSettings.Count);
         }
         finally { window.Close(); }
-        var second = Model(); var again = new AccountsWindow(second); again.Show();
+        var second = Model(); var again = new AccountsDialog(second).Open(second);
         try
         {
             Settle(again);

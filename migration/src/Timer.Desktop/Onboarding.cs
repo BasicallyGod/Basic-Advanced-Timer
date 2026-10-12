@@ -128,7 +128,7 @@ public sealed class OnboardingView : Grid
     {
         var name = new TextBox { Text = account.Name, Watermark = "Client name", Margin = new Thickness(0, 0, 8, 0), Name = "SetupName" + accountRows.Count };
         var budget = new TextBox { Text = account.BudgetHours?.ToString("0.###", CultureInfo.InvariantCulture) ?? "", Watermark = "none", Margin = new Thickness(0, 0, 8, 0), Name = "SetupBudget" + accountRows.Count };
-        var period = new ComboBox { ItemsSource = new[] { "week", "month", "quarter" }, SelectedItem = account.BudgetPeriod, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 8, 0) };
+        var period = new ComboBox { ItemsSource = new[] { "day", "week", "month", "quarter" }, SelectedItem = account.BudgetPeriod, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 8, 0) };
         var show = new CheckBox { IsChecked = !account.Hidden, HorizontalAlignment = HorizontalAlignment.Center };
         var row = (existing ? account.Name : null, account.Colour, name, budget, period, show);
         accountRows.Add(row);
@@ -189,7 +189,7 @@ public sealed class OnboardingView : Grid
         panel.Children.Add(Ui.Horizontal(Detach(startBox), Ui.Dash(), Detach(endBox)));
         var different = Ui.Button("Different hours on some days…", () =>
         {
-            if (TopLevel.GetTopLevel(this) is Window owner) { customHours = true; new ShiftWindow(model).Show(owner); }
+            if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) { customHours = true; dashboard.Dialogs.Show(new ShiftDialog(model)); }
         }, "SetupDifferentHours");
         different.Classes.Add("toolButton"); different.Classes.Add("quiet"); different.HorizontalAlignment = HorizontalAlignment.Left; different.Height = 38;
         panel.Children.Add(different);
@@ -197,7 +197,7 @@ public sealed class OnboardingView : Grid
     }
     private bool ApplyHours()
     {
-        // Hours set one day at a time in their own window are kept as they are, rather than flattened to one shift.
+        // Hours set one day at a time in their own dialog are kept as they are, rather than flattened to one shift.
         if (customHours) return true;
         var start = TimeSpan.ParseExact((startBox.Text ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture, TimeSpanStyles.None);
         var end = TimeSpan.ParseExact((endBox.Text ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture, TimeSpanStyles.None);
@@ -252,7 +252,7 @@ public sealed class OnboardingView : Grid
             block.Children.Add(new TextBlock { Text = text, FontSize = 13, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
             return block;
         }
-        panel.Children.Add(Point("The tray.", "Closing a window hides the timer to the notification area and tracking carries on. Choose Close timer on the right-click menu to quit."));
+        panel.Children.Add(Point("The tray.", "Closing a window hides the timer to the notification area and tracking carries on. Use the cross at the foot of the dashboard to close the timer for good."));
         panel.Children.Add(Point("The pill and this dashboard.", "Click the clock on the pill to open the dashboard, and the account name to pick what you are working on."));
         panel.Children.Add(Point("Your data.", model.DataFolder is { } folder ? $"Stays on this computer in {folder}, with a backup each day." : "Stays on this computer, with a backup each day."));
         if (model.AutoStart?.Available == true)
