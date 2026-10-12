@@ -129,7 +129,8 @@ public static class ReviewViews
             {
                 // The block that is recording now. A green outline, a label and the stop menu make it clear why it can't be dragged.
                 card.Classes.Add("recording"); card.Name = "TimelineRecording"; card.Cursor = new Cursor(StandardCursorType.Arrow);
-                var live = Ui.Text("● Recording now", 12); live.Foreground = Brush.Parse(ink == "#FFFFFF" ? ink : "#1E5C38"); live.FontWeight = FontWeight.SemiBold;
+                var live = Ui.Text("● Recording now", 12); live.Foreground = Brush.Parse(ThemeColours.Contrast("#1E5C38", colour) >= 4.5 ? "#1E5C38" : ink); live.FontWeight = FontWeight.SemiBold;
+                // The green only where it reads on the block, otherwise the block's own text colour, which always does.
                 if (height >= 96) text.Children.Insert(model.IsSelected(selectionSources) ? 1 : 0, live);
                 else if (text.Children.Count > 0 && text.Children[0] is TextBlock liveTitle) liveTitle.Text = "● " + liveTitle.Text;
                 var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
@@ -145,14 +146,14 @@ public static class ReviewViews
                 card.PointerPressed += (_, e) =>
                 {
                     if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
-                    if (e.ClickCount == 2) { model.OpenGroup(group.GroupId!); groupPress = null; }
+                    if (TimelineGestures.IsDoubleClick(group.GroupId!, e)) { model.OpenGroup(group.GroupId!); groupPress = null; }
                     else groupPress = e.GetPosition(canvas);
                     e.Handled = true;
                 };
                 card.PointerReleased += (_, e) =>
                 {
                     if (groupPress is { } p)
-                    { var movement = e.GetPosition(canvas) - p; if (movement.X * movement.X + movement.Y * movement.Y <= 25) model.ToggleSelection(group.Sources); }
+                    { var movement = e.GetPosition(canvas) - p; if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && movement.X * movement.X + movement.Y * movement.Y <= 25) model.ToggleSelection(group.Sources); }
                     groupPress = null; e.Handled = true;
                 };
                 card.Tag = group; card.Name = "TimelineGroup" + group.GroupId + "-" + interval.Start.ToString("HHmmss");

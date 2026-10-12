@@ -190,4 +190,17 @@ public sealed class SwitchingAndBlockTests
         model.ToggleAccount("Account one");
         Assert.Equal(2, engine.Sessions.Count); Assert.Null(engine.ContinuedBlock);
     }
+
+    [Fact]
+    public void StartingABreakInsideABreakBlockAlreadyThereCarriesThatBlockOn()
+    {
+        var (model, engine, advance) = AtTenThirty(new SessionRow("2026-10-14", BreakAccount.Name, "10:00:00", "added", "60.00"));
+        model.ToggleBreak();
+        Assert.Empty(engine.Sessions); // Reopened, not left under a second break.
+        Assert.Equal(new DateTime(2026, 10, 14, 10, 0, 0), engine.Active!.Start);
+        Assert.True(model.IsOnBreak);
+        advance(TimeSpan.FromMinutes(15)); model.ToggleBreak(); // Ends at 10:45.
+        var block = Assert.Single(engine.Sessions);
+        Assert.Equal(BreakAccount.Name, block.Account); Assert.Equal("10:00:00", block.Start);
+    }
 }

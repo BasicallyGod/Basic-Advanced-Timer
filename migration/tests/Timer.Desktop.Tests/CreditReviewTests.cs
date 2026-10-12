@@ -127,6 +127,23 @@ public sealed class CreditReviewTests
     }
 
     [AvaloniaFact]
+    public void PlainClickDoesNotSelectAndDoubleClickOpensTheBlockUnderIt()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
+        var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
+        var opened = new List<string>(); model.EntryRequested += (row, _, _) => opened.Add(row?.Account ?? "");
+        Point Centre(int index) { var card = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + index); return card.TranslatePoint(new Point(70, card.Height / 2), dashboard)!.Value; }
+        Capture(dashboard, "plain-click"); dashboard.UpdateLayout();
+        var first = Centre(0); var second = Centre(1);
+        dashboard.MouseDown(first, MouseButton.Left); dashboard.MouseUp(first, MouseButton.Left);
+        Assert.Empty(model.SelectedRows); Assert.Empty(opened);
+        dashboard.MouseDown(second, MouseButton.Left); dashboard.MouseUp(second, MouseButton.Left); // A quick click on the next block is not a double-click on it.
+        Assert.Empty(opened);
+        dashboard.MouseDown(second, MouseButton.Left); dashboard.MouseUp(second, MouseButton.Left); // Twice on the same block does.
+        Assert.Single(opened); Assert.Empty(model.SelectedRows);
+        dashboard.Close();
+    }
+    [AvaloniaFact]
     public void ClickSelectsWithoutDraggingAndToolbarAndContextMenuMerge()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:00:00", "30") });
@@ -137,8 +154,8 @@ public sealed class CreditReviewTests
             Capture(dashboard, "merge-selection");
             var card = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + index);
             var point = card.TranslatePoint(new Point(70, card.Height / 2), dashboard)!.Value;
-            dashboard.MouseDown(point, MouseButton.Left);
-            dashboard.MouseUp(point, MouseButton.Left);
+            dashboard.MouseDown(point, MouseButton.Left, RawInputModifiers.Shift); // Shift+click selects, a plain click leaves the selection alone.
+            dashboard.MouseUp(point, MouseButton.Left, RawInputModifiers.Shift);
         }
         Select(0); Select(1); Assert.Equal(2, model.SelectedRows.Count); Assert.True(model.CanMergeSelection);
         model.ToggleSelection(new[] { engine.Sessions[1] }); Assert.Single(model.SelectedRows); Assert.False(model.CanMergeSelection); model.ToggleSelection(new[] { engine.Sessions[1] });
@@ -148,7 +165,7 @@ public sealed class CreditReviewTests
         Capture(dashboard, "merge-combined-selection");
         var groupCard = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is ReviewEntry);
         var p = groupCard.TranslatePoint(new Point(70, 35), dashboard)!.Value;
-        dashboard.MouseDown(p, MouseButton.Left); dashboard.MouseUp(p, MouseButton.Left);
+        dashboard.MouseDown(p, MouseButton.Left, RawInputModifiers.Shift); dashboard.MouseUp(p, MouseButton.Left, RawInputModifiers.Shift);
         Select(2); Assert.True(model.CanMergeSelection); Capture(dashboard, "merge-group-and-block");
         var last = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry2");
         var menu = last.ContextMenu!.ItemsSource!.OfType<MenuItem>().Single(i => i.Name == "MergeSelectedMenu");

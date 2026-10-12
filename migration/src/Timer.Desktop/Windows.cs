@@ -238,10 +238,10 @@ public sealed class PillWindow : Window
         var divider = new Border { Width = 1, Height = 42 }; divider.Classes.Add("rule");
         Ui.Put(head, divider, 1);
         // The account, with its colour dot and a chevron that opens the list, the line under it that says what is happening, and how far through the day it is.
-        account.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis; account.FontWeight = Avalonia.Media.FontWeight.SemiBold;
-        credited.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis;
-        var nameRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 9 };
-        nameRow.Children.Add(dot); nameRow.Children.Add(account); nameRow.Children.Add(chevron);
+        // A name or line too long for the room slides to its end and back (AutoScrollText) instead of being cut off.
+        account.FontWeight = Avalonia.Media.FontWeight.SemiBold;
+        var nameRow = new NameRow();
+        nameRow.Children.Add(dot); nameRow.Children.Add(new AutoScrollText(account)); nameRow.Children.Add(chevron);
         // How far through the working day it is, as a thin bar under the account.
         progressBar.Height = 5; progressBar.Margin = new Thickness(0, 7, 0, 0);
         progressBar.ColumnDefinitions = new ColumnDefinitions("0*,1*");
@@ -251,7 +251,7 @@ public sealed class PillWindow : Window
         progressBar.Children.Add(rest); progressBar.Children.Add(fill);
         progressBar.Name = "DayProgress"; progressBar.IsHitTestVisible = false;
         var labels = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
-        labels.Children.Add(nameRow); labels.Children.Add(credited); labels.Children.Add(progressBar);
+        labels.Children.Add(nameRow); labels.Children.Add(new AutoScrollText(credited)); labels.Children.Add(progressBar);
         var accountButton = Ui.Button("", ToggleExpansion, "PillAccounts");
         accountButton.Content = labels;
         accountButton.Classes.Add("pillAction");
