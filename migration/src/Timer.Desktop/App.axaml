@@ -8,6 +8,8 @@
   </Application.Resources>
   <Application.Styles>
     <FluentTheme />
+    <!-- The colour picker is a separate package whose look is not part of FluentTheme. -->
+    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
     <Style Selector="ScrollBar">
       <Setter Property="Theme">
         <ControlTheme TargetType="ScrollBar">
