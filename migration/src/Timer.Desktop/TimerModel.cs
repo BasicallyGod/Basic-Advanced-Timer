@@ -594,12 +594,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool GroupEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Group(rows));
     public bool UngroupEntries(string id) => ChangeLog(() => Editor.Ungroup(id));
     public bool TidyDay(IReadOnlyList<GapChoice> choices, int limit) => ChangeLog(() => Editor.Tidy(choices, limit));
-    public bool ExportWeek(bool wholeMonth = false)
+    /// <summary>Exports the week or the whole month that the given day falls in, or the one being viewed when none is given.</summary>
+    public bool ExportWeek(bool wholeMonth = false, DateTime? day = null)
     {
         try
         {
             if (!Save()) return false;
-            var export = wholeMonth ? WeekExport.ForMonth(Editor, Engine, SelectedDate) : new WeekExport(Editor, Engine, WeekStart(SelectedDate));
+            var chosen = day ?? SelectedDate;
+            var export = wholeMonth ? WeekExport.ForMonth(Editor, Engine, chosen) : new WeekExport(Editor, Engine, WeekStart(chosen));
             if (store is not null) export.VerifyAgainst(store.Database);
             ExportPath = export.Write(store?.ExportDirectory ?? Path.Combine(Path.GetTempPath(), "BasicsAdvancedTimer-demo-exports"), ReviewAccounts.Select(a => a.Name));
             EditError = null; Notify(); return true;

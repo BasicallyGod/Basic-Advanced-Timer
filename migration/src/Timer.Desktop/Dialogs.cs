@@ -43,10 +43,13 @@ public sealed class DialogHost : Grid
     {
         if (open.Any(o => ReferenceEquals(o.Dialog, dialog))) return;
         dialog.Host = this; dialog.IsVisible = true;
-        // A card with a cross in its corner, over a dim scrim that takes every click so nothing behind is reached.
+        // A card with a header row, the title on the left and a cross on the right, above the dialog's own content. The scroll bar of a long dialog
+        // therefore sits below the cross and never runs under it.
         var close = Ui.IconButton(IconKind.Close, "Close", "CloseDialog", dialog.Close);
-        close.HorizontalAlignment = HorizontalAlignment.Right; close.VerticalAlignment = VerticalAlignment.Top; close.Margin = new Thickness(0, 10, 10, 0); close.ZIndex = 2;
-        var inner = new Grid(); inner.Children.Add(dialog); inner.Children.Add(close);
+        close.VerticalAlignment = VerticalAlignment.Center; close.Margin = new Thickness(0, 0, 10, 0);
+        var title = Ui.Text(dialog.Title, 22); title.Name = "DialogTitle"; title.VerticalAlignment = VerticalAlignment.Center; title.Margin = new Thickness(24, 0, 12, 0);
+        var header = Ui.Grid("*,Auto"); header.Margin = new Thickness(0, 14, 0, 0); header.Children.Add(title); Ui.Put(header, close, 1);
+        var inner = Ui.Grid("*", "Auto,*"); inner.Children.Add(header); Ui.Put(inner, dialog, row: 1);
         var card = new Border { Child = inner, CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), ClipToBounds = true,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(24), Name = "DialogCard" };
         card.Classes.Add("dayCard");

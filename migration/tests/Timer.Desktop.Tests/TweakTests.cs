@@ -87,17 +87,26 @@ public sealed class TweakTests
     }
 
     [AvaloniaFact]
-    public void TheExportDialogOffersAWeekOrAWholeMonthAndWritesTheMonth()
+    public void TheExportDialogOffersAWeekAndAMonthEachWithAListAndWritesTheOneChosen()
     {
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));
         var window = new ExportDialog(model).Open(model);
-        var week = window.GetVisualDescendants().OfType<RadioButton>().Single(b => b.Name == "ExportWeekChoice");
-        var month = window.GetVisualDescendants().OfType<RadioButton>().Single(b => b.Name == "ExportMonthChoice");
-        Assert.True(week.IsChecked); Assert.Contains("October 2026", (string)month.Content!);
-        month.IsChecked = true;
-        window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ExportCsv").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        Assert.NotNull(model.ExportPath); Assert.Contains("Month-202610", model.ExportPath);
+        T Get<T>(string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+        var week = Get<RadioButton>("ExportWeekChoice"); var month = Get<RadioButton>("ExportMonthChoice");
+        var weekPick = Get<ComboBox>("ExportWeekPick"); var monthPick = Get<ComboBox>("ExportMonthPick");
+        Assert.True(week.IsChecked); Assert.False(month.IsChecked);
+        // The lists start on the week and month being viewed, and reach back over the recorded days.
+        Assert.Equal("5 Oct to 11 Oct 2026", weekPick.SelectedItem); Assert.Equal("October 2026", monthPick.SelectedItem);
+        Assert.True(weekPick.ItemCount >= 12 && monthPick.ItemCount >= 12);
+        // Choosing from the month list picks the month, and exports that month, not the one being viewed.
+        monthPick.SelectedIndex = 2; Assert.True(month.IsChecked); Assert.False(week.IsChecked);
+        Get<Button>("ExportCsv").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.NotNull(model.ExportPath); Assert.Contains("Month-202608", model.ExportPath);
         Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Detail.csv")) && File.Exists(Path.Combine(model.ExportPath!, "Summary.csv")));
+        // Choosing from the week list goes back to a week.
+        weekPick.SelectedIndex = 3; Assert.True(week.IsChecked);
+        Get<Button>("ExportCsv").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.Contains("Week-20260914", model.ExportPath); // Three weeks before the week of 5 October.
         window.Close();
     }
 
