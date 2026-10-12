@@ -103,10 +103,19 @@ public sealed class ThemesDialog : Dialog
         duplicate.IsEnabled = true; delete.IsEnabled = !theme.BuiltIn;
         Rebuild(theme.BuiltIn);
     }
+    // Dragging a slider reports many changes a second, and each preview repaints the whole app. So the first shows at once and the rest are
+    // gathered, with the latest shown a moment later, which feels the same and keeps the slider smooth.
+    private static readonly TimeSpan PreviewGap = TimeSpan.FromMilliseconds(70);
+    private DateTime lastPreview = DateTime.MinValue; private Avalonia.Threading.DispatcherTimer? pendingPreview;
     private void Changed()
     {
         dirty = true; error.Text = "";
-        model.PreviewTheme(Working());
+        var wait = PreviewGap - (DateTime.UtcNow - lastPreview);
+        if (wait <= TimeSpan.Zero && pendingPreview is not { IsEnabled: true }) { lastPreview = DateTime.UtcNow; model.PreviewTheme(Working()); return; }
+        if (pendingPreview is { IsEnabled: true }) return; // The one already waiting will show the latest values.
+        pendingPreview = new Avalonia.Threading.DispatcherTimer { Interval = wait > TimeSpan.Zero ? wait : PreviewGap };
+        pendingPreview.Tick += (_, _) => { pendingPreview!.Stop(); if (dirty && Host is not null) { lastPreview = DateTime.UtcNow; model.PreviewTheme(Working()); } };
+        pendingPreview.Start();
     }
     private void Rebuild(bool locked)
     {
@@ -181,28 +190,37 @@ public sealed class ThemesDialog : Dialog
     private Button ThemeColourButton(string token, bool locked, Action changed)
     {
         var swatch = new Border { Width = 56, Height = 24, CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), BorderBrush = Brushes.Gray, Background = Brush.Parse(colours[token]) };
-        var hex = new TextBox { Text = colours[token], Width = 100, IsEnabled = !locked, Name = "Hex" + token };
         var button = new Button { Content = swatch, Name = "Colour" + token, Padding = new Thickness(4), IsEnabled = !locked, Background = Brushes.Transparent };
+        // The picker's sliders and box are made the first time it opens. There are two dozen pickers, and making them all whenever a theme
+        // was chosen was most of the wait.
+        TextBox? hex = null; Slider? hue = null, sat = null, lit = null;
         void Apply(string value, bool fromHex)
         {
             value = value.ToUpperInvariant(); colours[token] = value; swatch.Background = Brush.Parse(value);
-            if (!fromHex) hex.Text = value;
+            if (!fromHex && hex is not null) hex.Text = value;
             changed();
         }
-        var hue = new Slider { Minimum = 0, Maximum = 360, Width = 220 }; var sat = new Slider { Minimum = 0, Maximum = 1, Width = 220 }; var lit = new Slider { Minimum = 0, Maximum = 1, Width = 220 };
-        void Load() { var (h, s, l) = ThemeColours.Hsl(colours[token]); filling = true; hue.Value = h; sat.Value = s; lit.Value = l; filling = false; }
-        void FromSliders(object? sender, AvaloniaPropertyChangedEventArgs e) { if (e.Property == RangeBase.ValueProperty && !filling) Apply(ThemeColours.FromHsl(hue.Value, sat.Value, lit.Value), false); }
-        hue.PropertyChanged += FromSliders; sat.PropertyChanged += FromSliders; lit.PropertyChanged += FromSliders;
-        hex.PropertyChanged += (_, e) =>
+        void Load() { if (hue is null || sat is null || lit is null) return; var (h, s, l) = ThemeColours.Hsl(colours[token]); filling = true; hue.Value = h; sat.Value = s; lit.Value = l; filling = false; }
+        var flyout = new Flyout();
+        flyout.Opening += (_, _) =>
         {
-            if (e.Property != TextBox.TextProperty) return;
-            var text = (hex.Text ?? "").Trim(); if (!text.StartsWith('#')) text = "#" + text;
-            if (ThemeTokens.IsValid(token, text) && !text.Equals(colours[token], StringComparison.OrdinalIgnoreCase)) { Apply(text, true); Load(); }
+            if (flyout.Content is not null) return;
+            hex = new TextBox { Text = colours[token], Width = 100, IsEnabled = !locked, Name = "Hex" + token };
+            hue = new Slider { Minimum = 0, Maximum = 360, Width = 220 }; sat = new Slider { Minimum = 0, Maximum = 1, Width = 220 }; lit = new Slider { Minimum = 0, Maximum = 1, Width = 220 };
+            void FromSliders(object? sender, AvaloniaPropertyChangedEventArgs e) { if (e.Property == RangeBase.ValueProperty && !filling) Apply(ThemeColours.FromHsl(hue.Value, sat.Value, lit.Value), false); }
+            hue.PropertyChanged += FromSliders; sat.PropertyChanged += FromSliders; lit.PropertyChanged += FromSliders;
+            hex.PropertyChanged += (_, e) =>
+            {
+                if (e.Property != TextBox.TextProperty) return;
+                var text = (hex.Text ?? "").Trim(); if (!text.StartsWith('#')) text = "#" + text;
+                if (ThemeTokens.IsValid(token, text) && !text.Equals(colours[token], StringComparison.OrdinalIgnoreCase)) { Apply(text, true); Load(); }
+            };
+            var panel = new StackPanel { Spacing = 6, Margin = new Thickness(4) };
+            panel.Children.Add(Ui.Text("Hue", 12, "muted")); panel.Children.Add(hue); panel.Children.Add(Ui.Text("Saturation", 12, "muted")); panel.Children.Add(sat);
+            panel.Children.Add(Ui.Text("Lightness", 12, "muted")); panel.Children.Add(lit); panel.Children.Add(hex);
+            flyout.Content = panel;
         };
-        var panel = new StackPanel { Spacing = 6, Margin = new Thickness(4) };
-        panel.Children.Add(Ui.Text("Hue", 12, "muted")); panel.Children.Add(hue); panel.Children.Add(Ui.Text("Saturation", 12, "muted")); panel.Children.Add(sat);
-        panel.Children.Add(Ui.Text("Lightness", 12, "muted")); panel.Children.Add(lit); panel.Children.Add(hex);
-        var flyout = new Flyout { Content = panel }; flyout.Opened += (_, _) => { hex.Text = colours[token]; Load(); };
+        flyout.Opened += (_, _) => { if (hex is not null) hex.Text = colours[token]; Load(); };
         button.Flyout = flyout;
         return button;
     }

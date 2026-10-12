@@ -118,4 +118,36 @@ public sealed class UxTweakTests
         var model = new TimerModel(new TrackingEngine()); var bar = new MessageBar(model);
         Assert.Contains("messageBar", bar.Classes); Assert.DoesNotContain("chip", bar.Classes);
     }
+
+    [AvaloniaFact]
+    public void TheFloatingMessageReallyGetsABackgroundAndAnOutline()
+    {
+        var model = new TimerModel(new TrackingEngine()); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            model.ExplainRunning(); Settle(dashboard);
+            var bar = dashboard.GetVisualDescendants().OfType<MessageBar>().Single();
+            Assert.True(bar.IsVisible);
+            Assert.IsAssignableFrom<ISolidColorBrush>(bar.Background); // A style that names Border alone skips a subclass, which once left it see-through.
+            Assert.NotNull(bar.BorderBrush); Assert.True(bar.BorderThickness.Left > 1);
+        }
+        finally { dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void WritingATwiceLeavesUnchangedColoursAloneAndAPreviewWritesOnlyTheMainVariant()
+    {
+        var theme = ThemeLibrary.BuiltIn.First(t => t.Name == "Studio"); var app = Application.Current!;
+        ThemeEngine.Register(app, new[] { theme });
+        var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
+        var ink = dictionary["Ink"]; var accent = dictionary["Accent"];
+        ThemeEngine.Register(app, new[] { theme });
+        Assert.Same(ink, dictionary["Ink"]); Assert.Same(accent, dictionary["Accent"]); // Nothing changed, so nothing was replaced.
+        var edited = new Dictionary<string, string>(theme.Colours) { ["Accent"] = "#123456" };
+        var recording = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.StateVariant(theme, ThemeDerivation.Recording)]; var recordingAccent = recording["Accent"];
+        ThemeEngine.RegisterPreview(app, theme with { Colours = edited });
+        Assert.NotSame(accent, dictionary["Accent"]); Assert.Same(ink, dictionary["Ink"]); // Only the colour that moved was replaced.
+        Assert.Same(recordingAccent, recording["Accent"]); // A preview leaves the pill's tinted variants alone.
+        ThemeEngine.Register(app, new[] { theme }); // Put back.
+    }
 }
