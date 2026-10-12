@@ -14,7 +14,8 @@ namespace Timer.Desktop.Tests;
 
 public sealed class PolishTests
 {
-    private static void Settle(Window window) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); }
+    // A few passes, because a new page's visuals appear only after a layout and render pass, and a slow Windows runner has been seen to need more than one.
+    private static void Settle(Window window) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
     private static TimerModel Plain() => new(new TrackingEngine(clock: () => new DateTime(2026, 10, 9, 10, 0, 0)));
 
     [AvaloniaFact]
