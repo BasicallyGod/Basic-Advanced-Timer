@@ -252,7 +252,7 @@ public sealed class OnboardingView : Grid
             block.Children.Add(new TextBlock { Text = text, FontSize = 13, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
             return block;
         }
-        panel.Children.Add(Point("The tray.", "Closing a window hides the timer to the notification area and tracking carries on. Choose Close timer on the right-click menu to quit."));
+        panel.Children.Add(Point("The tray.", "Closing a window hides the timer to the notification area and tracking carries on. Use the cross at the foot of the dashboard to close the timer for good."));
         panel.Children.Add(Point("The pill and this dashboard.", "Click the clock on the pill to open the dashboard, and the account name to pick what you are working on."));
         panel.Children.Add(Point("Your data.", model.DataFolder is { } folder ? $"Stays on this computer in {folder}, with a backup each day." : "Stays on this computer, with a backup each day."));
         if (model.AutoStart?.Available == true)

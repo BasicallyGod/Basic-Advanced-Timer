@@ -14,7 +14,7 @@ public sealed class AccountsDialog : Dialog
         Width = 700; Height = 540;
         var root = Ui.Grid("*", "Auto,*,Auto,Auto,Auto,Auto"); root.Margin = new Thickness(24, 4, 24, 24);
         var intro = new StackPanel { Spacing = 8, Margin = new Thickness(0, 0, 0, 16) };
-        intro.Children.Add(new TextBlock { Text = "Add accounts, rename them, show or hide them, and set budgets in hours. Drag accounts on the dashboard to reorder them.\nA blank budget means no limit. Hidden accounts keep their recorded time. The bin deletes an account and everything recorded against it.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        intro.Children.Add(new TextBlock { Text = "Rename, hide or delete accounts and set budgets in hours. A blank budget means no limit.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
         Ui.Put(root, intro);
         var confirm = new StackPanel { Name = "DeleteConfirm", Spacing = 8, IsVisible = false, Margin = new Thickness(0, 8, 0, 0) };
         var list = new StackPanel { Spacing = 10 };
@@ -39,7 +39,7 @@ public sealed class AccountsDialog : Dialog
             Ui.Put(row, period, 4);
             var entry = new AccountRow { Original = existing ? account.Name : null, Name = name, Visible = visible, Budget = budget, Period = period, Colour = () => chosen, Grid = row };
             // The bin removes a new row at once. For an existing account it marks the row for deleting, dimmed, and a second press takes the mark off.
-            var bin = Ui.IconButton(IconKind.Trash, existing ? "Delete this account and everything recorded against it" : "Remove this row", "DeleteAccount" + entries.Count, () =>
+            var bin = Ui.IconButton(IconKind.Trash, existing ? "Delete account and its time" : "Remove this row", "DeleteAccount" + entries.Count, () =>
             {
                 if (entry.Original is null) { list.Children.Remove(entry.Grid); entries.Remove(entry); return; }
                 entry.Deleting = !entry.Deleting;

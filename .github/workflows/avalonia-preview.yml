@@ -37,13 +37,15 @@ jobs:
         env:
           TIMER_PREVIEW_DIR: ${{ runner.temp }}/avalonia-timer-previews
         run: dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release --verbosity minimal
+      # The pictures are only worth keeping when a test failed, so a green run leaves nothing behind. A manual run (Run workflow) keeps them too.
       - name: Upload rendered previews
-        if: always()
+        if: failure() || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: avalonia-previews-${{ matrix.os }}
           path: ${{ runner.temp }}/avalonia-timer-previews/*.png
           if-no-files-found: ignore
+          retention-days: 7
       - name: Publish self-contained Windows preview
         if: runner.os == 'Windows'
         run: dotnet publish migration/src/Timer.Desktop/Timer.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=false -p:BuildChannel=${{ github.ref_name }} -p:Version=0.1.${{ github.run_number }} -p:InformationalVersion=0.1.${{ github.run_number }}+${{ github.sha }} -o artifacts/windows-preview
@@ -92,6 +94,7 @@ jobs:
           name: BasicsAdvancedTimer-Windows-experimental
           path: artifacts/windows-preview/
           if-no-files-found: error
+          retention-days: 14
       - name: Upload alpha Windows build
         if: runner.os == 'Windows' && github.ref_name == 'alpha' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
@@ -99,3 +102,4 @@ jobs:
           name: BasicsAdvancedTimer-Windows-alpha
           path: artifacts/windows-preview/
           if-no-files-found: error
+          retention-days: 14

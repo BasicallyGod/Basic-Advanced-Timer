@@ -111,8 +111,8 @@ public sealed class ThemesDialog : Dialog
     private void Rebuild(bool locked)
     {
         detail.Children.Clear();
-        detail.Children.Add(Ui.Text(locked ? name + " (built in)" : "Edit theme", 18));
-        if (locked) detail.Children.Add(new TextBlock { Text = "Built-in themes cannot be changed. Duplicate this one to make your own, then change any colour.", TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
+        detail.Children.Add(Ui.Heading(locked ? name + " (built in)" : "Edit theme", 20));
+        if (locked) detail.Children.Add(new TextBlock { Text = "Built in. Duplicate it to make your own.", TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
         var nameBox = new TextBox { Text = name, Name = "ThemeName", IsEnabled = !locked, MaxLength = 40, Width = 280, HorizontalAlignment = HorizontalAlignment.Left };
         nameBox.PropertyChanged += (_, e) => { if (e.Property != TextBox.TextProperty) return; name = nameBox.Text ?? ""; if (!filling) dirty = true; };
         detail.Children.Add(Ui.Text("Name", 12, "muted")); detail.Children.Add(nameBox);

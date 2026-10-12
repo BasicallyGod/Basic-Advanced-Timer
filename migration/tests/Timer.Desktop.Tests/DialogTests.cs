@@ -75,7 +75,7 @@ public sealed class DialogTests
         var bar = Find<Border>(dashboard, "MessageBar"); Assert.False(bar.IsVisible);
         var addTime = Top("AddTime"); var undo = Top("UndoEdit");
         model.ExplainRunning(); Settle(dashboard); // "This block is still recording..."
-        Assert.True(bar.IsVisible); Assert.Contains("still recording", Find<TextBlock>(dashboard, "MessageText").Text);
+        Assert.True(bar.IsVisible); Assert.Contains("Still recording", Find<TextBlock>(dashboard, "MessageText").Text);
         Assert.Equal(addTime, Top("AddTime"), 0.5); Assert.Equal(undo, Top("UndoEdit"), 0.5); // Nothing moved.
         var barBottom = bar.TranslatePoint(new Point(0, bar.Bounds.Height), dashboard)!.Value.Y;
         Assert.True(barBottom <= addTime, $"The message ends at {barBottom} but the buttons start at {addTime}."); // Above the buttons, not over them.

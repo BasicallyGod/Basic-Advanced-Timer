@@ -26,8 +26,8 @@ public sealed class ShiftEditor : StackPanel
     {
         Margin = new Thickness(heading ? 24 : 0); Spacing = 12;
         var root = this;
-        if (heading) root.Children.Add(Ui.Text("Working hours", 22));
-        root.Children.Add(new TextBlock { Text = "Choose your working days and shifts. Times use HH:mm.\nThe day clock starts at the scheduled time; overtime starts at the end.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        if (heading) root.Children.Add(Ui.Heading("Working hours", 24));
+        root.Children.Add(new TextBlock { Text = "Working days and shifts. Times are HH:mm.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
         var entries = new List<(DayOfWeek Day, CheckBox On, TextBox Start, TextBox End)>();
         foreach (var day in new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday })
         {

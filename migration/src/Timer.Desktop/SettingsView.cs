@@ -33,14 +33,14 @@ public sealed class SettingsView : ScrollViewer
         var theme = new ComboBox { Name = "ThemeChoice", ItemsSource = themeNames, SelectedItem = themeNames.Contains(model.Theme) ? model.Theme : ThemeLibrary.System, MinWidth = 200 };
         theme.SelectionChanged += (_, _) => { if (theme.SelectedItem is string chosen && chosen != model.Theme) model.SetTheme(chosen); };
         syncs.Add(() => { var wanted = themeNames.Contains(model.Theme) ? model.Theme : ThemeLibrary.System; if (!Equals(theme.SelectedItem, wanted)) theme.SelectedItem = wanted; });
-        var editThemes = Ui.Button("Edit themes…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new ThemesDialog(model)); }, "EditThemes");
+        var editThemes = Ui.DialogButton("Edit themes…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new ThemesDialog(model)); }, "EditThemes");
         var appearance = new StackPanel { Spacing = 10 };
         appearance.Children.Add(Row("Theme", Ui.Horizontal(theme, editThemes)));
         // The pill is sized for the screen it is on. This overrides that with a size of your own.
         var pillChoices = new List<string> { "Automatic" }; pillChoices.AddRange(TimerModel.PillScaleChoices.Select(p => p + "%"));
         string PillText(int? percent) => percent is { } p ? p + "%" : "Automatic";
         var pillSize = new ComboBox { Name = "PillSize", ItemsSource = pillChoices, SelectedItem = PillText(model.PillScalePercent), MinWidth = 140 };
-        ToolTip.SetTip(pillSize, "Automatic sizes the pill for the screen it is on and its Windows scale. Choose a percentage to set it yourself.");
+        ToolTip.SetTip(pillSize, "Automatic fits the pill to the screen.");
         pillSize.SelectionChanged += (_, _) =>
         {
             if (pillSize.SelectedItem is not string chosen || chosen == PillText(model.PillScalePercent)) return;
@@ -58,15 +58,15 @@ public sealed class SettingsView : ScrollViewer
         var general = new StackPanel { Spacing = 10 };
         general.Children.Add(Toggle("Decimal hours (1.50h instead of 1h 30m)", "DecimalHours", () => model.DecimalHours, _ => model.ToggleFormat()));
         general.Children.Add(Toggle("Move later blocks without asking when a longer entry runs into them", "MoveLaterAlways", () => model.MoveLaterAlways, v => model.SetMoveLaterAlways(v)));
-        general.Children.Add(Row("Client accounts", Ui.Button("Accounts and budgets…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new AccountsDialog(model)); }, "EditAccounts")));
+        general.Children.Add(Row("Client accounts", Ui.DialogButton("Accounts and budgets…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new AccountsDialog(model)); }, "EditAccounts")));
         page.Children.Add(Section("Hours and accounts", general));
 
         // The getting started setup, for anyone who skipped it or wants to look again. Nothing is lost: it starts from the current settings.
-        page.Children.Add(Section("Getting started", Row("Setup", Ui.Button("Run setup again", () => model.RestartSetup(), "RunSetup"))));
+        page.Children.Add(Section("Getting started", Row("Setup", Ui.DialogButton("Run setup again", () => model.RestartSetup(), "RunSetup"))));
         // Hidden until unlocked: ten quick clicks on the About tile. Once unlocked it holds the sample-data demo and a switch to hide the features again.
         var developer = new StackPanel { Spacing = 10 };
         // In the demo the developer features are simply on: there is no demo to open from inside it, and the switch is fixed on and greyed out.
-        var openDemo = Row("Sample data", Ui.Button("Open sample-data demo", Ui.StartDemo, "OpenDemo")); openDemo.IsVisible = !model.IsDemo;
+        var openDemo = Row("Sample data", Ui.DialogButton("Open sample-data demo", Ui.StartDemo, "OpenDemo")); openDemo.IsVisible = !model.IsDemo;
         developer.Children.Add(openDemo);
         var inDemo = Ui.Text("You are in the sample-data demo, so the developer features are on. Nothing here is saved.", 13, "muted"); inDemo.Name = "InDemoNote"; inDemo.TextWrapping = Avalonia.Media.TextWrapping.Wrap; inDemo.IsVisible = model.IsDemo;
         developer.Children.Add(inDemo);
@@ -102,7 +102,7 @@ public sealed class SettingsView : ScrollViewer
     private static Border Section(string title, Control body)
     {
         var stack = new StackPanel { Spacing = 12, Margin = new Thickness(20, 16) };
-        stack.Children.Add(Ui.Text(title, 16));
+        stack.Children.Add(Ui.Heading(title, 18));
         stack.Children.Add(body);
         var card = new Border { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Child = stack };
         card.Classes.Add("dayCard");
