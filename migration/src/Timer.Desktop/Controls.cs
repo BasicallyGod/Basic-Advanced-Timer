@@ -269,7 +269,7 @@ public sealed class AccountIndicator : Control
         Account = account;
         this.model = model;
         Width = Height = Size;
-        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = TimeSpan.FromMilliseconds(160) } };
+        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = IconGlyph.HoverDuration } };
     }
     // Drawn on a 42 unit canvas and scaled down, so the ring, bars and play triangle stay in proportion at the smaller size.
     public const double Size = 36;
@@ -310,7 +310,7 @@ public sealed class AccountIndicator : Control
         }
         // On the plain circle a running account is already filled with the accent, so its pause bars are drawn in the accent's own text colour.
         if (!Ring && running) ink = accentInk;
-        using var grow = context.PushTransform(Matrix.CreateTranslation(-21, -21) * Matrix.CreateScale(1 + .18 * glow, 1 + .18 * glow) * Matrix.CreateTranslation(21, 21));
+        using var grow = context.PushTransform(Matrix.CreateTranslation(-21, -21) * Matrix.CreateScale(1 + .08 * glow, 1 + .08 * glow) * Matrix.CreateTranslation(21, 21));
         if (model.ActiveAccount == Account.Name)
         {
             context.DrawRectangle(ink, null, new Rect(15, 14, 4, 14), 1, 1);
@@ -681,7 +681,7 @@ public sealed class Chevron : Control
     public override void Render(DrawingContext context)
     {
         var brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
-        var pen = new Pen(brush, 2.2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        var pen = new Pen(brush, IconGlyph.StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         var y = Expanded ? 9 : 5;
         context.DrawLine(pen, new Point(2, y), new Point(7, Expanded ? 4 : 10));
         context.DrawLine(pen, new Point(7, Expanded ? 4 : 10), new Point(12, y));
@@ -698,12 +698,12 @@ public sealed class PauseGlyph : Control
     public PauseGlyph()
     {
         Width = Height = 14;
-        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = TimeSpan.FromMilliseconds(160) } };
+        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = IconGlyph.HoverDuration } };
     }
     public override void Render(DrawingContext context)
     {
         var glow = Math.Clamp(Glow, 0, 1);
-        using var grow = context.PushTransform(Matrix.CreateTranslation(-7, -7) * Matrix.CreateScale(1 + .25 * glow, 1 + .25 * glow) * Matrix.CreateTranslation(7, 7));
+        using var grow = context.PushTransform(Matrix.CreateTranslation(-7, -7) * Matrix.CreateScale(1 + .08 * glow, 1 + .08 * glow) * Matrix.CreateTranslation(7, 7));
         var normal = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
         var tint = this.TryFindResource("Accent", ActualThemeVariant, out var accentValue) ? accentValue as IBrush : normal;
         // The accent can be too faint on a theme's panel, so it is only mixed in as the pointer arrives and the shape itself is what grows.
@@ -754,7 +754,7 @@ public sealed class BreakGlyph : Control
         IBrush? brush = null;
         var key = Mono ? (Hot ? HotKey : "Ink") : "Break";
         if (Filled) brush = Brushes.White; else if (this.TryFindResource(key, ActualThemeVariant, out var value)) brush = value as IBrush;
-        var pen = new Pen(brush ?? Brushes.Gray, 1.8, lineCap: PenLineCap.Round);
+        var pen = new Pen(brush ?? Brushes.Gray, IconGlyph.StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         context.DrawGeometry(null, pen, Geometry.Parse("M 3,7 L 3,12 Q 3,15.5 6.5,15.5 L 9.5,15.5 Q 13,15.5 13,12 L 13,7 Z"));
         context.DrawGeometry(null, pen, Geometry.Parse("M 13,8 L 14.5,8 Q 16.5,8 16.5,10 Q 16.5,12 14.5,12 L 13,12"));
         // Two wisps, half a cycle apart. Each rises a little and fades in and out; when still they sit where they always did.
@@ -768,13 +768,43 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
 {
+    public const double StrokeWidth = 1.6;
+    public static readonly TimeSpan HoverDuration = TimeSpan.FromMilliseconds(200);
+    public static readonly StyledProperty<double> HoverProperty = AvaloniaProperty.Register<IconGlyph, double>(nameof(Hover));
+    static IconGlyph() => AffectsRender<IconGlyph>(HoverProperty);
+    public double Hover { get => GetValue(HoverProperty); set => SetValue(HoverProperty, value); }
     public IconKind Kind { get; }
-    public IconGlyph(IconKind kind) { Kind = kind; Width = Height = 18; }
+    public IconGlyph(IconKind kind)
+    {
+        Kind = kind; Width = Height = 18;
+        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = HoverProperty, Duration = HoverDuration } };
+    }
+    private Button? owner;
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        owner = this.GetVisualAncestors().OfType<Button>().FirstOrDefault();
+        if (owner is null) return;
+        owner.PropertyChanged += OwnerChanged;
+        UpdateHover();
+    }
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        if (owner is not null) owner.PropertyChanged -= OwnerChanged;
+        owner = null; Hover = 0;
+        Waving = false;
+        base.OnDetachedFromVisualTree(e);
+    }
+    private void OwnerChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == IsPointerOverProperty || e.Property == IsKeyboardFocusWithinProperty || e.Property == IsEffectivelyEnabledProperty) UpdateHover();
+    }
+    private void UpdateHover() => Hover = owner is { IsEffectivelyEnabled: true } && (owner.IsPointerOver || owner.IsKeyboardFocusWithin) ? 1 : 0;
     private string? tintKey;
     /// <summary>The theme brush this icon is drawn in, when it should not follow the text colour of its button.</summary>
     public string? TintKey { get => tintKey; set { if (tintKey == value) return; tintKey = value; InvalidateVisual(); } }
@@ -808,16 +838,22 @@ public sealed class IconGlyph : Control
     public override void Render(DrawingContext context)
     {
         IBrush brush = this.TryFindResource(TintKey ?? "Ink", ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;
-        var pen = new Pen(brush, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        var pen = new Pen(brush, StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        var hover = Math.Clamp(Hover, 0, 1);
+        // Every icon keeps its hit target and layout still. Only a small part of the drawing moves.
+        var angle = Kind == IconKind.Gear ? hover * Math.PI / 9 : Kind == IconKind.Undo ? -hover * Math.PI / 15 : 0;
+        using var turn = context.PushTransform(Matrix.CreateTranslation(-9, -9) * Matrix.CreateRotation(angle) * Matrix.CreateTranslation(9, 9));
         switch (Kind)
         {
             case IconKind.Timeline:
                 // A spine with three blocks of different lengths beside it, drawn apart from each other: the day as a column of time.
                 context.DrawLine(pen, new Point(3.5, 2), new Point(3.5, 16));
                 // Solid bars rather than outlines, so the gaps between them stay open at button size.
-                context.DrawRectangle(brush, null, new Rect(7.5, 2.5, 8, 3), 1.2, 1.2);
-                context.DrawRectangle(brush, null, new Rect(7.5, 7.5, 8, 3), 1.2, 1.2);
-                context.DrawRectangle(brush, null, new Rect(7.5, 12.5, 8, 3), 1.2, 1.2);
+                for (var i = 0; i < 3; i++)
+                {
+                    var shift = hover * (i == 1 ? -1 : 1);
+                    context.DrawLine(pen, new Point(7.5 + shift, 3 + i * 6), new Point(14.5 + shift - (i == 1 ? 2 : 0), 3 + i * 6));
+                }
                 break;
             case IconKind.Trash:
                 // A bin: a lid with a handle, and a tapering body with two slats.
@@ -841,9 +877,9 @@ public sealed class IconGlyph : Control
             case IconKind.Week:
                 // Three bars of different heights on a baseline: an overview of the week, not a calendar.
                 context.DrawLine(pen, new Point(2.5, 15.5), new Point(15.5, 15.5));
-                context.DrawRectangle(brush, null, new Rect(3.5, 9, 3, 5), 1, 1);
-                context.DrawRectangle(brush, null, new Rect(7.5, 3.5, 3, 10.5), 1, 1);
-                context.DrawRectangle(brush, null, new Rect(11.5, 6.5, 3, 7.5), 1, 1);
+                context.DrawLine(pen, new Point(4.5, 13), new Point(4.5, 9 - hover));
+                context.DrawLine(pen, new Point(9, 13), new Point(9, 3.5 - hover));
+                context.DrawLine(pen, new Point(13.5, 13), new Point(13.5, 6.5 - hover));
                 break;
             case IconKind.Close:
                 context.DrawLine(pen, new Point(4.5, 4.5), new Point(13.5, 13.5)); context.DrawLine(pen, new Point(13.5, 4.5), new Point(4.5, 13.5));
@@ -886,27 +922,43 @@ public sealed class IconGlyph : Control
                 break;
             case IconKind.Gear:
             {
-                // A classic cog: eight teeth round a ring, with a hole in the middle.
-                var tooth = new Pen(brush, 2.6, lineCap: PenLineCap.Flat);
-                for (var i = 0; i < 8; i++)
+                // One continuous outline, with the same rounded stroke as the rest of the set.
+                var cog = new StreamGeometry();
+                using (var g = cog.Open())
                 {
-                    var angle = i * Math.PI / 4; var cos = Math.Cos(angle); var sin = Math.Sin(angle);
-                    context.DrawLine(tooth, new Point(9 + 5.6 * cos, 9 + 5.6 * sin), new Point(9 + 8.2 * cos, 9 + 8.2 * sin));
+                    for (var i = 0; i < 32; i++)
+                    {
+                        var theta = i * Math.PI / 16; var radius = i % 4 is 1 or 2 ? 7.3 : 5.7;
+                        var point = new Point(9 + radius * Math.Cos(theta), 9 + radius * Math.Sin(theta));
+                        if (i == 0) g.BeginFigure(point, false); else g.LineTo(point);
+                    }
+                    g.EndFigure(true);
                 }
-                context.DrawEllipse(null, new Pen(brush, 2.0), new Point(9, 9), 5.2, 5.2);
-                context.DrawEllipse(null, pen, new Point(9, 9), 1.9, 1.9);
+                context.DrawGeometry(null, pen, cog);
+                context.DrawEllipse(null, pen, new Point(9, 9), 2.2, 2.2);
                 break;
             }
             case IconKind.Minimise:
-                // The familiar low bar of a window's minimise button.
-                context.DrawLine(new Pen(brush, 1.8, lineCap: PenLineCap.Flat), new Point(3.5, 13), new Point(14.5, 13));
+                // A miniature timer pill: its dot and timer are visible before hovering.
+                var width = 14 + hover * 2;
+                context.DrawRectangle(null, pen, new Rect(9 - width / 2, 4.5, width, 9), 4.5, 4.5);
+                context.DrawEllipse(brush, null, new Point(5.5 - hover * .5, 9), .9, .9);
+                context.DrawLine(pen, new Point(8, 8), new Point(12.5 + hover * .5, 8));
+                context.DrawLine(new Pen(brush, 1, lineCap: PenLineCap.Round), new Point(8, 10.5), new Point(11, 10.5));
+                break;
+            case IconKind.Previous:
+            case IconKind.Next:
+                var direction = Kind == IconKind.Previous ? -1 : 1;
+                var x = 9 + direction * hover;
+                context.DrawLine(pen, new Point(x - direction * 2.5, 4), new Point(x + direction * 2.5, 9));
+                context.DrawLine(pen, new Point(x + direction * 2.5, 9), new Point(x - direction * 2.5, 14));
                 break;
             case IconKind.Flag:
             {
                 // A pole with a pennant in the button's own text colour. The cloth ripples while Waving is on, fading back to still.
                 IBrush flagBrush = TintKey is not null && this.TryFindResource(TintKey, ActualThemeVariant, out var tint) && tint is IBrush tinted ? tinted
                     : Avalonia.Controls.Documents.TextElement.GetForeground(this) ?? brush;
-                var flagPen = new Pen(flagBrush, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+                var flagPen = new Pen(flagBrush, StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
                 context.DrawLine(flagPen, new Point(4, 2.5), new Point(4, 16));
                 double Wave(double x) => amplitude * 1.4 * Math.Sin(phase - (x - 4) * 0.7) * ((x - 4) / 10.5);
                 var geometry = new StreamGeometry();
