@@ -18,10 +18,10 @@ public sealed class TweakTests
     private static void Settle(Window window) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); }
 
     [Fact]
-    public void ThePillShrinksOnSmallScreensButNeverBelowTheLimitOrAboveFullSize()
+    public void ThePillShrinksWithTheScreenAndStaysBetweenItsLargestAndSmallestSizes()
     {
-        Assert.Equal(1.0, PillWindow.ScaleFor(2560));
-        Assert.Equal(1.0, PillWindow.ScaleFor(1800));
+        Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(2560)); // Even a big screen gets a smaller pill than the design size.
+        Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(1920));
         Assert.InRange(PillWindow.ScaleFor(1366), 0.75, 0.77); // A common laptop screen.
         Assert.Equal(PillWindow.SmallestScale, PillWindow.ScaleFor(800));
     }
@@ -30,11 +30,9 @@ public sealed class TweakTests
     public void AScaledPillKeepsItsProportionsAndGrowsBackOnABigScreen()
     {
         var pill = new PillWindow(TimerModel.CreateDemo()); pill.Show(); Settle(pill);
-        var full = (pill.Width, pill.Height);
-        Assert.Equal(1.0, pill.Scale);
-        pill.FitToScreen(null); Assert.Equal(1.0, pill.Scale); // No screen to look at means full size.
+        Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5); // The window keeps the pill's proportions at whatever size it is drawn.
+        pill.FitToScreen(null); Assert.Equal(1.0, pill.Scale); // No screen to look at means the design size.
         Assert.Equal(PillWindow.CollapsedWindowHeight, pill.Height, 0.5);
-        Assert.Equal(PillWindow.PillWidth + 2 * Ui.ShadowMargin, full.Width, 0.5);
         pill.Close();
     }
 
