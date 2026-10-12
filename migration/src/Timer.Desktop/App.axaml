@@ -171,17 +171,12 @@
     <Style Selector="Button.rail.selected /template/ ContentPresenter#PART_ContentPresenter, Button.rail.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
-    <!-- Close timer goes red and glows under the pointer, and swells a little, so it is plain that it ends the timer. -->
+    <!-- Close timer only turns red and swells a little under the pointer, with no box or glow around it. -->
     <Style Selector="Button.quit">
       <Setter Property="Transitions"><Transitions><TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.15" /></Transitions></Setter>
     </Style>
     <Style Selector="Button.quit:pointerover"><Setter Property="RenderTransform" Value="scale(1.12)" /></Style>
-    <Style Selector="Button.quit:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Finish}" />
-      <Setter Property="BorderThickness" Value="2" />
-      <Setter Property="BoxShadow" Value="0 0 16 2 #77E5484D" />
-    </Style>
+    <Style Selector="Button.quit:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
     <!-- The floating message is raised off the timeline, with the accent for an outline, so it is easy to see against any block. -->
     <Style Selector="Border.messageBar">
       <Setter Property="Background" Value="{DynamicResource Panel}" />
