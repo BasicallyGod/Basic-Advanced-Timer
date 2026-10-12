@@ -48,6 +48,9 @@ public static class ThemeEngine
             if (token == "ShadowColor") { if (!(dictionary.TryGetValue(token, out var shadow) && shadow is Color same && same == colour)) dictionary[token] = colour; }
             else Put(token, colour);
         }
+        // Icon hover tiles retain the theme's highlight hue at a quiet opacity, rather than flashing a solid fill.
+        var hover = Color.Parse(colours["Hover"]);
+        Put("IconHover", Color.FromArgb((byte)Math.Round(hover.A * .28), hover.R, hover.G, hover.B));
         // The standard controls take their colours from their own named resources, which default to the computer's accent colour. Pointing the ones that
         // show "on" or "filled" at the theme's accent keeps sliders and tick boxes in step with the rest of the app.
         var accent = Color.Parse(colours["Accent"]); var accentInk = Color.Parse(colours["AccentInk"]); var line = Color.Parse(colours["Line"]);

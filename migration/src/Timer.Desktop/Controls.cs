@@ -301,12 +301,12 @@ public sealed class AccountIndicator : Control
                 context.DrawGeometry(null, new Pen(colour, 3), geometry);
             }
         }
-        // Under the hand, the button fills with the accent colour and its symbol grows a little and turns to the accent's own text colour.
+        // A faint accent wash and small growth answer the pointer; the symbol keeps its state colour.
         var glow = Math.Clamp(Glow, 0, 1);
         var accent = Resource("Accent"); var accentInk = Resource("AccentInk");
         if (glow > 0 && !BreakAccount.Is(Account.Name))
         {
-            using (context.PushOpacity(glow)) context.DrawEllipse(accent, null, centre, Ring ? 15 : 19, Ring ? 15 : 19);
+            using (context.PushOpacity(glow * .16)) context.DrawEllipse(accent, null, centre, Ring ? 15 : 19, Ring ? 15 : 19);
         }
         // On the plain circle a running account is already filled with the accent, so its pause bars are drawn in the accent's own text colour.
         if (!Ring && running) ink = accentInk;
@@ -315,8 +315,6 @@ public sealed class AccountIndicator : Control
         {
             context.DrawRectangle(ink, null, new Rect(15, 14, 4, 14), 1, 1);
             context.DrawRectangle(ink, null, new Rect(23, 14, 4, 14), 1, 1);
-            if (glow > 0)
-                using (context.PushOpacity(glow)) { context.DrawRectangle(accentInk, null, new Rect(15, 14, 4, 14), 1, 1); context.DrawRectangle(accentInk, null, new Rect(23, 14, 4, 14), 1, 1); }
         }
         else if (BreakAccount.Is(Account.Name))
         {
@@ -333,7 +331,6 @@ public sealed class AccountIndicator : Control
         {
             var triangle = Geometry.Parse("M 17,13 L 28,21 L 17,29 Z");
             context.DrawGeometry(ink, null, triangle);
-            if (glow > 0) using (context.PushOpacity(glow)) context.DrawGeometry(accentInk, null, triangle);
         }
     }
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -705,9 +702,8 @@ public sealed class PauseGlyph : Control
         var glow = Math.Clamp(Glow, 0, 1);
         using var grow = context.PushTransform(Matrix.CreateTranslation(-7, -7) * Matrix.CreateScale(1 + .08 * glow, 1 + .08 * glow) * Matrix.CreateTranslation(7, 7));
         var normal = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
-        var tint = this.TryFindResource("Accent", ActualThemeVariant, out var accentValue) ? accentValue as IBrush : normal;
-        // The accent can be too faint on a theme's panel, so it is only mixed in as the pointer arrives and the shape itself is what grows.
-        var brush = glow > .5 ? tint : normal;
+        // Motion and the button's highlight provide feedback without a mid-transition jump to the accent colour.
+        var brush = normal;
         if (Playing)
         {
             context.DrawRectangle(brush, null, new Rect(2, 1, 4, 12), 1, 1);
@@ -752,7 +748,7 @@ public sealed class BreakGlyph : Control
     public override void Render(DrawingContext context)
     {
         IBrush? brush = null;
-        var key = Mono ? (Hot ? HotKey : "Ink") : "Break";
+        var key = Mono ? "Ink" : "Break";
         if (Filled) brush = Brushes.White; else if (this.TryFindResource(key, ActualThemeVariant, out var value)) brush = value as IBrush;
         var pen = new Pen(brush ?? Brushes.Gray, IconGlyph.StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         context.DrawGeometry(null, pen, Geometry.Parse("M 3,7 L 3,12 Q 3,15.5 6.5,15.5 L 9.5,15.5 Q 13,15.5 13,12 L 13,7 Z"));
@@ -838,8 +834,15 @@ public sealed class IconGlyph : Control
     public override void Render(DrawingContext context)
     {
         IBrush brush = this.TryFindResource(TintKey ?? "Ink", ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;
-        var pen = new Pen(brush, StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         var hover = Math.Clamp(Hover, 0, 1);
+        // Keep the close cue, but ease only a little towards red instead of swapping brushes on pointer entry.
+        if (Kind == IconKind.Close && brush is ISolidColorBrush ink && this.TryFindResource("Finish", ActualThemeVariant, out var finish) && finish is ISolidColorBrush danger)
+        {
+            var amount = hover * .2;
+            byte Mix(byte from, byte to) => (byte)Math.Round(from + (to - from) * amount);
+            brush = new SolidColorBrush(Color.FromArgb(Mix(ink.Color.A, danger.Color.A), Mix(ink.Color.R, danger.Color.R), Mix(ink.Color.G, danger.Color.G), Mix(ink.Color.B, danger.Color.B)));
+        }
+        var pen = new Pen(brush, StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         // Every icon keeps its hit target and layout still. Only a small part of the drawing moves.
         var angle = Kind == IconKind.Gear ? hover * Math.PI / 9 : Kind == IconKind.Undo ? -hover * Math.PI / 15 : 0;
         using var turn = context.PushTransform(Matrix.CreateTranslation(-9, -9) * Matrix.CreateRotation(angle) * Matrix.CreateTranslation(9, 9));

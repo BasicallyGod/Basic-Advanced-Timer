@@ -502,10 +502,8 @@ public sealed class DashboardWindow : Window
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
         settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);
         railFoot.Children.Add(settingsRail);
-        // Closes the timer for good. It goes red under the pointer, so it is never pressed by accident.
+        // Closes the timer for good, with the same restrained highlight as the other rail controls.
         var quit = RailButton(IconKind.Close, "Close timer", "QuitTimer", () => model.RequestQuit()); quit.Classes.Add("quit");
-        var quitGlyph = (IconGlyph)quit.Content!;
-        quit.PointerEntered += (_, _) => quitGlyph.TintKey = "Finish"; quit.PointerExited += (_, _) => quitGlyph.TintKey = null;
         railFoot.Children.Add(quit);
         Ui.Put(railGrid, railFoot, row: 1);
         rail.Child = railGrid; Ui.Put(root, rail);
