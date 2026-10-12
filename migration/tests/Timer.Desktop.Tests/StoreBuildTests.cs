@@ -16,7 +16,8 @@ namespace Timer.Desktop.Tests;
 // The tests are built without the Store flag, so these switch the developer features off the way a Store package has them, and check that nothing leaks.
 public sealed class StoreBuildTests
 {
-    private static void Settle(Window window) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); }
+    // A few passes, because a new page's visuals appear only after a layout and render pass, and a slow Windows runner has been seen to need more than one.
+    private static void Settle(Window window) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
     private static StoreSettings WithDeveloperOn() => new(new() { new("Account one") }, false, ThemeLibrary.Default, DayOfWeek.Monday, Developer: true);
 
     [AvaloniaFact]
