@@ -100,6 +100,16 @@ public static class Ui
         button.Click += (_, _) => click();
         return button;
     }
+    // The buttons in dialogs wear the same quiet outlined look as the dashboard's (Add time, Undo, Start break). The main action of a dialog,
+    // such as Save or Export, has an accent outline so it reads as the one to press.
+    private static readonly string[] MainActions = { "Save", "Export CSV files", "Apply selected fills", "Group selected", "Move later blocks" };
+    public static Button DialogButton(string text, Action click, string? name = null, bool? main = null)
+    {
+        var button = Button(text, click, name);
+        button.Classes.Add("toolButton"); button.Classes.Add("quiet"); button.Classes.Add("dialogButton");
+        if (main ?? MainActions.Contains(text)) button.Classes.Add("mainAction");
+        return button;
+    }
     public static Grid Grid(string columns, string rows = "Auto") => new()
     {
         ColumnDefinitions = new ColumnDefinitions(columns), RowDefinitions = new RowDefinitions(rows)
@@ -478,7 +488,8 @@ public sealed class AccountList : StackPanel
             row.PointerExited += (_, _) => { icon.Glow = 0; marquee?.Hover(false); };
             if (reorderable && !BreakAccount.Is(account.Name)) AttachReorder(row, account.Name);
             var settings = new MenuItem { Header = "Name and budget…", Name = "AccountSettingsMenu" };
-            settings.Click += (_, _) => { if (TopLevel.GetTopLevel(row) is Window owner) new AccountsWindow(model).Show(owner); };
+            // The pill has no room for a dialog, so the dashboard shows it, and comes up first when it is hidden.
+            settings.Click += (_, _) => model.OpenAccounts();
             row.ContextMenu = new ContextMenu { ItemsSource = new Control[] { settings } };
             Children.Add(row);
             rows.Add((account, row, today, budget, icon, dot, bar, percent));
@@ -753,7 +764,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -829,6 +840,9 @@ public sealed class IconGlyph : Control
                 context.DrawRectangle(brush, null, new Rect(3.5, 9, 3, 5), 1, 1);
                 context.DrawRectangle(brush, null, new Rect(7.5, 3.5, 3, 10.5), 1, 1);
                 context.DrawRectangle(brush, null, new Rect(11.5, 6.5, 3, 7.5), 1, 1);
+                break;
+            case IconKind.Close:
+                context.DrawLine(pen, new Point(4.5, 4.5), new Point(13.5, 13.5)); context.DrawLine(pen, new Point(13.5, 4.5), new Point(4.5, 13.5));
                 break;
             case IconKind.Today:
                 // A calendar page with two rings, and a dot on the day.

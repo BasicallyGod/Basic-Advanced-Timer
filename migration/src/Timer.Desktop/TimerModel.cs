@@ -58,6 +58,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     public event Action<SessionRow?, DateTime, DateTime>? EntryRequested;
     public event Action<string>? GroupRequested;
     public event Action? TidyRequested;
+    public event Action? AccountsRequested;
+    /// <summary>Asks for the accounts and budgets dialog. The dashboard shows it, and comes up first if only the pill is showing.</summary>
+    public void OpenAccounts() => AccountsRequested?.Invoke();
     public void OpenTidy() => TidyRequested?.Invoke();
     public string? ExportPath { get; private set; }
     private readonly HashSet<SessionRow> selectedRows = new(ReferenceEqualityComparer.Instance);
@@ -591,12 +594,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool GroupEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Group(rows));
     public bool UngroupEntries(string id) => ChangeLog(() => Editor.Ungroup(id));
     public bool TidyDay(IReadOnlyList<GapChoice> choices, int limit) => ChangeLog(() => Editor.Tidy(choices, limit));
-    public bool ExportWeek(bool wholeMonth = false)
+    /// <summary>Exports the week or the whole month that the given day falls in, or the one being viewed when none is given.</summary>
+    public bool ExportWeek(bool wholeMonth = false, DateTime? day = null)
     {
         try
         {
             if (!Save()) return false;
-            var export = wholeMonth ? WeekExport.ForMonth(Editor, Engine, SelectedDate) : new WeekExport(Editor, Engine, WeekStart(SelectedDate));
+            var chosen = day ?? SelectedDate;
+            var export = wholeMonth ? WeekExport.ForMonth(Editor, Engine, chosen) : new WeekExport(Editor, Engine, WeekStart(chosen));
             if (store is not null) export.VerifyAgainst(store.Database);
             ExportPath = export.Write(store?.ExportDirectory ?? Path.Combine(Path.GetTempPath(), "BasicsAdvancedTimer-demo-exports"), ReviewAccounts.Select(a => a.Name));
             EditError = null; Notify(); return true;
@@ -658,6 +663,10 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Whether a longer entry that runs into later blocks moves them without asking first. Chosen by a tick box in the entry window, and in settings.</summary>
     public bool MoveLaterAlways => preferences.MoveLaterAlways;
     public void SetMoveLaterAlways(bool on) { preferences = preferences with { MoveLaterAlways = on }; Save(); Notify(); }
+    /// <summary>The pill size chosen by hand, as a percentage of its design size, or null for the automatic size that follows the screen.</summary>
+    public int? PillScalePercent => preferences.PillScale;
+    public static readonly int[] PillScaleChoices = { 50, 60, 70, 80, 90, 100, 110, 120 };
+    public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
     public bool Tooltips => preferences.Tooltips;
     public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
     /// <summary>Whether the developer features are switched on: the sample-data demo, the overtime tester and the version on the right-click menu. Off until unlocked from the About section.</summary>
@@ -722,7 +731,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     { Engine.StopAccount(); var saved = Save(); if (!saved) Notify(); return saved; }
     // Notes and refused-edit messages in the footer fade after a while, so a stale one is never left sitting there.
     // A failed save is not one of these, because it stays until a save works.
-    public static readonly TimeSpan MessageLifetime = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan MessageLifetime = TimeSpan.FromSeconds(15);
     private Avalonia.Threading.DispatcherTimer? messageTimer;
     private (string?, string?) messageSeen;
     private void WatchMessages()

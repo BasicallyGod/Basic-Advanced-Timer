@@ -226,7 +226,7 @@ public sealed class AccountEditingTests
     public void TheColourChooserPicksFromThePaletteOrAnyHexColourAndKeepsItOnSave()
     {
         var model = new TimerModel(Engine(), new StoreSettings(new() { new("A"), new("B") }, false, "System", DayOfWeek.Monday));
-        var window = new AccountsWindow(model); window.Show();
+        var window = new AccountsDialog(model).Open(model);
         try
         {
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();

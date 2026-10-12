@@ -140,10 +140,9 @@ public sealed class EditingTests
     {
         var engine = Engine(); var row = Row(end: "09:01:01", minutes: "1.01") with { Account = "ACCOUNT ONE" }; engine.Sessions.Add(row);
         var model = new TimerModel(engine);
-        var editor = new EntryWindow(model, row, row.From, row.To); editor.Show();
+        var editor = new EntryDialog(model, row, row.From, row.To).Open(model);
         try
         {
-            Dispatcher.UIThread.RunJobs(); using var frame = editor.CaptureRenderedFrame();
             editor.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryNote").Text = "Short entry note";
             editor.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Same(row, engine.Sessions.Single()); Assert.Equal("1.01", engine.Sessions.Single().Minutes);
@@ -181,10 +180,9 @@ public sealed class EditingTests
             var model = new TimerModel(engine, prefs, store); Assert.True(model.Save());
             StorageFaults.Block(store);
             var row = engine.Sessions.Single();
-            var dialog = new EntryWindow(model, null, row.To, row.To.AddMinutes(30)); dialog.Show();
+            var dialog = new EntryDialog(model, null, row.To, row.To.AddMinutes(30)).Open(model);
             try
             {
-                Dispatcher.UIThread.RunJobs(); using var frame = dialog.CaptureRenderedFrame();
                 var button = dialog.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry");
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.True(dialog.IsVisible); Assert.Equal(2, engine.Sessions.Count); Assert.NotNull(model.LastError);
@@ -204,8 +202,7 @@ public sealed class EditingTests
         var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
         try
         {
-            var row = engine.Sessions[0]; var editor = new EntryWindow(model, row, row.From, row.To); editor.Show(window);
-            Dispatcher.UIThread.RunJobs(); using var frame = editor.CaptureRenderedFrame();
+            var row = engine.Sessions[0]; var editor = new EntryDialog(model, row, row.From, row.To).Open(window);
             var end = editor.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryEnd"); end.Text = "10:15";
             editor.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryNote").Text = "Drafting\nClient review";
             editor.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -214,9 +211,9 @@ public sealed class EditingTests
             window.SelectTab(true); model.SetWeekSection("entries"); Dispatcher.UIThread.RunJobs(); using var week = window.CaptureRenderedFrame();
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Drafting\nClient review");
             var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath(); Directory.CreateDirectory(output);
-            using var settled = window.CaptureRenderedFrame(); settled!.Save(Path.Combine(output, "week-editable-entries.png"));
-            var add = new EntryWindow(model, null, row.To.AddMinutes(30), row.To.AddMinutes(45)); add.Show(window);
-            Dispatcher.UIThread.RunJobs(); using var addFrame = add.CaptureRenderedFrame(); addFrame!.Save(Path.Combine(output, "entry-editor.png"));
+            using var settled = window.CaptureRenderedFrame(); settled?.Save(Path.Combine(output, "week-editable-entries.png"));
+            var add = new EntryDialog(model, null, row.To.AddMinutes(30), row.To.AddMinutes(45)).Open(window);
+            Dispatcher.UIThread.RunJobs(); using var addFrame = add.CaptureRenderedFrame(); addFrame?.Save(Path.Combine(output, "entry-editor.png"));
             add.Close();
             Assert.True(model.EditEntry(null, "Account two", row.To.AddMinutes(30), row.To.AddMinutes(45), "Gap note"));
             Assert.Equal(2, engine.Sessions.Count); Assert.True(model.UndoEdit()); Assert.Single(engine.Sessions);

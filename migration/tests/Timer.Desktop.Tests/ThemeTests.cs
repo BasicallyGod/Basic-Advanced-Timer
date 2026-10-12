@@ -117,13 +117,13 @@ public sealed class ThemeTests
         finally { Avalonia.Application.Current!.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default; if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }
 
-    private static T Find<T>(Avalonia.Controls.Window window, string name) where T : Avalonia.Controls.Control
+    private static T Find<T>(Avalonia.Controls.Control window, string name) where T : Avalonia.Controls.Control
         => Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<T>().Single(c => c.Name == name);
 
     [Avalonia.Headless.XUnit.AvaloniaFact]
     public void TheThemeEditorDuplicatesEditsPreviewsSavesAndDeletesYourOwnThemes_AndLocksBuiltInOnes()
     {
-        var model = TimerModel.CreateDemo(); var window = new ThemesWindow(model); window.Show();
+        var model = TimerModel.CreateDemo(); var window = new ThemesDialog(model).Open(model);
         try
         {
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -157,12 +157,12 @@ public sealed class ThemeTests
         finally { window.Close(); }
     }
 
-    private static void Edit(ThemesWindow window, string hexColour)
+    private static void Edit(ThemesDialog window, string hexColour)
     {
         var picker = (Avalonia.Controls.Flyout)Find<Avalonia.Controls.Button>(window, "ColourSurface").Flyout!;
         Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Avalonia.Controls.Control)picker.Content!).OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "HexSurface").Text = hexColour;
     }
-    private static void Press(ThemesWindow window, string name)
+    private static void Press(ThemesDialog window, string name)
     {
         Find<Avalonia.Controls.Button>(window, name).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -178,7 +178,7 @@ public sealed class ThemeTests
     public void ClosingWithUnsavedEditsAsksAndDiscardPutsTheSavedLookBack()
     {
         var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
-        var window = new ThemesWindow(model); window.Show();
+        var window = new ThemesDialog(model).Open(model);
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Edit(window, "#FF00FF");
         window.Close(); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -197,7 +197,7 @@ public sealed class ThemeTests
     public void SavingFromThePromptKeepsTheEditThenClosesOrSwitches()
     {
         var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
-        var window = new ThemesWindow(model); window.Show();
+        var window = new ThemesDialog(model).Open(model);
         Avalonia.Threading.Dispatcher.UIThread.RunJobs();
         Edit(window, "#112233");
         // Choosing another theme in the list also asks, and the edited theme stays selected until it is answered.
@@ -266,7 +266,7 @@ public sealed class ThemeTests
     public void TheEditorShowsTheBlockRuleSlidersForATintedThemeAndSavesThem()
     {
         var model = TimerModel.CreateDemo(); model.SetTheme("Light"); var copy = model.DuplicateTheme("Light");
-        var window = new ThemesWindow(model); window.Show();
+        var window = new ThemesDialog(model).Open(model);
         try
         {
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();

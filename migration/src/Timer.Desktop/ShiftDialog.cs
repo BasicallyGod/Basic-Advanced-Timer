@@ -6,18 +6,18 @@ using Timer.Core;
 
 namespace Timer.Desktop;
 
-public sealed class ShiftWindow : Window
+public sealed class ShiftDialog : Dialog
 {
-    public ShiftWindow(TimerModel model)
+    public ShiftDialog(TimerModel model)
     {
-        Title = "Working hours"; WindowChrome.Attach(this);
-        Width = 480; Height = 560; CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Content = new ScrollViewer { Content = new ShiftEditor(model, Close, Close, heading: true) };
+        Title = "Working hours";
+        Width = 480; // The height follows the content, up to the window.
+        // The dialog's header carries the title, so the editor has no heading of its own, only the margin round it.
+        Content = new ScrollViewer { Content = new Border { Padding = new Thickness(24, 4, 24, 24), Child = new ShiftEditor(model, Close, Close) } };
     }
 }
 
-/// <summary>The working days and hours form. It sits in its own window and in the settings page, so it is one control with two ways of being finished.</summary>
+/// <summary>The working days and hours form. It sits in its own dialog and in the settings page, so it is one control with two ways of being finished.</summary>
 public sealed class ShiftEditor : StackPanel
 {
     /// <param name="saved">Called after the hours are saved.</param>
@@ -43,7 +43,7 @@ public sealed class ShiftEditor : StackPanel
         root.Children.Add(today);
         var error = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, Classes = { "overtime" } };
         root.Children.Add(error);
-        var buttons = Ui.Horizontal(Ui.Button("Save", () =>
+        var buttons = Ui.Horizontal(Ui.DialogButton("Save", () =>
         {
             try
             {
@@ -57,7 +57,7 @@ public sealed class ShiftEditor : StackPanel
             catch (Exception ex) when (ex is FormatException or ArgumentException or OverflowException)
             { error.Text = "Use HH:mm, with an end after the start, and at least one working day."; }
         }, "SaveShifts"));
-        if (cancelled is not null) buttons.Children.Add(Ui.Button("Cancel", cancelled));
+        if (cancelled is not null) buttons.Children.Add(Ui.DialogButton("Cancel", cancelled));
         root.Children.Add(buttons);
     }
 }

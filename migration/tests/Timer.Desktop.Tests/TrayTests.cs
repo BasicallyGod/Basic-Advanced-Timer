@@ -76,7 +76,8 @@ public sealed class TrayTests
     {
         var model = TimerModel.CreateDemo(); model.SetTheme("Dark");
         var windows = new WindowCoordinator(model, () => { });
-        var dialog = new ShiftWindow(model); dialog.Show();
+        // Pop-ups are dialogs on the dashboard now, so the dashboard is the other window that shows a title bar.
+        windows.ShowDashboard(); var dialog = windows.Dashboard;
         try
         {
             Dispatcher.UIThread.RunJobs();
@@ -88,6 +89,6 @@ public sealed class TrayTests
             var light = WindowChrome.Colours(dialog)!.Value;
             Assert.False(light.Dark); Assert.Equal(Timer.Core.ThemeLibrary.Light.Colour("Surface").ToUpperInvariant(), light.Caption.ToUpperInvariant());
         }
-        finally { dialog.Close(); windows.Quit(); }
+        finally { windows.Quit(); }
     }
 }

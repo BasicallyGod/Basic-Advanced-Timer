@@ -116,10 +116,10 @@
       <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
     </Style>
     <!-- The left side has no border, because the block's coloured strip is its left edge and a border beside it looked like interference. -->
-    <Style Selector="Border.mergeSelected">
-      <Setter Property="BorderThickness" Value="0,3,3,3" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
-    </Style>
+    <!-- The dim layer behind a dialog, in the theme's shadow colour. -->
+    <Style Selector="Border.scrim"><Setter Property="Background" Value="{DynamicResource ShadowColor}" /></Style>
+    <!-- A selected block is shown by its left strip, in the accent colour, and not by an outline. The class stays on the block so it can be found. -->
+    <Style Selector="Border.selectedEdge"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Border#DayProgressFill"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <!-- On a break or in overtime the whole pill is that colour, so the bar is drawn in the pill's text colour. -->
     <Style Selector="Border#DayProgressFill.progressOvertime"><Setter Property="Background" Value="{DynamicResource Ink}" /></Style>
@@ -134,8 +134,6 @@
       <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
     </Style>
     <Style Selector="Button.mergeSelected">
-      <Setter Property="BorderThickness" Value="2" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
     <Style Selector="Button.account">
@@ -322,6 +320,10 @@
       <Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
     </Style>
     <Style Selector="Button.toolButton.addButton:pointerover /template/ ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <!-- Buttons in dialogs: the same outline, a little more room, and an accent outline on the main action. -->
+    <Style Selector="Button.toolButton.dialogButton"><Setter Property="MinHeight" Value="36" /><Setter Property="Padding" Value="16,0" /><Setter Property="FontSize" Value="14" /></Style>
+    <Style Selector="Button.toolButton.mainAction"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Button.toolButton.mainAction:pointerover /template/ ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Button.quiet.breakButton.onBreak">
       <Setter Property="Background" Value="{DynamicResource Break}" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="{DynamicResource Break}" />
     </Style>
