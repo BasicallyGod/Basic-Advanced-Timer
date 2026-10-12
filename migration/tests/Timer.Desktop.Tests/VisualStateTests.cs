@@ -122,8 +122,8 @@ public sealed class VisualStateTests
             Assert.Contains("finishDay", day.Classes); Assert.InRange(day.Bounds.Width, 450, 560); // 10:00 on a working day: finishing is red.
             Assert.DoesNotContain(pill.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.ScrollBar>(), b => b.IsVisible); // Nothing to scroll, so no scroll bar.
             var bottom = day.TranslatePoint(new Point(0, day.Bounds.Height), pill)!.Value.Y;
-            var cardBottom = pill.Height - Ui.ShadowMargin;
-            Assert.InRange(cardBottom - bottom, 0, 24); // Only the button's own margin below it, however many accounts there are.
+            var cardBottom = pill.Height - Ui.ShadowMargin * pill.Scale; // Positions inside the window are drawn at the pill's scale, so the margin is too.
+            Assert.InRange(cardBottom - bottom, 0, 24 * pill.Scale + 0.5); // Only the button's own margin below it, however many accounts there are.
             var accounts = model.Accounts.Count - 1;
             pill.ToggleExpansion(); pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs();
             Assert.InRange(pill.Height / pill.Scale - 2 * Ui.ShadowMargin, PillWindow.CollapsedHeight + accounts * 52, PillWindow.CollapsedHeight + accounts * 52 + 130);

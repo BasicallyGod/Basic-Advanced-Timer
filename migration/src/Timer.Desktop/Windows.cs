@@ -124,10 +124,17 @@ public sealed class PillWindow : Window
     private bool expanded;
     public const double CollapsedHeight = 82, PillWidth = 516, CapsuleRadius = 41, CardRadius = 28;
     public static double CollapsedWindowHeight => CollapsedHeight + 2 * Ui.ShadowMargin;
-    // The whole pill is drawn smaller than its design size on every screen, and smaller again on small ones, so it never takes a big share of a display.
-    // Its width is a 1800th of the screen's width in device independent pixels, never above 85 per cent and never below 70 per cent of the design size.
-    public const double ScreenWidthDivisor = 1800, LargestScale = 0.85, SmallestScale = 0.7;
-    public static double ScaleFor(double screenWidth) => Math.Clamp(screenWidth / ScreenWidthDivisor, SmallestScale, LargestScale);
+    // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
+    // A narrow screen (its width in device independent pixels over 1800, never above 85 per cent or below 70 per cent), and a screen with a low
+    // Windows scale, because it has fewer pixels to the inch, so the same pill looks bigger on it. Windows scale 125 per cent or more gives the
+    // largest pill, and 100 per cent the smallest, with the steps between spread evenly. The smaller of the two wins.
+    public const double ScreenWidthDivisor = 1800, LargestScale = 0.85, SmallestScale = 0.7, LargestScaleFromDisplayScale = 1.25;
+    public static double ScaleFor(double screenWidth, double displayScale = LargestScaleFromDisplayScale)
+    {
+        var byWidth = Math.Clamp(screenWidth / ScreenWidthDivisor, SmallestScale, LargestScale);
+        var byDensity = SmallestScale + Math.Clamp((displayScale - 1.0) / (LargestScaleFromDisplayScale - 1.0), 0, 1) * (LargestScale - SmallestScale);
+        return Math.Min(byWidth, byDensity);
+    }
     private readonly Avalonia.Media.ScaleTransform pillScale = new(1, 1);
     public double Scale => pillScale.ScaleX;
     /// <summary>The window height of a closed pill at the size it is drawn on this screen.</summary>
@@ -135,7 +142,7 @@ public sealed class PillWindow : Window
     /// <summary>Sizes the pill for the screen it is on. The window keeps the pill's proportions, so the content only needs the scale.</summary>
     public void FitToScreen(Avalonia.Platform.Screen? screen)
     {
-        var scale = screen is null ? 1 : ScaleFor(screen.WorkingArea.Width / screen.Scaling);
+        var scale = screen is null ? 1 : ScaleFor(screen.WorkingArea.Width / screen.Scaling, screen.Scaling);
         if (Math.Abs(scale - pillScale.ScaleX) < 0.001 && Width > 0) { ApplyWidth(); return; }
         pillScale.ScaleX = scale; pillScale.ScaleY = scale;
         ApplyWidth(); if (IsLoaded || IsVisible) ApplyHeight();
