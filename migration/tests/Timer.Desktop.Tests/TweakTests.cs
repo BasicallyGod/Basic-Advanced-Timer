@@ -37,8 +37,8 @@ public sealed class TweakTests
     {
         var pill = new PillWindow(TimerModel.CreateDemo()); pill.Show(); Settle(pill);
         Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5); // The window keeps the pill's proportions at whatever size it is drawn.
-        pill.FitToScreen(null); Assert.Equal(1.0, pill.Scale); // No screen to look at means the design size.
-        Assert.Equal(PillWindow.CollapsedWindowHeight, pill.Height, 0.5);
+        var before = pill.Scale; pill.FitToScreen(null); Assert.Equal(before, pill.Scale); // No screen to measure (a hidden pill) leaves the size as it is.
+        Assert.Equal(pill.CollapsedWindowHeightNow, pill.Height, 0.5);
         pill.Close();
     }
 
@@ -230,5 +230,57 @@ public sealed class TweakTests
         var canvas = dashboard.GetVisualDescendants().OfType<Canvas>().First(c => c.ContextMenu is not null && c.ContextMenu.Items.OfType<MenuItem>().Any(m => m.Name == "PasteHereMenu"));
         Assert.False(canvas.ContextMenu!.Items.OfType<MenuItem>().Single(m => m.Name == "PasteHereMenu").IsEnabled); // Nothing copied yet.
         dashboard.Close();
+    }
+
+    private static Avalonia.Platform.Screen FakeScreen(int width, int height, double scaling)
+        => new(scaling, new PixelRect(0, 0, width, height), new PixelRect(0, 0, width, height), true);
+
+    [AvaloniaFact]
+    public void ThePillIsResizedForANewScreenAsSoonAsItMovesThereWithoutBeingShownAgain()
+    {
+        var pill = new PillWindow(TimerModel.CreateDemo()); pill.Show(); Settle(pill);
+        pill.FitToScreen(FakeScreen(2560, 1600, 1.25)); Assert.Equal(PillWindow.LargestScale, pill.Scale, 3); // The 2560 by 1600 screen at 125 per cent.
+        // Moving the window makes it look at the screen it is on now. That one is not the screen last used, so it is sized for it.
+        pill.FitIfScreenChanged();
+        Assert.Equal(PillWindow.ScaleFor(pill.Screens.ScreenFromWindow(pill)!.WorkingArea.Width / pill.Screens.ScreenFromWindow(pill)!.Scaling, pill.Screens.ScreenFromWindow(pill)!.Scaling), pill.Scale, 3);
+        Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5);
+        var settled = pill.Scale; pill.FitIfScreenChanged(); Assert.Equal(settled, pill.Scale); // On the same screen, nothing changes.
+        pill.Close();
+    }
+
+    [AvaloniaFact]
+    public void APillSizeChosenInSettingsAppliesAtOnceEvenWhileThePillIsHiddenAndAutomaticGoesBack()
+    {
+        var model = TimerModel.CreateDemo(); var pill = new PillWindow(model); // Never shown: the dashboard would be open when this is chosen.
+        model.SetPillScale(90); Assert.Equal(0.9, pill.Scale, 3); Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * 0.9, pill.Width, 0.5);
+        pill.FitToScreen(FakeScreen(1366, 768, 1.0)); Assert.Equal(0.9, pill.Scale, 3); // A screen does not override a size chosen by hand.
+        model.SetPillScale(null); pill.FitToScreen(FakeScreen(1920, 1080, 1.0)); Assert.Equal(PillWindow.SmallestScale, pill.Scale, 3); // Automatic again.
+        model.SetPillScale(500); Assert.Equal(120, model.PillScalePercent); model.SetPillScale(1); Assert.Equal(50, model.PillScalePercent); // Kept to a sensible range.
+        pill.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheSettingsPageHasAPillSizeChoiceThatSetsAndShowsTheSize()
+    {
+        var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
+        var box = dashboard.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "PillSize");
+        Assert.Equal("Automatic", box.SelectedItem); Assert.Contains("120%", (IEnumerable<string>)box.ItemsSource!);
+        box.SelectedItem = "80%"; Assert.Equal(80, model.PillScalePercent);
+        box.SelectedItem = "Automatic"; Assert.Null(model.PillScalePercent);
+        dashboard.Close();
+    }
+
+    [Fact]
+    public void ThePillSizeIsSavedAndLoadedAndABadValueFallsBackToAutomatic()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-pill-" + Guid.NewGuid());
+        try
+        {
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.Null(prefs.PillScale); store.Save(engine, prefs with { PillScale = 85 }); }
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.Equal(85, prefs.PillScale); store.Save(engine, prefs with { PillScale = null }); }
+            using (var store = new TimerStore(folder)) Assert.Null(store.Load(new TrackingEngine()).PillScale);
+        }
+        finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
 }

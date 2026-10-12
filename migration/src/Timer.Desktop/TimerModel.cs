@@ -663,6 +663,10 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Whether a longer entry that runs into later blocks moves them without asking first. Chosen by a tick box in the entry window, and in settings.</summary>
     public bool MoveLaterAlways => preferences.MoveLaterAlways;
     public void SetMoveLaterAlways(bool on) { preferences = preferences with { MoveLaterAlways = on }; Save(); Notify(); }
+    /// <summary>The pill size chosen by hand, as a percentage of its design size, or null for the automatic size that follows the screen.</summary>
+    public int? PillScalePercent => preferences.PillScale;
+    public static readonly int[] PillScaleChoices = { 50, 60, 70, 80, 90, 100, 110, 120 };
+    public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
     public bool Tooltips => preferences.Tooltips;
     public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
     /// <summary>Whether the developer features are switched on: the sample-data demo, the overtime tester and the version on the right-click menu. Off until unlocked from the About section.</summary>
