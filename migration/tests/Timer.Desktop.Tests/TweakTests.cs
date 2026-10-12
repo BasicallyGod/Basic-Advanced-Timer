@@ -43,10 +43,10 @@ public sealed class TweakTests
     }
 
     [AvaloniaFact]
-    public void FooterNotesFadeAfterThirtySecondsButAFailedSaveDoesNot()
+    public void FooterNotesFadeAfterFifteenSecondsButAFailedSaveDoesNot()
     {
         var model = TimerModel.CreateDemo();
-        Assert.Equal(TimeSpan.FromSeconds(30), TimerModel.MessageLifetime);
+        Assert.Equal(TimeSpan.FromSeconds(15), TimerModel.MessageLifetime);
         model.ExplainRunning();
         Assert.NotNull(model.EditError);
         model.ExpireMessages();
@@ -87,10 +87,10 @@ public sealed class TweakTests
     }
 
     [AvaloniaFact]
-    public void TheExportWindowOffersAWeekOrAWholeMonthAndWritesTheMonth()
+    public void TheExportDialogOffersAWeekOrAWholeMonthAndWritesTheMonth()
     {
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));
-        var window = new ExportWindow(model); window.Show(); Settle(window);
+        var window = new ExportDialog(model).Open(model);
         var week = window.GetVisualDescendants().OfType<RadioButton>().Single(b => b.Name == "ExportWeekChoice");
         var month = window.GetVisualDescendants().OfType<RadioButton>().Single(b => b.Name == "ExportMonthChoice");
         Assert.True(week.IsChecked); Assert.Contains("October 2026", (string)month.Content!);

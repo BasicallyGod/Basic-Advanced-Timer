@@ -722,7 +722,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     { Engine.StopAccount(); var saved = Save(); if (!saved) Notify(); return saved; }
     // Notes and refused-edit messages in the footer fade after a while, so a stale one is never left sitting there.
     // A failed save is not one of these, because it stays until a save works.
-    public static readonly TimeSpan MessageLifetime = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan MessageLifetime = TimeSpan.FromSeconds(15);
     private Avalonia.Threading.DispatcherTimer? messageTimer;
     private (string?, string?) messageSeen;
     private void WatchMessages()

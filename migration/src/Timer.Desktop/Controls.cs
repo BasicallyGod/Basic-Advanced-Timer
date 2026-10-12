@@ -753,7 +753,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -829,6 +829,9 @@ public sealed class IconGlyph : Control
                 context.DrawRectangle(brush, null, new Rect(3.5, 9, 3, 5), 1, 1);
                 context.DrawRectangle(brush, null, new Rect(7.5, 3.5, 3, 10.5), 1, 1);
                 context.DrawRectangle(brush, null, new Rect(11.5, 6.5, 3, 7.5), 1, 1);
+                break;
+            case IconKind.Close:
+                context.DrawLine(pen, new Point(4.5, 4.5), new Point(13.5, 13.5)); context.DrawLine(pen, new Point(13.5, 4.5), new Point(4.5, 13.5));
                 break;
             case IconKind.Today:
                 // A calendar page with two rings, and a dot on the day.

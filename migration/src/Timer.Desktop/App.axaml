@@ -116,10 +116,10 @@
       <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
     </Style>
     <!-- The left side has no border, because the block's coloured strip is its left edge and a border beside it looked like interference. -->
-    <Style Selector="Border.mergeSelected">
-      <Setter Property="BorderThickness" Value="0,3,3,3" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
-    </Style>
+    <!-- The dim layer behind a dialog, in the theme's shadow colour. -->
+    <Style Selector="Border.scrim"><Setter Property="Background" Value="{DynamicResource ShadowColor}" /></Style>
+    <!-- A selected block is shown by its left strip, in the accent colour, and not by an outline. The class stays on the block so it can be found. -->
+    <Style Selector="Border.selectedEdge"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Border#DayProgressFill"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <!-- On a break or in overtime the whole pill is that colour, so the bar is drawn in the pill's text colour. -->
     <Style Selector="Border#DayProgressFill.progressOvertime"><Setter Property="Background" Value="{DynamicResource Ink}" /></Style>
@@ -134,8 +134,6 @@
       <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
     </Style>
     <Style Selector="Button.mergeSelected">
-      <Setter Property="BorderThickness" Value="2" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
     <Style Selector="Button.account">

@@ -5,13 +5,12 @@ using Timer.Core;
 
 namespace Timer.Desktop;
 
-public sealed class EntryWindow : Window
+public sealed class EntryDialog : Dialog
 {
-    public EntryWindow(TimerModel model, SessionRow? row, DateTime start, DateTime end)
+    public EntryDialog(TimerModel model, SessionRow? row, DateTime start, DateTime end)
     {
-        Title = row is null ? "Add time" : "Edit entry"; WindowChrome.Attach(this);
-        Width = 480; Height = 640; CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Title = row is null ? "Add time" : "Edit entry";
+        Width = 480; // The height follows the content, up to the window.
         var root = new StackPanel { Margin = new Thickness(24), Spacing = 12 };
         root.Children.Add(Ui.Text(Title, 22));
         root.Children.Add(Ui.Text(start.ToString("dddd, d MMMM yyyy"), 13, "muted"));
@@ -27,7 +26,8 @@ public sealed class EntryWindow : Window
         // The length and the end follow each other: type either, and the other is worked out from the start.
         var length = new TextBox { Name = "EntryLength", Width = 130, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
         root.Children.Add(Ui.Horizontal(Ui.Text("Length", 13, "muted"), length));
-        root.Children.Add(Ui.Text("Start and end use HH:mm or HH:mm:ss. Length can be minutes (45), hours and minutes (1:15) or with seconds (1:15:30). Time changes affect credited totals.", 11, "muted"));
+        var hint = Ui.Text("Start and end use HH:mm or HH:mm:ss. Length can be minutes (45), hours and minutes (1:15) or with seconds (1:15:30). Time changes affect credited totals.", 11, "muted");
+        hint.TextWrapping = Avalonia.Media.TextWrapping.Wrap; root.Children.Add(hint);
         var note = new TextBox { Name = "EntryNote", Watermark = "Entry note", AcceptsReturn = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Height = 110, Text = row is null ? "" : model.Editor.Note(row) };
         root.Children.Add(note);
         var error = new TextBlock { Name = "EntryError", TextWrapping = Avalonia.Media.TextWrapping.Wrap, Classes = { "overtime" } };

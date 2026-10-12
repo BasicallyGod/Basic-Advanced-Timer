@@ -100,14 +100,17 @@ public static class ReviewViews
             foreach (var child in text.GetLogicalDescendants().OfType<TextBlock>()) child.Foreground = Brush.Parse(ink);
             var card = new Border { Background = Brush.Parse(colour), CornerRadius = new CornerRadius(Math.Min(BlockRadius, height / 2)),
                 Width = 380, Height = height, ClipToBounds = true };
+            var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
+            var isSelected = model.IsSelected(selectionSources);
             // A strip down the left side in the account's own colour, so a block can be told apart at a glance whatever its fill is.
-            var content = new Grid { ColumnDefinitions = new ColumnDefinitions("5,*") };
-            content.Children.Add(new Border { Name = "BlockEdge", Background = Brush.Parse(look.Edge) });
+            // A selected block shows it in the theme's accent colour instead, a little wider. Nothing is added to the text, so the block never shifts or clips.
+            var content = new Grid { ColumnDefinitions = new ColumnDefinitions(isSelected ? "8,*" : "5,*") };
+            var edgeStrip = new Border { Name = "BlockEdge" };
+            if (isSelected) edgeStrip.Classes.Add("selectedEdge"); else edgeStrip.Background = Brush.Parse(look.Edge);
+            content.Children.Add(edgeStrip);
             if (height >= 24) { Grid.SetColumn(text, 1); content.Children.Add(text); }
             card.Child = content;
-            var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
-            // A selected block is shown by its border alone. Nothing is added to the text, so the block never shifts or clips.
-            if (model.IsSelected(selectionSources)) card.Classes.Add("mergeSelected");
+            if (isSelected) card.Classes.Add("mergeSelected");
             var note = interval.Group is { } groupNote ? "Grouped entries · " + groupNote.Note : interval.Row is null ? "Recording now · stop tracking to move or edit" : model.Editor.Note(interval.Row);
             if (height >= 90 && !string.IsNullOrWhiteSpace(note))
             {
@@ -380,7 +383,7 @@ public static class ReviewViews
             reset.Tick += (_, _) => { reset.Stop(); ToolTip.SetTip(copy, "Copy the table to the clipboard, ready to paste into a timesheet"); };
             reset.Start();
         };
-        var export = Ui.IconButton(IconKind.Export, "Export hours…", "ExportWeek", () => { if (TopLevel.GetTopLevel(root) is Window owner) new ExportWindow(model).Show(owner); });
+        var export = Ui.IconButton(IconKind.Export, "Export hours…", "ExportWeek", () => { if (TopLevel.GetTopLevel(root) is DashboardWindow dashboard) dashboard.Dialogs.Show(new ExportDialog(model)); });
         Ui.Put(heading2, Ui.Horizontal(copy, export), 1);
         root.Children.Add(heading2);
         root.Children.Add(Card(grid, new Thickness(16, 12, 16, 6)));
@@ -440,13 +443,16 @@ public static class ReviewViews
                 button.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
                 // The account's colour runs down the left as a strip, as on a timeline block, then the account and when, then the credited time.
                 var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(entry.Account, StringComparison.OrdinalIgnoreCase))?.Colour;
-                var edge = new Border { Width = 4, CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 8), Background = colour is null ? Brushes.Transparent : Brush.Parse(model.BlockLook(colour).Edge) };
+                var selected = entry.Sources.Count > 0 && model.IsSelected(entry.Sources);
+                var edge = new Border { Width = selected ? 6 : 4, CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 8) };
+                // A selected entry's strip is the theme's accent colour, as on the timeline.
+                if (selected) edge.Classes.Add("selectedEdge"); else edge.Background = colour is null ? Brushes.Transparent : Brush.Parse(model.BlockLook(colour).Edge);
                 var labels = new StackPanel { Spacing = 2, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = new Thickness(12, 6) };
                 var accountText = Ui.Text(model.Label(entry.Account), 14); accountText.FontWeight = FontWeight.SemiBold;
                 labels.Children.Add(accountText); labels.Children.Add(Ui.Text(caption, 12, "muted"));
                 if (!string.IsNullOrWhiteSpace(entry.Note)) labels.Children.Add(new TextBlock { Text = entry.Note, FontSize = 12, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
                 var length = Ui.Text(Length(index), 14); length.FontWeight = FontWeight.SemiBold; length.Classes.Add("figures"); length.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center; length.Margin = new Thickness(0, 0, 14, 0);
-                var content = Ui.Grid("4,*,Auto"); Ui.Put(content, edge); Ui.Put(content, labels, 1); Ui.Put(content, length, 2);
+                var content = Ui.Grid(selected ? "6,*,Auto" : "4,*,Auto"); Ui.Put(content, edge); Ui.Put(content, labels, 1); Ui.Put(content, length, 2);
                 button.Content = content;
                 if (entry.Sources.Count > 0)
                 {

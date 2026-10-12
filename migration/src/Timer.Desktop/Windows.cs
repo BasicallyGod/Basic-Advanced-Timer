@@ -381,11 +381,13 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly Button undo;
     private readonly Button merge;
-    private EntryWindow? entryEditor;
+    private EntryDialog? entryEditor;
     private bool weekMode, settingsMode, renderedSettings, settingZoom;
     private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
     private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
+    /// <summary>The pop-ups open over the dashboard. They share its blurred backdrop with the getting started setup.</summary>
+    public DialogHost Dialogs { get; } = new();
     private bool? renderedWeekMode;
     private DateTime? renderedDate;
     public DashboardWindow(TimerModel model)
@@ -540,30 +542,15 @@ public sealed class DashboardWindow : Window
         Ui.Put(review, workspace, row: 1);
         Ui.Put(review, tools, row: 2);
         // The title row's empty middle still drags the window.
-        var rightColumn = Ui.Grid("*", "*,Auto");
+        var rightColumn = Ui.Grid("*", "*");
         Ui.Put(rightColumn, review); Ui.DragHeader(nav, this);
         Ui.Put(body, rightColumn, 2);
         Ui.Put(root, body, 1);
-        // The bottom line appears only when there is something to say: a failed save, an edit that was refused, or the one-off note
-        // about old files. Otherwise it takes no room.
-        string? FooterText() => model.LastError ?? model.EditError ?? model.Notice;
-        var footer = Ui.Text(FooterText() ?? "", 11, "muted"); footer.VerticalAlignment = VerticalAlignment.Center;
-        // After a quick slip from one account to another and back, the earlier block can be picked up again from here for a few minutes.
-        var continueButton = Ui.Button("", () => model.ContinuePrevious(), "ContinuePrevious");
-        continueButton.Classes.Add("toolButton"); continueButton.Classes.Add("quiet"); continueButton.Height = 30; continueButton.Padding = new Thickness(12, 0); continueButton.FontSize = 13;
-        var footerRow = Ui.Horizontal(footer, continueButton); footerRow.Spacing = 12;
-        void SyncFooter()
-        {
-            var text = FooterText(); footer.Text = text ?? ""; footer.IsVisible = text is not null;
-            var offer = model.ContinuePreviousText; continueButton.IsVisible = offer is not null; if (offer is not null) continueButton.Content = offer;
-            footerRow.IsVisible = text is not null || offer is not null;
-        }
-        SyncFooter();
-        model.PropertyChanged += (_, _) => SyncFooter();
-        // Messages sit under the review only, so they never change the height of the left column.
-        footerRow.Margin = new Thickness(22, 4, 22, 10); Ui.Put(rightColumn, footerRow, row: 1);
+        // Notes, refused edits and failed saves float over the lowest part of the workspace, above the buttons, so they never push the buttons up.
+        Ui.Put(review, new MessageBar(model), row: 1);
         // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
         layers.Children.Add(root); dashboardBody = root;
+        layers.Children.Add(Dialogs); Dialogs.OpenChanged += UpdateBackdrop; // Last, so a dialog is above the setup too.
         var surface = new Border { Name = "DashboardSurface", Child = layers, ClipToBounds = true };
         surface.Classes.Add("surface");
         var host = Ui.Shadowed(surface, 20); Content = host;
@@ -594,7 +581,8 @@ public sealed class DashboardWindow : Window
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         KeyDown += (_, e) =>
         {
-            if (e.Key == Avalonia.Input.Key.Escape) { model.ClearSelection(); e.Handled = true; }
+            // Escape takes the top dialog away first, and only then clears the selection.
+            if (e.Key == Avalonia.Input.Key.Escape) { if (!Dialogs.CloseTop()) model.ClearSelection(); e.Handled = true; }
             // Ctrl+C copies the selected blocks and Ctrl+V pastes them on the timeline, but never while typing in a text box.
             else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key is Avalonia.Input.Key.C or Avalonia.Input.Key.V && !settingsMode && FocusManager?.GetFocusedElement() is not TextBox)
             {
@@ -623,15 +611,22 @@ public sealed class DashboardWindow : Window
         {
             onboarding = new OnboardingView(model);
             onboarding.Finished += () => { model.CompleteSetup(); UpdateOnboarding(); };
-            dashboardBody.Effect = new Avalonia.Media.BlurEffect { Radius = 7 }; dashboardBody.IsHitTestVisible = false;
-            layers.Children.Add(onboarding);
+            layers.Children.Insert(layers.Children.IndexOf(Dialogs), onboarding);
+            UpdateBackdrop();
             Avalonia.Threading.Dispatcher.UIThread.Post(() => onboarding?.Focus());
         }
         else if (!wanted && onboarding is not null && dashboardBody is not null)
         {
             layers.Children.Remove(onboarding); onboarding = null;
-            dashboardBody.Effect = null; dashboardBody.IsHitTestVisible = true;
+            UpdateBackdrop();
         }
+    }
+    // The dashboard is blurred and cannot be clicked while the setup or any dialog is over it.
+    private void UpdateBackdrop()
+    {
+        if (dashboardBody is null) return;
+        var covered = onboarding is not null || Dialogs.Any;
+        dashboardBody.Effect = covered ? new Avalonia.Media.BlurEffect { Radius = 7 } : null; dashboardBody.IsHitTestVisible = !covered;
     }
     /// <summary>Whether a point (in window coordinates) is in the part of the dashboard that drags the window.</summary>
     public bool InDragZone(Point point)
@@ -644,13 +639,13 @@ public sealed class DashboardWindow : Window
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
     {
         if (!IsVisible) return;
-        if (entryEditor is { IsVisible: true }) { entryEditor.Activate(); return; }
-        entryEditor = new EntryWindow(model, row, start, end);
+        if (entryEditor is { IsVisible: true }) return;
+        entryEditor = new EntryDialog(model, row, start, end);
         entryEditor.Closed += (_, _) => entryEditor = null;
-        entryEditor.Show(this);
+        Dialogs.Show(entryEditor);
     }
-    private void ShowTidy() { if (IsVisible) new TidyWindow(model).Show(this); }
-    private void ShowGroup(string id) { if (IsVisible) new GroupWindow(model, id).Show(this); }
+    private void ShowTidy() { if (IsVisible) Dialogs.Show(new TidyDialog(model)); }
+    private void ShowGroup(string id) { if (IsVisible) Dialogs.Show(new GroupDialog(model, id)); }
     public void SelectTab(bool showWeek) { settingsMode = false; weekMode = showWeek; Refresh(true); }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }

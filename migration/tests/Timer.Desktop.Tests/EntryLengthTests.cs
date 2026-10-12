@@ -30,7 +30,7 @@ public sealed class EntryLengthTests
     public void TheLengthAndTheEndFollowEachOther()
     {
         var model = Model(out var engine); var row = engine.Sessions[0];
-        var window = new EntryWindow(model, row, row.From, row.To); window.Show();
+        var window = new EntryDialog(model, row, row.From, row.To).Open(model);
         try
         {
             Dispatcher.UIThread.RunJobs();
@@ -50,7 +50,7 @@ public sealed class EntryLengthTests
     public void ALongerLengthOffersToMoveLaterBlocksOrAllowTheOverlap_AndTheOverlapIsKept()
     {
         var model = Model(out var engine); var row = engine.Sessions[0];
-        var window = new EntryWindow(model, row, row.From, row.To); window.Show();
+        var window = new EntryDialog(model, row, row.From, row.To).Open(model);
         try
         {
             Dispatcher.UIThread.RunJobs();
@@ -71,7 +71,7 @@ public sealed class EntryLengthTests
     public void TickingAlwaysMoveKeepsTheChoiceSoTheNextLongerEntryMovesBlocksWithoutAsking()
     {
         var model = Model(out var engine);
-        var window = new EntryWindow(model, engine.Sessions[0], engine.Sessions[0].From, engine.Sessions[0].To); window.Show();
+        var window = new EntryDialog(model, engine.Sessions[0], engine.Sessions[0].From, engine.Sessions[0].To).Open(model);
         try
         {
             Dispatcher.UIThread.RunJobs();
@@ -82,7 +82,7 @@ public sealed class EntryLengthTests
             Assert.Equal("09:45:00", engine.Sessions[1].Start); Assert.Equal("10:15:00", engine.Sessions[2].Start);
         }
         finally { window.Close(); }
-        var again = new EntryWindow(model, engine.Sessions[0], engine.Sessions[0].From, engine.Sessions[0].To); again.Show();
+        var again = new EntryDialog(model, engine.Sessions[0], engine.Sessions[0].From, engine.Sessions[0].To).Open(model);
         try
         {
             Dispatcher.UIThread.RunJobs();

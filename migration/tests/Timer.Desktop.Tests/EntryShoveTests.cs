@@ -55,7 +55,7 @@ public sealed class EntryShoveTests
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "60"), Row("10:00:00", "30", "Account two") });
         var model = new TimerModel(engine, new StoreSettings(new() { new("Account one"), new("Account two") }, false, "Light", DayOfWeek.Monday));
-        var row = engine.Sessions[0]; var window = new EntryWindow(model, row, row.From, row.To); window.Show();
+        var row = engine.Sessions[0]; var window = new EntryDialog(model, row, row.From, row.To).Open(model);
         try
         {
             Dispatcher.UIThread.RunJobs();
@@ -77,12 +77,12 @@ public sealed class EntryShoveTests
     {
         var engine = Engine(); engine.Sessions.Add(Row("09:00:00", "60"));
         var model = new TimerModel(engine, new StoreSettings(new() { new("Account one") }, false, "Light", DayOfWeek.Monday));
-        var entry = new EntryWindow(model, engine.Sessions[0], engine.Sessions[0].From, engine.Sessions[0].To); entry.Show();
+        var entry = new EntryDialog(model, engine.Sessions[0], engine.Sessions[0].From, engine.Sessions[0].To).Open(model);
         var shifts = new ShiftWindow(model); shifts.Show();
         try
         {
             Dispatcher.UIThread.RunJobs();
-            foreach (var window in new Window[] { entry, shifts })
+            foreach (var window in new Control[] { entry, shifts })
             {
                 var dash = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "–");
                 var siblings = dash.GetVisualParent()!.GetVisualChildren().OfType<TextBox>().ToList();

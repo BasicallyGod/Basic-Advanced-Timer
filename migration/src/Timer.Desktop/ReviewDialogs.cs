@@ -7,15 +7,14 @@ using Timer.Storage;
 
 namespace Timer.Desktop;
 
-public class ReviewWindow : Window
+public class ReviewDialog : Dialog
 {
     protected readonly StackPanel Root = new() { Margin = new Thickness(24), Spacing = 12 };
     protected readonly TextBlock Error = new() { TextWrapping = TextWrapping.Wrap, Classes = { "overtime" } };
     private bool applied;
-    protected ReviewWindow(string title)
+    protected ReviewDialog(string title)
     {
-        Title = title; WindowChrome.Attach(this); Width = 560; Height = 520; MinHeight = 360;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Title = title; Width = 560; // The height follows the content, up to the window.
         Root.Children.Add(Ui.Text(title, 22)); Content = new ScrollViewer { Content = Root };
     }
     protected void Apply(TimerModel model, Func<bool> change)
@@ -35,11 +34,10 @@ public class ReviewWindow : Window
         => day.Date + TimeSpan.ParseExact(value ?? "", new[] { @"hh\:mm", @"hh\:mm\:ss" }, CultureInfo.InvariantCulture);
 }
 
-public sealed class GroupWindow : ReviewWindow
+public sealed class GroupDialog : ReviewDialog
 {
-    public GroupWindow(TimerModel model, string? id = null) : base(id is null ? "Group entries" : "Grouped entries")
+    public GroupDialog(TimerModel model, string? id = null) : base(id is null ? "Group entries" : "Grouped entries")
     {
-        Height = 620;
         var group = id is null ? null : model.Editor.Entries(model.WeekStart(model.SelectedDate), model.WeekStart(model.SelectedDate).AddDays(7)).FirstOrDefault(e => e.GroupId == id);
         var week = model.WeekStart(model.SelectedDate);
         var existing = model.Editor.Entries(week, week.AddDays(7)).Where(e => e.GroupId is not null).ToArray();
@@ -47,7 +45,7 @@ public sealed class GroupWindow : ReviewWindow
         {
             Root.Children.Add(Ui.Text("Existing groups · open to inspect or ungroup", 13, "muted"));
             foreach (var entry in existing)
-                Root.Children.Add(Ui.Button($"{entry.Day:ddd d MMM} · {model.Label(entry.Account)} · {entry.Sources.Count} entries", () => { var owner = Owner; Close(); if (owner is Window window) new GroupWindow(model, entry.GroupId).Show(window); }));
+                Root.Children.Add(Ui.Button($"{entry.Day:ddd d MMM} · {model.Label(entry.Account)} · {entry.Sources.Count} entries", () => { var host = Host; Close(); host?.Show(new GroupDialog(model, entry.GroupId)); }));
         }
         var grouped = existing.SelectMany(e => e.Sources).ToHashSet();
         var rows = group?.Sources ?? model.Engine.Sessions.Where(s => s.Day >= week && s.Day < week.AddDays(7) && !grouped.Contains(s)).OrderBy(s => s.From).ToArray();
@@ -69,11 +67,10 @@ public sealed class GroupWindow : ReviewWindow
     }
 }
 
-public sealed class TidyWindow : ReviewWindow
+public sealed class TidyDialog : ReviewDialog
 {
-    public TidyWindow(TimerModel model) : base("Tidy day")
+    public TidyDialog(TimerModel model) : base("Tidy day")
     {
-        Height = 620;
         Root.Children.Add(Info("Review short gaps between stopped entries. Breaks, away time and running entries are excluded. Each fill adds credited time; one Undo reverses the batch."));
         var limit = new NumericUpDown { Name = "TidyLimit", Minimum = 1, Maximum = 60, Value = 5, Width = 100 };
         Root.Children.Add(Ui.Horizontal(Ui.Text("Maximum gap (minutes)", 13), limit));
@@ -96,11 +93,10 @@ public sealed class TidyWindow : ReviewWindow
     }
 }
 
-public sealed class ExportWindow : ReviewWindow
+public sealed class ExportDialog : ReviewDialog
 {
-    public ExportWindow(TimerModel model) : base("Export hours")
+    public ExportDialog(TimerModel model) : base("Export hours")
     {
-        Height = 470;
         var week = new RadioButton { Name = "ExportWeekChoice", GroupName = "ExportPeriod", IsChecked = true, Content = "Week commencing " + model.WeekStart(model.SelectedDate).ToString("d MMMM yyyy") };
         var month = new RadioButton { Name = "ExportMonthChoice", GroupName = "ExportPeriod", Content = "Whole month of " + model.SelectedDate.ToString("MMMM yyyy") };
         Root.Children.Add(Ui.Text("What to export", 13)); Root.Children.Add(week); Root.Children.Add(month);
