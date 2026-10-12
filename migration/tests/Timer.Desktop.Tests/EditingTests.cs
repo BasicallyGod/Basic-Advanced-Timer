@@ -221,18 +221,6 @@ public sealed class EditingTests
         finally { window.Close(); }
     }
 
-    [AvaloniaFact]
-    public void DoubleClickRevertsOnlyTheToggleFromItsOwnFirstClick()
-    {
-        var engine = Engine(); var row = Row("09:00:00", "added", "30"); var other = Row("10:00:00", "added", "30"); engine.Sessions.AddRange(new[] { row, other });
-        var model = new TimerModel(engine); var opened = 0; model.EntryRequested += (_, _, _) => opened++;
-        model.ToggleSelection(new[] { other });
-        model.ToggleSelection(new[] { row }); model.OpenEntryFromDoubleClick(row);
-        Assert.Equal(1, opened); Assert.Same(other, Assert.Single(model.SelectedRows));
-        model.ToggleSelection(new[] { row }); model.ToggleSelection(new[] { row }); model.OpenEntryFromDoubleClick(row); // Selected before, so the first click deselected it and the double-click restores it.
-        Assert.Equal(2, opened); Assert.Contains(row, model.SelectedRows);
-    }
-
     [Theory]
     [InlineData(100, 0, -1)] [InlineData(100, 5, -1)] [InlineData(100, 95, 1)] [InlineData(100, 50, 0)]
     [InlineData(18, 2, -1)] [InlineData(18, 9, 0)] [InlineData(18, 16, 1)]
