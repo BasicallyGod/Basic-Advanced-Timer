@@ -41,6 +41,7 @@ public sealed class WindowCoordinator
             Pill.Hide();
             Dashboard.Activate();
         };
+        Dashboard.Reveal = ShowDashboard;
         Dashboard.OpenPill = () => { Pill.Collapse(); Pill.Show(); Dashboard.Hide(); Pill.Activate(); };
         Pill.Closed += (_, _) => exit();
         Dashboard.Closed += (_, _) => exit();
@@ -596,8 +597,8 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += Changed;
         model.PropertyChanged += (_, _) => UpdateOnboarding();
         model.EntryRequested += ShowEntry;
-        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy;
-        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; };
+        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy; model.AccountsRequested += ShowAccounts;
+        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; model.AccountsRequested -= ShowAccounts; };
         Refresh(true);
         UpdateOnboarding();
     }
@@ -643,6 +644,13 @@ public sealed class DashboardWindow : Window
         entryEditor = new EntryDialog(model, row, start, end);
         entryEditor.Closed += (_, _) => entryEditor = null;
         Dialogs.Show(entryEditor);
+    }
+    /// <summary>Set by the coordinator so a request that arrives while only the pill is showing can bring the dashboard up first.</summary>
+    public Action? Reveal { get; set; }
+    private void ShowAccounts()
+    {
+        if (!IsVisible) Reveal?.Invoke();
+        if (IsVisible && !Dialogs.Dialogs.OfType<AccountsDialog>().Any()) Dialogs.Show(new AccountsDialog(model));
     }
     private void ShowTidy() { if (IsVisible) Dialogs.Show(new TidyDialog(model)); }
     private void ShowGroup(string id) { if (IsVisible) Dialogs.Show(new GroupDialog(model, id)); }

@@ -109,4 +109,36 @@ public sealed class DialogTests
         Assert.DoesNotContain("selectedEdge", Edge(1).Classes); // The other block is untouched.
         dashboard.Close();
     }
+
+    [AvaloniaFact]
+    public void NameAndBudgetFromThePillBringsUpTheDashboardAndShowsTheAccountsDialogThere()
+    {
+        var model = Model(out _); var windows = new WindowCoordinator(model, () => { });
+        try
+        {
+            windows.Pill.Show(); Assert.False(windows.Dashboard.IsVisible);
+            model.OpenAccounts(); Settle(windows.Dashboard);
+            Assert.True(windows.Dashboard.IsVisible); Assert.False(windows.Pill.IsVisible); // The dashboard came up first.
+            Assert.IsType<AccountsDialog>(Assert.Single(windows.Dashboard.Dialogs.Dialogs));
+            model.OpenAccounts(); Settle(windows.Dashboard); Assert.Single(windows.Dashboard.Dialogs.Dialogs); // Asking again does not stack a second.
+            windows.Dashboard.Dialogs.CloseTop(); Assert.False(windows.Dashboard.Dialogs.Any);
+        }
+        finally { windows.Quit(); }
+    }
+
+    [AvaloniaFact]
+    public void TheSettingsPageOpensAccountsHoursAndThemesAsDialogsAndTheThemeEditorStillAsksAboutUnsavedEdits()
+    {
+        var model = Model(out _); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        Find<Button>(dashboard, "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
+        Find<Button>(dashboard, "EditAccounts").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
+        Assert.IsType<AccountsDialog>(Assert.Single(dashboard.Dialogs.Dialogs)); dashboard.Dialogs.CloseTop();
+        Find<Button>(dashboard, "EditThemes").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
+        var themes = Assert.IsType<ThemesDialog>(Assert.Single(dashboard.Dialogs.Dialogs));
+        // A close that a dialog refuses leaves it open, which is how the theme editor asks about unsaved edits.
+        var refuse = true; themes.Closing += (_, e) => e.Cancel = refuse;
+        Assert.True(dashboard.Dialogs.CloseTop()); Assert.True(themes.IsVisible); Assert.True(dashboard.Dialogs.Any);
+        refuse = false; dashboard.Dialogs.CloseTop(); Assert.False(dashboard.Dialogs.Any);
+        dashboard.Close();
+    }
 }

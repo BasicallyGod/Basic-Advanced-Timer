@@ -78,7 +78,7 @@ public sealed class EntryShoveTests
         var engine = Engine(); engine.Sessions.Add(Row("09:00:00", "60"));
         var model = new TimerModel(engine, new StoreSettings(new() { new("Account one") }, false, "Light", DayOfWeek.Monday));
         var entry = new EntryDialog(model, engine.Sessions[0], engine.Sessions[0].From, engine.Sessions[0].To).Open(model);
-        var shifts = new ShiftWindow(model); shifts.Show();
+        var shifts = new ShiftDialog(model).Open(model);
         try
         {
             Dispatcher.UIThread.RunJobs();

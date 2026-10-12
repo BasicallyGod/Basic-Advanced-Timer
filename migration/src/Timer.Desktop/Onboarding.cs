@@ -189,7 +189,7 @@ public sealed class OnboardingView : Grid
         panel.Children.Add(Ui.Horizontal(Detach(startBox), Ui.Dash(), Detach(endBox)));
         var different = Ui.Button("Different hours on some days…", () =>
         {
-            if (TopLevel.GetTopLevel(this) is Window owner) { customHours = true; new ShiftWindow(model).Show(owner); }
+            if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) { customHours = true; dashboard.Dialogs.Show(new ShiftDialog(model)); }
         }, "SetupDifferentHours");
         different.Classes.Add("toolButton"); different.Classes.Add("quiet"); different.HorizontalAlignment = HorizontalAlignment.Left; different.Height = 38;
         panel.Children.Add(different);
@@ -197,7 +197,7 @@ public sealed class OnboardingView : Grid
     }
     private bool ApplyHours()
     {
-        // Hours set one day at a time in their own window are kept as they are, rather than flattened to one shift.
+        // Hours set one day at a time in their own dialog are kept as they are, rather than flattened to one shift.
         if (customHours) return true;
         var start = TimeSpan.ParseExact((startBox.Text ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture, TimeSpanStyles.None);
         var end = TimeSpan.ParseExact((endBox.Text ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture, TimeSpanStyles.None);

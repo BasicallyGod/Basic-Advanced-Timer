@@ -33,7 +33,7 @@ public sealed class SettingsView : ScrollViewer
         var theme = new ComboBox { Name = "ThemeChoice", ItemsSource = themeNames, SelectedItem = themeNames.Contains(model.Theme) ? model.Theme : ThemeLibrary.System, MinWidth = 200 };
         theme.SelectionChanged += (_, _) => { if (theme.SelectedItem is string chosen && chosen != model.Theme) model.SetTheme(chosen); };
         syncs.Add(() => { var wanted = themeNames.Contains(model.Theme) ? model.Theme : ThemeLibrary.System; if (!Equals(theme.SelectedItem, wanted)) theme.SelectedItem = wanted; });
-        var editThemes = Ui.Button("Edit themes…", () => { if (TopLevel.GetTopLevel(this) is Window owner) new ThemesWindow(model).Show(owner); }, "EditThemes");
+        var editThemes = Ui.Button("Edit themes…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new ThemesDialog(model)); }, "EditThemes");
         var appearance = new StackPanel { Spacing = 10 };
         appearance.Children.Add(Row("Theme", Ui.Horizontal(theme, editThemes)));
         appearance.Children.Add(Toggle("Window shadows", "WindowShadows", () => model.Shadows, v => model.SetShadows(v)));
@@ -46,7 +46,7 @@ public sealed class SettingsView : ScrollViewer
         var general = new StackPanel { Spacing = 10 };
         general.Children.Add(Toggle("Decimal hours (1.50h instead of 1h 30m)", "DecimalHours", () => model.DecimalHours, _ => model.ToggleFormat()));
         general.Children.Add(Toggle("Move later blocks without asking when a longer entry runs into them", "MoveLaterAlways", () => model.MoveLaterAlways, v => model.SetMoveLaterAlways(v)));
-        general.Children.Add(Row("Client accounts", Ui.Button("Accounts and budgets…", () => { if (TopLevel.GetTopLevel(this) is Window owner) new AccountsWindow(model).Show(owner); }, "EditAccounts")));
+        general.Children.Add(Row("Client accounts", Ui.Button("Accounts and budgets…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new AccountsDialog(model)); }, "EditAccounts")));
         page.Children.Add(Section("Hours and accounts", general));
 
         // The getting started setup, for anyone who skipped it or wants to look again. Nothing is lost: it starts from the current settings.

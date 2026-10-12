@@ -6,13 +6,12 @@ using Timer.Storage;
 
 namespace Timer.Desktop;
 
-public sealed class AccountsWindow : Window
+public sealed class AccountsDialog : Dialog
 {
-    public AccountsWindow(TimerModel model)
+    public AccountsDialog(TimerModel model)
     {
-        Title = "Accounts and budgets"; WindowChrome.Attach(this);
-        Width = 700; Height = 540; CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Title = "Accounts and budgets";
+        Width = 700; Height = 540;
         var root = Ui.Grid("*", "Auto,*,Auto,Auto,Auto,Auto"); root.Margin = new Thickness(24);
         var intro = new StackPanel { Spacing = 8, Margin = new Thickness(0, 0, 0, 16) };
         intro.Children.Add(Ui.Text("Accounts and budgets", 22));

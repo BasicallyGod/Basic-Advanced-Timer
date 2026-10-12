@@ -407,9 +407,9 @@ public sealed class ShellTests
                     Assert.Equal(TimeSpan.FromMinutes(5), engine.Credited("Account one", now.Date, now.Date.AddDays(1)));
                     Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
                     Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "New client");
-                    var editor = new AccountsWindow(model); editor.Show(window);
+                    var editor = new AccountsDialog(model).Open((DashboardWindow)window);
                     var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();
-                    Save(editor, Path.Combine(output, "accounts-editor.png")); editor.Close();
+                    Save(window, Path.Combine(output, "accounts-editor.png")); editor.Close();
                     Assert.Throws<ArgumentException>(() => model.SetAccounts(model.AccountSettings.Append(new("new CLIENT"))));
                 }
                 finally { window.Close(); }

@@ -13,12 +13,15 @@ namespace Timer.Desktop;
 public abstract class Dialog : ContentControl
 {
     public string Title { get; protected set; } = "";
+    /// <summary>Raised when the dialog is about to close. Set Cancel to keep it open, such as to ask about unsaved changes first.</summary>
+    public event EventHandler<System.ComponentModel.CancelEventArgs>? Closing;
     /// <summary>Raised once, after the dialog has gone.</summary>
     public event EventHandler? Closed;
     internal DialogHost? Host { get; set; }
     public void Close()
     {
         if (Host is null) return;
+        var asking = new System.ComponentModel.CancelEventArgs(); Closing?.Invoke(this, asking); if (asking.Cancel) return;
         var host = Host; Host = null; host.Remove(this);
         IsVisible = false; Closed?.Invoke(this, EventArgs.Empty);
     }

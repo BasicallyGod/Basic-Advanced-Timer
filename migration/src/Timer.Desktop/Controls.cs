@@ -478,7 +478,8 @@ public sealed class AccountList : StackPanel
             row.PointerExited += (_, _) => { icon.Glow = 0; marquee?.Hover(false); };
             if (reorderable && !BreakAccount.Is(account.Name)) AttachReorder(row, account.Name);
             var settings = new MenuItem { Header = "Name and budget…", Name = "AccountSettingsMenu" };
-            settings.Click += (_, _) => { if (TopLevel.GetTopLevel(row) is Window owner) new AccountsWindow(model).Show(owner); };
+            // The pill has no room for a dialog, so the dashboard shows it, and comes up first when it is hidden.
+            settings.Click += (_, _) => model.OpenAccounts();
             row.ContextMenu = new ContextMenu { ItemsSource = new Control[] { settings } };
             Children.Add(row);
             rows.Add((account, row, today, budget, icon, dot, bar, percent));
