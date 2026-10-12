@@ -150,4 +150,72 @@ public sealed class TweakTests
         }
         finally { SqliteConnection.ClearAllPools(); try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
+
+    private static TimerModel CopyModel(out TrackingEngine engine)
+    {
+        engine = new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 17, 0, 0));
+        engine.Sessions.Add(new("2026-10-14", "Account one", "09:00:00", "recorded", "30.50")); // Credited length is not a whole number of minutes.
+        engine.Sessions.Add(new("2026-10-14", "Account two", "10:00:00", "recorded", "45.00"));
+        var model = new TimerModel(engine, new StoreSettings(new() { new("Account one"), new("Account two") }, false, ThemeLibrary.Default, DayOfWeek.Monday));
+        model.ChangeDate((new DateTime(2026, 10, 14) - model.SelectedDate.Date).Days);
+        return model;
+    }
+
+    [Fact]
+    public void CopiedBlocksPasteWithTheirCreditedTimeNotesAndGapsAsOneUndoStep()
+    {
+        var model = CopyModel(out var engine);
+        model.Editor.Edit(engine.Sessions[1], "Account two", engine.Sessions[1].From, engine.Sessions[1].To, "Call with client");
+        Assert.True(model.CopyBlocks(engine.Sessions.ToList()));
+        Assert.True(model.CanPaste);
+        Assert.True(model.PasteBlocks(new DateTime(2026, 10, 14, 13, 0, 0)));
+        Assert.Equal(4, engine.Sessions.Count);
+        var pastedFirst = engine.Sessions.Single(s => s.Start == "13:00:00"); var pastedSecond = engine.Sessions.Single(s => s.Start == "14:00:00"); // The one hour gap is kept.
+        Assert.Equal("30.50", pastedFirst.Minutes); Assert.Equal("Account one", pastedFirst.Account); // Credit is copied exactly, not worked out from clock times.
+        Assert.Equal("Call with client", model.Editor.Note(pastedSecond));
+        model.UndoEdit();
+        Assert.Equal(2, engine.Sessions.Count); // The whole paste comes back out in one step.
+    }
+
+    [Fact]
+    public void ARefusedPasteAddsNothing()
+    {
+        var model = CopyModel(out var engine);
+        model.CopyBlocks(engine.Sessions.ToList());
+        Assert.False(model.PasteBlocks(new DateTime(2026, 10, 14, 9, 15, 0))); // Lands on the existing 09:00 block.
+        Assert.Equal(2, engine.Sessions.Count); Assert.NotNull(model.EditError);
+        Assert.False(model.PasteBlocks(new DateTime(2026, 10, 14, 23, 30, 0))); // Runs past midnight.
+        Assert.Equal(2, engine.Sessions.Count);
+    }
+
+    [Fact]
+    public void BlocksFromDifferentDaysCannotBeCopiedTogetherAndNothingCopiedMeansNothingToPaste()
+    {
+        var model = CopyModel(out var engine);
+        engine.Sessions.Add(new("2026-10-13", "Account one", "09:00:00", "recorded", "60.00"));
+        Assert.False(model.CopyBlocks(engine.Sessions.ToList())); Assert.False(model.CanPaste); Assert.Contains("one day", model.EditError);
+        Assert.False(model.PasteBlocks(new DateTime(2026, 10, 14, 13, 0, 0)));
+        Assert.Equal(3, engine.Sessions.Count);
+    }
+
+    [Fact]
+    public void CtrlVWithoutAPointerPastesStraightAfterTheLastBlockOfTheDay()
+    {
+        var model = CopyModel(out var engine);
+        model.CopyBlocks(new[] { engine.Sessions[0] });
+        Assert.Equal(new DateTime(2026, 10, 14, 10, 45, 0), model.DefaultPasteTime());
+        model.PasteTime = new DateTime(2026, 10, 14, 15, 0, 0);
+        Assert.Equal(new DateTime(2026, 10, 14, 15, 0, 0), model.DefaultPasteTime());
+    }
+
+    [AvaloniaFact]
+    public void BlocksAndTheTimelineOfferCopyAndPasteHere()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        var block = dashboard.GetVisualDescendants().OfType<Border>().First(b => b.Name?.StartsWith("TimelineEntry") == true);
+        Assert.Contains(block.ContextMenu!.Items.OfType<MenuItem>(), m => m.Name == "CopyBlocksMenu");
+        var canvas = dashboard.GetVisualDescendants().OfType<Canvas>().First(c => c.ContextMenu is not null && c.ContextMenu.Items.OfType<MenuItem>().Any(m => m.Name == "PasteHereMenu"));
+        Assert.False(canvas.ContextMenu!.Items.OfType<MenuItem>().Single(m => m.Name == "PasteHereMenu").IsEnabled); // Nothing copied yet.
+        dashboard.Close();
+    }
 }

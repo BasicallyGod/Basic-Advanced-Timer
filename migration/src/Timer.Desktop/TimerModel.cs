@@ -87,6 +87,39 @@ public sealed class TimerModel : INotifyPropertyChanged
         OpenEntry(row);
     }
     public void ClearSelection() { if (selectedRows.Count == 0) return; selectedRows.Clear(); Notify(); }
+    // Copied blocks stay inside the app, not on the system clipboard, so they can carry their credited minutes and notes exactly.
+    private IReadOnlyList<LedgerEditor.ClipBlock> copied = Array.Empty<LedgerEditor.ClipBlock>();
+    public bool CanPaste => copied.Count > 0;
+    /// <summary>Where Ctrl+V pastes. The timeline keeps it at the time under the pointer, and it is null when the pointer has not been over it.</summary>
+    public DateTime? PasteTime { get; set; }
+    /// <summary>Copies the blocks, or the selection when the clicked block is part of it. Blocks from several days cannot be copied together.</summary>
+    public bool CopyBlocks(IReadOnlyList<SessionRow> rows)
+    {
+        var chosen = Engine.Sessions.Where(s => rows.Any(r => ReferenceEquals(r, s)) && s.Duration > TimeSpan.Zero).OrderBy(s => s.From).ToList();
+        if (chosen.Count == 0) return false;
+        if (chosen.Select(s => s.Day).Distinct().Count() > 1) { EditError = "Copy blocks from one day at a time."; Notify(); return false; }
+        var first = chosen[0].From;
+        copied = chosen.Select(s => new LedgerEditor.ClipBlock(s.Account, s.From - first, s.Minutes, Editor.Note(s))).ToList();
+        EditError = null; Notice = copied.Count == 1 ? "Copied 1 block. Right-click the timeline, or press Ctrl+V, to paste it." : $"Copied {copied.Count} blocks. Right-click the timeline, or press Ctrl+V, to paste them.";
+        Notify(); return true;
+    }
+    public bool CopySelection() => CopyBlocks(Engine.Sessions.Where(selectedRows.Contains).ToList());
+    /// <summary>Pastes the copied blocks with the first at this time on the day shown. One undo step, and the time is credited like Add time.</summary>
+    public bool PasteBlocks(DateTime at)
+    {
+        if (!CanPaste) { EditError = "Copy some blocks first."; Notify(); return false; }
+        var count = copied.Count;
+        var done = ChangeLog(() => { foreach (var block in copied) ValidateAccount(block.Account); Editor.Paste(copied, at); });
+        if (done) { Notice = count == 1 ? "Pasted 1 block." : $"Pasted {count} blocks."; Notify(); }
+        return done;
+    }
+    /// <summary>The time Ctrl+V uses on the day shown, which is the pointer's place on the timeline, or straight after the day's last block.</summary>
+    public DateTime DefaultPasteTime()
+    {
+        if (PasteTime is { } at && at.Date == SelectedDate.Date) return at;
+        var day = SelectedDate.Date; var last = Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero).Select(s => s.To).DefaultIfEmpty().Max();
+        return last > day ? last : Engine.Plan(day).Working ? Engine.Plan(day).Start : day.AddHours(9);
+    }
     public bool MergeSelection()
     {
         if (!CanMergeSelection) { EditError = MergeHint; Notify(); return false; }

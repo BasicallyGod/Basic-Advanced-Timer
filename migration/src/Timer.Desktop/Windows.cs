@@ -566,6 +566,12 @@ public sealed class DashboardWindow : Window
         KeyDown += (_, e) =>
         {
             if (e.Key == Avalonia.Input.Key.Escape) { model.ClearSelection(); e.Handled = true; }
+            // Ctrl+C copies the selected blocks and Ctrl+V pastes them on the timeline, but never while typing in a text box.
+            else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key is Avalonia.Input.Key.C or Avalonia.Input.Key.V && !settingsMode && FocusManager?.GetFocusedElement() is not TextBox)
+            {
+                if (e.Key == Avalonia.Input.Key.C) model.CopySelection(); else if (!weekMode) model.PasteBlocks(model.DefaultPasteTime());
+                e.Handled = true;
+            }
             // Backspace and Delete remove the selected blocks, but never while typing in a text box.
             else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete && FocusManager?.GetFocusedElement() is not TextBox)
             { if (model.SelectedRows.Count > 0) { model.DeleteSelection(); e.Handled = true; } }

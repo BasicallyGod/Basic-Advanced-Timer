@@ -116,7 +116,7 @@ public static class ReviewViews
             {
                 card.Tag = row; card.Name = "TimelineEntry" + model.Engine.Sessions.IndexOf(row);
                 var edit = new MenuItem { Header = "Edit entry / note…" }; edit.Click += (_, _) => model.OpenEntry(row);
-                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, new[] { row }), MergeMenu(model), new Separator(), DeleteMenu(model, new[] { row }) } };
+                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, new[] { row }), CopyMenu(model, new[] { row }), MergeMenu(model), new Separator(), DeleteMenu(model, new[] { row }) } };
                 TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour);
             }
             if (interval.Row is null && interval.Group is null)
@@ -150,7 +150,7 @@ public static class ReviewViews
                 card.Tag = group; card.Name = "TimelineGroup" + group.GroupId + "-" + interval.Start.ToString("HHmmss");
                 var editGroup = new MenuItem { Header = "Inspect / edit grouped entries…" }; editGroup.Click += (_, _) => model.OpenGroup(group.GroupId!);
                 var ungroup = new MenuItem { Header = "Ungroup" }; ungroup.Click += (_, _) => model.UngroupEntries(group.GroupId!);
-                card.ContextMenu = new ContextMenu { ItemsSource = new[] { editGroup, ungroup, MergeMenu(model) } };
+                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { editGroup, ungroup, CopyMenu(model, group.Sources), MergeMenu(model) } };
                 ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} grouped entries · {model.Format(duration)} credited\nSeparate sections preserve any gaps. Double-click to inspect; right-click to ungroup.");
             }
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
@@ -189,7 +189,13 @@ public static class ReviewViews
         DateTime At(double y) => day.AddMinutes(Math.Clamp(Math.Floor(y / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);
         var tidy = new MenuItem { Header = "Tidy day…", Name = "TidyDayMenu" }; tidy.Click += (_, _) => model.OpenTidy();
-        canvas.ContextMenu = new ContextMenu { ItemsSource = new[] { add, tidy, MergeMenu(model) } };
+        // Paste puts the copied blocks with the first at the time that was right-clicked, snapped to five minutes like Add time.
+        var paste = new MenuItem { Header = "Paste here", Name = "PasteHereMenu", InputGesture = new KeyGesture(Key.V, KeyModifiers.Control), IsEnabled = model.CanPaste };
+        paste.Click += (_, _) => model.PasteBlocks(clicked);
+        canvas.ContextMenu = new ContextMenu { ItemsSource = new Control[] { add, paste, tidy, MergeMenu(model) } };
+        // Ctrl+V pastes where the pointer last was on this timeline.
+        canvas.PointerMoved += (_, e) => model.PasteTime = At(e.GetPosition(canvas).Y);
+        canvas.PointerExited += (_, _) => model.PasteTime = null;
         bool OnBlock(object? source) => source is Visual visual && (visual is Border { Tag: SessionRow or ReviewEntry }
             || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow or ReviewEntry));
         Point? emptyPress = null;
@@ -441,7 +447,7 @@ public static class ReviewViews
                 {
                     button.Classes.Set("mergeSelected", model.IsSelected(entry.Sources));
                     var edit = new MenuItem { Header = "Edit / inspect entry…" }; edit.Click += (_, _) => Open();
-                    button.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, entry.Sources), MergeMenu(model), new Separator(), DeleteMenu(model, entry.Sources) } };
+                    button.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, entry.Sources), CopyMenu(model, entry.Sources), MergeMenu(model), new Separator(), DeleteMenu(model, entry.Sources) } };
                 }
                 if (entry.GroupId is { } groupId)
                 {
@@ -476,6 +482,14 @@ public static class ReviewViews
         var rows = selected ? model.Engine.Sessions.Where(model.SelectedRows.Contains).ToList() : clicked.ToList();
         var item = new MenuItem { Name = "DeleteMenu", Header = rows.Count > 1 ? $"Delete {rows.Count} blocks" : "Delete", IsEnabled = rows.Count > 0 };
         item.Click += (_, _) => { if (selected) model.DeleteSelection(); else model.DeleteEntries(rows); };
+        return item;
+    }
+    // Copies the clicked block, or every selected block when the clicked one is selected. Ctrl+C does the same for the selection.
+    private static MenuItem CopyMenu(TimerModel model, IReadOnlyList<SessionRow> clicked)
+    {
+        var rows = model.IsSelected(clicked) ? model.Engine.Sessions.Where(model.SelectedRows.Contains).ToList() : clicked.ToList();
+        var item = new MenuItem { Name = "CopyBlocksMenu", Header = rows.Count > 1 ? $"Copy {rows.Count} blocks" : "Copy", InputGesture = new KeyGesture(Key.C, KeyModifiers.Control), IsEnabled = rows.Count > 0 };
+        item.Click += (_, _) => model.CopyBlocks(rows);
         return item;
     }
     private static MenuItem MergeMenu(TimerModel model)

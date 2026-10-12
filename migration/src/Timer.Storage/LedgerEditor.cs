@@ -165,6 +165,30 @@ public sealed partial class LedgerEditor
             throw new ArgumentException("Another entry uses that account and start time.");
         Change("Add time", () => { engine.Sessions.Add(row); SetNote(null, row, note); });
     }
+    /// <summary>One block taken for copying: where it began relative to the first block copied, its credited minutes exactly as written, and its note.</summary>
+    public sealed record ClipBlock(string Account, TimeSpan Offset, string Minutes, string Note);
+    /// <summary>
+    /// Adds copies of the blocks with the first one starting at <paramref name="anchor"/>, keeping each block's account, credited length, note and
+    /// gaps between them, as one undoable step. Everything is checked before anything is added, so a paste is whole or not at all.
+    /// Like Add time it adds credited time, and it refuses a place that overlaps recorded or running time or runs past midnight.
+    /// </summary>
+    public void Paste(IReadOnlyList<ClipBlock> blocks, DateTime anchor)
+    {
+        if (blocks.Count == 0) throw new ArgumentException("There is nothing copied to paste.");
+        anchor = new DateTime(anchor.Year, anchor.Month, anchor.Day, anchor.Hour, anchor.Minute, anchor.Second);
+        var added = new List<(SessionRow Row, string Note)>();
+        foreach (var block in blocks)
+        {
+            var start = anchor + block.Offset;
+            var row = new SessionRow(start.ToString("yyyy-MM-dd"), block.Account, start.ToString("HH:mm:ss"), "added", block.Minutes);
+            if (row.Duration <= TimeSpan.Zero || row.To > start.Date.AddDays(1)) throw new ArgumentException("The copied time does not fit before midnight from here. Choose an earlier time.");
+            ValidateInterval(row, null);
+            if (added.Any(a => a.Row.From < row.To && a.Row.To > row.From) || engine.Sessions.Any(x => x.Date == row.Date && x.Start == row.Start && x.Account.Equals(row.Account, StringComparison.OrdinalIgnoreCase)))
+                throw new ArgumentException("This overlaps recorded or running time. Choose a free gap.");
+            added.Add((row, block.Note));
+        }
+        Change(added.Count == 1 ? "Paste block" : "Paste blocks", () => { foreach (var (row, note) in added) { engine.Sessions.Add(row); SetNote(null, row, note); } });
+    }
     public void Delete(SessionRow row)
     {
         var index = Index(row); CheckNoteKey(row);
