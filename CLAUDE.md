@@ -69,6 +69,10 @@ Each theme is a `ThemeDefinition` (name, Light or Dark base, colour tokens, bloc
 - Fault-injection helper `StorageFaults` (in `EditingTests.cs`) uses triggers to make saves fail.
 - Keep the C# for `Timer.Core` and `Timer.Storage` free of UI types.
 
+## Keeping builds few
+
+Each merge into `experimental` or `alpha` builds and stores a Windows ZIP (kept 14 days), and a pull request run adds tests on three systems. The owner tests only every few versions, so batch work: keep related changes on one `feature/...` branch, open one pull request for the lot, and sync `experimental` only for a candidate. Before opening a pull request for a small change, ask whether it can wait for the next one. Rendered previews upload only when a test fails or a run is started by hand.
+
 ## Checking changes
 
 Run `dotnet test migration/tests/Timer.Desktop.Tests -c Release`. CI runs it on Windows, Linux and macOS and publishes a self-contained Windows build; check the run before saying tests pass. The user tests visuals on Windows and reports back with screenshots.
