@@ -136,7 +136,7 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void NoteOnlyDialogPreservesFractionalCreditAndDoubleClickRequestsAnEditor()
+    public void NoteOnlyDialogPreservesFractionalCreditAndEditingTheSelectionRequestsAnEditor()
     {
         var engine = Engine(); var row = Row(end: "09:01:01", minutes: "1.01") with { Account = "ACCOUNT ONE" }; engine.Sessions.Add(row);
         var model = new TimerModel(engine);
@@ -158,7 +158,10 @@ public sealed class EditingTests
             var point = card.TranslatePoint(new Point(80, 1), window)!.Value;
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
-            Assert.Equal(1, requests); Assert.Empty(model.SelectedRows); // A double-click edits without leaving the block selected.
+            Assert.Equal(0, requests); Assert.Empty(model.SelectedRows); // Two clicks select and deselect. There is no double-click edit any more.
+            window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
+            Assert.True(model.CanEditSelection); model.EditSelection();
+            Assert.Equal(1, requests); model.ClearSelection(); Dispatcher.UIThread.RunJobs();
             var nine = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
             var empty = nine.TranslatePoint(new Point(200, 60), window)!.Value; // The label sits five pixels above its hour's tick.
             window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);

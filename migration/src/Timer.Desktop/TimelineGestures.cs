@@ -8,15 +8,6 @@ namespace Timer.Desktop;
 
 public static class TimelineGestures
 {
-    // Avalonia counts a second click from the time and place alone, so two quick clicks on neighbouring blocks arrive as a double-click on the second one,
-    // which opened the wrong account. A double-click only counts when both presses were on the same block.
-    private static object? lastPressed;
-    public static bool IsDoubleClick(object block, PointerPressedEventArgs e)
-    {
-        var same = lastPressed is not null && lastPressed.Equals(block);
-        lastPressed = block;
-        return e.ClickCount == 2 && same;
-    }
 
     public static void Attach(Border card, Canvas canvas, TimerModel model, SessionRow row, double pixelsPerHour)
     {
@@ -32,7 +23,6 @@ public static class TimelineGestures
         card.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
-            if (IsDoubleClick(row, e)) { model.OpenEntryFromDoubleClick(row); e.Handled = true; return; }
             origin = e.GetPosition(canvas); delta = TimeSpan.Zero; dragging = false;
             oldTop = Canvas.GetTop(card); oldHeight = card.Height;
             var y = e.GetPosition(card).Y;
@@ -78,7 +68,7 @@ public static class TimelineGestures
         {
             if (origin is null) return;
             var commit = dragging && delta != TimeSpan.Zero;
-            var change = delta; var mode = edge; var push = nudging; var select = !dragging && e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+            var change = delta; var mode = edge; var push = nudging; var select = !dragging;
             RestoreNeighbours();
             origin = null; dragging = false; e.Pointer.Capture(null); card.Opacity = 1;
             Canvas.SetTop(card, oldTop); card.Height = oldHeight;

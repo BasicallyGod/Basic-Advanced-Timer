@@ -22,9 +22,9 @@ public sealed class MessageBar : Border
         offer.Classes.Add("toolButton"); offer.Classes.Add("quiet"); offer.Height = 30; offer.Padding = new Thickness(12, 0); offer.FontSize = 13;
         var close = Ui.IconButton(IconKind.Close, "Dismiss", "DismissMessage", () => { dismissedError = model.LastError; model.ExpireMessages(); });
         var row = Ui.Horizontal(text, offer, close); row.Spacing = 12;
-        Child = row; CornerRadius = new CornerRadius(12); BorderThickness = new Thickness(1); Padding = new Thickness(14, 6, 6, 6);
+        Child = row; CornerRadius = new CornerRadius(12); Padding = new Thickness(14, 6, 6, 6);
         HorizontalAlignment = HorizontalAlignment.Left; VerticalAlignment = VerticalAlignment.Bottom; Margin = new Thickness(0, 0, 0, 6);
-        Classes.Add("chip");
+        Classes.Add("messageBar");
         model.PropertyChanged += (_, _) => Sync();
         Sync();
     }

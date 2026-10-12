@@ -47,6 +47,27 @@ public sealed class WindowCoordinator
         Dashboard.Closed += (_, _) => exit();
         Pill.Closing += OnClosing; Dashboard.Closing += OnClosing;
         model.QuitRequested += Quit;
+        // Tucks the timer away with tracking still running. Without a tray it goes to the taskbar instead, so it can never be lost.
+        model.HideRequested += () =>
+        {
+            if (HideToTray) Hide();
+            else foreach (var window in new Window[] { Pill, Dashboard }) if (window.IsVisible) window.WindowState = WindowState.Minimized;
+        };
+        KeepInFront();
+    }
+    // Snapping another window over the timer, or a window that is itself on top, can leave the pill or dashboard behind it. So whenever one loses focus
+    // it is put back at the front of the topmost windows, and a slow check does the same for one that was covered without a focus change.
+    private void KeepInFront()
+    {
+        void Reassert(Window window) { if (window.IsVisible && !window.IsActive && window.WindowState != WindowState.Minimized) { window.Topmost = false; window.Topmost = true; } }
+        foreach (var window in new Window[] { Pill, Dashboard })
+        {
+            var self = window;
+            self.Deactivated += (_, _) => Avalonia.Threading.DispatcherTimer.RunOnce(() => Reassert(self), TimeSpan.FromMilliseconds(250));
+        }
+        var check = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        check.Tick += (_, _) => { Reassert(Pill); Reassert(Dashboard); };
+        check.Start();
     }
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
@@ -233,7 +254,7 @@ public sealed class PillWindow : Window
         timerColumn.Children.Add(timer); timerColumn.Children.Add(pillUnallocated);
         timerButton.Content = timerColumn;
         timerButton.Classes.Add("pillAction");
-        ToolTip.SetTip(timerButton, "Click for dashboard; drag to move");
+        ToolTip.SetTip(timerButton, "Open dashboard");
         Ui.Put(head, timerButton).Margin = new Thickness(0, 0, 16, 0);
         var divider = new Border { Width = 1, Height = 42 }; divider.Classes.Add("rule");
         Ui.Put(head, divider, 1);
@@ -257,7 +278,7 @@ public sealed class PillWindow : Window
         accountButton.Classes.Add("pillAction");
         accountButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         accountButton.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-        ToolTip.SetTip(accountButton, "Click for accounts; drag to move");
+        ToolTip.SetTip(accountButton, "Accounts");
         Ui.Put(head, accountButton, 2).Margin = new Thickness(16, 0, 16, 0);
         breakButton = Ui.Button("", model.ToggleBreak, "PillBreak");
         breakGlyph.Mono = true; // Plain text colour at rest, and the accent only under the pointer.
@@ -387,9 +408,9 @@ public sealed class PillWindow : Window
         Ui.Pulse(dot, model.IsTracking);
         pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
         breakButton.Classes.Set("onBreak", model.IsOnBreak); breakGlyph.Filled = false; breakGlyph.HotKey = model.ThemeState == "Recording" ? "Accent" : "Break"; breakGlyph.SetSteaming(model.IsOnBreak || pillHoverBreak); breakGlyph.InvalidateVisual();
-        ToolTip.SetTip(breakButton, model.IsOnBreak ? "Finish break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Start break");
+        ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Start break");
         pause.IsEnabled = model.IsTracking || selected is not null;
-        ToolTip.SetTip(pause, model.IsOnBreak ? "End break; drag to move" : model.IsTracking ? "Pause account; drag to move" : "Resume account; drag to move");
+        ToolTip.SetTip(pause, model.IsOnBreak ? "End break" : model.IsTracking ? "Pause" : "Resume");
         pillDayText.Text = model.DayStarted ? "Finish day" : "Start day";
         // The same quiet outline as the dashboard's button, with a flag that is green to start the day and red to finish it, so ending the day is never done by accident.
         pillDayFlag.TintKey = model.DayStarted ? "Finish" : "Start";
@@ -401,7 +422,7 @@ public sealed class PillWindow : Window
         progressBar.ColumnDefinitions[0].Width = new GridLength(done, GridUnitType.Star);
         progressBar.ColumnDefinitions[1].Width = new GridLength(1.0 - done, GridUnitType.Star);
         progressFill.Classes.Set("progressOvertime", model.IsOvertime && !model.IsOnBreak); progressFill.Classes.Set("progressBreak", model.IsOnBreak);
-        ToolTip.SetTip(progressBar, progress is null ? "No working day today. The line fills as a working day goes by." : $"{(int)(done * 100)}% of the working day");
+        ToolTip.SetTip(progressBar, progress is null ? "No working day today" : $"{(int)(done * 100)}% of the working day");
         // The capsule's own colour says what is happening, so the pill keeps the ordinary shadow in every state.
         var shadow = (model.Shadows, (string?)null, ActualThemeVariant);
         if (lastShadow != shadow) { lastShadow = shadow; Ui.SetShadow(shadowHost, model.Shadows, null); }
@@ -431,7 +452,7 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock today = Ui.Text("", 12, "muted");
     private readonly ContentControl workspace = new();
     private readonly Button day;
-    private Button timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!;
+    private Button timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
     private readonly BreakGlyph dashboardCup = new();
     private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly Button undo;
@@ -472,12 +493,20 @@ public sealed class DashboardWindow : Window
         overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectSection("overview"));
         hoursTab = RailButton(IconKind.Table, "Hours table", "WeekHoursTab", () => SelectSection("hours"));
         entriesTab = RailButton(IconKind.Entries, "Entries", "WeekEntriesTab", () => SelectSection("entries"));
+        // The way back to the pill is the first thing on the rail, at the top left.
+        var backToPill = RailButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke());
+        railTop.Children.Add(backToPill);
+        var backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
         foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
-        railFoot.Children.Add(RailButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke()));
         settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);
         railFoot.Children.Add(settingsRail);
+        // Closes the timer for good. It goes red under the pointer, so it is never pressed by accident.
+        var quit = RailButton(IconKind.Close, "Close timer", "QuitTimer", () => model.RequestQuit()); quit.Classes.Add("quit");
+        var quitGlyph = (IconGlyph)quit.Content!;
+        quit.PointerEntered += (_, _) => quitGlyph.TintKey = "Finish"; quit.PointerExited += (_, _) => quitGlyph.TintKey = null;
+        railFoot.Children.Add(quit);
         Ui.Put(railGrid, railFoot, row: 1);
         rail.Child = railGrid; Ui.Put(root, rail);
         Ui.DragHeader(railTop, this);
@@ -490,7 +519,7 @@ public sealed class DashboardWindow : Window
         cardStack.Children.Add(accentEdge);
         var identity = new StackPanel { Margin = new Thickness(18, 14, 18, 16), Spacing = 2 };
         var topRow = Ui.Grid("*,Auto");
-        Ui.Put(topRow, Ui.Text("Day elapsed", 12, "muted")); Ui.Put(topRow, today, 1);
+        Ui.Put(topRow, Ui.Text("Working time", 12, "muted")); Ui.Put(topRow, today, 1);
         identity.Children.Add(topRow); identity.Children.Add(clock);
         var live = new StackPanel { Spacing = 4, Margin = new Thickness(0, 4, 0, 12) };
         live.Children.Add(Ui.Horizontal(accountDot, account)); live.Children.Add(new TrackingLabels(model));
@@ -559,10 +588,11 @@ public sealed class DashboardWindow : Window
         Ui.Put(review, nav);
         undo = Ui.Button("", () => model.UndoEdit(), "UndoEdit");
         merge = Ui.Button("", () => model.MergeSelection(), "MergeSelected");
+        edit = Ui.Button("", () => model.EditSelection(), "EditSelected");
         // Editing buttons sit on the left and only where they apply; Tools stays on the right. Hours and minutes is in Settings.
         addTime = Ui.Button("", () => model.OpenGap(), "AddTime");
         // The same quiet outlined look as Start break and Finish day, each with a small icon: a plus in the accent colour, and plain ones for the rest.
-        (Button Button, IconKind Icon, string Words, string? Tint)[] toolSpecs = { (addTime, IconKind.Plus, "Add time", "Accent"), (undo, IconKind.Undo, "Undo", null), (merge, IconKind.Merge, "Merge", null) };
+        (Button Button, IconKind Icon, string Words, string? Tint)[] toolSpecs = { (addTime, IconKind.Plus, "Add time", "Accent"), (undo, IconKind.Undo, "Undo", null), (merge, IconKind.Merge, "Merge", null), (edit, IconKind.Edit, "Edit", null) };
         foreach (var (toolButton, icon, words, tint) in toolSpecs)
         {
             toolButton.Classes.Add("toolButton"); toolButton.Classes.Add("quiet");
@@ -570,7 +600,7 @@ public sealed class DashboardWindow : Window
             Avalonia.Automation.AutomationProperties.SetName(toolButton, words);
         }
         addTime.Classes.Add("addButton");
-        var edits = Ui.Horizontal(addTime, undo, merge);
+        var edits = Ui.Horizontal(addTime, undo, merge, edit);
         // Zoom and fit sit beside Tools in this row, applying to the timeline underneath. They show only on the Timeline tab.
         ScrollViewer? TimelineScroll() => workspace.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
         zoomOut = Ui.IconButton(IconKind.ZoomOut, "Zoom out", "TimelineZoomOut", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Height / 2, s.Offset.Y); });
@@ -590,7 +620,7 @@ public sealed class DashboardWindow : Window
         ((StackPanel)zoomBar.Child).Spacing = 4; zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
         // Add time, Undo and Merge sit on the left of a bar under the workspace, and the zoom controls on its right, so the working area has the whole height above.
         // The bar is as tall as the Start break and Finish day buttons beside it, so the two bottom rows line up. Its buttons fill that height.
-        addTime.Height = ControlBarHeight; undo.Height = ControlBarHeight; merge.Height = ControlBarHeight;
+        addTime.Height = ControlBarHeight; undo.Height = ControlBarHeight; merge.Height = ControlBarHeight; edit.Height = ControlBarHeight;
         var tools = Ui.Grid("*,Auto"); toolsRow = tools; Ui.Put(tools, edits); Ui.Put(tools, zoomBar, 1);
         tools.Margin = new Thickness(0, 12, 0, 0); zoomBar.Margin = new Thickness(12, 0, 0, 0); // Clear space between Merge and the zoom bar.
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
@@ -644,6 +674,10 @@ public sealed class DashboardWindow : Window
                 if (e.Key == Avalonia.Input.Key.C) model.CopySelection(); else if (!weekMode) model.PasteBlocks(model.DefaultPasteTime());
                 e.Handled = true;
             }
+            // Enter opens the one selected block, but never while typing in a box or with a button focused (Enter presses that instead).
+            else if (e.Key == Avalonia.Input.Key.Enter && e.KeyModifiers == Avalonia.Input.KeyModifiers.None && !settingsMode && Dialogs.Any == false
+                && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox or Button) && model.CanEditSelection)
+            { model.EditSelection(); e.Handled = true; }
             // Backspace and Delete remove the selected blocks, but never while typing in a text box.
             else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete && FocusManager?.GetFocusedElement() is not TextBox)
             { if (model.SelectedRows.Count > 0) { model.DeleteSelection(); e.Handled = true; } }
@@ -744,10 +778,11 @@ public sealed class DashboardWindow : Window
         zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
+        edit.IsVisible = editing && model.CanEditSelection; if (edit.IsVisible && edit.Content is Panel editRow && editRow.Children.OfType<TextBlock>().FirstOrDefault() is { } editText) editText.Text = model.EditText;
         dashboardCup.Filled = model.IsOnBreak; dashboardCup.SetSteaming(model.IsOnBreak); dashboardCup.InvalidateVisual();
         dashboardBreakText.Text = model.IsOnBreak ? "Finish break" : "Start break";
         breakButton.Classes.Set("onBreak", model.IsOnBreak);
-        ToolTip.SetTip(breakButton, model.IsOnBreak ? "End the break" + (model.ResumeAccount is { } resumeTo ? " and go back to " + resumeTo : "") : "Stop timing any account while you take a break");
+        ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Take a break");
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); if (button.Content is IconGlyph glyph) glyph.TintKey = selected ? "Ink" : "Muted"; }

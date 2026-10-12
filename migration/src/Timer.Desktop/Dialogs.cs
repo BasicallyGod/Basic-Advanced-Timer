@@ -47,7 +47,7 @@ public sealed class DialogHost : Grid
         // therefore sits below the cross and never runs under it.
         var close = Ui.IconButton(IconKind.Close, "Close", "CloseDialog", dialog.Close);
         close.VerticalAlignment = VerticalAlignment.Center; close.Margin = new Thickness(0, 0, 10, 0);
-        var title = Ui.Text(dialog.Title, 22); title.Name = "DialogTitle"; title.VerticalAlignment = VerticalAlignment.Center; title.Margin = new Thickness(24, 0, 12, 0);
+        var title = Ui.Heading(dialog.Title, 24); title.Name = "DialogTitle"; title.VerticalAlignment = VerticalAlignment.Center; title.Margin = new Thickness(24, 0, 12, 0);
         var header = Ui.Grid("*,Auto"); header.Margin = new Thickness(0, 14, 0, 0); header.Children.Add(title); Ui.Put(header, close, 1);
         var inner = Ui.Grid("*", "Auto,*"); inner.Children.Add(header); Ui.Put(inner, dialog, row: 1);
         var card = new Border { Child = inner, CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), ClipToBounds = true,

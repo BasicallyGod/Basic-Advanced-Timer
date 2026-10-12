@@ -143,7 +143,7 @@ public sealed class VisualStateTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Content as string == "×");
                 var items = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).ToList();
-                Assert.Equal("Close timer", ((MenuItem)items[^1]).Header); Assert.IsType<Separator>(items[^2]);
+                Assert.Equal("Collapse to tray", ((MenuItem)items[^1]).Header); Assert.IsType<Separator>(items[^2]);
             }
             finally { window.Close(); }
         }

@@ -146,21 +146,20 @@ public static class ReviewViews
                 card.PointerPressed += (_, e) =>
                 {
                     if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
-                    if (TimelineGestures.IsDoubleClick(group.GroupId!, e)) { model.OpenGroup(group.GroupId!); groupPress = null; }
-                    else groupPress = e.GetPosition(canvas);
+                    groupPress = e.GetPosition(canvas);
                     e.Handled = true;
                 };
                 card.PointerReleased += (_, e) =>
                 {
                     if (groupPress is { } p)
-                    { var movement = e.GetPosition(canvas) - p; if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && movement.X * movement.X + movement.Y * movement.Y <= 25) model.ToggleSelection(group.Sources); }
+                    { var movement = e.GetPosition(canvas) - p; if (movement.X * movement.X + movement.Y * movement.Y <= 25) model.ToggleSelection(group.Sources); }
                     groupPress = null; e.Handled = true;
                 };
                 card.Tag = group; card.Name = "TimelineGroup" + group.GroupId + "-" + interval.Start.ToString("HHmmss");
                 var editGroup = new MenuItem { Header = "Inspect / edit grouped entries…" }; editGroup.Click += (_, _) => model.OpenGroup(group.GroupId!);
                 var ungroup = new MenuItem { Header = "Ungroup" }; ungroup.Click += (_, _) => model.UngroupEntries(group.GroupId!);
                 card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { editGroup, ungroup, CopyMenu(model, group.Sources), MergeMenu(model) } };
-                ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} grouped entries · {model.Format(duration)} credited\nSeparate sections preserve any gaps. Double-click to inspect; right-click to ungroup.");
+                ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} grouped entries · {model.Format(duration)}\nClick to select");
             }
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
             canvas.Children.Add(card); cards.Add((card, lane));
@@ -374,7 +373,7 @@ public static class ReviewViews
         Ui.Put(heading2, Heading(model.DecimalHours ? "Decimal hours" : "Hours and minutes"));
         // Copy and export live on this line, with the table they act on. Both are icons with tooltips.
         var copy = Ui.IconButton(IconKind.Copy, "Copy hours table", "CopyHours", () => { });
-        ToolTip.SetTip(copy, "Copy the table to the clipboard, ready to paste into a timesheet");
+        ToolTip.SetTip(copy, "Copy table");
         copy.Click += async (_, _) =>
         {
             if (TopLevel.GetTopLevel(copy)?.Clipboard is not { } clipboard) return;

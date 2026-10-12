@@ -25,7 +25,7 @@ public sealed class EntryDialog : Dialog
         // The length and the end follow each other: type either, and the other is worked out from the start.
         var length = new TextBox { Name = "EntryLength", Width = 130, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
         root.Children.Add(Ui.Horizontal(Ui.Text("Length", 13, "muted"), length));
-        var hint = Ui.Text("Start and end use HH:mm or HH:mm:ss. Length can be minutes (45), hours and minutes (1:15) or with seconds (1:15:30). Time changes affect credited totals.", 11, "muted");
+        var hint = Ui.Text("Times are HH:mm. Length is minutes (45) or hours and minutes (1:15).", 11, "muted");
         hint.TextWrapping = Avalonia.Media.TextWrapping.Wrap; root.Children.Add(hint);
         var note = new TextBox { Name = "EntryNote", Watermark = "Entry note", AcceptsReturn = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Height = 110, Text = row is null ? "" : model.Editor.Note(row) };
         root.Children.Add(note);

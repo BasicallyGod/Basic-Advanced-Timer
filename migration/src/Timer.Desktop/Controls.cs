@@ -81,6 +81,11 @@ public static class Ui
         _ = animation.RunAsync(control, source.Token);
     }
     public static bool IsPulsing(Control control) => pulses.TryGetValue(control, out _);
+    /// <summary>A heading in the app's display face, the same as the dashboard's workspace title, so every page and pop-up names itself alike.</summary>
+    public static TextBlock Heading(string text, double size = 20)
+    {
+        var heading = Text(text, size, "clock"); return heading;
+    }
     public static TextBlock Text(string text, double size = 14, string? style = null)
     {
         var control = new TextBlock { Text = text, FontSize = size, VerticalAlignment = VerticalAlignment.Center };
@@ -217,8 +222,6 @@ public static class Ui
     /// </summary>
     public static ContextMenu SettingsMenu(TimerModel model)
     {
-        var format = new MenuItem { Header = "Decimal hours", IsChecked = model.DecimalHours, ToggleType = MenuItemToggleType.CheckBox };
-        format.Click += (_, _) => model.ToggleFormat();
         // Inside the demo you can switch overtime on and off to see how it looks. Like the version, it shows only once developer features are unlocked.
         var overtimeTest = new MenuItem { Header = "Test overtime", ToggleType = MenuItemToggleType.CheckBox, IsVisible = false, Name = "TestOvertime" };
         overtimeTest.Click += (_, _) => model.SetOvertimeTest(!model.OvertimeTest);
@@ -227,14 +230,15 @@ public static class Ui
         // Shown for a few minutes after going from one account to another and back, to pick the earlier block up again.
         var continueItem = new MenuItem { Name = "ContinuePreviousMenu", Header = "Continue earlier block", IsVisible = false };
         continueItem.Click += (_, _) => model.ContinuePrevious();
-        var quit = new MenuItem { Header = "Close timer" };
-        quit.Click += (_, _) => model.RequestQuit();
+        // Tucks the timer away without stopping it. Closing it for good is the cross at the foot of the dashboard's rail.
+        var collapse = new MenuItem { Header = "Collapse to tray", Name = "CollapseToTray" };
+        collapse.Click += (_, _) => model.RequestHide();
         var versionRule = new Separator { IsVisible = false };
-        var menu = new ContextMenu { ItemsSource = new Control[] { format, continueItem, overtimeTest, versionRule, version, new Separator(), quit } };
+        var menu = new ContextMenu { ItemsSource = new Control[] { continueItem, overtimeTest, versionRule, version, new Separator(), collapse } };
         void Sync()
         {
             var developer = model.DeveloperUnlocked;
-            format.IsChecked = model.DecimalHours; overtimeTest.IsChecked = model.OvertimeTest;
+            overtimeTest.IsChecked = model.OvertimeTest;
             overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer; versionRule.IsVisible = developer;
             var offer = model.ContinuePreviousText; continueItem.IsVisible = offer is not null; if (offer is not null) continueItem.Header = offer;
         }
@@ -596,7 +600,7 @@ public sealed class AccountList : StackPanel
             {
                 bar.Set(ratio, model.BudgetPace(row.Account));
                 var period = row.Account.Period is "day" or "month" or "quarter" ? row.Account.Period : "week";
-                ToolTip.SetTip(bar, $"The line marks how far through the {(period == "day" ? "working day" : period)} it is. A bar past the line is ahead of an even spread of the budget.");
+                ToolTip.SetTip(bar, $"The line is how far through the {(period == "day" ? "working day" : period)} you are.");
                 // A spent budget shows its percentage in red, so overrunning reads at a glance.
                 row.Percent.Text = Math.Round(ratio * 100) + "%"; row.Percent.Classes.Set("overtime", ratio >= 1); row.Percent.Classes.Set("muted", ratio < 1);
             }
@@ -764,7 +768,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -843,6 +847,10 @@ public sealed class IconGlyph : Control
                 break;
             case IconKind.Close:
                 context.DrawLine(pen, new Point(4.5, 4.5), new Point(13.5, 13.5)); context.DrawLine(pen, new Point(13.5, 4.5), new Point(4.5, 13.5));
+                break;
+            case IconKind.Edit:
+                // A pencil.
+                context.DrawGeometry(null, pen, Geometry.Parse("M 3,15 L 3.8,11.6 L 12.6,2.8 Q 13.4,2 14.2,2.8 L 15.2,3.8 Q 16,4.6 15.2,5.4 L 6.4,14.2 Z M 11,4.4 L 13.6,7"));
                 break;
             case IconKind.Today:
                 // A calendar page with two rings, and a dot on the day.
