@@ -77,6 +77,7 @@ public sealed class ShellTests
         try
         {
             Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout(); // Windows CI can reach the clicks before the first layout pass, leaving every row at 0, 0.
             for (var i = 0; i < model.Accounts.Count - 1; i++) // The break has its own button, not a row.
             {
                 var row = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account" + i);
@@ -198,6 +199,22 @@ public sealed class ShellTests
             Assert.Equal(elapsed, model.Elapsed);
         }
         finally { window.Close(); model.SetTheme("System"); }
+    }
+
+    [AvaloniaFact]
+    public void ClosingTheSecondWindowAfterTheStoreIsDisposedDoesNotSaveAgain()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-double-close-" + Guid.NewGuid());
+        try
+        {
+            var store = new TimerStore(folder);
+            var engine = new TrackingEngine();
+            var model = new TimerModel(engine, store.Load(engine), store);
+            Assert.True(model.StopForClose()); // The pill closes and the app shuts down, which disposes the database.
+            store.Dispose();
+            Assert.True(model.StopForClose()); // The dashboard's close follows and must not touch the closed database.
+        }
+        finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
 
     [AvaloniaFact]
