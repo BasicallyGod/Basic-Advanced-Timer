@@ -37,7 +37,7 @@ public sealed class AccountsWindow : Window
             Ui.Put(row, visible, 2);
             var budget = new TextBox { Text = account.BudgetHours?.ToString("0.###", CultureInfo.InvariantCulture) ?? "", Margin = new Thickness(0, 0, 8, 0) };
             Ui.Put(row, budget, 3);
-            var period = new ComboBox { ItemsSource = new[] { "week", "month", "quarter" }, SelectedItem = account.BudgetPeriod, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
+            var period = new ComboBox { ItemsSource = new[] { "day", "week", "month", "quarter" }, SelectedItem = account.BudgetPeriod, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
             Ui.Put(row, period, 4);
             var entry = new AccountRow { Original = existing ? account.Name : null, Name = name, Visible = visible, Budget = budget, Period = period, Colour = () => chosen, Grid = row };
             // The bin removes a new row at once. For an existing account it marks the row for deleting, dimmed, and a second press takes the mark off.

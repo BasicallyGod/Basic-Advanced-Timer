@@ -1,0 +1,221 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Microsoft.Data.Sqlite;
+using Timer.Core;
+using Timer.Storage;
+using Timer.Desktop;
+using Xunit;
+
+namespace Timer.Desktop.Tests;
+
+// Small fixes from the first Store feedback: a smaller pill on small screens, clear space beside Merge, and messages that fade.
+public sealed class TweakTests
+{
+    private static void Settle(Window window) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); }
+
+    [Fact]
+    public void ThePillShrinksOnSmallScreensButNeverBelowTheLimitOrAboveFullSize()
+    {
+        Assert.Equal(1.0, PillWindow.ScaleFor(2560));
+        Assert.Equal(1.0, PillWindow.ScaleFor(1800));
+        Assert.InRange(PillWindow.ScaleFor(1366), 0.75, 0.77); // A common laptop screen.
+        Assert.Equal(PillWindow.SmallestScale, PillWindow.ScaleFor(800));
+    }
+
+    [AvaloniaFact]
+    public void AScaledPillKeepsItsProportionsAndGrowsBackOnABigScreen()
+    {
+        var pill = new PillWindow(TimerModel.CreateDemo()); pill.Show(); Settle(pill);
+        var full = (pill.Width, pill.Height);
+        Assert.Equal(1.0, pill.Scale);
+        pill.FitToScreen(null); Assert.Equal(1.0, pill.Scale); // No screen to look at means full size.
+        Assert.Equal(PillWindow.CollapsedWindowHeight, pill.Height, 0.5);
+        Assert.Equal(PillWindow.PillWidth + 2 * Ui.ShadowMargin, full.Width, 0.5);
+        pill.Close();
+    }
+
+    [AvaloniaFact]
+    public void FooterNotesFadeAfterThirtySecondsButAFailedSaveDoesNot()
+    {
+        var model = TimerModel.CreateDemo();
+        Assert.Equal(TimeSpan.FromSeconds(30), TimerModel.MessageLifetime);
+        model.ExplainRunning();
+        Assert.NotNull(model.EditError);
+        model.ExpireMessages();
+        Assert.Null(model.EditError); Assert.Null(model.Notice);
+    }
+
+    [AvaloniaFact]
+    public void MergeAndTheZoomBarHaveRoomBetweenThem()
+    {
+        var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        var merge = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "MergeSelected");
+        var zoom = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
+        var mergeRight = merge.TranslatePoint(new Point(merge.Bounds.Width, 0), dashboard)!.Value.X;
+        var zoomLeft = zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.X;
+        Assert.True(zoomLeft - mergeRight >= 24, $"Only {zoomLeft - mergeRight} px between Merge and the zoom bar.");
+        dashboard.Close();
+    }
+
+    [Fact]
+    public void AMonthExportCoversEveryDayOfTheMonthAndTheHundredthsStillAddUpExactly()
+    {
+        var engine = new TrackingEngine(clock: () => new DateTime(2026, 10, 31, 18, 0, 0));
+        // Three odd lengths on different weeks, so rounding has to be shared out across the whole month.
+        engine.Sessions.Add(new("2026-10-01", "Account one", "09:00:00", "added", "20"));
+        engine.Sessions.Add(new("2026-10-14", "Account one", "09:00:00", "added", "20"));
+        engine.Sessions.Add(new("2026-10-30", "Account two", "09:00:00", "added", "20"));
+        engine.Sessions.Add(new("2026-09-30", "Account one", "09:00:00", "added", "60")); // Last month, left out.
+        var export = WeekExport.ForMonth(new LedgerEditor(engine), engine, new DateTime(2026, 10, 17));
+        Assert.True(export.IsMonth);
+        Assert.Equal((new DateTime(2026, 10, 1), new DateTime(2026, 10, 31)), export.Period);
+        Assert.Equal(100, export.TotalUnits); // One hour in all, shared as 33, 33 and 34 hundredths.
+        Assert.Equal(100, export.Accounts.Values.Sum(days => days.Sum()));
+        var summary = export.SummaryCsv(new[] { "Account one", "Account two" });
+        Assert.Contains("Thu 01/10", summary); Assert.Contains("Sat 31/10", summary); Assert.DoesNotContain("Wed 30/09", summary);
+        Assert.Equal(3, export.Entries.Count);
+        var weekExport = new WeekExport(new LedgerEditor(engine), engine, new DateTime(2026, 10, 12));
+        Assert.False(weekExport.IsMonth); Assert.Equal(33, weekExport.TotalUnits); // A week is unchanged.
+    }
+
+    [AvaloniaFact]
+    public void TheExportWindowOffersAWeekOrAWholeMonthAndWritesTheMonth()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));
+        var window = new ExportWindow(model); window.Show(); Settle(window);
+        var week = window.GetVisualDescendants().OfType<RadioButton>().Single(b => b.Name == "ExportWeekChoice");
+        var month = window.GetVisualDescendants().OfType<RadioButton>().Single(b => b.Name == "ExportMonthChoice");
+        Assert.True(week.IsChecked); Assert.Contains("October 2026", (string)month.Content!);
+        month.IsChecked = true;
+        window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ExportCsv").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.NotNull(model.ExportPath); Assert.Contains("Month-202610", model.ExportPath);
+        Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Detail.csv")) && File.Exists(Path.Combine(model.ExportPath!, "Summary.csv")));
+        window.Close();
+    }
+
+    [Fact]
+    public void ADailyBudgetCountsTodayOnlyAndPacesAcrossTheWorkingDay()
+    {
+        var now = new DateTime(2026, 10, 14, 13, 0, 0); // A Wednesday, part way through the working day.
+        var engine = new TrackingEngine(clock: () => now);
+        engine.Sessions.Add(new("2026-10-14", "Account one", "09:00:00", "added", "60"));
+        engine.Sessions.Add(new("2026-10-13", "Account one", "09:00:00", "added", "240")); // Yesterday, not counted.
+        var model = new TimerModel(engine, new StoreSettings(new() { new("Account one", 4, "day") }, false, ThemeLibrary.Default, DayOfWeek.Monday));
+        var account = model.Accounts.First(a => a.Name == "Account one");
+        Assert.Equal(TimeSpan.FromHours(1), model.BudgetUsed(account));
+        Assert.Equal(0.25, model.BudgetRatio(account)!.Value, 3);
+        Assert.Contains("daily", model.BudgetLine(account));
+        Assert.InRange(model.BudgetPace(account), 0.01, 0.99); // Somewhere through the working day, not midnight to midnight.
+        model.SetAccounts(new[] { new AccountSettings("Account one", 3, "day") }); // Saving a daily budget is accepted.
+        Assert.Equal("day", model.Accounts.First(a => a.Name == "Account one").Period);
+    }
+
+    [Fact]
+    public void AnOlderDatabaseUpgradesToAllowDailyBudgetsWithEveryAccountEntryAndLinkKept()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "bat-upgrade-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using (var db = TimerDatabase.Open(folder, () => new DateTime(2026, 10, 1)))
+            {
+                db.Execute("INSERT INTO accounts (id, name, colour, position, budget_seconds, budget_period) VALUES (7, 'Account one', '#336699', 0, 7200, 'month')");
+                db.Execute("INSERT INTO entries (kind, account_id, day, start_at, end_at, seconds, created_at) VALUES ('work', 7, '2026-10-01', '2026-10-01T09:00:00', '2026-10-01T09:10:00', 600, '2026-10-01T09:10:00')");
+            }
+            SqliteConnection.ClearAllPools();
+            // Put it back to how format 1 stored accounts, with the narrower period check, as an existing user's file would be.
+            using (var raw = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(folder, TimerDatabase.FileName), Pooling = false }.ToString()))
+            {
+                raw.Open();
+                foreach (var sql in new[] { "PRAGMA foreign_keys = OFF", "BEGIN", TimerDatabase.AccountsTable("accounts_old", false),
+                    "INSERT INTO accounts_old SELECT id, name, colour, position, hidden, budget_seconds, budget_period FROM accounts", "DROP TABLE accounts",
+                    "ALTER TABLE accounts_old RENAME TO accounts", "COMMIT", "PRAGMA user_version = 1" })
+                { using var command = raw.CreateCommand(); command.CommandText = sql; command.ExecuteNonQuery(); }
+                using var check = raw.CreateCommand(); check.CommandText = "INSERT INTO accounts (name, colour, position, budget_period) VALUES ('x', '#336699', 1, 'day')";
+                Assert.Throws<SqliteException>(() => check.ExecuteNonQuery()); // Format 1 really refuses a daily budget.
+            }
+            SqliteConnection.ClearAllPools();
+            using var upgraded = TimerDatabase.Open(folder, () => new DateTime(2026, 10, 2));
+            Assert.Equal(TimerDatabase.SchemaVersion, upgraded.Version);
+            Assert.Equal(7200L, upgraded.Scalar("SELECT budget_seconds FROM accounts WHERE id = 7"));
+            Assert.Equal("month", upgraded.Scalar("SELECT budget_period FROM accounts WHERE id = 7"));
+            Assert.Equal("Account one", upgraded.Scalar("SELECT a.name FROM entries e JOIN accounts a ON a.id = e.account_id"));
+            Assert.Empty(upgraded.Query("PRAGMA foreign_key_check", r => 1));
+            upgraded.Execute("UPDATE accounts SET budget_period = 'day' WHERE id = 7"); // Now allowed.
+            Assert.Equal("day", upgraded.Scalar("SELECT budget_period FROM accounts WHERE id = 7"));
+            Assert.Single(Directory.GetFiles(Path.Combine(folder, "Backups"), "timer-before-format-2-*.db"));
+        }
+        finally { SqliteConnection.ClearAllPools(); try { Directory.Delete(folder, true); } catch (IOException) { } }
+    }
+
+    private static TimerModel CopyModel(out TrackingEngine engine)
+    {
+        engine = new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 17, 0, 0));
+        engine.Sessions.Add(new("2026-10-14", "Account one", "09:00:00", "recorded", "30.50")); // Credited length is not a whole number of minutes.
+        engine.Sessions.Add(new("2026-10-14", "Account two", "10:00:00", "recorded", "45.00"));
+        var model = new TimerModel(engine, new StoreSettings(new() { new("Account one"), new("Account two") }, false, ThemeLibrary.Default, DayOfWeek.Monday));
+        model.ChangeDate((new DateTime(2026, 10, 14) - model.SelectedDate.Date).Days);
+        return model;
+    }
+
+    [Fact]
+    public void CopiedBlocksPasteWithTheirCreditedTimeNotesAndGapsAsOneUndoStep()
+    {
+        var model = CopyModel(out var engine);
+        model.Editor.Edit(engine.Sessions[1], "Account two", engine.Sessions[1].From, engine.Sessions[1].To, "Call with client");
+        Assert.True(model.CopyBlocks(engine.Sessions.ToList()));
+        Assert.True(model.CanPaste);
+        Assert.True(model.PasteBlocks(new DateTime(2026, 10, 14, 13, 0, 0)));
+        Assert.Equal(4, engine.Sessions.Count);
+        var pastedFirst = engine.Sessions.Single(s => s.Start == "13:00:00"); var pastedSecond = engine.Sessions.Single(s => s.Start == "14:00:00"); // The one hour gap is kept.
+        Assert.Equal("30.50", pastedFirst.Minutes); Assert.Equal("Account one", pastedFirst.Account); // Credit is copied exactly, not worked out from clock times.
+        Assert.Equal("Call with client", model.Editor.Note(pastedSecond));
+        model.UndoEdit();
+        Assert.Equal(2, engine.Sessions.Count); // The whole paste comes back out in one step.
+    }
+
+    [Fact]
+    public void ARefusedPasteAddsNothing()
+    {
+        var model = CopyModel(out var engine);
+        model.CopyBlocks(engine.Sessions.ToList());
+        Assert.False(model.PasteBlocks(new DateTime(2026, 10, 14, 9, 15, 0))); // Lands on the existing 09:00 block.
+        Assert.Equal(2, engine.Sessions.Count); Assert.NotNull(model.EditError);
+        Assert.False(model.PasteBlocks(new DateTime(2026, 10, 14, 23, 30, 0))); // Runs past midnight.
+        Assert.Equal(2, engine.Sessions.Count);
+    }
+
+    [Fact]
+    public void BlocksFromDifferentDaysCannotBeCopiedTogetherAndNothingCopiedMeansNothingToPaste()
+    {
+        var model = CopyModel(out var engine);
+        engine.Sessions.Add(new("2026-10-13", "Account one", "09:00:00", "recorded", "60.00"));
+        Assert.False(model.CopyBlocks(engine.Sessions.ToList())); Assert.False(model.CanPaste); Assert.Contains("one day", model.EditError);
+        Assert.False(model.PasteBlocks(new DateTime(2026, 10, 14, 13, 0, 0)));
+        Assert.Equal(3, engine.Sessions.Count);
+    }
+
+    [Fact]
+    public void CtrlVWithoutAPointerPastesStraightAfterTheLastBlockOfTheDay()
+    {
+        var model = CopyModel(out var engine);
+        model.CopyBlocks(new[] { engine.Sessions[0] });
+        Assert.Equal(new DateTime(2026, 10, 14, 10, 45, 0), model.DefaultPasteTime());
+        model.PasteTime = new DateTime(2026, 10, 14, 15, 0, 0);
+        Assert.Equal(new DateTime(2026, 10, 14, 15, 0, 0), model.DefaultPasteTime());
+    }
+
+    [AvaloniaFact]
+    public void BlocksAndTheTimelineOfferCopyAndPasteHere()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        var block = dashboard.GetVisualDescendants().OfType<Border>().First(b => b.Name?.StartsWith("TimelineEntry") == true);
+        Assert.Contains(block.ContextMenu!.Items.OfType<MenuItem>(), m => m.Name == "CopyBlocksMenu");
+        var canvas = dashboard.GetVisualDescendants().OfType<Canvas>().First(c => c.ContextMenu is not null && c.ContextMenu.Items.OfType<MenuItem>().Any(m => m.Name == "PasteHereMenu"));
+        Assert.False(canvas.ContextMenu!.Items.OfType<MenuItem>().Single(m => m.Name == "PasteHereMenu").IsEnabled); // Nothing copied yet.
+        dashboard.Close();
+    }
+}

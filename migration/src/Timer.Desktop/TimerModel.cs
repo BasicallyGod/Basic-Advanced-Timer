@@ -87,6 +87,39 @@ public sealed class TimerModel : INotifyPropertyChanged
         OpenEntry(row);
     }
     public void ClearSelection() { if (selectedRows.Count == 0) return; selectedRows.Clear(); Notify(); }
+    // Copied blocks stay inside the app, not on the system clipboard, so they can carry their credited minutes and notes exactly.
+    private IReadOnlyList<LedgerEditor.ClipBlock> copied = Array.Empty<LedgerEditor.ClipBlock>();
+    public bool CanPaste => copied.Count > 0;
+    /// <summary>Where Ctrl+V pastes. The timeline keeps it at the time under the pointer, and it is null when the pointer has not been over it.</summary>
+    public DateTime? PasteTime { get; set; }
+    /// <summary>Copies the blocks, or the selection when the clicked block is part of it. Blocks from several days cannot be copied together.</summary>
+    public bool CopyBlocks(IReadOnlyList<SessionRow> rows)
+    {
+        var chosen = Engine.Sessions.Where(s => rows.Any(r => ReferenceEquals(r, s)) && s.Duration > TimeSpan.Zero).OrderBy(s => s.From).ToList();
+        if (chosen.Count == 0) return false;
+        if (chosen.Select(s => s.Day).Distinct().Count() > 1) { EditError = "Copy blocks from one day at a time."; Notify(); return false; }
+        var first = chosen[0].From;
+        copied = chosen.Select(s => new LedgerEditor.ClipBlock(s.Account, s.From - first, s.Minutes, Editor.Note(s))).ToList();
+        EditError = null; Notice = copied.Count == 1 ? "Copied 1 block. Right-click the timeline, or press Ctrl+V, to paste it." : $"Copied {copied.Count} blocks. Right-click the timeline, or press Ctrl+V, to paste them.";
+        Notify(); return true;
+    }
+    public bool CopySelection() => CopyBlocks(Engine.Sessions.Where(selectedRows.Contains).ToList());
+    /// <summary>Pastes the copied blocks with the first at this time on the day shown. One undo step, and the time is credited like Add time.</summary>
+    public bool PasteBlocks(DateTime at)
+    {
+        if (!CanPaste) { EditError = "Copy some blocks first."; Notify(); return false; }
+        var count = copied.Count;
+        var done = ChangeLog(() => { foreach (var block in copied) ValidateAccount(block.Account); Editor.Paste(copied, at); });
+        if (done) { Notice = count == 1 ? "Pasted 1 block." : $"Pasted {count} blocks."; Notify(); }
+        return done;
+    }
+    /// <summary>The time Ctrl+V uses on the day shown, which is the pointer's place on the timeline, or straight after the day's last block.</summary>
+    public DateTime DefaultPasteTime()
+    {
+        if (PasteTime is { } at && at.Date == SelectedDate.Date) return at;
+        var day = SelectedDate.Date; var last = Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero).Select(s => s.To).DefaultIfEmpty().Max();
+        return last > day ? last : Engine.Plan(day).Working ? Engine.Plan(day).Start : day.AddHours(9);
+    }
     public bool MergeSelection()
     {
         if (!CanMergeSelection) { EditError = MergeHint; Notify(); return false; }
@@ -214,7 +247,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         var values = accounts.ToList();
         if (values.Count == 0 || values.Any(a => string.IsNullOrWhiteSpace(a.Name) || a.Name != a.Name.Trim()
             || a.Name.IndexOfAny(new[] { '\t', '\r', '\n' }) >= 0 || (a.Name.Equals(BreakAccount.Name, StringComparison.OrdinalIgnoreCase) || a.Name.Equals(BreakAccount.Label, StringComparison.OrdinalIgnoreCase))
-            || a.BudgetPeriod is not ("week" or "month" or "quarter")
+            || a.BudgetPeriod is not ("day" or "week" or "month" or "quarter")
             || (a.BudgetHours is { } h && (!double.IsFinite(h) || h <= 0)))
             || values.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Count)
             throw new ArgumentException("Use unique account names and positive budgets; Break is reserved.");
@@ -266,23 +299,30 @@ public sealed class TimerModel : INotifyPropertyChanged
     public TimeSpan Today(TimerAccount a) => Engine.Credited(a.Name, Engine.Now.Date, Engine.Now.Date.AddDays(1));
     public TimeSpan OnDay(TimerAccount a, DateTime day) => Engine.Credited(a.Name, day, day.AddDays(1));
     public TimeSpan Week(TimerAccount a) { var start = WeekStart(SelectedDate); return Engine.Credited(a.Name, start, start.AddDays(7)); }
-    /// <summary>The span a budget covers right now, from the account's own period (this week, month or quarter).</summary>
+    /// <summary>The span a budget covers right now, from the account's own period (today, this week, month or quarter).</summary>
     private (DateTime Start, DateTime End) BudgetWindow(TimerAccount a)
     {
         var now = Engine.Now;
         var start = a.Period switch
         {
+            "day" => now.Date,
             "month" => new DateTime(now.Year, now.Month, 1),
             "quarter" => new DateTime(now.Year, ((now.Month - 1) / 3) * 3 + 1, 1), _ => WeekStart(now)
         };
-        var end = a.Period switch { "month" => start.AddMonths(1), "quarter" => start.AddMonths(3), _ => start.AddDays(7) };
+        var end = a.Period switch { "day" => start.AddDays(1), "month" => start.AddMonths(1), "quarter" => start.AddMonths(3), _ => start.AddDays(7) };
         return (start, end);
     }
     public TimeSpan BudgetUsed(TimerAccount a) { var (start, end) = BudgetWindow(a); return Engine.Credited(a.Name, start, end); }
     /// <summary>How much of the budget is used, where 1 is all of it. Null when the account has no budget.</summary>
     public double? BudgetRatio(TimerAccount a) => a.Budget is { } target && target > TimeSpan.Zero ? BudgetUsed(a).TotalSeconds / target.TotalSeconds : null;
     /// <summary>How far through the budget's period it is now, from 0 to 1. The bar's tick sits here, so a bar past the tick is running ahead of pace.</summary>
-    public double BudgetPace(TimerAccount a) { var (start, end) = BudgetWindow(a); return Math.Clamp((Engine.Now - start).TotalSeconds / (end - start).TotalSeconds, 0, 1); }
+    public double BudgetPace(TimerAccount a)
+    {
+        // A daily budget is spread over the working day, so the line follows that and not the clock from midnight. A day off has nothing to pace.
+        if (a.Period == "day") return DayProgress ?? 0;
+        var (start, end) = BudgetWindow(a);
+        return Math.Clamp((Engine.Now - start).TotalSeconds / (end - start).TotalSeconds, 0, 1);
+    }
     public string Format(TimeSpan value)
     {
         if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) + "h";
@@ -305,7 +345,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>The budget for an account row, such as "10h35 / 20h monthly". The period is always said, since it matters when comparing accounts.</summary>
     public string BudgetLine(TimerAccount a) => a.Budget is { } target
-        ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)} {(a.Period switch { "month" => "monthly", "quarter" => "quarterly", _ => "weekly" })}" : "No budget";
+        ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)} {(a.Period switch { "day" => "daily", "month" => "monthly", "quarter" => "quarterly", _ => "weekly" })}" : "No budget";
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
     public void ChangeDate(int days) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
@@ -522,12 +562,12 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool GroupEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Group(rows));
     public bool UngroupEntries(string id) => ChangeLog(() => Editor.Ungroup(id));
     public bool TidyDay(IReadOnlyList<GapChoice> choices, int limit) => ChangeLog(() => Editor.Tidy(choices, limit));
-    public bool ExportWeek()
+    public bool ExportWeek(bool wholeMonth = false)
     {
         try
         {
             if (!Save()) return false;
-            var export = new WeekExport(Editor, Engine, WeekStart(SelectedDate));
+            var export = wholeMonth ? WeekExport.ForMonth(Editor, Engine, SelectedDate) : new WeekExport(Editor, Engine, WeekStart(SelectedDate));
             if (store is not null) export.VerifyAgainst(store.Database);
             ExportPath = export.Write(store?.ExportDirectory ?? Path.Combine(Path.GetTempPath(), "BasicsAdvancedTimer-demo-exports"), ReviewAccounts.Select(a => a.Name));
             EditError = null; Notify(); return true;
@@ -648,5 +688,27 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void RequestQuit() => QuitRequested?.Invoke();
     public bool StopForClose()
     { Engine.StopAccount(); var saved = Save(); if (!saved) Notify(); return saved; }
-    private void Notify() { ApplyTheme(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
+    // Notes and refused-edit messages in the footer fade after a while, so a stale one is never left sitting there.
+    // A failed save is not one of these, because it stays until a save works.
+    public static readonly TimeSpan MessageLifetime = TimeSpan.FromSeconds(30);
+    private Avalonia.Threading.DispatcherTimer? messageTimer;
+    private (string?, string?) messageSeen;
+    private void WatchMessages()
+    {
+        var now = (Notice, EditError);
+        if (now == messageSeen) return;
+        messageSeen = now;
+        messageTimer?.Stop(); messageTimer = null;
+        if (now.Item1 is null && now.Item2 is null) return;
+        messageTimer = new Avalonia.Threading.DispatcherTimer { Interval = MessageLifetime };
+        messageTimer.Tick += (_, _) => ExpireMessages();
+        messageTimer.Start();
+    }
+    /// <summary>Clears the footer notes now. The 30 second timer calls this, and tests call it directly because timers do not tick headless.</summary>
+    public void ExpireMessages()
+    {
+        messageTimer?.Stop(); messageTimer = null;
+        Notice = null; EditError = null; messageSeen = (null, null); Notify();
+    }
+    private void Notify() { ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
 }
