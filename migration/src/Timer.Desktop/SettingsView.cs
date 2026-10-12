@@ -45,6 +45,7 @@ public sealed class SettingsView : ScrollViewer
         // Units, and the accounts the day is divided between.
         var general = new StackPanel { Spacing = 10 };
         general.Children.Add(Toggle("Decimal hours (1.50h instead of 1h 30m)", "DecimalHours", () => model.DecimalHours, _ => model.ToggleFormat()));
+        general.Children.Add(Toggle("Move later blocks without asking when a longer entry runs into them", "MoveLaterAlways", () => model.MoveLaterAlways, v => model.SetMoveLaterAlways(v)));
         general.Children.Add(Row("Client accounts", Ui.Button("Accounts and budgets…", () => { if (TopLevel.GetTopLevel(this) is Window owner) new AccountsWindow(model).Show(owner); }, "EditAccounts")));
         page.Children.Add(Section("Hours and accounts", general));
 

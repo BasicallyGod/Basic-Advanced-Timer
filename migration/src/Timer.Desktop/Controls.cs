@@ -214,15 +214,19 @@ public static class Ui
         overtimeTest.Click += (_, _) => model.SetOvertimeTest(!model.OvertimeTest);
         // Which build this is, greyed out because it is information, not an action.
         var version = new MenuItem { Header = BuildInfo.Current, IsEnabled = false, IsVisible = false, Name = "BuildVersion" };
+        // Shown for a few minutes after going from one account to another and back, to pick the earlier block up again.
+        var continueItem = new MenuItem { Name = "ContinuePreviousMenu", Header = "Continue earlier block", IsVisible = false };
+        continueItem.Click += (_, _) => model.ContinuePrevious();
         var quit = new MenuItem { Header = "Close timer" };
         quit.Click += (_, _) => model.RequestQuit();
         var versionRule = new Separator { IsVisible = false };
-        var menu = new ContextMenu { ItemsSource = new Control[] { format, overtimeTest, versionRule, version, new Separator(), quit } };
+        var menu = new ContextMenu { ItemsSource = new Control[] { format, continueItem, overtimeTest, versionRule, version, new Separator(), quit } };
         void Sync()
         {
             var developer = model.DeveloperUnlocked;
             format.IsChecked = model.DecimalHours; overtimeTest.IsChecked = model.OvertimeTest;
             overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer; versionRule.IsVisible = developer;
+            var offer = model.ContinuePreviousText; continueItem.IsVisible = offer is not null; if (offer is not null) continueItem.Header = offer;
         }
         menu.Opened += (_, _) => Sync(); Sync();
         return menu;
@@ -749,7 +753,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -825,6 +829,13 @@ public sealed class IconGlyph : Control
                 context.DrawRectangle(brush, null, new Rect(3.5, 9, 3, 5), 1, 1);
                 context.DrawRectangle(brush, null, new Rect(7.5, 3.5, 3, 10.5), 1, 1);
                 context.DrawRectangle(brush, null, new Rect(11.5, 6.5, 3, 7.5), 1, 1);
+                break;
+            case IconKind.Today:
+                // A calendar page with two rings, and a dot on the day.
+                context.DrawRectangle(null, pen, new Rect(2.5, 3.5, 13, 12), 2.5, 2.5);
+                context.DrawLine(pen, new Point(2.5, 7.5), new Point(15.5, 7.5));
+                context.DrawLine(pen, new Point(6, 2), new Point(6, 5)); context.DrawLine(pen, new Point(12, 2), new Point(12, 5));
+                context.DrawEllipse(brush, null, new Point(9, 11.5), 1.4, 1.4);
                 break;
             case IconKind.Table:
                 // A grid of cells: hours by account.

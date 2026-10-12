@@ -87,6 +87,29 @@ public sealed class TimerModel : INotifyPropertyChanged
         OpenEntry(row);
     }
     public void ClearSelection() { if (selectedRows.Count == 0) return; selectedRows.Clear(); Notify(); }
+    // After a quick slip from one account to another and back, the earlier block can be picked up again. Blocks in a group are left alone, since
+    // taking one out of a group would break the group.
+    private bool InGroup(SessionRow row) => Editor.Entries(row.Day, row.Day.AddDays(1)).Any(e => e.GroupId is not null && e.Sources.Contains(row));
+    private (SessionRow Earlier, SessionRow Between)? ContinuableNow()
+    {
+        if (Engine.ContinuableBlocks() is not { } blocks) return null;
+        return InGroup(blocks.Earlier) || InGroup(blocks.Between) ? null : blocks;
+    }
+    public bool CanContinuePrevious => ContinuableNow() is not null;
+    /// <summary>What the option says, such as the account and the time its earlier block began, or null when it is not on offer.</summary>
+    public string? ContinuePreviousText => ContinuableNow() is { } blocks ? $"Continue {Label(blocks.Earlier.Account)} from {blocks.Earlier.From:HH:mm}" : null;
+    /// <summary>Takes back a switch made by mistake. The short block between is dropped and the earlier block carries on as one, including the time of the slip.</summary>
+    public bool ContinuePrevious()
+    {
+        if (ContinuableNow() is null) { EditError = "There is no recent switch to take back."; Notify(); return false; }
+        if (!Save()) { EditError = LastError; Notify(); return false; }
+        var removed = Engine.ContinuePrevious();
+        if (removed is { } blocks) Editor.DropNotes(new[] { (blocks.Between.Account, blocks.Between.Date, blocks.Between.Start) });
+        selectedRows.Clear();
+        var saved = Save();
+        Notice = removed is { } done ? $"Carrying on with {Label(done.Earlier.Account)} from {done.Earlier.From:HH:mm}." : null;
+        Notify(); return saved;
+    }
     // Copied blocks stay inside the app, not on the system clipboard, so they can carry their credited minutes and notes exactly.
     private IReadOnlyList<LedgerEditor.ClipBlock> copied = Array.Empty<LedgerEditor.ClipBlock>();
     public bool CanPaste => copied.Count > 0;
@@ -135,6 +158,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, ThemeLibrary.Default, DayOfWeek.Monday);
         this.store = store;
         Editor = store?.Editor ?? new LedgerEditor(Engine);
+        Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
         SelectedDate = Engine.Now.Date;
@@ -201,7 +225,12 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (!Accounts.Any(a => a.Name == name)) throw new ArgumentException("Unknown account", nameof(name));
         if (BreakAccount.Is(name)) { ToggleBreak(); return; } // A break is never the selected account, so it can always hand back.
-        SelectedAccount = name; Engine.ToggleAccount(name); Save(); Notify();
+        SelectedAccount = name; Engine.ToggleAccount(name); NoteContinuedBlock(); Save(); Notify();
+    }
+    // Tells the user when pressing play carried on a block that was already there, since no new block appears.
+    private void NoteContinuedBlock()
+    {
+        if (Engine.ContinuedBlock is { } block) { selectedRows.Clear(); Notice = $"Carrying on with the {Label(block.Account)} block from {block.From:HH:mm}."; }
     }
     // The block being recorded has no ledger row yet, so it cannot be dragged or edited until tracking stops.
     public void ExplainRunning() { EditError = "This block is still recording. Stop tracking to move or edit it."; Notify(); }
@@ -210,7 +239,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         // On a break, resume ends the break and goes back to the account that was running before it.
         if (IsOnBreak) { EndBreak(); return; }
         if (Engine.Active is { } active) { SelectedAccount = active.Account; Engine.StopAccount(); }
-        else if (SelectedAccount is { } name && Accounts.Any(a => a.Name == name)) Engine.ToggleAccount(name);
+        else if (SelectedAccount is { } name && Accounts.Any(a => a.Name == name)) { Engine.ToggleAccount(name); NoteContinuedBlock(); }
         Save(); Notify();
     }
     // The account to go back to after a break: the one that stopped at the moment the break began. It is found from the
@@ -523,8 +552,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (end <= start) { EditError = "There is no free recorded-time gap here."; Notify(); return; }
         EditError = null; EntryRequested?.Invoke(null, start, end);
     }
-    public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note)
-        => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note); });
+    public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note, bool allowOverlap = false)
+        => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note, allowOverlap); });
     /// <summary>What lengthening a block to a later end would move, or an explanation when it cannot be done. Nothing is changed.</summary>
     public IReadOnlyList<TimelineChange> PlanExtend(SessionRow row, DateTime end) => Editor.PlanExtend(row, end);
     public bool ExtendEntry(SessionRow row, DateTime end, string note) => ChangeLog(() => Editor.ExtendEnd(row, end, note));
@@ -626,6 +655,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool IsOnBreak => BreakAccount.Is(ActiveAccount);
     /// <summary>Whether hovering a control shows its tooltip. Switched off, the words are still the accessible names.</summary>
+    /// <summary>Whether a longer entry that runs into later blocks moves them without asking first. Chosen by a tick box in the entry window, and in settings.</summary>
+    public bool MoveLaterAlways => preferences.MoveLaterAlways;
+    public void SetMoveLaterAlways(bool on) { preferences = preferences with { MoveLaterAlways = on }; Save(); Notify(); }
     public bool Tooltips => preferences.Tooltips;
     public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
     /// <summary>Whether the developer features are switched on: the sample-data demo, the overtime tester and the version on the right-click menu. Off until unlocked from the About section.</summary>

@@ -29,7 +29,7 @@ public sealed class MenuAndShellTests
         {
             var items = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).ToList();
             var headers = items.Select(i => i is MenuItem m ? (string?)m.Header : "|").ToList();
-            Assert.Equal(new[] { "Decimal hours", "Test overtime", "|", BuildInfo.Current, "|", "Close timer" }, headers);
+            Assert.Equal(new[] { "Decimal hours", "Continue earlier block", "Test overtime", "|", BuildInfo.Current, "|", "Close timer" }, headers);
         }
         finally { window.Close(); }
     }
