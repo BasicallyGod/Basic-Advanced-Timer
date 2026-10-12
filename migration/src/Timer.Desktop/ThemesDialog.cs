@@ -191,36 +191,49 @@ public sealed class ThemesDialog : Dialog
     {
         var swatch = new Border { Width = 56, Height = 24, CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), BorderBrush = Brushes.Gray, Background = Brush.Parse(colours[token]) };
         var button = new Button { Content = swatch, Name = "Colour" + token, Padding = new Thickness(4), IsEnabled = !locked, Background = Brushes.Transparent };
-        // The picker's sliders and box are made the first time it opens. There are two dozen pickers, and making them all whenever a theme
-        // was chosen was most of the wait.
-        TextBox? hex = null; Slider? hue = null, sat = null, lit = null;
-        void Apply(string value, bool fromHex)
+        // A colour wheel (hue around it, strength out from the middle), a bar beside it for how light, and a box for the hex value. It is built the
+        // first time it opens, since there are two dozen of them and most are never looked at.
+        ColorSpectrum? wheel = null; ColorSlider? lightness = null; TextBox? hex = null; var syncing = false;
+        void Apply(string value)
         {
-            value = value.ToUpperInvariant(); colours[token] = value; swatch.Background = Brush.Parse(value);
-            if (!fromHex && hex is not null) hex.Text = value;
+            value = value.ToUpperInvariant(); if (value == colours[token]) return;
+            colours[token] = value; swatch.Background = Brush.Parse(value);
             changed();
         }
-        void Load() { if (hue is null || sat is null || lit is null) return; var (h, s, l) = ThemeColours.Hsl(colours[token]); filling = true; hue.Value = h; sat.Value = s; lit.Value = l; filling = false; }
+        static string Hex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+        void Show(Color colour)
+        {
+            if (wheel is null || lightness is null || hex is null) return;
+            syncing = true; var hsv = colour.ToHsv(); wheel.HsvColor = hsv; lightness.HsvColor = hsv; hex.Text = Hex(colour); syncing = false;
+        }
         var flyout = new Flyout();
         flyout.Opening += (_, _) =>
         {
             if (flyout.Content is not null) return;
-            hex = new TextBox { Text = colours[token], Width = 100, IsEnabled = !locked, Name = "Hex" + token };
-            hue = new Slider { Minimum = 0, Maximum = 360, Width = 220 }; sat = new Slider { Minimum = 0, Maximum = 1, Width = 220 }; lit = new Slider { Minimum = 0, Maximum = 1, Width = 220 };
-            void FromSliders(object? sender, AvaloniaPropertyChangedEventArgs e) { if (e.Property == RangeBase.ValueProperty && !filling) Apply(ThemeColours.FromHsl(hue.Value, sat.Value, lit.Value), false); }
-            hue.PropertyChanged += FromSliders; sat.PropertyChanged += FromSliders; lit.PropertyChanged += FromSliders;
+            wheel = new ColorSpectrum { Name = "Wheel" + token, Shape = ColorSpectrumShape.Ring, Components = ColorSpectrumComponents.HueSaturation, Width = 240, Height = 240, IsEnabled = !locked };
+            lightness = new ColorSlider { Name = "Lightness" + token, ColorModel = ColorModel.Hsva, ColorComponent = ColorComponent.Component3, IsAlphaVisible = false,
+                Orientation = Avalonia.Layout.Orientation.Vertical, Width = 26, Height = 240, Margin = new Thickness(0, 0, 14, 0), IsEnabled = !locked };
+            hex = new TextBox { Text = colours[token], Width = 120, IsEnabled = !locked, Name = "Hex" + token, HorizontalAlignment = HorizontalAlignment.Left };
+            // Moving either one moves the other and the box, and typing a valid colour moves both.
+            void FromPicker(object source, AvaloniaPropertyChangedEventArgs e)
+            {
+                if (syncing || e.Property.Name != "HsvColor" || wheel is null || lightness is null || hex is null) return;
+                var hsv = ReferenceEquals(source, wheel) ? wheel.HsvColor : lightness.HsvColor;
+                syncing = true; wheel.HsvColor = hsv; lightness.HsvColor = hsv; syncing = false;
+                var colour = hsv.ToRgb(); hex.Text = Hex(colour); Apply(Hex(colour));
+            }
+            wheel.PropertyChanged += (_, e) => FromPicker(wheel, e); lightness.PropertyChanged += (_, e) => FromPicker(lightness, e);
             hex.PropertyChanged += (_, e) =>
             {
-                if (e.Property != TextBox.TextProperty) return;
+                if (e.Property != TextBox.TextProperty || syncing) return;
                 var text = (hex.Text ?? "").Trim(); if (!text.StartsWith('#')) text = "#" + text;
-                if (ThemeTokens.IsValid(token, text) && !text.Equals(colours[token], StringComparison.OrdinalIgnoreCase)) { Apply(text, true); Load(); }
+                if (ThemeTokens.IsValid(token, text) && !text.Equals(colours[token], StringComparison.OrdinalIgnoreCase)) { Apply(text); syncing = true; var hsv = Color.Parse(text).ToHsv(); wheel.HsvColor = hsv; lightness.HsvColor = hsv; syncing = false; }
             };
-            var panel = new StackPanel { Spacing = 6, Margin = new Thickness(4) };
-            panel.Children.Add(Ui.Text("Hue", 12, "muted")); panel.Children.Add(hue); panel.Children.Add(Ui.Text("Saturation", 12, "muted")); panel.Children.Add(sat);
-            panel.Children.Add(Ui.Text("Lightness", 12, "muted")); panel.Children.Add(lit); panel.Children.Add(hex);
-            flyout.Content = panel;
+            var row = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Children = { lightness, wheel } };
+            flyout.Content = new StackPanel { Spacing = 10, Margin = new Thickness(6), Children = { row, hex } };
+            Show(Color.Parse(colours[token]));
         };
-        flyout.Opened += (_, _) => { if (hex is not null) hex.Text = colours[token]; Load(); };
+        flyout.Opened += (_, _) => Show(Color.Parse(colours[token]));
         button.Flyout = flyout;
         return button;
     }
