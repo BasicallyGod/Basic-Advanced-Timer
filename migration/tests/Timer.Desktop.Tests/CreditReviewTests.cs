@@ -415,8 +415,10 @@ public sealed class CreditReviewTests
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.Combine(Path.GetTempPath(), "timer-credit-previews");
         Directory.CreateDirectory(folder); Dispatcher.UIThread.RunJobs();
         using var warmup = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs();
-        using var frame = window.CaptureRenderedFrame(); Assert.NotNull(frame);
-        frame!.Save(Path.Combine(folder, name + ".png"));
+        // The renderer on a slow Windows runner has been seen to hand back no frame at first, so a few tries are made before giving up.
+        var frame = window.CaptureRenderedFrame();
+        for (var attempt = 0; frame is null && attempt < 5; attempt++) { Dispatcher.UIThread.RunJobs(); frame = window.CaptureRenderedFrame(); }
+        using (frame) { Assert.NotNull(frame); frame!.Save(Path.Combine(folder, name + ".png")); }
     }
 
 }

@@ -106,7 +106,7 @@ public static class TimelineGestures
         var high = edge >= 0 ? row.Day.AddDays(1) - row.To : (row.To - minimum) - row.From;
         return delta < low ? low : delta > high ? high : delta;
     }
-    private static TimeSpan SnapDelta(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour, out bool nudge)
+    public static TimeSpan SnapDelta(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour, out bool nudge)
     {
         var snapped = Snap(model, row, edge, requested, pixelsPerHour, out nudge);
         return ClampToDay(row, edge, snapped);
@@ -134,7 +134,7 @@ public static class TimelineGestures
             }
             if (edge >= 0)
             {
-                var boundary = other.Start - row.To;
+                var boundary = LastDeltaBefore(row, edge, other.Start);
                 candidates.Add(boundary);
                 if (other.Start >= row.To && (upper is null || boundary < upper.Value)) upper = boundary;
             }
@@ -155,7 +155,27 @@ public static class TimelineGestures
             var saved = LedgerEditor.TimedRow(row.Account, from, until, "edited");
             if (!occupied.Any(other => other.Start < saved.To && other.End > saved.From)) return candidate;
         }
+        // Nothing close enough to snap to. Never go past the nearest neighbour all the same.
+        if (lower is { } floor && grid < floor) grid = floor;
+        if (upper is { } ceiling && grid > ceiling) grid = ceiling;
         return grid;
     }
-
+    /// <summary>
+    /// The furthest this drag can go so that what is saved ends no later than <paramref name="limit"/>. A block's start is kept to the whole second and its
+    /// length to hundredths of a minute, so ending it exactly at a moment with a fraction of a second, such as the start of the block being recorded,
+    /// can round up past it and be refused. This steps back a second at a time until the saved block really fits.
+    /// </summary>
+    private static TimeSpan LastDeltaBefore(SessionRow row, int edge, DateTime limit)
+    {
+        var whole = new DateTime(limit.Ticks - limit.Ticks % TimeSpan.TicksPerSecond, limit.Kind);
+        var delta = whole - row.To;
+        for (var back = 0; back < 4; back++, delta -= TimeSpan.FromSeconds(1))
+        {
+            var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero);
+            var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
+            if ((until - from).TotalSeconds < 3 || until > row.Day.AddDays(1)) break;
+            if (LedgerEditor.TimedRow(row.Account, from, until, "edited").To <= limit) return delta;
+        }
+        return limit - row.To;
+    }
 }
