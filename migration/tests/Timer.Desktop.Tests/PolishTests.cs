@@ -27,7 +27,13 @@ public sealed class PolishTests
             window.ContextMenu!.Open(); Dispatcher.UIThread.RunJobs();
             Assert.False(menu.Single(m => m.Name == "BuildVersion").IsVisible); Assert.False(menu.Single(m => m.Name == "TestOvertime").IsVisible);
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); Settle(window);
-            Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible); // No sample-data demo yet.
+            // TEMPORARY diagnostic for a Windows-only failure.
+            var found = window.GetVisualDescendants().OfType<Border>().Where(b => b.Name == "DevelopmentSection").ToList();
+            if (found.Count == 0)
+                throw new Xunit.Sdk.XunitException("DevelopmentSection missing. Page present: " + window.GetVisualDescendants().OfType<ScrollViewer>().Any(x => x.Name == "SettingsPage")
+                    + ". Title: " + string.Join("|", window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Where(t => !string.IsNullOrEmpty(t)).Take(25))
+                    + ". Buttons: " + string.Join(",", window.GetVisualDescendants().OfType<Button>().Select(b => b.Name).Where(n => n is not null)));
+            Assert.False(found.Single().IsVisible); // No sample-data demo yet.
             window.GetVisualDescendants().OfType<ScrollViewer>().Single(x => x.Name == "SettingsPage").Offset = new Vector(0, 5000); Settle(window); // About is at the foot of the page.
             var about = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "AboutSection");
             var point = about.TranslatePoint(new Point(20, 20), window)!.Value;
