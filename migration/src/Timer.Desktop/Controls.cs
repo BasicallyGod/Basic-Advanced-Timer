@@ -805,6 +805,9 @@ public sealed class IconGlyph : Control
         if (e.Property == IsPointerOverProperty || e.Property == IsKeyboardFocusWithinProperty || e.Property == IsEffectivelyEnabledProperty) UpdateHover();
     }
     private void UpdateHover() => Hover = owner is { IsEffectivelyEnabled: true } && (owner.IsPointerOver || owner.IsKeyboardFocusWithin) ? 1 : 0;
+    private string? dotKey;
+    /// <summary>The theme brush the pill icon's dot turns to under the pointer, such as Live while tracking, so the icon says how the day is going.</summary>
+    public string? DotKey { get => dotKey; set { if (dotKey == value) return; dotKey = value; InvalidateVisual(); } }
     private string? tintKey;
     /// <summary>The theme brush this icon is drawn in, when it should not follow the text colour of its button.</summary>
     public string? TintKey { get => tintKey; set { if (tintKey == value) return; tintKey = value; InvalidateVisual(); } }
@@ -940,12 +943,18 @@ public sealed class IconGlyph : Control
             }
             case IconKind.Minimise:
             {
-                // A miniature timer pill: its dot and timer are visible before hovering.
-                var width = 14 + hover * 2;
-                context.DrawRectangle(null, pen, new Rect(9 - width / 2, 4.5, width, 9), 4.5, 4.5);
-                context.DrawEllipse(brush, null, new Point(5.5 - hover * .5, 9), .9, .9);
-                context.DrawLine(pen, new Point(8, 8), new Point(12.5 + hover * .5, 8));
-                context.DrawLine(new Pen(brush, 1, lineCap: PenLineCap.Round), new Point(8, 10.5), new Point(11, 10.5));
+                // A miniature timer pill: its dot and timer are visible before hovering. Under the pointer it behaves like the real pill coming forward:
+                // the outline fills with a soft tint, it widens a little about its middle, and the dot turns to the colour of how the day is going.
+                var width = 14 + hover * 3;
+                var body = new Rect(9 - width / 2, 4.5, width, 9);
+                IBrush? tint = hover > 0 && brush is ISolidColorBrush ink ? new SolidColorBrush(ink.Color, .16 * hover) : null;
+                context.DrawRectangle(tint, pen, body, 4.5, 4.5);
+                var dotCentre = new Point(body.Left + 3.6, 9);
+                context.DrawEllipse(brush, null, dotCentre, .9, .9);
+                if (hover > 0.02 && this.TryFindResource(DotKey ?? "Accent", ActualThemeVariant, out var statusFound) && statusFound is IBrush status)
+                    using (context.PushOpacity(hover)) context.DrawEllipse(status, null, dotCentre, 1.5, 1.5);
+                context.DrawLine(pen, new Point(body.Left + 6.5, 8), new Point(body.Right - 3.1, 8));
+                context.DrawLine(new Pen(brush, 1, lineCap: PenLineCap.Round), new Point(body.Left + 6.5, 10.5), new Point(body.Left + 9.5, 10.5));
                 break;
             }
             case IconKind.Previous:
