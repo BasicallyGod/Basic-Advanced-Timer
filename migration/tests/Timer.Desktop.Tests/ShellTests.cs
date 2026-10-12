@@ -77,6 +77,7 @@ public sealed class ShellTests
         try
         {
             Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout(); // Windows CI can reach the clicks before the first layout pass, leaving every row at 0, 0.
             for (var i = 0; i < model.Accounts.Count - 1; i++) // The break has its own button, not a row.
             {
                 var row = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account" + i);
