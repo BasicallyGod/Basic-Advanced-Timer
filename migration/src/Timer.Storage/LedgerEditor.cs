@@ -98,11 +98,12 @@ public sealed partial class LedgerEditor
         return new(start.ToString("yyyy-MM-dd"), account, start.ToString("HH:mm:ss"), origin,
             Math.Round((end - start).TotalMinutes, 2, MidpointRounding.ToEven).ToString("0.00", CultureInfo.InvariantCulture));
     }
-    private void ValidateInterval(SessionRow row, SessionRow? except)
+    // Overlapping recorded blocks can be allowed on purpose (the same hours billed to two accounts), but a block never runs into the one being recorded now.
+    private void ValidateInterval(SessionRow row, SessionRow? except, bool allowOverlap = false)
     {
-        if (engine.Sessions.Any(s => !ReferenceEquals(s, except) && s.Duration > TimeSpan.Zero && s.From < row.To && s.To > row.From)
+        if ((!allowOverlap && engine.Sessions.Any(s => !ReferenceEquals(s, except) && s.Duration > TimeSpan.Zero && s.From < row.To && s.To > row.From))
             || (engine.Active is { } active && active.Start < row.To && engine.Now > row.From))
-            throw new ArgumentException("This interval overlaps recorded or running time. Choose a free gap.");
+            throw new ArgumentException(allowOverlap ? "This runs into the time being recorded now. Stop tracking first, or choose another end." : "This interval overlaps recorded or running time. Choose a free gap.");
     }
     private void CheckNoteKey(SessionRow row)
     {
@@ -146,12 +147,12 @@ public sealed partial class LedgerEditor
         TrimHistory();
         Changed = true;
     }
-    public void Edit(SessionRow old, string account, DateTime start, DateTime end, string note)
+    public void Edit(SessionRow old, string account, DateTime start, DateTime end, string note, bool allowOverlap = false)
     {
         var index = Index(old);
         var row = old;
         if (account != old.Account || start != old.From || end != old.To)
-        { row = TimedRow(account, start, end, "edited"); ValidateInterval(row, old); }
+        { row = TimedRow(account, start, end, "edited"); ValidateInterval(row, old, allowOverlap); }
         CheckNoteKey(old);
         if (engine.Sessions.Any(s => !ReferenceEquals(s, old) && s.Date == row.Date && s.Start == row.Start && s.Account.Equals(row.Account, StringComparison.OrdinalIgnoreCase)))
             throw new ArgumentException("Another entry uses that account and start time.");

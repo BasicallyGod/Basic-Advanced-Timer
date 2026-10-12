@@ -335,16 +335,16 @@ public sealed class ShellTests
                 Dispatcher.UIThread.RunJobs();
             }
             Click("PillAccounts");
-            Assert.True(coordinator.Pill.Height > PillWindow.CollapsedWindowHeight);
+            Assert.True(coordinator.Pill.Height > coordinator.Pill.CollapsedWindowHeightNow);
             Assert.False(coordinator.Dashboard.IsVisible);
             Click("PillAccounts");
-            Assert.Equal(PillWindow.CollapsedWindowHeight, coordinator.Pill.Height);
+            Assert.Equal(coordinator.Pill.CollapsedWindowHeightNow, coordinator.Pill.Height);
             Click("PillDashboard");
             Assert.True(coordinator.Dashboard.IsVisible);
             Assert.False(coordinator.Pill.IsVisible);
             Assert.Equal("Account one", model.ActiveAccount);
             coordinator.Dashboard.OpenPill!();
-            Assert.Equal(PillWindow.CollapsedWindowHeight, coordinator.Pill.Height);
+            Assert.Equal(coordinator.Pill.CollapsedWindowHeightNow, coordinator.Pill.Height);
         }
         finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
     }
@@ -366,7 +366,7 @@ public sealed class ShellTests
                 coordinator.Pill.MouseMove(point + new Vector(20, 10));
                 coordinator.Pill.MouseUp(point + new Vector(20, 10), MouseButton.Left);
                 Assert.False(coordinator.Dashboard.IsVisible);
-                Assert.Equal(PillWindow.CollapsedWindowHeight, coordinator.Pill.Height);
+                Assert.Equal(coordinator.Pill.CollapsedWindowHeightNow, coordinator.Pill.Height);
                 Assert.Equal("Account one", model.ActiveAccount);
             }
             var pause = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillPause");
