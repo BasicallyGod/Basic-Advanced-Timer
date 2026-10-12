@@ -435,10 +435,15 @@ public sealed class ShellTests
         // First frame completes deferred scroll layout; capture the settled production view.
         using var warmup = window.CaptureRenderedFrame();
         Dispatcher.UIThread.RunJobs();
-        using var frame = window.CaptureRenderedFrame();
-        Assert.NotNull(frame);
-        Assert.True(frame!.PixelSize.Width > 0);
-        frame.Save(path);
+        // The renderer on a slow Windows runner has been seen to hand back no frame at first, so a few tries are made before giving up.
+        var frame = window.CaptureRenderedFrame();
+        for (var attempt = 0; frame is null && attempt < 5; attempt++) { Dispatcher.UIThread.RunJobs(); frame = window.CaptureRenderedFrame(); }
+        using (frame)
+        {
+            Assert.NotNull(frame);
+            Assert.True(frame!.PixelSize.Width > 0);
+            frame.Save(path);
+        }
     }
 
     private sealed class TestWindow(Control control) : Window, IDisposable
