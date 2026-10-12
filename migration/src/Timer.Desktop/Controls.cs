@@ -678,6 +678,12 @@ public sealed class Chevron : Control
 {
     public bool Expanded { get; set; }
     public Chevron() { Width = 14; Height = 14; }
+    // Drawn in the theme's text colour, which changes when the pill turns to a recording, break or overtime look, so it must be drawn again then.
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property.Name == nameof(ActualThemeVariant)) InvalidateVisual();
+    }
     public override void Render(DrawingContext context)
     {
         var brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
@@ -699,6 +705,12 @@ public sealed class PauseGlyph : Control
     {
         Width = Height = 14;
         Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = IconGlyph.HoverDuration } };
+    }
+    // Drawn in the theme's text colour, which changes when the pill turns to a recording, break or overtime look, so it must be drawn again then.
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property.Name == nameof(ActualThemeVariant)) InvalidateVisual();
     }
     public override void Render(DrawingContext context)
     {
@@ -748,6 +760,12 @@ public sealed class BreakGlyph : Control
             }
         };
         _ = animation.RunAsync(this, steaming.Token);
+    }
+    // Drawn in the theme's text colour, which changes when the pill turns to a recording, break or overtime look, so it must be drawn again then.
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property.Name == nameof(ActualThemeVariant)) InvalidateVisual();
     }
     public override void Render(DrawingContext context)
     {

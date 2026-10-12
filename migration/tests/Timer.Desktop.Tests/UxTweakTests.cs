@@ -150,4 +150,33 @@ public sealed class UxTweakTests
         Assert.Same(recordingAccent, recording["Accent"]); // A preview leaves the pill's tinted variants alone.
         ThemeEngine.Register(app, new[] { theme }); // Put back.
     }
+
+    [AvaloniaFact]
+    public void TheTrayMenuHasWordsOnEveryItemFromTheStart()
+    {
+        var model = new TimerModel(new TrackingEngine()); var windows = new WindowCoordinator(model, () => { });
+        var tray = new TrayController(model, windows);
+        try
+        {
+            var items = tray.Icons[0].Menu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).ToList();
+            Assert.Equal(6, items.Count);
+            Assert.All(items, item => Assert.False(string.IsNullOrWhiteSpace(item.Header), "A menu item has no words."));
+        }
+        finally { tray.Dispose(); }
+    }
+
+    [AvaloniaFact]
+    public void TheChevronIsDrawnAgainInTheNewColourWhenTheThemeVariantChanges()
+    {
+        var chevron = new Chevron { Width = 14, Height = 14, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+        var window = new Window { Width = 60, Height = 60, Content = chevron, RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light }; window.Show();
+        try
+        {
+            byte[] Frame() { Settle(window); using var frame = window.CaptureRenderedFrame(); using var stream = new MemoryStream(); frame!.Save(stream); return stream.ToArray(); }
+            ThemeEngine.Register(Application.Current!, ThemeLibrary.BuiltIn);
+            var light = Frame(); window.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark; var dark = Frame();
+            Assert.NotEqual(light, dark); // The stroke changed colour, not only the window around it.
+        }
+        finally { window.Close(); }
+    }
 }

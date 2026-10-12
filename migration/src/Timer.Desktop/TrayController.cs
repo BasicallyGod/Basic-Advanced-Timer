@@ -39,6 +39,9 @@ public sealed class TrayController : IDisposable
         icon = new TrayIcon { Menu = menu, IsVisible = true };
         icon.Clicked += (_, _) => windows.ToggleFromTray();
         model.PropertyChanged += Changed;
+        // The two middle items take their words from the day's state. They are filled in now, not only when the menu opens, because the menu can
+        // be drawn before that event arrives, which left them as blank lines.
+        RefreshMenu();
         Refresh();
     }
     public static string Tooltip(TimerModel model)
@@ -59,7 +62,7 @@ public sealed class TrayController : IDisposable
         pause.IsEnabled = model.IsTracking || model.SelectedAccount is not null;
         day.Header = DayLabel(model);
     }
-    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
+    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { RefreshMenu(); Refresh(); }
     private void Refresh()
     {
         var text = Tooltip(model);
