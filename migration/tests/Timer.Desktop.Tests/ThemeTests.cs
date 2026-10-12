@@ -155,6 +155,28 @@ public sealed class ThemeTests
         finally { window.Close(); }
     }
 
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void TheColourWheelAndLightnessBarMoveTheColourAndTheHexBoxFollowsThem()
+    {
+        var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
+        var window = new ThemesDialog(model).Open(model);
+        try
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Edit(window, "#336699"); // Opens the picker and puts a first colour in.
+            var picker = Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Avalonia.Controls.Control)((Avalonia.Controls.Flyout)Find<Avalonia.Controls.Button>(window, "ColourSurface").Flyout!).Content!).ToList();
+            var wheel = picker.OfType<Avalonia.Controls.Primitives.ColorSpectrum>().Single(); var bar = picker.OfType<Avalonia.Controls.Primitives.ColorSlider>().Single(); var hex = picker.OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "HexSurface");
+            Assert.Equal(Avalonia.Media.Color.Parse("#336699"), wheel.HsvColor.ToRgb()); Assert.Equal(wheel.HsvColor.V, bar.HsvColor.V, 3); // Typing a colour moves both.
+            wheel.HsvColor = new Avalonia.Media.HsvColor(1, 120, 1, 1); // Pure green, from the wheel.
+            Assert.Equal("#00FF00", hex.Text); // The app repaints a moment later (repaints are gathered while a control moves), so only the box is checked here.
+            var swatch = (Avalonia.Controls.Border)Find<Avalonia.Controls.Button>(window, "ColourSurface").Content!;
+            Assert.Equal(Avalonia.Media.Color.Parse("#00FF00"), ((Avalonia.Media.ISolidColorBrush)swatch.Background!).Color);
+            bar.HsvColor = new Avalonia.Media.HsvColor(1, 120, 1, 0.5); // Half as light, from the bar.
+            Assert.Equal(wheel.HsvColor.V, 0.5, 2); Assert.Equal(hex.Text, $"#{wheel.HsvColor.ToRgb().R:X2}{wheel.HsvColor.ToRgb().G:X2}{wheel.HsvColor.ToRgb().B:X2}");
+        }
+        finally { window.Close(); model.DeleteTheme(copy); model.SetTheme("System"); }
+    }
+
     private static void Edit(ThemesDialog window, string hexColour)
     {
         // The picker is built the first time it opens, so it is opened (and put away again) before its box is typed in.

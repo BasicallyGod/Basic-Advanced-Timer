@@ -8,6 +8,8 @@
   </Application.Resources>
   <Application.Styles>
     <FluentTheme />
+    <!-- The colour picker is a separate package whose look is not part of FluentTheme. -->
+    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
     <Style Selector="ScrollBar">
       <Setter Property="Theme">
         <ControlTheme TargetType="ScrollBar">
@@ -171,12 +173,11 @@
     <Style Selector="Button.rail.selected /template/ ContentPresenter#PART_ContentPresenter, Button.rail.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
-    <!-- Close timer only turns red and swells a little under the pointer, with no box or glow around it. -->
-    <Style Selector="Button.quit">
-      <Setter Property="Transitions"><Transitions><TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.15" /></Transitions></Setter>
+    <!-- The close icon stays still, with the same soft hover surface as the other rail controls. -->
+    <Style Selector="Button.quit:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
+    <Style Selector="Button.rail /template/ ContentPresenter#PART_ContentPresenter, Button.iconButton /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Transitions"><Transitions><BrushTransition Property="Background" Duration="0:0:0.2" /></Transitions></Setter>
     </Style>
-    <Style Selector="Button.quit:pointerover"><Setter Property="RenderTransform" Value="scale(1.12)" /></Style>
-    <Style Selector="Button.quit:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
     <!-- The floating message is raised off the timeline, with the accent for an outline, so it is easy to see against any block. -->
     <Style Selector=":is(Border).messageBar">
       <Setter Property="Background" Value="{DynamicResource Panel}" />

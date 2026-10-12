@@ -453,6 +453,7 @@ public sealed class DashboardWindow : Window
     private readonly ContentControl workspace = new();
     private readonly Button day;
     private Button timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
+    private IconGlyph pillGlyph = null!;
     private readonly BreakGlyph dashboardCup = new();
     private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly Button undo;
@@ -494,7 +495,8 @@ public sealed class DashboardWindow : Window
         hoursTab = RailButton(IconKind.Table, "Hours table", "WeekHoursTab", () => SelectSection("hours"));
         entriesTab = RailButton(IconKind.Entries, "Entries", "WeekEntriesTab", () => SelectSection("entries"));
         // The way back to the pill is the first thing on the rail, at the top left.
-        var backToPill = RailButton(IconKind.Minimise, "Back to pill", "BackToPill", () => OpenPill?.Invoke());
+        var backToPill = RailButton(IconKind.Minimise, "Switch to pill", "BackToPill", () => OpenPill?.Invoke());
+        pillGlyph = (IconGlyph)backToPill.Content!;
         railTop.Children.Add(backToPill);
         var backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
         foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
@@ -577,8 +579,8 @@ public sealed class DashboardWindow : Window
         var nav = Ui.Grid("*,Auto"); nav.VerticalAlignment = VerticalAlignment.Center;
         Ui.Put(nav, workspaceTitle); headerRow = nav;
         date.Width = 112; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
-        previous = Ui.Button("‹", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }, "PreviousPeriod"); previous.Classes.Add("iconButton"); previous.Width = 30; previous.FontSize = 20;
-        next = Ui.Button("›", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }, "NextPeriod"); next.Classes.Add("iconButton"); next.Width = 30; next.FontSize = 20;
+        previous = Ui.IconButton(IconKind.Previous, "Previous day or week", "PreviousPeriod", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }); previous.Width = 30;
+        next = Ui.IconButton(IconKind.Next, "Next day or week", "NextPeriod", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }); next.Width = 30;
         // The same quiet outlined look, with a small icon, as Add time, Undo and Merge.
         todayButton = Ui.Button("", () => model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days), "GoToToday");
         todayButton.Classes.Add("toolButton"); todayButton.Classes.Add("quiet"); todayButton.Height = 34; todayButton.Margin = new Thickness(10, 0, 0, 0); todayButton.Padding = new Thickness(12, 0);
@@ -779,6 +781,7 @@ public sealed class DashboardWindow : Window
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
         edit.IsVisible = editing && model.CanEditSelection; if (edit.IsVisible && edit.Content is Panel editRow && editRow.Children.OfType<TextBlock>().FirstOrDefault() is { } editText) editText.Text = model.EditText;
+        pillGlyph.DotKey = model.IsOnBreak ? "Break" : model.IsTracking ? "Live" : "Accent";
         dashboardCup.Filled = model.IsOnBreak; dashboardCup.SetSteaming(model.IsOnBreak); dashboardCup.InvalidateVisual();
         dashboardBreakText.Text = model.IsOnBreak ? "Finish break" : "Start break";
         breakButton.Classes.Set("onBreak", model.IsOnBreak);
