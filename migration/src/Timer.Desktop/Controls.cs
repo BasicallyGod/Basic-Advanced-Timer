@@ -29,7 +29,7 @@ public static class Ui
     /// <summary>The text colour that reads best on a block of this colour: the usual dark ink on light colours, white on dark ones.</summary>
     public static string InkOn(string colour) => IsColour(colour) ? ThemeColours.ReadableOn(colour) : "#24312B";
     // Room around a borderless window for its soft shadow or glow, which are drawn outside the card.
-    public const double ShadowMargin = 22;
+    public const double ShadowMargin = 30;
     /// <summary>Wraps a window's card so it can cast a shadow or glow. The card clips its own content, so the shadow lives on a parent.</summary>
     public static Border Shadowed(Border card, double radius)
     {
