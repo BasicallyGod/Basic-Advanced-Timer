@@ -4,6 +4,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Microsoft.Data.Sqlite;
 using Timer.Core;
 using Timer.Storage;
 using Timer.Desktop;
@@ -94,5 +95,59 @@ public sealed class TweakTests
         Assert.NotNull(model.ExportPath); Assert.Contains("Month-202610", model.ExportPath);
         Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Detail.csv")) && File.Exists(Path.Combine(model.ExportPath!, "Summary.csv")));
         window.Close();
+    }
+
+    [Fact]
+    public void ADailyBudgetCountsTodayOnlyAndPacesAcrossTheWorkingDay()
+    {
+        var now = new DateTime(2026, 10, 14, 13, 0, 0); // A Wednesday, part way through the working day.
+        var engine = new TrackingEngine(clock: () => now);
+        engine.Sessions.Add(new("2026-10-14", "Account one", "09:00:00", "added", "60"));
+        engine.Sessions.Add(new("2026-10-13", "Account one", "09:00:00", "added", "240")); // Yesterday, not counted.
+        var model = new TimerModel(engine, new StoreSettings(new() { new("Account one", 4, "day") }, false, ThemeLibrary.Default, DayOfWeek.Monday));
+        var account = model.Accounts.First(a => a.Name == "Account one");
+        Assert.Equal(TimeSpan.FromHours(1), model.BudgetUsed(account));
+        Assert.Equal(0.25, model.BudgetRatio(account)!.Value, 3);
+        Assert.Contains("daily", model.BudgetLine(account));
+        Assert.InRange(model.BudgetPace(account), 0.01, 0.99); // Somewhere through the working day, not midnight to midnight.
+        model.SetAccounts(new[] { new AccountSettings("Account one", 3, "day") }); // Saving a daily budget is accepted.
+        Assert.Equal("day", model.Accounts.First(a => a.Name == "Account one").Period);
+    }
+
+    [Fact]
+    public void AnOlderDatabaseUpgradesToAllowDailyBudgetsWithEveryAccountEntryAndLinkKept()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "bat-upgrade-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using (var db = TimerDatabase.Open(folder, () => new DateTime(2026, 10, 1)))
+            {
+                db.Execute("INSERT INTO accounts (id, name, colour, position, budget_seconds, budget_period) VALUES (7, 'Account one', '#336699', 0, 7200, 'month')");
+                db.Execute("INSERT INTO entries (kind, account_id, day, start_at, end_at, seconds, created_at) VALUES ('work', 7, '2026-10-01', '2026-10-01T09:00:00', '2026-10-01T09:10:00', 600, '2026-10-01T09:10:00')");
+            }
+            SqliteConnection.ClearAllPools();
+            // Put it back to how format 1 stored accounts, with the narrower period check, as an existing user's file would be.
+            using (var raw = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(folder, TimerDatabase.FileName), Pooling = false }.ToString()))
+            {
+                raw.Open();
+                foreach (var sql in new[] { "PRAGMA foreign_keys = OFF", "BEGIN", TimerDatabase.AccountsTable("accounts_old", false),
+                    "INSERT INTO accounts_old SELECT id, name, colour, position, hidden, budget_seconds, budget_period FROM accounts", "DROP TABLE accounts",
+                    "ALTER TABLE accounts_old RENAME TO accounts", "COMMIT", "PRAGMA user_version = 1" })
+                { using var command = raw.CreateCommand(); command.CommandText = sql; command.ExecuteNonQuery(); }
+                using var check = raw.CreateCommand(); check.CommandText = "INSERT INTO accounts (name, colour, position, budget_period) VALUES ('x', '#336699', 1, 'day')";
+                Assert.Throws<SqliteException>(() => check.ExecuteNonQuery()); // Format 1 really refuses a daily budget.
+            }
+            SqliteConnection.ClearAllPools();
+            using var upgraded = TimerDatabase.Open(folder, () => new DateTime(2026, 10, 2));
+            Assert.Equal(TimerDatabase.SchemaVersion, upgraded.Version);
+            Assert.Equal(7200L, upgraded.Scalar("SELECT budget_seconds FROM accounts WHERE id = 7"));
+            Assert.Equal("month", upgraded.Scalar("SELECT budget_period FROM accounts WHERE id = 7"));
+            Assert.Equal("Account one", upgraded.Scalar("SELECT a.name FROM entries e JOIN accounts a ON a.id = e.account_id"));
+            Assert.Empty(upgraded.Query("PRAGMA foreign_key_check", r => 1));
+            upgraded.Execute("UPDATE accounts SET budget_period = 'day' WHERE id = 7"); // Now allowed.
+            Assert.Equal("day", upgraded.Scalar("SELECT budget_period FROM accounts WHERE id = 7"));
+            Assert.Single(Directory.GetFiles(Path.Combine(folder, "Backups"), "timer-before-format-2-*.db"));
+        }
+        finally { SqliteConnection.ClearAllPools(); try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
 }

@@ -16,12 +16,27 @@ public sealed class DatabaseTooNewException : IOException
 // change either lands whole or not at all.
 public sealed class TimerDatabase : IDisposable
 {
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = 2;
     public const string FileName = "timer.db";
     public const int DailyCopiesKept = 14;
     // Numbered upgrades from one format to the next: entry 0 takes the data from format 1 to 2, entry 1 from 2 to 3, and so on. A build that adds a table
     // or column adds one here and raises SchemaVersion; nothing rewrites the data in place without a copy being saved first.
-    private static readonly IReadOnlyList<string> NoUpgrades = Array.Empty<string>();
+    // Format 2 allows a budget per day. The accounts table carries a CHECK on the budget period that SQLite cannot widen in place, so the
+    // table is rebuilt, with foreign keys off while it happens (SQLite ignores that switch inside a transaction, so Upgrade sets it) and checked before the change is kept.
+    public static string AccountsTable(string name, bool days) => $@"CREATE TABLE {name} (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK (length(name) > 0),
+            colour TEXT NOT NULL CHECK (colour GLOB '#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]'),
+            position INTEGER NOT NULL,
+            hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
+            budget_seconds INTEGER CHECK (budget_seconds IS NULL OR budget_seconds > 0),
+            budget_period TEXT NOT NULL DEFAULT 'week' CHECK (budget_period IN ({(days ? "'day', " : "")}'week', 'month', 'quarter')))";
+    public static readonly IReadOnlyList<string> Upgrades = new[]
+    {
+        AccountsTable("accounts_next", true) + "; "
+        + "INSERT INTO accounts_next (id, name, colour, position, hidden, budget_seconds, budget_period) SELECT id, name, colour, position, hidden, budget_seconds, budget_period FROM accounts; "
+        + "DROP TABLE accounts; ALTER TABLE accounts_next RENAME TO accounts;"
+    };
 
     private readonly SqliteConnection connection;
     private SqliteTransaction? transaction;
@@ -37,7 +52,7 @@ public sealed class TimerDatabase : IDisposable
     {
         Directory.CreateDirectory(folder);
         var path = System.IO.Path.Combine(folder, FileName);
-        var steps = upgrades ?? NoUpgrades; var target = targetVersion ?? SchemaVersion;
+        var steps = upgrades ?? Upgrades; var target = targetVersion ?? SchemaVersion;
         var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadWriteCreate, Pooling = false }.ToString());
         TimerDatabase? database = null;
         try
@@ -82,15 +97,23 @@ public sealed class TimerDatabase : IDisposable
         // The data is copied aside first, so a failed or unwanted upgrade can be put back.
         var copy = System.IO.Path.Combine(folder, "Backups", $"timer-before-format-{target}-{clock():yyyyMMdd-HHmmss}.db");
         CopyTo(copy);
-        InTransaction(() =>
+        // Rebuilding a table that others point at needs foreign keys off, which only takes effect outside a transaction.
+        // They are checked again before the change is kept, and switched back on whatever happens.
+        Execute("PRAGMA foreign_keys = OFF");
+        try
         {
-            for (var from = Version; from < target; from++)
+            InTransaction(() =>
             {
-                if (from - 1 >= steps.Count) throw new InvalidDataException("No upgrade is defined from data format " + from + ".");
-                Execute(steps[from - 1]);
-            }
-            Execute($"PRAGMA user_version = {target}");
-        });
+                for (var from = Version; from < target; from++)
+                {
+                    if (from - 1 >= steps.Count) throw new InvalidDataException("No upgrade is defined from data format " + from + ".");
+                    Execute(steps[from - 1]);
+                }
+                if (Query("PRAGMA foreign_key_check", r => 1).Count > 0) throw new InvalidDataException("The upgrade left records pointing at accounts that do not exist, so it was undone.");
+                Execute($"PRAGMA user_version = {target}");
+            });
+        }
+        finally { Execute("PRAGMA foreign_keys = ON"); }
         Version = target;
     }
     // The first launch each day saves a dated copy, since the file cannot be repaired by hand. The newest few are kept.
@@ -159,14 +182,7 @@ public sealed class TimerDatabase : IDisposable
 
     private static readonly string[] Schema =
     {
-        @"CREATE TABLE accounts (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK (length(name) > 0),
-            colour TEXT NOT NULL CHECK (colour GLOB '#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]'),
-            position INTEGER NOT NULL,
-            hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
-            budget_seconds INTEGER CHECK (budget_seconds IS NULL OR budget_seconds > 0),
-            budget_period TEXT NOT NULL DEFAULT 'week' CHECK (budget_period IN ('week', 'month', 'quarter')))",
+        AccountsTable("accounts", true),
         @"CREATE TABLE groups (
             id INTEGER PRIMARY KEY,
             account_id INTEGER NOT NULL REFERENCES accounts(id),

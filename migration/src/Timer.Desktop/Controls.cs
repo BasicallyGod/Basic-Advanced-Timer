@@ -580,8 +580,8 @@ public sealed class AccountList : StackPanel
             if (row.Bar is { } bar && model.BudgetRatio(row.Account) is { } ratio)
             {
                 bar.Set(ratio, model.BudgetPace(row.Account));
-                var period = row.Account.Period is "month" or "quarter" ? row.Account.Period : "week";
-                ToolTip.SetTip(bar, $"The line marks how far through the {period} it is. A bar past the line is ahead of an even spread of the budget.");
+                var period = row.Account.Period is "day" or "month" or "quarter" ? row.Account.Period : "week";
+                ToolTip.SetTip(bar, $"The line marks how far through the {(period == "day" ? "working day" : period)} it is. A bar past the line is ahead of an even spread of the budget.");
                 // A spent budget shows its percentage in red, so overrunning reads at a glance.
                 row.Percent.Text = Math.Round(ratio * 100) + "%"; row.Percent.Classes.Set("overtime", ratio >= 1); row.Percent.Classes.Set("muted", ratio < 1);
             }

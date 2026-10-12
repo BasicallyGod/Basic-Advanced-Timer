@@ -214,7 +214,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         var values = accounts.ToList();
         if (values.Count == 0 || values.Any(a => string.IsNullOrWhiteSpace(a.Name) || a.Name != a.Name.Trim()
             || a.Name.IndexOfAny(new[] { '\t', '\r', '\n' }) >= 0 || (a.Name.Equals(BreakAccount.Name, StringComparison.OrdinalIgnoreCase) || a.Name.Equals(BreakAccount.Label, StringComparison.OrdinalIgnoreCase))
-            || a.BudgetPeriod is not ("week" or "month" or "quarter")
+            || a.BudgetPeriod is not ("day" or "week" or "month" or "quarter")
             || (a.BudgetHours is { } h && (!double.IsFinite(h) || h <= 0)))
             || values.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Count)
             throw new ArgumentException("Use unique account names and positive budgets; Break is reserved.");
@@ -266,23 +266,30 @@ public sealed class TimerModel : INotifyPropertyChanged
     public TimeSpan Today(TimerAccount a) => Engine.Credited(a.Name, Engine.Now.Date, Engine.Now.Date.AddDays(1));
     public TimeSpan OnDay(TimerAccount a, DateTime day) => Engine.Credited(a.Name, day, day.AddDays(1));
     public TimeSpan Week(TimerAccount a) { var start = WeekStart(SelectedDate); return Engine.Credited(a.Name, start, start.AddDays(7)); }
-    /// <summary>The span a budget covers right now, from the account's own period (this week, month or quarter).</summary>
+    /// <summary>The span a budget covers right now, from the account's own period (today, this week, month or quarter).</summary>
     private (DateTime Start, DateTime End) BudgetWindow(TimerAccount a)
     {
         var now = Engine.Now;
         var start = a.Period switch
         {
+            "day" => now.Date,
             "month" => new DateTime(now.Year, now.Month, 1),
             "quarter" => new DateTime(now.Year, ((now.Month - 1) / 3) * 3 + 1, 1), _ => WeekStart(now)
         };
-        var end = a.Period switch { "month" => start.AddMonths(1), "quarter" => start.AddMonths(3), _ => start.AddDays(7) };
+        var end = a.Period switch { "day" => start.AddDays(1), "month" => start.AddMonths(1), "quarter" => start.AddMonths(3), _ => start.AddDays(7) };
         return (start, end);
     }
     public TimeSpan BudgetUsed(TimerAccount a) { var (start, end) = BudgetWindow(a); return Engine.Credited(a.Name, start, end); }
     /// <summary>How much of the budget is used, where 1 is all of it. Null when the account has no budget.</summary>
     public double? BudgetRatio(TimerAccount a) => a.Budget is { } target && target > TimeSpan.Zero ? BudgetUsed(a).TotalSeconds / target.TotalSeconds : null;
     /// <summary>How far through the budget's period it is now, from 0 to 1. The bar's tick sits here, so a bar past the tick is running ahead of pace.</summary>
-    public double BudgetPace(TimerAccount a) { var (start, end) = BudgetWindow(a); return Math.Clamp((Engine.Now - start).TotalSeconds / (end - start).TotalSeconds, 0, 1); }
+    public double BudgetPace(TimerAccount a)
+    {
+        // A daily budget is spread over the working day, so the line follows that and not the clock from midnight. A day off has nothing to pace.
+        if (a.Period == "day") return DayProgress ?? 0;
+        var (start, end) = BudgetWindow(a);
+        return Math.Clamp((Engine.Now - start).TotalSeconds / (end - start).TotalSeconds, 0, 1);
+    }
     public string Format(TimeSpan value)
     {
         if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) + "h";
@@ -305,7 +312,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>The budget for an account row, such as "10h35 / 20h monthly". The period is always said, since it matters when comparing accounts.</summary>
     public string BudgetLine(TimerAccount a) => a.Budget is { } target
-        ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)} {(a.Period switch { "month" => "monthly", "quarter" => "quarterly", _ => "weekly" })}" : "No budget";
+        ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)} {(a.Period switch { "day" => "daily", "month" => "monthly", "quarter" => "quarterly", _ => "weekly" })}" : "No budget";
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
     public void ChangeDate(int days) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }

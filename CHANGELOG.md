@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 | --- | --- | --- |
+| Export a month, budgets per day | pending | The export window offers the week or the whole month of the date shown, writing Detail.csv and Summary.csv with hundredths of an hour shared out across the whole month so every sum is exact. A budget can now be per day as well as week, month or quarter, in the getting started setup and in Accounts and budgets. A daily budget counts today only and its pace line follows the working day. The database moves to format 2 to allow it, with a copy saved first, and an older build will refuse a newer file. |
 | First Store feedback fixes | pending | The pill is drawn smaller on screens under 1800 pixels wide, down to 70 per cent. A selected block no longer has a border beside its coloured strip. There is clear space between Merge and the zoom bar. The week overview icon is a small bar chart rather than a calendar. Notes and refused-edit messages at the bottom of the dashboard fade after 30 seconds. |
 
 ## 11 October 2026
