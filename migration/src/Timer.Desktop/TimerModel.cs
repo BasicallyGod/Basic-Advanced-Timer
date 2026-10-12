@@ -89,11 +89,11 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void ClearSelection() { if (selectedRows.Count == 0) return; selectedRows.Clear(); Notify(); }
     // After a quick slip from one account to another and back, the earlier block can be picked up again. Blocks in a group are left alone, since
     // taking one out of a group would break the group.
+    private bool InGroup(SessionRow row) => Editor.Entries(row.Day, row.Day.AddDays(1)).Any(e => e.GroupId is not null && e.Sources.Contains(row));
     private (SessionRow Earlier, SessionRow Between)? ContinuableNow()
     {
         if (Engine.ContinuableBlocks() is not { } blocks) return null;
-        var grouped = Editor.Entries(blocks.Earlier.Day, blocks.Earlier.Day.AddDays(1)).Where(e => e.GroupId is not null).SelectMany(e => e.Sources).ToHashSet();
-        return grouped.Contains(blocks.Earlier) || grouped.Contains(blocks.Between) ? null : blocks;
+        return InGroup(blocks.Earlier) || InGroup(blocks.Between) ? null : blocks;
     }
     public bool CanContinuePrevious => ContinuableNow() is not null;
     /// <summary>What the option says, such as the account and the time its earlier block began, or null when it is not on offer.</summary>
@@ -158,6 +158,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, ThemeLibrary.Default, DayOfWeek.Monday);
         this.store = store;
         Editor = store?.Editor ?? new LedgerEditor(Engine);
+        Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
         SelectedDate = Engine.Now.Date;
@@ -224,7 +225,12 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (!Accounts.Any(a => a.Name == name)) throw new ArgumentException("Unknown account", nameof(name));
         if (BreakAccount.Is(name)) { ToggleBreak(); return; } // A break is never the selected account, so it can always hand back.
-        SelectedAccount = name; Engine.ToggleAccount(name); Save(); Notify();
+        SelectedAccount = name; Engine.ToggleAccount(name); NoteContinuedBlock(); Save(); Notify();
+    }
+    // Tells the user when pressing play carried on a block that was already there, since no new block appears.
+    private void NoteContinuedBlock()
+    {
+        if (Engine.ContinuedBlock is { } block) { selectedRows.Clear(); Notice = $"Carrying on with the {Label(block.Account)} block from {block.From:HH:mm}."; }
     }
     // The block being recorded has no ledger row yet, so it cannot be dragged or edited until tracking stops.
     public void ExplainRunning() { EditError = "This block is still recording. Stop tracking to move or edit it."; Notify(); }
@@ -233,7 +239,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         // On a break, resume ends the break and goes back to the account that was running before it.
         if (IsOnBreak) { EndBreak(); return; }
         if (Engine.Active is { } active) { SelectedAccount = active.Account; Engine.StopAccount(); }
-        else if (SelectedAccount is { } name && Accounts.Any(a => a.Name == name)) Engine.ToggleAccount(name);
+        else if (SelectedAccount is { } name && Accounts.Any(a => a.Name == name)) { Engine.ToggleAccount(name); NoteContinuedBlock(); }
         Save(); Notify();
     }
     // The account to go back to after a break: the one that stopped at the moment the break began. It is found from the

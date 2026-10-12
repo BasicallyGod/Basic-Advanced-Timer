@@ -91,8 +91,28 @@ public sealed class TrackingEngine
             // after the new one begins, which drew the two side by side as if they overlapped. The new block starts at the whole second
             // after the old one's end instead (a second or so later at most), so consecutive blocks always meet cleanly.
             if (stoppedEnd is not null && LastStoredEnd is { } end && end.Date == start.Date && WholeSecond(start) < end) start = WholeSecond(end, up: true);
+            // When the time now is inside an earlier block of this same account, such as one added or pasted ahead of time, pressing play carries that block on
+            // instead of starting a second one on top of it. It is reopened from its own start, and stopping ends it where the recording stops.
+            ContinuedBlock = null;
+            if (FutureBlockOf(account) is { } block) { Sessions.Remove(block); start = block.From; ContinuedBlock = block; }
             Active = new(account, start);
         }
+    }
+    /// <summary>The block that the last start carried on instead of starting a new one, or null when it started a new one.</summary>
+    public SessionRow? ContinuedBlock { get; private set; }
+    /// <summary>Lets the caller keep some blocks out of that, such as ones in a group, which the engine knows nothing about.</summary>
+    public Func<SessionRow, bool> CanReopen { get; set; } = _ => true;
+    /// <summary>
+    /// The block of this account that the time now falls inside and that runs on past it, as long as carrying it on would not overlap other
+    /// recorded time. Breaks are left out, since a break has its own way of resuming.
+    /// </summary>
+    public SessionRow? FutureBlockOf(string account)
+    {
+        if (BreakAccount.Is(account)) return null;
+        var now = Now;
+        var block = Sessions.FirstOrDefault(s => s.Account.Equals(account, StringComparison.OrdinalIgnoreCase) && s.From <= now && s.To > now);
+        if (block is null || !CanReopen(block)) return null;
+        return Sessions.Any(s => !ReferenceEquals(s, block) && s.Duration > TimeSpan.Zero && s.From < now && s.To > block.From) ? null : block;
     }
     private static DateTime WholeSecond(DateTime time, bool up = false)
     {

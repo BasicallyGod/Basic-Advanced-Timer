@@ -136,4 +136,58 @@ public sealed class SwitchingAndBlockTests
         Assert.Equal(Canvas.GetLeft(cards[0]), Canvas.GetLeft(cards[1]), 1); // Same lane.
         dashboard.Close();
     }
+
+    private static (TimerModel Model, TrackingEngine Engine, Action<TimeSpan> Advance) AtTenThirty(params SessionRow[] blocks)
+    {
+        var (model, engine, _, advance) = Setup(); advance(TimeSpan.FromMinutes(90)); // 10:30
+        foreach (var block in blocks) engine.Sessions.Add(block);
+        return (model, engine, advance);
+    }
+
+    [Fact]
+    public void PlayingAnAccountWhoseBlockRunsPastNowCarriesThatBlockOnWithItsNote()
+    {
+        var (model, engine, advance) = AtTenThirty(new SessionRow("2026-10-14", "Account one", "10:00:00", "added", "60.00"));
+        model.Editor.Edit(engine.Sessions[0], "Account one", engine.Sessions[0].From, engine.Sessions[0].To, "Planning session");
+        model.ToggleAccount("Account one");
+        Assert.Empty(engine.Sessions); // The block was reopened, not left under a second one.
+        Assert.Equal(new DateTime(2026, 10, 14, 10, 0, 0), engine.Active!.Start);
+        Assert.Contains("10:00", model.Notice);
+        advance(TimeSpan.FromMinutes(15)); model.TogglePause(); // Stopped at 10:45.
+        var block = Assert.Single(engine.Sessions);
+        Assert.Equal("10:00:00", block.Start); Assert.Equal(45.0, (double)decimal.Parse(block.Minutes, System.Globalization.CultureInfo.InvariantCulture), 0.05); // Ends where the recording stopped.
+        Assert.Equal("Planning session", model.Editor.Note(block)); // The note stayed with it.
+    }
+
+    [Fact]
+    public void ThePlayButtonOnThePillCarriesTheBlockOnToo()
+    {
+        var (model, engine, _) = AtTenThirty(new SessionRow("2026-10-14", "Account one", "10:00:00", "added", "60.00"));
+        model.ToggleAccount("Account one"); model.TogglePause(); // Stop, then play again from the pill.
+        Assert.Single(engine.Sessions); // Stopped at 10:30, so it is one block of half an hour.
+        model.TogglePause(); // Plays again: the time now is past the block's end, so a new block begins.
+        Assert.Equal(new DateTime(2026, 10, 14, 10, 30, 0), engine.Active!.Start);
+    }
+
+    [Fact]
+    public void ABlockIsNotCarriedOnWhenItIsAnotherAccountOverEarlierOrWouldOverlapOtherTime()
+    {
+        var (model, engine, _) = AtTenThirty(new SessionRow("2026-10-14", "Account two", "10:00:00", "added", "60.00"));
+        model.ToggleAccount("Account one"); // Another account's block: untouched.
+        Assert.Single(engine.Sessions); Assert.Null(engine.ContinuedBlock);
+        model.TogglePause();
+        var (model2, engine2, _) = AtTenThirty(new SessionRow("2026-10-14", "Account one", "09:00:00", "added", "60.00")); // Ended at 10:00, before now.
+        model2.ToggleAccount("Account one"); Assert.Single(engine2.Sessions); Assert.Null(engine2.ContinuedBlock);
+        var (model3, engine3, _) = AtTenThirty(new SessionRow("2026-10-14", "Account one", "10:00:00", "added", "60.00"), new SessionRow("2026-10-14", "Account two", "10:00:00", "recorded", "10.00"));
+        model3.ToggleAccount("Account one"); Assert.Equal(2, engine3.Sessions.Count); Assert.Null(engine3.ContinuedBlock); // Would sit on top of Account two's time.
+    }
+
+    [Fact]
+    public void ABlockInAGroupIsNotTakenOutOfItToBeCarriedOn()
+    {
+        var (model, engine, _) = AtTenThirty(new SessionRow("2026-10-14", "Account one", "10:00:00", "added", "20.00"), new SessionRow("2026-10-14", "Account one", "10:20:00", "added", "40.00"));
+        Assert.True(model.GroupEntries(engine.Sessions.ToList()));
+        model.ToggleAccount("Account one");
+        Assert.Equal(2, engine.Sessions.Count); Assert.Null(engine.ContinuedBlock);
+    }
 }
