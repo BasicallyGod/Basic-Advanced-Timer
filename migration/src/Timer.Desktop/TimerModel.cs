@@ -552,8 +552,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (end <= start) { EditError = "There is no free recorded-time gap here."; Notify(); return; }
         EditError = null; EntryRequested?.Invoke(null, start, end);
     }
-    public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note)
-        => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note); });
+    public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note, bool allowOverlap = false)
+        => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note, allowOverlap); });
     /// <summary>What lengthening a block to a later end would move, or an explanation when it cannot be done. Nothing is changed.</summary>
     public IReadOnlyList<TimelineChange> PlanExtend(SessionRow row, DateTime end) => Editor.PlanExtend(row, end);
     public bool ExtendEntry(SessionRow row, DateTime end, string note) => ChangeLog(() => Editor.ExtendEnd(row, end, note));
@@ -655,6 +655,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool IsOnBreak => BreakAccount.Is(ActiveAccount);
     /// <summary>Whether hovering a control shows its tooltip. Switched off, the words are still the accessible names.</summary>
+    /// <summary>Whether a longer entry that runs into later blocks moves them without asking first. Chosen by a tick box in the entry window, and in settings.</summary>
+    public bool MoveLaterAlways => preferences.MoveLaterAlways;
+    public void SetMoveLaterAlways(bool on) { preferences = preferences with { MoveLaterAlways = on }; Save(); Notify(); }
     public bool Tooltips => preferences.Tooltips;
     public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
     /// <summary>Whether the developer features are switched on: the sample-data demo, the overtime tester and the version on the right-click menu. Off until unlocked from the About section.</summary>

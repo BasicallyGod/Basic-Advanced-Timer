@@ -10,7 +10,7 @@ public sealed class EntryWindow : Window
     public EntryWindow(TimerModel model, SessionRow? row, DateTime start, DateTime end)
     {
         Title = row is null ? "Add time" : "Edit entry"; WindowChrome.Attach(this);
-        Width = 480; Height = 540; CanResize = false;
+        Width = 480; Height = 640; CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var root = new StackPanel { Margin = new Thickness(24), Spacing = 12 };
         root.Children.Add(Ui.Text(Title, 22));
@@ -24,7 +24,10 @@ public sealed class EntryWindow : Window
         var until = new TextBox { Name = "EntryEnd", Text = end == start.Date.AddDays(1) ? "24:00:00" : end.ToString("HH:mm:ss") };
         var initialStart = from.Text; var initialEnd = until.Text;
         Ui.Put(times, from); Ui.Put(times, Ui.Dash(), 1); Ui.Put(times, until, 2); root.Children.Add(times);
-        root.Children.Add(Ui.Text("Start/end use HH:mm or HH:mm:ss. Time changes affect credited totals.", 11, "muted"));
+        // The length and the end follow each other: type either, and the other is worked out from the start.
+        var length = new TextBox { Name = "EntryLength", Width = 130, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        root.Children.Add(Ui.Horizontal(Ui.Text("Length", 13, "muted"), length));
+        root.Children.Add(Ui.Text("Start and end use HH:mm or HH:mm:ss. Length can be minutes (45), hours and minutes (1:15) or with seconds (1:15:30). Time changes affect credited totals.", 11, "muted"));
         var note = new TextBox { Name = "EntryNote", Watermark = "Entry note", AcceptsReturn = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Height = 110, Text = row is null ? "" : model.Editor.Note(row) };
         root.Children.Add(note);
         var error = new TextBlock { Name = "EntryError", TextWrapping = Avalonia.Media.TextWrapping.Wrap, Classes = { "overtime" } };
@@ -34,14 +37,23 @@ public sealed class EntryWindow : Window
         DateTime shoveEnd = default;
         var shove = new Border { Name = "ShovePrompt", IsVisible = false, Padding = new Thickness(12), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1) };
         shove.Classes.Add("chip");
+        // Ticking this keeps the choice, so a longer entry moves the blocks after it without asking again. Settings has the same switch.
+        var always = new CheckBox { Name = "AlwaysShove", Content = "Always move later blocks, without asking" };
         var shoveButtons = Ui.Horizontal(
             Ui.Button("Move later blocks", () =>
             {
                 shove.IsVisible = false;
+                if (always.IsChecked == true) model.SetMoveLaterAlways(true);
                 if (row is not null && model.ExtendEntry(row, shoveEnd, note.Text ?? "")) Close(); else error.Text = model.LastError ?? model.EditError;
             }, "ShoveConfirm"),
+            // The longer entry goes in as it is, over the top of the blocks after it. Those hours are then counted twice, which is for the person to decide.
+            Ui.Button("Allow overlap", () =>
+            {
+                shove.IsVisible = false;
+                if (row is not null && model.EditEntry(row, row.Account, row.From, shoveEnd, note.Text ?? "", allowOverlap: true)) Close(); else error.Text = model.LastError ?? model.EditError;
+            }, "ShoveOverlap"),
             Ui.Button("Keep editing", () => shove.IsVisible = false, "ShoveCancel"));
-        var shoveStack = new StackPanel { Spacing = 8 }; shoveStack.Children.Add(shoveText); shoveStack.Children.Add(shoveButtons); shove.Child = shoveStack;
+        var shoveStack = new StackPanel { Spacing = 8 }; shoveStack.Children.Add(shoveText); shoveStack.Children.Add(always); shoveStack.Children.Add(shoveButtons); shove.Child = shoveStack;
         root.Children.Add(shove);
         until.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) shove.IsVisible = false; };
         DateTime Parse(string? value, bool finish)
@@ -51,6 +63,37 @@ public sealed class EntryWindow : Window
             if (time >= TimeSpan.FromDays(1)) throw new FormatException();
             return start.Date + time;
         }
+        // Minutes (45 or 7.5), H:MM or H:MM:SS.
+        static TimeSpan? ParseLength(string? value)
+        {
+            value = value?.Trim(); if (string.IsNullOrEmpty(value)) return null;
+            if (value.Contains(':'))
+                return TimeSpan.TryParseExact(value, new[] { @"h\:mm", @"h\:mm\:ss", @"hh\:mm", @"hh\:mm\:ss" }, CultureInfo.InvariantCulture, out var span) && span > TimeSpan.Zero ? span : null;
+            return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var minutes) && minutes > 0 && minutes < 24 * 60 ? TimeSpan.FromMinutes(minutes) : null;
+        }
+        static string ShowLength(TimeSpan span) => span.Seconds == 0 ? $"{(int)span.TotalHours}:{span.Minutes:00}" : $"{(int)span.TotalHours}:{span.Minutes:00}:{span.Seconds:00}";
+        var syncing = false;
+        void ShowLengthFromTimes()
+        {
+            if (syncing) return;
+            syncing = true;
+            try { var span = Parse(until.Text, true) - Parse(from.Text, false); length.Text = span > TimeSpan.Zero ? ShowLength(span) : ""; }
+            catch (Exception ex) when (ex is FormatException or OverflowException) { length.Text = ""; }
+            finally { syncing = false; }
+        }
+        ShowLengthFromTimes();
+        from.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) ShowLengthFromTimes(); };
+        until.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) ShowLengthFromTimes(); };
+        length.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != TextBox.TextProperty || syncing) return;
+            if (ParseLength(length.Text) is not { } span) return;
+            DateTime begin; try { begin = Parse(from.Text, false); } catch (Exception ex) when (ex is FormatException or OverflowException) { return; }
+            var finish = begin + span;
+            if (finish > start.Date.AddDays(1)) { error.Text = "That length would run past midnight."; return; }
+            error.Text = ""; syncing = true;
+            try { until.Text = finish == start.Date.AddDays(1) ? "24:00:00" : finish.ToString("HH:mm:ss"); } finally { syncing = false; }
+        };
         var applied = false;
         var save = Ui.Button("Save", () =>
         {
@@ -69,8 +112,11 @@ public sealed class EntryWindow : Window
                         var most = later.Max(p => p.Updated.From - p.Source.From);
                         shoveEnd = newEnd; error.Text = "";
                         shoveText.Text = $"Ending this block at {(newEnd == start.Date.AddDays(1) ? "24:00" : newEnd.ToString("HH:mm:ss"))} runs into the next {(later.Count == 1 ? "block" : later.Count + " blocks")}. "
-                            + $"{(later.Count == 1 ? "It" : "They")} will move later by up to {model.FormatShort(most)} so nothing overlaps. Undo puts everything back. Move {(later.Count == 1 ? "it" : "them")}?";
-                        shove.IsVisible = true; return;
+                            + $"{(later.Count == 1 ? "It" : "They")} can move later by up to {model.FormatShort(most)} so nothing overlaps, or this can overlap {(later.Count == 1 ? "it" : "them")}, which counts those hours twice. Undo puts everything back.";
+                        // With the choice already kept, the blocks simply move.
+                        if (model.MoveLaterAlways)
+                        { if (model.ExtendEntry(row, newEnd, note.Text ?? "")) Close(); else error.Text = model.LastError ?? model.EditError; return; }
+                        always.IsChecked = false; shove.IsVisible = true; return;
                     }
                 }
                 var previous = model.Editor.UndoState;

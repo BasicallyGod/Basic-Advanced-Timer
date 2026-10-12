@@ -7,7 +7,7 @@ using Timer.Core;
 namespace Timer.Storage;
 
 public sealed record AccountSettings(string Name, double? BudgetHours = null, string BudgetPeriod = "week", bool Hidden = false, string? Colour = null);
-public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true, IReadOnlyList<ThemeDefinition>? Themes = null, bool TaskbarButton = true, bool Tooltips = true, bool Developer = false, bool SetupDone = true);
+public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true, IReadOnlyList<ThemeDefinition>? Themes = null, bool TaskbarButton = true, bool Tooltips = true, bool Developer = false, bool SetupDone = true, bool MoveLaterAlways = false);
 
 // The timer's records live in one SQLite file (timer.db). Preferences stay in the settings JSON beside it.
 // The in-memory model is unchanged: Load fills the engine from the database and Save writes it back in one transaction.
@@ -140,13 +140,14 @@ public sealed class TimerStore : IDisposable
         var taskbar = !appearance.Skip(1).Contains("taskbar=off");
         var tooltips = !appearance.Skip(1).Contains("tooltips=off");
         var developer = appearance.Skip(1).Contains("developer=on");
+        var moveLater = appearance.Skip(1).Contains("shove=always");
         // The setup is done once it says so. A database from before it existed counts as done, and a new one is pending until it is finished or skipped.
         var setupDone = appearance.Skip(1).Contains("setup=done") || (!appearance.Skip(1).Contains("setup=pending") && !firstRun);
         var themes = ThemeStorage.FromLines(Lines("migrationThemes"));
         // A name that is neither System, a built-in nor one of the user's own falls back to System, so a removed theme never leaves the app unstyled.
         if (theme != ThemeLibrary.System && !ThemeLibrary.BuiltIn.Concat(themes).Any(t => t.Name == theme)) theme = ThemeLibrary.System;
         // Written back on the first save, so a brand new database does not start with the sample accounts every launch.
-        return new(accounts, decimalHours, theme, weekStart, shadows, themes, taskbar, tooltips, developer, setupDone);
+        return new(accounts, decimalHours, theme, weekStart, shadows, themes, taskbar, tooltips, developer, setupDone, moveLater);
     }
     private static SessionRow ToRow(Microsoft.Data.Sqlite.SqliteDataReader r)
     {
@@ -175,7 +176,7 @@ public sealed class TimerStore : IDisposable
         var sections = (JsonObject)settings["sections"]!;
         sections["dayOverrides"] = Array(engine.Schedule.Overrides.OrderBy(p => p.Key).Select(p => p.Value.Off
             ? $"{p.Key:yyyy-MM-dd}\toff" : $"{p.Key:yyyy-MM-dd}\t{p.Value.Shift!.Start:hh\\:mm}\t{p.Value.Shift.End:hh\\:mm}"));
-        sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off", preferences.TaskbarButton ? "taskbar=on" : "taskbar=off", preferences.Tooltips ? "tooltips=on" : "tooltips=off", preferences.Developer ? "developer=on" : "developer=off", preferences.SetupDone ? "setup=done" : "setup=pending" });
+        sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off", preferences.TaskbarButton ? "taskbar=on" : "taskbar=off", preferences.Tooltips ? "tooltips=on" : "tooltips=off", preferences.Developer ? "developer=on" : "developer=off", preferences.SetupDone ? "setup=done" : "setup=pending", preferences.MoveLaterAlways ? "shove=always" : "shove=ask" });
         sections["migrationThemes"] = Array((preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).Select(ThemeStorage.ToLine));
         var hours = Lines("workingHours").Where(s =>
         {
