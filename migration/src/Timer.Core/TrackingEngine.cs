@@ -104,11 +104,10 @@ public sealed class TrackingEngine
     public Func<SessionRow, bool> CanReopen { get; set; } = _ => true;
     /// <summary>
     /// The block of this account that the time now falls inside and that runs on past it, as long as carrying it on would not overlap other
-    /// recorded time. Breaks are left out, since a break has its own way of resuming.
+    /// recorded time. A break counts too, so starting one inside a break block already there carries that block on.
     /// </summary>
     public SessionRow? FutureBlockOf(string account)
     {
-        if (BreakAccount.Is(account)) return null;
         var now = Now;
         var block = Sessions.FirstOrDefault(s => s.Account.Equals(account, StringComparison.OrdinalIgnoreCase) && s.From <= now && s.To > now);
         if (block is null || !CanReopen(block)) return null;

@@ -70,25 +70,17 @@ public sealed class TimerModel : INotifyPropertyChanged
         .Count(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains));
     public bool CanMergeSelection => SelectedBlockCount >= 2 && selectedRows.Select(s => s.Day).Distinct().Count() == 1
         && selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() == 1 && Editor.CanCombine(selectedRows.ToArray());
-    public string MergeHint => SelectedBlockCount < 2 ? "Click at least two blocks to merge." : CanMergeSelection
+    public string MergeHint => SelectedBlockCount < 2 ? "Shift+click at least two blocks to merge." : CanMergeSelection
         ? $"Merge {SelectedBlockCount} blocks · adds {Format(TimeSpan.FromMinutes((double)Editor.MergeGapMinutes(selectedRows.ToArray())))} of gap time." : "Select blocks for the same account/day, with only blank gaps between them.";
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
     {
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
         var remove = IsSelected(rows);
         foreach (var row in rows) { if (remove) selectedRows.Remove(row); else selectedRows.Add(row); }
-        lastToggled = rows;
         EditError = null; Notify();
     }
-    // The first click of a double-click has already toggled the block, and the timeline is
-    // rebuilt after it, so the model remembers that toggle and undoes it before opening the editor.
-    private IReadOnlyList<SessionRow>? lastToggled;
-    public void OpenEntryFromDoubleClick(SessionRow row)
-    {
-        if (lastToggled is { Count: 1 } last && ReferenceEquals(last[0], row)) { lastToggled = null; ToggleSelection(last); }
-        lastToggled = null;
-        OpenEntry(row);
-    }
+    // A plain click no longer selects, so a double-click has nothing to undo before it opens the editor.
+    public void OpenEntryFromDoubleClick(SessionRow row) => OpenEntry(row);
     public void ClearSelection() { if (selectedRows.Count == 0) return; selectedRows.Clear(); Notify(); }
     // After a quick slip from one account to another and back, the earlier block can be picked up again. Blocks in a group are left alone, since
     // taking one out of a group would break the group.
@@ -260,7 +252,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void ToggleBreak()
     {
         if (IsOnBreak) { EndBreak(); return; }
-        Engine.ToggleAccount(BreakAccount.Name);
+        Engine.ToggleAccount(BreakAccount.Name); NoteContinuedBlock();
         Save(); Notify();
     }
     private void EndBreak()
@@ -727,8 +719,15 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public event Action? QuitRequested;
     public void RequestQuit() => QuitRequested?.Invoke();
+    // Closing the pill closes the dashboard straight after it, and by then the first close may have let the app shut down and
+    // dispose the database, so a close that has already saved is not allowed to save again.
+    private bool savedForClose;
     public bool StopForClose()
-    { Engine.StopAccount(); var saved = Save(); if (!saved) Notify(); return saved; }
+    {
+        if (savedForClose) return true;
+        Engine.StopAccount(); var saved = Save(); if (!saved) Notify();
+        savedForClose = saved; return saved;
+    }
     // Notes and refused-edit messages in the footer fade after a while, so a stale one is never left sitting there.
     // A failed save is not one of these, because it stays until a save works.
     public static readonly TimeSpan MessageLifetime = TimeSpan.FromSeconds(15);

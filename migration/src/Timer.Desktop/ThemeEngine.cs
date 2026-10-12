@@ -51,6 +51,11 @@ public static class ThemeEngine
             "RadioButtonOuterEllipseCheckedStroke", "RadioButtonOuterEllipseCheckedStrokePointerOver", "RadioButtonOuterEllipseCheckedStrokePressed" }) dictionary[key] = accent;
         foreach (var key in new[] { "RadioButtonCheckGlyphFill", "RadioButtonCheckGlyphFillPointerOver", "RadioButtonCheckGlyphFillPressed", "RadioButtonCheckGlyphStroke", "RadioButtonCheckGlyphStrokePointerOver", "RadioButtonCheckGlyphStrokePressed" }) dictionary[key] = accentInk;
         foreach (var key in new[] { "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver", "CheckBoxCheckGlyphForegroundCheckedPressed" }) dictionary[key] = accentInk;
+        // Tooltips are drawn by a pop-up that otherwise takes the computer's own light or dark colours, which left dark text on a dark tooltip (or the reverse)
+        // when the theme and the computer disagreed, and in the recording pill. They wear the theme's surface, text and line instead.
+        dictionary["ToolTipBackground"] = new SolidColorBrush(Color.Parse(colours["Surface"]));
+        dictionary["ToolTipForeground"] = new SolidColorBrush(Color.Parse(colours["Ink"]));
+        dictionary["ToolTipBorderBrush"] = line;
         foreach (var key in new[] { "SliderTrackFill", "SliderTrackFillPointerOver", "SliderTrackFillPressed" }) dictionary[key] = line;
     }
     /// <summary>Raised after theme colours are written, so windows with their own chrome (title bars) can follow a change or a preview.</summary>
