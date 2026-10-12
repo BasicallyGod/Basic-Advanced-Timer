@@ -5,19 +5,30 @@ namespace Timer.Storage;
 
 // Integer hundredths are allocated first to account/day buckets, then to their
 // entries. This keeps detail rows, daily cells and the grand total identical.
+// The same export serves a week (seven days from the week start) or a whole month (the days of that month), so a month's
+// hours reconcile in exactly the same way: hundredths are shared out across the whole period, then within each bucket.
 public sealed class WeekExport
 {
     private readonly DateTime week;
+    private readonly int days;
+    public bool IsMonth => days != 7;
+    /// <summary>The first and last day shown, for a title.</summary>
+    public (DateTime First, DateTime Last) Period => (week, week.AddDays(days - 1));
+    public static WeekExport ForMonth(LedgerEditor editor, TrackingEngine engine, DateTime anyDay)
+    {
+        var first = new DateTime(anyDay.Year, anyDay.Month, 1);
+        return new WeekExport(editor, engine, first, DateTime.DaysInMonth(first.Year, first.Month));
+    }
     public IReadOnlyList<ReviewEntry> Entries { get; }
     public IReadOnlyList<long> EntryUnits { get; }
     public IReadOnlyDictionary<string, long[]> Accounts { get; }
     public long TotalUnits { get; }
     public long LunchUnits { get; }
-    public WeekExport(LedgerEditor editor, TrackingEngine engine, DateTime week)
+    public WeekExport(LedgerEditor editor, TrackingEngine engine, DateTime week, int days = 7)
     {
-        this.week = week.Date;
-        Entries = editor.Entries(this.week, this.week.AddDays(7));
-        var source = engine.Sessions.Where(s => s.Day >= this.week && s.Day < this.week.AddDays(7)).ToArray();
+        this.week = week.Date; this.days = days;
+        Entries = editor.Entries(this.week, this.week.AddDays(days));
+        var source = engine.Sessions.Where(s => s.Day >= this.week && s.Day < this.week.AddDays(days)).ToArray();
         foreach (var bucket in source.GroupBy(s => (s.Day, Account: s.Account.ToUpperInvariant())))
         {
             var expected = bucket.Sum(s => decimal.Parse(s.Minutes, CultureInfo.InvariantCulture));
@@ -40,8 +51,8 @@ public sealed class WeekExport
                 var partUnits = Allocate(parts.Select(p => p.Entry.Minutes / 60m * 100m).ToArray(), bucketUnits[b]);
                 for (var i = 0; i < parts.Length; i++) units[parts[i].Index] = partUnits[i];
                 var name = parts[0].Entry.Account;
-                if (!accounts.TryGetValue(name, out var days)) accounts[name] = days = new long[7];
-                days[(int)(parts[0].Entry.Day - this.week).TotalDays] = bucketUnits[b];
+                if (!accounts.TryGetValue(name, out var dayUnits)) accounts[name] = dayUnits = new long[days];
+                dayUnits[(int)(parts[0].Entry.Day - this.week).TotalDays] = bucketUnits[b];
             }
         }
         EntryUnits = units; Accounts = accounts;
@@ -56,12 +67,12 @@ public sealed class WeekExport
         var stored = database.Query(@"SELECT COALESCE(a.name, $break), e.day, SUM(e.seconds) FROM entries e LEFT JOIN accounts a ON a.id = e.account_id
             WHERE e.day >= $from AND e.day < $to GROUP BY 1, 2",
             r => (Account: r.GetString(0), Day: r.GetString(1), Minutes: (decimal)r.GetDouble(2) / 60m),
-            ("$break", BreakAccount.Name), ("$from", week.ToString("yyyy-MM-dd")), ("$to", week.AddDays(7).ToString("yyyy-MM-dd")));
+            ("$break", BreakAccount.Name), ("$from", week.ToString("yyyy-MM-dd")), ("$to", week.AddDays(days).ToString("yyyy-MM-dd")));
         var shown = Entries.GroupBy(e => (Account: e.Account.ToUpperInvariant(), Day: e.Day.ToString("yyyy-MM-dd"))).ToDictionary(g => g.Key, g => g.Sum(e => e.Minutes));
         var saved = stored.ToDictionary(r => (Account: r.Account.ToUpperInvariant(), r.Day), r => r.Minutes);
         foreach (var key in shown.Keys.Union(saved.Keys))
             if (Math.Abs(shown.GetValueOrDefault(key) - saved.GetValueOrDefault(key)) > 0.005m)
-                throw new InvalidDataException("The saved records do not match this week's totals, so the export was stopped. Nothing was written.");
+                throw new InvalidDataException("The saved records do not match this period's totals, so the export was stopped. Nothing was written.");
     }
     public static long[] Allocate(IReadOnlyList<decimal> ideal, long target)
     {
@@ -90,24 +101,24 @@ public sealed class WeekExport
     }
     public string SummaryCsv(IEnumerable<string> configured)
     {
-        var labels = Enumerable.Range(0, 7).Select(i => week.AddDays(i).ToString("ddd dd/MM", CultureInfo.GetCultureInfo("en-GB"))).ToArray();
+        var labels = Enumerable.Range(0, days).Select(i => week.AddDays(i).ToString("ddd dd/MM", CultureInfo.GetCultureInfo("en-GB"))).ToArray();
         var headers = new[] { "Account" }.Concat(labels).Append("Total").ToArray();
         var rows = new List<Dictionary<string, string>>();
         Dictionary<string, string> Row(string account, long[] units)
         {
             var row = new Dictionary<string, string> { ["Account"] = account, ["Total"] = Hours(units.Sum()) };
-            for (var i = 0; i < 7; i++) row[labels[i]] = Hours(units[i]); return row;
+            for (var i = 0; i < days; i++) row[labels[i]] = Hours(units[i]); return row;
         }
         foreach (var account in configured.Concat(Accounts.Keys).Distinct(StringComparer.OrdinalIgnoreCase).Where(a => !a.Equals(BreakAccount.Name, StringComparison.OrdinalIgnoreCase)))
-            rows.Add(Row(account, Accounts.GetValueOrDefault(account) ?? new long[7]));
-        if (LunchUnits != 0) rows.Add(Row(BreakAccount.Label, Accounts.GetValueOrDefault(BreakAccount.Name) ?? new long[7]));
-        rows.Add(Row("Total (excluding breaks)", Enumerable.Range(0, 7).Select(i => Accounts.Where(a => !a.Key.Equals(BreakAccount.Name, StringComparison.OrdinalIgnoreCase)).Sum(a => a.Value[i])).ToArray()));
+            rows.Add(Row(account, Accounts.GetValueOrDefault(account) ?? new long[days]));
+        if (LunchUnits != 0) rows.Add(Row(BreakAccount.Label, Accounts.GetValueOrDefault(BreakAccount.Name) ?? new long[days]));
+        rows.Add(Row("Total (excluding breaks)", Enumerable.Range(0, days).Select(i => Accounts.Where(a => !a.Key.Equals(BreakAccount.Name, StringComparison.OrdinalIgnoreCase)).Sum(a => a.Value[i])).ToArray()));
         return new CsvTable(headers, rows).Serialize();
     }
     public string Write(string directory, IEnumerable<string> configured)
     {
         Directory.CreateDirectory(directory);
-        var name = "Week-" + week.ToString("yyyyMMdd") + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8];
+        var name = (IsMonth ? "Month-" + week.ToString("yyyyMM") : "Week-" + week.ToString("yyyyMMdd")) + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8];
         var staging = Path.Combine(directory, "." + name); var destination = Path.Combine(directory, name);
         Directory.CreateDirectory(staging);
         try

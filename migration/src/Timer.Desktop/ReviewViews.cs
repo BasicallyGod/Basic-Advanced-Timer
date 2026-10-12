@@ -369,7 +369,7 @@ public static class ReviewViews
             reset.Tick += (_, _) => { reset.Stop(); ToolTip.SetTip(copy, "Copy the table to the clipboard, ready to paste into a timesheet"); };
             reset.Start();
         };
-        var export = Ui.IconButton(IconKind.Export, "Export week…", "ExportWeek", () => { if (TopLevel.GetTopLevel(root) is Window owner) new ExportWindow(model).Show(owner); });
+        var export = Ui.IconButton(IconKind.Export, "Export hours…", "ExportWeek", () => { if (TopLevel.GetTopLevel(root) is Window owner) new ExportWindow(model).Show(owner); });
         Ui.Put(heading2, Ui.Horizontal(copy, export), 1);
         root.Children.Add(heading2);
         root.Children.Add(Card(grid, new Thickness(16, 12, 16, 6)));

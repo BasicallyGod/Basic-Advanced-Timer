@@ -98,16 +98,18 @@ public sealed class TidyWindow : ReviewWindow
 
 public sealed class ExportWindow : ReviewWindow
 {
-    public ExportWindow(TimerModel model) : base("Export week")
+    public ExportWindow(TimerModel model) : base("Export hours")
     {
-        Height = 420;
-        Root.Children.Add(Ui.Text("Week commencing " + model.WeekStart(model.SelectedDate).ToString("d MMMM yyyy"), 13));
+        Height = 470;
+        var week = new RadioButton { Name = "ExportWeekChoice", GroupName = "ExportPeriod", IsChecked = true, Content = "Week commencing " + model.WeekStart(model.SelectedDate).ToString("d MMMM yyyy") };
+        var month = new RadioButton { Name = "ExportMonthChoice", GroupName = "ExportPeriod", Content = "Whole month of " + model.SelectedDate.ToString("MMMM yyyy") };
+        Root.Children.Add(Ui.Text("What to export", 13)); Root.Children.Add(week); Root.Children.Add(month);
         Root.Children.Add(Info("Creates Detail.csv and Summary.csv together. Decimal hours reconcile across entries, days and account totals. Breaks are shown separately from the working total."));
         Root.Children.Add(Info("Exports include saved entries only. Pause tracking first to include the current running interval."));
         var result = new TextBox { IsReadOnly = true, TextWrapping = TextWrapping.Wrap, IsVisible = false }; Root.Children.Add(result); Root.Children.Add(Error);
         var export = Ui.Button("Export CSV files", () =>
         {
-            if (model.ExportWeek()) { result.IsVisible = true; result.Text = model.ExportPath; Error.Text = null; Root.Children.Add(Ui.Text("Both files saved.", 13)); }
+            if (model.ExportWeek(month.IsChecked == true)) { result.IsVisible = true; result.Text = model.ExportPath; Error.Text = null; Root.Children.Add(Ui.Text("Both files saved.", 13)); }
             else Error.Text = model.LastError ?? model.EditError;
         }, "ExportCsv");
         Root.Children.Add(Ui.Horizontal(export, Ui.Button("Close", Close)));
