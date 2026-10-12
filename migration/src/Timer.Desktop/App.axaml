@@ -178,7 +178,7 @@
     <Style Selector="Button.quit:pointerover"><Setter Property="RenderTransform" Value="scale(1.12)" /></Style>
     <Style Selector="Button.quit:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
     <!-- The floating message is raised off the timeline, with the accent for an outline, so it is easy to see against any block. -->
-    <Style Selector="Border.messageBar">
+    <Style Selector=":is(Border).messageBar">
       <Setter Property="Background" Value="{DynamicResource Panel}" />
       <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
       <Setter Property="BorderThickness" Value="1.5" />

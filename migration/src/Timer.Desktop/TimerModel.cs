@@ -405,12 +405,15 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void PreviewTheme(ThemeDefinition theme)
     {
         if (Application.Current is not { } app || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;
-        ThemeEngine.Register(app, new[] { theme }); app.RequestedThemeVariant = ThemeEngine.VariantFor(theme); appliedVariant = null;
+        ThemeEngine.RegisterPreview(app, theme); app.RequestedThemeVariant = ThemeEngine.VariantFor(theme); appliedVariant = null; previewedTheme = theme.Name;
     }
+    // Only the theme that was being edited needs its saved colours put back, not every theme there is.
+    private string? previewedTheme;
     public void EndThemePreview()
     {
-        if (Application.Current is { } app && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) ThemeEngine.Register(app, Themes);
-        appliedVariant = null; ApplyTheme(); Notify();
+        if (previewedTheme is { } name && Application.Current is { } app && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && Themes.FirstOrDefault(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } saved)
+            ThemeEngine.Register(app, new[] { saved });
+        previewedTheme = null; appliedVariant = null; ApplyTheme(); Notify();
     }
     /// <summary>Saves one of the user's own themes. <paramref name="replacing"/> is its earlier name, so a rename replaces it, and the theme stays selected if it was.</summary>
     public void SaveTheme(ThemeDefinition theme, string? replacing = null)
