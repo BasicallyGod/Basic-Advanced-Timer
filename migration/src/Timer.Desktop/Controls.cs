@@ -820,10 +820,11 @@ public sealed class IconGlyph : Control
                 context.DrawGeometry(null, pen, Geometry.Parse("M 6.5,12 L 9,14.5 L 11.5,12"));
                 break;
             case IconKind.Week:
-                // A calendar page with two rings at the top.
-                context.DrawRectangle(null, pen, new Rect(2.5, 3.5, 13, 12), 2.5, 2.5);
-                context.DrawLine(pen, new Point(2.5, 7.5), new Point(15.5, 7.5));
-                context.DrawLine(pen, new Point(6, 2), new Point(6, 5)); context.DrawLine(pen, new Point(12, 2), new Point(12, 5));
+                // Three bars of different heights on a baseline: an overview of the week, not a calendar.
+                context.DrawLine(pen, new Point(2.5, 15.5), new Point(15.5, 15.5));
+                context.DrawRectangle(brush, null, new Rect(3.5, 9, 3, 5), 1, 1);
+                context.DrawRectangle(brush, null, new Rect(7.5, 3.5, 3, 10.5), 1, 1);
+                context.DrawRectangle(brush, null, new Rect(11.5, 6.5, 3, 7.5), 1, 1);
                 break;
             case IconKind.Table:
                 // A grid of cells: hours by account.

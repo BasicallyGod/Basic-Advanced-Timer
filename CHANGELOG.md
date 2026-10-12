@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 12 October 2026
+
+| Change | Commit | Details |
+| --- | --- | --- |
+| First Store feedback fixes | pending | The pill is drawn smaller on screens under 1800 pixels wide, down to 70 per cent. A selected block no longer has a border beside its coloured strip. There is clear space between Merge and the zoom bar. The week overview icon is a small bar chart rather than a calendar. Notes and refused-edit messages at the bottom of the dashboard fade after 30 seconds. |
+
 ## 11 October 2026
 
 | Change | Commit | Details |

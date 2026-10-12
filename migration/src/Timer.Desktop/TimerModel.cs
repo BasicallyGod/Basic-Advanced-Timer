@@ -648,5 +648,27 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void RequestQuit() => QuitRequested?.Invoke();
     public bool StopForClose()
     { Engine.StopAccount(); var saved = Save(); if (!saved) Notify(); return saved; }
-    private void Notify() { ApplyTheme(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
+    // Notes and refused-edit messages in the footer fade after a while, so a stale one is never left sitting there.
+    // A failed save is not one of these, because it stays until a save works.
+    public static readonly TimeSpan MessageLifetime = TimeSpan.FromSeconds(30);
+    private Avalonia.Threading.DispatcherTimer? messageTimer;
+    private (string?, string?) messageSeen;
+    private void WatchMessages()
+    {
+        var now = (Notice, EditError);
+        if (now == messageSeen) return;
+        messageSeen = now;
+        messageTimer?.Stop(); messageTimer = null;
+        if (now.Item1 is null && now.Item2 is null) return;
+        messageTimer = new Avalonia.Threading.DispatcherTimer { Interval = MessageLifetime };
+        messageTimer.Tick += (_, _) => ExpireMessages();
+        messageTimer.Start();
+    }
+    /// <summary>Clears the footer notes now. The 30 second timer calls this, and tests call it directly because timers do not tick headless.</summary>
+    public void ExpireMessages()
+    {
+        messageTimer?.Stop(); messageTimer = null;
+        Notice = null; EditError = null; messageSeen = (null, null); Notify();
+    }
+    private void Notify() { ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
 }

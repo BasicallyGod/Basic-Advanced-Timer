@@ -84,6 +84,7 @@ public sealed class WindowCoordinator
         if (screen is not null)
         {
             var area = screen.WorkingArea;
+            Pill.FitToScreen(screen);
             Pill.Position = new PixelPoint(area.Right - (int)(Pill.Width * screen.Scaling) - 24, area.Y + 24);
         }
         Dashboard.Hide(); Pill.Show(); BringToFront(Pill);
@@ -122,6 +123,21 @@ public sealed class PillWindow : Window
     private bool expanded;
     public const double CollapsedHeight = 82, PillWidth = 516, CapsuleRadius = 41, CardRadius = 28;
     public static double CollapsedWindowHeight => CollapsedHeight + 2 * Ui.ShadowMargin;
+    // On a small screen the whole pill is drawn smaller, so it does not take a big share of a low resolution display.
+    // A screen 1800 or more device independent pixels wide shows it at full size, and the smallest it gets is 70 per cent.
+    public const double FullSizeScreenWidth = 1800, SmallestScale = 0.7;
+    public static double ScaleFor(double screenWidth) => Math.Clamp(screenWidth / FullSizeScreenWidth, SmallestScale, 1.0);
+    private readonly Avalonia.Media.ScaleTransform pillScale = new(1, 1);
+    public double Scale => pillScale.ScaleX;
+    /// <summary>Sizes the pill for the screen it is on. The window keeps the pill's proportions, so the content only needs the scale.</summary>
+    public void FitToScreen(Avalonia.Platform.Screen? screen)
+    {
+        var scale = screen is null ? 1 : ScaleFor(screen.WorkingArea.Width / screen.Scaling);
+        if (Math.Abs(scale - pillScale.ScaleX) < 0.001 && Width > 0) { ApplyWidth(); return; }
+        pillScale.ScaleX = scale; pillScale.ScaleY = scale;
+        ApplyWidth(); if (IsLoaded || IsVisible) ApplyHeight();
+    }
+    private void ApplyWidth() => Width = (PillWidth + 2 * Ui.ShadowMargin) * pillScale.ScaleX;
     private readonly TextBlock credited = Ui.Text("", 13, "muted");
     private readonly Avalonia.Controls.Shapes.Ellipse dot = new() { Width = 16, Height = 16, StrokeThickness = 2, VerticalAlignment = VerticalAlignment.Center };
     private readonly Chevron chevron = new() { VerticalAlignment = VerticalAlignment.Center };
@@ -215,7 +231,9 @@ public sealed class PillWindow : Window
         Ui.Put(root, pillScroll, row: 1);
         var surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true };
         surface.Classes.Add("surface");
-        shadowHost = Ui.Shadowed(surface, CapsuleRadius); Content = shadowHost; surfaceBorder = surface;
+        shadowHost = Ui.Shadowed(surface, CapsuleRadius); surfaceBorder = surface;
+        Content = new Avalonia.Controls.LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
+        Opened += (_, _) => FitToScreen(Screens.ScreenFromWindow(this));
         // The capsule changes colour with what is happening, and grows from a capsule into a rounded card as it opens, both eased.
         var ease = TimeSpan.FromMilliseconds(260);
         surface.Transitions = new Avalonia.Animation.Transitions
@@ -260,8 +278,8 @@ public sealed class PillWindow : Window
     {
         var wanted = WantedHeight(); var limit = wanted;
         if (Screens.ScreenFromWindow(this) is { } screen) limit = screen.WorkingArea.Height / screen.Scaling;
-        Height = Math.Min(wanted, limit);
-        pillScroll.VerticalScrollBarVisibility = wanted > Height + 1 ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+        Height = Math.Min(wanted * Scale, limit);
+        pillScroll.VerticalScrollBarVisibility = wanted * Scale > Height + 1 ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
     private void Refresh()
@@ -483,7 +501,7 @@ public sealed class DashboardWindow : Window
         zoomIn = Ui.IconButton(IconKind.ZoomIn, "Zoom in (or hold Ctrl and use the mouse wheel)", "TimelineZoomIn", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Height / 2, s.Offset.Y); });
         var fit = Ui.IconButton(IconKind.FitDay, "Fit the day to the window", "TimelineFit", () => { if (TimelineScroll() is { } s) model.FitTimeline(s.Viewport.Height); });
         // The zoom controls sit in a bar under the timeline: fit the day, zoom out, a slider, zoom in. They show only on the Timeline view.
-        zoomSlider = new Slider { Name = "TimelineZoom", Minimum = 0, Maximum = 1, Width = 170, VerticalAlignment = VerticalAlignment.Center, Value = model.TimelineZoomFraction,
+        zoomSlider = new Slider { Name = "TimelineZoom", Minimum = 0, Maximum = 1, Width = 130, VerticalAlignment = VerticalAlignment.Center, Value = model.TimelineZoomFraction,
             // The standard slider draws its track a little below the middle of its own box, so the box is lifted by the same amount (drawing only, no layout change) to put the track on the bar's centre line.
             RenderTransform = new Avalonia.Media.TranslateTransform(0, -5) };
         Avalonia.Automation.AutomationProperties.SetName(zoomSlider, "Zoom"); ToolTip.SetTip(zoomSlider, "Zoom the timeline");
@@ -498,7 +516,7 @@ public sealed class DashboardWindow : Window
         // The bar is as tall as the Start break and Finish day buttons beside it, so the two bottom rows line up. Its buttons fill that height.
         addTime.Height = ControlBarHeight; undo.Height = ControlBarHeight; merge.Height = ControlBarHeight;
         var tools = Ui.Grid("*,Auto"); toolsRow = tools; Ui.Put(tools, edits); Ui.Put(tools, zoomBar, 1);
-        tools.Margin = new Thickness(0, 12, 0, 0);
+        tools.Margin = new Thickness(0, 12, 0, 0); zoomBar.Margin = new Thickness(12, 0, 0, 0); // Clear space between Merge and the zoom bar.
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
         Ui.Put(review, workspace, row: 1);
         Ui.Put(review, tools, row: 2);
