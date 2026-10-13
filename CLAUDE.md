@@ -13,7 +13,7 @@ Notes for contributors and coding assistants. The application is a C# Avalonia d
 | `migration/updater` | Standalone Windows test-build updater with rollback. |
 | `migration/packaging` | MSIX packaging for the Microsoft Store (manifest template, `build-msix.ps1`, and `StoreAssets`, the tile and logo PNGs cut from the app icon). Packaged builds keep data under `%LOCALAPPDATA%` via `PackageEnvironment`; portable builds keep it beside the exe. Store builds compile for `net8.0-windows10.0.19041.0` (`StorePackage=true`, `STORE_PACKAGE` defined) so the Start with Windows menu item can use the WinRT startup task; everyday builds stay `net8.0`. |
 | `.github/workflows/microsoft-store-msix.yml` | Store release workflow for `main`. Pull requests compile the Store target and run tests only; a push to `main` builds the unsigned `BasicsAdvancedTimer-MSIX-Store` package. |
-| `.github/workflows/avalonia-preview.yml` | Development builds for `experimental` and `alpha`: updater tests, then app tests on Windows, Linux and macOS, then a channel-named portable Windows ZIP. |
+| `.github/workflows/avalonia-preview.yml` | Development builds for `experimental` and `alpha`: updater tests, then app tests on Windows (Linux and macOS are left out for now), then a channel-named portable Windows ZIP. |
 | `BRANCHES.md` | The three release channels and how changes are promoted. |
 | `README.md`, `migration/README.md`, `CHANGELOG.md` | Overview, user guide and architecture, history. |
 
@@ -78,11 +78,11 @@ Each theme is a `ThemeDefinition` (name, Light or Dark base, colour tokens, bloc
 
 ## Keeping builds few
 
-Each merge into `experimental` or `alpha` builds and stores a Windows ZIP (kept 14 days), and a pull request run adds tests on three systems. The owner tests only every few versions, so batch work: keep related changes on one `feature/...` branch, open one pull request for the lot, and sync `experimental` only for a candidate. Before opening a pull request for a small change, ask whether it can wait for the next one. Rendered previews upload only when a test fails or a run is started by hand.
+Each merge into `experimental` or `alpha` builds and stores a Windows ZIP (kept 14 days), and a pull request run adds tests on Windows. The owner tests only every few versions, so batch work: keep related changes on one `feature/...` branch, open one pull request for the lot, and sync `experimental` only for a candidate. Before opening a pull request for a small change, ask whether it can wait for the next one. Rendered previews upload only when a test fails or a run is started by hand.
 
 ## Checking changes
 
-Run `dotnet test migration/tests/Timer.Desktop.Tests -c Release`. CI runs it on Windows, Linux and macOS and publishes a self-contained Windows build; check the run before saying tests pass. The user tests visuals on Windows and reports back with screenshots.
+Run `dotnet test migration/tests/Timer.Desktop.Tests -c Release`. CI runs it on Windows only and publishes a self-contained Windows build; check the run before saying tests pass. The user tests visuals on Windows and reports back with screenshots.
 
 ## Conventions
 
