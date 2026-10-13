@@ -136,7 +136,7 @@ public sealed class CreditReviewTests
             var bar = Find<MessageBar>(dashboard, "MessageBar"); var dismiss = Find<Button>(dashboard, "DismissMessage");
             Assert.False(bar.IsVisible);
             model.ToggleSelection(new[] { engine.Sessions[0] }); dashboard.UpdateLayout();
-            Assert.True(bar.IsVisible); Assert.StartsWith("1 block selected.", bar.Text); Assert.False(dismiss.IsVisible); // Nothing to dismiss, it goes with the selection.
+            Assert.True(bar.IsVisible); Assert.Equal(Avalonia.Layout.HorizontalAlignment.Center, bar.HorizontalAlignment); Assert.StartsWith("1 block selected.", bar.Text); Assert.False(dismiss.IsVisible); // Nothing to dismiss, it goes with the selection.
             model.ToggleSelection(new[] { engine.Sessions[1] }); dashboard.UpdateLayout();
             Assert.StartsWith("2 blocks selected.", bar.Text); Assert.Contains("Merge", bar.Text);
             model.ToggleSelection(engine.Sessions.ToArray()); dashboard.UpdateLayout();
