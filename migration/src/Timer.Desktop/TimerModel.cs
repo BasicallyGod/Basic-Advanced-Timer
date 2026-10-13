@@ -70,11 +70,29 @@ public sealed class TimerModel : INotifyPropertyChanged
         .Count(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains));
     public bool CanMergeSelection => SelectedBlockCount >= 2 && selectedRows.Select(s => s.Day).Distinct().Count() == 1
         && selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() == 1 && Editor.CanCombine(selectedRows.ToArray());
+    /// <summary>The full rule for merging, for the Merge button's tooltip and a refused merge.</summary>
     public string MergeHint => SelectedBlockCount < 2 ? "Select two or more blocks to merge them." : CanMergeSelection
-        ? $"Press Merge to join them into one block. This adds {Format(TimeSpan.FromMinutes((double)Editor.MergeGapMinutes(selectedRows.ToArray())))} of gap time."
-        : "These cannot be merged. To merge, blocks must share an account and day, with only gaps between.";
-    /// <summary>What the message bar says while blocks are selected: how many, then what merging them would do. Null with no selection.</summary>
-    public string? SelectionLine => SelectedBlockCount is var count and > 0 ? $"{count} {(count == 1 ? "block" : "blocks")} selected. " + MergeHint : null;
+        ? (Editor.MergeGapMinutes(selectedRows.ToArray()) is var gapMinutes and > 0 ? $"Press Merge to join them into one block. This adds {Format(TimeSpan.FromMinutes((double)gapMinutes))} of gap time." : "Press Merge to join them into one block.")
+        : "To merge, blocks must share an account and day, with only gaps between.";
+    /// <summary>How many blocks are selected, for the selection strip. Null with no selection.</summary>
+    public string? SelectionCountText => SelectedBlockCount is var count and > 0 ? $"{count} {(count == 1 ? "block" : "blocks")} selected" : null;
+    /// <summary>One short sentence under the count: what is needed, or what Merge will do. It names the specific problem when blocks cannot be merged.</summary>
+    public string? SelectionNote
+    {
+        get
+        {
+            var count = SelectedBlockCount; if (count == 0) return null;
+            if (count < 2) return "Select another block to merge.";
+            if (CanMergeSelection)
+            {
+                var gap = Editor.MergeGapMinutes(selectedRows.ToArray());
+                return gap > 0 ? $"Merge joins them and adds {Format(TimeSpan.FromMinutes((double)gap))} of gap time." : "Merge joins them into one block.";
+            }
+            if (selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() > 1) return "Choose blocks from the same account to merge.";
+            if (selectedRows.Select(s => s.Day).Distinct().Count() > 1) return "Choose blocks from the same day to merge.";
+            return "Other time sits between these blocks, so they cannot be merged.";
+        }
+    }
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
     {
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
@@ -392,21 +410,21 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) + "h";
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return $"{sign}{(int)value.TotalHours}h {value.Minutes:00}m";
+        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
     }
-    /// <summary>The short form for crowded places such as the week table: 7:00, or 7.00 in decimal hours.</summary>
+    /// <summary>Every duration reads as HH:MM (07:00), or in decimal hours (7.00) when that is chosen. The three formats differ only in how decimal hours are written.</summary>
     public string FormatShort(TimeSpan value)
     {
         if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB"));
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return $"{sign}{(int)value.TotalHours}:{value.Minutes:00}";
+        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
     }
-    /// <summary>A compact form for tight rows: 10h35, or 20h when there are no minutes, or 10.58h in decimal hours.</summary>
+    /// <summary>For tight rows. HH:MM like the rest, or 10.58h in decimal hours.</summary>
     public string FormatCompact(TimeSpan value)
     {
         if (DecimalHours) return value.TotalHours.ToString("0.##", CultureInfo.GetCultureInfo("en-GB")) + "h";
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return value.Minutes == 0 ? $"{sign}{(int)value.TotalHours}h" : $"{sign}{(int)value.TotalHours}h{value.Minutes:00}";
+        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
     }
     /// <summary>The budget for an account row, such as "10h35 / 20h monthly". The period is always said, since it matters when comparing accounts.</summary>
     public string BudgetLine(TimerAccount a) => a.Budget is { } target

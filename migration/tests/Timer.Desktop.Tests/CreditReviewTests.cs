@@ -127,20 +127,26 @@ public sealed class CreditReviewTests
     }
 
     [AvaloniaFact]
-    public void TheSelectionLineSitsInTheMessageBarAndSaysWhatMergingWillDo()
+    public void TheSelectionStripSitsAboveTheButtonsAndNamesTheSpecificMergeProblem()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
+        engine.Sessions.Add(Row("11:00:00", "30") with { Account = "Other account" });
         var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            var bar = Find<MessageBar>(dashboard, "MessageBar"); var dismiss = Find<Button>(dashboard, "DismissMessage");
-            Assert.False(bar.IsVisible);
+            var strip = Find<SelectionStrip>(dashboard, "SelectionStrip"); var tools = Find<Button>(dashboard, "AddTime");
+            string Count() => Find<TextBlock>(dashboard, "SelectionCount").Text!; string Note() => Find<TextBlock>(dashboard, "SelectionNote").Text!;
+            Assert.False(strip.IsVisible);
             model.ToggleSelection(new[] { engine.Sessions[0] }); dashboard.UpdateLayout();
-            Assert.True(bar.IsVisible); Assert.Equal(Avalonia.Layout.HorizontalAlignment.Center, bar.HorizontalAlignment); Assert.StartsWith("1 block selected.", bar.Text); Assert.False(dismiss.IsVisible); // Nothing to dismiss, it goes with the selection.
+            Assert.True(strip.IsVisible); Assert.Equal("1 block selected", Count()); Assert.Contains("Select another block", Note());
+            var stripBottom = strip.TranslatePoint(new Point(0, strip.Bounds.Height), dashboard)!.Value.Y; var toolsTop = tools.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y;
+            Assert.True(stripBottom <= toolsTop + 0.5, "The strip is in the layout above the buttons, not floating over them.");
             model.ToggleSelection(new[] { engine.Sessions[1] }); dashboard.UpdateLayout();
-            Assert.StartsWith("2 blocks selected.", bar.Text); Assert.Contains("Merge", bar.Text);
-            model.ToggleSelection(engine.Sessions.ToArray()); dashboard.UpdateLayout();
-            Assert.False(bar.IsVisible);
+            Assert.Equal("2 blocks selected", Count()); Assert.Contains("Merge joins them", Note());
+            model.ToggleSelection(new[] { engine.Sessions[2] }); dashboard.UpdateLayout();
+            Assert.Equal("3 blocks selected", Count()); Assert.Contains("same account", Note());
+            Find<Button>(dashboard, "ClearSelection").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); dashboard.UpdateLayout();
+            Assert.Empty(model.SelectedRows); Assert.False(strip.IsVisible);
         }
         finally { dashboard.Close(); }
     }

@@ -56,7 +56,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 ## 11 October 2026
 
 | Change | Commit | Details |
-| --- | --- | --- |
+| Selection strip above the toolbar | pending | The selection note is no longer a floating alert. It is a quiet strip in the layout just above Add time, Undo and Merge, in the panel colour with a fine line on top. It shows the count in stronger type, then one short sentence that names the specific merge problem, for example "Choose blocks from the same account to merge." A Clear selection button sits at the right. The full merge rule stays in the Merge tooltip. |
 | Polish, new themes and hidden developer features | [f973c38](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/f973c389299b9a576b1b7bfaac202f4351f7ccd1) | Budgets read as compact figures with their period (10h35 / 20h monthly) under a Today heading, the pill says where a break returns to, the break button has a faint ring, status and account dots align, and the zoom slider is centred. Added the Studio, After Hours, Botanical and Hawthorn themes. The sample-data demo, overtime tester and version on the right-click menu stay hidden until About in settings is clicked ten times quickly, except inside the demo itself, which has them on and shows the Development section ([bcef665](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/bcef6655a2774659e2d57def7de67dd83702da38)). |
 | Long account names slide | [0492557](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/0492557db9ae244eae48496fd75dc44384c5d4e7) | An account name too long for its row still ends in an ellipsis, but slides sideways to show the rest while the pointer is over the row, and snaps back when it leaves. |
 | Entries in time order | [cc47cce](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/cc47cce2cd0c9cab72894a981367f2a00d4fd7f8) | The Entries view now lists each day's entries by start time. They had followed the export's order, which sorts by account name within a day. Exports are unchanged. |
@@ -76,7 +76,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 ## 10 October 2026
 
 | Change | Commit | Details |
-| --- | --- | --- |
+| Design vet tidy-ups | pending | The By account names in the week overview have room again (one was cut short). The selection note no longer says a merge adds 0h 00m of gap time when there is no gap. The budget column and the period column are headed the same in the setup and in Accounts and budgets. |
 | Updater and startup | [5d0fa98](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/5d0fa9894b4c3af1ddb2c817c48de6c0765f6afb) | Added Windows preview update, launch and rollback tools. Start with Windows launches through the updater so it survives updates; directly launched ZIP builds keep their existing startup behaviour. The original branch picker was superseded by channels on 11 October. |
 | Avalonia becomes the application | [2ad1c1c](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/2ad1c1cbefd7181863ab2a19c8ffab3f384bed55) | Retired the PowerShell app. Old CSV timesheets are not imported and remain untouched; keep them as an archive. See [migration guidance](README.md#moving-from-the-powershell-version). |
 | Theme editor | [c80fb25](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/c80fb25d6bf839f24a7af5ca2cdf90a02bf127a3) | Added editable custom themes with live previews, colour controls, block styling and contrast warnings. Changes persist only on Save; closing, switching or duplicating with unsaved edits offers Save, Discard or Keep editing. The built-in palettes were replaced by Light and Dark on 11 October. |
@@ -92,7 +92,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 ## 9 October 2026
 
 | Change | Commit | Details |
-| --- | --- | --- |
+| Durations read as HH:MM everywhere | pending | The dashboard, pill, timeline, week views and tooltips had three ways of writing a duration (1h 30m, 1:30 and 1h30). They now all read as HH:MM, for example 01:30, with hours growing past two digits when needed. Decimal hours are unchanged. The setup's Add an account and Different hours buttons use the same dialog button as the rest. |
 | Weekly reporting and breaks | [d0851eb](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/d0851eb84b077fc1a8320fdf4f8d39bda6a37bfe) | Added weekly totals, budgets, copyable hours and Move to account. Break controls resume the previous client account; break and overtime states are visible in the pill. |
 | Tray and startup | [e49eb5e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/e49eb5ecffeebfc2363e91c8dfbf6f67573ceabe) | Added tray controls and optional Start with Windows. Hiding the timer keeps tracking; Close timer saves and exits. |
 | Account management | [723d125](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/723d12509f6f30acc7a9245a5636457f158729a1) | Added account renaming and drag reordering. Renaming rules were replaced by the database account-identity changes on 10 October. |

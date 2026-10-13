@@ -92,10 +92,10 @@ public sealed class PolishTests
         {
             Settle(window);
             var lines = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Where(t => t is not null).ToList();
-            Assert.Contains(lines, t => t!.EndsWith(" / 20h")); Assert.Contains("This month", lines); Assert.Contains("This week", lines); Assert.Contains("This quarter", lines); // The period sits beside the usage, not tacked on its end.
+            Assert.Contains(lines, t => t!.EndsWith(" / 20:00")); Assert.Contains("This month", lines); Assert.Contains("This week", lines); Assert.Contains("This quarter", lines); // The period sits beside the usage, not tacked on its end.
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.Contains(" of ") && x.Contains("h ") && t.Classes.Contains("muted") && x.Contains("m") && x.Length > 0 && x.Contains("00m"));
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "TodayHeading" && t.Text == "Today");
-            Assert.Equal("10h35", model.FormatCompact(TimeSpan.FromMinutes(635))); Assert.Equal("20h", model.FormatCompact(TimeSpan.FromHours(20)));
+            Assert.Equal("10:35", model.FormatCompact(TimeSpan.FromMinutes(635))); Assert.Equal("20:00", model.FormatCompact(TimeSpan.FromHours(20)));
         }
         finally { window.Close(); }
     }

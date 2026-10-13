@@ -113,15 +113,15 @@ public sealed class OnboardingView : Grid
     {
         var panel = new StackPanel { Spacing = 8 };
         var headings = Ui.Grid("*,76,100,72");
-        Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Budget", 12, "muted"), 1); Ui.Put(headings, Ui.Text("Per", 12, "muted"), 2); Ui.Put(headings, Ui.Text("In tracker", 12, "muted"), 3);
+        Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Budget", 12, "muted"), 1); Ui.Put(headings, Ui.Text("Period", 12, "muted"), 2); Ui.Put(headings, Ui.Text("In tracker", 12, "muted"), 3);
         panel.Children.Add(headings);
         accountList = new StackPanel { Spacing = 8 };
         if (accountRows.Count == 0)
             foreach (var account in model.AccountSettings) AddRow(account, existing: true);
         else foreach (var row in accountRows) accountList.Children.Add(RowGrid(row));
         panel.Children.Add(new ScrollViewer { Name = "SetupAccounts", Content = accountList, MaxHeight = 232, AllowAutoHide = true, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
-        var add = Ui.Button("Add an account", () => { AddRow(new AccountSettings(""), existing: false); if (accountRows[^1].Name is { } box) box.Focus(); }, "SetupAddAccount");
-        add.Classes.Add("toolButton"); add.Classes.Add("quiet"); add.HorizontalAlignment = HorizontalAlignment.Left; add.Height = 38;
+        var add = Ui.DialogButton("Add an account", () => { AddRow(new AccountSettings(""), existing: false); if (accountRows[^1].Name is { } box) box.Focus(); }, "SetupAddAccount", main: false);
+        add.HorizontalAlignment = HorizontalAlignment.Left;
         panel.Children.Add(add);
         return panel;
     }
@@ -188,11 +188,11 @@ public sealed class OnboardingView : Grid
         panel.Children.Add(Ui.Text("Working days", 12, "muted")); panel.Children.Add(days);
         panel.Children.Add(Ui.Text("Usual hours (24 hour clock)", 12, "muted"));
         panel.Children.Add(Ui.Horizontal(Detach(startBox), Ui.Dash(), Detach(endBox)));
-        var different = Ui.Button("Different hours on some days…", () =>
+        var different = Ui.DialogButton("Different hours on some days…", () =>
         {
             if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) { customHours = true; dashboard.Dialogs.Show(new ShiftDialog(model)); }
-        }, "SetupDifferentHours");
-        different.Classes.Add("toolButton"); different.Classes.Add("quiet"); different.HorizontalAlignment = HorizontalAlignment.Left; different.Height = 38;
+        }, "SetupDifferentHours", main: false);
+        different.HorizontalAlignment = HorizontalAlignment.Left;
         panel.Children.Add(different);
         return panel;
     }
