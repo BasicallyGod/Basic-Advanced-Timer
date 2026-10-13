@@ -23,7 +23,7 @@ public sealed class MessageBar : Border
         close = Ui.IconButton(IconKind.Close, "Dismiss", "DismissMessage", () => { dismissedError = model.LastError; dismissedOffer = model.ContinuePreviousText; model.ExpireMessages(); Sync(); });
         var row = Ui.Horizontal(text, offer, close); row.Spacing = 12;
         Child = row; CornerRadius = new CornerRadius(12); Padding = new Thickness(14, 6, 6, 6);
-        HorizontalAlignment = HorizontalAlignment.Left; VerticalAlignment = VerticalAlignment.Bottom; Margin = new Thickness(0, 0, 0, 6);
+        HorizontalAlignment = HorizontalAlignment.Center; VerticalAlignment = VerticalAlignment.Bottom; Margin = new Thickness(0, 0, 0, 6);
         Classes.Add("messageBar");
         model.PropertyChanged += (_, _) => Sync();
         Sync();

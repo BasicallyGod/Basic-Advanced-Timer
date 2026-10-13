@@ -9,7 +9,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 ## 12 October 2026
 
 | Change | Commit | Details |
-| --- | --- | --- |
+| Centred messages, steadier break test | pending | Notes, refused edits and the selection line now sit in the middle of the workspace instead of the left. The break button test waits for the layout to settle before clicking, after it failed once on a slow runner. |
 | Scroll cue is a fine line | pending | The fade that showed more content past the edge of a list looked muddy on light themes. It is now a one pixel line in the theme's line colour, at the bottom while there is more below and at the top once scrolled. |
 | Selection line moves to the message bar | [0a32b1e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/0a32b1e4678600133cd98ce92155bfe037b4fb72) | The "2 blocks selected" line is no longer at the top of the timeline. It shows in the message bar above the buttons, without a cross, and says plainly what merging will do, for example "Press Merge to join them into one block. This adds 0:05 of gap time." When the blocks cannot be merged it says what they would need to share. |
 | Dashboard cup steams like the pill's | [d192e89](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/d192e89476b07d860eaa06d521e1fe43680f66f7) | Any update to the dashboard while the pointer was over the break button stopped the steam, so it started and cut out. It now keeps steaming for as long as the pointer is over it, as the pill does. |
