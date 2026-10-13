@@ -787,7 +787,7 @@ public sealed class DashboardWindow : Window
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
         edit.IsVisible = editing && model.CanEditSelection; if (edit.IsVisible && edit.Content is Panel editRow && editRow.Children.OfType<TextBlock>().FirstOrDefault() is { } editText) editText.Text = model.EditText;
         pillGlyph.DotKey = model.IsOnBreak ? "Break" : model.IsTracking ? "Live" : "Idle";
-        dashboardCup.Filled = model.IsOnBreak; dashboardCup.SetSteaming(model.IsOnBreak); dashboardCup.InvalidateVisual();
+        dashboardCup.Filled = model.IsOnBreak; dashboardCup.SetSteaming(model.IsOnBreak || hoverBreak); dashboardCup.InvalidateVisual();
         dashboardBreakText.Text = model.IsOnBreak ? "Finish break" : "Start break";
         breakButton.Classes.Set("onBreak", model.IsOnBreak);
         ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Take a break");

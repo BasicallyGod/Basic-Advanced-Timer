@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 | --- | --- | --- |
+| Dashboard cup steams like the pill's | pending | Any update to the dashboard while the pointer was over the break button stopped the steam, so it started and cut out. It now keeps steaming for as long as the pointer is over it, as the pill does. |
 | On-top switches and a slimmer grip | pending | Settings has Keep the pill on top and Keep the dashboard on top, so the dashboard can drop back behind other windows. Both default to on. The drag grip on account rows is narrower and takes less of the left edge. |
 | Light takes the Studio palette | pending | Light is now the cool blue-grey look that was Studio, with its blue accent, and Studio is gone from the list. A saved choice of Studio lands on Light. |
 | Alpha bug check fixes | pending | The week overview no longer shows a sideways scroll bar. The scroll cue is a shadow along the edge, above as well as below. The setup dots stay centred whatever the button widths. Light and Dark use a blue accent, clear of red, green and orange. Duplicate and Delete in the theme editor sit in the bottom row. Themes made by the user appear in the settings theme list straight away. |
