@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using Timer.Core;
 using Timer.Desktop;
@@ -16,6 +17,43 @@ namespace Timer.Desktop.Tests;
 public sealed class UxTweakTests
 {
     private static void Settle(Window window) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); } }
+
+    [AvaloniaFact]
+    public void TheAccountsDialogCallsTheVisibilityBoxInTrackerAndExplainsHiding()
+    {
+        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
+        var dialog = new AccountsDialog(model);
+        var texts = dialog.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
+        Assert.Contains("In tracker", texts); Assert.DoesNotContain("Show", texts);
+        Assert.Contains(texts, t => t.Contains("stays in every report"));
+    }
+
+    [AvaloniaFact]
+    public void SettingsSaysBudgetPercentagesStayInWeekOverviewWhenTooltipsAreOff()
+    {
+        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
+        var view = new SettingsView(model);
+        var note = view.GetLogicalDescendants().OfType<TextBlock>().Single(t => t.Name == "TooltipsNote");
+        Assert.Contains("Week overview", note.Text);
+    }
+
+    [AvaloniaFact]
+    public void AFadeShowsOnlyWhileMoreContentLiesBelow()
+    {
+        var content = new StackPanel(); for (var i = 0; i < 30; i++) content.Children.Add(new TextBlock { Text = "row " + i, Height = 30 });
+        var scroll = new ScrollViewer { Content = content, Height = 200 };
+        var host = Ui.WithMoreBelow(scroll);
+        var window = new Window { Width = 300, Height = 300, Content = host }; window.Show();
+        try
+        {
+            Settle(window);
+            var fade = host.Children.OfType<Border>().Single(b => b.Name == "MoreBelow");
+            Assert.True(fade.IsVisible); Assert.False(fade.IsHitTestVisible);
+            scroll.Offset = new Vector(0, 100000); Settle(window);
+            Assert.False(fade.IsVisible);
+        }
+        finally { window.Close(); }
+    }
 
     [AvaloniaFact]
     public void LongTextSlidesAndShortTextStaysPut()

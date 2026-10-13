@@ -50,8 +50,8 @@ public sealed class OnboardingView : Grid
         var top = Ui.Grid("*,Auto"); Ui.Put(top, stepLabel);
         var skip = Ui.Button("Skip setup", () => Skip(), "SetupSkip"); skip.Classes.Add("flat"); Ui.Put(top, skip, 1);
         layout.Children.Add(top); layout.Children.Add(title); layout.Children.Add(subtitle); layout.Children.Add(body); layout.Children.Add(error);
-        back = Ui.Button("Back", () => Go(-1), "SetupBack"); back.Classes.Add("toolButton"); back.Classes.Add("quiet"); back.Height = DashboardWindow.ControlBarHeight;
-        next = Ui.Button("Next", () => Advance(), "SetupNext"); next.Classes.Add("accentButton"); next.Height = DashboardWindow.ControlBarHeight; next.Padding = new Thickness(26, 0);
+        back = Ui.DialogButton("Back", () => Go(-1), "SetupBack", main: false);
+        next = Ui.DialogButton("Next", () => Advance(), "SetupNext", main: true);
         var footer = Ui.Grid("Auto,*,Auto"); footer.Margin = new Thickness(0, 8, 0, 0);
         Ui.Put(footer, back); Ui.Put(footer, dots, 1); dots.HorizontalAlignment = HorizontalAlignment.Center; Ui.Put(footer, next, 2);
         layout.Children.Add(footer);
@@ -111,8 +111,8 @@ public sealed class OnboardingView : Grid
     private Control AccountsStep()
     {
         var panel = new StackPanel { Spacing = 8 };
-        var headings = Ui.Grid("*,76,100,52");
-        Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Budget", 12, "muted"), 1); Ui.Put(headings, Ui.Text("Per", 12, "muted"), 2); Ui.Put(headings, Ui.Text("Show", 12, "muted"), 3);
+        var headings = Ui.Grid("*,76,100,72");
+        Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Budget", 12, "muted"), 1); Ui.Put(headings, Ui.Text("Per", 12, "muted"), 2); Ui.Put(headings, Ui.Text("In tracker", 12, "muted"), 3);
         panel.Children.Add(headings);
         accountList = new StackPanel { Spacing = 8 };
         if (accountRows.Count == 0)
@@ -138,7 +138,7 @@ public sealed class OnboardingView : Grid
     private static T Detach<T>(T control) where T : Control { if (control.Parent is Panel panel) panel.Children.Remove(control); return control; }
     private static Grid RowGrid((string? Original, string? Colour, TextBox Name, TextBox Budget, ComboBox Period, CheckBox Show) row)
     {
-        var grid = Ui.Grid("*,76,100,52");
+        var grid = Ui.Grid("*,76,100,72");
         Ui.Put(grid, Detach(row.Name)); Ui.Put(grid, Detach(row.Budget), 1); Ui.Put(grid, Detach(row.Period), 2); Ui.Put(grid, Detach(row.Show), 3);
         return grid;
     }

@@ -271,7 +271,7 @@ public static class ReviewViews
         var scroll = new ScrollViewer { Content = root, AllowAutoHide = false, Tag = Vector.Zero,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
         DeferOffset(scroll);
-        return scroll;
+        return Ui.WithMoreBelow(scroll);
     }
     private static void OverviewSection(TimerModel model, WeekTable table, DateTime day, int[] days, StackPanel root)
     {

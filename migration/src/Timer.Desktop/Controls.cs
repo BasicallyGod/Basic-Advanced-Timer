@@ -119,6 +119,26 @@ public static class Ui
         if (main ?? MainActions.Contains(text)) button.Classes.Add("mainAction");
         return button;
     }
+    /// <summary>
+    /// Puts a faint fade over the bottom edge of a scroll viewer while more content lies below, so rows cut off by the buttons underneath
+    /// read as scrollable. The fade ignores the pointer and goes once the end is reached.
+    /// </summary>
+    public static Grid WithMoreBelow(ScrollViewer scroll)
+    {
+        var fade = new Border { Name = "MoreBelow", Height = 22, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false, IsVisible = false };
+        void Paint()
+        {
+            var c = fade.TryFindResource("Surface", fade.ActualThemeVariant, out var r) && r is SolidColorBrush found ? found.Color : Colors.Transparent;
+            fade.Background = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                GradientStops = { new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 0), new GradientStop(Color.FromArgb(235, c.R, c.G, c.B), 1) } };
+        }
+        fade.ActualThemeVariantChanged += (_, _) => Paint(); fade.AttachedToVisualTree += (_, _) => Paint();
+        void Update() => fade.IsVisible = scroll.Extent.Height > scroll.Viewport.Height + 1 && scroll.Offset.Y + scroll.Viewport.Height < scroll.Extent.Height - 1;
+        scroll.ScrollChanged += (_, _) => Update();
+        scroll.PropertyChanged += (_, e) => { if (e.Property == ScrollViewer.ExtentProperty || e.Property == ScrollViewer.ViewportProperty) Update(); };
+        var host = new Grid(); host.Children.Add(scroll); host.Children.Add(fade);
+        return host;
+    }
     public static Grid Grid(string columns, string rows = "Auto") => new()
     {
         ColumnDefinitions = new ColumnDefinitions(columns), RowDefinitions = new RowDefinitions(rows)

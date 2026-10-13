@@ -553,8 +553,8 @@ public sealed class DashboardWindow : Window
         var headLine = Ui.Grid("*,Auto"); Ui.Put(headLine, title); Ui.Put(headLine, todayHead, 1);
         var accountsHead = new StackPanel(); accountsHead.Children.Add(titleRule); accountsHead.Children.Add(headLine); accountsHeadBlock = accountsHead;
         Ui.Put(sidebar, accountsHead, row: 1);
-        Ui.Put(sidebar, new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 2);
+        Ui.Put(sidebar, Ui.WithMoreBelow(new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 2);
         var summary = new StackPanel { Margin = new Thickness(18, 12, 18, 18), Spacing = 10 };
         // The break is its own control, apart from the account rows above it, because it stops time going to any account.
         breakButton = Ui.Button("", model.ToggleBreak, "DashboardBreak");
