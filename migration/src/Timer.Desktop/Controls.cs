@@ -320,7 +320,7 @@ public sealed class AccountIndicator : Control
         {
             context.DrawEllipse(null, new Pen(Resource("Line"), 3), centre, 19, 19);
             var ratio = Math.Clamp(model.BudgetUsed(Account).TotalSeconds / budget.TotalSeconds, 0, 1);
-            var colour = ratio >= 1 ? Resource("Overtime") : ratio >= .8 ? Resource("BudgetWarning") : Resource("Live");
+            var colour = ratio >= 1 ? Resource("Overtime") : ratio >= .8 ? Resource("BudgetWarning") : Resource("Muted");
             if (ratio >= 1) context.DrawEllipse(null, new Pen(colour, 3), centre, 19, 19);
             else if (ratio > 0)
             {
@@ -402,8 +402,8 @@ public sealed class BudgetBar : Control
         var width = Bounds.Width; var top = 2.0; var height = 6.0;
         context.DrawRectangle(Resource("Line"), null, new Rect(0, top, width, height), 3, 3);
         var fill = Math.Clamp(Ratio, 0, 1) * width;
-        // Green while there is room, amber from 80%, red once the budget is spent.
-        var colour = Ratio >= 1 ? Resource("Overtime") : Ratio >= .8 ? Resource("BudgetWarning") : Resource("Live");
+        // Neutral while there is room (green means tracking only), amber from 80%, red once the budget is spent.
+        var colour = Ratio >= 1 ? Resource("Overtime") : Ratio >= .8 ? Resource("BudgetWarning") : Resource("Muted");
         if (fill > 0) context.DrawRectangle(colour, null, new Rect(0, top, Math.Max(fill, height), height), 3, 3);
         // The marker says where an even spread of the budget would have got to by now. Once the budget is spent there is nothing left to pace, so it goes.
         if (Ratio < 1) using (context.PushOpacity(.7)) context.DrawRectangle(Resource("Ink"), null, new Rect(Math.Clamp(Pace, 0, 1) * (width - 2), 0, 2, 10), 1, 1);

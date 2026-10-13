@@ -94,7 +94,7 @@ public sealed class OnboardingView : Grid
         for (var i = 0; i < StepCount; i++)
         {
             var dot = new Avalonia.Controls.Shapes.Ellipse { Width = 8, Height = 8 };
-            dot.Classes.Add(i == index ? "live" : "idle");
+            dot.Classes.Add(i == index ? "stepDot" : "idle");
             dots.Children.Add(dot);
         }
         (title.Text, subtitle.Text, body.Content) = index switch

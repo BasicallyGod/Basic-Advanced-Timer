@@ -85,12 +85,13 @@
       <Setter Property="Foreground" Value="{DynamicResource AccentInk}" />
     </Style>
     <Style Selector="TextBlock.idle"><Setter Property="Foreground" Value="{DynamicResource Idle}" /></Style>
+    <Style Selector="Ellipse.stepDot"><Setter Property="Fill" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Ellipse.live"><Setter Property="Fill" Value="{DynamicResource Live}" /></Style>
     <Style Selector="Ellipse.break"><Setter Property="Fill" Value="{DynamicResource Break}" /></Style>
     <Style Selector="Ellipse.idle"><Setter Property="Fill" Value="{DynamicResource Idle}" /></Style>
     <Style Selector="TextBlock.live"><Setter Property="Foreground" Value="{DynamicResource Live}" /></Style>
     <Style Selector="TextBlock.break"><Setter Property="Foreground" Value="{DynamicResource Break}" /></Style>
-    <Style Selector="Border.budgetFill"><Setter Property="Background" Value="{DynamicResource Live}" /></Style>
+    <Style Selector="Border.budgetFill"><Setter Property="Background" Value="{DynamicResource Muted}" /></Style>
     <Style Selector="Border.budgetFill.budgetWarn"><Setter Property="Background" Value="{DynamicResource BudgetWarning}" /></Style>
     <Style Selector="Border.budgetFill.budgetOver"><Setter Property="Background" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="TextBlock.budgetWarning"><Setter Property="Foreground" Value="{DynamicResource BudgetWarning}" /></Style>

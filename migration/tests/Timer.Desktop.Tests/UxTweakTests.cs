@@ -232,7 +232,7 @@ public sealed class UxTweakTests
             Assert.Equal(IconKind.Minimise, glyph.Kind); Assert.Equal("Switch to pill", ToolTip.GetTip(button));
             if (!model.IsTracking) model.ToggleAccount("Account one"); Settle(window);
             Assert.Equal("Live", glyph.DotKey);
-            model.TogglePause(); Settle(window); Assert.Equal("Accent", glyph.DotKey);
+            model.TogglePause(); Settle(window); Assert.Equal("Idle", glyph.DotKey);
             model.ToggleBreak(); Settle(window); Assert.Equal("Break", glyph.DotKey);
         }
         finally { window.Close(); }
