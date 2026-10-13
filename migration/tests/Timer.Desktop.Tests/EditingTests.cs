@@ -313,7 +313,7 @@ public sealed class EditingTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("account")).ToList();
-            Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(66, r.Bounds.Height, 0.5)); // Tall enough for the name, the budget line and its bar.
+            Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(70, r.Bounds.Height, 0.5)); // Tall enough for the name, the budget line and its bar.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
             Assert.Contains("rail", tab.Classes); Assert.Contains("selected", tab.Classes);
         }

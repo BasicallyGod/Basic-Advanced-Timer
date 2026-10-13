@@ -61,11 +61,18 @@ public static class ThemeEngine
         foreach (var key in new[] { "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver", "CheckBoxCheckGlyphForegroundCheckedPressed" }) Put(key, accentInk);
         // Tooltips are drawn by a pop-up that otherwise takes the computer's own light or dark colours, which left dark text on a dark tooltip (or the reverse)
         // when the theme and the computer disagreed, and in the recording pill. They wear the theme's surface, text and line instead.
+        // A gentle wash of the tracking colour over the surface, for the card of the account that is recording.
+        Put("LiveTint", Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Live"], ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000") ? .24 : .14)));
         Put("ToolTipBackground", Color.Parse(colours["Surface"]));
         Put("ToolTipForeground", Color.Parse(colours["Ink"]));
         Put("ToolTipBorderBrush", line);
         foreach (var key in new[] { "SliderTrackValueFill", "SliderTrackValueFillPointerOver", "SliderTrackValueFillPressed", "SliderThumbBackground", "SliderThumbBackgroundPointerOver", "SliderThumbBackgroundPressed" }) Put(key, sliderFill);
         foreach (var key in new[] { "SliderTrackFill", "SliderTrackFillPointerOver", "SliderTrackFillPressed" }) Put(key, sliderTrack);
+        // A slider that is switched off, such as every one in a built-in theme (they cannot be changed), is drawn from its own Disabled resources, which
+        // the standard theme makes a dim grey that vanishes on a dark surface. They stay quieter than a live slider but can still be seen.
+        var (offFill, offTrack) = DisabledSliderColours(colours);
+        foreach (var key in new[] { "SliderTrackValueFillDisabled", "SliderThumbBackgroundDisabled" }) Put(key, offFill);
+        Put("SliderTrackFillDisabled", offTrack);
     }
     /// <summary>
     /// Writes only the colours the windows are drawn in, not the pill's recording, break and overtime tints. While a theme is being edited every
@@ -90,6 +97,9 @@ public static class ThemeEngine
         for (var weight = .3; weight <= 1.0; weight += .05) { track = ThemeColours.Mix(surface, ink, weight); if (Seen(track)) break; }
         return (Color.Parse(fill), Color.Parse(track));
     }
+    /// <summary>The colours of a slider that cannot be changed: a thumb and fill about half way between the surface and the text colour, on a fainter track.</summary>
+    public static (Color Fill, Color Track) DisabledSliderColours(IReadOnlyDictionary<string, string> colours)
+        => (Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Ink"], .5)), Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Ink"], .28)));
     /// <summary>Raised after theme colours are written, so windows with their own chrome (title bars) can follow a change or a preview.</summary>
     public static event Action? Applied;
     /// <summary>Makes every theme, built-in and the user's own, available to the app. Safe to call again after a theme changes.</summary>

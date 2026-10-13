@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
 using Timer.Desktop;
+using Timer.Storage;
 using Xunit;
 
 namespace Timer.Desktop.Tests;
@@ -229,5 +230,124 @@ public sealed class UxTweakTests
         Assert.True(run.Alive);
         pending.SetResult(); Assert.False(run.Alive); // It was running and then ended: asking for it again must start it afresh.
         Assert.True(new RunningAnimation(Task.CompletedTask).Alive); // Finished at once, as where nothing ticks: counted as running so tests see the state.
+    }
+
+    [Fact]
+    public void ShowTodayBringsTheViewsBackToTheCurrentDayAndMidnightIsFollowedOnlyWhenTodayWasShowing()
+    {
+        var now = new DateTime(2026, 10, 13, 23, 59, 40);
+        var model = new TimerModel(new TrackingEngine(clock: () => now));
+        Assert.Equal(now.Date, model.SelectedDate);
+        model.ChangeDate(-3); Assert.NotEqual(now.Date, model.SelectedDate);
+        model.ShowToday(); Assert.Equal(now.Date, model.SelectedDate);
+        // Left showing today over midnight, the view moves on with the clock.
+        now = now.AddSeconds(30); model.Tick(); Assert.Equal(new DateTime(2026, 10, 14), model.SelectedDate);
+        // Reviewing an earlier day, it stays put when midnight passes.
+        var late = new DateTime(2026, 10, 13, 23, 59, 40); var review = new TimerModel(new TrackingEngine(clock: () => late));
+        review.ChangeDate(-2); var chosen = review.SelectedDate; late = late.AddSeconds(30); review.Tick();
+        Assert.Equal(chosen, review.SelectedDate);
+        review.ShowToday(); Assert.Equal(new DateTime(2026, 10, 14), review.SelectedDate);
+    }
+
+    [AvaloniaFact]
+    public void TheDashboardOpensOnTheCurrentDayEveryTimeItIsShown()
+    {
+        var now = new DateTime(2026, 10, 13, 10, 0, 0);
+        var model = new TimerModel(new TrackingEngine(clock: () => now)); model.CompleteSetup();
+        var windows = new WindowCoordinator(model, () => { });
+        try
+        {
+            model.ChangeDate(-4); windows.Pill.Show();
+            windows.Pill.OpenDashboard!(); // The pill's button to the dashboard.
+            Assert.Equal(now.Date, model.SelectedDate);
+            model.ChangeDate(-2); windows.Hide(); windows.ShowDashboard(); // Back from the tray, or asked for by a menu.
+            Assert.Equal(now.Date, model.SelectedDate);
+            now = now.AddDays(1); windows.Hide(); windows.ShowDashboard(); // Left hidden overnight.
+            Assert.Equal(now.Date, model.SelectedDate);
+        }
+        finally { windows.Pill.Close(); windows.Dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void SlidersThatAreSwitchedOffCanStillBeSeenInEveryBuiltInTheme()
+    {
+        var app = Application.Current!;
+        foreach (var theme in ThemeLibrary.BuiltIn)
+        {
+            ThemeEngine.Register(app, new[] { theme });
+            var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
+            var (fill, track) = ThemeEngine.DisabledSliderColours(theme.Colours);
+            Assert.Equal(fill, ((ISolidColorBrush)dictionary["SliderThumbBackgroundDisabled"]!).Color); Assert.Equal(track, ((ISolidColorBrush)dictionary["SliderTrackFillDisabled"]!).Color);
+            string Hex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            Assert.True(ThemeColours.Contrast(Hex(fill), theme.Colour("Surface")) >= 2, $"{theme.Name} disabled thumb");
+            Assert.True(ThemeColours.Contrast(Hex(track), theme.Colour("Surface")) >= 1.5, $"{theme.Name} disabled track");
+        }
+    }
+
+    [Theory]
+    [InlineData(true, false, false, false, true)]  // Covered or snapped under another window: put back in front.
+    [InlineData(true, true, false, false, false)]  // Already the active window.
+    [InlineData(false, false, false, false, false)] // Hidden.
+    [InlineData(true, false, true, false, false)]  // Minimised.
+    [InlineData(true, false, false, true, false)]  // A topmost window of another app (such as the screenshot overlay) has the focus.
+    public void TheTimerOnlyJumpsToTheFrontWhenNothingTopmostHasTheFocus(bool visible, bool active, bool minimised, bool foregroundTopmost, bool expected)
+        => Assert.Equal(expected, ZOrder.ShouldReassert(visible, active, minimised, foregroundTopmost));
+
+    [AvaloniaFact]
+    public void TheCrossOnTheMessageBarPutsAwayTheContinueOfferUntilThereIsADifferentOne()
+    {
+        var now = new DateTime(2026, 10, 13, 9, 0, 0);
+        var engine = new TrackingEngine(clock: () => now);
+        var model = new TimerModel(engine, new StoreSettings(new() { new("Account one"), new("Account two") }, false, ThemeLibrary.Default, DayOfWeek.Monday));
+        var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            model.ToggleAccount("Account one"); now = now.AddMinutes(30);
+            model.ToggleAccount("Account two"); now = now.AddSeconds(20);
+            model.ToggleAccount("Account one"); now = now.AddSeconds(10); // A slip of the finger, which offers to take it back.
+            Settle(dashboard);
+            var bar = dashboard.GetVisualDescendants().OfType<MessageBar>().Single(); var offer = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ContinuePrevious");
+            Assert.True(offer.IsVisible); Assert.True(bar.IsVisible);
+            dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DismissMessage").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
+            Assert.False(offer.IsVisible); Assert.False(bar.IsVisible); // Gone, so the timeline is clear again.
+            Assert.True(model.CanContinuePrevious); // Still there from the footer, pill and menus.
+        }
+        finally { dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void AccountRowsPairBudgetUsedWithItsPeriodAndKeepThePercentageForTheHover()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Settle(window);
+            var rows = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")).ToList();
+            Assert.NotEmpty(rows);
+            Assert.All(rows, row => Assert.DoesNotContain(row.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.EndsWith('%'))); // No percentage on the row itself.
+            var withBudget = model.Accounts.First(a => a.Budget is not null);
+            Assert.Matches(@"^\d+h\d*m? / \d+h", model.BudgetUsage(withBudget).Replace("h ", "h")); Assert.Equal("This week", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null) with { Budget = TimeSpan.FromHours(5), Period = "week" }));
+            Assert.Equal("This month", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null) with { Budget = TimeSpan.FromHours(5), Period = "month" }));
+            Assert.Equal("Today", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null) with { Budget = TimeSpan.FromHours(5), Period = "day" })); Assert.Equal("", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null)));
+            Assert.Contains("% used", model.BudgetDetail(withBudget)); Assert.Contains("how far through", model.BudgetDetail(withBudget));
+            var bars = rows.SelectMany(r => r.GetVisualDescendants().OfType<BudgetBar>()).ToList(); Assert.NotEmpty(bars);
+            Assert.All(bars, bar => Assert.Contains("% used", (string?)ToolTip.GetTip(bar)));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheRecordingAccountsCardTakesAGentleTintOfTheTrackingColourInEveryTheme()
+    {
+        var app = Application.Current!;
+        foreach (var theme in ThemeLibrary.BuiltIn)
+        {
+            ThemeEngine.Register(app, new[] { theme });
+            var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
+            var tint = ((ISolidColorBrush)dictionary["LiveTint"]!).Color;
+            string Hex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            Assert.NotEqual(Color.Parse(theme.Colour("Surface")), tint); // Visible against the surface...
+            Assert.True(ThemeColours.Contrast(theme.Colour("Ink"), Hex(tint)) >= 4.5, $"{theme.Name}: text on the recording card"); // ...and the words on it still read.
+        }
     }
 }

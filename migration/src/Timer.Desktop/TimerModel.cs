@@ -165,7 +165,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
-        SelectedDate = Engine.Now.Date;
+        SelectedDate = Engine.Now.Date; lastToday = SelectedDate;
         // The user's own themes need their colours registered too. The built-in ones were registered when the app started.
         if (Application.Current is { } current && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && this.preferences.Themes is { Count: > 0 } own) ThemeEngine.Register(current, own);
         ApplyTheme(); Ui.ApplyTooltips(this.preferences.Tooltips);
@@ -379,8 +379,34 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>The budget for an account row, such as "10h35 / 20h monthly". The period is always said, since it matters when comparing accounts.</summary>
     public string BudgetLine(TimerAccount a) => a.Budget is { } target
         ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)} {(a.Period switch { "day" => "daily", "month" => "monthly", "quarter" => "quarterly", _ => "weekly" })}" : "No budget";
+    /// <summary>What has been used against the budget, such as "8h 45m / 15h", for the dashboard's account rows, or "No budget".</summary>
+    public string BudgetUsage(TimerAccount a) => a.Budget is { } target ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)}" : "No budget";
+    /// <summary>The period the budget covers, in words that sit beside the usage, or an empty string when there is no budget.</summary>
+    public string BudgetPeriodLabel(TimerAccount a) => a.Budget is null ? "" : a.Period switch { "day" => "Today", "month" => "This month", "quarter" => "This quarter", _ => "This week" };
+    /// <summary>The detail shown on hover instead of a percentage on the row: how much is used, and what the pace line means.</summary>
+    public string BudgetDetail(TimerAccount a)
+    {
+        if (BudgetRatio(a) is not { } ratio) return "No budget";
+        var period = a.Period is "day" or "month" or "quarter" ? (a.Period == "day" ? "working day" : a.Period) : "week";
+        return $"{Math.Round(ratio * 100)}% used{(ratio >= 1 ? ", over budget" : "")}. The line is how far through the {period} you are.";
+    }
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
+    /// <summary>Puts the timeline and week views back on the current day. The dashboard does this whenever it is opened, so it never comes up on a day left over from earlier.</summary>
+    public void ShowToday()
+    {
+        if (SelectedDate.Date == Engine.Now.Date) return;
+        selectedRows.Clear(); TimelineOffset = null; SelectedDate = Engine.Now.Date; Notify();
+    }
+    // A timer left running past midnight carries on following the current day, if that is the day being shown. Someone reviewing an earlier day is left there.
+    private DateTime lastToday;
+    private void FollowToday()
+    {
+        var today = Engine.Now.Date; if (today == lastToday) return;
+        var following = SelectedDate.Date == lastToday; lastToday = today;
+        if (following) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = today; }
+        Notify();
+    }
     public void ChangeDate(int days) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
     /// <summary>Steps the Week tab by whole weeks. It never goes past the current week, since there is nothing to review there.</summary>
     public void ChangeWeek(int weeks)
@@ -711,6 +737,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void Tick()
     {
         ticks++;
+        FollowToday();
         if (ticks % 15 == 0) { Save(); Notify(); }
         else PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Elapsed)));
     }
