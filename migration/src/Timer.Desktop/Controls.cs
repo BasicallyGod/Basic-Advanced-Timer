@@ -749,8 +749,14 @@ public sealed class PauseGlyph : Control
 public sealed class BreakGlyph : Control
 {
     public static readonly StyledProperty<double> SteamProperty = AvaloniaProperty.Register<BreakGlyph, double>(nameof(Steam));
-    static BreakGlyph() => AffectsRender<BreakGlyph>(SteamProperty);
+    // How far the steam has taken over from the still wisps, from 0 to 1. It eases in and out, so hovering the cup does not snap the wisps from still to moving.
+    public static readonly StyledProperty<double> FlowProperty = AvaloniaProperty.Register<BreakGlyph, double>(nameof(Flow));
+    static BreakGlyph() => AffectsRender<BreakGlyph>(SteamProperty, FlowProperty);
     public double Steam { get => GetValue(SteamProperty); set => SetValue(SteamProperty, value); }
+    public double Flow { get => GetValue(FlowProperty); set => SetValue(FlowProperty, value); }
+    /// <summary>One slow cycle of the steam, and how long the steam takes to arrive or fade.</summary>
+    public static readonly TimeSpan SteamCycle = TimeSpan.FromSeconds(3.2), SteamEase = TimeSpan.FromMilliseconds(600);
+    private bool wanted;
     public bool Filled { get; set; }
     /// <summary>Draws the cup in plain text colour, and in <see cref="HotKey"/> only while the pointer is over its button.</summary>
     public bool Mono { get; set; }
@@ -759,17 +765,30 @@ public sealed class BreakGlyph : Control
     public string HotKey { get; set; } = "Break";
     private CancellationTokenSource? steaming; private RunningAnimation? steamRun;
     // Counted as steaming only while its animation is really running, so one that stopped (its window was hidden) is started again when asked.
-    public bool Steaming => steaming is not null && steamRun is { Alive: true };
-    public BreakGlyph() { Width = Height = 18; }
+    public bool Steaming => wanted && steaming is not null && steamRun is { Alive: true };
+    public BreakGlyph()
+    {
+        Width = Height = 18;
+        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = FlowProperty, Duration = SteamEase, Easing = new Avalonia.Animation.Easings.CubicEaseInOut() } };
+    }
     public void SetSteaming(bool on)
     {
         if (on && Steaming) return;
+        wanted = on;
+        if (!on)
+        {
+            // The steam is left to fade out over its ease, and the animation is stopped once that has finished (unless it was asked for again).
+            Flow = 0; var stopping = steaming;
+            if (stopping is not null) DispatcherTimer.RunOnce(() => { if (!wanted && ReferenceEquals(steaming, stopping)) { stopping.Cancel(); steaming = null; Steam = 0; } }, SteamEase + TimeSpan.FromMilliseconds(100));
+            return;
+        }
+        Flow = 1;
+        if (steaming is not null && steamRun is { Alive: true }) return; // Still turning from a moment ago: it just picks up again.
         if (steaming is not null) { steaming.Cancel(); steaming = null; Steam = 0; }
-        if (!on) return;
         steaming = new CancellationTokenSource();
         var animation = new Avalonia.Animation.Animation
         {
-            Duration = TimeSpan.FromSeconds(1.8), IterationCount = Avalonia.Animation.IterationCount.Infinite,
+            Duration = SteamCycle, IterationCount = Avalonia.Animation.IterationCount.Infinite,
             Children =
             {
                 new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0), Setters = { new Setter(SteamProperty, 0.0) } },
@@ -795,10 +814,11 @@ public sealed class BreakGlyph : Control
         // Two wisps, half a cycle apart. Each rises a little and fades in and out; when still they sit where they always did.
         for (var i = 0; i < 2; i++)
         {
-            var x = 6.0 + 4 * i; var phase = Steaming ? (Steam + .5 * i) % 1.0 : 0;
-            var rise = phase * 3.5; var alpha = Steaming ? Math.Sin(phase * Math.PI) : 1.0;
+            // The still wisp and the moving one are blended by Flow, so the change between them is gradual in both directions.
+            var x = 6.0 + 4 * i; var phase = (Steam + .5 * i) % 1.0; var flow = Math.Clamp(Flow, 0.0, 1.0);
+            var rise = phase * 3.5 * flow; var alpha = 1.0 + (Math.Sin(phase * Math.PI) - 1.0) * flow;
             using (context.PushOpacity(Math.Clamp(alpha, 0.0, 1.0)))
-                context.DrawLine(pen, new Point(x, 4 - rise), new Point(x, 1.5 - rise + (Steaming ? 0 : 0)));
+                context.DrawLine(pen, new Point(x, 4 - rise), new Point(x, 1.5 - rise));
         }
     }
 }

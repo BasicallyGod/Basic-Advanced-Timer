@@ -60,7 +60,8 @@ public sealed class WindowCoordinator
     // it is put back at the front of the topmost windows, and a slow check does the same for one that was covered without a focus change.
     private void KeepInFront()
     {
-        void Reassert(Window window) { if (window.IsVisible && !window.IsActive && window.WindowState != WindowState.Minimized) { window.Topmost = false; window.Topmost = true; } }
+        // Not while a topmost window of another app has the focus (the screenshot tool's overlay, say), which this would otherwise jump on top of.
+        void Reassert(Window window) { if (ZOrder.ShouldReassert(window.IsVisible, window.IsActive, window.WindowState == WindowState.Minimized, ZOrder.ForegroundIsTopmost())) { window.Topmost = false; window.Topmost = true; } }
         foreach (var window in new Window[] { Pill, Dashboard })
         {
             var self = window;

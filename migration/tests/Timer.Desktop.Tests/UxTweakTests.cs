@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
 using Timer.Desktop;
+using Timer.Storage;
 using Xunit;
 
 namespace Timer.Desktop.Tests;
@@ -281,5 +282,36 @@ public sealed class UxTweakTests
             Assert.True(ThemeColours.Contrast(Hex(fill), theme.Colour("Surface")) >= 2, $"{theme.Name} disabled thumb");
             Assert.True(ThemeColours.Contrast(Hex(track), theme.Colour("Surface")) >= 1.5, $"{theme.Name} disabled track");
         }
+    }
+
+    [Theory]
+    [InlineData(true, false, false, false, true)]  // Covered or snapped under another window: put back in front.
+    [InlineData(true, true, false, false, false)]  // Already the active window.
+    [InlineData(false, false, false, false, false)] // Hidden.
+    [InlineData(true, false, true, false, false)]  // Minimised.
+    [InlineData(true, false, false, true, false)]  // A topmost window of another app (such as the screenshot overlay) has the focus.
+    public void TheTimerOnlyJumpsToTheFrontWhenNothingTopmostHasTheFocus(bool visible, bool active, bool minimised, bool foregroundTopmost, bool expected)
+        => Assert.Equal(expected, ZOrder.ShouldReassert(visible, active, minimised, foregroundTopmost));
+
+    [AvaloniaFact]
+    public void TheCrossOnTheMessageBarPutsAwayTheContinueOfferUntilThereIsADifferentOne()
+    {
+        var now = new DateTime(2026, 10, 13, 9, 0, 0);
+        var engine = new TrackingEngine(clock: () => now);
+        var model = new TimerModel(engine, new StoreSettings(new() { new("Account one"), new("Account two") }, false, ThemeLibrary.Default, DayOfWeek.Monday));
+        var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            model.ToggleAccount("Account one"); now = now.AddMinutes(30);
+            model.ToggleAccount("Account two"); now = now.AddSeconds(20);
+            model.ToggleAccount("Account one"); now = now.AddSeconds(10); // A slip of the finger, which offers to take it back.
+            Settle(dashboard);
+            var bar = dashboard.GetVisualDescendants().OfType<MessageBar>().Single(); var offer = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ContinuePrevious");
+            Assert.True(offer.IsVisible); Assert.True(bar.IsVisible);
+            dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DismissMessage").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
+            Assert.False(offer.IsVisible); Assert.False(bar.IsVisible); // Gone, so the timeline is clear again.
+            Assert.True(model.CanContinuePrevious); // Still there from the footer, pill and menus.
+        }
+        finally { dashboard.Close(); }
     }
 }
