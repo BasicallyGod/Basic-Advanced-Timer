@@ -397,4 +397,49 @@ public sealed class UxTweakTests
         }
         finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
+
+    private static TimerModel BudgetModel(Func<DateTime> clock, out TrackingEngine engine)
+    {
+        engine = new TrackingEngine(clock: clock);
+        var settings = new StoreSettings(new() { new("Weekly", 10, "week"), new("Monthly", 20, "month"), new("Quarterly", 100, "quarter"), new("Daily", 6, "day") }, false, "Light", DayOfWeek.Monday);
+        return new TimerModel(engine, settings);
+    }
+
+    [Fact]
+    public void AnEarlierWeeksBudgetFiguresNameThePeriodTheyBelongToInsteadOfSayingThisMonth()
+    {
+        var now = new DateTime(2026, 10, 13, 12, 0, 0); var model = BudgetModel(() => now, out var engine);
+        engine.Sessions.Add(new SessionRow("2026-09-16", "Monthly", "09:00:00", "added", "120.00")); // Two hours in September.
+        engine.Sessions.Add(new SessionRow("2026-10-12", "Monthly", "09:00:00", "added", "60.00"));  // One hour this month.
+        var monthly = model.Accounts.Single(a => a.Name == "Monthly"); var quarterly = model.Accounts.Single(a => a.Name == "Quarterly");
+        var currentWeek = new DateTime(2026, 10, 12); var earlierWeek = new DateTime(2026, 9, 14);
+        Assert.Equal("this month", model.BudgetPeriodNameAt(monthly, model.BudgetReference(currentWeek)));
+        Assert.Equal("September 2026", model.BudgetPeriodNameAt(monthly, model.BudgetReference(earlierWeek)));
+        Assert.Equal("Q3 2026", model.BudgetPeriodNameAt(quarterly, model.BudgetReference(earlierWeek)));
+        Assert.Equal("this quarter", model.BudgetPeriodNameAt(quarterly, model.BudgetReference(currentWeek)));
+        Assert.Equal("week of 14 Sept", model.BudgetPeriodNameAt(model.Accounts.Single(a => a.Name == "Weekly"), model.BudgetReference(earlierWeek)));
+        Assert.Equal("Thu 17 Sept", model.BudgetPeriodNameAt(model.Accounts.Single(a => a.Name == "Daily"), model.BudgetReference(earlierWeek)));
+        Assert.Equal(TimeSpan.FromHours(2), model.BudgetUsedAt(monthly, model.BudgetReference(earlierWeek))); // September's own use, not this month's.
+        Assert.Equal(TimeSpan.FromHours(1), model.BudgetUsedAt(monthly, model.BudgetReference(currentWeek)));
+        // A week that straddles two months is placed with the month holding most of its days.
+        Assert.Equal("this month", model.BudgetPeriodNameAt(monthly, model.BudgetReference(new DateTime(2026, 9, 28)))); // 28 Sep to 4 Oct has its Thursday on 1 Oct.
+    }
+
+    [AvaloniaFact]
+    public void TheRunningRecordingCountsInTheWeekTableTheChartAndTheEntriesDayTotal()
+    {
+        var now = new DateTime(2026, 10, 9, 12, 0, 0); var model = BudgetModel(() => now, out var engine);
+        model.ToggleAccount("Weekly"); now = now.AddHours(2); // Two hours running, nothing saved yet.
+        var week = new DateTime(2026, 10, 5);
+        var table = WeekTable.Build(model, new WeekExport(model.Editor, engine, week), week, new[] { 0, 1, 2, 3, 4 });
+        var allocated = table.Rows.Single(r => r.Label == "Allocated"); Assert.Equal("2:00", allocated.Cells[4]); Assert.Equal("2:00", allocated.Total);
+        Assert.Equal("2:00", table.Rows.Single(r => r.Label == "Weekly").Total);
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekEntriesTab").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "DayAllocated" && t.Text!.Contains("2h 00m"));
+        }
+        finally { window.Close(); }
+    }
 }
