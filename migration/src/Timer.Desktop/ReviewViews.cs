@@ -22,12 +22,7 @@ public static class ReviewViews
     {
         var day = model.SelectedDate;
         var root = Ui.Grid("*", "Auto,Auto,*");
-        // This line shows selection feedback only when there is a selection. Otherwise it takes no room at all.
-        var caption = Ui.Text(model.SelectedBlockCount > 0 ? $"{model.SelectedBlockCount} blocks selected · " + model.MergeHint : "", 12, "muted");
-        caption.IsVisible = model.SelectedBlockCount > 0;
-        caption.TextWrapping = TextWrapping.Wrap;
-        caption.Margin = new Thickness(0, 0, 0, 10);
-        Ui.Put(root, caption);
+        // The selection line is shown in the message bar over the buttons, not here, so nothing moves when blocks are selected.
         var pixelsPerHour = model.TimelinePixelsPerHour;
         // The hours run down a spine with a tick for each hour, and for each half and quarter hour as you zoom in. Blocks sit to the right of it,
         // A little room above and below lets the first and last labels sit fully in view.
@@ -435,7 +430,7 @@ public static class ReviewViews
     }
     private static void EntriesSection(TimerModel model, WeekExport reconciled, StackPanel root)
     {
-        root.Children.Add(Ui.Text(model.SelectedBlockCount > 0 ? $"{model.SelectedBlockCount} blocks selected · " + model.MergeHint : "Click an entry to select it, double-click to edit, right-click to edit or merge", 12, "muted"));
+        root.Children.Add(Ui.Text(model.SelectedBlockCount > 0 ? "" : "Click an entry to select it, double-click to edit, right-click to edit or merge", 12, "muted"));
         var entries = reconciled.Entries.ToList();
         string Length(int index) => model.DecimalHours ? WeekExport.Hours(reconciled.EntryUnits[index]) + "h" : model.Format(TimeSpan.FromMinutes((double)entries[index].Minutes));
         // Entries are grouped under their day, each day on its own tile with its total, so a week reads as seven short lists rather than one long one.

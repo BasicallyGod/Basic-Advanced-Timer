@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 | --- | --- | --- |
+| Selection line moves to the message bar | pending | The "2 blocks selected" line is no longer at the top of the timeline. It shows in the message bar above the buttons, without a cross, and says plainly what merging will do, for example "Press Merge to join them into one block. This adds 0:05 of gap time." When the blocks cannot be merged it says what they would need to share. |
 | Dashboard cup steams like the pill's | pending | Any update to the dashboard while the pointer was over the break button stopped the steam, so it started and cut out. It now keeps steaming for as long as the pointer is over it, as the pill does. |
 | On-top switches and a slimmer grip | pending | Settings has Keep the pill on top and Keep the dashboard on top, so the dashboard can drop back behind other windows. Both default to on. The drag grip on account rows is narrower and takes less of the left edge. |
 | Light takes the Studio palette | pending | Light is now the cool blue-grey look that was Studio, with its blue accent, and Studio is gone from the list. A saved choice of Studio lands on Light. |

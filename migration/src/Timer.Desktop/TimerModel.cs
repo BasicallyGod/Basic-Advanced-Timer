@@ -70,8 +70,11 @@ public sealed class TimerModel : INotifyPropertyChanged
         .Count(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains));
     public bool CanMergeSelection => SelectedBlockCount >= 2 && selectedRows.Select(s => s.Day).Distinct().Count() == 1
         && selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() == 1 && Editor.CanCombine(selectedRows.ToArray());
-    public string MergeHint => SelectedBlockCount < 2 ? "Select two or more blocks to merge." : CanMergeSelection
-        ? $"Merge {SelectedBlockCount} blocks · adds {Format(TimeSpan.FromMinutes((double)Editor.MergeGapMinutes(selectedRows.ToArray())))} of gap time." : "Blocks must share an account and day, with only gaps between.";
+    public string MergeHint => SelectedBlockCount < 2 ? "Select two or more blocks to merge them." : CanMergeSelection
+        ? $"Press Merge to join them into one block. This adds {Format(TimeSpan.FromMinutes((double)Editor.MergeGapMinutes(selectedRows.ToArray())))} of gap time."
+        : "These cannot be merged. To merge, blocks must share an account and day, with only gaps between.";
+    /// <summary>What the message bar says while blocks are selected: how many, then what merging them would do. Null with no selection.</summary>
+    public string? SelectionLine => SelectedBlockCount is var count and > 0 ? $"{count} {(count == 1 ? "block" : "blocks")} selected. " + MergeHint : null;
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
     {
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
