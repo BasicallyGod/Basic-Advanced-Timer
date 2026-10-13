@@ -35,6 +35,7 @@ public sealed class WindowCoordinator
         model.PropertyChanged += (_, _) => ApplyTaskbar();
         Pill.OpenDashboard = () =>
         {
+            model.ShowToday();
             Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin);
             Dashboard.Show();
             Pill.Collapse(); // So it is a capsule again when you come back.
@@ -87,7 +88,7 @@ public sealed class WindowCoordinator
     }
     public void ShowDashboard()
     {
-        if (!Dashboard.IsVisible) { Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin); Dashboard.Show(); }
+        if (!Dashboard.IsVisible) { model.ShowToday(); Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin); Dashboard.Show(); }
         Pill.Collapse(); Pill.Hide(); BringToFront(Dashboard);
     }
     // The tray icon's left click shows the timer, or hides it when it is already in front.

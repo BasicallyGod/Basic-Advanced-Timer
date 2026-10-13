@@ -230,4 +230,40 @@ public sealed class UxTweakTests
         pending.SetResult(); Assert.False(run.Alive); // It was running and then ended: asking for it again must start it afresh.
         Assert.True(new RunningAnimation(Task.CompletedTask).Alive); // Finished at once, as where nothing ticks: counted as running so tests see the state.
     }
+
+    [Fact]
+    public void ShowTodayBringsTheViewsBackToTheCurrentDayAndMidnightIsFollowedOnlyWhenTodayWasShowing()
+    {
+        var now = new DateTime(2026, 10, 13, 23, 59, 40);
+        var model = new TimerModel(new TrackingEngine(clock: () => now));
+        Assert.Equal(now.Date, model.SelectedDate);
+        model.ChangeDate(-3); Assert.NotEqual(now.Date, model.SelectedDate);
+        model.ShowToday(); Assert.Equal(now.Date, model.SelectedDate);
+        // Left showing today over midnight, the view moves on with the clock.
+        now = now.AddSeconds(30); model.Tick(); Assert.Equal(new DateTime(2026, 10, 14), model.SelectedDate);
+        // Reviewing an earlier day, it stays put when midnight passes.
+        var late = new DateTime(2026, 10, 13, 23, 59, 40); var review = new TimerModel(new TrackingEngine(clock: () => late));
+        review.ChangeDate(-2); var chosen = review.SelectedDate; late = late.AddSeconds(30); review.Tick();
+        Assert.Equal(chosen, review.SelectedDate);
+        review.ShowToday(); Assert.Equal(new DateTime(2026, 10, 14), review.SelectedDate);
+    }
+
+    [AvaloniaFact]
+    public void TheDashboardOpensOnTheCurrentDayEveryTimeItIsShown()
+    {
+        var now = new DateTime(2026, 10, 13, 10, 0, 0);
+        var model = new TimerModel(new TrackingEngine(clock: () => now)); model.CompleteSetup();
+        var windows = new WindowCoordinator(model, () => { });
+        try
+        {
+            model.ChangeDate(-4); windows.Pill.Show();
+            windows.Pill.OpenDashboard!(); // The pill's button to the dashboard.
+            Assert.Equal(now.Date, model.SelectedDate);
+            model.ChangeDate(-2); windows.Hide(); windows.ShowDashboard(); // Back from the tray, or asked for by a menu.
+            Assert.Equal(now.Date, model.SelectedDate);
+            now = now.AddDays(1); windows.Hide(); windows.ShowDashboard(); // Left hidden overnight.
+            Assert.Equal(now.Date, model.SelectedDate);
+        }
+        finally { windows.Pill.Close(); windows.Dashboard.Close(); }
+    }
 }
