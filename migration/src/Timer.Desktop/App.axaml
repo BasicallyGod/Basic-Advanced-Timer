@@ -85,6 +85,7 @@
       <Setter Property="Foreground" Value="{DynamicResource AccentInk}" />
     </Style>
     <Style Selector="TextBlock.idle"><Setter Property="Foreground" Value="{DynamicResource Idle}" /></Style>
+    <Style Selector="Border.scrollEdge"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Ellipse.stepDot"><Setter Property="Fill" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Ellipse.live"><Setter Property="Fill" Value="{DynamicResource Live}" /></Style>
     <Style Selector="Ellipse.break"><Setter Property="Fill" Value="{DynamicResource Break}" /></Style>

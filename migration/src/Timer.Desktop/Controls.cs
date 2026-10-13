@@ -120,27 +120,14 @@ public static class Ui
         return button;
     }
     /// <summary>
-    /// Puts a soft shadow along the edge of a scroll viewer that has more content past it, at the bottom while there is more below and at the top
-    /// once it has scrolled down, so rows cut off by the buttons underneath read as scrollable. It is a shadow (darker at the edge) and never a glow.
-    /// The shadows ignore the pointer and go once the end is reached.
+    /// Draws a hairline in the theme's line colour along the edge of a scroll viewer that has more content past it, at the bottom while there is more
+    /// below and at the top once it has scrolled down, so rows cut off by the buttons underneath read as scrollable. A plain line suits every theme,
+    /// where a fade or shadow looked muddy on light ones. The lines ignore the pointer and go once the end is reached.
     /// </summary>
     public static Grid WithMoreBelow(ScrollViewer scroll)
     {
-        Border Shadow(string name, VerticalAlignment edge) => new() { Name = name, Height = 14, VerticalAlignment = edge, IsHitTestVisible = false, IsVisible = false };
-        var below = Shadow("MoreBelow", VerticalAlignment.Bottom); var above = Shadow("MoreAbove", VerticalAlignment.Top);
-        void Paint()
-        {
-            // A shadow is darkest where the content is cut off. A dark surface needs a stronger one to show at all.
-            var c = below.TryFindResource("Surface", below.ActualThemeVariant, out var r) && r is SolidColorBrush found ? found.Color : Colors.White;
-            var strength = (byte)(c.R + c.G + c.B < 384 ? 120 : 46);
-            IBrush Ramp(bool darkAtBottom) => new LinearGradientBrush
-            {
-                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                GradientStops = { new GradientStop(Color.FromArgb(darkAtBottom ? (byte)0 : strength, 0, 0, 0), 0), new GradientStop(Color.FromArgb(darkAtBottom ? strength : (byte)0, 0, 0, 0), 1) }
-            };
-            below.Background = Ramp(true); above.Background = Ramp(false);
-        }
-        below.ActualThemeVariantChanged += (_, _) => Paint(); below.AttachedToVisualTree += (_, _) => Paint();
+        Border Edge(string name, VerticalAlignment edge) { var line = new Border { Name = name, Height = 1, VerticalAlignment = edge, IsHitTestVisible = false, IsVisible = false }; line.Classes.Add("scrollEdge"); return line; }
+        var below = Edge("MoreBelow", VerticalAlignment.Bottom); var above = Edge("MoreAbove", VerticalAlignment.Top);
         void Update()
         {
             var scrolls = scroll.Extent.Height > scroll.Viewport.Height + 1;
