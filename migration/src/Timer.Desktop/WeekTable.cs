@@ -6,11 +6,13 @@ namespace Timer.Desktop;
 
 // Cells and Total are the short forms shown on screen (7:00, with a dash for nothing). CopyCells and CopyTotal keep the full wording for pasting.
 public sealed record WeekTableRow(string Label, string[] Cells, string Total, string Style, string[] CopyCells, string CopyTotal);
-public sealed record BudgetTableRow(string Account, string Budget, string Used, string Remaining, double Fraction);
+/// <summary>One budgeted account in a week view. Period names the budget period the Used figure belongs to, and ThisWeek is the time worked in the week on show, which is not the same thing.</summary>
+public sealed record BudgetTableRow(string Account, string Budget, string Used, string Remaining, double Fraction, string Period = "", string ThisWeek = "");
 
 // The hours table in the Week tab as plain data, so the screen and "Copy hours table" always show the same figures.
 public sealed class WeekTable
 {
+    public const string AllocatedLabel = "Allocated", UnallocatedLabel = "Unallocated", WorkingLabel = "Working time", BreaksLabel = "Breaks";
     public string[] Headers { get; init; } = Array.Empty<string>();
     public List<WeekTableRow> Rows { get; } = new();
     public List<BudgetTableRow> Budgets { get; } = new();
@@ -40,21 +42,32 @@ public sealed class WeekTable
             Add(account.Display, i => model.OnDay(account, weekStart.AddDays(i)), i => values[i], "normal");
         }
         var perAccount = accounts.Select(a => UnitsFor(a.Name)).ToList();
-        Add("Total (excluding breaks)", i => accounts.Aggregate(TimeSpan.Zero, (sum, a) => sum + model.OnDay(a, weekStart.AddDays(i))), i => perAccount.Sum(v => v[i]), "bold");
+        // One meaning throughout: Working time is what was given to accounts (Allocated) plus what was not (Unallocated). Breaks are never part of it.
+        TimeSpan AllocatedOn(int i) => accounts.Aggregate(TimeSpan.Zero, (sum, a) => sum + model.OnDay(a, weekStart.AddDays(i)));
+        TimeSpan UnallocatedOn(int i)
+        {
+            var totals = model.Engine.Totals(weekStart.AddDays(i));
+            var left = totals.Working + totals.Overtime - AllocatedOn(i);
+            return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+        }
+        // Whole hundredths of an hour, so the decimal rows still add up down and across.
+        long UnallocatedUnits(int i) => (long)Math.Round(UnallocatedOn(i).TotalHours * 100);
+        Add(AllocatedLabel, AllocatedOn, i => perAccount.Sum(v => v[i]), "subtotal");
+        Add(UnallocatedLabel, UnallocatedOn, UnallocatedUnits, "normal");
+        Add(WorkingLabel, i => AllocatedOn(i) + UnallocatedOn(i), i => perAccount.Sum(v => v[i]) + UnallocatedUnits(i), "bold");
         var breakUnits = UnitsFor(BreakAccount.Name);
         var breakAccount = new TimerAccount(BreakAccount.Name, "", null);
-        Add(BreakAccount.Label, i => model.OnDay(breakAccount, weekStart.AddDays(i)), i => breakUnits[i], "faint");
-        // Unallocated is working time not given to any account, so it is shown as time even in decimal mode.
-        var unallocated = days.Select(i => model.Engine.Totals(weekStart.AddDays(i)).Unallocated).ToArray();
-        var unallocatedTotal = unallocated.Aggregate(TimeSpan.Zero, (a, b) => a + b);
-        table.Rows.Add(new("Unallocated", unallocated.Select(Short).ToArray(), Short(unallocatedTotal), "faint",
-            unallocated.Select(model.Format).ToArray(), model.Format(unallocatedTotal)));
+        Add(BreaksLabel, i => model.OnDay(breakAccount, weekStart.AddDays(i)), i => breakUnits[i], "faint");
 
         foreach (var account in accounts.Where(a => a.Budget is not null))
         {
-            var used = model.BudgetUsed(account); var target = account.Budget!.Value;
-            table.Budgets.Add(new(account.Display, $"{model.FormatShort(target)} per {account.Period}", model.FormatShort(used),
-                model.FormatShort(used >= target ? TimeSpan.Zero : target - used), used.TotalSeconds / target.TotalSeconds));
+            // The budget period is the one that holds this week (the present one when it is the current week), and is named so it cannot be mistaken for another.
+            var reference = model.BudgetReference(weekStart);
+            var used = model.BudgetUsedAt(account, reference); var target = account.Budget!.Value;
+            var name = model.BudgetPeriodNameAt(account, reference);
+            table.Budgets.Add(new(account.Display, model.FormatShort(target), model.FormatShort(used),
+                model.FormatShort(used >= target ? TimeSpan.Zero : target - used), used.TotalSeconds / target.TotalSeconds,
+                char.ToUpper(name[0]) + name[1..], model.FormatShort(model.Engine.Credited(account.Name, weekStart, weekStart.AddDays(7)))));
         }
         return table;
     }

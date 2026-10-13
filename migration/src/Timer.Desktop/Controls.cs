@@ -119,6 +119,26 @@ public static class Ui
         if (main ?? MainActions.Contains(text)) button.Classes.Add("mainAction");
         return button;
     }
+    /// <summary>
+    /// Puts a faint fade over the bottom edge of a scroll viewer while more content lies below, so rows cut off by the buttons underneath
+    /// read as scrollable. The fade ignores the pointer and goes once the end is reached.
+    /// </summary>
+    public static Grid WithMoreBelow(ScrollViewer scroll)
+    {
+        var fade = new Border { Name = "MoreBelow", Height = 22, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false, IsVisible = false };
+        void Paint()
+        {
+            var c = fade.TryFindResource("Surface", fade.ActualThemeVariant, out var r) && r is SolidColorBrush found ? found.Color : Colors.Transparent;
+            fade.Background = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                GradientStops = { new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 0), new GradientStop(Color.FromArgb(235, c.R, c.G, c.B), 1) } };
+        }
+        fade.ActualThemeVariantChanged += (_, _) => Paint(); fade.AttachedToVisualTree += (_, _) => Paint();
+        void Update() => fade.IsVisible = scroll.Extent.Height > scroll.Viewport.Height + 1 && scroll.Offset.Y + scroll.Viewport.Height < scroll.Extent.Height - 1;
+        scroll.ScrollChanged += (_, _) => Update();
+        scroll.PropertyChanged += (_, e) => { if (e.Property == ScrollViewer.ExtentProperty || e.Property == ScrollViewer.ViewportProperty) Update(); };
+        var host = new Grid(); host.Children.Add(scroll); host.Children.Add(fade);
+        return host;
+    }
     public static Grid Grid(string columns, string rows = "Auto") => new()
     {
         ColumnDefinitions = new ColumnDefinitions(columns), RowDefinitions = new RowDefinitions(rows)
@@ -300,7 +320,7 @@ public sealed class AccountIndicator : Control
         {
             context.DrawEllipse(null, new Pen(Resource("Line"), 3), centre, 19, 19);
             var ratio = Math.Clamp(model.BudgetUsed(Account).TotalSeconds / budget.TotalSeconds, 0, 1);
-            var colour = ratio >= 1 ? Resource("Overtime") : ratio >= .8 ? Resource("BudgetWarning") : Resource("Live");
+            var colour = ratio >= 1 ? Resource("Overtime") : ratio >= .8 ? Resource("BudgetWarning") : Resource("Muted");
             if (ratio >= 1) context.DrawEllipse(null, new Pen(colour, 3), centre, 19, 19);
             else if (ratio > 0)
             {
@@ -382,8 +402,8 @@ public sealed class BudgetBar : Control
         var width = Bounds.Width; var top = 2.0; var height = 6.0;
         context.DrawRectangle(Resource("Line"), null, new Rect(0, top, width, height), 3, 3);
         var fill = Math.Clamp(Ratio, 0, 1) * width;
-        // Green while there is room, amber from 80%, red once the budget is spent.
-        var colour = Ratio >= 1 ? Resource("Overtime") : Ratio >= .8 ? Resource("BudgetWarning") : Resource("Live");
+        // Neutral while there is room (green means tracking only), amber from 80%, red once the budget is spent.
+        var colour = Ratio >= 1 ? Resource("Overtime") : Ratio >= .8 ? Resource("BudgetWarning") : Resource("Muted");
         if (fill > 0) context.DrawRectangle(colour, null, new Rect(0, top, Math.Max(fill, height), height), 3, 3);
         // The marker says where an even spread of the budget would have got to by now. Once the budget is spent there is nothing left to pace, so it goes.
         if (Ratio < 1) using (context.PushOpacity(.7)) context.DrawRectangle(Resource("Ink"), null, new Rect(Math.Clamp(Pace, 0, 1) * (width - 2), 0, 2, 10), 1, 1);
@@ -847,27 +867,31 @@ public sealed class IconGlyph : Control
         Kind = kind; Width = Height = 18;
         Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = HoverProperty, Duration = HoverDuration } };
     }
-    private Button? owner;
+    private Button? owner; private bool keyboardFocus;
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
         owner = this.GetVisualAncestors().OfType<Button>().FirstOrDefault();
         if (owner is null) return;
-        owner.PropertyChanged += OwnerChanged;
+        owner.PropertyChanged += OwnerChanged; owner.GotFocus += OwnerFocused; owner.LostFocus += OwnerBlurred;
         UpdateHover();
     }
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
-        if (owner is not null) owner.PropertyChanged -= OwnerChanged;
-        owner = null; Hover = 0;
+        if (owner is not null) { owner.PropertyChanged -= OwnerChanged; owner.GotFocus -= OwnerFocused; owner.LostFocus -= OwnerBlurred; }
+        owner = null; keyboardFocus = false; Hover = 0;
         Waving = false;
         base.OnDetachedFromVisualTree(e);
     }
     private void OwnerChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
-        if (e.Property == IsPointerOverProperty || e.Property == IsKeyboardFocusWithinProperty || e.Property == IsEffectivelyEnabledProperty) UpdateHover();
+        if (e.Property == IsPointerOverProperty || e.Property == IsEffectivelyEnabledProperty) UpdateHover();
     }
-    private void UpdateHover() => Hover = owner is { IsEffectivelyEnabled: true } && (owner.IsPointerOver || owner.IsKeyboardFocusWithin) ? 1 : 0;
+    // Keyboard focus moves an icon the way the pointer does, but focus left behind by a mouse click does not. A clicked button keeps the focus, so counting that
+    // left the icon held open for good and the next mouse-over had nothing to play.
+    private void OwnerFocused(object? sender, GotFocusEventArgs e) { keyboardFocus = e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional; UpdateHover(); }
+    private void OwnerBlurred(object? sender, RoutedEventArgs e) { keyboardFocus = false; UpdateHover(); }
+    private void UpdateHover() => Hover = owner is { IsEffectivelyEnabled: true } && (owner.IsPointerOver || keyboardFocus) ? 1 : 0;
     private string? dotKey;
     /// <summary>The theme brush the pill icon's dot turns to under the pointer, such as Live while tracking, so the icon says how the day is going.</summary>
     public string? DotKey { get => dotKey; set { if (dotKey == value) return; dotKey = value; InvalidateVisual(); } }

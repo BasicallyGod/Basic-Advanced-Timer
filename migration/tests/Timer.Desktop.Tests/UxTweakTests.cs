@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using Timer.Core;
 using Timer.Desktop;
@@ -15,6 +17,43 @@ namespace Timer.Desktop.Tests;
 public sealed class UxTweakTests
 {
     private static void Settle(Window window) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); } }
+
+    [AvaloniaFact]
+    public void TheAccountsDialogCallsTheVisibilityBoxInTrackerAndExplainsHiding()
+    {
+        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
+        var dialog = new AccountsDialog(model);
+        var texts = dialog.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
+        Assert.Contains("In tracker", texts); Assert.DoesNotContain("Show", texts);
+        Assert.Contains(texts, t => t.Contains("stays in every report"));
+    }
+
+    [AvaloniaFact]
+    public void SettingsSaysBudgetPercentagesStayInWeekOverviewWhenTooltipsAreOff()
+    {
+        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
+        var view = new SettingsView(model);
+        var note = view.GetLogicalDescendants().OfType<TextBlock>().Single(t => t.Name == "TooltipsNote");
+        Assert.Contains("Week overview", note.Text);
+    }
+
+    [AvaloniaFact]
+    public void AFadeShowsOnlyWhileMoreContentLiesBelow()
+    {
+        var content = new StackPanel(); for (var i = 0; i < 30; i++) content.Children.Add(new TextBlock { Text = "row " + i, Height = 30 });
+        var scroll = new ScrollViewer { Content = content, Height = 200 };
+        var host = Ui.WithMoreBelow(scroll);
+        var window = new Window { Width = 300, Height = 300, Content = host }; window.Show();
+        try
+        {
+            Settle(window);
+            var fade = host.Children.OfType<Border>().Single(b => b.Name == "MoreBelow");
+            Assert.True(fade.IsVisible); Assert.False(fade.IsHitTestVisible);
+            scroll.Offset = new Vector(0, 100000); Settle(window);
+            Assert.False(fade.IsVisible);
+        }
+        finally { window.Close(); }
+    }
 
     [AvaloniaFact]
     public void LongTextSlidesAndShortTextStaysPut()
@@ -193,7 +232,7 @@ public sealed class UxTweakTests
             Assert.Equal(IconKind.Minimise, glyph.Kind); Assert.Equal("Switch to pill", ToolTip.GetTip(button));
             if (!model.IsTracking) model.ToggleAccount("Account one"); Settle(window);
             Assert.Equal("Live", glyph.DotKey);
-            model.TogglePause(); Settle(window); Assert.Equal("Accent", glyph.DotKey);
+            model.TogglePause(); Settle(window); Assert.Equal("Idle", glyph.DotKey);
             model.ToggleBreak(); Settle(window); Assert.Equal("Break", glyph.DotKey);
         }
         finally { window.Close(); }
@@ -349,5 +388,96 @@ public sealed class UxTweakTests
             Assert.NotEqual(Color.Parse(theme.Colour("Surface")), tint); // Visible against the surface...
             Assert.True(ThemeColours.Contrast(theme.Colour("Ink"), Hex(tint)) >= 4.5, $"{theme.Name}: text on the recording card"); // ...and the words on it still read.
         }
+    }
+
+    [AvaloniaFact]
+    public void FocusLeftBehindByAMouseClickDoesNotHoldAnIconOpen()
+    {
+        var glyph = new IconGlyph(IconKind.Gear) { Transitions = null }; var button = new Button { Content = glyph };
+        var window = new Window { Content = button, Width = 100, Height = 100 }; window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            button.Focus(NavigationMethod.Pointer); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, glyph.Hover); // Clicked, so the next mouse-over still has something to play.
+            window.FocusManager?.ClearFocus(); Dispatcher.UIThread.RunJobs();
+            button.Focus(NavigationMethod.Tab); Dispatcher.UIThread.RunJobs(); Assert.Equal(1, glyph.Hover); // Tabbing to it still shows it.
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void ALateTickOrSaveAfterTheDatabaseHasClosedDoesNotThrow()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-late-save-" + Guid.NewGuid());
+        try
+        {
+            var store = new TimerStore(folder); var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store);
+            model.ToggleAccount("Account one");
+            store.Dispose(); // A restart closes the database while the one second clock still has ticks queued.
+            for (var i = 0; i < 20; i++) model.Tick();
+            Assert.True(model.Save());
+        }
+        finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
+    }
+
+    [Fact]
+    public void ASaveThatFailsBecauseTheDatabaseClosedUnderItIsReportedNotThrown()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-closed-under-" + Guid.NewGuid());
+        try
+        {
+            var store = new TimerStore(folder); var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store);
+            model.ToggleAccount("Account one"); model.MarkClosed();
+            store.Dispose();
+            for (var i = 0; i < 20; i++) model.Tick(); // Closed, so the clock does nothing at all.
+            Assert.True(model.Save());
+        }
+        finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
+    }
+
+    private static TimerModel BudgetModel(Func<DateTime> clock, out TrackingEngine engine)
+    {
+        engine = new TrackingEngine(clock: clock);
+        var settings = new StoreSettings(new() { new("Weekly", 10, "week"), new("Monthly", 20, "month"), new("Quarterly", 100, "quarter"), new("Daily", 6, "day") }, false, "Light", DayOfWeek.Monday);
+        return new TimerModel(engine, settings);
+    }
+
+    [Fact]
+    public void AnEarlierWeeksBudgetFiguresNameThePeriodTheyBelongToInsteadOfSayingThisMonth()
+    {
+        var now = new DateTime(2026, 10, 13, 12, 0, 0); var model = BudgetModel(() => now, out var engine);
+        engine.Sessions.Add(new SessionRow("2026-09-16", "Monthly", "09:00:00", "added", "120.00")); // Two hours in September.
+        engine.Sessions.Add(new SessionRow("2026-10-12", "Monthly", "09:00:00", "added", "60.00"));  // One hour this month.
+        var monthly = model.Accounts.Single(a => a.Name == "Monthly"); var quarterly = model.Accounts.Single(a => a.Name == "Quarterly");
+        var currentWeek = new DateTime(2026, 10, 12); var earlierWeek = new DateTime(2026, 9, 14);
+        Assert.Equal("this month", model.BudgetPeriodNameAt(monthly, model.BudgetReference(currentWeek)));
+        Assert.Equal("September 2026", model.BudgetPeriodNameAt(monthly, model.BudgetReference(earlierWeek)));
+        Assert.Equal("Q3 2026", model.BudgetPeriodNameAt(quarterly, model.BudgetReference(earlierWeek)));
+        Assert.Equal("this quarter", model.BudgetPeriodNameAt(quarterly, model.BudgetReference(currentWeek)));
+        Assert.Equal("week of 14 Sept", model.BudgetPeriodNameAt(model.Accounts.Single(a => a.Name == "Weekly"), model.BudgetReference(earlierWeek)));
+        Assert.Equal("Thu 17 Sept", model.BudgetPeriodNameAt(model.Accounts.Single(a => a.Name == "Daily"), model.BudgetReference(earlierWeek)));
+        Assert.Equal(TimeSpan.FromHours(2), model.BudgetUsedAt(monthly, model.BudgetReference(earlierWeek))); // September's own use, not this month's.
+        Assert.Equal(TimeSpan.FromHours(1), model.BudgetUsedAt(monthly, model.BudgetReference(currentWeek)));
+        // A week that straddles two months is placed with the month holding most of its days.
+        Assert.Equal("this month", model.BudgetPeriodNameAt(monthly, model.BudgetReference(new DateTime(2026, 9, 28)))); // 28 Sep to 4 Oct has its Thursday on 1 Oct.
+    }
+
+    [AvaloniaFact]
+    public void TheRunningRecordingCountsInTheWeekTableTheChartAndTheEntriesDayTotal()
+    {
+        var now = new DateTime(2026, 10, 9, 12, 0, 0); var model = BudgetModel(() => now, out var engine);
+        model.ToggleAccount("Weekly"); now = now.AddHours(2); // Two hours running, nothing saved yet.
+        var week = new DateTime(2026, 10, 5);
+        var table = WeekTable.Build(model, new WeekExport(model.Editor, engine, week), week, new[] { 0, 1, 2, 3, 4 });
+        var allocated = table.Rows.Single(r => r.Label == "Allocated"); Assert.Equal("2:00", allocated.Cells[4]); Assert.Equal("2:00", allocated.Total);
+        Assert.Equal("2:00", table.Rows.Single(r => r.Label == "Weekly").Total);
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekEntriesTab").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "DayAllocated" && t.Text!.Contains("2h 00m"));
+        }
+        finally { window.Close(); }
     }
 }

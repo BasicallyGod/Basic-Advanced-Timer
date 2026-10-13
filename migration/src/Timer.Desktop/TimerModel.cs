@@ -333,9 +333,11 @@ public sealed class TimerModel : INotifyPropertyChanged
     public TimeSpan OnDay(TimerAccount a, DateTime day) => Engine.Credited(a.Name, day, day.AddDays(1));
     public TimeSpan Week(TimerAccount a) { var start = WeekStart(SelectedDate); return Engine.Credited(a.Name, start, start.AddDays(7)); }
     /// <summary>The span a budget covers right now, from the account's own period (today, this week, month or quarter).</summary>
-    private (DateTime Start, DateTime End) BudgetWindow(TimerAccount a)
+    private (DateTime Start, DateTime End) BudgetWindow(TimerAccount a) => BudgetWindowAt(a, Engine.Now);
+    /// <summary>The span the budget covers around a reference moment: the day, week, month or quarter that holds it.</summary>
+    public (DateTime Start, DateTime End) BudgetWindowAt(TimerAccount a, DateTime reference)
     {
-        var now = Engine.Now;
+        var now = reference;
         var start = a.Period switch
         {
             "day" => now.Date,
@@ -345,7 +347,34 @@ public sealed class TimerModel : INotifyPropertyChanged
         var end = a.Period switch { "day" => start.AddDays(1), "month" => start.AddMonths(1), "quarter" => start.AddMonths(3), _ => start.AddDays(7) };
         return (start, end);
     }
-    public TimeSpan BudgetUsed(TimerAccount a) { var (start, end) = BudgetWindow(a); return Engine.Credited(a.Name, start, end); }
+    public TimeSpan BudgetUsed(TimerAccount a) => BudgetUsedAt(a, Engine.Now);
+    /// <summary>What has been used in the budget period that holds the reference moment, which for an earlier week is that week's own period.</summary>
+    public TimeSpan BudgetUsedAt(TimerAccount a, DateTime reference) { var (start, end) = BudgetWindowAt(a, reference); return Engine.Credited(a.Name, start, end); }
+    /// <summary>
+    /// The moment that decides which budget period a week view speaks of. For the current week it is now. For an earlier week it is the middle of the week
+    /// (the Thursday), so a week that straddles two months is placed with the month that holds most of its days.
+    /// </summary>
+    public DateTime BudgetReference(DateTime weekStart)
+    {
+        var now = Engine.Now; weekStart = weekStart.Date;
+        return now.Date >= weekStart && now.Date < weekStart.AddDays(7) ? now : weekStart.AddDays(3);
+    }
+    /// <summary>
+    /// Names the budget period that holds the reference moment: "this month" when it is the current one, and otherwise which one it was, such as "September 2026",
+    /// so a figure seen while browsing an earlier week is never mistaken for the present.
+    /// </summary>
+    public string BudgetPeriodNameAt(TimerAccount a, DateTime reference)
+    {
+        var british = CultureInfo.GetCultureInfo("en-GB"); var (start, end) = BudgetWindowAt(a, reference); var now = Engine.Now;
+        var current = now >= start && now < end;
+        return a.Period switch
+        {
+            "day" => current ? "today" : start.ToString("ddd d MMM", british),
+            "month" => current ? "this month" : start.ToString("MMMM yyyy", british),
+            "quarter" => current ? "this quarter" : $"Q{(start.Month - 1) / 3 + 1} {start.Year}",
+            _ => current ? "this week" : "week of " + start.ToString("d MMM", british)
+        };
+    }
     /// <summary>How much of the budget is used, where 1 is all of it. Null when the account has no budget.</summary>
     public double? BudgetRatio(TimerAccount a) => a.Budget is { } target && target > TimeSpan.Zero ? BudgetUsed(a).TotalSeconds / target.TotalSeconds : null;
     /// <summary>How far through the budget's period it is now, from 0 to 1. The bar's tick sits here, so a bar past the tick is running ahead of pace.</summary>
@@ -736,6 +765,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public void Tick()
     {
+        if (closed) return;
         ticks++;
         FollowToday();
         if (ticks % 15 == 0) { Save(); Notify(); }
@@ -743,10 +773,16 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool Save()
     {
+        // Once the app is closing, or its database has been closed, there is nothing left to save and a late tick must not try.
+        if (closed || store is { IsDisposed: true }) return true;
         try { store?.Save(Engine, preferences); LastError = null; return true; }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        // A restart or shutdown can close the database under a save that is already queued. That must be reported, never allowed to crash the app.
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or ObjectDisposedException || error.GetType().Namespace == "Microsoft.Data.Sqlite")
         { LastError = "Could not save. Time remains in memory; retrying. " + error.Message; return false; }
     }
+    private bool closed;
+    /// <summary>Called as the app exits, before the database is closed, so the clock's tick stops saving.</summary>
+    public void MarkClosed() => closed = true;
     /// <summary>Whether to start with Windows. Null in demo mode and tests, where it is not offered.</summary>
     public IAutoStart? AutoStart { get; set; }
     public void SetAutoStart(bool enabled)

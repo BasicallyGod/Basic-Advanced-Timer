@@ -14,24 +14,24 @@ public sealed class AccountsDialog : Dialog
         Width = 700; Height = 540;
         var root = Ui.Grid("*", "Auto,*,Auto,Auto,Auto,Auto"); root.Margin = new Thickness(24, 4, 24, 24);
         var intro = new StackPanel { Spacing = 8, Margin = new Thickness(0, 0, 0, 16) };
-        intro.Children.Add(new TextBlock { Text = "Rename, hide or delete accounts and set budgets in hours. A blank budget means no limit.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        intro.Children.Add(new TextBlock { Text = "Rename or delete accounts and set budgets in hours. A blank budget means no limit. Untick In tracker to take an account off the tracker list. Its recorded time stays in every report.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
         Ui.Put(root, intro);
         var confirm = new StackPanel { Name = "DeleteConfirm", Spacing = 8, IsVisible = false, Margin = new Thickness(0, 8, 0, 0) };
         var list = new StackPanel { Spacing = 10 };
         var entries = new List<AccountRow>();
-        var headings = Ui.Grid("*,50,65,85,110,44");
-        Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Colour", 12, "muted"), 1); Ui.Put(headings, Ui.Text("Show", 12, "muted"), 2);
+        var headings = Ui.Grid("*,50,80,85,110,44");
+        Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Colour", 12, "muted"), 1); Ui.Put(headings, Ui.Text("In tracker", 12, "muted"), 2);
         Ui.Put(headings, Ui.Text("Hours", 12, "muted"), 3); Ui.Put(headings, Ui.Text("Period", 12, "muted"), 4);
         list.Children.Add(headings);
         void Add(AccountSettings account, bool existing = true)
         {
-            var row = Ui.Grid("*,50,65,85,110,44");
+            var row = Ui.Grid("*,50,80,85,110,44");
             var name = new TextBox { Text = account.Name, Margin = new Thickness(0, 0, 8, 0) };
             ToolTip.SetTip(name, "Edit the name to rename this account"); Ui.Put(row, name);
             // A new account starts on the first palette colour nobody here is using, as the model would give it.
             var chosen = account.Colour ?? TimerModel.Palette.FirstOrDefault(c => !entries.Any(e => e.Colour().Equals(c, StringComparison.OrdinalIgnoreCase))) ?? TimerModel.Palette[0];
             Ui.Put(row, ColourButton(() => chosen, value => chosen = value, account.Name), 1);
-            var visible = new CheckBox { IsChecked = !account.Hidden };
+            var visible = new CheckBox { IsChecked = !account.Hidden }; ToolTip.SetTip(visible, "Show this account in the tracker list");
             Ui.Put(row, visible, 2);
             var budget = new TextBox { Text = account.BudgetHours?.ToString("0.###", CultureInfo.InvariantCulture) ?? "", Margin = new Thickness(0, 0, 8, 0) };
             Ui.Put(row, budget, 3);

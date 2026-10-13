@@ -186,6 +186,9 @@ public sealed class TrackingEngine
             credited += Intersection(active.Start, Now, from.Date, until.Date);
         return credited;
     }
+    /// <summary>How much of the recording that is running now falls on this day, or nothing when it is a break or nothing is running. Saved entries do not include it yet.</summary>
+    public TimeSpan ActiveElapsedOn(DateTime day, bool includeBreak = false)
+        => Active is { } active && (includeBreak || !BreakAccount.Is(active.Account)) ? Intersection(active.Start, Now, day.Date, day.Date.AddDays(1)) : TimeSpan.Zero;
     public DayTotals Totals(DateTime day)
     {
         day = day.Date;

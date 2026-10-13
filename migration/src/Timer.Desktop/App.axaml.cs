@@ -80,6 +80,7 @@ public sealed partial class App : Application
                 {
                     if (released) return;
                     released = true;
+                    model.MarkClosed();
                     openedStore?.Dispose();
                     if ((smokeMode || demoMode) && Directory.Exists(folder)) Directory.Delete(folder, true);
                 };

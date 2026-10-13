@@ -296,5 +296,8 @@ public sealed class TimerStore : IDisposable
         ? time : throw new InvalidDataException("Invalid working-hours clock.");
     private static DayOfWeek Dow(string s) => s.Trim().ToLowerInvariant() switch
     { "sun" => DayOfWeek.Sunday, "mon" => DayOfWeek.Monday, "tue" => DayOfWeek.Tuesday, "wed" => DayOfWeek.Wednesday, "thu" => DayOfWeek.Thursday, "fri" => DayOfWeek.Friday, "sat" => DayOfWeek.Saturday, _ => throw new InvalidDataException("Invalid weekday.") };
-    public void Dispose() => database.Dispose();
+    private bool disposed;
+    /// <summary>Whether the database has been closed, after which nothing more can be saved.</summary>
+    public bool IsDisposed => disposed;
+    public void Dispose() { disposed = true; database.Dispose(); }
 }
