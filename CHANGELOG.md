@@ -92,7 +92,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 ## 9 October 2026
 
 | Change | Commit | Details |
-| --- | --- | --- |
+| Durations read as HH:MM everywhere | pending | The dashboard, pill, timeline, week views and tooltips had three ways of writing a duration (1h 30m, 1:30 and 1h30). They now all read as HH:MM, for example 01:30, with hours growing past two digits when needed. Decimal hours are unchanged. The setup's Add an account and Different hours buttons use the same dialog button as the rest. |
 | Weekly reporting and breaks | [d0851eb](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/d0851eb84b077fc1a8320fdf4f8d39bda6a37bfe) | Added weekly totals, budgets, copyable hours and Move to account. Break controls resume the previous client account; break and overtime states are visible in the pill. |
 | Tray and startup | [e49eb5e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/e49eb5ecffeebfc2363e91c8dfbf6f67573ceabe) | Added tray controls and optional Start with Windows. Hiding the timer keeps tracking; Close timer saves and exits. |
 | Account management | [723d125](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/723d12509f6f30acc7a9245a5636457f158729a1) | Added account renaming and drag reordering. Renaming rules were replaced by the database account-identity changes on 10 October. |

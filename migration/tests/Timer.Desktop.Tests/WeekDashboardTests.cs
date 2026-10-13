@@ -34,16 +34,16 @@ public sealed class WeekDashboardTests
         // One meaning everywhere: Working time is Allocated plus Unallocated, and Breaks stand apart from it.
         Assert.Equal(new[] { "Account one", "Account two", "Internal", "Allocated", "Unallocated", "Working time", "Breaks" }, table.Rows.Select(r => r.Label));
         Assert.Equal(new[] { "normal", "normal", "normal", "subtotal", "normal", "bold", "faint" }, table.Rows.Select(r => r.Style));
-        Assert.Equal("2:30", table.Rows[0].Total); Assert.Equal("0:30", table.Rows[1].Total); Assert.Equal("–", table.Rows[2].Total); // Short forms, and a dash for nothing.
-        Assert.Equal("2h 30m", table.Rows[0].CopyTotal); Assert.Equal("0h 00m", table.Rows[2].CopyTotal); // Copying keeps the full wording.
-        Assert.Equal("3:00", table.Rows[3].Total); Assert.Equal("0:30", table.Rows[6].Total); // The break stays out of the allocated and working totals.
+        Assert.Equal("02:30", table.Rows[0].Total); Assert.Equal("00:30", table.Rows[1].Total); Assert.Equal("–", table.Rows[2].Total); // Short forms, and a dash for nothing.
+        Assert.Equal("02:30", table.Rows[0].CopyTotal); Assert.Equal("00:00", table.Rows[2].CopyTotal); // Copying gives the same figures.
+        Assert.Equal("03:00", table.Rows[3].Total); Assert.Equal("00:30", table.Rows[6].Total); // The break stays out of the allocated and working totals.
         TimeSpan Time(string text) { if (text == "–") return TimeSpan.Zero; var parts = text.Split(':'); return new TimeSpan(int.Parse(parts[0]), int.Parse(parts[1]), 0); }
         for (var d = 0; d < 5; d++) Assert.Equal(Time(table.Rows[3].Cells[d]) + Time(table.Rows[4].Cells[d]), Time(table.Rows[5].Cells[d])); // Working time = Allocated + Unallocated, every day.
         Assert.Equal(Time(table.Rows[3].Total) + Time(table.Rows[4].Total), Time(table.Rows[5].Total));
-        Assert.Equal("1:00", table.Rows[3].Cells[1]); Assert.Equal("2:00", table.Rows[3].Cells[4]); Assert.Equal("–", table.Rows[3].Cells[0]);
+        Assert.Equal("01:00", table.Rows[3].Cells[1]); Assert.Equal("02:00", table.Rows[3].Cells[4]); Assert.Equal("–", table.Rows[3].Cells[0]);
         var budget = Assert.Single(table.Budgets);
-        Assert.Equal("Account one", budget.Account); Assert.Equal("10:00", budget.Budget); Assert.Equal("2:30", budget.Used); Assert.Equal("This week", budget.Period); Assert.Equal("2:30", budget.ThisWeek);
-        Assert.Equal("7:30", budget.Remaining); Assert.Equal(.25, budget.Fraction, 3);
+        Assert.Equal("Account one", budget.Account); Assert.Equal("10:00", budget.Budget); Assert.Equal("02:30", budget.Used); Assert.Equal("This week", budget.Period); Assert.Equal("02:30", budget.ThisWeek);
+        Assert.Equal("07:30", budget.Remaining); Assert.Equal(.25, budget.Fraction, 3);
     }
 
     [AvaloniaFact]
@@ -71,7 +71,7 @@ public sealed class WeekDashboardTests
         var table = WeekTable.Build(model, new WeekExport(model.Editor, engine, week), week, new[] { 0, 1, 2, 3, 4 });
         var lines = table.ToTsv().Split("\r\n");
         Assert.Equal("Account\tMon 05/10\tTue 06/10\tWed 07/10\tThu 08/10\tFri 09/10\tTotal", lines[0]);
-        Assert.Equal("Account one\t0h 00m\t0h 00m\t0h 00m\t0h 00m\t1h 30m\t1h 30m", lines[1]);
+        Assert.Equal("Account one\t00:00\t00:00\t00:00\t00:00\t01:30\t01:30", lines[1]);
         Assert.Equal(table.Rows.Count + 1, lines.Length); Assert.All(lines, l => Assert.Equal(6, l.Count(c => c == '\t')));
     }
 
@@ -164,7 +164,7 @@ public sealed class WeekDashboardTests
             // Each column is that day's working time: the accounts' blocks, then what went to no account as a neutral block on top.
             Assert.Equal(4, bars.Bars[4].Segments.Count); Assert.Equal("Unallocated", bars.Bars[4].Segments[^1].Account);
             Assert.Equal(1.5, bars.Bars[4].Segments[0].Hours, 3); Assert.Equal(TimeSpan.FromHours(bars.Bars[4].Segments.Sum(s => s.Hours)), TimeSpan.FromHours(bars.Bars[4].Hours));
-            Assert.Contains("Account one  1:30", bars.Bars[4].Tooltip); Assert.Contains("Working time", bars.Bars[4].Tooltip); Assert.Contains("Unallocated", bars.Bars[4].Tooltip);
+            Assert.Contains("Account one  01:30", bars.Bars[4].Tooltip); Assert.Contains("Working time", bars.Bars[4].Tooltip); Assert.Contains("Unallocated", bars.Bars[4].Tooltip);
             var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
             Assert.Contains("Working time", texts); Assert.Contains("Allocated to accounts", texts); Assert.Contains("Unallocated", texts); Assert.DoesNotContain("Worked this week", texts);
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "BreaksNote" && t.Text!.StartsWith("Breaks ") && t.Text.EndsWith("not counted in working time")); // Breaks apart and quieter.

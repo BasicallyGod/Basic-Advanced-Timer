@@ -422,7 +422,7 @@ public sealed class UxTweakTests
             Assert.NotEmpty(rows);
             Assert.All(rows, row => Assert.DoesNotContain(row.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.EndsWith('%'))); // No percentage on the row itself.
             var withBudget = model.Accounts.First(a => a.Budget is not null);
-            Assert.Matches(@"^\d+h\d*m? / \d+h", model.BudgetUsage(withBudget).Replace("h ", "h")); Assert.Equal("This week", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null) with { Budget = TimeSpan.FromHours(5), Period = "week" }));
+            Assert.Matches(@"^\d\d:\d\d / \d\d:\d\d$", model.BudgetUsage(withBudget)); Assert.Equal("This week", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null) with { Budget = TimeSpan.FromHours(5), Period = "week" }));
             Assert.Equal("This month", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null) with { Budget = TimeSpan.FromHours(5), Period = "month" }));
             Assert.Equal("Today", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null) with { Budget = TimeSpan.FromHours(5), Period = "day" })); Assert.Equal("", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null)));
             Assert.Contains("% used", model.BudgetDetail(withBudget)); Assert.Contains("how far through", model.BudgetDetail(withBudget));
@@ -527,13 +527,13 @@ public sealed class UxTweakTests
         model.ToggleAccount("Weekly"); now = now.AddHours(2); // Two hours running, nothing saved yet.
         var week = new DateTime(2026, 10, 5);
         var table = WeekTable.Build(model, new WeekExport(model.Editor, engine, week), week, new[] { 0, 1, 2, 3, 4 });
-        var allocated = table.Rows.Single(r => r.Label == "Allocated"); Assert.Equal("2:00", allocated.Cells[4]); Assert.Equal("2:00", allocated.Total);
-        Assert.Equal("2:00", table.Rows.Single(r => r.Label == "Weekly").Total);
+        var allocated = table.Rows.Single(r => r.Label == "Allocated"); Assert.Equal("02:00", allocated.Cells[4]); Assert.Equal("02:00", allocated.Total);
+        Assert.Equal("02:00", table.Rows.Single(r => r.Label == "Weekly").Total);
         var window = new DashboardWindow(model); window.Show();
         try
         {
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekEntriesTab").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "DayAllocated" && t.Text!.Contains("2h 00m"));
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "DayAllocated" && t.Text!.Contains("02:00"));
         }
         finally { window.Close(); }
     }

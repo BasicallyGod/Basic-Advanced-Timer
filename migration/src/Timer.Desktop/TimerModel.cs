@@ -410,21 +410,21 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) + "h";
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return $"{sign}{(int)value.TotalHours}h {value.Minutes:00}m";
+        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
     }
-    /// <summary>The short form for crowded places such as the week table: 7:00, or 7.00 in decimal hours.</summary>
+    /// <summary>Every duration reads as HH:MM (07:00), or in decimal hours (7.00) when that is chosen. The three formats differ only in how decimal hours are written.</summary>
     public string FormatShort(TimeSpan value)
     {
         if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB"));
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return $"{sign}{(int)value.TotalHours}:{value.Minutes:00}";
+        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
     }
-    /// <summary>A compact form for tight rows: 10h35, or 20h when there are no minutes, or 10.58h in decimal hours.</summary>
+    /// <summary>For tight rows. HH:MM like the rest, or 10.58h in decimal hours.</summary>
     public string FormatCompact(TimeSpan value)
     {
         if (DecimalHours) return value.TotalHours.ToString("0.##", CultureInfo.GetCultureInfo("en-GB")) + "h";
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return value.Minutes == 0 ? $"{sign}{(int)value.TotalHours}h" : $"{sign}{(int)value.TotalHours}h{value.Minutes:00}";
+        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
     }
     /// <summary>The budget for an account row, such as "10h35 / 20h monthly". The period is always said, since it matters when comparing accounts.</summary>
     public string BudgetLine(TimerAccount a) => a.Budget is { } target
