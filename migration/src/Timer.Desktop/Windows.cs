@@ -447,7 +447,7 @@ public sealed class DashboardWindow : Window
     private readonly Avalonia.Controls.Shapes.Ellipse accountDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
     private Button todayButton = null!;
     private readonly TextBlock account = Ui.Text("", 16);
-    private Border zoomControls = new(); private Control? identityBlock, accountsHeadBlock, toolsRow; private Button zoomOut = new(), zoomIn = new();
+    private Border zoomControls = new(); private SelectionStrip? selectionStrip; private Control? identityBlock, accountsHeadBlock, toolsRow; private Button zoomOut = new(), zoomIn = new();
     private readonly TextBlock allocatedValue = new TextBlock { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly TextBlock unallocatedValue = new TextBlock { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly TextBlock dayText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
@@ -576,7 +576,7 @@ public sealed class DashboardWindow : Window
         panel.Classes.Add("panel");
         Ui.Put(body, panel);
         var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
-        var review = Ui.Grid("*", "Auto,*,Auto");
+        var review = Ui.Grid("*", "Auto,*,Auto,Auto");
         review.Margin = new Thickness(22, 16, 22, 18);
         // The workspace's name on the left; on the right the date to step through and a button back to today.
         // In Week views the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
@@ -632,7 +632,9 @@ public sealed class DashboardWindow : Window
         tools.Margin = new Thickness(0, 12, 0, 0); zoomBar.Margin = new Thickness(12, 0, 0, 0); // Clear space between Merge and the zoom bar.
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
         Ui.Put(review, workspace, row: 1);
-        Ui.Put(review, tools, row: 2);
+        // Selection feedback has its own strip in the layout, just above the buttons it relates to.
+        selectionStrip = new SelectionStrip(model); Ui.Put(review, selectionStrip, row: 2);
+        Ui.Put(review, tools, row: 3);
         // The title row's empty middle still drags the window.
         var rightColumn = Ui.Grid("*", "*");
         Ui.Put(rightColumn, review); Ui.DragHeader(nav, this);
@@ -801,6 +803,7 @@ public sealed class DashboardWindow : Window
         Rail(settingsRail, settingsMode);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
         foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = !settingsMode;
+        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && (!weekMode || model.WeekSection == "entries");
         if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
         workspaceTitle.Text = settingsMode ? "Settings" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;

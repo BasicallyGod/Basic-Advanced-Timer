@@ -12,7 +12,7 @@ public sealed class MessageBar : Border
 {
     private readonly TimerModel model;
     private readonly TextBlock text = new() { TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontSize = 13, MaxWidth = 460, VerticalAlignment = VerticalAlignment.Center, Name = "MessageText" };
-    private readonly Button offer, close;
+    private readonly Button offer;
     private string? dismissedError, dismissedOffer;
     public MessageBar(TimerModel model)
     {
@@ -20,7 +20,7 @@ public sealed class MessageBar : Border
         // A failed save stays until a save works, so the cross hides it only until it changes.
         offer = Ui.Button("", () => model.ContinuePrevious(), "ContinuePrevious");
         offer.Classes.Add("toolButton"); offer.Classes.Add("quiet"); offer.Height = 30; offer.Padding = new Thickness(12, 0); offer.FontSize = 13;
-        close = Ui.IconButton(IconKind.Close, "Dismiss", "DismissMessage", () => { dismissedError = model.LastError; dismissedOffer = model.ContinuePreviousText; model.ExpireMessages(); Sync(); });
+        var close = Ui.IconButton(IconKind.Close, "Dismiss", "DismissMessage", () => { dismissedError = model.LastError; dismissedOffer = model.ContinuePreviousText; model.ExpireMessages(); Sync(); });
         var row = Ui.Horizontal(text, offer, close); row.Spacing = 12;
         Child = row; CornerRadius = new CornerRadius(12); Padding = new Thickness(14, 6, 6, 6);
         HorizontalAlignment = HorizontalAlignment.Center; VerticalAlignment = VerticalAlignment.Bottom; Margin = new Thickness(0, 0, 0, 6);
@@ -29,9 +29,7 @@ public sealed class MessageBar : Border
         Sync();
     }
     /// <summary>The line to show, or null when there is nothing to say.</summary>
-    public string? Text => Message ?? model.SelectionLine;
-    /// <summary>A note, refused edit or failed save. These can be put away with the cross. The selection line cannot, since it only shows while blocks are selected.</summary>
-    private string? Message => model.LastError is { } failed && failed != dismissedError ? failed : model.EditError ?? model.Notice;
+    public string? Text => model.LastError is { } failed && failed != dismissedError ? failed : model.EditError ?? model.Notice;
     private void Sync()
     {
         if (model.LastError is null) dismissedError = null;
@@ -40,7 +38,6 @@ public sealed class MessageBar : Border
         var continueText = model.ContinuePreviousText; if (continueText is null) dismissedOffer = null;
         if (continueText is not null && continueText == dismissedOffer) continueText = null;
         offer.IsVisible = continueText is not null; if (continueText is not null) offer.Content = continueText;
-        close.IsVisible = Message is not null || continueText is not null;
         IsVisible = line is not null || continueText is not null;
     }
 }
