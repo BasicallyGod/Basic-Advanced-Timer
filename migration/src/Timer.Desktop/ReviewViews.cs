@@ -312,7 +312,7 @@ public static class ReviewViews
         // Two different things are shown for each account and they are headed apart: the time worked in the week on show, and the budget used over its whole
         // period (which can be longer than the week, and for an earlier week is named so it cannot be mistaken for the present).
         var list = new StackPanel { Spacing = 6 };
-        var heads = Ui.Grid("30,*,90,110,260");
+        var heads = Ui.Grid("30,*,80,96,220");
         Ui.Put(heads, Ui.Text("By account", 12, "muted"), 1);
         var weekHead = Ui.Text("This week", 12, "muted"); weekHead.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(heads, weekHead, 2);
         var budgetHead = Ui.Text("Budget used over its period", 12, "muted"); budgetHead.Margin = new Thickness(18, 0, 0, 0); Ui.Put(heads, budgetHead, 3).SetValue(Grid.ColumnSpanProperty, 2);
@@ -321,7 +321,7 @@ public static class ReviewViews
         {
             var account = accounts[i]; var row = table.Rows[i];
             // Every row is one line with everything centred on it, so a budget meter always sits level with its account.
-            var line = Ui.Grid("30,*,90,110,260"); line.MinHeight = 36;
+            var line = Ui.Grid("30,*,80,96,220"); line.MinHeight = 36;
             var dot = new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = Brush.Parse(model.ChartColour(account.Colour)), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
             Ui.Put(line, dot); Ui.Put(line, Ui.Text(account.Display, 14), 1);
             var total = Ui.Text(row.Total == "–" ? "0:00" : row.Total, 14); total.Classes.Add("figures"); total.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(line, total, 2);

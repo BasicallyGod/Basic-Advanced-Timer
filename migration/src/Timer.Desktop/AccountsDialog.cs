@@ -21,7 +21,7 @@ public sealed class AccountsDialog : Dialog
         var entries = new List<AccountRow>();
         var headings = Ui.Grid("*,50,80,85,110,44");
         Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Colour", 12, "muted"), 1); Ui.Put(headings, Ui.Text("In tracker", 12, "muted"), 2);
-        Ui.Put(headings, Ui.Text("Hours", 12, "muted"), 3); Ui.Put(headings, Ui.Text("Period", 12, "muted"), 4);
+        Ui.Put(headings, Ui.Text("Budget", 12, "muted"), 3); Ui.Put(headings, Ui.Text("Period", 12, "muted"), 4);
         list.Children.Add(headings);
         void Add(AccountSettings account, bool existing = true)
         {

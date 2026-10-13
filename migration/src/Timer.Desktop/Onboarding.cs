@@ -113,7 +113,7 @@ public sealed class OnboardingView : Grid
     {
         var panel = new StackPanel { Spacing = 8 };
         var headings = Ui.Grid("*,76,100,72");
-        Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Budget", 12, "muted"), 1); Ui.Put(headings, Ui.Text("Per", 12, "muted"), 2); Ui.Put(headings, Ui.Text("In tracker", 12, "muted"), 3);
+        Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Budget", 12, "muted"), 1); Ui.Put(headings, Ui.Text("Period", 12, "muted"), 2); Ui.Put(headings, Ui.Text("In tracker", 12, "muted"), 3);
         panel.Children.Add(headings);
         accountList = new StackPanel { Spacing = 8 };
         if (accountRows.Count == 0)

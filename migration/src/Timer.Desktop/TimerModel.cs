@@ -72,7 +72,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         && selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() == 1 && Editor.CanCombine(selectedRows.ToArray());
     /// <summary>The full rule for merging, for the Merge button's tooltip and a refused merge.</summary>
     public string MergeHint => SelectedBlockCount < 2 ? "Select two or more blocks to merge them." : CanMergeSelection
-        ? $"Press Merge to join them into one block. This adds {Format(TimeSpan.FromMinutes((double)Editor.MergeGapMinutes(selectedRows.ToArray())))} of gap time."
+        ? (Editor.MergeGapMinutes(selectedRows.ToArray()) is var gapMinutes and > 0 ? $"Press Merge to join them into one block. This adds {Format(TimeSpan.FromMinutes((double)gapMinutes))} of gap time." : "Press Merge to join them into one block.")
         : "To merge, blocks must share an account and day, with only gaps between.";
     /// <summary>How many blocks are selected, for the selection strip. Null with no selection.</summary>
     public string? SelectionCountText => SelectedBlockCount is var count and > 0 ? $"{count} {(count == 1 ? "block" : "blocks")} selected" : null;
@@ -83,7 +83,11 @@ public sealed class TimerModel : INotifyPropertyChanged
         {
             var count = SelectedBlockCount; if (count == 0) return null;
             if (count < 2) return "Select another block to merge.";
-            if (CanMergeSelection) return $"Merge joins them and adds {Format(TimeSpan.FromMinutes((double)Editor.MergeGapMinutes(selectedRows.ToArray())))} of gap time.";
+            if (CanMergeSelection)
+            {
+                var gap = Editor.MergeGapMinutes(selectedRows.ToArray());
+                return gap > 0 ? $"Merge joins them and adds {Format(TimeSpan.FromMinutes((double)gap))} of gap time." : "Merge joins them into one block.";
+            }
             if (selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() > 1) return "Choose blocks from the same account to merge.";
             if (selectedRows.Select(s => s.Day).Distinct().Count() > 1) return "Choose blocks from the same day to merge.";
             return "Other time sits between these blocks, so they cannot be merged.";

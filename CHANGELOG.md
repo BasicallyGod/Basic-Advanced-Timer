@@ -76,7 +76,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 ## 10 October 2026
 
 | Change | Commit | Details |
-| --- | --- | --- |
+| Design vet tidy-ups | pending | The By account names in the week overview have room again (one was cut short). The selection note no longer says a merge adds 0h 00m of gap time when there is no gap. The budget column and the period column are headed the same in the setup and in Accounts and budgets. |
 | Updater and startup | [5d0fa98](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/5d0fa9894b4c3af1ddb2c817c48de6c0765f6afb) | Added Windows preview update, launch and rollback tools. Start with Windows launches through the updater so it survives updates; directly launched ZIP builds keep their existing startup behaviour. The original branch picker was superseded by channels on 11 October. |
 | Avalonia becomes the application | [2ad1c1c](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/2ad1c1cbefd7181863ab2a19c8ffab3f384bed55) | Retired the PowerShell app. Old CSV timesheets are not imported and remain untouched; keep them as an archive. See [migration guidance](README.md#moving-from-the-powershell-version). |
 | Theme editor | [c80fb25](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/c80fb25d6bf839f24a7af5ca2cdf90a02bf127a3) | Added editable custom themes with live previews, colour controls, block styling and contrast warnings. Changes persist only on Save; closing, switching or duplicating with unsaved edits offers Save, Discard or Keep editing. The built-in palettes were replaced by Light and Dark on 11 October. |
