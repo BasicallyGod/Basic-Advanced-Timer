@@ -75,7 +75,9 @@ public sealed class WindowCoordinator
     {
         // The close button hides the timer and leaves tracking running. Quitting, or Windows shutting down, saves and really closes.
         if (HideToTray && !quitting && e.CloseReason == WindowCloseReason.WindowClosing) { e.Cancel = true; Hide(); return; }
-        e.Cancel = !model.StopForClose();
+        // Windows closing the timer for a restart or shutdown must never be held up, or crashed, by a failed save.
+        try { e.Cancel = !model.StopForClose(); }
+        catch (Exception) { e.Cancel = false; }
     }
     public void Hide()
     {

@@ -367,4 +367,34 @@ public sealed class UxTweakTests
         }
         finally { window.Close(); }
     }
+
+    [Fact]
+    public void ALateTickOrSaveAfterTheDatabaseHasClosedDoesNotThrow()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-late-save-" + Guid.NewGuid());
+        try
+        {
+            var store = new TimerStore(folder); var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store);
+            model.ToggleAccount("Account one");
+            store.Dispose(); // A restart closes the database while the one second clock still has ticks queued.
+            for (var i = 0; i < 20; i++) model.Tick();
+            Assert.True(model.Save());
+        }
+        finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
+    }
+
+    [Fact]
+    public void ASaveThatFailsBecauseTheDatabaseClosedUnderItIsReportedNotThrown()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-closed-under-" + Guid.NewGuid());
+        try
+        {
+            var store = new TimerStore(folder); var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store);
+            model.ToggleAccount("Account one"); model.MarkClosed();
+            store.Dispose();
+            for (var i = 0; i < 20; i++) model.Tick(); // Closed, so the clock does nothing at all.
+            Assert.True(model.Save());
+        }
+        finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
+    }
 }

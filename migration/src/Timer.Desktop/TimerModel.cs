@@ -736,6 +736,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public void Tick()
     {
+        if (closed) return;
         ticks++;
         FollowToday();
         if (ticks % 15 == 0) { Save(); Notify(); }
@@ -743,10 +744,16 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool Save()
     {
+        // Once the app is closing, or its database has been closed, there is nothing left to save and a late tick must not try.
+        if (closed || store is { IsDisposed: true }) return true;
         try { store?.Save(Engine, preferences); LastError = null; return true; }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        // A restart or shutdown can close the database under a save that is already queued. That must be reported, never allowed to crash the app.
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or ObjectDisposedException || error.GetType().Namespace == "Microsoft.Data.Sqlite")
         { LastError = "Could not save. Time remains in memory; retrying. " + error.Message; return false; }
     }
+    private bool closed;
+    /// <summary>Called as the app exits, before the database is closed, so the clock's tick stops saving.</summary>
+    public void MarkClosed() => closed = true;
     /// <summary>Whether to start with Windows. Null in demo mode and tests, where it is not offered.</summary>
     public IAutoStart? AutoStart { get; set; }
     public void SetAutoStart(bool enabled)
