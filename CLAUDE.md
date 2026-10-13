@@ -88,7 +88,6 @@ Run `dotnet test migration/tests/Timer.Desktop.Tests -c Release`. CI runs it on 
 
 - Record changes in `CHANGELOG.md`, newest first, each row linked to its commit.
 - Comments in plain English explaining why.
-- Interface text and documentation use British spelling, no em dashes, no mid-sentence colons, no arrows or unusual characters, plain human wording. Say "client accounts".
 - Test with synthetic data only.
 
 ## Not done yet
