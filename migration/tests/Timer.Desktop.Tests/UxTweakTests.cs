@@ -266,4 +266,20 @@ public sealed class UxTweakTests
         }
         finally { windows.Pill.Close(); windows.Dashboard.Close(); }
     }
+
+    [AvaloniaFact]
+    public void SlidersThatAreSwitchedOffCanStillBeSeenInEveryBuiltInTheme()
+    {
+        var app = Application.Current!;
+        foreach (var theme in ThemeLibrary.BuiltIn)
+        {
+            ThemeEngine.Register(app, new[] { theme });
+            var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
+            var (fill, track) = ThemeEngine.DisabledSliderColours(theme.Colours);
+            Assert.Equal(fill, ((ISolidColorBrush)dictionary["SliderThumbBackgroundDisabled"]!).Color); Assert.Equal(track, ((ISolidColorBrush)dictionary["SliderTrackFillDisabled"]!).Color);
+            string Hex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            Assert.True(ThemeColours.Contrast(Hex(fill), theme.Colour("Surface")) >= 2, $"{theme.Name} disabled thumb");
+            Assert.True(ThemeColours.Contrast(Hex(track), theme.Colour("Surface")) >= 1.5, $"{theme.Name} disabled track");
+        }
+    }
 }
