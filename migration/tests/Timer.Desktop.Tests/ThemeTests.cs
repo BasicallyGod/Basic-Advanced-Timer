@@ -234,12 +234,13 @@ public sealed class ThemeTests
     }
 
     [Fact]
-    public void SixBuiltInsShipAndAnythingRemovedLandsOnTheNearestLightOrDark()
+    public void FiveBuiltInsShipAndAnythingRemovedLandsOnTheNearestLightOrDark()
     {
-        Assert.Equal(new[] { "Light", "Dark", "Studio", "After Hours", "Botanical", "Hawthorn" }, ThemeLibrary.BuiltIn.Select(t => t.Name));
-        Assert.Equal(new[] { false, true, false, true, false, true }, ThemeLibrary.BuiltIn.Select(t => t.Dark));
+        Assert.Equal(new[] { "Light", "Dark", "After Hours", "Botanical", "Hawthorn" }, ThemeLibrary.BuiltIn.Select(t => t.Name));
+        Assert.Equal(new[] { false, true, true, false, true }, ThemeLibrary.BuiltIn.Select(t => t.Dark));
         Assert.Equal("Light", ThemeLibrary.Renamed("Time Deck")); Assert.Equal("Dark", ThemeLibrary.Renamed("Time Deck Dark"));
         Assert.Equal("Hawthorn", ThemeLibrary.Renamed("Hawthorn")); Assert.Equal("Dark", ThemeLibrary.Renamed("Sage")); Assert.Equal("Light", ThemeLibrary.Renamed("Sandstone")); Assert.Equal("Dark", ThemeLibrary.Renamed("Ocean"));
+        Assert.Equal("Light", ThemeLibrary.Renamed("Studio"));
         Assert.Equal("My own", ThemeLibrary.Renamed("My own"));
     }
 

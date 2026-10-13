@@ -56,6 +56,63 @@ public sealed class UxTweakTests
     }
 
     [AvaloniaFact]
+    public void ThemesMadeAfterTheSettingsPageWasBuiltAppearInItsList()
+    {
+        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
+        var view = new SettingsView(model); var window = new Window { Content = view }; window.Show();
+        try
+        {
+            var choice = view.GetLogicalDescendants().OfType<ComboBox>().Single(c => c.Name == "ThemeChoice");
+            Assert.DoesNotContain("Mine", choice.ItemsSource!.Cast<string>());
+            model.SaveTheme(ThemeLibrary.Light with { Name = "Mine" });
+            Assert.Contains("Mine", choice.ItemsSource!.Cast<string>());
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void LightAndDarkAccentsKeepClearOfRedGreenAndOrange()
+    {
+        foreach (var theme in new[] { ThemeLibrary.Light, ThemeLibrary.Dark })
+        {
+            var accent = Color.Parse(theme.Colour("Accent"));
+            Assert.True(accent.B > accent.R + 40 && accent.B >= accent.G, $"{theme.Name} accent {theme.Colour("Accent")} is not clearly blue");
+        }
+    }
+
+    [AvaloniaFact]
+    public void TheWeekOverviewNeverAsksForASidewaysScrollBar()
+    {
+        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
+        var scroll = ReviewViews.Week(model).GetLogicalDescendants().OfType<ScrollViewer>().First();
+        Assert.Equal(Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, scroll.HorizontalScrollBarVisibility);
+    }
+
+    [AvaloniaFact]
+    public void TheWindowsStayOnTopUnlessSwitchedOffInSettings()
+    {
+        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
+        var pill = new PillWindow(model); var dashboard = new DashboardWindow(model);
+        Assert.True(pill.Topmost); Assert.True(dashboard.Topmost);
+        model.SetDashboardOnTop(false);
+        Assert.False(dashboard.Topmost); Assert.True(pill.Topmost);
+        model.SetPillOnTop(false); Assert.False(pill.Topmost);
+        model.SetDashboardOnTop(true); Assert.True(dashboard.Topmost);
+    }
+
+    [Fact]
+    public void TheOnTopChoicesAreSavedWithTheAppearanceSettings()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-ontop-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.True(prefs.DashboardOnTop); store.Save(engine, prefs with { DashboardOnTop = false }); }
+            using (var store = new TimerStore(folder)) { var prefs = store.Load(new TrackingEngine()); Assert.False(prefs.DashboardOnTop); Assert.True(prefs.PillOnTop); }
+        }
+        finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
+    }
+
+    [AvaloniaFact]
     public void LongTextSlidesAndShortTextStaysPut()
     {
         var longText = new AutoScrollText(new TextBlock { Text = "A very long client account name that cannot fit in the pill" }) { Width = 120 };
@@ -177,7 +234,7 @@ public sealed class UxTweakTests
     [AvaloniaFact]
     public void WritingATwiceLeavesUnchangedColoursAloneAndAPreviewWritesOnlyTheMainVariant()
     {
-        var theme = ThemeLibrary.BuiltIn.First(t => t.Name == "Studio"); var app = Application.Current!;
+        var theme = ThemeLibrary.BuiltIn.First(t => t.Name == "Botanical"); var app = Application.Current!;
         ThemeEngine.Register(app, new[] { theme });
         var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
         var ink = dictionary["Ink"]; var accent = dictionary["Accent"];

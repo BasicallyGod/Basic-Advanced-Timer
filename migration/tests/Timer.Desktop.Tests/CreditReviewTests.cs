@@ -127,6 +127,25 @@ public sealed class CreditReviewTests
     }
 
     [AvaloniaFact]
+    public void TheSelectionLineSitsInTheMessageBarAndSaysWhatMergingWillDo()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
+        var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            var bar = Find<MessageBar>(dashboard, "MessageBar"); var dismiss = Find<Button>(dashboard, "DismissMessage");
+            Assert.False(bar.IsVisible);
+            model.ToggleSelection(new[] { engine.Sessions[0] }); dashboard.UpdateLayout();
+            Assert.True(bar.IsVisible); Assert.StartsWith("1 block selected.", bar.Text); Assert.False(dismiss.IsVisible); // Nothing to dismiss, it goes with the selection.
+            model.ToggleSelection(new[] { engine.Sessions[1] }); dashboard.UpdateLayout();
+            Assert.StartsWith("2 blocks selected.", bar.Text); Assert.Contains("Merge", bar.Text);
+            model.ToggleSelection(engine.Sessions.ToArray()); dashboard.UpdateLayout();
+            Assert.False(bar.IsVisible);
+        }
+        finally { dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ClickSelectsABlockAndTheEditButtonOpensTheSelectedOne()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
