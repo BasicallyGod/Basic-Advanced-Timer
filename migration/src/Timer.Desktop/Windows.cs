@@ -554,13 +554,12 @@ public sealed class DashboardWindow : Window
         Ui.Put(sidebar, identityHost);
         var title = Ui.Text("Client accounts", 13, "muted");
         title.Margin = new Thickness(20, 12, 20, 6);
-        // A rule and a heading set the accounts apart from the card above them.
-        var titleRule = Ui.Rule(); titleRule.Margin = new Thickness(16, 0);
+        // The heading alone sets the accounts apart from the card above them, with no divider.
         // "Today" sits over the bold daily totals, since each row also shows a weekly or monthly figure and the two could be mistaken for each other.
         var todayHead = Ui.Text("Today", 11, "muted"); todayHead.HorizontalAlignment = HorizontalAlignment.Right; todayHead.VerticalAlignment = VerticalAlignment.Bottom;
         todayHead.Margin = new Thickness(0, 12, 58, 6); todayHead.Name = "TodayHeading";
         var headLine = Ui.Grid("*,Auto"); Ui.Put(headLine, title); Ui.Put(headLine, todayHead, 1);
-        var accountsHead = new StackPanel(); accountsHead.Children.Add(titleRule); accountsHead.Children.Add(headLine); accountsHeadBlock = accountsHead;
+        var accountsHead = new StackPanel(); accountsHead.Children.Add(headLine); accountsHeadBlock = accountsHead;
         Ui.Put(sidebar, accountsHead, row: 1);
         Ui.Put(sidebar, Ui.WithMoreBelow(new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 2);
