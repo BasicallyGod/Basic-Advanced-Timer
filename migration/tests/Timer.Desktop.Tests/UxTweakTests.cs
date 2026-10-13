@@ -197,4 +197,37 @@ public sealed class UxTweakTests
         }
         finally { window.Close(); }
     }
+
+    [Fact]
+    public void SlidersCanBeSeenInEveryBuiltInTheme()
+    {
+        foreach (var theme in ThemeLibrary.BuiltIn)
+        {
+            var (fill, track) = ThemeEngine.SliderColours(theme.Colours);
+            string Hex(Avalonia.Media.Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            foreach (var (name, colour) in new[] { ("fill", fill), ("track", track) })
+                foreach (var behind in new[] { "Surface", "Panel" })
+                    Assert.True(ThemeColours.Contrast(Hex(colour), theme.Colour(behind)) >= 3, $"{theme.Name} slider {name} on {behind}: {ThemeColours.Contrast(Hex(colour), theme.Colour(behind)):0.0} to 1");
+        }
+    }
+
+    [AvaloniaFact]
+    public void TheSliderResourcesAreWrittenFromThoseColours()
+    {
+        var theme = ThemeLibrary.Hawthorn; var app = Application.Current!;
+        ThemeEngine.Register(app, new[] { theme });
+        var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
+        var (fill, track) = ThemeEngine.SliderColours(theme.Colours);
+        Assert.Equal(track, ((ISolidColorBrush)dictionary["SliderTrackFill"]!).Color); Assert.Equal(fill, ((ISolidColorBrush)dictionary["SliderThumbBackground"]!).Color);
+        Assert.NotEqual(Color.Parse(theme.Colour("Line")), track); // No longer the hairline colour.
+    }
+
+    [Fact]
+    public void AnAnimationThatStoppedByItselfIsNoLongerCountedAsRunning()
+    {
+        var pending = new TaskCompletionSource(); var run = new RunningAnimation(pending.Task);
+        Assert.True(run.Alive);
+        pending.SetResult(); Assert.False(run.Alive); // It was running and then ended: asking for it again must start it afresh.
+        Assert.True(new RunningAnimation(Task.CompletedTask).Alive); // Finished at once, as where nothing ticks: counted as running so tests see the state.
+    }
 }

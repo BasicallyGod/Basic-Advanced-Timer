@@ -57,17 +57,21 @@ public static class Ui
             host.BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 6, Blur = 22, Spread = 0, Color = ThemeColour(host, "ShadowColor", Color.FromArgb(90, 0, 0, 0)) });
         else host.BoxShadow = default;
     }
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Control, CancellationTokenSource> pulses = new();
+    // An animation that has stopped (its window was hidden or the control left the tree, which ends a repeating one) must not still count as running,
+    // or asking for it again does nothing and the dot stays still for good. So the task is kept, and a finished one is started afresh.
+    private sealed record PulseRun(CancellationTokenSource Source, RunningAnimation Run);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Control, PulseRun> pulses = new();
     /// <summary>Fades a control in and out gently while <paramref name="on"/> is true, as the live dot does while an account is recording.</summary>
     public static void Pulse(Control control, bool on)
     {
         if (pulses.TryGetValue(control, out var running))
         {
-            if (on) return;
-            running.Cancel(); pulses.Remove(control); control.Opacity = 1; return;
+            if (on && running.Run.Alive) return;
+            running.Source.Cancel(); pulses.Remove(control); control.Opacity = 1;
+            if (!on) return;
         }
         if (!on) return;
-        var source = new CancellationTokenSource(); pulses.Add(control, source);
+        var source = new CancellationTokenSource();
         var animation = new Avalonia.Animation.Animation
         {
             Duration = TimeSpan.FromSeconds(1.6), IterationCount = Avalonia.Animation.IterationCount.Infinite,
@@ -78,9 +82,9 @@ public static class Ui
                 new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1), Setters = { new Setter(Visual.OpacityProperty, 1.0) } },
             }
         };
-        _ = animation.RunAsync(control, source.Token);
+        pulses.Add(control, new PulseRun(source, new RunningAnimation(animation.RunAsync(control, source.Token))));
     }
-    public static bool IsPulsing(Control control) => pulses.TryGetValue(control, out _);
+    public static bool IsPulsing(Control control) => pulses.TryGetValue(control, out var run) && run.Run.Alive;
     /// <summary>A heading in the app's display face, the same as the dashboard's workspace title, so every page and pop-up names itself alike.</summary>
     public static TextBlock Heading(string text, double size = 20)
     {
@@ -254,6 +258,17 @@ public static class Ui
 }
 
 // Vector geometry keeps the budget ring and cutlery crisp at any display scale.
+/// <summary>
+/// A repeating animation that was started, with a way to tell that it has since stopped by itself (its window was hidden, or its control left the tree).
+/// One that finished the moment it started, as in the headless tests where nothing ticks, is not treated as stopped.
+/// </summary>
+public sealed class RunningAnimation
+{
+    private readonly Task task; private readonly bool pendingAtStart;
+    public RunningAnimation(Task task) { this.task = task; pendingAtStart = !task.IsCompleted; }
+    public bool Alive => !pendingAtStart || !task.IsCompleted;
+}
+
 public sealed class AccountIndicator : Control
 {
     // 0 at rest, 1 while the pointer is over the row. It eases in and out, so the button visibly answers the pointer and reads as pressable.
@@ -742,13 +757,15 @@ public sealed class BreakGlyph : Control
     private bool hot;
     public bool Hot { get => hot; set { if (hot == value) return; hot = value; InvalidateVisual(); } }
     public string HotKey { get; set; } = "Break";
-    private CancellationTokenSource? steaming;
-    public bool Steaming => steaming is not null;
+    private CancellationTokenSource? steaming; private RunningAnimation? steamRun;
+    // Counted as steaming only while its animation is really running, so one that stopped (its window was hidden) is started again when asked.
+    public bool Steaming => steaming is not null && steamRun is { Alive: true };
     public BreakGlyph() { Width = Height = 18; }
     public void SetSteaming(bool on)
     {
-        if (on == Steaming) return;
-        if (!on) { steaming!.Cancel(); steaming = null; Steam = 0; return; }
+        if (on && Steaming) return;
+        if (steaming is not null) { steaming.Cancel(); steaming = null; Steam = 0; }
+        if (!on) return;
         steaming = new CancellationTokenSource();
         var animation = new Avalonia.Animation.Animation
         {
@@ -759,7 +776,7 @@ public sealed class BreakGlyph : Control
                 new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1), Setters = { new Setter(SteamProperty, 1.0) } },
             }
         };
-        _ = animation.RunAsync(this, steaming.Token);
+        steamRun = new RunningAnimation(animation.RunAsync(this, steaming.Token));
     }
     // Drawn in the theme's text colour, which changes when the pill turns to a recording, break or overtime look, so it must be drawn again then.
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
