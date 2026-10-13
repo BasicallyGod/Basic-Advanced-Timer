@@ -230,4 +230,40 @@ public sealed class UxTweakTests
         pending.SetResult(); Assert.False(run.Alive); // It was running and then ended: asking for it again must start it afresh.
         Assert.True(new RunningAnimation(Task.CompletedTask).Alive); // Finished at once, as where nothing ticks: counted as running so tests see the state.
     }
+
+    [AvaloniaFact]
+    public void AccountRowsPairBudgetUsedWithItsPeriodAndKeepThePercentageForTheHover()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Settle(window);
+            var rows = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")).ToList();
+            Assert.NotEmpty(rows);
+            Assert.All(rows, row => Assert.DoesNotContain(row.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.EndsWith('%'))); // No percentage on the row itself.
+            var withBudget = model.Accounts.First(a => a.Budget is not null);
+            Assert.Matches(@"^\d+h\d*m? / \d+h", model.BudgetUsage(withBudget).Replace("h ", "h")); Assert.Equal("This week", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null) with { Budget = TimeSpan.FromHours(5), Period = "week" }));
+            Assert.Equal("This month", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null) with { Budget = TimeSpan.FromHours(5), Period = "month" }));
+            Assert.Equal("Today", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null) with { Budget = TimeSpan.FromHours(5), Period = "day" })); Assert.Equal("", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null)));
+            Assert.Contains("% used", model.BudgetDetail(withBudget)); Assert.Contains("how far through", model.BudgetDetail(withBudget));
+            var bars = rows.SelectMany(r => r.GetVisualDescendants().OfType<BudgetBar>()).ToList(); Assert.NotEmpty(bars);
+            Assert.All(bars, bar => Assert.Contains("% used", (string?)ToolTip.GetTip(bar)));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheRecordingAccountsCardTakesAGentleTintOfTheTrackingColourInEveryTheme()
+    {
+        var app = Application.Current!;
+        foreach (var theme in ThemeLibrary.BuiltIn)
+        {
+            ThemeEngine.Register(app, new[] { theme });
+            var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
+            var tint = ((ISolidColorBrush)dictionary["LiveTint"]!).Color;
+            string Hex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+            Assert.NotEqual(Color.Parse(theme.Colour("Surface")), tint); // Visible against the surface...
+            Assert.True(ThemeColours.Contrast(theme.Colour("Ink"), Hex(tint)) >= 4.5, $"{theme.Name}: text on the recording card"); // ...and the words on it still read.
+        }
+    }
 }

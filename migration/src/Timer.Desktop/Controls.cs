@@ -440,7 +440,7 @@ public sealed class MarqueeText : Border
 public sealed class AccountList : StackPanel
 {
     private readonly TimerModel model;
-    private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Percent)> rows = new();
+    private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Period)> rows = new();
     private readonly bool reorderable, bars;
     /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
     public AccountList(TimerModel model, bool reorderable = false, bool bars = false)
@@ -476,21 +476,28 @@ public sealed class AccountList : StackPanel
             TextBlock today;
             if (bars)
             {
-                // The account's own colour leads the name, then the budget line with its percentage, then the bar.
+                // The account's own colour leads the name, with today's time at the end of that line. Under it the budget used and the period it covers, then
+                // the bar. The play circle takes the right-hand side, and the percentage is left to the hover detail.
                 var swatch = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0),
                     Fill = Avalonia.Media.Brush.Parse(Ui.Visible(account.Colour)) };
                 labels.Spacing = 3;
                 // The percentage sits at the end of the name line, which leaves the whole line under it for the budget in words.
-                var nameLine = Ui.Grid("*,34"); var nameStack = Ui.Grid("Auto,*,Auto");
+                var nameLine = Ui.Grid("*,Auto"); var nameStack = new NameRow { Spacing = 0 }; // The live dot follows the name closely instead of sitting out by today's time.
                 marquee = new MarqueeText(account.Display, 15) { Name = "AccountName" }; var nameText = marquee; dot.Margin = new Thickness(8, 0, 0, 0);
-                Ui.Put(nameStack, swatch); Ui.Put(nameStack, nameText, 1); Ui.Put(nameStack, dot, 2);
-                Ui.Put(nameLine, nameStack); Ui.Put(nameLine, percent, 1); percent.TextAlignment = Avalonia.Media.TextAlignment.Right; percent.VerticalAlignment = VerticalAlignment.Center; // A fixed column, so the rows never shift.
-                labels.Children.Add(nameLine); labels.Children.Add(budget);
+                nameStack.Children.Add(swatch); nameStack.Children.Add(nameText); nameStack.Children.Add(dot);
+                today = Ui.Text(model.Format(model.Today(account)), 15); today.Classes.Add("figures"); today.FontWeight = Avalonia.Media.FontWeight.SemiBold; today.VerticalAlignment = VerticalAlignment.Center; today.TextAlignment = Avalonia.Media.TextAlignment.Right;
+                Ui.Put(nameLine, nameStack); Ui.Put(nameLine, today, 1);
+                // The budget used is in the text colour (red once spent) and the period it covers is quiet and lines up with today's time above it.
+                budget.Classes.Remove("muted"); budget.FontSize = 13;
+                var period = Ui.Text("", 12, "muted"); period.TextAlignment = Avalonia.Media.TextAlignment.Right; period.VerticalAlignment = VerticalAlignment.Center;
+                var budgetLine = Ui.Grid("*,Auto"); Ui.Put(budgetLine, budget); Ui.Put(budgetLine, period, 1); period.Name = "BudgetPeriod";
+                percent = period; // The row's second quiet text, kept under the old name in the row list.
+                labels.Children.Add(nameLine); labels.Children.Add(budgetLine);
                 if (account.Budget is not null) { bar = new BudgetBar(); labels.Children.Add(bar); }
-                today = Ui.Text(model.Format(model.Today(account)), 15); today.Classes.Add("figures"); today.VerticalAlignment = VerticalAlignment.Center; today.Margin = new Thickness(0, 0, 6, 0); today.Width = 62; today.TextAlignment = Avalonia.Media.TextAlignment.Right; // Fixed, so every play circle lines up.
-                var right = Ui.Horizontal(today, icon); right.VerticalAlignment = VerticalAlignment.Center;
-                Ui.Put(grid, labels, shift); Ui.Put(grid, right, 1 + shift);
-                row.Height = 66;
+                icon.Margin = new Thickness(8, 0, 0, 0);
+                Ui.Put(grid, labels, shift); Ui.Put(grid, icon, 1 + shift);
+                // A rounded card inset from the edges, so the recording account's soft highlight has room to show.
+                row.Classes.Add("accountCard"); row.Margin = new Thickness(10, 0); row.Height = 70;
             }
             else
             {
@@ -610,14 +617,15 @@ public sealed class AccountList : StackPanel
         {
             row.Row.Classes.Set("active", model.ActiveAccount == row.Account.Name);
             row.Today.Text = model.Format(model.Today(row.Account));
-            row.Budget.Text = bars ? model.BudgetLine(row.Account) : model.BudgetSummary(row.Account);
+            row.Budget.Text = bars ? model.BudgetUsage(row.Account) : model.BudgetSummary(row.Account);
+            if (bars) row.Period.Text = model.BudgetPeriodLabel(row.Account);
             if (row.Bar is { } bar && model.BudgetRatio(row.Account) is { } ratio)
             {
                 bar.Set(ratio, model.BudgetPace(row.Account));
-                var period = row.Account.Period is "day" or "month" or "quarter" ? row.Account.Period : "week";
-                ToolTip.SetTip(bar, $"The line is how far through the {(period == "day" ? "working day" : period)} you are.");
-                // A spent budget shows its percentage in red, so overrunning reads at a glance.
-                row.Percent.Text = Math.Round(ratio * 100) + "%"; row.Percent.Classes.Set("overtime", ratio >= 1); row.Percent.Classes.Set("muted", ratio < 1);
+                // The percentage and what the pace line means are in the hover detail, and a spent budget turns the usage red so overrunning reads at a glance.
+                var detail = model.BudgetDetail(row.Account);
+                ToolTip.SetTip(bar, detail); ToolTip.SetTip(row.Budget, detail);
+                row.Budget.Classes.Set("overtime", ratio >= 1);
             }
             row.Icon.InvalidateVisual();
             // The live dot pulses beside the account that is recording.
