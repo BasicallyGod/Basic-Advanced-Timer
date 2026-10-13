@@ -113,6 +113,24 @@ public sealed class UxTweakTests
     }
 
     [AvaloniaFact]
+    public void TheRightClickMenuShowsADividerOnlyBetweenItemsThatAreShowing()
+    {
+        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
+        var menu = Ui.SettingsMenu(model); var target = new Border { ContextMenu = menu, Width = 200, Height = 100 };
+        var window = new Window { Content = target }; window.Show();
+        try
+        {
+            int Dividers() => menu.ItemsSource!.OfType<Separator>().Count(r => r.IsVisible);
+            menu.Open(target); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, Dividers()); // Only Collapse to tray is showing, so there is nothing to divide it from.
+            menu.Close(); model.SetDeveloper(true); menu.Open(target); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, Dividers()); // The version, then a divider, then Collapse to tray. Nothing above the version.
+            Assert.False(menu.ItemsSource!.OfType<Separator>().First().IsVisible);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void LongTextSlidesAndShortTextStaysPut()
     {
         var longText = new AutoScrollText(new TextBlock { Text = "A very long client account name that cannot fit in the pill" }) { Width = 120 };

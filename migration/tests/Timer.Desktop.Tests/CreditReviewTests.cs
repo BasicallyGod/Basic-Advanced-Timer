@@ -152,6 +152,31 @@ public sealed class CreditReviewTests
     }
 
     [AvaloniaFact]
+    public void TheToolbarButtonsNeverRunUnderTheZoomControls()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
+        var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            var zoom = Find<Border>(dashboard, "TimelineControls");
+            foreach (var selection in new[] { 0, 1, 2 })
+            {
+                model.ClearSelection(); for (var n = 0; n < selection; n++) model.ToggleSelection(new[] { engine.Sessions[n] }); dashboard.UpdateLayout();
+                Capture(dashboard, "toolbar-selection-" + selection);
+                var zoomLeft = zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.X;
+                foreach (var name in new[] { "AddTime", "UndoEdit", "MergeSelected", "EditSelected" })
+                {
+                    var button = dashboard.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == name);
+                    if (!button.IsVisible) continue;
+                    var right = button.TranslatePoint(new Point(button.Bounds.Width, 0), dashboard)!.Value.X;
+                    Assert.True(right <= zoomLeft + 0.5, $"{name} ends at {right} but the zoom controls start at {zoomLeft} with {selection} selected.");
+                }
+            }
+        }
+        finally { dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ClickSelectsABlockAndTheEditButtonOpensTheSelectedOne()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });

@@ -258,13 +258,17 @@ public static class Ui
         var collapse = new MenuItem { Header = "Collapse to tray", Name = "CollapseToTray" };
         collapse.Click += (_, _) => model.RequestHide();
         var versionRule = new Separator { IsVisible = false };
-        var menu = new ContextMenu { ItemsSource = new Control[] { continueItem, overtimeTest, versionRule, version, new Separator(), collapse } };
+        var collapseRule = new Separator { IsVisible = false };
+        var menu = new ContextMenu { ItemsSource = new Control[] { continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
         void Sync()
         {
             var developer = model.DeveloperUnlocked;
             overtimeTest.IsChecked = model.OvertimeTest;
-            overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer; versionRule.IsVisible = developer;
+            overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer;
             var offer = model.ContinuePreviousText; continueItem.IsVisible = offer is not null; if (offer is not null) continueItem.Header = offer;
+            // A divider only goes between two things that are showing, so it never sits at the top of the menu or above the only item.
+            versionRule.IsVisible = (continueItem.IsVisible || overtimeTest.IsVisible) && version.IsVisible;
+            collapseRule.IsVisible = continueItem.IsVisible || overtimeTest.IsVisible || version.IsVisible;
         }
         menu.Opened += (_, _) => Sync(); Sync();
         return menu;
