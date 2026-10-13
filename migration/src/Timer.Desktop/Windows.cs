@@ -631,12 +631,16 @@ public sealed class DashboardWindow : Window
             if (e.Property != Avalonia.Controls.Primitives.RangeBase.ValueProperty || settingZoom) return;
             if (TimelineScroll() is { } s) model.SetTimelineScale(TimerModel.ScaleAt(zoomSlider.Value), s.Viewport.Height / 2, s.Offset.Y);
         };
-        var zoomBar = new Border { Name = "TimelineControls", Child = ZoomRow(fit, zoomOut, zoomSlider, zoomIn), MaxWidth = 262, HorizontalAlignment = HorizontalAlignment.Right, CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 0), Height = ControlBarHeight, BorderThickness = new Thickness(1), };
+        var zoomBar = new Border { Name = "TimelineControls", Child = ZoomRow(fit, zoomOut, zoomSlider, zoomIn), HorizontalAlignment = HorizontalAlignment.Right, CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 0), Height = ControlBarHeight, BorderThickness = new Thickness(1), };
         zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
         // Add time, Undo and Merge sit on the left of a bar under the workspace, and the zoom controls on its right, so the working area has the whole height above.
         // The bar is as tall as the Start break and Finish day buttons beside it, so the two bottom rows line up. Its buttons fill that height.
         addTime.Height = ControlBarHeight; undo.Height = ControlBarHeight; merge.Height = ControlBarHeight; edit.Height = ControlBarHeight;
-        var tools = Ui.Grid("Auto,*"); toolsRow = tools; Ui.Put(tools, edits); Ui.Put(tools, zoomBar, 1);
+        var tools = Ui.Grid("Auto,*"); toolsRow = tools; Ui.Put(tools, edits);
+        // The zoom bar is as wide as the room left beside the buttons, up to a limit, so its slider is long when nothing is crowding it and short when Edit is showing.
+        var zoomSlot = new Grid(); zoomSlot.Children.Add(zoomBar);
+        zoomSlot.SizeChanged += (_, e) => zoomBar.Width = Math.Clamp(e.NewSize.Width - 12, 120, 262);
+        Ui.Put(tools, zoomSlot, 1);
         tools.Margin = new Thickness(0, 12, 0, 0); zoomBar.Margin = new Thickness(12, 0, 0, 0); // Clear space between Merge and the zoom bar.
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
         Ui.Put(review, workspace, row: 1);
