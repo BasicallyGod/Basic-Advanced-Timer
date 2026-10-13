@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -20,11 +21,11 @@ public sealed class HoverTests
         try
         {
             Dispatcher.UIThread.RunJobs();
-            button.Focus(); Dispatcher.UIThread.RunJobs();
+            button.Focus(NavigationMethod.Tab); Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, glyph.Hover);
             button.IsEnabled = false; Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, glyph.Hover);
-            button.IsEnabled = true; button.Focus(); Dispatcher.UIThread.RunJobs();
+            button.IsEnabled = true; button.Focus(NavigationMethod.Tab); Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, glyph.Hover);
             button.Content = null; Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, glyph.Hover);

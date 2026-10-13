@@ -847,27 +847,31 @@ public sealed class IconGlyph : Control
         Kind = kind; Width = Height = 18;
         Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = HoverProperty, Duration = HoverDuration } };
     }
-    private Button? owner;
+    private Button? owner; private bool keyboardFocus;
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
         owner = this.GetVisualAncestors().OfType<Button>().FirstOrDefault();
         if (owner is null) return;
-        owner.PropertyChanged += OwnerChanged;
+        owner.PropertyChanged += OwnerChanged; owner.GotFocus += OwnerFocused; owner.LostFocus += OwnerBlurred;
         UpdateHover();
     }
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
-        if (owner is not null) owner.PropertyChanged -= OwnerChanged;
-        owner = null; Hover = 0;
+        if (owner is not null) { owner.PropertyChanged -= OwnerChanged; owner.GotFocus -= OwnerFocused; owner.LostFocus -= OwnerBlurred; }
+        owner = null; keyboardFocus = false; Hover = 0;
         Waving = false;
         base.OnDetachedFromVisualTree(e);
     }
     private void OwnerChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
-        if (e.Property == IsPointerOverProperty || e.Property == IsKeyboardFocusWithinProperty || e.Property == IsEffectivelyEnabledProperty) UpdateHover();
+        if (e.Property == IsPointerOverProperty || e.Property == IsEffectivelyEnabledProperty) UpdateHover();
     }
-    private void UpdateHover() => Hover = owner is { IsEffectivelyEnabled: true } && (owner.IsPointerOver || owner.IsKeyboardFocusWithin) ? 1 : 0;
+    // Keyboard focus moves an icon the way the pointer does, but focus left behind by a mouse click does not. A clicked button keeps the focus, so counting that
+    // left the icon held open for good and the next mouse-over had nothing to play.
+    private void OwnerFocused(object? sender, GotFocusEventArgs e) { keyboardFocus = e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional; UpdateHover(); }
+    private void OwnerBlurred(object? sender, RoutedEventArgs e) { keyboardFocus = false; UpdateHover(); }
+    private void UpdateHover() => Hover = owner is { IsEffectivelyEnabled: true } && (owner.IsPointerOver || keyboardFocus) ? 1 : 0;
     private string? dotKey;
     /// <summary>The theme brush the pill icon's dot turns to under the pointer, such as Live while tracking, so the icon says how the day is going.</summary>
     public string? DotKey { get => dotKey; set { if (dotKey == value) return; dotKey = value; InvalidateVisual(); } }

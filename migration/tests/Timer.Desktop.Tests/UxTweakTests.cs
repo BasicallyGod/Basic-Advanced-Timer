@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -349,5 +350,21 @@ public sealed class UxTweakTests
             Assert.NotEqual(Color.Parse(theme.Colour("Surface")), tint); // Visible against the surface...
             Assert.True(ThemeColours.Contrast(theme.Colour("Ink"), Hex(tint)) >= 4.5, $"{theme.Name}: text on the recording card"); // ...and the words on it still read.
         }
+    }
+
+    [AvaloniaFact]
+    public void FocusLeftBehindByAMouseClickDoesNotHoldAnIconOpen()
+    {
+        var glyph = new IconGlyph(IconKind.Gear) { Transitions = null }; var button = new Button { Content = glyph };
+        var window = new Window { Content = button, Width = 100, Height = 100 }; window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            button.Focus(NavigationMethod.Pointer); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, glyph.Hover); // Clicked, so the next mouse-over still has something to play.
+            window.FocusManager?.ClearFocus(); Dispatcher.UIThread.RunJobs();
+            button.Focus(NavigationMethod.Tab); Dispatcher.UIThread.RunJobs(); Assert.Equal(1, glyph.Hover); // Tabbing to it still shows it.
+        }
+        finally { window.Close(); }
     }
 }
