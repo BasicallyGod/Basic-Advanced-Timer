@@ -1,6 +1,6 @@
 # Basic’s Advanced Timer
 
-An always-on-top time tracker for client accounts and weekly timesheets. It runs as a small pill that stays out of the way, and opens into a dashboard with a daily timeline, the week's hours and exports. It is written in C# with Avalonia on .NET 8 and runs on Windows, Linux and macOS. The packaged Windows build needs no installer, administrator access or separately installed runtime.
+An always-on-top time tracker for client accounts and weekly timesheets. It runs as a small pill that stays out of the way, and opens into a dashboard with a daily timeline, the week's hours and exports. It is written in C# with Avalonia on .NET 8 and is built and tested for Windows. The code is cross-platform, but Linux and macOS are not tested for now. The packaged Windows build needs no installer, administrator access or separately installed runtime.
 
 The earlier PowerShell application (v2.32) has been retired. Its source remains available in Git history. See [Moving from the PowerShell version](#moving-from-the-powershell-version) before switching.
 

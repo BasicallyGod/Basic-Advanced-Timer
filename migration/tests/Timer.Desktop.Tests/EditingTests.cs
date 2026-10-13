@@ -313,7 +313,7 @@ public sealed class EditingTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("account")).ToList();
-            Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(66, r.Bounds.Height, 0.5)); // Tall enough for the name, the budget line and its bar.
+            Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(70, r.Bounds.Height, 0.5)); // Tall enough for the name, the budget line and its bar.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
             Assert.Contains("rail", tab.Classes); Assert.Contains("selected", tab.Classes);
         }
@@ -386,6 +386,7 @@ public sealed class EditingTests
             dashboard.MouseMove(new Point(5, 5)); Assert.False(flag.Waving);
             var cup = breakButton.GetVisualDescendants().OfType<BreakGlyph>().Single(); var cupSpot = breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, breakButton.Bounds.Height / 2), dashboard)!.Value;
             var wasSteaming = cup.Steaming; dashboard.MouseMove(cupSpot); Assert.True(cup.Steaming);
+            model.SetPillScale(null); Dispatcher.UIThread.RunJobs(); Assert.True(cup.Steaming); // A model update while the pointer is over it does not stop the steam, as on the pill.
             dashboard.MouseMove(new Point(5, 5)); Assert.Equal(wasSteaming, cup.Steaming);
         }
         finally { dashboard.Close(); }

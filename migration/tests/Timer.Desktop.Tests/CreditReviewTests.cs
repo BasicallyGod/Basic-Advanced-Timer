@@ -127,6 +127,56 @@ public sealed class CreditReviewTests
     }
 
     [AvaloniaFact]
+    public void TheSelectionStripSitsAboveTheButtonsAndNamesTheSpecificMergeProblem()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
+        engine.Sessions.Add(Row("11:00:00", "30") with { Account = "Other account" });
+        var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            var strip = Find<SelectionStrip>(dashboard, "SelectionStrip"); var tools = Find<Button>(dashboard, "AddTime");
+            string Count() => Find<TextBlock>(dashboard, "SelectionCount").Text!; string Note() => Find<TextBlock>(dashboard, "SelectionNote").Text!;
+            Assert.False(strip.IsVisible);
+            model.ToggleSelection(new[] { engine.Sessions[0] }); dashboard.UpdateLayout();
+            Assert.True(strip.IsVisible); Assert.Equal("1 block selected", Count()); Assert.Contains("Select another block", Note());
+            var stripBottom = strip.TranslatePoint(new Point(0, strip.Bounds.Height), dashboard)!.Value.Y; var toolsTop = tools.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y;
+            Assert.True(stripBottom <= toolsTop + 0.5, "The strip is in the layout above the buttons, not floating over them.");
+            model.ToggleSelection(new[] { engine.Sessions[1] }); dashboard.UpdateLayout();
+            Assert.Equal("2 blocks selected", Count()); Assert.Contains("Merge joins them", Note());
+            model.ToggleSelection(new[] { engine.Sessions[2] }); dashboard.UpdateLayout();
+            Assert.Equal("3 blocks selected", Count()); Assert.Contains("same account", Note());
+            Find<Button>(dashboard, "ClearSelection").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); dashboard.UpdateLayout();
+            Assert.Empty(model.SelectedRows); Assert.False(strip.IsVisible);
+        }
+        finally { dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheToolbarButtonsNeverRunUnderTheZoomControls()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
+        var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            var zoom = Find<Border>(dashboard, "TimelineControls");
+            foreach (var selection in new[] { 0, 1, 2 })
+            {
+                model.ClearSelection(); for (var n = 0; n < selection; n++) model.ToggleSelection(new[] { engine.Sessions[n] }); dashboard.UpdateLayout();
+                Capture(dashboard, "toolbar-selection-" + selection);
+                var zoomLeft = zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.X;
+                foreach (var name in new[] { "AddTime", "UndoEdit", "MergeSelected", "EditSelected" })
+                {
+                    var button = dashboard.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == name);
+                    if (!button.IsVisible) continue;
+                    var right = button.TranslatePoint(new Point(button.Bounds.Width, 0), dashboard)!.Value.X;
+                    Assert.True(right <= zoomLeft + 0.5, $"{name} ends at {right} but the zoom controls start at {zoomLeft} with {selection} selected.");
+                }
+            }
+        }
+        finally { dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ClickSelectsABlockAndTheEditButtonOpensTheSelectedOne()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });

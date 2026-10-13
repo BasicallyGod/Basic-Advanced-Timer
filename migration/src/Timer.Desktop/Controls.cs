@@ -57,17 +57,21 @@ public static class Ui
             host.BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 6, Blur = 22, Spread = 0, Color = ThemeColour(host, "ShadowColor", Color.FromArgb(90, 0, 0, 0)) });
         else host.BoxShadow = default;
     }
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Control, CancellationTokenSource> pulses = new();
+    // An animation that has stopped (its window was hidden or the control left the tree, which ends a repeating one) must not still count as running,
+    // or asking for it again does nothing and the dot stays still for good. So the task is kept, and a finished one is started afresh.
+    private sealed record PulseRun(CancellationTokenSource Source, RunningAnimation Run);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Control, PulseRun> pulses = new();
     /// <summary>Fades a control in and out gently while <paramref name="on"/> is true, as the live dot does while an account is recording.</summary>
     public static void Pulse(Control control, bool on)
     {
         if (pulses.TryGetValue(control, out var running))
         {
-            if (on) return;
-            running.Cancel(); pulses.Remove(control); control.Opacity = 1; return;
+            if (on && running.Run.Alive) return;
+            running.Source.Cancel(); pulses.Remove(control); control.Opacity = 1;
+            if (!on) return;
         }
         if (!on) return;
-        var source = new CancellationTokenSource(); pulses.Add(control, source);
+        var source = new CancellationTokenSource();
         var animation = new Avalonia.Animation.Animation
         {
             Duration = TimeSpan.FromSeconds(1.6), IterationCount = Avalonia.Animation.IterationCount.Infinite,
@@ -78,9 +82,9 @@ public static class Ui
                 new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1), Setters = { new Setter(Visual.OpacityProperty, 1.0) } },
             }
         };
-        _ = animation.RunAsync(control, source.Token);
+        pulses.Add(control, new PulseRun(source, new RunningAnimation(animation.RunAsync(control, source.Token))));
     }
-    public static bool IsPulsing(Control control) => pulses.TryGetValue(control, out _);
+    public static bool IsPulsing(Control control) => pulses.TryGetValue(control, out var run) && run.Run.Alive;
     /// <summary>A heading in the app's display face, the same as the dashboard's workspace title, so every page and pop-up names itself alike.</summary>
     public static TextBlock Heading(string text, double size = 20)
     {
@@ -114,6 +118,26 @@ public static class Ui
         button.Classes.Add("toolButton"); button.Classes.Add("quiet"); button.Classes.Add("dialogButton");
         if (main ?? MainActions.Contains(text)) button.Classes.Add("mainAction");
         return button;
+    }
+    /// <summary>
+    /// Draws a hairline in the theme's line colour along the edge of a scroll viewer that has more content past it, at the bottom while there is more
+    /// below and at the top once it has scrolled down, so rows cut off by the buttons underneath read as scrollable. A plain line suits every theme,
+    /// where a fade or shadow looked muddy on light ones. The lines ignore the pointer and go once the end is reached.
+    /// </summary>
+    public static Grid WithMoreBelow(ScrollViewer scroll)
+    {
+        Border Edge(string name, VerticalAlignment edge) { var line = new Border { Name = name, Height = 1, VerticalAlignment = edge, IsHitTestVisible = false, IsVisible = false }; line.Classes.Add("scrollEdge"); return line; }
+        var below = Edge("MoreBelow", VerticalAlignment.Bottom); var above = Edge("MoreAbove", VerticalAlignment.Top);
+        void Update()
+        {
+            var scrolls = scroll.Extent.Height > scroll.Viewport.Height + 1;
+            below.IsVisible = scrolls && scroll.Offset.Y + scroll.Viewport.Height < scroll.Extent.Height - 1;
+            above.IsVisible = scrolls && scroll.Offset.Y > 1;
+        }
+        scroll.ScrollChanged += (_, _) => Update();
+        scroll.PropertyChanged += (_, e) => { if (e.Property == ScrollViewer.ExtentProperty || e.Property == ScrollViewer.ViewportProperty) Update(); };
+        var host = new Grid(); host.Children.Add(scroll); host.Children.Add(above); host.Children.Add(below);
+        return host;
     }
     public static Grid Grid(string columns, string rows = "Auto") => new()
     {
@@ -234,13 +258,17 @@ public static class Ui
         var collapse = new MenuItem { Header = "Collapse to tray", Name = "CollapseToTray" };
         collapse.Click += (_, _) => model.RequestHide();
         var versionRule = new Separator { IsVisible = false };
-        var menu = new ContextMenu { ItemsSource = new Control[] { continueItem, overtimeTest, versionRule, version, new Separator(), collapse } };
+        var collapseRule = new Separator { IsVisible = false };
+        var menu = new ContextMenu { ItemsSource = new Control[] { continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
         void Sync()
         {
             var developer = model.DeveloperUnlocked;
             overtimeTest.IsChecked = model.OvertimeTest;
-            overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer; versionRule.IsVisible = developer;
+            overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer;
             var offer = model.ContinuePreviousText; continueItem.IsVisible = offer is not null; if (offer is not null) continueItem.Header = offer;
+            // A divider only goes between two things that are showing, so it never sits at the top of the menu or above the only item.
+            versionRule.IsVisible = (continueItem.IsVisible || overtimeTest.IsVisible) && version.IsVisible;
+            collapseRule.IsVisible = continueItem.IsVisible || overtimeTest.IsVisible || version.IsVisible;
         }
         menu.Opened += (_, _) => Sync(); Sync();
         return menu;
@@ -254,6 +282,17 @@ public static class Ui
 }
 
 // Vector geometry keeps the budget ring and cutlery crisp at any display scale.
+/// <summary>
+/// A repeating animation that was started, with a way to tell that it has since stopped by itself (its window was hidden, or its control left the tree).
+/// One that finished the moment it started, as in the headless tests where nothing ticks, is not treated as stopped.
+/// </summary>
+public sealed class RunningAnimation
+{
+    private readonly Task task; private readonly bool pendingAtStart;
+    public RunningAnimation(Task task) { this.task = task; pendingAtStart = !task.IsCompleted; }
+    public bool Alive => !pendingAtStart || !task.IsCompleted;
+}
+
 public sealed class AccountIndicator : Control
 {
     // 0 at rest, 1 while the pointer is over the row. It eases in and out, so the button visibly answers the pointer and reads as pressable.
@@ -285,7 +324,7 @@ public sealed class AccountIndicator : Control
         {
             context.DrawEllipse(null, new Pen(Resource("Line"), 3), centre, 19, 19);
             var ratio = Math.Clamp(model.BudgetUsed(Account).TotalSeconds / budget.TotalSeconds, 0, 1);
-            var colour = ratio >= 1 ? Resource("Overtime") : ratio >= .8 ? Resource("BudgetWarning") : Resource("Live");
+            var colour = ratio >= 1 ? Resource("Overtime") : ratio >= .8 ? Resource("BudgetWarning") : Resource("Muted");
             if (ratio >= 1) context.DrawEllipse(null, new Pen(colour, 3), centre, 19, 19);
             else if (ratio > 0)
             {
@@ -367,8 +406,8 @@ public sealed class BudgetBar : Control
         var width = Bounds.Width; var top = 2.0; var height = 6.0;
         context.DrawRectangle(Resource("Line"), null, new Rect(0, top, width, height), 3, 3);
         var fill = Math.Clamp(Ratio, 0, 1) * width;
-        // Green while there is room, amber from 80%, red once the budget is spent.
-        var colour = Ratio >= 1 ? Resource("Overtime") : Ratio >= .8 ? Resource("BudgetWarning") : Resource("Live");
+        // Neutral while there is room (green means tracking only), amber from 80%, red once the budget is spent.
+        var colour = Ratio >= 1 ? Resource("Overtime") : Ratio >= .8 ? Resource("BudgetWarning") : Resource("Muted");
         if (fill > 0) context.DrawRectangle(colour, null, new Rect(0, top, Math.Max(fill, height), height), 3, 3);
         // The marker says where an even spread of the budget would have got to by now. Once the budget is spent there is nothing left to pace, so it goes.
         if (Ratio < 1) using (context.PushOpacity(.7)) context.DrawRectangle(Resource("Ink"), null, new Rect(Math.Clamp(Pace, 0, 1) * (width - 2), 0, 2, 10), 1, 1);
@@ -425,7 +464,7 @@ public sealed class MarqueeText : Border
 public sealed class AccountList : StackPanel
 {
     private readonly TimerModel model;
-    private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Percent)> rows = new();
+    private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Period)> rows = new();
     private readonly bool reorderable, bars;
     /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
     public AccountList(TimerModel model, bool reorderable = false, bool bars = false)
@@ -445,10 +484,10 @@ public sealed class AccountList : StackPanel
             var row = new Button { Name = "Account" + rows.Count, Classes = { "account" } };
             // Where rows can be dragged to reorder them, a grip at the left says so.
             var shift = reorderable ? 1 : 0;
-            var grid = Ui.Grid(reorderable ? "14,*,Auto" : bars ? "*,Auto" : "38,*,Auto");
+            var grid = Ui.Grid(reorderable ? "10,*,Auto" : bars ? "*,Auto" : "38,*,Auto");
             if (reorderable)
             {
-                var grip = new IconGlyph(IconKind.Grip) { Cursor = new Cursor(StandardCursorType.SizeAll), Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, Name = "Grip" + rows.Count };
+                var grip = new IconGlyph(IconKind.Grip) { Cursor = new Cursor(StandardCursorType.SizeAll), VerticalAlignment = VerticalAlignment.Center, Name = "Grip" + rows.Count };
                 ToolTip.SetTip(grip, "Drag to change the order"); Ui.Put(grid, grip);
             }
             var icon = new AccountIndicator(account, model) { Ring = !bars };
@@ -461,21 +500,28 @@ public sealed class AccountList : StackPanel
             TextBlock today;
             if (bars)
             {
-                // The account's own colour leads the name, then the budget line with its percentage, then the bar.
+                // The account's own colour leads the name, with today's time at the end of that line. Under it the budget used and the period it covers, then
+                // the bar. The play circle takes the right-hand side, and the percentage is left to the hover detail.
                 var swatch = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0),
                     Fill = Avalonia.Media.Brush.Parse(Ui.Visible(account.Colour)) };
                 labels.Spacing = 3;
                 // The percentage sits at the end of the name line, which leaves the whole line under it for the budget in words.
-                var nameLine = Ui.Grid("*,34"); var nameStack = Ui.Grid("Auto,*,Auto");
+                var nameLine = Ui.Grid("*,Auto"); var nameStack = new NameRow { Spacing = 0 }; // The live dot follows the name closely instead of sitting out by today's time.
                 marquee = new MarqueeText(account.Display, 15) { Name = "AccountName" }; var nameText = marquee; dot.Margin = new Thickness(8, 0, 0, 0);
-                Ui.Put(nameStack, swatch); Ui.Put(nameStack, nameText, 1); Ui.Put(nameStack, dot, 2);
-                Ui.Put(nameLine, nameStack); Ui.Put(nameLine, percent, 1); percent.TextAlignment = Avalonia.Media.TextAlignment.Right; percent.VerticalAlignment = VerticalAlignment.Center; // A fixed column, so the rows never shift.
-                labels.Children.Add(nameLine); labels.Children.Add(budget);
+                nameStack.Children.Add(swatch); nameStack.Children.Add(nameText); nameStack.Children.Add(dot);
+                today = Ui.Text(model.Format(model.Today(account)), 15); today.Classes.Add("figures"); today.FontWeight = Avalonia.Media.FontWeight.SemiBold; today.VerticalAlignment = VerticalAlignment.Center; today.TextAlignment = Avalonia.Media.TextAlignment.Right;
+                Ui.Put(nameLine, nameStack); Ui.Put(nameLine, today, 1);
+                // The budget used is in the text colour (red once spent) and the period it covers is quiet and lines up with today's time above it.
+                budget.Classes.Remove("muted"); budget.FontSize = 13;
+                var period = Ui.Text("", 12, "muted"); period.TextAlignment = Avalonia.Media.TextAlignment.Right; period.VerticalAlignment = VerticalAlignment.Center;
+                var budgetLine = Ui.Grid("*,Auto"); Ui.Put(budgetLine, budget); Ui.Put(budgetLine, period, 1); period.Name = "BudgetPeriod";
+                percent = period; // The row's second quiet text, kept under the old name in the row list.
+                labels.Children.Add(nameLine); labels.Children.Add(budgetLine);
                 if (account.Budget is not null) { bar = new BudgetBar(); labels.Children.Add(bar); }
-                today = Ui.Text(model.Format(model.Today(account)), 15); today.Classes.Add("figures"); today.VerticalAlignment = VerticalAlignment.Center; today.Margin = new Thickness(0, 0, 6, 0); today.Width = 62; today.TextAlignment = Avalonia.Media.TextAlignment.Right; // Fixed, so every play circle lines up.
-                var right = Ui.Horizontal(today, icon); right.VerticalAlignment = VerticalAlignment.Center;
-                Ui.Put(grid, labels, shift); Ui.Put(grid, right, 1 + shift);
-                row.Height = 66;
+                icon.Margin = new Thickness(8, 0, 0, 0);
+                Ui.Put(grid, labels, shift); Ui.Put(grid, icon, 1 + shift);
+                // A rounded card inset from the edges, so the recording account's soft highlight has room to show.
+                row.Classes.Add("accountCard"); row.Margin = new Thickness(10, 0); row.Height = 70;
             }
             else
             {
@@ -595,14 +641,15 @@ public sealed class AccountList : StackPanel
         {
             row.Row.Classes.Set("active", model.ActiveAccount == row.Account.Name);
             row.Today.Text = model.Format(model.Today(row.Account));
-            row.Budget.Text = bars ? model.BudgetLine(row.Account) : model.BudgetSummary(row.Account);
+            row.Budget.Text = bars ? model.BudgetUsage(row.Account) : model.BudgetSummary(row.Account);
+            if (bars) row.Period.Text = model.BudgetPeriodLabel(row.Account);
             if (row.Bar is { } bar && model.BudgetRatio(row.Account) is { } ratio)
             {
                 bar.Set(ratio, model.BudgetPace(row.Account));
-                var period = row.Account.Period is "day" or "month" or "quarter" ? row.Account.Period : "week";
-                ToolTip.SetTip(bar, $"The line is how far through the {(period == "day" ? "working day" : period)} you are.");
-                // A spent budget shows its percentage in red, so overrunning reads at a glance.
-                row.Percent.Text = Math.Round(ratio * 100) + "%"; row.Percent.Classes.Set("overtime", ratio >= 1); row.Percent.Classes.Set("muted", ratio < 1);
+                // The percentage and what the pace line means are in the hover detail, and a spent budget turns the usage red so overrunning reads at a glance.
+                var detail = model.BudgetDetail(row.Account);
+                ToolTip.SetTip(bar, detail); ToolTip.SetTip(row.Budget, detail);
+                row.Budget.Classes.Set("overtime", ratio >= 1);
             }
             row.Icon.InvalidateVisual();
             // The live dot pulses beside the account that is recording.
@@ -734,32 +781,53 @@ public sealed class PauseGlyph : Control
 public sealed class BreakGlyph : Control
 {
     public static readonly StyledProperty<double> SteamProperty = AvaloniaProperty.Register<BreakGlyph, double>(nameof(Steam));
-    static BreakGlyph() => AffectsRender<BreakGlyph>(SteamProperty);
+    // How far the steam has taken over from the still wisps, from 0 to 1. It eases in and out, so hovering the cup does not snap the wisps from still to moving.
+    public static readonly StyledProperty<double> FlowProperty = AvaloniaProperty.Register<BreakGlyph, double>(nameof(Flow));
+    static BreakGlyph() => AffectsRender<BreakGlyph>(SteamProperty, FlowProperty);
     public double Steam { get => GetValue(SteamProperty); set => SetValue(SteamProperty, value); }
+    public double Flow { get => GetValue(FlowProperty); set => SetValue(FlowProperty, value); }
+    /// <summary>One slow cycle of the steam, and how long the steam takes to arrive or fade.</summary>
+    public static readonly TimeSpan SteamCycle = TimeSpan.FromSeconds(3.2), SteamEase = TimeSpan.FromMilliseconds(600);
+    private bool wanted;
     public bool Filled { get; set; }
     /// <summary>Draws the cup in plain text colour, and in <see cref="HotKey"/> only while the pointer is over its button.</summary>
     public bool Mono { get; set; }
     private bool hot;
     public bool Hot { get => hot; set { if (hot == value) return; hot = value; InvalidateVisual(); } }
     public string HotKey { get; set; } = "Break";
-    private CancellationTokenSource? steaming;
-    public bool Steaming => steaming is not null;
-    public BreakGlyph() { Width = Height = 18; }
+    private CancellationTokenSource? steaming; private RunningAnimation? steamRun;
+    // Counted as steaming only while its animation is really running, so one that stopped (its window was hidden) is started again when asked.
+    public bool Steaming => wanted && steaming is not null && steamRun is { Alive: true };
+    public BreakGlyph()
+    {
+        Width = Height = 18;
+        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = FlowProperty, Duration = SteamEase, Easing = new Avalonia.Animation.Easings.CubicEaseInOut() } };
+    }
     public void SetSteaming(bool on)
     {
-        if (on == Steaming) return;
-        if (!on) { steaming!.Cancel(); steaming = null; Steam = 0; return; }
+        if (on && Steaming) return;
+        wanted = on;
+        if (!on)
+        {
+            // The steam is left to fade out over its ease, and the animation is stopped once that has finished (unless it was asked for again).
+            Flow = 0; var stopping = steaming;
+            if (stopping is not null) DispatcherTimer.RunOnce(() => { if (!wanted && ReferenceEquals(steaming, stopping)) { stopping.Cancel(); steaming = null; Steam = 0; } }, SteamEase + TimeSpan.FromMilliseconds(100));
+            return;
+        }
+        Flow = 1;
+        if (steaming is not null && steamRun is { Alive: true }) return; // Still turning from a moment ago: it just picks up again.
+        if (steaming is not null) { steaming.Cancel(); steaming = null; Steam = 0; }
         steaming = new CancellationTokenSource();
         var animation = new Avalonia.Animation.Animation
         {
-            Duration = TimeSpan.FromSeconds(1.8), IterationCount = Avalonia.Animation.IterationCount.Infinite,
+            Duration = SteamCycle, IterationCount = Avalonia.Animation.IterationCount.Infinite,
             Children =
             {
                 new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0), Setters = { new Setter(SteamProperty, 0.0) } },
                 new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1), Setters = { new Setter(SteamProperty, 1.0) } },
             }
         };
-        _ = animation.RunAsync(this, steaming.Token);
+        steamRun = new RunningAnimation(animation.RunAsync(this, steaming.Token));
     }
     // Drawn in the theme's text colour, which changes when the pill turns to a recording, break or overtime look, so it must be drawn again then.
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -778,10 +846,11 @@ public sealed class BreakGlyph : Control
         // Two wisps, half a cycle apart. Each rises a little and fades in and out; when still they sit where they always did.
         for (var i = 0; i < 2; i++)
         {
-            var x = 6.0 + 4 * i; var phase = Steaming ? (Steam + .5 * i) % 1.0 : 0;
-            var rise = phase * 3.5; var alpha = Steaming ? Math.Sin(phase * Math.PI) : 1.0;
+            // The still wisp and the moving one are blended by Flow, so the change between them is gradual in both directions.
+            var x = 6.0 + 4 * i; var phase = (Steam + .5 * i) % 1.0; var flow = Math.Clamp(Flow, 0.0, 1.0);
+            var rise = phase * 3.5 * flow; var alpha = 1.0 + (Math.Sin(phase * Math.PI) - 1.0) * flow;
             using (context.PushOpacity(Math.Clamp(alpha, 0.0, 1.0)))
-                context.DrawLine(pen, new Point(x, 4 - rise), new Point(x, 1.5 - rise + (Steaming ? 0 : 0)));
+                context.DrawLine(pen, new Point(x, 4 - rise), new Point(x, 1.5 - rise));
         }
     }
 }
@@ -800,29 +869,34 @@ public sealed class IconGlyph : Control
     public IconGlyph(IconKind kind)
     {
         Kind = kind; Width = Height = 18;
+        if (kind == IconKind.Grip) Width = 10; // A narrow strip, so the grip takes little of the row.
         Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = HoverProperty, Duration = HoverDuration } };
     }
-    private Button? owner;
+    private Button? owner; private bool keyboardFocus;
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
         owner = this.GetVisualAncestors().OfType<Button>().FirstOrDefault();
         if (owner is null) return;
-        owner.PropertyChanged += OwnerChanged;
+        owner.PropertyChanged += OwnerChanged; owner.GotFocus += OwnerFocused; owner.LostFocus += OwnerBlurred;
         UpdateHover();
     }
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
-        if (owner is not null) owner.PropertyChanged -= OwnerChanged;
-        owner = null; Hover = 0;
+        if (owner is not null) { owner.PropertyChanged -= OwnerChanged; owner.GotFocus -= OwnerFocused; owner.LostFocus -= OwnerBlurred; }
+        owner = null; keyboardFocus = false; Hover = 0;
         Waving = false;
         base.OnDetachedFromVisualTree(e);
     }
     private void OwnerChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
-        if (e.Property == IsPointerOverProperty || e.Property == IsKeyboardFocusWithinProperty || e.Property == IsEffectivelyEnabledProperty) UpdateHover();
+        if (e.Property == IsPointerOverProperty || e.Property == IsEffectivelyEnabledProperty) UpdateHover();
     }
-    private void UpdateHover() => Hover = owner is { IsEffectivelyEnabled: true } && (owner.IsPointerOver || owner.IsKeyboardFocusWithin) ? 1 : 0;
+    // Keyboard focus moves an icon the way the pointer does, but focus left behind by a mouse click does not. A clicked button keeps the focus, so counting that
+    // left the icon held open for good and the next mouse-over had nothing to play.
+    private void OwnerFocused(object? sender, GotFocusEventArgs e) { keyboardFocus = e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional; UpdateHover(); }
+    private void OwnerBlurred(object? sender, RoutedEventArgs e) { keyboardFocus = false; UpdateHover(); }
+    private void UpdateHover() => Hover = owner is { IsEffectivelyEnabled: true } && (owner.IsPointerOver || keyboardFocus) ? 1 : 0;
     private string? dotKey;
     /// <summary>The theme brush the pill icon's dot turns to under the pointer, such as Live while tracking, so the icon says how the day is going.</summary>
     public string? DotKey { get => dotKey; set { if (dotKey == value) return; dotKey = value; InvalidateVisual(); } }
@@ -933,7 +1007,7 @@ public sealed class IconGlyph : Control
             case IconKind.Grip:
                 // Two columns of three dots, the usual sign that something can be picked up and moved, drawn quietly.
                 IBrush quiet = this.TryFindResource("Muted", ActualThemeVariant, out var muted) && muted is IBrush mutedBrush ? mutedBrush : brush;
-                foreach (var x in new[] { 6.5, 11.5 }) foreach (var y in new[] { 4.5, 9.0, 13.5 }) context.DrawEllipse(quiet, null, new Point(x, y), 1.4, 1.4);
+                foreach (var x in new[] { 3.0, 7.0 }) foreach (var y in new[] { 4.5, 9.0, 13.5 }) context.DrawEllipse(quiet, null, new Point(x, y), 1.4, 1.4);
                 break;
             case IconKind.ZoomIn or IconKind.ZoomOut:
                 context.DrawEllipse(null, pen, new Point(8, 8), 6, 6);

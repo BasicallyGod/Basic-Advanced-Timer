@@ -50,10 +50,11 @@ public sealed class OnboardingView : Grid
         var top = Ui.Grid("*,Auto"); Ui.Put(top, stepLabel);
         var skip = Ui.Button("Skip setup", () => Skip(), "SetupSkip"); skip.Classes.Add("flat"); Ui.Put(top, skip, 1);
         layout.Children.Add(top); layout.Children.Add(title); layout.Children.Add(subtitle); layout.Children.Add(body); layout.Children.Add(error);
-        back = Ui.Button("Back", () => Go(-1), "SetupBack"); back.Classes.Add("toolButton"); back.Classes.Add("quiet"); back.Height = DashboardWindow.ControlBarHeight;
-        next = Ui.Button("Next", () => Advance(), "SetupNext"); next.Classes.Add("accentButton"); next.Height = DashboardWindow.ControlBarHeight; next.Padding = new Thickness(26, 0);
-        var footer = Ui.Grid("Auto,*,Auto"); footer.Margin = new Thickness(0, 8, 0, 0);
-        Ui.Put(footer, back); Ui.Put(footer, dots, 1); dots.HorizontalAlignment = HorizontalAlignment.Center; Ui.Put(footer, next, 2);
+        back = Ui.DialogButton("Back", () => Go(-1), "SetupBack", main: false);
+        next = Ui.DialogButton("Next", () => Advance(), "SetupNext", main: true);
+        // Equal outer columns keep the dots in the middle, whatever the width of Back (hidden on the first step) and of Next or Start tracking.
+        var footer = Ui.Grid("*,Auto,*"); footer.Margin = new Thickness(0, 8, 0, 0);
+        Ui.Put(footer, back); back.HorizontalAlignment = HorizontalAlignment.Left; Ui.Put(footer, dots, 1); dots.HorizontalAlignment = HorizontalAlignment.Center; Ui.Put(footer, next, 2); next.HorizontalAlignment = HorizontalAlignment.Right;
         layout.Children.Add(footer);
         card.Child = layout; Children.Add(card);
         Focusable = true;
@@ -94,7 +95,7 @@ public sealed class OnboardingView : Grid
         for (var i = 0; i < StepCount; i++)
         {
             var dot = new Avalonia.Controls.Shapes.Ellipse { Width = 8, Height = 8 };
-            dot.Classes.Add(i == index ? "live" : "idle");
+            dot.Classes.Add(i == index ? "stepDot" : "idle");
             dots.Children.Add(dot);
         }
         (title.Text, subtitle.Text, body.Content) = index switch
@@ -111,16 +112,16 @@ public sealed class OnboardingView : Grid
     private Control AccountsStep()
     {
         var panel = new StackPanel { Spacing = 8 };
-        var headings = Ui.Grid("*,76,100,52");
-        Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Budget", 12, "muted"), 1); Ui.Put(headings, Ui.Text("Per", 12, "muted"), 2); Ui.Put(headings, Ui.Text("Show", 12, "muted"), 3);
+        var headings = Ui.Grid("*,76,100,72");
+        Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Budget", 12, "muted"), 1); Ui.Put(headings, Ui.Text("Period", 12, "muted"), 2); Ui.Put(headings, Ui.Text("In tracker", 12, "muted"), 3);
         panel.Children.Add(headings);
         accountList = new StackPanel { Spacing = 8 };
         if (accountRows.Count == 0)
             foreach (var account in model.AccountSettings) AddRow(account, existing: true);
         else foreach (var row in accountRows) accountList.Children.Add(RowGrid(row));
         panel.Children.Add(new ScrollViewer { Name = "SetupAccounts", Content = accountList, MaxHeight = 232, AllowAutoHide = true, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
-        var add = Ui.Button("Add an account", () => { AddRow(new AccountSettings(""), existing: false); if (accountRows[^1].Name is { } box) box.Focus(); }, "SetupAddAccount");
-        add.Classes.Add("toolButton"); add.Classes.Add("quiet"); add.HorizontalAlignment = HorizontalAlignment.Left; add.Height = 38;
+        var add = Ui.DialogButton("Add an account", () => { AddRow(new AccountSettings(""), existing: false); if (accountRows[^1].Name is { } box) box.Focus(); }, "SetupAddAccount", main: false);
+        add.HorizontalAlignment = HorizontalAlignment.Left;
         panel.Children.Add(add);
         return panel;
     }
@@ -138,7 +139,7 @@ public sealed class OnboardingView : Grid
     private static T Detach<T>(T control) where T : Control { if (control.Parent is Panel panel) panel.Children.Remove(control); return control; }
     private static Grid RowGrid((string? Original, string? Colour, TextBox Name, TextBox Budget, ComboBox Period, CheckBox Show) row)
     {
-        var grid = Ui.Grid("*,76,100,52");
+        var grid = Ui.Grid("*,76,100,72");
         Ui.Put(grid, Detach(row.Name)); Ui.Put(grid, Detach(row.Budget), 1); Ui.Put(grid, Detach(row.Period), 2); Ui.Put(grid, Detach(row.Show), 3);
         return grid;
     }
@@ -187,11 +188,11 @@ public sealed class OnboardingView : Grid
         panel.Children.Add(Ui.Text("Working days", 12, "muted")); panel.Children.Add(days);
         panel.Children.Add(Ui.Text("Usual hours (24 hour clock)", 12, "muted"));
         panel.Children.Add(Ui.Horizontal(Detach(startBox), Ui.Dash(), Detach(endBox)));
-        var different = Ui.Button("Different hours on some days…", () =>
+        var different = Ui.DialogButton("Different hours on some days…", () =>
         {
             if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) { customHours = true; dashboard.Dialogs.Show(new ShiftDialog(model)); }
-        }, "SetupDifferentHours");
-        different.Classes.Add("toolButton"); different.Classes.Add("quiet"); different.HorizontalAlignment = HorizontalAlignment.Left; different.Height = 38;
+        }, "SetupDifferentHours", main: false);
+        different.HorizontalAlignment = HorizontalAlignment.Left;
         panel.Children.Add(different);
         return panel;
     }

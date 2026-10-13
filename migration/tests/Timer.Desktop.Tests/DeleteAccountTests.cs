@@ -94,7 +94,7 @@ public sealed class DeleteAccountTests
             Settle(again);
             Find<Button>(again, "DeleteAccount0").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Press(again, "SaveAccounts");
             var confirm = Find<StackPanel>(again, "DeleteConfirm"); Assert.True(confirm.IsVisible);
-            Assert.Contains(confirm.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.Contains("Account one") && x.Contains("2 recorded entries") && x.Contains("1h 30m"));
+            Assert.Contains(confirm.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.Contains("Account one") && x.Contains("2 recorded entries") && x.Contains("01:30"));
             Assert.Equal(3, second.AccountSettings.Count); // Nothing has gone yet.
             Press(again, "CancelDeleteAccounts"); Assert.False(confirm.IsVisible); Assert.Equal(3, second.AccountSettings.Count);
             Press(again, "SaveAccounts"); Press(again, "ConfirmDeleteAccounts");

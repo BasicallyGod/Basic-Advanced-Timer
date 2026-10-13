@@ -35,6 +35,7 @@ public sealed class WindowCoordinator
         model.PropertyChanged += (_, _) => ApplyTaskbar();
         Pill.OpenDashboard = () =>
         {
+            model.ShowToday();
             Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin);
             Dashboard.Show();
             Pill.Collapse(); // So it is a capsule again when you come back.
@@ -59,7 +60,8 @@ public sealed class WindowCoordinator
     // it is put back at the front of the topmost windows, and a slow check does the same for one that was covered without a focus change.
     private void KeepInFront()
     {
-        void Reassert(Window window) { if (window.IsVisible && !window.IsActive && window.WindowState != WindowState.Minimized) { window.Topmost = false; window.Topmost = true; } }
+        // Not while a topmost window of another app has the focus (the screenshot tool's overlay, say), which this would otherwise jump on top of.
+        void Reassert(Window window) { if (window.Topmost && ZOrder.ShouldReassert(window.IsVisible, window.IsActive, window.WindowState == WindowState.Minimized, ZOrder.ForegroundIsTopmost())) { window.Topmost = false; window.Topmost = true; } }
         foreach (var window in new Window[] { Pill, Dashboard })
         {
             var self = window;
@@ -73,7 +75,9 @@ public sealed class WindowCoordinator
     {
         // The close button hides the timer and leaves tracking running. Quitting, or Windows shutting down, saves and really closes.
         if (HideToTray && !quitting && e.CloseReason == WindowCloseReason.WindowClosing) { e.Cancel = true; Hide(); return; }
-        e.Cancel = !model.StopForClose();
+        // Windows closing the timer for a restart or shutdown must never be held up, or crashed, by a failed save.
+        try { e.Cancel = !model.StopForClose(); }
+        catch (Exception) { e.Cancel = false; }
     }
     public void Hide()
     {
@@ -87,7 +91,7 @@ public sealed class WindowCoordinator
     }
     public void ShowDashboard()
     {
-        if (!Dashboard.IsVisible) { Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin); Dashboard.Show(); }
+        if (!Dashboard.IsVisible) { model.ShowToday(); Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin); Dashboard.Show(); }
         Pill.Collapse(); Pill.Hide(); BringToFront(Dashboard);
     }
     // The tray icon's left click shows the timer, or hides it when it is already in front.
@@ -95,9 +99,10 @@ public sealed class WindowCoordinator
     {
         if ((Pill.IsVisible && Pill.IsActive) || (Dashboard.IsVisible && Dashboard.IsActive)) Hide(); else ShowTimer();
     }
-    private static void BringToFront(Window window)
+    private void BringToFront(Window window)
     {
-        window.Topmost = false; window.Topmost = true; window.Activate();
+        // Raising it once keeps it on top only when that window is set to stay in front.
+        window.Topmost = false; window.Topmost = window == Pill ? model.PillOnTop : model.DashboardOnTop; window.Activate();
     }
     public void ResetPosition()
     {
@@ -240,7 +245,7 @@ public sealed class PillWindow : Window
         Width = PillWidth + 2 * Ui.ShadowMargin;
         Height = CollapsedHeight + 2 * Ui.ShadowMargin;
         CanResize = false;
-        Topmost = true;
+        Topmost = model.PillOnTop; model.PropertyChanged += (_, _) => { if (Topmost != model.PillOnTop) Topmost = model.PillOnTop; };
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
@@ -442,7 +447,15 @@ public sealed class DashboardWindow : Window
     private readonly Avalonia.Controls.Shapes.Ellipse accountDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
     private Button todayButton = null!;
     private readonly TextBlock account = Ui.Text("", 16);
-    private Border zoomControls = new(); private Control? identityBlock, accountsHeadBlock, toolsRow; private Button zoomOut = new(), zoomIn = new();
+    // The slider takes whatever room the buttons beside it leave, so a fourth button (Edit) never runs under the zoom bar.
+    private static Grid ZoomRow(Control fit, Control zoomOut, Control slider, Control zoomIn)
+    {
+        var row = Ui.Grid("Auto,Auto,*,Auto", "*"); row.ColumnSpacing = 4; row.VerticalAlignment = VerticalAlignment.Center;
+        foreach (var button in new[] { fit, zoomOut, zoomIn }) button.VerticalAlignment = VerticalAlignment.Center;
+        Ui.Put(row, fit); Ui.Put(row, zoomOut, 1); Ui.Put(row, slider, 2); Ui.Put(row, zoomIn, 3);
+        return row;
+    }
+    private Border zoomControls = new(); private SelectionStrip? selectionStrip; private Control? identityBlock, accountsHeadBlock, toolsRow; private Button zoomOut = new(), zoomIn = new();
     private readonly TextBlock allocatedValue = new TextBlock { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly TextBlock unallocatedValue = new TextBlock { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly TextBlock dayText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
@@ -474,7 +487,7 @@ public sealed class DashboardWindow : Window
         ContextMenu = Ui.SettingsMenu(model);
         Width = DashboardWidth + 2 * Ui.ShadowMargin;
         Height = DashboardHeight + 2 * Ui.ShadowMargin;
-        Topmost = true; // The dashboard stays in front of other windows, as the pill does.
+        Topmost = model.DashboardOnTop; model.PropertyChanged += (_, _) => { if (Topmost != model.DashboardOnTop) Topmost = model.DashboardOnTop; }; // In front of other windows unless switched off in settings.
         CanResize = false;
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
@@ -541,16 +554,15 @@ public sealed class DashboardWindow : Window
         Ui.Put(sidebar, identityHost);
         var title = Ui.Text("Client accounts", 13, "muted");
         title.Margin = new Thickness(20, 12, 20, 6);
-        // A rule and a heading set the accounts apart from the card above them.
-        var titleRule = Ui.Rule(); titleRule.Margin = new Thickness(16, 0);
+        // The heading alone sets the accounts apart from the card above them, with no divider.
         // "Today" sits over the bold daily totals, since each row also shows a weekly or monthly figure and the two could be mistaken for each other.
         var todayHead = Ui.Text("Today", 11, "muted"); todayHead.HorizontalAlignment = HorizontalAlignment.Right; todayHead.VerticalAlignment = VerticalAlignment.Bottom;
         todayHead.Margin = new Thickness(0, 12, 58, 6); todayHead.Name = "TodayHeading";
         var headLine = Ui.Grid("*,Auto"); Ui.Put(headLine, title); Ui.Put(headLine, todayHead, 1);
-        var accountsHead = new StackPanel(); accountsHead.Children.Add(titleRule); accountsHead.Children.Add(headLine); accountsHeadBlock = accountsHead;
+        var accountsHead = new StackPanel(); accountsHead.Children.Add(headLine); accountsHeadBlock = accountsHead;
         Ui.Put(sidebar, accountsHead, row: 1);
-        Ui.Put(sidebar, new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }, row: 2);
+        Ui.Put(sidebar, Ui.WithMoreBelow(new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 2);
         var summary = new StackPanel { Margin = new Thickness(18, 12, 18, 18), Spacing = 10 };
         // The break is its own control, apart from the account rows above it, because it stops time going to any account.
         breakButton = Ui.Button("", model.ToggleBreak, "DashboardBreak");
@@ -571,7 +583,7 @@ public sealed class DashboardWindow : Window
         panel.Classes.Add("panel");
         Ui.Put(body, panel);
         var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
-        var review = Ui.Grid("*", "Auto,*,Auto");
+        var review = Ui.Grid("*", "Auto,*,Auto,Auto");
         review.Margin = new Thickness(22, 16, 22, 18);
         // The workspace's name on the left; on the right the date to step through and a button back to today.
         // In Week views the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
@@ -609,7 +621,7 @@ public sealed class DashboardWindow : Window
         zoomIn = Ui.IconButton(IconKind.ZoomIn, "Zoom in (or hold Ctrl and use the mouse wheel)", "TimelineZoomIn", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Height / 2, s.Offset.Y); });
         var fit = Ui.IconButton(IconKind.FitDay, "Fit the day to the window", "TimelineFit", () => { if (TimelineScroll() is { } s) model.FitTimeline(s.Viewport.Height); });
         // The zoom controls sit in a bar under the timeline: fit the day, zoom out, a slider, zoom in. They show only on the Timeline view.
-        zoomSlider = new Slider { Name = "TimelineZoom", Minimum = 0, Maximum = 1, Width = 130, VerticalAlignment = VerticalAlignment.Center, Value = model.TimelineZoomFraction,
+        zoomSlider = new Slider { Name = "TimelineZoom", Minimum = 0, Maximum = 1, MinWidth = 50, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center, Value = model.TimelineZoomFraction,
             // The standard slider draws its track a little below the middle of its own box, so the box is lifted by the same amount (drawing only, no layout change) to put the track on the bar's centre line.
             RenderTransform = new Avalonia.Media.TranslateTransform(0, -5) };
         Avalonia.Automation.AutomationProperties.SetName(zoomSlider, "Zoom"); ToolTip.SetTip(zoomSlider, "Zoom the timeline");
@@ -618,16 +630,22 @@ public sealed class DashboardWindow : Window
             if (e.Property != Avalonia.Controls.Primitives.RangeBase.ValueProperty || settingZoom) return;
             if (TimelineScroll() is { } s) model.SetTimelineScale(TimerModel.ScaleAt(zoomSlider.Value), s.Viewport.Height / 2, s.Offset.Y);
         };
-        var zoomBar = new Border { Name = "TimelineControls", Child = Ui.Horizontal(fit, zoomOut, zoomSlider, zoomIn), CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 0), Height = ControlBarHeight, BorderThickness = new Thickness(1), };
-        ((StackPanel)zoomBar.Child).Spacing = 4; zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
+        var zoomBar = new Border { Name = "TimelineControls", Child = ZoomRow(fit, zoomOut, zoomSlider, zoomIn), HorizontalAlignment = HorizontalAlignment.Right, CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 0), Height = ControlBarHeight, BorderThickness = new Thickness(1), };
+        zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
         // Add time, Undo and Merge sit on the left of a bar under the workspace, and the zoom controls on its right, so the working area has the whole height above.
         // The bar is as tall as the Start break and Finish day buttons beside it, so the two bottom rows line up. Its buttons fill that height.
         addTime.Height = ControlBarHeight; undo.Height = ControlBarHeight; merge.Height = ControlBarHeight; edit.Height = ControlBarHeight;
-        var tools = Ui.Grid("*,Auto"); toolsRow = tools; Ui.Put(tools, edits); Ui.Put(tools, zoomBar, 1);
+        var tools = Ui.Grid("Auto,*"); toolsRow = tools; Ui.Put(tools, edits);
+        // The zoom bar is as wide as the room left beside the buttons, up to a limit, so its slider is long when nothing is crowding it and short when Edit is showing.
+        var zoomSlot = new Grid(); zoomSlot.Children.Add(zoomBar);
+        zoomSlot.SizeChanged += (_, e) => zoomBar.Width = Math.Clamp(e.NewSize.Width - 12, 120, 262);
+        Ui.Put(tools, zoomSlot, 1);
         tools.Margin = new Thickness(0, 12, 0, 0); zoomBar.Margin = new Thickness(12, 0, 0, 0); // Clear space between Merge and the zoom bar.
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
         Ui.Put(review, workspace, row: 1);
-        Ui.Put(review, tools, row: 2);
+        // Selection feedback has its own strip in the layout, just above the buttons it relates to.
+        selectionStrip = new SelectionStrip(model); Ui.Put(review, selectionStrip, row: 2);
+        Ui.Put(review, tools, row: 3);
         // The title row's empty middle still drags the window.
         var rightColumn = Ui.Grid("*", "*");
         Ui.Put(rightColumn, review); Ui.DragHeader(nav, this);
@@ -781,8 +799,8 @@ public sealed class DashboardWindow : Window
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
         edit.IsVisible = editing && model.CanEditSelection; if (edit.IsVisible && edit.Content is Panel editRow && editRow.Children.OfType<TextBlock>().FirstOrDefault() is { } editText) editText.Text = model.EditText;
-        pillGlyph.DotKey = model.IsOnBreak ? "Break" : model.IsTracking ? "Live" : "Accent";
-        dashboardCup.Filled = model.IsOnBreak; dashboardCup.SetSteaming(model.IsOnBreak); dashboardCup.InvalidateVisual();
+        pillGlyph.DotKey = model.IsOnBreak ? "Break" : model.IsTracking ? "Live" : "Idle";
+        dashboardCup.Filled = model.IsOnBreak; dashboardCup.SetSteaming(model.IsOnBreak || hoverBreak); dashboardCup.InvalidateVisual();
         dashboardBreakText.Text = model.IsOnBreak ? "Finish break" : "Start break";
         breakButton.Classes.Set("onBreak", model.IsOnBreak);
         ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Take a break");
@@ -796,6 +814,7 @@ public sealed class DashboardWindow : Window
         Rail(settingsRail, settingsMode);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
         foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = !settingsMode;
+        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && (!weekMode || model.WeekSection == "entries");
         if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
         workspaceTitle.Text = settingsMode ? "Settings" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;

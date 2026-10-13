@@ -69,6 +69,8 @@ public sealed class BreakTests
             var pillBreak = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillBreak");
             Assert.Contains("breakButton", dashboardBreak.Classes); Assert.DoesNotContain("onBreak", dashboardBreak.Classes);
             Assert.Contains(dashboardBreak.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Start break");
+            // A slow runner may still be settling the layout, so it is finished before the button's position is read.
+            Dispatcher.UIThread.RunJobs(); dashboard.UpdateLayout();
             var point = dashboardBreak.TranslatePoint(new Point(dashboardBreak.Bounds.Width / 2, dashboardBreak.Bounds.Height / 2), dashboard)!.Value;
             dashboard.MouseDown(point, MouseButton.Left); dashboard.MouseUp(point, MouseButton.Left); Dispatcher.UIThread.RunJobs();
             now = now.AddMinutes(30); model.ChangeDate(0); Dispatcher.UIThread.RunJobs();
