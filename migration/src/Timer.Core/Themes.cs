@@ -180,9 +180,8 @@ public static class ThemeLibrary
         return ThemeColours.FromHsl(hue, Math.Max(saturation, .8), .55);
     }
     private const string DarkShadow = "#B3000000", LightShadow = "#59000000";
-    /// <summary>Light: a neutral dashboard with a blue accent, and tinted blocks with a stronger edge on the left.</summary>
-    public static readonly ThemeDefinition Light = Make("Light", false, "#FBFBFC", "#F2F3F5", "#17181C", "#6A6F78", "#E3E5E9", "#EDEFF2", "#E2EBFC",
-        "#1F8F4E", "#C0243F", "#D9890B", "#E8790E", "#D7263D", "#2563EB", "#FFFFFF", "#17181C", LightShadow, "#1F8F4E") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .55, BlockEdge = 0 };
+    /// <summary>Light: cool and precise, a pale blue-grey surface with a strong blue accent (the palette that was the Studio study).</summary>
+    public static readonly ThemeDefinition Light = Themed("Light", false, "#F3F6FA", "#E5EBF2", "#202C3D", "#4169C1", "#1F8F4E", "#E07A10", "#B92D43", .55);
     /// <summary>Dark: cool charcoal surfaces with a soft blue accent, apart from the green, orange and red that carry meaning. Blocks take a little more of the account colour than in the light version, so they hold against the dark.</summary>
     public static readonly ThemeDefinition Dark = Make("Dark", true, "#14161A", "#1C1F24", "#EEF0F3", "#9CA3AD", "#2E333A", "#262A31", "#1D2A44",
         "#4CD48A", "#FF7A8A", "#F2B84B", "#FF9A3C", "#FF6B6B", "#6EA8FF", "#0B1426", "#EEF0F3", DarkShadow, "#4CD48A") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .45, BlockEdge = 0 };
@@ -199,8 +198,6 @@ public static class ThemeLibrary
         return Make(name, dark, surface, panel, ink, muted, line, hover, selected, live, overtimeText, dark ? "#F2B84B" : "#D9890B", breakColour, dark ? "#FF7A8A" : "#C0243F",
             accent, ThemeColours.ReadableOn(accent), ink, dark ? DarkShadow : LightShadow, live) with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = tint, BlockEdge = 0 };
     }
-    /// <summary>Studio: cool and precise, a pale blue-grey with a strong blue accent.</summary>
-    public static readonly ThemeDefinition Studio = Themed("Studio", false, "#F3F6FA", "#E5EBF2", "#202C3D", "#4169C1", "#1F8F4E", "#E07A10", "#B92D43", .55);
     /// <summary>After Hours: deep and electric, a navy surface with a soft violet accent.</summary>
     public static readonly ThemeDefinition AfterHours = Themed("After Hours", true, "#111827", "#1C2638", "#EDF2FA", "#A5A0FF", "#4CD48A", "#F28A24", "#B92D43", .42);
     /// <summary>Botanical: soft and grounded, a pale sage surface with a deep green accent.</summary>
@@ -208,7 +205,7 @@ public static class ThemeLibrary
     /// <summary>Hawthorn: forest and luminous, deep green with a lime accent. It is the old default theme, back as a choice.</summary>
     public static readonly ThemeDefinition Hawthorn = Themed("Hawthorn", true, "#073D29", "#105237", "#F5F8ED", "#C5FF42", "#6FE39A", "#F28A24", "#B92D43", .38);
     // Light and Dark lead the list, then the studies. More can be added here later, and the editor and settings page list whatever is in this array.
-    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark, Studio, AfterHours, Botanical, Hawthorn };
+    public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, Dark, AfterHours, Botanical, Hawthorn };
     /// <summary>"System" is not a theme of its own: it picks Light or Dark to match the computer.</summary>
     public const string System = "System";
     /// <summary>What a new installation starts on.</summary>
@@ -216,7 +213,7 @@ public static class ThemeLibrary
     /// <summary>A built-in theme that was renamed or removed keeps working under its old name in saved settings, by landing on the light or dark theme it was closest to.</summary>
     public static string Renamed(string name) => name switch
     {
-        "Time Deck" or "Paper" or "Sandstone" or "Sunset" or "High contrast light" => "Light",
+        "Studio" or "Time Deck" or "Paper" or "Sandstone" or "Sunset" or "High contrast light" => "Light",
         "Time Deck Dark" or "Sage" or "Graphite" or "Midnight" or "Ocean" or "Aubergine" or "High contrast dark" => "Dark",
         _ => name
     };

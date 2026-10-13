@@ -210,7 +210,7 @@ public sealed class UxTweakTests
     [AvaloniaFact]
     public void WritingATwiceLeavesUnchangedColoursAloneAndAPreviewWritesOnlyTheMainVariant()
     {
-        var theme = ThemeLibrary.BuiltIn.First(t => t.Name == "Studio"); var app = Application.Current!;
+        var theme = ThemeLibrary.BuiltIn.First(t => t.Name == "Botanical"); var app = Application.Current!;
         ThemeEngine.Register(app, new[] { theme });
         var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
         var ink = dictionary["Ink"]; var accent = dictionary["Accent"];

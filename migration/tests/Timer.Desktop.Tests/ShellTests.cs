@@ -192,7 +192,7 @@ public sealed class ShellTests
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             var choice = window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "ThemeChoice");
-            Assert.Equal(new[] { "System", "Light", "Dark", "Studio", "After Hours", "Botanical", "Hawthorn" }, choice.Items.Cast<string>());
+            Assert.Equal(new[] { "System", "Light", "Dark", "After Hours", "Botanical", "Hawthorn" }, choice.Items.Cast<string>());
             var elapsed = model.Elapsed;
             choice.SelectedItem = "Dark";
             Assert.Equal("Dark", model.Theme);
