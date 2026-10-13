@@ -89,6 +89,30 @@ public sealed class UxTweakTests
     }
 
     [AvaloniaFact]
+    public void TheWindowsStayOnTopUnlessSwitchedOffInSettings()
+    {
+        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
+        var pill = new PillWindow(model); var dashboard = new DashboardWindow(model);
+        Assert.True(pill.Topmost); Assert.True(dashboard.Topmost);
+        model.SetDashboardOnTop(false);
+        Assert.False(dashboard.Topmost); Assert.True(pill.Topmost);
+        model.SetPillOnTop(false); Assert.False(pill.Topmost);
+        model.SetDashboardOnTop(true); Assert.True(dashboard.Topmost);
+    }
+
+    [Fact]
+    public void TheOnTopChoicesAreSavedWithTheAppearanceSettings()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-ontop-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.True(prefs.DashboardOnTop); store.Save(engine, prefs with { DashboardOnTop = false }); }
+            using (var store = new TimerStore(folder)) { var prefs = store.Load(new TrackingEngine()); Assert.False(prefs.DashboardOnTop); Assert.True(prefs.PillOnTop); }
+        }
+        finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
+    }
+
+    [AvaloniaFact]
     public void LongTextSlidesAndShortTextStaysPut()
     {
         var longText = new AutoScrollText(new TextBlock { Text = "A very long client account name that cannot fit in the pill" }) { Width = 120 };

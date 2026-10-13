@@ -493,10 +493,10 @@ public sealed class AccountList : StackPanel
             var row = new Button { Name = "Account" + rows.Count, Classes = { "account" } };
             // Where rows can be dragged to reorder them, a grip at the left says so.
             var shift = reorderable ? 1 : 0;
-            var grid = Ui.Grid(reorderable ? "14,*,Auto" : bars ? "*,Auto" : "38,*,Auto");
+            var grid = Ui.Grid(reorderable ? "10,*,Auto" : bars ? "*,Auto" : "38,*,Auto");
             if (reorderable)
             {
-                var grip = new IconGlyph(IconKind.Grip) { Cursor = new Cursor(StandardCursorType.SizeAll), Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center, Name = "Grip" + rows.Count };
+                var grip = new IconGlyph(IconKind.Grip) { Cursor = new Cursor(StandardCursorType.SizeAll), VerticalAlignment = VerticalAlignment.Center, Name = "Grip" + rows.Count };
                 ToolTip.SetTip(grip, "Drag to change the order"); Ui.Put(grid, grip);
             }
             var icon = new AccountIndicator(account, model) { Ring = !bars };
@@ -878,6 +878,7 @@ public sealed class IconGlyph : Control
     public IconGlyph(IconKind kind)
     {
         Kind = kind; Width = Height = 18;
+        if (kind == IconKind.Grip) Width = 10; // A narrow strip, so the grip takes little of the row.
         Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = HoverProperty, Duration = HoverDuration } };
     }
     private Button? owner; private bool keyboardFocus;
@@ -1015,7 +1016,7 @@ public sealed class IconGlyph : Control
             case IconKind.Grip:
                 // Two columns of three dots, the usual sign that something can be picked up and moved, drawn quietly.
                 IBrush quiet = this.TryFindResource("Muted", ActualThemeVariant, out var muted) && muted is IBrush mutedBrush ? mutedBrush : brush;
-                foreach (var x in new[] { 6.5, 11.5 }) foreach (var y in new[] { 4.5, 9.0, 13.5 }) context.DrawEllipse(quiet, null, new Point(x, y), 1.4, 1.4);
+                foreach (var x in new[] { 3.0, 7.0 }) foreach (var y in new[] { 4.5, 9.0, 13.5 }) context.DrawEllipse(quiet, null, new Point(x, y), 1.4, 1.4);
                 break;
             case IconKind.ZoomIn or IconKind.ZoomOut:
                 context.DrawEllipse(null, pen, new Point(8, 8), 6, 6);

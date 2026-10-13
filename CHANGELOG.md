@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 | --- | --- | --- |
+| On-top switches and a slimmer grip | pending | Settings has Keep the pill on top and Keep the dashboard on top, so the dashboard can drop back behind other windows. Both default to on. The drag grip on account rows is narrower and takes less of the left edge. |
 | Light takes the Studio palette | pending | Light is now the cool blue-grey look that was Studio, with its blue accent, and Studio is gone from the list. A saved choice of Studio lands on Light. |
 | Alpha bug check fixes | pending | The week overview no longer shows a sideways scroll bar. The scroll cue is a shadow along the edge, above as well as below. The setup dots stay centred whatever the button widths. Light and Dark use a blue accent, clear of red, green and orange. Duplicate and Delete in the theme editor sit in the bottom row. Themes made by the user appear in the settings theme list straight away. |
 | CI tests on Windows only | [fcc821f](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/fcc821f298903e5a73f82f92b2f092d0ce84f008) | The development workflow no longer runs the tests on Linux and macOS, which the project does not target for now. Add `ubuntu-latest` and `macos-latest` back to the matrix to restore them. |

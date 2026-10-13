@@ -55,6 +55,8 @@ public sealed class SettingsView : ScrollViewer
         };
         syncs.Add(() => { if (!Equals(pillSize.SelectedItem, PillText(model.PillScalePercent))) pillSize.SelectedItem = PillText(model.PillScalePercent); });
         appearance.Children.Add(Row("Pill size", pillSize));
+        appearance.Children.Add(Toggle("Keep the pill on top", "PillOnTop", () => model.PillOnTop, v => model.SetPillOnTop(v)));
+        appearance.Children.Add(Toggle("Keep the dashboard on top", "DashboardOnTop", () => model.DashboardOnTop, v => model.SetDashboardOnTop(v)));
         appearance.Children.Add(Toggle("Window shadows", "WindowShadows", () => model.Shadows, v => model.SetShadows(v)));
         appearance.Children.Add(Toggle("Show tooltips", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v)));
         var tipNote = Ui.Text("With tooltips off, budget percentages are still in Week overview.", 12, "muted"); tipNote.Name = "TooltipsNote"; tipNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; appearance.Children.Add(tipNote);

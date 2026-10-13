@@ -723,6 +723,11 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool MoveLaterAlways => preferences.MoveLaterAlways;
     public void SetMoveLaterAlways(bool on) { preferences = preferences with { MoveLaterAlways = on }; Save(); Notify(); }
     /// <summary>The pill size chosen by hand, as a percentage of its design size, or null for the automatic size that follows the screen.</summary>
+    /// <summary>Whether the pill and the dashboard stay in front of other windows. Either can be let go, so the dashboard can drop back behind other work.</summary>
+    public bool PillOnTop => preferences.PillOnTop;
+    public bool DashboardOnTop => preferences.DashboardOnTop;
+    public void SetPillOnTop(bool on) { preferences = preferences with { PillOnTop = on }; Save(); Notify(); }
+    public void SetDashboardOnTop(bool on) { preferences = preferences with { DashboardOnTop = on }; Save(); Notify(); }
     public int? PillScalePercent => preferences.PillScale;
     public static readonly int[] PillScaleChoices = { 50, 60, 70, 80, 90, 100, 110, 120 };
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
