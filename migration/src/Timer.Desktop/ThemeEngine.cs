@@ -61,6 +61,8 @@ public static class ThemeEngine
         foreach (var key in new[] { "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver", "CheckBoxCheckGlyphForegroundCheckedPressed" }) Put(key, accentInk);
         // Tooltips are drawn by a pop-up that otherwise takes the computer's own light or dark colours, which left dark text on a dark tooltip (or the reverse)
         // when the theme and the computer disagreed, and in the recording pill. They wear the theme's surface, text and line instead.
+        // A gentle wash of the tracking colour over the surface, for the card of the account that is recording.
+        Put("LiveTint", Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Live"], ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000") ? .24 : .14)));
         Put("ToolTipBackground", Color.Parse(colours["Surface"]));
         Put("ToolTipForeground", Color.Parse(colours["Ink"]));
         Put("ToolTipBorderBrush", line);
