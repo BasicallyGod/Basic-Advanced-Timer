@@ -56,6 +56,39 @@ public sealed class UxTweakTests
     }
 
     [AvaloniaFact]
+    public void ThemesMadeAfterTheSettingsPageWasBuiltAppearInItsList()
+    {
+        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
+        var view = new SettingsView(model); var window = new Window { Content = view }; window.Show();
+        try
+        {
+            var choice = view.GetLogicalDescendants().OfType<ComboBox>().Single(c => c.Name == "ThemeChoice");
+            Assert.DoesNotContain("Mine", choice.ItemsSource!.Cast<string>());
+            model.SaveTheme(ThemeLibrary.Light with { Name = "Mine" });
+            Assert.Contains("Mine", choice.ItemsSource!.Cast<string>());
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void LightAndDarkAccentsKeepClearOfRedGreenAndOrange()
+    {
+        foreach (var theme in new[] { ThemeLibrary.Light, ThemeLibrary.Dark })
+        {
+            var accent = Color.Parse(theme.Colour("Accent"));
+            Assert.True(accent.B > accent.R + 40 && accent.B >= accent.G, $"{theme.Name} accent {theme.Colour("Accent")} is not clearly blue");
+        }
+    }
+
+    [AvaloniaFact]
+    public void TheWeekOverviewNeverAsksForASidewaysScrollBar()
+    {
+        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
+        var scroll = ReviewViews.Week(model).GetLogicalDescendants().OfType<ScrollViewer>().First();
+        Assert.Equal(Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, scroll.HorizontalScrollBarVisibility);
+    }
+
+    [AvaloniaFact]
     public void LongTextSlidesAndShortTextStaysPut()
     {
         var longText = new AutoScrollText(new TextBlock { Text = "A very long client account name that cannot fit in the pill" }) { Width = 120 };

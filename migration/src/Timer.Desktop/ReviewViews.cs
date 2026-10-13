@@ -269,7 +269,8 @@ public static class ReviewViews
             default: OverviewSection(model, table, day, days, root); break;
         }
         var scroll = new ScrollViewer { Content = root, AllowAutoHide = false, Tag = Vector.Zero,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+            // The overview is laid out to the width it is given, so it never needs a sideways bar. The table and entries may be wider than the window.
+            HorizontalScrollBarVisibility = model.WeekSection is "hours" or "entries" ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
         DeferOffset(scroll);
         return Ui.WithMoreBelow(scroll);
     }

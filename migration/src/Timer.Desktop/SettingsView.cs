@@ -29,10 +29,17 @@ public sealed class SettingsView : ScrollViewer
         page.Children.Add(Section("Working hours", new ShiftEditor(model, () => { }, null)));
 
         // How the app looks and behaves.
-        var themeNames = new[] { ThemeLibrary.System }.Concat(model.Themes.Select(t => t.Name)).ToList();
+        List<string> ThemeNames() => new[] { ThemeLibrary.System }.Concat(model.Themes.Select(t => t.Name)).ToList();
+        var themeNames = ThemeNames();
         var theme = new ComboBox { Name = "ThemeChoice", ItemsSource = themeNames, SelectedItem = themeNames.Contains(model.Theme) ? model.Theme : ThemeLibrary.System, MinWidth = 200 };
         theme.SelectionChanged += (_, _) => { if (theme.SelectedItem is string chosen && chosen != model.Theme) model.SetTheme(chosen); };
-        syncs.Add(() => { var wanted = themeNames.Contains(model.Theme) ? model.Theme : ThemeLibrary.System; if (!Equals(theme.SelectedItem, wanted)) theme.SelectedItem = wanted; });
+        syncs.Add(() =>
+        {
+            // The page is built once, so themes made or deleted in the editor afterwards are picked up here.
+            var current = ThemeNames();
+            if (!current.SequenceEqual(themeNames)) { themeNames = current; theme.ItemsSource = themeNames; }
+            var wanted = themeNames.Contains(model.Theme) ? model.Theme : ThemeLibrary.System; if (!Equals(theme.SelectedItem, wanted)) theme.SelectedItem = wanted;
+        });
         var editThemes = Ui.DialogButton("Edit themes…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new ThemesDialog(model)); }, "EditThemes");
         var appearance = new StackPanel { Spacing = 10 };
         appearance.Children.Add(Row("Theme", Ui.Horizontal(theme, editThemes)));

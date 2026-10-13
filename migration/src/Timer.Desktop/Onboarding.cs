@@ -52,8 +52,9 @@ public sealed class OnboardingView : Grid
         layout.Children.Add(top); layout.Children.Add(title); layout.Children.Add(subtitle); layout.Children.Add(body); layout.Children.Add(error);
         back = Ui.DialogButton("Back", () => Go(-1), "SetupBack", main: false);
         next = Ui.DialogButton("Next", () => Advance(), "SetupNext", main: true);
-        var footer = Ui.Grid("Auto,*,Auto"); footer.Margin = new Thickness(0, 8, 0, 0);
-        Ui.Put(footer, back); Ui.Put(footer, dots, 1); dots.HorizontalAlignment = HorizontalAlignment.Center; Ui.Put(footer, next, 2);
+        // Equal outer columns keep the dots in the middle, whatever the width of Back (hidden on the first step) and of Next or Start tracking.
+        var footer = Ui.Grid("*,Auto,*"); footer.Margin = new Thickness(0, 8, 0, 0);
+        Ui.Put(footer, back); back.HorizontalAlignment = HorizontalAlignment.Left; Ui.Put(footer, dots, 1); dots.HorizontalAlignment = HorizontalAlignment.Center; Ui.Put(footer, next, 2); next.HorizontalAlignment = HorizontalAlignment.Right;
         layout.Children.Add(footer);
         card.Child = layout; Children.Add(card);
         Focusable = true;

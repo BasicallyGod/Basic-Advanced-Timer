@@ -180,12 +180,12 @@ public static class ThemeLibrary
         return ThemeColours.FromHsl(hue, Math.Max(saturation, .8), .55);
     }
     private const string DarkShadow = "#B3000000", LightShadow = "#59000000";
-    /// <summary>Light: a neutral dashboard with an orange accent, and tinted blocks with a stronger edge on the left.</summary>
-    public static readonly ThemeDefinition Light = Make("Light", false, "#FBFBFC", "#F2F3F5", "#17181C", "#6A6F78", "#E3E5E9", "#EDEFF2", "#FDEAD3",
-        "#1F8F4E", "#C0243F", "#D9890B", "#E8790E", "#D7263D", "#F27A0D", "#1B1209", "#17181C", LightShadow, "#1F8F4E") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .55, BlockEdge = 0 };
-    /// <summary>Dark: cool charcoal surfaces with the same orange accent. Blocks take a little more of the account colour than in the light version, so they hold against the dark.</summary>
-    public static readonly ThemeDefinition Dark = Make("Dark", true, "#14161A", "#1C1F24", "#EEF0F3", "#9CA3AD", "#2E333A", "#262A31", "#33281D",
-        "#4CD48A", "#FF7A8A", "#F2B84B", "#FF9A3C", "#FF6B6B", "#FF8A1F", "#1B1209", "#EEF0F3", DarkShadow, "#4CD48A") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .45, BlockEdge = 0 };
+    /// <summary>Light: a neutral dashboard with a blue accent, and tinted blocks with a stronger edge on the left.</summary>
+    public static readonly ThemeDefinition Light = Make("Light", false, "#FBFBFC", "#F2F3F5", "#17181C", "#6A6F78", "#E3E5E9", "#EDEFF2", "#E2EBFC",
+        "#1F8F4E", "#C0243F", "#D9890B", "#E8790E", "#D7263D", "#2563EB", "#FFFFFF", "#17181C", LightShadow, "#1F8F4E") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .55, BlockEdge = 0 };
+    /// <summary>Dark: cool charcoal surfaces with a soft blue accent, apart from the green, orange and red that carry meaning. Blocks take a little more of the account colour than in the light version, so they hold against the dark.</summary>
+    public static readonly ThemeDefinition Dark = Make("Dark", true, "#14161A", "#1C1F24", "#EEF0F3", "#9CA3AD", "#2E333A", "#262A31", "#1D2A44",
+        "#4CD48A", "#FF7A8A", "#F2B84B", "#FF9A3C", "#FF6B6B", "#6EA8FF", "#0B1426", "#EEF0F3", DarkShadow, "#4CD48A") with { BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .45, BlockEdge = 0 };
     // The colours a mock-up gives (surface, panel, text, accent, break and overtime) are the ones set by hand. The rest are worked out from them, so
     // every theme gets quiet text, lines, hovers and a selection tint that suit its own surface, and holds the same contrast the tests ask of all.
     private static ThemeDefinition Themed(string name, bool dark, string surface, string panel, string ink, string accent, string live, string breakColour, string overtime, double tint)

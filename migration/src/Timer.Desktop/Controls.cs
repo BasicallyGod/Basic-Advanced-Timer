@@ -120,23 +120,36 @@ public static class Ui
         return button;
     }
     /// <summary>
-    /// Puts a faint fade over the bottom edge of a scroll viewer while more content lies below, so rows cut off by the buttons underneath
-    /// read as scrollable. The fade ignores the pointer and goes once the end is reached.
+    /// Puts a soft shadow along the edge of a scroll viewer that has more content past it, at the bottom while there is more below and at the top
+    /// once it has scrolled down, so rows cut off by the buttons underneath read as scrollable. It is a shadow (darker at the edge) and never a glow.
+    /// The shadows ignore the pointer and go once the end is reached.
     /// </summary>
     public static Grid WithMoreBelow(ScrollViewer scroll)
     {
-        var fade = new Border { Name = "MoreBelow", Height = 22, VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false, IsVisible = false };
+        Border Shadow(string name, VerticalAlignment edge) => new() { Name = name, Height = 14, VerticalAlignment = edge, IsHitTestVisible = false, IsVisible = false };
+        var below = Shadow("MoreBelow", VerticalAlignment.Bottom); var above = Shadow("MoreAbove", VerticalAlignment.Top);
         void Paint()
         {
-            var c = fade.TryFindResource("Surface", fade.ActualThemeVariant, out var r) && r is SolidColorBrush found ? found.Color : Colors.Transparent;
-            fade.Background = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                GradientStops = { new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 0), new GradientStop(Color.FromArgb(235, c.R, c.G, c.B), 1) } };
+            // A shadow is darkest where the content is cut off. A dark surface needs a stronger one to show at all.
+            var c = below.TryFindResource("Surface", below.ActualThemeVariant, out var r) && r is SolidColorBrush found ? found.Color : Colors.White;
+            var strength = (byte)(c.R + c.G + c.B < 384 ? 120 : 46);
+            IBrush Ramp(bool darkAtBottom) => new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                GradientStops = { new GradientStop(Color.FromArgb(darkAtBottom ? (byte)0 : strength, 0, 0, 0), 0), new GradientStop(Color.FromArgb(darkAtBottom ? strength : (byte)0, 0, 0, 0), 1) }
+            };
+            below.Background = Ramp(true); above.Background = Ramp(false);
         }
-        fade.ActualThemeVariantChanged += (_, _) => Paint(); fade.AttachedToVisualTree += (_, _) => Paint();
-        void Update() => fade.IsVisible = scroll.Extent.Height > scroll.Viewport.Height + 1 && scroll.Offset.Y + scroll.Viewport.Height < scroll.Extent.Height - 1;
+        below.ActualThemeVariantChanged += (_, _) => Paint(); below.AttachedToVisualTree += (_, _) => Paint();
+        void Update()
+        {
+            var scrolls = scroll.Extent.Height > scroll.Viewport.Height + 1;
+            below.IsVisible = scrolls && scroll.Offset.Y + scroll.Viewport.Height < scroll.Extent.Height - 1;
+            above.IsVisible = scrolls && scroll.Offset.Y > 1;
+        }
         scroll.ScrollChanged += (_, _) => Update();
         scroll.PropertyChanged += (_, e) => { if (e.Property == ScrollViewer.ExtentProperty || e.Property == ScrollViewer.ViewportProperty) Update(); };
-        var host = new Grid(); host.Children.Add(scroll); host.Children.Add(fade);
+        var host = new Grid(); host.Children.Add(scroll); host.Children.Add(above); host.Children.Add(below);
         return host;
     }
     public static Grid Grid(string columns, string rows = "Auto") => new()
