@@ -218,7 +218,7 @@ public sealed class DeskConsolidationTests
     [AvaloniaFact]
     public void DeskSettingCanBeSwitchedBothWaysWithoutLosingTheHome()
     {
-        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup();
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup(); model.SetDesk(true);
         var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
