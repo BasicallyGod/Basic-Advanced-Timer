@@ -16,7 +16,7 @@ public sealed class DatabaseTooNewException : IOException
 // change either lands whole or not at all.
 public sealed class TimerDatabase : IDisposable
 {
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
     public const string FileName = "timer.db";
     public const int DailyCopiesKept = 14;
     // Numbered upgrades from one format to the next: entry 0 takes the data from format 1 to 2, entry 1 from 2 to 3, and so on. A build that adds a table
@@ -31,11 +31,20 @@ public sealed class TimerDatabase : IDisposable
             hidden INTEGER NOT NULL DEFAULT 0 CHECK (hidden IN (0, 1)),
             budget_seconds INTEGER CHECK (budget_seconds IS NULL OR budget_seconds > 0),
             budget_period TEXT NOT NULL DEFAULT 'week' CHECK (budget_period IN ({(days ? "'day', " : "")}'week', 'month', 'quarter')))";
+    public const string DayNotesTable = @"CREATE TABLE day_notes (
+            id INTEGER PRIMARY KEY,
+            day TEXT NOT NULL,
+            at_time TEXT,
+            text TEXT NOT NULL CHECK (length(text) > 0),
+            done INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0, 1)))";
+    public const string DayNotesIndex = "CREATE INDEX day_notes_by_day ON day_notes(day)";
     public static readonly IReadOnlyList<string> Upgrades = new[]
     {
         AccountsTable("accounts_next", true) + "; "
         + "INSERT INTO accounts_next (id, name, colour, position, hidden, budget_seconds, budget_period) SELECT id, name, colour, position, hidden, budget_seconds, budget_period FROM accounts; "
-        + "DROP TABLE accounts; ALTER TABLE accounts_next RENAME TO accounts;"
+        + "DROP TABLE accounts; ALTER TABLE accounts_next RENAME TO accounts;",
+        // Format 3 adds notes on a day, with an optional time. Nothing existing is touched.
+        DayNotesTable + "; " + DayNotesIndex
     };
 
     private readonly SqliteConnection connection;
@@ -209,6 +218,8 @@ public sealed class TimerDatabase : IDisposable
             CHECK (kind <> 'adjustment' OR (end_at IS NULL AND seconds <> 0)))",
         "CREATE INDEX entries_by_day ON entries(day)",
         "CREATE INDEX entries_by_account ON entries(account_id, day)",
+        DayNotesTable,
+        DayNotesIndex,
         @"CREATE TABLE away (
             id INTEGER PRIMARY KEY,
             start_at TEXT NOT NULL,

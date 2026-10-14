@@ -176,6 +176,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     private StoreSettings preferences;
     private readonly TimerStore? store;
+    private readonly List<DayNote> dayNotes;
+    private long nextNoteId = 1;
     private int ticks;
     public TimerModel(TrackingEngine? engine = null, StoreSettings? preferences = null, TimerStore? store = null)
     {
@@ -183,6 +185,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, ThemeLibrary.Default, DayOfWeek.Monday);
         this.store = store;
         Editor = store?.Editor ?? new LedgerEditor(Engine);
+        dayNotes = store?.LoadDayNotes() ?? new List<DayNote>();
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
@@ -768,6 +771,31 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>The order the desk's tiles were left in. Only the order is saved, since the arrangement follows from it at any window size.</summary>
     public IReadOnlyList<string> DeskOrder => preferences.DeskOrder ?? Array.Empty<string>();
     public void SetDeskOrder(IReadOnlyList<string> order) { preferences = preferences with { DeskOrder = order.ToList() }; Save(); }
+    // ---- Notes on a day. They live in the database, outside the undo history, and feed Coming up. ----
+    public IReadOnlyList<DayNote> AllDayNotes => dayNotes;
+    public IReadOnlyList<DayNote> NotesOn(DateTime day) => dayNotes.Where(n => n.Day.Date == day.Date).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
+    public IReadOnlyList<DayNote> ComingUp(int days = 14) => DayNotes.ComingUp(dayNotes, Engine.Now, days);
+    /// <summary>Adds a note to a day from what was typed. A time such as 14:30 in the words becomes the note's time.</summary>
+    public void AddDayNote(DateTime day, string typed)
+    {
+        var (text, at) = DayNotes.Parse(typed); if (text.Length == 0) return;
+        var id = store?.AddDayNote(day.Date, at, text) ?? nextNoteId++;
+        dayNotes.Add(new DayNote(id, day.Date, at, text)); Notify();
+    }
+    public void ToggleDayNote(long id) => ChangeNote(id, n => n with { Done = !n.Done }, true);
+    /// <summary>Saves a note's words as they are typed, without notifying, so the box being typed in is not rebuilt. Emptying a note deletes it.</summary>
+    public void SetDayNoteText(long id, string text) => ChangeNote(id, n => n with { Text = text.Trim() }, false);
+    public void RemoveDayNote(long id)
+    {
+        if (dayNotes.RemoveAll(n => n.Id == id) == 0) return;
+        store?.DeleteDayNote(id); Notify();
+    }
+    private void ChangeNote(long id, Func<DayNote, DayNote> change, bool notify)
+    {
+        var index = dayNotes.FindIndex(n => n.Id == id); if (index < 0) return;
+        var note = change(dayNotes[index]); if (note == dayNotes[index] || note.Text.Length == 0) return;
+        dayNotes[index] = note; store?.UpdateDayNote(note); if (notify) Notify();
+    }
     /// <summary>The desk's trinkets: the to-do list and the post-its. They are not part of the day's records, so they live with the settings.</summary>
     public TrinketData Trinkets => preferences.Trinkets ?? TrinketData.Empty;
     private void SetTrinkets(TrinketData data) { preferences = preferences with { Trinkets = data }; Save(); Notify(); }
