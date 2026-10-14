@@ -199,24 +199,39 @@ public sealed class DeskConsolidationTests
     }
 
     [Fact]
-    public void TheDeskIsOnWhateverAnEarlierBuildSavedAndSettingsHasNoSwitchForIt()
+    public void TheDeskDefaultsOnButRemembersAnExplicitOptOut()
     {
         var folder = Path.Combine(Path.GetTempPath(), "timer-desk-home-" + Guid.NewGuid());
         try
         {
-            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); store.Save(engine, prefs with { Desk = false }); }
-            using (var store = new TimerStore(folder)) Assert.True(store.Load(new TrackingEngine()).Desk);
+            using (var store = new TimerStore(folder))
+            {
+                var engine = new TrackingEngine(); var prefs = store.Load(engine);
+                Assert.True(prefs.Desk); // No setting yet: the Desk remains the default home.
+                store.Save(engine, prefs with { Desk = false });
+            }
+            using (var store = new TimerStore(folder)) Assert.False(store.Load(new TrackingEngine()).Desk);
         }
         finally { Directory.Delete(folder, true); }
     }
 
     [AvaloniaFact]
-    public void SettingsNoLongerHasADeskPreviewSwitch()
+    public void DeskSettingCanBeSwitchedBothWaysWithoutLosingTheHome()
     {
         var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup();
-        var view = new SettingsView(model); var window = new Window { Content = view }; window.Show();
-        try { view.Select("desk"); Settle(window); Assert.DoesNotContain(window.GetVisualDescendants().OfType<CheckBox>(), c => c.Name == "DeskPreview"); Assert.Contains(window.GetVisualDescendants().OfType<CheckBox>(), c => c.Name == "CalmMotion"); }
-        finally { window.Close(); }
+        var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            dashboard.OpenCategory("desk"); Settle(dashboard);
+            var checkbox = dashboard.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Name == "DeskEnabled");
+            var deskTab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DeskTab");
+            Assert.True(checkbox.IsChecked); Assert.True(deskTab.IsVisible);
+            checkbox.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
+            Assert.False(model.Desk); Assert.False(deskTab.IsVisible);
+            checkbox.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
+            Assert.True(model.Desk); Assert.True(deskTab.IsVisible);
+        }
+        finally { dashboard.Close(); }
     }
 
     [AvaloniaTheory]

@@ -161,9 +161,9 @@ public sealed class TimerStore : IDisposable
         int? dashWidth = null, dashHeight = null;
         if (appearance.Skip(1).FirstOrDefault(l => l.StartsWith("dash=", StringComparison.Ordinal)) is { } dashLine && dashLine[5..].Split('x') is [var dw, var dh]
             && int.TryParse(dw, out var wValue) && int.TryParse(dh, out var hValue) && wValue is >= 300 and <= 10000 && hValue is >= 300 and <= 10000) { dashWidth = wValue; dashHeight = hValue; }
-        // The desk is a preview, off until switched on, and its tile order is saved as desk-order=a,b,c.
-        // The desk is the home now, so it is on whatever an earlier build saved. The setting stays in the file so an older build still reads it.
-        var deskOn = true;
+        // The Desk is on by default, but an explicit opt-out in Settings persists across launches.
+        // Older settings without this choice continue to open the Desk.
+        var deskOn = !appearance.Skip(1).Contains("desk=off");
         var deskOrder = appearance.Skip(1).FirstOrDefault(l => l.StartsWith("desk-order=", StringComparison.Ordinal)) is { } orderLine ? orderLine[11..].Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
         var deskHidden = appearance.Skip(1).FirstOrDefault(l => l.StartsWith("desk-hidden=", StringComparison.Ordinal)) is { } hiddenLine ? hiddenLine[12..].Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
         var trinkets = Trinkets.FromJson(Lines("deskTrinkets").FirstOrDefault());
