@@ -56,7 +56,7 @@ public sealed class TweakTests
     [AvaloniaFact]
     public void MergeAndTheZoomBarHaveRoomBetweenThem()
     {
-        var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show(); dashboard.SelectTab(false); Settle(dashboard);
         var merge = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "MergeSelected");
         var zoom = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
         var mergeRight = merge.TranslatePoint(new Point(merge.Bounds.Width, 0), dashboard)!.Value.X;

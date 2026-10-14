@@ -75,7 +75,7 @@ public sealed class DeskConsolidationTests
     [AvaloniaFact]
     public void TheDesksListsAndTimelineKeepTheWheel()
     {
-        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup(); model.SetDesk(true);
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup();
         var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         try
         {
@@ -138,7 +138,7 @@ public sealed class DeskConsolidationTests
     [AvaloniaFact]
     public void TheDesksAccountListCanBeReorderedLikeTheDashboards()
     {
-        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup(); model.SetDesk(true);
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup();
         var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         try
         {
@@ -155,7 +155,7 @@ public sealed class DeskConsolidationTests
     [AvaloniaFact]
     public void TheWeekIsOneTimesheetButtonWithTabsOnItsPage()
     {
-        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup(); model.SetDesk(true);
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup();
         var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         try
         {
@@ -184,7 +184,7 @@ public sealed class DeskConsolidationTests
     [AvaloniaFact]
     public void TheDashboardOpensOnTheDeskAndGoHomeReturnsToItFromAnyPage()
     {
-        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup(); model.SetDesk(true);
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup();
         var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         try
         {
@@ -194,47 +194,6 @@ public sealed class DeskConsolidationTests
             dashboard.GoHome(); Settle(dashboard);
             Assert.Contains("selected", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DeskTab").Classes);
             Assert.DoesNotContain("selected", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimesheetTab").Classes);
-        }
-        finally { dashboard.Close(); }
-    }
-
-    [Fact]
-    public void TheDeskDefaultsOnButRemembersAnExplicitOptOut()
-    {
-        var folder = Path.Combine(Path.GetTempPath(), "timer-desk-home-" + Guid.NewGuid());
-        try
-        {
-            using (var store = new TimerStore(folder))
-            {
-                var engine = new TrackingEngine(); var prefs = store.Load(engine);
-                Assert.True(prefs.Desk); // No setting yet: the Desk remains the default home.
-                store.Save(engine, prefs with { Desk = false });
-            }
-            using (var store = new TimerStore(folder)) Assert.False(store.Load(new TrackingEngine()).Desk);
-        }
-        finally { Directory.Delete(folder, true); }
-    }
-
-    [AvaloniaFact]
-    public void DeskSettingCanBeSwitchedBothWaysWithoutLosingTheHome()
-    {
-        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup(); model.SetDesk(true);
-        var dashboard = new DashboardWindow(model); dashboard.Show();
-        try
-        {
-            dashboard.OpenCategory("desk"); Settle(dashboard);
-            var checkbox = dashboard.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Name == "DeskEnabled");
-            var deskTab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DeskTab");
-            Assert.True(checkbox.IsChecked); Assert.True(deskTab.IsVisible);
-            // Raising Click directly in headless tests does not toggle a CheckBox's IsChecked first as a real pointer click does.
-            checkbox.IsChecked = false;
-            checkbox.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
-            Assert.False(model.Desk);
-            Assert.False(deskTab.IsVisible);
-            checkbox.IsChecked = true;
-            checkbox.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
-            Assert.True(model.Desk);
-            Assert.True(deskTab.IsVisible);
         }
         finally { dashboard.Close(); }
     }
@@ -333,11 +292,11 @@ public sealed class DeskConsolidationTests
     public void PreviewPictures()
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return; Directory.CreateDirectory(folder);
-        var model = TimerModel.CreateDemo(); model.SetDesk(true); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        var model = TimerModel.CreateDemo();var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         try
         {
             void Shot(string name) { Settle(dashboard); using var frame = dashboard.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, name + ".png")); }
-            Shot("desk-home"); Press(dashboard, "TimesheetTab"); Shot("timesheet-overview"); Press(dashboard, "WeekHoursTab"); Shot("timesheet-hours"); Press(dashboard, "WeekEntriesTab"); Shot("timesheet-entries");
+            Shot("desk-home"); dashboard.SelectTab(false); Shot("timeline"); dashboard.GoHome(); Press(dashboard, "TimesheetTab"); Shot("timesheet-overview"); Press(dashboard, "WeekHoursTab"); Shot("timesheet-hours"); Press(dashboard, "WeekEntriesTab"); Shot("timesheet-entries");
         }
         finally { dashboard.Close(); }
     }

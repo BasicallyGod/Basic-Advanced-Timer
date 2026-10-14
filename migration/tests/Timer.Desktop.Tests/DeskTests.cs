@@ -15,8 +15,8 @@ namespace Timer.Desktop.Tests;
 
 public sealed class DeskTests
 {
-    private static TimerModel Model(bool desk = true, params string[] order)
-        => new(new TrackingEngine(), new StoreSettings(new() { new("Account one", null, null), new("Account two", null, null) }, false, "Light", DayOfWeek.Monday, Desk: desk, DeskOrder: order));
+    private static TimerModel Model(params string[] order)
+        => new(new TrackingEngine(), new StoreSettings(new() { new("Account one", null, null), new("Account two", null, null) }, false, "Light", DayOfWeek.Monday, DeskOrder: order));
 
     private static DashboardWindow Open(TimerModel model, int width = 1080, int height = 680)
     {
@@ -27,24 +27,15 @@ public sealed class DeskTests
     private static void Press(Control root, string name) { Named<Button>(root, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
 
     [AvaloniaFact]
-    public void TheDeskTabAppearsOnlyWhenThePreviewIsOn()
+    public void TheDeskShowsItsTilesInTheSavedOrder()
     {
-        var off = Open(Model(false)); var on = Open(Model());
-        try { Assert.False(Named<Button>(off, "DeskTab").IsVisible); Assert.True(Named<Button>(on, "DeskTab").IsVisible); }
-        finally { off.Close(); on.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void TheDeskShowsItsTilesInTheSavedOrderAndHidesTheAccountsColumn()
-    {
-        var window = Open(Model(true, "day", "working", "accounts"));
+        var window = Open(Model("day", "working", "accounts"));
         try
         {
             Press(window, "DeskTab"); window.UpdateLayout();
             var desk = window.GetVisualDescendants().OfType<DeskView>().Single();
             Assert.Equal(new[] { "day", "working", "accounts" }, desk.Order.Take(3)); // Tiles added since the order was saved follow it.
             Assert.Equal(DeskView.Kinds.Count, desk.Placements.Count); Assert.Equal("day", desk.Placements[0].Id);
-            Assert.False(Named<Control>(window, "SidebarPanel").IsVisible);
             Assert.Equal(TileForm.Normal, desk.Placements.Single(p => p.Id == "working").Form);
         }
         finally { window.Close(); }
@@ -129,7 +120,7 @@ public sealed class DeskTests
     [AvaloniaFact]
     public void TheDayStripShowsTheDaysBlocksAndCoversTheWorkingHours()
     {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));var window = Open(model);
         try
         {
             OpenDesk(window); var strip = Named<DayStrip>(window, "DayStrip");
@@ -172,19 +163,17 @@ public sealed class DeskTests
     }
 
     [AvaloniaFact]
-    public void TheRailBecomesATopBarWhenTheDeskIsOn()
+    public void TheViewButtonsAreABarAlongTheTop()
     {
-        var off = Open(Model(false)); var on = Open(Model());
+        var on = Open(Model());
         try
         {
             Point At(Window w, string name) => Named<Button>(w, name).TranslatePoint(new Point(), w)!.Value;
-            // A rail stacks its buttons down the side; the bar lays the same buttons along the top.
-            Assert.True(Math.Abs(At(off, "TimelineTab").X - At(off, "TimesheetTab").X) < 1 && At(off, "TimesheetTab").Y > At(off, "TimelineTab").Y + 20);
             Assert.True(Math.Abs(At(on, "TimelineTab").Y - At(on, "TimesheetTab").Y) < 1 && At(on, "TimesheetTab").X > At(on, "TimelineTab").X + 20);
             Assert.True(At(on, "QuitTimer").X > At(on, "Settings").X); Assert.True(Math.Abs(At(on, "QuitTimer").Y - At(on, "Settings").Y) < 1);
             Assert.True(At(on, "DeskTab").X < At(on, "TimelineTab").X);
         }
-        finally { off.Close(); on.Close(); }
+        finally { on.Close(); }
     }
 
     [AvaloniaFact]
@@ -226,7 +215,7 @@ public sealed class DeskTests
     [AvaloniaFact]
     public void TheWeekTileChartsTheWorkingDaysAndTotalsTheWeek()
     {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));var window = Open(model);
         try
         {
             OpenDesk(window); var chart = Named<WeekChart>(window, "WeekChart"); var days = chart.Days();
@@ -316,7 +305,7 @@ public sealed class DeskTests
     [AvaloniaFact]
     public void TheWeekChartGainsAnAccountBreakdownAsItGrows()
     {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));var window = Open(model);
         try
         {
             var desk = OpenDesk(window); desk.Lively = false; var chart = Named<WeekChart>(window, "WeekChart");
@@ -332,7 +321,7 @@ public sealed class DeskTests
     [AvaloniaFact]
     public void TheWeekChartKeepsDetailsForTheHoverAndTheFullLegendForTheBiggestSize()
     {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));var window = Open(model);
         try
         {
             var desk = OpenDesk(window); desk.Lively = false; var chart = Named<WeekChart>(window, "WeekChart");
@@ -408,7 +397,7 @@ public sealed class DeskTests
     [AvaloniaFact]
     public void TheDayTileMeasuresTheWorkingDayAgainstItsTarget()
     {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));var window = Open(model);
         try
         {
             var desk = OpenDesk(window); desk.Lively = false;
@@ -449,7 +438,7 @@ public sealed class DeskTests
     [AvaloniaFact]
     public void TheTilesDrawAtTheirSmallAndBigForms()
     {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true);
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));
         model.AddDayNote(model.Engine.Now.Date.AddDays(1), "!Timesheet due 17:00"); model.AddDayNote(model.Engine.Now.Date.AddDays(3), "!Quarter end report 09:00"); model.AddDayNote(model.Engine.Now.Date.AddDays(4), "!Budget review"); model.AddDayNote(model.Engine.Now.Date, "Call about scope 15:00");
         model.SetDeskHidden(new[] { "todo", "notes", "timeline", "strip", "postit2", "postit3", "pomodoro" });
         var window = Open(model, 1500, 900);
@@ -505,7 +494,7 @@ public sealed class DeskTests
     [AvaloniaFact]
     public void TheTimelineTileOpensInPlaceWithTheDayArrowsAndEditingButtons()
     {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));var window = Open(model);
         try
         {
             var desk = OpenDesk(window); desk.Lively = false;
@@ -521,7 +510,7 @@ public sealed class DeskTests
     [AvaloniaFact]
     public void TheTimelineTileShowsTheDaysBlocks()
     {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));var window = Open(model);
         try { var desk = OpenDesk(window); desk.Lively = false; Assert.Contains(desk.Placements, p => p.Id == "timeline"); Assert.NotEmpty(window.GetVisualDescendants().OfType<Control>().Where(c => c.Name == "TimelineSpine")); }
         finally { window.Close(); }
     }
@@ -660,7 +649,7 @@ public sealed class DeskTests
     [AvaloniaFact]
     public void ASavedDrawerIsRestoredWhenTheDeskOpens()
     {
-        var window = Open(new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday, Desk: true, DeskOrder: new[] { "working", "accounts" }, DeskHidden: new[] { "day" })));
+        var window = Open(new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday, DeskOrder: new[] { "working", "accounts" }, DeskHidden: new[] { "day" })));
         try
         {
             Press(window, "DeskTab");
@@ -690,8 +679,8 @@ public sealed class DeskTests
         var folder = Path.Combine(Path.GetTempPath(), "timer-desk-" + Guid.NewGuid().ToString("N"));
         try
         {
-            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.True(prefs.Desk); /* The desk is home, so even a new database has it on. */ store.Save(engine, prefs with { Desk = true, Calm = true, DeskOrder = new[] { "day", "accounts" }, DeskHidden = new[] { "working" } }); }
-            using (var store = new TimerStore(folder)) { var prefs = store.Load(new TrackingEngine()); Assert.True(prefs.Desk); Assert.True(prefs.Calm); Assert.Equal(new[] { "working" }, prefs.DeskHidden); Assert.Equal(new[] { "day", "accounts" }, prefs.DeskOrder); }
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); store.Save(engine, prefs with { Calm = true, DeskOrder = new[] { "day", "accounts" }, DeskHidden = new[] { "working" } }); }
+            using (var store = new TimerStore(folder)) { var prefs = store.Load(new TrackingEngine()); Assert.True(prefs.Calm); Assert.Equal(new[] { "working" }, prefs.DeskHidden); Assert.Equal(new[] { "day", "accounts" }, prefs.DeskOrder); }
         }
         finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
@@ -703,7 +692,7 @@ public sealed class DeskTests
     [InlineData(1500, 900)]
     public void TheDeskDrawsAtEachSize(int width, int height)
     {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true);
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));
         model.AddTodo("Send the invoice #AccountOne"); model.AddTodo("Call back about the budget #AccountThree"); model.AddTodo("Order more tea"); model.ToggleTodo(model.Todos[2].Id);
         model.SetPostItText(0, "Ask about the printer. Book the room for Friday.");
         model.AddDayNote(model.Engine.Now.Date, "Team stand-up 09:30"); model.AddDayNote(model.Engine.Now.Date, "Send timesheet"); model.AddDayNote(model.Engine.Now.Date.AddDays(1), "Client review 11:00"); model.AddDayNote(model.Engine.Now.Date.AddDays(3), "Quarter end"); model.AddDayNote(model.Engine.Now.Date.AddDays(1), "!Timesheet due 17:00");

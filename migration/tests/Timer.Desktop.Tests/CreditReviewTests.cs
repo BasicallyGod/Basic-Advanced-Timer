@@ -113,7 +113,7 @@ public sealed class CreditReviewTests
     [AvaloniaFact]
     public void DashboardHasRoundedSurfaceAndSlimScrollbarStillDrags()
     {
-        var model = TimerModel.CreateDemo(() => Day.AddHours(12)); var dashboard = new DashboardWindow(model); dashboard.Show();
+        var model = TimerModel.CreateDemo(() => Day.AddHours(12)); var dashboard = new DashboardWindow(model); dashboard.Show(); dashboard.SelectTab(false);
         Capture(dashboard, "dashboard-rounded-slim-scrollbars");
         var surface = Find<Border>(dashboard, "DashboardSurface"); Assert.Equal(new CornerRadius(20), surface.CornerRadius); Assert.True(surface.ClipToBounds);
         var scroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
@@ -131,7 +131,7 @@ public sealed class CreditReviewTests
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
         engine.Sessions.Add(Row("11:00:00", "30") with { Account = "Other account" });
-        var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
+        var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show(); dashboard.SelectTab(false);
         try
         {
             var strip = Find<SelectionStrip>(dashboard, "SelectionStrip"); var tools = Find<Button>(dashboard, "AddTime");
@@ -180,7 +180,7 @@ public sealed class CreditReviewTests
     public void ClickSelectsABlockAndTheEditButtonOpensTheSelectedOne()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
-        var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
+        var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show(); dashboard.SelectTab(false);
         var opened = new List<SessionRow?>(); model.EntryRequested += (row, _, _) => opened.Add(row);
         Point Centre(int index) { var card = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + index); return card.TranslatePoint(new Point(70, card.Height / 2), dashboard)!.Value; }
         Capture(dashboard, "click-select"); dashboard.UpdateLayout();
@@ -200,7 +200,7 @@ public sealed class CreditReviewTests
     public void ClickSelectsWithoutDraggingAndToolbarAndContextMenuMerge()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:00:00", "30") });
-        var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
+        var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show(); dashboard.SelectTab(false);
         var csv = model.Editor.SessionsCsv;
         void Select(int index)
         {
@@ -230,7 +230,7 @@ public sealed class CreditReviewTests
     public void MergeContextMenuCaptureLossKeepsBothSelectedBlocksInPlace()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "50"), Row("09:53:00", "55") });
-        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show(); window.SelectTab(false);
         model.ToggleSelection(engine.Sessions.ToArray()); Capture(window, "merge-menu-before");
         var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(Canvas.GetTop).ToArray();
         Assert.Equal(2, cards.Length); var tops = cards.Select(Canvas.GetTop).ToArray();
@@ -253,7 +253,7 @@ public sealed class CreditReviewTests
     public void LosingCaptureDuringActualDragRestoresBlockWithoutEditingTime()
     {
         var engine = Engine(); engine.Sessions.Add(Row("09:00:00", "50"));
-        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show(); Capture(window, "capture-cancel-before");
+        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show(); window.SelectTab(false); Capture(window, "capture-cancel-before");
         var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is SessionRow);
         var top = Canvas.GetTop(card); var height = card.Height; var csv = model.Editor.SessionsCsv;
         IPointer? pointer = null; card.AddHandler(InputElement.PointerPressedEvent, (_, e) => pointer = e.Pointer, RoutingStrategies.Tunnel, true);
@@ -271,7 +271,7 @@ public sealed class CreditReviewTests
             int index, double fraction, double minutes, DateTime expectedFrom, DateTime expectedTo)
         {
             var engine = Engine(); engine.Sessions.AddRange(new[] { Row(firstStart, firstMinutes), Row(nextStart, nextMinutes) });
-            var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+            var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show(); window.SelectTab(false);
             try
             {
                 Capture(window, "snap-neighbour-before"); var original = model.Editor.SessionsCsv;
@@ -373,7 +373,7 @@ public sealed class CreditReviewTests
     public void DragBeyondNestleThresholdInsertsAndPreviewsNeighbours()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:00:00", "30") });
-        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show(); Capture(window, "nudge-before");
+        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show(); window.SelectTab(false); Capture(window, "nudge-before");
         try
         {
             var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(Canvas.GetTop).ToArray();
@@ -468,7 +468,7 @@ public sealed class CreditReviewTests
     public void DoubleClickBlankTimelineOpensOnePrefilledEditorAndSavesTime()
     {
         var engine = Engine(); engine.Sessions.Add(Row("10:00:00", "30")); var model = new TimerModel(engine);
-        var window = new DashboardWindow(model); window.Show(); Capture(window, "click-to-add-timeline");
+        var window = new DashboardWindow(model); window.Show(); window.SelectTab(false); Capture(window, "click-to-add-timeline");
         var ten = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "10:00");
         var point = ten.TranslatePoint(new Point(180, 168), window)!.Value; // 11:00
         window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);

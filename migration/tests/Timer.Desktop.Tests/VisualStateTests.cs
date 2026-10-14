@@ -177,7 +177,7 @@ public sealed class VisualStateTests
         {
             pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
             var pillDay = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDay");
-            var dashDay = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay");
+            var dashDay = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DayStartFinish"); // The Day tile has it now.
             Assert.Equal("Start day", pillDay.GetVisualDescendants().OfType<TextBlock>().Single().Text); Assert.Contains("startDay", pillDay.Classes); Assert.DoesNotContain("finishDay", pillDay.Classes);
             Assert.Equal("Start", pillDay.GetVisualDescendants().OfType<IconGlyph>().Single().TintKey); Assert.Equal("Start", dashDay.GetVisualDescendants().OfType<IconGlyph>().Single().TintKey);
             foreach (var theme in Timer.Core.ThemeLibrary.BuiltIn) { var (r, g, b) = Timer.Core.ThemeColours.Rgb(theme.Colour("Start")); Assert.True(g > r + 20 && g > b + 20, theme.Name + " Start day is green"); }
@@ -195,7 +195,7 @@ public sealed class VisualStateTests
     {
         var model = new TimerModel(new TrackingEngine(clock: () => Day.AddHours(10)));
         model.Engine.Sessions.Add(new("2026-10-09", "Account one", "09:00:00", "added", "30"));
-        var dashboard = new DashboardWindow(model); dashboard.Show();
+        var dashboard = new DashboardWindow(model); dashboard.Show(); dashboard.SelectTab(false);
         try
         {
             model.Editor.Edit(model.Engine.Sessions[0], "Account one", Day.AddHours(9), Day.AddHours(9.25), "note"); model.ChangeDate(0); Dispatcher.UIThread.RunJobs();

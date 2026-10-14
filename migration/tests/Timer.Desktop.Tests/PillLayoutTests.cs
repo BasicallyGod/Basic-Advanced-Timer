@@ -124,8 +124,6 @@ public sealed class PillLayoutTests
         {
             var items = ((IEnumerable<Control>)pill.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
             pill.ContextMenu.Open(pill); Dispatcher.UIThread.RunJobs();
-            Assert.Equal("Open dashboard", items.Single(m => m.Name == "OpenDeskMenu").Header);
-            model.SetDesk(true); pill.ContextMenu.Close(); pill.ContextMenu.Open(pill);
             Assert.Equal("Open Desk", items.Single(m => m.Name == "OpenDeskMenu").Header);
             Assert.DoesNotContain(((IEnumerable<Control>)dashboard.ContextMenu!.ItemsSource!).OfType<MenuItem>(), m => m.Name == "QuickSwitchMenu");
             // Quick switch lists every account but the break, and choosing one starts it.

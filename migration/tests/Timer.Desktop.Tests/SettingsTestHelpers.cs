@@ -19,4 +19,12 @@ internal static class SettingsTestHelpers
         window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SettingsCategory_" + key).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();
     }
+
+    /// <summary>Opens the Accounts tile in place on the desk, so its rows are all on show and at known places.</summary>
+    public static void ExpandAccounts(this DashboardWindow window)
+    {
+        window.GetVisualDescendants().OfType<DeskView>().Single().Lively = false; // Nothing ticks headless, so tiles must move straight to their places.
+        window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TileExpand_accounts").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        for (var i = 0; i < 3; i++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); }
+    }
 }
