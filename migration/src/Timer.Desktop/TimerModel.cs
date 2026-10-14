@@ -831,6 +831,9 @@ public sealed class TimerModel : INotifyPropertyChanged
         notes[index] = notes[index] with { Colour = colours[(colours.ToList().IndexOf(notes[index].Colour) + 1) % colours.Count] };
         SetTrinkets(Trinkets with { PostIts = notes });
     }
+    /// <summary>Sizes tiles were left at, in whole cells. A tile with no entry has its own default size.</summary>
+    public IReadOnlyDictionary<string, (int Columns, int Rows)> DeskSizes => DeskLayout.ParseSizes(preferences.DeskSizes);
+    public void SetDeskSizes(IReadOnlyDictionary<string, (int Columns, int Rows)> sizes) { preferences = preferences with { DeskSizes = DeskLayout.FormatSizes(sizes) }; Save(); }
     /// <summary>The tiles put away in the drawer. Their data is untouched; they are only not on the desk.</summary>
     public IReadOnlyList<string> DeskHidden => preferences.DeskHidden ?? Array.Empty<string>();
     public void SetDeskHidden(IReadOnlyList<string> hidden) { preferences = preferences with { DeskHidden = hidden.ToList() }; Save(); }

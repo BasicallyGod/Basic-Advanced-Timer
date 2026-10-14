@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -167,6 +169,80 @@ public sealed class DeskTests
     }
 
     [AvaloniaFact]
+    public void TheRailBecomesATopBarWhenTheDeskIsOn()
+    {
+        var off = Open(Model(false)); var on = Open(Model());
+        try
+        {
+            Point At(Window w, string name) => Named<Button>(w, name).TranslatePoint(new Point(), w)!.Value;
+            // A rail stacks its buttons down the side; the bar lays the same buttons along the top.
+            Assert.True(Math.Abs(At(off, "TimelineTab").X - At(off, "WeekOverviewTab").X) < 1 && At(off, "WeekOverviewTab").Y > At(off, "TimelineTab").Y + 20);
+            Assert.True(Math.Abs(At(on, "TimelineTab").Y - At(on, "WeekOverviewTab").Y) < 1 && At(on, "WeekOverviewTab").X > At(on, "TimelineTab").X + 20);
+            Assert.True(At(on, "QuitTimer").X > At(on, "Settings").X); Assert.True(Math.Abs(At(on, "QuitTimer").Y - At(on, "Settings").Y) < 1);
+            Assert.True(At(on, "DeskTab").X < At(on, "TimelineTab").X);
+        }
+        finally { off.Close(); on.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ATileCanBeMadeLargerOrSmallerWithinItsLimitsAndTheSizeIsKept()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false;
+            Assert.Equal((3, 4), desk.SizeOf("timeline"));
+            desk.Resize("timeline", 3, 6); window.UpdateLayout();
+            Assert.Equal((3, 6), desk.SizeOf("timeline")); Assert.Equal((3, 6), model.DeskSizes["timeline"]);
+            var placed = desk.Placements.Single(p => p.Id == "timeline"); Assert.Equal((3, 6), (placed.ColumnSpan, placed.RowSpan));
+            desk.Resize("timeline", 1, 1); Assert.Equal((2, 3), desk.SizeOf("timeline")); // Held to what a timeline needs.
+            desk.Resize("clock", 9, 9); Assert.Equal((4, 8), desk.SizeOf("clock"));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ATileOpensInPlaceToFillTheDeskAndGoesBackWithEscape()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false;
+            Press(window, "TileExpand_notes"); window.UpdateLayout();
+            Assert.Equal("notes", desk.Expanded); Assert.Equal(TileForm.Roomy, Assert.Single(desk.Placements).Form);
+            Assert.True(desk.TileControl("notes")!.IsVisible); Assert.False(desk.TileControl("clock")!.IsVisible);
+            Assert.True(desk.TileControl("notes")!.Bounds.Width > desk.Bounds.Width - 40);
+            window.KeyPress(Avalonia.Input.Key.Escape, Avalonia.Input.RawInputModifiers.None, Avalonia.Input.PhysicalKey.Escape, null); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+            Assert.Null(desk.Expanded); Assert.True(desk.TileControl("clock")!.IsVisible); Assert.True(desk.Placements.Count > 1);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheTimelineTileOpensInPlaceWithTheDayArrowsAndEditingButtons()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false;
+            Assert.False(Named<Button>(window, "NextPeriod").IsEffectivelyVisible); Assert.False(Named<Button>(window, "AddTime").IsEffectivelyVisible);
+            Press(window, "TileExpand_timeline"); window.UpdateLayout();
+            Assert.True(Named<Button>(window, "NextPeriod").IsEffectivelyVisible); Assert.True(Named<Button>(window, "AddTime").IsEffectivelyVisible);
+            Assert.Same(desk, window.GetVisualDescendants().OfType<DeskView>().Single());
+            Press(window, "TileExpand_timeline"); Assert.False(Named<Button>(window, "AddTime").IsEffectivelyVisible); // The same button puts it back.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheTimelineTileShowsTheDaysBlocks()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        try { var desk = OpenDesk(window); desk.Lively = false; Assert.Contains(desk.Placements, p => p.Id == "timeline"); Assert.NotEmpty(window.GetVisualDescendants().OfType<Control>().Where(c => c.Name == "TimelineSpine")); }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ATilePutAwayLeavesTheDeskAndSitsInTheDrawerUntilBroughtBack()
     {
         var model = Model(); var window = Open(model);
@@ -241,6 +317,13 @@ public sealed class DeskTests
         {
             Press(window, "DeskTab"); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
             var shown = window.GetVisualDescendants().OfType<DeskView>().Single(); Assert.Empty(shown.Hidden);
+            Assert.DoesNotContain("selected", Named<Button>(window, "TimelineTab").Classes);
+            if (Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") is { } openFolder && width == 1080)
+            {
+                var desk = window.GetVisualDescendants().OfType<DeskView>().Single(); desk.Lively = false; desk.Expand("timeline"); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+                Directory.CreateDirectory(openFolder); using (window.CaptureRenderedFrame()) { } using (var open = window.CaptureRenderedFrame()) open?.Save(Path.Combine(openFolder, "desk-timeline-open.png"));
+                desk.Collapse(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            }
             Assert.DoesNotContain("selected", Named<Button>(window, "TimelineTab").Classes); Assert.Contains("selected", Named<Button>(window, "DeskTab").Classes);
             if (Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") is { } folder)
             {

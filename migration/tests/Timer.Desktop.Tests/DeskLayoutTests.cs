@@ -65,4 +65,30 @@ public sealed class DeskLayoutTests
     [Fact]
     public void ASavedOrderLosesGoneTilesAndGainsNewOnes()
         => Assert.Equal(new[] { "b", "a", "c" }, DeskLayout.Reconcile(new[] { "b", "gone", "a", "b" }, new[] { "a", "b", "c" }));
+
+    [Theory]
+    [InlineData(9, 9, 1, 1, 4, 6, 5, 4, 6)]
+    [InlineData(0, 0, 2, 2, 4, 6, 5, 2, 2)]
+    [InlineData(4, 3, 2, 2, 4, 6, 2, 2, 3)]
+    [InlineData(3, 3, 3, 1, 4, 6, 2, 2, 3)]
+    public void ASizeIsHeldToTheTilesLimitsAndTheGrid(int c, int r, int minC, int minR, int maxC, int maxR, int grid, int wantC, int wantR)
+        => Assert.Equal((wantC, wantR), DeskLayout.ClampSize(c, r, minC, minR, maxC, maxR, grid));
+
+    [Fact]
+    public void ADraggedCornerSnapsToWholeCells()
+    {
+        // A tile two cells wide and three tall measures 2 * 200 - 12 by 3 * (124 + 12) - 12.
+        Assert.Equal((2, 3), DeskLayout.SizeFromPixels(388, 396, 200, 124, 12));
+        Assert.Equal((3, 3), DeskLayout.SizeFromPixels(500, 380, 200, 124, 12));
+        Assert.Equal((1, 1), DeskLayout.SizeFromPixels(5, 5, 200, 124, 12));
+    }
+
+    [Fact]
+    public void SizesSurviveWritingAndReadingAndBadOnesAreDropped()
+    {
+        var sizes = new Dictionary<string, (int Columns, int Rows)> { ["timeline"] = (3, 5), ["accounts"] = (2, 4) };
+        var back = DeskLayout.ParseSizes(DeskLayout.FormatSizes(sizes));
+        Assert.Equal(sizes.OrderBy(k => k.Key), back.OrderBy(k => k.Key));
+        Assert.Equal(new[] { "ok" }, DeskLayout.ParseSizes(new[] { "ok:2x2", "bad", "x:0x2", "y:2xz", ":2x2", "z:99x2" }).Keys);
+    }
 }
