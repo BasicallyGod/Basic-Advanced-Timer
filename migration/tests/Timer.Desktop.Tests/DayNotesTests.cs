@@ -103,4 +103,27 @@ public sealed class DayNotesTests
         }
         finally { SqliteConnection.ClearAllPools(); try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
+
+    [Fact]
+    public void ABangMarksADeadlineAndTheSoonestUndoneOneIsWatched()
+    {
+        var day = new DateTime(2026, 10, 14);
+        var notes = new[]
+        {
+            new DayNote(1, day.AddDays(3), new TimeSpan(9, 0, 0), "!Quarter end report"), new DayNote(2, day.AddDays(1), null, "!Timesheet due"),
+            new DayNote(3, day, new TimeSpan(8, 0, 0), "not a deadline"), new DayNote(4, day.AddDays(-1), null, "!Done already", true),
+        };
+        Assert.True(DayNotes.IsDeadline(notes[1])); Assert.False(DayNotes.IsDeadline(notes[2])); Assert.Equal("Timesheet due", DayNotes.DisplayText(notes[1]));
+        Assert.Equal(2, DayNotes.NextDeadline(notes)!.Id);
+        Assert.Equal(day.AddDays(1).AddHours(17), DayNotes.DueAt(notes[1])); // No time means five in the afternoon.
+        Assert.Equal(day.AddDays(3).AddHours(9), DayNotes.DueAt(notes[0]));
+        Assert.Null(DayNotes.NextDeadline(notes.Where(n => !DayNotes.IsDeadline(n))));
+    }
+
+    [Fact]
+    public void ADeadlineThatHasPassedStaysUntilItIsTickedOff()
+    {
+        var late = new DayNote(1, new DateTime(2026, 10, 1), null, "!Old one");
+        Assert.Equal(1, DayNotes.NextDeadline(new[] { late, new DayNote(2, new DateTime(2026, 11, 1), null, "!Later") })!.Id);
+    }
 }

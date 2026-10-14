@@ -24,4 +24,13 @@ public static class DayNotes
     public static List<DayNote> ComingUp(IEnumerable<DayNote> notes, DateTime now, int days)
         => notes.Where(n => !n.Done && n.Day.Date >= now.Date && n.Day.Date <= now.Date.AddDays(days) && (n.Day.Date > now.Date || n.At is null || n.Day.Date + n.At.Value >= now.AddHours(-1)))
             .OrderBy(n => n.Day.Date).ThenBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
+
+    /// <summary>A note whose words start with ! is a deadline. The marker stays in the text, so it shows where it is edited.</summary>
+    public static bool IsDeadline(DayNote note) => note.Text.StartsWith('!');
+    /// <summary>The words without the deadline marker, for showing where the marker itself would be noise.</summary>
+    public static string DisplayText(DayNote note) => note.Text.TrimStart('!', ' ');
+    /// <summary>When a deadline falls due: its day at its time, or at 17:00 when it has none.</summary>
+    public static DateTime DueAt(DayNote note) => note.Day.Date + (note.At ?? TimeSpan.FromHours(17));
+    /// <summary>The deadline to watch: the soonest one not yet ticked off. One already past stays until it is done, so it is not forgotten.</summary>
+    public static DayNote? NextDeadline(IEnumerable<DayNote> notes) => notes.Where(n => !n.Done && IsDeadline(n)).OrderBy(DueAt).ThenBy(n => n.Id).FirstOrDefault();
 }

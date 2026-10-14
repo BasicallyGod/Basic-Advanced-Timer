@@ -20,7 +20,9 @@ public sealed class DeskView : UserControl
     public const double CellHeight = 124, Gap = 12;
     public static readonly IReadOnlyList<DeskTileKind> Kinds = new DeskTileKind[]
     {
-        new("working", "Working time", "#7FD1C7", 2, 1, "timeline"),
+        new("working", "Time tracker", "#7FD1C7", 2, 2, "timeline", 1, 1, 4, 3),
+        new("week", "This week", "#E8C48C", 2, 2, "overview", 2, 2, 4, 4),
+        new("deadline", "Deadline", "#EE9CB4", 2, 2, null, 1, 1, 4, 3),
         new("day", "Day", "#F0C97A", 2, 1, "overview"),
         new("strip", "Day strip", "#D9A8E8", 4, 1, "timeline", 2, 1, 4, 2),
         new("timeline", "Timeline", "#D6C3A5", 3, 4, "timeline", 2, 3, 4, 10),
@@ -41,7 +43,7 @@ public sealed class DeskView : UserControl
     private readonly Dictionary<string, (Border Tile, Border Body, TileForm? Form)> tiles = new();
     private readonly ClockText clock = new(34, 18); private readonly TextBlock accountLine = Ui.Text("", 14), allocated = Ui.Text("", 20, "figures"), unallocated = Ui.Text("", 20, "figures");
     private readonly AnalogueClock analogue; private readonly DayStrip strip;
-    private PomodoroView? pomodoroView;
+    private PomodoroView? pomodoroView; private TrackerView? trackerView; private WeekChart? weekChart; private DeadlineView? deadlineView;
     private NotesView? notesView; private ComingUpView? comingView;
     private TodoView? todoView; private readonly Dictionary<string, TextBox> postIts = new();
     private List<string> order, hidden;
@@ -196,6 +198,7 @@ public sealed class DeskView : UserControl
         var coming = model.ComingUp().Count; Set("coming", coming == 0 ? "" : $"{coming} to come");
         var notes = model.NotesOn(model.SelectedDate).Count; Set("notes", notes == 0 ? "" : $"{notes} note{(notes == 1 ? "" : "s")}");
         Set("accounts", $"{model.Accounts.Count(a => !BreakAccount.Is(a.Name))} accounts");
+        if (weekChart is not null) Set("week", model.Format(weekChart.Total()));
         Set("pomodoro", model.Pomodoro.Completed == 0 ? "" : $"{model.Pomodoro.Completed} done");
     }
     private static bool IsPostIt(string id) => id.StartsWith("postit", StringComparison.Ordinal);
@@ -210,7 +213,7 @@ public sealed class DeskView : UserControl
         clock.Text = model.ClockText;
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
         clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
-        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual(); strip.InvalidateVisual(); pomodoroView?.Refresh(); RefreshMeta();
+        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual(); strip.InvalidateVisual(); pomodoroView?.Refresh(); trackerView?.Refresh(); deadlineView?.Refresh(); weekChart?.InvalidateVisual(); RefreshMeta();
         allocated.Text = model.Format(model.Allocated); unallocated.Text = model.Format(model.Unallocated);
     }
 
@@ -274,9 +277,9 @@ public sealed class DeskView : UserControl
         tiles[id] = (tile, body, form);
         switch (id)
         {
-            case "working":
-                body.Child = form == TileForm.Tiny ? clock : new StackPanel { Spacing = 2, Children = { clock, accountLine } };
-                break;
+            case "working": body.Child = trackerView = new TrackerView(model, form == TileForm.Tiny); break;
+            case "week": body.Child = weekChart ??= new WeekChart(model); weekChart.InvalidateVisual(); break;
+            case "deadline": body.Child = deadlineView = new DeadlineView(model, form == TileForm.Tiny); break;
             case "day":
                 body.Child = form == TileForm.Tiny ? allocated : new StackPanel { Orientation = Orientation.Horizontal, Spacing = 28, Children =
                 {

@@ -163,7 +163,7 @@ public sealed class DayStrip : Control
 public sealed class NotesView : Grid
 {
     private readonly TimerModel model; private readonly StackPanel rows = new() { Spacing = 4 };
-    private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Add a note, 14:30 sets a time", Padding = new Thickness(10, 6) };
+    private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Add a note: 14:30 sets a time, ! marks a deadline", Padding = new Thickness(10, 6) };
     public NotesView(TimerModel model, bool compact)
     {
         this.model = model; RowDefinitions = new RowDefinitions("*,Auto");
@@ -218,7 +218,7 @@ public sealed class ComingUpView : StackPanel
             var tick = new CheckBox { Name = "ComingTick_" + id, IsChecked = false, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
             tick.Click += (_, _) => model.ToggleDayNote(id);
             var when = Ui.Text(When(note.Day, model.Engine.Now) + (note.At is { } at ? " " + at.ToString("hh\\:mm") : ""), 12, "muted");
-            var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(new TextBlock { Text = note.Text, FontSize = 14, TextWrapping = TextWrapping.Wrap }); words.Children.Add(when);
+            var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(new TextBlock { Text = DayNotes.DisplayText(note), FontSize = 14, TextWrapping = TextWrapping.Wrap }); words.Children.Add(when);
             var row = Ui.Grid("Auto,*"); Ui.Put(row, tick); Ui.Put(row, words, 1); Children.Add(row);
         }
     }
@@ -284,5 +284,120 @@ public sealed class PomodoroView : Grid
         if (p.Completed > 0) phase.Text += " · " + p.Completed;
         toggle.Content = p.Running ? "Pause" : p.Phase == PomodoroPhase.Idle || p.Nudge ? "Start" : "Resume";
         ring.Fraction = p.Phase == PomodoroPhase.Idle ? 0 : p.Fraction(now); ring.Soft = p.Nudge; ring.InvalidateVisual();
+    }
+}
+
+/// <summary>
+/// The time tracker tile: the day clock, who is running and whether it is tracking, with round buttons to pause or carry on and to take a break.
+/// These are the two controls that matter most while working, so they live on the tile rather than behind a page.
+/// </summary>
+public sealed class TrackerView : Grid
+{
+    private readonly TimerModel model; private readonly ClockText clock; private readonly TextBlock account = new() { FontSize = 14, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+    private readonly Border dot = new() { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), VerticalAlignment = VerticalAlignment.Center };
+    private readonly Border chip = new() { CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 2), VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock chipText = new() { FontSize = 12, FontWeight = FontWeight.SemiBold };
+    private readonly PauseGlyph pauseGlyph = new(); private readonly BreakGlyph cup = new();
+    public TrackerView(TimerModel model, bool compact)
+    {
+        this.model = model; clock = new ClockText(compact ? 34 : 44, compact ? 16 : 22); clock.Name = "TrackerClock";
+        ColumnDefinitions = new ColumnDefinitions("*,Auto"); VerticalAlignment = VerticalAlignment.Center;
+        chip.Child = chipText;
+        var who = Ui.Horizontal(dot, account, chip); who.Spacing = 8;
+        var left = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center }; left.Children.Add(clock);
+        if (!compact) left.Children.Add(who);
+        Children.Add(left);
+        if (!compact)
+        {
+            Button Round(Control glyph, string name, string tip, Action click)
+            {
+                var button = Ui.Button("", click, name); button.Classes.Add("toolButton"); button.Classes.Add("quiet");
+                button.Width = 48; button.Height = 48; button.CornerRadius = new CornerRadius(24); button.Padding = new Thickness(0);
+                button.HorizontalContentAlignment = HorizontalAlignment.Center; button.VerticalContentAlignment = VerticalAlignment.Center;
+                button.Content = new Viewbox { Width = 22, Height = 22, Child = glyph }; ToolTip.SetTip(button, tip); Avalonia.Automation.AutomationProperties.SetName(button, tip); return button;
+            }
+            var pause = Round(pauseGlyph, "TrackerPause", "Pause or carry on", model.TogglePause);
+            var rest = Round(cup, "TrackerBreak", "Take a break", model.ToggleBreak);
+            pause.PointerEntered += (_, _) => pauseGlyph.Glow = 1; pause.PointerExited += (_, _) => pauseGlyph.Glow = 0;
+            rest.PointerEntered += (_, _) => cup.SetSteaming(true); rest.PointerExited += (_, _) => cup.SetSteaming(model.IsOnBreak);
+            var buttons = Ui.Horizontal(pause, rest); buttons.Spacing = 10; buttons.VerticalAlignment = VerticalAlignment.Center; SetColumn(buttons, 1); Children.Add(buttons);
+        }
+        Refresh();
+    }
+    public void Refresh()
+    {
+        var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak; var live = model.IsTracking && !onBreak && !late;
+        clock.Text = model.ClockText; clock.SetState(onBreak, late, live);
+        account.Text = model.AccountLabel;
+        var shown = onBreak ? null : model.Accounts.FirstOrDefault(a => a.Name == (model.ActiveAccount ?? model.SelectedAccount));
+        dot.IsVisible = shown is not null; if (shown is not null) dot.Background = Brush.Parse(Ui.Visible(shown.Colour));
+        // Green says tracking and amber says a break, as everywhere else; anything else is a quiet grey chip.
+        var key = onBreak ? "Break" : model.IsTracking ? "Live" : "Muted";
+        var colour = Ui.ThemeColour(this, key, Colors.Gray);
+        chip.Background = new SolidColorBrush(colour, .18); chipText.Foreground = new SolidColorBrush(colour);
+        chipText.Text = onBreak ? "On break" : model.IsTracking ? "Tracking" : "Paused";
+        pauseGlyph.Playing = model.IsTracking && !onBreak; pauseGlyph.InvalidateVisual();
+        cup.Filled = onBreak; cup.SetSteaming(onBreak); cup.InvalidateVisual();
+    }
+}
+
+/// <summary>The week as bars, one for each working day: time on accounts with the unallocated time stacked on top, and the day being shown in bold.</summary>
+public sealed class WeekChart : Control
+{
+    private readonly TimerModel model;
+    public WeekChart(TimerModel model) { this.model = model; Name = "WeekChart"; ActualThemeVariantChanged += (_, _) => InvalidateVisual(); }
+    /// <summary>Each day of the week shown with its allocated and unallocated time. A day off appears only if time was tracked on it.</summary>
+    public IReadOnlyList<(DateTime Day, TimeSpan Allocated, TimeSpan Unallocated)> Days()
+    {
+        var start = model.WeekStart(model.SelectedDate); var days = new List<(DateTime, TimeSpan, TimeSpan)>();
+        for (var i = 0; i < 7; i++)
+        {
+            var day = start.AddDays(i); var totals = model.Engine.Totals(day);
+            if (model.Engine.Schedule.Days.Contains(day.DayOfWeek) || totals.Allocated + totals.Unallocated > TimeSpan.Zero) days.Add((day, totals.Allocated, totals.Unallocated));
+        }
+        return days;
+    }
+    public TimeSpan Total() => Days().Aggregate(TimeSpan.Zero, (sum, d) => sum + d.Allocated + d.Unallocated);
+    public override void Render(DrawingContext context)
+    {
+        var days = Days(); if (days.Count == 0 || Bounds.Width < 60) return;
+        var ink = Ui.ThemeColour(this, "Ink", Colors.Black); var muted = new SolidColorBrush(Ui.ThemeColour(this, "Muted", Colors.Gray));
+        var allocated = new SolidColorBrush(Color.Parse("#8FB3E8")); var unallocated = new SolidColorBrush(Color.Parse("#E3D3B0"));
+        var top = days.Max(d => (d.Allocated + d.Unallocated).TotalHours); top = Math.Max(top, 8); // A light week does not stretch to fill the tile.
+        var labelRoom = 20.0; var area = Math.Max(20, Bounds.Height - labelRoom); var slot = Bounds.Width / days.Count; var barWidth = Math.Min(44, slot * .6);
+        foreach (var (i, d) in days.Select((d, i) => (i, d)))
+        {
+            var x = i * slot + (slot - barWidth) / 2; var a = d.Allocated.TotalHours / top * area; var u = d.Unallocated.TotalHours / top * area;
+            if (u > 0.5) context.DrawRectangle(unallocated, null, new Rect(x, area - a - u, barWidth, u), 5, 5);
+            if (a > 0.5) context.DrawRectangle(allocated, null, new Rect(x, area - a, barWidth, a), 5, 5);
+            var current = d.Day == model.SelectedDate.Date;
+            var label = new FormattedText(d.Day.ToString("ddd", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                new Typeface(FontFamily.Default, FontStyle.Normal, current ? FontWeight.Bold : FontWeight.Normal), 12, current ? new SolidColorBrush(ink) : muted);
+            context.DrawText(label, new Point(x + (barWidth - label.Width) / 2, area + 4));
+        }
+    }
+}
+
+/// <summary>A countdown to the next deadline, a note starting with !. It counts in hours and minutes, and says so plainly when the time has gone.</summary>
+public sealed class DeadlineView : StackPanel
+{
+    private readonly TimerModel model;
+    private readonly TextBlock what = Ui.Text("", 13, "muted"), left = new() { Name = "DeadlineLeft", FontSize = 40, Classes = { "clock" } }, when = Ui.Text("", 13);
+    public DeadlineView(TimerModel model, bool compact)
+    {
+        this.model = model; Spacing = 2; VerticalAlignment = VerticalAlignment.Center;
+        what.TextTrimming = TextTrimming.CharacterEllipsis; left.FontSize = compact ? 30 : 40;
+        Children.Add(what); Children.Add(left); if (!compact) Children.Add(when);
+        Refresh();
+    }
+    public void Refresh()
+    {
+        var note = DayNotes.NextDeadline(model.AllDayNotes);
+        if (note is null) { what.Text = "No deadlines"; left.Text = "--:--"; when.Text = "Start a note with ! to add one."; return; }
+        var due = DayNotes.DueAt(note); var remaining = due - model.Engine.Now; var late = remaining < TimeSpan.Zero; var span = late ? -remaining : remaining;
+        var hours = (int)span.TotalHours; var text = $"{hours:00}:{span.Minutes:00}";
+        what.Text = DayNotes.DisplayText(note) + (late ? " was due" : " is due in");
+        left.Text = late ? "-" + text : text;
+        when.Text = due.ToString("ddd d MMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
     }
 }

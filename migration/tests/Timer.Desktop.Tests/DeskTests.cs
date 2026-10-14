@@ -203,6 +203,54 @@ public sealed class DeskTests
     }
 
     [AvaloniaFact]
+    public void TheTrackerTilePausesAndTakesABreak()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            OpenDesk(window); var account = model.Accounts.First(a => !BreakAccount.Is(a.Name)).Name;
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Paused");
+            model.ToggleAccount(account); window.UpdateLayout();
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Tracking");
+            Press(window, "TrackerPause"); Assert.False(model.IsTracking); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Paused");
+            Press(window, "TrackerPause"); Assert.True(model.IsTracking);
+            Press(window, "TrackerBreak"); Assert.True(model.IsOnBreak); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "On break");
+            Press(window, "TrackerBreak"); Assert.False(model.IsOnBreak);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheWeekTileChartsTheWorkingDaysAndTotalsTheWeek()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        try
+        {
+            OpenDesk(window); var chart = Named<WeekChart>(window, "WeekChart"); var days = chart.Days();
+            Assert.InRange(days.Count, 5, 7); Assert.Contains(days, d => d.Day == model.SelectedDate.Date && d.Allocated > TimeSpan.Zero);
+            Assert.Equal(model.Format(chart.Total()), Named<TextBlock>(window, "TileMeta_week").Text);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ADeadlineNoteStartsTheCountdownAndTickingItOffClearsIt()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            OpenDesk(window); Assert.Equal("--:--", Named<TextBlock>(window, "DeadlineLeft").Text);
+            var due = model.Engine.Now.Date.AddDays(1); // Tomorrow, at five.
+            model.AddDayNote(due, "!Timesheet due"); window.UpdateLayout();
+            var expected = due.AddHours(17) - model.Engine.Now; var left = Named<TextBlock>(window, "DeadlineLeft").Text;
+            Assert.Equal($"{(int)expected.TotalHours:00}:{expected.Minutes:00}", left);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Timesheet due is due in");
+            model.ToggleDayNote(model.AllDayNotes[0].Id); window.UpdateLayout(); Assert.Equal("--:--", Named<TextBlock>(window, "DeadlineLeft").Text);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ATileCanBeMadeLargerOrSmallerWithinItsLimitsAndTheSizeIsKept()
     {
         var model = Model(); var window = Open(model);
@@ -393,7 +441,7 @@ public sealed class DeskTests
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true);
         model.AddTodo("Send the invoice #AccountOne"); model.AddTodo("Call back about the budget #AccountThree"); model.AddTodo("Order more tea"); model.ToggleTodo(2);
         model.SetPostItText(0, "Ask about the printer. Book the room for Friday.");
-        model.AddDayNote(model.Engine.Now.Date, "Team stand-up 09:30"); model.AddDayNote(model.Engine.Now.Date, "Send timesheet"); model.AddDayNote(model.Engine.Now.Date.AddDays(1), "Client review 11:00"); model.AddDayNote(model.Engine.Now.Date.AddDays(3), "Quarter end");
+        model.AddDayNote(model.Engine.Now.Date, "Team stand-up 09:30"); model.AddDayNote(model.Engine.Now.Date, "Send timesheet"); model.AddDayNote(model.Engine.Now.Date.AddDays(1), "Client review 11:00"); model.AddDayNote(model.Engine.Now.Date.AddDays(3), "Quarter end"); model.AddDayNote(model.Engine.Now.Date.AddDays(1), "!Timesheet due 17:00");
         var window = Open(model, width, height);
         try
         {
