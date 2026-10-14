@@ -67,7 +67,19 @@ public sealed class DeskView : UserControl
     private string? resizing; private (int Columns, int Rows) resizingSize; private Point resizeStart; private Size resizeFrom;
     private string? expanded;
     private readonly ScrollViewer scroller; private readonly DayStrip timelineStrip; private readonly Border timelineHost = new();
-    private readonly Dictionary<string, Control> grips = new(); private readonly Dictionary<string, Border> tapes = new(); private readonly Dictionary<string, Border> slots = new(); private readonly Dictionary<string, Action<bool, bool>> slimSetters = new(); private readonly Dictionary<string, TextBlock> metas = new();
+    private readonly Dictionary<string, Control> grips = new(); private readonly Dictionary<string, Border> bands = new(), tiles0 = new(); private bool hueDark;
+    /// <summary>Gives each tile the hue made for the theme in use: pale washes in a light theme, deeper tones of the same hues in a dark one (<see cref="DeskHues"/>).</summary>
+    private void ApplyHues()
+    {
+        hueDark = model.CurrentTheme.Dark;
+        foreach (var (id, tile) in tiles0)
+        {
+            if (IsPostIt(id)) continue; // Paper keeps its own colour.
+            var wash = Color.Parse(DeskHues.Wash(id, hueDark));
+            tile.Background = new SolidColorBrush(Color.FromArgb(DeskHues.WashAlphaFor(hueDark), wash.R, wash.G, wash.B));
+            if (bands.TryGetValue(id, out var band)) band.Background = new SolidColorBrush(Color.FromArgb(DeskHues.BandAlphaFor(hueDark), wash.R, wash.G, wash.B));
+        }
+    } private readonly Dictionary<string, Border> tapes = new(); private readonly Dictionary<string, Border> slots = new(); private readonly Dictionary<string, Action<bool, bool>> slimSetters = new(); private readonly Dictionary<string, TextBlock> metas = new();
     /// <summary>Raised when a tile is opened in place or put back, with the tile's id or null, so the window can show the controls that tile needs.</summary>
     public event Action<string?>? ExpandedChanged;
 
@@ -105,7 +117,7 @@ public sealed class DeskView : UserControl
         Ui.Put(frame, scroller);
         Ui.Put(frame, drawer);
         Content = frame;
-        SyncDrawer();
+        SyncDrawer(); ApplyHues();
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; RefreshLive(); };
         DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; };
     }
@@ -179,6 +191,7 @@ public sealed class DeskView : UserControl
 
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (model.CurrentTheme.Dark != hueDark) ApplyHues();
         RefreshLive();
         // The rows are redrawn only when something other than the clock changed, so a tick never interrupts the to-do list.
         if (e.PropertyName != nameof(TimerModel.Elapsed)) { RebuildTimeline(); todoView?.Rebuild(); notesView?.Rebuild(); comingView?.Rebuild(); PaintPostIt(); }
@@ -247,8 +260,8 @@ public sealed class DeskView : UserControl
     {
         var tile = new Border { Name = "Tile_" + kind.Id, CornerRadius = new CornerRadius(IsPostIt(kind.Id) ? 8 : 22), ClipToBounds = !IsPostIt(kind.Id), Tag = kind };
         var hue = Color.Parse(kind.Hue); var post = IsPostIt(kind.Id);
-        // A wash of the hue over the panel, so it reads on light and dark themes alike, with a soft shadow to lift the tile off the desk.
-        tile.Background = new SolidColorBrush(Color.FromArgb(0x38, hue.R, hue.G, hue.B));
+        // A wash of the tile's hue over the surface, set by ApplyHues for the theme in use, with a soft shadow to lift the tile off the desk.
+        tiles0[kind.Id] = tile;
         tile.BoxShadow = BoxShadows.Parse(post ? "0 6 16 0 #34000000" : "0 4 14 0 #18000000");
         var hovered = false;
         var buttons = Ui.Horizontal(); buttons.Spacing = 2; buttons.Opacity = 0; buttons.IsHitTestVisible = false;
@@ -304,7 +317,7 @@ public sealed class DeskView : UserControl
             figure.HorizontalAlignment = HorizontalAlignment.Right; buttons.HorizontalAlignment = HorizontalAlignment.Right; buttons.VerticalAlignment = VerticalAlignment.Center;
             var cluster = new Grid { VerticalAlignment = VerticalAlignment.Center }; cluster.Children.Add(figure); cluster.Children.Add(buttons); Ui.Put(head, cluster, 3);
             dots = new IconGlyph(IconKind.Grip) { TintKey = "Muted", VerticalAlignment = VerticalAlignment.Center, Opacity = .8, IsHitTestVisible = false, IsVisible = false }; Ui.Put(head, dots, 4);
-            var band = new Border { Height = 52, Background = new SolidColorBrush(Color.FromArgb(0x30, hue.R, hue.G, hue.B)), Child = handle };
+            var band = new Border { Height = 52, Child = handle }; bands[kind.Id] = band;
             body = new Border { Margin = new Thickness(16, 10, 16, 14) };
             var stack = Ui.Grid("*", "Auto,*"); Ui.Put(stack, band); Ui.Put(stack, body, row: 1);
             content = stack;

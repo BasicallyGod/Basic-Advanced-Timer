@@ -388,6 +388,24 @@ public sealed class DeskTests
     }
 
     [AvaloniaFact]
+    public void TheTilesWearTheHuesOfTheThemeInUseAndChangeWhenItChanges()
+    {
+        var model = Model(); model.SetTheme("Light"); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window);
+            Color Wash(string id) => ((SolidColorBrush)((Border)desk.TileControl(id)!).Background!).Color;
+            var light = Wash("deadline"); Assert.Equal(DeskHues.WashAlpha, light.A); Assert.Equal(ThemeColours.Rgb(DeskHues.Wash("deadline", false)), ((int)light.R, (int)light.G, (int)light.B));
+            model.SetTheme("Dark"); Dispatcher.UIThread.RunJobs();
+            var dark = Wash("deadline"); Assert.Equal(DeskHues.DarkWashAlpha, dark.A); Assert.Equal(ThemeColours.Rgb(DeskHues.Wash("deadline", true)), ((int)dark.R, (int)dark.G, (int)dark.B));
+            Assert.NotEqual(light, dark);
+            Assert.Same(desk, window.GetVisualDescendants().OfType<DeskView>().Single()); // Re-dressed in place, not rebuilt.
+            Assert.Equal(Color.Parse(DeskHues.Badge("deadline")), ((SolidColorBrush)Named<Border>(window, "Tile_deadline").GetVisualDescendants().OfType<Border>().First(b => b.Width == 30).Background!).Color); // The badge stays its pastel.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void TheDayTileMeasuresTheWorkingDayAgainstItsTarget()
     {
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
@@ -443,6 +461,7 @@ public sealed class DeskTests
             if (Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") is { } folder)
             {
                 Directory.CreateDirectory(folder); using (window.CaptureRenderedFrame()) { } using var frame = window.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, "desk-forms.png"));
+                model.SetTheme("Dark"); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); using (window.CaptureRenderedFrame()) { } using (var darkFrame = window.CaptureRenderedFrame()) darkFrame?.Save(Path.Combine(folder, "desk-forms-dark.png")); model.SetTheme("Light");
                 desk.SetArranging(true); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); using (window.CaptureRenderedFrame()) { } using var arranging = window.CaptureRenderedFrame(); arranging?.Save(Path.Combine(folder, "desk-arranging.png"));
             }
         }
