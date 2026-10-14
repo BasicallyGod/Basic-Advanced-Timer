@@ -123,7 +123,7 @@ public sealed class TodoView : Grid
 /// <summary>A post-it: a coloured square of paper to type on, kept in the light look whatever the theme, since paper does not go dark.</summary>
 public static class PostItView
 {
-    public static Color Paper(string colour) => Color.Parse(colour switch { "lilac" => "#E3D6FF", "rose" => "#FFD3DC", _ => "#FFF1A8" });
+    public static Color Paper(string colour) => Color.Parse(colour switch { "lilac" => "#E3D6FF", "rose" => "#FFD3DC", "sky" => "#CFE6FF", "mint" => "#D4F0DC", _ => "#FFF1A8" });
     public static TextBox Build(TimerModel model, int index, bool oneLine, string name = "PostItText")
     {
         var box = new TextBox
@@ -258,11 +258,19 @@ public sealed class ComingUpView : StackPanel
                 line.Children.Add(new TextBlock { Text = DayNotes.DisplayText(note), FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis }); Children.Add(line); continue;
             }
             var id = note.Id;
-            var tick = new CheckBox { Name = "ComingTick_" + id, IsChecked = false, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
-            tick.Click += (_, _) => model.ToggleDayNote(id);
+            // What kind of thing it is shows in its leading mark: a flag for a deadline (press it when done), a clock for an event, which simply passes,
+            // and a tick box for a task, which is the only kind that is ticked off.
+            Control tick;
+            if (DayNotes.IsDeadline(note)) { var flag = Ui.IconButton(IconKind.Flag, "Deadline. Press when it is done", "ComingDone_" + id, () => model.ToggleDayNote(id)); flag.Width = 26; flag.Height = 26; tick = flag; }
+            else if (note.At is not null)
+            {
+                var mark = new Border { Name = "ComingEvent_" + id, Width = 26, Height = 26, Child = new IconGlyph(IconKind.Clock) { TintKey = "Muted", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+                ToolTip.SetTip(mark, "Event"); tick = mark;
+            }
+            else { var box = new CheckBox { Name = "ComingTick_" + id, IsChecked = false, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center }; box.Click += (_, _) => model.ToggleDayNote(id); tick = box; }
             var when = Ui.Text(When(note.Day, model.Engine.Now) + (note.At is { } at ? " " + at.ToString("hh\\:mm") : ""), 13); when.FontWeight = FontWeight.Bold; // Bold, so when it falls is read first.
             var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(new TextBlock { Text = DayNotes.DisplayText(note), FontSize = 14, TextWrapping = TextWrapping.Wrap }); words.Children.Add(when);
-            var row = Ui.Grid("Auto,*"); Ui.Put(row, tick); Ui.Put(row, words, 1); Children.Add(row);
+            var row = Ui.Grid("Auto,*"); tick.VerticalAlignment = VerticalAlignment.Center; Ui.Put(row, tick); Ui.Put(row, words, 1); Children.Add(row);
         }
     }
 }
@@ -438,57 +446,94 @@ public sealed class WeekChart : Control
         return totals.OrderByDescending(t => t.Value).Select(t => (t.Key, t.Value)).ToList();
     }
     private Color ColourOf(string account) => model.Accounts.FirstOrDefault(a => a.Name.Equals(account, StringComparison.OrdinalIgnoreCase)) is { } known ? Color.Parse(Ui.Visible(known.Colour)) : Colors.Gray; // The account's own colour, so each stays recognisable beside its dot elsewhere.
+    /// <summary>With more room the legend names every account in the week; otherwise it names the biggest few and counts the rest.</summary>
+    public bool FullLegend { get; set; }
+    private readonly List<(Rect Area, string Tip)> hits = new();
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        // The details are under the pointer rather than in a legend that would crowd the chart: a segment names its account and time, a bar its day.
+        var at = e.GetPosition(this); string? tip = null;
+        foreach (var (area, text) in hits) if (area.Contains(at)) tip = text;
+        ToolTip.SetTip(this, tip);
+    }
     public override void Render(DrawingContext context)
     {
+        hits.Clear();
         var days = Days(); if (days.Count == 0 || Bounds.Width < 40) return;
         var tiny = Mode == TileForm.Tiny; var roomy = Mode == TileForm.Roomy;
-        var ink = Ui.ThemeColour(this, "Ink", Colors.Black); var muted = new SolidColorBrush(Ui.ThemeColour(this, "Muted", Colors.Gray));
+        var ink = Ui.ThemeColour(this, "Ink", Colors.Black); var inkBrush = new SolidColorBrush(ink); var muted = new SolidColorBrush(Ui.ThemeColour(this, "Muted", Colors.Gray));
         var unallocated = new SolidColorBrush(Color.Parse("#E3D3B0")); var plain = new SolidColorBrush(Color.Parse("#8FB3E8"));
+        var seam = new Pen(new SolidColorBrush(Ui.ThemeColour(this, "Surface", Colors.White), .9), 1.5); // A thin seam between segments, so neighbouring colours that are alike still read as separate.
         var top = Math.Max(8, days.Max(d => (d.Allocated + d.Unallocated).TotalHours)); // A light week does not stretch to fill the tile.
-        var legend = roomy ? AccountsThisWeek().Take(4).ToList() : new List<(string, TimeSpan)>();
-        var labelRoom = tiny ? 0.0 : 20.0; var legendRoom = legend.Count > 0 ? 26.0 : 0.0;
+        // The legend: the biggest accounts in a line, or in a full list when there is a lot of room, wrapping as it needs to.
+        var all = roomy ? AccountsThisWeek() : new List<(string Account, TimeSpan Time)>();
+        var legendLines = new List<List<(string Account, string Text, double Width)>>();
+        if (all.Count > 0)
+        {
+            var shown = FullLegend ? all : all.Take(5).ToList(); var line = new List<(string, string, double)>(); var used = 0.0;
+            FormattedText Measure(string t) => new(t, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Typeface.Default, 12, inkBrush);
+            foreach (var (account, time) in shown)
+            {
+                var text = $"{account}  {model.Format(time)}"; var width = Measure(text).Width + 28;
+                if (used + width + (FullLegend ? 0 : 74) > Bounds.Width && line.Count > 0) { legendLines.Add(line); line = new(); used = 0; if (!FullLegend) break; } // One line keeps room for the count of the rest.
+                line.Add((account, text, width)); used += width;
+            }
+            if (line.Count > 0 && (FullLegend || legendLines.Count == 0)) legendLines.Add(line);
+            var listed = legendLines.SelectMany(l => l).Count();
+            if (!FullLegend && all.Count > listed && legendLines.Count > 0) legendLines[^1].Add(("", $"+{all.Count - listed} more", 70));
+        }
+        var labelRoom = tiny ? 0.0 : 20.0; var legendRoom = legendLines.Count * 20.0 + (legendLines.Count > 0 ? 6 : 0);
         var area = Math.Max(16, Bounds.Height - labelRoom - legendRoom); var slot = Bounds.Width / days.Count; var barWidth = Math.Min(tiny ? 18 : 48, slot * (tiny ? .55 : .62));
         foreach (var (i, d) in days.Select((d, i) => (i, d)))
         {
             var x = i * slot + (slot - barWidth) / 2; var u = d.Unallocated.TotalHours / top * area; var a = d.Allocated.TotalHours / top * area;
             double y = area;
+            var dayText = $"{d.Day.ToString("ddd d MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"))}: {model.Format(d.Allocated)} on accounts, {model.Format(d.Unallocated)} unallocated";
+            hits.Add((new Rect(i * slot, 0, slot, area + labelRoom), dayText));
             if (roomy)
             {
                 // Each account's share, from the bottom up, in its own colour; the unallocated time sits on top as before.
                 foreach (var (account, time) in AccountsOn(d.Day).AsEnumerable().Reverse())
                 {
                     var h = time.TotalHours / top * area; if (h < 0.5) continue; y -= h;
-                    context.DrawRectangle(new SolidColorBrush(ColourOf(account)), null, new Rect(x, y, barWidth, h), 3, 3);
+                    var segment = new Rect(x, y, barWidth, h);
+                    context.DrawRectangle(new SolidColorBrush(ColourOf(account)), seam, segment, 3, 3);
+                    hits.Add((segment, $"{account}: {model.Format(time)} ({d.Day.ToString("ddd", System.Globalization.CultureInfo.GetCultureInfo("en-GB"))})"));
                 }
             }
             else if (a > 0.5) { y -= a; context.DrawRectangle(plain, null, new Rect(x, y, barWidth, a), tiny ? 3 : 5, tiny ? 3 : 5); }
-            if (u > 0.5) context.DrawRectangle(unallocated, null, new Rect(x, y - u, barWidth, u), tiny ? 3 : 5, tiny ? 3 : 5);
+            if (u > 0.5) context.DrawRectangle(unallocated, roomy ? seam : null, new Rect(x, y - u, barWidth, u), tiny ? 3 : 5, tiny ? 3 : 5);
             if (tiny) continue;
             var current = d.Day == model.SelectedDate.Date;
             var label = new FormattedText(d.Day.ToString("ddd", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                new Typeface(FontFamily.Default, FontStyle.Normal, current ? FontWeight.Bold : FontWeight.Normal), 12, current ? new SolidColorBrush(ink) : muted);
+                new Typeface(FontFamily.Default, FontStyle.Normal, current ? FontWeight.Bold : FontWeight.Normal), 12, current ? inkBrush : muted);
             context.DrawText(label, new Point(x + (barWidth - label.Width) / 2, area + 4));
         }
-        var cursor = 0.0;
-        foreach (var (account, time) in legend)
+        var rowY = Bounds.Height - legendRoom + 8;
+        foreach (var line in legendLines)
         {
-            var text = new FormattedText($"{account}  {model.Format(time)}", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Typeface.Default, 12, new SolidColorBrush(ink));
-            if (cursor + 14 + text.Width > Bounds.Width) break;
-            context.DrawEllipse(new SolidColorBrush(ColourOf(account)), null, new Point(cursor + 5, Bounds.Height - 11), 4.5, 4.5);
-            context.DrawText(text, new Point(cursor + 14, Bounds.Height - 11 - text.Height / 2)); cursor += 14 + text.Width + 14;
+            var cursor = 0.0;
+            foreach (var (account, text, width) in line)
+            {
+                if (account.Length > 0) context.DrawEllipse(new SolidColorBrush(ColourOf(account)), null, new Point(cursor + 5, rowY + 8), 4.5, 4.5);
+                var t = new FormattedText(text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Typeface.Default, 12, account.Length > 0 ? inkBrush : muted);
+                context.DrawText(t, new Point(cursor + (account.Length > 0 ? 14 : 0), rowY + 8 - t.Height / 2)); cursor += width;
+            }
+            rowY += 20;
         }
     }
 }
 
 /// <summary>
 /// A countdown to the next deadline, a note starting with !. Small, it is just the countdown; normal, the deadline's name, the countdown and when it
-/// falls; roomy, it also says how much working time is left before it and lists the deadlines after it.
+/// falls; roomy, it also says how much working time, over how many working days, is left before it. It is about one deadline; Coming up is the overview of what follows.
 /// </summary>
 public sealed class DeadlineView : StackPanel
 {
     private readonly TimerModel model; private readonly TileForm form;
     private readonly TextBlock what = new() { Name = "DeadlineWhat", FontSize = 17, FontWeight = FontWeight.SemiBold }, phrase = Ui.Text("", 13, "muted"), left = new() { Name = "DeadlineLeft", FontSize = 40, Classes = { "clock" } }, when = Ui.Text("", 13);
-    private readonly TextBlock workLeft = new() { Name = "DeadlineWorkLeft", FontSize = 13 }; private readonly StackPanel later = new() { Spacing = 3, Name = "DeadlineLater" };
+    private readonly TextBlock workLeft = new() { Name = "DeadlineWorkLeft", FontSize = 14, FontWeight = FontWeight.SemiBold };
     private readonly bool slim;
     public DeadlineView(TimerModel model, TileForm form, bool slim = false)
     {
@@ -498,7 +543,7 @@ public sealed class DeadlineView : StackPanel
         if (form != TileForm.Tiny) { Children.Add(what); Children.Add(phrase); } else { what.FontSize = 13; Children.Add(what); }
         Children.Add(left);
         if (form != TileForm.Tiny) Children.Add(when);
-        if (form == TileForm.Roomy) { workLeft.Margin = new Thickness(0, 6, 0, 0); Children.Add(workLeft); later.Margin = new Thickness(0, 8, 0, 0); Children.Add(later); }
+        if (form == TileForm.Roomy) { workLeft.Margin = new Thickness(0, 6, 0, 0); Children.Add(workLeft); }
         Refresh();
     }
     // The countdown and the date take a deep tone of the tile's rose, part-way to the text colour, so they are bold without turning into a warning colour.
@@ -512,7 +557,7 @@ public sealed class DeadlineView : StackPanel
         left.Foreground = Tone(); when.Foreground = left.Foreground;
         var deadlines = model.AllDayNotes.Where(n => !n.Done && DayNotes.IsDeadline(n)).OrderBy(DayNotes.DueAt).ThenBy(n => n.Id).ToList();
         var note = deadlines.FirstOrDefault();
-        if (note is null) { what.Text = form == TileForm.Tiny ? "No deadline" : "No deadlines"; phrase.Text = ""; left.Text = "None"; when.Text = "Start a note with ! to add one."; workLeft.Text = ""; later.Children.Clear(); return; }
+        if (note is null) { what.Text = form == TileForm.Tiny ? "No deadline" : "No deadlines"; phrase.Text = ""; left.Text = "None"; when.Text = "Start a note with ! to add one."; workLeft.Text = ""; return; }
         var now = model.Engine.Now; var due = DayNotes.DueAt(note); var remaining = due - now; var late = remaining < TimeSpan.Zero; var span = late ? -remaining : remaining;
         // A countdown reads as hours and minutes spelled out, so it cannot be mistaken for a time of day.
         var text = $"{(int)span.TotalHours}h {span.Minutes:00}m";
@@ -520,15 +565,9 @@ public sealed class DeadlineView : StackPanel
         left.Text = late ? "-" + text : text;
         when.Text = due.ToString("ddd d MMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
         if (form != TileForm.Roomy) return;
-        // More context for the room: the working time that is actually left before it falls due, and what follows it.
-        workLeft.Text = late ? "" : "Working time left: " + model.Format(model.Engine.Schedule.WorkingTimeBetween(now, due));
-        later.Children.Clear();
-        foreach (var next in deadlines.Skip(1).Take(2))
-        {
-            var row = Ui.Grid("*,Auto"); var name = new TextBlock { Text = DayNotes.DisplayText(next), FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis };
-            var date = Ui.Text(DayNotes.DueAt(next).ToString("ddd d MMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), 12, "muted"); date.Margin = new Thickness(10, 0, 0, 0);
-            Ui.Put(row, name); Ui.Put(row, date, 1); later.Children.Add(row);
-        }
+        // More context for the room: the working time that is actually left before it falls due, over the working days that remain.
+        var days = 0; for (var day = now.Date; day <= due.Date; day = day.AddDays(1)) if (model.Engine.Schedule.Scheduled(day).Working) days++;
+        workLeft.Text = late ? "" : $"Working time left: {model.Format(model.Engine.Schedule.WorkingTimeBetween(now, due))} over {days} working day{(days == 1 ? "" : "s")}";
     }
 }
 
@@ -620,7 +659,7 @@ public sealed class AccountChips : WrapPanel
         if (single) { Cursor = new Cursor(StandardCursorType.Hand); Background = Brushes.Transparent; PointerPressed += (_, _) => { shown++; Refresh(); }; ToolTip.SetTip(this, "Click for the next account"); }
         Refresh();
     }
-    private static string Short(string name) => name.Length <= 11 ? name : name[..10] + "…";
+    private string Short(string name) { var room = single ? 8 : 11; return name.Length <= room ? name : name[..(room - 1)] + "…"; }
     public void Refresh()
     {
         Children.Clear();
@@ -637,7 +676,7 @@ public sealed class AccountChips : WrapPanel
     private Control Chip(TimerAccount account, bool large)
     {
         var dot = new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = Brush.Parse(Ui.Visible(account.Colour)), VerticalAlignment = VerticalAlignment.Center };
-        var name = new TextBlock { Text = Short(account.Display), FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
+        var name = new TextBlock { Text = Short(account.Display), FontSize = large ? 12 : 13, VerticalAlignment = VerticalAlignment.Center };
         var time = Ui.Text(model.Format(model.Today(account)), 13, "figures"); time.FontWeight = FontWeight.Bold; time.VerticalAlignment = VerticalAlignment.Center;
         var chip = Ui.Horizontal(dot, name, time); chip.Spacing = 6; chip.Margin = new Thickness(0, 0, 14, 4);
         if (large) name.FontWeight = FontWeight.SemiBold;

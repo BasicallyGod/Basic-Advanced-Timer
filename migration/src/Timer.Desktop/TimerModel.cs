@@ -826,6 +826,12 @@ public sealed class TimerModel : INotifyPropertyChanged
         var notes = Trinkets.PostIts.ToList(); notes[index] = notes[index] with { Text = text };
         preferences = preferences with { Trinkets = Trinkets with { PostIts = notes } }; Save();
     }
+    /// <summary>Puts a post-it's strip of tape on or takes it off, for a plainer sheet.</summary>
+    public void TogglePostItTape(int index)
+    {
+        if (index < 0 || index >= Trinkets.PostIts.Count) return;
+        var notes = Trinkets.PostIts.ToList(); notes[index] = notes[index] with { Tape = !notes[index].Tape }; SetTrinkets(Trinkets with { PostIts = notes });
+    }
     public void CyclePostItColour(int index)
     {
         if (index < 0 || index >= Trinkets.PostIts.Count) return;

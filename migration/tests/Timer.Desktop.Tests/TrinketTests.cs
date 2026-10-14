@@ -52,4 +52,12 @@ public sealed class TrinketTests
         Assert.Equal(new string?[] { "New", null, "Same" }, after.Todos.Select(t => t.Account));
         Assert.Equal("b", after.Todos[1].Text);
     }
+
+    [Fact]
+    public void TapeIsOnUnlessSaidOtherwiseAndOlderSavesKeepIt()
+    {
+        Assert.True(Trinkets.FromJson("{\"Todos\":[],\"PostIts\":[{\"Text\":\"x\",\"Colour\":\"rose\"}]}").PostIts[0].Tape); // Saved before tape could be taken off.
+        var back = Trinkets.FromJson(Trinkets.ToJson(new TrinketData(Array.Empty<TodoItem>(), new[] { new PostIt("a", "sky", false), new PostIt("b", "mint", true) })));
+        Assert.False(back.PostIts[0].Tape); Assert.Equal("sky", back.PostIts[0].Colour); Assert.Equal("mint", back.PostIts[1].Colour);
+    }
 }

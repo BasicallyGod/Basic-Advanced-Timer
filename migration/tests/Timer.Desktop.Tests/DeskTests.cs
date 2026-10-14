@@ -112,7 +112,8 @@ public sealed class DeskTests
             Named<TextBox>(window, "PostItText").Text = "Ring the printer people";
             Assert.Equal("Ring the printer people", model.Trinkets.PostIts[0].Text);
             Press(window, "PostItColour"); Assert.Equal("lilac", model.Trinkets.PostIts[0].Colour);
-            Press(window, "PostItColour"); Press(window, "PostItColour"); Assert.Equal("lemon", model.Trinkets.PostIts[0].Colour);
+            Press(window, "PostItColour"); Assert.Equal("rose", model.Trinkets.PostIts[0].Colour); Press(window, "PostItColour"); Assert.Equal("sky", model.Trinkets.PostIts[0].Colour); Press(window, "PostItColour"); Assert.Equal("mint", model.Trinkets.PostIts[0].Colour);
+            Press(window, "PostItColour"); Assert.Equal("lemon", model.Trinkets.PostIts[0].Colour); // Five sheets, then round again.
         }
         finally { window.Close(); }
     }
@@ -153,7 +154,8 @@ public sealed class DeskTests
             Assert.Contains("Today 23:30", window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
             Named<TextBox>(window, "NoteText_" + note.Id).Text = "Ring the client back";
             Assert.Equal("Ring the client back", model.NotesOn(today)[0].Text);
-            Named<CheckBox>(window, "ComingTick_" + note.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.True(Has<Border>(window, "ComingEvent_" + note.Id)); Assert.False(window.GetVisualDescendants().OfType<CheckBox>().Any(c => c.Name == "ComingTick_" + note.Id)); // An event is not ticked off; it passes.
+            Named<CheckBox>(window, "NoteTick_" + note.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             Assert.Empty(model.ComingUp()); Assert.True(model.NotesOn(today)[0].Done);
             Press(window, "NoteRemove_" + note.Id); Assert.Empty(model.NotesOn(today));
         }
@@ -305,8 +307,8 @@ public sealed class DeskTests
             desk.Resize("deadline", 2, 3); window.UpdateLayout(); // Expanded: working time left and what follows.
             var left = Named<TextBlock>(window, "DeadlineWorkLeft").Text; Assert.StartsWith("Working time left: ", left);
             var due = model.Engine.Now.Date.AddDays(1).AddHours(17);
-            Assert.Equal("Working time left: " + model.Format(model.Engine.Schedule.WorkingTimeBetween(model.Engine.Now, due)), left);
-            Assert.Equal(2, Named<StackPanel>(window, "DeadlineLater").Children.Count);
+            Assert.StartsWith("Working time left: " + model.Format(model.Engine.Schedule.WorkingTimeBetween(model.Engine.Now, due)) + " over ", left); Assert.Contains("working day", left);
+            Assert.False(Has<StackPanel>(window, "DeadlineLater")); // The deadlines after it are Coming up's business.
         }
         finally { window.Close(); }
     }
@@ -323,6 +325,20 @@ public sealed class DeskTests
             desk.Resize("week", 3, 2); window.UpdateLayout(); Assert.Equal(TileForm.Roomy, chart.Mode);
             var accounts = chart.AccountsThisWeek(); Assert.NotEmpty(accounts); Assert.Equal(accounts.OrderByDescending(a => a.Time).Select(a => a.Account), accounts.Select(a => a.Account));
             Assert.All(chart.AccountsOn(model.SelectedDate), a => Assert.True(a.Time > TimeSpan.Zero));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheWeekChartKeepsDetailsForTheHoverAndTheFullLegendForTheBiggestSize()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false; var chart = Named<WeekChart>(window, "WeekChart");
+            desk.Resize("week", 3, 2); window.UpdateLayout(); Assert.False(chart.FullLegend); // Roomy: the biggest few and a count of the rest.
+            desk.Resize("week", 3, 3); window.UpdateLayout(); Assert.True(chart.FullLegend); // Large: every account in the week.
+            Assert.True(chart.AccountsThisWeek().Count > 5);
         }
         finally { window.Close(); }
     }
@@ -350,6 +366,23 @@ public sealed class DeskTests
             desk.Resize("accounts", 2, 3); window.UpdateLayout(); Assert.Empty(window.GetVisualDescendants().OfType<AccountChips>());
             desk.Resize("coming", 2, 1); window.UpdateLayout(); Assert.False(window.GetVisualDescendants().OfType<CheckBox>().Any(c => c.Name?.StartsWith("ComingTick_") == true)); // One line, no ticks.
             desk.Resize("coming", 2, 2); window.UpdateLayout(); Assert.True(window.GetVisualDescendants().OfType<CheckBox>().Any(c => c.Name?.StartsWith("ComingTick_") == true) || window.GetVisualDescendants().OfType<Button>().Any(c => c.Name?.StartsWith("ComingDone_") == true) || Has<Border>(window, "TileInline_coming"));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ComingUpTellsTasksEventsAndDeadlinesApart()
+    {
+        var model = Model(); var today = model.Engine.Now.Date;
+        model.AddDayNote(today.AddDays(1), "Update the budget sheet"); model.AddDayNote(today.AddDays(1), "Client review 11:00"); model.AddDayNote(today.AddDays(2), "!Timesheet due 17:00");
+        var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false; desk.Resize("coming", 2, 3); window.UpdateLayout();
+            var task = model.AllDayNotes.First(n => n.Text.StartsWith("Update")); var ev = model.AllDayNotes.First(n => n.Text.StartsWith("Client")); var due = model.AllDayNotes.First(n => n.Text.StartsWith("!"));
+            Assert.True(window.GetVisualDescendants().OfType<CheckBox>().Any(c => c.Name == "ComingTick_" + task.Id)); // A task: a tick box.
+            Assert.True(Has<Border>(window, "ComingEvent_" + ev.Id)); Assert.False(window.GetVisualDescendants().OfType<CheckBox>().Any(c => c.Name == "ComingTick_" + ev.Id)); // An event: a clock, nothing to tick.
+            Press(window, "ComingDone_" + due.Id); Assert.True(model.AllDayNotes.First(n => n.Id == due.Id).Done); // A deadline: a flag that completes it.
         }
         finally { window.Close(); }
     }
@@ -523,6 +556,20 @@ public sealed class DeskTests
             Press(window, "ArrangeToggle"); Assert.Equal("Done", Named<Button>(window, "ArrangeToggle").Content);
             Assert.True(Named<Control>(window, "TileResize_todo").IsVisible); Assert.True(Named<Button>(window, "TileHide_todo").IsVisible);
             Press(window, "ArrangeToggle"); Assert.False(Named<Control>(window, "TileResize_todo").IsVisible); Assert.False(Named<Button>(window, "TileHide_todo").IsVisible);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void APostItCanLoseItsTapeAndKeepsThatChoice()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false; desk.Show("postit2"); window.UpdateLayout();
+            Assert.True(model.Trinkets.PostIts[0].Tape); Assert.False(model.Trinkets.PostIts[1].Tape); // The first is taped; the spare starts plain, for some variety.
+            Press(window, "PostItTape"); Assert.False(model.Trinkets.PostIts[0].Tape); Assert.True(model.Trinkets.PostIts[1].Tape == false);
+            Press(window, "PostItTape2"); Assert.True(model.Trinkets.PostIts[1].Tape); Assert.False(model.Trinkets.PostIts[0].Tape);
         }
         finally { window.Close(); }
     }

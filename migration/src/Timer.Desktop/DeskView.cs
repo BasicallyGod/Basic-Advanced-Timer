@@ -67,7 +67,7 @@ public sealed class DeskView : UserControl
     private string? resizing; private (int Columns, int Rows) resizingSize; private Point resizeStart; private Size resizeFrom;
     private string? expanded;
     private readonly ScrollViewer scroller; private readonly DayStrip timelineStrip; private readonly Border timelineHost = new();
-    private readonly Dictionary<string, Control> grips = new(); private readonly Dictionary<string, Border> slots = new(); private readonly Dictionary<string, Action<bool, bool>> slimSetters = new(); private readonly Dictionary<string, TextBlock> metas = new();
+    private readonly Dictionary<string, Control> grips = new(); private readonly Dictionary<string, Border> tapes = new(); private readonly Dictionary<string, Border> slots = new(); private readonly Dictionary<string, Action<bool, bool>> slimSetters = new(); private readonly Dictionary<string, TextBlock> metas = new();
     /// <summary>Raised when a tile is opened in place or put back, with the tile's id or null, so the window can show the controls that tile needs.</summary>
     public event Action<string?>? ExpandedChanged;
 
@@ -102,7 +102,6 @@ public sealed class DeskView : UserControl
         // An opened tile fills the room the board has, so the board needs to know it.
         scroller.PropertyChanged += (_, e) => { if (e.Property == BoundsProperty && expanded is not null) board.InvalidateMeasure(); };
         // A faint field of dots sits behind the tiles, so the desk reads as a surface rather than a blank page.
-        Ui.Put(frame, new DotField());
         Ui.Put(frame, scroller);
         Ui.Put(frame, drawer);
         Content = frame;
@@ -219,7 +218,7 @@ public sealed class DeskView : UserControl
     private void PaintPostIt()
     {
         foreach (var (id, t) in tiles.Where(t => IsPostIt(t.Key)))
-            t.Tile.Background = new SolidColorBrush(PostItView.Paper(model.Trinkets.PostIts[PostItIndex(id)].Colour));
+            { var note = model.Trinkets.PostIts[PostItIndex(id)]; t.Tile.Background = new SolidColorBrush(PostItView.Paper(note.Colour)); if (tapes.TryGetValue(id, out var tape)) tape.IsVisible = note.Tape; }
     }
     private void RefreshLive()
     {
@@ -263,6 +262,7 @@ public sealed class DeskView : UserControl
         {
             // A button changes the paper's colour.
             var paint = Ui.IconButton(IconKind.Edit, "Change colour", "PostItColour" + (kind.Id == "postit" ? "" : (PostItIndex(kind.Id) + 1).ToString()), () => model.CyclePostItColour(PostItIndex(kind.Id))); paint.Width = 28; paint.Height = 28; buttons.Children.Insert(0, paint);
+            var tapeButton = Ui.IconButton(IconKind.Copy, "Tape on or off", "PostItTape" + (kind.Id == "postit" ? "" : (PostItIndex(kind.Id) + 1).ToString()), () => model.TogglePostItTape(PostItIndex(kind.Id))); tapeButton.Width = 28; tapeButton.Height = 28; buttons.Children.Insert(1, tapeButton);
         }
         // A grip in the bottom right corner makes the tile larger or smaller by whole cells. It shows only while arranging.
         var grip = new Border { Name = "TileResize_" + kind.Id, Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.BottomRightCorner), IsVisible = false,
@@ -281,7 +281,7 @@ public sealed class DeskView : UserControl
             buttons.HorizontalAlignment = HorizontalAlignment.Right; buttons.VerticalAlignment = VerticalAlignment.Top; buttons.Margin = new Thickness(0, 4, 6, 0);
             var tape = new Border { Width = 84, Height = 22, Background = new SolidColorBrush(Colors.White, .55), BorderBrush = new SolidColorBrush(Colors.Black, .06), BorderThickness = new Thickness(0, 0, 0, 1), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, -9, 0, 0), RenderTransform = new RotateTransform(-3), IsHitTestVisible = false };
-            body = new Border { Margin = new Thickness(18, 22, 18, 16) };
+            tapes[kind.Id] = tape; body = new Border { Margin = new Thickness(18, 22, 18, 16) };
             var paper = new Grid(); paper.Children.Add(body); paper.Children.Add(handle); paper.Children.Add(buttons); paper.Children.Add(tape);
             content = new ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light, Child = paper };
         }
@@ -352,6 +352,7 @@ public sealed class DeskView : UserControl
         return id switch
         {
             "clock" => area >= 6 ? "roomy" : "face",
+            "week" => area >= 9 ? "large" : p.Form.ToString().ToLowerInvariant(),
             _ => p.Form.ToString().ToLowerInvariant(),
         };
     }
@@ -371,7 +372,7 @@ public sealed class DeskView : UserControl
             case "deadline": target.Child = deadlineView = new DeadlineView(model, form, slim); break;
             case "week":
                 weekChart ??= new WeekChart(model); Free(weekChart);
-                weekChart.Mode = slim ? TileForm.Tiny : form; weekChart.Width = slim ? (wide ? 170 : 100) : double.NaN; weekChart.Height = slim ? 56 : double.NaN;
+                weekChart.Mode = slim ? TileForm.Tiny : form; weekChart.FullLegend = variant == "large"; weekChart.Width = slim ? (wide ? 170 : 100) : double.NaN; weekChart.Height = slim ? 56 : double.NaN;
                 target.Child = weekChart; weekChart.InvalidateVisual(); break;
             case "timeline": timelineStrip.Labels = true; target.Child = form == TileForm.Tiny ? timelineStrip : timelineHost; if (form != TileForm.Tiny) RebuildTimeline(); break;
             case "pomodoro": target.Child = pomodoroView = new PomodoroView(model, form == TileForm.Tiny); break;
@@ -535,7 +536,9 @@ public sealed class DeskView : UserControl
         private string? lifted; private double lift, liftTarget, tilt, lastX;
 
         public DeskBoard() { Margin = new Thickness(6, 2, 6, 10); // Room for the tiles' shadows, which the scroll view would otherwise cut off.
-            timer.Tick += (_, _) => Step(); DetachedFromVisualTree += (_, _) => timer.Stop(); }
+            // The dots sit behind the tiles, in this panel so they scroll with them, and are left out wherever a tile covers them, so a tile's own surface stays clean.
+            Children.Add(dots); timer.Tick += (_, _) => Step(); DetachedFromVisualTree += (_, _) => timer.Stop(); }
+        private readonly DotField dots = new();
         private static double Width0(double available) => double.IsInfinity(available) ? 640 : available;
         protected override Size MeasureOverride(Size available)
         {
@@ -557,7 +560,7 @@ public sealed class DeskView : UserControl
             Placements = Owner?.expanded is { } open
                 ? new List<DeskPlacement> { new(open, 0, 0, Columns, 99) } // Roomy, since it has the whole desk.
                 : DeskLayout.Pack((Provisional ?? Owner?.order ?? new()).Select(o => Owner!.SpecFor(o)), Columns);
-            targets.Clear();
+            targets.Clear(); var holes = new List<Rect>();
             foreach (var p in Placements)
             {
                 if (Children.FirstOrDefault(c => (c.Tag as DeskTileKind)?.Id == p.Id) is not { } tile) continue;
@@ -573,9 +576,10 @@ public sealed class DeskView : UserControl
                     tilt += (Math.Clamp((DragOffset.X - lastX) * .35, -3.5, 3.5) - tilt) * .4; lastX = DragOffset.X; liftTarget = Lively ? 1 : 0; // The lift eases in, in Step, so picking a tile up does not pop.
                 }
                 else if (!Lively) { glide.X = rect.X; glide.Y = rect.Y; glide.W = rect.Width; glide.H = rect.Height; }
-                tile.Arrange(new Rect(glide.X, glide.Y, Math.Max(1, glide.W), Math.Max(1, glide.H)));
+                var placed = new Rect(glide.X, glide.Y, Math.Max(1, glide.W), Math.Max(1, glide.H)); tile.Arrange(placed); holes.Add(placed);
                 Owner?.Fill(p.Id, p);
             }
+            dots.Arrange(new Rect(final)); dots.Holes = holes; dots.InvalidateVisual();
             ApplyLift();
             if (Lively && (Dragged is not null || Unsettled() || lift > .01) && !timer.IsEnabled) timer.Start();
             return final;
@@ -616,10 +620,17 @@ public sealed class DeskView : UserControl
 /// <summary>A faint field of dots in the theme's line colour, drawn behind the desk's tiles.</summary>
 public sealed class DotField : Control
 {
+    public List<Rect> Holes { get; set; } = new();
     public DotField() { IsHitTestVisible = false; ActualThemeVariantChanged += (_, _) => InvalidateVisual(); }
     public override void Render(DrawingContext context)
     {
         var brush = new SolidColorBrush(Ui.ThemeColour(this, "Line", Colors.LightGray), .55);
-        for (var x = 12.0; x < Bounds.Width; x += 24) for (var y = 12.0; y < Bounds.Height; y += 24) context.DrawEllipse(brush, null, new Point(x, y), 1.1, 1.1);
+        for (var x = 12.0; x < Bounds.Width; x += 24)
+            for (var y = 12.0; y < Bounds.Height; y += 24)
+            {
+                var at = new Point(x, y); var covered = false;
+                foreach (var hole in Holes) if (hole.Inflate(3).Contains(at)) { covered = true; break; }
+                if (!covered) context.DrawEllipse(brush, null, at, 1.1, 1.1);
+            }
     }
 }
