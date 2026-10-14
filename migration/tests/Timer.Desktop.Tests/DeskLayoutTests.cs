@@ -91,4 +91,60 @@ public sealed class DeskLayoutTests
         Assert.Equal(sizes.OrderBy(k => k.Key), back.OrderBy(k => k.Key));
         Assert.Equal(new[] { "ok" }, DeskLayout.ParseSizes(new[] { "ok:2x2", "bad", "x:0x2", "y:2xz", ":2x2", "z:99x2" }).Keys);
     }
+
+    private static DeskTileSpec Tile(string id, int c = 2, int r = 2) => new(id, c, r);
+    private static Dictionary<string, (int Column, int Row)> Pins(params (string Id, int C, int R)[] pins) => pins.ToDictionary(p => p.Id, p => (p.C, p.R));
+
+    [Fact]
+    public void PinnedTilesKeepTheirCellsAndLeaveTheGapsBetweenThem()
+    {
+        var placed = DeskLayout.PackPinned(new[] { Tile("a"), Tile("b") }, Pins(("a", 0, 0), ("b", 3, 4)), 6);
+        Assert.Equal((0, 0), (placed[0].Column, placed[0].Row));
+        Assert.Equal((3, 4), (placed[1].Column, placed[1].Row)); // Flowing would have put it at 2,0.
+    }
+
+    [Fact]
+    public void ATileWithNoPinFlowsIntoTheFirstFreeSpotAroundThePinnedOnes()
+    {
+        var placed = DeskLayout.PackPinned(new[] { Tile("a"), Tile("loose") }, Pins(("a", 0, 0)), 4);
+        Assert.Equal((2, 0), (placed[1].Column, placed[1].Row));
+    }
+
+    [Fact]
+    public void ThePriorityTileKeepsItsCellAndTheOneItLandedOnMakesWay()
+    {
+        var pins = Pins(("a", 0, 0), ("b", 0, 0));
+        var first = DeskLayout.PackPinned(new[] { Tile("a"), Tile("b") }, pins, 4, "b");
+        Assert.Equal((0, 0), (first[1].Column, first[1].Row));
+        Assert.NotEqual((0, 0), (first[0].Column, first[0].Row));
+        Assert.False(Overlap(first[0], first[1]));
+    }
+
+    [Fact]
+    public void AGrownTilePushesOnlyWhatItCoversAndNothingOverlaps()
+    {
+        var specs = new[] { Tile("a", 3, 2), Tile("b"), Tile("c") };
+        var placed = DeskLayout.PackPinned(specs, Pins(("a", 0, 0), ("b", 2, 0), ("c", 0, 4)), 6, "a");
+        Assert.Equal((0, 4), (placed[2].Column, placed[2].Row)); // Untouched, so its gap stays.
+        for (var i = 0; i < placed.Count; i++) for (var j = i + 1; j < placed.Count; j++) Assert.False(Overlap(placed[i], placed[j]));
+    }
+
+    [Fact]
+    public void ANarrowerWindowPullsPinsInsideTheGridWithoutOverlap()
+    {
+        var placed = DeskLayout.PackPinned(new[] { Tile("a"), Tile("b") }, Pins(("a", 4, 0), ("b", 6, 0)), 2);
+        Assert.All(placed, p => Assert.True(p.Column + p.ColumnSpan <= 2));
+        Assert.False(Overlap(placed[0], placed[1]));
+    }
+
+    private static bool Overlap(DeskPlacement x, DeskPlacement y)
+        => x.Column < y.Column + y.ColumnSpan && y.Column < x.Column + x.ColumnSpan && x.Row < y.Row + y.RowSpan && y.Row < x.Row + x.RowSpan;
+
+    [Fact]
+    public void PositionsSurviveWritingAndReadingAndBadOnesAreDropped()
+    {
+        var pins = Pins(("timeline", 2, 3), ("day", 0, 0));
+        Assert.Equal(pins.OrderBy(k => k.Key), DeskLayout.ParsePositions(DeskLayout.FormatPositions(pins)).OrderBy(k => k.Key));
+        Assert.Equal(new[] { "ok" }, DeskLayout.ParsePositions(new[] { "ok:1+2", "bad", "x:-1+2", "y:1+z", ":1+2", "z:99+2" }).Keys);
+    }
 }

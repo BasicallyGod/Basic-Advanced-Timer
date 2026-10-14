@@ -887,6 +887,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Sizes tiles were left at, in whole cells. A tile with no entry has its own default size.</summary>
     public IReadOnlyDictionary<string, (int Columns, int Rows)> DeskSizes => DeskLayout.ParseSizes(preferences.DeskSizes);
     public void SetDeskSizes(IReadOnlyDictionary<string, (int Columns, int Rows)> sizes) { preferences = preferences with { DeskSizes = DeskLayout.FormatSizes(sizes) }; Save(); }
+    /// <summary>Where arranged tiles were put, as cells. Empty until the desk is first arranged, when tiles simply flow in order.</summary>
+    public IReadOnlyDictionary<string, (int Column, int Row)> DeskPositions => DeskLayout.ParsePositions(preferences.DeskPositions);
+    public void SetDeskPositions(IReadOnlyDictionary<string, (int Column, int Row)> positions) { preferences = preferences with { DeskPositions = DeskLayout.FormatPositions(positions) }; Save(); }
     /// <summary>The tiles put away in the drawer. Their data is untouched; they are only not on the desk.</summary>
     public IReadOnlyList<string> DeskHidden => preferences.DeskHidden ?? Array.Empty<string>();
     public void SetDeskHidden(IReadOnlyList<string> hidden) { preferences = preferences with { DeskHidden = hidden.ToList() }; Save(); }

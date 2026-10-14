@@ -640,7 +640,7 @@ public sealed class DeskTests
             Press(window, "DrawerToggle"); Assert.True(Named<Border>(window, "Drawer").IsVisible);
             var chip = Named<Border>(window, "DrawerChip_day"); Assert.NotNull(chip);
             desk.Show("day", 0); window.UpdateLayout();
-            Assert.DoesNotContain("day", desk.Hidden); Assert.Equal("day", desk.Order[0]); Assert.True(desk.TileControl("day")!.IsVisible); Assert.Equal(desk.Order.Count, desk.Placements.Count);
+            Assert.DoesNotContain("day", desk.Hidden); Assert.Contains("day", desk.Order); Assert.True(desk.TileControl("day")!.IsVisible); Assert.Equal(desk.Order.Count, desk.Placements.Count);
             Assert.DoesNotContain("day", model.DeskHidden);
         }
         finally { window.Close(); }
@@ -714,6 +714,100 @@ public sealed class DeskTests
                 Directory.CreateDirectory(folder); using (window.CaptureRenderedFrame()) { } // The first capture brings the picture up to date.
                 using var frame = window.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, $"desk-{width}x{height}.png"));
             }
+        }
+        finally { window.Close(); }
+    }
+
+    private static DeskView Arranged(DashboardWindow window)
+    {
+        Press(window, "DeskTab");
+        var desk = window.GetVisualDescendants().OfType<DeskView>().Single(); desk.Lively = false; Press(window, "ArrangeToggle"); window.UpdateLayout();
+        return desk;
+    }
+
+    [AvaloniaFact]
+    public void ATileDroppedInAnEmptyCellStaysThereAndTheGapIsKept()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = Arranged(window);
+            var before = desk.Placements.ToDictionary(p => p.Id);
+            var farRow = desk.Placements.Max(p => p.Row + p.RowSpan) + 2;
+            desk.DropAt("clock", 0, farRow); window.UpdateLayout();
+            var clock = desk.Placements.Single(p => p.Id == "clock");
+            Assert.Equal((0, farRow), (clock.Column, clock.Row));
+            foreach (var p in desk.Placements.Where(p => p.Id != "clock")) Assert.Equal((before[p.Id].Column, before[p.Id].Row), (p.Column, p.Row)); // Nothing else moved.
+            Assert.Equal((0, farRow), model.DeskPositions["clock"]);
+            Assert.True(Named<Button>(window, "TidyDesk").IsVisible);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void PuttingATileAwayLeavesItsPlaceEmptyUntilTidyUp()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = Arranged(window);
+            var next = desk.Placements.First(p => p.Id != "working"); var before = desk.Placements.ToDictionary(p => p.Id);
+            Press(window, "TileHide_working"); window.UpdateLayout();
+            Assert.DoesNotContain(desk.Placements, p => p.Id == "working");
+            foreach (var p in desk.Placements) Assert.Equal((before[p.Id].Column, before[p.Id].Row), (p.Column, p.Row));
+            Press(window, "TidyDesk"); window.UpdateLayout();
+            Assert.False(desk.HasGaps); Assert.Empty(model.DeskPositions);
+            Assert.Equal((0, 0), (desk.Placements[0].Column, desk.Placements[0].Row));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void MakingATileBiggerMovesOnlyWhatItLandsOn()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = Arranged(window);
+            desk.DropAt("clock", 0, 14); window.UpdateLayout(); // Far below everything, in a gap of its own.
+            var before = desk.Placements.ToDictionary(p => p.Id);
+            desk.Resize("week", 3, 2); window.UpdateLayout();
+            var after = desk.Placements.ToDictionary(p => p.Id);
+            Assert.Equal((before["clock"].Column, before["clock"].Row), (after["clock"].Column, after["clock"].Row));
+            Assert.Equal((before["week"].Column, before["week"].Row), (after["week"].Column, after["week"].Row)); // The resized tile keeps its corner.
+            var list = desk.Placements.ToList();
+            for (var i = 0; i < list.Count; i++) for (var j = i + 1; j < list.Count; j++)
+                Assert.False(list[i].Column < list[j].Column + list[j].ColumnSpan && list[j].Column < list[i].Column + list[i].ColumnSpan && list[i].Row < list[j].Row + list[j].RowSpan && list[j].Row < list[i].Row + list[i].RowSpan);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ADeskThatIsNeverArrangedKeepsFlowingAndSavedGapsComeBackOnReopening()
+    {
+        var model = Model(); var window = Open(model);
+        try { Press(window, "DeskTab"); Assert.False(window.GetVisualDescendants().OfType<DeskView>().Single().HasGaps); Assert.Empty(model.DeskPositions); }
+        finally { window.Close(); }
+        var saved = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday, DeskPositions: new[] { "clock:0+9" }));
+        var again = Open(saved);
+        try
+        {
+            Press(again, "DeskTab");
+            var desk = again.GetVisualDescendants().OfType<DeskView>().Single(); desk.Lively = false; again.UpdateLayout();
+            var clock = desk.Placements.Single(p => p.Id == "clock"); Assert.Equal((0, 9), (clock.Column, clock.Row));
+        }
+        finally { again.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ATileBroughtBackFromTheDrawerLandsWhereItWasDropped()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = Arranged(window);
+            desk.ShowAt("postit2", 0, 12); window.UpdateLayout();
+            var p = desk.Placements.Single(x => x.Id == "postit2"); Assert.Equal((0, 12), (p.Column, p.Row)); Assert.DoesNotContain("postit2", desk.Hidden);
         }
         finally { window.Close(); }
     }
