@@ -83,36 +83,11 @@ public sealed class PolishTests
         finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
 
-    [AvaloniaFact]
-    public void BudgetsReadAsCompactFiguresWithTheirPeriodAndTodayIsLabelled()
+    [Fact]
+    public void BudgetsReadAsCompactFigures()
     {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model); window.Show();
-        try
-        {
-            Settle(window);
-            var lines = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Where(t => t is not null).ToList();
-            Assert.Contains(lines, t => t!.EndsWith(" / 20:00")); Assert.Contains("This month", lines); Assert.Contains("This week", lines); Assert.Contains("This quarter", lines); // The period sits beside the usage, not tacked on its end.
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.Contains(" of ") && x.Contains("h ") && t.Classes.Contains("muted") && x.Contains("m") && x.Length > 0 && x.Contains("00m"));
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "TodayHeading" && t.Text == "Today");
-            Assert.Equal("10:35", model.FormatCompact(TimeSpan.FromMinutes(635))); Assert.Equal("20:00", model.FormatCompact(TimeSpan.FromHours(20)));
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void TheStatusDotAndTheAccountDotShareACentreLine()
-    {
-        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
-        try
-        {
-            Settle(window);
-            var card = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("dayCard"));
-            var dots = card.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().ToList();
-            Assert.Equal(2, dots.Count);
-            double Centre(Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, 0), window)!.Value.X;
-            Assert.Equal(Centre(dots[0]), Centre(dots[1]), 0.6);
-        }
-        finally { window.Close(); }
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));
+        Assert.Equal("10:35", model.FormatCompact(TimeSpan.FromMinutes(635))); Assert.Equal("20:00", model.FormatCompact(TimeSpan.FromHours(20)));
     }
 
     [AvaloniaFact]

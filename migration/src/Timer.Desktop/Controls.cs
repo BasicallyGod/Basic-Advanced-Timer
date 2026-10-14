@@ -703,40 +703,6 @@ public sealed class AccountList : StackPanel
     }
 }
 
-public sealed class TrackingLabels : StackPanel
-{
-    private readonly TextBlock status = Ui.Text("", 12);
-    private readonly TextBlock overtime = Ui.Text("Overtime", 12, "overtime");
-    private readonly Avalonia.Controls.Shapes.Ellipse dot = new() { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center };
-    public TrackingLabels(TimerModel model)
-    {
-        Orientation = Orientation.Vertical;
-        Spacing = 3;
-        // The status dot is a real shape in a box as wide as the account's colour dot above it, so the two dots share one centre line.
-        var dotBox = new Border { Width = 10, Child = dot, VerticalAlignment = VerticalAlignment.Center };
-        var line = Ui.Horizontal(dotBox, status); line.Spacing = 8;
-        Children.Add(line);
-        Children.Add(overtime);
-        overtime.Margin = new Thickness(18, 0, 0, 0); // Lined up under the status words.
-        void Refresh()
-        {
-            status.Text = model.Status;
-            // A break turns the status line, dot included, amber; otherwise it is green while tracking and grey when not.
-            foreach (Control control in new Control[] { status, dot })
-            {
-                control.Classes.Set("break", model.IsOnBreak);
-                control.Classes.Set("live", model.IsTracking && !model.IsOnBreak);
-                control.Classes.Set("idle", !model.IsTracking);
-            }
-            overtime.IsVisible = model.IsOvertime;
-            overtime.Text = "Overtime +" + model.Format(model.Engine.Totals(model.Engine.Now).Overtime);
-        }
-        void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
-        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Refresh(); };
-        DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
-    }
-}
-
 /// <summary>A clock whose hours and minutes are heavy and whose seconds are lighter and dimmer, so the figure that matters stands out.</summary>
 public sealed class ClockText : StackPanel
 {

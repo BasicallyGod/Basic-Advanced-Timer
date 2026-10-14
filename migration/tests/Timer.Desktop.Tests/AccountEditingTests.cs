@@ -108,7 +108,7 @@ public sealed class AccountEditingTests
         var window = new DashboardWindow(model); window.Show();
         try
         {
-            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); window.ExpandAccounts();
             Button Row(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
             var first = Row("Account0"); var height = first.Bounds.Height;
             var from = first.TranslatePoint(new Point(100, height / 2), window)!.Value;
@@ -151,7 +151,7 @@ public sealed class AccountEditingTests
         var window = new DashboardWindow(model); window.Show();
         try
         {
-            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); window.ExpandAccounts();
             Button Row(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
             var first = Row("Account0"); var height = first.Bounds.Height; var second = Row("Account1");
             var from = first.TranslatePoint(new Point(100, height / 2), window)!.Value; var to = from + new Vector(0, height * 1.4); // Released a little past the middle of its new slot.

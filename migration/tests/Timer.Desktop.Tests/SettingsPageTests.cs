@@ -35,7 +35,7 @@ public sealed class SettingsPageTests
             var expected = new (string Category, string Control)[]
             {
                 ("general", "DecimalHours"), ("appearance", "EditThemes"), ("appearance", "WindowShadows"), ("pill", "PillSize"), ("pill", "PillLayout_compact"), ("pill", "PillOnTop"),
-                ("desk", "DeskEnabled"), ("desk", "CalmMotion"), ("hours", "SaveShifts"), ("accounts", "SaveAccounts"), ("about", "AboutVersion"),
+                ("desk", "CalmMotion"), ("hours", "SaveShifts"), ("accounts", "SaveAccounts"), ("about", "AboutVersion"),
             };
             foreach (var (category, name) in expected)
             {
@@ -122,7 +122,6 @@ public sealed class SettingsPageTests
             OpenSettings(window); using var closed = window.CaptureRenderedFrame();
             Assert.Empty(window.Dialogs.Dialogs);
             Assert.DoesNotContain("selected", window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").Classes);
-            Assert.True(window.GetVisualDescendants().OfType<Control>().First(c => c.Name == "SidebarDragHeader").Bounds.Width > 100);
         }
         finally { window.Close(); }
     }
@@ -145,13 +144,13 @@ public sealed class SettingsPageTests
     }
 
     [AvaloniaFact]
-    public void TheSettingsAndPillButtonsShareACentreLine()
+    public void TheBarsButtonsShareACentreLine()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
-            double Centre(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Avalonia.Point(b.Bounds.Width / 2, 0), window)!.Value.X; }
+            double Centre(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Avalonia.Point(0, b.Bounds.Height / 2), window)!.Value.Y; }
             Assert.Equal(Centre("Settings"), Centre("BackToPill"), 0.5);
             Assert.Equal(Centre("Settings"), Centre("TimelineTab"), 0.5);
         }

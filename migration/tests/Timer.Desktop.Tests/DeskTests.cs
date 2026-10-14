@@ -27,7 +27,7 @@ public sealed class DeskTests
     private static void Press(Control root, string name) { Named<Button>(root, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
 
     [AvaloniaFact]
-    public void TheDeskShowsItsTilesInTheSavedOrderAndHidesTheAccountsColumn()
+    public void TheDeskShowsItsTilesInTheSavedOrder()
     {
         var window = Open(Model("day", "working", "accounts"));
         try
@@ -36,7 +36,6 @@ public sealed class DeskTests
             var desk = window.GetVisualDescendants().OfType<DeskView>().Single();
             Assert.Equal(new[] { "day", "working", "accounts" }, desk.Order.Take(3)); // Tiles added since the order was saved follow it.
             Assert.Equal(DeskView.Kinds.Count, desk.Placements.Count); Assert.Equal("day", desk.Placements[0].Id);
-            Assert.False(Named<Control>(window, "SidebarPanel").IsVisible);
             Assert.Equal(TileForm.Normal, desk.Placements.Single(p => p.Id == "working").Form);
         }
         finally { window.Close(); }

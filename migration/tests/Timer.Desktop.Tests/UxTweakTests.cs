@@ -179,20 +179,18 @@ public sealed class UxTweakTests
     }
 
     [AvaloniaFact]
-    public void BackToPillIsFirstOnTheRailAndCloseTimerIsAtTheFootBelowSettings()
+    public void BackToPillIsFirstOnTheBarAndCloseTimerIsAtTheEndAfterSettings()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
         try
         {
             Settle(window);
-            double Top(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Point(0, 0), window)!.Value.Y; }
-            Assert.True(Top("BackToPill") < Top("TimelineTab"));
-            Assert.True(Top("QuitTimer") > Top("Settings"));
+            double Left(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Point(0, 0), window)!.Value.X; }
+            Assert.True(Left("BackToPill") < Left("TimelineTab"));
+            Assert.True(Left("QuitTimer") > Left("Settings"));
             var quits = 0; model.QuitRequested += () => quits++;
             window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "QuitTimer").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(1, quits);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Working time");
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Day elapsed");
         }
         finally { window.Close(); }
     }

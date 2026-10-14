@@ -73,19 +73,19 @@ public sealed class ToolbarAndTrackingTests
             var green = Color.Parse(model.CurrentTheme.Colour("Live")); Assert.True(green.G > green.R + 20, "The theme's tracking colour is green.");
             void Check(Window window, string name)
             {
-                var main = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Classes.Contains("clock"));
-                var seconds = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Classes.Contains("clockLight"));
+                // The dashboard's clock is the Time tracker tile's, the pill's is its own.
+                var scope = window is DashboardWindow ? (Control)window.GetVisualDescendants().OfType<ClockText>().First(c => c.Name == "TrackerClock") : window;
+                var main = scope.GetVisualDescendants().OfType<TextBlock>().First(t => t.Classes.Contains("clock"));
+                var seconds = scope.GetVisualDescendants().OfType<TextBlock>().First(t => t.Classes.Contains("clockLight"));
                 Assert.Contains("live", main.Classes); Assert.Contains("live", seconds.Classes);
                 Assert.True(seconds.Opacity < 1 && main.Opacity == 1, name + " seconds are the lighter shade");
                 Assert.True(((ISolidColorBrush)main.Foreground!).Color.G > ((ISolidColorBrush)main.Foreground!).Color.R, name + " clock is green");
                 Assert.Equal(((ISolidColorBrush)main.Foreground!).Color, ((ISolidColorBrush)seconds.Foreground!).Color);
             }
             Check(dash, "dashboard"); Check(pill, "pill");
-            var status = dash.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Tracking" && t.Classes.Contains("live"));
-            Assert.True(((ISolidColorBrush)status.Foreground!).Color.G > ((ISolidColorBrush)status.Foreground!).Color.R);
             // On a break the green goes, and the clock takes the break colour.
             model.ToggleBreak(); Settle(dash);
-            Assert.DoesNotContain("live", dash.GetVisualDescendants().OfType<TextBlock>().First(t => t.Classes.Contains("clock")).Classes);
+            Assert.DoesNotContain("live", dash.GetVisualDescendants().OfType<ClockText>().First(c => c.Name == "TrackerClock").GetVisualDescendants().OfType<TextBlock>().First(t => t.Classes.Contains("clock")).Classes);
         }
         finally { dash.Close(); pill.Close(); }
     }
@@ -102,18 +102,17 @@ public sealed class ToolbarAndTrackingTests
     }
 
     [AvaloniaFact]
-    public void TheBarUnderTheTimelineIsAsTallAsTheBreakAndDayButtonsAndLevelWithThem()
+    public void TheBarUnderTheTimelineIsAsTallAsTheEditButtonsAndLevelWithThem()
     {
-        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show(); window.SelectTab(false);
         try
         {
             Settle(window);
             var bar = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
-            var breakButton = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
             var add = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "AddTime");
-            Assert.Equal(breakButton.Bounds.Height, bar.Bounds.Height, 0.5); Assert.Equal(breakButton.Bounds.Height, add.Bounds.Height, 0.5);
+            Assert.Equal(DashboardWindow.ControlBarHeight, bar.Bounds.Height, 0.5); Assert.Equal(DashboardWindow.ControlBarHeight, add.Bounds.Height, 0.5);
             double Bottom(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), window)!.Value.Y;
-            Assert.Equal(Bottom(breakButton), Bottom(bar), 0.5); Assert.Equal(Bottom(breakButton), Bottom(add), 0.5);
+            Assert.Equal(Bottom(add), Bottom(bar), 0.5);
         }
         finally { window.Close(); }
     }
@@ -135,9 +134,6 @@ public sealed class ToolbarAndTrackingTests
             var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
             var gap = scroll.TranslatePoint(new Point(0, 0), window)!.Value.Y - (title.TranslatePoint(new Point(0, title.Bounds.Height), window)!.Value.Y);
             Assert.True(gap >= 14, $"only {gap:0}px between the title and the timeline");
-            // The card's account dot sits close to the name beside it.
-            var dot = window.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().First(e => e.Width == 10 && e.Margin == default);
-            Assert.Equal(default, dot.Margin);
         }
         finally { window.Close(); }
     }

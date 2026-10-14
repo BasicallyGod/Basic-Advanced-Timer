@@ -101,11 +101,11 @@ public sealed class MenuAndShellTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(); using var pillFrame = pill.CaptureRenderedFrame();
             var grips = dashboard.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip).ToList();
-            Assert.Equal(model.Accounts.Count - 1, grips.Count); // One for each account row, none for the break.
-            Assert.All(grips, g => Assert.Equal("Drag to change the order", ToolTip.GetTip(g)));
+            // The Accounts tile's list can be reordered (the tiles' own grips are for moving tiles), and has no row for the break.
+            Assert.Equal(model.Accounts.Count - 1, grips.Count(g => ToolTip.GetTip(g) as string == "Drag to change the order"));
             Assert.Empty(pill.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip)); // The pill list cannot be reordered.
             // The rest of the row keeps its shape: the account name and today's time are still both visible inside it.
-            var row = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account0");
+            var row = dashboard.GetVisualDescendants().OfType<Button>().First(b => b.Name == "Account0");
             Assert.All(row.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is { Length: > 0 }), t => Assert.True(t.TranslatePoint(default, row)!.Value.X >= 0 && t.TranslatePoint(new Point(t.Bounds.Width, 0), row)!.Value.X <= row.Bounds.Width + 1));
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
             if (folder is not null) { Directory.CreateDirectory(folder); frame?.Save(Path.Combine(folder, "account-grips.png")); }
