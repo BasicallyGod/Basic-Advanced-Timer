@@ -796,6 +796,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         var note = change(dayNotes[index]); if (note == dayNotes[index] || note.Text.Length == 0) return;
         dayNotes[index] = note; store?.UpdateDayNote(note); if (notify) Notify();
     }
+    /// <summary>The pomodoro timer. It lives only while the app runs, and does not touch time tracking.</summary>
+    public Pomodoro Pomodoro { get; } = new();
     /// <summary>The desk's trinkets: the to-do list and the post-its. They are not part of the day's records, so they live with the settings.</summary>
     public TrinketData Trinkets => preferences.Trinkets ?? TrinketData.Empty;
     private void SetTrinkets(TrinketData data) { preferences = preferences with { Trinkets = data }; Save(); Notify(); }

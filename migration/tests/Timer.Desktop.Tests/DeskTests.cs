@@ -243,6 +243,52 @@ public sealed class DeskTests
     }
 
     [AvaloniaFact]
+    public void TheSparePostItsStartInTheDrawerAndKeepTheirOwnWords()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false;
+            Assert.Equal(new[] { "postit2", "postit3" }, desk.Hidden);
+            desk.Show("postit2"); window.UpdateLayout();
+            Named<TextBox>(window, "PostItText2").Text = "Second note";
+            Assert.Equal("Second note", model.Trinkets.PostIts[1].Text); Assert.Equal("", model.Trinkets.PostIts[0].Text);
+            Press(window, "PostItColour2"); Assert.Equal("rose", model.Trinkets.PostIts[1].Colour); Assert.Equal("lemon", model.Trinkets.PostIts[0].Colour);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ThePomodoroTileStartsPausesAndResets()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            OpenDesk(window);
+            Assert.Equal("25:00", Named<TextBlock>(window, "PomodoroTime").Text); Assert.Equal("Start", Named<Button>(window, "PomodoroToggle").Content);
+            Press(window, "PomodoroToggle"); Assert.True(model.Pomodoro.Running); Assert.Equal("Pause", Named<Button>(window, "PomodoroToggle").Content);
+            Press(window, "PomodoroToggle"); Assert.False(model.Pomodoro.Running); Assert.Equal("Resume", Named<Button>(window, "PomodoroToggle").Content);
+            Press(window, "PomodoroReset"); Assert.Equal(PomodoroPhase.Idle, model.Pomodoro.Phase); Assert.Equal("Start", Named<Button>(window, "PomodoroToggle").Content);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ANoteWithATimeIsMarkedOnTheTimeline()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            model.AddDayNote(model.Engine.Now.Date, "Call the client 10:30"); model.AddDayNote(model.Engine.Now.Date, "No time on this one");
+            window.UpdateLayout(); Press(window, "TimelineTab"); window.UpdateLayout();
+            var marks = window.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("TimelineNote") == true).ToList();
+            var mark = Assert.Single(marks);
+            Assert.Equal(10.5 * model.TimelinePixelsPerHour + 2 - 6, Canvas.GetTop(mark), 1);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ATilePutAwayLeavesTheDeskAndSitsInTheDrawerUntilBroughtBack()
     {
         var model = Model(); var window = Open(model);
@@ -251,13 +297,13 @@ public sealed class DeskTests
             Press(window, "DeskTab");
             var desk = window.GetVisualDescendants().OfType<DeskView>().Single(); desk.Lively = false;
             Press(window, "TileHide_day"); window.UpdateLayout();
-            Assert.Equal(new[] { "day" }, desk.Hidden); Assert.DoesNotContain(desk.Placements, p => p.Id == "day"); Assert.False(desk.TileControl("day")!.IsVisible);
-            Assert.Equal(new[] { "day" }, model.DeskHidden); Assert.DoesNotContain("day", model.DeskOrder);
+            Assert.Contains("day", desk.Hidden); Assert.DoesNotContain(desk.Placements, p => p.Id == "day"); Assert.False(desk.TileControl("day")!.IsVisible);
+            Assert.Contains("day", model.DeskHidden); Assert.DoesNotContain("day", model.DeskOrder);
             Press(window, "DrawerToggle"); Assert.True(Named<Border>(window, "Drawer").IsVisible);
             var chip = Named<Border>(window, "DrawerChip_day"); Assert.NotNull(chip);
             desk.Show("day", 0); window.UpdateLayout();
-            Assert.Empty(desk.Hidden); Assert.Equal("day", desk.Order[0]); Assert.True(desk.TileControl("day")!.IsVisible); Assert.Equal(desk.Order.Count, desk.Placements.Count);
-            Assert.Empty(model.DeskHidden);
+            Assert.DoesNotContain("day", desk.Hidden); Assert.Equal("day", desk.Order[0]); Assert.True(desk.TileControl("day")!.IsVisible); Assert.Equal(desk.Order.Count, desk.Placements.Count);
+            Assert.DoesNotContain("day", model.DeskHidden);
         }
         finally { window.Close(); }
     }
@@ -316,7 +362,7 @@ public sealed class DeskTests
         try
         {
             Press(window, "DeskTab"); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
-            var shown = window.GetVisualDescendants().OfType<DeskView>().Single(); Assert.Empty(shown.Hidden);
+            var shown = window.GetVisualDescendants().OfType<DeskView>().Single(); Assert.Equal(new[] { "postit2", "postit3" }, shown.Hidden);
             Assert.DoesNotContain("selected", Named<Button>(window, "TimelineTab").Classes);
             if (Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") is { } openFolder && width == 1080)
             {

@@ -12,11 +12,13 @@ public sealed record PostIt(string Text = "", string Colour = "lemon");
 /// <summary>What the desk's trinkets hold. It is plain data, saved as one small piece of JSON beside the other settings.</summary>
 public sealed record TrinketData(IReadOnlyList<TodoItem> Todos, IReadOnlyList<PostIt> PostIts)
 {
-    public static readonly TrinketData Empty = new(Array.Empty<TodoItem>(), new[] { new PostIt() });
+    /// <summary>Three post-its, the first on the desk and the others kept in the drawer until wanted.</summary>
+    public static readonly TrinketData Empty = new(Array.Empty<TodoItem>(), new[] { new PostIt(), new PostIt("", "lilac"), new PostIt("", "rose") });
 }
 
 public static class Trinkets
 {
+    public const int PostItCount = 3;
     public static readonly IReadOnlyList<string> PostItColours = new[] { "lemon", "lilac", "rose" };
     private static readonly Regex Tag = new(@"(?:^|\s)#([\p{L}\p{N}_-]+)", RegexOptions.Compiled);
 
@@ -51,7 +53,7 @@ public static class Trinkets
             var data = JsonSerializer.Deserialize<TrinketData>(json);
             if (data is null) return TrinketData.Empty;
             var posts = (data.PostIts ?? Array.Empty<PostIt>()).Select(p => new PostIt(p.Text ?? "", PostItColours.Contains(p.Colour) ? p.Colour : "lemon")).ToList();
-            if (posts.Count == 0) posts.Add(new PostIt());
+            while (posts.Count < PostItCount) posts.Add(new PostIt("", PostItColours[posts.Count % PostItColours.Count]));
             return new TrinketData((data.Todos ?? Array.Empty<TodoItem>()).Where(t => !string.IsNullOrWhiteSpace(t.Text)).ToList(), posts);
         }
         catch (JsonException) { return TrinketData.Empty; }

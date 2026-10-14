@@ -39,7 +39,7 @@ A project to turn the dashboard into a resizable desk of small tiles that you mo
 
 ## Open questions
 
-- Dated notes do not yet appear on the timeline itself, only in Coming up.
+- Dated notes show on the timeline as small markers; they could later be edited or moved from there.
 - Which tiles show at the minimum size by default (suggested: Working time, Accounts, Day strip).
 - Tile forms are roomy, normal and tiny. A fully fluid form is a possible later step for particular tiles.
 - Whether dropping a tile onto an occupied spot swaps or pushes.

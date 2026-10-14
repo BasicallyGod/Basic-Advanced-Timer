@@ -29,6 +29,9 @@ public sealed class DeskView : UserControl
         new("notes", "Notes", "#9ED0E6", 2, 3, null),
         new("coming", "Coming up", "#F2A7B8", 2, 2, null),
         new("postit", "Post-it", "#FFF1A8", 2, 2, null),
+        new("postit2", "Post-it 2", "#E3D6FF", 2, 2, null),
+        new("postit3", "Post-it 3", "#FFD3DC", 2, 2, null),
+        new("pomodoro", "Pomodoro", "#D0D8A0", 2, 2, null, 1, 2, 3, 4),
         new("clock", "Clock", "#8FA8D8", 1, 2, null),
     };
 
@@ -38,8 +41,9 @@ public sealed class DeskView : UserControl
     private readonly Dictionary<string, (Border Tile, Border Body, TileForm? Form)> tiles = new();
     private readonly ClockText clock = new(34, 18); private readonly TextBlock accountLine = Ui.Text("", 14), allocated = Ui.Text("", 20, "figures"), unallocated = Ui.Text("", 20, "figures");
     private readonly AnalogueClock analogue; private readonly DayStrip strip;
+    private PomodoroView? pomodoroView;
     private NotesView? notesView; private ComingUpView? comingView;
-    private TodoView? todoView; private TextBox? postIt;
+    private TodoView? todoView; private readonly Dictionary<string, TextBox> postIts = new();
     private List<string> order, hidden;
     private readonly Border drawer = new() { Name = "Drawer", Width = 236, HorizontalAlignment = HorizontalAlignment.Right, IsVisible = false, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), ZIndex = 20 };
     private readonly StackPanel chips = new() { Spacing = 8 };
@@ -61,6 +65,8 @@ public sealed class DeskView : UserControl
         sizes = new Dictionary<string, (int Columns, int Rows)>(model.DeskSizes);
         var known = Kinds.Select(k => k.Id).ToList();
         hidden = model.DeskHidden.Where(known.Contains).Distinct().ToList();
+        // A desk that has never been arranged starts with one post-it out and the spare two in the drawer.
+        if (model.DeskOrder.Count == 0 && model.DeskHidden.Count == 0) hidden = new List<string> { "postit2", "postit3" };
         order = DeskLayout.Reconcile(model.DeskOrder.Where(id => !hidden.Contains(id)), known.Where(id => !hidden.Contains(id)).ToList());
         foreach (var kind in Kinds) { var tile = BuildTile(kind); tiles[kind.Id] = tile; board.Children.Add(tile.Tile); }
         board.Owner = this; board.Lively = !model.Calm;
@@ -140,17 +146,19 @@ public sealed class DeskView : UserControl
         if (offset is { } kept) { var next = fresh is ScrollViewer d ? d : fresh.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault(); if (next is not null) next.Tag = kept; }
         timelineHost.Child = fresh;
     }
+    private static bool IsPostIt(string id) => id.StartsWith("postit", StringComparison.Ordinal);
+    private static int PostItIndex(string id) => id == "postit" ? 0 : int.Parse(id[6..]) - 1;
     private void PaintPostIt()
     {
-        if (!tiles.TryGetValue("postit", out var t)) return;
-        t.Tile.Background = new SolidColorBrush(PostItView.Paper(model.Trinkets.PostIts[0].Colour));
+        foreach (var (id, t) in tiles.Where(t => IsPostIt(t.Key)))
+            t.Tile.Background = new SolidColorBrush(PostItView.Paper(model.Trinkets.PostIts[PostItIndex(id)].Colour));
     }
     private void RefreshLive()
     {
         clock.Text = model.ClockText;
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
         clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
-        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual(); strip.InvalidateVisual();
+        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual(); strip.InvalidateVisual(); pomodoroView?.Refresh();
         allocated.Text = model.Format(model.Allocated); unallocated.Text = model.Format(model.Unallocated);
     }
 
@@ -170,15 +178,15 @@ public sealed class DeskView : UserControl
         }
         var expand = Ui.IconButton(IconKind.FitDay, "Open in place", "TileExpand_" + kind.Id, () => { if (expanded == kind.Id) Collapse(); else Expand(kind.Id); }); expand.Width = 28; expand.Height = 28; buttons.Children.Add(expand);
         var put = Ui.IconButton(IconKind.Close, "Put away in the drawer", "TileHide_" + kind.Id, () => Hide(kind.Id)); put.Width = 28; put.Height = 28; buttons.Children.Add(put);
-        if (kind.Id == "postit")
+        if (IsPostIt(kind.Id))
         {
             // Paper stays light whatever the theme, and a button changes its colour.
-            var paint = Ui.IconButton(IconKind.Edit, "Change colour", "PostItColour", () => model.CyclePostItColour(0)); paint.Width = 28; paint.Height = 28; buttons.Children.Insert(0, paint);
+            var paint = Ui.IconButton(IconKind.Edit, "Change colour", "PostItColour" + (kind.Id == "postit" ? "" : (PostItIndex(kind.Id) + 1).ToString()), () => model.CyclePostItColour(PostItIndex(kind.Id))); paint.Width = 28; paint.Height = 28; buttons.Children.Insert(0, paint);
         }
         Ui.Put(head, buttons, 1);
         var body = new Border { Margin = new Thickness(16, 2, 16, 14) };
         var stack = Ui.Grid("*", "Auto,*"); Ui.Put(stack, head); Ui.Put(stack, body, row: 1);
-        Control content = kind.Id == "postit" ? new ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light, Child = stack } : stack;
+        Control content = IsPostIt(kind.Id) ? new ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light, Child = stack } : stack;
         // A grip in the bottom right corner makes the tile larger or smaller by whole cells.
         var grip = new Border { Name = "TileResize_" + kind.Id, Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.BottomRightCorner),
             Child = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse("M15,5 L5,15 M15,10 L10,15"), Stroke = new SolidColorBrush(Colors.Gray), StrokeThickness = 1.6, Opacity = .6, StrokeLineCap = PenLineCap.Round, Margin = new Thickness(2) } };
@@ -213,12 +221,15 @@ public sealed class DeskView : UserControl
                     new StackPanel { Children = { Ui.Text("Allocated", 12, "muted"), allocated } }, new StackPanel { Children = { Ui.Text("Unallocated", 12, "muted"), unallocated } } } };
                 break;
             case "timeline": timelineStrip.Labels = true; body.Child = form == TileForm.Tiny ? timelineStrip : timelineHost; if (form != TileForm.Tiny) RebuildTimeline(); break;
+            case "pomodoro": body.Child = pomodoroView = new PomodoroView(model, form == TileForm.Tiny); break;
             case "clock": body.Child = analogue; break;
             case "strip": strip.Labels = form != TileForm.Tiny; body.Child = strip; strip.InvalidateVisual(); break;
             case "notes": body.Child = notesView = new NotesView(model, form == TileForm.Tiny); break;
             case "coming": body.Child = new ScrollViewer { Content = comingView = new ComingUpView(model), AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }; break;
             case "todo": body.Child = todoView = new TodoView(model, form == TileForm.Tiny); break;
-            case "postit": body.Child = postIt ??= PostItView.Build(model, 0, false); PaintPostIt(); break;
+            case "postit": case "postit2": case "postit3":
+                if (!postIts.TryGetValue(id, out var note)) postIts[id] = note = PostItView.Build(model, PostItIndex(id), false, id == "postit" ? "PostItText" : "PostItText" + (PostItIndex(id) + 1));
+                body.Child = note; PaintPostIt(); break;
             case "accounts":
                 body.Child = form == TileForm.Tiny
                     ? Ui.Text(model.Accounts.Count(a => !BreakAccount.Is(a.Name)) + " accounts", 14)

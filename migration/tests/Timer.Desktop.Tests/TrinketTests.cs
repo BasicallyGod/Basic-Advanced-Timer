@@ -31,7 +31,7 @@ public sealed class TrinketTests
     {
         var data = new TrinketData(new[] { new TodoItem("a", true, "Internal"), new TodoItem("b") }, new[] { new PostIt("hello", "rose") });
         var back = Trinkets.FromJson(Trinkets.ToJson(data));
-        Assert.Equal(data.Todos, back.Todos); Assert.Equal(data.PostIts, back.PostIts);
+        Assert.Equal(data.Todos, back.Todos); Assert.Equal(data.PostIts[0], back.PostIts[0]); Assert.Equal(Trinkets.PostItCount, back.PostIts.Count); // Older saves are filled out to three post-its.
     }
 
     [Theory]
@@ -39,7 +39,7 @@ public sealed class TrinketTests
     [InlineData("")]
     [InlineData("{not json")]
     [InlineData("null")]
-    public void MissingOrDamagedTrinketsGiveAnEmptyDesk(string? json) { var data = Trinkets.FromJson(json); Assert.Empty(data.Todos); Assert.Single(data.PostIts); }
+    public void MissingOrDamagedTrinketsGiveAnEmptyDesk(string? json) { var data = Trinkets.FromJson(json); Assert.Empty(data.Todos); Assert.Equal(Trinkets.PostItCount, data.PostIts.Count); }
 
     [Fact]
     public void AnUnknownPostItColourBecomesLemon() => Assert.Equal("lemon", Trinkets.FromJson("{\"Todos\":[],\"PostIts\":[{\"Text\":\"x\",\"Colour\":\"puce\"}]}").PostIts[0].Colour);

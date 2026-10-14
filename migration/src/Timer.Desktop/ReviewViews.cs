@@ -46,6 +46,15 @@ public static class ReviewViews
             var guide = Ui.Rule(); guide.Width = 390; guide.Opacity = .35; guide.Tag = "HourGuide";
             Canvas.SetLeft(guide, CardLeft - 6); Canvas.SetTop(guide, hour * pixelsPerHour + 1.5); canvas.Children.Add(guide);
         }
+        // Notes with a time sit on the spine as small diamonds, so a call or meeting can be seen against the day. The words are in the tooltip,
+        // and the colour is the same decorative rose as Coming up, never one that carries meaning.
+        foreach (var note in model.NotesOn(day).Where(n => n.At is not null))
+        {
+            var mark = new Border { Name = "TimelineNote" + note.Id, Width = 12, Height = 12, Background = Brush.Parse("#F2A7B8"), BorderBrush = Brush.Parse("#B45C73"), BorderThickness = new Thickness(1.5),
+                RenderTransform = new RotateTransform(45), RenderTransformOrigin = new RelativePoint(.5, .5, RelativeUnit.Relative), Opacity = note.Done ? .45 : 1 };
+            Canvas.SetLeft(mark, SpineX - 6); Canvas.SetTop(mark, note.At!.Value.TotalHours * pixelsPerHour + 2 - 6);
+            ToolTip.SetTip(mark, $"{note.At.Value:hh\\:mm} {note.Text}"); canvas.Children.Add(mark);
+        }
         var groups = model.Editor.Entries(day, day.AddDays(1)).Where(e => e.GroupId is not null && e.Sources.Any(s => s.Duration > TimeSpan.Zero)).ToArray();
         var grouped = groups.SelectMany(e => e.Sources).ToHashSet();
         var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero && !grouped.Contains(s))

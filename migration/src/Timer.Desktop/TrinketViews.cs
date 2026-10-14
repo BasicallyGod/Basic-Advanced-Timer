@@ -89,11 +89,11 @@ public sealed class TodoView : Grid
 public static class PostItView
 {
     public static Color Paper(string colour) => Color.Parse(colour switch { "lilac" => "#E3D6FF", "rose" => "#FFD3DC", _ => "#FFF1A8" });
-    public static TextBox Build(TimerModel model, int index, bool oneLine)
+    public static TextBox Build(TimerModel model, int index, bool oneLine, string name = "PostItText")
     {
         var box = new TextBox
         {
-            Name = "PostItText", Text = model.Trinkets.PostIts.ElementAtOrDefault(index)?.Text ?? "", AcceptsReturn = !oneLine, TextWrapping = oneLine ? TextWrapping.NoWrap : TextWrapping.Wrap,
+            Name = name, Text = model.Trinkets.PostIts.ElementAtOrDefault(index)?.Text ?? "", AcceptsReturn = !oneLine, TextWrapping = oneLine ? TextWrapping.NoWrap : TextWrapping.Wrap,
             Watermark = "Jot something down", Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), FontSize = 15, VerticalContentAlignment = VerticalAlignment.Top,
         };
         box.Classes.Add("postit");
@@ -221,5 +221,68 @@ public sealed class ComingUpView : StackPanel
             var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(new TextBlock { Text = note.Text, FontSize = 14, TextWrapping = TextWrapping.Wrap }); words.Children.Add(when);
             var row = Ui.Grid("Auto,*"); Ui.Put(row, tick); Ui.Put(row, words, 1); Children.Add(row);
         }
+    }
+}
+
+/// <summary>A ring that fills as a fraction goes from 0 to 1, in the theme's text colour on a faint track.</summary>
+public sealed class ProgressRing : Control
+{
+    public double Fraction { get; set; }
+    public bool Soft { get; set; }
+    public ProgressRing() { ActualThemeVariantChanged += (_, _) => InvalidateVisual(); }
+    public override void Render(DrawingContext context)
+    {
+        var size = Math.Min(Bounds.Width, Bounds.Height); if (size < 30) return;
+        var centre = new Point(Bounds.Width / 2, Bounds.Height / 2); var thickness = Math.Max(5, size * .07); var radius = size / 2 - thickness;
+        var track = new Pen(new SolidColorBrush(Ui.ThemeColour(this, "Line", Colors.LightGray)), thickness, lineCap: PenLineCap.Round);
+        context.DrawEllipse(null, track, centre, radius, radius);
+        var fraction = Math.Clamp(Fraction, 0, 1); if (fraction <= 0.002) return;
+        var ink = Ui.ThemeColour(this, "Ink", Colors.Black); var pen = new Pen(new SolidColorBrush(ink, Soft ? .55 : 1), thickness, lineCap: PenLineCap.Round);
+        if (fraction >= .999) { context.DrawEllipse(null, pen, centre, radius, radius); return; }
+        var end = -Math.PI / 2 + fraction * 2 * Math.PI;
+        var geometry = new StreamGeometry();
+        using (var g = geometry.Open())
+        {
+            g.BeginFigure(new Point(centre.X, centre.Y - radius), false);
+            g.ArcTo(new Point(centre.X + Math.Cos(end) * radius, centre.Y + Math.Sin(end) * radius), new Size(radius, radius), 0, fraction > .5, SweepDirection.Clockwise);
+            g.EndFigure(false);
+        }
+        context.DrawGeometry(null, pen, geometry);
+    }
+}
+
+/// <summary>The pomodoro tile: a ring, the time left and, when there is room, start and reset. It ends quietly, by changing its words and softening the ring.</summary>
+public sealed class PomodoroView : Grid
+{
+    private readonly TimerModel model; private readonly ProgressRing ring = new() { Name = "PomodoroRing" };
+    private readonly TextBlock time = new() { Name = "PomodoroTime", FontSize = 30, HorizontalAlignment = HorizontalAlignment.Center, Classes = { "clock" } };
+    private readonly TextBlock phase = Ui.Text("", 12, "muted"); private readonly Button toggle;
+    public PomodoroView(TimerModel model, bool compact)
+    {
+        this.model = model; RowDefinitions = new RowDefinitions(compact ? "*" : "*,Auto");
+        phase.HorizontalAlignment = HorizontalAlignment.Center;
+        var middle = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Spacing = 0, IsHitTestVisible = false };
+        middle.Children.Add(time); middle.Children.Add(phase);
+        var face = new Grid(); face.Children.Add(ring); face.Children.Add(middle);
+        // Where there are no buttons, the face itself starts and pauses.
+        face.Background = Brushes.Transparent; face.Cursor = new Cursor(StandardCursorType.Hand);
+        if (compact) face.PointerPressed += (_, _) => { model.Pomodoro.Toggle(model.Engine.Now); Refresh(); };
+        Children.Add(face);
+        toggle = Ui.DialogButton("Start", () => { model.Pomodoro.Toggle(model.Engine.Now); Refresh(); }, "PomodoroToggle");
+        var reset = Ui.DialogButton("Reset", () => { model.Pomodoro.Reset(); Refresh(); }, "PomodoroReset");
+        var buttons = Ui.Horizontal(toggle, reset); buttons.HorizontalAlignment = HorizontalAlignment.Center; buttons.Margin = new Thickness(0, 6, 0, 0);
+        if (!compact) { SetRow(buttons, 1); Children.Add(buttons); }
+        Refresh();
+    }
+    /// <summary>Brings the face up to date. It is called as time passes, and moves the timer on when a phase has run out.</summary>
+    public void Refresh()
+    {
+        var now = model.Engine.Now; var p = model.Pomodoro; p.Update(now);
+        var left = p.Remaining(now); time.Text = $"{(int)left.TotalMinutes:00}:{left.Seconds:00}";
+        phase.Text = p.Nudge ? (p.Phase == PomodoroPhase.Work ? "Back to work?" : p.Phase == PomodoroPhase.LongBreak ? "Time for a long break" : "Time for a short break")
+            : p.Phase switch { PomodoroPhase.Idle => "Ready", PomodoroPhase.Work => p.Running ? "Focus" : "Paused", PomodoroPhase.ShortBreak => p.Running ? "Short break" : "Paused", _ => p.Running ? "Long break" : "Paused" };
+        if (p.Completed > 0) phase.Text += " · " + p.Completed;
+        toggle.Content = p.Running ? "Pause" : p.Phase == PomodoroPhase.Idle || p.Nudge ? "Start" : "Resume";
+        ring.Fraction = p.Phase == PomodoroPhase.Idle ? 0 : p.Fraction(now); ring.Soft = p.Nudge; ring.InvalidateVisual();
     }
 }
