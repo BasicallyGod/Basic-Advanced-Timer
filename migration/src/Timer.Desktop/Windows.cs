@@ -908,13 +908,19 @@ public sealed class DashboardWindow : Window
     private void ShowSettings() { settingsMode = !settingsMode; if (settingsMode) deskMode = false; Refresh(true); }
     private DeskView NewDesk()
     {
-        var desk = new DeskView(model, OpenDeskPage); openDesk = desk; deskSlot.Child = desk.DrawerButton;
+        var desk = new DeskView(model, OpenDeskPage); openDesk = desk; deskSlot.Child = desk.HeaderTools;
         desk.ExpandedChanged += id => { deskExpanded = id; Refresh(false); };
         return desk;
     }
     private string? deskExpanded; private DeskView? openDesk; private readonly Border deskSlot = new() { Name = "DeskSlot", IsVisible = false, VerticalAlignment = VerticalAlignment.Center };
     // Escape puts an opened tile back on the desk, after dialogs and before clearing a selection.
-    private bool CollapseDesk() { if (openDesk is not { Expanded: not null } desk || !deskMode) return false; desk.Collapse(); return true; }
+    private bool CollapseDesk()
+    {
+        if (openDesk is null || !deskMode) return false;
+        if (openDesk.Expanded is not null) { openDesk.Collapse(); return true; }
+        if (openDesk.Arranging) { openDesk.SetArranging(false); return true; } // Escape leaves arrange mode.
+        return false;
+    }
     private Action<bool>? chromeApplier; private bool barMode;
     private StackPanel dateNav = null!, navRight = null!, railTopRef = null!;
     private void ShowDesk() { settingsMode = false; deskMode = true; Refresh(true); }

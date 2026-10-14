@@ -40,7 +40,7 @@ public sealed class DeskView : UserControl
     private readonly TimerModel model;
     private readonly Action<string>? openPage;
     private readonly DeskBoard board = new();
-    private readonly Dictionary<string, (Border Tile, Border Body, TileForm? Form)> tiles = new();
+    private readonly Dictionary<string, (Border Tile, Border Body, string? Variant)> tiles = new();
     private readonly ClockText clock = new(34, 18); private readonly TextBlock accountLine = Ui.Text("", 14), allocated = Big(26), unallocated = Big(26);
     // The big figures: the display face at weight, so the numbers carry each tile the way they do in the reference.
     private static TextBlock Big(double size) => new() { FontSize = size, FontWeight = FontWeight.Bold, Classes = { "clock" } };
@@ -87,6 +87,10 @@ public sealed class DeskView : UserControl
         var drawerStack = new StackPanel { Spacing = 10 };
         drawerStack.Children.Add(Ui.Text("Put away", 12, "muted")); drawerStack.Children.Add(chips);
         drawer.Child = drawerStack; drawer.BoxShadow = BoxShadows.Parse("-6 0 24 0 #30000000");
+        // Arrange mode turns the desk's editing controls on, and the Drawer button comes with it; the window sets both in its header.
+        arrangeButton = Ui.Button("Arrange", () => SetArranging(!arranging), "ArrangeToggle");
+        arrangeButton.Classes.Add("toolButton"); arrangeButton.Classes.Add("quiet"); arrangeButton.Height = 30; arrangeButton.Padding = new Thickness(12, 0);
+        drawerToggle.IsVisible = false; HeaderTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { drawerToggle, arrangeButton } };
         // The Drawer button is handed to the window, which sets it in the header beside the title, so the board gets the room a row of its own would take.
         var frame = Ui.Grid("*", "*");
         scroller = new ScrollViewer { Content = board, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, AllowAutoHide = false };
@@ -178,7 +182,7 @@ public sealed class DeskView : UserControl
     /// <summary>Redraws the timeline tile, keeping where it was scrolled to, as the dashboard does for its own timeline.</summary>
     private void RebuildTimeline()
     {
-        if (!tiles.TryGetValue("timeline", out var t) || tiles["timeline"].Form is null or TileForm.Tiny) return;
+        if (!tiles.TryGetValue("timeline", out var t) || tiles["timeline"].Variant is null or "tiny") return;
         var old = timelineHost.Child as Control;
         var scroll = old is ScrollViewer direct ? direct : old?.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();
         var offset = model.TimelineOffset is double fromModel ? new Vector(0, fromModel) : scroll?.Tag is Vector pending ? pending : scroll?.Offset;
@@ -220,69 +224,123 @@ public sealed class DeskView : UserControl
         allocated.Text = model.Format(model.Allocated); unallocated.Text = model.Format(model.Unallocated);
     }
 
-    private (Border Tile, Border Body, TileForm? Form) BuildTile(DeskTileKind kind)
+    // What changes when the desk goes into arrange mode, kept per tile so every tile follows the same rules.
+    private readonly Dictionary<string, Action> chrome = new();
+    private bool arranging;
+    /// <summary>Whether the desk is being rearranged. At rest the tiles show no grips, resize corners or put-away crosses, so the desk feels settled.</summary>
+    public bool Arranging => arranging;
+    public Panel HeaderTools { get; }
+    private readonly Button arrangeButton;
+    public void SetArranging(bool on)
     {
-        var tile = new Border { Name = "Tile_" + kind.Id, CornerRadius = new CornerRadius(22), ClipToBounds = true, Tag = kind };
-        var hue = Color.Parse(kind.Hue);
+        if (on == arranging) return;
+        arranging = on; if (!on) { SetDrawer(false); CancelDrag(); CancelResize(); }
+        arrangeButton.Content = on ? "Done" : "Arrange"; arrangeButton.Classes.Set("mainAction", on); drawerToggle.IsVisible = on;
+        foreach (var refresh in chrome.Values) refresh();
+    }
+    private static double RestAngle(string id) => id switch { "postit" => -1.6, "postit2" => 1.3, "postit3" => -0.8, _ => 0 };
+
+    private (Border Tile, Border Body, string? Variant) BuildTile(DeskTileKind kind)
+    {
+        var tile = new Border { Name = "Tile_" + kind.Id, CornerRadius = new CornerRadius(IsPostIt(kind.Id) ? 8 : 22), ClipToBounds = !IsPostIt(kind.Id), Tag = kind };
+        var hue = Color.Parse(kind.Hue); var post = IsPostIt(kind.Id);
         // A wash of the hue over the panel, so it reads on light and dark themes alike, with a soft shadow to lift the tile off the desk.
         tile.Background = new SolidColorBrush(Color.FromArgb(0x38, hue.R, hue.G, hue.B));
-        tile.BoxShadow = BoxShadows.Parse("0 4 14 0 #18000000");
-        // The header: a round badge in the tile's hue with its icon, the title, a quiet figure, and the grip to pick the tile up by.
-        // The buttons (open, open in place, put away) appear when the pointer is over the tile, so they do not crowd the header at rest.
-        var badge = new ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light, Child = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(15), Background = new SolidColorBrush(hue), VerticalAlignment = VerticalAlignment.Center,
-            Child = new IconGlyph(IconFor(kind.Id)) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } } };
-        var heading = new TextBlock { Text = kind.Title, FontSize = 16, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = Ui.Text("", 13, "muted"); meta.VerticalAlignment = VerticalAlignment.Center; meta.Name = "TileMeta_" + kind.Id; metas[kind.Id] = meta;
-        // A figure that is the point of the tile (the week's total) is set bold in the text colour; the rest stay quiet.
-        if (kind.Id == "week") { meta.Classes.Remove("muted"); meta.FontSize = 18; meta.FontWeight = FontWeight.Bold; meta.Classes.Add("clock"); }
-        var head = Ui.Grid("Auto,*,Auto,Auto"); head.ColumnSpacing = 10; head.Margin = new Thickness(14, 0, 8, 0); head.VerticalAlignment = VerticalAlignment.Center; head.Cursor = new Cursor(StandardCursorType.Hand); head.Background = Brushes.Transparent; head.Name = "TileHandle_" + kind.Id; // Centred in its band, whose height is fixed.
-        Ui.Put(head, badge); Ui.Put(head, heading, 1);
+        tile.BoxShadow = BoxShadows.Parse(post ? "0 6 16 0 #34000000" : "0 4 14 0 #18000000");
+        var hovered = false;
         var buttons = Ui.Horizontal(); buttons.Spacing = 2; buttons.Opacity = 0; buttons.IsHitTestVisible = false;
         if (kind.OpensPage is { } page)
         {
             var open = Ui.IconButton(IconKind.Next, "Open full page", "TileOpen_" + kind.Id, () => openPage?.Invoke(page)); open.Width = 28; open.Height = 28; buttons.Children.Add(open);
         }
         var expand = Ui.IconButton(IconKind.FitDay, "Open in place", "TileExpand_" + kind.Id, () => { if (expanded == kind.Id) Collapse(); else Expand(kind.Id); }); expand.Width = 28; expand.Height = 28; buttons.Children.Add(expand);
-        var put = Ui.IconButton(IconKind.Close, "Put away in the drawer", "TileHide_" + kind.Id, () => Hide(kind.Id)); put.Width = 28; put.Height = 28; buttons.Children.Add(put);
-        if (IsPostIt(kind.Id))
+        var put = Ui.IconButton(IconKind.Close, "Put away in the drawer", "TileHide_" + kind.Id, () => Hide(kind.Id)); put.Width = 28; put.Height = 28; put.IsVisible = false; buttons.Children.Add(put);
+        if (post)
         {
-            // Paper stays light whatever the theme, and a button changes its colour.
+            // A button changes the paper's colour.
             var paint = Ui.IconButton(IconKind.Edit, "Change colour", "PostItColour" + (kind.Id == "postit" ? "" : (PostItIndex(kind.Id) + 1).ToString()), () => model.CyclePostItColour(PostItIndex(kind.Id))); paint.Width = 28; paint.Height = 28; buttons.Children.Insert(0, paint);
         }
-        // The figure and the buttons share one cell at the right, the figure at rest and the buttons under the pointer, so the header's right edge
-        // is the same on every tile whatever it holds and the grip always sits at the same distance from the corner.
-        meta.HorizontalAlignment = HorizontalAlignment.Right; buttons.HorizontalAlignment = HorizontalAlignment.Right; buttons.VerticalAlignment = VerticalAlignment.Center;
-        var cluster = new Grid { VerticalAlignment = VerticalAlignment.Center }; cluster.Children.Add(meta); cluster.Children.Add(buttons); Ui.Put(head, cluster, 2);
-        var dots = new IconGlyph(IconKind.Grip) { TintKey = "Muted", VerticalAlignment = VerticalAlignment.Center, Opacity = .8, IsHitTestVisible = false }; Ui.Put(head, dots, 3);
-        tile.PointerEntered += (_, _) => { buttons.Opacity = 1; buttons.IsHitTestVisible = true; meta.Opacity = 0; };
-        tile.PointerExited += (_, _) => { if (resizing is null && dragged is null) { buttons.Opacity = 0; buttons.IsHitTestVisible = false; meta.Opacity = 1; } };
-        var band = new Border { Height = 52, Background = new SolidColorBrush(Color.FromArgb(0x30, hue.R, hue.G, hue.B)), Child = head };
-        var body = new Border { Margin = new Thickness(16, 10, 16, 14) };
-        var stack = Ui.Grid("*", "Auto,*"); Ui.Put(stack, band); Ui.Put(stack, body, row: 1);
-        Control content = IsPostIt(kind.Id) ? new ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light, Child = stack } : stack;
-        // A grip in the bottom right corner makes the tile larger or smaller by whole cells.
-        var grip = new Border { Name = "TileResize_" + kind.Id, Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.BottomRightCorner),
+        // A grip in the bottom right corner makes the tile larger or smaller by whole cells. It shows only while arranging.
+        var grip = new Border { Name = "TileResize_" + kind.Id, Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.BottomRightCorner), IsVisible = false,
             Child = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse("M15,5 L5,15 M15,10 L10,15"), Stroke = new SolidColorBrush(Colors.Gray), StrokeThickness = 1.6, Opacity = .6, StrokeLineCap = PenLineCap.Round, Margin = new Thickness(2) } };
         grip.PointerPressed += (_, e) => BeginResize(kind.Id, e, tile);
         grip.PointerMoved += (_, e) => ResizeTo(e);
         grip.PointerReleased += (_, e) => EndResize(e);
         grip.PointerCaptureLost += (_, _) => CancelResize();
         grips[kind.Id] = grip;
+        Border body; Control content; Border handle; Control? meta = null; IconGlyph? dots = null;
+        if (post)
+        {
+            // A post-it is an informal object, not a structured tile: no header band, a strip of tape across the top and a slight tilt. The top of the paper is its handle.
+            handle = new Border { Name = "TileHandle_" + kind.Id, Height = 34, VerticalAlignment = VerticalAlignment.Top, Background = Brushes.Transparent };
+            buttons.HorizontalAlignment = HorizontalAlignment.Right; buttons.VerticalAlignment = VerticalAlignment.Top; buttons.Margin = new Thickness(0, 4, 6, 0);
+            var tape = new Border { Width = 84, Height = 22, Background = new SolidColorBrush(Colors.White, .55), BorderBrush = new SolidColorBrush(Colors.Black, .06), BorderThickness = new Thickness(0, 0, 0, 1), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, -9, 0, 0), RenderTransform = new RotateTransform(-3), IsHitTestVisible = false };
+            body = new Border { Margin = new Thickness(18, 22, 18, 16) };
+            var paper = new Grid(); paper.Children.Add(body); paper.Children.Add(handle); paper.Children.Add(buttons); paper.Children.Add(tape);
+            content = new ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light, Child = paper };
+        }
+        else
+        {
+            // The header: a round badge in the tile's hue with its icon, the title, a quiet figure, and the grip to pick the tile up by (arrange mode only).
+            var badge = new ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light, Child = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(15), Background = new SolidColorBrush(hue), VerticalAlignment = VerticalAlignment.Center,
+                Child = new IconGlyph(IconFor(kind.Id)) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } } };
+            var heading = new TextBlock { Text = kind.Title, FontSize = 16, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var figure = Ui.Text("", 13, "muted"); figure.VerticalAlignment = VerticalAlignment.Center; figure.Name = "TileMeta_" + kind.Id; metas[kind.Id] = figure; meta = figure;
+            // A figure that is the point of the tile (the week's total) is set bold in the text colour; the rest stay quiet.
+            if (kind.Id == "week") { figure.Classes.Remove("muted"); figure.FontSize = 18; figure.FontWeight = FontWeight.Bold; figure.Classes.Add("clock"); }
+            var head = Ui.Grid("Auto,*,Auto,Auto"); head.ColumnSpacing = 10; head.Margin = new Thickness(14, 0, 8, 0); head.VerticalAlignment = VerticalAlignment.Center; head.Background = Brushes.Transparent; head.Name = "TileHandle_" + kind.Id; // Centred in its band, whose height is fixed.
+            handle = new Border { Child = head, Background = Brushes.Transparent }; // The drag target is the whole header.
+            Ui.Put(head, badge); Ui.Put(head, heading, 1);
+            // The figure and the buttons share one cell at the right, the figure at rest and the buttons under the pointer, so the header's right edge
+            // is the same on every tile whatever it holds and the grip always sits at the same distance from the corner.
+            figure.HorizontalAlignment = HorizontalAlignment.Right; buttons.HorizontalAlignment = HorizontalAlignment.Right; buttons.VerticalAlignment = VerticalAlignment.Center;
+            var cluster = new Grid { VerticalAlignment = VerticalAlignment.Center }; cluster.Children.Add(figure); cluster.Children.Add(buttons); Ui.Put(head, cluster, 2);
+            dots = new IconGlyph(IconKind.Grip) { TintKey = "Muted", VerticalAlignment = VerticalAlignment.Center, Opacity = .8, IsHitTestVisible = false, IsVisible = false }; Ui.Put(head, dots, 3);
+            var band = new Border { Height = 52, Background = new SolidColorBrush(Color.FromArgb(0x30, hue.R, hue.G, hue.B)), Child = handle };
+            body = new Border { Margin = new Thickness(16, 10, 16, 14) };
+            var stack = Ui.Grid("*", "Auto,*"); Ui.Put(stack, band); Ui.Put(stack, body, row: 1);
+            content = stack;
+        }
         var layers = new Grid(); layers.Children.Add(content); layers.Children.Add(grip);
         tile.Child = layers;
-        head.PointerPressed += (_, e) => BeginDrag(kind.Id, e, tile);
-        head.PointerMoved += (_, e) => DragTo(e);
-        head.PointerReleased += (_, e) => EndDrag(e);
-        head.PointerCaptureLost += (_, _) => CancelDrag();
+        void Refresh()
+        {
+            var shown = arranging || hovered;
+            buttons.Opacity = shown ? 1 : 0; buttons.IsHitTestVisible = shown; if (meta is not null) meta.Opacity = shown ? 0 : 1;
+            put.IsVisible = arranging; grip.IsVisible = arranging && expanded is null; if (dots is not null) dots.IsVisible = arranging;
+            handle.Cursor = arranging ? new Cursor(StandardCursorType.SizeAll) : Cursor.Default;
+            tile.BorderBrush = arranging ? new SolidColorBrush(Colors.Gray, .45) : null; tile.BorderThickness = arranging ? new Thickness(1.5) : default;
+        }
+        chrome[kind.Id] = Refresh;
+        tile.PointerEntered += (_, _) => { hovered = true; Refresh(); };
+        tile.PointerExited += (_, _) => { if (resizing is null && dragged is null) { hovered = false; Refresh(); } };
+        handle.PointerPressed += (_, e) => BeginDrag(kind.Id, e, tile);
+        handle.PointerMoved += (_, e) => DragTo(e);
+        handle.PointerReleased += (_, e) => EndDrag(e);
+        handle.PointerCaptureLost += (_, _) => CancelDrag();
         return (tile, body, null);
     }
 
     /// <summary>Fills a tile for the room it has. A small form keeps only what is essential.</summary>
-    internal void Fill(string id, TileForm form)
+    /// <summary>
+    /// What a tile shows follows from the room it has, not just how much of it: a clock that is one row high becomes a digital strip, a deadline that is
+    /// one cell becomes a bare countdown. The key names which version of the tile fits the placement, and the tile is redrawn only when it changes.
+    /// </summary>
+    internal static string VariantFor(string id, DeskPlacement p)
     {
-        var (tile, body, current) = tiles[id];
-        if (current == form) return;
-        tiles[id] = (tile, body, form);
+        var area = p.ColumnSpan * p.RowSpan;
+        return id switch
+        {
+            "clock" => p.RowSpan == 1 ? "strip" : area >= 6 ? "roomy" : "face",
+            _ => p.Form.ToString().ToLowerInvariant(),
+        };
+    }
+    internal void Fill(string id, DeskPlacement placement)
+    {
+        var (tile, body, current) = tiles[id]; var variant = VariantFor(id, placement); var form = placement.Form;
+        if (current == variant) return;
+        tiles[id] = (tile, body, variant);
         switch (id)
         {
             case "working": body.Child = trackerView = new TrackerView(model, form == TileForm.Tiny); break;
@@ -320,7 +378,7 @@ public sealed class DeskView : UserControl
 
     private void BeginResize(string id, PointerPressedEventArgs e, Control tile)
     {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || expanded is not null) return;
+        if (!arranging || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || expanded is not null) return;
         resizing = id; resizingSize = SizeOf(id); resizeStart = e.GetPosition(board); resizeFrom = tile.Bounds.Size;
         e.Pointer.Capture((IInputElement)e.Source!); e.Handled = true;
     }
@@ -344,7 +402,7 @@ public sealed class DeskView : UserControl
 
     private void BeginDrag(string id, PointerPressedEventArgs e, Control tile)
     {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        if (!arranging || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return; // Tiles are picked up only while arranging.
         if (TopLevel.GetTopLevel(this) is Window window) Ui.CloseMenus(window);
         dragged = id; dragStart = e.GetPosition(board); dragIndex = order.IndexOf(id);
         e.Pointer.Capture((IInputElement)e.Source!); e.Handled = true;
@@ -399,7 +457,7 @@ public sealed class DeskView : UserControl
     private void Save() { model.SetDeskOrder(order); model.SetDeskHidden(hidden); }
     private void SyncDrawer()
     {
-        foreach (var kind in Kinds) { tiles[kind.Id].Tile.IsVisible = !hidden.Contains(kind.Id) && (expanded is null || expanded == kind.Id); grips[kind.Id].IsVisible = expanded is null; }
+        foreach (var kind in Kinds) { tiles[kind.Id].Tile.IsVisible = !hidden.Contains(kind.Id) && (expanded is null || expanded == kind.Id); grips[kind.Id].IsVisible = arranging && expanded is null; }
         drawerToggle.Content = hidden.Count == 0 ? "Drawer" : $"Drawer ({hidden.Count})";
         chips.Children.Clear();
         if (hidden.Count == 0) chips.Children.Add(Ui.Text("Nothing put away. Drag a tile here, or use its cross.", 12, "muted"));
@@ -485,7 +543,7 @@ public sealed class DeskView : UserControl
                 }
                 else if (!Lively) { glide.X = rect.X; glide.Y = rect.Y; glide.W = rect.Width; glide.H = rect.Height; }
                 tile.Arrange(new Rect(glide.X, glide.Y, Math.Max(1, glide.W), Math.Max(1, glide.H)));
-                Owner?.Fill(p.Id, p.Form);
+                Owner?.Fill(p.Id, p);
             }
             ApplyLift();
             if (Lively && (Dragged is not null || Unsettled() || lift > .01) && !timer.IsEnabled) timer.Start();
@@ -517,7 +575,8 @@ public sealed class DeskView : UserControl
                 var held = lifted is not null && (child.Tag as DeskTileKind)?.Id == lifted && (lift > 0 || Dragged == lifted);
                 child.ZIndex = held ? 10 : 0; child.Opacity = held ? .97 : 1;
                 child.RenderTransformOrigin = new RelativePoint(.5, .5, RelativeUnit.Relative);
-                child.RenderTransform = held ? new TransformGroup { Children = { new ScaleTransform(1 + .025 * lift, 1 + .025 * lift), new RotateTransform(tilt * lift) } } : null;
+                var rest = RestAngle((child.Tag as DeskTileKind)?.Id ?? ""); // Post-its keep their slight tilt at rest and when held.
+                child.RenderTransform = held ? new TransformGroup { Children = { new ScaleTransform(1 + .025 * lift, 1 + .025 * lift), new RotateTransform(rest + tilt * lift) } } : rest != 0 ? new RotateTransform(rest) : null;
             }
         }
     }

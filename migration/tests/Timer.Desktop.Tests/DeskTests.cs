@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -257,7 +258,7 @@ public sealed class DeskTests
         try
         {
             var desk = OpenDesk(window); desk.Lively = false;
-            foreach (var placement in desk.Placements)
+            foreach (var placement in desk.Placements.Where(p => !p.Id.StartsWith("postit"))) // Post-its are informal: no header band.
             {
                 var tile = (Control)desk.TileControl(placement.Id)!; var handle = Named<Control>(window, "TileHandle_" + placement.Id);
                 var band = (Control)handle.Parent!; Assert.Equal(52, band.Bounds.Height);
@@ -351,12 +352,45 @@ public sealed class DeskTests
         {
             var desk = OpenDesk(window); desk.Lively = false;
             var button = Named<Button>(window, "DrawerToggle");
-            Assert.True(button.IsEffectivelyVisible);
+            Assert.False(button.IsEffectivelyVisible); // Putting away is arranging, so the Drawer button waits for Arrange.
+            Press(window, "ArrangeToggle"); Assert.True(desk.Arranging); Assert.True(button.IsEffectivelyVisible);
             // It shares a line with the title instead of taking a row above the tiles.
             Assert.True(button.TranslatePoint(new Point(), window)!.Value.Y < desk.TranslatePoint(new Point(), window)!.Value.Y);
             Press(window, "DrawerToggle"); Assert.True(desk.DrawerOpen); Assert.True(Named<Border>(window, "Drawer").IsVisible);
             Press(window, "DrawerToggle"); Assert.False(desk.DrawerOpen); Assert.False(Named<Border>(window, "Drawer").IsVisible);
+            window.KeyPress(Avalonia.Input.Key.Escape, Avalonia.Input.RawInputModifiers.None, Avalonia.Input.PhysicalKey.Escape, null); Dispatcher.UIThread.RunJobs();
+            Assert.False(desk.Arranging); Assert.False(button.IsEffectivelyVisible); // Escape leaves arrange mode, and the drawer goes with it.
             Press(window, "TileExpand_notes"); Assert.False(button.IsEffectivelyVisible); // Nothing to put away or bring back while a tile fills the desk.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void AtRestTilesShowNoEditingControlsAndArrangeModeBringsThemOut()
+    {
+        var window = Open(Model());
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false;
+            Assert.False(Named<Control>(window, "TileResize_todo").IsVisible); Assert.False(Named<Button>(window, "TileHide_todo").IsVisible);
+            Assert.Equal("Arrange", Named<Button>(window, "ArrangeToggle").Content);
+            Press(window, "ArrangeToggle"); Assert.Equal("Done", Named<Button>(window, "ArrangeToggle").Content);
+            Assert.True(Named<Control>(window, "TileResize_todo").IsVisible); Assert.True(Named<Button>(window, "TileHide_todo").IsVisible);
+            Press(window, "ArrangeToggle"); Assert.False(Named<Control>(window, "TileResize_todo").IsVisible); Assert.False(Named<Button>(window, "TileHide_todo").IsVisible);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void PostItsAreInformalWithATiltWhileTilesStayStraight()
+    {
+        var window = Open(Model());
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false; desk.Show("postit2"); window.UpdateLayout();
+            Assert.Equal(-1.6, Assert.IsType<RotateTransform>(desk.TileControl("postit")!.RenderTransform).Angle, 3);
+            Assert.Equal(1.3, Assert.IsType<RotateTransform>(desk.TileControl("postit2")!.RenderTransform).Angle, 3);
+            Assert.Null(desk.TileControl("todo")!.RenderTransform);
         }
         finally { window.Close(); }
     }

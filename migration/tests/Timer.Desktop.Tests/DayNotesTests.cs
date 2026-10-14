@@ -126,4 +126,16 @@ public sealed class DayNotesTests
         var late = new DayNote(1, new DateTime(2026, 10, 1), null, "!Old one");
         Assert.Equal(1, DayNotes.NextDeadline(new[] { late, new DayNote(2, new DateTime(2026, 11, 1), null, "!Later") })!.Id);
     }
+
+    [Fact]
+    public void WorkingTimeBetweenCountsOnlyScheduledHours()
+    {
+        var schedule = new WorkSchedule(); // Monday to Friday, nine to five.
+        var wed = new DateTime(2026, 10, 14);
+        Assert.Equal(TimeSpan.FromHours(3), schedule.WorkingTimeBetween(wed.AddHours(14), wed.AddHours(20))); // 14:00 to 17:00 is all that is left of Wednesday.
+        Assert.Equal(TimeSpan.FromHours(16), schedule.WorkingTimeBetween(wed.AddHours(12), wed.AddDays(2).AddHours(12))); // 5 + 8 + 3 across to Friday noon.
+        Assert.Equal(TimeSpan.FromHours(16), schedule.WorkingTimeBetween(wed.AddDays(2).AddHours(7), wed.AddDays(5).AddHours(18))); // Friday and Monday, with nothing for the weekend between.
+        Assert.Equal(TimeSpan.Zero, schedule.WorkingTimeBetween(wed.AddDays(3), wed.AddDays(4))); // Saturday.
+        Assert.Equal(TimeSpan.Zero, schedule.WorkingTimeBetween(wed.AddHours(12), wed.AddHours(10)));
+    }
 }

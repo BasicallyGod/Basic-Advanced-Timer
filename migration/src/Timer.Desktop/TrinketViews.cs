@@ -128,8 +128,8 @@ public static class PostItView
     {
         var box = new TextBox
         {
-            Name = name, Text = model.Trinkets.PostIts.ElementAtOrDefault(index)?.Text ?? "", AcceptsReturn = !oneLine, TextWrapping = oneLine ? TextWrapping.NoWrap : TextWrapping.Wrap,
-            Watermark = "Jot something down", Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), FontSize = 15, VerticalContentAlignment = VerticalAlignment.Top,
+            Name = name, Text = model.Trinkets.PostIts.ElementAtOrDefault(index)?.Text ?? "", AcceptsReturn = !oneLine, TextWrapping = oneLine ? TextWrapping.NoWrap : TextWrapping.Wrap, FontFamily = new FontFamily("Segoe Print, Segoe Script, Bradley Hand, Comic Sans MS, Segoe UI"),
+            Watermark = "Jot something down", Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), FontSize = 17, VerticalContentAlignment = VerticalAlignment.Top,
         };
         box.Classes.Add("postit");
         // TextChanged does not fire headless, so the text property is watched instead.
