@@ -48,6 +48,9 @@ public sealed class DeskView : UserControl
     private readonly Border drawer = new() { Name = "Drawer", Width = 236, HorizontalAlignment = HorizontalAlignment.Right, IsVisible = false, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), ZIndex = 20 };
     private readonly StackPanel chips = new() { Spacing = 8 };
     private readonly Button drawerToggle;
+    private bool drawerOpen; private readonly TranslateTransform drawerSlide = new();
+    private readonly Avalonia.Threading.DispatcherTimer drawerTimer = new() { Interval = TimeSpan.FromMilliseconds(16) }; private long drawerStamp;
+    private const double DrawerMilliseconds = 320, ChipStagger = 30;
     private Point chipStart; private string? chipPressed; private bool chipMoved;
     private string? dragged; private Point dragStart; private int dragIndex;
     private readonly Dictionary<string, (int Columns, int Rows)> sizes;
@@ -72,19 +75,20 @@ public sealed class DeskView : UserControl
         board.Owner = this; board.Lively = !model.Calm;
         Name = "Desk";
         // A button above the board opens the drawer, a panel down the right edge that holds the tiles put away.
-        drawerToggle = Ui.Button("", () => { drawer.IsVisible = !drawer.IsVisible; }, "DrawerToggle");
+        drawerToggle = Ui.Button("", () => SetDrawer(!drawerOpen), "DrawerToggle");
         drawerToggle.Classes.Add("toolButton"); drawerToggle.Classes.Add("quiet"); drawerToggle.HorizontalAlignment = HorizontalAlignment.Right; drawerToggle.Height = 30; drawerToggle.Padding = new Thickness(12, 0); drawerToggle.Margin = new Thickness(0, 0, 4, 4);
+        drawer.RenderTransform = drawerSlide; drawerTimer.Tick += (_, _) => StepDrawer();
         drawer.Classes.Add("panel"); drawer.Margin = new Thickness(0, 4, 4, 4); drawer.Padding = new Thickness(14);
         var drawerStack = new StackPanel { Spacing = 10 };
         drawerStack.Children.Add(Ui.Text("Put away", 12, "muted")); drawerStack.Children.Add(chips);
         drawer.Child = drawerStack; drawer.BoxShadow = BoxShadows.Parse("-6 0 24 0 #30000000");
-        var frame = Ui.Grid("*", "Auto,*");
-        Ui.Put(frame, drawerToggle);
+        // The Drawer button is handed to the window, which sets it in the header beside the title, so the board gets the room a row of its own would take.
+        var frame = Ui.Grid("*", "*");
         scroller = new ScrollViewer { Content = board, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, AllowAutoHide = false };
         // An opened tile fills the room the board has, so the board needs to know it.
         scroller.PropertyChanged += (_, e) => { if (e.Property == BoundsProperty && expanded is not null) board.InvalidateMeasure(); };
-        Ui.Put(frame, scroller, row: 1);
-        Ui.Put(frame, drawer, row: 1);
+        Ui.Put(frame, scroller);
+        Ui.Put(frame, drawer);
         Content = frame;
         SyncDrawer();
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; RefreshLive(); };
@@ -95,6 +99,35 @@ public sealed class DeskView : UserControl
     public bool Lively { get => board.Lively; set { board.Lively = value; board.InvalidateArrange(); } }
     /// <summary>The tiles in the order they sit, as the saved order and a drag leave it.</summary>
     public IReadOnlyList<string> Order => order;
+    /// <summary>The button that opens and closes the drawer. The window sets it in its header.</summary>
+    public Button DrawerButton => drawerToggle;
+    public bool DrawerOpen => drawerOpen;
+    public void SetDrawer(bool open)
+    {
+        if (open == drawerOpen) return;
+        drawerOpen = open;
+        if (!Lively) { drawer.IsVisible = open; drawerSlide.X = 0; foreach (var chip in chips.Children) { chip.Opacity = 1; chip.RenderTransform = null; } return; }
+        // The panel slides in from the edge and its chips follow one after another. The first step is taken on the first tick, so where no ticks come it simply appears.
+        drawer.IsVisible = true; drawerStamp = Environment.TickCount64; drawerTimer.Start();
+    }
+    private void StepDrawer()
+    {
+        var elapsed = (double)(Environment.TickCount64 - drawerStamp);
+        double Ease(double t) { t = Math.Clamp(t, 0, 1); return 1 - Math.Pow(1 - t, 3); }
+        var shown = drawerOpen ? Ease(elapsed / DrawerMilliseconds) : 1 - Ease(elapsed / (DrawerMilliseconds * .8));
+        drawerSlide.X = (1 - shown) * (drawer.Width + 16);
+        var index = 0;
+        foreach (var chip in chips.Children)
+        {
+            var local = drawerOpen ? Ease((elapsed - index * ChipStagger) / 240) : shown; index++;
+            chip.Opacity = local; chip.RenderTransform = new TranslateTransform((1 - local) * 28, 0);
+        }
+        var finished = elapsed >= DrawerMilliseconds + chips.Children.Count * ChipStagger;
+        if (!finished) return;
+        drawerTimer.Stop(); drawerSlide.X = 0;
+        foreach (var chip in chips.Children) { chip.Opacity = 1; chip.RenderTransform = null; }
+        drawer.IsVisible = drawerOpen;
+    }
     /// <summary>The tiles in the drawer.</summary>
     public IReadOnlyList<string> Hidden => hidden;
     /// <summary>Each tile's place and form at the current width.</summary>
@@ -120,7 +153,7 @@ public sealed class DeskView : UserControl
     public void Expand(string id)
     {
         if (expanded == id || !tiles.ContainsKey(id) || hidden.Contains(id)) return;
-        expanded = id; SyncDrawer(); board.InvalidateMeasure(); board.InvalidateArrange(); ExpandedChanged?.Invoke(id);
+        SetDrawer(false); expanded = id; SyncDrawer(); board.InvalidateMeasure(); board.InvalidateArrange(); ExpandedChanged?.Invoke(id);
     }
     public void Collapse()
     {
@@ -283,7 +316,7 @@ public sealed class DeskView : UserControl
     {
         if (dragged is null) return;
         var id = dragged; var index = IndexAt(e.GetPosition(board));
-        var overDrawer = drawer.IsVisible && drawer.Bounds.Contains(e.GetPosition((Visual?)drawer.Parent));
+        var overDrawer = drawerOpen && drawer.Bounds.Contains(e.GetPosition((Visual?)drawer.Parent));
         e.Pointer.Capture(null); Finish();
         if (overDrawer) Hide(id); else Drop(id, index);
     }
@@ -364,7 +397,7 @@ public sealed class DeskView : UserControl
         public int Columns { get; private set; } = 2; public double CellWidth { get; private set; }
         private readonly Dictionary<string, Glide> glides = new(); private readonly Dictionary<string, Rect> targets = new();
         private readonly Avalonia.Threading.DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
-        private string? lifted; private double lift, tilt, lastX;
+        private string? lifted; private double lift, liftTarget, tilt, lastX;
 
         public DeskBoard() { timer.Tick += (_, _) => Step(); DetachedFromVisualTree += (_, _) => timer.Stop(); }
         private static double Width0(double available) => double.IsInfinity(available) ? 640 : available;
@@ -401,7 +434,7 @@ public sealed class DeskView : UserControl
                     // The tile in hand sticks to the pointer, and its spring starts from there so letting go carries on smoothly.
                     var held = rect.Translate(DragOffset); glide.X = held.X; glide.Y = held.Y; glide.W = held.Width; glide.H = held.Height; glide.VX = glide.VY = glide.VW = glide.VH = 0;
                     if (Dragged != lifted) { lifted = Dragged; lastX = DragOffset.X; }
-                    tilt += (Math.Clamp((DragOffset.X - lastX) * .5, -5, 5) - tilt) * .4; lastX = DragOffset.X; lift = Lively ? 1 : 0;
+                    tilt += (Math.Clamp((DragOffset.X - lastX) * .35, -3.5, 3.5) - tilt) * .4; lastX = DragOffset.X; liftTarget = Lively ? 1 : 0; // The lift eases in, in Step, so picking a tile up does not pop.
                 }
                 else if (!Lively) { glide.X = rect.X; glide.Y = rect.Y; glide.W = rect.Width; glide.H = rect.Height; }
                 tile.Arrange(new Rect(glide.X, glide.Y, Math.Max(1, glide.W), Math.Max(1, glide.H)));
@@ -425,6 +458,7 @@ public sealed class DeskView : UserControl
                 Spring(ref g.X, ref g.VX, rect.X); Spring(ref g.Y, ref g.VY, rect.Y); Spring(ref g.W, ref g.VW, rect.Width); Spring(ref g.H, ref g.VH, rect.Height);
             }
             if (Dragged is null) { lift *= .8; tilt *= .8; if (lift < .01) { lift = 0; tilt = 0; } }
+            else { lift += (liftTarget - lift) * .2; if (liftTarget - lift < .01) lift = liftTarget; }
             InvalidateArrange();
             if (Dragged is null && lift == 0 && !Unsettled()) { timer.Stop(); lifted = null; ApplyLift(); }
         }
@@ -433,10 +467,10 @@ public sealed class DeskView : UserControl
         {
             foreach (var child in Children)
             {
-                var held = lifted is not null && (child.Tag as DeskTileKind)?.Id == lifted && lift > 0;
-                child.ZIndex = held ? 10 : 0; child.Opacity = held ? .95 : 1;
+                var held = lifted is not null && (child.Tag as DeskTileKind)?.Id == lifted && (lift > 0 || Dragged == lifted);
+                child.ZIndex = held ? 10 : 0; child.Opacity = held ? .97 : 1;
                 child.RenderTransformOrigin = new RelativePoint(.5, .5, RelativeUnit.Relative);
-                child.RenderTransform = held ? new TransformGroup { Children = { new ScaleTransform(1 + .04 * lift, 1 + .04 * lift), new RotateTransform(tilt * lift) } } : null;
+                child.RenderTransform = held ? new TransformGroup { Children = { new ScaleTransform(1 + .025 * lift, 1 + .025 * lift), new RotateTransform(tilt * lift) } } : null;
             }
         }
     }

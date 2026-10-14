@@ -702,7 +702,8 @@ public sealed class DashboardWindow : Window
         todayLabel = new TextBlock { Text = "Today", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
         todayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), todayLabel);
         Avalonia.Automation.AutomationProperties.SetName(todayButton, "Today");
-        Ui.Put(nav, Ui.Horizontal(previous, date, next, todayButton), 1);
+        // On the desk the Drawer button sits here, at the right of the title, so it takes no row of its own.
+        Ui.Put(nav, Ui.Horizontal(deskSlot, previous, date, next, todayButton), 1);
         Ui.Put(review, nav);
         undo = Ui.Button("", () => model.UndoEdit(), "UndoEdit");
         merge = Ui.Button("", () => model.MergeSelection(), "MergeSelected");
@@ -902,11 +903,11 @@ public sealed class DashboardWindow : Window
     private void ShowSettings() { settingsMode = !settingsMode; if (settingsMode) deskMode = false; Refresh(true); }
     private DeskView NewDesk()
     {
-        var desk = new DeskView(model, OpenDeskPage); openDesk = desk;
+        var desk = new DeskView(model, OpenDeskPage); openDesk = desk; deskSlot.Child = desk.DrawerButton;
         desk.ExpandedChanged += id => { deskExpanded = id; Refresh(false); };
         return desk;
     }
-    private string? deskExpanded; private DeskView? openDesk;
+    private string? deskExpanded; private DeskView? openDesk; private readonly Border deskSlot = new() { Name = "DeskSlot", IsVisible = false, VerticalAlignment = VerticalAlignment.Center };
     // Escape puts an opened tile back on the desk, after dialogs and before clearing a selection.
     private bool CollapseDesk() { if (openDesk is not { Expanded: not null } desk || !deskMode) return false; desk.Collapse(); return true; }
     private Action<bool>? chromeApplier; private bool barMode;
@@ -928,6 +929,7 @@ public sealed class DashboardWindow : Window
         var timelineOpen = showDesk && deskExpanded == "timeline"; var weekish = weekMode && !showDesk;
         workspaceTitle.IsVisible = !iconsOnly || showDesk; // The desk has no date row, so its name stays even when the buttons shrink to icons.
         if (model.Desk != barMode) { barMode = model.Desk; chromeApplier?.Invoke(barMode); }
+        deskSlot.IsVisible = showDesk && deskExpanded is null;
         if (showDesk != renderedDesk) ApplySidebarState();
         clock.Text = model.ClockText;
         // Amber on a break, red in overtime, green while tracking, full-strength text otherwise. A break outranks overtime.

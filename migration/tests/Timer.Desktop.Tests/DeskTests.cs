@@ -259,6 +259,24 @@ public sealed class DeskTests
     }
 
     [AvaloniaFact]
+    public void TheDrawerButtonSitsInTheHeaderAndOpensAndClosesTheDrawer()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false;
+            var button = Named<Button>(window, "DrawerToggle");
+            Assert.True(button.IsEffectivelyVisible);
+            // It shares a line with the title instead of taking a row above the tiles.
+            Assert.True(button.TranslatePoint(new Point(), window)!.Value.Y < desk.TranslatePoint(new Point(), window)!.Value.Y);
+            Press(window, "DrawerToggle"); Assert.True(desk.DrawerOpen); Assert.True(Named<Border>(window, "Drawer").IsVisible);
+            Press(window, "DrawerToggle"); Assert.False(desk.DrawerOpen); Assert.False(Named<Border>(window, "Drawer").IsVisible);
+            Press(window, "TileExpand_notes"); Assert.False(button.IsEffectivelyVisible); // Nothing to put away or bring back while a tile fills the desk.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ThePomodoroTileStartsPausesAndResets()
     {
         var model = Model(); var window = Open(model);
