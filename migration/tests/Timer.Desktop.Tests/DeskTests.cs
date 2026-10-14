@@ -270,6 +270,117 @@ public sealed class DeskTests
         finally { window.Close(); }
     }
 
+    private static bool Has<T>(Control root, string name) where T : Control => root.GetVisualDescendants().OfType<T>().Any(c => c.Name == name);
+
+    [AvaloniaFact]
+    public void TheClockChangesWhatItShowsWithItsSizeNotJustHowBigItIs()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false;
+            desk.Resize("clock", 2, 1); window.UpdateLayout(); // One row high: a digital strip with the date, and no face.
+            Assert.True(Has<TextBlock>(window, "ClockStripTime")); Assert.False(window.GetVisualDescendants().OfType<AnalogueClock>().Any());
+            desk.Resize("clock", 1, 2); window.UpdateLayout(); // Two rows: the face, with the time in figures under it.
+            Assert.True(window.GetVisualDescendants().OfType<AnalogueClock>().Any()); Assert.False(Has<TextBlock>(window, "ClockStripTime")); Assert.True(Has<TextBlock>(window, "ClockDigital"));
+            desk.Resize("clock", 2, 3); window.UpdateLayout(); // A big one adds the date.
+            Assert.True(window.GetVisualDescendants().OfType<AnalogueClock>().Any());
+            Assert.Contains(model.Engine.Now.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheDeadlineHasATinyStateAStandardOneAndAnExpandedOneWithContext()
+    {
+        var model = Model(); model.AddDayNote(model.Engine.Now.Date.AddDays(1), "!Timesheet due 17:00"); model.AddDayNote(model.Engine.Now.Date.AddDays(3), "!Quarter end report 09:00"); model.AddDayNote(model.Engine.Now.Date.AddDays(4), "!Budget review");
+        var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false;
+            desk.Resize("deadline", 1, 1); window.UpdateLayout(); // Tiny: a countdown and the name, and no date line or extras.
+            Assert.True(Has<TextBlock>(window, "DeadlineLeft")); Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Due in"); Assert.False(Has<TextBlock>(window, "DeadlineWorkLeft"));
+            desk.Resize("deadline", 2, 2); window.UpdateLayout(); // Standard: the phrase and the date.
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Due in"); Assert.False(Has<TextBlock>(window, "DeadlineWorkLeft"));
+            desk.Resize("deadline", 2, 3); window.UpdateLayout(); // Expanded: working time left and what follows.
+            var left = Named<TextBlock>(window, "DeadlineWorkLeft").Text; Assert.StartsWith("Working time left: ", left);
+            var due = model.Engine.Now.Date.AddDays(1).AddHours(17);
+            Assert.Equal("Working time left: " + model.Format(model.Engine.Schedule.WorkingTimeBetween(model.Engine.Now, due)), left);
+            Assert.Equal(2, Named<StackPanel>(window, "DeadlineLater").Children.Count);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheWeekChartGainsAnAccountBreakdownAsItGrows()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false; var chart = Named<WeekChart>(window, "WeekChart");
+            Assert.Equal(TileForm.Normal, chart.Mode);
+            desk.Resize("week", 1, 1); window.UpdateLayout(); Assert.Equal(TileForm.Tiny, chart.Mode);
+            desk.Resize("week", 3, 2); window.UpdateLayout(); Assert.Equal(TileForm.Roomy, chart.Mode);
+            var accounts = chart.AccountsThisWeek(); Assert.NotEmpty(accounts); Assert.Equal(accounts.OrderByDescending(a => a.Time).Select(a => a.Account), accounts.Select(a => a.Account));
+            Assert.All(chart.AccountsOn(model.SelectedDate), a => Assert.True(a.Time > TimeSpan.Zero));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TrackerDayAccountsAndComingUpEachHaveASmallAndABigForm()
+    {
+        var model = Model(); model.AddDayNote(model.Engine.Now.Date, "Call the client 23:00"); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false;
+            Assert.False(Has<TextBlock>(window, "TrackerAllocated") && Named<TextBlock>(window, "TrackerAllocated").IsEffectivelyVisible); // Normal: no stats row.
+            desk.Resize("working", 2, 3); window.UpdateLayout(); Assert.True(Has<TextBlock>(window, "TrackerAllocated"));
+            desk.Resize("working", 1, 1); window.UpdateLayout(); Assert.False(Has<Button>(window, "TrackerBreak")); Assert.True(Has<Button>(window, "TrackerPause")); // Small: the clock and one button.
+            desk.Resize("accounts", 1, 1); window.UpdateLayout(); Assert.NotEmpty(window.GetVisualDescendants().OfType<AccountDots>());
+            desk.Resize("accounts", 2, 3); window.UpdateLayout(); Assert.Empty(window.GetVisualDescendants().OfType<AccountDots>());
+            desk.Resize("coming", 1, 1); window.UpdateLayout(); Assert.False(window.GetVisualDescendants().OfType<CheckBox>().Any(c => c.Name?.StartsWith("ComingTick_") == true)); // One line, no ticks.
+            desk.Resize("coming", 2, 2); window.UpdateLayout(); Assert.True(window.GetVisualDescendants().OfType<CheckBox>().Any(c => c.Name?.StartsWith("ComingTick_") == true));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ATileThatIsResizedBackAndForthNeverTripsOverItsSharedPieces()
+    {
+        var window = Open(Model());
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false;
+            foreach (var id in new[] { "clock", "day", "working", "deadline" })
+                foreach (var size in new[] { (1, 1), (2, 2), (2, 3), (1, 2), (2, 1), (1, 1) }) { desk.Resize(id, size.Item1, size.Item2); window.UpdateLayout(); }
+            Assert.NotEmpty(window.GetVisualDescendants().OfType<AnalogueClock>().Concat<Control>(window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name == "ClockStripTime")));
+        }
+        finally { window.Close(); }
+    }
+
+    // A picture of the tiles at their small and big forms, for looking at when TIMER_PREVIEW_DIR is set.
+    [AvaloniaFact]
+    public void TheTilesDrawAtTheirSmallAndBigForms()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true);
+        model.AddDayNote(model.Engine.Now.Date.AddDays(1), "!Timesheet due 17:00"); model.AddDayNote(model.Engine.Now.Date.AddDays(3), "!Quarter end report 09:00"); model.AddDayNote(model.Engine.Now.Date.AddDays(4), "!Budget review"); model.AddDayNote(model.Engine.Now.Date, "Call about scope 15:00");
+        model.SetDeskHidden(new[] { "todo", "notes", "timeline", "strip", "postit2", "postit3", "pomodoro" });
+        var window = Open(model, 1500, 900);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false;
+            desk.Resize("clock", 2, 1); desk.Resize("deadline", 2, 3); desk.Resize("week", 3, 2); desk.Resize("working", 2, 3); desk.Resize("accounts", 1, 1); desk.Resize("day", 2, 2);
+            desk.Drop("clock", 0); desk.Drop("accounts", 1); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            if (Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") is { } folder)
+            {
+                Directory.CreateDirectory(folder); using (window.CaptureRenderedFrame()) { } using var frame = window.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, "desk-forms.png"));
+                desk.SetArranging(true); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); using (window.CaptureRenderedFrame()) { } using var arranging = window.CaptureRenderedFrame(); arranging?.Save(Path.Combine(folder, "desk-arranging.png"));
+            }
+        }
+        finally { window.Close(); }
+    }
+
     [AvaloniaFact]
     public void ATileCanBeMadeLargerOrSmallerWithinItsLimitsAndTheSizeIsKept()
     {

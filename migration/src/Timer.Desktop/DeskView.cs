@@ -21,7 +21,7 @@ public sealed class DeskView : UserControl
     public static readonly IReadOnlyList<DeskTileKind> Kinds = new DeskTileKind[]
     {
         new("working", "Time tracker", "#7FD1C7", 2, 2, "timeline", 1, 1, 4, 3),
-        new("week", "This week", "#E8C48C", 2, 2, "overview", 2, 2, 4, 4),
+        new("week", "This week", "#E8C48C", 2, 2, "overview", 1, 1, 4, 4),
         new("deadline", "Deadline", "#EE9CB4", 2, 2, null, 1, 1, 4, 3),
         new("day", "Day", "#F0C97A", 2, 1, "overview"),
         new("strip", "Day strip", "#D9A8E8", 4, 1, "timeline", 2, 1, 4, 2),
@@ -46,6 +46,14 @@ public sealed class DeskView : UserControl
     private static TextBlock Big(double size) => new() { FontSize = size, FontWeight = FontWeight.Bold, Classes = { "clock" } };
     private readonly AnalogueClock analogue; private readonly DayStrip strip;
     private readonly TextBlock digital = new() { Name = "ClockDigital", FontSize = 18, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Classes = { "figures" } };
+    private AccountDots? accountDots;
+    private readonly TextBlock stripTime = new() { Name = "ClockStripTime", FontSize = 40, FontWeight = FontWeight.Bold, Classes = { "clock" } }, clockDate = Ui.Text("", 13, "muted"), dayTotal = Big(26);
+    // A control can sit in one place at a time, so a tile that rebuilds its layout first takes the shared pieces out of the old one.
+    private static T Free<T>(T control) where T : Control
+    {
+        switch (control.Parent) { case Panel panel: panel.Children.Remove(control); break; case Decorator decorator: decorator.Child = null; break; case ContentControl content: content.Content = null; break; }
+        return control;
+    }
     private PomodoroView? pomodoroView; private TrackerView? trackerView; private WeekChart? weekChart; private DeadlineView? deadlineView;
     private NotesView? notesView; private ComingUpView? comingView;
     private TodoView? todoView; private readonly Dictionary<string, TextBox> postIts = new();
@@ -220,7 +228,7 @@ public sealed class DeskView : UserControl
         clock.Text = model.ClockText;
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
         clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
-        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual(); digital.Text = model.Engine.Now.ToString("HH:mm"); strip.InvalidateVisual(); pomodoroView?.Refresh(); trackerView?.Refresh(); deadlineView?.Refresh(); weekChart?.InvalidateVisual(); RefreshMeta();
+        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual(); digital.Text = model.Engine.Now.ToString("HH:mm"); stripTime.Text = digital.Text; clockDate.Text = model.Engine.Now.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")); dayTotal.Text = model.Format(model.Allocated + model.Unallocated); accountDots?.Refresh(); strip.InvalidateVisual(); pomodoroView?.Refresh(); trackerView?.Refresh(); deadlineView?.Refresh(); weekChart?.InvalidateVisual(); RefreshMeta();
         allocated.Text = model.Format(model.Allocated); unallocated.Text = model.Format(model.Unallocated);
     }
 
@@ -343,34 +351,45 @@ public sealed class DeskView : UserControl
         tiles[id] = (tile, body, variant);
         switch (id)
         {
-            case "working": body.Child = trackerView = new TrackerView(model, form == TileForm.Tiny); break;
-            case "week": body.Child = weekChart ??= new WeekChart(model); weekChart.InvalidateVisual(); break;
-            case "deadline": body.Child = deadlineView = new DeadlineView(model, form == TileForm.Tiny); break;
+            case "working": body.Child = trackerView = new TrackerView(model, form); break;
+            case "week": body.Child = weekChart ??= new WeekChart(model); weekChart.Mode = form; weekChart.InvalidateVisual(); break;
+            case "deadline": body.Child = deadlineView = new DeadlineView(model, form); break;
             case "day":
-                body.Child = form == TileForm.Tiny ? allocated : new StackPanel { Orientation = Orientation.Horizontal, Spacing = 28, Children =
                 {
-                    new StackPanel { Children = { Ui.Text("Allocated", 12, "muted"), allocated } }, new StackPanel { Children = { Ui.Text("Unallocated", 12, "muted"), unallocated } } } };
-                break;
+                    if (form == TileForm.Tiny) { body.Child = Free(allocated); break; }
+                    var figures = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 28 };
+                    figures.Children.Add(new StackPanel { Children = { Ui.Text("Allocated", 12, "muted"), Free(allocated) } }); figures.Children.Add(new StackPanel { Children = { Ui.Text("Unallocated", 12, "muted"), Free(unallocated) } });
+                    // With room, the whole of the working time joins the two parts it is made of.
+                    if (form == TileForm.Roomy) figures.Children.Add(new StackPanel { Children = { Ui.Text("Working time", 12, "muted"), Free(dayTotal) } });
+                    body.Child = figures; break;
+                }
             case "timeline": timelineStrip.Labels = true; body.Child = form == TileForm.Tiny ? timelineStrip : timelineHost; if (form != TileForm.Tiny) RebuildTimeline(); break;
             case "pomodoro": body.Child = pomodoroView = new PomodoroView(model, form == TileForm.Tiny); break;
             case "clock":
                 {
-                    // The face, with the time in figures under it when there is room.
-                    var face = Ui.Grid("*", form == TileForm.Tiny ? "*" : "*,Auto"); Ui.Put(face, analogue);
-                    if (form != TileForm.Tiny) { digital.Margin = new Thickness(0, 6, 0, 0); Ui.Put(face, digital, row: 1); }
+                    // One row high it is just the time, as a strip; with two rows it is the face with the time under it; with more it adds the date.
+                    if (variant == "strip")
+                    {
+                        var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14, VerticalAlignment = VerticalAlignment.Center };
+                        clockDate.Margin = new Thickness(0, 0, 0, 5); clockDate.VerticalAlignment = VerticalAlignment.Bottom; line.Children.Add(Free(stripTime)); line.Children.Add(Free(clockDate)); body.Child = line; break;
+                    }
+                    var roomy = variant == "roomy"; var face = Ui.Grid("*", roomy ? "*,Auto,Auto" : "*,Auto"); Ui.Put(face, Free(analogue));
+                    clockDate.Margin = new Thickness(0, 6, 0, 0); clockDate.VerticalAlignment = VerticalAlignment.Center;
+                    if (roomy) { clockDate.HorizontalAlignment = HorizontalAlignment.Center; Ui.Put(face, Free(clockDate), row: 1); }
+                    digital.Margin = new Thickness(0, 2, 0, 0); Ui.Put(face, Free(digital), row: roomy ? 2 : 1);
                     body.Child = face; break;
                 }
             case "strip": strip.Labels = form != TileForm.Tiny; body.Child = strip; strip.InvalidateVisual(); break;
             case "notes": body.Child = notesView = new NotesView(model, form == TileForm.Tiny); break;
-            case "coming": body.Child = new ScrollViewer { Content = comingView = new ComingUpView(model), AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }; break;
+            case "coming": body.Child = new ScrollViewer { Content = comingView = new ComingUpView(model, form == TileForm.Tiny), AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }; break;
             case "todo": body.Child = todoView = new TodoView(model, form == TileForm.Tiny); break;
             case "postit": case "postit2": case "postit3":
                 if (!postIts.TryGetValue(id, out var note)) postIts[id] = note = PostItView.Build(model, PostItIndex(id), false, id == "postit" ? "PostItText" : "PostItText" + (PostItIndex(id) + 1));
                 body.Child = note; PaintPostIt(); break;
             case "accounts":
-                body.Child = form == TileForm.Tiny
-                    ? Ui.Text(model.Accounts.Count(a => !BreakAccount.Is(a.Name)) + " accounts", 14)
-                    : new ScrollViewer { Content = new AccountList(model), AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+                // Small, the accounts are dots with their times; with room, the list; with more, the list with each budget as a bar.
+                body.Child = form == TileForm.Tiny ? accountDots = new AccountDots(model)
+                    : new ScrollViewer { Content = new AccountList(model, reorderable: false, bars: form == TileForm.Roomy), AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
                 break;
         }
         RefreshLive();
