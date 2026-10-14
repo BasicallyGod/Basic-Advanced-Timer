@@ -39,7 +39,7 @@ public sealed class EntryDialog : Dialog
         // Ticking this keeps the choice, so a longer entry moves the blocks after it without asking again. Settings has the same switch.
         var always = new CheckBox { Name = "AlwaysShove", Content = "Always move later blocks, without asking" };
         var shoveButtons = Ui.Horizontal(
-            Ui.DialogButton("Move later blocks", () =>
+            Ui.DialogButton("Move blocks", () =>
             {
                 shove.IsVisible = false;
                 if (always.IsChecked == true) model.SetMoveLaterAlways(true);
