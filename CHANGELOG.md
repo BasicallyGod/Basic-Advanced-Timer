@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 | --- | --- | --- |
+| Desk motion and Calm setting | pending | Tiles glide to their places on a light spring, and the tile in hand lifts and leans the way it is carried. A Calm motion switch in settings makes them move straight instead. |
 | Desk preview: a board of tiles | pending | A preview switch in settings adds a Desk page of tiles (Working time, Accounts, Day) that flow to fill the window, squeeze into smaller forms, can be picked up by their heading and moved, and open their full page. The order is remembered. The existing pages are unchanged. |
 | Resizable dashboard | pending | The dashboard can be resized from its edges and corners down to 640 by 480, and remembers its size. Narrow windows fold the accounts column into a panel opened by an Accounts button, with a small clock in the header, and the toolbar drops to icons. |
 

@@ -63,6 +63,7 @@ public sealed class SettingsView : ScrollViewer
         if (model.TrayAvailable) appearance.Children.Add(Toggle("Show in taskbar", "ShowInTaskbar", () => model.TaskbarButton, v => model.SetTaskbarButton(v)));
         if (model.AutoStart?.Available == true) appearance.Children.Add(Toggle("Start with Windows", "StartWithWindows", () => model.AutoStart?.IsEnabled == true, v => model.SetAutoStart(v)));
         // The tile board is still being built, so it sits behind a switch. The existing pages are all still there.
+        appearance.Children.Add(Toggle("Calm motion: tiles move without bouncing", "CalmMotion", () => model.Calm, v => model.SetCalm(v)));
         appearance.Children.Add(Toggle("Desk (preview): a board of tiles you can move", "DeskPreview", () => model.Desk, v => model.SetDesk(v)));
         page.Children.Add(Section("Appearance and behaviour", appearance));
 

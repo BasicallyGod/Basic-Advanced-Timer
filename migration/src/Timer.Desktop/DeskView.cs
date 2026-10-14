@@ -37,13 +37,15 @@ public sealed class DeskView : UserControl
         this.model = model; this.openPage = openPage;
         order = DeskLayout.Reconcile(model.DeskOrder, Kinds.Select(k => k.Id).ToList());
         foreach (var kind in Kinds) { var tile = BuildTile(kind); tiles[kind.Id] = tile; board.Children.Add(tile.Tile); }
-        board.Owner = this;
+        board.Owner = this; board.Lively = !model.Calm;
         Name = "Desk";
         Content = new ScrollViewer { Content = board, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, AllowAutoHide = false };
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; RefreshLive(); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
     }
 
+    /// <summary>Whether tiles glide, lift and bounce (Lively) or just move (Calm).</summary>
+    public bool Lively { get => board.Lively; set { board.Lively = value; board.InvalidateArrange(); } }
     /// <summary>The tiles in the order they sit, as the saved order and a drag leave it.</summary>
     public IReadOnlyList<string> Order => order;
     /// <summary>Each tile's place and form at the current width.</summary>
@@ -113,7 +115,6 @@ public sealed class DeskView : UserControl
         if (TopLevel.GetTopLevel(this) is Window window) Ui.CloseMenus(window);
         dragged = id; dragStart = e.GetPosition(board); dragIndex = order.IndexOf(id);
         e.Pointer.Capture((IInputElement)e.Source!); e.Handled = true;
-        tile.ZIndex = 10; tile.Opacity = .92;
     }
     private void DragTo(PointerEventArgs e)
     {
@@ -134,7 +135,6 @@ public sealed class DeskView : UserControl
     private void CancelDrag() { if (dragged is null) return; Finish(); board.InvalidateArrange(); }
     private void Finish()
     {
-        if (dragged is { } id && tiles.TryGetValue(id, out var t)) { t.Tile.ZIndex = 0; t.Tile.Opacity = 1; }
         dragged = null; board.Dragged = null; board.Provisional = null; board.DragOffset = default;
     }
     private int IndexAt(Point at)
@@ -153,14 +153,25 @@ public sealed class DeskView : UserControl
     internal static DeskTileSpec Spec(string id) { var k = Kinds.First(k => k.Id == id); return new(k.Id, k.Columns, k.Rows); }
     internal IReadOnlyList<string> LayoutOrder => board.Provisional ?? order;
 
-    /// <summary>A panel that sets each tile on the grid from the packed layout, with the dragged tile following the pointer.</summary>
+    /// <summary>
+    /// A panel that sets each tile on the grid from the packed layout, with the dragged tile following the pointer. Tiles glide to their
+    /// places on a light spring (a little overshoot, so a drop settles with a bounce), and the one in hand is lifted and tilted with the way it is moving.
+    /// With Lively off the tiles simply jump, which is also what the headless tests see because nothing ticks there.
+    /// </summary>
     private sealed class DeskBoard : Panel
     {
+        private sealed class Glide { public double X, Y, W, H, VX, VY, VW, VH; }
         public DeskView? Owner;
         public List<string>? Provisional; public string? Dragged; public Vector DragOffset;
+        public bool Lively = true;
         public List<DeskPlacement> Placements { get; private set; } = new();
         public int Columns { get; private set; } = 2; public double CellWidth { get; private set; }
-        private double Width0(double available) => double.IsInfinity(available) ? 640 : available;
+        private readonly Dictionary<string, Glide> glides = new(); private readonly Dictionary<string, Rect> targets = new();
+        private readonly Avalonia.Threading.DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
+        private string? lifted; private double lift, tilt, lastX;
+
+        public DeskBoard() { timer.Tick += (_, _) => Step(); DetachedFromVisualTree += (_, _) => timer.Stop(); }
+        private static double Width0(double available) => double.IsInfinity(available) ? 640 : available;
         protected override Size MeasureOverride(Size available)
         {
             var width = Width0(available.Width); Columns = DeskLayout.ColumnsFor(width); CellWidth = width / Columns;
@@ -172,15 +183,55 @@ public sealed class DeskView : UserControl
         {
             Columns = DeskLayout.ColumnsFor(final.Width); CellWidth = final.Width / Columns;
             Placements = DeskLayout.Pack((Provisional ?? Owner?.order ?? new()).Select(Spec), Columns);
+            targets.Clear();
             foreach (var p in Placements)
             {
                 if (Children.FirstOrDefault(c => (c.Tag as DeskTileKind)?.Id == p.Id) is not { } tile) continue;
                 var rect = new Rect(p.Column * CellWidth + Gap / 2, p.Row * (CellHeight + Gap) + Gap / 2, p.ColumnSpan * CellWidth - Gap, p.RowSpan * (CellHeight + Gap) - Gap);
-                if (p.Id == Dragged) rect = rect.Translate(DragOffset);
-                tile.Arrange(rect);
+                targets[p.Id] = rect;
+                if (!glides.TryGetValue(p.Id, out var glide)) glides[p.Id] = glide = new Glide { X = rect.X, Y = rect.Y, W = rect.Width, H = rect.Height };
+                if (p.Id == Dragged)
+                {
+                    // The tile in hand sticks to the pointer, and its spring starts from there so letting go carries on smoothly.
+                    var held = rect.Translate(DragOffset); glide.X = held.X; glide.Y = held.Y; glide.W = held.Width; glide.H = held.Height; glide.VX = glide.VY = glide.VW = glide.VH = 0;
+                    if (Dragged != lifted) { lifted = Dragged; lastX = DragOffset.X; }
+                    tilt += (Math.Clamp((DragOffset.X - lastX) * .5, -5, 5) - tilt) * .4; lastX = DragOffset.X; lift = Lively ? 1 : 0;
+                }
+                else if (!Lively) { glide.X = rect.X; glide.Y = rect.Y; glide.W = rect.Width; glide.H = rect.Height; }
+                tile.Arrange(new Rect(glide.X, glide.Y, Math.Max(1, glide.W), Math.Max(1, glide.H)));
                 Owner?.Fill(p.Id, p.Form);
             }
+            ApplyLift();
+            if (Lively && (Dragged is not null || Unsettled() || lift > .01) && !timer.IsEnabled) timer.Start();
             return final;
+        }
+        private bool Unsettled() => targets.Any(t => glides.TryGetValue(t.Key, out var g) && (Math.Abs(g.X - t.Value.X) > .4 || Math.Abs(g.Y - t.Value.Y) > .4 || Math.Abs(g.W - t.Value.Width) > .4 || Math.Abs(g.H - t.Value.Height) > .4 || Math.Abs(g.VX) + Math.Abs(g.VY) > .4));
+        private static void Spring(ref double pos, ref double velocity, double target)
+        {
+            velocity = (velocity + (target - pos) * .16) * .72; pos += velocity;
+            if (Math.Abs(target - pos) < .3 && Math.Abs(velocity) < .3) { pos = target; velocity = 0; }
+        }
+        private void Step()
+        {
+            foreach (var (id, rect) in targets)
+            {
+                if (id == Dragged || !glides.TryGetValue(id, out var g)) continue;
+                Spring(ref g.X, ref g.VX, rect.X); Spring(ref g.Y, ref g.VY, rect.Y); Spring(ref g.W, ref g.VW, rect.Width); Spring(ref g.H, ref g.VH, rect.Height);
+            }
+            if (Dragged is null) { lift *= .8; tilt *= .8; if (lift < .01) { lift = 0; tilt = 0; } }
+            InvalidateArrange();
+            if (Dragged is null && lift == 0 && !Unsettled()) { timer.Stop(); lifted = null; ApplyLift(); }
+        }
+        // The held tile grows a little and leans the way it is being carried, and sits above its neighbours until it has settled.
+        private void ApplyLift()
+        {
+            foreach (var child in Children)
+            {
+                var held = lifted is not null && (child.Tag as DeskTileKind)?.Id == lifted && lift > 0;
+                child.ZIndex = held ? 10 : 0; child.Opacity = held ? .95 : 1;
+                child.RenderTransformOrigin = new RelativePoint(.5, .5, RelativeUnit.Relative);
+                child.RenderTransform = held ? new TransformGroup { Children = { new ScaleTransform(1 + .04 * lift, 1 + .04 * lift), new RotateTransform(tilt * lift) } } : null;
+            }
         }
     }
 }

@@ -760,6 +760,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>The desk is a preview of the tile board that will replace the dashboard's pages. Off until switched on in settings.</summary>
     public bool Desk => preferences.Desk;
     public void SetDesk(bool on) { preferences = preferences with { Desk = on }; Save(); Notify(); }
+    /// <summary>Calm motion: things move straight to their places instead of gliding and bouncing. Lively is the default.</summary>
+    public bool Calm => preferences.Calm;
+    public void SetCalm(bool on) { preferences = preferences with { Calm = on }; Save(); Notify(); }
     /// <summary>The order the desk's tiles were left in. Only the order is saved, since the arrangement follows from it at any window size.</summary>
     public IReadOnlyList<string> DeskOrder => preferences.DeskOrder ?? Array.Empty<string>();
     public void SetDeskOrder(IReadOnlyList<string> order) { preferences = preferences with { DeskOrder = order.ToList() }; Save(); }

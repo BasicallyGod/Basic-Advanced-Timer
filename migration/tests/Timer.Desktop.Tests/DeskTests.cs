@@ -64,6 +64,21 @@ public sealed class DeskTests
     }
 
     [AvaloniaFact]
+    public void ACalmDeskMovesTilesStraightToTheirPlaces()
+    {
+        var window = Open(Model());
+        try
+        {
+            Press(window, "DeskTab");
+            var desk = window.GetVisualDescendants().OfType<DeskView>().Single(); desk.Lively = false;
+            desk.Drop("accounts", 0); window.UpdateLayout();
+            var accounts = (Control)desk.TileControl("accounts")!;
+            Assert.Equal(DeskView.Gap / 2, accounts.Bounds.X, 1); Assert.Equal(DeskView.Gap / 2, accounts.Bounds.Y, 1);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ATileOpensItsFullPage()
     {
         var window = Open(Model());
@@ -83,8 +98,8 @@ public sealed class DeskTests
         var folder = Path.Combine(Path.GetTempPath(), "timer-desk-" + Guid.NewGuid().ToString("N"));
         try
         {
-            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.False(prefs.Desk); store.Save(engine, prefs with { Desk = true, DeskOrder = new[] { "day", "accounts" } }); }
-            using (var store = new TimerStore(folder)) { var prefs = store.Load(new TrackingEngine()); Assert.True(prefs.Desk); Assert.Equal(new[] { "day", "accounts" }, prefs.DeskOrder); }
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.False(prefs.Desk); store.Save(engine, prefs with { Desk = true, Calm = true, DeskOrder = new[] { "day", "accounts" } }); }
+            using (var store = new TimerStore(folder)) { var prefs = store.Load(new TrackingEngine()); Assert.True(prefs.Desk); Assert.True(prefs.Calm); Assert.Equal(new[] { "day", "accounts" }, prefs.DeskOrder); }
         }
         finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
