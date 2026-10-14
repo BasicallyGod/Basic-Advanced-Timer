@@ -10,7 +10,8 @@ public sealed record TodoItem(string Text, bool Done = false, string? Account = 
 public sealed record PostIt(string Text = "", string Colour = "lemon", bool Tape = true);
 
 /// <summary>What the desk's trinkets hold. It is plain data, saved as one small piece of JSON beside the other settings.</summary>
-public sealed record TrinketData(IReadOnlyList<TodoItem> Todos, IReadOnlyList<PostIt> PostIts)
+/// <param name="TodosMoved">Set once the saved to-dos have been turned into notes, which now hold every task. The old list stays in the file as it was.</param>
+public sealed record TrinketData(IReadOnlyList<TodoItem> Todos, IReadOnlyList<PostIt> PostIts, bool TodosMoved = false)
 {
     /// <summary>Three post-its, the first on the desk and the others kept in the drawer until wanted.</summary>
     public static readonly TrinketData Empty = new(Array.Empty<TodoItem>(), new[] { new PostIt(), new PostIt("", "lilac", false), new PostIt("", "rose") });
@@ -63,7 +64,7 @@ public static class Trinkets
             if (data is null) return TrinketData.Empty;
             var posts = (data.PostIts ?? Array.Empty<PostIt>()).Select(p => new PostIt(p.Text ?? "", PostItColours.Contains(p.Colour) ? p.Colour : "lemon", p.Tape)).ToList();
             while (posts.Count < PostItCount) posts.Add(new PostIt("", PostItColours[posts.Count % PostItColours.Count]));
-            return new TrinketData((data.Todos ?? Array.Empty<TodoItem>()).Where(t => !string.IsNullOrWhiteSpace(t.Text)).ToList(), posts);
+            return new TrinketData((data.Todos ?? Array.Empty<TodoItem>()).Where(t => !string.IsNullOrWhiteSpace(t.Text)).ToList(), posts, data.TodosMoved);
         }
         catch (JsonException) { return TrinketData.Empty; }
     }

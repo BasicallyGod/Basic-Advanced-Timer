@@ -18,7 +18,7 @@ public static class NoteShorthand
     private static readonly string[] Months = { "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec" };
 
     /// <summary>Splits typed words into the note's text, its time and the day it names, if any. Today decides what tomorrow and the weekdays mean.</summary>
-    public static NoteParts Parse(string typed, DateTime today)
+    public static NoteParts Parse(string typed, DateTime today, bool task = false)
     {
         DateTime? day = null; var rest = typed;
         foreach (Match match in Day.Matches(typed))
@@ -28,6 +28,8 @@ public static class NoteShorthand
             if (rest.Length == 0) rest = match.Groups[1].Value; // A note that was only a date keeps the word.
             break;
         }
+        // Typed into the To-do list a note is a task: a time-like word stays a word and a leading ! is dropped, so what was typed there stays there.
+        if (task) { var plain = rest.Trim().TrimStart('!', ' '); return new NoteParts(plain.Length == 0 ? rest.Trim() : plain, null, day); }
         var (text, at) = DayNotes.Parse(rest);
         return new NoteParts(text, at, day);
     }
@@ -56,6 +58,22 @@ public static class NoteShorthand
     {
         var full = new[] { "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday" }[index];
         return full.StartsWith(w, StringComparison.Ordinal);
+    }
+
+    /// <summary>The #Tag that names an account, for writing into a note: the account's name with its spaces taken out.</summary>
+    public static string TagFor(string account) => "#" + new string(account.Where(c => !char.IsWhiteSpace(c)).ToArray());
+
+    /// <summary>
+    /// A note's words after accounts were renamed or deleted: a tag that named a renamed account names its new name, and one that named a deleted account
+    /// becomes an ordinary word. <paramref name="before"/> are the account names as they were, since that is what the old tag was read against.
+    /// </summary>
+    public static string Relink(string text, IEnumerable<string> before, IReadOnlyDictionary<string, string> renamed, IReadOnlyCollection<string> deleted)
+    {
+        var names = before.ToList();
+        if (Trinkets.FindAccountTag(text, names) is not { } found) return text;
+        var start = text[found.Index] == '#' ? found.Index : found.Index + 1;
+        if (renamed.TryGetValue(found.Account, out var now)) return text.Remove(start, 1 + found.Tag.Length).Insert(start, TagFor(now));
+        return deleted.Contains(found.Account) ? text.Remove(start, 1) : text;
     }
 
     /// <summary>The account a note's #Tag links to, or null.</summary>

@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
 using Timer.Desktop;
+using Timer.Storage;
 using Xunit;
 
 namespace Timer.Desktop.Tests;
@@ -139,6 +140,96 @@ public sealed class NoteShorthandTests
             Assert.Contains(coming.GetVisualDescendants().OfType<Control>(), c => c.Name == "ComingEvent_" + id); // and with its time it is an event.
         }
         finally { window.Close(); }
+    }
+
+    [Fact]
+    public void ATaskIsANoteWithNoTimeThatIsNotADeadlineAndTheListCarriesOpenOnesOver()
+    {
+        var yesterday = Today.AddDays(-1); var tomorrow = Today.AddDays(1);
+        var notes = new[]
+        {
+            new DayNote(1, yesterday, null, "open from yesterday"), new DayNote(2, yesterday, null, "done yesterday", true), new DayNote(3, Today, null, "today"),
+            new DayNote(4, Today, null, "done today", true), new DayNote(5, tomorrow, null, "later"), new DayNote(6, Today, new TimeSpan(14, 0, 0), "event"), new DayNote(7, Today, null, "!deadline"),
+        };
+        Assert.Equal(new long[] { 1, 3, 4 }, DayNotes.Todos(notes, Today.AddHours(10)).Select(n => n.Id)); // Carried over, today's, and today's ticked; not later, events or deadlines.
+        Assert.True(DayNotes.IsTask(notes[0])); Assert.False(DayNotes.IsTask(notes[5])); Assert.False(DayNotes.IsTask(notes[6]));
+    }
+
+    [Fact]
+    public void ATaskTypedInTheTodoListKeepsATimeLikeWordAndDropsALeadingMarker()
+    {
+        var parts = NoteShorthand.Parse("call at 14:30 #AccountOne @fri", Today, task: true);
+        Assert.Equal("call at 14:30 #AccountOne", parts.Text); Assert.Null(parts.At); Assert.Equal(new DateTime(2026, 10, 16), parts.Day);
+        Assert.Equal("ring Sam", NoteShorthand.Parse("!ring Sam", Today, task: true).Text);
+    }
+
+    [Fact]
+    public void ATagFollowsARenameAndBecomesAnOrdinaryWordWhenItsAccountIsDeleted()
+    {
+        var renamed = new Dictionary<string, string> { ["Account two"] = "Beta Co" };
+        Assert.Equal("call #BetaCo back", NoteShorthand.Relink("call #AccountTwo back", Accounts, renamed, Array.Empty<string>()));
+        Assert.Equal("call AccountTwo back", NoteShorthand.Relink("call #AccountTwo back", Accounts, new Dictionary<string, string>(), new[] { "Account two" }));
+        Assert.Equal("call #AccountOne", NoteShorthand.Relink("call #AccountOne", Accounts, renamed, new[] { "Internal" })); // Another account's change leaves it alone.
+        Assert.Equal("#BetaCo", NoteShorthand.TagFor("Beta Co"));
+    }
+
+    [AvaloniaFact]
+    public void ATodoIsTheSameItemInTodoNotesAndComingUp()
+    {
+        var model = Model(); model.AddTodo("send invoice #AccountOne");
+        var todo = Assert.Single(model.Todos);
+        Assert.Contains(model.NotesOn(model.SelectedDate), n => n.Id == todo.Id); // Notes shows it,
+        Assert.Contains(model.ComingUp(), n => n.Id == todo.Id); // and so does Coming up.
+        model.ToggleDayNote(todo.Id); // Ticked in Notes,
+        Assert.True(model.Todos.Single().Done); Assert.DoesNotContain(model.ComingUp(), n => n.Id == todo.Id); // it is ticked in the list and gone from Coming up.
+        model.ToggleTodo(todo.Id); Assert.False(model.Todos.Single().Done); // And back from the list.
+        model.ToggleTodo(todo.Id); model.ClearDoneTodos(); Assert.Empty(model.Todos); Assert.Empty(model.AllDayNotes); // Clearing the done ones removes the notes themselves.
+    }
+
+    [AvaloniaFact]
+    public void ATodoLeftOverFromYesterdayCarriesOnAndSaysWhen()
+    {
+        var model = Model(); model.AddDayNote(model.Engine.Now.Date.AddDays(-1), "chase payment", task: true);
+        var view = new TodoView(model, false); var window = new Window { Width = 400, Height = 300, Content = view }; window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); var id = model.Todos.Single().Id;
+            Assert.Equal("chase payment", model.Todos.Single().Text);
+            Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "TodoFrom_" + id);
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void ToDosAnEarlierBuildSavedBecomeTaskNotesOnceAfterABackup()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-todos-move-" + Guid.NewGuid());
+        try
+        {
+            var clock = new DateTime(2026, 10, 14, 10, 0, 0);
+            using (var store = new TimerStore(folder))
+            {
+                var engine = new TrackingEngine(clock: () => clock); var prefs = store.Load(engine);
+                var old = new TrinketData(new[] { new TodoItem("send invoice", false, "Account one"), new TodoItem("order tea", true), new TodoItem("plan #AccountTwo", false, "Account two") }, TrinketData.Empty.PostIts);
+                store.Save(engine, prefs with { Trinkets = old });
+            }
+            using (var store = new TimerStore(folder))
+            {
+                var engine = new TrackingEngine(clock: () => clock); var model = new TimerModel(engine, store.Load(engine), store);
+                var todos = model.Todos; Assert.Equal(3, todos.Count);
+                Assert.Equal("send invoice #Accountone", todos[0].Text); Assert.Equal("Account one", NoteShorthand.AccountOf(todos[0].Text, model.AccountNames));
+                Assert.True(todos[1].Done); Assert.Equal("order tea", todos[1].Text);
+                Assert.Equal("plan #AccountTwo", todos[2].Text); // A tag already in the words is not added twice.
+                Assert.All(todos, t => Assert.Equal(clock.Date, t.Day));
+                Assert.True(model.Trinkets.TodosMoved); Assert.Equal(3, model.Trinkets.Todos.Count); // The old list is still in the file.
+            }
+            using (var store = new TimerStore(folder))
+            {
+                var engine = new TrackingEngine(clock: () => clock); var model = new TimerModel(engine, store.Load(engine), store);
+                Assert.Equal(3, model.AllDayNotes.Count); // Opening again does not add them twice.
+            }
+        }
+        finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
 
     [AvaloniaFact]

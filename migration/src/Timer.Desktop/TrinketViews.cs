@@ -95,25 +95,30 @@ public sealed class TodoView : Grid
     public void Rebuild()
     {
         rows.Children.Clear();
-        var todos = model.Trinkets.Todos;
+        // The list is made of task notes, the same items Notes and Coming up show, so a tick or a removal here is a tick or a removal there.
+        var todos = model.Todos; var today = model.Engine.Now.Date;
         if (todos.Count == 0) rows.Children.Add(Ui.Text("Nothing to do. Type one below.", 12, "muted"));
-        for (var i = 0; i < todos.Count; i++)
+        foreach (var item in todos)
         {
-            var index = i; var item = todos[i];
-            var tick = new CheckBox { Name = "TodoTick_" + i, IsChecked = item.Done, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
-            tick.Click += (_, _) => model.ToggleTodo(index);
-            var text = new TextBlock { Text = item.Text, FontSize = 14, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Opacity = item.Done ? .55 : 1 };
+            var id = item.Id;
+            var tick = new CheckBox { Name = "TodoTick_" + id, IsChecked = item.Done, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
+            tick.Click += (_, _) => model.ToggleTodo(id);
+            var text = new TextBlock { Text = NoteShorthand.Display(item, model.AccountNames), FontSize = 14, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Opacity = item.Done ? .55 : 1 };
             if (item.Done) text.TextDecorations = TextDecorations.Strikethrough;
             var words = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(text);
-            if (item.Account is { } account && model.Accounts.FirstOrDefault(a => a.Name == account) is { } known)
+            var line = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8 };
+            if (NoteShorthand.AccountOf(item.Text, model.AccountNames) is { } account && model.Accounts.FirstOrDefault(a => a.Name == account) is { } known)
             {
                 // The tag takes the account's own colour, so a to-do reads as belonging to it at a glance.
                 var colour = Color.Parse(Ui.Visible(known.Colour));
                 var dot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(colour), VerticalAlignment = VerticalAlignment.Center };
                 var tag = new TextBlock { Text = "#" + known.Display, FontSize = 12, Foreground = new SolidColorBrush(Mix(colour, Ui.ThemeColour(this, "Ink", Colors.Black), .45)), FontWeight = FontWeight.SemiBold };
-                var tagRow = Ui.Horizontal(dot, tag); tagRow.Spacing = 5; tagRow.Name = "TodoTag_" + i; words.Children.Add(tagRow);
+                var tagRow = Ui.Horizontal(dot, tag); tagRow.Spacing = 5; tagRow.Name = "TodoTag_" + id; line.Children.Add(tagRow);
             }
-            var remove = Ui.IconButton(IconKind.Close, "Remove", "TodoRemove_" + i, () => model.RemoveTodo(index)); remove.Width = 26; remove.Height = 26;
+            // One carried over from an earlier day says when it was first set down.
+            if (item.Day.Date < today) { var from = Ui.Text("from " + ComingUpView.When(item.Day, model.Engine.Now), 12, "muted"); from.Name = "TodoFrom_" + id; line.Children.Add(from); }
+            if (line.Children.Count > 0) words.Children.Add(line);
+            var remove = Ui.IconButton(IconKind.Close, "Remove", "TodoRemove_" + id, () => model.RemoveTodo(id)); remove.Width = 26; remove.Height = 26;
             var row = Ui.Grid("Auto,*,Auto"); row.Margin = new Thickness(0, 2); Ui.Put(row, tick); Ui.Put(row, words, 1); Ui.Put(row, remove, 2);
             rows.Children.Add(row);
         }
