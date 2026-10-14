@@ -1,6 +1,6 @@
 # Navigation: audit and proposal
 
-Status: proposal only. Nothing here has been removed or changed yet. It follows the consolidated feedback on the desk and the floating timer, and keeps the three layers apart: the pill for the moment, the desk as the main workspace, dedicated views for detailed work.
+Status: agreed in outline. Overview folds into Timesheet, and the desk becomes the one home in alpha. Step 1 of the order of work is done; nothing has been removed yet. It follows the consolidated feedback on the desk and the floating timer, and keeps the three layers apart: the pill for the moment, the desk as the main workspace, dedicated views for detailed work.
 
 ## What there is today
 
@@ -23,7 +23,7 @@ With the desk on, the rail becomes a bar and the legacy left column is hidden. W
 These must exist on the desk, or somewhere reachable from it, before the legacy home can go:
 
 1. **Start day and Finish day.** On the left column and the pill's open list. The desk has no way to start or finish the day.
-2. **Continue earlier block.** On the message bar (shared) and menus. The desk shows the message bar only on pages that have it.
+2. **Continue earlier block.** Already available on the desk: it lives on the message bar, which floats over every page including the desk. (An earlier draft of this audit said otherwise.)
 3. **Reordering accounts** (drag grip) and the budget bar with its pace tick in a narrow list. The Accounts tile shows budget bars when big but cannot reorder.
 4. **The day card** (working time, allocated, unallocated). The Day and Time tracker tiles cover the figures.
 5. **Hidden-account handling, Accounts and budgets.** Now in Settings, so not lost.
@@ -44,7 +44,7 @@ These must exist on the desk, or somewhere reachable from it, before the legacy 
 
 ## Order of work if this is agreed
 
-1. Add Start/Finish day, Continue earlier block and account reordering to the desk (Time tracker and Accounts tiles).
+1. Add Start/Finish day and account reordering to the desk. Done: the Day tile has the button, and the Accounts list has its grips.
 2. Make Timesheet one view with three sections, keeping every control and button name.
 3. Make the desk the default home and remove the legacy left column.
 4. Date and account carried between views.

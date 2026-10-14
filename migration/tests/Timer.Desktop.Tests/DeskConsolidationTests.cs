@@ -109,4 +109,44 @@ public sealed class DeskConsolidationTests
         }
         finally { pill.Close(); }
     }
+
+    [AvaloniaTheory]
+    [InlineData(false, TileForm.Normal)]
+    [InlineData(false, TileForm.Roomy)]
+    [InlineData(true, TileForm.Normal)]
+    [InlineData(true, TileForm.Tiny)]
+    public void TheDayTileStartsAndFinishesTheDayInEveryForm(bool slim, TileForm form)
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0)));
+        var view = new DayView(model, form, slim); var window = new Window { Width = 500, Height = 300, Content = view }; window.Show();
+        try
+        {
+            Settle(window);
+            var button = view.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DayStartFinish"); Assert.True(button.IsVisible);
+            var before = model.DayStarted;
+            button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.NotEqual(before, model.DayStarted);
+            view.Refresh(); // The tile is refreshed by the desk on every change.
+            Assert.Equal(model.DayStarted ? "Finish day" : "Start day", ToolTip.GetTip(button));
+            Assert.Equal(model.DayStarted, button.Classes.Contains("finishDay"));
+            // The words show where there is room for them, and only the flag where there is not.
+            Assert.Equal(!slim, view.GetVisualDescendants().OfType<TextBlock>().Any(t => t.IsVisible && t.Text is "Start day" or "Finish day"));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheDesksAccountListCanBeReorderedLikeTheDashboards()
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup(); model.SetDesk(true);
+        var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        try
+        {
+            dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DeskTab").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
+            model.SetDeskHidden(Array.Empty<string>()); Settle(dashboard);
+            var grips = dashboard.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip && g.IsVisible).ToList();
+            Assert.NotEmpty(grips); // The Accounts tile's list has a grip on each row, so the order can be changed without leaving the desk.
+        }
+        finally { dashboard.Close(); }
+    }
 }

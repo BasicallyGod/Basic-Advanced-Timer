@@ -415,7 +415,7 @@ public sealed class DeskView : UserControl
             case "accounts":
                 // One row high the accounts are chips with their names and times (or, one cell wide, the account in hand); with room, the list, and with more, the list with budget bars.
                 target.Child = slim ? accountChips = new AccountChips(model, single: !wide)
-                    : new ScrollViewer { Content = new AccountList(model, reorderable: false, bars: form == TileForm.Roomy), AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+                    : new ScrollViewer { Content = new AccountList(model, reorderable: true, bars: form == TileForm.Roomy), AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
                 break;
         }
         // A list inside a tile keeps the wheel while the pointer is over it, so scrolling it never moves the desk behind.

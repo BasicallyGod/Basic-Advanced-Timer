@@ -613,22 +613,34 @@ public sealed class DayView : Grid
     private readonly TimerModel model; private readonly TileForm form; private readonly bool slim;
     private readonly TextBlock done = new() { Name = "DayDone", FontWeight = FontWeight.Bold, Classes = { "clock" } }, of = Ui.Text("", 13, "muted"), left = Ui.Text("", 13);
     private readonly DayProgress bar = new(); private readonly StackPanel details = new() { Spacing = 2 };
+    // Start day and Finish day live here, with the day's progress, since the desk has no left column to hold them.
+    private readonly Button dayButton; private readonly IconGlyph dayFlag = new(IconKind.Flag); private readonly TextBlock dayText = new() { VerticalAlignment = VerticalAlignment.Center, FontWeight = FontWeight.SemiBold };
     public DayView(TimerModel model, TileForm form, bool slim = false)
     {
         this.model = model; this.form = form; this.slim = slim; VerticalAlignment = VerticalAlignment.Center;
+        dayButton = Ui.Button("", model.ToggleDay, "DayStartFinish"); dayButton.Classes.Add("outlined"); dayButton.Classes.Add("quiet");
+        dayButton.Content = Ui.Horizontal(dayFlag, dayText); dayButton.HorizontalAlignment = HorizontalAlignment.Left; dayButton.Height = 34; dayButton.Padding = new Thickness(12, 0);
+        dayButton.PointerEntered += (_, _) => dayFlag.Waving = true; dayButton.PointerExited += (_, _) => dayFlag.Waving = false;
         if (slim)
         {
+            // One row high there is only room for the flag, with the words as its tooltip.
+            dayText.IsVisible = false; dayButton.Width = 34; dayButton.Padding = new Thickness(0); dayButton.HorizontalContentAlignment = HorizontalAlignment.Center; dayButton.Margin = new Thickness(10, 0, 0, 0);
             done.FontSize = 26; bar.Width = form == TileForm.Tiny ? 70 : 140; bar.VerticalAlignment = VerticalAlignment.Center; of.VerticalAlignment = VerticalAlignment.Center;
-            var row = Ui.Horizontal(bar, done); if (form != TileForm.Tiny) row.Children.Add(of); row.Spacing = 10; HorizontalAlignment = HorizontalAlignment.Right; Children.Add(row); Refresh(); return;
+            var row = Ui.Horizontal(bar, done); if (form != TileForm.Tiny) row.Children.Add(of); row.Children.Add(dayButton); row.Spacing = 10; HorizontalAlignment = HorizontalAlignment.Right; Children.Add(row); Refresh(); return;
         }
-        RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"); done.FontSize = form == TileForm.Roomy ? 46 : 40;
+        RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"); done.FontSize = form == TileForm.Roomy ? 46 : 40;
         var top = Ui.Horizontal(done, of); top.Spacing = 10; top.VerticalAlignment = VerticalAlignment.Bottom; Children.Add(top);
         bar.Margin = new Thickness(0, 8, 0, 6); SetRow(bar, 1); Children.Add(bar); SetRow(left, 2); Children.Add(left);
         if (form == TileForm.Roomy) { details.Margin = new Thickness(0, 8, 0, 0); SetRow(details, 3); Children.Add(details); }
+        dayButton.Margin = new Thickness(0, 10, 0, 0); SetRow(dayButton, 4); Children.Add(dayButton);
         Refresh();
     }
     public void Refresh()
     {
+        // The same flag as the pill's button: green to start the day, red to finish it, so ending it is never done by accident.
+        dayText.Text = model.DayStarted ? "Finish day" : "Start day"; dayFlag.TintKey = model.DayStarted ? "Finish" : "Start"; dayFlag.InvalidateVisual();
+        dayButton.Classes.Set("finishDay", model.DayStarted); dayButton.Classes.Set("startDay", !model.DayStarted);
+        ToolTip.SetTip(dayButton, dayText.Text);
         var f = DayFigures.For(model);
         done.Text = model.Format(f.Allocated); of.Text = f.Target > TimeSpan.Zero ? "of " + model.Format(f.Target) : "no working hours today";
         bar.Recorded = f.Target > TimeSpan.Zero ? f.Allocated.TotalSeconds / f.Target.TotalSeconds : 0;
