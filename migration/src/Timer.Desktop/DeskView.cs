@@ -25,6 +25,7 @@ public sealed class DeskView : UserControl
         new("todo", "To-do", "#F4B58A", 2, 3, null),
         new("postit", "Post-it", "#FFF1A8", 2, 2, null),
         new("clock", "Clock", "#8FA8D8", 1, 2, null),
+        new("strip", "Day strip", "#D9A8E8", 4, 1, "timeline"),
     };
 
     private readonly TimerModel model;
@@ -32,7 +33,7 @@ public sealed class DeskView : UserControl
     private readonly DeskBoard board = new();
     private readonly Dictionary<string, (Border Tile, Border Body, TileForm? Form)> tiles = new();
     private readonly ClockText clock = new(34, 18); private readonly TextBlock accountLine = Ui.Text("", 14), allocated = Ui.Text("", 20, "figures"), unallocated = Ui.Text("", 20, "figures");
-    private readonly AnalogueClock analogue;
+    private readonly AnalogueClock analogue; private readonly DayStrip strip;
     private TodoView? todoView; private TextBox? postIt;
     private List<string> order, hidden;
     private readonly Border drawer = new() { Name = "Drawer", Width = 236, HorizontalAlignment = HorizontalAlignment.Right, IsVisible = false, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), ZIndex = 20 };
@@ -44,7 +45,7 @@ public sealed class DeskView : UserControl
     public DeskView(TimerModel model, Action<string>? openPage = null)
     {
         this.model = model; this.openPage = openPage;
-        analogue = new AnalogueClock(() => model.Engine.Now);
+        analogue = new AnalogueClock(() => model.Engine.Now); strip = new DayStrip(model);
         var known = Kinds.Select(k => k.Id).ToList();
         hidden = model.DeskHidden.Where(known.Contains).Distinct().ToList();
         order = DeskLayout.Reconcile(model.DeskOrder.Where(id => !hidden.Contains(id)), known.Where(id => !hidden.Contains(id)).ToList());
@@ -94,7 +95,7 @@ public sealed class DeskView : UserControl
         clock.Text = model.ClockText;
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
         clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
-        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual();
+        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual(); strip.InvalidateVisual();
         allocated.Text = model.Format(model.Allocated); unallocated.Text = model.Format(model.Unallocated);
     }
 
@@ -146,6 +147,7 @@ public sealed class DeskView : UserControl
                     new StackPanel { Children = { Ui.Text("Allocated", 12, "muted"), allocated } }, new StackPanel { Children = { Ui.Text("Unallocated", 12, "muted"), unallocated } } } };
                 break;
             case "clock": body.Child = analogue; break;
+            case "strip": strip.Labels = form != TileForm.Tiny; body.Child = strip; strip.InvalidateVisual(); break;
             case "todo": body.Child = todoView = new TodoView(model, form == TileForm.Tiny); break;
             case "postit": body.Child = postIt ??= PostItView.Build(model, 0, false); PaintPostIt(); break;
             case "accounts":

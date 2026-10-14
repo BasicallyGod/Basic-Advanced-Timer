@@ -123,6 +123,19 @@ public sealed class DeskTests
     }
 
     [AvaloniaFact]
+    public void TheDayStripShowsTheDaysBlocksAndCoversTheWorkingHours()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        try
+        {
+            OpenDesk(window); var strip = Named<DayStrip>(window, "DayStrip");
+            var blocks = strip.Blocks(); Assert.NotEmpty(blocks); Assert.All(blocks, b => Assert.True(b.To >= b.From));
+            var (from, to) = strip.Window(blocks); Assert.True(from <= 8 && to >= 18); Assert.True(strip.Bounds.Width > 100);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void RenamingAnAccountKeepsItsToDosLinked()
     {
         var model = Model(); model.AddTodo("Call #AccountTwo");
