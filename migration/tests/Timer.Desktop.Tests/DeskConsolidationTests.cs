@@ -226,10 +226,15 @@ public sealed class DeskConsolidationTests
             var checkbox = dashboard.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Name == "DeskEnabled");
             var deskTab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DeskTab");
             Assert.True(checkbox.IsChecked); Assert.True(deskTab.IsVisible);
+            // Raising Click directly in headless tests does not toggle a CheckBox's IsChecked first as a real pointer click does.
+            checkbox.IsChecked = false;
             checkbox.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
-            Assert.False(model.Desk); Assert.False(deskTab.IsVisible);
+            Assert.False(model.Desk);
+            Assert.False(deskTab.IsVisible);
+            checkbox.IsChecked = true;
             checkbox.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
-            Assert.True(model.Desk); Assert.True(deskTab.IsVisible);
+            Assert.True(model.Desk);
+            Assert.True(deskTab.IsVisible);
         }
         finally { dashboard.Close(); }
     }
