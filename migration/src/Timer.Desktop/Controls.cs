@@ -111,7 +111,7 @@ public static class Ui
     }
     // The buttons in dialogs wear the same quiet outlined look as the dashboard's (Add time, Undo, Start break). The main action of a dialog,
     // such as Save or Export, has an accent outline so it reads as the one to press.
-    private static readonly string[] MainActions = { "Save", "Export CSV files", "Apply selected fills", "Group selected", "Move later blocks" };
+    private static readonly string[] MainActions = { "Save", "Export CSV files", "Apply selected fills", "Group selected", "Move blocks" };
     public static Button DialogButton(string text, Action click, string? name = null, bool? main = null)
     {
         var button = Button(text, click, name);
