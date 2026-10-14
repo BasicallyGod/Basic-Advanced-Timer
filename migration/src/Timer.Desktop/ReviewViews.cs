@@ -276,7 +276,21 @@ public static class ReviewViews
             // The overview is laid out to the width it is given, so it never needs a sideways bar. The table and entries may be wider than the window.
             HorizontalScrollBarVisibility = model.WeekSection is "hours" or "entries" ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
         DeferOffset(scroll);
-        return Ui.WithMoreBelow(scroll);
+        // The three sections are tabs along the top of the page, so the week is one place to go to rather than three.
+        var page = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+        page.Children.Add(SectionTabs(model)); Ui.Put(page, Ui.WithMoreBelow(scroll), row: 1);
+        return page;
+    }
+    private static Control SectionTabs(TimerModel model)
+    {
+        var tabs = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 4, 0, 0) };
+        foreach (var (key, label, tip, name) in new[] { ("overview", "Overview", "Week overview", "WeekOverviewTab"), ("hours", "Hours", "Hours table", "WeekHoursTab"), ("entries", "Entries", "Entries", "WeekEntriesTab") })
+        {
+            var tab = Ui.Button(label, () => model.SetWeekSection(key), name); tab.Classes.Add("tab"); tab.Classes.Set("selected", model.WeekSection == key); ToolTip.SetTip(tab, tip);
+            tabs.Children.Add(tab);
+        }
+        var rule = Ui.Rule(); var host = new StackPanel(); host.Children.Add(tabs); host.Children.Add(rule);
+        return host;
     }
     private static void OverviewSection(TimerModel model, WeekTable table, DateTime day, int[] days, StackPanel root)
     {

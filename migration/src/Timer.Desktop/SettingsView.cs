@@ -160,8 +160,6 @@ public sealed class SettingsView : Grid
     private Control DeskPane()
     {
         var pane = Pane("Desk");
-        // The tile board is still being built, so it sits behind a switch. The existing pages are all still there.
-        pane.Children.Add(Toggle("Desk (preview): a board of tiles you can move", "DeskPreview", () => model.Desk, v => model.SetDesk(v)));
         pane.Children.Add(Toggle("Calm motion: tiles move without bouncing", "CalmMotion", () => model.Calm, v => model.SetCalm(v)));
         return pane;
     }

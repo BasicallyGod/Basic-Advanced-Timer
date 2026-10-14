@@ -205,7 +205,7 @@ public sealed class DeskView : UserControl
         var offset = model.TimelineOffset is double fromModel ? new Vector(0, fromModel) : scroll?.Tag is Vector pending ? pending : scroll?.Offset;
         var fresh = ReviewViews.Timeline(model);
         if (offset is { } kept) { var next = fresh is ScrollViewer d ? d : fresh.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault(); if (next is not null) next.Tag = kept; }
-        timelineHost.Child = fresh;
+        timelineHost.Child = fresh; Ui.OwnWheel(fresh);
     }
     private static IconKind IconFor(string id) => id switch
     {
@@ -415,9 +415,11 @@ public sealed class DeskView : UserControl
             case "accounts":
                 // One row high the accounts are chips with their names and times (or, one cell wide, the account in hand); with room, the list, and with more, the list with budget bars.
                 target.Child = slim ? accountChips = new AccountChips(model, single: !wide)
-                    : new ScrollViewer { Content = new AccountList(model, reorderable: false, bars: form == TileForm.Roomy), AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+                    : new ScrollViewer { Content = new AccountList(model, reorderable: true, bars: form == TileForm.Roomy), AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
                 break;
         }
+        // A list inside a tile keeps the wheel while the pointer is over it, so scrolling it never moves the desk behind.
+        if (target.Child is Control built) Ui.OwnWheel(built);
         RefreshLive();
     }
 
