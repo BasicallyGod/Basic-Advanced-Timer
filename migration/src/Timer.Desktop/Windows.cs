@@ -35,7 +35,7 @@ public sealed class WindowCoordinator
         model.PropertyChanged += (_, _) => ApplyTaskbar();
         Pill.OpenDashboard = () =>
         {
-            model.ShowToday();
+            model.ShowToday(); Dashboard.GoHome();
             FitDashboardToPill();
             Dashboard.Show();
             Pill.Collapse(); // So it is a capsule again when you come back.
@@ -93,7 +93,7 @@ public sealed class WindowCoordinator
     }
     public void ShowDashboard()
     {
-        if (!Dashboard.IsVisible) { model.ShowToday(); FitDashboardToPill(); Dashboard.Show(); }
+        if (!Dashboard.IsVisible) { model.ShowToday(); Dashboard.GoHome(); FitDashboardToPill(); Dashboard.Show(); }
         Pill.Collapse(); Pill.Hide(); BringToFront(Dashboard);
     }
     // The tray icon's left click shows the timer, or hides it when it is already in front.
@@ -588,11 +588,12 @@ public sealed class DashboardWindow : Window
     private void ApplySidebarState()
     {
         // The desk shows the accounts and the working time as tiles, so its column stays away altogether.
-        var folded = sidebarCollapsed || deskMode;
+        // With the desk on it is home and the column is gone from every page, which keep the whole width for their own work.
+        var folded = sidebarCollapsed || deskMode || model.Desk;
         bodyGrid.ColumnDefinitions[0].Width = new GridLength(folded ? 0 : 340);
         sidebarDivider.IsVisible = !folded;
-        accountsToggle.IsVisible = sidebarCollapsed && !deskMode; compactClock.IsVisible = sidebarCollapsed && !deskMode;
-        sidebarPanel.IsVisible = deskMode ? false : !sidebarCollapsed || sidebarOpen;
+        accountsToggle.IsVisible = sidebarCollapsed && !deskMode && !model.Desk; compactClock.IsVisible = sidebarCollapsed && !deskMode && !model.Desk;
+        sidebarPanel.IsVisible = deskMode || model.Desk ? false : !sidebarCollapsed || sidebarOpen;
         if (sidebarCollapsed)
         {
             // Laid over the workspace from the left, above it, with a soft edge so it reads as sitting on top.
@@ -624,7 +625,7 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock today = Ui.Text("", 12, "muted");
     private readonly ContentControl workspace = new();
     private readonly Button day;
-    private Button timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
+    private Button timelineRail = null!, breakButton = null!, previous = null!, next = null!, timesheetRail = null!, addTime = null!, edit = null!;
     private IconGlyph pillGlyph = null!;
     private readonly BreakGlyph dashboardCup = new();
     private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
@@ -643,7 +644,7 @@ public sealed class DashboardWindow : Window
     private DateTime? renderedDate;
     public DashboardWindow(TimerModel model)
     {
-        this.model = model;
+        this.model = model; deskMode = model.Desk; // With the desk on, the dashboard opens on it.
         Title = "Basic’s Advanced Timer"; WindowChrome.Attach(this);
         ContextMenu = Ui.SettingsMenu(model);
         var (startWidth, startHeight) = PreferredSize(model);
@@ -667,17 +668,16 @@ public sealed class DashboardWindow : Window
             var button = Ui.Button("", click, name); button.Classes.Add("rail"); button.Content = new IconGlyph(kind);
             ToolTip.SetTip(button, tip); Avalonia.Automation.AutomationProperties.SetName(button, tip); return button;
         }
-        deskRail = RailButton(IconKind.Desk, "Desk (preview)", "DeskTab", ShowDesk); deskRail.IsVisible = model.Desk;
+        deskRail = RailButton(IconKind.Desk, "Desk", "DeskTab", ShowDesk); deskRail.IsVisible = model.Desk;
         timelineRail = RailButton(IconKind.Timeline, "Timeline", "TimelineTab", () => SelectTab(false));
-        overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectSection("overview"));
-        hoursTab = RailButton(IconKind.Table, "Hours table", "WeekHoursTab", () => SelectSection("hours"));
-        entriesTab = RailButton(IconKind.Entries, "Entries", "WeekEntriesTab", () => SelectSection("entries"));
+        // The week's three views (overview, hours, entries) are sections of one Timesheet page, picked by tabs on the page itself.
+        timesheetRail = RailButton(IconKind.Table, "Timesheet", "TimesheetTab", () => SelectSection(model.WeekSection));
         // The way back to the pill is the first thing on the rail, at the top left.
         var backToPill = RailButton(IconKind.Minimise, "Switch to pill", "BackToPill", () => OpenPill?.Invoke());
         pillGlyph = (IconGlyph)backToPill.Content!;
         railTop.Children.Add(backToPill);
         backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
-        foreach (var button in new[] { deskRail, timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
+        foreach (var button in new[] { deskRail, timelineRail, timesheetRail }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
         railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
         settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);
@@ -979,6 +979,8 @@ public sealed class DashboardWindow : Window
     }
     private void ShowTidy() { if (IsVisible) Dialogs.Show(new TidyDialog(model)); }
     private void ShowGroup(string id) { if (IsVisible) Dialogs.Show(new GroupDialog(model, id)); }
+    /// <summary>The desk is home: whenever the dashboard comes up from the pill it lands there, on today, not on whatever page was last open.</summary>
+    public void GoHome() { if (!model.Desk || deskMode) return; deskMode = true; weekMode = false; Refresh(true); }
     public void SelectTab(bool showWeek) { deskMode = false; weekMode = showWeek; Refresh(true); }
     // The gear opens the settings dialog and the same gear closes it.
     private void ShowSettings() { if (settingsDialog is not null) settingsDialog.Close(); else OpenSettings(); }
@@ -1025,7 +1027,7 @@ public sealed class DashboardWindow : Window
         // A tile opened in place that is the timeline brings the day arrows and editing buttons with it, as the Timeline page has.
         var timelineOpen = showDesk && deskExpanded == "timeline"; var weekish = weekMode && !showDesk;
         workspaceTitle.IsVisible = !iconsOnly || showDesk; // The desk has no date row, so its name stays even when the buttons shrink to icons.
-        if (model.Desk != barMode) { barMode = model.Desk; chromeApplier?.Invoke(barMode); }
+        if (model.Desk != barMode) { barMode = model.Desk; chromeApplier?.Invoke(barMode); ApplySidebarState(); }
         deskSlot.IsVisible = showDesk && deskExpanded is null;
         if (showDesk != renderedDesk) ApplySidebarState();
         clock.Text = model.ClockText;
@@ -1065,15 +1067,13 @@ public sealed class DashboardWindow : Window
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); if (button.Content is IconGlyph glyph) glyph.TintKey = selected ? "Ink" : "Muted"; }
         Rail(deskRail, showDesk);
         Rail(timelineRail, !showDesk && !weekMode);
-        Rail(overviewTab, !showDesk && weekMode && model.WeekSection == "overview");
-        Rail(hoursTab, !showDesk && weekMode && model.WeekSection == "hours");
-        Rail(entriesTab, !showDesk && weekMode && model.WeekSection == "entries");
+        Rail(timesheetRail, !showDesk && weekMode);
         Rail(settingsRail, settingsDialog is not null);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
         foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = (barMode || !showDesk || timelineOpen);
         if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && (!showDesk || timelineOpen) && (!weekish || model.WeekSection == "entries");
         if (toolsRow is not null) toolsRow.IsVisible = (!showDesk || timelineOpen) && (!weekish || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
-        workspaceTitle.Text = showDesk ? "Desk" : !weekish ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
+        workspaceTitle.Text = showDesk ? "Desk" : !weekish ? "Timeline" : "Timesheet";
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
         // The desk keeps itself up to date, so a change does not rebuild it under the pointer or in the middle of typing.
         if ((refreshWorkspace && !(showDesk && renderedDesk)) || renderedDesk != showDesk)

@@ -1,6 +1,6 @@
 # Navigation: audit and proposal
 
-Status: agreed in outline. Overview folds into Timesheet, and the desk becomes the one home in alpha. Step 1 of the order of work is done; nothing has been removed yet. It follows the consolidated feedback on the desk and the floating timer, and keeps the three layers apart: the pill for the moment, the desk as the main workspace, dedicated views for detailed work.
+Status: agreed in outline. Overview folds into Timesheet, and the desk becomes the one home in alpha. Steps 1 and 2 of the order of work are done, and most of step 3: the desk is home and the legacy left column no longer shows. The older dashboard layout code is still in the tree (tests reach it by turning the desk off) and is the remaining thing to delete. It follows the consolidated feedback on the desk and the floating timer, and keeps the three layers apart: the pill for the moment, the desk as the main workspace, dedicated views for detailed work.
 
 ## What there is today
 
@@ -45,8 +45,8 @@ These must exist on the desk, or somewhere reachable from it, before the legacy 
 ## Order of work if this is agreed
 
 1. Add Start/Finish day and account reordering to the desk. Done: the Day tile has the button, and the Accounts list has its grips.
-2. Make Timesheet one view with three sections, keeping every control and button name.
-3. Make the desk the default home and remove the legacy left column.
+2. Make Timesheet one view with three sections, keeping every control and button name. Done: one `TimesheetTab` button, with Overview, Hours and Entries as tabs on the page.
+3. Make the desk the default home and remove the legacy left column. Done in product: always on, opens on it, no switch, column hidden everywhere. To do: delete the older layout code and move the tests that still use it.
 4. Date and account carried between views.
 
 ## Questions for decision

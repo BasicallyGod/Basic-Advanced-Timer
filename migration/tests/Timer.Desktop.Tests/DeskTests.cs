@@ -179,8 +179,8 @@ public sealed class DeskTests
         {
             Point At(Window w, string name) => Named<Button>(w, name).TranslatePoint(new Point(), w)!.Value;
             // A rail stacks its buttons down the side; the bar lays the same buttons along the top.
-            Assert.True(Math.Abs(At(off, "TimelineTab").X - At(off, "WeekOverviewTab").X) < 1 && At(off, "WeekOverviewTab").Y > At(off, "TimelineTab").Y + 20);
-            Assert.True(Math.Abs(At(on, "TimelineTab").Y - At(on, "WeekOverviewTab").Y) < 1 && At(on, "WeekOverviewTab").X > At(on, "TimelineTab").X + 20);
+            Assert.True(Math.Abs(At(off, "TimelineTab").X - At(off, "TimesheetTab").X) < 1 && At(off, "TimesheetTab").Y > At(off, "TimelineTab").Y + 20);
+            Assert.True(Math.Abs(At(on, "TimelineTab").Y - At(on, "TimesheetTab").Y) < 1 && At(on, "TimesheetTab").X > At(on, "TimelineTab").X + 20);
             Assert.True(At(on, "QuitTimer").X > At(on, "Settings").X); Assert.True(Math.Abs(At(on, "QuitTimer").Y - At(on, "Settings").Y) < 1);
             Assert.True(At(on, "DeskTab").X < At(on, "TimelineTab").X);
         }
@@ -196,7 +196,7 @@ public sealed class DeskTests
             var desk = OpenDesk(window);
             Point At(string name) => Named<Control>(window, name).TranslatePoint(new Point(), window)!.Value;
             Assert.True(Math.Abs(At("NextPeriod").Y - At("TimelineTab").Y) < 12); // On the bar's line, beside the view buttons.
-            Assert.True(At("PreviousPeriod").X > At("WeekEntriesTab").X);
+            Assert.True(At("PreviousPeriod").X > At("TimesheetTab").X);
             var today = model.SelectedDate; Press(window, "PreviousPeriod");
             Assert.Equal(today.AddDays(-1), model.SelectedDate); Assert.Same(desk, window.GetVisualDescendants().OfType<DeskView>().Single());
             Assert.Contains(today.AddDays(-1).ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
@@ -690,7 +690,7 @@ public sealed class DeskTests
         var folder = Path.Combine(Path.GetTempPath(), "timer-desk-" + Guid.NewGuid().ToString("N"));
         try
         {
-            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.False(prefs.Desk); store.Save(engine, prefs with { Desk = true, Calm = true, DeskOrder = new[] { "day", "accounts" }, DeskHidden = new[] { "working" } }); }
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.True(prefs.Desk); /* The desk is home, so even a new database has it on. */ store.Save(engine, prefs with { Desk = true, Calm = true, DeskOrder = new[] { "day", "accounts" }, DeskHidden = new[] { "working" } }); }
             using (var store = new TimerStore(folder)) { var prefs = store.Load(new TrackingEngine()); Assert.True(prefs.Desk); Assert.True(prefs.Calm); Assert.Equal(new[] { "working" }, prefs.DeskHidden); Assert.Equal(new[] { "day", "accounts" }, prefs.DeskOrder); }
         }
         finally { try { Directory.Delete(folder, true); } catch (IOException) { } }

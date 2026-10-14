@@ -625,8 +625,8 @@ public sealed class DayView : Grid
         {
             // One row high there is only room for the flag, with the words as its tooltip.
             dayText.IsVisible = false; dayButton.Width = 34; dayButton.Padding = new Thickness(0); dayButton.HorizontalContentAlignment = HorizontalAlignment.Center; dayButton.Margin = new Thickness(10, 0, 0, 0);
-            done.FontSize = 26; bar.Width = form == TileForm.Tiny ? 70 : 140; bar.VerticalAlignment = VerticalAlignment.Center; of.VerticalAlignment = VerticalAlignment.Center;
-            var row = Ui.Horizontal(bar, done); if (form != TileForm.Tiny) row.Children.Add(of); row.Children.Add(dayButton); row.Spacing = 10; HorizontalAlignment = HorizontalAlignment.Right; Children.Add(row); Refresh(); return;
+            done.FontSize = 26; bar.Width = form == TileForm.Tiny ? 70 : form == TileForm.Roomy ? 140 : 100; bar.VerticalAlignment = VerticalAlignment.Center; of.VerticalAlignment = VerticalAlignment.Center;
+            var row = Ui.Horizontal(bar, done); if (form == TileForm.Roomy) row.Children.Add(of); row.Children.Add(dayButton); row.Spacing = 10; HorizontalAlignment = HorizontalAlignment.Right; Children.Add(row); Refresh(); return;
         }
         RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"); done.FontSize = form == TileForm.Roomy ? 46 : 40;
         var top = Ui.Horizontal(done, of); top.Spacing = 10; top.VerticalAlignment = VerticalAlignment.Bottom; Children.Add(top);

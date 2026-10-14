@@ -149,4 +149,86 @@ public sealed class DeskConsolidationTests
         }
         finally { dashboard.Close(); }
     }
+
+    private static void Press(Window w, string name) => w.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+
+    [AvaloniaFact]
+    public void TheWeekIsOneTimesheetButtonWithTabsOnItsPage()
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup(); model.SetDesk(true);
+        var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        try
+        {
+            // The bar has Timesheet and no separate week buttons.
+            var buttons = dashboard.GetVisualDescendants().OfType<Button>().Select(b => b.Name).ToList();
+            Assert.Contains("TimesheetTab", buttons); Assert.DoesNotContain("WeekOverviewTab", buttons); Assert.DoesNotContain("WeekHoursTab", buttons); Assert.DoesNotContain("WeekEntriesTab", buttons);
+            Press(dashboard, "TimesheetTab"); Settle(dashboard);
+            Assert.Contains("selected", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimesheetTab").Classes);
+            Assert.Equal("Timesheet", dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == null && t.Text == "Timesheet" && t.Classes.Contains("clock")).Text);
+            // The three sections are tabs on the page, with their own tooltips, and the chosen one is marked.
+            foreach (var (name, section, tip) in new[] { ("WeekOverviewTab", "overview", "Week overview"), ("WeekHoursTab", "hours", "Hours table"), ("WeekEntriesTab", "entries", "Entries") })
+            {
+                Press(dashboard, name); Settle(dashboard);
+                Assert.Equal(section, model.WeekSection);
+                var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
+                Assert.Contains("selected", tab.Classes); Assert.Equal(tip, ToolTip.GetTip(tab));
+                Assert.Single(dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("tab") && b.Classes.Contains("selected")));
+            }
+            // Coming back to the Timesheet from another page returns to the section last used.
+            Press(dashboard, "TimelineTab"); Settle(dashboard); Press(dashboard, "TimesheetTab"); Settle(dashboard);
+            Assert.Contains("selected", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekEntriesTab").Classes);
+        }
+        finally { dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheDashboardOpensOnTheDeskAndGoHomeReturnsToItFromAnyPage()
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup(); model.SetDesk(true);
+        var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        try
+        {
+            Assert.Contains("selected", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DeskTab").Classes); // It opens on the desk.
+            Press(dashboard, "TimesheetTab"); Settle(dashboard);
+            Assert.DoesNotContain("selected", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DeskTab").Classes);
+            dashboard.GoHome(); Settle(dashboard);
+            Assert.Contains("selected", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DeskTab").Classes);
+            Assert.DoesNotContain("selected", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimesheetTab").Classes);
+        }
+        finally { dashboard.Close(); }
+    }
+
+    [Fact]
+    public void TheDeskIsOnWhateverAnEarlierBuildSavedAndSettingsHasNoSwitchForIt()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-desk-home-" + Guid.NewGuid());
+        try
+        {
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); store.Save(engine, prefs with { Desk = false }); }
+            using (var store = new TimerStore(folder)) Assert.True(store.Load(new TrackingEngine()).Desk);
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public void SettingsNoLongerHasADeskPreviewSwitch()
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup();
+        var view = new SettingsView(model); var window = new Window { Content = view }; window.Show();
+        try { view.Select("desk"); Settle(window); Assert.DoesNotContain(window.GetVisualDescendants().OfType<CheckBox>(), c => c.Name == "DeskPreview"); Assert.Contains(window.GetVisualDescendants().OfType<CheckBox>(), c => c.Name == "CalmMotion"); }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void PreviewPictures()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return; Directory.CreateDirectory(folder);
+        var model = TimerModel.CreateDemo(); model.SetDesk(true); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        try
+        {
+            void Shot(string name) { Settle(dashboard); using var frame = dashboard.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, name + ".png")); }
+            Shot("desk-home"); Press(dashboard, "TimesheetTab"); Shot("timesheet-overview"); Press(dashboard, "WeekHoursTab"); Shot("timesheet-hours"); Press(dashboard, "WeekEntriesTab"); Shot("timesheet-entries");
+        }
+        finally { dashboard.Close(); }
+    }
 }

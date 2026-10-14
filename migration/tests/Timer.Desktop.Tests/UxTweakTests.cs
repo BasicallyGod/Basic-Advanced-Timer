@@ -551,7 +551,7 @@ public sealed class UxTweakTests
         var window = new DashboardWindow(model); window.Show();
         try
         {
-            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekEntriesTab").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            window.SelectTab(true); window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekEntriesTab").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window); // The sections are tabs on the Timesheet page.
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "DayAllocated" && t.Text!.Contains("02:00"));
         }
         finally { window.Close(); }
