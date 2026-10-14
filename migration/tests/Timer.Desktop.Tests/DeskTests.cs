@@ -244,7 +244,7 @@ public sealed class DeskTests
             model.AddDayNote(due, "!Timesheet due"); window.UpdateLayout();
             var expected = due.AddHours(17) - model.Engine.Now; var left = Named<TextBlock>(window, "DeadlineLeft").Text;
             Assert.Equal($"{(int)expected.TotalHours:00}:{expected.Minutes:00}", left);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Timesheet due is due in");
+            Assert.Equal("Timesheet due", Named<TextBlock>(window, "DeadlineWhat").Text); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Due in");
             model.ToggleDayNote(model.AllDayNotes[0].Id); window.UpdateLayout(); Assert.Equal("--:--", Named<TextBlock>(window, "DeadlineLeft").Text);
         }
         finally { window.Close(); }

@@ -43,6 +43,7 @@ public sealed class DeskView : UserControl
     private readonly Dictionary<string, (Border Tile, Border Body, TileForm? Form)> tiles = new();
     private readonly ClockText clock = new(34, 18); private readonly TextBlock accountLine = Ui.Text("", 14), allocated = Ui.Text("", 20, "figures"), unallocated = Ui.Text("", 20, "figures");
     private readonly AnalogueClock analogue; private readonly DayStrip strip;
+    private readonly TextBlock digital = new() { Name = "ClockDigital", FontSize = 15, HorizontalAlignment = HorizontalAlignment.Center, Classes = { "figures" } };
     private PomodoroView? pomodoroView; private TrackerView? trackerView; private WeekChart? weekChart; private DeadlineView? deadlineView;
     private NotesView? notesView; private ComingUpView? comingView;
     private TodoView? todoView; private readonly Dictionary<string, TextBox> postIts = new();
@@ -213,7 +214,7 @@ public sealed class DeskView : UserControl
         clock.Text = model.ClockText;
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
         clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
-        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual(); strip.InvalidateVisual(); pomodoroView?.Refresh(); trackerView?.Refresh(); deadlineView?.Refresh(); weekChart?.InvalidateVisual(); RefreshMeta();
+        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual(); digital.Text = model.Engine.Now.ToString("HH:mm"); strip.InvalidateVisual(); pomodoroView?.Refresh(); trackerView?.Refresh(); deadlineView?.Refresh(); weekChart?.InvalidateVisual(); RefreshMeta();
         allocated.Text = model.Format(model.Allocated); unallocated.Text = model.Format(model.Unallocated);
     }
 
@@ -230,8 +231,8 @@ public sealed class DeskView : UserControl
             Child = new IconGlyph(IconFor(kind.Id)) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } } };
         var heading = new TextBlock { Text = kind.Title, FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var meta = Ui.Text("", 12, "muted"); meta.VerticalAlignment = VerticalAlignment.Center; meta.Name = "TileMeta_" + kind.Id; metas[kind.Id] = meta;
-        var head = Ui.Grid("Auto,*,Auto,Auto,Auto"); head.ColumnSpacing = 10; head.Margin = new Thickness(14, 0, 8, 0); head.Cursor = new Cursor(StandardCursorType.Hand); head.Background = Brushes.Transparent; head.Name = "TileHandle_" + kind.Id;
-        Ui.Put(head, badge); Ui.Put(head, heading, 1); Ui.Put(head, meta, 2);
+        var head = Ui.Grid("Auto,*,Auto,Auto"); head.ColumnSpacing = 10; head.Margin = new Thickness(14, 0, 8, 0); head.Cursor = new Cursor(StandardCursorType.Hand); head.Background = Brushes.Transparent; head.Name = "TileHandle_" + kind.Id;
+        Ui.Put(head, badge); Ui.Put(head, heading, 1);
         var buttons = Ui.Horizontal(); buttons.Spacing = 2; buttons.Opacity = 0; buttons.IsHitTestVisible = false;
         if (kind.OpensPage is { } page)
         {
@@ -244,10 +245,13 @@ public sealed class DeskView : UserControl
             // Paper stays light whatever the theme, and a button changes its colour.
             var paint = Ui.IconButton(IconKind.Edit, "Change colour", "PostItColour" + (kind.Id == "postit" ? "" : (PostItIndex(kind.Id) + 1).ToString()), () => model.CyclePostItColour(PostItIndex(kind.Id))); paint.Width = 28; paint.Height = 28; buttons.Children.Insert(0, paint);
         }
-        Ui.Put(head, buttons, 3);
-        var dots = new IconGlyph(IconKind.Grip) { TintKey = "Muted", VerticalAlignment = VerticalAlignment.Center, Opacity = .8, IsHitTestVisible = false }; Ui.Put(head, dots, 4);
-        tile.PointerEntered += (_, _) => { buttons.Opacity = 1; buttons.IsHitTestVisible = true; };
-        tile.PointerExited += (_, _) => { if (resizing is null && dragged is null) { buttons.Opacity = 0; buttons.IsHitTestVisible = false; } };
+        // The figure and the buttons share one cell at the right, the figure at rest and the buttons under the pointer, so the header's right edge
+        // is the same on every tile whatever it holds and the grip always sits at the same distance from the corner.
+        meta.HorizontalAlignment = HorizontalAlignment.Right; buttons.HorizontalAlignment = HorizontalAlignment.Right; buttons.VerticalAlignment = VerticalAlignment.Center;
+        var cluster = new Grid { VerticalAlignment = VerticalAlignment.Center }; cluster.Children.Add(meta); cluster.Children.Add(buttons); Ui.Put(head, cluster, 2);
+        var dots = new IconGlyph(IconKind.Grip) { TintKey = "Muted", VerticalAlignment = VerticalAlignment.Center, Opacity = .8, IsHitTestVisible = false }; Ui.Put(head, dots, 3);
+        tile.PointerEntered += (_, _) => { buttons.Opacity = 1; buttons.IsHitTestVisible = true; meta.Opacity = 0; };
+        tile.PointerExited += (_, _) => { if (resizing is null && dragged is null) { buttons.Opacity = 0; buttons.IsHitTestVisible = false; meta.Opacity = 1; } };
         var band = new Border { Height = 52, Background = new SolidColorBrush(Color.FromArgb(0x30, hue.R, hue.G, hue.B)), Child = head };
         var body = new Border { Margin = new Thickness(16, 10, 16, 14) };
         var stack = Ui.Grid("*", "Auto,*"); Ui.Put(stack, band); Ui.Put(stack, body, row: 1);
@@ -287,7 +291,13 @@ public sealed class DeskView : UserControl
                 break;
             case "timeline": timelineStrip.Labels = true; body.Child = form == TileForm.Tiny ? timelineStrip : timelineHost; if (form != TileForm.Tiny) RebuildTimeline(); break;
             case "pomodoro": body.Child = pomodoroView = new PomodoroView(model, form == TileForm.Tiny); break;
-            case "clock": body.Child = analogue; break;
+            case "clock":
+                {
+                    // The face, with the time in figures under it when there is room.
+                    var face = Ui.Grid("*", form == TileForm.Tiny ? "*" : "*,Auto"); Ui.Put(face, analogue);
+                    if (form != TileForm.Tiny) { digital.Margin = new Thickness(0, 6, 0, 0); Ui.Put(face, digital, row: 1); }
+                    body.Child = face; break;
+                }
             case "strip": strip.Labels = form != TileForm.Tiny; body.Child = strip; strip.InvalidateVisual(); break;
             case "notes": body.Child = notesView = new NotesView(model, form == TileForm.Tiny); break;
             case "coming": body.Child = new ScrollViewer { Content = comingView = new ComingUpView(model), AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }; break;

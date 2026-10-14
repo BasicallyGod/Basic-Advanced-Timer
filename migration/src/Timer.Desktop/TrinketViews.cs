@@ -19,20 +19,55 @@ public sealed class AnalogueClock : Control
     public override void Render(DrawingContext context)
     {
         var size = Math.Min(Bounds.Width, Bounds.Height); if (size < 20) return;
-        var centre = new Point(Bounds.Width / 2, Bounds.Height / 2); var radius = size / 2 - 3;
-        var ink = new SolidColorBrush(Ui.ThemeColour(this, "Ink", Colors.Black)); var line = new SolidColorBrush(Ui.ThemeColour(this, "Muted", Colors.Gray));
-        var face = new SolidColorBrush(Ui.ThemeColour(this, "Surface", Colors.White));
-        context.DrawEllipse(face, new Pen(line, 1.5), centre, radius, radius);
-        for (var i = 0; i < 12; i++)
+        var centre = new Point(Bounds.Width / 2, Bounds.Height / 2); var radius = size / 2 - 4;
+        var inkColour = Ui.ThemeColour(this, "Ink", Colors.Black); var mutedColour = Ui.ThemeColour(this, "Muted", Colors.Gray); var surface = Ui.ThemeColour(this, "Surface", Colors.White);
+        var ink = new SolidColorBrush(inkColour); var muted = new SolidColorBrush(mutedColour);
+        // A soft drop shadow, then a rim, a face that is a touch lighter in the middle, and a fine inner ring.
+        context.DrawEllipse(new SolidColorBrush(Colors.Black, .10), null, new Point(centre.X, centre.Y + radius * .04), radius, radius);
+        context.DrawEllipse(new SolidColorBrush(inkColour, .85), null, centre, radius, radius);
+        var rim = Math.Max(2.5, radius * .045); var faceRadius = radius - rim;
+        var faceBrush = new RadialGradientBrush { Center = new RelativePoint(.5, .42, RelativeUnit.Relative), GradientOrigin = new RelativePoint(.5, .42, RelativeUnit.Relative), RadiusX = RelativeScalar.Parse("75%"), RadiusY = RelativeScalar.Parse("75%"),
+            GradientStops = { new GradientStop(Blend(surface, Colors.White, .55), 0), new GradientStop(surface, .8), new GradientStop(Blend(surface, inkColour, .08), 1) } };
+        context.DrawEllipse(faceBrush, null, centre, faceRadius, faceRadius);
+        context.DrawEllipse(null, new Pen(new SolidColorBrush(mutedColour, .35), 1), centre, faceRadius * .86, faceRadius * .86);
+        // Sixty minute ticks, with a bolder one each five minutes and a numeral at each quarter, or at every hour once the face is big enough.
+        for (var i = 0; i < 60; i++)
         {
-            var angle = i * Math.PI / 6; var major = i % 3 == 0;
-            context.DrawLine(new Pen(major ? ink : line, major ? 2.2 : 1.2, lineCap: PenLineCap.Round), Along(centre, angle, radius * (major ? .8 : .86)), Along(centre, angle, radius * .94));
+            var angle = i * Math.PI / 30; var hour = i % 5 == 0;
+            context.DrawLine(new Pen(hour ? ink : muted, hour ? Math.Max(2, radius * .03) : 1, lineCap: PenLineCap.Round), Along(centre, angle, faceRadius * (hour ? .80 : .88)), Along(centre, angle, faceRadius * .94));
+        }
+        var numerals = radius > 95; var numeralSize = Math.Clamp(radius * (numerals ? .15 : .17), 10, 20);
+        for (var n = 1; n <= 12; n++)
+        {
+            if (!numerals && n % 3 != 0) continue;
+            var text = new FormattedText(n.ToString(), System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.SemiBold), numeralSize, n % 3 == 0 ? ink : muted);
+            var at = Along(centre, n * Math.PI / 6, faceRadius * .62); context.DrawText(text, new Point(at.X - text.Width / 2, at.Y - text.Height / 2));
         }
         var time = now(); var seconds = time.Second + time.Millisecond / 1000.0; var minutes = time.Minute + seconds / 60; var hours = time.Hour % 12 + minutes / 60;
-        context.DrawLine(new Pen(ink, Math.Max(3, radius * .07), lineCap: PenLineCap.Round), centre, Along(centre, hours * Math.PI / 6, radius * .5));
-        context.DrawLine(new Pen(ink, Math.Max(2.2, radius * .05), lineCap: PenLineCap.Round), centre, Along(centre, minutes * Math.PI / 30, radius * .75));
-        context.DrawLine(new Pen(line, 1.2, lineCap: PenLineCap.Round), Along(centre, Math.PI + seconds * Math.PI / 30, radius * .12), Along(centre, seconds * Math.PI / 30, radius * .82));
-        context.DrawEllipse(ink, null, centre, radius * .05, radius * .05);
+        // The hands taper from a broad base to a rounded tip, each with a faint shadow, and the second hand has a short counterweight and a ring at its middle.
+        Hand(context, centre, hours * Math.PI / 6, faceRadius * .52, Math.Max(4, radius * .085), ink);
+        Hand(context, centre, minutes * Math.PI / 30, faceRadius * .78, Math.Max(3, radius * .06), ink);
+        var second = new SolidColorBrush(Color.Parse("#5B76B8")); var secondAngle = seconds * Math.PI / 30;
+        context.DrawLine(new Pen(new SolidColorBrush(Colors.Black, .12), 1.6, lineCap: PenLineCap.Round), Offset(Along(centre, secondAngle + Math.PI, faceRadius * .2)), Offset(Along(centre, secondAngle, faceRadius * .86)));
+        context.DrawLine(new Pen(second, 1.6, lineCap: PenLineCap.Round), Along(centre, secondAngle + Math.PI, faceRadius * .2), Along(centre, secondAngle, faceRadius * .86));
+        context.DrawEllipse(second, null, centre, Math.Max(3.5, radius * .05), Math.Max(3.5, radius * .05));
+        context.DrawEllipse(new SolidColorBrush(surface), null, centre, Math.Max(1.4, radius * .018), Math.Max(1.4, radius * .018));
+    }
+    private static Point Offset(Point p) => new(p.X + 1.5, p.Y + 2);
+    private static Color Blend(Color a, Color b, double towardsB) => Color.FromRgb((byte)(a.R + (b.R - a.R) * towardsB), (byte)(a.G + (b.G - a.G) * towardsB), (byte)(a.B + (b.B - a.B) * towardsB));
+    private static void Hand(DrawingContext context, Point centre, double angle, double length, double baseWidth, IBrush brush)
+    {
+        Point Local(double along, double across) => new(centre.X + Math.Sin(angle) * along + Math.Cos(angle) * across, centre.Y - Math.Cos(angle) * along + Math.Sin(angle) * across);
+        Geometry Shape(Func<Point, Point> move)
+        {
+            var g = new StreamGeometry();
+            using var c = g.Open();
+            c.BeginFigure(move(Local(-baseWidth * 1.4, 0)), true);
+            c.LineTo(move(Local(0, baseWidth / 2))); c.LineTo(move(Local(length, baseWidth * .18))); c.LineTo(move(Local(length, -baseWidth * .18))); c.LineTo(move(Local(0, -baseWidth / 2)));
+            c.EndFigure(true); return g;
+        }
+        context.DrawGeometry(new SolidColorBrush(Colors.Black, .14), null, Shape(Offset));
+        context.DrawGeometry(brush, null, Shape(p => p));
     }
     private static Point Along(Point centre, double clockwiseFromTop, double length) => new(centre.X + Math.Sin(clockwiseFromTop) * length, centre.Y - Math.Cos(clockwiseFromTop) * length);
 }
@@ -382,21 +417,21 @@ public sealed class WeekChart : Control
 public sealed class DeadlineView : StackPanel
 {
     private readonly TimerModel model;
-    private readonly TextBlock what = Ui.Text("", 13, "muted"), left = new() { Name = "DeadlineLeft", FontSize = 40, Classes = { "clock" } }, when = Ui.Text("", 13);
+    private readonly TextBlock what = new() { Name = "DeadlineWhat", FontSize = 14, FontWeight = FontWeight.SemiBold }, phrase = Ui.Text("", 12, "muted"), left = new() { Name = "DeadlineLeft", FontSize = 40, Classes = { "clock" } }, when = Ui.Text("", 13);
     public DeadlineView(TimerModel model, bool compact)
     {
         this.model = model; Spacing = 2; VerticalAlignment = VerticalAlignment.Center;
         what.TextTrimming = TextTrimming.CharacterEllipsis; left.FontSize = compact ? 30 : 40;
-        Children.Add(what); Children.Add(left); if (!compact) Children.Add(when);
+        Children.Add(what); Children.Add(phrase); Children.Add(left); if (!compact) Children.Add(when);
         Refresh();
     }
     public void Refresh()
     {
         var note = DayNotes.NextDeadline(model.AllDayNotes);
-        if (note is null) { what.Text = "No deadlines"; left.Text = "--:--"; when.Text = "Start a note with ! to add one."; return; }
+        if (note is null) { what.Text = "No deadlines"; phrase.Text = ""; left.Text = "--:--"; when.Text = "Start a note with ! to add one."; return; }
         var due = DayNotes.DueAt(note); var remaining = due - model.Engine.Now; var late = remaining < TimeSpan.Zero; var span = late ? -remaining : remaining;
         var hours = (int)span.TotalHours; var text = $"{hours:00}:{span.Minutes:00}";
-        what.Text = DayNotes.DisplayText(note) + (late ? " was due" : " is due in");
+        what.Text = DayNotes.DisplayText(note); phrase.Text = late ? "Overdue by" : "Due in";
         left.Text = late ? "-" + text : text;
         when.Text = due.ToString("ddd d MMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
     }
