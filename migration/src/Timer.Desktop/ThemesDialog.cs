@@ -37,7 +37,6 @@ public sealed class ThemesDialog : Dialog
         left.Children.Add(list);
         duplicate = Ui.DialogButton("Duplicate", () => Guard(() => Run(() => { model.EndThemePreview(); var copy = model.DuplicateTheme(shown); Refill(copy); })), "DuplicateTheme");
         delete = Ui.DialogButton("Delete", () => Run(() => { model.DeleteTheme(shown); Refill(model.Theme); }), "DeleteTheme");
-        var buttons = Ui.Horizontal(duplicate, delete); Ui.Put(left, buttons, 0, 2);
         unsaved.Classes.Add("chip");
         Ui.Put(root, left);
         Ui.Put(root, new ScrollViewer { Content = detail, AllowAutoHide = false, Padding = new Thickness(0, 0, 14, 0) }, 1);
@@ -49,7 +48,9 @@ public sealed class ThemesDialog : Dialog
         var promptStack = new StackPanel { Spacing = 8 }; promptStack.Children.Add(promptText); promptStack.Children.Add(promptButtons);
         unsaved.Child = promptStack; unsavedText = promptText;
         Grid.SetColumnSpan(unsaved, 2); Ui.Put(root, unsaved, 0, 1);
-        var footer = Ui.Horizontal(Ui.DialogButton("Close", () => Close(), "CloseThemes")); footer.HorizontalAlignment = HorizontalAlignment.Right; footer.Margin = new Thickness(0, 12, 0, 0);
+        // Duplicate and Delete sit in the bottom row on the left and Close on the right, like the buttons of the other dialogs.
+        var footer = Ui.Grid("*,Auto"); footer.Margin = new Thickness(0, 12, 0, 0);
+        Ui.Put(footer, Ui.Horizontal(duplicate, delete)); var close = Ui.DialogButton("Close", () => Close(), "CloseThemes"); close.HorizontalAlignment = HorizontalAlignment.Right; Ui.Put(footer, close, 1);
         Grid.SetColumnSpan(footer, 2); Ui.Put(root, footer, 0, 2);
         Content = root;
         list.SelectionChanged += (_, _) =>

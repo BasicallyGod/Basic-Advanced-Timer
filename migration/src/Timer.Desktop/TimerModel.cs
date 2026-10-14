@@ -70,8 +70,29 @@ public sealed class TimerModel : INotifyPropertyChanged
         .Count(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains));
     public bool CanMergeSelection => SelectedBlockCount >= 2 && selectedRows.Select(s => s.Day).Distinct().Count() == 1
         && selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() == 1 && Editor.CanCombine(selectedRows.ToArray());
-    public string MergeHint => SelectedBlockCount < 2 ? "Select two or more blocks to merge." : CanMergeSelection
-        ? $"Merge {SelectedBlockCount} blocks · adds {Format(TimeSpan.FromMinutes((double)Editor.MergeGapMinutes(selectedRows.ToArray())))} of gap time." : "Blocks must share an account and day, with only gaps between.";
+    /// <summary>The full rule for merging, for the Merge button's tooltip and a refused merge.</summary>
+    public string MergeHint => SelectedBlockCount < 2 ? "Select two or more blocks to merge them." : CanMergeSelection
+        ? (Editor.MergeGapMinutes(selectedRows.ToArray()) is var gapMinutes and > 0 ? $"Press Merge to join them into one block. This adds {Format(TimeSpan.FromMinutes((double)gapMinutes))} of gap time." : "Press Merge to join them into one block.")
+        : "To merge, blocks must share an account and day, with only gaps between.";
+    /// <summary>How many blocks are selected, for the selection strip. Null with no selection.</summary>
+    public string? SelectionCountText => SelectedBlockCount is var count and > 0 ? $"{count} {(count == 1 ? "block" : "blocks")} selected" : null;
+    /// <summary>One short sentence under the count: what is needed, or what Merge will do. It names the specific problem when blocks cannot be merged.</summary>
+    public string? SelectionNote
+    {
+        get
+        {
+            var count = SelectedBlockCount; if (count == 0) return null;
+            if (count < 2) return "Select another block to merge.";
+            if (CanMergeSelection)
+            {
+                var gap = Editor.MergeGapMinutes(selectedRows.ToArray());
+                return gap > 0 ? $"Merge joins them and adds {Format(TimeSpan.FromMinutes((double)gap))} of gap time." : "Merge joins them into one block.";
+            }
+            if (selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() > 1) return "Choose blocks from the same account to merge.";
+            if (selectedRows.Select(s => s.Day).Distinct().Count() > 1) return "Choose blocks from the same day to merge.";
+            return "Other time sits between these blocks, so they cannot be merged.";
+        }
+    }
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
     {
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
@@ -165,7 +186,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
-        SelectedDate = Engine.Now.Date;
+        SelectedDate = Engine.Now.Date; lastToday = SelectedDate;
         // The user's own themes need their colours registered too. The built-in ones were registered when the app started.
         if (Application.Current is { } current && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && this.preferences.Themes is { Count: > 0 } own) ThemeEngine.Register(current, own);
         ApplyTheme(); Ui.ApplyTooltips(this.preferences.Tooltips);
@@ -333,9 +354,11 @@ public sealed class TimerModel : INotifyPropertyChanged
     public TimeSpan OnDay(TimerAccount a, DateTime day) => Engine.Credited(a.Name, day, day.AddDays(1));
     public TimeSpan Week(TimerAccount a) { var start = WeekStart(SelectedDate); return Engine.Credited(a.Name, start, start.AddDays(7)); }
     /// <summary>The span a budget covers right now, from the account's own period (today, this week, month or quarter).</summary>
-    private (DateTime Start, DateTime End) BudgetWindow(TimerAccount a)
+    private (DateTime Start, DateTime End) BudgetWindow(TimerAccount a) => BudgetWindowAt(a, Engine.Now);
+    /// <summary>The span the budget covers around a reference moment: the day, week, month or quarter that holds it.</summary>
+    public (DateTime Start, DateTime End) BudgetWindowAt(TimerAccount a, DateTime reference)
     {
-        var now = Engine.Now;
+        var now = reference;
         var start = a.Period switch
         {
             "day" => now.Date,
@@ -345,7 +368,34 @@ public sealed class TimerModel : INotifyPropertyChanged
         var end = a.Period switch { "day" => start.AddDays(1), "month" => start.AddMonths(1), "quarter" => start.AddMonths(3), _ => start.AddDays(7) };
         return (start, end);
     }
-    public TimeSpan BudgetUsed(TimerAccount a) { var (start, end) = BudgetWindow(a); return Engine.Credited(a.Name, start, end); }
+    public TimeSpan BudgetUsed(TimerAccount a) => BudgetUsedAt(a, Engine.Now);
+    /// <summary>What has been used in the budget period that holds the reference moment, which for an earlier week is that week's own period.</summary>
+    public TimeSpan BudgetUsedAt(TimerAccount a, DateTime reference) { var (start, end) = BudgetWindowAt(a, reference); return Engine.Credited(a.Name, start, end); }
+    /// <summary>
+    /// The moment that decides which budget period a week view speaks of. For the current week it is now. For an earlier week it is the middle of the week
+    /// (the Thursday), so a week that straddles two months is placed with the month that holds most of its days.
+    /// </summary>
+    public DateTime BudgetReference(DateTime weekStart)
+    {
+        var now = Engine.Now; weekStart = weekStart.Date;
+        return now.Date >= weekStart && now.Date < weekStart.AddDays(7) ? now : weekStart.AddDays(3);
+    }
+    /// <summary>
+    /// Names the budget period that holds the reference moment: "this month" when it is the current one, and otherwise which one it was, such as "September 2026",
+    /// so a figure seen while browsing an earlier week is never mistaken for the present.
+    /// </summary>
+    public string BudgetPeriodNameAt(TimerAccount a, DateTime reference)
+    {
+        var british = CultureInfo.GetCultureInfo("en-GB"); var (start, end) = BudgetWindowAt(a, reference); var now = Engine.Now;
+        var current = now >= start && now < end;
+        return a.Period switch
+        {
+            "day" => current ? "today" : start.ToString("ddd d MMM", british),
+            "month" => current ? "this month" : start.ToString("MMMM yyyy", british),
+            "quarter" => current ? "this quarter" : $"Q{(start.Month - 1) / 3 + 1} {start.Year}",
+            _ => current ? "this week" : "week of " + start.ToString("d MMM", british)
+        };
+    }
     /// <summary>How much of the budget is used, where 1 is all of it. Null when the account has no budget.</summary>
     public double? BudgetRatio(TimerAccount a) => a.Budget is { } target && target > TimeSpan.Zero ? BudgetUsed(a).TotalSeconds / target.TotalSeconds : null;
     /// <summary>How far through the budget's period it is now, from 0 to 1. The bar's tick sits here, so a bar past the tick is running ahead of pace.</summary>
@@ -360,27 +410,53 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) + "h";
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return $"{sign}{(int)value.TotalHours}h {value.Minutes:00}m";
+        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
     }
-    /// <summary>The short form for crowded places such as the week table: 7:00, or 7.00 in decimal hours.</summary>
+    /// <summary>Every duration reads as HH:MM (07:00), or in decimal hours (7.00) when that is chosen. The three formats differ only in how decimal hours are written.</summary>
     public string FormatShort(TimeSpan value)
     {
         if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB"));
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return $"{sign}{(int)value.TotalHours}:{value.Minutes:00}";
+        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
     }
-    /// <summary>A compact form for tight rows: 10h35, or 20h when there are no minutes, or 10.58h in decimal hours.</summary>
+    /// <summary>For tight rows. HH:MM like the rest, or 10.58h in decimal hours.</summary>
     public string FormatCompact(TimeSpan value)
     {
         if (DecimalHours) return value.TotalHours.ToString("0.##", CultureInfo.GetCultureInfo("en-GB")) + "h";
         var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return value.Minutes == 0 ? $"{sign}{(int)value.TotalHours}h" : $"{sign}{(int)value.TotalHours}h{value.Minutes:00}";
+        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
     }
     /// <summary>The budget for an account row, such as "10h35 / 20h monthly". The period is always said, since it matters when comparing accounts.</summary>
     public string BudgetLine(TimerAccount a) => a.Budget is { } target
         ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)} {(a.Period switch { "day" => "daily", "month" => "monthly", "quarter" => "quarterly", _ => "weekly" })}" : "No budget";
+    /// <summary>What has been used against the budget, such as "8h 45m / 15h", for the dashboard's account rows, or "No budget".</summary>
+    public string BudgetUsage(TimerAccount a) => a.Budget is { } target ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)}" : "No budget";
+    /// <summary>The period the budget covers, in words that sit beside the usage, or an empty string when there is no budget.</summary>
+    public string BudgetPeriodLabel(TimerAccount a) => a.Budget is null ? "" : a.Period switch { "day" => "Today", "month" => "This month", "quarter" => "This quarter", _ => "This week" };
+    /// <summary>The detail shown on hover instead of a percentage on the row: how much is used, and what the pace line means.</summary>
+    public string BudgetDetail(TimerAccount a)
+    {
+        if (BudgetRatio(a) is not { } ratio) return "No budget";
+        var period = a.Period is "day" or "month" or "quarter" ? (a.Period == "day" ? "working day" : a.Period) : "week";
+        return $"{Math.Round(ratio * 100)}% used{(ratio >= 1 ? ", over budget" : "")}. The line is how far through the {period} you are.";
+    }
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
+    /// <summary>Puts the timeline and week views back on the current day. The dashboard does this whenever it is opened, so it never comes up on a day left over from earlier.</summary>
+    public void ShowToday()
+    {
+        if (SelectedDate.Date == Engine.Now.Date) return;
+        selectedRows.Clear(); TimelineOffset = null; SelectedDate = Engine.Now.Date; Notify();
+    }
+    // A timer left running past midnight carries on following the current day, if that is the day being shown. Someone reviewing an earlier day is left there.
+    private DateTime lastToday;
+    private void FollowToday()
+    {
+        var today = Engine.Now.Date; if (today == lastToday) return;
+        var following = SelectedDate.Date == lastToday; lastToday = today;
+        if (following) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = today; }
+        Notify();
+    }
     public void ChangeDate(int days) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
     /// <summary>Steps the Week tab by whole weeks. It never goes past the current week, since there is nothing to review there.</summary>
     public void ChangeWeek(int weeks)
@@ -668,6 +744,11 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool MoveLaterAlways => preferences.MoveLaterAlways;
     public void SetMoveLaterAlways(bool on) { preferences = preferences with { MoveLaterAlways = on }; Save(); Notify(); }
     /// <summary>The pill size chosen by hand, as a percentage of its design size, or null for the automatic size that follows the screen.</summary>
+    /// <summary>Whether the pill and the dashboard stay in front of other windows. Either can be let go, so the dashboard can drop back behind other work.</summary>
+    public bool PillOnTop => preferences.PillOnTop;
+    public bool DashboardOnTop => preferences.DashboardOnTop;
+    public void SetPillOnTop(bool on) { preferences = preferences with { PillOnTop = on }; Save(); Notify(); }
+    public void SetDashboardOnTop(bool on) { preferences = preferences with { DashboardOnTop = on }; Save(); Notify(); }
     public int? PillScalePercent => preferences.PillScale;
     public static readonly int[] PillScaleChoices = { 50, 60, 70, 80, 90, 100, 110, 120 };
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
@@ -710,16 +791,24 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public void Tick()
     {
+        if (closed) return;
         ticks++;
+        FollowToday();
         if (ticks % 15 == 0) { Save(); Notify(); }
         else PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Elapsed)));
     }
     public bool Save()
     {
+        // Once the app is closing, or its database has been closed, there is nothing left to save and a late tick must not try.
+        if (closed || store is { IsDisposed: true }) return true;
         try { store?.Save(Engine, preferences); LastError = null; return true; }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        // A restart or shutdown can close the database under a save that is already queued. That must be reported, never allowed to crash the app.
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or ObjectDisposedException || error.GetType().Namespace == "Microsoft.Data.Sqlite")
         { LastError = "Could not save. Time remains in memory; retrying. " + error.Message; return false; }
     }
+    private bool closed;
+    /// <summary>Called as the app exits, before the database is closed, so the clock's tick stops saving.</summary>
+    public void MarkClosed() => closed = true;
     /// <summary>Whether to start with Windows. Null in demo mode and tests, where it is not offered.</summary>
     public IAutoStart? AutoStart { get; set; }
     public void SetAutoStart(bool enabled)

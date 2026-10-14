@@ -22,12 +22,7 @@ public static class ReviewViews
     {
         var day = model.SelectedDate;
         var root = Ui.Grid("*", "Auto,Auto,*");
-        // This line shows selection feedback only when there is a selection. Otherwise it takes no room at all.
-        var caption = Ui.Text(model.SelectedBlockCount > 0 ? $"{model.SelectedBlockCount} blocks selected · " + model.MergeHint : "", 12, "muted");
-        caption.IsVisible = model.SelectedBlockCount > 0;
-        caption.TextWrapping = TextWrapping.Wrap;
-        caption.Margin = new Thickness(0, 0, 0, 10);
-        Ui.Put(root, caption);
+        // The selection line is shown in the message bar over the buttons, not here, so nothing moves when blocks are selected.
         var pixelsPerHour = model.TimelinePixelsPerHour;
         // The hours run down a spine with a tick for each hour, and for each half and quarter hour as you zoom in. Blocks sit to the right of it,
         // A little room above and below lets the first and last labels sit fully in view.
@@ -269,29 +264,33 @@ public static class ReviewViews
             default: OverviewSection(model, table, day, days, root); break;
         }
         var scroll = new ScrollViewer { Content = root, AllowAutoHide = false, Tag = Vector.Zero,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+            // The overview is laid out to the width it is given, so it never needs a sideways bar. The table and entries may be wider than the window.
+            HorizontalScrollBarVisibility = model.WeekSection is "hours" or "entries" ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
         DeferOffset(scroll);
-        return scroll;
+        return Ui.WithMoreBelow(scroll);
     }
     private static void OverviewSection(TimerModel model, WeekTable table, DateTime day, int[] days, StackPanel root)
     {
         TextBlock Tile(string caption, string value, string? style = null)
         { var tile = Ui.Text(value, 30, style); tile.Classes.Add("figures"); return tile; }
-        Border Stat(string caption, string value, string? style = null)
+        Border Stat(string caption, string value, string tip, string? style = null)
         {
             var stat = new StackPanel { Spacing = 4 };
             stat.Children.Add(Ui.Text(caption, 12, "muted")); stat.Children.Add(Tile(caption, value, style));
-            return Card(stat, new Thickness(18, 14));
+            var card = Card(stat, new Thickness(18, 14)); ToolTip.SetTip(card, tip); return card;
         }
-        WeekTableRow Find(string label) => table.Rows.First(r => r.Label.StartsWith(label));
-        // Three figures, each on its own tile: the week's work, its breaks and what was never given to an account.
+        WeekTableRow Find(string label) => table.Rows.First(r => r.Label == label);
+        string Shown(string label) => Find(label).Total == "–" ? "0:00" : Find(label).Total;
+        // Working time is the whole of the week's work: what was given to accounts plus what was not. Breaks sit apart from it, quieter.
         var stats = Ui.Grid("*,*,*");
-        var worked = Stat("Worked this week", Find("Total").Total == "–" ? "0:00" : Find("Total").Total);
-        var breaks = Stat("Breaks", Find("Break").Total == "–" ? "0:00" : Find("Break").Total, "muted");
-        var unallocated = Stat("Unallocated", Find("Unallocated").Total == "–" ? "0:00" : Find("Unallocated").Total, "muted");
-        breaks.Margin = new Thickness(6, 0); worked.Margin = new Thickness(0, 0, 6, 0); unallocated.Margin = new Thickness(6, 0, 0, 0);
-        Ui.Put(stats, worked); Ui.Put(stats, breaks, 1); Ui.Put(stats, unallocated, 2);
+        var worked = Stat("Working time", Shown(WeekTable.WorkingLabel), "Allocated plus unallocated. Breaks are not included.");
+        var allocated = Stat("Allocated to accounts", Shown(WeekTable.AllocatedLabel), "Time given to client accounts.");
+        var unallocated = Stat("Unallocated", Shown(WeekTable.UnallocatedLabel), "Working time not given to any account.", "muted");
+        allocated.Margin = new Thickness(6, 0); worked.Margin = new Thickness(0, 0, 6, 0); unallocated.Margin = new Thickness(6, 0, 0, 0);
+        Ui.Put(stats, worked); Ui.Put(stats, allocated, 1); Ui.Put(stats, unallocated, 2);
         root.Children.Add(stats);
+        var breakNote = Ui.Text($"Breaks {Shown(WeekTable.BreaksLabel)} this week, not counted in working time", 12, "muted"); breakNote.Name = "BreaksNote"; breakNote.Margin = new Thickness(4, -6, 0, 0);
+        root.Children.Add(breakNote);
         var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
         var bars = new WeekBars
         {
@@ -299,21 +298,30 @@ public static class ReviewViews
             {
                 var date = day.AddDays(i);
                 var segments = accounts.Select(a => new BarSegment(a.Display, Color.Parse(model.ChartColour(a.Colour)), model.OnDay(a, date).TotalHours)).ToList();
+                // Time in the working day that went to no account stands on the column as a neutral block, so the column is that day's whole working time.
+                var totals = model.Engine.Totals(date); var left = (totals.Working + totals.Overtime).TotalHours - segments.Sum(s => s.Hours);
+                if (left > 1.0 / 120) segments.Add(new BarSegment(WeekTable.UnallocatedLabel, Color.Parse(ThemeColours.Mix(model.CurrentTheme.Colour("Surface"), model.CurrentTheme.Colour("Ink"), .22)), left));
                 var total = segments.Sum(s => s.Hours);
                 var detail = string.Join("\n", segments.Where(s => s.Hours > 0).Select(s => $"{s.Account}  {model.FormatShort(TimeSpan.FromHours(s.Hours))}"));
-                return new DayBar(date.ToString("ddd"), date.ToString("dddd d MMMM") + (detail.Length > 0 ? "\n" + detail : "\nNothing recorded"),
+                return new DayBar(date.ToString("ddd"), date.ToString("dddd d MMMM") + (detail.Length > 0 ? $"\nWorking time {model.FormatShort(TimeSpan.FromHours(total))}\n" + detail : "\nNothing recorded"),
                     total > 0 ? model.FormatShort(TimeSpan.FromHours(total)) : "–", total, segments);
             }).ToList()
         };
         root.Children.Add(Card(bars, new Thickness(14, 10, 14, 6)));
         // The accounts sit on their own tile under the chart, one line each: its colour, its week, and its budget when it has one.
-        var byAccount = Ui.Text("By account", 12, "muted");
-        var list = new StackPanel { Spacing = 6 }; list.Children.Add(byAccount);
+        // Two different things are shown for each account and they are headed apart: the time worked in the week on show, and the budget used over its whole
+        // period (which can be longer than the week, and for an earlier week is named so it cannot be mistaken for the present).
+        var list = new StackPanel { Spacing = 6 };
+        var heads = Ui.Grid("30,*,80,96,220");
+        Ui.Put(heads, Ui.Text("By account", 12, "muted"), 1);
+        var weekHead = Ui.Text("This week", 12, "muted"); weekHead.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(heads, weekHead, 2);
+        var budgetHead = Ui.Text("Budget used over its period", 12, "muted"); budgetHead.Margin = new Thickness(18, 0, 0, 0); Ui.Put(heads, budgetHead, 3).SetValue(Grid.ColumnSpanProperty, 2);
+        list.Children.Add(heads);
         for (var i = 0; i < accounts.Count; i++)
         {
             var account = accounts[i]; var row = table.Rows[i];
             // Every row is one line with everything centred on it, so a budget meter always sits level with its account.
-            var line = Ui.Grid("30,*,64,110,200"); line.MinHeight = 36;
+            var line = Ui.Grid("30,*,80,96,220"); line.MinHeight = 36;
             var dot = new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = Brush.Parse(model.ChartColour(account.Colour)), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
             Ui.Put(line, dot); Ui.Put(line, Ui.Text(account.Display, 14), 1);
             var total = Ui.Text(row.Total == "–" ? "0:00" : row.Total, 14); total.Classes.Add("figures"); total.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(line, total, 2);
@@ -328,7 +336,8 @@ public static class ReviewViews
                 fill.Classes.Set("budgetWarn", budget.Fraction >= .8 && budget.Fraction < 1); fill.Classes.Set("budgetOver", budget.Fraction >= 1);
                 track.Children.Add(rest); track.Children.Add(fill);
                 Ui.Put(line, track, 3);
-                var caption = Ui.Text($"{budget.Fraction * 100:0}% of {budget.Budget}", 12, budget.Fraction >= 1 ? "overtime" : budget.Fraction >= .8 ? "budgetWarning" : "muted");
+                var caption = Ui.Text($"{budget.Used} / {budget.Budget} {budget.Period.ToLowerInvariant()}", 12, budget.Fraction >= 1 ? "overtime" : budget.Fraction >= .8 ? "budgetWarning" : "muted");
+                caption.Name = "BudgetCaption"; ToolTip.SetTip(caption, $"{budget.Fraction * 100:0}% of the {budget.Period.ToLowerInvariant()} budget used");
                 caption.Margin = new Thickness(12, 0, 0, 0); caption.TextTrimming = TextTrimming.CharacterEllipsis; Ui.Put(line, caption, 4);
             }
             list.Children.Add(line);
@@ -353,18 +362,25 @@ public static class ReviewViews
             TextBlock Cell(string text, bool right)
             {
                 var block = Ui.Text(text, item.Style == "bold" ? 14 : 13, item.Style == "faint" || text == "–" ? "muted" : null);
-                if (item.Style == "bold") block.FontWeight = FontWeight.SemiBold;
+                if (item.Style is "bold" or "subtotal") block.FontWeight = FontWeight.SemiBold;
                 if (right) block.Classes.Add("figures");
                 block.Margin = new Thickness(0, 10);
                 if (right) block.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
                 return block;
             }
-            var shown = Ui.Put(grid, Cell(item.Style == "bold" ? "Total" : item.Label, false), 0, r + 1);
-            if (item.Style == "bold") ToolTip.SetTip(shown, item.Label);
+            var shown = Ui.Put(grid, Cell(item.Label, false), 0, r + 1);
+            ToolTip.SetTip(shown, item.Label switch
+            {
+                WeekTable.AllocatedLabel => "The accounts' rows added up.",
+                WeekTable.UnallocatedLabel => "Working time not given to any account.",
+                WeekTable.WorkingLabel => "Allocated plus unallocated. Breaks are not included.",
+                WeekTable.BreaksLabel => "Kept apart from working time.",
+                _ => null
+            });
             for (var i = 0; i < item.Cells.Length; i++) Ui.Put(grid, Cell(item.Cells[i], true), i + 1, r + 1);
             Ui.Put(grid, Cell(item.Total, true), item.Cells.Length + 1, r + 1);
             // A strong rule above the total, and a faint hairline under every other row.
-            if (item.Style == "bold") Ui.Put(grid, new Border { Height = 1, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Classes = { "rule" } }, 0, r + 1).SetValue(Grid.ColumnSpanProperty, table.Headers.Length);
+            if (item.Style is "bold" or "subtotal") Ui.Put(grid, new Border { Height = 1, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Classes = { "rule" } }, 0, r + 1).SetValue(Grid.ColumnSpanProperty, table.Headers.Length);
             else if (r < table.Rows.Count - 1) Ui.Put(grid, new Border { Height = 1, Opacity = .45, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom, Classes = { "rule" } }, 0, r + 1).SetValue(Grid.ColumnSpanProperty, table.Headers.Length);
         }
         // Both headings on this tab are real headings, so the table and the budgets read as two distinct parts.
@@ -391,7 +407,8 @@ public static class ReviewViews
         {
             root.Children.Add(Heading("Budgets"));
             var budgets = Ui.Grid("150,*,*,*,60", "Auto," + string.Join(",", table.Budgets.Select(_ => "Auto")));
-            foreach (var (text, c) in new[] { "Account", "Budget", "Used", "Left", "Used" }.Select((t, c) => (t, c)))
+            // Four plainly different figures: the budget, how much of it is used, how much is left, and the share used.
+            foreach (var (text, c) in new[] { "Account", "Budget", "Used", "Remaining", "% used" }.Select((t, c) => (t, c)))
             {
                 var h = Ui.Text(text, 12, "muted"); if (c > 0) h.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; Ui.Put(budgets, h, c);
             }
@@ -403,6 +420,8 @@ public static class ReviewViews
                 {
                     var block = Ui.Text(cells[c], 13, c == 4 ? (b.Fraction >= 1 ? "overtime" : b.Fraction >= .8 ? "budgetWarning" : null) : null);
                     block.Margin = new Thickness(0, 8); if (c > 0) { block.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right; block.Classes.Add("figures"); }
+                    // The account's cell carries the period the figures belong to, such as "September 2026" when an earlier week is on show.
+                    if (c == 0) { var stack = new StackPanel { Spacing = 1, Margin = new Thickness(0, 6) }; block.Margin = new Thickness(0); stack.Children.Add(block); var period = Ui.Text(b.Period, 11, "muted"); period.Name = "BudgetPeriod"; stack.Children.Add(period); Ui.Put(budgets, stack, c, r + 1); continue; }
                     Ui.Put(budgets, block, c, r + 1);
                 }
             }
@@ -411,7 +430,7 @@ public static class ReviewViews
     }
     private static void EntriesSection(TimerModel model, WeekExport reconciled, StackPanel root)
     {
-        root.Children.Add(Ui.Text(model.SelectedBlockCount > 0 ? $"{model.SelectedBlockCount} blocks selected · " + model.MergeHint : "Click an entry to select it, double-click to edit, right-click to edit or merge", 12, "muted"));
+        root.Children.Add(Ui.Text(model.SelectedBlockCount > 0 ? "" : "Click an entry to select it, double-click to edit, right-click to edit or merge", 12, "muted"));
         var entries = reconciled.Entries.ToList();
         string Length(int index) => model.DecimalHours ? WeekExport.Hours(reconciled.EntryUnits[index]) + "h" : model.Format(TimeSpan.FromMinutes((double)entries[index].Minutes));
         // Entries are grouped under their day, each day on its own tile with its total, so a week reads as seven short lists rather than one long one.
@@ -420,8 +439,12 @@ public static class ReviewViews
             var header = Ui.Grid("*,Auto"); header.Margin = new Thickness(4, 6, 4, 0);
             var title = Ui.Text(dayGroup.Key.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), 14); title.FontWeight = FontWeight.SemiBold;
             var counted = dayGroup.Where(x => !BreakAccount.Is(x.entry.Account)).ToList();
-            var dayTotal = model.DecimalHours ? WeekExport.Hours(counted.Sum(x => reconciled.EntryUnits[x.index])) + "h" : model.Format(TimeSpan.FromMinutes((double)counted.Sum(x => x.entry.Minutes)));
-            var total = Ui.Text(dayTotal, 13, "muted"); total.Classes.Add("figures");
+            // The recording that is running now is part of the day's total, so this agrees with the live tracker, though it is not an entry until it stops.
+            var running = model.Engine.ActiveElapsedOn(dayGroup.Key);
+            var dayTotal = model.DecimalHours ? WeekExport.Hours(counted.Sum(x => reconciled.EntryUnits[x.index]) + (long)Math.Round(running.TotalHours * 100)) + "h"
+                : model.Format(TimeSpan.FromMinutes((double)counted.Sum(x => x.entry.Minutes)) + running);
+            var total = Ui.Text("Allocated " + dayTotal, 13, "muted"); total.Classes.Add("figures"); total.Name = "DayAllocated";
+            ToolTip.SetTip(total, running > TimeSpan.Zero ? "Time given to accounts that day, including the recording still running." : "Time given to accounts that day. Breaks are not counted.");
             Ui.Put(header, title); Ui.Put(header, total, 1);
             root.Children.Add(header);
             var rows = new StackPanel { Spacing = 2 };
@@ -469,6 +492,16 @@ public static class ReviewViews
                 else rows.Children.Add(button);
             }
             root.Children.Add(Card(rows, new Thickness(6)));
+        }
+        // A recording that is running now on a day with no saved entries yet still counts for that day, so it gets its heading and total too.
+        var today = model.Engine.Now.Date; var runningToday = model.Engine.ActiveElapsedOn(today);
+        if (runningToday > TimeSpan.Zero && model.WeekStart(model.SelectedDate) <= today && today < model.WeekStart(model.SelectedDate).AddDays(7) && !entries.Any(e => e.Day == today))
+        {
+            var header = Ui.Grid("*,Auto"); header.Margin = new Thickness(4, 6, 4, 0);
+            var title = Ui.Text(today.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), 14); title.FontWeight = FontWeight.SemiBold;
+            var total = Ui.Text("Allocated " + (model.DecimalHours ? WeekExport.Hours((long)Math.Round(runningToday.TotalHours * 100)) + "h" : model.Format(runningToday)), 13, "muted"); total.Classes.Add("figures"); total.Name = "DayAllocated";
+            ToolTip.SetTip(total, "The recording still running. It becomes an entry when it stops.");
+            Ui.Put(header, title); Ui.Put(header, total, 1); root.Children.Add(header);
         }
     }
     // Moves the clicked entry, or every selected block when the clicked one is selected, to another account.

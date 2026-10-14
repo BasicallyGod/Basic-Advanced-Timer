@@ -63,7 +63,7 @@ public sealed class EntryShoveTests
             window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryEnd").Text = "10:05:00"; Dispatcher.UIThread.RunJobs();
             Click(window, "SaveEntry");
             Assert.True(prompt.IsVisible); Assert.Equal("10:00:00", engine.Sessions[1].Start); Assert.Equal("60", engine.Sessions[0].Minutes); // Asked, and nothing changed yet.
-            Assert.Contains("move later by up to 0:05", window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "ShoveText").Text);
+            Assert.Contains("move later by up to 00:05", window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "ShoveText").Text);
             Click(window, "ShoveCancel"); Assert.False(prompt.IsVisible); Assert.Equal("10:00:00", engine.Sessions[1].Start);
             Click(window, "SaveEntry"); Click(window, "ShoveConfirm");
             Assert.Equal("10:05:00", engine.Sessions[1].Start); Assert.Equal("65.00", engine.Sessions[0].Minutes); Assert.False(window.IsVisible);

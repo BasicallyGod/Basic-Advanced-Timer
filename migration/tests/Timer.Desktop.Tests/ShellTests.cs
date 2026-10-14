@@ -156,7 +156,7 @@ public sealed class ShellTests
             var clockText = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 46 && t.Classes.Contains("clock")); var figure = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "4.50h");
             Assert.True(figure.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y > clockText.TranslatePoint(new Point(0, clockText.Bounds.Height - 2), dashboard)!.Value.Y);
             Assert.Contains("clock", clockText.Classes); Assert.Equal("Bricolage Display", clockText.FontFamily.Name); // The big clock wears the bundled display face.
-            Assert.Contains(texts, t => t is not null && t.Contains("9h / 15h weekly"));
+            Assert.Contains(texts, t => t is not null && t.Contains("9h / 15h")); Assert.Contains("This week", texts);
             model.ToggleAccount("Account three");
             pill.ToggleExpansion();
             Save(pill, Path.Combine(output, "pill-expanded-Dark.png"));
@@ -192,7 +192,7 @@ public sealed class ShellTests
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             var choice = window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "ThemeChoice");
-            Assert.Equal(new[] { "System", "Light", "Dark", "Studio", "After Hours", "Botanical", "Hawthorn" }, choice.Items.Cast<string>());
+            Assert.Equal(new[] { "System", "Light", "Dark", "After Hours", "Botanical", "Hawthorn" }, choice.Items.Cast<string>());
             var elapsed = model.Elapsed;
             choice.SelectedItem = "Dark";
             Assert.Equal("Dark", model.Theme);
