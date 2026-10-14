@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 14 October 2026
+
+| Change | Commit | Details |
+| --- | --- | --- |
+| Resizable dashboard | pending | The dashboard can be resized from its edges and corners down to 640 by 480, and remembers its size. Narrow windows fold the accounts column into a panel opened by an Accounts button, with a small clock in the header, and the toolbar drops to icons. |
+
 ## 12 October 2026
 
 | Change | Commit | Details |

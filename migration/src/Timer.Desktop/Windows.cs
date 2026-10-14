@@ -448,6 +448,12 @@ public sealed class DashboardWindow : Window
         => model.DashboardSize is { } size ? (Math.Max(MinimumWidth, size.Width), Math.Max(MinimumHeight, size.Height)) : (DashboardWidth, DashboardHeight);
     /// <summary>The height of the Start break and Finish day buttons, and of the bar under the timeline.</summary>
     public const double ControlBarHeight = 42;
+    /// <summary>Below this card width the accounts column folds away into a panel opened from a button, and below the second one the buttons keep only their icons.</summary>
+    public const double SidebarCollapseWidth = 900, IconsOnlyWidth = 780;
+    private Grid bodyGrid = null!; private Border sidebarPanel = null!, sidebarDivider = null!; private Button accountsToggle = null!; private TextBlock todayLabel = null!;
+    private readonly ClockText compactClock = new(26, 16) { Text = "00:00:00" };
+    private readonly List<TextBlock> toolLabels = new();
+    private bool sidebarCollapsed, iconsOnly, sidebarOpen;
     public Action? OpenPill { get; set; }
     private readonly TimerModel model;
     private readonly ClockText clock = new(46, 26) { Text = "00:00:00" };
@@ -496,6 +502,39 @@ public sealed class DashboardWindow : Window
         };
         PropertyChanged += (_, e) => { if (e.Property == BoundsProperty) { pending.Stop(); pending.Start(); } };
     }
+    // Works out how much of the layout fits. Narrow windows fold the accounts column into a panel, and narrower ones drop the words from buttons.
+    private void ApplyLayoutMode()
+    {
+        var width = Bounds.Width - 2 * Ui.ShadowMargin; if (width <= 0) return;
+        var collapse = width < SidebarCollapseWidth; var icons = width < IconsOnlyWidth;
+        if (collapse != sidebarCollapsed) { sidebarCollapsed = collapse; if (!collapse) sidebarOpen = false; ApplySidebarState(); }
+        if (icons != iconsOnly)
+        {
+            iconsOnly = icons;
+            foreach (var label in toolLabels) label.IsVisible = !icons;
+            todayLabel.IsVisible = !icons; workspaceTitle.IsVisible = !icons;
+            foreach (var button in new Button[] { addTime, undo, merge, edit, todayButton }) button.Padding = icons ? new Thickness(10, 0) : new Thickness(button == todayButton ? 12 : 16, 0);
+        }
+    }
+    private void ApplySidebarState()
+    {
+        bodyGrid.ColumnDefinitions[0].Width = new GridLength(sidebarCollapsed ? 0 : 340);
+        sidebarDivider.IsVisible = !sidebarCollapsed;
+        accountsToggle.IsVisible = sidebarCollapsed; compactClock.IsVisible = sidebarCollapsed;
+        sidebarPanel.IsVisible = !sidebarCollapsed || sidebarOpen;
+        if (sidebarCollapsed)
+        {
+            // Laid over the workspace from the left, above it, with a soft edge so it reads as sitting on top.
+            Grid.SetColumnSpan(sidebarPanel, 3); sidebarPanel.HorizontalAlignment = HorizontalAlignment.Left; sidebarPanel.Width = 340; sidebarPanel.ZIndex = 20;
+            sidebarPanel.BoxShadow = Avalonia.Media.BoxShadows.Parse("6 0 24 0 #40000000");
+        }
+        else
+        {
+            Grid.SetColumnSpan(sidebarPanel, 1); sidebarPanel.HorizontalAlignment = HorizontalAlignment.Stretch; sidebarPanel.Width = double.NaN; sidebarPanel.ZIndex = 0;
+            sidebarPanel.BoxShadow = default;
+        }
+    }
+    private bool CloseSidebarPanel() { if (!sidebarCollapsed || !sidebarOpen) return false; sidebarOpen = false; ApplySidebarState(); return true; }
     // The slider takes whatever room the buttons beside it leave, so a fourth button (Edit) never runs under the zoom bar.
     private static Grid ZoomRow(Control fit, Control zoomOut, Control slider, Control zoomIn)
     {
@@ -576,7 +615,7 @@ public sealed class DashboardWindow : Window
         Ui.Put(railGrid, railFoot, row: 1);
         rail.Child = railGrid; Ui.Put(root, rail);
         Ui.DragHeader(railTop, this);
-        var body = Ui.Grid("340,1,*", "*");
+        var body = Ui.Grid("340,1,*", "*"); bodyGrid = body;
         var sidebar = Ui.Grid("*", "Auto,Auto,*,Auto");
         // The Day elapsed card, with a bar of the accent colour along its top edge.
         var dayCard = new Border { CornerRadius = new CornerRadius(18), ClipToBounds = true, BorderThickness = new Thickness(1) }; dayCard.Classes.Add("dayCard");
@@ -630,24 +669,32 @@ public sealed class DashboardWindow : Window
         Ui.Put(pair, breakButton); Ui.Put(pair, day, 1);
         summary.Children.Add(pair);
         Ui.Put(sidebar, summary, row: 3);
-        var panel = new Border { Child = sidebar };
+        var panel = new Border { Child = sidebar, Name = "SidebarPanel" }; sidebarPanel = panel;
         panel.Classes.Add("panel");
         Ui.Put(body, panel);
-        var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
+        var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1); sidebarDivider = divider;
         var review = Ui.Grid("*", "Auto,*,Auto,Auto");
         review.Margin = new Thickness(22, 16, 22, 18);
         // The workspace's name on the left; on the right the date to step through and a button back to today.
         // In Week views the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
         // The date has a fixed width, so the arrows stay put whatever its text says.
         var nav = Ui.Grid("*,Auto"); nav.VerticalAlignment = VerticalAlignment.Center;
-        Ui.Put(nav, workspaceTitle); headerRow = nav;
+        // Once the accounts column has folded away, a button brings it back as a panel, and a small clock keeps the day's time in view.
+        accountsToggle = Ui.Button("", () => { sidebarOpen = !sidebarOpen; ApplySidebarState(); }, "AccountsToggle");
+        accountsToggle.Classes.Add("toolButton"); accountsToggle.Classes.Add("quiet"); accountsToggle.Height = 34; accountsToggle.Padding = new Thickness(12, 0); accountsToggle.IsVisible = false;
+        accountsToggle.Content = Ui.Horizontal(new IconGlyph(IconKind.Entries), new TextBlock { Text = "Accounts", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
+        Avalonia.Automation.AutomationProperties.SetName(accountsToggle, "Accounts"); ToolTip.SetTip(accountsToggle, "Show the client accounts");
+        compactClock.IsVisible = false; compactClock.VerticalAlignment = VerticalAlignment.Center; compactClock.Name = "CompactClock";
+        var leftHeader = Ui.Horizontal(accountsToggle, compactClock, workspaceTitle); leftHeader.Spacing = 12; leftHeader.VerticalAlignment = VerticalAlignment.Center;
+        Ui.Put(nav, leftHeader); headerRow = nav;
         date.Width = 112; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
         previous = Ui.IconButton(IconKind.Previous, "Previous day or week", "PreviousPeriod", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }); previous.Width = 30;
         next = Ui.IconButton(IconKind.Next, "Next day or week", "NextPeriod", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }); next.Width = 30;
         // The same quiet outlined look, with a small icon, as Add time, Undo and Merge.
         todayButton = Ui.Button("", () => model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days), "GoToToday");
         todayButton.Classes.Add("toolButton"); todayButton.Classes.Add("quiet"); todayButton.Height = 34; todayButton.Margin = new Thickness(10, 0, 0, 0); todayButton.Padding = new Thickness(12, 0);
-        todayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), new TextBlock { Text = "Today", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
+        todayLabel = new TextBlock { Text = "Today", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
+        todayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), todayLabel);
         Avalonia.Automation.AutomationProperties.SetName(todayButton, "Today");
         Ui.Put(nav, Ui.Horizontal(previous, date, next, todayButton), 1);
         Ui.Put(review, nav);
@@ -661,7 +708,8 @@ public sealed class DashboardWindow : Window
         foreach (var (toolButton, icon, words, tint) in toolSpecs)
         {
             toolButton.Classes.Add("toolButton"); toolButton.Classes.Add("quiet");
-            toolButton.Content = Ui.Horizontal(new IconGlyph(icon) { TintKey = tint }, new TextBlock { Text = words, VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
+            var label = new TextBlock { Text = words, VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold }; toolLabels.Add(label);
+            toolButton.Content = Ui.Horizontal(new IconGlyph(icon) { TintKey = tint }, label);
             Avalonia.Automation.AutomationProperties.SetName(toolButton, words);
         }
         addTime.Classes.Add("addButton");
@@ -712,6 +760,13 @@ public sealed class DashboardWindow : Window
         var host = Ui.Shadowed(surface, 20);
         Content = WithResizeGrips(host);
         RememberSize();
+        PropertyChanged += (_, e) => { if (e.Property == BoundsProperty) ApplyLayoutMode(); };
+        // A click anywhere outside the folded accounts panel puts it away again.
+        AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (!sidebarOpen || e.Source is not Avalonia.Visual source) return;
+            if (!sidebarPanel.IsVisualAncestorOf(source) && source != sidebarPanel && !accountsToggle.IsVisualAncestorOf(source) && source != accountsToggle) CloseSidebarPanel();
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         (bool, Avalonia.Styling.ThemeVariant)? lastShadow = null;
         void UpdateShadow()
         {
@@ -740,7 +795,7 @@ public sealed class DashboardWindow : Window
         KeyDown += (_, e) =>
         {
             // Escape takes the top dialog away first, and only then clears the selection.
-            if (e.Key == Avalonia.Input.Key.Escape) { if (!Dialogs.CloseTop()) model.ClearSelection(); e.Handled = true; }
+            if (e.Key == Avalonia.Input.Key.Escape) { if (!Dialogs.CloseTop() && !CloseSidebarPanel()) model.ClearSelection(); e.Handled = true; }
             // Ctrl+C copies the selected blocks and Ctrl+V pastes them on the timeline, but never while typing in a text box.
             else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key is Avalonia.Input.Key.C or Avalonia.Input.Key.V && !settingsMode && FocusManager?.GetFocusedElement() is not TextBox)
             {
@@ -830,6 +885,7 @@ public sealed class DashboardWindow : Window
         // Amber on a break, red in overtime, green while tracking, full-strength text otherwise. A break outranks overtime.
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
         clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
+        compactClock.Text = model.ClockText; compactClock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
         var shownAccount = onBreak ? null : model.Accounts.FirstOrDefault(a => a.Name == (model.ActiveAccount ?? model.SelectedAccount));
         accountDot.IsVisible = shownAccount is not null; if (shownAccount is not null) accountDot.Fill = Avalonia.Media.Brush.Parse(Ui.Visible(shownAccount.Colour));
         account.Text = model.IsOnBreak ? (model.ResumeAccount is { } backTo ? "Then back to " + backTo : "No account running") : model.AccountLabel;

@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.VisualTree;
@@ -52,5 +53,65 @@ public sealed class ResizableWindowTests
             var model = Model(); model.SetDashboardSize(900, 620); Assert.Equal((900, 620), model.DashboardSize);
         }
         finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
+    }
+
+    // Pictures of the dashboard at several sizes, for looking at when TIMER_PREVIEW_DIR is set. Nothing is asserted beyond the window fitting its size.
+    [AvaloniaTheory]
+    [InlineData(640, 480)]
+    [InlineData(800, 560)]
+    [InlineData(1080, 680)]
+    [InlineData(1500, 900)]
+    public void TheDashboardDrawsAtEachSize(int width, int height)
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model);
+        window.Width = width + 2 * Ui.ShadowMargin; window.Height = height + 2 * Ui.ShadowMargin; window.Show();
+        try
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+            var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
+            if (folder is not null)
+            {
+                Directory.CreateDirectory(folder);
+                using var frame = window.CaptureRenderedFrame();
+                frame?.Save(Path.Combine(folder, $"size-{width}x{height}.png"));
+            }
+            Assert.True(window.ClientSize.Width >= width && window.ClientSize.Height >= height);
+        }
+        finally { window.Close(); }
+    }
+
+    private static T Named<T>(Avalonia.Controls.Control root, string name) where T : Avalonia.Controls.Control =>
+        Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(root).OfType<T>().Single(c => c.Name == name);
+
+    [AvaloniaFact]
+    public void ANarrowDashboardFoldsTheAccountsIntoAPanelThatOpensOnDemand()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model);
+        window.Width = 700 + 2 * Ui.ShadowMargin; window.Height = 520 + 2 * Ui.ShadowMargin; window.Show();
+        try
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+            var toggle = Named<Avalonia.Controls.Button>(window, "AccountsToggle"); var panel = Named<Avalonia.Controls.Control>(window, "SidebarPanel");
+            Assert.True(toggle.IsVisible); Assert.True(Named<Avalonia.Controls.Control>(window, "CompactClock").IsVisible); Assert.False(panel.IsVisible);
+            toggle.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent)); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.True(panel.IsVisible);
+            window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.False(panel.IsVisible);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void AWideDashboardKeepsTheAccountsColumn()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model);
+        window.Width = 1080 + 2 * Ui.ShadowMargin; window.Height = 680 + 2 * Ui.ShadowMargin; window.Show();
+        try
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+            Assert.False(Named<Avalonia.Controls.Button>(window, "AccountsToggle").IsVisible);
+            Assert.True(Named<Avalonia.Controls.Control>(window, "SidebarPanel").IsVisible);
+        }
+        finally { window.Close(); }
     }
 }
