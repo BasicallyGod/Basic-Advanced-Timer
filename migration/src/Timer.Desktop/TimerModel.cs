@@ -333,6 +333,8 @@ public sealed class TimerModel : INotifyPropertyChanged
             if (store is not null) { store.Save(Engine, preferences); store.Backup("before-rename"); }
             foreach (var (from, to) in renamed) Editor.RenameAccount(from, to);
         }
+        // To-dos linked to an account follow its rename, and lose the link if it is deleted.
+        if (renamed.Count > 0 || deleted.Count > 0) preferences = preferences with { Trinkets = Timer.Core.Trinkets.Relink(Trinkets, renamed.ToDictionary(r => r.Key, r => r.Value), deleted.ToList()) };
         preferences = preferences with { Accounts = WithColours(values) };
         if (renamed.Count > 0 && SelectedAccount is { } picked && renames.TryGetValue(picked, out var now)) SelectedAccount = now;
         if (!Accounts.Any(a => a.Name == SelectedAccount)) SelectedAccount = values.FirstOrDefault(a => !a.Hidden)?.Name;
@@ -766,6 +768,41 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>The order the desk's tiles were left in. Only the order is saved, since the arrangement follows from it at any window size.</summary>
     public IReadOnlyList<string> DeskOrder => preferences.DeskOrder ?? Array.Empty<string>();
     public void SetDeskOrder(IReadOnlyList<string> order) { preferences = preferences with { DeskOrder = order.ToList() }; Save(); }
+    /// <summary>The desk's trinkets: the to-do list and the post-its. They are not part of the day's records, so they live with the settings.</summary>
+    public TrinketData Trinkets => preferences.Trinkets ?? TrinketData.Empty;
+    private void SetTrinkets(TrinketData data) { preferences = preferences with { Trinkets = data }; Save(); Notify(); }
+    /// <summary>Adds a to-do from what was typed. A #Tag naming one account links it, and the item then wears that account's colour.</summary>
+    public void AddTodo(string typed)
+    {
+        if (string.IsNullOrWhiteSpace(typed)) return;
+        var item = Timer.Core.Trinkets.ParseTodo(typed, Accounts.Select(a => a.Name));
+        SetTrinkets(Trinkets with { Todos = Trinkets.Todos.Append(item).ToList() });
+    }
+    public void ToggleTodo(int index)
+    {
+        if (index < 0 || index >= Trinkets.Todos.Count) return;
+        var todos = Trinkets.Todos.ToList(); todos[index] = todos[index] with { Done = !todos[index].Done }; SetTrinkets(Trinkets with { Todos = todos });
+    }
+    public void RemoveTodo(int index)
+    {
+        if (index < 0 || index >= Trinkets.Todos.Count) return;
+        var todos = Trinkets.Todos.ToList(); todos.RemoveAt(index); SetTrinkets(Trinkets with { Todos = todos });
+    }
+    public void ClearDoneTodos() => SetTrinkets(Trinkets with { Todos = Trinkets.Todos.Where(t => !t.Done).ToList() });
+    /// <summary>Saves a post-it's words as they are typed. It does not notify, so the box being typed in is not rebuilt.</summary>
+    public void SetPostItText(int index, string text)
+    {
+        if (index < 0 || index >= Trinkets.PostIts.Count || Trinkets.PostIts[index].Text == text) return;
+        var notes = Trinkets.PostIts.ToList(); notes[index] = notes[index] with { Text = text };
+        preferences = preferences with { Trinkets = Trinkets with { PostIts = notes } }; Save();
+    }
+    public void CyclePostItColour(int index)
+    {
+        if (index < 0 || index >= Trinkets.PostIts.Count) return;
+        var notes = Trinkets.PostIts.ToList(); var colours = Timer.Core.Trinkets.PostItColours;
+        notes[index] = notes[index] with { Colour = colours[(colours.ToList().IndexOf(notes[index].Colour) + 1) % colours.Count] };
+        SetTrinkets(Trinkets with { PostIts = notes });
+    }
     /// <summary>The tiles put away in the drawer. Their data is untouched; they are only not on the desk.</summary>
     public IReadOnlyList<string> DeskHidden => preferences.DeskHidden ?? Array.Empty<string>();
     public void SetDeskHidden(IReadOnlyList<string> hidden) { preferences = preferences with { DeskHidden = hidden.ToList() }; Save(); }

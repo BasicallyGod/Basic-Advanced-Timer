@@ -22,6 +22,9 @@ public sealed class DeskView : UserControl
         new("working", "Working time", "#7FD1C7", 2, 1, "timeline"),
         new("accounts", "Accounts", "#A99CF5", 2, 3, null),
         new("day", "Day", "#F0C97A", 2, 1, "overview"),
+        new("todo", "To-do", "#F4B58A", 2, 3, null),
+        new("postit", "Post-it", "#FFF1A8", 2, 2, null),
+        new("clock", "Clock", "#8FA8D8", 1, 2, null),
     };
 
     private readonly TimerModel model;
@@ -29,6 +32,8 @@ public sealed class DeskView : UserControl
     private readonly DeskBoard board = new();
     private readonly Dictionary<string, (Border Tile, Border Body, TileForm? Form)> tiles = new();
     private readonly ClockText clock = new(34, 18); private readonly TextBlock accountLine = Ui.Text("", 14), allocated = Ui.Text("", 20, "figures"), unallocated = Ui.Text("", 20, "figures");
+    private readonly AnalogueClock analogue;
+    private TodoView? todoView; private TextBox? postIt;
     private List<string> order, hidden;
     private readonly Border drawer = new() { Name = "Drawer", Width = 236, HorizontalAlignment = HorizontalAlignment.Right, IsVisible = false, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), ZIndex = 20 };
     private readonly StackPanel chips = new() { Spacing = 8 };
@@ -39,6 +44,7 @@ public sealed class DeskView : UserControl
     public DeskView(TimerModel model, Action<string>? openPage = null)
     {
         this.model = model; this.openPage = openPage;
+        analogue = new AnalogueClock(() => model.Engine.Now);
         var known = Kinds.Select(k => k.Id).ToList();
         hidden = model.DeskHidden.Where(known.Contains).Distinct().ToList();
         order = DeskLayout.Reconcile(model.DeskOrder.Where(id => !hidden.Contains(id)), known.Where(id => !hidden.Contains(id)).ToList());
@@ -72,13 +78,23 @@ public sealed class DeskView : UserControl
     public IReadOnlyList<DeskPlacement> Placements => board.Placements;
     public Control? TileControl(string id) => tiles.TryGetValue(id, out var t) ? t.Tile : null;
 
-    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => RefreshLive();
+    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        RefreshLive();
+        // The rows are redrawn only when something other than the clock changed, so a tick never interrupts the to-do list.
+        if (e.PropertyName != nameof(TimerModel.Elapsed)) { todoView?.Rebuild(); PaintPostIt(); }
+    }
+    private void PaintPostIt()
+    {
+        if (!tiles.TryGetValue("postit", out var t)) return;
+        t.Tile.Background = new SolidColorBrush(PostItView.Paper(model.Trinkets.PostIts[0].Colour));
+    }
     private void RefreshLive()
     {
         clock.Text = model.ClockText;
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
         clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
-        accountLine.Text = model.AccountLabel;
+        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual();
         allocated.Text = model.Format(model.Allocated); unallocated.Text = model.Format(model.Unallocated);
     }
 
@@ -97,9 +113,15 @@ public sealed class DeskView : UserControl
             var open = Ui.IconButton(IconKind.Next, "Open full page", "TileOpen_" + kind.Id, () => openPage?.Invoke(page)); open.Width = 28; open.Height = 28; buttons.Children.Add(open);
         }
         var put = Ui.IconButton(IconKind.Close, "Put away in the drawer", "TileHide_" + kind.Id, () => Hide(kind.Id)); put.Width = 28; put.Height = 28; buttons.Children.Add(put);
+        if (kind.Id == "postit")
+        {
+            // Paper stays light whatever the theme, and a button changes its colour.
+            var paint = Ui.IconButton(IconKind.Edit, "Change colour", "PostItColour", () => model.CyclePostItColour(0)); paint.Width = 28; paint.Height = 28; buttons.Children.Insert(0, paint);
+        }
         Ui.Put(head, buttons, 1);
         var body = new Border { Margin = new Thickness(16, 2, 16, 14) };
-        var stack = Ui.Grid("*", "Auto,*"); Ui.Put(stack, head); Ui.Put(stack, body, row: 1); tile.Child = stack;
+        var stack = Ui.Grid("*", "Auto,*"); Ui.Put(stack, head); Ui.Put(stack, body, row: 1);
+        tile.Child = kind.Id == "postit" ? new ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light, Child = stack } : stack;
         head.PointerPressed += (_, e) => BeginDrag(kind.Id, e, tile);
         head.PointerMoved += (_, e) => DragTo(e);
         head.PointerReleased += (_, e) => EndDrag(e);
@@ -123,6 +145,9 @@ public sealed class DeskView : UserControl
                 {
                     new StackPanel { Children = { Ui.Text("Allocated", 12, "muted"), allocated } }, new StackPanel { Children = { Ui.Text("Unallocated", 12, "muted"), unallocated } } } };
                 break;
+            case "clock": body.Child = analogue; break;
+            case "todo": body.Child = todoView = new TodoView(model, form == TileForm.Tiny); break;
+            case "postit": body.Child = postIt ??= PostItView.Build(model, 0, false); PaintPostIt(); break;
             case "accounts":
                 body.Child = form == TileForm.Tiny
                     ? Ui.Text(model.Accounts.Count(a => !BreakAccount.Is(a.Name)) + " accounts", 14)

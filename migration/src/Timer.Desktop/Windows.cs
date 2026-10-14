@@ -940,7 +940,8 @@ public sealed class DashboardWindow : Window
         workspaceTitle.Text = settingsMode ? "Settings" : showDesk ? "Desk" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
-        if (settingsMode ? !renderedSettings : refreshWorkspace || renderedDesk != showDesk)
+        // The desk keeps itself up to date, so a change does not rebuild it under the pointer or in the middle of typing.
+        if (settingsMode ? !renderedSettings : (refreshWorkspace && !(showDesk && renderedDesk && renderedSettings == settingsMode)) || renderedDesk != showDesk)
         {
             var oldScroll = workspace.Content is ScrollViewer directOld ? directOld
                 : (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();

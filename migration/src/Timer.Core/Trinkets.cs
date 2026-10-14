@@ -1,0 +1,68 @@
+using System.Text.Json;
+using System.Text.RegularExpressions;
+
+namespace Timer.Core;
+
+/// <summary>A to-do item. The account it belongs to is kept by name, so a rename moves it along, and it is cleared if that account is deleted.</summary>
+public sealed record TodoItem(string Text, bool Done = false, string? Account = null);
+
+/// <summary>A post-it: some text on a coloured square. The colour is one of <see cref="Trinkets.PostItColours"/>.</summary>
+public sealed record PostIt(string Text = "", string Colour = "lemon");
+
+/// <summary>What the desk's trinkets hold. It is plain data, saved as one small piece of JSON beside the other settings.</summary>
+public sealed record TrinketData(IReadOnlyList<TodoItem> Todos, IReadOnlyList<PostIt> PostIts)
+{
+    public static readonly TrinketData Empty = new(Array.Empty<TodoItem>(), new[] { new PostIt() });
+}
+
+public static class Trinkets
+{
+    public static readonly IReadOnlyList<string> PostItColours = new[] { "lemon", "lilac", "rose" };
+    private static readonly Regex Tag = new(@"(?:^|\s)#([\p{L}\p{N}_-]+)", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Splits a typed to-do into its words and the account a #Tag names. The tag is the account's name with its spaces taken out, in any
+    /// case (#AccountOne for "Account one"), or the start of one when only a single account begins that way. A tag that names no account stays in the text.
+    /// </summary>
+    public static TodoItem ParseTodo(string typed, IEnumerable<string> accounts)
+    {
+        var names = accounts.Where(n => !BreakAccount.Is(n)).ToList();
+        foreach (Match match in Tag.Matches(typed))
+        {
+            var tag = match.Groups[1].Value;
+            string Squash(string name) => new string(name.Where(c => !char.IsWhiteSpace(c)).ToArray());
+            var exact = names.Where(n => Squash(n).Equals(tag, StringComparison.OrdinalIgnoreCase)).ToList();
+            var starts = exact.Count > 0 ? exact : names.Where(n => Squash(n).StartsWith(tag, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (starts.Count != 1) continue;
+            var text = Regex.Replace((typed.Remove(match.Index, match.Length)).Trim(), @"\s{2,}", " ");
+            return new TodoItem(text.Length == 0 ? starts[0] : text, false, starts[0]);
+        }
+        return new TodoItem(typed.Trim());
+    }
+
+    public static string ToJson(TrinketData data) => JsonSerializer.Serialize(data);
+
+    /// <summary>Reads saved trinkets, falling back to an empty desk when there are none or the text is damaged, so a bad file never stops the app opening.</summary>
+    public static TrinketData FromJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return TrinketData.Empty;
+        try
+        {
+            var data = JsonSerializer.Deserialize<TrinketData>(json);
+            if (data is null) return TrinketData.Empty;
+            var posts = (data.PostIts ?? Array.Empty<PostIt>()).Select(p => new PostIt(p.Text ?? "", PostItColours.Contains(p.Colour) ? p.Colour : "lemon")).ToList();
+            if (posts.Count == 0) posts.Add(new PostIt());
+            return new TrinketData((data.Todos ?? Array.Empty<TodoItem>()).Where(t => !string.IsNullOrWhiteSpace(t.Text)).ToList(), posts);
+        }
+        catch (JsonException) { return TrinketData.Empty; }
+    }
+
+    /// <summary>Follows an account rename or removal: renamed accounts keep their to-dos, and a deleted account's to-dos stay but lose the link.</summary>
+    public static TrinketData Relink(TrinketData data, IReadOnlyDictionary<string, string> renamed, IReadOnlyCollection<string> deleted)
+        => data with
+        {
+            Todos = data.Todos.Select(t => t.Account is not { } a ? t
+                : renamed.TryGetValue(a, out var now) ? t with { Account = now }
+                : deleted.Contains(a) ? t with { Account = null } : t).ToList()
+        };
+}

@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 | --- | --- | --- |
+| Desk trinkets: to-do, post-it, clock | pending | New desk tiles: a to-do list where a #Account tag links an item to that account and shows it in the account's colour (links follow a rename and clear on delete), a post-it that keeps what you type and changes colour, and an analogue clock. They are saved with the settings, not the day's records. |
 | Desk drawer | pending | Each desk tile has a cross that puts it away in a drawer, a panel down the right edge opened from the Drawer button. A tile can be dragged onto the open drawer, and a chip dragged out onto the desk (or clicked) brings it back. What is put away is remembered. |
 | Desk motion and Calm setting | pending | Tiles glide to their places on a light spring, and the tile in hand lifts and leans the way it is carried. A Calm motion switch in settings makes them move straight instead. |
 | Desk preview: a board of tiles | pending | A preview switch in settings adds a Desk page of tiles (Working time, Accounts, Day) that flow to fill the window, squeeze into smaller forms, can be picked up by their heading and moved, and open their full page. The order is remembered. The existing pages are unchanged. |

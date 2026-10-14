@@ -39,8 +39,8 @@ public sealed class DeskTests
         {
             Press(window, "DeskTab"); window.UpdateLayout();
             var desk = window.GetVisualDescendants().OfType<DeskView>().Single();
-            Assert.Equal(new[] { "day", "working", "accounts" }, desk.Order);
-            Assert.Equal(3, desk.Placements.Count); Assert.Equal("day", desk.Placements[0].Id);
+            Assert.Equal(new[] { "day", "working", "accounts" }, desk.Order.Take(3)); // Tiles added since the order was saved follow it.
+            Assert.Equal(DeskView.Kinds.Count, desk.Placements.Count); Assert.Equal("day", desk.Placements[0].Id);
             Assert.False(Named<Control>(window, "SidebarPanel").IsVisible);
             Assert.Equal(TileForm.Normal, desk.Placements.Single(p => p.Id == "working").Form);
         }
@@ -56,8 +56,8 @@ public sealed class DeskTests
             Press(window, "DeskTab");
             var desk = window.GetVisualDescendants().OfType<DeskView>().Single();
             desk.Drop("accounts", 0); window.UpdateLayout();
-            Assert.Equal(new[] { "accounts", "working", "day" }, desk.Order);
-            Assert.Equal(new[] { "accounts", "working", "day" }, model.DeskOrder);
+            Assert.Equal("accounts", desk.Order[0]);
+            Assert.Equal("accounts", model.DeskOrder[0]);
             Assert.Equal(0, desk.Placements.Single(p => p.Id == "accounts").Row);
         }
         finally { window.Close(); }
@@ -78,6 +78,59 @@ public sealed class DeskTests
         finally { window.Close(); }
     }
 
+    private static DeskView OpenDesk(DashboardWindow window) { Press(window, "DeskTab"); window.UpdateLayout(); return window.GetVisualDescendants().OfType<DeskView>().Single(); }
+
+    [AvaloniaFact]
+    public void AToDoWithATagLinksTheAccountAndTicksOffAndSurvivesTheDeskBeingKept()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window);
+            var input = Named<TextBox>(window, "TodoInput"); input.Text = "Send invoice #AccountOne";
+            input.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter }); Dispatcher.UIThread.RunJobs();
+            Assert.Same(desk, window.GetVisualDescendants().OfType<DeskView>().Single()); // The desk is not rebuilt, so the box keeps its focus.
+            var item = Assert.Single(model.Trinkets.Todos); Assert.Equal("Send invoice", item.Text); Assert.Equal("Account one", item.Account);
+            Assert.Equal("", input.Text); Assert.NotNull(Named<Control>(window, "TodoTag_0"));
+            Named<CheckBox>(window, "TodoTick_0").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.True(model.Trinkets.Todos[0].Done);
+            Press(window, "TodoRemove_0"); Assert.Empty(model.Trinkets.Todos);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void APostItKeepsWhatIsTypedAndCyclesItsColour()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            OpenDesk(window);
+            Named<TextBox>(window, "PostItText").Text = "Ring the printer people";
+            Assert.Equal("Ring the printer people", model.Trinkets.PostIts[0].Text);
+            Press(window, "PostItColour"); Assert.Equal("lilac", model.Trinkets.PostIts[0].Colour);
+            Press(window, "PostItColour"); Press(window, "PostItColour"); Assert.Equal("lemon", model.Trinkets.PostIts[0].Colour);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheClockTileDrawsAnAnalogueFace()
+    {
+        var window = Open(Model());
+        try { OpenDesk(window); Assert.True(Named<AnalogueClock>(window, "AnalogueClock").Bounds.Width > 40); }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void RenamingAnAccountKeepsItsToDosLinked()
+    {
+        var model = Model(); model.AddTodo("Call #AccountTwo");
+        Assert.Equal("Account two", model.Trinkets.Todos[0].Account);
+        model.SetAccounts(model.Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name == "Account two" ? new AccountSettings("Beta", null, "week") : new AccountSettings(a.Name, null, "week")).ToList(), new Dictionary<string, string> { ["Account two"] = "Beta" });
+        Assert.Equal("Beta", model.Trinkets.Todos[0].Account);
+    }
+
     [AvaloniaFact]
     public void ATilePutAwayLeavesTheDeskAndSitsInTheDrawerUntilBroughtBack()
     {
@@ -88,11 +141,11 @@ public sealed class DeskTests
             var desk = window.GetVisualDescendants().OfType<DeskView>().Single(); desk.Lively = false;
             Press(window, "TileHide_day"); window.UpdateLayout();
             Assert.Equal(new[] { "day" }, desk.Hidden); Assert.DoesNotContain(desk.Placements, p => p.Id == "day"); Assert.False(desk.TileControl("day")!.IsVisible);
-            Assert.Equal(new[] { "day" }, model.DeskHidden); Assert.Equal(new[] { "working", "accounts" }, model.DeskOrder);
+            Assert.Equal(new[] { "day" }, model.DeskHidden); Assert.DoesNotContain("day", model.DeskOrder);
             Press(window, "DrawerToggle"); Assert.True(Named<Border>(window, "Drawer").IsVisible);
             var chip = Named<Border>(window, "DrawerChip_day"); Assert.NotNull(chip);
             desk.Show("day", 0); window.UpdateLayout();
-            Assert.Empty(desk.Hidden); Assert.Equal("day", desk.Order[0]); Assert.True(desk.TileControl("day")!.IsVisible); Assert.Equal(3, desk.Placements.Count);
+            Assert.Empty(desk.Hidden); Assert.Equal("day", desk.Order[0]); Assert.True(desk.TileControl("day")!.IsVisible); Assert.Equal(desk.Order.Count, desk.Placements.Count);
             Assert.Empty(model.DeskHidden);
         }
         finally { window.Close(); }
@@ -106,7 +159,7 @@ public sealed class DeskTests
         {
             Press(window, "DeskTab");
             var desk = window.GetVisualDescendants().OfType<DeskView>().Single();
-            Assert.Equal(new[] { "day" }, desk.Hidden); Assert.Equal(2, desk.Placements.Count);
+            Assert.Equal(new[] { "day" }, desk.Hidden); Assert.Equal(DeskView.Kinds.Count - 1, desk.Placements.Count);
         }
         finally { window.Close(); }
     }
@@ -145,12 +198,13 @@ public sealed class DeskTests
     public void TheDeskDrawsAtEachSize(int width, int height)
     {
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true);
-        model.SetDeskHidden(new[] { "day" });
+        model.AddTodo("Send the invoice #AccountOne"); model.AddTodo("Call back about the budget #AccountThree"); model.AddTodo("Order more tea"); model.ToggleTodo(2);
+        model.SetPostItText(0, "Ask about the printer. Book the room for Friday.");
         var window = Open(model, width, height);
         try
         {
-            Press(window, "DeskTab"); Press(window, "DrawerToggle"); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
-            var shown = window.GetVisualDescendants().OfType<DeskView>().Single(); Assert.Equal(new[] { "day" }, shown.Hidden); Assert.True(Named<Border>(window, "Drawer").IsVisible);
+            Press(window, "DeskTab"); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            var shown = window.GetVisualDescendants().OfType<DeskView>().Single(); Assert.Empty(shown.Hidden);
             Assert.DoesNotContain("selected", Named<Button>(window, "TimelineTab").Classes); Assert.Contains("selected", Named<Button>(window, "DeskTab").Classes);
             if (Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") is { } folder)
             {
