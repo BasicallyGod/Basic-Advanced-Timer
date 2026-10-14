@@ -36,7 +36,7 @@ public sealed class WindowCoordinator
         Pill.OpenDashboard = () =>
         {
             model.ShowToday();
-            Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin);
+            FitDashboardToPill();
             Dashboard.Show();
             Pill.Collapse(); // So it is a capsule again when you come back.
             Pill.Hide();
@@ -91,7 +91,7 @@ public sealed class WindowCoordinator
     }
     public void ShowDashboard()
     {
-        if (!Dashboard.IsVisible) { model.ShowToday(); Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin); Dashboard.Show(); }
+        if (!Dashboard.IsVisible) { model.ShowToday(); FitDashboardToPill(); Dashboard.Show(); }
         Pill.Collapse(); Pill.Hide(); BringToFront(Dashboard);
     }
     // The tray icon's left click shows the timer, or hides it when it is already in front.
@@ -121,6 +121,11 @@ public sealed class WindowCoordinator
         if (!model.StopForClose()) { ShowTimer(); return; }
         quitting = true;
         Pill.Close(); Dashboard.Close();
+    }
+    private void FitDashboardToPill()
+    {
+        var (width, height) = DashboardWindow.PreferredSize(model);
+        Fit(Dashboard, Pill, width + 2 * Ui.ShadowMargin, height + 2 * Ui.ShadowMargin);
     }
     private static void Fit(Window target, Window source, double width, double height)
     {
@@ -436,8 +441,11 @@ public sealed class PillWindow : Window
 
 public sealed class DashboardWindow : Window
 {
-    /// <summary>The dashboard's fixed size, before the room kept around it for its shadow.</summary>
-    public const double DashboardWidth = 1080, DashboardHeight = 680;
+    /// <summary>The size the dashboard opens at when none has been chosen, and the smallest it can be made (the card, before the room kept around it for its shadow).</summary>
+    public const double DashboardWidth = 1080, DashboardHeight = 680, MinimumWidth = 640, MinimumHeight = 480;
+    /// <summary>The window size to open at: the remembered size, held to the minimum, or the default.</summary>
+    public static (double Width, double Height) PreferredSize(TimerModel model)
+        => model.DashboardSize is { } size ? (Math.Max(MinimumWidth, size.Width), Math.Max(MinimumHeight, size.Height)) : (DashboardWidth, DashboardHeight);
     /// <summary>The height of the Start break and Finish day buttons, and of the bar under the timeline.</summary>
     public const double ControlBarHeight = 42;
     public Action? OpenPill { get; set; }
@@ -447,6 +455,47 @@ public sealed class DashboardWindow : Window
     private readonly Avalonia.Controls.Shapes.Ellipse accountDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
     private Button todayButton = null!;
     private readonly TextBlock account = Ui.Text("", 16);
+    // The window has no frame, so thin invisible grips along its edges and corners (in the room kept for the shadow, just outside the card) start a resize.
+    private Control WithResizeGrips(Control content)
+    {
+        var frame = new Grid(); frame.Children.Add(content);
+        const double Edge = 12, Corner = 22, Reach = Ui.ShadowMargin - 14;
+        void Grip(string name, WindowEdge edge, StandardCursorType cursor, HorizontalAlignment h, VerticalAlignment v, double width, double height, Thickness margin)
+        {
+            var grip = new Border { Name = name, Background = Avalonia.Media.Brushes.Transparent, Cursor = new Cursor(cursor), HorizontalAlignment = h, VerticalAlignment = v, Margin = margin };
+            if (!double.IsNaN(width)) grip.Width = width; if (!double.IsNaN(height)) grip.Height = height;
+            grip.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+                Ui.CloseMenus(this); BeginResizeDrag(edge, e); e.Handled = true;
+            };
+            frame.Children.Add(grip);
+        }
+        var none = double.NaN;
+        // Edges first, inset from the corners, then the corners on top.
+        Grip("ResizeLeft", WindowEdge.West, StandardCursorType.SizeWestEast, HorizontalAlignment.Left, VerticalAlignment.Stretch, Edge, none, new Thickness(Reach, Corner + 8, 0, Corner + 8));
+        Grip("ResizeRight", WindowEdge.East, StandardCursorType.SizeWestEast, HorizontalAlignment.Right, VerticalAlignment.Stretch, Edge, none, new Thickness(0, Corner + 8, Reach, Corner + 8));
+        Grip("ResizeTop", WindowEdge.North, StandardCursorType.SizeNorthSouth, HorizontalAlignment.Stretch, VerticalAlignment.Top, none, Edge, new Thickness(Corner + 8, Reach, Corner + 8, 0));
+        Grip("ResizeBottom", WindowEdge.South, StandardCursorType.SizeNorthSouth, HorizontalAlignment.Stretch, VerticalAlignment.Bottom, none, Edge, new Thickness(Corner + 8, 0, Corner + 8, Reach));
+        Grip("ResizeTopLeft", WindowEdge.NorthWest, StandardCursorType.TopLeftCorner, HorizontalAlignment.Left, VerticalAlignment.Top, Corner, Corner, new Thickness(Reach - 4, Reach - 4, 0, 0));
+        Grip("ResizeTopRight", WindowEdge.NorthEast, StandardCursorType.TopRightCorner, HorizontalAlignment.Right, VerticalAlignment.Top, Corner, Corner, new Thickness(0, Reach - 4, Reach - 4, 0));
+        Grip("ResizeBottomLeft", WindowEdge.SouthWest, StandardCursorType.BottomLeftCorner, HorizontalAlignment.Left, VerticalAlignment.Bottom, Corner, Corner, new Thickness(Reach - 4, 0, 0, Reach - 4));
+        Grip("ResizeBottomRight", WindowEdge.SouthEast, StandardCursorType.BottomRightCorner, HorizontalAlignment.Right, VerticalAlignment.Bottom, Corner, Corner, new Thickness(0, 0, Reach - 4, Reach - 4));
+        return frame;
+    }
+    // The size is remembered a moment after the last change, so dragging an edge saves once and not on every pixel.
+    private void RememberSize()
+    {
+        var pending = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
+        pending.Tick += (_, _) =>
+        {
+            pending.Stop();
+            if (!IsVisible || WindowState != WindowState.Normal) return;
+            var card = (Width: Bounds.Width - 2 * Ui.ShadowMargin, Height: Bounds.Height - 2 * Ui.ShadowMargin);
+            if (card.Width >= MinimumWidth && card.Height >= MinimumHeight) model.SetDashboardSize((int)Math.Round(card.Width), (int)Math.Round(card.Height));
+        };
+        PropertyChanged += (_, e) => { if (e.Property == BoundsProperty) { pending.Stop(); pending.Start(); } };
+    }
     // The slider takes whatever room the buttons beside it leave, so a fourth button (Edit) never runs under the zoom bar.
     private static Grid ZoomRow(Control fit, Control zoomOut, Control slider, Control zoomIn)
     {
@@ -485,10 +534,12 @@ public sealed class DashboardWindow : Window
         this.model = model;
         Title = "Basic’s Advanced Timer"; WindowChrome.Attach(this);
         ContextMenu = Ui.SettingsMenu(model);
-        Width = DashboardWidth + 2 * Ui.ShadowMargin;
-        Height = DashboardHeight + 2 * Ui.ShadowMargin;
+        var (startWidth, startHeight) = PreferredSize(model);
+        Width = startWidth + 2 * Ui.ShadowMargin;
+        Height = startHeight + 2 * Ui.ShadowMargin;
+        MinWidth = MinimumWidth + 2 * Ui.ShadowMargin; MinHeight = MinimumHeight + 2 * Ui.ShadowMargin;
         Topmost = model.DashboardOnTop; model.PropertyChanged += (_, _) => { if (Topmost != model.DashboardOnTop) Topmost = model.DashboardOnTop; }; // In front of other windows unless switched off in settings.
-        CanResize = false;
+        CanResize = true; // There is no frame to grab, so the grips drawn around the card start the resize.
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
@@ -658,7 +709,9 @@ public sealed class DashboardWindow : Window
         layers.Children.Add(Dialogs); Dialogs.OpenChanged += UpdateBackdrop; // Last, so a dialog is above the setup too.
         var surface = new Border { Name = "DashboardSurface", Child = layers, ClipToBounds = true };
         surface.Classes.Add("surface");
-        var host = Ui.Shadowed(surface, 20); Content = host;
+        var host = Ui.Shadowed(surface, 20);
+        Content = WithResizeGrips(host);
+        RememberSize();
         (bool, Avalonia.Styling.ThemeVariant)? lastShadow = null;
         void UpdateShadow()
         {

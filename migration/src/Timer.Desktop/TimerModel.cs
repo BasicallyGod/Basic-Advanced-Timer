@@ -749,6 +749,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool DashboardOnTop => preferences.DashboardOnTop;
     public void SetPillOnTop(bool on) { preferences = preferences with { PillOnTop = on }; Save(); Notify(); }
     public void SetDashboardOnTop(bool on) { preferences = preferences with { DashboardOnTop = on }; Save(); Notify(); }
+    /// <summary>The size the dashboard was last left at (the card, without the room kept for its shadow), or null for the default.</summary>
+    public (int Width, int Height)? DashboardSize => preferences.DashboardWidth is { } w && preferences.DashboardHeight is { } h ? (w, h) : null;
+    /// <summary>Remembers the dashboard's size. It does not notify, since nothing on screen needs to change.</summary>
+    public void SetDashboardSize(int width, int height)
+    {
+        if (preferences.DashboardWidth == width && preferences.DashboardHeight == height) return;
+        preferences = preferences with { DashboardWidth = width, DashboardHeight = height }; Save();
+    }
     public int? PillScalePercent => preferences.PillScale;
     public static readonly int[] PillScaleChoices = { 50, 60, 70, 80, 90, 100, 110, 120 };
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
