@@ -62,11 +62,12 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Asks for the accounts and budgets dialog. The dashboard shows it, and comes up first if only the pill is showing.</summary>
     public void OpenAccounts() => AccountsRequested?.Invoke();
     public void OpenTidy() => TidyRequested?.Invoke();
-    public event Action? NoteRequested, DashboardRequested, SettingsRequested;
+    public event Action<string?>? NoteRequested;
+    public event Action? DashboardRequested, SettingsRequested;
     /// <summary>Asks for the settings dialog, from the pill's menu. The dashboard shows it, and comes up first if only the pill is showing.</summary>
     public void RequestSettings() => SettingsRequested?.Invoke();
     /// <summary>Asks for the add note dialog. The dashboard shows it, and comes up first if only the pill is showing.</summary>
-    public void RequestNote() => NoteRequested?.Invoke();
+    public void RequestNote(string? prefill = null) => NoteRequested?.Invoke(prefill);
     /// <summary>Asks for the dashboard (or the desk, when it is on) to come up, as the pill's own button does.</summary>
     public void RequestDashboard() => DashboardRequested?.Invoke();
     public string? ExportPath { get; private set; }
@@ -348,6 +349,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (renamed.Count > 0 || deleted.Count > 0)
         {
             preferences = preferences with { Trinkets = Timer.Core.Trinkets.Relink(Trinkets, renamed.ToDictionary(r => r.Key, r => r.Value), deleted.ToList()) };
+            if (Pomodoro.Account is { } focus) Pomodoro.Account = deleted.Contains(focus) ? null : renamed.FirstOrDefault(r => r.Key == focus) is { Value: not null } moved ? moved.Value : focus;
             // Notes and tasks tagged with an account follow it the same way.
             var before = preferences.Accounts.Select(a => a.Name).ToList(); var map = renamed.ToDictionary(r => r.Key, r => r.Value); var gone = deleted.ToList();
             for (var i = 0; i < dayNotes.Count; i++)
@@ -828,6 +830,12 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>The pomodoro timer. It lives only while the app runs, and does not touch time tracking.</summary>
     public Pomodoro Pomodoro { get; } = new();
+    /// <summary>Steps the focus timer's account through none and each account in turn. It changes only a label on the session.</summary>
+    public void CyclePomodoroAccount()
+    {
+        var names = AccountNames; var index = Pomodoro.Account is { } now ? names.ToList().IndexOf(now) : -1;
+        Pomodoro.Account = index + 1 < names.Count ? names[index + 1] : null; Notify();
+    }
     /// <summary>The desk's trinkets: the to-do list and the post-its. They are not part of the day's records, so they live with the settings.</summary>
     public TrinketData Trinkets => preferences.Trinkets ?? TrinketData.Empty;
     private void SetTrinkets(TrinketData data) { preferences = preferences with { Trinkets = data }; Save(); Notify(); }

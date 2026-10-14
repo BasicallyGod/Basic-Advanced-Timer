@@ -972,10 +972,10 @@ public sealed class DashboardWindow : Window
         if (!IsVisible) Reveal?.Invoke();
         if (IsVisible && !Dialogs.Dialogs.OfType<AccountsDialog>().Any()) Dialogs.Show(new AccountsDialog(model));
     }
-    private void ShowNote()
+    private void ShowNote(string? prefill)
     {
         if (!IsVisible) Reveal?.Invoke();
-        if (IsVisible && !Dialogs.Dialogs.OfType<NoteDialog>().Any()) Dialogs.Show(new NoteDialog(model));
+        if (IsVisible && !Dialogs.Dialogs.OfType<NoteDialog>().Any()) Dialogs.Show(new NoteDialog(model, prefill));
     }
     private void ShowTidy() { if (IsVisible) Dialogs.Show(new TidyDialog(model)); }
     private void ShowGroup(string id) { if (IsVisible) Dialogs.Show(new GroupDialog(model, id)); }

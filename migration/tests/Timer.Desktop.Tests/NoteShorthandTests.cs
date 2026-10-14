@@ -136,7 +136,7 @@ public sealed class NoteShorthandTests
             Assert.Contains(coming.GetVisualDescendants().OfType<Control>(), c => c.Name == "ComingAccount_" + id); // The account shows beside the words in Coming up.
             Assert.Equal("file report", deadline.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "DeadlineWhat").Text);
             model.ClearNoteDeadline(id); coming.Rebuild(); deadline.Refresh(); Dispatcher.UIThread.RunJobs();
-            Assert.Contains("No deadline", deadline.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "DeadlineWhat").Text); // It is no longer a deadline,
+            Assert.Equal("Nothing due", deadline.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "DeadlineWhat").Text); // It is no longer a deadline,
             Assert.Contains(coming.GetVisualDescendants().OfType<Control>(), c => c.Name == "ComingEvent_" + id); // and with its time it is an event.
         }
         finally { window.Close(); }

@@ -242,13 +242,13 @@ public sealed class DeskTests
         var model = Model(); var window = Open(model);
         try
         {
-            OpenDesk(window); Assert.Equal("None", Named<TextBlock>(window, "DeadlineLeft").Text);
+            OpenDesk(window); Assert.False(Named<TextBlock>(window, "DeadlineLeft").IsVisible); Assert.Equal("Nothing due", Named<TextBlock>(window, "DeadlineWhat").Text); // No big figure for nothing.
             var due = model.Engine.Now.Date.AddDays(1); // Tomorrow, at five.
             model.AddDayNote(due, "!Timesheet due"); window.UpdateLayout();
             var expected = due.AddHours(17) - model.Engine.Now; var left = Named<TextBlock>(window, "DeadlineLeft").Text;
             Assert.Equal($"{(int)expected.TotalHours}h {expected.Minutes:00}m", left); // Spelled out, so it reads as a duration and not a time of day.
             Assert.Equal("Timesheet due", Named<TextBlock>(window, "DeadlineWhat").Text); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Due in");
-            model.ToggleDayNote(model.AllDayNotes[0].Id); window.UpdateLayout(); Assert.Equal("None", Named<TextBlock>(window, "DeadlineLeft").Text);
+            model.ToggleDayNote(model.AllDayNotes[0].Id); window.UpdateLayout(); Assert.False(Named<TextBlock>(window, "DeadlineLeft").IsVisible); Assert.Equal("Nothing due", Named<TextBlock>(window, "DeadlineWhat").Text);
         }
         finally { window.Close(); }
     }

@@ -298,7 +298,12 @@ public sealed class ComingUpView : StackPanel
     {
         Children.Clear();
         var coming = model.ComingUp();
-        if (coming.Count == 0) Children.Add(Ui.Text("Nothing coming up. Add a dated note in Notes.", 12, "muted"));
+        if (coming.Count == 0)
+        {
+            Children.Add(Ui.Text("Nothing coming up", compact ? 13 : 14, "muted"));
+            // One quiet way to put something here, through the same dialog the pill's menu opens.
+            if (!compact) { var add = Ui.DialogButton("Add a note", () => model.RequestNote(), "ComingAdd"); add.HorizontalAlignment = HorizontalAlignment.Left; add.Height = 32; add.Margin = new Thickness(0, 4, 0, 0); Children.Add(add); }
+        }
         // Small, it is the one thing coming next, on a single line.
         foreach (var note in compact ? coming.Take(1) : coming)
         {
@@ -359,7 +364,7 @@ public sealed class PomodoroView : Grid
 {
     private readonly TimerModel model; private readonly ProgressRing ring = new() { Name = "PomodoroRing" };
     private readonly TextBlock time = new() { Name = "PomodoroTime", FontSize = 46, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, Classes = { "clock" } };
-    private readonly TextBlock phase = Ui.Text("", 12, "muted"); private readonly Button toggle;
+    private readonly TextBlock phase = Ui.Text("", 12, "muted"); private readonly Button toggle, account;
     public PomodoroView(TimerModel model, bool compact)
     {
         this.model = model; RowDefinitions = new RowDefinitions(compact ? "*" : "*,Auto");
@@ -373,7 +378,10 @@ public sealed class PomodoroView : Grid
         Children.Add(face);
         toggle = Ui.DialogButton("Start", () => { model.Pomodoro.Toggle(model.Engine.Now); Refresh(); }, "PomodoroToggle");
         var reset = Ui.DialogButton("Reset", () => { model.Pomodoro.Reset(); Refresh(); }, "PomodoroReset");
-        var buttons = Ui.Horizontal(toggle, reset); buttons.HorizontalAlignment = HorizontalAlignment.Center; buttons.Margin = new Thickness(0, 6, 0, 0);
+        // Which account the focus is for. It is only a label for the session, and never starts, stops or adds recorded time.
+        account = Ui.DialogButton("", () => { model.CyclePomodoroAccount(); Refresh(); }, "PomodoroAccount"); account.Classes.Remove("mainAction"); account.Height = 30; account.Padding = new Thickness(10, 0);
+        ToolTip.SetTip(account, "Which account this focus is for. It never adds recorded time.");
+        var buttons = Ui.Horizontal(toggle, reset, account); buttons.HorizontalAlignment = HorizontalAlignment.Center; buttons.Margin = new Thickness(0, 6, 0, 0);
         if (!compact) { SetRow(buttons, 1); Children.Add(buttons); }
         Refresh();
     }
@@ -384,7 +392,9 @@ public sealed class PomodoroView : Grid
         var left = p.Remaining(now); time.Text = $"{(int)left.TotalMinutes:00}:{left.Seconds:00}";
         phase.Text = p.Nudge ? (p.Phase == PomodoroPhase.Work ? "Back to work?" : p.Phase == PomodoroPhase.LongBreak ? "Time for a long break" : "Time for a short break")
             : p.Phase switch { PomodoroPhase.Idle => "Ready", PomodoroPhase.Work => p.Running ? "Focus" : "Paused", PomodoroPhase.ShortBreak => p.Running ? "Short break" : "Paused", _ => p.Running ? "Long break" : "Paused" };
+        if (model.Pomodoro.Account is { } forAccount && p.Phase == PomodoroPhase.Work) phase.Text += " · " + model.Label(forAccount);
         if (p.Completed > 0) phase.Text += " · " + p.Completed;
+        account.Content = model.Pomodoro.Account is { } chosen ? "#" + model.Label(chosen) : "No account";
         toggle.Content = p.Running ? "Pause" : p.Phase == PomodoroPhase.Idle || p.Nudge ? "Start" : "Resume";
         ring.Fraction = p.Phase == PomodoroPhase.Idle ? 0 : p.Fraction(now); ring.Soft = p.Nudge; ring.InvalidateVisual();
     }
@@ -586,15 +596,16 @@ public sealed class DeadlineView : StackPanel
     private readonly TimerModel model; private readonly TileForm form;
     private readonly TextBlock what = new() { Name = "DeadlineWhat", FontSize = 17, FontWeight = FontWeight.SemiBold }, phrase = Ui.Text("", 13, "muted"), left = new() { Name = "DeadlineLeft", FontSize = 40, Classes = { "clock" } }, when = Ui.Text("", 13);
     private readonly TextBlock workLeft = new() { Name = "DeadlineWorkLeft", FontSize = 14, FontWeight = FontWeight.SemiBold };
-    private readonly bool slim;
+    private readonly bool slim; private readonly Button add;
     public DeadlineView(TimerModel model, TileForm form, bool slim = false)
     {
         this.model = model; this.form = slim ? TileForm.Tiny : form; this.slim = slim; form = this.form; Spacing = 2; VerticalAlignment = VerticalAlignment.Center;
+        add = Ui.DialogButton("Add a deadline", () => model.RequestNote("! "), "DeadlineAdd"); add.HorizontalAlignment = HorizontalAlignment.Left; add.Height = 32; add.Margin = new Thickness(0, 8, 0, 0);
         what.TextTrimming = TextTrimming.CharacterEllipsis; left.FontSize = form == TileForm.Tiny ? 34 : form == TileForm.Roomy ? 60 : 54; left.FontWeight = FontWeight.Bold;
         if (slim) { what.FontSize = 13; what.MaxWidth = 150; left.FontSize = 36; var row = Ui.Horizontal(what, left); row.Spacing = 12; Orientation = Orientation.Vertical; Children.Add(row); HorizontalAlignment = HorizontalAlignment.Right; Refresh(); return; }
         if (form != TileForm.Tiny) { Children.Add(what); Children.Add(phrase); } else { what.FontSize = 13; Children.Add(what); }
         Children.Add(left);
-        if (form != TileForm.Tiny) Children.Add(when);
+        if (form != TileForm.Tiny) { Children.Add(when); Children.Add(add); }
         if (form == TileForm.Roomy) { workLeft.Margin = new Thickness(0, 6, 0, 0); Children.Add(workLeft); }
         Refresh();
     }
@@ -609,7 +620,10 @@ public sealed class DeadlineView : StackPanel
         left.Foreground = Tone(); when.Foreground = left.Foreground;
         var deadlines = model.AllDayNotes.Where(n => !n.Done && DayNotes.IsDeadline(n)).OrderBy(DayNotes.DueAt).ThenBy(n => n.Id).ToList();
         var note = deadlines.FirstOrDefault();
-        if (note is null) { what.Text = form == TileForm.Tiny ? "No deadline" : "No deadlines"; phrase.Text = ""; left.Text = "None"; when.Text = "Start a note with ! to add one."; workLeft.Text = ""; return; }
+        // With nothing due the tile says so once, in quiet words, and offers the one thing to do about it, rather than a big figure for nothing.
+        var empty = note is null; left.IsVisible = !empty; phrase.IsVisible = !empty && !slim && form != TileForm.Tiny; when.IsVisible = !empty; add.IsVisible = empty && !slim && form != TileForm.Tiny;
+        if (note is null) { what.Text = "Nothing due"; what.Foreground = new SolidColorBrush(Ui.ThemeColour(this, "Muted", Colors.Gray)); phrase.Text = ""; left.Text = ""; when.Text = ""; workLeft.Text = ""; return; }
+        what.ClearValue(TextBlock.ForegroundProperty);
         var now = model.Engine.Now; var due = DayNotes.DueAt(note); var remaining = due - now; var late = remaining < TimeSpan.Zero; var span = late ? -remaining : remaining;
         // A countdown reads as hours and minutes spelled out, so it cannot be mistaken for a time of day.
         var text = $"{(int)span.TotalHours}h {span.Minutes:00}m";
@@ -706,6 +720,10 @@ public sealed class DayView : Grid
             var row = Ui.Grid("*,Auto"); row.Name = name; Ui.Put(row, Ui.Text(label, 13, "muted"));
             var v = Ui.Text(model.Format(value), 13, "figures"); v.FontWeight = FontWeight.SemiBold; Ui.Put(row, v, 1); details.Children.Add(row);
         }
+        // How much of the day's working time is still ahead, to its scheduled end, apart from how much is still to be put on accounts.
+        var now = model.Engine.Now; var plan = model.Engine.Plan(model.SelectedDate);
+        var ahead = plan.Working && model.SelectedDate.Date == now.Date && now < plan.End ? model.Engine.Schedule.WorkingTimeBetween(now, plan.End) : TimeSpan.Zero;
+        Line("Working time left", ahead, "DayWorkLeft");
         Line("Unallocated", f.Unallocated, "DayUnallocated"); Line("Breaks", f.Breaks, "DayBreaks"); Line("Overtime", f.Overtime, "DayOvertime");
     }
 }
