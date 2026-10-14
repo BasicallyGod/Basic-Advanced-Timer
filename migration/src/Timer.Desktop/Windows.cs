@@ -512,7 +512,7 @@ public sealed class DashboardWindow : Window
         {
             iconsOnly = icons;
             foreach (var label in toolLabels) label.IsVisible = !icons;
-            todayLabel.IsVisible = !icons; workspaceTitle.IsVisible = !icons || deskMode;
+            todayLabel.IsVisible = !icons; workspaceTitle.IsVisible = !icons || deskMode; date.Width = icons ? 80 : 112; if (railTopRef is not null) railTopRef.Spacing = barMode && icons ? 2 : 6; // The bar has a lot to hold, so its buttons close up when the window is narrow.
             foreach (var button in new Button[] { addTime, undo, merge, edit, todayButton }) button.Padding = icons ? new Thickness(10, 0) : new Thickness(button == todayButton ? 12 : 16, 0);
         }
     }
@@ -703,7 +703,8 @@ public sealed class DashboardWindow : Window
         todayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), todayLabel);
         Avalonia.Automation.AutomationProperties.SetName(todayButton, "Today");
         // On the desk the Drawer button sits here, at the right of the title, so it takes no row of its own.
-        Ui.Put(nav, Ui.Horizontal(deskSlot, previous, date, next, todayButton), 1);
+        dateNav = Ui.Horizontal(previous, date, next, todayButton); navRight = Ui.Horizontal(deskSlot, dateNav);
+        Ui.Put(nav, navRight, 1);
         Ui.Put(review, nav);
         undo = Ui.Button("", () => model.UndoEdit(), "UndoEdit");
         merge = Ui.Button("", () => model.MergeSelection(), "MergeSelected");
@@ -759,7 +760,8 @@ public sealed class DashboardWindow : Window
         Ui.Put(root, body, 1);
         // With the desk on, the rail becomes a slim bar across the top, which gives the tiles the full width. It is the same buttons laid out
         // the other way round, so every name, tooltip and behaviour is unchanged.
-        var ruleHeight = backRule.Height;
+        railTopRef = railTop; var ruleHeight = backRule.Height;
+        var dateRule = Ui.Rule(); dateRule.Width = 1; dateRule.Height = 22; dateRule.Margin = new Thickness(6, 0); dateRule.VerticalAlignment = VerticalAlignment.Center;
         chromeApplier = bar =>
         {
             root.RowDefinitions[0].Height = GridLength.Auto;
@@ -767,7 +769,7 @@ public sealed class DashboardWindow : Window
             Grid.SetRow(body, bar ? 1 : 0); Grid.SetRowSpan(body, bar ? 1 : 2); Grid.SetColumn(body, bar ? 0 : 1); Grid.SetColumnSpan(body, bar ? 2 : 1);
             rail.Width = bar ? double.NaN : 60; rail.Height = bar ? 56 : double.NaN;
             railGrid.ColumnDefinitions = new ColumnDefinitions(bar ? "*,Auto" : "*"); railGrid.RowDefinitions = new RowDefinitions(bar ? "*" : "*,Auto");
-            railTop.Orientation = bar ? Orientation.Horizontal : Orientation.Vertical;
+            railTop.Orientation = bar ? Orientation.Horizontal : Orientation.Vertical; railTop.Spacing = bar && iconsOnly ? 2 : 6;
             railTop.Margin = bar ? new Thickness(14, 0, 0, 0) : new Thickness(0, 18, 0, 0);
             railTop.HorizontalAlignment = bar ? HorizontalAlignment.Left : HorizontalAlignment.Center; railTop.VerticalAlignment = bar ? VerticalAlignment.Center : VerticalAlignment.Top;
             railFoot.Orientation = bar ? Orientation.Horizontal : Orientation.Vertical;
@@ -776,6 +778,9 @@ public sealed class DashboardWindow : Window
             Grid.SetColumn(railFoot, bar ? 1 : 0); Grid.SetRow(railFoot, bar ? 0 : 1);
             backRule.Width = bar ? 1 : double.NaN; backRule.Height = bar ? 22 : ruleHeight; backRule.Margin = bar ? new Thickness(6, 0) : new Thickness(6, 4);
             backRule.HorizontalAlignment = bar ? HorizontalAlignment.Left : HorizontalAlignment.Stretch; backRule.VerticalAlignment = VerticalAlignment.Center;
+            // In the bar the date arrows sit after the view buttons, so one date drives every tile and page; otherwise they are in the header, as before.
+            ((Panel?)dateNav.Parent)?.Children.Remove(dateNav);
+            if (bar) { railTop.Children.Add(dateRule); railTop.Children.Add(dateNav); } else { railTop.Children.Remove(dateRule); navRight.Children.Add(dateNav); }
         };
         chromeApplier(false);
         // Notes, refused edits and failed saves float over the lowest part of the workspace, above the buttons, so they never push the buttons up.
@@ -815,7 +820,7 @@ public sealed class DashboardWindow : Window
         AddHandler(KeyDownEvent, (_, e) =>
         {
             if (settingsMode || e.KeyModifiers != Avalonia.Input.KeyModifiers.None || e.Key is not (Avalonia.Input.Key.Left or Avalonia.Input.Key.Right)) return;
-            if (FocusManager?.GetFocusedElement() is TextBox or ComboBox || (deskMode && deskExpanded != "timeline")) return; // The desk shows no day to step through unless the timeline is open.
+            if (FocusManager?.GetFocusedElement() is TextBox or ComboBox) return;
             var step = e.Key == Avalonia.Input.Key.Left ? -1 : 1;
             if (weekMode && !deskMode) { if (step < 0 || model.CanStepForwardAWeek) model.ChangeWeek(step); } else model.ChangeDate(step);
             e.Handled = true;
@@ -911,6 +916,7 @@ public sealed class DashboardWindow : Window
     // Escape puts an opened tile back on the desk, after dialogs and before clearing a selection.
     private bool CollapseDesk() { if (openDesk is not { Expanded: not null } desk || !deskMode) return false; desk.Collapse(); return true; }
     private Action<bool>? chromeApplier; private bool barMode;
+    private StackPanel dateNav = null!, navRight = null!, railTopRef = null!;
     private void ShowDesk() { settingsMode = false; deskMode = true; Refresh(true); }
     // A tile's open button goes to the page that shows the same thing in full.
     private void OpenDeskPage(string page) { if (page == "timeline") SelectTab(false); else SelectSection(page); }
@@ -973,7 +979,7 @@ public sealed class DashboardWindow : Window
         Rail(entriesTab, !settingsMode && !showDesk && weekMode && model.WeekSection == "entries");
         Rail(settingsRail, settingsMode);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
-        foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = !settingsMode && (!showDesk || timelineOpen);
+        foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = !settingsMode && (barMode || !showDesk || timelineOpen);
         if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && (!showDesk || timelineOpen) && (!weekish || model.WeekSection == "entries");
         if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && (!showDesk || timelineOpen) && (!weekish || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
         workspaceTitle.Text = settingsMode ? "Settings" : showDesk ? "Desk" : !weekish ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };

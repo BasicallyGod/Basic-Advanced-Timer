@@ -185,6 +185,24 @@ public sealed class DeskTests
     }
 
     [AvaloniaFact]
+    public void TheDateArrowsLiveInTheBarAndMoveEveryDayTile()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window);
+            Point At(string name) => Named<Control>(window, name).TranslatePoint(new Point(), window)!.Value;
+            Assert.True(Math.Abs(At("NextPeriod").Y - At("TimelineTab").Y) < 12); // On the bar's line, beside the view buttons.
+            Assert.True(At("PreviousPeriod").X > At("WeekEntriesTab").X);
+            var today = model.SelectedDate; Press(window, "PreviousPeriod");
+            Assert.Equal(today.AddDays(-1), model.SelectedDate); Assert.Same(desk, window.GetVisualDescendants().OfType<DeskView>().Single());
+            Assert.Contains(today.AddDays(-1).ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+            Press(window, "GoToToday"); Assert.Equal(today, model.SelectedDate);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ATileCanBeMadeLargerOrSmallerWithinItsLimitsAndTheSizeIsKept()
     {
         var model = Model(); var window = Open(model);
@@ -225,7 +243,7 @@ public sealed class DeskTests
         try
         {
             var desk = OpenDesk(window); desk.Lively = false;
-            Assert.False(Named<Button>(window, "NextPeriod").IsEffectivelyVisible); Assert.False(Named<Button>(window, "AddTime").IsEffectivelyVisible);
+            Assert.True(Named<Button>(window, "NextPeriod").IsEffectivelyVisible); Assert.False(Named<Button>(window, "AddTime").IsEffectivelyVisible); // The date is in the bar always; editing buttons wait for the timeline to open.
             Press(window, "TileExpand_timeline"); window.UpdateLayout();
             Assert.True(Named<Button>(window, "NextPeriod").IsEffectivelyVisible); Assert.True(Named<Button>(window, "AddTime").IsEffectivelyVisible);
             Assert.Same(desk, window.GetVisualDescendants().OfType<DeskView>().Single());
