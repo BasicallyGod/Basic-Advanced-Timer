@@ -341,24 +341,27 @@ public sealed class TrackerView : Grid
     private readonly Border dot = new() { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), VerticalAlignment = VerticalAlignment.Center };
     private readonly Border chip = new() { CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 2), VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock chipText = new() { FontSize = 12, FontWeight = FontWeight.SemiBold };
-    private readonly TextBlock allocated = new() { Name = "TrackerAllocated", FontSize = 24, FontWeight = FontWeight.Bold, Classes = { "clock" } }, unallocated = new() { Name = "TrackerUnallocated", FontSize = 24, FontWeight = FontWeight.Bold, Classes = { "clock" } };
+    private readonly TextBlock allocated = new() { Name = "TrackerBlock", FontSize = 24, FontWeight = FontWeight.Bold, Classes = { "clock" } }, unallocated = new() { Name = "TrackerAccountToday", FontSize = 24, FontWeight = FontWeight.Bold, Classes = { "clock" } };
     private readonly PauseGlyph pauseGlyph = new(); private readonly BreakGlyph cup = new();
-    public TrackerView(TimerModel model, TileForm form)
+    public TrackerView(TimerModel model, TileForm form, bool slim = false)
     {
-        this.model = model; var tiny = form == TileForm.Tiny; var roomy = form == TileForm.Roomy;
-        clock = new ClockText(tiny ? 34 : roomy ? 66 : 56, tiny ? 16 : roomy ? 30 : 26); clock.Name = "TrackerClock";
+        // Slim, in one row, it is the clock, the status and one button; otherwise the clock and who is running, with a break button, and with room the block and the account's day.
+        this.model = model; var tiny = form == TileForm.Tiny || slim; var roomy = form == TileForm.Roomy && !slim;
+        clock = new ClockText(slim ? 36 : tiny ? 34 : roomy ? 66 : 56, slim ? 17 : tiny ? 16 : roomy ? 30 : 26); clock.Name = "TrackerClock";
         ColumnDefinitions = new ColumnDefinitions("*,Auto"); VerticalAlignment = VerticalAlignment.Center;
         chip.Child = chipText;
         var left = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center }; left.Children.Add(clock);
         if (!tiny) { var who = Ui.Horizontal(dot, account, chip); who.Spacing = 8; left.Children.Add(who); }
+        if (slim) { var row = Ui.Horizontal(left); row.Spacing = 14; if (form != TileForm.Tiny) { var status = Ui.Horizontal(dot, chip); status.Spacing = 8; status.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(status); } Children.Add(row); }
         if (roomy)
         {
+            // How long this block has run and what the account has had today: the tracker's own questions, not the day's reconciliation.
             var stats = Ui.Grid("*,*"); stats.Margin = new Thickness(0, 8, 0, 0); stats.ColumnSpacing = 18;
-            var a = new StackPanel(); a.Children.Add(Ui.Text("Allocated", 12, "muted")); a.Children.Add(allocated);
-            var u = new StackPanel(); u.Children.Add(Ui.Text("Unallocated", 12, "muted")); u.Children.Add(unallocated);
+            var a = new StackPanel(); a.Children.Add(Ui.Text("This block", 12, "muted")); a.Children.Add(allocated);
+            var u = new StackPanel(); u.Children.Add(Ui.Text("Account today", 12, "muted")); u.Children.Add(unallocated);
             Ui.Put(stats, a); Ui.Put(stats, u, 1); left.Children.Add(stats);
         }
-        Children.Add(left);
+        if (!slim) Children.Add(left);
         Button Round(Control glyph, string name, string tip, Action click, double size)
         {
             var button = Ui.Button("", click, name); button.Classes.Add("toolButton"); button.Classes.Add("quiet");
@@ -375,14 +378,17 @@ public sealed class TrackerView : Grid
             rest.PointerEntered += (_, _) => cup.SetSteaming(true); rest.PointerExited += (_, _) => cup.SetSteaming(model.IsOnBreak);
             buttons.Children.Add(rest);
         }
+        if (slim) { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"); buttons.Margin = new Thickness(14, 0, 0, 0); }
         SetColumn(buttons, 1); Children.Add(buttons);
+        if (slim) HorizontalAlignment = HorizontalAlignment.Right;
         Refresh();
     }
     public void Refresh()
     {
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak; var live = model.IsTracking && !onBreak && !late;
         clock.Text = model.ClockText; clock.SetState(onBreak, late, live);
-        account.Text = model.AccountLabel; allocated.Text = model.Format(model.Allocated); unallocated.Text = model.Format(model.Unallocated);
+        account.Text = model.AccountLabel; allocated.Text = model.Format(model.Engine.ActiveElapsed);
+        unallocated.Text = model.ActiveAccount is { } running && !BreakAccount.Is(running) && model.Accounts.FirstOrDefault(a => a.Name == running) is { } current ? model.Format(model.Today(current)) : model.Format(TimeSpan.Zero);
         var shown = onBreak ? null : model.Accounts.FirstOrDefault(a => a.Name == (model.ActiveAccount ?? model.SelectedAccount));
         dot.IsVisible = shown is not null; if (shown is not null) dot.Background = Brush.Parse(Ui.Visible(shown.Colour));
         // Green says tracking and amber says a break, as everywhere else; anything else is a quiet grey chip.
@@ -483,10 +489,12 @@ public sealed class DeadlineView : StackPanel
     private readonly TimerModel model; private readonly TileForm form;
     private readonly TextBlock what = new() { Name = "DeadlineWhat", FontSize = 17, FontWeight = FontWeight.SemiBold }, phrase = Ui.Text("", 13, "muted"), left = new() { Name = "DeadlineLeft", FontSize = 40, Classes = { "clock" } }, when = Ui.Text("", 13);
     private readonly TextBlock workLeft = new() { Name = "DeadlineWorkLeft", FontSize = 13 }; private readonly StackPanel later = new() { Spacing = 3, Name = "DeadlineLater" };
-    public DeadlineView(TimerModel model, TileForm form)
+    private readonly bool slim;
+    public DeadlineView(TimerModel model, TileForm form, bool slim = false)
     {
-        this.model = model; this.form = form; Spacing = 2; VerticalAlignment = VerticalAlignment.Center;
-        what.TextTrimming = TextTrimming.CharacterEllipsis; left.FontSize = form == TileForm.Tiny ? 38 : form == TileForm.Roomy ? 64 : 58; left.FontWeight = FontWeight.Bold;
+        this.model = model; this.form = slim ? TileForm.Tiny : form; this.slim = slim; form = this.form; Spacing = 2; VerticalAlignment = VerticalAlignment.Center;
+        what.TextTrimming = TextTrimming.CharacterEllipsis; left.FontSize = form == TileForm.Tiny ? 34 : form == TileForm.Roomy ? 60 : 54; left.FontWeight = FontWeight.Bold;
+        if (slim) { what.FontSize = 13; what.MaxWidth = 150; left.FontSize = 36; var row = Ui.Horizontal(what, left); row.Spacing = 12; Orientation = Orientation.Vertical; Children.Add(row); HorizontalAlignment = HorizontalAlignment.Right; Refresh(); return; }
         if (form != TileForm.Tiny) { Children.Add(what); Children.Add(phrase); } else { what.FontSize = 13; Children.Add(what); }
         Children.Add(left);
         if (form != TileForm.Tiny) Children.Add(when);
@@ -504,9 +512,10 @@ public sealed class DeadlineView : StackPanel
         left.Foreground = Tone(); when.Foreground = left.Foreground;
         var deadlines = model.AllDayNotes.Where(n => !n.Done && DayNotes.IsDeadline(n)).OrderBy(DayNotes.DueAt).ThenBy(n => n.Id).ToList();
         var note = deadlines.FirstOrDefault();
-        if (note is null) { what.Text = form == TileForm.Tiny ? "No deadline" : "No deadlines"; phrase.Text = ""; left.Text = "--:--"; when.Text = "Start a note with ! to add one."; workLeft.Text = ""; later.Children.Clear(); return; }
+        if (note is null) { what.Text = form == TileForm.Tiny ? "No deadline" : "No deadlines"; phrase.Text = ""; left.Text = "None"; when.Text = "Start a note with ! to add one."; workLeft.Text = ""; later.Children.Clear(); return; }
         var now = model.Engine.Now; var due = DayNotes.DueAt(note); var remaining = due - now; var late = remaining < TimeSpan.Zero; var span = late ? -remaining : remaining;
-        var hours = (int)span.TotalHours; var text = $"{hours:00}:{span.Minutes:00}";
+        // A countdown reads as hours and minutes spelled out, so it cannot be mistaken for a time of day.
+        var text = $"{(int)span.TotalHours}h {span.Minutes:00}m";
         what.Text = DayNotes.DisplayText(note); phrase.Text = late ? "Overdue by" : "Due in";
         left.Text = late ? "-" + text : text;
         when.Text = due.ToString("ddd d MMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
@@ -524,19 +533,114 @@ public sealed class DeadlineView : StackPanel
 }
 
 
-/// <summary>The accounts at their smallest: a coloured dot and today's time for each, wrapping across the room there is.</summary>
-public sealed class AccountDots : WrapPanel
+/// <summary>What the Day tile works out from the day it shows: how much of the expected working day has gone onto accounts, and the reconciliation behind it.</summary>
+public sealed record DayFigures(TimeSpan Allocated, TimeSpan Unallocated, TimeSpan Target, TimeSpan Breaks, TimeSpan Overtime)
 {
-    private readonly TimerModel model;
-    public AccountDots(TimerModel model) { this.model = model; Orientation = Orientation.Horizontal; Refresh(); }
+    public TimeSpan Left => Target > Allocated ? Target - Allocated : TimeSpan.Zero;
+    /// <summary>The share of the working day recorded on accounts, 0 to 1, or null on a day with no working hours.</summary>
+    public double? Fraction => Target > TimeSpan.Zero ? Math.Clamp(Allocated.TotalSeconds / Target.TotalSeconds, 0, 1) : null;
+    public static DayFigures For(TimerModel model)
+    {
+        var day = model.SelectedDate.Date; var engine = model.Engine; var totals = engine.Totals(day); var plan = engine.Plan(day);
+        var breaks = engine.Sessions.Where(r => r.Day == day && BreakAccount.Is(r.Account)).Aggregate(TimeSpan.Zero, (sum, r) => sum + r.Duration);
+        if (engine.Active is { } active && BreakAccount.Is(active.Account)) breaks += engine.ActiveElapsedOn(day, true);
+        return new(totals.Allocated, totals.Unallocated, plan.Working ? plan.End - plan.Start : TimeSpan.Zero, breaks, totals.Overtime);
+    }
+}
+
+/// <summary>A thin bar for the working day: time on accounts, then the unallocated time, against what is left of the target.</summary>
+public sealed class DayProgress : Control
+{
+    public double Recorded { get; set; } public double Unrecorded { get; set; }
+    public DayProgress() { Name = "DayProgress"; Height = 12; ActualThemeVariantChanged += (_, _) => InvalidateVisual(); }
+    public override void Render(DrawingContext context)
+    {
+        var w = Bounds.Width; var h = Bounds.Height; if (w < 8) return;
+        var track = new SolidColorBrush(Ui.ThemeColour(this, "Line", Colors.LightGray), .7);
+        context.DrawRectangle(track, null, new Rect(0, 0, w, h), h / 2, h / 2);
+        var a = Math.Clamp(Recorded, 0, 1) * w; var u = Math.Clamp(Unrecorded, 0, 1 - Math.Clamp(Recorded, 0, 1)) * w;
+        if (a + u > 1) context.DrawRectangle(new SolidColorBrush(Color.Parse("#E3D3B0")), null, new Rect(0, 0, a + u, h), h / 2, h / 2);
+        if (a > 1) context.DrawRectangle(new SolidColorBrush(Color.Parse("#8FB3E8")), null, new Rect(0, 0, a, h), h / 2, h / 2);
+    }
+}
+
+/// <summary>
+/// The Day tile answers one question: how much of the working day is done, and how much is left to put on accounts. Slim, it is a bar with the figures
+/// beside it; standard, the figure large with its bar and what is left; roomy, the reconciliation too (unallocated time, breaks, overtime).
+/// This is the day measured against its target, where the Time tracker is about the moment: how long, and what is recording now.
+/// </summary>
+public sealed class DayView : Grid
+{
+    private readonly TimerModel model; private readonly TileForm form; private readonly bool slim;
+    private readonly TextBlock done = new() { Name = "DayDone", FontWeight = FontWeight.Bold, Classes = { "clock" } }, of = Ui.Text("", 13, "muted"), left = Ui.Text("", 13);
+    private readonly DayProgress bar = new(); private readonly StackPanel details = new() { Spacing = 2 };
+    public DayView(TimerModel model, TileForm form, bool slim = false)
+    {
+        this.model = model; this.form = form; this.slim = slim; VerticalAlignment = VerticalAlignment.Center;
+        if (slim)
+        {
+            done.FontSize = 26; bar.Width = form == TileForm.Tiny ? 70 : 140; bar.VerticalAlignment = VerticalAlignment.Center; of.VerticalAlignment = VerticalAlignment.Center;
+            var row = Ui.Horizontal(bar, done); if (form != TileForm.Tiny) row.Children.Add(of); row.Spacing = 10; HorizontalAlignment = HorizontalAlignment.Right; Children.Add(row); Refresh(); return;
+        }
+        RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"); done.FontSize = form == TileForm.Roomy ? 46 : 40;
+        var top = Ui.Horizontal(done, of); top.Spacing = 10; top.VerticalAlignment = VerticalAlignment.Bottom; Children.Add(top);
+        bar.Margin = new Thickness(0, 8, 0, 6); SetRow(bar, 1); Children.Add(bar); SetRow(left, 2); Children.Add(left);
+        if (form == TileForm.Roomy) { details.Margin = new Thickness(0, 8, 0, 0); SetRow(details, 3); Children.Add(details); }
+        Refresh();
+    }
+    public void Refresh()
+    {
+        var f = DayFigures.For(model);
+        done.Text = model.Format(f.Allocated); of.Text = f.Target > TimeSpan.Zero ? "of " + model.Format(f.Target) : "no working hours today";
+        bar.Recorded = f.Target > TimeSpan.Zero ? f.Allocated.TotalSeconds / f.Target.TotalSeconds : 0;
+        bar.Unrecorded = f.Target > TimeSpan.Zero ? f.Unallocated.TotalSeconds / f.Target.TotalSeconds : 0; bar.InvalidateVisual();
+        if (slim) return;
+        left.Text = f.Target > TimeSpan.Zero ? (f.Left > TimeSpan.Zero ? model.Format(f.Left) + " still to put on accounts" : "Working day filled") : "Time tracked on a day off counts as it is recorded";
+        if (form != TileForm.Roomy) return;
+        details.Children.Clear();
+        void Line(string label, TimeSpan value, string name)
+        {
+            var row = Ui.Grid("*,Auto"); row.Name = name; Ui.Put(row, Ui.Text(label, 13, "muted"));
+            var v = Ui.Text(model.Format(value), 13, "figures"); v.FontWeight = FontWeight.SemiBold; Ui.Put(row, v, 1); details.Children.Add(row);
+        }
+        Line("Unallocated", f.Unallocated, "DayUnallocated"); Line("Breaks", f.Breaks, "DayBreaks"); Line("Overtime", f.Overtime, "DayOvertime");
+    }
+}
+
+/// <summary>
+/// The accounts at their smallest. In one row beside the title it is a line of coloured chips with each account's name, shortened where needed, and today's time;
+/// one cell wide it shows the account being recorded (or the selected one) with how many there are, and a click moves to the next.
+/// </summary>
+public sealed class AccountChips : WrapPanel
+{
+    private readonly TimerModel model; private readonly bool single; private int shown;
+    public AccountChips(TimerModel model, bool single = false)
+    {
+        this.model = model; this.single = single; Orientation = Orientation.Horizontal; MaxHeight = 62; Name = "AccountChips";
+        if (single) { Cursor = new Cursor(StandardCursorType.Hand); Background = Brushes.Transparent; PointerPressed += (_, _) => { shown++; Refresh(); }; ToolTip.SetTip(this, "Click for the next account"); }
+        Refresh();
+    }
+    private static string Short(string name) => name.Length <= 11 ? name : name[..10] + "…";
     public void Refresh()
     {
         Children.Clear();
-        foreach (var account in model.Accounts.Where(a => !BreakAccount.Is(a.Name)))
+        var accounts = model.Accounts.Where(a => !BreakAccount.Is(a.Name)).ToList(); if (accounts.Count == 0) return;
+        if (single)
         {
-            var dot = new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = Brush.Parse(Ui.Visible(account.Colour)), VerticalAlignment = VerticalAlignment.Center };
-            var time = Ui.Text(model.Format(model.Today(account)), 13, "figures"); time.FontWeight = FontWeight.SemiBold;
-            var chip = Ui.Horizontal(dot, time); chip.Spacing = 5; chip.Margin = new Thickness(0, 0, 14, 6); ToolTip.SetTip(chip, account.Display); Children.Add(chip);
+            // The running account first, then whichever the pointer has stepped on to.
+            var start = Math.Max(0, accounts.FindIndex(a => a.Name == (model.ActiveAccount ?? model.SelectedAccount))); var account = accounts[(start + shown) % accounts.Count];
+            var line = Chip(account, true); var count = Ui.Text($"{(accounts.IndexOf(account) + 1)} of {accounts.Count}", 11, "muted"); count.Margin = new Thickness(0, 0, 0, 0);
+            var stack = new StackPanel { Spacing = 0 }; stack.Children.Add(line); stack.Children.Add(count); Children.Add(stack); return;
         }
+        foreach (var account in accounts) Children.Add(Chip(account, false));
+    }
+    private Control Chip(TimerAccount account, bool large)
+    {
+        var dot = new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = Brush.Parse(Ui.Visible(account.Colour)), VerticalAlignment = VerticalAlignment.Center };
+        var name = new TextBlock { Text = Short(account.Display), FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
+        var time = Ui.Text(model.Format(model.Today(account)), 13, "figures"); time.FontWeight = FontWeight.Bold; time.VerticalAlignment = VerticalAlignment.Center;
+        var chip = Ui.Horizontal(dot, name, time); chip.Spacing = 6; chip.Margin = new Thickness(0, 0, 14, 4);
+        if (large) name.FontWeight = FontWeight.SemiBold;
+        return chip;
     }
 }

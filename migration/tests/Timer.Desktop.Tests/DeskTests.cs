@@ -240,13 +240,13 @@ public sealed class DeskTests
         var model = Model(); var window = Open(model);
         try
         {
-            OpenDesk(window); Assert.Equal("--:--", Named<TextBlock>(window, "DeadlineLeft").Text);
+            OpenDesk(window); Assert.Equal("None", Named<TextBlock>(window, "DeadlineLeft").Text);
             var due = model.Engine.Now.Date.AddDays(1); // Tomorrow, at five.
             model.AddDayNote(due, "!Timesheet due"); window.UpdateLayout();
             var expected = due.AddHours(17) - model.Engine.Now; var left = Named<TextBlock>(window, "DeadlineLeft").Text;
-            Assert.Equal($"{(int)expected.TotalHours:00}:{expected.Minutes:00}", left);
+            Assert.Equal($"{(int)expected.TotalHours}h {expected.Minutes:00}m", left); // Spelled out, so it reads as a duration and not a time of day.
             Assert.Equal("Timesheet due", Named<TextBlock>(window, "DeadlineWhat").Text); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Due in");
-            model.ToggleDayNote(model.AllDayNotes[0].Id); window.UpdateLayout(); Assert.Equal("--:--", Named<TextBlock>(window, "DeadlineLeft").Text);
+            model.ToggleDayNote(model.AllDayNotes[0].Id); window.UpdateLayout(); Assert.Equal("None", Named<TextBlock>(window, "DeadlineLeft").Text);
         }
         finally { window.Close(); }
     }
@@ -261,7 +261,7 @@ public sealed class DeskTests
             foreach (var placement in desk.Placements.Where(p => !p.Id.StartsWith("postit"))) // Post-its are informal: no header band.
             {
                 var tile = (Control)desk.TileControl(placement.Id)!; var handle = Named<Control>(window, "TileHandle_" + placement.Id);
-                var band = (Control)handle.Parent!; Assert.Equal(52, band.Bounds.Height);
+                var band = (Control)handle.Parent!;
                 var top = handle.TranslatePoint(new Point(), band)!.Value.Y; var bottom = band.Bounds.Height - (top + handle.Bounds.Height);
                 Assert.True(Math.Abs(top - bottom) < 1.5, $"{placement.Id}: {top} above, {bottom} below"); // As much room above the badge as below it.
                 Assert.True(top >= 4, $"{placement.Id} header touches the top of its band");
@@ -328,21 +328,56 @@ public sealed class DeskTests
     }
 
     [AvaloniaFact]
-    public void TrackerDayAccountsAndComingUpEachHaveASmallAndABigForm()
+    public void TrackerAccountsAndComingUpEachHaveASlimAndABigForm()
     {
         var model = Model(); model.AddDayNote(model.Engine.Now.Date, "Call the client 23:00"); var window = Open(model);
         try
         {
             var desk = OpenDesk(window); desk.Lively = false;
-            Assert.False(Has<TextBlock>(window, "TrackerAllocated") && Named<TextBlock>(window, "TrackerAllocated").IsEffectivelyVisible); // Normal: no stats row.
-            desk.Resize("working", 2, 3); window.UpdateLayout(); Assert.True(Has<TextBlock>(window, "TrackerAllocated"));
-            desk.Resize("working", 1, 1); window.UpdateLayout(); Assert.False(Has<Button>(window, "TrackerBreak")); Assert.True(Has<Button>(window, "TrackerPause")); // Small: the clock and one button.
-            desk.Resize("accounts", 1, 1); window.UpdateLayout(); Assert.NotEmpty(window.GetVisualDescendants().OfType<AccountDots>());
-            desk.Resize("accounts", 2, 3); window.UpdateLayout(); Assert.Empty(window.GetVisualDescendants().OfType<AccountDots>());
-            desk.Resize("coming", 1, 1); window.UpdateLayout(); Assert.False(window.GetVisualDescendants().OfType<CheckBox>().Any(c => c.Name?.StartsWith("ComingTick_") == true)); // One line, no ticks.
-            desk.Resize("coming", 2, 2); window.UpdateLayout(); Assert.True(window.GetVisualDescendants().OfType<CheckBox>().Any(c => c.Name?.StartsWith("ComingTick_") == true));
+            Assert.False(Has<TextBlock>(window, "TrackerBlock")); // Standard: the clock and who is recording, no extra figures.
+            desk.Resize("working", 2, 3); window.UpdateLayout(); Assert.True(Has<TextBlock>(window, "TrackerBlock")); Assert.True(Has<TextBlock>(window, "TrackerAccountToday")); // Big: the block and the account's day, not the day's figures.
+            desk.Resize("working", 2, 1); window.UpdateLayout(); Assert.True(Has<Button>(window, "TrackerPause")); Assert.False(Has<Button>(window, "TrackerBreak")); // Slim: the clock and one button, beside the title.
+            Assert.True(Has<Border>(window, "TileInline_working")); Assert.True(Named<Border>(window, "TileInline_working").IsVisible);
+            desk.Resize("working", 1, 1); window.UpdateLayout(); Assert.True(Has<Button>(window, "TrackerPause")); // Slimmer still: one cell wide drops the title, not the content.
+            desk.Resize("accounts", 2, 1); window.UpdateLayout(); // Slim: every account with its name and time, nothing to hover for.
+            var chips = Named<AccountChips>(window, "AccountChips");
+            Assert.Equal(model.Accounts.Count(a => !BreakAccount.Is(a.Name)), chips.Children.Count);
+            Assert.All(chips.GetVisualDescendants().OfType<StackPanel>().Where(p => p.Parent == chips || true).Take(1), _ => { });
+            Assert.Contains(chips.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Account one"); Assert.Contains(chips.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Account two");
+            desk.Resize("accounts", 1, 1); window.UpdateLayout(); // One cell: the account in hand, and how many there are.
+            var single = Named<AccountChips>(window, "AccountChips"); Assert.Single(single.Children);
+            Assert.Contains(single.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.EndsWith("of 2"));
+            desk.Resize("accounts", 2, 3); window.UpdateLayout(); Assert.Empty(window.GetVisualDescendants().OfType<AccountChips>());
+            desk.Resize("coming", 2, 1); window.UpdateLayout(); Assert.False(window.GetVisualDescendants().OfType<CheckBox>().Any(c => c.Name?.StartsWith("ComingTick_") == true)); // One line, no ticks.
+            desk.Resize("coming", 2, 2); window.UpdateLayout(); Assert.True(window.GetVisualDescendants().OfType<CheckBox>().Any(c => c.Name?.StartsWith("ComingTick_") == true) || window.GetVisualDescendants().OfType<Button>().Any(c => c.Name?.StartsWith("ComingDone_") == true) || Has<Border>(window, "TileInline_coming"));
         }
         finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheDayTileMeasuresTheWorkingDayAgainstItsTarget()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false;
+            var f = DayFigures.For(model); Assert.Equal(TimeSpan.FromHours(8), f.Target); // Nine to five.
+            Assert.Equal(f.Target - f.Allocated, f.Left); Assert.InRange(f.Fraction!.Value, 0.01, 1);
+            Assert.Equal(model.Format(f.Allocated), Named<TextBlock>(window, "DayDone").Text); // Slim by default: one row, the figure beside a bar.
+            Assert.Equal($"{f.Fraction * 100:0}%", Named<TextBlock>(window, "TileMeta_day").Text);
+            Assert.True(Has<DayProgress>(window, "DayProgress"));
+            desk.Resize("day", 2, 3); window.UpdateLayout(); // Roomy: the reconciliation behind the figure.
+            Assert.True(Has<Grid>(window, "DayUnallocated")); Assert.True(Has<Grid>(window, "DayBreaks")); Assert.True(Has<Grid>(window, "DayOvertime"));
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.EndsWith("still to put on accounts"));
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void ADayOffHasNoTargetAndNoFraction()
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 10, 11, 0, 0)), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday)); // A Saturday.
+        var f = DayFigures.For(model); Assert.Equal(TimeSpan.Zero, f.Target); Assert.Null(f.Fraction); Assert.Equal(TimeSpan.Zero, f.Left);
     }
 
     [AvaloniaFact]

@@ -17,7 +17,7 @@ public sealed record DeskTileKind(string Id, string Title, string Hue, int Colum
 /// </summary>
 public sealed class DeskView : UserControl
 {
-    public const double CellHeight = 124, Gap = 12;
+    public const double CellHeight = 100, Gap = 12;
     public static readonly IReadOnlyList<DeskTileKind> Kinds = new DeskTileKind[]
     {
         new("working", "Time tracker", "#7FD1C7", 2, 2, "timeline", 1, 1, 4, 3),
@@ -41,13 +41,10 @@ public sealed class DeskView : UserControl
     private readonly Action<string>? openPage;
     private readonly DeskBoard board = new();
     private readonly Dictionary<string, (Border Tile, Border Body, string? Variant)> tiles = new();
-    private readonly ClockText clock = new(34, 18); private readonly TextBlock accountLine = Ui.Text("", 14), allocated = Big(26), unallocated = Big(26);
-    // The big figures: the display face at weight, so the numbers carry each tile the way they do in the reference.
-    private static TextBlock Big(double size) => new() { FontSize = size, FontWeight = FontWeight.Bold, Classes = { "clock" } };
     private readonly AnalogueClock analogue; private readonly DayStrip strip;
     private readonly TextBlock digital = new() { Name = "ClockDigital", FontSize = 18, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Classes = { "figures" } };
-    private AccountDots? accountDots;
-    private readonly TextBlock stripTime = new() { Name = "ClockStripTime", FontSize = 40, FontWeight = FontWeight.Bold, Classes = { "clock" } }, clockDate = Ui.Text("", 13, "muted"), dayTotal = Big(26);
+    private AccountChips? accountChips; private DayView? dayView;
+    private readonly TextBlock stripTime = new() { Name = "ClockStripTime", FontSize = 40, FontWeight = FontWeight.Bold, Classes = { "clock" } }, clockDate = Ui.Text("", 13, "muted");
     // A control can sit in one place at a time, so a tile that rebuilds its layout first takes the shared pieces out of the old one.
     private static T Free<T>(T control) where T : Control
     {
@@ -70,7 +67,7 @@ public sealed class DeskView : UserControl
     private string? resizing; private (int Columns, int Rows) resizingSize; private Point resizeStart; private Size resizeFrom;
     private string? expanded;
     private readonly ScrollViewer scroller; private readonly DayStrip timelineStrip; private readonly Border timelineHost = new();
-    private readonly Dictionary<string, Control> grips = new(); private readonly Dictionary<string, TextBlock> metas = new();
+    private readonly Dictionary<string, Control> grips = new(); private readonly Dictionary<string, Border> slots = new(); private readonly Dictionary<string, Action<bool, bool>> slimSetters = new(); private readonly Dictionary<string, TextBlock> metas = new();
     /// <summary>Raised when a tile is opened in place or put back, with the tile's id or null, so the window can show the controls that tile needs.</summary>
     public event Action<string?>? ExpandedChanged;
 
@@ -214,6 +211,7 @@ public sealed class DeskView : UserControl
         var notes = model.NotesOn(model.SelectedDate).Count; Set("notes", notes == 0 ? "" : $"{notes} note{(notes == 1 ? "" : "s")}");
         Set("accounts", $"{model.Accounts.Count(a => !BreakAccount.Is(a.Name))} accounts");
         if (weekChart is not null) Set("week", model.Format(weekChart.Total()));
+        { var f = DayFigures.For(model); Set("day", f.Fraction is { } share ? $"{share * 100:0}%" : ""); }
         Set("pomodoro", model.Pomodoro.Completed == 0 ? "" : $"{model.Pomodoro.Completed} done");
     }
     private static bool IsPostIt(string id) => id.StartsWith("postit", StringComparison.Ordinal);
@@ -225,11 +223,9 @@ public sealed class DeskView : UserControl
     }
     private void RefreshLive()
     {
-        clock.Text = model.ClockText;
-        var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
-        clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
-        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual(); digital.Text = model.Engine.Now.ToString("HH:mm"); stripTime.Text = digital.Text; clockDate.Text = model.Engine.Now.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")); dayTotal.Text = model.Format(model.Allocated + model.Unallocated); accountDots?.Refresh(); strip.InvalidateVisual(); pomodoroView?.Refresh(); trackerView?.Refresh(); deadlineView?.Refresh(); weekChart?.InvalidateVisual(); RefreshMeta();
-        allocated.Text = model.Format(model.Allocated); unallocated.Text = model.Format(model.Unallocated);
+        var now = model.Engine.Now;
+        analogue.InvalidateVisual(); digital.Text = now.ToString("HH:mm"); stripTime.Text = digital.Text; clockDate.Text = now.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
+        accountChips?.Refresh(); dayView?.Refresh(); strip.InvalidateVisual(); pomodoroView?.Refresh(); trackerView?.Refresh(); deadlineView?.Refresh(); weekChart?.InvalidateVisual(); RefreshMeta();
     }
 
     // What changes when the desk goes into arrange mode, kept per tile so every tile follows the same rules.
@@ -277,6 +273,7 @@ public sealed class DeskView : UserControl
         grip.PointerCaptureLost += (_, _) => CancelResize();
         grips[kind.Id] = grip;
         Border body; Control content; Border handle; Control? meta = null; IconGlyph? dots = null;
+        var layers = new Grid();
         if (post)
         {
             // A post-it is an informal object, not a structured tile: no header band, a strip of tape across the top and a slight tilt. The top of the paper is its handle.
@@ -297,20 +294,31 @@ public sealed class DeskView : UserControl
             var figure = Ui.Text("", 13, "muted"); figure.VerticalAlignment = VerticalAlignment.Center; figure.Name = "TileMeta_" + kind.Id; metas[kind.Id] = figure; meta = figure;
             // A figure that is the point of the tile (the week's total) is set bold in the text colour; the rest stay quiet.
             if (kind.Id == "week") { figure.Classes.Remove("muted"); figure.FontSize = 18; figure.FontWeight = FontWeight.Bold; figure.Classes.Add("clock"); }
-            var head = Ui.Grid("Auto,*,Auto,Auto"); head.ColumnSpacing = 10; head.Margin = new Thickness(14, 0, 8, 0); head.VerticalAlignment = VerticalAlignment.Center; head.Background = Brushes.Transparent; head.Name = "TileHandle_" + kind.Id; // Centred in its band, whose height is fixed.
+            var head = Ui.Grid("Auto,Auto,*,Auto,Auto"); head.ColumnSpacing = 10; head.Margin = new Thickness(14, 0, 8, 0); head.VerticalAlignment = VerticalAlignment.Center; head.Background = Brushes.Transparent; head.Name = "TileHandle_" + kind.Id; // Centred in its band, whose height is fixed.
             handle = new Border { Child = head, Background = Brushes.Transparent }; // The drag target is the whole header.
             Ui.Put(head, badge); Ui.Put(head, heading, 1);
+            // In a slim tile, one row high, the content sits here in the header's own row instead of under it.
+            var slot = new Border { Name = "TileInline_" + kind.Id, IsVisible = false, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right }; Ui.Put(head, slot, 2); slots[kind.Id] = slot;
             // The figure and the buttons share one cell at the right, the figure at rest and the buttons under the pointer, so the header's right edge
             // is the same on every tile whatever it holds and the grip always sits at the same distance from the corner.
             figure.HorizontalAlignment = HorizontalAlignment.Right; buttons.HorizontalAlignment = HorizontalAlignment.Right; buttons.VerticalAlignment = VerticalAlignment.Center;
-            var cluster = new Grid { VerticalAlignment = VerticalAlignment.Center }; cluster.Children.Add(figure); cluster.Children.Add(buttons); Ui.Put(head, cluster, 2);
-            dots = new IconGlyph(IconKind.Grip) { TintKey = "Muted", VerticalAlignment = VerticalAlignment.Center, Opacity = .8, IsHitTestVisible = false, IsVisible = false }; Ui.Put(head, dots, 3);
+            var cluster = new Grid { VerticalAlignment = VerticalAlignment.Center }; cluster.Children.Add(figure); cluster.Children.Add(buttons); Ui.Put(head, cluster, 3);
+            dots = new IconGlyph(IconKind.Grip) { TintKey = "Muted", VerticalAlignment = VerticalAlignment.Center, Opacity = .8, IsHitTestVisible = false, IsVisible = false }; Ui.Put(head, dots, 4);
             var band = new Border { Height = 52, Background = new SolidColorBrush(Color.FromArgb(0x30, hue.R, hue.G, hue.B)), Child = handle };
             body = new Border { Margin = new Thickness(16, 10, 16, 14) };
             var stack = Ui.Grid("*", "Auto,*"); Ui.Put(stack, band); Ui.Put(stack, body, row: 1);
             content = stack;
+            // A tile one row high has no room for a header and a body, so it becomes a slim bar: the content moves up beside the title (or beside the badge alone when one column wide),
+            // and the hover buttons float over its corner instead of holding a place in the row.
+            slimSetters[kind.Id] = (slim, titled) =>
+            {
+                band.Height = slim ? double.NaN : 52; stack.RowDefinitions = new RowDefinitions(slim ? "*,0" : "Auto,*");
+                body.IsVisible = !slim; slot.IsVisible = slim; heading.IsVisible = !slim || titled; figure.IsVisible = !slim;
+                if (slim && cluster.Parent == head) { head.Children.Remove(cluster); Grid.SetColumn(cluster, 0); cluster.HorizontalAlignment = HorizontalAlignment.Right; cluster.VerticalAlignment = VerticalAlignment.Top; cluster.Margin = new Thickness(0, 6, 6, 0); layers.Children.Add(cluster); }
+                else if (!slim && cluster.Parent == layers) { layers.Children.Remove(cluster); cluster.Margin = default; cluster.HorizontalAlignment = HorizontalAlignment.Stretch; cluster.VerticalAlignment = VerticalAlignment.Center; Ui.Put(head, cluster, 3); }
+            };
         }
-        var layers = new Grid(); layers.Children.Add(content); layers.Children.Add(grip);
+        layers.Children.Insert(0, content); layers.Children.Add(grip);
         tile.Child = layers;
         void Refresh()
         {
@@ -335,12 +343,15 @@ public sealed class DeskView : UserControl
     /// What a tile shows follows from the room it has, not just how much of it: a clock that is one row high becomes a digital strip, a deadline that is
     /// one cell becomes a bare countdown. The key names which version of the tile fits the placement, and the tile is redrawn only when it changes.
     /// </summary>
+    private static readonly HashSet<string> SlimKinds = new() { "working", "day", "deadline", "clock", "strip", "accounts", "week", "coming" };
     internal static string VariantFor(string id, DeskPlacement p)
     {
         var area = p.ColumnSpan * p.RowSpan;
+        // One row high, a tile whose content is a line or two becomes a slim bar: the title and the content share the row.
+        if (p.RowSpan == 1 && SlimKinds.Contains(id)) return p.ColumnSpan >= 2 ? "slim2" : "slim1";
         return id switch
         {
-            "clock" => p.RowSpan == 1 ? "strip" : area >= 6 ? "roomy" : "face",
+            "clock" => area >= 6 ? "roomy" : "face",
             _ => p.Form.ToString().ToLowerInvariant(),
         };
     }
@@ -349,46 +360,47 @@ public sealed class DeskView : UserControl
         var (tile, body, current) = tiles[id]; var variant = VariantFor(id, placement); var form = placement.Form;
         if (current == variant) return;
         tiles[id] = (tile, body, variant);
+        var slim = variant.StartsWith("slim", StringComparison.Ordinal); var wide = variant == "slim2";
+        if (slimSetters.TryGetValue(id, out var setSlim)) setSlim(slim, wide);
+        Border target = body; if (slim) body.Child = null; // What the tile showed below its header goes when it moves up into the header row.
+        if (slots.TryGetValue(id, out var inline)) { if (slim) { target = inline; inline.HorizontalAlignment = id == "strip" ? HorizontalAlignment.Stretch : HorizontalAlignment.Right; } else inline.Child = null; }
         switch (id)
         {
-            case "working": body.Child = trackerView = new TrackerView(model, form); break;
-            case "week": body.Child = weekChart ??= new WeekChart(model); weekChart.Mode = form; weekChart.InvalidateVisual(); break;
-            case "deadline": body.Child = deadlineView = new DeadlineView(model, form); break;
-            case "day":
-                {
-                    if (form == TileForm.Tiny) { body.Child = Free(allocated); break; }
-                    var figures = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 28 };
-                    figures.Children.Add(new StackPanel { Children = { Ui.Text("Allocated", 12, "muted"), Free(allocated) } }); figures.Children.Add(new StackPanel { Children = { Ui.Text("Unallocated", 12, "muted"), Free(unallocated) } });
-                    // With room, the whole of the working time joins the two parts it is made of.
-                    if (form == TileForm.Roomy) figures.Children.Add(new StackPanel { Children = { Ui.Text("Working time", 12, "muted"), Free(dayTotal) } });
-                    body.Child = figures; break;
-                }
-            case "timeline": timelineStrip.Labels = true; body.Child = form == TileForm.Tiny ? timelineStrip : timelineHost; if (form != TileForm.Tiny) RebuildTimeline(); break;
-            case "pomodoro": body.Child = pomodoroView = new PomodoroView(model, form == TileForm.Tiny); break;
+            case "working": target.Child = trackerView = new TrackerView(model, form, slim); break;
+            case "day": target.Child = dayView = new DayView(model, form, slim); break;
+            case "deadline": target.Child = deadlineView = new DeadlineView(model, form, slim); break;
+            case "week":
+                weekChart ??= new WeekChart(model); Free(weekChart);
+                weekChart.Mode = slim ? TileForm.Tiny : form; weekChart.Width = slim ? (wide ? 170 : 100) : double.NaN; weekChart.Height = slim ? 56 : double.NaN;
+                target.Child = weekChart; weekChart.InvalidateVisual(); break;
+            case "timeline": timelineStrip.Labels = true; target.Child = form == TileForm.Tiny ? timelineStrip : timelineHost; if (form != TileForm.Tiny) RebuildTimeline(); break;
+            case "pomodoro": target.Child = pomodoroView = new PomodoroView(model, form == TileForm.Tiny); break;
             case "clock":
                 {
-                    // One row high it is just the time, as a strip; with two rows it is the face with the time under it; with more it adds the date.
-                    if (variant == "strip")
+                    // One row high it is just the time beside the title; with two rows it is the face with the time under it; with more it adds the date.
+                    if (slim)
                     {
-                        var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14, VerticalAlignment = VerticalAlignment.Center };
-                        clockDate.Margin = new Thickness(0, 0, 0, 5); clockDate.VerticalAlignment = VerticalAlignment.Bottom; line.Children.Add(Free(stripTime)); line.Children.Add(Free(clockDate)); body.Child = line; break;
+                        var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center };
+                        clockDate.Margin = new Thickness(0, 0, 0, 4); clockDate.VerticalAlignment = VerticalAlignment.Bottom; line.Children.Add(Free(stripTime)); if (wide) line.Children.Add(Free(clockDate)); target.Child = line; break;
                     }
                     var roomy = variant == "roomy"; var face = Ui.Grid("*", roomy ? "*,Auto,Auto" : "*,Auto"); Ui.Put(face, Free(analogue));
                     clockDate.Margin = new Thickness(0, 6, 0, 0); clockDate.VerticalAlignment = VerticalAlignment.Center;
                     if (roomy) { clockDate.HorizontalAlignment = HorizontalAlignment.Center; Ui.Put(face, Free(clockDate), row: 1); }
                     digital.Margin = new Thickness(0, 2, 0, 0); Ui.Put(face, Free(digital), row: roomy ? 2 : 1);
-                    body.Child = face; break;
+                    target.Child = face; break;
                 }
-            case "strip": strip.Labels = form != TileForm.Tiny; body.Child = strip; strip.InvalidateVisual(); break;
-            case "notes": body.Child = notesView = new NotesView(model, form == TileForm.Tiny); break;
-            case "coming": body.Child = new ScrollViewer { Content = comingView = new ComingUpView(model, form == TileForm.Tiny), AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }; break;
-            case "todo": body.Child = todoView = new TodoView(model, form == TileForm.Tiny); break;
+            case "strip": strip.Labels = !slim; strip.Height = slim ? 30 : double.NaN; strip.MinWidth = slim ? 80 : 0; strip.VerticalAlignment = slim ? VerticalAlignment.Center : VerticalAlignment.Stretch; target.Child = strip; strip.InvalidateVisual(); break;
+            case "notes": target.Child = notesView = new NotesView(model, form == TileForm.Tiny); break;
+            case "coming":
+                comingView = new ComingUpView(model, slim || form == TileForm.Tiny);
+                target.Child = slim ? comingView : new ScrollViewer { Content = comingView, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }; break;
+            case "todo": target.Child = todoView = new TodoView(model, form == TileForm.Tiny); break;
             case "postit": case "postit2": case "postit3":
                 if (!postIts.TryGetValue(id, out var note)) postIts[id] = note = PostItView.Build(model, PostItIndex(id), false, id == "postit" ? "PostItText" : "PostItText" + (PostItIndex(id) + 1));
-                body.Child = note; PaintPostIt(); break;
+                target.Child = note; PaintPostIt(); break;
             case "accounts":
-                // Small, the accounts are dots with their times; with room, the list; with more, the list with each budget as a bar.
-                body.Child = form == TileForm.Tiny ? accountDots = new AccountDots(model)
+                // One row high the accounts are chips with their names and times (or, one cell wide, the account in hand); with room, the list, and with more, the list with budget bars.
+                target.Child = slim ? accountChips = new AccountChips(model, single: !wide)
                     : new ScrollViewer { Content = new AccountList(model, reorderable: false, bars: form == TileForm.Roomy), AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
                 break;
         }
