@@ -101,6 +101,30 @@ public sealed class NoteShorthandTests
     }
 
     [AvaloniaFact]
+    public void ANoteCanBeMovedToAnotherDayAndTheNoticeSaysWhereItWent()
+    {
+        var model = Model(); model.AddDayNote(model.SelectedDate, "14:30 call back"); var id = model.NotesOn(model.SelectedDate).Single().Id;
+        model.MoveDayNote(id, model.SelectedDate); Assert.Single(model.NotesOn(model.SelectedDate)); // The same day changes nothing.
+        model.MoveDayNote(id, new DateTime(2026, 10, 20, 8, 0, 0));
+        Assert.Empty(model.NotesOn(model.SelectedDate)); Assert.Equal("Moved to Tuesday 20 October.", model.Notice);
+        var moved = Assert.Single(model.NotesOn(new DateTime(2026, 10, 20))); Assert.Equal(new TimeSpan(14, 30, 0), moved.At); Assert.Equal("call back", moved.Text);
+    }
+
+    [AvaloniaFact]
+    public void EachNoteInTheNotesTileHasACalendarThatMovesIt()
+    {
+        var model = Model(); model.AddDayNote(model.SelectedDate, "plain note"); var id = model.NotesOn(model.SelectedDate).Single().Id;
+        var view = new NotesView(model, false); var window = new Window { Content = view }; window.Show();
+        try
+        {
+            var button = view.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NoteMove_" + id); Assert.NotNull(button.Flyout);
+            var calendar = (Calendar)((Flyout)button.Flyout!).Content!; calendar.SelectedDate = new DateTime(2026, 10, 21);
+            Assert.Empty(model.NotesOn(model.SelectedDate)); Assert.Single(model.NotesOn(new DateTime(2026, 10, 21)));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void TheNotesTileShowsWhatWasRecognisedAndEachChipTakesItsPartBackOut()
     {
         var model = Model(); model.AddDayNote(model.SelectedDate, "!file report 14:30 #AccountOne");
