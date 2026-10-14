@@ -6,6 +6,17 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 14 October 2026
+
+| Change | Commit | Details |
+| --- | --- | --- |
+| Desk tiles: Notes, Coming up, Day strip (data format 3) | pending | New desk tiles: notes for the day shown, where a time such as 14:30 in a note sets its time, a Coming up list of dated notes from today on, and a strip of the day's blocks. Notes are stored in a new table, so the data format moves from 2 to 3: an older build will refuse a file this version has opened, and a copy is saved before the upgrade. |
+| Desk trinkets: to-do, post-it, clock | pending | New desk tiles: a to-do list where a #Account tag links an item to that account and shows it in the account's colour (links follow a rename and clear on delete), a post-it that keeps what you type and changes colour, and an analogue clock. They are saved with the settings, not the day's records. |
+| Desk drawer | pending | Each desk tile has a cross that puts it away in a drawer, a panel down the right edge opened from the Drawer button. A tile can be dragged onto the open drawer, and a chip dragged out onto the desk (or clicked) brings it back. What is put away is remembered. |
+| Desk motion and Calm setting | pending | Tiles glide to their places on a light spring, and the tile in hand lifts and leans the way it is carried. A Calm motion switch in settings makes them move straight instead. |
+| Desk preview: a board of tiles | pending | A preview switch in settings adds a Desk page of tiles (Working time, Accounts, Day) that flow to fill the window, squeeze into smaller forms, can be picked up by their heading and moved, and open their full page. The order is remembered. The existing pages are unchanged. |
+| Resizable dashboard | pending | The dashboard can be resized from its edges and corners down to 640 by 480, and remembers its size. Narrow windows fold the accounts column into a panel opened by an Accounts button, with a small clock in the header, and the toolbar drops to icons. |
+
 ## 12 October 2026
 
 | Change | Commit | Details |

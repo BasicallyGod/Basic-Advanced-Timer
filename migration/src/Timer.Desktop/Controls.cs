@@ -855,7 +855,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Desk }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -989,6 +989,11 @@ public sealed class IconGlyph : Control
                 context.DrawLine(pen, new Point(2.5, 7.5), new Point(15.5, 7.5));
                 context.DrawLine(pen, new Point(6, 2), new Point(6, 5)); context.DrawLine(pen, new Point(12, 2), new Point(12, 5));
                 context.DrawEllipse(brush, null, new Point(9, 11.5), 1.4, 1.4);
+                break;
+            case IconKind.Desk:
+                // Three tiles of different sizes, as laid out on the desk.
+                context.DrawRectangle(null, pen, new Rect(2.5, 3, 7, 7), 2, 2); context.DrawRectangle(null, pen, new Rect(11.5, 3, 4, 4), 1.5, 1.5);
+                context.DrawRectangle(null, pen, new Rect(11.5, 9, 4, 6), 1.5, 1.5); context.DrawRectangle(null, pen, new Rect(2.5, 12, 7, 3), 1.5, 1.5);
                 break;
             case IconKind.Table:
                 // A grid of cells: hours by account.

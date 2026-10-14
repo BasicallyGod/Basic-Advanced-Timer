@@ -36,7 +36,7 @@ public sealed class WindowCoordinator
         Pill.OpenDashboard = () =>
         {
             model.ShowToday();
-            Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin);
+            FitDashboardToPill();
             Dashboard.Show();
             Pill.Collapse(); // So it is a capsule again when you come back.
             Pill.Hide();
@@ -91,7 +91,7 @@ public sealed class WindowCoordinator
     }
     public void ShowDashboard()
     {
-        if (!Dashboard.IsVisible) { model.ShowToday(); Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin); Dashboard.Show(); }
+        if (!Dashboard.IsVisible) { model.ShowToday(); FitDashboardToPill(); Dashboard.Show(); }
         Pill.Collapse(); Pill.Hide(); BringToFront(Dashboard);
     }
     // The tray icon's left click shows the timer, or hides it when it is already in front.
@@ -121,6 +121,11 @@ public sealed class WindowCoordinator
         if (!model.StopForClose()) { ShowTimer(); return; }
         quitting = true;
         Pill.Close(); Dashboard.Close();
+    }
+    private void FitDashboardToPill()
+    {
+        var (width, height) = DashboardWindow.PreferredSize(model);
+        Fit(Dashboard, Pill, width + 2 * Ui.ShadowMargin, height + 2 * Ui.ShadowMargin);
     }
     private static void Fit(Window target, Window source, double width, double height)
     {
@@ -436,10 +441,19 @@ public sealed class PillWindow : Window
 
 public sealed class DashboardWindow : Window
 {
-    /// <summary>The dashboard's fixed size, before the room kept around it for its shadow.</summary>
-    public const double DashboardWidth = 1080, DashboardHeight = 680;
+    /// <summary>The size the dashboard opens at when none has been chosen, and the smallest it can be made (the card, before the room kept around it for its shadow).</summary>
+    public const double DashboardWidth = 1080, DashboardHeight = 680, MinimumWidth = 640, MinimumHeight = 480;
+    /// <summary>The window size to open at: the remembered size, held to the minimum, or the default.</summary>
+    public static (double Width, double Height) PreferredSize(TimerModel model)
+        => model.DashboardSize is { } size ? (Math.Max(MinimumWidth, size.Width), Math.Max(MinimumHeight, size.Height)) : (DashboardWidth, DashboardHeight);
     /// <summary>The height of the Start break and Finish day buttons, and of the bar under the timeline.</summary>
     public const double ControlBarHeight = 42;
+    /// <summary>Below this card width the accounts column folds away into a panel opened from a button, and below the second one the buttons keep only their icons.</summary>
+    public const double SidebarCollapseWidth = 900, IconsOnlyWidth = 780;
+    private Grid bodyGrid = null!; private Border sidebarPanel = null!, sidebarDivider = null!; private Button accountsToggle = null!; private TextBlock todayLabel = null!;
+    private readonly ClockText compactClock = new(26, 16) { Text = "00:00:00" };
+    private readonly List<TextBlock> toolLabels = new();
+    private bool sidebarCollapsed, iconsOnly, sidebarOpen;
     public Action? OpenPill { get; set; }
     private readonly TimerModel model;
     private readonly ClockText clock = new(46, 26) { Text = "00:00:00" };
@@ -447,6 +461,82 @@ public sealed class DashboardWindow : Window
     private readonly Avalonia.Controls.Shapes.Ellipse accountDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
     private Button todayButton = null!;
     private readonly TextBlock account = Ui.Text("", 16);
+    // The window has no frame, so thin invisible grips along its edges and corners (in the room kept for the shadow, just outside the card) start a resize.
+    private Control WithResizeGrips(Control content)
+    {
+        var frame = new Grid(); frame.Children.Add(content);
+        const double Edge = 12, Corner = 22, Reach = Ui.ShadowMargin - 14;
+        void Grip(string name, WindowEdge edge, StandardCursorType cursor, HorizontalAlignment h, VerticalAlignment v, double width, double height, Thickness margin)
+        {
+            var grip = new Border { Name = name, Background = Avalonia.Media.Brushes.Transparent, Cursor = new Cursor(cursor), HorizontalAlignment = h, VerticalAlignment = v, Margin = margin };
+            if (!double.IsNaN(width)) grip.Width = width; if (!double.IsNaN(height)) grip.Height = height;
+            grip.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+                Ui.CloseMenus(this); BeginResizeDrag(edge, e); e.Handled = true;
+            };
+            frame.Children.Add(grip);
+        }
+        var none = double.NaN;
+        // Edges first, inset from the corners, then the corners on top.
+        Grip("ResizeLeft", WindowEdge.West, StandardCursorType.SizeWestEast, HorizontalAlignment.Left, VerticalAlignment.Stretch, Edge, none, new Thickness(Reach, Corner + 8, 0, Corner + 8));
+        Grip("ResizeRight", WindowEdge.East, StandardCursorType.SizeWestEast, HorizontalAlignment.Right, VerticalAlignment.Stretch, Edge, none, new Thickness(0, Corner + 8, Reach, Corner + 8));
+        Grip("ResizeTop", WindowEdge.North, StandardCursorType.SizeNorthSouth, HorizontalAlignment.Stretch, VerticalAlignment.Top, none, Edge, new Thickness(Corner + 8, Reach, Corner + 8, 0));
+        Grip("ResizeBottom", WindowEdge.South, StandardCursorType.SizeNorthSouth, HorizontalAlignment.Stretch, VerticalAlignment.Bottom, none, Edge, new Thickness(Corner + 8, 0, Corner + 8, Reach));
+        Grip("ResizeTopLeft", WindowEdge.NorthWest, StandardCursorType.TopLeftCorner, HorizontalAlignment.Left, VerticalAlignment.Top, Corner, Corner, new Thickness(Reach - 4, Reach - 4, 0, 0));
+        Grip("ResizeTopRight", WindowEdge.NorthEast, StandardCursorType.TopRightCorner, HorizontalAlignment.Right, VerticalAlignment.Top, Corner, Corner, new Thickness(0, Reach - 4, Reach - 4, 0));
+        Grip("ResizeBottomLeft", WindowEdge.SouthWest, StandardCursorType.BottomLeftCorner, HorizontalAlignment.Left, VerticalAlignment.Bottom, Corner, Corner, new Thickness(Reach - 4, 0, 0, Reach - 4));
+        Grip("ResizeBottomRight", WindowEdge.SouthEast, StandardCursorType.BottomRightCorner, HorizontalAlignment.Right, VerticalAlignment.Bottom, Corner, Corner, new Thickness(0, 0, Reach - 4, Reach - 4));
+        return frame;
+    }
+    // The size is remembered a moment after the last change, so dragging an edge saves once and not on every pixel.
+    private void RememberSize()
+    {
+        var pending = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
+        pending.Tick += (_, _) =>
+        {
+            pending.Stop();
+            if (!IsVisible || WindowState != WindowState.Normal) return;
+            var card = (Width: Bounds.Width - 2 * Ui.ShadowMargin, Height: Bounds.Height - 2 * Ui.ShadowMargin);
+            if (card.Width >= MinimumWidth && card.Height >= MinimumHeight) model.SetDashboardSize((int)Math.Round(card.Width), (int)Math.Round(card.Height));
+        };
+        PropertyChanged += (_, e) => { if (e.Property == BoundsProperty) { pending.Stop(); pending.Start(); } };
+    }
+    // Works out how much of the layout fits. Narrow windows fold the accounts column into a panel, and narrower ones drop the words from buttons.
+    private void ApplyLayoutMode()
+    {
+        var width = Bounds.Width - 2 * Ui.ShadowMargin; if (width <= 0) return;
+        var collapse = width < SidebarCollapseWidth; var icons = width < IconsOnlyWidth;
+        if (collapse != sidebarCollapsed) { sidebarCollapsed = collapse; if (!collapse) sidebarOpen = false; ApplySidebarState(); }
+        if (icons != iconsOnly)
+        {
+            iconsOnly = icons;
+            foreach (var label in toolLabels) label.IsVisible = !icons;
+            todayLabel.IsVisible = !icons; workspaceTitle.IsVisible = !icons || deskMode;
+            foreach (var button in new Button[] { addTime, undo, merge, edit, todayButton }) button.Padding = icons ? new Thickness(10, 0) : new Thickness(button == todayButton ? 12 : 16, 0);
+        }
+    }
+    private void ApplySidebarState()
+    {
+        // The desk shows the accounts and the working time as tiles, so its column stays away altogether.
+        var folded = sidebarCollapsed || deskMode;
+        bodyGrid.ColumnDefinitions[0].Width = new GridLength(folded ? 0 : 340);
+        sidebarDivider.IsVisible = !folded;
+        accountsToggle.IsVisible = sidebarCollapsed && !deskMode; compactClock.IsVisible = sidebarCollapsed && !deskMode;
+        sidebarPanel.IsVisible = deskMode ? false : !sidebarCollapsed || sidebarOpen;
+        if (sidebarCollapsed)
+        {
+            // Laid over the workspace from the left, above it, with a soft edge so it reads as sitting on top.
+            Grid.SetColumnSpan(sidebarPanel, 3); sidebarPanel.HorizontalAlignment = HorizontalAlignment.Left; sidebarPanel.Width = 340; sidebarPanel.ZIndex = 20;
+            sidebarPanel.BoxShadow = Avalonia.Media.BoxShadows.Parse("6 0 24 0 #40000000");
+        }
+        else
+        {
+            Grid.SetColumnSpan(sidebarPanel, 1); sidebarPanel.HorizontalAlignment = HorizontalAlignment.Stretch; sidebarPanel.Width = double.NaN; sidebarPanel.ZIndex = 0;
+            sidebarPanel.BoxShadow = default;
+        }
+    }
+    private bool CloseSidebarPanel() { if (!sidebarCollapsed || !sidebarOpen) return false; sidebarOpen = false; ApplySidebarState(); return true; }
     // The slider takes whatever room the buttons beside it leave, so a fourth button (Edit) never runs under the zoom bar.
     private static Grid ZoomRow(Control fit, Control zoomOut, Control slider, Control zoomIn)
     {
@@ -472,7 +562,8 @@ public sealed class DashboardWindow : Window
     private readonly Button undo;
     private readonly Button merge;
     private EntryDialog? entryEditor;
-    private bool weekMode, settingsMode, renderedSettings, settingZoom;
+    private bool weekMode, settingsMode, renderedSettings, settingZoom, deskMode, renderedDesk;
+    private Button deskRail = null!;
     private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
     private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
@@ -485,10 +576,12 @@ public sealed class DashboardWindow : Window
         this.model = model;
         Title = "Basic’s Advanced Timer"; WindowChrome.Attach(this);
         ContextMenu = Ui.SettingsMenu(model);
-        Width = DashboardWidth + 2 * Ui.ShadowMargin;
-        Height = DashboardHeight + 2 * Ui.ShadowMargin;
+        var (startWidth, startHeight) = PreferredSize(model);
+        Width = startWidth + 2 * Ui.ShadowMargin;
+        Height = startHeight + 2 * Ui.ShadowMargin;
+        MinWidth = MinimumWidth + 2 * Ui.ShadowMargin; MinHeight = MinimumHeight + 2 * Ui.ShadowMargin;
         Topmost = model.DashboardOnTop; model.PropertyChanged += (_, _) => { if (Topmost != model.DashboardOnTop) Topmost = model.DashboardOnTop; }; // In front of other windows unless switched off in settings.
-        CanResize = false;
+        CanResize = true; // There is no frame to grab, so the grips drawn around the card start the resize.
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
@@ -503,6 +596,7 @@ public sealed class DashboardWindow : Window
             var button = Ui.Button("", click, name); button.Classes.Add("rail"); button.Content = new IconGlyph(kind);
             ToolTip.SetTip(button, tip); Avalonia.Automation.AutomationProperties.SetName(button, tip); return button;
         }
+        deskRail = RailButton(IconKind.Desk, "Desk (preview)", "DeskTab", ShowDesk); deskRail.IsVisible = model.Desk;
         timelineRail = RailButton(IconKind.Timeline, "Timeline", "TimelineTab", () => SelectTab(false));
         overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectSection("overview"));
         hoursTab = RailButton(IconKind.Table, "Hours table", "WeekHoursTab", () => SelectSection("hours"));
@@ -512,7 +606,7 @@ public sealed class DashboardWindow : Window
         pillGlyph = (IconGlyph)backToPill.Content!;
         railTop.Children.Add(backToPill);
         var backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
-        foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
+        foreach (var button in new[] { deskRail, timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
         settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);
@@ -525,7 +619,7 @@ public sealed class DashboardWindow : Window
         Ui.Put(railGrid, railFoot, row: 1);
         rail.Child = railGrid; Ui.Put(root, rail);
         Ui.DragHeader(railTop, this);
-        var body = Ui.Grid("340,1,*", "*");
+        var body = Ui.Grid("340,1,*", "*"); bodyGrid = body;
         var sidebar = Ui.Grid("*", "Auto,Auto,*,Auto");
         // The Day elapsed card, with a bar of the accent colour along its top edge.
         var dayCard = new Border { CornerRadius = new CornerRadius(18), ClipToBounds = true, BorderThickness = new Thickness(1) }; dayCard.Classes.Add("dayCard");
@@ -579,24 +673,32 @@ public sealed class DashboardWindow : Window
         Ui.Put(pair, breakButton); Ui.Put(pair, day, 1);
         summary.Children.Add(pair);
         Ui.Put(sidebar, summary, row: 3);
-        var panel = new Border { Child = sidebar };
+        var panel = new Border { Child = sidebar, Name = "SidebarPanel" }; sidebarPanel = panel;
         panel.Classes.Add("panel");
         Ui.Put(body, panel);
-        var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
+        var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1); sidebarDivider = divider;
         var review = Ui.Grid("*", "Auto,*,Auto,Auto");
         review.Margin = new Thickness(22, 16, 22, 18);
         // The workspace's name on the left; on the right the date to step through and a button back to today.
         // In Week views the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
         // The date has a fixed width, so the arrows stay put whatever its text says.
         var nav = Ui.Grid("*,Auto"); nav.VerticalAlignment = VerticalAlignment.Center;
-        Ui.Put(nav, workspaceTitle); headerRow = nav;
+        // Once the accounts column has folded away, a button brings it back as a panel, and a small clock keeps the day's time in view.
+        accountsToggle = Ui.Button("", () => { sidebarOpen = !sidebarOpen; ApplySidebarState(); }, "AccountsToggle");
+        accountsToggle.Classes.Add("toolButton"); accountsToggle.Classes.Add("quiet"); accountsToggle.Height = 34; accountsToggle.Padding = new Thickness(12, 0); accountsToggle.IsVisible = false;
+        accountsToggle.Content = Ui.Horizontal(new IconGlyph(IconKind.Entries), new TextBlock { Text = "Accounts", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
+        Avalonia.Automation.AutomationProperties.SetName(accountsToggle, "Accounts"); ToolTip.SetTip(accountsToggle, "Show the client accounts");
+        compactClock.IsVisible = false; compactClock.VerticalAlignment = VerticalAlignment.Center; compactClock.Name = "CompactClock";
+        var leftHeader = Ui.Horizontal(accountsToggle, compactClock, workspaceTitle); leftHeader.Spacing = 12; leftHeader.VerticalAlignment = VerticalAlignment.Center;
+        Ui.Put(nav, leftHeader); headerRow = nav;
         date.Width = 112; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
         previous = Ui.IconButton(IconKind.Previous, "Previous day or week", "PreviousPeriod", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }); previous.Width = 30;
         next = Ui.IconButton(IconKind.Next, "Next day or week", "NextPeriod", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }); next.Width = 30;
         // The same quiet outlined look, with a small icon, as Add time, Undo and Merge.
         todayButton = Ui.Button("", () => model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days), "GoToToday");
         todayButton.Classes.Add("toolButton"); todayButton.Classes.Add("quiet"); todayButton.Height = 34; todayButton.Margin = new Thickness(10, 0, 0, 0); todayButton.Padding = new Thickness(12, 0);
-        todayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), new TextBlock { Text = "Today", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
+        todayLabel = new TextBlock { Text = "Today", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
+        todayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), todayLabel);
         Avalonia.Automation.AutomationProperties.SetName(todayButton, "Today");
         Ui.Put(nav, Ui.Horizontal(previous, date, next, todayButton), 1);
         Ui.Put(review, nav);
@@ -610,7 +712,8 @@ public sealed class DashboardWindow : Window
         foreach (var (toolButton, icon, words, tint) in toolSpecs)
         {
             toolButton.Classes.Add("toolButton"); toolButton.Classes.Add("quiet");
-            toolButton.Content = Ui.Horizontal(new IconGlyph(icon) { TintKey = tint }, new TextBlock { Text = words, VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
+            var label = new TextBlock { Text = words, VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold }; toolLabels.Add(label);
+            toolButton.Content = Ui.Horizontal(new IconGlyph(icon) { TintKey = tint }, label);
             Avalonia.Automation.AutomationProperties.SetName(toolButton, words);
         }
         addTime.Classes.Add("addButton");
@@ -658,7 +761,16 @@ public sealed class DashboardWindow : Window
         layers.Children.Add(Dialogs); Dialogs.OpenChanged += UpdateBackdrop; // Last, so a dialog is above the setup too.
         var surface = new Border { Name = "DashboardSurface", Child = layers, ClipToBounds = true };
         surface.Classes.Add("surface");
-        var host = Ui.Shadowed(surface, 20); Content = host;
+        var host = Ui.Shadowed(surface, 20);
+        Content = WithResizeGrips(host);
+        RememberSize();
+        PropertyChanged += (_, e) => { if (e.Property == BoundsProperty) ApplyLayoutMode(); };
+        // A click anywhere outside the folded accounts panel puts it away again.
+        AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (!sidebarOpen || e.Source is not Avalonia.Visual source) return;
+            if (!sidebarPanel.IsVisualAncestorOf(source) && source != sidebarPanel && !accountsToggle.IsVisualAncestorOf(source) && source != accountsToggle) CloseSidebarPanel();
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         (bool, Avalonia.Styling.ThemeVariant)? lastShadow = null;
         void UpdateShadow()
         {
@@ -687,7 +799,7 @@ public sealed class DashboardWindow : Window
         KeyDown += (_, e) =>
         {
             // Escape takes the top dialog away first, and only then clears the selection.
-            if (e.Key == Avalonia.Input.Key.Escape) { if (!Dialogs.CloseTop()) model.ClearSelection(); e.Handled = true; }
+            if (e.Key == Avalonia.Input.Key.Escape) { if (!Dialogs.CloseTop() && !CloseSidebarPanel()) model.ClearSelection(); e.Handled = true; }
             // Ctrl+C copies the selected blocks and Ctrl+V pastes them on the timeline, but never while typing in a text box.
             else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key is Avalonia.Input.Key.C or Avalonia.Input.Key.V && !settingsMode && FocusManager?.GetFocusedElement() is not TextBox)
             {
@@ -762,21 +874,29 @@ public sealed class DashboardWindow : Window
     }
     private void ShowTidy() { if (IsVisible) Dialogs.Show(new TidyDialog(model)); }
     private void ShowGroup(string id) { if (IsVisible) Dialogs.Show(new GroupDialog(model, id)); }
-    public void SelectTab(bool showWeek) { settingsMode = false; weekMode = showWeek; Refresh(true); }
+    public void SelectTab(bool showWeek) { deskMode = false; settingsMode = false; weekMode = showWeek; Refresh(true); }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
-    private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
+    private void ShowSettings() { settingsMode = !settingsMode; if (settingsMode) deskMode = false; Refresh(true); }
+    private void ShowDesk() { settingsMode = false; deskMode = true; Refresh(true); }
+    // A tile's open button goes to the page that shows the same thing in full.
+    private void OpenDeskPage(string page) { if (page == "timeline") SelectTab(false); else SelectSection(page); }
     private void SelectSection(string section)
     {
-        settingsMode = false; weekMode = true;
+        deskMode = false; settingsMode = false; weekMode = true;
         if (model.WeekSection != section) model.SetWeekSection(section); else Refresh(true);
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
     private void Refresh(bool refreshWorkspace)
     {
+        deskRail.IsVisible = model.Desk; if (!model.Desk && deskMode) { deskMode = false; refreshWorkspace = true; }
+        var showDesk = deskMode && !settingsMode;
+        workspaceTitle.IsVisible = !iconsOnly || showDesk; // The desk has no date row, so its name stays even when the buttons shrink to icons.
+        if (showDesk != renderedDesk) ApplySidebarState();
         clock.Text = model.ClockText;
         // Amber on a break, red in overtime, green while tracking, full-strength text otherwise. A break outranks overtime.
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
         clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
+        compactClock.Text = model.ClockText; compactClock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
         var shownAccount = onBreak ? null : model.Accounts.FirstOrDefault(a => a.Name == (model.ActiveAccount ?? model.SelectedAccount));
         accountDot.IsVisible = shownAccount is not null; if (shownAccount is not null) accountDot.Fill = Avalonia.Media.Brush.Parse(Ui.Visible(shownAccount.Colour));
         account.Text = model.IsOnBreak ? (model.ResumeAccount is { } backTo ? "Then back to " + backTo : "No account running") : model.AccountLabel;
@@ -793,7 +913,7 @@ public sealed class DashboardWindow : Window
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
         var editing = !weekMode || model.WeekSection == "entries";
-        zoomControls.IsVisible = !weekMode && !settingsMode;
+        zoomControls.IsVisible = !weekMode && !settingsMode && !showDesk;
         settingZoom = true; zoomSlider.Value = model.TimelineZoomFraction; settingZoom = false; // Follows the wheel and the buttons too.
         zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
@@ -807,32 +927,34 @@ public sealed class DashboardWindow : Window
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); if (button.Content is IconGlyph glyph) glyph.TintKey = selected ? "Ink" : "Muted"; }
-        Rail(timelineRail, !weekMode && !settingsMode);
-        Rail(overviewTab, !settingsMode && weekMode && model.WeekSection == "overview");
-        Rail(hoursTab, !settingsMode && weekMode && model.WeekSection == "hours");
-        Rail(entriesTab, !settingsMode && weekMode && model.WeekSection == "entries");
+        Rail(deskRail, showDesk);
+        Rail(timelineRail, !showDesk && !weekMode && !settingsMode);
+        Rail(overviewTab, !settingsMode && !showDesk && weekMode && model.WeekSection == "overview");
+        Rail(hoursTab, !settingsMode && !showDesk && weekMode && model.WeekSection == "hours");
+        Rail(entriesTab, !settingsMode && !showDesk && weekMode && model.WeekSection == "entries");
         Rail(settingsRail, settingsMode);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
-        foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = !settingsMode;
-        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && (!weekMode || model.WeekSection == "entries");
-        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
-        workspaceTitle.Text = settingsMode ? "Settings" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
+        foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = !settingsMode && !showDesk;
+        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && !showDesk && (!weekMode || model.WeekSection == "entries");
+        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && !showDesk && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
+        workspaceTitle.Text = settingsMode ? "Settings" : showDesk ? "Desk" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
-        if (settingsMode ? !renderedSettings : refreshWorkspace)
+        // The desk keeps itself up to date, so a change does not rebuild it under the pointer or in the middle of typing.
+        if (settingsMode ? !renderedSettings : (refreshWorkspace && !(showDesk && renderedDesk && renderedSettings == settingsMode)) || renderedDesk != showDesk)
         {
             var oldScroll = workspace.Content is ScrollViewer directOld ? directOld
                 : (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
             var previous = renderedSettings == settingsMode && !settingsMode && renderedWeekMode == weekMode && renderedDate == model.SelectedDate
                 ? !weekMode && model.TimelineOffset is double timelineOffset ? new Vector(0, timelineOffset)
                     : oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset : null;
-            workspace.Content = settingsMode ? new SettingsView(model) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
+            workspace.Content = settingsMode ? new SettingsView(model) : showDesk ? new DeskView(model, OpenDeskPage) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
             if (previous is { } offset && workspace.Content is Control control)
             {
                 var scroll = control is ScrollViewer direct ? direct : control.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();
                 if (scroll is not null) scroll.Tag = offset;
             }
-            renderedWeekMode = weekMode; renderedSettings = settingsMode;
+            renderedWeekMode = weekMode; renderedSettings = settingsMode; renderedDesk = showDesk;
             renderedDate = model.SelectedDate;
         }
     }

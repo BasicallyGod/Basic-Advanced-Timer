@@ -7,7 +7,7 @@ using Timer.Core;
 namespace Timer.Storage;
 
 public sealed record AccountSettings(string Name, double? BudgetHours = null, string BudgetPeriod = "week", bool Hidden = false, string? Colour = null);
-public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true, IReadOnlyList<ThemeDefinition>? Themes = null, bool TaskbarButton = true, bool Tooltips = true, bool Developer = false, bool SetupDone = true, bool MoveLaterAlways = false, int? PillScale = null, bool PillOnTop = true, bool DashboardOnTop = true);
+public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true, IReadOnlyList<ThemeDefinition>? Themes = null, bool TaskbarButton = true, bool Tooltips = true, bool Developer = false, bool SetupDone = true, bool MoveLaterAlways = false, int? PillScale = null, bool PillOnTop = true, bool DashboardOnTop = true, int? DashboardWidth = null, int? DashboardHeight = null, bool Desk = false, IReadOnlyList<string>? DeskOrder = null, bool Calm = false, IReadOnlyList<string>? DeskHidden = null, TrinketData? Trinkets = null);
 
 // The timer's records live in one SQLite file (timer.db). Preferences stay in the settings JSON beside it.
 // The in-memory model is unchanged: Load fills the engine from the database and Save writes it back in one transaction.
@@ -59,6 +59,17 @@ public sealed class TimerStore : IDisposable
     private static string Iso(DateTime time) => time.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
     private static DateTime ParseIso(string text) => DateTime.ParseExact(text, "yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
     private string? Meta(string key) => database.Scalar("SELECT value FROM meta WHERE key = $k", ("$k", key)) as string;
+
+    // ---- Notes on a day. They are small and edited one at a time, so each change is its own statement, outside the undo history. ----
+    public List<DayNote> LoadDayNotes() => database.Query("SELECT id, day, at_time, text, done FROM day_notes ORDER BY day, at_time, id",
+        r => new DayNote(r.GetInt64(0), DateTime.ParseExact(r.GetString(1), "yyyy-MM-dd", CultureInfo.InvariantCulture),
+            r.IsDBNull(2) ? null : TimeSpan.ParseExact(r.GetString(2), "hh\\:mm", CultureInfo.InvariantCulture), r.GetString(3), r.GetInt64(4) == 1));
+    public long AddDayNote(DateTime day, TimeSpan? at, string text)
+        => database.Insert("INSERT INTO day_notes (day, at_time, text) VALUES ($d, $t, $x)", ("$d", day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)), ("$t", at?.ToString("hh\\:mm", CultureInfo.InvariantCulture)), ("$x", text));
+    public void UpdateDayNote(DayNote note)
+        => database.Execute("UPDATE day_notes SET day = $d, at_time = $t, text = $x, done = $n WHERE id = $i", ("$d", note.Day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+            ("$t", note.At?.ToString("hh\\:mm", CultureInfo.InvariantCulture)), ("$x", note.Text), ("$n", note.Done ? 1 : 0), ("$i", note.Id));
+    public void DeleteDayNote(long id) => database.Execute("DELETE FROM day_notes WHERE id = $i", ("$i", id));
 
     public StoreSettings Load(TrackingEngine engine)
     {
@@ -146,11 +157,21 @@ public sealed class TimerStore : IDisposable
         // The setup is done once it says so. A database from before it existed counts as done, and a new one is pending until it is finished or skipped.
         var setupDone = appearance.Skip(1).Contains("setup=done") || (!appearance.Skip(1).Contains("setup=pending") && !firstRun);
         var pillOnTop = !appearance.Skip(1).Contains("pilltop=off"); var dashboardOnTop = !appearance.Skip(1).Contains("dashtop=off");
+        // The dashboard's size, as dash=WIDTHxHEIGHT, or the default when there is none or it makes no sense.
+        int? dashWidth = null, dashHeight = null;
+        if (appearance.Skip(1).FirstOrDefault(l => l.StartsWith("dash=", StringComparison.Ordinal)) is { } dashLine && dashLine[5..].Split('x') is [var dw, var dh]
+            && int.TryParse(dw, out var wValue) && int.TryParse(dh, out var hValue) && wValue is >= 300 and <= 10000 && hValue is >= 300 and <= 10000) { dashWidth = wValue; dashHeight = hValue; }
+        // The desk is a preview, off until switched on, and its tile order is saved as desk-order=a,b,c.
+        var deskOn = appearance.Skip(1).Contains("desk=on");
+        var deskOrder = appearance.Skip(1).FirstOrDefault(l => l.StartsWith("desk-order=", StringComparison.Ordinal)) is { } orderLine ? orderLine[11..].Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
+        var deskHidden = appearance.Skip(1).FirstOrDefault(l => l.StartsWith("desk-hidden=", StringComparison.Ordinal)) is { } hiddenLine ? hiddenLine[12..].Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
+        var trinkets = Trinkets.FromJson(Lines("deskTrinkets").FirstOrDefault());
+        var calm = appearance.Skip(1).Contains("motion=calm");
         var themes = ThemeStorage.FromLines(Lines("migrationThemes"));
         // A name that is neither System, a built-in nor one of the user's own falls back to System, so a removed theme never leaves the app unstyled.
         if (theme != ThemeLibrary.System && !ThemeLibrary.BuiltIn.Concat(themes).Any(t => t.Name == theme)) theme = ThemeLibrary.System;
         // Written back on the first save, so a brand new database does not start with the sample accounts every launch.
-        return new(accounts, decimalHours, theme, weekStart, shadows, themes, taskbar, tooltips, developer, setupDone, moveLater, pillScale, pillOnTop, dashboardOnTop);
+        return new(accounts, decimalHours, theme, weekStart, shadows, themes, taskbar, tooltips, developer, setupDone, moveLater, pillScale, pillOnTop, dashboardOnTop, dashWidth, dashHeight, deskOn, deskOrder, calm, deskHidden, trinkets);
     }
     private static SessionRow ToRow(Microsoft.Data.Sqlite.SqliteDataReader r)
     {
@@ -179,7 +200,8 @@ public sealed class TimerStore : IDisposable
         var sections = (JsonObject)settings["sections"]!;
         sections["dayOverrides"] = Array(engine.Schedule.Overrides.OrderBy(p => p.Key).Select(p => p.Value.Off
             ? $"{p.Key:yyyy-MM-dd}\toff" : $"{p.Key:yyyy-MM-dd}\t{p.Value.Shift!.Start:hh\\:mm}\t{p.Value.Shift.End:hh\\:mm}"));
-        sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off", preferences.TaskbarButton ? "taskbar=on" : "taskbar=off", preferences.Tooltips ? "tooltips=on" : "tooltips=off", preferences.Developer ? "developer=on" : "developer=off", preferences.SetupDone ? "setup=done" : "setup=pending", preferences.MoveLaterAlways ? "shove=always" : "shove=ask", preferences.PillScale is { } pill ? "pill=" + pill : "pill=auto", preferences.PillOnTop ? "pilltop=on" : "pilltop=off", preferences.DashboardOnTop ? "dashtop=on" : "dashtop=off" });
+        sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off", preferences.TaskbarButton ? "taskbar=on" : "taskbar=off", preferences.Tooltips ? "tooltips=on" : "tooltips=off", preferences.Developer ? "developer=on" : "developer=off", preferences.SetupDone ? "setup=done" : "setup=pending", preferences.MoveLaterAlways ? "shove=always" : "shove=ask", preferences.PillScale is { } pill ? "pill=" + pill : "pill=auto", preferences.PillOnTop ? "pilltop=on" : "pilltop=off", preferences.DashboardOnTop ? "dashtop=on" : "dashtop=off", preferences.DashboardWidth is { } dw && preferences.DashboardHeight is { } dh ? $"dash={dw}x{dh}" : "dash=default", preferences.Desk ? "desk=on" : "desk=off", preferences.Calm ? "motion=calm" : "motion=lively", "desk-order=" + string.Join(',', preferences.DeskOrder ?? System.Array.Empty<string>()), "desk-hidden=" + string.Join(',', preferences.DeskHidden ?? System.Array.Empty<string>()) });
+        sections["deskTrinkets"] = Array(new[] { Trinkets.ToJson(preferences.Trinkets ?? TrinketData.Empty) });
         sections["migrationThemes"] = Array((preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).Select(ThemeStorage.ToLine));
         var hours = Lines("workingHours").Where(s =>
         {

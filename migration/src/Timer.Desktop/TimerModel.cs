@@ -176,6 +176,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     private StoreSettings preferences;
     private readonly TimerStore? store;
+    private readonly List<DayNote> dayNotes;
+    private long nextNoteId = 1;
     private int ticks;
     public TimerModel(TrackingEngine? engine = null, StoreSettings? preferences = null, TimerStore? store = null)
     {
@@ -183,6 +185,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, ThemeLibrary.Default, DayOfWeek.Monday);
         this.store = store;
         Editor = store?.Editor ?? new LedgerEditor(Engine);
+        dayNotes = store?.LoadDayNotes() ?? new List<DayNote>();
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
@@ -333,6 +336,8 @@ public sealed class TimerModel : INotifyPropertyChanged
             if (store is not null) { store.Save(Engine, preferences); store.Backup("before-rename"); }
             foreach (var (from, to) in renamed) Editor.RenameAccount(from, to);
         }
+        // To-dos linked to an account follow its rename, and lose the link if it is deleted.
+        if (renamed.Count > 0 || deleted.Count > 0) preferences = preferences with { Trinkets = Timer.Core.Trinkets.Relink(Trinkets, renamed.ToDictionary(r => r.Key, r => r.Value), deleted.ToList()) };
         preferences = preferences with { Accounts = WithColours(values) };
         if (renamed.Count > 0 && SelectedAccount is { } picked && renames.TryGetValue(picked, out var now)) SelectedAccount = now;
         if (!Accounts.Any(a => a.Name == SelectedAccount)) SelectedAccount = values.FirstOrDefault(a => !a.Hidden)?.Name;
@@ -749,6 +754,86 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool DashboardOnTop => preferences.DashboardOnTop;
     public void SetPillOnTop(bool on) { preferences = preferences with { PillOnTop = on }; Save(); Notify(); }
     public void SetDashboardOnTop(bool on) { preferences = preferences with { DashboardOnTop = on }; Save(); Notify(); }
+    /// <summary>The size the dashboard was last left at (the card, without the room kept for its shadow), or null for the default.</summary>
+    public (int Width, int Height)? DashboardSize => preferences.DashboardWidth is { } w && preferences.DashboardHeight is { } h ? (w, h) : null;
+    /// <summary>Remembers the dashboard's size. It does not notify, since nothing on screen needs to change.</summary>
+    public void SetDashboardSize(int width, int height)
+    {
+        if (preferences.DashboardWidth == width && preferences.DashboardHeight == height) return;
+        preferences = preferences with { DashboardWidth = width, DashboardHeight = height }; Save();
+    }
+    /// <summary>The desk is a preview of the tile board that will replace the dashboard's pages. Off until switched on in settings.</summary>
+    public bool Desk => preferences.Desk;
+    public void SetDesk(bool on) { preferences = preferences with { Desk = on }; Save(); Notify(); }
+    /// <summary>Calm motion: things move straight to their places instead of gliding and bouncing. Lively is the default.</summary>
+    public bool Calm => preferences.Calm;
+    public void SetCalm(bool on) { preferences = preferences with { Calm = on }; Save(); Notify(); }
+    /// <summary>The order the desk's tiles were left in. Only the order is saved, since the arrangement follows from it at any window size.</summary>
+    public IReadOnlyList<string> DeskOrder => preferences.DeskOrder ?? Array.Empty<string>();
+    public void SetDeskOrder(IReadOnlyList<string> order) { preferences = preferences with { DeskOrder = order.ToList() }; Save(); }
+    // ---- Notes on a day. They live in the database, outside the undo history, and feed Coming up. ----
+    public IReadOnlyList<DayNote> AllDayNotes => dayNotes;
+    public IReadOnlyList<DayNote> NotesOn(DateTime day) => dayNotes.Where(n => n.Day.Date == day.Date).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
+    public IReadOnlyList<DayNote> ComingUp(int days = 14) => DayNotes.ComingUp(dayNotes, Engine.Now, days);
+    /// <summary>Adds a note to a day from what was typed. A time such as 14:30 in the words becomes the note's time.</summary>
+    public void AddDayNote(DateTime day, string typed)
+    {
+        var (text, at) = DayNotes.Parse(typed); if (text.Length == 0) return;
+        var id = store?.AddDayNote(day.Date, at, text) ?? nextNoteId++;
+        dayNotes.Add(new DayNote(id, day.Date, at, text)); Notify();
+    }
+    public void ToggleDayNote(long id) => ChangeNote(id, n => n with { Done = !n.Done }, true);
+    /// <summary>Saves a note's words as they are typed, without notifying, so the box being typed in is not rebuilt. Emptying a note deletes it.</summary>
+    public void SetDayNoteText(long id, string text) => ChangeNote(id, n => n with { Text = text.Trim() }, false);
+    public void RemoveDayNote(long id)
+    {
+        if (dayNotes.RemoveAll(n => n.Id == id) == 0) return;
+        store?.DeleteDayNote(id); Notify();
+    }
+    private void ChangeNote(long id, Func<DayNote, DayNote> change, bool notify)
+    {
+        var index = dayNotes.FindIndex(n => n.Id == id); if (index < 0) return;
+        var note = change(dayNotes[index]); if (note == dayNotes[index] || note.Text.Length == 0) return;
+        dayNotes[index] = note; store?.UpdateDayNote(note); if (notify) Notify();
+    }
+    /// <summary>The desk's trinkets: the to-do list and the post-its. They are not part of the day's records, so they live with the settings.</summary>
+    public TrinketData Trinkets => preferences.Trinkets ?? TrinketData.Empty;
+    private void SetTrinkets(TrinketData data) { preferences = preferences with { Trinkets = data }; Save(); Notify(); }
+    /// <summary>Adds a to-do from what was typed. A #Tag naming one account links it, and the item then wears that account's colour.</summary>
+    public void AddTodo(string typed)
+    {
+        if (string.IsNullOrWhiteSpace(typed)) return;
+        var item = Timer.Core.Trinkets.ParseTodo(typed, Accounts.Select(a => a.Name));
+        SetTrinkets(Trinkets with { Todos = Trinkets.Todos.Append(item).ToList() });
+    }
+    public void ToggleTodo(int index)
+    {
+        if (index < 0 || index >= Trinkets.Todos.Count) return;
+        var todos = Trinkets.Todos.ToList(); todos[index] = todos[index] with { Done = !todos[index].Done }; SetTrinkets(Trinkets with { Todos = todos });
+    }
+    public void RemoveTodo(int index)
+    {
+        if (index < 0 || index >= Trinkets.Todos.Count) return;
+        var todos = Trinkets.Todos.ToList(); todos.RemoveAt(index); SetTrinkets(Trinkets with { Todos = todos });
+    }
+    public void ClearDoneTodos() => SetTrinkets(Trinkets with { Todos = Trinkets.Todos.Where(t => !t.Done).ToList() });
+    /// <summary>Saves a post-it's words as they are typed. It does not notify, so the box being typed in is not rebuilt.</summary>
+    public void SetPostItText(int index, string text)
+    {
+        if (index < 0 || index >= Trinkets.PostIts.Count || Trinkets.PostIts[index].Text == text) return;
+        var notes = Trinkets.PostIts.ToList(); notes[index] = notes[index] with { Text = text };
+        preferences = preferences with { Trinkets = Trinkets with { PostIts = notes } }; Save();
+    }
+    public void CyclePostItColour(int index)
+    {
+        if (index < 0 || index >= Trinkets.PostIts.Count) return;
+        var notes = Trinkets.PostIts.ToList(); var colours = Timer.Core.Trinkets.PostItColours;
+        notes[index] = notes[index] with { Colour = colours[(colours.ToList().IndexOf(notes[index].Colour) + 1) % colours.Count] };
+        SetTrinkets(Trinkets with { PostIts = notes });
+    }
+    /// <summary>The tiles put away in the drawer. Their data is untouched; they are only not on the desk.</summary>
+    public IReadOnlyList<string> DeskHidden => preferences.DeskHidden ?? Array.Empty<string>();
+    public void SetDeskHidden(IReadOnlyList<string> hidden) { preferences = preferences with { DeskHidden = hidden.ToList() }; Save(); }
     public int? PillScalePercent => preferences.PillScale;
     public static readonly int[] PillScaleChoices = { 50, 60, 70, 80, 90, 100, 110, 120 };
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
