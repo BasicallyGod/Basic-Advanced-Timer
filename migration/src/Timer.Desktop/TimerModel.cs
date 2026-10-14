@@ -766,6 +766,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>The order the desk's tiles were left in. Only the order is saved, since the arrangement follows from it at any window size.</summary>
     public IReadOnlyList<string> DeskOrder => preferences.DeskOrder ?? Array.Empty<string>();
     public void SetDeskOrder(IReadOnlyList<string> order) { preferences = preferences with { DeskOrder = order.ToList() }; Save(); }
+    /// <summary>The tiles put away in the drawer. Their data is untouched; they are only not on the desk.</summary>
+    public IReadOnlyList<string> DeskHidden => preferences.DeskHidden ?? Array.Empty<string>();
+    public void SetDeskHidden(IReadOnlyList<string> hidden) { preferences = preferences with { DeskHidden = hidden.ToList() }; Save(); }
     public int? PillScalePercent => preferences.PillScale;
     public static readonly int[] PillScaleChoices = { 50, 60, 70, 80, 90, 100, 110, 120 };
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }

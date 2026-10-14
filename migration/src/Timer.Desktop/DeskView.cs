@@ -29,17 +29,35 @@ public sealed class DeskView : UserControl
     private readonly DeskBoard board = new();
     private readonly Dictionary<string, (Border Tile, Border Body, TileForm? Form)> tiles = new();
     private readonly ClockText clock = new(34, 18); private readonly TextBlock accountLine = Ui.Text("", 14), allocated = Ui.Text("", 20, "figures"), unallocated = Ui.Text("", 20, "figures");
-    private List<string> order;
+    private List<string> order, hidden;
+    private readonly Border drawer = new() { Name = "Drawer", Width = 236, HorizontalAlignment = HorizontalAlignment.Right, IsVisible = false, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), ZIndex = 20 };
+    private readonly StackPanel chips = new() { Spacing = 8 };
+    private readonly Button drawerToggle;
+    private Point chipStart; private string? chipPressed; private bool chipMoved;
     private string? dragged; private Point dragStart; private int dragIndex;
 
     public DeskView(TimerModel model, Action<string>? openPage = null)
     {
         this.model = model; this.openPage = openPage;
-        order = DeskLayout.Reconcile(model.DeskOrder, Kinds.Select(k => k.Id).ToList());
+        var known = Kinds.Select(k => k.Id).ToList();
+        hidden = model.DeskHidden.Where(known.Contains).Distinct().ToList();
+        order = DeskLayout.Reconcile(model.DeskOrder.Where(id => !hidden.Contains(id)), known.Where(id => !hidden.Contains(id)).ToList());
         foreach (var kind in Kinds) { var tile = BuildTile(kind); tiles[kind.Id] = tile; board.Children.Add(tile.Tile); }
         board.Owner = this; board.Lively = !model.Calm;
         Name = "Desk";
-        Content = new ScrollViewer { Content = board, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, AllowAutoHide = false };
+        // A button above the board opens the drawer, a panel down the right edge that holds the tiles put away.
+        drawerToggle = Ui.Button("", () => { drawer.IsVisible = !drawer.IsVisible; }, "DrawerToggle");
+        drawerToggle.Classes.Add("toolButton"); drawerToggle.Classes.Add("quiet"); drawerToggle.HorizontalAlignment = HorizontalAlignment.Right; drawerToggle.Height = 30; drawerToggle.Padding = new Thickness(12, 0); drawerToggle.Margin = new Thickness(0, 0, 4, 4);
+        drawer.Classes.Add("panel"); drawer.Margin = new Thickness(0, 4, 4, 4); drawer.Padding = new Thickness(14);
+        var drawerStack = new StackPanel { Spacing = 10 };
+        drawerStack.Children.Add(Ui.Text("Put away", 12, "muted")); drawerStack.Children.Add(chips);
+        drawer.Child = drawerStack; drawer.BoxShadow = BoxShadows.Parse("-6 0 24 0 #30000000");
+        var frame = Ui.Grid("*", "Auto,*");
+        Ui.Put(frame, drawerToggle);
+        Ui.Put(frame, new ScrollViewer { Content = board, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, AllowAutoHide = false }, row: 1);
+        Ui.Put(frame, drawer, row: 1);
+        Content = frame;
+        SyncDrawer();
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; RefreshLive(); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
     }
@@ -48,6 +66,8 @@ public sealed class DeskView : UserControl
     public bool Lively { get => board.Lively; set { board.Lively = value; board.InvalidateArrange(); } }
     /// <summary>The tiles in the order they sit, as the saved order and a drag leave it.</summary>
     public IReadOnlyList<string> Order => order;
+    /// <summary>The tiles in the drawer.</summary>
+    public IReadOnlyList<string> Hidden => hidden;
     /// <summary>Each tile's place and form at the current width.</summary>
     public IReadOnlyList<DeskPlacement> Placements => board.Placements;
     public Control? TileControl(string id) => tiles.TryGetValue(id, out var t) ? t.Tile : null;
@@ -71,10 +91,13 @@ public sealed class DeskView : UserControl
         var heading = Ui.Text(kind.Title, 12, "muted"); heading.VerticalAlignment = VerticalAlignment.Center;
         var head = Ui.Grid("*,Auto"); head.Margin = new Thickness(16, 10, 8, 0); head.Height = 30; head.Cursor = new Cursor(StandardCursorType.Hand); head.Background = Brushes.Transparent; head.Name = "TileHandle_" + kind.Id;
         Ui.Put(head, heading);
+        var buttons = Ui.Horizontal(); buttons.Spacing = 2;
         if (kind.OpensPage is { } page)
         {
-            var open = Ui.IconButton(IconKind.Next, "Open full page", "TileOpen_" + kind.Id, () => openPage?.Invoke(page)); open.Width = 28; open.Height = 28; Ui.Put(head, open, 1);
+            var open = Ui.IconButton(IconKind.Next, "Open full page", "TileOpen_" + kind.Id, () => openPage?.Invoke(page)); open.Width = 28; open.Height = 28; buttons.Children.Add(open);
         }
+        var put = Ui.IconButton(IconKind.Close, "Put away in the drawer", "TileHide_" + kind.Id, () => Hide(kind.Id)); put.Width = 28; put.Height = 28; buttons.Children.Add(put);
+        Ui.Put(head, buttons, 1);
         var body = new Border { Margin = new Thickness(16, 2, 16, 14) };
         var stack = Ui.Grid("*", "Auto,*"); Ui.Put(stack, head); Ui.Put(stack, body, row: 1); tile.Child = stack;
         head.PointerPressed += (_, e) => BeginDrag(kind.Id, e, tile);
@@ -129,8 +152,9 @@ public sealed class DeskView : UserControl
     {
         if (dragged is null) return;
         var id = dragged; var index = IndexAt(e.GetPosition(board));
+        var overDrawer = drawer.IsVisible && drawer.Bounds.Contains(e.GetPosition((Visual?)drawer.Parent));
         e.Pointer.Capture(null); Finish();
-        Drop(id, index);
+        if (overDrawer) Hide(id); else Drop(id, index);
     }
     private void CancelDrag() { if (dragged is null) return; Finish(); board.InvalidateArrange(); }
     private void Finish()
@@ -149,6 +173,48 @@ public sealed class DeskView : UserControl
         order = DeskLayout.Move(order, id, index);
         model.SetDeskOrder(order);
         board.InvalidateMeasure(); board.InvalidateArrange();
+    }
+    /// <summary>Puts a tile away in the drawer. Nothing is lost: it keeps its data and comes back when it is put on the desk again.</summary>
+    public void Hide(string id)
+    {
+        if (!order.Remove(id)) return;
+        hidden.Add(id); Save(); SyncDrawer(); board.InvalidateMeasure(); board.InvalidateArrange();
+    }
+    /// <summary>Brings a tile from the drawer onto the desk at a place in the order.</summary>
+    public void Show(string id, int index = int.MaxValue)
+    {
+        if (!hidden.Remove(id)) return;
+        order.Insert(Math.Clamp(index, 0, order.Count), id); Save(); SyncDrawer(); board.InvalidateMeasure(); board.InvalidateArrange();
+    }
+    private void Save() { model.SetDeskOrder(order); model.SetDeskHidden(hidden); }
+    private void SyncDrawer()
+    {
+        foreach (var kind in Kinds) tiles[kind.Id].Tile.IsVisible = !hidden.Contains(kind.Id);
+        drawerToggle.Content = hidden.Count == 0 ? "Drawer" : $"Drawer ({hidden.Count})";
+        chips.Children.Clear();
+        if (hidden.Count == 0) chips.Children.Add(Ui.Text("Nothing put away. Drag a tile here, or use its cross.", 12, "muted"));
+        foreach (var id in hidden)
+        {
+            var kind = Kinds.First(k => k.Id == id); var hue = Color.Parse(kind.Hue);
+            var chip = new Border { Name = "DrawerChip_" + id, CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 10), Cursor = new Cursor(StandardCursorType.Hand), Background = new SolidColorBrush(Color.FromArgb(0x40, hue.R, hue.G, hue.B)), Child = Ui.Text(kind.Title, 14) };
+            chip.PointerPressed += (_, e) => { chipPressed = id; chipStart = e.GetPosition(this); chipMoved = false; e.Pointer.Capture(chip); e.Handled = true; };
+            chip.PointerMoved += (_, e) => { if (chipPressed is not null && (e.GetPosition(this) - chipStart).X is var dx && Math.Abs(dx) + Math.Abs((e.GetPosition(this) - chipStart).Y) > 8) chipMoved = true; };
+            chip.PointerReleased += (_, e) =>
+            {
+                if (chipPressed is not { } pressed) return;
+                chipPressed = null; e.Pointer.Capture(null);
+                // A plain click brings the tile back at the end. Dragging it out onto the board drops it where it lands.
+                var at = e.GetPosition(board); var overBoard = chipMoved && new Rect(board.Bounds.Size).Contains(at) && !drawer.Bounds.Contains(e.GetPosition((Visual?)drawer.Parent));
+                Show(pressed, overBoard ? DropIndexFor(pressed, at) : int.MaxValue);
+            };
+            chips.Children.Add(chip);
+        }
+    }
+    private int DropIndexFor(string id, Point at)
+    {
+        var cell = board.CellWidth; if (cell <= 0) return int.MaxValue;
+        var specs = order.Concat(new[] { id }).Select(Spec);
+        return DeskLayout.InsertIndexAt(DeskLayout.Pack(specs, board.Columns), id, at.X / cell, at.Y / (CellHeight + Gap));
     }
     internal static DeskTileSpec Spec(string id) { var k = Kinds.First(k => k.Id == id); return new(k.Id, k.Columns, k.Rows); }
     internal IReadOnlyList<string> LayoutOrder => board.Provisional ?? order;

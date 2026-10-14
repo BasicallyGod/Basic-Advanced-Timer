@@ -79,6 +79,39 @@ public sealed class DeskTests
     }
 
     [AvaloniaFact]
+    public void ATilePutAwayLeavesTheDeskAndSitsInTheDrawerUntilBroughtBack()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            Press(window, "DeskTab");
+            var desk = window.GetVisualDescendants().OfType<DeskView>().Single(); desk.Lively = false;
+            Press(window, "TileHide_day"); window.UpdateLayout();
+            Assert.Equal(new[] { "day" }, desk.Hidden); Assert.DoesNotContain(desk.Placements, p => p.Id == "day"); Assert.False(desk.TileControl("day")!.IsVisible);
+            Assert.Equal(new[] { "day" }, model.DeskHidden); Assert.Equal(new[] { "working", "accounts" }, model.DeskOrder);
+            Press(window, "DrawerToggle"); Assert.True(Named<Border>(window, "Drawer").IsVisible);
+            var chip = Named<Border>(window, "DrawerChip_day"); Assert.NotNull(chip);
+            desk.Show("day", 0); window.UpdateLayout();
+            Assert.Empty(desk.Hidden); Assert.Equal("day", desk.Order[0]); Assert.True(desk.TileControl("day")!.IsVisible); Assert.Equal(3, desk.Placements.Count);
+            Assert.Empty(model.DeskHidden);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ASavedDrawerIsRestoredWhenTheDeskOpens()
+    {
+        var window = Open(new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday, Desk: true, DeskOrder: new[] { "working", "accounts" }, DeskHidden: new[] { "day" })));
+        try
+        {
+            Press(window, "DeskTab");
+            var desk = window.GetVisualDescendants().OfType<DeskView>().Single();
+            Assert.Equal(new[] { "day" }, desk.Hidden); Assert.Equal(2, desk.Placements.Count);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ATileOpensItsFullPage()
     {
         var window = Open(Model());
@@ -98,8 +131,8 @@ public sealed class DeskTests
         var folder = Path.Combine(Path.GetTempPath(), "timer-desk-" + Guid.NewGuid().ToString("N"));
         try
         {
-            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.False(prefs.Desk); store.Save(engine, prefs with { Desk = true, Calm = true, DeskOrder = new[] { "day", "accounts" } }); }
-            using (var store = new TimerStore(folder)) { var prefs = store.Load(new TrackingEngine()); Assert.True(prefs.Desk); Assert.True(prefs.Calm); Assert.Equal(new[] { "day", "accounts" }, prefs.DeskOrder); }
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.False(prefs.Desk); store.Save(engine, prefs with { Desk = true, Calm = true, DeskOrder = new[] { "day", "accounts" }, DeskHidden = new[] { "working" } }); }
+            using (var store = new TimerStore(folder)) { var prefs = store.Load(new TrackingEngine()); Assert.True(prefs.Desk); Assert.True(prefs.Calm); Assert.Equal(new[] { "working" }, prefs.DeskHidden); Assert.Equal(new[] { "day", "accounts" }, prefs.DeskOrder); }
         }
         finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
@@ -112,14 +145,17 @@ public sealed class DeskTests
     public void TheDeskDrawsAtEachSize(int width, int height)
     {
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true);
+        model.SetDeskHidden(new[] { "day" });
         var window = Open(model, width, height);
         try
         {
-            Press(window, "DeskTab"); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            Press(window, "DeskTab"); Press(window, "DrawerToggle"); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            var shown = window.GetVisualDescendants().OfType<DeskView>().Single(); Assert.Equal(new[] { "day" }, shown.Hidden); Assert.True(Named<Border>(window, "Drawer").IsVisible);
             Assert.DoesNotContain("selected", Named<Button>(window, "TimelineTab").Classes); Assert.Contains("selected", Named<Button>(window, "DeskTab").Classes);
             if (Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") is { } folder)
             {
-                Directory.CreateDirectory(folder); using var frame = window.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, $"desk-{width}x{height}.png"));
+                Directory.CreateDirectory(folder); using (window.CaptureRenderedFrame()) { } // The first capture brings the picture up to date.
+                using var frame = window.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, $"desk-{width}x{height}.png"));
             }
         }
         finally { window.Close(); }
