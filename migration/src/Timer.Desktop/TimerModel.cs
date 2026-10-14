@@ -62,11 +62,12 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Asks for the accounts and budgets dialog. The dashboard shows it, and comes up first if only the pill is showing.</summary>
     public void OpenAccounts() => AccountsRequested?.Invoke();
     public void OpenTidy() => TidyRequested?.Invoke();
-    public event Action? NoteRequested, DashboardRequested, SettingsRequested;
+    public event Action<string?>? NoteRequested;
+    public event Action? DashboardRequested, SettingsRequested;
     /// <summary>Asks for the settings dialog, from the pill's menu. The dashboard shows it, and comes up first if only the pill is showing.</summary>
     public void RequestSettings() => SettingsRequested?.Invoke();
     /// <summary>Asks for the add note dialog. The dashboard shows it, and comes up first if only the pill is showing.</summary>
-    public void RequestNote() => NoteRequested?.Invoke();
+    public void RequestNote(string? prefill = null) => NoteRequested?.Invoke(prefill);
     /// <summary>Asks for the dashboard (or the desk, when it is on) to come up, as the pill's own button does.</summary>
     public void RequestDashboard() => DashboardRequested?.Invoke();
     public string? ExportPath { get; private set; }
@@ -197,6 +198,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
         SelectedDate = Engine.Now.Date; lastToday = SelectedDate;
+        MoveTodosToNotes();
         // The user's own themes need their colours registered too. The built-in ones were registered when the app started.
         if (Application.Current is { } current && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && this.preferences.Themes is { Count: > 0 } own) ThemeEngine.Register(current, own);
         ApplyTheme(); Ui.ApplyTooltips(this.preferences.Tooltips);
@@ -344,7 +346,18 @@ public sealed class TimerModel : INotifyPropertyChanged
             foreach (var (from, to) in renamed) Editor.RenameAccount(from, to);
         }
         // To-dos linked to an account follow its rename, and lose the link if it is deleted.
-        if (renamed.Count > 0 || deleted.Count > 0) preferences = preferences with { Trinkets = Timer.Core.Trinkets.Relink(Trinkets, renamed.ToDictionary(r => r.Key, r => r.Value), deleted.ToList()) };
+        if (renamed.Count > 0 || deleted.Count > 0)
+        {
+            preferences = preferences with { Trinkets = Timer.Core.Trinkets.Relink(Trinkets, renamed.ToDictionary(r => r.Key, r => r.Value), deleted.ToList()) };
+            if (Pomodoro.Account is { } focus) Pomodoro.Account = deleted.Contains(focus) ? null : renamed.FirstOrDefault(r => r.Key == focus) is { Value: not null } moved ? moved.Value : focus;
+            // Notes and tasks tagged with an account follow it the same way.
+            var before = preferences.Accounts.Select(a => a.Name).ToList(); var map = renamed.ToDictionary(r => r.Key, r => r.Value); var gone = deleted.ToList();
+            for (var i = 0; i < dayNotes.Count; i++)
+            {
+                var text = NoteShorthand.Relink(dayNotes[i].Text, before, map, gone);
+                if (text != dayNotes[i].Text) { dayNotes[i] = dayNotes[i] with { Text = text }; store?.UpdateDayNote(dayNotes[i]); }
+            }
+        }
         preferences = preferences with { Accounts = WithColours(values) };
         if (renamed.Count > 0 && SelectedAccount is { } picked && renames.TryGetValue(picked, out var now)) SelectedAccount = now;
         if (!Accounts.Any(a => a.Name == SelectedAccount)) SelectedAccount = values.FirstOrDefault(a => !a.Hidden)?.Name;
@@ -783,12 +796,24 @@ public sealed class TimerModel : INotifyPropertyChanged
     public IReadOnlyList<DayNote> NotesOn(DateTime day) => dayNotes.Where(n => n.Day.Date == day.Date).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
     public IReadOnlyList<DayNote> ComingUp(int days = 14) => DayNotes.ComingUp(dayNotes, Engine.Now, days);
     /// <summary>Adds a note to a day from what was typed. A time such as 14:30 in the words becomes the note's time.</summary>
-    public void AddDayNote(DateTime day, string typed)
+    public void AddDayNote(DateTime day, string typed, bool task = false)
     {
-        var (text, at) = DayNotes.Parse(typed); if (text.Length == 0) return;
-        var id = store?.AddDayNote(day.Date, at, text) ?? nextNoteId++;
-        dayNotes.Add(new DayNote(id, day.Date, at, text)); Notify();
+        // A day named in the words (@fri, @tomorrow, @21oct) wins over the day showing, and the notice says where the note went, since it may leave the list in view.
+        var parts = NoteShorthand.Parse(typed, Engine.Now, task); if (parts.Text.Length == 0) return;
+        var target = (parts.Day ?? day).Date;
+        var id = store?.AddDayNote(target, parts.At, parts.Text) ?? nextNoteId++;
+        dayNotes.Add(new DayNote(id, target, parts.At, parts.Text));
+        if (target != day.Date) Notice = "Added to " + target.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
+        Notify();
     }
+    /// <summary>The names of the accounts a #Tag can link to.</summary>
+    public IReadOnlyList<string> AccountNames => Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name).ToList();
+    /// <summary>Takes a note's time back out of the note and puts it into its words, so nothing is lost and it can be set again by typing it.</summary>
+    public void ClearNoteTime(long id) => ChangeNote(id, n => n.At is { } at ? n with { At = null, Text = NoteShorthand.WithTimeInWords(n.Text, at) } : n, true);
+    /// <summary>Takes the deadline marker off a note, which becomes an ordinary one.</summary>
+    public void ClearNoteDeadline(long id) => ChangeNote(id, n => DayNotes.IsDeadline(n) ? n with { Text = NoteShorthand.WithoutDeadline(n.Text) } : n, true);
+    /// <summary>Unlinks a note from its account, leaving the name in its words as an ordinary word.</summary>
+    public void ClearNoteAccount(long id) => ChangeNote(id, n => n with { Text = NoteShorthand.WithoutAccountTag(n.Text, AccountNames) }, true);
     public void ToggleDayNote(long id) => ChangeNote(id, n => n with { Done = !n.Done }, true);
     /// <summary>Saves a note's words as they are typed, without notifying, so the box being typed in is not rebuilt. Emptying a note deletes it.</summary>
     public void SetDayNoteText(long id, string text) => ChangeNote(id, n => n with { Text = text.Trim() }, false);
@@ -805,27 +830,42 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>The pomodoro timer. It lives only while the app runs, and does not touch time tracking.</summary>
     public Pomodoro Pomodoro { get; } = new();
+    /// <summary>Steps the focus timer's account through none and each account in turn. It changes only a label on the session.</summary>
+    public void CyclePomodoroAccount()
+    {
+        var names = AccountNames; var index = Pomodoro.Account is { } now ? names.ToList().IndexOf(now) : -1;
+        Pomodoro.Account = index + 1 < names.Count ? names[index + 1] : null; Notify();
+    }
     /// <summary>The desk's trinkets: the to-do list and the post-its. They are not part of the day's records, so they live with the settings.</summary>
     public TrinketData Trinkets => preferences.Trinkets ?? TrinketData.Empty;
     private void SetTrinkets(TrinketData data) { preferences = preferences with { Trinkets = data }; Save(); Notify(); }
     /// <summary>Adds a to-do from what was typed. A #Tag naming one account links it, and the item then wears that account's colour.</summary>
-    public void AddTodo(string typed)
+    public void AddTodo(string typed) { if (!string.IsNullOrWhiteSpace(typed)) AddDayNote(Engine.Now.Date, typed, task: true); }
+    /// <summary>The to-do list. A to-do is a task note, the same item Notes and Coming up show, so ticking it anywhere ticks it everywhere.</summary>
+    public IReadOnlyList<DayNote> Todos => DayNotes.Todos(dayNotes, Engine.Now);
+    public void ToggleTodo(long id) => ToggleDayNote(id);
+    public void RemoveTodo(long id) => RemoveDayNote(id);
+    public void ClearDoneTodos() { foreach (var note in Todos.Where(t => t.Done).ToList()) { dayNotes.RemoveAll(n => n.Id == note.Id); store?.DeleteDayNote(note.Id); } Notify(); }
+    // The to-dos an earlier build kept with the settings become task notes dated today, once, after a backup. The old list stays in the file as it was.
+    private void MoveTodosToNotes()
     {
-        if (string.IsNullOrWhiteSpace(typed)) return;
-        var item = Timer.Core.Trinkets.ParseTodo(typed, Accounts.Select(a => a.Name));
-        SetTrinkets(Trinkets with { Todos = Trinkets.Todos.Append(item).ToList() });
+        var saved = preferences.Trinkets ?? TrinketData.Empty;
+        if (saved.TodosMoved) return;
+        if (saved.Todos.Count > 0)
+        {
+            store?.Backup("before-todos-to-notes");
+            var today = Engine.Now.Date;
+            foreach (var todo in saved.Todos)
+            {
+                var text = todo.Account is { } account && !todo.Text.Contains(NoteShorthand.TagFor(account), StringComparison.OrdinalIgnoreCase) ? todo.Text + " " + NoteShorthand.TagFor(account) : todo.Text;
+                var id = store?.AddDayNote(today, null, text) ?? nextNoteId++;
+                var note = new DayNote(id, today, null, text, todo.Done); dayNotes.Add(note);
+                if (todo.Done) store?.UpdateDayNote(note);
+            }
+        }
+        preferences = preferences with { Trinkets = saved with { TodosMoved = true } };
+        if (store is not null) Save();
     }
-    public void ToggleTodo(int index)
-    {
-        if (index < 0 || index >= Trinkets.Todos.Count) return;
-        var todos = Trinkets.Todos.ToList(); todos[index] = todos[index] with { Done = !todos[index].Done }; SetTrinkets(Trinkets with { Todos = todos });
-    }
-    public void RemoveTodo(int index)
-    {
-        if (index < 0 || index >= Trinkets.Todos.Count) return;
-        var todos = Trinkets.Todos.ToList(); todos.RemoveAt(index); SetTrinkets(Trinkets with { Todos = todos });
-    }
-    public void ClearDoneTodos() => SetTrinkets(Trinkets with { Todos = Trinkets.Todos.Where(t => !t.Done).ToList() });
     /// <summary>Saves a post-it's words as they are typed. It does not notify, so the box being typed in is not rebuilt.</summary>
     public void SetPostItText(int index, string text)
     {

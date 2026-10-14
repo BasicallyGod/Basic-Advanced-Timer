@@ -93,11 +93,11 @@ public sealed class DeskTests
             var input = Named<TextBox>(window, "TodoInput"); input.Text = "Send invoice #AccountOne";
             input.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter }); Dispatcher.UIThread.RunJobs();
             Assert.Same(desk, window.GetVisualDescendants().OfType<DeskView>().Single()); // The desk is not rebuilt, so the box keeps its focus.
-            var item = Assert.Single(model.Trinkets.Todos); Assert.Equal("Send invoice", item.Text); Assert.Equal("Account one", item.Account);
-            Assert.Equal("", input.Text); Assert.NotNull(Named<Control>(window, "TodoTag_0"));
-            Named<CheckBox>(window, "TodoTick_0").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
-            Assert.True(model.Trinkets.Todos[0].Done);
-            Press(window, "TodoRemove_0"); Assert.Empty(model.Trinkets.Todos);
+            var item = Assert.Single(model.Todos); Assert.Equal("Send invoice #AccountOne", item.Text); Assert.Equal("Account one", NoteShorthand.AccountOf(item.Text, model.AccountNames));
+            Assert.Equal("", input.Text); Assert.NotNull(Named<Control>(window, "TodoTag_" + item.Id));
+            Named<CheckBox>(window, "TodoTick_" + item.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.True(model.Todos[0].Done);
+            Press(window, "TodoRemove_" + item.Id); Assert.Empty(model.Todos);
         }
         finally { window.Close(); }
     }
@@ -166,9 +166,9 @@ public sealed class DeskTests
     public void RenamingAnAccountKeepsItsToDosLinked()
     {
         var model = Model(); model.AddTodo("Call #AccountTwo");
-        Assert.Equal("Account two", model.Trinkets.Todos[0].Account);
+        Assert.Equal("Account two", NoteShorthand.AccountOf(model.Todos[0].Text, model.AccountNames));
         model.SetAccounts(model.Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name == "Account two" ? new AccountSettings("Beta", null, "week") : new AccountSettings(a.Name, null, "week")).ToList(), new Dictionary<string, string> { ["Account two"] = "Beta" });
-        Assert.Equal("Beta", model.Trinkets.Todos[0].Account);
+        Assert.Equal("Beta", NoteShorthand.AccountOf(model.Todos[0].Text, model.AccountNames)); // The tag was rewritten to the new name.
     }
 
     [AvaloniaFact]
@@ -242,13 +242,13 @@ public sealed class DeskTests
         var model = Model(); var window = Open(model);
         try
         {
-            OpenDesk(window); Assert.Equal("None", Named<TextBlock>(window, "DeadlineLeft").Text);
+            OpenDesk(window); Assert.False(Named<TextBlock>(window, "DeadlineLeft").IsVisible); Assert.Equal("Nothing due", Named<TextBlock>(window, "DeadlineWhat").Text); // No big figure for nothing.
             var due = model.Engine.Now.Date.AddDays(1); // Tomorrow, at five.
             model.AddDayNote(due, "!Timesheet due"); window.UpdateLayout();
             var expected = due.AddHours(17) - model.Engine.Now; var left = Named<TextBlock>(window, "DeadlineLeft").Text;
             Assert.Equal($"{(int)expected.TotalHours}h {expected.Minutes:00}m", left); // Spelled out, so it reads as a duration and not a time of day.
             Assert.Equal("Timesheet due", Named<TextBlock>(window, "DeadlineWhat").Text); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Due in");
-            model.ToggleDayNote(model.AllDayNotes[0].Id); window.UpdateLayout(); Assert.Equal("None", Named<TextBlock>(window, "DeadlineLeft").Text);
+            model.ToggleDayNote(model.AllDayNotes[0].Id); window.UpdateLayout(); Assert.False(Named<TextBlock>(window, "DeadlineLeft").IsVisible); Assert.Equal("Nothing due", Named<TextBlock>(window, "DeadlineWhat").Text);
         }
         finally { window.Close(); }
     }
@@ -704,7 +704,7 @@ public sealed class DeskTests
     public void TheDeskDrawsAtEachSize(int width, int height)
     {
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true);
-        model.AddTodo("Send the invoice #AccountOne"); model.AddTodo("Call back about the budget #AccountThree"); model.AddTodo("Order more tea"); model.ToggleTodo(2);
+        model.AddTodo("Send the invoice #AccountOne"); model.AddTodo("Call back about the budget #AccountThree"); model.AddTodo("Order more tea"); model.ToggleTodo(model.Todos[2].Id);
         model.SetPostItText(0, "Ask about the printer. Book the room for Friday.");
         model.AddDayNote(model.Engine.Now.Date, "Team stand-up 09:30"); model.AddDayNote(model.Engine.Now.Date, "Send timesheet"); model.AddDayNote(model.Engine.Now.Date.AddDays(1), "Client review 11:00"); model.AddDayNote(model.Engine.Now.Date.AddDays(3), "Quarter end"); model.AddDayNote(model.Engine.Now.Date.AddDays(1), "!Timesheet due 17:00");
         var window = Open(model, width, height);

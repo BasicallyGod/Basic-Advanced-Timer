@@ -25,6 +25,14 @@ public static class DayNotes
         => notes.Where(n => !n.Done && n.Day.Date >= now.Date && n.Day.Date <= now.Date.AddDays(days) && (n.Day.Date > now.Date || n.At is null || n.Day.Date + n.At.Value >= now.AddHours(-1)))
             .OrderBy(n => n.Day.Date).ThenBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
 
+    /// <summary>A task is a note with no time that is not a deadline: the kind that is ticked off, and the one the To-do list holds.</summary>
+    public static bool IsTask(DayNote note) => note.At is null && !IsDeadline(note);
+    /// <summary>
+    /// The to-do list: tasks dated today or earlier that are still open, so one not finished carries over to the next day, plus the ones ticked off today.
+    /// Tasks dated later wait in Coming up until their day.
+    /// </summary>
+    public static List<DayNote> Todos(IEnumerable<DayNote> notes, DateTime now)
+        => notes.Where(n => IsTask(n) && n.Day.Date <= now.Date && (!n.Done || n.Day.Date == now.Date)).OrderBy(n => n.Day.Date).ThenBy(n => n.Id).ToList();
     /// <summary>A note whose words start with ! is a deadline. The marker stays in the text, so it shows where it is edited.</summary>
     public static bool IsDeadline(DayNote note) => note.Text.StartsWith('!');
     /// <summary>The words without the deadline marker, for showing where the marker itself would be noise.</summary>

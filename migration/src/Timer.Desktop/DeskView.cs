@@ -216,7 +216,7 @@ public sealed class DeskView : UserControl
     private void RefreshMeta()
     {
         void Set(string id, string text) { if (metas.TryGetValue(id, out var m)) m.Text = text; }
-        var blocks = strip.Blocks().Count; var todos = model.Trinkets.Todos;
+        var blocks = strip.Blocks().Count; var todos = model.Todos;
         Set("strip", $"{blocks} block{(blocks == 1 ? "" : "s")}"); Set("timeline", $"{blocks} block{(blocks == 1 ? "" : "s")}");
         Set("todo", todos.Count == 0 ? "" : $"{todos.Count(t => t.Done)} of {todos.Count} done");
         var coming = model.ComingUp().Count; Set("coming", coming == 0 ? "" : $"{coming} to come");

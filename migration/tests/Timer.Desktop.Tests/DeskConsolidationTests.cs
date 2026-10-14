@@ -219,6 +219,96 @@ public sealed class DeskConsolidationTests
         finally { window.Close(); }
     }
 
+    [AvaloniaTheory]
+    [InlineData(TileForm.Normal)]
+    [InlineData(TileForm.Roomy)]
+    public void AnEmptyDeadlineSaysNothingDueOnceAndOffersToAddOne(TileForm form)
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup();
+        var view = new DeadlineView(model, form); var window = new Window { Width = 500, Height = 500, Content = view }; window.Show();
+        try
+        {
+            Settle(window);
+            var texts = view.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsVisible && !string.IsNullOrEmpty(t.Text)).Select(t => t.Text).ToList();
+            Assert.Equal(new[] { "Nothing due" }, texts.Where(t => t is "Nothing due" or "No deadlines" or "None").ToArray()); // Said once, with no big "None" beside it.
+            string? asked = null; model.NoteRequested += p => asked = p;
+            var add = view.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DeadlineAdd"); Assert.True(add.IsVisible);
+            add.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.Equal("! ", asked); // The dialog opens ready for a deadline.
+            model.AddDayNote(model.Engine.Now.Date.AddDays(1), "!report"); view.Refresh(); Settle(window);
+            Assert.False(view.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DeadlineAdd").IsVisible); // With one due the button is gone.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void AnEmptyComingUpIsOneQuietLineWithAButtonThatOpensTheNoteDialog()
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup();
+        var view = new ComingUpView(model); var window = new Window { Width = 400, Height = 300, Content = view }; window.Show();
+        try
+        {
+            Settle(window);
+            Assert.Equal("Nothing coming up", Assert.Single(view.GetVisualDescendants().OfType<TextBlock>().Where(t => !string.IsNullOrEmpty(t.Text) && t.Text.StartsWith("Nothing"))).Text);
+            var asked = false; model.NoteRequested += _ => asked = true;
+            view.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ComingAdd").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.True(asked);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheNoteDialogOpensPreparedForADeadlineWhenAskedTo()
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 10, 0, 0))); model.CompleteSetup();
+        var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        try
+        {
+            model.RequestNote("! "); Settle(dashboard);
+            Assert.Equal("Add deadline", dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "DialogTitle").Text);
+            var box = dashboard.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "NoteText"); Assert.Equal("! ", box.Text);
+            box.Text = "! file report @fri 17:00"; Press(dashboard, "SaveNote"); Settle(dashboard);
+            var note = Assert.Single(model.AllDayNotes); Assert.True(DayNotes.IsDeadline(note)); Assert.Equal(new TimeSpan(17, 0, 0), note.At);
+        }
+        finally { dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheRoomyDayTileAddsTheWorkingTimeLeftAndTheTrackerKeepsToItsOwnFigures()
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 14, 11, 0, 0))); model.CompleteSetup();
+        var day = new DayView(model, TileForm.Roomy); var tracker = new TrackerView(model, TileForm.Roomy); var window = new Window { Width = 600, Height = 700, Content = new StackPanel { Children = { day, tracker } } }; window.Show();
+        try
+        {
+            Settle(window);
+            Assert.Contains(day.GetVisualDescendants().OfType<Grid>(), g => g.Name == "DayWorkLeft");
+            foreach (var name in new[] { "DayUnallocated", "DayBreaks", "DayOvertime" }) Assert.Contains(day.GetVisualDescendants().OfType<Grid>(), g => g.Name == name);
+            // The tracker does not repeat any of them: its big figures are the block and the account's day.
+            Assert.DoesNotContain(tracker.GetVisualDescendants().OfType<Control>(), c => c.Name is "DayUnallocated" or "DayWorkLeft");
+            Assert.Contains(tracker.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "TrackerBlock"); Assert.Contains(tracker.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "TrackerAccountToday");
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ThePomodoroCanBeForAnAccountWithoutTouchingRecordedTime()
+    {
+        var now = new DateTime(2026, 10, 14, 10, 0, 0); var model = new TimerModel(new TrackingEngine(clock: () => now)); model.CompleteSetup();
+        var sessionsBefore = model.Engine.Sessions.Count; var active = model.ActiveAccount;
+        var view = new PomodoroView(model, false); var window = new Window { Width = 400, Height = 400, Content = view }; window.Show();
+        try
+        {
+            Settle(window);
+            var button = view.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PomodoroAccount"); Assert.Equal("No account", button.Content);
+            button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.Equal("Account one", model.Pomodoro.Account); Assert.Equal("#Account one", button.Content);
+            model.Pomodoro.Start(now); now = now.AddMinutes(26); model.Pomodoro.Update(now); // A whole focus block for that account.
+            Assert.Equal(1, model.Pomodoro.CompletedFor["Account one"]); Assert.Equal(1, model.Pomodoro.Completed);
+            Assert.Equal(sessionsBefore, model.Engine.Sessions.Count); Assert.Equal(active, model.ActiveAccount); Assert.False(model.IsTracking); // Nothing was recorded or started.
+            for (var i = 0; i < 3; i++) button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); // Through the other two accounts, then back to none.
+            Assert.Null(model.Pomodoro.Account);
+            model.Pomodoro.Reset(); Assert.Empty(model.Pomodoro.CompletedFor);
+        }
+        finally { window.Close(); }
+    }
+
     [AvaloniaFact]
     public void PreviewPictures()
     {

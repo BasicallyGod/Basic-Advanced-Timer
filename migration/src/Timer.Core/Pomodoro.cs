@@ -19,6 +19,11 @@ public sealed class Pomodoro
     public bool Running => runningSince is not null;
     /// <summary>Work blocks finished since the last reset.</summary>
     public int Completed { get; private set; }
+    /// <summary>The account the focus is for, if one was chosen. It is a label on the session and nothing more: it never touches recorded time.</summary>
+    public string? Account { get; set; }
+    private readonly Dictionary<string, int> completedFor = new();
+    /// <summary>Work blocks finished for each account since the last reset.</summary>
+    public IReadOnlyDictionary<string, int> CompletedFor => completedFor;
     /// <summary>True from the end of a phase until the next one is started.</summary>
     public bool Nudge { get; private set; }
 
@@ -38,7 +43,7 @@ public sealed class Pomodoro
     }
     public void Pause(DateTime now) { if (runningSince is null) return; carried = Elapsed(now); runningSince = null; }
     public void Toggle(DateTime now) { if (Running) Pause(now); else Start(now); }
-    public void Reset() { Phase = PomodoroPhase.Idle; runningSince = null; carried = TimeSpan.Zero; Completed = 0; Nudge = false; }
+    public void Reset() { Phase = PomodoroPhase.Idle; runningSince = null; carried = TimeSpan.Zero; Completed = 0; Nudge = false; completedFor.Clear(); }
     /// <summary>Ends the phase now and waits at the start of the next.</summary>
     public void Skip(DateTime now) { if (Phase != PomodoroPhase.Idle) Finish(); }
 
@@ -47,7 +52,7 @@ public sealed class Pomodoro
 
     private void Finish()
     {
-        if (Phase == PomodoroPhase.Work) { Completed++; Phase = Completed % RoundsBeforeLongBreak == 0 ? PomodoroPhase.LongBreak : PomodoroPhase.ShortBreak; }
+        if (Phase == PomodoroPhase.Work) { Completed++; if (Account is { } who) completedFor[who] = completedFor.GetValueOrDefault(who) + 1; Phase = Completed % RoundsBeforeLongBreak == 0 ? PomodoroPhase.LongBreak : PomodoroPhase.ShortBreak; }
         else Phase = PomodoroPhase.Work;
         runningSince = null; carried = TimeSpan.Zero; Nudge = true;
     }
