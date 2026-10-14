@@ -114,7 +114,7 @@ public sealed class EditingTests
     {
         var engine = Engine(); engine.Sessions.Add(Row());
         engine.Sessions.Add(Row("11:00:00", "12:00:00") with { Account = "Account two" });
-        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show(); window.SelectTab(false);
         try
         {
             void Layout() { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var settled = window.CaptureRenderedFrame(); }
@@ -323,7 +323,7 @@ public sealed class EditingTests
     [AvaloniaFact]
     public void ZoomAndFitSitInABarUnderTheTimelineTheHintLineIsGoneAndADisabledButtonStaysOutlined()
     {
-        var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
+        var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show(); dashboard.SelectTab(false);
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();

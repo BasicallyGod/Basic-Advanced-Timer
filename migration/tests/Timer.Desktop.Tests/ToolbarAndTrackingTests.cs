@@ -121,7 +121,7 @@ public sealed class ToolbarAndTrackingTests
     [AvaloniaFact]
     public void TheEditButtonsShareTheBreakButtonsOutlineAndThePageHasRoomUnderItsTitle()
     {
-        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show(); window.SelectTab(false);
         try
         {
             Settle(window);

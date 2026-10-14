@@ -32,7 +32,7 @@ public sealed class DialogTests
     [AvaloniaFact]
     public void ADialogOpensOverTheDashboardWhichCannotBeClickedAndEscapeAndTheCrossTakeItAway()
     {
-        var model = Model(out var engine); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        var model = Model(out var engine); var dashboard = new DashboardWindow(model); dashboard.Show(); dashboard.SelectTab(false); Settle(dashboard);
         var addTime = Find<Button>(dashboard, "AddTime");
         var centre = addTime.TranslatePoint(new Point(addTime.Bounds.Width / 2, addTime.Bounds.Height / 2), dashboard)!.Value;
         Assert.True(dashboard.InputHitTest(centre) is Visual before && before.GetSelfAndVisualAncestors().Contains(addTime)); // Reachable before.
@@ -70,7 +70,7 @@ public sealed class DialogTests
     [AvaloniaFact]
     public void AMessageFloatsAboveTheButtonsAndNeverMovesThem()
     {
-        var model = Model(out _); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        var model = Model(out _); var dashboard = new DashboardWindow(model); dashboard.Show(); dashboard.SelectTab(false); Settle(dashboard);
         double Top(string name) { var c = Find<Button>(dashboard, name); return c.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y; }
         var bar = Find<Border>(dashboard, "MessageBar"); Assert.False(bar.IsVisible);
         var addTime = Top("AddTime"); var undo = Top("UndoEdit");

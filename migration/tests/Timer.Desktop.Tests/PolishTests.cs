@@ -147,7 +147,7 @@ public sealed class PolishTests
     [AvaloniaFact]
     public void TheZoomBarsIconsAndSliderAreAllCentredOnItsMiddle()
     {
-        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show(); window.SelectTab(false);
         try
         {
             Settle(window);

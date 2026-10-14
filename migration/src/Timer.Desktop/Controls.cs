@@ -274,7 +274,7 @@ public static class Ui
         if (pill) menu.ItemsSource = new Control[] { openItem, switchItem, breakItem, noteItem, quickRule, pinItem, settingsItem, continueItem, overtimeTest, versionRule, version, collapseRule, collapse };
         void Sync()
         {
-            openItem.Header = model.Desk ? "Open Desk" : "Open dashboard";
+            openItem.Header = "Open Desk";
             breakItem.Header = model.IsOnBreak ? "End break" : "Start break";
             pinItem.IsChecked = model.PillOnTop;
             // One entry per account, the running one ticked. Choosing another stops this one and starts that one.
