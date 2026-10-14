@@ -1021,7 +1021,10 @@ public sealed class DashboardWindow : Window
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
     private void Refresh(bool refreshWorkspace)
     {
-        deskRail.IsVisible = model.Desk; if (!model.Desk && deskMode) { deskMode = false; refreshWorkspace = true; }
+        // Switching between the new Desk and classic dashboard in Settings also selects the corresponding home immediately.
+        // Do not force the Desk when changing tabs: this runs only when the setting changes from the currently applied chrome mode.
+        if (model.Desk != barMode) { deskMode = model.Desk; weekMode = false; refreshWorkspace = true; }
+        deskRail.IsVisible = model.Desk;
         var showDesk = deskMode;
         if (!showDesk) deskExpanded = null;
         // A tile opened in place that is the timeline brings the day arrows and editing buttons with it, as the Timeline page has.

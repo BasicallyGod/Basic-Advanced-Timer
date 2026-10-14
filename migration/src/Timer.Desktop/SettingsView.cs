@@ -160,6 +160,8 @@ public sealed class SettingsView : Grid
     private Control DeskPane()
     {
         var pane = Pane("Desk");
+        pane.Children.Add(Toggle("Use the new Desk workspace", "DeskEnabled", () => model.Desk, v => model.SetDesk(v)));
+        pane.Children.Add(Ui.Text("Turn this off to use the classic dashboard instead. The Desk is enabled by default.", 13, "muted"));
         pane.Children.Add(Toggle("Calm motion: tiles move without bouncing", "CalmMotion", () => model.Calm, v => model.SetCalm(v)));
         return pane;
     }

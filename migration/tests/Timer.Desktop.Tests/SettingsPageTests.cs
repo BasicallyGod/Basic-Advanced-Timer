@@ -35,7 +35,7 @@ public sealed class SettingsPageTests
             var expected = new (string Category, string Control)[]
             {
                 ("general", "DecimalHours"), ("appearance", "EditThemes"), ("appearance", "WindowShadows"), ("pill", "PillSize"), ("pill", "PillLayout_compact"), ("pill", "PillOnTop"),
-                ("desk", "CalmMotion"), ("hours", "SaveShifts"), ("accounts", "SaveAccounts"), ("about", "AboutVersion"),
+                ("desk", "DeskEnabled"), ("desk", "CalmMotion"), ("hours", "SaveShifts"), ("accounts", "SaveAccounts"), ("about", "AboutVersion"),
             };
             foreach (var (category, name) in expected)
             {

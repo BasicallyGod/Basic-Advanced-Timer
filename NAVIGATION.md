@@ -1,6 +1,6 @@
 # Navigation: audit and proposal
 
-Status: agreed in outline. Overview folds into Timesheet, and the desk becomes the one home in alpha. Steps 1 and 2 of the order of work are done, and most of step 3: the desk is home and the legacy left column no longer shows. The older dashboard layout code is still in the tree (tests reach it by turning the desk off) and is the remaining thing to delete. It follows the consolidated feedback on the desk and the floating timer, and keeps the three layers apart: the pill for the moment, the desk as the main workspace, dedicated views for detailed work.
+Status: agreed in outline. Overview folds into Timesheet, and the desk becomes the default home in alpha. Settings > Desk now provides an optional switch back to the classic dashboard for comparison and testing; this choice is remembered. Steps 1 and 2 of the order of work are done, and most of step 3: the desk is home and the legacy left column no longer shows. The older dashboard layout code is still in the tree (tests reach it by turning the desk off) and is the remaining thing to delete. It follows the consolidated feedback on the desk and the floating timer, and keeps the three layers apart: the pill for the moment, the desk as the main workspace, dedicated views for detailed work.
 
 ## What there is today
 
