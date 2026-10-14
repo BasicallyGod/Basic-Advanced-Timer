@@ -41,9 +41,11 @@ public sealed class DeskView : UserControl
     private readonly Action<string>? openPage;
     private readonly DeskBoard board = new();
     private readonly Dictionary<string, (Border Tile, Border Body, TileForm? Form)> tiles = new();
-    private readonly ClockText clock = new(34, 18); private readonly TextBlock accountLine = Ui.Text("", 14), allocated = Ui.Text("", 20, "figures"), unallocated = Ui.Text("", 20, "figures");
+    private readonly ClockText clock = new(34, 18); private readonly TextBlock accountLine = Ui.Text("", 14), allocated = Big(26), unallocated = Big(26);
+    // The big figures: the display face at weight, so the numbers carry each tile the way they do in the reference.
+    private static TextBlock Big(double size) => new() { FontSize = size, FontWeight = FontWeight.Bold, Classes = { "clock" } };
     private readonly AnalogueClock analogue; private readonly DayStrip strip;
-    private readonly TextBlock digital = new() { Name = "ClockDigital", FontSize = 15, HorizontalAlignment = HorizontalAlignment.Center, Classes = { "figures" } };
+    private readonly TextBlock digital = new() { Name = "ClockDigital", FontSize = 18, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, Classes = { "figures" } };
     private PomodoroView? pomodoroView; private TrackerView? trackerView; private WeekChart? weekChart; private DeadlineView? deadlineView;
     private NotesView? notesView; private ComingUpView? comingView;
     private TodoView? todoView; private readonly Dictionary<string, TextBox> postIts = new();
@@ -229,8 +231,10 @@ public sealed class DeskView : UserControl
         // The buttons (open, open in place, put away) appear when the pointer is over the tile, so they do not crowd the header at rest.
         var badge = new ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light, Child = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(15), Background = new SolidColorBrush(hue), VerticalAlignment = VerticalAlignment.Center,
             Child = new IconGlyph(IconFor(kind.Id)) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } } };
-        var heading = new TextBlock { Text = kind.Title, FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = Ui.Text("", 12, "muted"); meta.VerticalAlignment = VerticalAlignment.Center; meta.Name = "TileMeta_" + kind.Id; metas[kind.Id] = meta;
+        var heading = new TextBlock { Text = kind.Title, FontSize = 16, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var meta = Ui.Text("", 13, "muted"); meta.VerticalAlignment = VerticalAlignment.Center; meta.Name = "TileMeta_" + kind.Id; metas[kind.Id] = meta;
+        // A figure that is the point of the tile (the week's total) is set bold in the text colour; the rest stay quiet.
+        if (kind.Id == "week") { meta.Classes.Remove("muted"); meta.FontSize = 18; meta.FontWeight = FontWeight.Bold; meta.Classes.Add("clock"); }
         var head = Ui.Grid("Auto,*,Auto,Auto"); head.ColumnSpacing = 10; head.Margin = new Thickness(14, 0, 8, 0); head.VerticalAlignment = VerticalAlignment.Center; head.Cursor = new Cursor(StandardCursorType.Hand); head.Background = Brushes.Transparent; head.Name = "TileHandle_" + kind.Id; // Centred in its band, whose height is fixed.
         Ui.Put(head, badge); Ui.Put(head, heading, 1);
         var buttons = Ui.Horizontal(); buttons.Spacing = 2; buttons.Opacity = 0; buttons.IsHitTestVisible = false;

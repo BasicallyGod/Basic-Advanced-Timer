@@ -214,7 +214,7 @@ public sealed class NotesView : Grid
     {
         rows.Children.Clear();
         var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
-        rows.Children.Add(Ui.Text(model.SelectedDate.ToString("dddd d MMMM", british), 12, "muted"));
+        var dayHeading = Ui.Text(model.SelectedDate.ToString("dddd d MMMM", british), 15); dayHeading.FontWeight = FontWeight.SemiBold; rows.Children.Add(dayHeading);
         var notes = model.NotesOn(model.SelectedDate);
         if (notes.Count == 0) rows.Children.Add(Ui.Text("No notes for this day.", 12, "muted"));
         foreach (var note in notes)
@@ -252,7 +252,7 @@ public sealed class ComingUpView : StackPanel
             var id = note.Id;
             var tick = new CheckBox { Name = "ComingTick_" + id, IsChecked = false, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
             tick.Click += (_, _) => model.ToggleDayNote(id);
-            var when = Ui.Text(When(note.Day, model.Engine.Now) + (note.At is { } at ? " " + at.ToString("hh\\:mm") : ""), 12, "muted");
+            var when = Ui.Text(When(note.Day, model.Engine.Now) + (note.At is { } at ? " " + at.ToString("hh\\:mm") : ""), 13); when.FontWeight = FontWeight.Bold; // Bold, so when it falls is read first.
             var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(new TextBlock { Text = DayNotes.DisplayText(note), FontSize = 14, TextWrapping = TextWrapping.Wrap }); words.Children.Add(when);
             var row = Ui.Grid("Auto,*"); Ui.Put(row, tick); Ui.Put(row, words, 1); Children.Add(row);
         }
@@ -290,7 +290,7 @@ public sealed class ProgressRing : Control
 public sealed class PomodoroView : Grid
 {
     private readonly TimerModel model; private readonly ProgressRing ring = new() { Name = "PomodoroRing" };
-    private readonly TextBlock time = new() { Name = "PomodoroTime", FontSize = 30, HorizontalAlignment = HorizontalAlignment.Center, Classes = { "clock" } };
+    private readonly TextBlock time = new() { Name = "PomodoroTime", FontSize = 46, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, Classes = { "clock" } };
     private readonly TextBlock phase = Ui.Text("", 12, "muted"); private readonly Button toggle;
     public PomodoroView(TimerModel model, bool compact)
     {
@@ -335,7 +335,7 @@ public sealed class TrackerView : Grid
     private readonly PauseGlyph pauseGlyph = new(); private readonly BreakGlyph cup = new();
     public TrackerView(TimerModel model, bool compact)
     {
-        this.model = model; clock = new ClockText(compact ? 34 : 44, compact ? 16 : 22); clock.Name = "TrackerClock";
+        this.model = model; clock = new ClockText(compact ? 40 : 62, compact ? 18 : 28); clock.Name = "TrackerClock";
         ColumnDefinitions = new ColumnDefinitions("*,Auto"); VerticalAlignment = VerticalAlignment.Center;
         chip.Child = chipText;
         var who = Ui.Horizontal(dot, account, chip); who.Spacing = 8;
@@ -417,16 +417,23 @@ public sealed class WeekChart : Control
 public sealed class DeadlineView : StackPanel
 {
     private readonly TimerModel model;
-    private readonly TextBlock what = new() { Name = "DeadlineWhat", FontSize = 14, FontWeight = FontWeight.SemiBold }, phrase = Ui.Text("", 12, "muted"), left = new() { Name = "DeadlineLeft", FontSize = 40, Classes = { "clock" } }, when = Ui.Text("", 13);
+    private readonly TextBlock what = new() { Name = "DeadlineWhat", FontSize = 17, FontWeight = FontWeight.SemiBold }, phrase = Ui.Text("", 13, "muted"), left = new() { Name = "DeadlineLeft", FontSize = 40, Classes = { "clock" } }, when = Ui.Text("", 13);
     public DeadlineView(TimerModel model, bool compact)
     {
         this.model = model; Spacing = 2; VerticalAlignment = VerticalAlignment.Center;
-        what.TextTrimming = TextTrimming.CharacterEllipsis; left.FontSize = compact ? 30 : 40;
+        what.TextTrimming = TextTrimming.CharacterEllipsis; left.FontSize = compact ? 36 : 60; left.FontWeight = FontWeight.Bold;
         Children.Add(what); Children.Add(phrase); Children.Add(left); if (!compact) Children.Add(when);
         Refresh();
     }
+    // The countdown and the date take a deep tone of the tile's rose, part-way to the text colour, so they are bold without turning into a warning colour.
+    private IBrush Tone()
+    {
+        var ink = Ui.ThemeColour(this, "Ink", Colors.Black); var rose = Color.Parse("#D4577F");
+        return new SolidColorBrush(Color.FromRgb((byte)(rose.R + (ink.R - rose.R) * .35), (byte)(rose.G + (ink.G - rose.G) * .35), (byte)(rose.B + (ink.B - rose.B) * .35)));
+    }
     public void Refresh()
     {
+        left.Foreground = Tone(); when.Foreground = left.Foreground;
         var note = DayNotes.NextDeadline(model.AllDayNotes);
         if (note is null) { what.Text = "No deadlines"; phrase.Text = ""; left.Text = "--:--"; when.Text = "Start a note with ! to add one."; return; }
         var due = DayNotes.DueAt(note); var remaining = due - model.Engine.Now; var late = remaining < TimeSpan.Zero; var span = late ? -remaining : remaining;
