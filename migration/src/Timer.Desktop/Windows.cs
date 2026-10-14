@@ -154,7 +154,7 @@ public sealed class PillWindow : Window
     private readonly IconGlyph pillDayFlag = new(IconKind.Flag);
     private readonly TextBlock pillDayText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private bool expanded;
-    public const double CollapsedHeight = 82, PillWidth = 516, CapsuleRadius = 41, CardRadius = 28;
+    public const double CollapsedHeight = 82, PillWidth = 516, CapsuleRadius = 24, CardRadius = 24;
     public static double CollapsedWindowHeight => CollapsedHeight + 2 * Ui.ShadowMargin;
     // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
     // A narrow screen (its width in device independent pixels over 1800, never above 85 per cent or below 70 per cent), and a screen with a low
@@ -232,6 +232,7 @@ public sealed class PillWindow : Window
     private readonly TextBlock credited = Ui.Text("", 13, "muted");
     private readonly Avalonia.Controls.Shapes.Ellipse dot = new() { Width = 16, Height = 16, StrokeThickness = 2, VerticalAlignment = VerticalAlignment.Center };
     private readonly Chevron chevron = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly Border badge = new() { Name = "PillBadge", Width = 38, Height = 38, CornerRadius = new CornerRadius(13), VerticalAlignment = VerticalAlignment.Center };
     private Border surfaceBorder = null!;
     private readonly Button pause;
     private readonly PauseGlyph pauseGlyph = new();
@@ -272,7 +273,7 @@ public sealed class PillWindow : Window
         // A name or line too long for the room slides to its end and back (AutoScrollText) instead of being cut off.
         account.FontWeight = Avalonia.Media.FontWeight.SemiBold;
         var nameRow = new NameRow();
-        nameRow.Children.Add(dot); nameRow.Children.Add(new AutoScrollText(account)); nameRow.Children.Add(chevron);
+        nameRow.Children.Add(new AutoScrollText(account)); nameRow.Children.Add(chevron);
         // How far through the working day it is, as a thin bar under the account.
         progressBar.Height = 5; progressBar.Margin = new Thickness(0, 7, 0, 0);
         progressBar.ColumnDefinitions = new ColumnDefinitions("0*,1*");
@@ -284,7 +285,11 @@ public sealed class PillWindow : Window
         var labels = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         labels.Children.Add(nameRow); labels.Children.Add(new AutoScrollText(credited)); labels.Children.Add(progressBar);
         var accountButton = Ui.Button("", ToggleExpansion, "PillAccounts");
-        accountButton.Content = labels;
+        // The account's colour sits in a rounded badge to the left of its name, the same badge the desk's tiles wear, so the pill reads as one of them.
+        badge.Child = dot;
+        var accountRow = Ui.Grid("Auto,*");
+        badge.Margin = new Thickness(0, 0, 12, 0); Ui.Put(accountRow, badge); Ui.Put(accountRow, labels, 1);
+        accountButton.Content = accountRow;
         accountButton.Classes.Add("pillAction");
         accountButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         accountButton.HorizontalContentAlignment = HorizontalAlignment.Stretch;
@@ -414,6 +419,7 @@ public sealed class PillWindow : Window
         // The dot is the account's own colour, with a ring in the pill's text colour so it shows on any capsule. A break is amber and an idle timer is grey.
         var shown = model.Accounts.FirstOrDefault(a => a.Name == (model.IsOnBreak ? null : model.ActiveAccount ?? selected?.Name));
         var dotColour = model.IsOnBreak ? ThemeColourOr("BudgetWarning", "#F2B84B") : !model.IsTracking ? ThemeColourOr("Muted", "#8A8F98") : shown?.Colour is { } own ? Avalonia.Media.Color.Parse(Ui.Visible(own)) : ThemeColourOr("Accent", "#F27A0D");
+        badge.Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromArgb(0x40, dotColour.R, dotColour.G, dotColour.B));
         dot.Fill = new Avalonia.Media.SolidColorBrush(dotColour); dot.Stroke = this.TryFindResource("Ink", ActualThemeVariant, out var ring) && ring is Avalonia.Media.IBrush ringBrush ? ringBrush : Avalonia.Media.Brushes.Gray;
         Ui.Pulse(dot, model.IsTracking);
         pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
