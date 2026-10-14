@@ -17,6 +17,19 @@ public sealed class WorkSchedule
     public HashSet<DayOfWeek> Days { get; set; } = new() { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday };
     public Dictionary<DayOfWeek, Shift> Shifts { get; set; } = new();
     public Dictionary<DateTime, DayOverride> Overrides { get; set; } = new();
+    /// <summary>The working time that falls between two moments, by the scheduled hours of each day in between (days off and overrides included).</summary>
+    public TimeSpan WorkingTimeBetween(DateTime from, DateTime to)
+    {
+        if (to <= from) return TimeSpan.Zero;
+        var total = TimeSpan.Zero;
+        for (var day = from.Date; day <= to.Date; day = day.AddDays(1))
+        {
+            var plan = Scheduled(day); if (!plan.Working) continue;
+            var start = plan.Start > from ? plan.Start : from; var end = plan.End < to ? plan.End : to;
+            if (end > start) total += end - start;
+        }
+        return total;
+    }
     public DayPlan Scheduled(DateTime day)
     {
         day = day.Date;

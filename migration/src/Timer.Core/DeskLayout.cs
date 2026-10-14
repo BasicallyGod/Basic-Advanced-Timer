@@ -80,4 +80,31 @@ public static class DeskLayout
         result.AddRange(known.Where(id => !result.Contains(id)));
         return result;
     }
+
+    // ---- Tile sizes. A tile can be made bigger or smaller by whole cells, within limits that suit what it shows. ----
+
+    /// <summary>Holds a size to a tile's limits and to the grid it is on, so a tile never asks for more columns than there are.</summary>
+    public static (int Columns, int Rows) ClampSize(int columns, int rows, int minColumns, int minRows, int maxColumns, int maxRows, int gridColumns)
+    {
+        var widest = Math.Max(1, Math.Min(maxColumns, gridColumns));
+        return (Math.Clamp(columns, Math.Min(minColumns, widest), widest), Math.Clamp(rows, minRows, Math.Max(minRows, maxRows)));
+    }
+
+    /// <summary>The whole-cell size nearest to a width and height in pixels, for a tile being dragged larger or smaller.</summary>
+    public static (int Columns, int Rows) SizeFromPixels(double width, double height, double cellWidth, double cellHeight, double gap)
+        => (Math.Max(1, (int)Math.Round((width + gap) / Math.Max(1, cellWidth))), Math.Max(1, (int)Math.Round((height + gap) / Math.Max(1, cellHeight + gap))));
+
+    /// <summary>Saved sizes are written as id:ColumnsxRows. Anything that does not read that way is dropped.</summary>
+    public static Dictionary<string, (int Columns, int Rows)> ParseSizes(IEnumerable<string>? saved)
+    {
+        var sizes = new Dictionary<string, (int, int)>();
+        foreach (var entry in saved ?? Array.Empty<string>())
+        {
+            var parts = entry.Split(':');
+            if (parts.Length == 2 && parts[1].Split('x') is [var c, var r] && int.TryParse(c, out var columns) && int.TryParse(r, out var rows) && columns is >= 1 and <= 12 && rows is >= 1 and <= 24 && parts[0].Length > 0)
+                sizes[parts[0]] = (columns, rows);
+        }
+        return sizes;
+    }
+    public static List<string> FormatSizes(IReadOnlyDictionary<string, (int Columns, int Rows)> sizes) => sizes.OrderBy(s => s.Key, StringComparer.Ordinal).Select(s => $"{s.Key}:{s.Value.Columns}x{s.Value.Rows}").ToList();
 }

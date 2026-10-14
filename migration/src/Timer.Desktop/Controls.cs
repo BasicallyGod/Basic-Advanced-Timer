@@ -855,7 +855,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Desk }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Desk, Clock, Check, Bars, Note }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -994,6 +994,24 @@ public sealed class IconGlyph : Control
                 // Three tiles of different sizes, as laid out on the desk.
                 context.DrawRectangle(null, pen, new Rect(2.5, 3, 7, 7), 2, 2); context.DrawRectangle(null, pen, new Rect(11.5, 3, 4, 4), 1.5, 1.5);
                 context.DrawRectangle(null, pen, new Rect(11.5, 9, 4, 6), 1.5, 1.5); context.DrawRectangle(null, pen, new Rect(2.5, 12, 7, 3), 1.5, 1.5);
+                break;
+            case IconKind.Clock:
+                // A round face with its two hands.
+                context.DrawEllipse(null, pen, new Point(9, 9), 6.5, 6.5); context.DrawLine(pen, new Point(9, 5.2), new Point(9, 9)); context.DrawLine(pen, new Point(9, 9), new Point(11.8, 10.6));
+                break;
+            case IconKind.Check:
+                // A tick in a round outline: something done.
+                context.DrawEllipse(null, pen, new Point(9, 9), 6.5, 6.5); context.DrawGeometry(null, pen, Geometry.Parse("M 6,9.2 L 8.2,11.4 L 12,6.8"));
+                break;
+            case IconKind.Bars:
+                // Three bars of different heights standing on a line: a small chart.
+                context.DrawLine(pen, new Point(3.5, 15), new Point(14.5, 15));
+                context.DrawLine(pen, new Point(5.5, 15), new Point(5.5, 10)); context.DrawLine(pen, new Point(9, 15), new Point(9, 4)); context.DrawLine(pen, new Point(12.5, 15), new Point(12.5, 7.5));
+                break;
+            case IconKind.Note:
+                // A page with a few lines of writing.
+                context.DrawRectangle(null, pen, new Rect(3.5, 3, 11, 12), 2.5, 2.5);
+                context.DrawLine(pen, new Point(6.5, 7), new Point(11.5, 7)); context.DrawLine(pen, new Point(6.5, 10), new Point(11.5, 10)); context.DrawLine(pen, new Point(6.5, 13), new Point(9, 13));
                 break;
             case IconKind.Table:
                 // A grid of cells: hours by account.

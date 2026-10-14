@@ -796,6 +796,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         var note = change(dayNotes[index]); if (note == dayNotes[index] || note.Text.Length == 0) return;
         dayNotes[index] = note; store?.UpdateDayNote(note); if (notify) Notify();
     }
+    /// <summary>The pomodoro timer. It lives only while the app runs, and does not touch time tracking.</summary>
+    public Pomodoro Pomodoro { get; } = new();
     /// <summary>The desk's trinkets: the to-do list and the post-its. They are not part of the day's records, so they live with the settings.</summary>
     public TrinketData Trinkets => preferences.Trinkets ?? TrinketData.Empty;
     private void SetTrinkets(TrinketData data) { preferences = preferences with { Trinkets = data }; Save(); Notify(); }
@@ -824,6 +826,12 @@ public sealed class TimerModel : INotifyPropertyChanged
         var notes = Trinkets.PostIts.ToList(); notes[index] = notes[index] with { Text = text };
         preferences = preferences with { Trinkets = Trinkets with { PostIts = notes } }; Save();
     }
+    /// <summary>Puts a post-it's strip of tape on or takes it off, for a plainer sheet.</summary>
+    public void TogglePostItTape(int index)
+    {
+        if (index < 0 || index >= Trinkets.PostIts.Count) return;
+        var notes = Trinkets.PostIts.ToList(); notes[index] = notes[index] with { Tape = !notes[index].Tape }; SetTrinkets(Trinkets with { PostIts = notes });
+    }
     public void CyclePostItColour(int index)
     {
         if (index < 0 || index >= Trinkets.PostIts.Count) return;
@@ -831,6 +839,9 @@ public sealed class TimerModel : INotifyPropertyChanged
         notes[index] = notes[index] with { Colour = colours[(colours.ToList().IndexOf(notes[index].Colour) + 1) % colours.Count] };
         SetTrinkets(Trinkets with { PostIts = notes });
     }
+    /// <summary>Sizes tiles were left at, in whole cells. A tile with no entry has its own default size.</summary>
+    public IReadOnlyDictionary<string, (int Columns, int Rows)> DeskSizes => DeskLayout.ParseSizes(preferences.DeskSizes);
+    public void SetDeskSizes(IReadOnlyDictionary<string, (int Columns, int Rows)> sizes) { preferences = preferences with { DeskSizes = DeskLayout.FormatSizes(sizes) }; Save(); }
     /// <summary>The tiles put away in the drawer. Their data is untouched; they are only not on the desk.</summary>
     public IReadOnlyList<string> DeskHidden => preferences.DeskHidden ?? Array.Empty<string>();
     public void SetDeskHidden(IReadOnlyList<string> hidden) { preferences = preferences with { DeskHidden = hidden.ToList() }; Save(); }

@@ -31,7 +31,7 @@ public sealed class TrinketTests
     {
         var data = new TrinketData(new[] { new TodoItem("a", true, "Internal"), new TodoItem("b") }, new[] { new PostIt("hello", "rose") });
         var back = Trinkets.FromJson(Trinkets.ToJson(data));
-        Assert.Equal(data.Todos, back.Todos); Assert.Equal(data.PostIts, back.PostIts);
+        Assert.Equal(data.Todos, back.Todos); Assert.Equal(data.PostIts[0], back.PostIts[0]); Assert.Equal(Trinkets.PostItCount, back.PostIts.Count); // Older saves are filled out to three post-its.
     }
 
     [Theory]
@@ -39,7 +39,7 @@ public sealed class TrinketTests
     [InlineData("")]
     [InlineData("{not json")]
     [InlineData("null")]
-    public void MissingOrDamagedTrinketsGiveAnEmptyDesk(string? json) { var data = Trinkets.FromJson(json); Assert.Empty(data.Todos); Assert.Single(data.PostIts); }
+    public void MissingOrDamagedTrinketsGiveAnEmptyDesk(string? json) { var data = Trinkets.FromJson(json); Assert.Empty(data.Todos); Assert.Equal(Trinkets.PostItCount, data.PostIts.Count); }
 
     [Fact]
     public void AnUnknownPostItColourBecomesLemon() => Assert.Equal("lemon", Trinkets.FromJson("{\"Todos\":[],\"PostIts\":[{\"Text\":\"x\",\"Colour\":\"puce\"}]}").PostIts[0].Colour);
@@ -51,5 +51,13 @@ public sealed class TrinketTests
         var after = Trinkets.Relink(data, new Dictionary<string, string> { ["Old"] = "New" }, new[] { "Gone" });
         Assert.Equal(new string?[] { "New", null, "Same" }, after.Todos.Select(t => t.Account));
         Assert.Equal("b", after.Todos[1].Text);
+    }
+
+    [Fact]
+    public void TapeIsOnUnlessSaidOtherwiseAndOlderSavesKeepIt()
+    {
+        Assert.True(Trinkets.FromJson("{\"Todos\":[],\"PostIts\":[{\"Text\":\"x\",\"Colour\":\"rose\"}]}").PostIts[0].Tape); // Saved before tape could be taken off.
+        var back = Trinkets.FromJson(Trinkets.ToJson(new TrinketData(Array.Empty<TodoItem>(), new[] { new PostIt("a", "sky", false), new PostIt("b", "mint", true) })));
+        Assert.False(back.PostIts[0].Tape); Assert.Equal("sky", back.PostIts[0].Colour); Assert.Equal("mint", back.PostIts[1].Colour);
     }
 }
