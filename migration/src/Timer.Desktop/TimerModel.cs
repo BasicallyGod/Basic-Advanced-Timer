@@ -62,6 +62,11 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Asks for the accounts and budgets dialog. The dashboard shows it, and comes up first if only the pill is showing.</summary>
     public void OpenAccounts() => AccountsRequested?.Invoke();
     public void OpenTidy() => TidyRequested?.Invoke();
+    public event Action? NoteRequested, DashboardRequested;
+    /// <summary>Asks for the add note dialog. The dashboard shows it, and comes up first if only the pill is showing.</summary>
+    public void RequestNote() => NoteRequested?.Invoke();
+    /// <summary>Asks for the dashboard (or the desk, when it is on) to come up, as the pill's own button does.</summary>
+    public void RequestDashboard() => DashboardRequested?.Invoke();
     public string? ExportPath { get; private set; }
     private readonly HashSet<SessionRow> selectedRows = new(ReferenceEqualityComparer.Instance);
     public IReadOnlyCollection<SessionRow> SelectedRows => selectedRows;
@@ -845,6 +850,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>The tiles put away in the drawer. Their data is untouched; they are only not on the desk.</summary>
     public IReadOnlyList<string> DeskHidden => preferences.DeskHidden ?? Array.Empty<string>();
     public void SetDeskHidden(IReadOnlyList<string> hidden) { preferences = preferences with { DeskHidden = hidden.ToList() }; Save(); }
+    /// <summary>The pill's layout: full, compact or minimal (see <see cref="PillLayouts"/>).</summary>
+    public string PillStyle => preferences.PillStyle is "compact" or "minimal" ? preferences.PillStyle : "full";
+    public void SetPillStyle(string style) { preferences = preferences with { PillStyle = style is "compact" or "minimal" ? style : "full" }; Save(); Notify(); }
     public int? PillScalePercent => preferences.PillScale;
     public static readonly int[] PillScaleChoices = { 50, 60, 70, 80, 90, 100, 110, 120 };
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }

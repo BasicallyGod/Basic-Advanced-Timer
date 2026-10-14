@@ -244,7 +244,7 @@ public static class Ui
     /// The right-click menu is kept short on purpose: the hours format, which build this is, the overtime tester (demo only) and Close timer.
     /// Everything else lives on the settings page.
     /// </summary>
-    public static ContextMenu SettingsMenu(TimerModel model)
+    public static ContextMenu SettingsMenu(TimerModel model, bool pill = false)
     {
         // Inside the demo you can switch overtime on and off to see how it looks. Like the version, it shows only once developer features are unlocked.
         var overtimeTest = new MenuItem { Header = "Test overtime", ToggleType = MenuItemToggleType.CheckBox, IsVisible = false, Name = "TestOvertime" };
@@ -257,18 +257,38 @@ public static class Ui
         // Tucks the timer away without stopping it. Closing it for good is the cross at the foot of the dashboard's rail.
         var collapse = new MenuItem { Header = "Collapse to tray", Name = "CollapseToTray" };
         collapse.Click += (_, _) => model.RequestHide();
+        // Quick actions: the things done most often, without opening the dashboard.
+        var openItem = new MenuItem { Name = "OpenDeskMenu" }; openItem.Click += (_, _) => model.RequestDashboard();
+        var switchItem = new MenuItem { Name = "QuickSwitchMenu", Header = "Quick switch account" };
+        var breakItem = new MenuItem { Name = "BreakMenu" }; breakItem.Click += (_, _) => model.ToggleBreak();
+        var noteItem = new MenuItem { Name = "AddNoteMenu", Header = "Add note…" }; noteItem.Click += (_, _) => model.RequestNote();
+        var pinItem = new MenuItem { Name = "PinMenu", Header = "Pin to screen", ToggleType = MenuItemToggleType.CheckBox };
+        pinItem.Click += (_, _) => model.SetPillOnTop(!model.PillOnTop);
+        var quickRule = new Separator();
         var versionRule = new Separator { IsVisible = false };
         var collapseRule = new Separator { IsVisible = false };
         var menu = new ContextMenu { ItemsSource = new Control[] { continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
+        // Quick actions live on the pill's menu, where there is no other way to do them. The dashboard has its own buttons for all of these.
+        if (pill) menu.ItemsSource = new Control[] { openItem, switchItem, breakItem, noteItem, quickRule, pinItem, continueItem, overtimeTest, versionRule, version, collapseRule, collapse };
         void Sync()
         {
+            openItem.Header = model.Desk ? "Open Desk" : "Open dashboard";
+            breakItem.Header = model.IsOnBreak ? "End break" : "Start break";
+            pinItem.IsChecked = model.PillOnTop;
+            // One entry per account, the running one ticked. Choosing another stops this one and starts that one.
+            switchItem.ItemsSource = model.Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a =>
+            {
+                var item = new MenuItem { Header = a.Name, ToggleType = MenuItemToggleType.CheckBox, IsChecked = model.ActiveAccount == a.Name };
+                item.Click += (_, _) => { if (model.ActiveAccount != a.Name) model.ToggleAccount(a.Name); };
+                return (Control)item;
+            }).ToList();
             var developer = model.DeveloperUnlocked;
             overtimeTest.IsChecked = model.OvertimeTest;
             overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer;
             var offer = model.ContinuePreviousText; continueItem.IsVisible = offer is not null; if (offer is not null) continueItem.Header = offer;
             // A divider only goes between two things that are showing, so it never sits at the top of the menu or above the only item.
             versionRule.IsVisible = (continueItem.IsVisible || overtimeTest.IsVisible) && version.IsVisible;
-            collapseRule.IsVisible = continueItem.IsVisible || overtimeTest.IsVisible || version.IsVisible;
+            collapseRule.IsVisible = pill || continueItem.IsVisible || overtimeTest.IsVisible || version.IsVisible;
         }
         menu.Opened += (_, _) => Sync(); Sync();
         return menu;

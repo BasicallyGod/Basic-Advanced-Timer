@@ -43,6 +43,8 @@ public sealed class WindowCoordinator
             Dashboard.Activate();
         };
         Dashboard.Reveal = ShowDashboard;
+        // The menu's Open Desk and Open dashboard: from the pill it does what its own button does, from the dashboard it just comes to the front.
+        model.DashboardRequested += () => { if (Pill.IsVisible) Pill.OpenDashboard?.Invoke(); else { Dashboard.Activate(); } };
         Dashboard.OpenPill = () => { Pill.Collapse(); Pill.Show(); Dashboard.Hide(); Pill.Activate(); };
         Pill.Closed += (_, _) => exit();
         Dashboard.Closed += (_, _) => exit();
@@ -200,7 +202,9 @@ public sealed class PillWindow : Window
         if (lastScreen is { } known && known.Bounds == screen.Bounds && known.Scaling == screen.Scaling) return;
         FitToScreen(screen);
     }
-    private double DesiredWidth => (PillWidth + 2 * Ui.ShadowMargin) * pillScale.ScaleX;
+    // Each layout has its own width, and the list needs at least a little room whichever layout is showing.
+    private double CurrentWidth => expanded ? Math.Max(PillLayouts.For(model.PillStyle).Width, 420) : PillLayouts.For(model.PillStyle).Width;
+    private double DesiredWidth => (CurrentWidth + 2 * Ui.ShadowMargin) * pillScale.ScaleX;
     private double DesiredHeight()
     {
         var wanted = WantedHeight(); var limit = wanted;
@@ -233,6 +237,9 @@ public sealed class PillWindow : Window
     private readonly Avalonia.Controls.Shapes.Ellipse dot = new() { Width = 16, Height = 16, StrokeThickness = 2, VerticalAlignment = VerticalAlignment.Center };
     private readonly Chevron chevron = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly Border badge = new() { Name = "PillBadge", Width = 38, Height = 38, CornerRadius = new CornerRadius(13), VerticalAlignment = VerticalAlignment.Center };
+    private Grid head = null!; private Button timerButton = null!, accountButton = null!; private Border divider = null!; private StackPanel labels = null!;
+    private readonly TextBlock initials = new() { FontSize = 15, FontWeight = Avalonia.Media.FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+    private string appliedLayout = "";
     private Border surfaceBorder = null!;
     private readonly Button pause;
     private readonly PauseGlyph pauseGlyph = new();
@@ -247,7 +254,7 @@ public sealed class PillWindow : Window
     {
         this.model = model;
         Title = "Basic’s Advanced Timer"; WindowChrome.Attach(this);
-        ContextMenu = Ui.SettingsMenu(model);
+        ContextMenu = Ui.SettingsMenu(model, pill: true);
         Width = PillWidth + 2 * Ui.ShadowMargin;
         Height = CollapsedHeight + 2 * Ui.ShadowMargin;
         CanResize = false;
@@ -256,9 +263,9 @@ public sealed class PillWindow : Window
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
         var root = Ui.Grid("*", "82,*");
-        var head = Ui.Grid("Auto,1,*,Auto,Auto", "*");
+        head = Ui.Grid("Auto,1,*,Auto,Auto", "*");
         head.Margin = new Thickness(24, 0, 20, 0);
-        var timerButton = Ui.Button("", () => OpenDashboard?.Invoke(), "PillDashboard");
+        timerButton = Ui.Button("", () => OpenDashboard?.Invoke(), "PillDashboard");
         // A small unallocated figure sits under the clock, only while the day is running and there is some.
         var timerColumn = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center };
         pillUnallocated.HorizontalAlignment = HorizontalAlignment.Left; pillUnallocated.IsVisible = false;
@@ -267,7 +274,7 @@ public sealed class PillWindow : Window
         timerButton.Classes.Add("pillAction");
         ToolTip.SetTip(timerButton, "Open dashboard");
         Ui.Put(head, timerButton).Margin = new Thickness(0, 0, 16, 0);
-        var divider = new Border { Width = 1, Height = 42 }; divider.Classes.Add("rule");
+        divider = new Border { Width = 1, Height = 42 }; divider.Classes.Add("rule");
         Ui.Put(head, divider, 1);
         // The account, with its colour dot and a chevron that opens the list, the line under it that says what is happening, and how far through the day it is.
         // A name or line too long for the room slides to its end and back (AutoScrollText) instead of being cut off.
@@ -282,9 +289,9 @@ public sealed class PillWindow : Window
         progressFill = fill; Grid.SetColumn(fill, 0); Grid.SetColumn(rest, 1);
         progressBar.Children.Add(rest); progressBar.Children.Add(fill);
         progressBar.Name = "DayProgress"; progressBar.IsHitTestVisible = false;
-        var labels = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
+        labels = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         labels.Children.Add(nameRow); labels.Children.Add(new AutoScrollText(credited)); labels.Children.Add(progressBar);
-        var accountButton = Ui.Button("", ToggleExpansion, "PillAccounts");
+        accountButton = Ui.Button("", ToggleExpansion, "PillAccounts");
         // The account's colour sits in a rounded badge to the left of its name, the same badge the desk's tiles wear, so the pill reads as one of them.
         badge.Child = dot;
         var accountRow = Ui.Grid("Auto,*");
@@ -353,13 +360,41 @@ public sealed class PillWindow : Window
         Closed += (_, _) => model.PropertyChanged -= Changed;
         Refresh();
     }
+    // Lays the head out for the chosen layout. The same controls are used in each, only arranged differently, so nothing else needs to know which is showing.
+    private void ApplyLayout()
+    {
+        var layout = model.PillStyle; if (layout == appliedLayout) return; appliedLayout = layout;
+        head.Children.Clear();
+        timerButton.Margin = new Thickness(0); accountButton.Margin = new Thickness(0); badge.Margin = new Thickness(0, 0, 12, 0);
+        switch (layout)
+        {
+            case "compact":
+                head.ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto");
+                accountButton.Margin = new Thickness(0, 0, 12, 0); timerButton.Margin = new Thickness(0, 0, 14, 0);
+                Ui.Put(head, accountButton, 0); Ui.Put(head, timerButton, 1); Ui.Put(head, breakButton, 2); Ui.Put(head, pause, 3);
+                break;
+            case "minimal":
+                head.ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto");
+                accountButton.Margin = new Thickness(0, 0, 14, 0); timerButton.Margin = new Thickness(0, 0, 14, 0); badge.Margin = new Thickness(0);
+                Ui.Put(head, accountButton, 0); Ui.Put(head, timerButton, 1); Ui.Put(head, pause, 2);
+                break;
+            default:
+                head.ColumnDefinitions = new ColumnDefinitions("Auto,1,*,Auto,Auto");
+                timerButton.Margin = new Thickness(0, 0, 16, 0); accountButton.Margin = new Thickness(16, 0, 16, 0);
+                Ui.Put(head, timerButton, 0); Ui.Put(head, divider, 1); Ui.Put(head, accountButton, 2); Ui.Put(head, breakButton, 3); Ui.Put(head, pause, 4);
+                break;
+        }
+        labels.IsVisible = layout != "minimal";
+        accountButton.HorizontalAlignment = layout == "minimal" ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
+        if (IsVisible) EnsureSize();
+    }
     private Avalonia.Media.Color ThemeColourOr(string key, string fallback) => Ui.ThemeColour(this, key, Avalonia.Media.Color.Parse(fallback));
     // The expanded pill grows by a line when a note such as a failed save is showing under the buttons.
     private double WantedHeight()
     {
         if (!expanded) return CollapsedHeight + 2 * Ui.ShadowMargin;
         // Measured, so there is no dead space whatever the number of accounts or notes showing.
-        expansion.Measure(new Size(PillWidth, double.PositiveInfinity));
+        expansion.Measure(new Size(CurrentWidth, double.PositiveInfinity));
         return CollapsedHeight + expansion.DesiredSize.Height + 2 * Ui.ShadowMargin;
     }
     private (int, bool, bool) expandedKey;
@@ -390,6 +425,7 @@ public sealed class PillWindow : Window
     private void Refresh()
     {
         // A break or overtime tints the pill alone, so the dashboard stays calm.
+        ApplyLayout();
         var wanted = model.PillVariant;
         if (!ReferenceEquals(RequestedThemeVariant, wanted)) RequestedThemeVariant = wanted;
         // Only worth a line when something is unusual, so the bottom edge stays just the two buttons.
@@ -409,17 +445,27 @@ public sealed class PillWindow : Window
         pillUnallocated.IsVisible = model.DayStarted && open >= TimeSpan.FromMinutes(1);
         pillUnallocated.Text = pillUnallocated.IsVisible ? model.Format(open) + " unallocated" : "";
         var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);
-        account.Text = model.IsOnBreak ? model.AccountLabel : model.ActiveAccount ?? (selected?.Name ?? model.AccountLabel);
+        // With nothing running, the pill says what it is waiting for: an account to be chosen, or the chosen one to be started.
+        var waiting = !model.IsTracking && !model.IsOnBreak;
+        account.Text = model.IsOnBreak ? model.AccountLabel : model.ActiveAccount ?? (selected?.Name ?? (waiting && !model.Engine.Finished ? "Ready to track" : model.AccountLabel));
         // What is happening, in one line. A break says where it will go back to, overtime adds how much there is, and an idle timer says what it is waiting for.
         var overtimeText = model.IsOvertime ? " · OT " + model.Format(model.Engine.Totals(model.Engine.Now).Overtime) : "";
         // On a break the first line already says so, so the second says something new: where it goes back to, or when the break began.
         var breakSince = model.Engine.Active is { } running && BreakAccount.Is(running.Account) ? running.Start : (DateTime?)null;
         credited.Text = model.IsOnBreak ? (model.ResumeAccount is { } returnTo ? "Returns to " + returnTo : breakSince is { } since ? "Since " + since.ToString("HH:mm") : "Nothing running") + overtimeText
-            : model.IsTracking && selected is not null ? "Today " + model.Format(model.Today(selected)) + overtimeText : model.Status + overtimeText;
+            : model.IsTracking && selected is not null ? "Today " + model.Format(model.Today(selected)) + overtimeText
+            : waiting && !model.Engine.Finished ? (selected is not null ? "Ready to track" : "Select an account") + overtimeText : model.Status + overtimeText;
         // The dot is the account's own colour, with a ring in the pill's text colour so it shows on any capsule. A break is amber and an idle timer is grey.
         var shown = model.Accounts.FirstOrDefault(a => a.Name == (model.IsOnBreak ? null : model.ActiveAccount ?? selected?.Name));
         var dotColour = model.IsOnBreak ? ThemeColourOr("BudgetWarning", "#F2B84B") : !model.IsTracking ? ThemeColourOr("Muted", "#8A8F98") : shown?.Colour is { } own ? Avalonia.Media.Color.Parse(Ui.Visible(own)) : ThemeColourOr("Accent", "#F27A0D");
-        badge.Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromArgb(0x40, dotColour.R, dotColour.G, dotColour.B));
+        // The minimal layout has no name on show, so the badge carries the account's initials in the account's colour.
+        var minimal = model.PillStyle == "minimal" && !model.IsOnBreak; var named = shown?.Name; // A break keeps the amber dot.
+        badge.Child = minimal && named is not null ? initials : dot;
+        initials.Text = named is null ? "" : PillLayouts.Initials(named);
+        initials.Foreground = Avalonia.Media.Brushes.Black;
+        if (minimal && named is not null) { initials.Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse(Ui.InkOn($"#{dotColour.R:X2}{dotColour.G:X2}{dotColour.B:X2}"))); }
+        ToolTip.SetTip(accountButton, model.PillStyle == "minimal" ? (model.IsOnBreak ? "On break" : named ?? "Accounts") + " · " + model.Status : "Accounts");
+        badge.Background = minimal && named is not null ? new Avalonia.Media.SolidColorBrush(dotColour) : new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromArgb(0x40, dotColour.R, dotColour.G, dotColour.B));
         dot.Fill = new Avalonia.Media.SolidColorBrush(dotColour); dot.Stroke = this.TryFindResource("Ink", ActualThemeVariant, out var ring) && ring is Avalonia.Media.IBrush ringBrush ? ringBrush : Avalonia.Media.Brushes.Gray;
         Ui.Pulse(dot, model.IsTracking);
         pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
@@ -433,7 +479,7 @@ public sealed class PillWindow : Window
         day.Classes.Set("finishDay", model.DayStarted); day.Classes.Set("startDay", !model.DayStarted);
         var progress = model.DayProgress;
         // The line is always there, so the pill never changes height or leaves a gap: on a day off it is simply an empty track.
-        progressBar.IsVisible = true;
+        progressBar.IsVisible = model.PillStyle == "full";
         var done = progress ?? 0.0;
         progressBar.ColumnDefinitions[0].Width = new GridLength(done, GridUnitType.Star);
         progressBar.ColumnDefinitions[1].Width = new GridLength(1.0 - done, GridUnitType.Star);
@@ -852,8 +898,8 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += Changed;
         model.PropertyChanged += (_, _) => UpdateOnboarding();
         model.EntryRequested += ShowEntry;
-        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy; model.AccountsRequested += ShowAccounts;
-        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; model.AccountsRequested -= ShowAccounts; };
+        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy; model.AccountsRequested += ShowAccounts; model.NoteRequested += ShowNote;
+        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; model.AccountsRequested -= ShowAccounts; model.NoteRequested -= ShowNote; };
         Refresh(true);
         UpdateOnboarding();
     }
@@ -906,6 +952,11 @@ public sealed class DashboardWindow : Window
     {
         if (!IsVisible) Reveal?.Invoke();
         if (IsVisible && !Dialogs.Dialogs.OfType<AccountsDialog>().Any()) Dialogs.Show(new AccountsDialog(model));
+    }
+    private void ShowNote()
+    {
+        if (!IsVisible) Reveal?.Invoke();
+        if (IsVisible && !Dialogs.Dialogs.OfType<NoteDialog>().Any()) Dialogs.Show(new NoteDialog(model));
     }
     private void ShowTidy() { if (IsVisible) Dialogs.Show(new TidyDialog(model)); }
     private void ShowGroup(string id) { if (IsVisible) Dialogs.Show(new GroupDialog(model, id)); }

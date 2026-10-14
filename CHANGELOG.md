@@ -9,6 +9,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 ## 14 October 2026
 
 | Change | Commit | Details |
+| Pill layouts, clearer idle, quick actions | pending | Settings has three pill layouts shown as small pictures: Full (as before), Compact (account first, no progress line) and Minimal (initials badge, clock and pause). An idle pill says Ready to track and Select an account. The pill's right-click menu now opens with Open dashboard, Quick switch account, Start break, Add note and Pin to screen. |
 | Pill becomes a card | pending | The pill takes the desk's card shape, a 24 pixel corner instead of a full capsule, with the account's colour in a rounded badge beside its name. It keeps its size, colours and behaviour, and opening it no longer changes the corner. |
 | --- | --- | --- |
 | Desk: hues for the light and dark themes | pending | Each desk tile now wears a hue made for the theme in use. A light theme keeps the pale washes; a dark theme gets deeper tones of the same hues, so tiles are rich rather than grey and muddy. They change in place when the theme changes, and text contrast on every tile is tested for both. The icon badges keep their pastel and post-it paper keeps its own colour. |
