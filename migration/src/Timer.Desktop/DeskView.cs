@@ -57,7 +57,7 @@ public sealed class DeskView : UserControl
     private string? resizing; private (int Columns, int Rows) resizingSize; private Point resizeStart; private Size resizeFrom;
     private string? expanded;
     private readonly ScrollViewer scroller; private readonly DayStrip timelineStrip; private readonly Border timelineHost = new();
-    private readonly Dictionary<string, Control> grips = new();
+    private readonly Dictionary<string, Control> grips = new(); private readonly Dictionary<string, TextBlock> metas = new();
     /// <summary>Raised when a tile is opened in place or put back, with the tile's id or null, so the window can show the controls that tile needs.</summary>
     public event Action<string?>? ExpandedChanged;
 
@@ -87,6 +87,8 @@ public sealed class DeskView : UserControl
         scroller = new ScrollViewer { Content = board, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, AllowAutoHide = false };
         // An opened tile fills the room the board has, so the board needs to know it.
         scroller.PropertyChanged += (_, e) => { if (e.Property == BoundsProperty && expanded is not null) board.InvalidateMeasure(); };
+        // A faint field of dots sits behind the tiles, so the desk reads as a surface rather than a blank page.
+        Ui.Put(frame, new DotField());
         Ui.Put(frame, scroller);
         Ui.Put(frame, drawer);
         Content = frame;
@@ -179,6 +181,23 @@ public sealed class DeskView : UserControl
         if (offset is { } kept) { var next = fresh is ScrollViewer d ? d : fresh.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault(); if (next is not null) next.Tag = kept; }
         timelineHost.Child = fresh;
     }
+    private static IconKind IconFor(string id) => id switch
+    {
+        "working" or "clock" or "pomodoro" => IconKind.Clock, "day" => IconKind.Table, "strip" or "timeline" => IconKind.Timeline, "accounts" => IconKind.Entries,
+        "todo" => IconKind.Check, "notes" => IconKind.Note, "coming" => IconKind.Today, "week" => IconKind.Bars, "deadline" => IconKind.Flag, _ => IconKind.Edit
+    };
+    /// <summary>The quiet figure at the right of each tile's header.</summary>
+    private void RefreshMeta()
+    {
+        void Set(string id, string text) { if (metas.TryGetValue(id, out var m)) m.Text = text; }
+        var blocks = strip.Blocks().Count; var todos = model.Trinkets.Todos;
+        Set("strip", $"{blocks} block{(blocks == 1 ? "" : "s")}"); Set("timeline", $"{blocks} block{(blocks == 1 ? "" : "s")}");
+        Set("todo", todos.Count == 0 ? "" : $"{todos.Count(t => t.Done)} of {todos.Count} done");
+        var coming = model.ComingUp().Count; Set("coming", coming == 0 ? "" : $"{coming} to come");
+        var notes = model.NotesOn(model.SelectedDate).Count; Set("notes", notes == 0 ? "" : $"{notes} note{(notes == 1 ? "" : "s")}");
+        Set("accounts", $"{model.Accounts.Count(a => !BreakAccount.Is(a.Name))} accounts");
+        Set("pomodoro", model.Pomodoro.Completed == 0 ? "" : $"{model.Pomodoro.Completed} done");
+    }
     private static bool IsPostIt(string id) => id.StartsWith("postit", StringComparison.Ordinal);
     private static int PostItIndex(string id) => id == "postit" ? 0 : int.Parse(id[6..]) - 1;
     private void PaintPostIt()
@@ -191,20 +210,26 @@ public sealed class DeskView : UserControl
         clock.Text = model.ClockText;
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
         clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
-        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual(); strip.InvalidateVisual(); pomodoroView?.Refresh();
+        accountLine.Text = model.AccountLabel; analogue.InvalidateVisual(); strip.InvalidateVisual(); pomodoroView?.Refresh(); RefreshMeta();
         allocated.Text = model.Format(model.Allocated); unallocated.Text = model.Format(model.Unallocated);
     }
 
     private (Border Tile, Border Body, TileForm? Form) BuildTile(DeskTileKind kind)
     {
-        var tile = new Border { Name = "Tile_" + kind.Id, CornerRadius = new CornerRadius(18), ClipToBounds = true, Tag = kind };
+        var tile = new Border { Name = "Tile_" + kind.Id, CornerRadius = new CornerRadius(22), ClipToBounds = true, Tag = kind };
         var hue = Color.Parse(kind.Hue);
-        // A wash of the hue over the panel, so it reads on light and dark themes alike.
+        // A wash of the hue over the panel, so it reads on light and dark themes alike, with a soft shadow to lift the tile off the desk.
         tile.Background = new SolidColorBrush(Color.FromArgb(0x38, hue.R, hue.G, hue.B));
-        var heading = Ui.Text(kind.Title, 12, "muted"); heading.VerticalAlignment = VerticalAlignment.Center;
-        var head = Ui.Grid("*,Auto"); head.Margin = new Thickness(16, 10, 8, 0); head.Height = 30; head.Cursor = new Cursor(StandardCursorType.Hand); head.Background = Brushes.Transparent; head.Name = "TileHandle_" + kind.Id;
-        Ui.Put(head, heading);
-        var buttons = Ui.Horizontal(); buttons.Spacing = 2;
+        tile.BoxShadow = BoxShadows.Parse("0 4 14 0 #18000000");
+        // The header: a round badge in the tile's hue with its icon, the title, a quiet figure, and the grip to pick the tile up by.
+        // The buttons (open, open in place, put away) appear when the pointer is over the tile, so they do not crowd the header at rest.
+        var badge = new ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light, Child = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(15), Background = new SolidColorBrush(hue), VerticalAlignment = VerticalAlignment.Center,
+            Child = new IconGlyph(IconFor(kind.Id)) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } } };
+        var heading = new TextBlock { Text = kind.Title, FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var meta = Ui.Text("", 12, "muted"); meta.VerticalAlignment = VerticalAlignment.Center; meta.Name = "TileMeta_" + kind.Id; metas[kind.Id] = meta;
+        var head = Ui.Grid("Auto,*,Auto,Auto,Auto"); head.ColumnSpacing = 10; head.Margin = new Thickness(14, 0, 8, 0); head.Cursor = new Cursor(StandardCursorType.Hand); head.Background = Brushes.Transparent; head.Name = "TileHandle_" + kind.Id;
+        Ui.Put(head, badge); Ui.Put(head, heading, 1); Ui.Put(head, meta, 2);
+        var buttons = Ui.Horizontal(); buttons.Spacing = 2; buttons.Opacity = 0; buttons.IsHitTestVisible = false;
         if (kind.OpensPage is { } page)
         {
             var open = Ui.IconButton(IconKind.Next, "Open full page", "TileOpen_" + kind.Id, () => openPage?.Invoke(page)); open.Width = 28; open.Height = 28; buttons.Children.Add(open);
@@ -216,9 +241,13 @@ public sealed class DeskView : UserControl
             // Paper stays light whatever the theme, and a button changes its colour.
             var paint = Ui.IconButton(IconKind.Edit, "Change colour", "PostItColour" + (kind.Id == "postit" ? "" : (PostItIndex(kind.Id) + 1).ToString()), () => model.CyclePostItColour(PostItIndex(kind.Id))); paint.Width = 28; paint.Height = 28; buttons.Children.Insert(0, paint);
         }
-        Ui.Put(head, buttons, 1);
-        var body = new Border { Margin = new Thickness(16, 2, 16, 14) };
-        var stack = Ui.Grid("*", "Auto,*"); Ui.Put(stack, head); Ui.Put(stack, body, row: 1);
+        Ui.Put(head, buttons, 3);
+        var dots = new IconGlyph(IconKind.Grip) { TintKey = "Muted", VerticalAlignment = VerticalAlignment.Center, Opacity = .8, IsHitTestVisible = false }; Ui.Put(head, dots, 4);
+        tile.PointerEntered += (_, _) => { buttons.Opacity = 1; buttons.IsHitTestVisible = true; };
+        tile.PointerExited += (_, _) => { if (resizing is null && dragged is null) { buttons.Opacity = 0; buttons.IsHitTestVisible = false; } };
+        var band = new Border { Height = 52, Background = new SolidColorBrush(Color.FromArgb(0x30, hue.R, hue.G, hue.B)), Child = head };
+        var body = new Border { Margin = new Thickness(16, 10, 16, 14) };
+        var stack = Ui.Grid("*", "Auto,*"); Ui.Put(stack, band); Ui.Put(stack, body, row: 1);
         Control content = IsPostIt(kind.Id) ? new ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light, Child = stack } : stack;
         // A grip in the bottom right corner makes the tile larger or smaller by whole cells.
         var grip = new Border { Name = "TileResize_" + kind.Id, Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.BottomRightCorner),
@@ -399,7 +428,8 @@ public sealed class DeskView : UserControl
         private readonly Avalonia.Threading.DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
         private string? lifted; private double lift, liftTarget, tilt, lastX;
 
-        public DeskBoard() { timer.Tick += (_, _) => Step(); DetachedFromVisualTree += (_, _) => timer.Stop(); }
+        public DeskBoard() { Margin = new Thickness(6, 2, 6, 10); // Room for the tiles' shadows, which the scroll view would otherwise cut off.
+            timer.Tick += (_, _) => Step(); DetachedFromVisualTree += (_, _) => timer.Stop(); }
         private static double Width0(double available) => double.IsInfinity(available) ? 640 : available;
         protected override Size MeasureOverride(Size available)
         {
@@ -473,5 +503,16 @@ public sealed class DeskView : UserControl
                 child.RenderTransform = held ? new TransformGroup { Children = { new ScaleTransform(1 + .025 * lift, 1 + .025 * lift), new RotateTransform(tilt * lift) } } : null;
             }
         }
+    }
+}
+
+/// <summary>A faint field of dots in the theme's line colour, drawn behind the desk's tiles.</summary>
+public sealed class DotField : Control
+{
+    public DotField() { IsHitTestVisible = false; ActualThemeVariantChanged += (_, _) => InvalidateVisual(); }
+    public override void Render(DrawingContext context)
+    {
+        var brush = new SolidColorBrush(Ui.ThemeColour(this, "Line", Colors.LightGray), .55);
+        for (var x = 12.0; x < Bounds.Width; x += 24) for (var y = 12.0; y < Bounds.Height; y += 24) context.DrawEllipse(brush, null, new Point(x, y), 1.1, 1.1);
     }
 }
