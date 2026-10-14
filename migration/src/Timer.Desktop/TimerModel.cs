@@ -757,6 +757,12 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (preferences.DashboardWidth == width && preferences.DashboardHeight == height) return;
         preferences = preferences with { DashboardWidth = width, DashboardHeight = height }; Save();
     }
+    /// <summary>The desk is a preview of the tile board that will replace the dashboard's pages. Off until switched on in settings.</summary>
+    public bool Desk => preferences.Desk;
+    public void SetDesk(bool on) { preferences = preferences with { Desk = on }; Save(); Notify(); }
+    /// <summary>The order the desk's tiles were left in. Only the order is saved, since the arrangement follows from it at any window size.</summary>
+    public IReadOnlyList<string> DeskOrder => preferences.DeskOrder ?? Array.Empty<string>();
+    public void SetDeskOrder(IReadOnlyList<string> order) { preferences = preferences with { DeskOrder = order.ToList() }; Save(); }
     public int? PillScalePercent => preferences.PillScale;
     public static readonly int[] PillScaleChoices = { 50, 60, 70, 80, 90, 100, 110, 120 };
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }

@@ -512,16 +512,18 @@ public sealed class DashboardWindow : Window
         {
             iconsOnly = icons;
             foreach (var label in toolLabels) label.IsVisible = !icons;
-            todayLabel.IsVisible = !icons; workspaceTitle.IsVisible = !icons;
+            todayLabel.IsVisible = !icons; workspaceTitle.IsVisible = !icons || deskMode;
             foreach (var button in new Button[] { addTime, undo, merge, edit, todayButton }) button.Padding = icons ? new Thickness(10, 0) : new Thickness(button == todayButton ? 12 : 16, 0);
         }
     }
     private void ApplySidebarState()
     {
-        bodyGrid.ColumnDefinitions[0].Width = new GridLength(sidebarCollapsed ? 0 : 340);
-        sidebarDivider.IsVisible = !sidebarCollapsed;
-        accountsToggle.IsVisible = sidebarCollapsed; compactClock.IsVisible = sidebarCollapsed;
-        sidebarPanel.IsVisible = !sidebarCollapsed || sidebarOpen;
+        // The desk shows the accounts and the working time as tiles, so its column stays away altogether.
+        var folded = sidebarCollapsed || deskMode;
+        bodyGrid.ColumnDefinitions[0].Width = new GridLength(folded ? 0 : 340);
+        sidebarDivider.IsVisible = !folded;
+        accountsToggle.IsVisible = sidebarCollapsed && !deskMode; compactClock.IsVisible = sidebarCollapsed && !deskMode;
+        sidebarPanel.IsVisible = deskMode ? false : !sidebarCollapsed || sidebarOpen;
         if (sidebarCollapsed)
         {
             // Laid over the workspace from the left, above it, with a soft edge so it reads as sitting on top.
@@ -560,7 +562,8 @@ public sealed class DashboardWindow : Window
     private readonly Button undo;
     private readonly Button merge;
     private EntryDialog? entryEditor;
-    private bool weekMode, settingsMode, renderedSettings, settingZoom;
+    private bool weekMode, settingsMode, renderedSettings, settingZoom, deskMode, renderedDesk;
+    private Button deskRail = null!;
     private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
     private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
@@ -593,6 +596,7 @@ public sealed class DashboardWindow : Window
             var button = Ui.Button("", click, name); button.Classes.Add("rail"); button.Content = new IconGlyph(kind);
             ToolTip.SetTip(button, tip); Avalonia.Automation.AutomationProperties.SetName(button, tip); return button;
         }
+        deskRail = RailButton(IconKind.Desk, "Desk (preview)", "DeskTab", ShowDesk); deskRail.IsVisible = model.Desk;
         timelineRail = RailButton(IconKind.Timeline, "Timeline", "TimelineTab", () => SelectTab(false));
         overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectSection("overview"));
         hoursTab = RailButton(IconKind.Table, "Hours table", "WeekHoursTab", () => SelectSection("hours"));
@@ -602,7 +606,7 @@ public sealed class DashboardWindow : Window
         pillGlyph = (IconGlyph)backToPill.Content!;
         railTop.Children.Add(backToPill);
         var backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
-        foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
+        foreach (var button in new[] { deskRail, timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
         settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);
@@ -870,17 +874,24 @@ public sealed class DashboardWindow : Window
     }
     private void ShowTidy() { if (IsVisible) Dialogs.Show(new TidyDialog(model)); }
     private void ShowGroup(string id) { if (IsVisible) Dialogs.Show(new GroupDialog(model, id)); }
-    public void SelectTab(bool showWeek) { settingsMode = false; weekMode = showWeek; Refresh(true); }
+    public void SelectTab(bool showWeek) { deskMode = false; settingsMode = false; weekMode = showWeek; Refresh(true); }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
-    private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
+    private void ShowSettings() { settingsMode = !settingsMode; if (settingsMode) deskMode = false; Refresh(true); }
+    private void ShowDesk() { settingsMode = false; deskMode = true; Refresh(true); }
+    // A tile's open button goes to the page that shows the same thing in full.
+    private void OpenDeskPage(string page) { if (page == "timeline") SelectTab(false); else SelectSection(page); }
     private void SelectSection(string section)
     {
-        settingsMode = false; weekMode = true;
+        deskMode = false; settingsMode = false; weekMode = true;
         if (model.WeekSection != section) model.SetWeekSection(section); else Refresh(true);
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
     private void Refresh(bool refreshWorkspace)
     {
+        deskRail.IsVisible = model.Desk; if (!model.Desk && deskMode) { deskMode = false; refreshWorkspace = true; }
+        var showDesk = deskMode && !settingsMode;
+        workspaceTitle.IsVisible = !iconsOnly || showDesk; // The desk has no date row, so its name stays even when the buttons shrink to icons.
+        if (showDesk != renderedDesk) ApplySidebarState();
         clock.Text = model.ClockText;
         // Amber on a break, red in overtime, green while tracking, full-strength text otherwise. A break outranks overtime.
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
@@ -902,7 +913,7 @@ public sealed class DashboardWindow : Window
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
         var editing = !weekMode || model.WeekSection == "entries";
-        zoomControls.IsVisible = !weekMode && !settingsMode;
+        zoomControls.IsVisible = !weekMode && !settingsMode && !showDesk;
         settingZoom = true; zoomSlider.Value = model.TimelineZoomFraction; settingZoom = false; // Follows the wheel and the buttons too.
         zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
@@ -916,32 +927,33 @@ public sealed class DashboardWindow : Window
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); if (button.Content is IconGlyph glyph) glyph.TintKey = selected ? "Ink" : "Muted"; }
-        Rail(timelineRail, !weekMode && !settingsMode);
-        Rail(overviewTab, !settingsMode && weekMode && model.WeekSection == "overview");
-        Rail(hoursTab, !settingsMode && weekMode && model.WeekSection == "hours");
-        Rail(entriesTab, !settingsMode && weekMode && model.WeekSection == "entries");
+        Rail(deskRail, showDesk);
+        Rail(timelineRail, !showDesk && !weekMode && !settingsMode);
+        Rail(overviewTab, !settingsMode && !showDesk && weekMode && model.WeekSection == "overview");
+        Rail(hoursTab, !settingsMode && !showDesk && weekMode && model.WeekSection == "hours");
+        Rail(entriesTab, !settingsMode && !showDesk && weekMode && model.WeekSection == "entries");
         Rail(settingsRail, settingsMode);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
-        foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = !settingsMode;
-        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && (!weekMode || model.WeekSection == "entries");
-        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
-        workspaceTitle.Text = settingsMode ? "Settings" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
+        foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = !settingsMode && !showDesk;
+        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && !showDesk && (!weekMode || model.WeekSection == "entries");
+        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && !showDesk && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
+        workspaceTitle.Text = settingsMode ? "Settings" : showDesk ? "Desk" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
-        if (settingsMode ? !renderedSettings : refreshWorkspace)
+        if (settingsMode ? !renderedSettings : refreshWorkspace || renderedDesk != showDesk)
         {
             var oldScroll = workspace.Content is ScrollViewer directOld ? directOld
                 : (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
             var previous = renderedSettings == settingsMode && !settingsMode && renderedWeekMode == weekMode && renderedDate == model.SelectedDate
                 ? !weekMode && model.TimelineOffset is double timelineOffset ? new Vector(0, timelineOffset)
                     : oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset : null;
-            workspace.Content = settingsMode ? new SettingsView(model) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
+            workspace.Content = settingsMode ? new SettingsView(model) : showDesk ? new DeskView(model, OpenDeskPage) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
             if (previous is { } offset && workspace.Content is Control control)
             {
                 var scroll = control is ScrollViewer direct ? direct : control.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();
                 if (scroll is not null) scroll.Tag = offset;
             }
-            renderedWeekMode = weekMode; renderedSettings = settingsMode;
+            renderedWeekMode = weekMode; renderedSettings = settingsMode; renderedDesk = showDesk;
             renderedDate = model.SelectedDate;
         }
     }

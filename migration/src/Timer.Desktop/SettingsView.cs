@@ -62,6 +62,8 @@ public sealed class SettingsView : ScrollViewer
         var tipNote = Ui.Text("With tooltips off, budget percentages are still in Week overview.", 12, "muted"); tipNote.Name = "TooltipsNote"; tipNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; appearance.Children.Add(tipNote);
         if (model.TrayAvailable) appearance.Children.Add(Toggle("Show in taskbar", "ShowInTaskbar", () => model.TaskbarButton, v => model.SetTaskbarButton(v)));
         if (model.AutoStart?.Available == true) appearance.Children.Add(Toggle("Start with Windows", "StartWithWindows", () => model.AutoStart?.IsEnabled == true, v => model.SetAutoStart(v)));
+        // The tile board is still being built, so it sits behind a switch. The existing pages are all still there.
+        appearance.Children.Add(Toggle("Desk (preview): a board of tiles you can move", "DeskPreview", () => model.Desk, v => model.SetDesk(v)));
         page.Children.Add(Section("Appearance and behaviour", appearance));
 
         // Units, and the accounts the day is divided between.
