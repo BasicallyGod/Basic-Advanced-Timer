@@ -28,6 +28,17 @@ public static class Trinkets
     /// </summary>
     public static TodoItem ParseTodo(string typed, IEnumerable<string> accounts)
     {
+        if (FindAccountTag(typed, accounts) is not { } found) return new TodoItem(typed.Trim());
+        var text = Regex.Replace((typed.Remove(found.Index, found.Length)).Trim(), @"\s{2,}", " ");
+        return new TodoItem(text.Length == 0 ? found.Account : text, false, found.Account);
+    }
+
+    /// <summary>
+    /// Finds the first #Tag in some words that names exactly one account (the account's name with its spaces taken out, in any case, or the start of
+    /// one when only a single account begins that way), with where the tag sits. The same rule serves to-dos and notes, so one shorthand means one thing.
+    /// </summary>
+    public static (string Account, int Index, int Length, string Tag)? FindAccountTag(string typed, IEnumerable<string> accounts)
+    {
         var names = accounts.Where(n => !BreakAccount.Is(n)).ToList();
         foreach (Match match in Tag.Matches(typed))
         {
@@ -35,11 +46,9 @@ public static class Trinkets
             string Squash(string name) => new string(name.Where(c => !char.IsWhiteSpace(c)).ToArray());
             var exact = names.Where(n => Squash(n).Equals(tag, StringComparison.OrdinalIgnoreCase)).ToList();
             var starts = exact.Count > 0 ? exact : names.Where(n => Squash(n).StartsWith(tag, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (starts.Count != 1) continue;
-            var text = Regex.Replace((typed.Remove(match.Index, match.Length)).Trim(), @"\s{2,}", " ");
-            return new TodoItem(text.Length == 0 ? starts[0] : text, false, starts[0]);
+            if (starts.Count == 1) return (starts[0], match.Index, match.Length, tag);
         }
-        return new TodoItem(typed.Trim());
+        return null;
     }
 
     public static string ToJson(TrinketData data) => JsonSerializer.Serialize(data);

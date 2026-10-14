@@ -198,7 +198,7 @@ public sealed class DayStrip : Control
 public sealed class NotesView : Grid
 {
     private readonly TimerModel model; private readonly StackPanel rows = new() { Spacing = 4 };
-    private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Add a note: 14:30 sets a time, ! marks a deadline", Padding = new Thickness(10, 6) };
+    private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Add a note: 14:30 time · ! deadline · @fri day · #Account", Padding = new Thickness(10, 6) };
     public NotesView(TimerModel model, bool compact)
     {
         this.model = model; RowDefinitions = new RowDefinitions("*,Auto");
@@ -226,12 +226,58 @@ public sealed class NotesView : Grid
             // TextChanged does not fire headless, so the text property is watched instead.
             text.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) model.SetDayNoteText(id, text.Text ?? ""); };
             var remove = Ui.IconButton(IconKind.Close, "Remove", "NoteRemove_" + id, () => model.RemoveDayNote(id)); remove.Width = 26; remove.Height = 26;
-            var row = Ui.Grid("Auto,Auto,*,Auto"); row.VerticalAlignment = VerticalAlignment.Center;
+            var row = Ui.Grid("Auto,*,Auto"); row.VerticalAlignment = VerticalAlignment.Center;
             Ui.Put(row, tick);
-            if (note.At is { } at) { var time = Ui.Text(at.ToString("hh\\:mm"), 12, "figures"); time.VerticalAlignment = VerticalAlignment.Center; time.Margin = new Thickness(0, 0, 4, 0); Ui.Put(row, time, 1); }
-            Ui.Put(row, text, 2); Ui.Put(row, remove, 3);
+            // What was recognised in the words is shown under them as chips, each with a cross that takes it back out of the note.
+            var body = new StackPanel { Spacing = 0 }; body.Children.Add(text);
+            if (NoteChips.For(model, note, this) is { } chips) { chips.Margin = new Thickness(8, 0, 0, 2); body.Children.Add(chips); }
+            Ui.Put(row, body, 1); Ui.Put(row, remove, 2);
             rows.Children.Add(row);
         }
+    }
+}
+
+/// <summary>
+/// The chips that show what a note's shorthand was taken to mean: its time, whether it is a deadline, and the account its #Tag links to. In Notes each has a
+/// cross that takes that part back out of the note (see TimerModel.ClearNoteTime and the others); elsewhere the account chip is only shown.
+/// </summary>
+public static class NoteChips
+{
+    private static Border Chip(string name, Control? lead, string text, string tip, string? clearName, Action? clear, IBrush? ink = null)
+    {
+        var words = new TextBlock { Text = text, FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        if (ink is not null) words.Foreground = ink;
+        var row = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
+        if (lead is not null) row.Children.Add(lead);
+        row.Children.Add(words);
+        if (clear is not null && clearName is not null)
+        {
+            var cross = Ui.IconButton(IconKind.Close, "Take this out of the note", clearName, clear); cross.Width = 18; cross.Height = 18; cross.Padding = new Thickness(0); row.Children.Add(cross);
+        }
+        var chip = new Border { Name = name, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(8, 1, clear is null ? 8 : 3, 1), Margin = new Thickness(0, 0, 6, 0), HorizontalAlignment = HorizontalAlignment.Left, Child = row };
+        chip.Classes.Add("chip"); ToolTip.SetTip(chip, tip); return chip;
+    }
+    private static Color Mix(Color a, Color b, double towardsB) => Color.FromRgb((byte)(a.R + (b.R - a.R) * towardsB), (byte)(a.G + (b.G - a.G) * towardsB), (byte)(a.B + (b.B - a.B) * towardsB));
+    /// <summary>The chip for the account a note's #Tag names, wearing that account's colour, or null when it names none.</summary>
+    public static Control? AccountChip(TimerModel model, DayNote note, Control host, string name, bool interactive)
+    {
+        if (NoteShorthand.AccountOf(note.Text, model.AccountNames) is not { } account || model.Accounts.FirstOrDefault(a => a.Name == account) is not { } known) return null;
+        var colour = Color.Parse(Ui.Visible(known.Colour));
+        var dot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(colour), VerticalAlignment = VerticalAlignment.Center };
+        var ink = new SolidColorBrush(Mix(colour, Ui.ThemeColour(host, "Ink", Colors.Black), .45));
+        return Chip(name, dot, "#" + known.Display, "Linked to " + known.Display, interactive ? name.Replace("Chip", "Clear") : null, interactive ? () => model.ClearNoteAccount(note.Id) : null, ink);
+    }
+    /// <summary>All the chips for one note, or null when it has none.</summary>
+    public static Control? For(TimerModel model, DayNote note, Control host)
+    {
+        var chips = new WrapPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
+        var id = note.Id;
+        if (note.At is { } at)
+            chips.Children.Add(Chip("NoteTimeChip_" + id, new IconGlyph(IconKind.Clock) { TintKey = "Muted" }, at.ToString("hh\\:mm"), "Time, taken from the words. The cross puts it back into them.", "NoteTimeClear_" + id, () => model.ClearNoteTime(id)));
+        if (DayNotes.IsDeadline(note))
+            chips.Children.Add(Chip("NoteDeadlineChip_" + id, new IconGlyph(IconKind.Flag) { TintKey = "Finish" }, "Deadline", "A deadline, from the ! at the start. The cross makes it an ordinary note.", "NoteDeadlineClear_" + id, () => model.ClearNoteDeadline(id)));
+        if (AccountChip(model, note, host, "NoteAccountChip_" + id, interactive: true) is { } account) chips.Children.Add(account);
+        return chips.Children.Count == 0 ? null : chips;
     }
 }
 
@@ -255,7 +301,7 @@ public sealed class ComingUpView : StackPanel
             {
                 var line = new StackPanel { Spacing = 0 };
                 line.Children.Add(new TextBlock { Text = When(note.Day, model.Engine.Now) + (note.At is { } t ? " " + t.ToString("hh\\:mm") : ""), FontSize = 15, FontWeight = FontWeight.Bold });
-                line.Children.Add(new TextBlock { Text = DayNotes.DisplayText(note), FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis }); Children.Add(line); continue;
+                line.Children.Add(new TextBlock { Text = NoteShorthand.Display(note, model.AccountNames), FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis }); Children.Add(line); continue;
             }
             var id = note.Id;
             // What kind of thing it is shows in its leading mark: a flag for a deadline (press it when done), a clock for an event, which simply passes,
@@ -269,7 +315,8 @@ public sealed class ComingUpView : StackPanel
             }
             else { var box = new CheckBox { Name = "ComingTick_" + id, IsChecked = false, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center }; box.Click += (_, _) => model.ToggleDayNote(id); tick = box; }
             var when = Ui.Text(When(note.Day, model.Engine.Now) + (note.At is { } at ? " " + at.ToString("hh\\:mm") : ""), 13); when.FontWeight = FontWeight.Bold; // Bold, so when it falls is read first.
-            var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(new TextBlock { Text = DayNotes.DisplayText(note), FontSize = 14, TextWrapping = TextWrapping.Wrap }); words.Children.Add(when);
+            var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(new TextBlock { Text = NoteShorthand.Display(note, model.AccountNames), FontSize = 14, TextWrapping = TextWrapping.Wrap }); words.Children.Add(when);
+            if (NoteChips.AccountChip(model, note, this, "ComingAccount_" + id, interactive: false) is { } account) { account.Margin = new Thickness(0, 2, 0, 0); words.Children.Add(account); }
             var row = Ui.Grid("Auto,*"); tick.VerticalAlignment = VerticalAlignment.Center; Ui.Put(row, tick); Ui.Put(row, words, 1); Children.Add(row);
         }
     }
@@ -561,7 +608,7 @@ public sealed class DeadlineView : StackPanel
         var now = model.Engine.Now; var due = DayNotes.DueAt(note); var remaining = due - now; var late = remaining < TimeSpan.Zero; var span = late ? -remaining : remaining;
         // A countdown reads as hours and minutes spelled out, so it cannot be mistaken for a time of day.
         var text = $"{(int)span.TotalHours}h {span.Minutes:00}m";
-        what.Text = DayNotes.DisplayText(note); phrase.Text = late ? "Overdue by" : "Due in";
+        what.Text = NoteShorthand.Display(note, model.AccountNames); phrase.Text = late ? "Overdue by" : "Due in";
         left.Text = late ? "-" + text : text;
         when.Text = due.ToString("ddd d MMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
         if (form != TileForm.Roomy) return;

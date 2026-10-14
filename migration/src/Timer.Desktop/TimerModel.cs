@@ -785,10 +785,22 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Adds a note to a day from what was typed. A time such as 14:30 in the words becomes the note's time.</summary>
     public void AddDayNote(DateTime day, string typed)
     {
-        var (text, at) = DayNotes.Parse(typed); if (text.Length == 0) return;
-        var id = store?.AddDayNote(day.Date, at, text) ?? nextNoteId++;
-        dayNotes.Add(new DayNote(id, day.Date, at, text)); Notify();
+        // A day named in the words (@fri, @tomorrow, @21oct) wins over the day showing, and the notice says where the note went, since it may leave the list in view.
+        var parts = NoteShorthand.Parse(typed, Engine.Now); if (parts.Text.Length == 0) return;
+        var target = (parts.Day ?? day).Date;
+        var id = store?.AddDayNote(target, parts.At, parts.Text) ?? nextNoteId++;
+        dayNotes.Add(new DayNote(id, target, parts.At, parts.Text));
+        if (target != day.Date) Notice = "Added to " + target.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
+        Notify();
     }
+    /// <summary>The names of the accounts a #Tag can link to.</summary>
+    public IReadOnlyList<string> AccountNames => Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name).ToList();
+    /// <summary>Takes a note's time back out of the note and puts it into its words, so nothing is lost and it can be set again by typing it.</summary>
+    public void ClearNoteTime(long id) => ChangeNote(id, n => n.At is { } at ? n with { At = null, Text = NoteShorthand.WithTimeInWords(n.Text, at) } : n, true);
+    /// <summary>Takes the deadline marker off a note, which becomes an ordinary one.</summary>
+    public void ClearNoteDeadline(long id) => ChangeNote(id, n => DayNotes.IsDeadline(n) ? n with { Text = NoteShorthand.WithoutDeadline(n.Text) } : n, true);
+    /// <summary>Unlinks a note from its account, leaving the name in its words as an ordinary word.</summary>
+    public void ClearNoteAccount(long id) => ChangeNote(id, n => n with { Text = NoteShorthand.WithoutAccountTag(n.Text, AccountNames) }, true);
     public void ToggleDayNote(long id) => ChangeNote(id, n => n with { Done = !n.Done }, true);
     /// <summary>Saves a note's words as they are typed, without notifying, so the box being typed in is not rebuilt. Emptying a note deletes it.</summary>
     public void SetDayNoteText(long id, string text) => ChangeNote(id, n => n with { Text = text.Trim() }, false);
