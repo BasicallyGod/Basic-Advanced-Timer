@@ -296,7 +296,7 @@ public sealed class DeskConsolidationTests
         try
         {
             void Shot(string name) { Settle(dashboard); using var frame = dashboard.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, name + ".png")); }
-            Shot("desk-home"); Press(dashboard, "TimesheetTab"); Shot("timesheet-overview"); Press(dashboard, "WeekHoursTab"); Shot("timesheet-hours"); Press(dashboard, "WeekEntriesTab"); Shot("timesheet-entries");
+            Shot("desk-home"); dashboard.SelectTab(false); Shot("timeline"); dashboard.GoHome(); Press(dashboard, "TimesheetTab"); Shot("timesheet-overview"); Press(dashboard, "WeekHoursTab"); Shot("timesheet-hours"); Press(dashboard, "WeekEntriesTab"); Shot("timesheet-entries");
         }
         finally { dashboard.Close(); }
     }
