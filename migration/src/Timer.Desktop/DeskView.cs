@@ -231,7 +231,7 @@ public sealed class DeskView : UserControl
             Child = new IconGlyph(IconFor(kind.Id)) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } } };
         var heading = new TextBlock { Text = kind.Title, FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var meta = Ui.Text("", 12, "muted"); meta.VerticalAlignment = VerticalAlignment.Center; meta.Name = "TileMeta_" + kind.Id; metas[kind.Id] = meta;
-        var head = Ui.Grid("Auto,*,Auto,Auto"); head.ColumnSpacing = 10; head.Margin = new Thickness(14, 0, 8, 0); head.Cursor = new Cursor(StandardCursorType.Hand); head.Background = Brushes.Transparent; head.Name = "TileHandle_" + kind.Id;
+        var head = Ui.Grid("Auto,*,Auto,Auto"); head.ColumnSpacing = 10; head.Margin = new Thickness(14, 0, 8, 0); head.VerticalAlignment = VerticalAlignment.Center; head.Cursor = new Cursor(StandardCursorType.Hand); head.Background = Brushes.Transparent; head.Name = "TileHandle_" + kind.Id; // Centred in its band, whose height is fixed.
         Ui.Put(head, badge); Ui.Put(head, heading, 1);
         var buttons = Ui.Horizontal(); buttons.Spacing = 2; buttons.Opacity = 0; buttons.IsHitTestVisible = false;
         if (kind.OpensPage is { } page)

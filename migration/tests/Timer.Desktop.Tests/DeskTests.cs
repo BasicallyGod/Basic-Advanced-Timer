@@ -251,6 +251,25 @@ public sealed class DeskTests
     }
 
     [AvaloniaFact]
+    public void EveryTilesHeaderContentIsCentredInItsBand()
+    {
+        var window = Open(Model()); 
+        try
+        {
+            var desk = OpenDesk(window); desk.Lively = false;
+            foreach (var placement in desk.Placements)
+            {
+                var tile = (Control)desk.TileControl(placement.Id)!; var handle = Named<Control>(window, "TileHandle_" + placement.Id);
+                var band = (Control)handle.Parent!; Assert.Equal(52, band.Bounds.Height);
+                var top = handle.TranslatePoint(new Point(), band)!.Value.Y; var bottom = band.Bounds.Height - (top + handle.Bounds.Height);
+                Assert.True(Math.Abs(top - bottom) < 1.5, $"{placement.Id}: {top} above, {bottom} below"); // As much room above the badge as below it.
+                Assert.True(top >= 4, $"{placement.Id} header touches the top of its band");
+            }
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ATileCanBeMadeLargerOrSmallerWithinItsLimitsAndTheSizeIsKept()
     {
         var model = Model(); var window = Open(model);
