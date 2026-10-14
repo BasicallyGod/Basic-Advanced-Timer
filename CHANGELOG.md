@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 | --- | --- | --- |
+| Desk tiles: Notes, Coming up, Day strip (data format 3) | pending | New desk tiles: notes for the day shown, where a time such as 14:30 in a note sets its time, a Coming up list of dated notes from today on, and a strip of the day's blocks. Notes are stored in a new table, so the data format moves from 2 to 3: an older build will refuse a file this version has opened, and a copy is saved before the upgrade. |
 | Desk trinkets: to-do, post-it, clock | pending | New desk tiles: a to-do list where a #Account tag links an item to that account and shows it in the account's colour (links follow a rename and clear on delete), a post-it that keeps what you type and changes colour, and an analogue clock. They are saved with the settings, not the day's records. |
 | Desk drawer | pending | Each desk tile has a cross that puts it away in a drawer, a panel down the right edge opened from the Drawer button. A tile can be dragged onto the open drawer, and a chip dragged out onto the desk (or clicked) brings it back. What is put away is remembered. |
 | Desk motion and Calm setting | pending | Tiles glide to their places on a light spring, and the tile in hand lifts and leans the way it is carried. A Calm motion switch in settings makes them move straight instead. |

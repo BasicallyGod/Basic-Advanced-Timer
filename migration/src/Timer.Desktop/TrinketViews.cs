@@ -158,3 +158,68 @@ public sealed class DayStrip : Control
         }
     }
 }
+
+/// <summary>Notes for the day the dashboard is showing. A time such as 14:30 typed in a note is kept as its time and makes it appear in Coming up.</summary>
+public sealed class NotesView : Grid
+{
+    private readonly TimerModel model; private readonly StackPanel rows = new() { Spacing = 4 };
+    private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Add a note, 14:30 sets a time", Padding = new Thickness(10, 6) };
+    public NotesView(TimerModel model, bool compact)
+    {
+        this.model = model; RowDefinitions = new RowDefinitions("*,Auto");
+        Children.Add(new ScrollViewer { Content = rows, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled });
+        if (!compact)
+        {
+            input.Margin = new Thickness(0, 8, 0, 0); SetRow(input, 1); Children.Add(input);
+            input.KeyDown += (_, e) => { if (e.Key == Key.Enter && !string.IsNullOrWhiteSpace(input.Text)) { var typed = input.Text; input.Text = ""; model.AddDayNote(model.SelectedDate, typed); e.Handled = true; } };
+        }
+        Rebuild();
+    }
+    public void Rebuild()
+    {
+        rows.Children.Clear();
+        var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
+        rows.Children.Add(Ui.Text(model.SelectedDate.ToString("dddd d MMMM", british), 12, "muted"));
+        var notes = model.NotesOn(model.SelectedDate);
+        if (notes.Count == 0) rows.Children.Add(Ui.Text("No notes for this day.", 12, "muted"));
+        foreach (var note in notes)
+        {
+            var id = note.Id;
+            var tick = new CheckBox { Name = "NoteTick_" + id, IsChecked = note.Done, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
+            tick.Click += (_, _) => model.ToggleDayNote(id);
+            var text = new TextBox { Name = "NoteText_" + id, Text = note.Text, TextWrapping = TextWrapping.Wrap, AcceptsReturn = false, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(4, 2), FontSize = 14, Opacity = note.Done ? .55 : 1 };
+            // TextChanged does not fire headless, so the text property is watched instead.
+            text.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) model.SetDayNoteText(id, text.Text ?? ""); };
+            var remove = Ui.IconButton(IconKind.Close, "Remove", "NoteRemove_" + id, () => model.RemoveDayNote(id)); remove.Width = 26; remove.Height = 26;
+            var row = Ui.Grid("Auto,Auto,*,Auto"); row.VerticalAlignment = VerticalAlignment.Center;
+            Ui.Put(row, tick);
+            if (note.At is { } at) { var time = Ui.Text(at.ToString("hh\\:mm"), 12, "figures"); time.VerticalAlignment = VerticalAlignment.Center; time.Margin = new Thickness(0, 0, 4, 0); Ui.Put(row, time, 1); }
+            Ui.Put(row, text, 2); Ui.Put(row, remove, 3);
+            rows.Children.Add(row);
+        }
+    }
+}
+
+/// <summary>What is coming up: dated notes from today on, soonest first, each marked with when it falls.</summary>
+public sealed class ComingUpView : StackPanel
+{
+    private readonly TimerModel model;
+    public ComingUpView(TimerModel model) { this.model = model; Spacing = 4; Rebuild(); }
+    public static string When(DateTime day, DateTime today)
+        => (day.Date - today.Date).Days switch { 0 => "Today", 1 => "Tomorrow", < 7 => day.ToString("dddd", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), _ => day.ToString("ddd d MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) };
+    public void Rebuild()
+    {
+        Children.Clear();
+        var coming = model.ComingUp();
+        if (coming.Count == 0) Children.Add(Ui.Text("Nothing coming up. Add a dated note in Notes.", 12, "muted"));
+        foreach (var note in coming)
+        {
+            var id = note.Id;
+            var tick = new CheckBox { Name = "ComingTick_" + id, IsChecked = false, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
+            tick.Click += (_, _) => model.ToggleDayNote(id);
+            var when = Ui.Text(When(note.Day, model.Engine.Now) + (note.At is { } at ? " " + at.ToString("hh\\:mm") : ""), 12, "muted");
+            var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(new TextBlock { Text = note.Text, FontSize = 14, TextWrapping = TextWrapping.Wrap }); words.Children.Add(when);
+            var row = Ui.Grid("Auto,*"); Ui.Put(row, tick); Ui.Put(row, words, 1); Children.Add(row);
+        }
+    }
+}

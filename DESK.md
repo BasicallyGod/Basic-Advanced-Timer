@@ -26,7 +26,7 @@ A project to turn the dashboard into a resizable desk of small tiles that you mo
 ## Phases
 
 1. Resizable window. The dashboard resizes between about 640 by 480 and full screen, remembers its size and position, and the existing pages reflow: below about 900 wide the account sidebar folds into a button, the toolbar compacts and the week cards stack. Content width is capped on very large windows, the timeline keeps its zoom, and the toolbar never overflows. Ships on its own.
-2. The tile board (the trinkets, one post-it, to-do and analogue clock, are in; the drawer and Lively/Calm motion are in too; started: layout maths, drag to reorder, three tiles and the preview switch are in; spring motion, a saved arrangement per size and resizing tiles are still to do). A custom tile layout with drag and drop, a saved arrangement per window size, spring motion, and the first tiles (Working time, Accounts, Day strip) with open in place and full page. Behind a preview switch in settings, with the current pages still available.
+2. The tile board (Notes by day, Coming up and the day strip are in too, with data format 3 for notes; the trinkets, one post-it, to-do and analogue clock, are in; the drawer and Lively/Calm motion are in too; started: layout maths, drag to reorder, three tiles and the preview switch are in; spring motion, a saved arrangement per size and resizing tiles are still to do). A custom tile layout with drag and drop, a saved arrangement per window size, spring motion, and the first tiles (Working time, Accounts, Day strip) with open in place and full page. Behind a preview switch in settings, with the current pages still available.
 3. The rest. The drawer, Notes by day, Reminders and deadlines, the remaining tiles, and the data changes they need (a schema upgrade with the install over an older database test before it reaches the Store build).
 4. Polish. Hues per theme, the Lively and Calm switch, the first-run hint, the trinkets (post-its, to-do, clock, pomodoro).
 
@@ -39,6 +39,7 @@ A project to turn the dashboard into a resizable desk of small tiles that you mo
 
 ## Open questions
 
+- Dated notes do not yet appear on the timeline itself, only in Coming up.
 - Which tiles show at the minimum size by default (suggested: Working time, Accounts, Day strip).
 - Tile forms are roomy, normal and tiny. A fully fluid form is a possible later step for particular tiles.
 - Whether dropping a tile onto an occupied spot swaps or pushes.

@@ -136,6 +136,28 @@ public sealed class DeskTests
     }
 
     [AvaloniaFact]
+    public void ANoteWithATimeAppearsInComingUpAndEditsAreKept()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = OpenDesk(window); var today = model.Engine.Now.Date;
+            var input = Named<TextBox>(window, "NoteInput"); input.Text = "Ring the client 23:30";
+            input.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter }); Dispatcher.UIThread.RunJobs();
+            Assert.Same(desk, window.GetVisualDescendants().OfType<DeskView>().Single());
+            var note = Assert.Single(model.NotesOn(today)); Assert.Equal("Ring the client", note.Text); Assert.Equal(new TimeSpan(23, 30, 0), note.At);
+            Assert.Contains(model.ComingUp(), n => n.Id == note.Id);
+            Assert.Contains("Today 23:30", window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+            Named<TextBox>(window, "NoteText_" + note.Id).Text = "Ring the client back";
+            Assert.Equal("Ring the client back", model.NotesOn(today)[0].Text);
+            Named<CheckBox>(window, "ComingTick_" + note.Id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Empty(model.ComingUp()); Assert.True(model.NotesOn(today)[0].Done);
+            Press(window, "NoteRemove_" + note.Id); Assert.Empty(model.NotesOn(today));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void RenamingAnAccountKeepsItsToDosLinked()
     {
         var model = Model(); model.AddTodo("Call #AccountTwo");
@@ -213,6 +235,7 @@ public sealed class DeskTests
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.SetDesk(true);
         model.AddTodo("Send the invoice #AccountOne"); model.AddTodo("Call back about the budget #AccountThree"); model.AddTodo("Order more tea"); model.ToggleTodo(2);
         model.SetPostItText(0, "Ask about the printer. Book the room for Friday.");
+        model.AddDayNote(model.Engine.Now.Date, "Team stand-up 09:30"); model.AddDayNote(model.Engine.Now.Date, "Send timesheet"); model.AddDayNote(model.Engine.Now.Date.AddDays(1), "Client review 11:00"); model.AddDayNote(model.Engine.Now.Date.AddDays(3), "Quarter end");
         var window = Open(model, width, height);
         try
         {

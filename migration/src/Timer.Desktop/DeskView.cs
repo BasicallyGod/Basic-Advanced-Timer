@@ -20,12 +20,14 @@ public sealed class DeskView : UserControl
     public static readonly IReadOnlyList<DeskTileKind> Kinds = new DeskTileKind[]
     {
         new("working", "Working time", "#7FD1C7", 2, 1, "timeline"),
-        new("accounts", "Accounts", "#A99CF5", 2, 3, null),
         new("day", "Day", "#F0C97A", 2, 1, "overview"),
+        new("strip", "Day strip", "#D9A8E8", 4, 1, "timeline"),
+        new("accounts", "Accounts", "#A99CF5", 2, 3, null),
         new("todo", "To-do", "#F4B58A", 2, 3, null),
+        new("notes", "Notes", "#9ED0E6", 2, 3, null),
+        new("coming", "Coming up", "#F2A7B8", 2, 2, null),
         new("postit", "Post-it", "#FFF1A8", 2, 2, null),
         new("clock", "Clock", "#8FA8D8", 1, 2, null),
-        new("strip", "Day strip", "#D9A8E8", 4, 1, "timeline"),
     };
 
     private readonly TimerModel model;
@@ -34,6 +36,7 @@ public sealed class DeskView : UserControl
     private readonly Dictionary<string, (Border Tile, Border Body, TileForm? Form)> tiles = new();
     private readonly ClockText clock = new(34, 18); private readonly TextBlock accountLine = Ui.Text("", 14), allocated = Ui.Text("", 20, "figures"), unallocated = Ui.Text("", 20, "figures");
     private readonly AnalogueClock analogue; private readonly DayStrip strip;
+    private NotesView? notesView; private ComingUpView? comingView;
     private TodoView? todoView; private TextBox? postIt;
     private List<string> order, hidden;
     private readonly Border drawer = new() { Name = "Drawer", Width = 236, HorizontalAlignment = HorizontalAlignment.Right, IsVisible = false, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), ZIndex = 20 };
@@ -83,7 +86,7 @@ public sealed class DeskView : UserControl
     {
         RefreshLive();
         // The rows are redrawn only when something other than the clock changed, so a tick never interrupts the to-do list.
-        if (e.PropertyName != nameof(TimerModel.Elapsed)) { todoView?.Rebuild(); PaintPostIt(); }
+        if (e.PropertyName != nameof(TimerModel.Elapsed)) { todoView?.Rebuild(); notesView?.Rebuild(); comingView?.Rebuild(); PaintPostIt(); }
     }
     private void PaintPostIt()
     {
@@ -148,6 +151,8 @@ public sealed class DeskView : UserControl
                 break;
             case "clock": body.Child = analogue; break;
             case "strip": strip.Labels = form != TileForm.Tiny; body.Child = strip; strip.InvalidateVisual(); break;
+            case "notes": body.Child = notesView = new NotesView(model, form == TileForm.Tiny); break;
+            case "coming": body.Child = new ScrollViewer { Content = comingView = new ComingUpView(model), AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }; break;
             case "todo": body.Child = todoView = new TodoView(model, form == TileForm.Tiny); break;
             case "postit": body.Child = postIt ??= PostItView.Build(model, 0, false); PaintPostIt(); break;
             case "accounts":
