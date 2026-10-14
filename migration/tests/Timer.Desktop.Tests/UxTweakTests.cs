@@ -62,6 +62,7 @@ public sealed class UxTweakTests
         var view = new SettingsView(model); var window = new Window { Content = view }; window.Show();
         try
         {
+            view.Select("appearance");
             var choice = view.GetLogicalDescendants().OfType<ComboBox>().Single(c => c.Name == "ThemeChoice");
             Assert.DoesNotContain("Mine", choice.ItemsSource!.Cast<string>());
             model.SaveTheme(ThemeLibrary.Light with { Name = "Mine" });

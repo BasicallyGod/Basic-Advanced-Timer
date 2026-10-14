@@ -22,23 +22,34 @@ public sealed class ShiftEditor : StackPanel
 {
     /// <param name="saved">Called after the hours are saved.</param>
     /// <param name="cancelled">Called when Cancel is pressed. Without it there is no Cancel button, as on the settings page.</param>
-    public ShiftEditor(TimerModel model, Action saved, Action? cancelled = null, bool heading = false)
+    public ShiftEditor(TimerModel model, Action saved, Action? cancelled = null, bool heading = false, bool week = false)
     {
         Margin = new Thickness(heading ? 24 : 0); Spacing = 12;
         var root = this;
         if (heading) root.Children.Add(Ui.Heading("Working hours", 24));
         root.Children.Add(new TextBlock { Text = "Working days and shifts. Times are HH:mm.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
         var entries = new List<(DayOfWeek Day, CheckBox On, TextBox Start, TextBox End)>();
+        // On the settings page the week is one row of seven columns, each a day with its start and end beneath, so it takes a few lines instead of a long list.
+        var weekGrid = week ? Ui.Grid("*,*,*,*,*,*,*") : null;
+        var column = 0;
         foreach (var day in new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday })
         {
             var shift = model.Engine.Schedule.Shifts.GetValueOrDefault(day) ?? model.Engine.Schedule.Default;
-            var on = new CheckBox { Content = day.ToString(), IsChecked = model.Engine.Schedule.Days.Contains(day) };
-            var start = new TextBox { Text = shift.Start.ToString(@"hh\:mm"), Width = 80 };
-            var end = new TextBox { Text = shift.End.ToString(@"hh\:mm"), Width = 80 };
+            var on = new CheckBox { Content = week ? day.ToString()[..3] : day.ToString(), IsChecked = model.Engine.Schedule.Days.Contains(day) };
+            var start = new TextBox { Text = shift.Start.ToString(@"hh\:mm"), Width = week ? double.NaN : 80 };
+            var end = new TextBox { Text = shift.End.ToString(@"hh\:mm"), Width = week ? double.NaN : 80 };
+            if (weekGrid is not null)
+            {
+                var cell = new StackPanel { Spacing = 6, Margin = new Thickness(0, 0, 8, 0) };
+                cell.Children.Add(on); cell.Children.Add(start); cell.Children.Add(end);
+                Ui.Put(weekGrid, cell, column++);
+                entries.Add((day, on, start, end)); continue;
+            }
             var row = Ui.Grid("*,80,24,80");
             Ui.Put(row, on); Ui.Put(row, start, 1); Ui.Put(row, Ui.Dash(), 2); Ui.Put(row, end, 3);
             root.Children.Add(row); entries.Add((day, on, start, end));
         }
+        if (weekGrid is not null) root.Children.Add(weekGrid);
         var today = new CheckBox { Content = "Also reset today to its new scheduled start/end" };
         root.Children.Add(today);
         var error = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, Classes = { "overtime" } };

@@ -49,18 +49,17 @@ public sealed class StoreBuildTests
             var menu = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
             Assert.False(menu.Single(m => m.Name == "BuildVersion").IsVisible); Assert.False(menu.Single(m => m.Name == "TestOvertime").IsVisible);
             Assert.True(menu.Single(m => (string?)m.Header == "Collapse to tray").IsVisible);
-            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window);
-            Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);
+            window.OpenCategory("about"); Settle(window);
+            Assert.False(window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SettingsCategory_development").IsVisible);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "OpenDemo" && b.IsVisible && b.GetVisualAncestors().All(a => a is not Control c || c.IsVisible));
             // About still shows which version this is, since that is not a developer feature.
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "AboutVersion" && !string.IsNullOrEmpty(t.Text));
-            window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "SettingsPage").Offset = new Vector(0, 5000); Settle(window);
-            var about = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "AboutSection");
+            var about = window.GetVisualDescendants().OfType<StackPanel>().Single(b => b.Name == "AboutSection");
             var point = about.TranslatePoint(new Point(20, 20), window)!.Value;
             for (var i = 0; i < SettingsView.UnlockClicks + 3; i++) { window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left); }
             Dispatcher.UIThread.RunJobs();
             Assert.False(model.DeveloperUnlocked);
-            Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);
+            Assert.False(window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SettingsCategory_development").IsVisible);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "UnlockHint" && t.IsVisible); // Not even a countdown.
         }
         finally { window.Close(); BuildInfo.DeveloperFeaturesOverride = null; }

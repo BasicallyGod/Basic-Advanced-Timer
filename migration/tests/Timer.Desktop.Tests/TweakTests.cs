@@ -263,7 +263,7 @@ public sealed class TweakTests
     public void TheSettingsPageHasAPillSizeChoiceThatSetsAndShowsTheSize()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
-        dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
+        dashboard.OpenCategory("pill"); Settle(dashboard);
         var box = dashboard.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "PillSize");
         Assert.Equal("Automatic", box.SelectedItem); Assert.Contains("120%", (IEnumerable<string>)box.ItemsSource!);
         box.SelectedItem = "80%"; Assert.Equal(80, model.PillScalePercent);

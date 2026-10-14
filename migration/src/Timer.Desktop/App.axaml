@@ -323,6 +323,15 @@
     <!-- A plain text button, for quiet actions such as Skip setup. -->
     <Style Selector="Button.flat"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /><Setter Property="Padding" Value="8,4" /></Style>
     <Style Selector="Button.flat:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
+    <!-- The categories down the left of the settings dialog: quiet text, a tint under the pointer and the selection tint for the one showing. -->
+    <Style Selector="Button.settingsCategory">
+      <Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="12,9" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /><Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Button.settingsCategory:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="Button.settingsCategory.selected /template/ ContentPresenter, Button.settingsCategory.selected:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" />
+    </Style>
     <!-- The two big choices in the getting started setup. The chosen one has an accent border and the selection tint. -->
     <Style Selector="Button.choiceTile">
       <Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BorderThickness" Value="1.5" />

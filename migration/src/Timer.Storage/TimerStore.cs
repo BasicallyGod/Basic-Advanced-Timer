@@ -7,7 +7,7 @@ using Timer.Core;
 namespace Timer.Storage;
 
 public sealed record AccountSettings(string Name, double? BudgetHours = null, string BudgetPeriod = "week", bool Hidden = false, string? Colour = null);
-public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true, IReadOnlyList<ThemeDefinition>? Themes = null, bool TaskbarButton = true, bool Tooltips = true, bool Developer = false, bool SetupDone = true, bool MoveLaterAlways = false, int? PillScale = null, bool PillOnTop = true, bool DashboardOnTop = true, int? DashboardWidth = null, int? DashboardHeight = null, bool Desk = false, IReadOnlyList<string>? DeskOrder = null, bool Calm = false, IReadOnlyList<string>? DeskHidden = null, TrinketData? Trinkets = null, IReadOnlyList<string>? DeskSizes = null);
+public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true, IReadOnlyList<ThemeDefinition>? Themes = null, bool TaskbarButton = true, bool Tooltips = true, bool Developer = false, bool SetupDone = true, bool MoveLaterAlways = false, int? PillScale = null, bool PillOnTop = true, bool DashboardOnTop = true, int? DashboardWidth = null, int? DashboardHeight = null, bool Desk = false, IReadOnlyList<string>? DeskOrder = null, bool Calm = false, IReadOnlyList<string>? DeskHidden = null, TrinketData? Trinkets = null, IReadOnlyList<string>? DeskSizes = null, string PillStyle = "full");
 
 // The timer's records live in one SQLite file (timer.db). Preferences stay in the settings JSON beside it.
 // The in-memory model is unchanged: Load fills the engine from the database and Save writes it back in one transaction.
@@ -168,11 +168,13 @@ public sealed class TimerStore : IDisposable
         var trinkets = Trinkets.FromJson(Lines("deskTrinkets").FirstOrDefault());
         var deskSizes = appearance.Skip(1).FirstOrDefault(l => l.StartsWith("desk-sizes=", StringComparison.Ordinal)) is { } sizesLine ? sizesLine[11..].Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
         var calm = appearance.Skip(1).Contains("motion=calm");
+        // The pill's layout: full (the default), compact or minimal. Anything else is the default.
+        var pillStyle = appearance.Skip(1).FirstOrDefault(l => l.StartsWith("pillstyle=", StringComparison.Ordinal))?[10..] is "compact" or "minimal" ? appearance.Skip(1).First(l => l.StartsWith("pillstyle=", StringComparison.Ordinal))[10..] : "full";
         var themes = ThemeStorage.FromLines(Lines("migrationThemes"));
         // A name that is neither System, a built-in nor one of the user's own falls back to System, so a removed theme never leaves the app unstyled.
         if (theme != ThemeLibrary.System && !ThemeLibrary.BuiltIn.Concat(themes).Any(t => t.Name == theme)) theme = ThemeLibrary.System;
         // Written back on the first save, so a brand new database does not start with the sample accounts every launch.
-        return new(accounts, decimalHours, theme, weekStart, shadows, themes, taskbar, tooltips, developer, setupDone, moveLater, pillScale, pillOnTop, dashboardOnTop, dashWidth, dashHeight, deskOn, deskOrder, calm, deskHidden, trinkets, deskSizes);
+        return new(accounts, decimalHours, theme, weekStart, shadows, themes, taskbar, tooltips, developer, setupDone, moveLater, pillScale, pillOnTop, dashboardOnTop, dashWidth, dashHeight, deskOn, deskOrder, calm, deskHidden, trinkets, deskSizes, pillStyle);
     }
     private static SessionRow ToRow(Microsoft.Data.Sqlite.SqliteDataReader r)
     {
@@ -201,7 +203,7 @@ public sealed class TimerStore : IDisposable
         var sections = (JsonObject)settings["sections"]!;
         sections["dayOverrides"] = Array(engine.Schedule.Overrides.OrderBy(p => p.Key).Select(p => p.Value.Off
             ? $"{p.Key:yyyy-MM-dd}\toff" : $"{p.Key:yyyy-MM-dd}\t{p.Value.Shift!.Start:hh\\:mm}\t{p.Value.Shift.End:hh\\:mm}"));
-        sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off", preferences.TaskbarButton ? "taskbar=on" : "taskbar=off", preferences.Tooltips ? "tooltips=on" : "tooltips=off", preferences.Developer ? "developer=on" : "developer=off", preferences.SetupDone ? "setup=done" : "setup=pending", preferences.MoveLaterAlways ? "shove=always" : "shove=ask", preferences.PillScale is { } pill ? "pill=" + pill : "pill=auto", preferences.PillOnTop ? "pilltop=on" : "pilltop=off", preferences.DashboardOnTop ? "dashtop=on" : "dashtop=off", preferences.DashboardWidth is { } dw && preferences.DashboardHeight is { } dh ? $"dash={dw}x{dh}" : "dash=default", preferences.Desk ? "desk=on" : "desk=off", preferences.Calm ? "motion=calm" : "motion=lively", "desk-order=" + string.Join(',', preferences.DeskOrder ?? System.Array.Empty<string>()), "desk-hidden=" + string.Join(',', preferences.DeskHidden ?? System.Array.Empty<string>()), "desk-sizes=" + string.Join(',', preferences.DeskSizes ?? System.Array.Empty<string>()) });
+        sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off", preferences.TaskbarButton ? "taskbar=on" : "taskbar=off", preferences.Tooltips ? "tooltips=on" : "tooltips=off", preferences.Developer ? "developer=on" : "developer=off", preferences.SetupDone ? "setup=done" : "setup=pending", preferences.MoveLaterAlways ? "shove=always" : "shove=ask", preferences.PillScale is { } pill ? "pill=" + pill : "pill=auto", preferences.PillOnTop ? "pilltop=on" : "pilltop=off", preferences.DashboardOnTop ? "dashtop=on" : "dashtop=off", preferences.DashboardWidth is { } dw && preferences.DashboardHeight is { } dh ? $"dash={dw}x{dh}" : "dash=default", preferences.Desk ? "desk=on" : "desk=off", preferences.Calm ? "motion=calm" : "motion=lively", "desk-order=" + string.Join(',', preferences.DeskOrder ?? System.Array.Empty<string>()), "desk-hidden=" + string.Join(',', preferences.DeskHidden ?? System.Array.Empty<string>()), "desk-sizes=" + string.Join(',', preferences.DeskSizes ?? System.Array.Empty<string>()), "pillstyle=" + (preferences.PillStyle is "compact" or "minimal" ? preferences.PillStyle : "full") });
         sections["deskTrinkets"] = Array(new[] { Trinkets.ToJson(preferences.Trinkets ?? TrinketData.Empty) });
         sections["migrationThemes"] = Array((preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).Select(ThemeStorage.ToLine));
         var hours = Lines("workingHours").Where(s =>

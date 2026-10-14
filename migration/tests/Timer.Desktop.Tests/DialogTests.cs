@@ -130,15 +130,15 @@ public sealed class DialogTests
     public void TheSettingsPageOpensAccountsHoursAndThemesAsDialogsAndTheThemeEditorStillAsksAboutUnsavedEdits()
     {
         var model = Model(out _); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
-        Find<Button>(dashboard, "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
-        Find<Button>(dashboard, "EditAccounts").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
-        Assert.IsType<AccountsDialog>(Assert.Single(dashboard.Dialogs.Dialogs)); dashboard.Dialogs.CloseTop();
+        dashboard.OpenCategory("accounts"); Settle(dashboard);
+        Assert.IsType<SettingsDialog>(Assert.Single(dashboard.Dialogs.Dialogs)); Assert.NotNull(Find<Button>(dashboard, "SaveAccounts")); // The accounts are edited in the page itself.
+        dashboard.OpenCategory("appearance");
         Find<Button>(dashboard, "EditThemes").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
-        var themes = Assert.IsType<ThemesDialog>(Assert.Single(dashboard.Dialogs.Dialogs));
+        var themes = Assert.IsType<ThemesDialog>(dashboard.Dialogs.Dialogs[^1]); Assert.Equal(2, dashboard.Dialogs.Dialogs.Count); // Over the settings.
         // A close that a dialog refuses leaves it open, which is how the theme editor asks about unsaved edits.
         var refuse = true; themes.Closing += (_, e) => e.Cancel = refuse;
         Assert.True(dashboard.Dialogs.CloseTop()); Assert.True(themes.IsVisible); Assert.True(dashboard.Dialogs.Any);
-        refuse = false; dashboard.Dialogs.CloseTop(); Assert.False(dashboard.Dialogs.Any);
+        refuse = false; dashboard.Dialogs.CloseTop(); Assert.Single(dashboard.Dialogs.Dialogs); dashboard.Dialogs.CloseTop(); Assert.False(dashboard.Dialogs.Any);
         dashboard.Close();
     }
 

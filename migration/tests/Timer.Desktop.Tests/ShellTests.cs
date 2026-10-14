@@ -189,8 +189,7 @@ public sealed class ShellTests
         {
             Assert.Empty(window.GetVisualDescendants().OfType<ComboBox>()); // Nothing to choose until the settings page is opened.
             Assert.NotNull(window.ContextMenu);
-            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Dispatcher.UIThread.RunJobs();
+            window.OpenCategory("appearance");
             var choice = window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "ThemeChoice");
             Assert.Equal(new[] { "System", "Light", "Dark", "After Hours", "Botanical", "Hawthorn" }, choice.Items.Cast<string>());
             var elapsed = model.Elapsed;
