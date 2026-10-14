@@ -4,6 +4,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Input;
 using Avalonia.VisualTree;
+using Avalonia.LogicalTree;
 using Avalonia.Interactivity;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -293,6 +294,27 @@ public static class Ui
         }
         menu.Opened += (_, _) => Sync(); Sync();
         return menu;
+    }
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ScrollViewer, object> ownWheel = new();
+    /// <summary>Whether this scroll viewer keeps the mouse wheel to itself (see <see cref="OwnWheel"/>).</summary>
+    public static bool OwnsWheel(ScrollViewer scroll) => ownWheel.TryGetValue(scroll, out _);
+    /// <summary>
+    /// Makes every scroll viewer in a widget (and the widget itself if it is one) keep the mouse wheel while the pointer is over it and it has
+    /// something to scroll. Left alone, a list that has reached its end hands the wheel on to the desk around it, so the whole desk jumps. One with
+    /// nothing to scroll still lets the wheel through, and holding Ctrl is left to whatever uses it (the timeline's zoom).
+    /// </summary>
+    public static void OwnWheel(Control root)
+    {
+        var all = root.GetLogicalDescendants().OfType<ScrollViewer>().ToList(); if (root is ScrollViewer self) all.Add(self);
+        foreach (var scroll in all)
+        {
+            if (ownWheel.TryGetValue(scroll, out _)) continue;
+            ownWheel.Add(scroll, new object());
+            scroll.AddHandler(InputElement.PointerWheelChangedEvent, (_, e) =>
+            {
+                if (!e.KeyModifiers.HasFlag(Avalonia.Input.KeyModifiers.Control) && scroll.Extent.Height > scroll.Viewport.Height + 1) e.Handled = true;
+            }, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
+        }
     }
     /// <summary>A button that shows only an icon, with its words as the tooltip and the accessible name.</summary>
     public static Button IconButton(IconKind kind, string tip, string name, Action click)

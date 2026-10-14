@@ -211,6 +211,19 @@ public sealed class PillWindow : Window
         if (!closedWindow && Screens.ScreenFromWindow(this) is { } screen) limit = screen.WorkingArea.Height / screen.Scaling;
         return Math.Min(wanted * Scale, limit);
     }
+    /// <summary>
+    /// The most of a screen's height an open pill takes: three fifths, so it never covers the whole screen on a laptop, though never less than the
+    /// pill plus a few rows. The list of accounts is what gives way, scrolling inside its box (see <see cref="WantedHeight"/>).
+    /// </summary>
+    public const double OpenShareOfScreen = 0.6, FewestRows = 3;
+    private double ListMaxHeight()
+    {
+        var screenHeight = 800.0;
+        if (!closedWindow && Screens.ScreenFromWindow(this) is { } screen) screenHeight = screen.WorkingArea.Height / screen.Scaling;
+        // In the pill's own units, since the whole pill is drawn at its scale. The rule, the day button and the notes under the list take about 150.
+        var room = screenHeight * OpenShareOfScreen / Scale - CollapsedHeight - 2 * Ui.ShadowMargin - 150;
+        return Math.Max(FewestRows * 52, room);
+    }
     private bool ensuring, closedWindow;
     /// <summary>
     /// Gives the window the size the pill's scale and state call for, and does it even when the window already has that size asked of it but not
@@ -248,7 +261,7 @@ public sealed class PillWindow : Window
     private readonly TextBlock saved = Ui.Text("", 11, "muted");
     private readonly Grid progressBar = new();
     private Border progressFill = null!, shadowHost = null!;
-    private ScrollViewer pillScroll = null!;
+    private ScrollViewer pillScroll = null!, accountScroll = null!;
     private (bool, string?, Avalonia.Styling.ThemeVariant)? lastShadow;
     public PillWindow(TimerModel model)
     {
@@ -318,7 +331,10 @@ public sealed class PillWindow : Window
         Ui.PillGestures(head, this);
         Ui.Put(root, head);
         expansion.Children.Add(Ui.Rule());
-        expansion.Children.Add(new AccountList(model));
+        // The list of accounts scrolls inside its own box, so on a short screen it is the list that gives way and the Finish day button stays in view.
+        accountScroll = new ScrollViewer { Name = "PillAccountScroll", Content = new AccountList(model), AllowAutoHide = false,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+        expansion.Children.Add(accountScroll);
         // After a quick slip from one account to another and back, the earlier block can be picked up again, for a few minutes.
         pillContinue = Ui.Button("", () => model.ContinuePrevious(), "PillContinue"); pillContinue.Classes.Add("flat"); pillContinue.IsVisible = false;
         pillContinue.HorizontalAlignment = HorizontalAlignment.Center; pillContinue.Margin = new Thickness(0, 4, 0, 0);
@@ -394,6 +410,7 @@ public sealed class PillWindow : Window
     {
         if (!expanded) return CollapsedHeight + 2 * Ui.ShadowMargin;
         // Measured, so there is no dead space whatever the number of accounts or notes showing.
+        accountScroll.MaxHeight = ListMaxHeight();
         expansion.Measure(new Size(CurrentWidth, double.PositiveInfinity));
         return CollapsedHeight + expansion.DesiredSize.Height + 2 * Ui.ShadowMargin;
     }

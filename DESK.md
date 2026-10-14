@@ -45,3 +45,5 @@ A project to turn the dashboard into a resizable desk of small tiles that you mo
 - Whether dropping a tile onto an occupied spot swaps or pushes.
 - How the full views are reached once the rail is gone besides expanding a tile.
 - What the pomodoro does at the end of a work block (suggested: a quiet nudge only).
+
+See NAVIGATION.md for the audit of the navigation and the proposed structure.
