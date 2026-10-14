@@ -62,7 +62,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Asks for the accounts and budgets dialog. The dashboard shows it, and comes up first if only the pill is showing.</summary>
     public void OpenAccounts() => AccountsRequested?.Invoke();
     public void OpenTidy() => TidyRequested?.Invoke();
-    public event Action? NoteRequested, DashboardRequested;
+    public event Action? NoteRequested, DashboardRequested, SettingsRequested;
+    /// <summary>Asks for the settings dialog, from the pill's menu. The dashboard shows it, and comes up first if only the pill is showing.</summary>
+    public void RequestSettings() => SettingsRequested?.Invoke();
     /// <summary>Asks for the add note dialog. The dashboard shows it, and comes up first if only the pill is showing.</summary>
     public void RequestNote() => NoteRequested?.Invoke();
     /// <summary>Asks for the dashboard (or the desk, when it is on) to come up, as the pill's own button does.</summary>

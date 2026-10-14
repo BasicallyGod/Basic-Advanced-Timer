@@ -19,25 +19,55 @@ public sealed class SettingsPageTests
     }
 
     [AvaloniaFact]
-    public void TheSettingsPageReplacesTheWorkspaceAndHoldsHoursAppearanceAndAccounts()
+    public void SettingsOpenAsADialogWithCategoriesAndEachHoldsItsOwnControls()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             OpenSettings(window); using var again = window.CaptureRenderedFrame();
-            var all = window.GetVisualDescendants().ToList();
-            Assert.Contains(all.OfType<ScrollViewer>(), s => s.Name == "SettingsPage");
-            Assert.Contains(all.OfType<TextBlock>(), t => t.Text == "Settings" && t.Classes.Contains("clock")); // The header names the page.
-            Assert.Contains(all.OfType<Button>(), b => b.Name == "SaveShifts"); // The working hours form is on the page.
-            Assert.Contains(all.OfType<Button>(), b => b.Name == "EditThemes"); Assert.Contains(all.OfType<Button>(), b => b.Name == "EditAccounts");
-            Assert.Contains(all.OfType<CheckBox>(), c => c.Name == "WindowShadows");
-            Assert.DoesNotContain(all.OfType<Button>(), b => b.Name == "PreviousPeriod" && b.IsVisible); // There is no date to step through here.
+            Assert.IsType<SettingsDialog>(Assert.Single(window.Dialogs.Dialogs));
+            Assert.Equal("Settings", window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "DialogTitle").Text);
             Assert.Contains("selected", window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").Classes);
-            // Going back to a view brings the date controls back.
-            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<ScrollViewer>(), s => s.Name == "SettingsPage");
-            Assert.True(window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PreviousPeriod").IsVisible);
+            // The timeline is still there behind the dialog: settings no longer take the workspace over.
+            Assert.Contains(window.GetVisualDescendants().OfType<ScrollViewer>(), s => s.Name == "TimelineScroll");
+            Assert.False(window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SettingsCategory_development").IsVisible == false && !model.DeveloperUnlocked && !model.IsDemo); // The demo has it open.
+            var expected = new (string Category, string Control)[]
+            {
+                ("general", "DecimalHours"), ("appearance", "EditThemes"), ("appearance", "WindowShadows"), ("pill", "PillSize"), ("pill", "PillLayout_compact"), ("pill", "PillOnTop"),
+                ("desk", "DeskPreview"), ("desk", "CalmMotion"), ("hours", "SaveShifts"), ("accounts", "SaveAccounts"), ("about", "AboutVersion"),
+            };
+            foreach (var (category, name) in expected)
+            {
+                window.OpenCategory(category);
+                Assert.Contains(window.GetVisualDescendants().OfType<Control>(), c => c.Name == name && c.IsVisible);
+                Assert.Contains("selected", window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SettingsCategory_" + category).Classes);
+            }
+            // Only the chosen category is on show: with About open, the pill's pictures are not in the tree.
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "PillLayout_full");
+            // The working week is one row of seven days.
+            window.OpenCategory("hours");
+            Assert.Equal(7, window.GetVisualDescendants().OfType<CheckBox>().Count(c => c.Content is string day && new[] { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" }.Contains(day)));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheSettingsAccountsEditorSavesInPlaceAndStartsAgainFromWhatWasSaved()
+    {
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            window.OpenCategory("accounts");
+            var before = model.AccountSettings.Count;
+            var input = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Watermark == "New account name"); input.Text = "Fresh account";
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Add account").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveAccounts").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(before + 1, model.AccountSettings.Count);
+            Assert.Single(window.Dialogs.Dialogs); // Saving leaves the settings open.
+            // The editor was built again, so its box for a new name is empty and the new account is a row.
+            Assert.Equal("", window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Watermark == "New account name").Text ?? "");
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBox>(), t => t.Text == "Fresh account");
         }
         finally { window.Close(); }
     }
@@ -74,27 +104,42 @@ public sealed class SettingsPageTests
     }
 
     [AvaloniaFact]
-    public void TheSettingsPageScrollsFillsTheWindowAndClosesWithTheSameButton()
+    public void TheSettingsCardKeepsItsSizeBetweenCategoriesAndTheGearClosesIt()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var first = window.CaptureRenderedFrame();
             OpenSettings(window); using var frame = window.CaptureRenderedFrame();
+            var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DialogCard");
+            var size = card.Bounds.Size; Assert.True(size.Height > 400 && size.Width > 600);
+            foreach (var key in new[] { "pill", "hours", "accounts", "about" }) { window.OpenCategory(key); using var shot = window.CaptureRenderedFrame(); Assert.Equal(size, card.Bounds.Size); }
+            // A long pane scrolls inside the card.
+            window.OpenCategory("pill");
             var page = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "SettingsPage");
-            Assert.True(page.Extent.Height > page.Viewport.Height, $"extent {page.Extent} viewport {page.Viewport}"); // There is more than fits, and it can scroll.
-            Assert.True(page.Viewport.Height > 400);
-            page.Offset = new Avalonia.Vector(0, 5000); Dispatcher.UIThread.RunJobs();
-            Assert.True(page.Offset.Y > 0);
-            // The day column stays in view, and the page runs out to the window's right edge.
-            Assert.True(page.TranslatePoint(new Avalonia.Point(0, 0), window)!.Value.X > 300);
-            Assert.True(page.TranslatePoint(new Avalonia.Point(page.Bounds.Width, 0), window)!.Value.X > window.Bounds.Width - 2 * Ui.ShadowMargin - 40);
-            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "DashboardDay" && b.IsVisible);
-            // The same button closes it again and the timeline returns.
+            Assert.True(page.Viewport.Height > 300);
+            // The same gear closes it again.
             OpenSettings(window); using var closed = window.CaptureRenderedFrame();
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<ScrollViewer>(), s => s.Name == "SettingsPage");
-            Assert.Contains(window.GetVisualDescendants().OfType<ScrollViewer>(), s => s.Name == "TimelineScroll");
+            Assert.Empty(window.Dialogs.Dialogs);
+            Assert.DoesNotContain("selected", window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").Classes);
             Assert.True(window.GetVisualDescendants().OfType<Control>().First(c => c.Name == "SidebarDragHeader").Bounds.Width > 100);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ThePillsMenuOpensTheSettingsOverTheDashboardAndRunSetupStepsOutOfTheWay()
+    {
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            model.RequestSettings(); Dispatcher.UIThread.RunJobs();
+            Assert.IsType<SettingsDialog>(Assert.Single(window.Dialogs.Dialogs));
+            model.RequestSettings(); Dispatcher.UIThread.RunJobs(); Assert.Single(window.Dialogs.Dialogs); // Asking again does not stack another.
+            window.OpenCategory("general");
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "RunSetup").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Empty(window.Dialogs.Dialogs); // The setup lays itself over the dashboard, so the dialog went.
         }
         finally { window.Close(); }
     }

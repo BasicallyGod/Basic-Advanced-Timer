@@ -78,7 +78,8 @@ public sealed class PillLayoutTests
                 }
                 model.ToggleBreak(); model.TogglePause();
             }
-            Click(Find<Button>(dashboard, "Settings")); Dispatcher.UIThread.RunJobs(); Find<Button>(dashboard, "PillLayout_full").BringIntoView(); Dispatcher.UIThread.RunJobs(); using var w2 = dashboard.CaptureRenderedFrame(); using var f2 = dashboard.CaptureRenderedFrame(); f2?.Save(Path.Combine(folder, "settings.png"));
+            foreach (var key in new[] { "general", "appearance", "pill", "desk", "hours", "accounts", "about" })
+            { dashboard.OpenCategory(key); using var warm2 = dashboard.CaptureRenderedFrame(); using var shot = dashboard.CaptureRenderedFrame(); shot?.Save(Path.Combine(folder, $"settings-{key}.png")); }
         }
         finally { pill.Close(); dashboard.Close(); }
     }
@@ -140,6 +141,7 @@ public sealed class PillLayoutTests
             var opened = 0; model.DashboardRequested += () => opened++; Click(items.Single(m => m.Name == "OpenDeskMenu")); Assert.Equal(1, opened);
             // Closing the timer is still not on the menu: it stays alone at the foot of the dashboard's rail.
             Assert.DoesNotContain(items, m => (string?)m.Header == "Close timer");
+            var settingsAsked = 0; model.SettingsRequested += () => settingsAsked++; Click(items.Single(m => m.Name == "SettingsMenu")); Assert.Equal(1, settingsAsked);
         }
         finally { pill.Close(); dashboard.Close(); }
     }
@@ -165,7 +167,7 @@ public sealed class PillLayoutTests
         var model = Model(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            Click(Find<Button>(dashboard, "Settings")); Dispatcher.UIThread.RunJobs();
+            dashboard.OpenCategory("pill");
             foreach (var layout in PillLayouts.All)
             {
                 var button = Find<Button>(dashboard, "PillLayout_" + layout.Key);

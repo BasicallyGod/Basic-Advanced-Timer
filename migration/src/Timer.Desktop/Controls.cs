@@ -262,6 +262,7 @@ public static class Ui
         var switchItem = new MenuItem { Name = "QuickSwitchMenu", Header = "Quick switch account" };
         var breakItem = new MenuItem { Name = "BreakMenu" }; breakItem.Click += (_, _) => model.ToggleBreak();
         var noteItem = new MenuItem { Name = "AddNoteMenu", Header = "Add note…" }; noteItem.Click += (_, _) => model.RequestNote();
+        var settingsItem = new MenuItem { Name = "SettingsMenu", Header = "Settings…" }; settingsItem.Click += (_, _) => model.RequestSettings();
         var pinItem = new MenuItem { Name = "PinMenu", Header = "Pin to screen", ToggleType = MenuItemToggleType.CheckBox };
         pinItem.Click += (_, _) => model.SetPillOnTop(!model.PillOnTop);
         var quickRule = new Separator();
@@ -269,7 +270,7 @@ public static class Ui
         var collapseRule = new Separator { IsVisible = false };
         var menu = new ContextMenu { ItemsSource = new Control[] { continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
         // Quick actions live on the pill's menu, where there is no other way to do them. The dashboard has its own buttons for all of these.
-        if (pill) menu.ItemsSource = new Control[] { openItem, switchItem, breakItem, noteItem, quickRule, pinItem, continueItem, overtimeTest, versionRule, version, collapseRule, collapse };
+        if (pill) menu.ItemsSource = new Control[] { openItem, switchItem, breakItem, noteItem, quickRule, pinItem, settingsItem, continueItem, overtimeTest, versionRule, version, collapseRule, collapse };
         void Sync()
         {
             openItem.Header = model.Desk ? "Open Desk" : "Open dashboard";

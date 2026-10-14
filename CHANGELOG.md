@@ -9,6 +9,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 ## 14 October 2026
 
 | Change | Commit | Details |
+| Settings become a dialog with categories | pending | Settings no longer take over the dashboard. The gear opens a dialog with General, Appearance, Pill, Desk, Working hours, Accounts and budgets and About down the left (Development once unlocked) and one pane on the right, the same size for each. Working hours is a row of seven days, the accounts are edited in place, and the pill's right-click menu has Settings… so they open from anywhere. Clicking text in a dialog near the top of the window no longer starts a window drag. |
 | Pill layouts, clearer idle, quick actions | pending | Settings has three pill layouts shown as small pictures: Full (as before), Compact (account first, no progress line) and Minimal (initials badge, clock and pause). An idle pill says Ready to track and Select an account. The pill's right-click menu now opens with Open dashboard, Quick switch account, Start break, Add note and Pin to screen. |
 | Pill becomes a card | pending | The pill takes the desk's card shape, a 24 pixel corner instead of a full capsule, with the account's colour in a rounded badge beside its name. It keeps its size, colours and behaviour, and opening it no longer changes the corner. |
 | --- | --- | --- |

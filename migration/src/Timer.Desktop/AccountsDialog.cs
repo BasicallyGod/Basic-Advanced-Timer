@@ -8,8 +8,11 @@ namespace Timer.Desktop;
 
 public sealed class AccountsDialog : Dialog
 {
-    public AccountsDialog(TimerModel model)
+    private readonly Action? finished;
+    /// <param name="finished">When the editor sits inside another page (the settings dialog) there is no dialog to close, so this is called instead after Save or Cancel.</param>
+    public AccountsDialog(TimerModel model, Action? finished = null)
     {
+        this.finished = finished;
         Title = "Accounts and budgets";
         Width = 700; Height = 540;
         var root = Ui.Grid("*", "Auto,*,Auto,Auto,Auto,Auto"); root.Margin = new Thickness(24, 4, 24, 24);
@@ -92,7 +95,7 @@ public sealed class AccountsDialog : Dialog
                     .Where(r => r.From != r.To).ToDictionary(r => r.From, r => r.To);
                 model.SetAccounts(accounts, renames, deleted);
                 if (model.LastError is not null) { error.Text = model.LastError; return; }
-                Close();
+                Done();
             }
             catch (Exception ex) when (ex is FormatException or OverflowException)
             { error.Text = "Use positive budget hours, such as 7.5, or leave the budget blank."; }
@@ -100,9 +103,12 @@ public sealed class AccountsDialog : Dialog
             { error.Text = ex.Message; }
         }
         Ui.Put(root, confirm, row: 4);
-        Ui.Put(root, Ui.Horizontal(Ui.DialogButton("Save", () => Commit(false), "SaveAccounts"), Ui.DialogButton("Cancel", Close)), row: 5);
+        Ui.Put(root, Ui.Horizontal(Ui.DialogButton("Save", () => Commit(false), "SaveAccounts"), Ui.DialogButton(finished is null ? "Cancel" : "Revert", Done)), row: 5);
         Content = root;
     }
+    private void Done() { if (finished is not null) finished(); else Close(); }
+    /// <summary>The editor itself, taken out of the dialog so a page can hold it.</summary>
+    public Control TakeBody() { var body = (Control)Content!; Content = null; return body; }
     private sealed class AccountRow
     {
         public string? Original; public TextBox Name = null!; public CheckBox Visible = null!; public TextBox Budget = null!; public ComboBox Period = null!;

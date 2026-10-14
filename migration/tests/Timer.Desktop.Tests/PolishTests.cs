@@ -27,21 +27,20 @@ public sealed class PolishTests
             var menu = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
             window.ContextMenu!.Open(); Dispatcher.UIThread.RunJobs();
             Assert.False(menu.Single(m => m.Name == "BuildVersion").IsVisible); Assert.False(menu.Single(m => m.Name == "TestOvertime").IsVisible);
-            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); Settle(window);
-            Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible); // No sample-data demo yet.
-            window.GetVisualDescendants().OfType<ScrollViewer>().Single(x => x.Name == "SettingsPage").Offset = new Vector(0, 5000); Settle(window); // About is at the foot of the page.
-            var about = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "AboutSection");
+            window.OpenCategory("about"); Settle(window);
+            Assert.False(window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SettingsCategory_development").IsVisible); // No sample-data demo yet.
+            var about = window.GetVisualDescendants().OfType<StackPanel>().Single(b => b.Name == "AboutSection");
             var point = about.TranslatePoint(new Point(20, 20), window)!.Value;
             for (var i = 0; i < SettingsView.UnlockClicks - 1; i++) { window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left); }
             Assert.False(model.DeveloperUnlocked); // Nine is not enough.
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left); Dispatcher.UIThread.RunJobs();
             Assert.True(model.DeveloperUnlocked);
-            Assert.True(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);
+            Assert.True(window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SettingsCategory_development").IsVisible);
             window.ContextMenu!.Close(); window.ContextMenu!.Open(); Dispatcher.UIThread.RunJobs();
             Assert.True(menu.Single(m => m.Name == "BuildVersion").IsVisible); Assert.False(menu.Single(m => m.Name == "TestOvertime").IsVisible); // The tester is for the demo only.
             // The switch in the Development section hides them again.
             model.SetDeveloper(false); Dispatcher.UIThread.RunJobs();
-            Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);
+            Assert.False(window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SettingsCategory_development").IsVisible);
         }
         finally { window.Close(); }
     }
@@ -56,8 +55,8 @@ public sealed class PolishTests
             var menu = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
             Assert.True(menu.Single(m => m.Name == "TestOvertime").IsVisible); Assert.True(menu.Single(m => m.Name == "BuildVersion").IsVisible);
             // The settings page shows the Development section already open, with its switch fixed on and no button to open a demo from inside one.
-            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window);
-            Assert.True(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);
+            window.OpenCategory("development"); Settle(window);
+            Assert.True(window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SettingsCategory_development").IsVisible);
             var toggle = window.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Name == "DeveloperFeatures");
             Assert.True(toggle.IsChecked); Assert.False(toggle.IsEnabled);
             Assert.False(window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "OpenDemo").IsVisible == true && window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "OpenDemo").GetVisualAncestors().OfType<Grid>().First().IsVisible);

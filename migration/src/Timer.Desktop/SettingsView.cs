@@ -1,48 +1,142 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.VisualTree;
 using Timer.Core;
 
 namespace Timer.Desktop;
 
-/// <summary>
-/// The settings page, shown in the dashboard's workspace. Everything that used to hang off the settings menu lives here in sections:
-/// working hours, how the app looks and behaves, hours format, accounts, and (in development builds) the sample-data demo.
-/// </summary>
-public sealed class SettingsView : ScrollViewer
+/// <summary>The settings, as a dialog over the dashboard, so they open the same way from the pill, the desk and the dashboard.</summary>
+public sealed class SettingsDialog : Dialog
 {
-    // Styles and the scrolling template are found by exact type, so a subclass must borrow ScrollViewer's or it draws no scroll bar and never scrolls.
-    protected override Type StyleKeyOverride => typeof(ScrollViewer);
+    public SettingsDialog(TimerModel model)
+    {
+        Title = "Settings"; Width = 940; Height = 640; // The card keeps this size, so moving between categories never makes it jump.
+        Content = new SettingsView(model);
+    }
+}
+
+/// <summary>
+/// The settings, in categories down the left with one pane each on the right: General, Appearance, Pill, Desk, Working hours, Accounts and budgets,
+/// About, and (once unlocked) Development. Every pane is built once and swapped in, so nothing a person has typed is lost by looking at another one.
+/// </summary>
+public sealed class SettingsView : Grid
+{
     /// <summary>How many quick clicks on the About tile unlock the developer features, and the longest pause allowed between them.</summary>
     public const int UnlockClicks = 10;
     public static readonly TimeSpan UnlockWindow = TimeSpan.FromMilliseconds(700);
     private readonly TimerModel model;
     private readonly List<Action> syncs = new();
+    private readonly Dictionary<string, Button> categoryButtons = new();
+    private readonly Dictionary<string, Control> panes = new();
+    private readonly ScrollViewer scroll = new() { Name = "SettingsPage", AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+    private readonly Border accountsHost = new() { Name = "AccountsPane", IsVisible = false };
+    private static readonly (string Key, string Title)[] Categories =
+    {
+        ("general", "General"), ("appearance", "Appearance"), ("pill", "Pill"), ("desk", "Desk"), ("hours", "Working hours"),
+        ("accounts", "Accounts and budgets"), ("about", "About"), ("development", "Development"),
+    };
+    public string Current { get; private set; } = "general";
+
     public SettingsView(TimerModel model)
     {
         this.model = model;
-        Name = "SettingsPage"; AllowAutoHide = false;
-        HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
-        var page = new StackPanel { Spacing = 16, Margin = new Thickness(0, 0, 14, 8), HorizontalAlignment = HorizontalAlignment.Stretch };
+        ColumnDefinitions = new ColumnDefinitions("210,*");
 
-        // Working hours, with the same form as its window.
-        page.Children.Add(Section("Working hours", new ShiftEditor(model, () => { }, null)));
+        panes["general"] = General();
+        panes["appearance"] = Appearance();
+        panes["pill"] = PillPane();
+        panes["desk"] = DeskPane();
+        panes["hours"] = Pane("Working hours", new ShiftEditor(model, () => { }, null, week: true));
+        BuildAccounts();
+        panes["development"] = Development();
+        panes["about"] = About();
 
-        // How the app looks and behaves.
+        var rail = new StackPanel { Spacing = 2, Margin = new Thickness(16, 4, 8, 16) };
+        foreach (var (key, title) in Categories)
+        {
+            var button = Ui.Button(title, () => Select(key), "SettingsCategory_" + key);
+            button.Classes.Add("settingsCategory"); categoryButtons[key] = button; rail.Children.Add(button);
+        }
+        // Development is only there once unlocked.
+        categoryButtons["development"].IsVisible = model.DeveloperUnlocked;
+        syncs.Add(() => { categoryButtons["development"].IsVisible = model.DeveloperUnlocked; if (!model.DeveloperUnlocked && Current == "development") Select("about"); });
+        Ui.Put(this, rail);
+        var content = new Grid(); content.Children.Add(scroll); content.Children.Add(accountsHost);
+        Ui.Put(this, content, 1);
+        Select("general");
+
+        // The dialog is built once, so it listens for changes made elsewhere (the right-click menu's decimal hours, a theme edit) and keeps its boxes true.
+        void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { foreach (var sync in syncs) sync(); }
+        AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
+        DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
+    }
+
+    /// <summary>Shows one category's pane.</summary>
+    public void Select(string key)
+    {
+        if (!panes.ContainsKey(key)) return;
+        Current = key;
+        foreach (var (name, button) in categoryButtons) button.Classes.Set("selected", name == key);
+        // The accounts editor has a list that scrolls by itself, so it sits straight in the dialog; the rest share one scroll viewer.
+        var own = key == "accounts";
+        accountsHost.IsVisible = own; scroll.IsVisible = !own;
+        if (!own) { scroll.Content = panes[key]; scroll.Offset = default; }
+    }
+
+    private static StackPanel Pane(string title, params Control[] parts)
+    {
+        var pane = new StackPanel { Spacing = 12, Margin = new Thickness(8, 4, 24, 20) };
+        pane.Children.Add(Ui.Heading(title, 22));
+        foreach (var part in parts) pane.Children.Add(part);
+        return pane;
+    }
+    private static TextBlock Group(string text) { var label = Ui.Text(text, 13, "muted"); label.Margin = new Thickness(0, 10, 0, 0); return label; }
+
+    private Control General()
+    {
+        var pane = Pane("General");
+        pane.Children.Add(Group("Hours"));
+        pane.Children.Add(Toggle("Decimal hours (1.50h instead of 1h 30m)", "DecimalHours", () => model.DecimalHours, _ => model.ToggleFormat()));
+        pane.Children.Add(Toggle("Move later blocks without asking when a longer entry runs into them", "MoveLaterAlways", () => model.MoveLaterAlways, v => model.SetMoveLaterAlways(v)));
+        pane.Children.Add(Group("Windows"));
+        pane.Children.Add(Toggle("Keep the dashboard on top", "DashboardOnTop", () => model.DashboardOnTop, v => model.SetDashboardOnTop(v)));
+        if (model.TrayAvailable) pane.Children.Add(Toggle("Show in taskbar", "ShowInTaskbar", () => model.TaskbarButton, v => model.SetTaskbarButton(v)));
+        if (model.AutoStart?.Available == true) pane.Children.Add(Toggle("Start with Windows", "StartWithWindows", () => model.AutoStart?.IsEnabled == true, v => model.SetAutoStart(v)));
+        pane.Children.Add(Toggle("Show tooltips", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v)));
+        var tipNote = Ui.Text("With tooltips off, budget percentages are still in Week overview.", 12, "muted"); tipNote.Name = "TooltipsNote"; tipNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; pane.Children.Add(tipNote);
+        // The getting started setup, for anyone who skipped it or wants to look again. Nothing is lost: it starts from the current settings.
+        pane.Children.Add(Group("Getting started"));
+        pane.Children.Add(Row("Setup", Ui.DialogButton("Run setup again", () =>
+        {
+            // The setup lays itself over the dashboard, so this dialog steps out of its way first.
+            this.GetVisualAncestors().OfType<Dialog>().FirstOrDefault()?.Close(); model.RestartSetup();
+        }, "RunSetup")));
+        return pane;
+    }
+
+    private Control Appearance()
+    {
         List<string> ThemeNames() => new[] { ThemeLibrary.System }.Concat(model.Themes.Select(t => t.Name)).ToList();
         var themeNames = ThemeNames();
         var theme = new ComboBox { Name = "ThemeChoice", ItemsSource = themeNames, SelectedItem = themeNames.Contains(model.Theme) ? model.Theme : ThemeLibrary.System, MinWidth = 200 };
         theme.SelectionChanged += (_, _) => { if (theme.SelectedItem is string chosen && chosen != model.Theme) model.SetTheme(chosen); };
         syncs.Add(() =>
         {
-            // The page is built once, so themes made or deleted in the editor afterwards are picked up here.
+            // The dialog is built once, so themes made or deleted in the editor afterwards are picked up here.
             var current = ThemeNames();
             if (!current.SequenceEqual(themeNames)) { themeNames = current; theme.ItemsSource = themeNames; }
             var wanted = themeNames.Contains(model.Theme) ? model.Theme : ThemeLibrary.System; if (!Equals(theme.SelectedItem, wanted)) theme.SelectedItem = wanted;
         });
         var editThemes = Ui.DialogButton("Edit themes…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new ThemesDialog(model)); }, "EditThemes");
-        var appearance = new StackPanel { Spacing = 10 };
-        appearance.Children.Add(Row("Theme", Ui.Horizontal(theme, editThemes)));
+        var pane = Pane("Appearance");
+        pane.Children.Add(Row("Theme", Ui.Horizontal(theme, editThemes)));
+        pane.Children.Add(Toggle("Window shadows", "WindowShadows", () => model.Shadows, v => model.SetShadows(v)));
+        return pane;
+    }
+
+    private Control PillPane()
+    {
         // The pill is sized for the screen it is on. This overrides that with a size of your own.
         var pillChoices = new List<string> { "Automatic" }; pillChoices.AddRange(TimerModel.PillScaleChoices.Select(p => p + "%"));
         string PillText(int? percent) => percent is { } p ? p + "%" : "Automatic";
@@ -54,75 +148,70 @@ public sealed class SettingsView : ScrollViewer
             model.SetPillScale(chosen == "Automatic" ? null : int.Parse(chosen.TrimEnd('%'), System.Globalization.CultureInfo.InvariantCulture));
         };
         syncs.Add(() => { if (!Equals(pillSize.SelectedItem, PillText(model.PillScalePercent))) pillSize.SelectedItem = PillText(model.PillScalePercent); });
-        appearance.Children.Add(Row("Pill size", pillSize));
+        var pane = Pane("Pill");
         // The choices need the whole width to sit side by side, so they go under their label instead of in a row.
-        appearance.Children.Add(Ui.Text("Pill layout", 14, "muted")); appearance.Children.Add(PillLayoutChoices(model, syncs));
-        appearance.Children.Add(Toggle("Keep the pill on top", "PillOnTop", () => model.PillOnTop, v => model.SetPillOnTop(v)));
-        appearance.Children.Add(Toggle("Keep the dashboard on top", "DashboardOnTop", () => model.DashboardOnTop, v => model.SetDashboardOnTop(v)));
-        appearance.Children.Add(Toggle("Window shadows", "WindowShadows", () => model.Shadows, v => model.SetShadows(v)));
-        appearance.Children.Add(Toggle("Show tooltips", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v)));
-        var tipNote = Ui.Text("With tooltips off, budget percentages are still in Week overview.", 12, "muted"); tipNote.Name = "TooltipsNote"; tipNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; appearance.Children.Add(tipNote);
-        if (model.TrayAvailable) appearance.Children.Add(Toggle("Show in taskbar", "ShowInTaskbar", () => model.TaskbarButton, v => model.SetTaskbarButton(v)));
-        if (model.AutoStart?.Available == true) appearance.Children.Add(Toggle("Start with Windows", "StartWithWindows", () => model.AutoStart?.IsEnabled == true, v => model.SetAutoStart(v)));
+        pane.Children.Add(Group("Layout")); pane.Children.Add(PillLayoutChoices(model, syncs));
+        pane.Children.Add(Group("Size and position"));
+        pane.Children.Add(Row("Pill size", pillSize));
+        pane.Children.Add(Toggle("Keep the pill on top", "PillOnTop", () => model.PillOnTop, v => model.SetPillOnTop(v)));
+        return pane;
+    }
+
+    private Control DeskPane()
+    {
+        var pane = Pane("Desk");
         // The tile board is still being built, so it sits behind a switch. The existing pages are all still there.
-        appearance.Children.Add(Toggle("Calm motion: tiles move without bouncing", "CalmMotion", () => model.Calm, v => model.SetCalm(v)));
-        appearance.Children.Add(Toggle("Desk (preview): a board of tiles you can move", "DeskPreview", () => model.Desk, v => model.SetDesk(v)));
-        page.Children.Add(Section("Appearance and behaviour", appearance));
+        pane.Children.Add(Toggle("Desk (preview): a board of tiles you can move", "DeskPreview", () => model.Desk, v => model.SetDesk(v)));
+        pane.Children.Add(Toggle("Calm motion: tiles move without bouncing", "CalmMotion", () => model.Calm, v => model.SetCalm(v)));
+        return pane;
+    }
 
-        // Units, and the accounts the day is divided between.
-        var general = new StackPanel { Spacing = 10 };
-        general.Children.Add(Toggle("Decimal hours (1.50h instead of 1h 30m)", "DecimalHours", () => model.DecimalHours, _ => model.ToggleFormat()));
-        general.Children.Add(Toggle("Move later blocks without asking when a longer entry runs into them", "MoveLaterAlways", () => model.MoveLaterAlways, v => model.SetMoveLaterAlways(v)));
-        general.Children.Add(Row("Client accounts", Ui.DialogButton("Accounts and budgets…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new AccountsDialog(model)); }, "EditAccounts")));
-        page.Children.Add(Section("Hours and accounts", general));
+    // The accounts list is edited right here. After Save or Revert it is built again from what is now saved.
+    private void BuildAccounts()
+    {
+        void Rebuild()
+        {
+            var body = new AccountsDialog(model, Rebuild).TakeBody(); body.Margin = new Thickness(8, 0, 12, 12);
+            var layout = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+            var heading = Ui.Heading("Accounts and budgets", 22); heading.Margin = new Thickness(8, 4, 0, 8);
+            layout.Children.Add(heading); Ui.Put(layout, body, row: 1);
+            accountsHost.Child = layout;
+        }
+        Rebuild();
+        panes["accounts"] = accountsHost;
+    }
 
-        // The getting started setup, for anyone who skipped it or wants to look again. Nothing is lost: it starts from the current settings.
-        page.Children.Add(Section("Getting started", Row("Setup", Ui.DialogButton("Run setup again", () => model.RestartSetup(), "RunSetup"))));
+    private Control Development()
+    {
         // Hidden until unlocked: ten quick clicks on the About tile. Once unlocked it holds the sample-data demo and a switch to hide the features again.
-        var developer = new StackPanel { Spacing = 10 };
         // In the demo the developer features are simply on: there is no demo to open from inside it, and the switch is fixed on and greyed out.
         var openDemo = Row("Sample data", Ui.DialogButton("Open sample-data demo", Ui.StartDemo, "OpenDemo")); openDemo.IsVisible = !model.IsDemo;
-        developer.Children.Add(openDemo);
         var inDemo = Ui.Text("You are in the sample-data demo, so the developer features are on. Nothing here is saved.", 13, "muted"); inDemo.Name = "InDemoNote"; inDemo.TextWrapping = Avalonia.Media.TextWrapping.Wrap; inDemo.IsVisible = model.IsDemo;
-        developer.Children.Add(inDemo);
         var developerToggle = Toggle("Developer features (overtime tester and version on the right-click menu)", "DeveloperFeatures", () => model.DeveloperUnlocked, v => model.SetDeveloper(v));
         developerToggle.IsEnabled = !model.IsDemo;
-        developer.Children.Add(developerToggle);
-        var developerSection = Section("Development", developer); developerSection.Name = "DevelopmentSection";
-        developerSection.IsVisible = model.DeveloperUnlocked;
-        syncs.Add(() => developerSection.IsVisible = model.DeveloperUnlocked);
-        page.Children.Add(developerSection);
-        var aboutText = new StackPanel { Spacing = 4 };
-        var about = Ui.Text(BuildInfo.Current, 13, "muted"); about.Name = "AboutVersion"; aboutText.Children.Add(about);
-        var unlockHint = Ui.Text("", 12, "muted"); unlockHint.Name = "UnlockHint"; unlockHint.IsVisible = false; aboutText.Children.Add(unlockHint);
-        var aboutSection = Section("About", aboutText); aboutSection.Name = "AboutSection";
+        var pane = Pane("Development", openDemo, inDemo, developerToggle); pane.Name = "DevelopmentSection";
+        return pane;
+    }
+
+    private Control About()
+    {
+        var pane = Pane("About");
+        var about = Ui.Text(BuildInfo.Current, 13, "muted"); about.Name = "AboutVersion"; pane.Children.Add(about);
+        var unlockHint = Ui.Text("", 12, "muted"); unlockHint.Name = "UnlockHint"; unlockHint.IsVisible = false; pane.Children.Add(unlockHint);
+        pane.Name = "AboutSection";
         // Ten presses, each soon after the one before, unlock the developer features. A pause starts the count again, so ordinary clicks never do it.
         var presses = 0; var lastPress = DateTime.MinValue;
-        aboutSection.PointerPressed += (_, e) =>
+        pane.PointerPressed += (_, e) =>
         {
             if (!BuildInfo.DeveloperFeatures || model.DeveloperUnlocked) return;
             var now = DateTime.UtcNow; presses = now - lastPress <= UnlockWindow ? presses + 1 : 1; lastPress = now;
             if (presses >= UnlockClicks) { model.SetDeveloper(true); presses = 0; unlockHint.Text = "Developer features unlocked."; unlockHint.IsVisible = true; }
             else if (presses >= UnlockClicks - 4) { unlockHint.Text = $"{UnlockClicks - presses} more clicks to unlock developer features."; unlockHint.IsVisible = true; }
         };
-        page.Children.Add(aboutSection);
-        Content = page;
-
-        // The page is built once, so it listens for changes made elsewhere (the right-click menu's decimal hours, a theme edit) and keeps its boxes true.
-        void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { foreach (var sync in syncs) sync(); }
-        AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
-        DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
+        pane.Background = Avalonia.Media.Brushes.Transparent; // So a press anywhere on the pane counts, not only on its text.
+        return pane;
     }
 
-    private static Border Section(string title, Control body)
-    {
-        var stack = new StackPanel { Spacing = 12, Margin = new Thickness(20, 16) };
-        stack.Children.Add(Ui.Heading(title, 18));
-        stack.Children.Add(body);
-        var card = new Border { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Child = stack };
-        card.Classes.Add("dayCard");
-        return card;
-    }
     // Each layout is a small picture of the pill with its name and what it shows, so the choice is clear before it is made. The chosen one has the accent outline.
     private static Control PillLayoutChoices(TimerModel model, List<Action> syncs)
     {
@@ -157,7 +246,7 @@ public sealed class SettingsView : ScrollViewer
         {
             var text = new StackPanel { Spacing = 2, Margin = new Thickness(0, 8, 0, 0) };
             text.Children.Add(Ui.Text(layout.Title, 14));
-            var note = Ui.Text(layout.Description, 12, "muted"); note.TextWrapping = Avalonia.Media.TextWrapping.Wrap; text.Children.Add(note);
+            var note = Ui.Text(layout.Description, 12, "muted"); note.FontWeight = Avalonia.Media.FontWeight.Normal; note.TextWrapping = Avalonia.Media.TextWrapping.Wrap; text.Children.Add(note);
             var card = new StackPanel { Width = 146 }; card.Children.Add(Picture(layout.Key)); card.Children.Add(text);
             var button = Ui.DialogButton("", () => model.SetPillStyle(layout.Key), "PillLayout_" + layout.Key, false);
             button.Content = card; button.HorizontalContentAlignment = HorizontalAlignment.Stretch; button.Margin = new Thickness(0, 0, 10, 10); button.Padding = new Thickness(10);
