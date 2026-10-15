@@ -22,7 +22,8 @@ public sealed class WorkSchedule
     {
         if (to <= from) return TimeSpan.Zero;
         var total = TimeSpan.Zero;
-        for (var day = from.Date; day <= to.Date; day = day.AddDays(1))
+        // From the day before, since an overnight shift that began then can still be running at the start.
+        for (var day = from.Date.AddDays(-1); day <= to.Date; day = day.AddDays(1))
         {
             var plan = Scheduled(day); if (!plan.Working) continue;
             var start = plan.Start > from ? plan.Start : from; var end = plan.End < to ? plan.End : to;
@@ -30,13 +31,26 @@ public sealed class WorkSchedule
         }
         return total;
     }
+    /// <summary>
+    /// A shift on a day. One that ends at or before its start (22:00 to 06:00) is an overnight shift: it belongs to the day it starts and ends
+    /// the next morning, so its end falls on the following date.
+    /// </summary>
+    public static DayPlan PlanOf(DateTime day, Shift shift) => new(true, day + shift.Start, shift.End > shift.Start ? day + shift.End : day.AddDays(1) + shift.End);
+    /// <summary>Whether a plan runs past midnight into the next day.</summary>
+    public static bool IsOvernight(DayPlan plan) => plan.Working && plan.End > plan.Start.Date.AddDays(1);
     public DayPlan Scheduled(DateTime day)
     {
         day = day.Date;
         if (Overrides.TryGetValue(day, out var change))
-            return change.Off ? new(false, day, day) : new(true, day + change.Shift!.Start, day + change.Shift.End);
+            return change.Off ? new(false, day, day) : PlanOf(day, change.Shift!);
         var hours = Shifts.GetValueOrDefault(day.DayOfWeek) ?? Default;
-        return Days.Contains(day.DayOfWeek) ? new(true, day + hours.Start, day + hours.End) : new(false, day, day);
+        return Days.Contains(day.DayOfWeek) ? PlanOf(day, hours) : new(false, day, day);
+    }
+    /// <summary>The part of yesterday's overnight shift that falls on this day (from midnight to its end), or null when there is none.</summary>
+    public DayPlan? Tail(DateTime day)
+    {
+        day = day.Date; var previous = Scheduled(day.AddDays(-1));
+        return IsOvernight(previous) ? new DayPlan(true, day, previous.End) : null;
     }
 }
 
@@ -65,20 +79,64 @@ public sealed class TrackingEngine
     {
         var plan = Schedule.Scheduled(day);
         if (!DayStarts.TryGetValue(day.Date, out var manual)) return plan;
-        var end = plan.Working ? plan.End : day.Date + Schedule.Default.End;
+        var end = plan.Working ? plan.End : WorkSchedule.PlanOf(day.Date, Schedule.Default).End;
         return new(true, manual, end < manual ? manual : end);
     }
-    public bool Finished => Away.Any(a => a.Start.Date == Now.Date && a.End is null);
-    public bool DayRunning => Plan(Now).Working && Now >= Plan(Now).Start && !Finished;
+    /// <summary>
+    /// How long a shift's overtime may run on after its scheduled end before the day is taken to be over by itself. A day shift's overtime stops at midnight,
+    /// where the day changes; an overnight shift has no midnight to stop it, so it stops this long after the shift ends, or when the next shift starts.
+    /// </summary>
+    public static readonly TimeSpan OvertimeTail = TimeSpan.FromHours(6);
+    /// <summary>
+    /// The date of the working day a moment belongs to. That is its own date, except in the early hours after an overnight shift from yesterday, when it is
+    /// yesterday's: the shift's clock, finishing and starting all carry on across midnight, and the day changes when the next shift starts.
+    /// </summary>
+    public DateTime ShiftKey(DateTime at)
+    {
+        var today = at.Date; var previous = Plan(today.AddDays(-1));
+        if (WorkSchedule.IsOvernight(previous) && at < previous.End + OvertimeTail)
+        {
+            var own = Plan(today);
+            if (!(own.Working && at >= own.Start)) return today.AddDays(-1);
+        }
+        return today;
+    }
+    /// <summary>The working day now belongs to, which is today unless an overnight shift from yesterday is still going.</summary>
+    public DateTime CurrentKey => ShiftKey(Now);
+    private bool AwayOf(AwayInterval away, DateTime key, DayPlan plan)
+    {
+        if (WorkSchedule.IsOvernight(plan)) return away.Start >= plan.Start;
+        // A day shift counts a finish made on its own date, but not one made in the small hours that closed last night's overnight shift.
+        return away.Start.Date == key && !(Schedule.Tail(key) is { } tail && away.Start < tail.End + OvertimeTail);
+    }
+    /// <summary>
+    /// Where an away spell that has not been ended stops by itself. A day's finish stops at midnight, where the day ends; one made during an overnight shift
+    /// (or in its overtime after midnight) stops when the next shift starts, so finishing at 06:05 does not also stop tonight's shift.
+    /// </summary>
+    private DateTime AwayBoundary(AwayInterval away)
+    {
+        foreach (var key in new[] { away.Start.Date, away.Start.Date.AddDays(-1) })
+        {
+            var plan = Plan(key);
+            if (!WorkSchedule.IsOvernight(plan) || away.Start < plan.Start || away.Start >= plan.End + OvertimeTail) continue;
+            for (var day = key.AddDays(1); day <= key.AddDays(3); day = day.AddDays(1)) if (Plan(day) is { Working: true } next && next.Start > away.Start) return next.Start;
+            return plan.End + OvertimeTail;
+        }
+        return away.Start.Date.AddDays(1);
+    }
+    private DateTime AwayEnd(AwayInterval away, DateTime now) { if (away.End is { } end) return end; var boundary = AwayBoundary(away); return now < boundary ? now : boundary; }
+    private bool FinishedFor(DateTime key) { var plan = Plan(key); return Away.Any(a => a.End is null && AwayOf(a, key, plan)); }
+    public bool Finished => FinishedFor(CurrentKey);
+    public bool DayRunning { get { var key = CurrentKey; var plan = Plan(key); return plan.Working && Now >= plan.Start && !FinishedFor(key); } }
     public TimeSpan ActiveElapsed => Active is { } active ? Positive(Now - active.Start) : TimeSpan.Zero;
 
     public void StartDay()
     {
-        var now = Now;
-        var plan = Plan(now);
-        if (!plan.Working || now < plan.Start) DayStarts[now.Date] = now;
+        var now = Now; var key = ShiftKey(now);
+        var plan = Plan(key);
+        if (!plan.Working || now < plan.Start) DayStarts[key] = now;
         for (var i = 0; i < Away.Count; i++)
-            if (Away[i].Start.Date == now.Date && Away[i].End is null) Away[i] = Away[i] with { End = now };
+            if (Away[i].End is null && AwayOf(Away[i], key, plan)) Away[i] = Away[i] with { End = now };
     }
     public void FinishDay()
     {
@@ -173,7 +231,7 @@ public sealed class TrackingEngine
         if (active is not null && lastSeen > active.Start) AddSession(active.Account, active.Start, lastSeen.Value);
         Active = null;
         for (var i = 0; i < Away.Count; i++)
-            if (Away[i].End is null && Away[i].Start.Date < Now.Date) Away[i] = Away[i] with { End = Away[i].Start.Date.AddDays(1) };
+            if (Away[i].End is null && AwayBoundary(Away[i]) <= Now) Away[i] = Away[i] with { End = AwayBoundary(Away[i]) };
     }
     public void AddSession(string account, DateTime start, DateTime end)
     {
@@ -202,7 +260,98 @@ public sealed class TrackingEngine
     /// <summary>How much of the recording that is running now falls on this day, or nothing when it is a break or nothing is running. Saved entries do not include it yet.</summary>
     public TimeSpan ActiveElapsedOn(DateTime day, bool includeBreak = false)
         => Active is { } active && (includeBreak || !BreakAccount.Is(active.Account)) ? Intersection(active.Start, Now, day.Date, day.Date.AddDays(1)) : TimeSpan.Zero;
+    /// <summary>Whether an overnight shift touches this calendar day: it starts on it, or one from the day before runs into it.</summary>
+    private bool OvernightTouches(DateTime day) => Schedule.Tail(day) is not null || WorkSchedule.IsOvernight(Plan(day));
+
+    /// <summary>
+    /// A calendar day's totals. With no overnight shift about, a day is its own shift. With one, the day holds two pieces, the tail of last night's shift
+    /// (midnight to its end) and the start of tonight's (its start to midnight), each measured as its own working time and overtime.
+    /// </summary>
     public DayTotals Totals(DateTime day)
+    {
+        day = day.Date;
+        if (!OvernightTouches(day)) return DayOnlyTotals(day);
+        var allocated = AllocatedIn(day, day.AddDays(1));
+        var work = TimeSpan.Zero; var overtime = TimeSpan.Zero;
+        if (Schedule.Tail(day) is not null) { var (w, o) = MeasureShift(day.AddDays(-1), day, day.AddDays(1)); work += w; overtime += o; }
+        var own = Plan(day);
+        if (own.Working) { var (w, o) = MeasureShift(day, day, day.AddDays(1)); work += w; overtime += o; }
+        if (work == TimeSpan.Zero && overtime == TimeSpan.Zero && !own.Working && Schedule.Tail(day) is null) return new(allocated, TimeSpan.Zero, allocated, TimeSpan.Zero);
+        return new(work, overtime, allocated, Positive(work + overtime - allocated));
+    }
+    /// <summary>
+    /// The totals of a working day as a shift: what the clock shows. It is the calendar day, except for an overnight shift, which runs from its start
+    /// across midnight to its end and its overtime; a day shift that follows a night shift leaves out the night shift's tail.
+    /// </summary>
+    public DayTotals ShiftTotals(DateTime key)
+    {
+        key = key.Date;
+        if (!OvernightTouches(key)) return DayOnlyTotals(key);
+        var plan = Plan(key);
+        var (from, until) = ShiftWindow(key);
+        var allocated = AllocatedIn(from, until);
+        if (!plan.Working) return new(allocated, TimeSpan.Zero, allocated, TimeSpan.Zero);
+        var (work, overtime) = MeasureShift(key, from, until);
+        return new(work, overtime, allocated, Positive(work + overtime - allocated));
+    }
+    /// <summary>
+    /// The span of clock time a working day owns, for adding up its allocated time and its credit: the calendar day, or for an overnight shift from its start
+    /// through its end and the overtime tail, with a day shift after a night shift starting where the night shift's tail and overtime stop.
+    /// </summary>
+    public (DateTime From, DateTime Until) ShiftWindow(DateTime key)
+    {
+        key = key.Date; var plan = Plan(key);
+        var from = key;
+        if (Schedule.Tail(key) is { } tail) from = plan.Working ? Min(tail.End + OvertimeTail, plan.Start) : tail.End + OvertimeTail;
+        var until = WorkSchedule.IsOvernight(plan) ? plan.End + OvertimeTail : key.AddDays(1);
+        // The next shift starts where this one's overtime tail stops, so the two windows never overlap.
+        if (WorkSchedule.IsOvernight(plan) && Plan(key.AddDays(1)) is { Working: true } next && next.Start < until && next.Start > plan.End) until = next.Start;
+        return (from, until);
+    }
+    private static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
+    private static DateTime Max(DateTime a, DateTime b) => a > b ? a : b;
+    /// <summary>The credited time on accounts (breaks left out) in a span of clock time, including the recording running now.</summary>
+    private TimeSpan AllocatedIn(DateTime from, DateTime until)
+    {
+        var total = Sessions.Where(s => !BreakAccount.Is(s.Account)).Aggregate(TimeSpan.Zero, (sum, s) => sum + (s.From >= from && s.To <= until ? s.Duration : Intersection(s.From, s.To, from, until)));
+        if (Active is { } active && !BreakAccount.Is(active.Account)) total += Intersection(active.Start, Now, from, until);
+        return total;
+    }
+    /// <summary>The working time and overtime of one shift that fall inside a span of clock time (a calendar day, or the whole shift).</summary>
+    private (TimeSpan Work, TimeSpan Overtime) MeasureShift(DateTime key, DateTime clipFrom, DateTime clipUntil)
+    {
+        var plan = Plan(key); if (!plan.Working) return (TimeSpan.Zero, TimeSpan.Zero);
+        var now = Now;
+        // Where the shift's overtime may run to: up to now for the shift under way, but never past the tail (or midnight, for a day shift).
+        var limit = WorkSchedule.IsOvernight(plan) ? plan.End + OvertimeTail : key.AddDays(1);
+        if (WorkSchedule.IsOvernight(plan) && Plan(key.AddDays(1)) is { Working: true } next && next.Start < limit && next.Start > plan.End) limit = next.Start;
+        var cap = now < limit ? now : limit;
+        // A shift that is over has no "now" to run overtime up to: its overtime stops at the last recorded activity, or the end of the shift if that came later.
+        if (limit <= now || ShiftKey(now) != key)
+        {
+            var last = Sessions.Where(s => s.Duration > TimeSpan.Zero && s.To > plan.Start && s.From < limit).Select(s => s.To).DefaultIfEmpty(DateTime.MinValue).Max();
+            var end = plan.End > last ? plan.End : last; cap = end < limit ? end : limit;
+            if (ShiftKey(now) != key && now < plan.Start) cap = now; // A shift still to come has run for no time at all.
+        }
+        var blocked = Sessions.Where(s => BreakAccount.Is(s.Account) && s.Duration > TimeSpan.Zero && s.To > plan.Start && s.From < limit).Select(s => (s.From, s.To)).ToList();
+        blocked.AddRange(Away.Select(a => (a.Start, AwayEnd(a, now))));
+        if (Active is { } lunch && BreakAccount.Is(lunch.Account)) blocked.Add((lunch.Start, now));
+        var start = Max(plan.Start, clipFrom);
+        if (cap <= start) return (TimeSpan.Zero, TimeSpan.Zero);
+        var regularEnd = Min(Min(cap, plan.End), clipUntil);
+        var work = regularEnd > start ? Positive(regularEnd - start - Blocked(blocked, start, regularEnd)) : TimeSpan.Zero;
+        var overtimeFrom = Max(plan.End, clipFrom); var overtimeTo = Min(cap, clipUntil);
+        var overtime = overtimeTo > overtimeFrom ? Positive(overtimeTo - overtimeFrom - Blocked(blocked, overtimeFrom, overtimeTo)) : TimeSpan.Zero;
+        return (work, overtime);
+    }
+    /// <summary>The credited time of an account in a span of clock time, partial blocks cut at the edges, including the recording running now.</summary>
+    public TimeSpan CreditedIn(string account, DateTime from, DateTime until)
+    {
+        var total = Sessions.Where(s => s.Account.Equals(account, StringComparison.OrdinalIgnoreCase)).Aggregate(TimeSpan.Zero, (sum, s) => sum + (s.From >= from && s.To <= until ? s.Duration : Intersection(s.From, s.To, from, until)));
+        if (Active is { } active && active.Account.Equals(account, StringComparison.OrdinalIgnoreCase)) total += Intersection(active.Start, Now, from, until);
+        return total;
+    }
+    private DayTotals DayOnlyTotals(DateTime day)
     {
         day = day.Date;
         var plan = Plan(day);
@@ -223,7 +372,7 @@ public sealed class TrackingEngine
         if (!plan.Working || cap <= plan.Start) return new(TimeSpan.Zero, TimeSpan.Zero, allocated, TimeSpan.Zero);
         var blocked = Sessions.Where(s => s.Day == day && BreakAccount.Is(s.Account) && s.Duration > TimeSpan.Zero)
             .Select(s => (s.From, s.To)).ToList();
-        blocked.AddRange(Away.Select(a => (a.Start, a.End ?? (now < a.Start.Date.AddDays(1) ? now : a.Start.Date.AddDays(1)))));
+        blocked.AddRange(Away.Select(a => (a.Start, AwayEnd(a, now))));
         if (Active is { } lunch && BreakAccount.Is(lunch.Account)) blocked.Add((lunch.Start, now));
         var regularEnd = cap < plan.End ? cap : plan.End;
         var work = Positive(regularEnd - plan.Start - Blocked(blocked, plan.Start, regularEnd));

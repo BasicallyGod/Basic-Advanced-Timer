@@ -207,4 +207,13 @@ public sealed class DeskLayoutTests
         Assert.Null(HotkeySpec.Parse("N")); Assert.Null(HotkeySpec.Parse("Shift+N")); // A letter alone, or with Shift alone, would take over typing.
         Assert.Null(HotkeySpec.Parse("Ctrl+Enter")); Assert.Null(HotkeySpec.Parse("Ctrl+A+B")); Assert.Null(HotkeySpec.Parse("Ctrl+F13")); Assert.Null(HotkeySpec.Parse("")); Assert.Null(HotkeySpec.Parse(null));
     }
+
+    [Fact]
+    public void AListTileAsksForRowsToFitItsItemsWithinItsUsualAndLargestSizes()
+    {
+        Assert.Equal(3, DeskLayout.PreferredRows(0, 46, 150, 3, 8)); Assert.Equal(3, DeskLayout.PreferredRows(2, 46, 150, 3, 8)); // Few items keep the usual size.
+        Assert.Equal(4, DeskLayout.PreferredRows(6, 46, 150, 3, 8)); // 150 + 276 = 426, which is four rows of 112.
+        Assert.Equal(8, DeskLayout.PreferredRows(40, 46, 150, 3, 8)); // Never past the tile's limit.
+        Assert.Equal(3, DeskLayout.PreferredRows(-5, 46, 150, 3, 8)); Assert.Equal(5, DeskLayout.PreferredRows(10, 46, 150, 5, 3)); // A limit below the usual size never shrinks the tile.
+    }
 }

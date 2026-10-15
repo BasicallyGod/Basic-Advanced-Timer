@@ -27,7 +27,7 @@ public sealed class ShiftEditor : StackPanel
         Margin = new Thickness(heading ? 24 : 0); Spacing = 12;
         var root = this;
         if (heading) root.Children.Add(Ui.Heading("Working hours", 24));
-        root.Children.Add(new TextBlock { Text = "Working days and shifts. Times are HH:mm.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        root.Children.Add(new TextBlock { Text = "Working days and shifts. Times are HH:mm, and an end earlier than the start is an overnight shift, such as 22:00 to 06:00, which belongs to the day it starts.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
         var entries = new List<(DayOfWeek Day, CheckBox On, TextBox Start, TextBox End)>();
         // On the settings page the week is one row of seven columns, each a day with its start and end beneath, so it takes a few lines instead of a long list.
         var weekGrid = week ? Ui.Grid("*,*,*,*,*,*,*") : null;
@@ -66,7 +66,7 @@ public sealed class ShiftEditor : StackPanel
                 error.Text = ""; saved();
             }
             catch (Exception ex) when (ex is FormatException or ArgumentException or OverflowException)
-            { error.Text = "Use HH:mm, with an end after the start, and at least one working day."; }
+            { error.Text = "Use HH:mm, with an end different from the start (earlier means an overnight shift), and at least one working day."; }
         }, "SaveShifts"));
         if (cancelled is not null) buttons.Children.Add(Ui.DialogButton("Cancel", cancelled));
         root.Children.Add(buttons);

@@ -242,7 +242,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string Label(string account) => BreakAccount.Display(account);
     public string Status => IsOnBreak ? "On break" : IsTracking ? "Tracking" : "Not tracking";
     public bool IsTracking => Engine.Active is not null;
-    public bool IsOvertime => Engine.Totals(Engine.Now).Overtime > TimeSpan.Zero;
+    public bool IsOvertime => ShiftNow.Overtime > TimeSpan.Zero;
+    /// <summary>The running working day as a shift: the calendar day, or for an overnight shift the whole of it across midnight.</summary>
+    public DayTotals ShiftNow => Engine.ShiftTotals(Engine.CurrentKey);
     public bool DayStarted => Engine.DayRunning;
     public bool DecimalHours => preferences.DecimalHours;
     public DateTime SelectedDate { get; private set; }
@@ -252,11 +254,11 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string? Notice { get; set; }
     public bool IsDemo { get; private set; }
     public bool Persistent => store is not null;
-    public TimeSpan Elapsed => Engine.Totals(Engine.Now).Elapsed;
+    public TimeSpan Elapsed => ShiftNow.Elapsed;
     public TimeSpan AccountElapsed => Engine.ActiveElapsed;
     public string ClockText => $"{(int)Elapsed.TotalHours:00}:{Elapsed.Minutes:00}:{Elapsed.Seconds:00}";
-    public TimeSpan Allocated => Engine.Totals(Engine.Now).Allocated;
-    public TimeSpan Unallocated => Engine.Totals(Engine.Now).Unallocated;
+    public TimeSpan Allocated => ShiftNow.Allocated;
+    public TimeSpan Unallocated => ShiftNow.Unallocated;
     public event PropertyChangedEventHandler? PropertyChanged;
     public void ToggleAccount(string name)
     {
@@ -375,7 +377,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         Save(); Notify();
     }
     public DateTime WeekStart(DateTime date) => date.Date.AddDays(-((7 + (int)date.DayOfWeek - (int)preferences.WeekStart) % 7));
-    public TimeSpan Today(TimerAccount a) => Engine.Credited(a.Name, Engine.Now.Date, Engine.Now.Date.AddDays(1));
+    public TimeSpan Today(TimerAccount a) { var (from, until) = Engine.ShiftWindow(Engine.CurrentKey); return Engine.CreditedIn(a.Name, from, until); }
     public TimeSpan OnDay(TimerAccount a, DateTime day) => Engine.Credited(a.Name, day, day.AddDays(1));
     public TimeSpan Week(TimerAccount a) { var start = WeekStart(SelectedDate); return Engine.Credited(a.Name, start, start.AddDays(7)); }
     /// <summary>The span a budget covers right now, from the account's own period (today, this week, month or quarter).</summary>
@@ -630,8 +632,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void ForceOvertime() => SetOvertimeTest(true);
     public void SetShifts(Dictionary<DayOfWeek, Shift> shifts, bool resetToday = false)
     {
-        if (shifts.Count == 0 || shifts.Values.Any(s => s.Start < TimeSpan.Zero || s.End >= TimeSpan.FromDays(1) || s.End <= s.Start))
-            throw new ArgumentException("Choose at least one working day, with an end after its start.");
+        if (shifts.Count == 0 || shifts.Values.Any(s => s.Start < TimeSpan.Zero || s.End >= TimeSpan.FromDays(1) || s.End == s.Start))
+            throw new ArgumentException("Choose at least one working day, with an end different from its start.");
         Engine.Schedule.Days = shifts.Keys.ToHashSet();
         Engine.Schedule.Shifts = new(shifts);
         if (resetToday) { Engine.Schedule.Overrides.Remove(Engine.Now.Date); Engine.DayStarts.Remove(Engine.Now.Date); }
@@ -992,7 +994,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         get
         {
-            var plan = Engine.Plan(Engine.Now);
+            var plan = Engine.Plan(Engine.CurrentKey);
             if (!plan.Working || plan.End <= plan.Start) return null;
             return Math.Clamp((Engine.Now - plan.Start).TotalSeconds / (plan.End - plan.Start).TotalSeconds, 0.0, 1.0);
         }

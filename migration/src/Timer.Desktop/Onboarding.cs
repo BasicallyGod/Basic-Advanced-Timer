@@ -186,7 +186,7 @@ public sealed class OnboardingView : Grid
         var days = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var (_, box) in dayBoxes) { box.Margin = new Thickness(0, 0, 14, 0); days.Children.Add(Detach(box)); }
         panel.Children.Add(Ui.Text("Working days", 12, "muted")); panel.Children.Add(days);
-        panel.Children.Add(Ui.Text("Usual hours (24 hour clock)", 12, "muted"));
+        panel.Children.Add(Ui.Text("Usual hours (24 hour clock). An end earlier than the start is an overnight shift.", 12, "muted"));
         panel.Children.Add(Ui.Horizontal(Detach(startBox), Ui.Dash(), Detach(endBox)));
         var different = Ui.DialogButton("Different hours on some days…", () =>
         {
@@ -203,7 +203,7 @@ public sealed class OnboardingView : Grid
         var start = TimeSpan.ParseExact((startBox.Text ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture, TimeSpanStyles.None);
         var end = TimeSpan.ParseExact((endBox.Text ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture, TimeSpanStyles.None);
         var chosen = dayBoxes.Where(d => d.Box.IsChecked == true).Select(d => d.Day).ToList();
-        if (chosen.Count == 0 || end <= start) { Fail("Use HH:mm, with an end after the start, and at least one working day."); return false; }
+        if (chosen.Count == 0 || end == start) { Fail("Use HH:mm, with an end different from the start (earlier means an overnight shift), and at least one working day."); return false; }
         var current = model.Engine.Schedule;
         var same = current.Days.SetEquals(chosen) && chosen.All(d => (current.Shifts.GetValueOrDefault(d) ?? current.Default) == new Shift(start, end));
         if (!same) model.SetShifts(chosen.ToDictionary(d => d, _ => new Shift(start, end)), false);
