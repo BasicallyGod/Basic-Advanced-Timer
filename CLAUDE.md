@@ -6,8 +6,7 @@ Notes for contributors and coding assistants. The application is a C# Avalonia d
 
 | Path | Role |
 | --- | --- |
-| `migration/src/Timer.Core` | Platform-independent tracking engine (`TrackingEngine`), schedules, day maths and the theme model (`Themes.cs`). |
-| `migration/src/Timer.Storage` | `TimerDatabase` (SQLite), `TimerStore`, undo, credit review, ledger editing, week export. |
+| Shared packages | `Timer.Core` (tracking engine `TrackingEngine`, schedules, day maths, theme model) and `Timer.Storage` (`TimerDatabase`, `TimerStore`, undo, credit review, ledger editing, week export) no longer live in this repository. They are the NuGet packages `BasicallyGod.Timer.Core` and `BasicallyGod.Timer.Storage`, published from the `BasicallyGod/Basic-Timer-Core` repository to GitHub Packages (a `v<version>` tag or a manual run of its ci workflow publishes). This repo takes a release through `SharedTimerVersion` in `migration/Directory.Build.props`. Restoring needs the `PACKAGES_TOKEN` environment variable (a `read:packages` token; a repository secret in CI), read by `migration/NuGet.config`. To change the engine or storage, change that repository, release, then raise the version here. The desk app (`BasicallyGod/Basic-Desk-Timer`) uses the same packages, with its own data folder. |
 | `migration/src/Timer.Desktop` | Avalonia views, `TimerModel` (UI adapter), `ThemeEngine`, styles in `App.axaml`. |
 | `migration/tests/Timer.Desktop.Tests` | xUnit tests, including headless Avalonia tests of production windows. |
 | `migration/updater` | Standalone Windows test-build updater with rollback. |
@@ -75,7 +74,7 @@ Each theme is a `ThemeDefinition` (name, Light or Dark base, colour tokens, bloc
 - Pill and dashboard are separate windows sharing one model. Do not resize a visible window to change views. The dashboard is `Topmost` unless switched off in settings.
 - Headless tests: `DispatcherTimer` and animations do not tick, so test state not frames. `TextBox.TextChanged` does not fire, so listen to `PropertyChanged` on `TextBox.TextProperty`.
 - Fault-injection helper `StorageFaults` (in `EditingTests.cs`) uses triggers to make saves fail.
-- Keep the C# for `Timer.Core` and `Timer.Storage` free of UI types.
+- Keep the C# for `Timer.Core` and `Timer.Storage` (in the Basic-Timer-Core repository) free of UI types.
 
 ## Keeping builds few
 

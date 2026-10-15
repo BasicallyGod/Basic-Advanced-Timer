@@ -46,8 +46,8 @@ The MSIX build and signing instructions are in [packaging/README.md](packaging/R
 
 ## Architecture
 
-- `Timer.Core` is platform-independent C#: tracking engine, schedules, day calculations, credited sessions, recovery and the theme model and library.
-- `Timer.Storage` is the SQLite database, settings, undo history, credit review, ledger editing and week export.
+- `Timer.Core` (a NuGet package from the Basic-Timer-Core repository) is platform-independent C#: tracking engine, schedules, day calculations, credited sessions, recovery and the theme model and library.
+- `Timer.Storage` (also from Basic-Timer-Core) is the SQLite database, settings, undo history, credit review, ledger editing and week export. Restoring the packages needs a `read:packages` token in the `PACKAGES_TOKEN` environment variable.
 - `Timer.Desktop` is the Avalonia UI. `TimerModel` adapts the engine and store to the views. Styles and the Light/Dark/theme dictionaries come from `ThemeEngine`, which registers each theme as an Avalonia theme variant at start-up.
 
 The build uses .NET 8 and pinned Avalonia 11.3.16.
