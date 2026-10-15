@@ -911,6 +911,12 @@ public sealed class TimerModel : INotifyPropertyChanged
     public int? PillScalePercent => preferences.PillScale;
     public static readonly int[] PillScaleChoices = { 50, 60, 70, 80, 90, 100, 110, 120 };
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
+    /// <summary>The shortcut that opens Quick capture from anywhere, such as Ctrl+Alt+N, or null when there is none.</summary>
+    public HotkeySpec? CaptureShortcut => HotkeySpec.Parse(preferences.CaptureKey);
+    public void SetCaptureShortcut(HotkeySpec? spec) { preferences = preferences with { CaptureKey = spec?.ToString() }; Save(); Notify(); }
+    /// <summary>Asks for the small Quick capture box: from the pill's menu or the shortcut. It works without bringing the dashboard up.</summary>
+    public event Action? QuickCaptureRequested;
+    public void RequestQuickCapture() => QuickCaptureRequested?.Invoke();
     public bool Tooltips => preferences.Tooltips;
     public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
     /// <summary>Whether the developer features are switched on: the sample-data demo, the overtime tester and the version on the right-click menu. Off until unlocked from the About section.</summary>

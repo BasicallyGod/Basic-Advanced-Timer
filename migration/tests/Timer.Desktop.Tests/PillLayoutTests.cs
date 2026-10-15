@@ -135,7 +135,7 @@ public sealed class PillLayoutTests
             var breakItem = items.Single(m => m.Name == "BreakMenu"); Assert.Equal("Start break", breakItem.Header);
             Click(breakItem); Assert.True(model.IsOnBreak); pill.ContextMenu.Close(); pill.ContextMenu.Open(pill); Assert.Equal("End break", breakItem.Header);
             var pin = items.Single(m => m.Name == "PinMenu"); Assert.True(pin.IsChecked); Click(pin); Assert.False(model.PillOnTop);
-            var asked = 0; model.NoteRequested += _ => asked++; Click(items.Single(m => m.Name == "AddNoteMenu")); Assert.Equal(1, asked);
+            var asked = 0; model.QuickCaptureRequested += () => asked++; Click(items.Single(m => m.Name == "AddNoteMenu")); Assert.Equal(1, asked); // The small capture box, not the dashboard.
             var opened = 0; model.DashboardRequested += () => opened++; Click(items.Single(m => m.Name == "OpenDeskMenu")); Assert.Equal(1, opened);
             // Closing the timer is still not on the menu: it stays alone at the foot of the dashboard's rail.
             Assert.DoesNotContain(items, m => (string?)m.Header == "Close timer");

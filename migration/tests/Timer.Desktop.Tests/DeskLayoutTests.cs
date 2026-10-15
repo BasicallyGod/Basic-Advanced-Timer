@@ -198,4 +198,13 @@ public sealed class DeskLayoutTests
         }
         finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
+
+    [Fact]
+    public void ShortcutsReadAndWriteInOneFormAndNeedAModifier()
+    {
+        var spec = HotkeySpec.Parse("alt + ctrl + n")!; Assert.Equal("Ctrl+Alt+N", spec.ToString()); Assert.Equal(HotkeySpec.Control | HotkeySpec.AltMod, spec.Modifiers); Assert.Equal('N', HotkeySpec.VirtualKey(spec.Key));
+        Assert.Equal("Win+F9", HotkeySpec.Parse("win+f9")!.ToString()); Assert.Equal(0x78, HotkeySpec.VirtualKey("F9"));
+        Assert.Null(HotkeySpec.Parse("N")); Assert.Null(HotkeySpec.Parse("Shift+N")); // A letter alone, or with Shift alone, would take over typing.
+        Assert.Null(HotkeySpec.Parse("Ctrl+Enter")); Assert.Null(HotkeySpec.Parse("Ctrl+A+B")); Assert.Null(HotkeySpec.Parse("Ctrl+F13")); Assert.Null(HotkeySpec.Parse("")); Assert.Null(HotkeySpec.Parse(null));
+    }
 }
