@@ -57,6 +57,25 @@ public sealed class WindowCoordinator
             else foreach (var window in new Window[] { Pill, Dashboard }) if (window.IsVisible) window.WindowState = WindowState.Minimized;
         };
         KeepInFront();
+        // Quick capture: a small box over whatever is on screen, from the pill's menu or the chosen shortcut, with no need for the dashboard.
+        model.QuickCaptureRequested += ShowQuickCapture;
+        hotkey = new GlobalHotkey(model.RequestQuickCapture); hotkey.Watch(Pill); hotkey.Watch(Dashboard);
+        Pill.Opened += (_, _) => ApplyShortcut(); Dashboard.Opened += (_, _) => ApplyShortcut();
+        model.PropertyChanged += (_, _) => ApplyShortcut();
+        Pill.Closed += (_, _) => hotkey.Dispose();
+    }
+    private readonly GlobalHotkey hotkey; private QuickCaptureWindow? capture; private string? appliedShortcut;
+    private void ApplyShortcut()
+    {
+        var wanted = model.CaptureShortcut?.ToString(); if (wanted == appliedShortcut) return;
+        if (hotkey.Apply(model.CaptureShortcut, Pill, Dashboard)) { appliedShortcut = wanted; return; }
+        // A window with no handle yet is tried again when it opens; a shortcut Windows refuses is said once, then left.
+        if (Pill.IsVisible || Dashboard.IsVisible) { appliedShortcut = wanted; model.Notice = $"{wanted} is already used by another app. Choose a different shortcut in Settings."; }
+    }
+    private void ShowQuickCapture()
+    {
+        if (capture is { IsVisible: true }) { capture.Activate(); return; }
+        capture = new QuickCaptureWindow(model); capture.Closed += (_, _) => capture = null; capture.Show(); capture.Activate();
     }
     // Snapping another window over the timer, or a window that is itself on top, can leave the pill or dashboard behind it. So whenever one loses focus
     // it is put back at the front of the topmost windows, and a slow check does the same for one that was covered without a focus change.

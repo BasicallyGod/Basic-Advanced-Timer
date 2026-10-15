@@ -114,7 +114,10 @@ public sealed class DeskView : UserControl
         // Tidy up closes the gaps by letting the tiles flow in reading order again. It is offered only while arranging, and only when there is something pinned to undo.
         tidyButton = Ui.Button("Tidy up", TidyUp, "TidyDesk"); ToolTip.SetTip(tidyButton, "Close the gaps");
         tidyButton.Classes.Add("toolButton"); tidyButton.Classes.Add("quiet"); tidyButton.Height = 30; tidyButton.Padding = new Thickness(12, 0); tidyButton.IsVisible = false;
-        drawerToggle.IsVisible = false; HeaderTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { tidyButton, drawerToggle, arrangeButton } };
+        // Layouts keeps named arrangements: apply one, save the desk as it is now, or delete one. Offered only while arranging, like the other editing controls.
+        layoutsButton = Ui.Button("Layouts", () => { }, "LayoutsToggle"); layoutsButton.Classes.Add("toolButton"); layoutsButton.Classes.Add("quiet"); layoutsButton.Height = 30; layoutsButton.Padding = new Thickness(12, 0); layoutsButton.IsVisible = false;
+        layoutsFlyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedRight }; layoutsFlyout.Opening += (_, _) => layoutsFlyout.Content = BuildLayoutsPanel(); layoutsButton.Flyout = layoutsFlyout;
+        drawerToggle.IsVisible = false; HeaderTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { layoutsButton, tidyButton, drawerToggle, arrangeButton } };
         // The Drawer button is handed to the window, which sets it in the header beside the title, so the board gets the room a row of its own would take.
         var frame = Ui.Grid("*", "*");
         scroller = new ScrollViewer { Content = board, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, AllowAutoHide = false };
@@ -206,6 +209,41 @@ public sealed class DeskView : UserControl
         pins = new(); provisionalPins = null; model.SetDeskOrder(order); model.SetDeskPositions(pins); tidyButton.IsVisible = false;
         board.InvalidateMeasure(); board.InvalidateArrange();
     }
+    /// <summary>The desk as it is now, as a layout that can be saved by name. It holds the arrangement only, never what is inside the tiles.</summary>
+    public SavedLayout CaptureLayout(string name)
+        => new(name, order.ToList(), hidden.ToList(), DeskLayout.FormatSizes(sizes), DeskLayout.FormatPositions(pins));
+    /// <summary>Brings a saved layout onto the desk. Tiles the layout does not know about are put at the end, and ones that no longer exist are ignored, so an old layout still works.</summary>
+    public void ApplyLayout(SavedLayout layout)
+    {
+        Collapse();
+        var known = Kinds.Select(k => k.Id).ToList();
+        hidden = layout.Hidden.Where(known.Contains).Distinct().ToList();
+        order = DeskLayout.Reconcile(layout.Order.Where(id => !hidden.Contains(id)), known.Where(id => !hidden.Contains(id)).ToList());
+        sizes.Clear(); foreach (var (id, size) in DeskLayout.ParseSizes(layout.Sizes)) if (known.Contains(id)) sizes[id] = size;
+        pins = DeskLayout.ParsePositions(layout.Positions).Where(p => known.Contains(p.Key) && !hidden.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value);
+        provisionalPins = null; model.SetDeskSizes(sizes); Save(); SyncDrawer();
+        tidyButton.IsVisible = arranging && pins.Count > 0; board.InvalidateMeasure(); board.InvalidateArrange();
+    }
+    public Control BuildLayoutsPanel()
+    {
+        var panel = new StackPanel { Name = "LayoutsPanel", Spacing = 6, Width = 260 };
+        panel.Children.Add(Ui.Text("Saved layouts", 12, "muted"));
+        if (model.DeskLayouts.Count == 0) panel.Children.Add(Ui.Text("None yet. Arrange the desk, then save it here.", 12, "muted"));
+        foreach (var layout in model.DeskLayouts)
+        {
+            var name = layout.Name; var row = Ui.Grid("*,Auto");
+            var apply = Ui.Button(name, () => { ApplyLayout(layout); layoutsFlyout.Hide(); }, "LayoutApply_" + name); apply.Classes.Add("toolButton"); apply.Classes.Add("quiet"); apply.HorizontalAlignment = HorizontalAlignment.Stretch; apply.HorizontalContentAlignment = HorizontalAlignment.Left;
+            var bin = Ui.IconButton(IconKind.Trash, "Delete this layout", "LayoutDelete_" + name, () => { model.DeleteDeskLayout(name); layoutsFlyout.Content = BuildLayoutsPanel(); }); bin.Width = 28; bin.Height = 28;
+            Ui.Put(row, apply); Ui.Put(row, bin, 1); panel.Children.Add(row);
+        }
+        var input = new TextBox { Name = "LayoutName", Watermark = "Name for this layout", MaxLength = DeskLayouts.MaxNameLength, Margin = new Thickness(0, 6, 0, 0) };
+        void Save() { var typed = DeskLayouts.CleanName(input.Text); if (typed.Length == 0) return; model.SaveDeskLayout(CaptureLayout(typed)); layoutsFlyout.Content = BuildLayoutsPanel(); }
+        input.KeyDown += (_, e) => { if (e.Key == Key.Enter) { e.Handled = true; Save(); } };
+        panel.Children.Add(input);
+        var save = Ui.DialogButton("Save current desk", Save, "LayoutSave"); panel.Children.Add(save);
+        if (model.DeskLayouts.Count >= DeskLayouts.MaxLayouts) panel.Children.Add(Ui.Text("Saving under a new name needs one deleted first.", 12, "muted"));
+        return panel;
+    }
     /// <summary>The cell a tile has been put in, or null while the desk still flows in order.</summary>
     public (int Column, int Row)? PinOf(string id) => pins.TryGetValue(id, out var cell) ? cell : null;
     public bool HasGaps => pins.Count > 0;
@@ -288,12 +326,12 @@ public sealed class DeskView : UserControl
     /// <summary>Whether the desk is being rearranged. At rest the tiles show no grips, resize corners or put-away crosses, so the desk feels settled.</summary>
     public bool Arranging => arranging;
     public Panel HeaderTools { get; }
-    private readonly Button arrangeButton, tidyButton;
+    private readonly Button arrangeButton, tidyButton, layoutsButton; private readonly Flyout layoutsFlyout;
     public void SetArranging(bool on)
     {
         if (on == arranging) return;
         arranging = on; if (!on) { SetDrawer(false); CancelDrag(); CancelResize(); }
-        arrangeButton.Content = on ? "Done" : "Arrange"; arrangeButton.Classes.Set("mainAction", on); drawerToggle.IsVisible = on; tidyButton.IsVisible = on && pins.Count > 0;
+        arrangeButton.Content = on ? "Done" : "Arrange"; arrangeButton.Classes.Set("mainAction", on); drawerToggle.IsVisible = on; layoutsButton.IsVisible = on; tidyButton.IsVisible = on && pins.Count > 0;
         foreach (var refresh in chrome.Values) refresh();
     }
     private static double RestAngle(string id) => id switch { "postit" => -1.6, "postit2" => 1.3, "postit3" => -0.8, _ => 0 };

@@ -105,6 +105,19 @@ public sealed class SettingsView : Grid
         if (model.AutoStart?.Available == true) pane.Children.Add(Toggle("Start with Windows", "StartWithWindows", () => model.AutoStart?.IsEnabled == true, v => model.SetAutoStart(v)));
         pane.Children.Add(Toggle("Show tooltips", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v)));
         var tipNote = Ui.Text("With tooltips off, budget percentages are still in Week overview.", 12, "muted"); tipNote.Name = "TooltipsNote"; tipNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; pane.Children.Add(tipNote);
+        // Quick capture: a small box for a note from anywhere. The shortcut is set by pressing it in the box; it needs Ctrl, Alt or the Windows key.
+        pane.Children.Add(Group("Quick capture"));
+        var shortcut = new TextBox { Name = "CaptureShortcut", IsReadOnly = true, Width = 200, Watermark = "Press a shortcut", Text = model.CaptureShortcut?.ToString() ?? "" };
+        shortcut.KeyDown += (_, e) =>
+        {
+            if (GlobalHotkey.FromKey(e.Key, e.KeyModifiers) is { } spec) { model.SetCaptureShortcut(spec); e.Handled = true; }
+            else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete) { model.SetCaptureShortcut(null); e.Handled = true; }
+        };
+        var clearShortcut = Ui.DialogButton("Clear", () => model.SetCaptureShortcut(null), "CaptureShortcutClear");
+        pane.Children.Add(Row("Shortcut", Ui.Horizontal(shortcut, clearShortcut)));
+        pane.Children.Add(Row("Open now", Ui.DialogButton("Quick capture", () => model.RequestQuickCapture(), "CaptureOpen")));
+        var captureNote = Ui.Text("Press the keys in the box, with Ctrl, Alt or Win. The pill's menu has Add note too.", 12, "muted"); captureNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; pane.Children.Add(captureNote);
+        syncs.Add(() => { var shown = model.CaptureShortcut?.ToString() ?? ""; if (shortcut.Text != shown) shortcut.Text = shown; });
         // The getting started setup, for anyone who skipped it or wants to look again. Nothing is lost: it starts from the current settings.
         pane.Children.Add(Group("Getting started"));
         pane.Children.Add(Row("Setup", Ui.DialogButton("Run setup again", () =>

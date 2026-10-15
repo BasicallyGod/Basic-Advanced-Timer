@@ -262,7 +262,7 @@ public static class Ui
         var openItem = new MenuItem { Name = "OpenDeskMenu" }; openItem.Click += (_, _) => model.RequestDashboard();
         var switchItem = new MenuItem { Name = "QuickSwitchMenu", Header = "Quick switch account" };
         var breakItem = new MenuItem { Name = "BreakMenu" }; breakItem.Click += (_, _) => model.ToggleBreak();
-        var noteItem = new MenuItem { Name = "AddNoteMenu", Header = "Add note…" }; noteItem.Click += (_, _) => model.RequestNote();
+        var noteItem = new MenuItem { Name = "AddNoteMenu", Header = "Add note…" }; noteItem.Click += (_, _) => model.RequestQuickCapture();
         var settingsItem = new MenuItem { Name = "SettingsMenu", Header = "Settings…" }; settingsItem.Click += (_, _) => model.RequestSettings();
         var pinItem = new MenuItem { Name = "PinMenu", Header = "Pin to screen", ToggleType = MenuItemToggleType.CheckBox };
         pinItem.Click += (_, _) => model.SetPillOnTop(!model.PillOnTop);

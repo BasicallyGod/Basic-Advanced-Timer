@@ -147,4 +147,64 @@ public sealed class DeskLayoutTests
         Assert.Equal(pins.OrderBy(k => k.Key), DeskLayout.ParsePositions(DeskLayout.FormatPositions(pins)).OrderBy(k => k.Key));
         Assert.Equal(new[] { "ok" }, DeskLayout.ParsePositions(new[] { "ok:1+2", "bad", "x:-1+2", "y:1+z", ":1+2", "z:99+2" }).Keys);
     }
+
+    private static SavedLayout Layout(string name, params string[] order) => new(name, order, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+
+    [Fact]
+    public void SavingUnderAnExistingNameReplacesItInPlaceAndANewNameIsAdded()
+    {
+        var list = DeskLayouts.Upsert(DeskLayouts.Upsert(new List<SavedLayout>(), Layout("Focus", "a")), Layout("Plan", "b"));
+        list = DeskLayouts.Upsert(list, Layout("  focus ", "c", "d"));
+        Assert.Equal(new[] { "focus", "Plan" }, list.Select(l => l.Name)); Assert.Equal(new[] { "c", "d" }, list[0].Order);
+        Assert.Single(DeskLayouts.Remove(list, "PLAN"));
+        Assert.Equal(2, DeskLayouts.Upsert(list, Layout("   ")).Count); // An empty name saves nothing.
+    }
+
+    [Fact]
+    public void NamesAreCleanedAndTheListHasALimit()
+    {
+        Assert.Equal("a b", DeskLayouts.CleanName("  a \t b  ")); Assert.Equal(DeskLayouts.MaxNameLength, DeskLayouts.CleanName(new string('x', 99)).Length);
+        var list = new List<SavedLayout>(); for (var i = 0; i < 20; i++) list = DeskLayouts.Upsert(list, Layout("L" + i));
+        Assert.Equal(DeskLayouts.MaxLayouts, list.Count);
+    }
+
+    [Fact]
+    public void LayoutsSurviveWritingAndReadingAndDamageGivesNone()
+    {
+        var one = new SavedLayout("Focus", new[] { "working", "todo" }, new[] { "clock" }, new[] { "todo:2x4" }, new[] { "todo:2+0" });
+        var back = Assert.Single(DeskLayouts.FromJson(DeskLayouts.ToJson(new[] { one })));
+        Assert.Equal(one.Name, back.Name); Assert.Equal(one.Order, back.Order); Assert.Equal(one.Hidden, back.Hidden); Assert.Equal(one.Sizes, back.Sizes); Assert.Equal(one.Positions, back.Positions);
+        Assert.Empty(DeskLayouts.FromJson("{not json")); Assert.Empty(DeskLayouts.FromJson(null)); Assert.Empty(DeskLayouts.FromJson("[{\"Name\":\" \"}]"));
+    }
+
+    [Fact]
+    public void SavedLayoutsAndPositionsAreKeptInTheStoreAcrossRestarts()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-layouts-" + Guid.NewGuid());
+        try
+        {
+            using (var store = new Timer.Storage.TimerStore(folder))
+            {
+                var engine = new TrackingEngine(); var model = new Timer.Desktop.TimerModel(engine, store.Load(engine), store);
+                model.SaveDeskLayout(new SavedLayout("Focus", new[] { "todo" }, new[] { "clock" }, new[] { "todo:2x4" }, new[] { "todo:2+3" }));
+                model.SetDeskPositions(new Dictionary<string, (int Column, int Row)> { ["day"] = (1, 2) });
+            }
+            using (var store = new Timer.Storage.TimerStore(folder))
+            {
+                var engine = new TrackingEngine(); var model = new Timer.Desktop.TimerModel(engine, store.Load(engine), store);
+                var layout = Assert.Single(model.DeskLayouts); Assert.Equal("Focus", layout.Name); Assert.Equal(new[] { "todo:2+3" }, layout.Positions);
+                Assert.Equal((1, 2), model.DeskPositions["day"]);
+            }
+        }
+        finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
+    }
+
+    [Fact]
+    public void ShortcutsReadAndWriteInOneFormAndNeedAModifier()
+    {
+        var spec = HotkeySpec.Parse("alt + ctrl + n")!; Assert.Equal("Ctrl+Alt+N", spec.ToString()); Assert.Equal(HotkeySpec.Control | HotkeySpec.AltMod, spec.Modifiers); Assert.Equal('N', HotkeySpec.VirtualKey(spec.Key));
+        Assert.Equal("Win+F9", HotkeySpec.Parse("win+f9")!.ToString()); Assert.Equal(0x78, HotkeySpec.VirtualKey("F9"));
+        Assert.Null(HotkeySpec.Parse("N")); Assert.Null(HotkeySpec.Parse("Shift+N")); // A letter alone, or with Shift alone, would take over typing.
+        Assert.Null(HotkeySpec.Parse("Ctrl+Enter")); Assert.Null(HotkeySpec.Parse("Ctrl+A+B")); Assert.Null(HotkeySpec.Parse("Ctrl+F13")); Assert.Null(HotkeySpec.Parse("")); Assert.Null(HotkeySpec.Parse(null));
+    }
 }
