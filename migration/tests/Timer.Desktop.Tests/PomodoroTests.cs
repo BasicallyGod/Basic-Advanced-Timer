@@ -1,4 +1,5 @@
 using Timer.Core;
+using Timer.Desk;
 using Xunit;
 
 namespace Timer.Desktop.Tests;

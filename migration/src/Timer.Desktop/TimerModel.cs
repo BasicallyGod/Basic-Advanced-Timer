@@ -3,6 +3,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Styling;
 using Timer.Core;
+using Timer.Desk;
 using Timer.Storage;
 
 namespace Timer.Desktop;
@@ -183,6 +184,9 @@ public sealed class TimerModel : INotifyPropertyChanged
         return ChangeLog(() => { Editor.Group(rows); selectedRows.Clear(); });
     }
     private StoreSettings preferences;
+    // The desk app's own settings, kept apart from the library's (see AppPrefs) and joined to them when they are saved.
+    private AppPrefs app;
+    private StoreSettings Settings => app.Into(preferences);
     private readonly TimerStore? store;
     private readonly List<DayNote> dayNotes;
     private long nextNoteId = 1;
@@ -191,7 +195,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         Engine = engine ?? new();
         this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, ThemeLibrary.Default, DayOfWeek.Monday);
-        this.store = store;
+        this.store = store; app = AppPrefs.From(this.preferences);
         Editor = store?.Editor ?? new LedgerEditor(Engine);
         dayNotes = store?.LoadDayNotes() ?? new List<DayNote>();
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
@@ -338,19 +342,19 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (deleted.Count > 0)
         {
             // Save first so the backup holds everything about to go, then remove each account's entries, notes and groups.
-            if (store is not null && deleted.Any(d => AccountHistory(d).Entries > 0)) { store.Save(Engine, preferences); store.Backup("before-delete"); }
+            if (store is not null && deleted.Any(d => AccountHistory(d).Entries > 0)) { store.Save(Engine, Settings); store.Backup("before-delete"); }
             foreach (var name in deleted) Editor.DeleteAccount(name);
         }
         if (renamed.Count > 0)
         {
             // Save first so the backup holds the latest entries, then rewrite everything in one go.
-            if (store is not null) { store.Save(Engine, preferences); store.Backup("before-rename"); }
+            if (store is not null) { store.Save(Engine, Settings); store.Backup("before-rename"); }
             foreach (var (from, to) in renamed) Editor.RenameAccount(from, to);
         }
         // To-dos linked to an account follow its rename, and lose the link if it is deleted.
         if (renamed.Count > 0 || deleted.Count > 0)
         {
-            preferences = preferences with { Trinkets = Timer.Core.Trinkets.Relink(Trinkets, renamed.ToDictionary(r => r.Key, r => r.Value), deleted.ToList()) };
+            app = app with { Trinkets = Timer.Desk.Trinkets.Relink(Trinkets, renamed.ToDictionary(r => r.Key, r => r.Value), deleted.ToList()) };
             if (Pomodoro.Account is { } focus) Pomodoro.Account = deleted.Contains(focus) ? null : renamed.FirstOrDefault(r => r.Key == focus) is { Value: not null } moved ? moved.Value : focus;
             // Notes and tasks tagged with an account follow it the same way.
             var before = preferences.Accounts.Select(a => a.Name).ToList(); var map = renamed.ToDictionary(r => r.Key, r => r.Value); var gone = deleted.ToList();
@@ -777,20 +781,20 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void SetPillOnTop(bool on) { preferences = preferences with { PillOnTop = on }; Save(); Notify(); }
     public void SetDashboardOnTop(bool on) { preferences = preferences with { DashboardOnTop = on }; Save(); Notify(); }
     /// <summary>The size the dashboard was last left at (the card, without the room kept for its shadow), or null for the default.</summary>
-    public (int Width, int Height)? DashboardSize => preferences.DashboardWidth is { } w && preferences.DashboardHeight is { } h ? (w, h) : null;
+    public (int Width, int Height)? DashboardSize => app.DashboardWidth is { } w && app.DashboardHeight is { } h ? (w, h) : null;
     /// <summary>Remembers the dashboard's size. It does not notify, since nothing on screen needs to change.</summary>
     public void SetDashboardSize(int width, int height)
     {
-        if (preferences.DashboardWidth == width && preferences.DashboardHeight == height) return;
-        preferences = preferences with { DashboardWidth = width, DashboardHeight = height }; Save();
+        if (app.DashboardWidth == width && app.DashboardHeight == height) return;
+        app = app with { DashboardWidth = width, DashboardHeight = height }; Save();
     }
     /// <summary>The desk is a preview of the tile board that will replace the dashboard's pages. Off until switched on in settings.</summary>
     /// <summary>Calm motion: things move straight to their places instead of gliding and bouncing. Lively is the default.</summary>
-    public bool Calm => preferences.Calm;
-    public void SetCalm(bool on) { preferences = preferences with { Calm = on }; Save(); Notify(); }
+    public bool Calm => app.Calm;
+    public void SetCalm(bool on) { app = app with { Calm = on }; Save(); Notify(); }
     /// <summary>The order the desk's tiles were left in. Only the order is saved, since the arrangement follows from it at any window size.</summary>
-    public IReadOnlyList<string> DeskOrder => preferences.DeskOrder ?? Array.Empty<string>();
-    public void SetDeskOrder(IReadOnlyList<string> order) { preferences = preferences with { DeskOrder = order.ToList() }; Save(); }
+    public IReadOnlyList<string> DeskOrder => app.DeskOrder ?? Array.Empty<string>();
+    public void SetDeskOrder(IReadOnlyList<string> order) { app = app with { DeskOrder = order.ToList() }; Save(); }
     // ---- Notes on a day. They live in the database, outside the undo history, and feed Coming up. ----
     public IReadOnlyList<DayNote> AllDayNotes => dayNotes;
     public IReadOnlyList<DayNote> NotesOn(DateTime day) => dayNotes.Where(n => n.Day.Date == day.Date).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
@@ -845,8 +849,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         Pomodoro.Account = index + 1 < names.Count ? names[index + 1] : null; Notify();
     }
     /// <summary>The desk's trinkets: the to-do list and the post-its. They are not part of the day's records, so they live with the settings.</summary>
-    public TrinketData Trinkets => preferences.Trinkets ?? TrinketData.Empty;
-    private void SetTrinkets(TrinketData data) { preferences = preferences with { Trinkets = data }; Save(); Notify(); }
+    public TrinketData Trinkets => app.Trinkets ?? TrinketData.Empty;
+    private void SetTrinkets(TrinketData data) { app = app with { Trinkets = data }; Save(); Notify(); }
     /// <summary>Adds a to-do from what was typed. A #Tag naming one account links it, and the item then wears that account's colour.</summary>
     public void AddTodo(string typed) { if (!string.IsNullOrWhiteSpace(typed)) AddDayNote(Engine.Now.Date, typed, task: true); }
     /// <summary>The to-do list. A to-do is a task note, the same item Notes and Coming up show, so ticking it anywhere ticks it everywhere.</summary>
@@ -857,7 +861,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     // The to-dos an earlier build kept with the settings become task notes dated today, once, after a backup. The old list stays in the file as it was.
     private void MoveTodosToNotes()
     {
-        var saved = preferences.Trinkets ?? TrinketData.Empty;
+        var saved = app.Trinkets ?? TrinketData.Empty;
         if (saved.TodosMoved) return;
         if (saved.Todos.Count > 0)
         {
@@ -871,7 +875,7 @@ public sealed class TimerModel : INotifyPropertyChanged
                 if (todo.Done) store?.UpdateDayNote(note);
             }
         }
-        preferences = preferences with { Trinkets = saved with { TodosMoved = true } };
+        app = app with { Trinkets = saved with { TodosMoved = true } };
         if (store is not null) Save();
     }
     /// <summary>Saves a post-it's words as they are typed. It does not notify, so the box being typed in is not rebuilt.</summary>
@@ -879,7 +883,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (index < 0 || index >= Trinkets.PostIts.Count || Trinkets.PostIts[index].Text == text) return;
         var notes = Trinkets.PostIts.ToList(); notes[index] = notes[index] with { Text = text };
-        preferences = preferences with { Trinkets = Trinkets with { PostIts = notes } }; Save();
+        app = app with { Trinkets = Trinkets with { PostIts = notes } }; Save();
     }
     /// <summary>Puts a post-it's strip of tape on or takes it off, for a plainer sheet.</summary>
     public void TogglePostItTape(int index)
@@ -890,22 +894,22 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void CyclePostItColour(int index)
     {
         if (index < 0 || index >= Trinkets.PostIts.Count) return;
-        var notes = Trinkets.PostIts.ToList(); var colours = Timer.Core.Trinkets.PostItColours;
+        var notes = Trinkets.PostIts.ToList(); var colours = Timer.Desk.Trinkets.PostItColours;
         notes[index] = notes[index] with { Colour = colours[(colours.ToList().IndexOf(notes[index].Colour) + 1) % colours.Count] };
         SetTrinkets(Trinkets with { PostIts = notes });
     }
     /// <summary>Sizes tiles were left at, in whole cells. A tile with no entry has its own default size.</summary>
-    public IReadOnlyDictionary<string, (int Columns, int Rows)> DeskSizes => DeskLayout.ParseSizes(preferences.DeskSizes);
-    public void SetDeskSizes(IReadOnlyDictionary<string, (int Columns, int Rows)> sizes) { preferences = preferences with { DeskSizes = DeskLayout.FormatSizes(sizes) }; Save(); }
+    public IReadOnlyDictionary<string, (int Columns, int Rows)> DeskSizes => DeskLayout.ParseSizes(app.DeskSizes);
+    public void SetDeskSizes(IReadOnlyDictionary<string, (int Columns, int Rows)> sizes) { app = app with { DeskSizes = DeskLayout.FormatSizes(sizes) }; Save(); }
     /// <summary>Where arranged tiles were put, as cells. Empty until the desk is first arranged, when tiles simply flow in order.</summary>
-    public IReadOnlyDictionary<string, (int Column, int Row)> DeskPositions => DeskLayout.ParsePositions(preferences.DeskPositions);
-    public void SetDeskPositions(IReadOnlyDictionary<string, (int Column, int Row)> positions) { preferences = preferences with { DeskPositions = DeskLayout.FormatPositions(positions) }; Save(); }
+    public IReadOnlyDictionary<string, (int Column, int Row)> DeskPositions => DeskLayout.ParsePositions(app.DeskPositions);
+    public void SetDeskPositions(IReadOnlyDictionary<string, (int Column, int Row)> positions) { app = app with { DeskPositions = DeskLayout.FormatPositions(positions) }; Save(); }
     // ---- Floating widgets: desk tiles detached into windows of their own, at most FloatingWidgets.Max at a time. ----
-    public IReadOnlyList<FloatingWidget> Floating => preferences.Floating ?? Array.Empty<FloatingWidget>();
+    public IReadOnlyList<FloatingWidget> Floating => app.Floating ?? Array.Empty<FloatingWidget>();
     public bool IsFloating(string id) => Floating.Any(f => f.Id == id);
     /// <summary>Whether floating widgets sit above other windows, as the pill does. On by default.</summary>
-    public bool FloatOnTop => preferences.FloatOnTop;
-    public void SetFloatOnTop(bool on) { preferences = preferences with { FloatOnTop = on }; Save(); Notify(); }
+    public bool FloatOnTop => app.FloatOnTop;
+    public void SetFloatOnTop(bool on) { app = app with { FloatOnTop = on }; Save(); Notify(); }
     /// <summary>Raised when a widget starts or stops floating, or all of them are hidden or shown, so the windows can follow.</summary>
     public event Action? FloatingChanged;
     /// <summary>Whether the floating widgets are tucked out of sight for now. It is for this session only, so a restart brings them back.</summary>
@@ -922,13 +926,13 @@ public sealed class TimerModel : INotifyPropertyChanged
         var (list, added) = FloatingWidgets.Add(Floating, new FloatingWidget(id, null, null, columns, rows));
         if (!added) { Notice = "Three widgets are already floating. Dock one first."; return false; }
         FloatingHidden = false; // Floating something new shows it, along with the others.
-        preferences = preferences with { Floating = list }; Save(); FloatingChanged?.Invoke(); Notify(); return true;
+        app = app with { Floating = list }; Save(); FloatingChanged?.Invoke(); Notify(); return true;
     }
     /// <summary>Puts a floating widget back on the desk.</summary>
     public void DockWidget(string id)
     {
         if (!IsFloating(id)) return;
-        preferences = preferences with { Floating = FloatingWidgets.Remove(Floating, id) }; if (Floating.Count == 0) FloatingHidden = false; Save(); FloatingChanged?.Invoke(); Notify();
+        app = app with { Floating = FloatingWidgets.Remove(Floating, id) }; if (Floating.Count == 0) FloatingHidden = false; Save(); FloatingChanged?.Invoke(); Notify();
     }
     /// <summary>Remembers where a floating widget sits. It does not notify, since nothing on screen needs to change.</summary>
     public void MoveFloating(string id, int x, int y) => ChangeFloating(id, f => f with { X = x, Y = y });
@@ -938,24 +942,24 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         var list = Floating.ToList(); var at = list.FindIndex(f => f.Id == id); if (at < 0) return;
         var changed = change(list[at]); if (changed == list[at]) return;
-        list[at] = changed; preferences = preferences with { Floating = list }; Save();
+        list[at] = changed; app = app with { Floating = list }; Save();
     }
     /// <summary>The desk arrangements saved by name.</summary>
-    public IReadOnlyList<SavedLayout> DeskLayouts => preferences.DeskLayouts ?? Array.Empty<SavedLayout>();
-    public void SaveDeskLayout(SavedLayout layout) { preferences = preferences with { DeskLayouts = Timer.Core.DeskLayouts.Upsert(DeskLayouts, layout) }; Save(); }
-    public void DeleteDeskLayout(string name) { preferences = preferences with { DeskLayouts = Timer.Core.DeskLayouts.Remove(DeskLayouts, name) }; Save(); }
+    public IReadOnlyList<SavedLayout> DeskLayouts => app.DeskLayouts ?? Array.Empty<SavedLayout>();
+    public void SaveDeskLayout(SavedLayout layout) { app = app with { DeskLayouts = Timer.Desk.DeskLayouts.Upsert(DeskLayouts, layout) }; Save(); }
+    public void DeleteDeskLayout(string name) { app = app with { DeskLayouts = Timer.Desk.DeskLayouts.Remove(DeskLayouts, name) }; Save(); }
     /// <summary>The tiles put away in the drawer. Their data is untouched; they are only not on the desk.</summary>
-    public IReadOnlyList<string> DeskHidden => preferences.DeskHidden ?? Array.Empty<string>();
-    public void SetDeskHidden(IReadOnlyList<string> hidden) { preferences = preferences with { DeskHidden = hidden.ToList() }; Save(); }
+    public IReadOnlyList<string> DeskHidden => app.DeskHidden ?? Array.Empty<string>();
+    public void SetDeskHidden(IReadOnlyList<string> hidden) { app = app with { DeskHidden = hidden.ToList() }; Save(); }
     /// <summary>The pill's layout: full, compact or minimal (see <see cref="PillLayouts"/>).</summary>
-    public string PillStyle => preferences.PillStyle is "compact" or "minimal" ? preferences.PillStyle : "full";
-    public void SetPillStyle(string style) { preferences = preferences with { PillStyle = style is "compact" or "minimal" ? style : "full" }; Save(); Notify(); }
+    public string PillStyle => app.PillStyle is "compact" or "minimal" ? app.PillStyle : "full";
+    public void SetPillStyle(string style) { app = app with { PillStyle = style is "compact" or "minimal" ? style : "full" }; Save(); Notify(); }
     public int? PillScalePercent => preferences.PillScale;
     public static readonly int[] PillScaleChoices = { 50, 60, 70, 80, 90, 100, 110, 120 };
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
     /// <summary>The shortcut that opens Quick capture from anywhere, such as Ctrl+Alt+N, or null when there is none.</summary>
-    public HotkeySpec? CaptureShortcut => HotkeySpec.Parse(preferences.CaptureKey);
-    public void SetCaptureShortcut(HotkeySpec? spec) { preferences = preferences with { CaptureKey = spec?.ToString() }; Save(); Notify(); }
+    public HotkeySpec? CaptureShortcut => HotkeySpec.Parse(app.CaptureKey);
+    public void SetCaptureShortcut(HotkeySpec? spec) { app = app with { CaptureKey = spec?.ToString() }; Save(); Notify(); }
     /// <summary>Asks for the small Quick capture box: from the pill's menu or the shortcut. It works without bringing the dashboard up.</summary>
     public event Action? QuickCaptureRequested;
     public void RequestQuickCapture() => QuickCaptureRequested?.Invoke();
@@ -1011,7 +1015,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         // Once the app is closing, or its database has been closed, there is nothing left to save and a late tick must not try.
         if (closed || store is { IsDisposed: true }) return true;
-        try { store?.Save(Engine, preferences); LastError = null; return true; }
+        try { store?.Save(Engine, Settings); LastError = null; return true; }
         // A restart or shutdown can close the database under a save that is already queued. That must be reported, never allowed to crash the app.
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or ObjectDisposedException || error.GetType().Namespace == "Microsoft.Data.Sqlite")
         { LastError = "Could not save. Time remains in memory; retrying. " + error.Message; return false; }

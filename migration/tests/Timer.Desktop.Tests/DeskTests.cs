@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
+using Timer.Desk;
 using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
@@ -16,7 +17,7 @@ namespace Timer.Desktop.Tests;
 public sealed class DeskTests
 {
     private static TimerModel Model(params string[] order)
-        => new(new TrackingEngine(), new StoreSettings(new() { new("Account one", null, null), new("Account two", null, null) }, false, "Light", DayOfWeek.Monday, DeskOrder: order));
+        => new(new TrackingEngine(), new StoreSettings(new() { new("Account one", null, null), new("Account two", null, null) }, false, "Light", DayOfWeek.Monday).WithApp(new AppPrefs(DeskOrder: order)));
 
     private static DashboardWindow Open(TimerModel model, int width = 1080, int height = 680)
     {
@@ -650,7 +651,7 @@ public sealed class DeskTests
     [AvaloniaFact]
     public void ASavedDrawerIsRestoredWhenTheDeskOpens()
     {
-        var window = Open(new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday, DeskOrder: new[] { "working", "accounts" }, DeskHidden: new[] { "day" })));
+        var window = Open(new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday).WithApp(new AppPrefs(DeskOrder: new[] { "working", "accounts" }, DeskHidden: new[] { "day" }))));
         try
         {
             Press(window, "DeskTab");
@@ -680,8 +681,8 @@ public sealed class DeskTests
         var folder = Path.Combine(Path.GetTempPath(), "timer-desk-" + Guid.NewGuid().ToString("N"));
         try
         {
-            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); store.Save(engine, prefs with { Calm = true, DeskOrder = new[] { "day", "accounts" }, DeskHidden = new[] { "working" } }); }
-            using (var store = new TimerStore(folder)) { var prefs = store.Load(new TrackingEngine()); Assert.True(prefs.Calm); Assert.Equal(new[] { "working" }, prefs.DeskHidden); Assert.Equal(new[] { "day", "accounts" }, prefs.DeskOrder); }
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); store.Save(engine, prefs.WithApp(a => a with { Calm = true, DeskOrder = new[] { "day", "accounts" }, DeskHidden = new[] { "working" } })); }
+            using (var store = new TimerStore(folder)) { var prefs = store.Load(new TrackingEngine()); Assert.True(prefs.App().Calm); Assert.Equal(new[] { "working" }, prefs.App().DeskHidden); Assert.Equal(new[] { "day", "accounts" }, prefs.App().DeskOrder); }
         }
         finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
@@ -789,7 +790,7 @@ public sealed class DeskTests
         var model = Model(); var window = Open(model);
         try { Press(window, "DeskTab"); Assert.False(window.GetVisualDescendants().OfType<DeskView>().Single().HasGaps); Assert.Empty(model.DeskPositions); }
         finally { window.Close(); }
-        var saved = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday, DeskPositions: new[] { "clock:0+9" }));
+        var saved = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday).WithApp(new AppPrefs(DeskPositions: new[] { "clock:0+9" })));
         var again = Open(saved);
         try
         {
@@ -844,7 +845,7 @@ public sealed class DeskTests
     public void AnOldLayoutNamingAGoneTileStillAppliesAndSavedLayoutsComeBackOnReopening()
     {
         var saved = new SavedLayout("Old", new[] { "ghost", "todo" }, new[] { "clock", "ghost2" }, new[] { "ghost:2x2", "todo:2x4" }, new[] { "ghost:0+0" });
-        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday, DeskLayouts: new[] { saved }));
+        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday).WithApp(new AppPrefs(DeskLayouts: new[] { saved })));
         var window = Open(model);
         try
         {
@@ -869,7 +870,7 @@ public sealed class DeskTests
             desk.Resize("todo", 2, 3); Assert.Equal((2, 3), desk.SizeOf("todo")); Assert.Equal((2, 3), model.DeskSizes["todo"]); // A size chosen by hand wins.
         }
         finally { window.Close(); }
-        var chosen = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday, DeskSizes: new[] { "todo:2x3" }));
+        var chosen = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday).WithApp(new AppPrefs(DeskSizes: new[] { "todo:2x3" })));
         for (var i = 0; i < 12; i++) chosen.AddTodo("Task " + i);
         var again = Open(chosen);
         try { Press(again, "DeskTab"); Assert.Equal((2, 3), again.GetVisualDescendants().OfType<DeskView>().Single().SizeOf("todo")); } // Saved earlier, so left alone.

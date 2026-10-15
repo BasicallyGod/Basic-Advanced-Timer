@@ -1,6 +1,8 @@
 using System.Text.Json;
 
-namespace Timer.Core;
+using Timer.Core;
+
+namespace Timer.Desk;
 
 /// <summary>
 /// A named arrangement of the desk: which tiles are out, their order, sizes and cells. It holds only the arrangement, never what is inside the tiles,

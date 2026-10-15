@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="../Timer.Core/Timer.Core.csproj" />
     <ProjectReference Include="../Timer.Storage/Timer.Storage.csproj" />
+    <ProjectReference Include="../Timer.Desk/Timer.Desk.csproj" />
     <PackageReference Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
     <PackageReference Include="Avalonia.Controls.ColorPicker" Version="$(AvaloniaVersion)" />

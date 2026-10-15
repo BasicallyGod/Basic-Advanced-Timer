@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Timer.Core;
+using Timer.Desk;
 
 namespace Timer.Desktop;
 

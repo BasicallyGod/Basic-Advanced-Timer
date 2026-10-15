@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
+using Timer.Desk;
 using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
@@ -235,7 +236,7 @@ public sealed class NoteShorthandTests
             {
                 var engine = new TrackingEngine(clock: () => clock); var prefs = store.Load(engine);
                 var old = new TrinketData(new[] { new TodoItem("send invoice", false, "Account one"), new TodoItem("order tea", true), new TodoItem("plan #AccountTwo", false, "Account two") }, TrinketData.Empty.PostIts);
-                store.Save(engine, prefs with { Trinkets = old });
+                store.Save(engine, prefs.WithApp(a => a with { Trinkets = old }));
             }
             using (var store = new TimerStore(folder))
             {

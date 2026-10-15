@@ -1,4 +1,6 @@
-namespace Timer.Core;
+using Timer.Core;
+
+namespace Timer.Desk;
 
 public enum PomodoroPhase { Idle, Work, ShortBreak, LongBreak }
 

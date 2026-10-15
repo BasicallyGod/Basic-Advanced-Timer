@@ -1,6 +1,8 @@
 using System.Text.Json;
 
-namespace Timer.Core;
+using Timer.Core;
+
+namespace Timer.Desk;
 
 /// <summary>
 /// A desk tile that has been detached to float on the screen in a window of its own. Its size is in desk cells, so it shows the same version of itself

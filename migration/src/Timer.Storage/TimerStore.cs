@@ -7,7 +7,20 @@ using Timer.Core;
 namespace Timer.Storage;
 
 public sealed record AccountSettings(string Name, double? BudgetHours = null, string BudgetPeriod = "week", bool Hidden = false, string? Colour = null);
-public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true, IReadOnlyList<ThemeDefinition>? Themes = null, bool TaskbarButton = true, bool Tooltips = true, bool Developer = false, bool SetupDone = true, bool MoveLaterAlways = false, int? PillScale = null, bool PillOnTop = true, bool DashboardOnTop = true, int? DashboardWidth = null, int? DashboardHeight = null, IReadOnlyList<string>? DeskOrder = null, bool Calm = false, IReadOnlyList<string>? DeskHidden = null, TrinketData? Trinkets = null, IReadOnlyList<string>? DeskSizes = null, string PillStyle = "full", IReadOnlyList<string>? DeskPositions = null, IReadOnlyList<SavedLayout>? DeskLayouts = null, string? CaptureKey = null, IReadOnlyList<FloatingWidget>? Floating = null, bool FloatOnTop = true);
+/// <summary>
+/// What the timer saves besides its time: the accounts, the theme and the few preferences every timer has. An app built on this library keeps its own
+/// settings in <see cref="Extras"/>, which the store carries through unread, so the library does not grow a field for every feature an app adds.
+/// </summary>
+public sealed record StoreSettings(List<AccountSettings> Accounts, bool DecimalHours, string Theme, DayOfWeek WeekStart, bool Shadows = true, IReadOnlyList<ThemeDefinition>? Themes = null, bool TaskbarButton = true, bool Tooltips = true, bool Developer = false, bool SetupDone = true, bool MoveLaterAlways = false, int? PillScale = null, bool PillOnTop = true, bool DashboardOnTop = true, SettingsExtras? Extras = null);
+
+/// <summary>
+/// The settings an app adds for itself: lines in the appearance section that the library does not own, and whole sections of the settings file. They are read
+/// as they were written and written back as they are, so the library never needs to know what they mean.
+/// </summary>
+public sealed record SettingsExtras(IReadOnlyList<string> AppearanceLines, IReadOnlyDictionary<string, IReadOnlyList<string>> Sections)
+{
+    public static readonly SettingsExtras Empty = new(System.Array.Empty<string>(), new Dictionary<string, IReadOnlyList<string>>());
+}
 
 // The timer's records live in one SQLite file (timer.db). Preferences stay in the settings JSON beside it.
 // The in-memory model is unchanged: Load fills the engine from the database and Save writes it back in one transaction.
@@ -71,6 +84,8 @@ public sealed class TimerStore : IDisposable
             ("$t", note.At?.ToString("hh\\:mm", CultureInfo.InvariantCulture)), ("$x", note.Text), ("$n", note.Done ? 1 : 0), ("$i", note.Id));
     public void DeleteDayNote(long id) => database.Execute("DELETE FROM day_notes WHERE id = $i", ("$i", id));
 
+    /// <summary>The sections of the settings file the library reads and writes itself. Every other section is the app's.</summary>
+    private static readonly HashSet<string> OwnedSections = new() { "workingHours", "dayOverrides", "migrationAppearance", "migrationThemes" };
     public StoreSettings Load(TrackingEngine engine)
     {
         var settingsPath = Path.Combine(directory, SettingsFile);
@@ -158,29 +173,15 @@ public sealed class TimerStore : IDisposable
         // The setup is done once it says so. A database from before it existed counts as done, and a new one is pending until it is finished or skipped.
         var setupDone = appearance.Skip(1).Contains("setup=done") || (!appearance.Skip(1).Contains("setup=pending") && !firstRun);
         var pillOnTop = !appearance.Skip(1).Contains("pilltop=off"); var dashboardOnTop = !appearance.Skip(1).Contains("dashtop=off");
-        // The dashboard's size, as dash=WIDTHxHEIGHT, or the default when there is none or it makes no sense.
-        int? dashWidth = null, dashHeight = null;
-        if (appearance.Skip(1).FirstOrDefault(l => l.StartsWith("dash=", StringComparison.Ordinal)) is { } dashLine && dashLine[5..].Split('x') is [var dw, var dh]
-            && int.TryParse(dw, out var wValue) && int.TryParse(dh, out var hValue) && wValue is >= 300 and <= 10000 && hValue is >= 300 and <= 10000) { dashWidth = wValue; dashHeight = hValue; }
-        var deskOrder = appearance.Skip(1).FirstOrDefault(l => l.StartsWith("desk-order=", StringComparison.Ordinal)) is { } orderLine ? orderLine[11..].Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
-        var deskHidden = appearance.Skip(1).FirstOrDefault(l => l.StartsWith("desk-hidden=", StringComparison.Ordinal)) is { } hiddenLine ? hiddenLine[12..].Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
-        var trinkets = Trinkets.FromJson(Lines("deskTrinkets").FirstOrDefault());
-        var deskLayouts = Timer.Core.DeskLayouts.FromJson(Lines("deskLayouts").FirstOrDefault());
-        // Floating widgets are tiles by their desk ids, which the storage layer does not know, so the ids are checked by the desk when it opens them.
-        var floating = FloatingWidgets.FromJson(Lines("deskFloating").FirstOrDefault());
-        var floatOnTop = !appearance.Skip(1).Contains("floattop=off");
-        var deskSizes = appearance.Skip(1).FirstOrDefault(l => l.StartsWith("desk-sizes=", StringComparison.Ordinal)) is { } sizesLine ? sizesLine[11..].Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
-        var deskPositions = appearance.Skip(1).FirstOrDefault(l => l.StartsWith("desk-pos=", StringComparison.Ordinal)) is { } positionsLine ? positionsLine[9..].Split(',', StringSplitOptions.RemoveEmptyEntries) : null;
-        // The quick capture shortcut, as capturekey=Ctrl+Alt+N. Nothing valid there means no shortcut.
-        var captureKey = Timer.Core.HotkeySpec.Parse(appearance.Skip(1).FirstOrDefault(l => l.StartsWith("capturekey=", StringComparison.Ordinal))?[11..])?.ToString();
-        var calm = appearance.Skip(1).Contains("motion=calm");
-        // The pill's layout: full (the default), compact or minimal. Anything else is the default.
-        var pillStyle = appearance.Skip(1).FirstOrDefault(l => l.StartsWith("pillstyle=", StringComparison.Ordinal))?[10..] is "compact" or "minimal" ? appearance.Skip(1).First(l => l.StartsWith("pillstyle=", StringComparison.Ordinal))[10..] : "full";
+        // Anything in the appearance section or the settings file that the library does not own belongs to the app, and is handed to it as it was written.
+        var ownedLines = new[] { "shadows=", "taskbar=", "tooltips=", "developer=", "shove=", "pill=", "setup=", "pilltop=", "dashtop=" };
+        var extraLines = appearance.Skip(1).Where(l => !ownedLines.Any(k => l.StartsWith(k, StringComparison.Ordinal))).ToList();
+        var extraSections = settings["sections"]!.AsObject().Where(p => !OwnedSections.Contains(p.Key) && p.Value is JsonArray).ToDictionary(p => p.Key, p => (IReadOnlyList<string>)Lines(p.Key).ToList());
         var themes = ThemeStorage.FromLines(Lines("migrationThemes"));
         // A name that is neither System, a built-in nor one of the user's own falls back to System, so a removed theme never leaves the app unstyled.
         if (theme != ThemeLibrary.System && !ThemeLibrary.BuiltIn.Concat(themes).Any(t => t.Name == theme)) theme = ThemeLibrary.System;
         // Written back on the first save, so a brand new database does not start with the sample accounts every launch.
-        return new(accounts, decimalHours, theme, weekStart, shadows, themes, taskbar, tooltips, developer, setupDone, moveLater, pillScale, pillOnTop, dashboardOnTop, dashWidth, dashHeight, deskOrder, calm, deskHidden, trinkets, deskSizes, pillStyle, deskPositions, deskLayouts, captureKey, floating, floatOnTop);
+        return new(accounts, decimalHours, theme, weekStart, shadows, themes, taskbar, tooltips, developer, setupDone, moveLater, pillScale, pillOnTop, dashboardOnTop, new SettingsExtras(extraLines, extraSections));
     }
     private static SessionRow ToRow(Microsoft.Data.Sqlite.SqliteDataReader r)
     {
@@ -209,10 +210,10 @@ public sealed class TimerStore : IDisposable
         var sections = (JsonObject)settings["sections"]!;
         sections["dayOverrides"] = Array(engine.Schedule.Overrides.OrderBy(p => p.Key).Select(p => p.Value.Off
             ? $"{p.Key:yyyy-MM-dd}\toff" : $"{p.Key:yyyy-MM-dd}\t{p.Value.Shift!.Start:hh\\:mm}\t{p.Value.Shift.End:hh\\:mm}"));
-        sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off", preferences.TaskbarButton ? "taskbar=on" : "taskbar=off", preferences.Tooltips ? "tooltips=on" : "tooltips=off", preferences.Developer ? "developer=on" : "developer=off", preferences.SetupDone ? "setup=done" : "setup=pending", preferences.MoveLaterAlways ? "shove=always" : "shove=ask", preferences.PillScale is { } pill ? "pill=" + pill : "pill=auto", preferences.PillOnTop ? "pilltop=on" : "pilltop=off", preferences.DashboardOnTop ? "dashtop=on" : "dashtop=off", preferences.DashboardWidth is { } dw && preferences.DashboardHeight is { } dh ? $"dash={dw}x{dh}" : "dash=default", "desk=on", preferences.Calm ? "motion=calm" : "motion=lively", "desk-order=" + string.Join(',', preferences.DeskOrder ?? System.Array.Empty<string>()), "desk-hidden=" + string.Join(',', preferences.DeskHidden ?? System.Array.Empty<string>()), "desk-sizes=" + string.Join(',', preferences.DeskSizes ?? System.Array.Empty<string>()), preferences.FloatOnTop ? "floattop=on" : "floattop=off", "capturekey=" + (Timer.Core.HotkeySpec.Parse(preferences.CaptureKey)?.ToString() ?? ""), "desk-pos=" + string.Join(',', preferences.DeskPositions ?? System.Array.Empty<string>()), "pillstyle=" + (preferences.PillStyle is "compact" or "minimal" ? preferences.PillStyle : "full") });
-        sections["deskFloating"] = Array(new[] { FloatingWidgets.ToJson(preferences.Floating ?? System.Array.Empty<FloatingWidget>()) });
-        sections["deskLayouts"] = Array(new[] { Timer.Core.DeskLayouts.ToJson(preferences.DeskLayouts ?? System.Array.Empty<SavedLayout>()) });
-        sections["deskTrinkets"] = Array(new[] { Trinkets.ToJson(preferences.Trinkets ?? TrinketData.Empty) });
+        sections["migrationAppearance"] = Array(new[] { preferences.Theme, preferences.Shadows ? "shadows=on" : "shadows=off", preferences.TaskbarButton ? "taskbar=on" : "taskbar=off", preferences.Tooltips ? "tooltips=on" : "tooltips=off", preferences.Developer ? "developer=on" : "developer=off", preferences.SetupDone ? "setup=done" : "setup=pending", preferences.MoveLaterAlways ? "shove=always" : "shove=ask", preferences.PillScale is { } pill ? "pill=" + pill : "pill=auto", preferences.PillOnTop ? "pilltop=on" : "pilltop=off", preferences.DashboardOnTop ? "dashtop=on" : "dashtop=off" }
+            .Concat(preferences.Extras?.AppearanceLines ?? System.Array.Empty<string>()));
+        // The app's own sections are written as they were handed over.
+        foreach (var (name, lines) in preferences.Extras?.Sections ?? SettingsExtras.Empty.Sections) if (!OwnedSections.Contains(name)) sections[name] = Array(lines);
         sections["migrationThemes"] = Array((preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).Select(ThemeStorage.ToLine));
         var hours = Lines("workingHours").Where(s =>
         {

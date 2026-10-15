@@ -1,4 +1,6 @@
-namespace Timer.Core;
+using Timer.Core;
+
+namespace Timer.Desk;
 
 /// <summary>
 /// A keyboard shortcut such as Ctrl+Alt+N, kept as plain data so it can be saved, shown and tested away from any window. A shortcut must hold

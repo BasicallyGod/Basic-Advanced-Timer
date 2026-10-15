@@ -1,4 +1,6 @@
-namespace Timer.Core;
+using Timer.Core;
+
+namespace Timer.Desk;
 
 /// <summary>How much room a tile has, which decides how much of itself it shows.</summary>
 public enum TileForm { Tiny, Normal, Roomy }

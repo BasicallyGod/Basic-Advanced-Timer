@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace Timer.Core;
+using Timer.Core;
+
+namespace Timer.Desk;
 
 /// <summary>What was recognised in a typed note: its words, and a time and a day when the words named them.</summary>
 public sealed record NoteParts(string Text, TimeSpan? At, DateTime? Day);

@@ -1,4 +1,6 @@
-namespace Timer.Core;
+using Timer.Core;
+
+namespace Timer.Desk;
 
 /// <summary>
 /// The soft colour each desk tile wears, one set for a light theme and one for a dark one. They are decoration only and carry no meaning. A light theme takes

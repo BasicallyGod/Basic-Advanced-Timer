@@ -1,7 +1,9 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace Timer.Core;
+using Timer.Core;
+
+namespace Timer.Desk;
 
 /// <summary>A to-do item. The account it belongs to is kept by name, so a rename moves it along, and it is cleared if that account is deleted.</summary>
 public sealed record TodoItem(string Text, bool Done = false, string? Account = null);

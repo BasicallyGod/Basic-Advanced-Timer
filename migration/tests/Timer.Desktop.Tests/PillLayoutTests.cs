@@ -33,9 +33,9 @@ public sealed class PillLayoutTests
         var folder = Path.Combine(Path.GetTempPath(), "timer-pill-layout-" + Guid.NewGuid());
         try
         {
-            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.Equal("full", prefs.PillStyle); store.Save(engine, prefs with { PillStyle = "minimal" }); }
-            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.Equal("minimal", prefs.PillStyle); store.Save(engine, prefs with { PillStyle = "sideways" }); }
-            using (var store = new TimerStore(folder)) Assert.Equal("full", store.Load(new TrackingEngine()).PillStyle);
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.Equal("full", prefs.App().PillStyle); store.Save(engine, prefs.WithApp(a => a with { PillStyle = "minimal" })); }
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.Equal("minimal", prefs.App().PillStyle); store.Save(engine, prefs.WithApp(a => a with { PillStyle = "sideways" })); }
+            using (var store = new TimerStore(folder)) Assert.Equal("full", store.Load(new TrackingEngine()).App().PillStyle);
         }
         finally { Directory.Delete(folder, true); }
     }

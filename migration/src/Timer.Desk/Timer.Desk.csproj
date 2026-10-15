@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The desk app's own models: the board's layout maths, saved layouts, floating widgets, the quick capture shortcut, the post-it and to-do trinkets,
+    note shorthand and the pomodoro timer, with the settings they are saved in. They sit on top of Timer.Core and Timer.Storage, which know nothing of
+    them, so those two can be shared with another app without bringing any of this along. Nothing here uses a UI type.
+  -->
+  <ItemGroup><ProjectReference Include="../Timer.Core/Timer.Core.csproj" /><ProjectReference Include="../Timer.Storage/Timer.Storage.csproj" /></ItemGroup>
+</Project>

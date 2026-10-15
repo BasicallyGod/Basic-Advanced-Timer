@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using Avalonia.Controls;
 using Avalonia.Win32;
 using Timer.Core;
+using Timer.Desk;
 
 namespace Timer.Desktop;
 

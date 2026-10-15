@@ -5,6 +5,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
+using Timer.Desk;
 using Timer.Desktop;
 using Timer.Storage;
 using Xunit;

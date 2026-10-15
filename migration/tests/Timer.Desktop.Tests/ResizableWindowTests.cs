@@ -1,3 +1,4 @@
+using Timer.Desk;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -14,7 +15,7 @@ namespace Timer.Desktop.Tests;
 public sealed class ResizableWindowTests
 {
     private static TimerModel Model(int? width = null, int? height = null)
-        => new(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday, DashboardWidth: width, DashboardHeight: height));
+        => new(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday).WithApp(new AppPrefs(DashboardWidth: width, DashboardHeight: height)));
 
     [AvaloniaFact]
     public void TheDashboardCanBeResizedFromItsEdgesAndCornersDownToAMinimum()
@@ -47,8 +48,8 @@ public sealed class ResizableWindowTests
         var folder = Path.Combine(Path.GetTempPath(), "timer-dash-" + Guid.NewGuid().ToString("N"));
         try
         {
-            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.Null(prefs.DashboardWidth); store.Save(engine, prefs with { DashboardWidth = 900, DashboardHeight = 620 }); }
-            using (var store = new TimerStore(folder)) { var prefs = store.Load(new TrackingEngine()); Assert.Equal(900, prefs.DashboardWidth); Assert.Equal(620, prefs.DashboardHeight); }
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.Null(prefs.App().DashboardWidth); store.Save(engine, prefs.WithApp(a => a with { DashboardWidth = 900, DashboardHeight = 620 })); }
+            using (var store = new TimerStore(folder)) { var prefs = store.Load(new TrackingEngine()); Assert.Equal(900, prefs.App().DashboardWidth); Assert.Equal(620, prefs.App().DashboardHeight); }
             // Setting a size on the model reports it back.
             var model = Model(); model.SetDashboardSize(900, 620); Assert.Equal((900, 620), model.DashboardSize);
         }

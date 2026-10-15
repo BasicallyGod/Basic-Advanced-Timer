@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Timer.Core;
+using Timer.Desk;
 
 namespace Timer.Desktop;
 
