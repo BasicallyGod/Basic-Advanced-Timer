@@ -143,7 +143,7 @@ public sealed class TweakTests
             using (var raw = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(folder, TimerDatabase.FileName), Pooling = false }.ToString()))
             {
                 raw.Open();
-                foreach (var sql in new[] { "PRAGMA foreign_keys = OFF", "BEGIN", TimerDatabase.AccountsTable("accounts_old", false),
+                foreach (var sql in new[] { "DROP TABLE day_notes", "PRAGMA foreign_keys = OFF", "BEGIN", TimerDatabase.AccountsTable("accounts_old", false),
                     "INSERT INTO accounts_old SELECT id, name, colour, position, hidden, budget_seconds, budget_period FROM accounts", "DROP TABLE accounts",
                     "ALTER TABLE accounts_old RENAME TO accounts", "COMMIT", "PRAGMA user_version = 1" })
                 { using var command = raw.CreateCommand(); command.CommandText = sql; command.ExecuteNonQuery(); }
@@ -159,7 +159,7 @@ public sealed class TweakTests
             Assert.Empty(upgraded.Query("PRAGMA foreign_key_check", r => 1));
             upgraded.Execute("UPDATE accounts SET budget_period = 'day' WHERE id = 7"); // Now allowed.
             Assert.Equal("day", upgraded.Scalar("SELECT budget_period FROM accounts WHERE id = 7"));
-            Assert.Single(Directory.GetFiles(Path.Combine(folder, "Backups"), "timer-before-format-2-*.db"));
+            Assert.Single(Directory.GetFiles(Path.Combine(folder, "Backups"), "timer-before-format-3-*.db"));
         }
         finally { SqliteConnection.ClearAllPools(); try { Directory.Delete(folder, true); } catch (IOException) { } }
     }

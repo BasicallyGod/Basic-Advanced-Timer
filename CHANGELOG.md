@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 15 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Engine and storage come from shared packages | pending | Timer.Core and Timer.Storage are now the NuGet packages BasicallyGod.Timer.Core and BasicallyGod.Timer.Storage (0.1.0) from the Basic-Timer-Core repository, shared with the separate desk app. The database format becomes 3 (a table for day notes); an existing file is backed up and upgraded when first opened, and an older build then refuses it. Working shifts that end after midnight are now supported by the engine. |
+
 ## 12 October 2026
 
 | Change | Commit | Details |

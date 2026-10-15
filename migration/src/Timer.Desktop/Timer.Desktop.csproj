@@ -24,8 +24,8 @@
     <AvaloniaResource Include="Assets/Fonts/*.ttf" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../Timer.Core/Timer.Core.csproj" />
-    <ProjectReference Include="../Timer.Storage/Timer.Storage.csproj" />
+    <PackageReference Include="BasicallyGod.Timer.Core" Version="$(SharedTimerVersion)" />
+    <PackageReference Include="BasicallyGod.Timer.Storage" Version="$(SharedTimerVersion)" />
     <PackageReference Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
     <PackageReference Include="Avalonia.Controls.ColorPicker" Version="$(AvaloniaVersion)" />
