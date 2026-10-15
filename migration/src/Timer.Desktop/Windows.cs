@@ -46,6 +46,9 @@ public sealed class WindowCoordinator
         // The menu's Open Desk and Open dashboard: from the pill it does what its own button does, from the dashboard it just comes to the front.
         model.DashboardRequested += () => { if (Pill.IsVisible) Pill.OpenDashboard?.Invoke(); else { Dashboard.Activate(); } };
         Dashboard.OpenPill = () => { Pill.Collapse(); Pill.Show(); Dashboard.Hide(); Pill.Activate(); };
+        // Floating widgets are put away first when the app closes, so closing them is not mistaken for docking them and they come back next time.
+        Pill.Closed += (_, _) => RetireFloats();
+        Dashboard.Closed += (_, _) => RetireFloats();
         Pill.Closed += (_, _) => exit();
         Dashboard.Closed += (_, _) => exit();
         Pill.Closing += OnClosing; Dashboard.Closing += OnClosing;
@@ -63,7 +66,19 @@ public sealed class WindowCoordinator
         Pill.Opened += (_, _) => ApplyShortcut(); Dashboard.Opened += (_, _) => ApplyShortcut();
         model.PropertyChanged += (_, _) => ApplyShortcut();
         Pill.Closed += (_, _) => hotkey.Dispose();
+        // Floating widgets: desk tiles in windows of their own. They stay up when the dashboard is hidden to the tray, and close with the app.
+        model.FloatingChanged += SyncFloating; SyncFloating();
     }
+    private readonly Dictionary<string, FloatingWidgetWindow> floats = new();
+    private void SyncFloating()
+    {
+        var wanted = model.Floating.Where(f => DeskView.Kinds.Any(k => k.Id == f.Id)).ToList();
+        foreach (var id in floats.Keys.Where(id => wanted.All(w => w.Id != id)).ToList()) { floats[id].Retire(); floats.Remove(id); }
+        foreach (var widget in wanted.Where(w => !floats.ContainsKey(w.Id))) { var window = new FloatingWidgetWindow(model, widget); floats[widget.Id] = window; window.Show(); }
+    }
+    /// <summary>The widgets with a window open now.</summary>
+    public IReadOnlySet<string> FloatingWindowIds => floats.Keys.ToHashSet();
+    private void RetireFloats() { foreach (var window in floats.Values.ToList()) window.Retire(); floats.Clear(); }
     private readonly GlobalHotkey hotkey; private QuickCaptureWindow? capture; private string? appliedShortcut;
     private void ApplyShortcut()
     {
@@ -140,7 +155,7 @@ public sealed class WindowCoordinator
     public void Quit()
     {
         if (!model.StopForClose()) { ShowTimer(); return; }
-        quitting = true;
+        quitting = true; RetireFloats();
         Pill.Close(); Dashboard.Close();
     }
     private void FitDashboardToPill()

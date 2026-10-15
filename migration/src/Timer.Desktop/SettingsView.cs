@@ -174,6 +174,9 @@ public sealed class SettingsView : Grid
     {
         var pane = Pane("Desk");
         pane.Children.Add(Toggle("Calm motion: tiles move without bouncing", "CalmMotion", () => model.Calm, v => model.SetCalm(v)));
+        pane.Children.Add(Group("Floating widgets"));
+        pane.Children.Add(Toggle("Keep floating widgets on top of other windows", "FloatOnTop", () => model.FloatOnTop, v => model.SetFloatOnTop(v)));
+        var floatNote = Ui.Text("Float a tile from its corner buttons. Up to three can float at once, and they stay when the dashboard is hidden.", 12, "muted"); floatNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; pane.Children.Add(floatNote);
         return pane;
     }
 

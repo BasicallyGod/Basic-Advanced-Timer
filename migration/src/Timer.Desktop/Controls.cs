@@ -864,7 +864,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Desk, Clock, Check, Bars, Note }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Desk, Clock, Check, Bars, Note, Float, Dock }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1111,6 +1111,16 @@ public sealed class IconGlyph : Control
                 context.DrawGeometry(null, flagPen, geometry);
                 break;
             }
+            case IconKind.Float:
+                // A small window with an arrow leaving its top right corner: lift this tile out to float on the screen.
+                context.DrawRectangle(null, pen, new Rect(2.5, 6.5, 9, 9), 2, 2);
+                context.DrawGeometry(null, pen, Geometry.Parse("M 8.5,9.5 L 15,3 M 10.5,3 L 15,3 L 15,7.5"));
+                break;
+            case IconKind.Dock:
+                // The arrow turned back into the window: put the tile back on the desk.
+                context.DrawRectangle(null, pen, new Rect(2.5, 6.5, 9, 9), 2, 2);
+                context.DrawGeometry(null, pen, Geometry.Parse("M 15,3 L 8.5,9.5 M 8.5,5.5 L 8.5,9.5 L 12.5,9.5"));
+                break;
             case IconKind.Copy:
                 // Two sheets, one behind the other: the usual sign for copy.
                 context.DrawRectangle(null, pen, new Rect(6.5, 2.5, 8.5, 10.5), 2, 2);

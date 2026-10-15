@@ -39,6 +39,11 @@ public sealed class DeskView : UserControl
 
     private readonly TimerModel model;
     private readonly Action<string>? openPage;
+    private readonly string? single;
+    private readonly Dictionary<string, Border> floatOverlays = new();
+    private (int Columns, int Rows) floatCells = (2, 2);
+    /// <summary>Raised as a floating widget is resized, with its new size in cells, so its window can follow.</summary>
+    public event Action<int, int>? CellsChanged;
     private readonly DeskBoard board = new();
     private readonly Dictionary<string, (Border Tile, Border Body, string? Variant)> tiles = new();
     private readonly AnalogueClock analogue; private readonly DayStrip strip;
@@ -86,9 +91,13 @@ public sealed class DeskView : UserControl
     /// <summary>Raised when a tile is opened in place or put back, with the tile's id or null, so the window can show the controls that tile needs.</summary>
     public event Action<string?>? ExpandedChanged;
 
-    public DeskView(TimerModel model, Action<string>? openPage = null)
+    /// <summary>
+    /// The desk, or with <paramref name="only"/> a single tile on its own for a floating widget: the same tile, built by the same code and showing
+    /// the same version of itself for its size in cells, with no board, drawer or arranging around it.
+    /// </summary>
+    public DeskView(TimerModel model, Action<string>? openPage = null, string? only = null)
     {
-        this.model = model; this.openPage = openPage;
+        this.model = model; this.openPage = openPage; single = only;
         analogue = new AnalogueClock(() => model.Engine.Now); strip = new DayStrip(model); timelineStrip = new DayStrip(model);
         sizes = new Dictionary<string, (int Columns, int Rows)>(model.DeskSizes);
         var known = Kinds.Select(k => k.Id).ToList();
@@ -97,7 +106,11 @@ public sealed class DeskView : UserControl
         // A desk that has never been arranged starts with one post-it out and the spare two in the drawer.
         if (model.DeskOrder.Count == 0 && model.DeskHidden.Count == 0) hidden = new List<string> { "postit2", "postit3" };
         order = DeskLayout.Reconcile(model.DeskOrder.Where(id => !hidden.Contains(id)), known.Where(id => !hidden.Contains(id)).ToList());
-        foreach (var kind in Kinds) { var tile = BuildTile(kind); tiles[kind.Id] = tile; board.Children.Add(tile.Tile); }
+        foreach (var kind in Kinds)
+        {
+            if (single is not null && kind.Id != single) continue;
+            var tile = BuildTile(kind); tiles[kind.Id] = tile; if (single is null) board.Children.Add(tile.Tile);
+        }
         board.Owner = this; board.Lively = !model.Calm;
         Name = "Desk";
         // A button above the board opens the drawer, a panel down the right edge that holds the tiles put away.
@@ -127,7 +140,9 @@ public sealed class DeskView : UserControl
         Ui.Put(frame, scroller);
         Ui.Put(frame, drawer);
         Content = frame;
-        SyncDrawer(); ApplyHues();
+        ApplyHues();
+        if (single is not null) { Content = tiles[single].Tile; }
+        else { SyncDrawer(); RefreshFloating(); }
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; RefreshLive(); };
         DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; };
     }
@@ -165,6 +180,21 @@ public sealed class DeskView : UserControl
         foreach (var chip in chips.Children) { chip.Opacity = 1; chip.RenderTransform = null; }
         drawer.IsVisible = drawerOpen;
     }
+    /// <summary>Shows a single-tile desk at a size in cells, which decides the version of the tile it shows (as the desk's own placement does).</summary>
+    public void SetCells(int columns, int rows)
+    {
+        if (single is null) return;
+        var kind = Kinds.First(k => k.Id == single);
+        var (c, r) = DeskLayout.ClampSize(columns, rows, kind.MinColumns, kind.MinRows, kind.MaxColumns, kind.MaxRows, 12);
+        floatCells = (c, r);
+        Fill(single, new DeskPlacement(single, 0, 0, c, r));
+    }
+    /// <summary>The size in cells a tile would float at: the size it has on the desk.</summary>
+    public (int Columns, int Rows) CellsFor(string id) => SizeOf(id);
+    /// <summary>The window size, in pixels, a tile of this many cells takes when floating (without the room for its shadow).</summary>
+    public static Size PixelsFor(int columns, int rows) => new(columns * DeskLayout.CellWidth - Gap, rows * (CellHeight + Gap) - Gap);
+    /// <summary>The tiles whose cells are on the desk but whose content is floating in a window of its own show a quiet placeholder instead.</summary>
+    private void RefreshFloating() { foreach (var (id, overlay) in floatOverlays) overlay.IsVisible = model.IsFloating(id); }
     /// <summary>The tiles in the drawer.</summary>
     public IReadOnlyList<string> Hidden => hidden;
     /// <summary>Each tile's place and form at the current width.</summary>
@@ -272,6 +302,7 @@ public sealed class DeskView : UserControl
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (model.CurrentTheme.Dark != hueDark) ApplyHues();
+        if (single is null && e.PropertyName != nameof(TimerModel.Elapsed)) RefreshFloating();
         RefreshLive();
         // The rows are redrawn only when something other than the clock changed, so a tick never interrupts the to-do list.
         if (e.PropertyName != nameof(TimerModel.Elapsed)) { RebuildTimeline(); todoView?.Rebuild(); notesView?.Rebuild(); comingView?.Rebuild(); PaintPostIt(); }
@@ -345,12 +376,21 @@ public sealed class DeskView : UserControl
         tile.BoxShadow = BoxShadows.Parse(post ? "0 6 16 0 #34000000" : "0 4 14 0 #18000000");
         var hovered = false;
         var buttons = Ui.Horizontal(); buttons.Spacing = 2; buttons.Opacity = 0; buttons.IsHitTestVisible = false;
-        if (kind.OpensPage is { } page)
+        // A floating widget has only the buttons that suit a window of its own: its own, and Dock to put it back on the desk.
+        if (single is null && kind.OpensPage is { } page)
         {
             var open = Ui.IconButton(IconKind.Next, "Open full page", "TileOpen_" + kind.Id, () => openPage?.Invoke(page)); open.Width = 28; open.Height = 28; buttons.Children.Add(open);
         }
-        var expand = Ui.IconButton(IconKind.FitDay, "Open in place", "TileExpand_" + kind.Id, () => { if (expanded == kind.Id) Collapse(); else Expand(kind.Id); }); expand.Width = 28; expand.Height = 28; buttons.Children.Add(expand);
-        var put = Ui.IconButton(IconKind.Close, "Put away in the drawer", "TileHide_" + kind.Id, () => Hide(kind.Id)); put.Width = 28; put.Height = 28; put.IsVisible = false; buttons.Children.Add(put);
+        if (single is null)
+        {
+            var expand = Ui.IconButton(IconKind.FitDay, "Open in place", "TileExpand_" + kind.Id, () => { if (expanded == kind.Id) Collapse(); else Expand(kind.Id); }); expand.Width = 28; expand.Height = 28; buttons.Children.Add(expand);
+            var lift = Ui.IconButton(IconKind.Float, "Float on screen", "TileFloat_" + kind.Id, () => { var (c, r) = SizeOf(kind.Id); model.FloatWidget(kind.Id, c, r); }); lift.Width = 28; lift.Height = 28; buttons.Children.Add(lift);
+        }
+        else
+        {
+            var dock = Ui.IconButton(IconKind.Dock, "Back on the desk", "TileDock_" + kind.Id, () => model.DockWidget(kind.Id)); dock.Width = 28; dock.Height = 28; buttons.Children.Add(dock);
+        }
+        var put = Ui.IconButton(IconKind.Close, "Put away in the drawer", "TileHide_" + kind.Id, () => Hide(kind.Id)); put.Width = 28; put.Height = 28; put.IsVisible = false; if (single is null) buttons.Children.Add(put);
         if (post)
         {
             // A button changes the paper's colour.
@@ -360,6 +400,7 @@ public sealed class DeskView : UserControl
         // A grip in the bottom right corner makes the tile larger or smaller by whole cells. It shows only while arranging.
         var grip = new Border { Name = "TileResize_" + kind.Id, Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.BottomRightCorner), IsVisible = false,
             Child = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse("M15,5 L5,15 M15,10 L10,15"), Stroke = new SolidColorBrush(Colors.Gray), StrokeThickness = 1.6, Opacity = .6, StrokeLineCap = PenLineCap.Round, Margin = new Thickness(2) } };
+        if (single is not null) grip.IsVisible = true; // A floating widget can always be resized, in whole cells like a tile on the desk.
         grip.PointerPressed += (_, e) => BeginResize(kind.Id, e, tile);
         grip.PointerMoved += (_, e) => ResizeTo(e);
         grip.PointerReleased += (_, e) => EndResize(e);
@@ -412,19 +453,37 @@ public sealed class DeskView : UserControl
             };
         }
         layers.Children.Insert(0, content); layers.Children.Add(grip);
+        if (single is null)
+        {
+            // While the tile floats, its place on the desk is kept and says so, with a way back.
+            var away = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            away.Children.Add(Ui.Text("Floating on screen", 13, "muted"));
+            var dockHere = Ui.DialogButton("Dock", () => model.DockWidget(kind.Id), "TileDockHere_" + kind.Id); dockHere.HorizontalAlignment = HorizontalAlignment.Center; dockHere.Height = 30; away.Children.Add(dockHere);
+            var overlay = new Border { Name = "TileFloating_" + kind.Id, IsVisible = false, CornerRadius = new CornerRadius(post ? 8 : 22), Child = away }; overlay.Classes.Add("panel");
+            layers.Children.Add(overlay); floatOverlays[kind.Id] = overlay;
+        }
         tile.Child = layers;
         void Refresh()
         {
             var shown = arranging || hovered;
             buttons.Opacity = shown ? 1 : 0; buttons.IsHitTestVisible = shown; if (meta is not null) meta.Opacity = shown ? 0 : 1;
-            put.IsVisible = arranging; grip.IsVisible = arranging && expanded is null; if (dots is not null) dots.IsVisible = arranging;
+            put.IsVisible = arranging; grip.IsVisible = single is not null || (arranging && expanded is null); if (dots is not null) dots.IsVisible = arranging;
             handle.Cursor = arranging ? new Cursor(StandardCursorType.SizeAll) : Cursor.Default;
             tile.BorderBrush = arranging ? new SolidColorBrush(Colors.Gray, .45) : null; tile.BorderThickness = arranging ? new Thickness(1.5) : default;
         }
         chrome[kind.Id] = Refresh;
         tile.PointerEntered += (_, _) => { hovered = true; Refresh(); };
         tile.PointerExited += (_, _) => { if (resizing is null && dragged is null) { hovered = false; Refresh(); } };
-        handle.PointerPressed += (_, e) => BeginDrag(kind.Id, e, tile);
+        handle.PointerPressed += (_, e) =>
+        {
+            // A floating widget is carried by its header, as the pill is, with the window moving rather than a tile on the board.
+            if (single is not null)
+            {
+                if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && TopLevel.GetTopLevel(this) is Window window) { Ui.CloseMenus(window); window.BeginMoveDrag(e); e.Handled = true; }
+                return;
+            }
+            BeginDrag(kind.Id, e, tile);
+        };
         handle.PointerMoved += (_, e) => DragTo(e);
         handle.PointerReleased += (_, e) => EndDrag(e);
         handle.PointerCaptureLost += (_, _) => CancelDrag();
@@ -505,24 +564,27 @@ public sealed class DeskView : UserControl
 
     private void BeginResize(string id, PointerPressedEventArgs e, Control tile)
     {
-        if (!arranging || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || expanded is not null) return;
-        resizing = id; resizingSize = SizeOf(id); resizeStart = e.GetPosition(board); resizeFrom = tile.Bounds.Size;
+        if ((single is null && !arranging) || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || expanded is not null) return;
+        resizing = id; resizingSize = single is not null ? floatCells : SizeOf(id); resizeStart = e.GetPosition(single is not null ? this : board); resizeFrom = tile.Bounds.Size;
         e.Pointer.Capture((IInputElement)e.Source!); e.Handled = true;
     }
     private void ResizeTo(PointerEventArgs e)
     {
         if (resizing is not { } id) return;
-        var at = e.GetPosition(board);
-        var (c, r) = DeskLayout.SizeFromPixels(resizeFrom.Width + at.X - resizeStart.X, resizeFrom.Height + at.Y - resizeStart.Y, board.CellWidth, CellHeight, Gap);
+        var at = e.GetPosition(single is not null ? this : board);
+        var (c, r) = DeskLayout.SizeFromPixels(resizeFrom.Width + at.X - resizeStart.X, resizeFrom.Height + at.Y - resizeStart.Y, single is not null ? DeskLayout.CellWidth : board.CellWidth, CellHeight, Gap);
         var kind = Kinds.First(k => k.Id == id);
-        var size = DeskLayout.ClampSize(c, r, kind.MinColumns, kind.MinRows, kind.MaxColumns, kind.MaxRows, board.Columns);
+        var size = DeskLayout.ClampSize(c, r, kind.MinColumns, kind.MinRows, kind.MaxColumns, kind.MaxRows, single is not null ? 12 : board.Columns);
         if (size == resizingSize) return;
-        resizingSize = size; board.InvalidateMeasure(); board.InvalidateArrange();
+        resizingSize = size;
+        if (single is not null) { floatCells = size; SetCells(size.Columns, size.Rows); CellsChanged?.Invoke(size.Columns, size.Rows); return; }
+        board.InvalidateMeasure(); board.InvalidateArrange();
     }
     private void EndResize(PointerReleasedEventArgs e)
     {
         if (resizing is not { } id) return;
         var size = resizingSize; e.Pointer.Capture(null); resizing = null;
+        if (single is not null) return; // A floating widget has already followed the pointer, cell by cell.
         Resize(id, size.Columns, size.Rows);
     }
     private void CancelResize() { if (resizing is null) return; resizing = null; board.InvalidateMeasure(); board.InvalidateArrange(); }
