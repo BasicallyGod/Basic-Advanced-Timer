@@ -107,4 +107,71 @@ public static class DeskLayout
         return sizes;
     }
     public static List<string> FormatSizes(IReadOnlyDictionary<string, (int Columns, int Rows)> sizes) => sizes.OrderBy(s => s.Key, StringComparer.Ordinal).Select(s => $"{s.Key}:{s.Value.Columns}x{s.Value.Rows}").ToList();
+
+    // ---- Pinned positions. Once a desk has been arranged, tiles keep the cell they were put in, so a deliberate gap stays a gap. ----
+
+    /// <summary>
+    /// Places tiles at their saved cells, then flows any without one into the first free spot around them. A pin that no longer fits (a narrower
+    /// window, or a tile that grew over it) goes to the nearest free place instead; the priority tile, the one just moved or resized, is placed first so it keeps its spot and the others make way.
+    /// </summary>
+    public static List<DeskPlacement> PackPinned(IEnumerable<DeskTileSpec> tiles, IReadOnlyDictionary<string, (int Column, int Row)> pins, int columns, string? priority = null)
+    {
+        columns = Math.Max(1, columns);
+        var specs = tiles.ToList();
+        var taken = new List<bool[]>();
+        bool[] RowOf(int index) { while (taken.Count <= index) taken.Add(new bool[columns]); return taken[index]; }
+        bool Free(int column, int row, int width, int height)
+        {
+            for (var r = row; r < row + height; r++) for (var c = column; c < column + width; c++) if (RowOf(r)[c]) return false;
+            return true;
+        }
+        void Take(int column, int row, int width, int height) { for (var r = row; r < row + height; r++) for (var c = column; c < column + width; c++) RowOf(r)[c] = true; }
+        var placed = new Dictionary<string, DeskPlacement>();
+        var pinned = specs.Where(s => pins.ContainsKey(s.Id))
+            .OrderBy(s => s.Id == priority ? 0 : 1).ThenBy(s => pins[s.Id].Row).ThenBy(s => pins[s.Id].Column).ToList();
+        foreach (var spec in pinned)
+        {
+            var width = Math.Clamp(spec.Columns, 1, columns); var height = Math.Max(1, spec.Rows);
+            var (pc, pr) = pins[spec.Id]; pc = Math.Clamp(pc, 0, columns - width); pr = Math.Max(0, pr);
+            var column = pc; var row = pr;
+            if (!Free(pc, pr, width, height))
+            {
+                // The nearest free cell by distance, reading order breaking ties, searched a little past the last row in use.
+                var best = double.MaxValue; var reach = Math.Max(taken.Count, pr) + height + 1;
+                column = pc; row = reach;
+                for (var r = 0; r <= reach; r++) for (var c = 0; c + width <= columns; c++)
+                {
+                    var distance = (c - pc) * (c - pc) + (r - pr) * (r - pr);
+                    if (distance < best && Free(c, r, width, height)) { best = distance; column = c; row = r; }
+                }
+            }
+            Take(column, row, width, height); placed[spec.Id] = new DeskPlacement(spec.Id, column, row, width, height);
+        }
+        foreach (var spec in specs.Where(s => !placed.ContainsKey(s.Id)))
+        {
+            var width = Math.Clamp(spec.Columns, 1, columns); var height = Math.Max(1, spec.Rows);
+            for (var row = 0; !placed.ContainsKey(spec.Id); row++)
+                for (var column = 0; column + width <= columns; column++)
+                    if (Free(column, row, width, height)) { Take(column, row, width, height); placed[spec.Id] = new DeskPlacement(spec.Id, column, row, width, height); break; }
+        }
+        return specs.Select(s => placed[s.Id]).ToList();
+    }
+
+    /// <summary>The cell a tile's top left corner is nearest to, for a tile dropped at a point (in cells, fractions allowed).</summary>
+    public static (int Column, int Row) CellAt(double column, double row) => (Math.Max(0, (int)Math.Round(column)), Math.Max(0, (int)Math.Round(row)));
+
+    /// <summary>Saved positions are written as id:Column,Row. Anything that does not read that way is dropped.</summary>
+    public static Dictionary<string, (int Column, int Row)> ParsePositions(IEnumerable<string>? saved)
+    {
+        var positions = new Dictionary<string, (int, int)>();
+        foreach (var entry in saved ?? Array.Empty<string>())
+        {
+            // The pair is joined with a colon and a plus sign so the comma can keep separating entries.
+            var parts = entry.Split(':');
+            if (parts.Length == 2 && parts[0].Length > 0 && parts[1].Split('+') is [var c, var r] && int.TryParse(c, out var column) && int.TryParse(r, out var row) && column is >= 0 and <= 40 && row is >= 0 and <= 200)
+                positions[parts[0]] = (column, row);
+        }
+        return positions;
+    }
+    public static List<string> FormatPositions(IReadOnlyDictionary<string, (int Column, int Row)> positions) => positions.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => $"{p.Key}:{p.Value.Column}+{p.Value.Row}").ToList();
 }

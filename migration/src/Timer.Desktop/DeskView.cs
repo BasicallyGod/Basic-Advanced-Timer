@@ -62,7 +62,10 @@ public sealed class DeskView : UserControl
     private readonly Avalonia.Threading.DispatcherTimer drawerTimer = new() { Interval = TimeSpan.FromMilliseconds(16) }; private long drawerStamp;
     private const double DrawerMilliseconds = 320, ChipStagger = 30;
     private Point chipStart; private string? chipPressed; private bool chipMoved;
-    private string? dragged; private Point dragStart; private int dragIndex;
+    private string? dragged; private Point dragStart; private DeskPlacement? dragOrigin;
+    // Once the desk has been arranged every visible tile keeps its own cell, so a gap left on purpose stays a gap. Empty means tiles simply flow in order.
+    private Dictionary<string, (int Column, int Row)> pins;
+    private Dictionary<string, (int Column, int Row)>? provisionalPins;
     private readonly Dictionary<string, (int Columns, int Rows)> sizes;
     private string? resizing; private (int Columns, int Rows) resizingSize; private Point resizeStart; private Size resizeFrom;
     private string? expanded;
@@ -90,6 +93,7 @@ public sealed class DeskView : UserControl
         sizes = new Dictionary<string, (int Columns, int Rows)>(model.DeskSizes);
         var known = Kinds.Select(k => k.Id).ToList();
         hidden = model.DeskHidden.Where(known.Contains).Distinct().ToList();
+        pins = model.DeskPositions.Where(p => known.Contains(p.Key) && !hidden.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value);
         // A desk that has never been arranged starts with one post-it out and the spare two in the drawer.
         if (model.DeskOrder.Count == 0 && model.DeskHidden.Count == 0) hidden = new List<string> { "postit2", "postit3" };
         order = DeskLayout.Reconcile(model.DeskOrder.Where(id => !hidden.Contains(id)), known.Where(id => !hidden.Contains(id)).ToList());
@@ -107,7 +111,10 @@ public sealed class DeskView : UserControl
         // Arrange mode turns the desk's editing controls on, and the Drawer button comes with it; the window sets both in its header.
         arrangeButton = Ui.Button("Arrange", () => SetArranging(!arranging), "ArrangeToggle");
         arrangeButton.Classes.Add("toolButton"); arrangeButton.Classes.Add("quiet"); arrangeButton.Height = 30; arrangeButton.Padding = new Thickness(12, 0);
-        drawerToggle.IsVisible = false; HeaderTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { drawerToggle, arrangeButton } };
+        // Tidy up closes the gaps by letting the tiles flow in reading order again. It is offered only while arranging, and only when there is something pinned to undo.
+        tidyButton = Ui.Button("Tidy up", TidyUp, "TidyDesk"); ToolTip.SetTip(tidyButton, "Close the gaps");
+        tidyButton.Classes.Add("toolButton"); tidyButton.Classes.Add("quiet"); tidyButton.Height = 30; tidyButton.Padding = new Thickness(12, 0); tidyButton.IsVisible = false;
+        drawerToggle.IsVisible = false; HeaderTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { tidyButton, drawerToggle, arrangeButton } };
         // The Drawer button is handed to the window, which sets it in the header beside the title, so the board gets the room a row of its own would take.
         var frame = Ui.Grid("*", "*");
         scroller = new ScrollViewer { Content = board, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, AllowAutoHide = false };
@@ -169,12 +176,47 @@ public sealed class DeskView : UserControl
         return DeskLayout.ClampSize(c, r, kind.MinColumns, kind.MinRows, kind.MaxColumns, kind.MaxRows, board.Columns);
     }
     internal DeskTileSpec SpecFor(string id) { var (c, r) = SizeOf(id); return new(id, c, r); }
+    /// <summary>Where each of these tiles sits at the current width: at its own cell once arranged (the tile being moved or resized first, so the others make way), otherwise flowing in order.</summary>
+    internal List<DeskPlacement> PackFor(IEnumerable<string> ids)
+    {
+        var specs = ids.Select(SpecFor).ToList(); var use = provisionalPins ?? pins;
+        return use.Count == 0 ? DeskLayout.Pack(specs, board.Columns) : DeskLayout.PackPinned(specs, use, board.Columns, dragged ?? resizing ?? lastMoved);
+    }
+    private string? lastMoved;
+    /// <summary>Fixes every visible tile where it is now, so what follows moves one tile and leaves the rest alone.</summary>
+    private void PinAll() { if (pins.Count == 0) foreach (var p in PackFor(order)) pins[p.Id] = (p.Column, p.Row); }
+    /// <summary>Settles the layout after a change: the moved tile keeps its place, the tiles it landed on make way, and the result is what gets saved.</summary>
+    private void Settle(string? moved)
+    {
+        lastMoved = moved;
+        var placed = PackFor(order); lastMoved = null;
+        pins = placed.ToDictionary(p => p.Id, p => (p.Column, p.Row));
+        // The order follows what the eye reads, so Tidy up and an older build flow the tiles the way they look.
+        order = placed.OrderBy(p => p.Row).ThenBy(p => p.Column).Select(p => p.Id).ToList();
+        model.SetDeskOrder(order); model.SetDeskPositions(pins);
+        tidyButton.IsVisible = arranging && pins.Count > 0;
+        board.InvalidateMeasure(); board.InvalidateArrange();
+    }
+    /// <summary>Lets the tiles flow in reading order again, closing every gap.</summary>
+    public void TidyUp()
+    {
+        if (pins.Count == 0) return;
+        var placed = PackFor(order);
+        order = placed.OrderBy(p => p.Row).ThenBy(p => p.Column).Select(p => p.Id).ToList();
+        pins = new(); provisionalPins = null; model.SetDeskOrder(order); model.SetDeskPositions(pins); tidyButton.IsVisible = false;
+        board.InvalidateMeasure(); board.InvalidateArrange();
+    }
+    /// <summary>The cell a tile has been put in, or null while the desk still flows in order.</summary>
+    public (int Column, int Row)? PinOf(string id) => pins.TryGetValue(id, out var cell) ? cell : null;
+    public bool HasGaps => pins.Count > 0;
     /// <summary>Makes a tile larger or smaller by whole cells, within what suits it, and remembers the size.</summary>
     public void Resize(string id, int columns, int rows)
     {
         var kind = Kinds.First(k => k.Id == id);
+        if (hidden.Contains(id)) { sizes[id] = DeskLayout.ClampSize(columns, rows, kind.MinColumns, kind.MinRows, kind.MaxColumns, kind.MaxRows, 12); model.SetDeskSizes(sizes); return; }
+        PinAll(); // Everything else stays where it is, and only what the larger tile lands on makes way.
         sizes[id] = DeskLayout.ClampSize(columns, rows, kind.MinColumns, kind.MinRows, kind.MaxColumns, kind.MaxRows, 12);
-        model.SetDeskSizes(sizes); board.InvalidateMeasure(); board.InvalidateArrange();
+        model.SetDeskSizes(sizes); Settle(id);
     }
     /// <summary>Opens a tile in place: it grows to fill the desk and the others step aside. It closes with its button, or Escape (handled by the window, after dialogs).</summary>
     public void Expand(string id)
@@ -246,12 +288,12 @@ public sealed class DeskView : UserControl
     /// <summary>Whether the desk is being rearranged. At rest the tiles show no grips, resize corners or put-away crosses, so the desk feels settled.</summary>
     public bool Arranging => arranging;
     public Panel HeaderTools { get; }
-    private readonly Button arrangeButton;
+    private readonly Button arrangeButton, tidyButton;
     public void SetArranging(bool on)
     {
         if (on == arranging) return;
         arranging = on; if (!on) { SetDrawer(false); CancelDrag(); CancelResize(); }
-        arrangeButton.Content = on ? "Done" : "Arrange"; arrangeButton.Classes.Set("mainAction", on); drawerToggle.IsVisible = on;
+        arrangeButton.Content = on ? "Done" : "Arrange"; arrangeButton.Classes.Set("mainAction", on); drawerToggle.IsVisible = on; tidyButton.IsVisible = on && pins.Count > 0;
         foreach (var refresh in chrome.Values) refresh();
     }
     private static double RestAngle(string id) => id switch { "postit" => -1.6, "postit2" => 1.3, "postit3" => -0.8, _ => 0 };
@@ -451,57 +493,78 @@ public sealed class DeskView : UserControl
     {
         if (!arranging || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return; // Tiles are picked up only while arranging.
         if (TopLevel.GetTopLevel(this) is Window window) Ui.CloseMenus(window);
-        dragged = id; dragStart = e.GetPosition(board); dragIndex = order.IndexOf(id);
+        dragged = id; dragStart = e.GetPosition(board); dragOrigin = board.Placements.FirstOrDefault(p => p.Id == id);
         e.Pointer.Capture((IInputElement)e.Source!); e.Handled = true;
     }
     private void DragTo(PointerEventArgs e)
     {
         if (dragged is null) return;
         var at = e.GetPosition(board);
-        board.DragOffset = at - dragStart; board.Dragged = dragged;
-        dragIndex = IndexAt(at);
-        board.Provisional = DeskLayout.Move(order, dragged, dragIndex);
+        board.DragOffset = at - dragStart; board.Dragged = dragged; board.DragOrigin = dragOrigin;
+        // The tile's top left corner decides the cell it would land in; the others show where they would make way.
+        if (CellFor(at) is { } cell)
+        {
+            var preview = pins.Count == 0 ? board.Placements.ToDictionary(p => p.Id, p => (p.Column, p.Row)) : new Dictionary<string, (int Column, int Row)>(pins);
+            preview[dragged] = cell; provisionalPins = preview;
+        }
         board.InvalidateArrange();
     }
     private void EndDrag(PointerReleasedEventArgs e)
     {
         if (dragged is null) return;
-        var id = dragged; var index = IndexAt(e.GetPosition(board));
+        var id = dragged; var cell = CellFor(e.GetPosition(board));
         var overDrawer = drawerOpen && drawer.Bounds.Contains(e.GetPosition((Visual?)drawer.Parent));
         e.Pointer.Capture(null); Finish();
-        if (overDrawer) Hide(id); else Drop(id, index);
+        if (overDrawer) Hide(id); else if (cell is { } at) DropAt(id, at.Column, at.Row); else board.InvalidateArrange();
     }
     private void CancelDrag() { if (dragged is null) return; Finish(); board.InvalidateArrange(); }
     private void Finish()
     {
-        dragged = null; board.Dragged = null; board.Provisional = null; board.DragOffset = default;
+        dragged = null; dragOrigin = null; provisionalPins = null; board.Dragged = null; board.DragOrigin = null; board.DragOffset = default;
     }
-    private int IndexAt(Point at)
+    /// <summary>The cell a dragged tile's top left corner is over, from where it was picked up and how far the pointer has moved.</summary>
+    private (int Column, int Row)? CellFor(Point at)
     {
-        var cell = board.CellWidth; if (cell <= 0) return dragIndex;
-        var placements = DeskLayout.Pack(order.Select(SpecFor), board.Columns);
-        return DeskLayout.InsertIndexAt(placements, dragged!, at.X / cell, at.Y / (CellHeight + Gap));
+        var cell = board.CellWidth; if (cell <= 0 || dragOrigin is not { } origin) return null;
+        var (column, row) = DeskLayout.CellAt(origin.Column + (at.X - dragStart.X) / cell, origin.Row + (at.Y - dragStart.Y) / (CellHeight + Gap));
+        return (column, row);
     }
-    /// <summary>Puts a tile at a place in the order, saves the order and lays the desk out again.</summary>
+    /// <summary>Puts a tile in a cell. Tiles already there make way to the nearest free place, and every other tile stays where it was.</summary>
+    public void DropAt(string id, int column, int row)
+    {
+        if (hidden.Contains(id) || !order.Contains(id)) return;
+        PinAll(); pins[id] = (column, row); Settle(id);
+    }
+    /// <summary>Moves a tile to a place in the reading order and lets the tiles flow again from there. The older, order-only way to rearrange.</summary>
     public void Drop(string id, int index)
     {
-        order = DeskLayout.Move(order, id, index);
-        model.SetDeskOrder(order);
+        order = DeskLayout.Move(order, id, index); pins = new(); tidyButton.IsVisible = false;
+        model.SetDeskOrder(order); model.SetDeskPositions(pins);
         board.InvalidateMeasure(); board.InvalidateArrange();
     }
     /// <summary>Puts a tile away in the drawer. Nothing is lost: it keeps its data and comes back when it is put on the desk again.</summary>
     public void Hide(string id)
     {
-        if (!order.Remove(id)) return;
-        hidden.Add(id); Save(); SyncDrawer(); board.InvalidateMeasure(); board.InvalidateArrange();
+        if (!order.Contains(id)) return;
+        PinAll(); order.Remove(id); pins.Remove(id); // The others stay where they are, so the tile's place is left empty.
+        hidden.Add(id); Save(); SyncDrawer(); Settle(null);
     }
     /// <summary>Brings a tile from the drawer onto the desk at a place in the order.</summary>
     public void Show(string id, int index = int.MaxValue)
     {
         if (!hidden.Remove(id)) return;
-        order.Insert(Math.Clamp(index, 0, order.Count), id); Save(); SyncDrawer(); board.InvalidateMeasure(); board.InvalidateArrange();
+        order.Insert(Math.Clamp(index, 0, order.Count), id); model.SetDeskHidden(hidden); SyncDrawer();
+        // On an arranged desk the tile goes into the first free place, without moving anything else.
+        if (pins.Count > 0) { Settle(null); return; }
+        Save(); board.InvalidateMeasure(); board.InvalidateArrange();
     }
-    private void Save() { model.SetDeskOrder(order); model.SetDeskHidden(hidden); }
+    /// <summary>Brings a tile from the drawer onto the desk at the cell it was dropped on.</summary>
+    public void ShowAt(string id, int column, int row)
+    {
+        if (!hidden.Remove(id)) return;
+        PinAll(); order.Add(id); model.SetDeskHidden(hidden); SyncDrawer(); pins[id] = (column, row); Settle(id);
+    }
+    private void Save() { model.SetDeskOrder(order); model.SetDeskHidden(hidden); model.SetDeskPositions(pins); }
     private void SyncDrawer()
     {
         foreach (var kind in Kinds) { tiles[kind.Id].Tile.IsVisible = !hidden.Contains(kind.Id) && (expanded is null || expanded == kind.Id); grips[kind.Id].IsVisible = arranging && expanded is null; }
@@ -520,18 +583,13 @@ public sealed class DeskView : UserControl
                 chipPressed = null; e.Pointer.Capture(null);
                 // A plain click brings the tile back at the end. Dragging it out onto the board drops it where it lands.
                 var at = e.GetPosition(board); var overBoard = chipMoved && new Rect(board.Bounds.Size).Contains(at) && !drawer.Bounds.Contains(e.GetPosition((Visual?)drawer.Parent));
-                Show(pressed, overBoard ? DropIndexFor(pressed, at) : int.MaxValue);
+                if (overBoard && board.CellWidth > 0) ShowAt(pressed, Math.Max(0, (int)(at.X / board.CellWidth)), Math.Max(0, (int)(at.Y / (CellHeight + Gap))));
+                else Show(pressed);
             };
             chips.Children.Add(chip);
         }
     }
-    private int DropIndexFor(string id, Point at)
-    {
-        var cell = board.CellWidth; if (cell <= 0) return int.MaxValue;
-        var specs = order.Concat(new[] { id }).Select(SpecFor);
-        return DeskLayout.InsertIndexAt(DeskLayout.Pack(specs, board.Columns), id, at.X / cell, at.Y / (CellHeight + Gap));
-    }
-    internal IReadOnlyList<string> LayoutOrder => board.Provisional ?? order;
+    internal IReadOnlyList<string> LayoutOrder => order;
 
     /// <summary>
     /// A panel that sets each tile on the grid from the packed layout, with the dragged tile following the pointer. Tiles glide to their
@@ -542,7 +600,7 @@ public sealed class DeskView : UserControl
     {
         private sealed class Glide { public double X, Y, W, H, VX, VY, VW, VH; }
         public DeskView? Owner;
-        public List<string>? Provisional; public string? Dragged; public Vector DragOffset;
+        public string? Dragged; public Vector DragOffset; public DeskPlacement? DragOrigin;
         public bool Lively = true;
         public List<DeskPlacement> Placements { get; private set; } = new();
         public int Columns { get; private set; } = 2; public double CellWidth { get; private set; }
@@ -565,7 +623,7 @@ public sealed class DeskView : UserControl
                 foreach (var child in Children) child.Measure(new Size(width, room));
                 return new Size(width, room);
             }
-            var rows = DeskLayout.RowCount(DeskLayout.Pack((Owner?.order ?? new()).Select(o => Owner!.SpecFor(o)), Columns));
+            var rows = DeskLayout.RowCount(Owner?.PackFor(Owner.order) ?? new());
             foreach (var child in Children) child.Measure(new Size(CellWidth * 2, CellHeight * 3));
             return new Size(width, rows * (CellHeight + Gap) - Gap + 24);
         }
@@ -574,7 +632,7 @@ public sealed class DeskView : UserControl
             Columns = DeskLayout.ColumnsFor(final.Width); CellWidth = final.Width / Columns;
             Placements = Owner?.expanded is { } open
                 ? new List<DeskPlacement> { new(open, 0, 0, Columns, 99) } // Roomy, since it has the whole desk.
-                : DeskLayout.Pack((Provisional ?? Owner?.order ?? new()).Select(o => Owner!.SpecFor(o)), Columns);
+                : Owner?.PackFor(Owner.order) ?? new();
             targets.Clear(); var holes = new List<Rect>();
             foreach (var p in Placements)
             {
@@ -586,7 +644,9 @@ public sealed class DeskView : UserControl
                 if (p.Id == Dragged)
                 {
                     // The tile in hand sticks to the pointer, and its spring starts from there so letting go carries on smoothly.
-                    var held = rect.Translate(DragOffset); glide.X = held.X; glide.Y = held.Y; glide.W = held.Width; glide.H = held.Height; glide.VX = glide.VY = glide.VW = glide.VH = 0;
+                    // The tile in hand is measured from where it was picked up, not from the cell it would land in, which moves as it is carried.
+                    var from = DragOrigin is { } o ? new Rect(o.Column * CellWidth + Gap / 2, o.Row * (CellHeight + Gap) + Gap / 2, rect.Width, rect.Height) : rect;
+                    var held = from.Translate(DragOffset); glide.X = held.X; glide.Y = held.Y; glide.W = held.Width; glide.H = held.Height; glide.VX = glide.VY = glide.VW = glide.VH = 0;
                     if (Dragged != lifted) { lifted = Dragged; lastX = DragOffset.X; }
                     tilt += (Math.Clamp((DragOffset.X - lastX) * .35, -3.5, 3.5) - tilt) * .4; lastX = DragOffset.X; liftTarget = Lively ? 1 : 0; // The lift eases in, in Step, so picking a tile up does not pop.
                 }

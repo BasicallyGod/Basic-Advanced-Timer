@@ -150,7 +150,7 @@ public sealed class PillLayoutTests
         var model = Model(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            model.RequestNote(); Dispatcher.UIThread.RunJobs();
+            model.RequestNote(); Dispatcher.UIThread.RunJobs(); dashboard.UpdateLayout(); // The dialog joins the visual tree on layout, which on a slow runner has not always happened by now.
             var text = Find<TextBox>(dashboard, "NoteText"); text.Text = "14:30 Call back";
             Click(Find<Button>(dashboard, "SaveNote")); Dispatcher.UIThread.RunJobs();
             var note = Assert.Single(model.NotesOn(Day)); Assert.Equal("Call back", note.Text); Assert.Equal(new TimeSpan(14, 30, 0), note.At);
