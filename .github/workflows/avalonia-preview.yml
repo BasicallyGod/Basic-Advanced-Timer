@@ -14,6 +14,10 @@ concurrency:
 permissions:
   contents: read
 
+# Reads the shared Timer.Core and Timer.Storage packages from GitHub Packages (see migration/NuGet.config).
+env:
+  PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+
 jobs:
   shell-checks:
     strategy:

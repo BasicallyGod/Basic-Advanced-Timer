@@ -3,6 +3,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The shared engine and storage, from the Basic-Timer-Core repository. Change this to take a newer release. -->
+    <SharedTimerVersion>0.1.0</SharedTimerVersion>
     <AvaloniaVersion>11.3.16</AvaloniaVersion>
   </PropertyGroup>
 </Project>

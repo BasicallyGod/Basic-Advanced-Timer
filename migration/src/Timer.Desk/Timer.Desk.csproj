@@ -4,5 +4,8 @@
     note shorthand and the pomodoro timer, with the settings they are saved in. They sit on top of Timer.Core and Timer.Storage, which know nothing of
     them, so those two can be shared with another app without bringing any of this along. Nothing here uses a UI type.
   -->
-  <ItemGroup><ProjectReference Include="../Timer.Core/Timer.Core.csproj" /><ProjectReference Include="../Timer.Storage/Timer.Storage.csproj" /></ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BasicallyGod.Timer.Core" Version="$(SharedTimerVersion)" />
+    <PackageReference Include="BasicallyGod.Timer.Storage" Version="$(SharedTimerVersion)" />
+  </ItemGroup>
 </Project>
