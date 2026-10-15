@@ -266,17 +266,20 @@ public static class Ui
         var settingsItem = new MenuItem { Name = "SettingsMenu", Header = "Settings…" }; settingsItem.Click += (_, _) => model.RequestSettings();
         var pinItem = new MenuItem { Name = "PinMenu", Header = "Pin to screen", ToggleType = MenuItemToggleType.CheckBox };
         pinItem.Click += (_, _) => model.SetPillOnTop(!model.PillOnTop);
+        // Tucks every floating widget out of sight, and brings them back. Only offered while something is floating.
+        var floatItem = new MenuItem { Name = "FloatingMenu" }; floatItem.Click += (_, _) => model.SetFloatingHidden(!model.FloatingHidden);
         var quickRule = new Separator();
         var versionRule = new Separator { IsVisible = false };
         var collapseRule = new Separator { IsVisible = false };
         var menu = new ContextMenu { ItemsSource = new Control[] { continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
         // Quick actions live on the pill's menu, where there is no other way to do them. The dashboard has its own buttons for all of these.
-        if (pill) menu.ItemsSource = new Control[] { openItem, switchItem, breakItem, noteItem, quickRule, pinItem, settingsItem, continueItem, overtimeTest, versionRule, version, collapseRule, collapse };
+        if (pill) menu.ItemsSource = new Control[] { openItem, switchItem, breakItem, noteItem, quickRule, pinItem, floatItem, settingsItem, continueItem, overtimeTest, versionRule, version, collapseRule, collapse };
         void Sync()
         {
             openItem.Header = "Open Desk";
             breakItem.Header = model.IsOnBreak ? "End break" : "Start break";
             pinItem.IsChecked = model.PillOnTop;
+            floatItem.IsVisible = model.Floating.Count > 0; floatItem.Header = model.FloatingHidden ? "Show floating widgets" : "Hide floating widgets";
             // One entry per account, the running one ticked. Choosing another stops this one and starts that one.
             switchItem.ItemsSource = model.Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a =>
             {
@@ -720,7 +723,7 @@ public sealed class ClockText : StackPanel
         main.Classes.Set("break", onBreak); main.Classes.Set("overtime", late); main.Classes.Set("live", live);
         main.Classes.Set("clockIdle", !onBreak && !late && !live);
         // The seconds take the same colour as the rest of the clock when it is tracking, on a break or in overtime, only lighter.
-        seconds.Classes.Set("break", onBreak); seconds.Classes.Set("overtime", late); seconds.Classes.Set("live", live); seconds.Opacity = onBreak || late || live ? .78 : 1; // Quieter than the main digits, but still easy to read.
+        seconds.Classes.Set("break", onBreak); seconds.Classes.Set("overtime", late); seconds.Classes.Set("live", live); seconds.Opacity = onBreak || late || live ? .9 : 1; // Quieter than the main digits, but still easy to read.
     }
     /// <summary>The whole clock, as hours:minutes:seconds. Setting it splits the seconds off to be drawn lighter.</summary>
     public string Text
@@ -864,7 +867,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Desk, Clock, Check, Bars, Note }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Desk, Clock, Check, Bars, Note, Float, Dock }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1111,6 +1114,16 @@ public sealed class IconGlyph : Control
                 context.DrawGeometry(null, flagPen, geometry);
                 break;
             }
+            case IconKind.Float:
+                // A small window with an arrow leaving its top right corner: lift this tile out to float on the screen.
+                context.DrawRectangle(null, pen, new Rect(2.5, 6.5, 9, 9), 2, 2);
+                context.DrawGeometry(null, pen, Geometry.Parse("M 8.5,9.5 L 15,3 M 10.5,3 L 15,3 L 15,7.5"));
+                break;
+            case IconKind.Dock:
+                // The arrow turned back into the window: put the tile back on the desk.
+                context.DrawRectangle(null, pen, new Rect(2.5, 6.5, 9, 9), 2, 2);
+                context.DrawGeometry(null, pen, Geometry.Parse("M 15,3 L 8.5,9.5 M 8.5,5.5 L 8.5,9.5 L 12.5,9.5"));
+                break;
             case IconKind.Copy:
                 // Two sheets, one behind the other: the usual sign for copy.
                 context.DrawRectangle(null, pen, new Rect(6.5, 2.5, 8.5, 10.5), 2, 2);

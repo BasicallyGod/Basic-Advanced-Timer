@@ -16,6 +16,7 @@ public sealed class TrayController : IDisposable
     private readonly TrayIcon icon;
     private readonly NativeMenuItem show = new() { Header = "Show timer" };
     private readonly NativeMenuItem dashboard = new() { Header = "Dashboard" };
+    private readonly NativeMenuItem floating = new();
     private readonly NativeMenuItem pause = new();
     private readonly NativeMenuItem day = new();
     private readonly NativeMenuItem reset = new() { Header = "Reset position" };
@@ -28,12 +29,13 @@ public sealed class TrayController : IDisposable
         this.model = model; this.windows = windows;
         show.Click += (_, _) => windows.ShowTimer();
         dashboard.Click += (_, _) => windows.ShowDashboard();
+        floating.Click += (_, _) => model.SetFloatingHidden(!model.FloatingHidden);
         pause.Click += (_, _) => model.TogglePause();
         day.Click += (_, _) => model.ToggleDay();
         reset.Click += (_, _) => windows.ResetPosition();
         close.Click += (_, _) => windows.Quit();
         var menu = new NativeMenu();
-        foreach (var item in new NativeMenuItemBase[] { show, dashboard, new NativeMenuItemSeparator(), pause, day, new NativeMenuItemSeparator(), reset, close })
+        foreach (var item in new NativeMenuItemBase[] { show, dashboard, floating, new NativeMenuItemSeparator(), pause, day, new NativeMenuItemSeparator(), reset, close })
             menu.Items.Add(item);
         menu.Opening += (_, _) => RefreshMenu();
         icon = new TrayIcon { Menu = menu, IsVisible = true };
@@ -58,6 +60,7 @@ public sealed class TrayController : IDisposable
     public static string DayLabel(TimerModel model) => model.DayStarted ? "Finish day" : "Start day";
     public void RefreshMenu()
     {
+        floating.IsVisible = model.Floating.Count > 0; floating.Header = model.FloatingHidden ? "Show floating widgets" : "Hide floating widgets";
         pause.Header = PauseLabel(model);
         pause.IsEnabled = model.IsTracking || model.SelectedAccount is not null;
         day.Header = DayLabel(model);

@@ -13,6 +13,10 @@ public sealed partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        // The standard text box fades its hint to half strength, which on a tinted tile left it under 3 to 1. The hint is given the strength in the colour
+        // itself (the theme writes a placeholder colour that reads at full strength), so the fade is taken off.
+        Avalonia.Controls.Primitives.TemplatedControl.TemplateAppliedEvent.AddClassHandler<Avalonia.Controls.TextBox>((_, e) =>
+        { if (e.NameScope.Find<Avalonia.Controls.TextBlock>("PART_Watermark") is { } hint) hint.Opacity = 1; });
         // Colours are registered before any window exists, so every control finds them the first time it looks.
         ThemeEngine.Register(this, ThemeLibrary.BuiltIn);
         // The clock typeface is bundled as three instances of Bricolage Grotesque (display, figures and light), each its own family. The assembly name

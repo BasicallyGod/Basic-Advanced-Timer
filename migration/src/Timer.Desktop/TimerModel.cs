@@ -898,6 +898,46 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Where arranged tiles were put, as cells. Empty until the desk is first arranged, when tiles simply flow in order.</summary>
     public IReadOnlyDictionary<string, (int Column, int Row)> DeskPositions => DeskLayout.ParsePositions(preferences.DeskPositions);
     public void SetDeskPositions(IReadOnlyDictionary<string, (int Column, int Row)> positions) { preferences = preferences with { DeskPositions = DeskLayout.FormatPositions(positions) }; Save(); }
+    // ---- Floating widgets: desk tiles detached into windows of their own, at most FloatingWidgets.Max at a time. ----
+    public IReadOnlyList<FloatingWidget> Floating => preferences.Floating ?? Array.Empty<FloatingWidget>();
+    public bool IsFloating(string id) => Floating.Any(f => f.Id == id);
+    /// <summary>Whether floating widgets sit above other windows, as the pill does. On by default.</summary>
+    public bool FloatOnTop => preferences.FloatOnTop;
+    public void SetFloatOnTop(bool on) { preferences = preferences with { FloatOnTop = on }; Save(); Notify(); }
+    /// <summary>Raised when a widget starts or stops floating, or all of them are hidden or shown, so the windows can follow.</summary>
+    public event Action? FloatingChanged;
+    /// <summary>Whether the floating widgets are tucked out of sight for now. It is for this session only, so a restart brings them back.</summary>
+    public bool FloatingHidden { get; private set; }
+    public void SetFloatingHidden(bool hidden)
+    {
+        if (FloatingHidden == hidden || (hidden && Floating.Count == 0)) return;
+        FloatingHidden = hidden; FloatingChanged?.Invoke(); Notify();
+    }
+    /// <summary>Lifts a tile out of the desk to float, at the size (in cells) it has on the desk. Refused with a notice once three are floating.</summary>
+    public bool FloatWidget(string id, int columns, int rows)
+    {
+        if (IsFloating(id)) return true;
+        var (list, added) = FloatingWidgets.Add(Floating, new FloatingWidget(id, null, null, columns, rows));
+        if (!added) { Notice = "Three widgets are already floating. Dock one first."; return false; }
+        FloatingHidden = false; // Floating something new shows it, along with the others.
+        preferences = preferences with { Floating = list }; Save(); FloatingChanged?.Invoke(); Notify(); return true;
+    }
+    /// <summary>Puts a floating widget back on the desk.</summary>
+    public void DockWidget(string id)
+    {
+        if (!IsFloating(id)) return;
+        preferences = preferences with { Floating = FloatingWidgets.Remove(Floating, id) }; if (Floating.Count == 0) FloatingHidden = false; Save(); FloatingChanged?.Invoke(); Notify();
+    }
+    /// <summary>Remembers where a floating widget sits. It does not notify, since nothing on screen needs to change.</summary>
+    public void MoveFloating(string id, int x, int y) => ChangeFloating(id, f => f with { X = x, Y = y });
+    /// <summary>Remembers a floating widget's size in cells.</summary>
+    public void ResizeFloating(string id, int columns, int rows) => ChangeFloating(id, f => f with { Columns = columns, Rows = rows });
+    private void ChangeFloating(string id, Func<FloatingWidget, FloatingWidget> change)
+    {
+        var list = Floating.ToList(); var at = list.FindIndex(f => f.Id == id); if (at < 0) return;
+        var changed = change(list[at]); if (changed == list[at]) return;
+        list[at] = changed; preferences = preferences with { Floating = list }; Save();
+    }
     /// <summary>The desk arrangements saved by name.</summary>
     public IReadOnlyList<SavedLayout> DeskLayouts => preferences.DeskLayouts ?? Array.Empty<SavedLayout>();
     public void SaveDeskLayout(SavedLayout layout) { preferences = preferences with { DeskLayouts = Timer.Core.DeskLayouts.Upsert(DeskLayouts, layout) }; Save(); }
@@ -917,6 +957,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Asks for the small Quick capture box: from the pill's menu or the shortcut. It works without bringing the dashboard up.</summary>
     public event Action? QuickCaptureRequested;
     public void RequestQuickCapture() => QuickCaptureRequested?.Invoke();
+    /// <summary>Asks the dashboard to come up on a page ("timeline", "overview", "hours" or "entries"), as a tile's open button does. A floating widget uses it, having no dashboard around it.</summary>
+    public event Action<string>? PageRequested;
+    public void RequestPage(string page) => PageRequested?.Invoke(page);
     public bool Tooltips => preferences.Tooltips;
     public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
     /// <summary>Whether the developer features are switched on: the sample-data demo, the overtime tester and the version on the right-click menu. Off until unlocked from the About section.</summary>

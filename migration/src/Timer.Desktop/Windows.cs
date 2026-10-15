@@ -46,6 +46,9 @@ public sealed class WindowCoordinator
         // The menu's Open Desk and Open dashboard: from the pill it does what its own button does, from the dashboard it just comes to the front.
         model.DashboardRequested += () => { if (Pill.IsVisible) Pill.OpenDashboard?.Invoke(); else { Dashboard.Activate(); } };
         Dashboard.OpenPill = () => { Pill.Collapse(); Pill.Show(); Dashboard.Hide(); Pill.Activate(); };
+        // Floating widgets are put away first when the app closes, so closing them is not mistaken for docking them and they come back next time.
+        Pill.Closed += (_, _) => RetireFloats();
+        Dashboard.Closed += (_, _) => RetireFloats();
         Pill.Closed += (_, _) => exit();
         Dashboard.Closed += (_, _) => exit();
         Pill.Closing += OnClosing; Dashboard.Closing += OnClosing;
@@ -63,7 +66,23 @@ public sealed class WindowCoordinator
         Pill.Opened += (_, _) => ApplyShortcut(); Dashboard.Opened += (_, _) => ApplyShortcut();
         model.PropertyChanged += (_, _) => ApplyShortcut();
         Pill.Closed += (_, _) => hotkey.Dispose();
+        // Floating widgets: desk tiles in windows of their own. They stay up when the dashboard is hidden to the tray, and close with the app.
+        model.FloatingChanged += SyncFloating; SyncFloating();
     }
+    private readonly Dictionary<string, FloatingWidgetWindow> floats = new();
+    private void SyncFloating()
+    {
+        var wanted = model.Floating.Where(f => DeskView.Kinds.Any(k => k.Id == f.Id)).ToList();
+        foreach (var id in floats.Keys.Where(id => wanted.All(w => w.Id != id)).ToList()) { floats[id].Retire(); floats.Remove(id); }
+        foreach (var widget in wanted.Where(w => !floats.ContainsKey(w.Id))) { var window = new FloatingWidgetWindow(model, widget); floats[widget.Id] = window; if (!model.FloatingHidden) window.Show(); }
+        // Hiding tucks them out of sight without docking them; showing brings them back where they were.
+        foreach (var window in floats.Values) { if (model.FloatingHidden && window.IsVisible) window.Hide(); else if (!model.FloatingHidden && !window.IsVisible) window.Show(); }
+    }
+    /// <summary>Whether the floating windows are showing on screen right now (they are tucked away, not closed, when hidden).</summary>
+    public bool FloatingWindowsVisible => floats.Count > 0 && floats.Values.All(w => w.IsVisible);
+    /// <summary>The widgets with a window open now.</summary>
+    public IReadOnlySet<string> FloatingWindowIds => floats.Keys.ToHashSet();
+    private void RetireFloats() { foreach (var window in floats.Values.ToList()) window.Retire(); floats.Clear(); }
     private readonly GlobalHotkey hotkey; private QuickCaptureWindow? capture; private string? appliedShortcut;
     private void ApplyShortcut()
     {
@@ -140,7 +159,7 @@ public sealed class WindowCoordinator
     public void Quit()
     {
         if (!model.StopForClose()) { ShowTimer(); return; }
-        quitting = true;
+        quitting = true; RetireFloats();
         Pill.Close(); Dashboard.Close();
     }
     private void FitDashboardToPill()
@@ -808,8 +827,8 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += Changed;
         model.PropertyChanged += (_, _) => UpdateOnboarding();
         model.EntryRequested += ShowEntry;
-        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy; model.AccountsRequested += ShowAccounts; model.NoteRequested += ShowNote; model.SettingsRequested += OpenSettings;
-        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; model.AccountsRequested -= ShowAccounts; model.NoteRequested -= ShowNote; model.SettingsRequested -= OpenSettings; };
+        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy; model.AccountsRequested += ShowAccounts; model.NoteRequested += ShowNote; model.SettingsRequested += OpenSettings; model.PageRequested += OpenPageRequested;
+        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; model.AccountsRequested -= ShowAccounts; model.NoteRequested -= ShowNote; model.PageRequested -= OpenPageRequested; model.SettingsRequested -= OpenSettings; };
         Refresh(true);
         UpdateOnboarding();
     }
@@ -901,6 +920,7 @@ public sealed class DashboardWindow : Window
     private StackPanel dateNav = null!, navRight = null!, railTopRef = null!;
     private void ShowDesk() { deskMode = true; Refresh(true); }
     // A tile's open button goes to the page that shows the same thing in full.
+    private void OpenPageRequested(string page) { if (!IsVisible) Reveal?.Invoke(); if (IsVisible) OpenDeskPage(page); }
     private void OpenDeskPage(string page) { if (page == "timeline") SelectTab(false); else SelectSection(page); }
     private void SelectSection(string section)
     {
