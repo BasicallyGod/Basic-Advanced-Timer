@@ -24,6 +24,7 @@ public sealed class DeskTests
         Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); return window;
     }
     private static T Named<T>(Control root, string name) where T : Control => root.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+    private static void Click(Button button) { button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
     private static void Press(Control root, string name) { Named<Button>(root, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
 
     [AvaloniaFact]
@@ -808,6 +809,49 @@ public sealed class DeskTests
             var desk = Arranged(window);
             desk.ShowAt("postit2", 0, 12); window.UpdateLayout();
             var p = desk.Placements.Single(x => x.Id == "postit2"); Assert.Equal((0, 12), (p.Column, p.Row)); Assert.DoesNotContain("postit2", desk.Hidden);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ASavedLayoutBringsBackTheTilesTheirSizesAndTheirCellsAndNothingElse()
+    {
+        var model = Model(); var window = Open(model);
+        try
+        {
+            var desk = Arranged(window);
+            Assert.True(Named<Button>(window, "LayoutsToggle").IsVisible);
+            desk.DropAt("clock", 0, 9); desk.Resize("week", 3, 2); Press(window, "TileHide_day"); window.UpdateLayout();
+            var panel = (Panel)desk.BuildLayoutsPanel(); Assert.Empty(panel.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.StartsWith("LayoutApply_") == true));
+            panel.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "LayoutName").Text = "Focus";
+            Click(panel.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "LayoutSave"));
+            Assert.Equal("Focus", Assert.Single(model.DeskLayouts).Name);
+            var placed = desk.Placements.ToDictionary(p => p.Id);
+            // Change everything, then apply the layout.
+            desk.TidyUp(); desk.Resize("week", 1, 1); desk.Show("day"); window.UpdateLayout();
+            desk.ApplyLayout(model.DeskLayouts[0]); window.UpdateLayout();
+            Assert.Contains("day", desk.Hidden); Assert.Equal((3, 2), desk.SizeOf("week")); Assert.Equal((0, 9), desk.PinOf("clock"));
+            var after = desk.Placements.ToDictionary(p => p.Id);
+            Assert.Equal(placed.Keys.OrderBy(k => k), after.Keys.OrderBy(k => k));
+            foreach (var (id, p) in placed) Assert.Equal((p.Column, p.Row, p.ColumnSpan, p.RowSpan), (after[id].Column, after[id].Row, after[id].ColumnSpan, after[id].RowSpan));
+            Assert.Contains("Focus", Assert.Single(desk.BuildLayoutsPanel().GetVisualDescendants().OfType<Button>().Where(b => b.Name == "LayoutApply_Focus")).Content?.ToString());
+            Click(desk.BuildLayoutsPanel().GetVisualDescendants().OfType<Button>().Single(b => b.Name == "LayoutDelete_Focus")); Assert.Empty(model.DeskLayouts);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void AnOldLayoutNamingAGoneTileStillAppliesAndSavedLayoutsComeBackOnReopening()
+    {
+        var saved = new SavedLayout("Old", new[] { "ghost", "todo" }, new[] { "clock", "ghost2" }, new[] { "ghost:2x2", "todo:2x4" }, new[] { "ghost:0+0" });
+        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday, DeskLayouts: new[] { saved }));
+        var window = Open(model);
+        try
+        {
+            Press(window, "DeskTab"); var desk = window.GetVisualDescendants().OfType<DeskView>().Single(); desk.Lively = false;
+            desk.ApplyLayout(model.DeskLayouts.Single()); window.UpdateLayout();
+            Assert.Equal(new[] { "clock" }, desk.Hidden); Assert.Equal("todo", desk.Order[0]); Assert.DoesNotContain("ghost", desk.Order); Assert.Equal(DeskView.Kinds.Count - 1, desk.Placements.Count);
+            Assert.Equal((2, 4), desk.SizeOf("todo"));
         }
         finally { window.Close(); }
     }

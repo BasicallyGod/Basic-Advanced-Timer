@@ -898,6 +898,10 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Where arranged tiles were put, as cells. Empty until the desk is first arranged, when tiles simply flow in order.</summary>
     public IReadOnlyDictionary<string, (int Column, int Row)> DeskPositions => DeskLayout.ParsePositions(preferences.DeskPositions);
     public void SetDeskPositions(IReadOnlyDictionary<string, (int Column, int Row)> positions) { preferences = preferences with { DeskPositions = DeskLayout.FormatPositions(positions) }; Save(); }
+    /// <summary>The desk arrangements saved by name.</summary>
+    public IReadOnlyList<SavedLayout> DeskLayouts => preferences.DeskLayouts ?? Array.Empty<SavedLayout>();
+    public void SaveDeskLayout(SavedLayout layout) { preferences = preferences with { DeskLayouts = Timer.Core.DeskLayouts.Upsert(DeskLayouts, layout) }; Save(); }
+    public void DeleteDeskLayout(string name) { preferences = preferences with { DeskLayouts = Timer.Core.DeskLayouts.Remove(DeskLayouts, name) }; Save(); }
     /// <summary>The tiles put away in the drawer. Their data is untouched; they are only not on the desk.</summary>
     public IReadOnlyList<string> DeskHidden => preferences.DeskHidden ?? Array.Empty<string>();
     public void SetDeskHidden(IReadOnlyList<string> hidden) { preferences = preferences with { DeskHidden = hidden.ToList() }; Save(); }
