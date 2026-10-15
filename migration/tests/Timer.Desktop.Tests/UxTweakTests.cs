@@ -273,8 +273,11 @@ public sealed class UxTweakTests
         try
         {
             var items = tray.Icons[0].Menu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).ToList();
-            Assert.Equal(6, items.Count);
+            Assert.Equal(7, items.Count); // Including Hide floating widgets, which only shows while something floats.
             Assert.All(items, item => Assert.False(string.IsNullOrWhiteSpace(item.Header), "A menu item has no words."));
+            Assert.False(items.Single(i => i.Header == "Hide floating widgets").IsVisible);
+            model.FloatWidget("todo", 2, 3); Assert.True(items.Single(i => i.Header == "Hide floating widgets").IsVisible);
+            model.SetFloatingHidden(true); Assert.Equal("Show floating widgets", items.Single(i => i.Header is "Show floating widgets" or "Hide floating widgets").Header);
         }
         finally { tray.Dispose(); }
     }

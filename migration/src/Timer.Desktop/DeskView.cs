@@ -254,9 +254,34 @@ public sealed class DeskView : UserControl
         provisionalPins = null; model.SetDeskSizes(sizes); Save(); SyncDrawer();
         tidyButton.IsVisible = arranging && pins.Count > 0; board.InvalidateMeasure(); board.InvalidateArrange();
     }
+    /// <summary>
+    /// Three ready-made arrangements to start from: Focus (the tracker, to-do, a countdown and a post-it), Planning (the timeline with notes and what is coming)
+    /// and Everything (every tile at its usual size). They are not saved layouts, so they cannot be deleted or counted against the twelve.
+    /// </summary>
+    public static readonly IReadOnlyList<SavedLayout> Starters = new[]
+    {
+        StarterLayout("Focus", ("working", 2, 2), ("todo", 2, 3), ("pomodoro", 2, 2), ("deadline", 2, 1), ("postit", 2, 2)),
+        StarterLayout("Planning", ("timeline", 3, 4), ("notes", 2, 3), ("coming", 2, 2), ("deadline", 2, 2), ("day", 2, 1)),
+        StarterLayout("Everything", Kinds.Where(k => k.Id is not ("postit2" or "postit3")).Select(k => (k.Id, k.Columns, k.Rows)).ToArray()),
+    };
+    private static SavedLayout StarterLayout(string name, params (string Id, int Columns, int Rows)[] tiles)
+    {
+        var shown = tiles.Select(t => t.Id).ToList();
+        // Sizes are written only where they differ from the tile's own, so a starter never fights a size the person likes by default.
+        var sizes = tiles.Where(t => Kinds.First(k => k.Id == t.Id) is var k && (k.Columns, k.Rows) != (t.Columns, t.Rows)).ToDictionary(t => t.Id, t => (t.Columns, t.Rows));
+        return new SavedLayout(name, shown, Kinds.Select(k => k.Id).Where(id => !shown.Contains(id)).ToList(), DeskLayout.FormatSizes(sizes), Array.Empty<string>());
+    }
     public Control BuildLayoutsPanel()
     {
         var panel = new StackPanel { Name = "LayoutsPanel", Spacing = 6, Width = 260 };
+        panel.Children.Add(Ui.Text("Start from", 12, "muted"));
+        var starters = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var starter in Starters)
+        {
+            var apply = Ui.Button(starter.Name, () => { ApplyLayout(starter); layoutsFlyout.Hide(); }, "LayoutStarter_" + starter.Name); apply.Classes.Add("toolButton"); apply.Classes.Add("quiet"); apply.Margin = new Thickness(0, 0, 6, 6);
+            starters.Children.Add(apply);
+        }
+        panel.Children.Add(starters);
         panel.Children.Add(Ui.Text("Saved layouts", 12, "muted"));
         if (model.DeskLayouts.Count == 0) panel.Children.Add(Ui.Text("None yet. Arrange the desk, then save it here.", 12, "muted"));
         foreach (var layout in model.DeskLayouts)

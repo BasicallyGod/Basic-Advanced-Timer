@@ -149,6 +149,48 @@ public sealed class FloatingWidgetTests
         Assert.True(model.IsFloating("clock")); // Closing the app leaves it floating for next time.
     }
 
+    [AvaloniaFact]
+    public void HidingTheFloatingWidgetsTucksTheWindowsAwayWithoutDockingAndNewFloatingShowsThemAgain()
+    {
+        var model = Model(); var coordinator = new WindowCoordinator(model, () => { });
+        coordinator.Pill.Show();
+        try
+        {
+            model.SetFloatingHidden(true); Assert.False(model.FloatingHidden); // Nothing floating, nothing to hide.
+            model.FloatWidget("todo", 2, 3); model.FloatWidget("clock", 1, 2);
+            var menu = coordinator.Pill.ContextMenu!; menu.Open(coordinator.Pill);
+            var item = menu.Items.OfType<MenuItem>().Single(m => m.Name == "FloatingMenu"); Assert.True(item.IsVisible); Assert.Equal("Hide floating widgets", item.Header);
+            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Assert.True(model.FloatingHidden); menu.Close(); menu.Open(coordinator.Pill); Assert.Equal("Show floating widgets", item.Header);
+            Assert.Equal(2, model.Floating.Count); Assert.True(coordinator.FloatingWindowIds.SetEquals(new[] { "todo", "clock" })); Assert.False(coordinator.FloatingWindowsVisible);
+            model.FloatWidget("notes", 2, 3); Assert.False(model.FloatingHidden); Assert.True(coordinator.FloatingWindowsVisible);
+            model.SetFloatingHidden(true); model.DockWidget("todo"); model.DockWidget("clock"); model.DockWidget("notes"); Assert.False(model.FloatingHidden);
+        }
+        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheStartingLayoutsApplyAndEveryTileInThemExists()
+    {
+        var ids = DeskView.Kinds.Select(k => k.Id).ToList();
+        foreach (var starter in DeskView.Starters)
+        {
+            Assert.All(starter.Order, id => Assert.Contains(id, ids)); Assert.Equal(starter.Order.Distinct().Count(), starter.Order.Count);
+            Assert.Equal(ids.Count, starter.Order.Count + starter.Hidden.Count); Assert.Empty(starter.Order.Intersect(starter.Hidden));
+        }
+        var model = Model(); var window = new DashboardWindow(model); window.Width = 1200; window.Height = 800; window.Show();
+        try
+        {
+            Click(Named<Button>(window, "DeskTab")); var desk = window.GetVisualDescendants().OfType<DeskView>().Single(); desk.Lively = false;
+            Click(Named<Button>(window, "ArrangeToggle")); window.UpdateLayout();
+            var panel = (Panel)desk.BuildLayoutsPanel(); Assert.Equal(3, panel.GetVisualDescendants().OfType<Button>().Count(b => b.Name?.StartsWith("LayoutStarter_") == true));
+            Click(panel.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "LayoutStarter_Focus")); window.UpdateLayout();
+            Assert.Equal(new[] { "working", "todo", "pomodoro", "deadline", "postit" }, desk.Order); Assert.Contains("timeline", desk.Hidden); Assert.Equal((2, 1), desk.SizeOf("deadline")); Assert.Equal(5, desk.Placements.Count);
+            Click(((Panel)desk.BuildLayoutsPanel()).GetVisualDescendants().OfType<Button>().Single(b => b.Name == "LayoutStarter_Everything")); window.UpdateLayout();
+            Assert.Equal(new[] { "postit2", "postit3" }, desk.Hidden.OrderBy(h => h)); Assert.Equal(DeskView.Kinds.Count - 2, desk.Placements.Count); Assert.Empty(model.DeskLayouts); // Starters are not saved layouts.
+        }
+        finally { window.Close(); }
+    }
+
     // Pictures of floating widgets for looking at when TIMER_PREVIEW_DIR is set.
     [AvaloniaFact]
     public void FloatingWidgetPictures()

@@ -74,8 +74,12 @@ public sealed class WindowCoordinator
     {
         var wanted = model.Floating.Where(f => DeskView.Kinds.Any(k => k.Id == f.Id)).ToList();
         foreach (var id in floats.Keys.Where(id => wanted.All(w => w.Id != id)).ToList()) { floats[id].Retire(); floats.Remove(id); }
-        foreach (var widget in wanted.Where(w => !floats.ContainsKey(w.Id))) { var window = new FloatingWidgetWindow(model, widget); floats[widget.Id] = window; window.Show(); }
+        foreach (var widget in wanted.Where(w => !floats.ContainsKey(w.Id))) { var window = new FloatingWidgetWindow(model, widget); floats[widget.Id] = window; if (!model.FloatingHidden) window.Show(); }
+        // Hiding tucks them out of sight without docking them; showing brings them back where they were.
+        foreach (var window in floats.Values) { if (model.FloatingHidden && window.IsVisible) window.Hide(); else if (!model.FloatingHidden && !window.IsVisible) window.Show(); }
     }
+    /// <summary>Whether the floating windows are showing on screen right now (they are tucked away, not closed, when hidden).</summary>
+    public bool FloatingWindowsVisible => floats.Count > 0 && floats.Values.All(w => w.IsVisible);
     /// <summary>The widgets with a window open now.</summary>
     public IReadOnlySet<string> FloatingWindowIds => floats.Keys.ToHashSet();
     private void RetireFloats() { foreach (var window in floats.Values.ToList()) window.Retire(); floats.Clear(); }

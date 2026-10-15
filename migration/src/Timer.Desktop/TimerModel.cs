@@ -904,21 +904,29 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Whether floating widgets sit above other windows, as the pill does. On by default.</summary>
     public bool FloatOnTop => preferences.FloatOnTop;
     public void SetFloatOnTop(bool on) { preferences = preferences with { FloatOnTop = on }; Save(); Notify(); }
-    /// <summary>Raised when a widget starts or stops floating, so the windows can follow.</summary>
+    /// <summary>Raised when a widget starts or stops floating, or all of them are hidden or shown, so the windows can follow.</summary>
     public event Action? FloatingChanged;
+    /// <summary>Whether the floating widgets are tucked out of sight for now. It is for this session only, so a restart brings them back.</summary>
+    public bool FloatingHidden { get; private set; }
+    public void SetFloatingHidden(bool hidden)
+    {
+        if (FloatingHidden == hidden || (hidden && Floating.Count == 0)) return;
+        FloatingHidden = hidden; FloatingChanged?.Invoke(); Notify();
+    }
     /// <summary>Lifts a tile out of the desk to float, at the size (in cells) it has on the desk. Refused with a notice once three are floating.</summary>
     public bool FloatWidget(string id, int columns, int rows)
     {
         if (IsFloating(id)) return true;
         var (list, added) = FloatingWidgets.Add(Floating, new FloatingWidget(id, null, null, columns, rows));
         if (!added) { Notice = "Three widgets are already floating. Dock one first."; return false; }
+        FloatingHidden = false; // Floating something new shows it, along with the others.
         preferences = preferences with { Floating = list }; Save(); FloatingChanged?.Invoke(); Notify(); return true;
     }
     /// <summary>Puts a floating widget back on the desk.</summary>
     public void DockWidget(string id)
     {
         if (!IsFloating(id)) return;
-        preferences = preferences with { Floating = FloatingWidgets.Remove(Floating, id) }; Save(); FloatingChanged?.Invoke(); Notify();
+        preferences = preferences with { Floating = FloatingWidgets.Remove(Floating, id) }; if (Floating.Count == 0) FloatingHidden = false; Save(); FloatingChanged?.Invoke(); Notify();
     }
     /// <summary>Remembers where a floating widget sits. It does not notify, since nothing on screen needs to change.</summary>
     public void MoveFloating(string id, int x, int y) => ChangeFloating(id, f => f with { X = x, Y = y });

@@ -266,17 +266,20 @@ public static class Ui
         var settingsItem = new MenuItem { Name = "SettingsMenu", Header = "Settings…" }; settingsItem.Click += (_, _) => model.RequestSettings();
         var pinItem = new MenuItem { Name = "PinMenu", Header = "Pin to screen", ToggleType = MenuItemToggleType.CheckBox };
         pinItem.Click += (_, _) => model.SetPillOnTop(!model.PillOnTop);
+        // Tucks every floating widget out of sight, and brings them back. Only offered while something is floating.
+        var floatItem = new MenuItem { Name = "FloatingMenu" }; floatItem.Click += (_, _) => model.SetFloatingHidden(!model.FloatingHidden);
         var quickRule = new Separator();
         var versionRule = new Separator { IsVisible = false };
         var collapseRule = new Separator { IsVisible = false };
         var menu = new ContextMenu { ItemsSource = new Control[] { continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
         // Quick actions live on the pill's menu, where there is no other way to do them. The dashboard has its own buttons for all of these.
-        if (pill) menu.ItemsSource = new Control[] { openItem, switchItem, breakItem, noteItem, quickRule, pinItem, settingsItem, continueItem, overtimeTest, versionRule, version, collapseRule, collapse };
+        if (pill) menu.ItemsSource = new Control[] { openItem, switchItem, breakItem, noteItem, quickRule, pinItem, floatItem, settingsItem, continueItem, overtimeTest, versionRule, version, collapseRule, collapse };
         void Sync()
         {
             openItem.Header = "Open Desk";
             breakItem.Header = model.IsOnBreak ? "End break" : "Start break";
             pinItem.IsChecked = model.PillOnTop;
+            floatItem.IsVisible = model.Floating.Count > 0; floatItem.Header = model.FloatingHidden ? "Show floating widgets" : "Hide floating widgets";
             // One entry per account, the running one ticked. Choosing another stops this one and starts that one.
             switchItem.ItemsSource = model.Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a =>
             {
