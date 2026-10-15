@@ -827,8 +827,8 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += Changed;
         model.PropertyChanged += (_, _) => UpdateOnboarding();
         model.EntryRequested += ShowEntry;
-        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy; model.AccountsRequested += ShowAccounts; model.NoteRequested += ShowNote; model.SettingsRequested += OpenSettings;
-        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; model.AccountsRequested -= ShowAccounts; model.NoteRequested -= ShowNote; model.SettingsRequested -= OpenSettings; };
+        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy; model.AccountsRequested += ShowAccounts; model.NoteRequested += ShowNote; model.SettingsRequested += OpenSettings; model.PageRequested += OpenPageRequested;
+        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; model.AccountsRequested -= ShowAccounts; model.NoteRequested -= ShowNote; model.PageRequested -= OpenPageRequested; model.SettingsRequested -= OpenSettings; };
         Refresh(true);
         UpdateOnboarding();
     }
@@ -920,6 +920,7 @@ public sealed class DashboardWindow : Window
     private StackPanel dateNav = null!, navRight = null!, railTopRef = null!;
     private void ShowDesk() { deskMode = true; Refresh(true); }
     // A tile's open button goes to the page that shows the same thing in full.
+    private void OpenPageRequested(string page) { if (!IsVisible) Reveal?.Invoke(); if (IsVisible) OpenDeskPage(page); }
     private void OpenDeskPage(string page) { if (page == "timeline") SelectTab(false); else SelectSection(page); }
     private void SelectSection(string section)
     {

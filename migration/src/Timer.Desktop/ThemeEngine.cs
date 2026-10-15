@@ -63,6 +63,15 @@ public static class ThemeEngine
         // when the theme and the computer disagreed, and in the recording pill. They wear the theme's surface, text and line instead.
         // A gentle wash of the tracking colour over the surface, for the card of the account that is recording.
         Put("LiveTint", Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Live"], ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000") ? .24 : .14)));
+        // The tracking green as text. The Live token sits well on the plain surface, but text in it also lands on tinted tiles and on the recording account's
+        // wash, where it fell to 2.4 to 1. So for text it is moved towards the text colour until it holds 4.5 to 1 on a green-tinted surface.
+        Put("LiveInk", Color.Parse(StatusInk(colours, "Live")));
+        // The break amber and the overtime red are lifted the same way when they are text: amber especially is a pale colour that lost its words on a tinted tile.
+        Put("BreakInk", Color.Parse(StatusInk(colours, "Break")));
+        Put("OvertimeInk", Color.Parse(StatusInk(colours, "Overtime")));
+        // The grey hint in an empty box ("Add a to-do") is a lighter mix of the theme's text colour, written at full strength (see App.Initialize), not the standard theme's own faded grey, which was too faint on tinted tiles.
+        var hint = Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Ink"], .62));
+        foreach (var key in new[] { "TextControlPlaceholderForeground", "TextControlPlaceholderForegroundPointerOver", "TextControlPlaceholderForegroundFocused" }) Put(key, hint);
         Put("ToolTipBackground", Color.Parse(colours["Surface"]));
         Put("ToolTipForeground", Color.Parse(colours["Ink"]));
         Put("ToolTipBorderBrush", line);
@@ -73,6 +82,17 @@ public static class ThemeEngine
         var (offFill, offTrack) = DisabledSliderColours(colours);
         foreach (var key in new[] { "SliderTrackValueFillDisabled", "SliderThumbBackgroundDisabled" }) Put(key, offFill);
         Put("SliderTrackFillDisabled", offTrack);
+    }
+    /// <summary>A status colour (tracking, break, overtime) moved towards the text colour until it reads as text (4.5 to 1) on a surface with some of that colour in it.</summary>
+    public static string StatusInk(IReadOnlyDictionary<string, string> colours, string token)
+    {
+        var backing = ThemeColours.Mix(colours["Surface"], colours[token], .30);
+        for (var amount = 0.0; amount <= 1.0001; amount += .05)
+        {
+            var candidate = ThemeColours.Mix(colours[token], colours["Ink"], amount);
+            if (ThemeColours.Contrast(candidate, backing) >= 4.5) return candidate;
+        }
+        return colours["Ink"];
     }
     /// <summary>
     /// Writes only the colours the windows are drawn in, not the pill's recording, break and overtime tints. While a theme is being edited every

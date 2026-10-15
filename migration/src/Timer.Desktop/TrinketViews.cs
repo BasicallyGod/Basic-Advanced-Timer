@@ -112,7 +112,7 @@ public sealed class TodoView : Grid
                 // The tag takes the account's own colour, so a to-do reads as belonging to it at a glance.
                 var colour = Color.Parse(Ui.Visible(known.Colour));
                 var dot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(colour), VerticalAlignment = VerticalAlignment.Center };
-                var tag = new TextBlock { Text = "#" + known.Display, FontSize = 12, Foreground = new SolidColorBrush(Mix(colour, Ui.ThemeColour(this, "Ink", Colors.Black), .45)), FontWeight = FontWeight.SemiBold };
+                var tag = new TextBlock { Text = "#" + known.Display, FontSize = 12, Foreground = new SolidColorBrush(TagColours.Text(colour, model)), FontWeight = FontWeight.SemiBold };
                 var tagRow = Ui.Horizontal(dot, tag); tagRow.Spacing = 5; tagRow.Name = "TodoTag_" + id; line.Children.Add(tagRow);
             }
             // One carried over from an earlier day says when it was first set down.
@@ -275,7 +275,7 @@ public static class NoteChips
         if (NoteShorthand.AccountOf(note.Text, model.AccountNames) is not { } account || model.Accounts.FirstOrDefault(a => a.Name == account) is not { } known) return null;
         var colour = Color.Parse(Ui.Visible(known.Colour));
         var dot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(colour), VerticalAlignment = VerticalAlignment.Center };
-        var ink = new SolidColorBrush(Mix(colour, Ui.ThemeColour(host, "Ink", Colors.Black), .45));
+        var ink = new SolidColorBrush(TagColours.Text(colour, model));
         return Chip(name, dot, "#" + known.Display, "Linked to " + known.Display, interactive ? name.Replace("Chip", "Clear") : null, interactive ? () => model.ClearNoteAccount(note.Id) : null, ink);
     }
     /// <summary>All the chips for one note, or null when it has none.</summary>
@@ -470,7 +470,7 @@ public sealed class TrackerView : Grid
         // Green says tracking and amber says a break, as everywhere else; anything else is a quiet grey chip.
         var key = onBreak ? "Break" : model.IsTracking ? "Live" : "Muted";
         var colour = Ui.ThemeColour(this, key, Colors.Gray);
-        chip.Background = new SolidColorBrush(colour, .18); chipText.Foreground = new SolidColorBrush(colour);
+        chip.Background = new SolidColorBrush(colour, .18); chipText.Foreground = new SolidColorBrush(onBreak ? Ui.ThemeColour(this, "BreakInk", colour) : model.IsTracking ? Ui.ThemeColour(this, "LiveInk", colour) : colour);
         chipText.Text = onBreak ? "On break" : model.IsTracking ? "Tracking" : "Paused";
         pauseGlyph.Playing = model.IsTracking && !onBreak; pauseGlyph.InvalidateVisual();
         cup.Filled = onBreak; cup.SetSteaming(onBreak); cup.InvalidateVisual();
@@ -769,5 +769,23 @@ public sealed class AccountChips : WrapPanel
         var chip = Ui.Horizontal(dot, name, time); chip.Spacing = 6; chip.Margin = new Thickness(0, 0, 14, 4);
         if (large) name.FontWeight = FontWeight.SemiBold;
         return chip;
+    }
+}
+
+/// <summary>Text in an account's colour for its #tag: the colour moved towards the text colour until it holds up on the surface, in a dark theme as well as a light one.</summary>
+internal static class TagColours
+{
+    public static Color Text(Color account, TimerModel model)
+    {
+        // The theme in use, not a control's resources: the tag is built before it is in a window, where those cannot be found yet and a dark theme would read as light.
+        var theme = model.CurrentTheme; var ink = Color.Parse(theme.Colour("Ink")); var surface = Color.Parse(theme.Colour("Surface"));
+        string Hex(Color c) => ThemeColours.Hex(c.R, c.G, c.B);
+        for (var amount = .45; amount <= 1.0001; amount += .05)
+        {
+            var candidate = Color.FromRgb((byte)(account.R + (ink.R - account.R) * amount), (byte)(account.G + (ink.G - account.G) * amount), (byte)(account.B + (ink.B - account.B) * amount));
+            // Tiles are washes a little darker or lighter than the surface, so the tag is asked to do better than 4.5 to 1 against the surface itself.
+            if (ThemeColours.Contrast(Hex(candidate), Hex(surface)) >= 6) return candidate;
+        }
+        return ink;
     }
 }

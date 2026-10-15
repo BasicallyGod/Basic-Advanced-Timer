@@ -191,6 +191,23 @@ public sealed class FloatingWidgetTests
         finally { window.Close(); }
     }
 
+    [AvaloniaFact]
+    public void AFloatingTileCanOpenItsFullPageInTheDashboard()
+    {
+        var model = Model(); var dashboard = new DashboardWindow(model); dashboard.Show(); model.FloatWidget("day", 2, 1); model.FloatWidget("clock", 1, 2);
+        var window = new FloatingWidgetWindow(model, model.Floating.Single(f => f.Id == "day")); window.Show();
+        var clock = new FloatingWidgetWindow(model, model.Floating.Single(f => f.Id == "clock")); clock.Show();
+        try
+        {
+            Assert.Empty(clock.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "TileOpen_clock")); // The clock has no page of its own.
+            var asked = new List<string>(); model.PageRequested += asked.Add;
+            Click(Named<Button>(window, "TileOpen_day")); Assert.Equal(new[] { "overview" }, asked);
+            Assert.Equal("overview", model.WeekSection); // The dashboard came to that page.
+            model.RequestPage("hours"); Assert.Equal("hours", model.WeekSection);
+        }
+        finally { window.Retire(); clock.Retire(); dashboard.Close(); }
+    }
+
     // Pictures of floating widgets for looking at when TIMER_PREVIEW_DIR is set.
     [AvaloniaFact]
     public void FloatingWidgetPictures()

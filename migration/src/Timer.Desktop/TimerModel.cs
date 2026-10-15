@@ -957,6 +957,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Asks for the small Quick capture box: from the pill's menu or the shortcut. It works without bringing the dashboard up.</summary>
     public event Action? QuickCaptureRequested;
     public void RequestQuickCapture() => QuickCaptureRequested?.Invoke();
+    /// <summary>Asks the dashboard to come up on a page ("timeline", "overview", "hours" or "entries"), as a tile's open button does. A floating widget uses it, having no dashboard around it.</summary>
+    public event Action<string>? PageRequested;
+    public void RequestPage(string page) => PageRequested?.Invoke(page);
     public bool Tooltips => preferences.Tooltips;
     public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
     /// <summary>Whether the developer features are switched on: the sample-data demo, the overtime tester and the version on the right-click menu. Off until unlocked from the About section.</summary>

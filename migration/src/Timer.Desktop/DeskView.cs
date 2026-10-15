@@ -413,6 +413,8 @@ public sealed class DeskView : UserControl
         }
         else
         {
+            // The full page opens in the dashboard, which comes up for it, since a floating widget has no dashboard around it.
+            if (kind.OpensPage is { } fullPage) { var open = Ui.IconButton(IconKind.Next, "Open full page", "TileOpen_" + kind.Id, () => model.RequestPage(fullPage)); open.Width = 28; open.Height = 28; buttons.Children.Add(open); }
             var dock = Ui.IconButton(IconKind.Dock, "Back on the desk", "TileDock_" + kind.Id, () => model.DockWidget(kind.Id)); dock.Width = 28; dock.Height = 28; buttons.Children.Add(dock);
         }
         var put = Ui.IconButton(IconKind.Close, "Put away in the drawer", "TileHide_" + kind.Id, () => Hide(kind.Id)); put.Width = 28; put.Height = 28; put.IsVisible = false; if (single is null) buttons.Children.Add(put);
@@ -462,7 +464,7 @@ public sealed class DeskView : UserControl
             // is the same on every tile whatever it holds and the grip always sits at the same distance from the corner.
             figure.HorizontalAlignment = HorizontalAlignment.Right; buttons.HorizontalAlignment = HorizontalAlignment.Right; buttons.VerticalAlignment = VerticalAlignment.Center;
             var cluster = new Grid { VerticalAlignment = VerticalAlignment.Center }; cluster.Children.Add(figure); cluster.Children.Add(buttons); Ui.Put(head, cluster, 3);
-            dots = new IconGlyph(IconKind.Grip) { TintKey = "Muted", VerticalAlignment = VerticalAlignment.Center, Opacity = .8, IsHitTestVisible = false, IsVisible = false }; Ui.Put(head, dots, 4);
+            dots = new IconGlyph(IconKind.Grip) { TintKey = "Muted", VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false, IsVisible = false }; Ui.Put(head, dots, 4);
             var band = new Border { Height = 52, Child = handle }; bands[kind.Id] = band;
             body = new Border { Margin = new Thickness(16, 10, 16, 14) };
             var stack = Ui.Grid("*", "Auto,*"); Ui.Put(stack, band); Ui.Put(stack, body, row: 1);

@@ -723,7 +723,7 @@ public sealed class ClockText : StackPanel
         main.Classes.Set("break", onBreak); main.Classes.Set("overtime", late); main.Classes.Set("live", live);
         main.Classes.Set("clockIdle", !onBreak && !late && !live);
         // The seconds take the same colour as the rest of the clock when it is tracking, on a break or in overtime, only lighter.
-        seconds.Classes.Set("break", onBreak); seconds.Classes.Set("overtime", late); seconds.Classes.Set("live", live); seconds.Opacity = onBreak || late || live ? .78 : 1; // Quieter than the main digits, but still easy to read.
+        seconds.Classes.Set("break", onBreak); seconds.Classes.Set("overtime", late); seconds.Classes.Set("live", live); seconds.Opacity = onBreak || late || live ? .9 : 1; // Quieter than the main digits, but still easy to read.
     }
     /// <summary>The whole clock, as hours:minutes:seconds. Setting it splits the seconds off to be drawn lighter.</summary>
     public string Text
