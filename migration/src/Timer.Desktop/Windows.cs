@@ -504,7 +504,7 @@ public sealed class PillWindow : Window
         var waiting = !model.IsTracking && !model.IsOnBreak;
         account.Text = model.IsOnBreak ? model.AccountLabel : model.ActiveAccount ?? (selected?.Name ?? (waiting && !model.Engine.Finished ? "Ready to track" : model.AccountLabel));
         // What is happening, in one line. A break says where it will go back to, overtime adds how much there is, and an idle timer says what it is waiting for.
-        var overtimeText = model.IsOvertime ? " · OT " + model.Format(model.Engine.Totals(model.Engine.Now).Overtime) : "";
+        var overtimeText = model.IsOvertime ? " · OT " + model.Format(model.ShiftNow.Overtime) : "";
         // On a break the first line already says so, so the second says something new: where it goes back to, or when the break began.
         var breakSince = model.Engine.Active is { } running && BreakAccount.Is(running.Account) ? running.Start : (DateTime?)null;
         credited.Text = model.IsOnBreak ? (model.ResumeAccount is { } returnTo ? "Returns to " + returnTo : breakSince is { } since ? "Since " + since.ToString("HH:mm") : "Nothing running") + overtimeText

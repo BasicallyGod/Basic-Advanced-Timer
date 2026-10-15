@@ -157,12 +157,12 @@ public sealed class SetupTests
             Find<TextBox>(window, "SetupStart").Text = "25:99"; Press(window, "SetupNext");
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsVisible && t.Text is { Length: > 0 } x && t.Classes.Contains("overtime") && x.Length > 5);
             Assert.False(model.SetupDone); Assert.Equal(TimeSpan.FromHours(9), model.Engine.Schedule.Default.Start); // Nothing was applied.
-            Find<TextBox>(window, "SetupStart").Text = "09:00"; Find<TextBox>(window, "SetupEnd").Text = "08:00"; Press(window, "SetupNext");
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsVisible && t.Text is { } x && x.Contains("end after the start"));
+            Find<TextBox>(window, "SetupStart").Text = "09:00"; Find<TextBox>(window, "SetupEnd").Text = "09:00"; Press(window, "SetupNext"); // An end earlier than the start is an overnight shift; only the same time is refused.
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsVisible && t.Text is { } x && x.Contains("different from the start"));
             Press(window, "SetupBack"); Settle(window);
             Assert.Equal("Account one", Find<TextBox>(window, "SetupName0").Text); // Going back shows what was there.
             Press(window, "SetupNext"); Settle(window);
-            Assert.Equal("08:00", Find<TextBox>(window, "SetupEnd").Text); // And forward again keeps what was typed.
+            Assert.Equal("09:00", Find<TextBox>(window, "SetupEnd").Text); // And forward again keeps what was typed.
         }
         finally { window.Close(); }
     }

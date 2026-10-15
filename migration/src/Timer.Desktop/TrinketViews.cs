@@ -652,9 +652,10 @@ public sealed record DayFigures(TimeSpan Allocated, TimeSpan Unallocated, TimeSp
     public double? Fraction => Target > TimeSpan.Zero ? Math.Clamp(Allocated.TotalSeconds / Target.TotalSeconds, 0, 1) : null;
     public static DayFigures For(TimerModel model)
     {
-        var day = model.SelectedDate.Date; var engine = model.Engine; var totals = engine.Totals(day); var plan = engine.Plan(day);
-        var breaks = engine.Sessions.Where(r => r.Day == day && BreakAccount.Is(r.Account)).Aggregate(TimeSpan.Zero, (sum, r) => sum + r.Duration);
-        if (engine.Active is { } active && BreakAccount.Is(active.Account)) breaks += engine.ActiveElapsedOn(day, true);
+        // Today is the working day now belongs to, which after midnight in an overnight shift is yesterday's, so the figures carry on across midnight.
+        var engine = model.Engine; var day = model.SelectedDate.Date; var key = day == engine.Now.Date ? engine.CurrentKey : day;
+        var totals = engine.ShiftTotals(key); var plan = engine.Plan(key);
+        var (from, until) = engine.ShiftWindow(key); var breaks = engine.CreditedIn(BreakAccount.Name, from, until);
         return new(totals.Allocated, totals.Unallocated, plan.Working ? plan.End - plan.Start : TimeSpan.Zero, breaks, totals.Overtime);
     }
 }
@@ -727,7 +728,7 @@ public sealed class DayView : Grid
             var v = Ui.Text(model.Format(value), 13, "figures"); v.FontWeight = FontWeight.SemiBold; Ui.Put(row, v, 1); details.Children.Add(row);
         }
         // How much of the day's working time is still ahead, to its scheduled end, apart from how much is still to be put on accounts.
-        var now = model.Engine.Now; var plan = model.Engine.Plan(model.SelectedDate);
+        var now = model.Engine.Now; var plan = model.Engine.Plan(model.SelectedDate.Date == now.Date ? model.Engine.CurrentKey : model.SelectedDate.Date);
         var ahead = plan.Working && model.SelectedDate.Date == now.Date && now < plan.End ? model.Engine.Schedule.WorkingTimeBetween(now, plan.End) : TimeSpan.Zero;
         Line("Working time left", ahead, "DayWorkLeft");
         Line("Unallocated", f.Unallocated, "DayUnallocated"); Line("Breaks", f.Breaks, "DayBreaks"); Line("Overtime", f.Overtime, "DayOvertime");

@@ -94,6 +94,16 @@ public static class DeskLayout
     public static (int Columns, int Rows) SizeFromPixels(double width, double height, double cellWidth, double cellHeight, double gap)
         => (Math.Max(1, (int)Math.Round((width + gap) / Math.Max(1, cellWidth))), Math.Max(1, (int)Math.Round((height + gap) / Math.Max(1, cellHeight + gap))));
 
+    /// <summary>
+    /// How many rows a list tile needs to show all of its items without scrolling: the header and the room at its foot (the box for a new item, the margins),
+    /// plus a height per item, over the height of a row. Never fewer than the tile's usual rows or more than its limit, so an empty list keeps its usual size.
+    /// </summary>
+    public static int PreferredRows(int items, double perItem, double chrome, int usualRows, int maxRows, double rowHeight = 112)
+    {
+        var needed = (int)Math.Ceiling((chrome + Math.Max(0, items) * perItem) / Math.Max(1, rowHeight));
+        return Math.Clamp(Math.Max(usualRows, needed), usualRows, Math.Max(usualRows, maxRows));
+    }
+
     /// <summary>Saved sizes are written as id:ColumnsxRows. Anything that does not read that way is dropped.</summary>
     public static Dictionary<string, (int Columns, int Rows)> ParseSizes(IEnumerable<string>? saved)
     {

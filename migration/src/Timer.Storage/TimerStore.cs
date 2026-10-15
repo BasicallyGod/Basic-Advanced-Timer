@@ -113,7 +113,8 @@ public sealed class TimerStore : IDisposable
             engine.DayStarts[DateTime.ParseExact(day, "yyyy-MM-dd", CultureInfo.InvariantCulture)] = ParseIso(start);
         var shifts = engine.Schedule.Shifts.Values.Append(engine.Schedule.Default)
             .Concat(engine.Schedule.Overrides.Values.Where(o => !o.Off).Select(o => o.Shift!));
-        if (shifts.Any(s => s.End <= s.Start)) throw new InvalidDataException("A working shift must finish after it starts.");
+        // An end earlier than the start is an overnight shift, which finishes the next morning. Only an end equal to the start has no meaning.
+        if (shifts.Any(s => s.End == s.Start)) throw new InvalidDataException("A working shift must finish at a different time from when it starts.");
         // An earlier version let you adjust an account's time without a block on the clock. That feature is gone, so those rows are left out here and
         // fall away on the next save. A copy of the database is kept first, and the undo history (which could bring them back) is cleared.
         var adjustments = database.Query("SELECT a.name, e.day, e.start_at FROM entries e LEFT JOIN accounts a ON a.id = e.account_id WHERE e.kind = 'adjustment'",

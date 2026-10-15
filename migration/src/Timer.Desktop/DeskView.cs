@@ -72,6 +72,22 @@ public sealed class DeskView : UserControl
     private Dictionary<string, (int Column, int Row)> pins;
     private Dictionary<string, (int Column, int Row)>? provisionalPins;
     private readonly Dictionary<string, (int Columns, int Rows)> sizes;
+    // The size a list tile opens at when its size has never been chosen: tall enough for what it holds. It is worked out once, as the desk is built, and is
+    // never saved, so a size set by hand (which is) always wins and a tile does not change size under you as items come and go.
+    private readonly Dictionary<string, (int Columns, int Rows)> preferred = new();
+    private void WorkOutPreferredSizes()
+    {
+        void Fit(string id, int items, double perItem, double chrome)
+        {
+            if (sizes.ContainsKey(id)) return;
+            var kind = Kinds.First(k => k.Id == id);
+            var rows = DeskLayout.PreferredRows(items, perItem, chrome, kind.Rows, kind.MaxRows);
+            if (rows != kind.Rows) preferred[id] = (kind.Columns, rows);
+        }
+        // Per item: a to-do or note line with its tag or chips under it, a line in Coming up, an account row. Chrome: the header band and margins, and the box for a new item.
+        Fit("todo", model.Todos.Count, 46, 150); Fit("notes", model.NotesOn(model.SelectedDate).Count + 1, 52, 150);
+        Fit("coming", model.ComingUp().Count, 40, 100); Fit("accounts", model.Accounts.Count(a => !BreakAccount.Is(a.Name)), 46, 90);
+    }
     private string? resizing; private (int Columns, int Rows) resizingSize; private Point resizeStart; private Size resizeFrom;
     private string? expanded;
     private readonly ScrollViewer scroller; private readonly DayStrip timelineStrip; private readonly Border timelineHost = new();
@@ -101,6 +117,7 @@ public sealed class DeskView : UserControl
         analogue = new AnalogueClock(() => model.Engine.Now); strip = new DayStrip(model); timelineStrip = new DayStrip(model);
         sizes = new Dictionary<string, (int Columns, int Rows)>(model.DeskSizes);
         var known = Kinds.Select(k => k.Id).ToList();
+        if (single is null) WorkOutPreferredSizes();
         hidden = model.DeskHidden.Where(known.Contains).Distinct().ToList();
         pins = model.DeskPositions.Where(p => known.Contains(p.Key) && !hidden.Contains(p.Key)).ToDictionary(p => p.Key, p => p.Value);
         // A desk that has never been arranged starts with one post-it out and the spare two in the drawer.
@@ -205,7 +222,7 @@ public sealed class DeskView : UserControl
     public (int Columns, int Rows) SizeOf(string id)
     {
         var kind = Kinds.First(k => k.Id == id);
-        var (c, r) = resizing == id ? resizingSize : sizes.TryGetValue(id, out var saved) ? saved : (kind.Columns, kind.Rows);
+        var (c, r) = resizing == id ? resizingSize : sizes.TryGetValue(id, out var saved) ? saved : preferred.TryGetValue(id, out var fits) ? fits : (kind.Columns, kind.Rows);
         return DeskLayout.ClampSize(c, r, kind.MinColumns, kind.MinRows, kind.MaxColumns, kind.MaxRows, board.Columns);
     }
     internal DeskTileSpec SpecFor(string id) { var (c, r) = SizeOf(id); return new(id, c, r); }

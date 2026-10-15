@@ -855,4 +855,27 @@ public sealed class DeskTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void ListTilesOpenTallEnoughForTheirItemsButNeverOverASizeChosenByHand()
+    {
+        var model = Model(); for (var i = 0; i < 12; i++) model.AddTodo("Task " + i);
+        var window = Open(model);
+        try
+        {
+            Press(window, "DeskTab"); var desk = window.GetVisualDescendants().OfType<DeskView>().Single(); desk.Lively = false;
+            Assert.True(desk.SizeOf("todo").Rows > 3); Assert.Equal(3, desk.SizeOf("accounts").Rows); Assert.Equal((2, 2), desk.SizeOf("week")); // Only lists grow, and only when they hold more.
+            Assert.False(model.DeskSizes.ContainsKey("todo")); // Worked out, not saved.
+            desk.Resize("todo", 2, 3); Assert.Equal((2, 3), desk.SizeOf("todo")); Assert.Equal((2, 3), model.DeskSizes["todo"]); // A size chosen by hand wins.
+        }
+        finally { window.Close(); }
+        var chosen = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday, DeskSizes: new[] { "todo:2x3" }));
+        for (var i = 0; i < 12; i++) chosen.AddTodo("Task " + i);
+        var again = Open(chosen);
+        try { Press(again, "DeskTab"); Assert.Equal((2, 3), again.GetVisualDescendants().OfType<DeskView>().Single().SizeOf("todo")); } // Saved earlier, so left alone.
+        finally { again.Close(); }
+        var empty = Open(Model());
+        try { Press(empty, "DeskTab"); Assert.Equal((2, 3), empty.GetVisualDescendants().OfType<DeskView>().Single().SizeOf("todo")); }
+        finally { empty.Close(); }
+    }
 }
