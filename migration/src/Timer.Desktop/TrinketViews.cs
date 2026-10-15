@@ -231,12 +231,18 @@ public sealed class NotesView : Grid
             // TextChanged does not fire headless, so the text property is watched instead.
             text.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) model.SetDayNoteText(id, text.Text ?? ""); };
             var remove = Ui.IconButton(IconKind.Close, "Remove", "NoteRemove_" + id, () => model.RemoveDayNote(id)); remove.Width = 26; remove.Height = 26;
-            var row = Ui.Grid("Auto,*,Auto"); row.VerticalAlignment = VerticalAlignment.Center;
+            // A small calendar picks another day for the note, for when it was put on the wrong one or plans change.
+            var when = Ui.IconButton(IconKind.Today, "Move to another day", "NoteMove_" + id, () => { }); when.Width = 26; when.Height = 26;
+            var calendar = new Calendar { Name = "NoteCalendar_" + id, SelectedDate = note.Day, DisplayDate = note.Day };
+            var flyout = new Flyout { Content = calendar, Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight };
+            calendar.SelectedDatesChanged += (_, _) => { if (calendar.SelectedDate is { } picked) { flyout.Hide(); model.MoveDayNote(id, picked); } };
+            when.Flyout = flyout;
+            var row = Ui.Grid("Auto,*,Auto,Auto"); row.VerticalAlignment = VerticalAlignment.Center;
             Ui.Put(row, tick);
             // What was recognised in the words is shown under them as chips, each with a cross that takes it back out of the note.
             var body = new StackPanel { Spacing = 0 }; body.Children.Add(text);
             if (NoteChips.For(model, note, this) is { } chips) { chips.Margin = new Thickness(8, 0, 0, 2); body.Children.Add(chips); }
-            Ui.Put(row, body, 1); Ui.Put(row, remove, 2);
+            Ui.Put(row, body, 1); Ui.Put(row, when, 2); Ui.Put(row, remove, 3);
             rows.Children.Add(row);
         }
     }

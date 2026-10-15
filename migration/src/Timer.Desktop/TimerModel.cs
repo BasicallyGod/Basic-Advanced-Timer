@@ -812,6 +812,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void ClearNoteDeadline(long id) => ChangeNote(id, n => DayNotes.IsDeadline(n) ? n with { Text = NoteShorthand.WithoutDeadline(n.Text) } : n, true);
     /// <summary>Unlinks a note from its account, leaving the name in its words as an ordinary word.</summary>
     public void ClearNoteAccount(long id) => ChangeNote(id, n => n with { Text = NoteShorthand.WithoutAccountTag(n.Text, AccountNames) }, true);
+    /// <summary>Moves a note to another day. A notice says where it went when it leaves the day showing, as typing @fri does.</summary>
+    public void MoveDayNote(long id, DateTime day)
+    {
+        var from = dayNotes.FirstOrDefault(n => n.Id == id); if (from is null || from.Day.Date == day.Date) return;
+        ChangeNote(id, n => n with { Day = day.Date }, false);
+        if (day.Date != SelectedDate.Date) Notice = "Moved to " + day.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
+        Notify();
+    }
     public void ToggleDayNote(long id) => ChangeNote(id, n => n with { Done = !n.Done }, true);
     /// <summary>Saves a note's words as they are typed, without notifying, so the box being typed in is not rebuilt. Emptying a note deletes it.</summary>
     public void SetDayNoteText(long id, string text) => ChangeNote(id, n => n with { Text = text.Trim() }, false);
