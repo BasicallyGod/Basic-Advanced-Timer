@@ -601,7 +601,26 @@ public sealed class TimerModel : INotifyPropertyChanged
             foreach (var (account, minutes) in earlier) { engine.AddSession(account, at, at.AddMinutes(minutes)); at = at.AddMinutes(minutes + 5); }
         }
         if (store is not null) store.Save(engine, prefs);
-        return new TimerModel(engine, prefs, store) { IsDemo = true };
+        var demo = new TimerModel(engine, prefs, store) { IsDemo = true };
+        demo.SeedDemoNotes(anchor.Date);
+        return demo;
+    }
+    /// <summary>
+    /// Sample notes and reminders for the demo, written in the same shorthand a person would type so they also show how it reads: today's tasks and a timed
+    /// event, a deadline, and notes tagged to accounts, then dated ones days and months ahead so Coming up and the Notes page have something to show.
+    /// </summary>
+    private void SeedDemoNotes(DateTime today)
+    {
+        string On(int days) => " @" + today.AddDays(days).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var notes = new[]
+        {
+            "Send the weekly update #Accountone", "Check the invoice numbers #Accounttwo", "16:30 Call with the Account three team #Accountthree",
+            "! 17:00 Timesheet to finance", "Book the meeting room" + On(1), "10:00 Planning with Account four #Accountfour" + On(1),
+            "! Account five report due #Accountfive" + On(5), "14:00 Review with Account one #Accountone" + On(9), "Renew the software licence" + On(21),
+            "! Quarterly review pack #Accountfive" + On(45), "Plan the team away day" + On(90), "! Year-end accounts to Internal #Internal" + On(150)
+        };
+        foreach (var typed in notes) AddDayNote(today, typed);
+        Notice = null;
     }
     // Overtime for testing: the demo's shift is cut short so the day is already past its end. It is only for the demo, and can be
     // switched off again, which puts back whatever shift was set for the day before.
