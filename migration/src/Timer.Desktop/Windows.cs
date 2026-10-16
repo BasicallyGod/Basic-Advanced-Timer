@@ -532,7 +532,7 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock today = Ui.Text("", 12, "muted");
     private readonly ContentControl workspace = new();
     private readonly Button day;
-    private Border feedBadge = null!; private Button feedRail = null!, notesRail = null!, timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
+    private FeedStrip feedStrip = null!; private Border feedBadge = null!; private Button feedRail = null!, notesRail = null!, timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
     private IconGlyph pillGlyph = null!;
     private readonly BreakGlyph dashboardCup = new();
     private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
@@ -578,7 +578,7 @@ public sealed class DashboardWindow : Window
         entriesTab = RailButton(IconKind.Entries, "Entries", "WeekEntriesTab", () => SelectSection("entries"));
         notesRail = RailButton(IconKind.Note, "Notes", "NotesTab", ShowNotes);
         // The Feed button carries a small dot while there is something unread.
-        feedRail = RailButton(IconKind.Feed, "Feed", "FeedTab", ShowFeed);
+        feedRail = RailButton(IconKind.Feed, "Feed", "FeedTab", () => ShowFeed());
         feedBadge = new Border { Name = "FeedBadge", Width = 9, Height = 9, CornerRadius = new CornerRadius(4.5), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -3, -3, 0), IsHitTestVisible = false, IsVisible = false };
         feedBadge.Classes.Add("accentEdge");
         var feedGlyph = (IconGlyph)feedRail.Content!; feedRail.Content = null; // Taken out of the button first, since a control has one parent.
@@ -628,7 +628,9 @@ public sealed class DashboardWindow : Window
         cardStack.Children.Add(identity); dayCard.Child = cardStack;
         var identityHost = new Border { Padding = new Thickness(12, 18, 16, 6), Child = dayCard };
         Ui.DragHeader(identityHost, this, "SidebarDragHeader"); identityBlock = identityHost;
-        Ui.Put(sidebar, identityHost);
+        // Under the Day card, a slim strip of unread feed items about the account being tracked. It is there only while there are some.
+        feedStrip = new FeedStrip(model, (account, id) => ShowFeed(account, id));
+        Ui.Put(sidebar, new StackPanel { Children = { identityHost, feedStrip } });
         var title = Ui.Text("Client accounts", 13, "muted");
         title.Margin = new Thickness(20, 12, 20, 6);
         // The heading alone sets the accounts apart from the card above them, with no divider.
@@ -843,7 +845,11 @@ public sealed class DashboardWindow : Window
     /// <summary>Shows the Notes page. It follows the date the dashboard is on, like the timeline.</summary>
     public void ShowNotes() { settingsMode = false; weekMode = false; feedMode = false; notesMode = true; Refresh(true); }
     /// <summary>Shows the Feed page.</summary>
-    public void ShowFeed() { settingsMode = false; weekMode = false; notesMode = false; feedMode = true; Refresh(true); }
+    public void ShowFeed(string? account = null, string? openId = null)
+    {
+        settingsMode = false; weekMode = false; notesMode = false; feedMode = true; Refresh(true);
+        if (workspace.Content is FeedPage page && (account is not null || openId is not null)) page.Focus(account, openId);
+    }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
     private void SelectSection(string section)
