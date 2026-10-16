@@ -465,14 +465,14 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock today = Ui.Text("", 12, "muted");
     private readonly ContentControl workspace = new();
     private readonly Button day;
-    private Button timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
+    private Button notesRail = null!, timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
     private IconGlyph pillGlyph = null!;
     private readonly BreakGlyph dashboardCup = new();
     private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly Button undo;
     private readonly Button merge;
     private EntryDialog? entryEditor;
-    private bool weekMode, settingsMode, renderedSettings, settingZoom;
+    private bool weekMode, settingsMode, notesMode, renderedSettings, renderedNotes, settingZoom;
     private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
     private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
@@ -507,12 +507,14 @@ public sealed class DashboardWindow : Window
         overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectSection("overview"));
         hoursTab = RailButton(IconKind.Table, "Hours table", "WeekHoursTab", () => SelectSection("hours"));
         entriesTab = RailButton(IconKind.Entries, "Entries", "WeekEntriesTab", () => SelectSection("entries"));
+        notesRail = RailButton(IconKind.Note, "Notes", "NotesTab", ShowNotes);
         // The way back to the pill is the first thing on the rail, at the top left.
         var backToPill = RailButton(IconKind.Minimise, "Switch to pill", "BackToPill", () => OpenPill?.Invoke());
         pillGlyph = (IconGlyph)backToPill.Content!;
         railTop.Children.Add(backToPill);
         var backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
         foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
+        var notesRule = Ui.Rule(); notesRule.Margin = new Thickness(6, 4); railTop.Children.Add(notesRule); railTop.Children.Add(notesRail);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
         settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);
@@ -689,17 +691,17 @@ public sealed class DashboardWindow : Window
             // Escape takes the top dialog away first, and only then clears the selection.
             if (e.Key == Avalonia.Input.Key.Escape) { if (!Dialogs.CloseTop()) model.ClearSelection(); e.Handled = true; }
             // Ctrl+C copies the selected blocks and Ctrl+V pastes them on the timeline, but never while typing in a text box.
-            else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key is Avalonia.Input.Key.C or Avalonia.Input.Key.V && !settingsMode && FocusManager?.GetFocusedElement() is not TextBox)
+            else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key is Avalonia.Input.Key.C or Avalonia.Input.Key.V && !settingsMode && !notesMode && FocusManager?.GetFocusedElement() is not TextBox)
             {
                 if (e.Key == Avalonia.Input.Key.C) model.CopySelection(); else if (!weekMode) model.PasteBlocks(model.DefaultPasteTime());
                 e.Handled = true;
             }
             // Enter opens the one selected block, but never while typing in a box or with a button focused (Enter presses that instead).
-            else if (e.Key == Avalonia.Input.Key.Enter && e.KeyModifiers == Avalonia.Input.KeyModifiers.None && !settingsMode && Dialogs.Any == false
+            else if (e.Key == Avalonia.Input.Key.Enter && e.KeyModifiers == Avalonia.Input.KeyModifiers.None && !settingsMode && !notesMode && Dialogs.Any == false
                 && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox or Button) && model.CanEditSelection)
             { model.EditSelection(); e.Handled = true; }
             // Backspace and Delete remove the selected blocks, but never while typing in a text box.
-            else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete && FocusManager?.GetFocusedElement() is not TextBox)
+            else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete && !notesMode && FocusManager?.GetFocusedElement() is not TextBox)
             { if (model.SelectedRows.Count > 0) { model.DeleteSelection(); e.Handled = true; } }
         };
         model.PropertyChanged += Changed;
@@ -762,12 +764,14 @@ public sealed class DashboardWindow : Window
     }
     private void ShowTidy() { if (IsVisible) Dialogs.Show(new TidyDialog(model)); }
     private void ShowGroup(string id) { if (IsVisible) Dialogs.Show(new GroupDialog(model, id)); }
-    public void SelectTab(bool showWeek) { settingsMode = false; weekMode = showWeek; Refresh(true); }
+    public void SelectTab(bool showWeek) { settingsMode = false; notesMode = false; weekMode = showWeek; Refresh(true); }
+    /// <summary>Shows the Notes page. It follows the date the dashboard is on, like the timeline.</summary>
+    public void ShowNotes() { settingsMode = false; weekMode = false; notesMode = true; Refresh(true); }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
     private void SelectSection(string section)
     {
-        settingsMode = false; weekMode = true;
+        settingsMode = false; notesMode = false; weekMode = true;
         if (model.WeekSection != section) model.SetWeekSection(section); else Refresh(true);
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
@@ -792,8 +796,8 @@ public sealed class DashboardWindow : Window
         day.Classes.Set("startDay", !model.DayStarted); // Green to start the day, red to finish it.
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
-        var editing = !weekMode || model.WeekSection == "entries";
-        zoomControls.IsVisible = !weekMode && !settingsMode;
+        var editing = !notesMode && (!weekMode || model.WeekSection == "entries");
+        zoomControls.IsVisible = !weekMode && !settingsMode && !notesMode;
         settingZoom = true; zoomSlider.Value = model.TimelineZoomFraction; settingZoom = false; // Follows the wheel and the buttons too.
         zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
@@ -807,32 +811,34 @@ public sealed class DashboardWindow : Window
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); if (button.Content is IconGlyph glyph) glyph.TintKey = selected ? "Ink" : "Muted"; }
-        Rail(timelineRail, !weekMode && !settingsMode);
+        Rail(timelineRail, !weekMode && !settingsMode && !notesMode);
+        Rail(notesRail, !settingsMode && notesMode);
         Rail(overviewTab, !settingsMode && weekMode && model.WeekSection == "overview");
         Rail(hoursTab, !settingsMode && weekMode && model.WeekSection == "hours");
         Rail(entriesTab, !settingsMode && weekMode && model.WeekSection == "entries");
         Rail(settingsRail, settingsMode);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
         foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = !settingsMode;
-        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && (!weekMode || model.WeekSection == "entries");
-        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
-        workspaceTitle.Text = settingsMode ? "Settings" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
+        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && !notesMode && (!weekMode || model.WeekSection == "entries");
+        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && !notesMode && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
+        workspaceTitle.Text = settingsMode ? "Settings" : notesMode ? "Notes" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
-        if (settingsMode ? !renderedSettings : refreshWorkspace)
+        // The settings and notes pages are built once when they open, so a model change does not rebuild them under the pointer and lose what is being typed.
+        if (settingsMode ? !renderedSettings : notesMode ? !renderedNotes : refreshWorkspace)
         {
             var oldScroll = workspace.Content is ScrollViewer directOld ? directOld
                 : (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
-            var previous = renderedSettings == settingsMode && !settingsMode && renderedWeekMode == weekMode && renderedDate == model.SelectedDate
+            var previous = renderedSettings == settingsMode && !settingsMode && !notesMode && !renderedNotes && renderedWeekMode == weekMode && renderedDate == model.SelectedDate
                 ? !weekMode && model.TimelineOffset is double timelineOffset ? new Vector(0, timelineOffset)
                     : oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset : null;
-            workspace.Content = settingsMode ? new SettingsView(model) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
+            workspace.Content = settingsMode ? new SettingsView(model) : notesMode ? new NotesPage(model) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
             if (previous is { } offset && workspace.Content is Control control)
             {
                 var scroll = control is ScrollViewer direct ? direct : control.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();
                 if (scroll is not null) scroll.Tag = offset;
             }
-            renderedWeekMode = weekMode; renderedSettings = settingsMode;
+            renderedWeekMode = weekMode; renderedSettings = settingsMode; renderedNotes = notesMode && !settingsMode;
             renderedDate = model.SelectedDate;
         }
     }
