@@ -85,6 +85,22 @@ public sealed class SettingsView : ScrollViewer
         syncs.Add(() => { var shown = model.CaptureShortcut?.ToString() ?? ""; if (shortcut.Text != shown) shortcut.Text = shown; });
         page.Children.Add(Section("Quick capture", capture));
 
+        // The feed: Markdown files in a folder, written by something else and only ever read here. See FEED.md.
+        var feed = new StackPanel { Spacing = 10 };
+        var feedFolder = new TextBox { Name = "FeedFolder", Width = 340, Watermark = "A folder of .md or .txt files", Text = model.FeedFolder ?? "" };
+        void CommitFolder() { var typed = feedFolder.Text?.Trim() ?? ""; if (typed != (model.FeedFolder ?? "")) model.SetFeedFolder(typed); }
+        feedFolder.LostFocus += (_, _) => CommitFolder();
+        feedFolder.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) { CommitFolder(); e.Handled = true; } };
+        feed.Children.Add(Row("Folder", Ui.Horizontal(feedFolder, Ui.DialogButton("Browse…", () => FeedFolderPicker.Choose(this, picked => model.SetFeedFolder(picked)), "FeedBrowse"))));
+        feed.Children.Add(Toggle("Mark an entry read when it is opened", "FeedAutoRead", () => model.FeedAutoRead, v => model.SetFeedAutoRead(v)));
+        feed.Children.Add(Toggle("Keep entries for 90 days instead of 30", "FeedLonger", () => model.FeedLonger, v => model.SetFeedLonger(v)));
+        var feedNote = Ui.Text(model.FeedNote, 12, "muted"); feedNote.Name = "FeedFolderNote"; feedNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; feed.Children.Add(feedNote);
+        var copyPrompt = Ui.DialogButton("Copy prompt for ChatGPT or Claude", () => { if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard) _ = clipboard.SetTextAsync(FeedPrompt.Build(model.AccountNames)); model.Notice = "Prompt copied."; }, "FeedCopyPrompt");
+        feed.Children.Add(Row("Prompt", copyPrompt));
+        var feedHelp = Ui.Text("Older entries are hidden, never deleted: the folder is only read. Clear old files by hand to keep it small.", 12, "muted"); feedHelp.TextWrapping = Avalonia.Media.TextWrapping.Wrap; feed.Children.Add(feedHelp);
+        syncs.Add(() => { var shown = model.FeedFolder ?? ""; if (!feedFolder.IsFocused && feedFolder.Text != shown) feedFolder.Text = shown; feedNote.Text = model.FeedNote; });
+        page.Children.Add(Section("Feed", feed));
+
         // The getting started setup, for anyone who skipped it or wants to look again. Nothing is lost: it starts from the current settings.
         page.Children.Add(Section("Getting started", Row("Setup", Ui.DialogButton("Run setup again", () => model.RestartSetup(), "RunSetup"))));
         // Hidden until unlocked: ten quick clicks on the About tile. Once unlocked it holds the sample-data demo and a switch to hide the features again.
