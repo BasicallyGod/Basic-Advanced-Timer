@@ -775,6 +775,17 @@ public sealed class DashboardWindow : Window
         Ui.Put(tools, zoomSlot, 1);
         tools.Margin = new Thickness(0, 12, 0, 0); zoomBar.Margin = new Thickness(12, 0, 0, 0); // Clear space between Merge and the zoom bar.
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
+        // A short, restrained fade makes the switch between the full and compact sidebar less abrupt.
+        // Keep geometry changes immediate, so mouse targets, tests, and keyboard focus remain predictable.
+        workspace.Transitions = new Avalonia.Animation.Transitions
+        {
+            new Avalonia.Animation.DoubleTransition
+            {
+                Property = Visual.OpacityProperty,
+                Duration = TimeSpan.FromMilliseconds(160),
+                Easing = new Avalonia.Animation.Easings.CubicEaseOut()
+            }
+        };
         Ui.Put(review, workspace, row: 1);
         // Selection feedback has its own strip in the layout, just above the buttons it relates to.
         selectionStrip = new SelectionStrip(model); Ui.Put(review, selectionStrip, row: 2);
@@ -941,6 +952,12 @@ public sealed class DashboardWindow : Window
             compactApplied = slim;
             bodyGrid.ColumnDefinitions[0].Width = new GridLength(slim ? CompactColumn.ColumnWidth : 340);
             fullColumn.IsVisible = !slim; compactColumn.IsVisible = slim;
+            if (IsVisible)
+            {
+                workspace.Opacity = .52;
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => workspace.Opacity = 1,
+                    Avalonia.Threading.DispatcherPriority.Loaded);
+            }
         }
         var editing = !PageMode && (!weekMode || model.WeekSection == "entries");
         zoomControls.IsVisible = !weekMode && !settingsMode && !PageMode;
