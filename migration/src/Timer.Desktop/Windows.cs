@@ -227,6 +227,20 @@ public sealed class PillWindow : Window
         if (!closedWindow && Screens.ScreenFromWindow(this) is { } screen) limit = screen.WorkingArea.Height / screen.Scaling;
         return Math.Min(wanted * Scale, limit);
     }
+    /// <summary>
+    /// The most of a screen's height an open pill takes: three fifths, so it never covers the whole screen on a laptop, though never less than the
+    /// pill plus a few rows. The list of accounts is what gives way, scrolling inside its box (see <see cref="WantedHeight"/>).
+    /// </summary>
+    public const double OpenShareOfScreen = 0.6, FewestRows = 3;
+    private ScrollViewer accountScroll = null!;
+    private double ListMaxHeight()
+    {
+        var screenHeight = 800.0;
+        if (!closedWindow && Screens.ScreenFromWindow(this) is { } screen) screenHeight = screen.WorkingArea.Height / screen.Scaling;
+        // In the pill's own units, since the whole pill is drawn at its scale. The rule, the day button and the notes under the list take about 150.
+        var room = screenHeight * OpenShareOfScreen / Scale - CollapsedHeight - 2 * Ui.ShadowMargin - 150;
+        return Math.Max(FewestRows * 52, room);
+    }
     private bool ensuring, closedWindow;
     /// <summary>
     /// Gives the window the size the pill's scale and state call for, and does it even when the window already has that size asked of it but not
@@ -335,7 +349,10 @@ public sealed class PillWindow : Window
         Ui.PillGestures(head, this);
         Ui.Put(root, head);
         expansion.Children.Add(Ui.Rule());
-        expansion.Children.Add(new AccountList(model));
+        // The list of accounts scrolls inside its own box, so on a short screen it is the list that gives way and the Finish day button stays in view.
+        accountScroll = new ScrollViewer { Name = "PillAccountScroll", Content = new AccountList(model), AllowAutoHide = false,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+        expansion.Children.Add(accountScroll);
         // After a quick slip from one account to another and back, the earlier block can be picked up again, for a few minutes.
         pillContinue = Ui.Button("", () => model.ContinuePrevious(), "PillContinue"); pillContinue.Classes.Add("flat"); pillContinue.IsVisible = false;
         pillContinue.HorizontalAlignment = HorizontalAlignment.Center; pillContinue.Margin = new Thickness(0, 4, 0, 0);
@@ -391,6 +408,7 @@ public sealed class PillWindow : Window
         if (reminderHost.IsVisible) { reminderHost.Measure(new Size(CurrentWidth, double.PositiveInfinity)); reminderHeight = reminderHost.DesiredSize.Height; }
         if (!expanded) return CollapsedHeight + reminderHeight + 2 * Ui.ShadowMargin;
         // Measured, so there is no dead space whatever the number of accounts or notes showing.
+        accountScroll.MaxHeight = ListMaxHeight();
         expansion.Measure(new Size(CurrentWidth, double.PositiveInfinity));
         return CollapsedHeight + reminderHeight + expansion.DesiredSize.Height + 2 * Ui.ShadowMargin;
     }
@@ -476,13 +494,16 @@ public sealed class PillWindow : Window
         pillUnallocated.IsVisible = model.DayStarted && open >= TimeSpan.FromMinutes(1);
         pillUnallocated.Text = pillUnallocated.IsVisible ? model.Format(open) + " unallocated" : "";
         var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);
-        account.Text = model.IsOnBreak ? model.AccountLabel : model.ActiveAccount ?? (selected?.Name ?? model.AccountLabel);
+        // With nothing running, the pill says what it is waiting for: an account to be chosen, or the chosen one to be started.
+        var waiting = !model.IsTracking && !model.IsOnBreak && !model.Engine.Finished;
+        account.Text = model.IsOnBreak ? model.AccountLabel : model.ActiveAccount ?? (selected?.Name ?? (waiting ? "Ready to track" : model.AccountLabel));
         // What is happening, in one line. A break says where it will go back to, overtime adds how much there is, and an idle timer says what it is waiting for.
         var overtimeText = model.IsOvertime ? " · OT " + model.Format(model.Engine.Totals(model.Engine.Now).Overtime) : "";
         // On a break the first line already says so, so the second says something new: where it goes back to, or when the break began.
         var breakSince = model.Engine.Active is { } running && BreakAccount.Is(running.Account) ? running.Start : (DateTime?)null;
         credited.Text = model.IsOnBreak ? (model.ResumeAccount is { } returnTo ? "Returns to " + returnTo : breakSince is { } since ? "Since " + since.ToString("HH:mm") : "Nothing running") + overtimeText
-            : model.IsTracking && selected is not null ? "Today " + model.Format(model.Today(selected)) + overtimeText : model.Status + overtimeText;
+            : model.IsTracking && selected is not null ? "Today " + model.Format(model.Today(selected)) + overtimeText
+            : waiting ? (selected is not null ? "Ready to track" : "Select an account") + overtimeText : model.Status + overtimeText;
         // The dot is the account's own colour, with a ring in the pill's text colour so it shows on any capsule. A break is amber and an idle timer is grey.
         var shown = model.Accounts.FirstOrDefault(a => a.Name == (model.IsOnBreak ? null : model.ActiveAccount ?? selected?.Name));
         var dotColour = model.IsOnBreak ? ThemeColourOr("BudgetWarning", "#F2B84B") : !model.IsTracking ? ThemeColourOr("Muted", "#8A8F98") : shown?.Colour is { } own ? Avalonia.Media.Color.Parse(Ui.Visible(own)) : ThemeColourOr("Accent", "#F27A0D");
