@@ -581,7 +581,7 @@ public sealed class DashboardWindow : Window
     private bool weekMode, settingsMode, notesMode, feedMode, renderedSettings, renderedNotes, renderedFeed, settingZoom;
     // The Notes and Feed pages stand in for the timeline and week views, with their own editing of nothing, so the toolbar and the zoom bar stay away.
     private bool PageMode => notesMode || feedMode;
-    private Grid bodyGrid = null!, rootGrid = null!; private Control fullColumn = null!, columnDivider = null!, compactRule = null!; private Border railBorder = null!; private StackPanel railTopStack = null!; private CompactColumn compactColumn = null!;
+    private Grid bodyGrid = null!; private Control fullColumn = null!; private CompactColumn compactColumn = null!; private bool compactApplied;
     private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
     private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
@@ -603,10 +603,10 @@ public sealed class DashboardWindow : Window
         Background = Avalonia.Media.Brushes.Transparent;
         // A narrow rail of icons picks the view and holds settings, then the day lives in the left column (the Day elapsed card, the accounts,
         // and the break and day buttons at the foot). The right column is a titled workspace with the date to step through.
-        var root = Ui.Grid("60,*", "*"); rootGrid = root;
-        var rail = new Border { Width = 60 }; rail.Classes.Add("panel"); railBorder = rail;
+        var root = Ui.Grid("60,*", "*");
+        var rail = new Border { Width = 60 }; rail.Classes.Add("panel");
         var railGrid = Ui.Grid("*", "*,Auto");
-        var railTop = new StackPanel { Margin = new Thickness(0, 18, 0, 0), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center }; railTopStack = railTop;
+        var railTop = new StackPanel { Margin = new Thickness(0, 18, 0, 0), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
         Button RailButton(IconKind kind, string tip, string name, Action click)
         {
             var button = Ui.Button("", click, name); button.Classes.Add("rail"); button.Content = new IconGlyph(kind);
@@ -633,9 +633,6 @@ public sealed class DashboardWindow : Window
         pillGlyph = (IconGlyph)backToPill.Content!;
         railTop.Children.Add(backToPill);
         var backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
-        // On Notes and Feed the clock, controls and account avatars live here in the rail, which widens to hold them.
-        compactColumn = new CompactColumn(model); railTop.Children.Add(compactColumn);
-        compactRule = Ui.Rule(); compactRule.Margin = new Thickness(6, 4); compactRule.IsVisible = false; railTop.Children.Add(compactRule);
         foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
         var notesRule = Ui.Rule(); notesRule.Margin = new Thickness(6, 4); railTop.Children.Add(notesRule); railTop.Children.Add(notesRail); railTop.Children.Add(feedRail);
         Ui.Put(railGrid, railTop);
@@ -709,7 +706,9 @@ public sealed class DashboardWindow : Window
         var panel = new Border { Child = sidebar };
         panel.Classes.Add("panel");
         Ui.Put(body, panel); fullColumn = panel;
-        var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1); columnDivider = divider;
+        // Notes and Feed swap the full dashboard column for a separate 96px tracking strip; the 60px navigation rail never changes.
+        compactColumn = new CompactColumn(model); Ui.Put(body, compactColumn);
+        var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
         var review = Ui.Grid("*", "Auto,*,Auto,Auto");
         review.Margin = new Thickness(22, 16, 22, 18);
         // The workspace's name on the left; on the right the date to step through and a button back to today.
@@ -935,11 +934,14 @@ public sealed class DashboardWindow : Window
         day.Classes.Set("startDay", !model.DayStarted); // Green to start the day, red to finish it.
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
-        // Notes and Feed take all the room the left column used: it goes, and its clock, controls and account avatars move into the icon rail, which widens a little.
+        // Navigation stays a fixed 60px. Notes and Feed use an independently scrolling slim tracking strip instead of the full sidebar.
         var slim = PageMode && !settingsMode;
-        bodyGrid.ColumnDefinitions[0].Width = new GridLength(slim ? 0 : 340); fullColumn.IsVisible = !slim; columnDivider.IsVisible = !slim;
-        rootGrid.ColumnDefinitions[0].Width = new GridLength(slim ? CompactColumn.RailWidth : 60); railBorder.Width = slim ? CompactColumn.RailWidth : 60; compactColumn.IsVisible = slim; compactRule.IsVisible = slim;
-        railTopStack.Spacing = slim ? 3 : 6; railTopStack.Margin = new Thickness(0, slim ? 10 : 18, 0, 0); // Tighter, so the clock, avatars and every view button fit the rail's height.
+        if (slim != compactApplied)
+        {
+            compactApplied = slim;
+            bodyGrid.ColumnDefinitions[0].Width = new GridLength(slim ? CompactColumn.ColumnWidth : 340);
+            fullColumn.IsVisible = !slim; compactColumn.IsVisible = slim;
+        }
         var editing = !PageMode && (!weekMode || model.WeekSection == "entries");
         zoomControls.IsVisible = !weekMode && !settingsMode && !PageMode;
         settingZoom = true; zoomSlider.Value = model.TimelineZoomFraction; settingZoom = false; // Follows the wheel and the buttons too.

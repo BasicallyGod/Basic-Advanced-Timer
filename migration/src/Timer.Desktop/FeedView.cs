@@ -75,9 +75,10 @@ public sealed class FeedPage : Grid
     private readonly StackPanel pickers = new() { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox searchBox = new() { Name = "FeedSearch", Watermark = "Search the feed", Height = 30, MinHeight = 30, Padding = new Thickness(10, 4), FontSize = 13, VerticalAlignment = VerticalAlignment.Center };
     private readonly StackPanel stream = new() { Spacing = 0 };
-    private readonly Border detail = new() { Name = "FeedDetail", IsVisible = false, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(16, 4, 4, 4), Margin = new Thickness(12, 0, 0, 0), Width = DetailWidth };
+    private readonly Border detail = new() { Name = "FeedDetail", IsVisible = false, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(16, 4, 4, 4), Margin = new Thickness(12, 0, 0, 0), MinWidth = 260, MaxWidth = 440, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly TextBlock status = Ui.Text("", 12, "muted");
     private readonly ScrollViewer scroll;
+    private readonly Grid contentGrid;
     private Button markAllButton = null!;
     private string tab = "all"; private string? selected, account, source; private string search = ""; private int limit = PageSize;
     private string shown = "";
@@ -98,8 +99,8 @@ public sealed class FeedPage : Grid
         scroll = new ScrollViewer { Content = stream, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, Name = "FeedScroll" };
         stream.Margin = new Thickness(0, 0, 10, 0);
         detail.Classes.Add("feedDetail");
-        var content = Ui.Grid("*,Auto", "*"); var host = Ui.WithMoreBelow(scroll); Ui.Put(content, host); Ui.Put(content, detail, 1);
-        SetRow(content, 2); Children.Add(content);
+        contentGrid = Ui.Grid("*,Auto", "*"); var host = Ui.WithMoreBelow(scroll); Ui.Put(contentGrid, host); Ui.Put(contentGrid, detail, 1);
+        SetRow(contentGrid, 2); Children.Add(contentGrid);
         Rebuild();
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += OnModel; model.RefreshFeedInBackground(); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= OnModel;
@@ -184,6 +185,10 @@ public sealed class FeedPage : Grid
         }
         // The pane beside the list shows the selected entry, and is not there when nothing is selected or the entry is filtered out.
         if (selected is not null && all.FirstOrDefault(e => e.Id == selected) is { } chosen && list.Contains(chosen)) { detail.Child = Detail(chosen, now); detail.IsVisible = true; }
+        // When open, the detail pane takes a proportion of available space, rather than a fixed 330px.
+        // When closed its column collapses completely, giving the full width back to the list.
+        contentGrid.ColumnDefinitions[0].Width = new GridLength(detail.IsVisible ? 3 : 1, GridUnitType.Star);
+        contentGrid.ColumnDefinitions[1].Width = detail.IsVisible ? new GridLength(2, GridUnitType.Star) : GridLength.Auto;
         // Rebuilding keeps the place in the stream, so ticking something off does not throw the page back to the top.
         Avalonia.Threading.Dispatcher.UIThread.Post(() => scroll.Offset = offset);
     }
