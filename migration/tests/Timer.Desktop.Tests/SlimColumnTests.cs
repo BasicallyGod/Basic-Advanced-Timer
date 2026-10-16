@@ -26,55 +26,71 @@ public sealed class SlimColumnTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void NotesAndFeedShrinkTheLeftColumnToAStripAndTheOtherPagesKeepTheFullOne()
+    public void NotesAndFeedGiveUpTheLeftColumnAndFoldItsControlsIntoAWiderRail()
     {
         var model = Demo(); var window = Open(model);
         try
         {
             var body = window.GetVisualDescendants().OfType<Grid>().First(g => g.ColumnDefinitions.Count == 3 && g.ColumnDefinitions[1].Width.Value == 1);
+            var rail = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("panel") && b.Width == 60);
             var slim = window.GetVisualDescendants().OfType<CompactColumn>().Single();
-            Assert.False(slim.IsVisible); Assert.Equal(340, body.ColumnDefinitions[0].Width.Value);
-            Click(window, "NotesTab"); Assert.True(slim.IsVisible); Assert.Equal(CompactColumn.ColumnWidth, body.ColumnDefinitions[0].Width.Value);
+            Assert.False(slim.IsVisible); Assert.Equal(340, body.ColumnDefinitions[0].Width.Value); Assert.Equal(60, rail.Width);
+            Click(window, "NotesTab"); Assert.True(slim.IsVisible); Assert.Equal(0, body.ColumnDefinitions[0].Width.Value); Assert.Equal(CompactColumn.RailWidth, rail.Width);
             Assert.False(window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "AccountScroll").IsEffectivelyVisible);
+            Assert.True(rail.IsVisualAncestorOf(slim)); // It is part of the rail, not a column of its own.
             Click(window, "FeedTab"); Assert.True(slim.IsVisible);
-            Click(window, "TimelineTab"); Assert.False(slim.IsVisible); Assert.Equal(340, body.ColumnDefinitions[0].Width.Value);
+            Click(window, "TimelineTab"); Assert.False(slim.IsVisible); Assert.Equal(340, body.ColumnDefinitions[0].Width.Value); Assert.Equal(60, rail.Width);
             Click(window, "NotesTab"); Click(window, "Settings"); Assert.False(slim.IsVisible); // Settings keeps the full column.
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheStripHoldsTheClockTheControlsAndADotPerAccount()
+    public void TheRailBlockHoldsTheClockTheControlsAndAnAvatarPerAccount()
     {
         var model = Demo(); var window = Open(model);
         try
         {
             Click(window, "NotesTab"); var slim = window.GetVisualDescendants().OfType<CompactColumn>().Single();
             Assert.Equal(model.AccountNames.Count, slim.GetVisualDescendants().OfType<Button>().Count(b => b.Name?.StartsWith("CompactDot_") == true));
+            Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "AO"); // Account one's initials.
+            Assert.Equal(model.AccountNames.Count, slim.GetVisualDescendants().OfType<Border>().Where(b => b.Child is TextBlock { FontSize: 8.5 } t).Select(b => ((TextBlock)b.Child!).Text).Distinct().Count()); // No two avatars say the same.
             Click(slim, "CompactDot_" + FeedPage.Key("Account one")); Assert.Equal("Account one", model.ActiveAccount);
-            Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Account one");
+            Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Working");
             Click(slim, "CompactPause"); Assert.False(model.IsTracking);
-            Click(slim, "CompactBreak"); Assert.True(model.IsOnBreak); Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "On break");
+            Click(slim, "CompactBreak"); Assert.True(model.IsOnBreak); Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Break");
             Click(slim, "CompactBreak"); Assert.False(model.IsOnBreak);
             var started = model.DayStarted; Click(slim, "CompactDay"); Assert.NotEqual(started, model.DayStarted);
+            // Everything fits the rail's height: nothing is cut off at the bottom.
+            var rail = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("panel") && b.Width == CompactColumn.RailWidth);
+            foreach (var name in new[] { "Settings", "QuitTimer", "FeedTab", "NotesTab" })
+            { var button = Find<Button>(window, name); Assert.True(button.TranslatePoint(new Point(0, button.Bounds.Height), rail)!.Value.Y <= rail.Bounds.Height + 1, name + " is below the rail"); }
         }
         finally { window.Close(); }
     }
 
+    [Fact]
+    public void AvatarLabelsAreShortAndNeverShared()
+    {
+        var labels = CompactColumn.Short(new[] { ("Account one", "Account one"), ("Account two", "Account two"), ("Account three", "Account three"), ("Account four", "Account four"), ("Account five", "Account five"), ("Internal", "Internal") });
+        Assert.Equal(6, labels.Values.Distinct().Count()); Assert.Equal("AO", labels["Account one"]); Assert.All(labels.Values, l => Assert.InRange(l.Length, 1, 3));
+        var numbered = CompactColumn.Short(new[] { ("Client 1", "Client 1"), ("Client 2", "Client 2"), ("Client 3", "Client 3") });
+        Assert.Equal(new[] { "C1", "C2", "C3" }, numbered.Values);
+        Assert.Equal(new[] { "1", "2" }, CompactColumn.Short(new[] { ("", ""), (" ", " ") }).Values); // Nothing to go on: places in the list.
+    }
+
     [AvaloniaFact]
-    public void TheStripCountsUnreadFeedItemsForTheRunningAccountAndOpensThem()
+    public void AnAvatarShowsADotWhileTheFeedHasUnreadItemsForThatAccount()
     {
         var model = Demo(); var window = Open(model);
         try
         {
             Click(window, "NotesTab"); var slim = window.GetVisualDescendants().OfType<CompactColumn>().Single();
-            Assert.False(Find<Button>(slim, "CompactFeed").IsVisible); // Nothing running.
-            model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs();
-            var button = Find<Button>(slim, "CompactFeed"); Assert.True(button.IsVisible); Assert.Equal("1 unread", button.Content);
-            Click(slim, "CompactFeed");
-            Assert.Single(window.GetVisualDescendants().OfType<FeedPage>());
-            Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name?.StartsWith("FeedEntry_") == true);
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "FeedEntry_" + FeedPage.Key("id:a2")); // Filtered to Account one.
+            Assert.Contains(slim.GetVisualDescendants().OfType<Border>(), b => b.Name == "CompactUnread_" + FeedPage.Key("Account one"));
+            Assert.Contains(slim.GetVisualDescendants().OfType<Border>(), b => b.Name == "CompactUnread_" + FeedPage.Key("Account two"));
+            Assert.DoesNotContain(slim.GetVisualDescendants().OfType<Border>(), b => b.Name == "CompactUnread_" + FeedPage.Key("Account three"));
+            model.SetFeedRead("id:a1", true); Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain(slim.GetVisualDescendants().OfType<Border>(), b => b.Name == "CompactUnread_" + FeedPage.Key("Account one"));
         }
         finally { window.Close(); }
     }
