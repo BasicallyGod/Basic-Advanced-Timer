@@ -1,6 +1,6 @@
 # Feed: a wire of client updates read from files
 
-Agreed in conversation on 16 October 2026. The shared reader is `Feed` in `Timer.Core` 0.2.0, and the Feed tab, its Settings section and the prompt are built in this app. **Not yet built:** the account strip (unread items for the account being tracked), so for now the feed is only on its own tab.
+Agreed in conversation on 16 October 2026. The shared reader is `Feed` in `Timer.Core` 0.2.0, and the Feed tab, its Settings section and the prompt are built in this app. The account strip (unread items for the account being tracked, under the Day card) is built too.
 
 ## What it is
 

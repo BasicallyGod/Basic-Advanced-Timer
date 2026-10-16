@@ -967,6 +967,10 @@ public sealed class TimerModel : INotifyPropertyChanged
     public IReadOnlyList<FeedEntry> FeedEntries => feedEntries;
     /// <summary>The entries young enough to show.</summary>
     public IReadOnlyList<FeedEntry> FeedShown => feedEntries.Where(e => Feed.Within(e, Engine.Now, FeedRetentionDays)).ToList();
+    /// <summary>The account an entry is about: the one its first #Tag names, in the headline or the words, or null.</summary>
+    public string? FeedAccountOf(FeedEntry entry) => AccountTags.Find(entry.Headline + "\n" + entry.Body, AccountNames)?.Account;
+    /// <summary>The unread entries about one account, newest first, for the strip under the Day card.</summary>
+    public IReadOnlyList<FeedEntry> FeedUnreadFor(string account) => FeedShown.Where(e => !FeedIsRead(e.Id) && FeedAccountOf(e) == account).ToList();
     public bool FeedIsRead(string id) => feedOptions.Marks.Read.Contains(id) || feedOptions.Marks.Done.Contains(id);
     public bool FeedIsDone(string id) => feedOptions.Marks.Done.Contains(id);
     /// <summary>How many shown entries are neither read nor done, for the badge on the rail.</summary>

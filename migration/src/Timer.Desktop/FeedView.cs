@@ -105,7 +105,7 @@ public sealed class FeedPage : Grid
     private string Signature() => string.Join(";", model.FeedShown.Select(e => e.Id + (model.FeedIsRead(e.Id) ? "r" : "") + (model.FeedIsDone(e.Id) ? "d" : "")))
         + $"|{model.FeedFolder}|{unreadOnly}|{showDone}|{account}|{source}|{limit}|{string.Join(",", expanded.OrderBy(x => x))}|{model.FeedUpdated:s}|{string.Join(",", model.AccountNames)}|{model.Engine.Now:yyyyMMddHHmm}";
 
-    private string? AccountOf(FeedEntry entry) => AccountTags.Find(entry.Headline + "\n" + entry.Body, model.AccountNames)?.Account;
+    private string? AccountOf(FeedEntry entry) => model.FeedAccountOf(entry);
 
     public static string Ago(DateTime now, DateTime then)
     {
@@ -211,6 +211,18 @@ public sealed class FeedPage : Grid
         if (Signature() != shown) Rebuild(); // Marking it read already rebuilt the page when that changed anything.
     }
 
+    /// <summary>
+    /// Shows the feed filtered to one account with an entry opened, for a click on the strip under the Day card. Opening marks it read when that is on,
+    /// and the entry is brought into view.
+    /// </summary>
+    public void Focus(string? forAccount, string? id)
+    {
+        account = forAccount; source = null; unreadOnly = false; showDone = false;
+        if (id is not null) { expanded.Add(id); if (model.FeedAutoRead) model.SetFeedRead(id, true); }
+        Rebuild();
+        if (id is not null) Avalonia.Threading.Dispatcher.UIThread.Post(() => this.GetVisualDescendants().OfType<Border>().FirstOrDefault(b => b.Name == "FeedEntry_" + Key(id))?.BringIntoView());
+    }
+
     private static Control Pad(Control control) { control.Margin = new Thickness(0, 0, 8, 0); control.VerticalAlignment = VerticalAlignment.Center; return control; }
 
     private static Border Chip(string name, string text)
@@ -218,5 +230,65 @@ public sealed class FeedPage : Grid
         var words = new TextBlock { Text = text, FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         var chip = new Border { Name = name, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(8, 1), Margin = new Thickness(0, 0, 6, 0), Child = words };
         chip.Classes.Add("chip"); return chip;
+    }
+}
+
+/// <summary>
+/// A slim card under the Day card with up to two unread feed items about the account being tracked, so what the client's updates say is in view when work on
+/// them starts. It is there only while an account is running and has unread items, and is gone on a break. Clicking an item opens the feed filtered to that
+/// account with the item open; the cross marks it read without opening it. Like the pages, it listens to the model itself and rebuilds only when it changed.
+/// </summary>
+public sealed class FeedStrip : Border
+{
+    public const int Shown = 2;
+    private readonly TimerModel model; private readonly Action<string, string> open; private string shown = "\u0001";
+
+    public FeedStrip(TimerModel model, Action<string, string> open)
+    {
+        this.model = model; this.open = open; Name = "FeedStrip"; IsVisible = false;
+        CornerRadius = new CornerRadius(14); BorderThickness = new Thickness(1); Padding = new Thickness(14, 8, 8, 8); Margin = new Thickness(12, 0, 16, 6);
+        Classes.Add("dayCard");
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += OnModel; Update(); };
+        DetachedFromVisualTree += (_, _) => model.PropertyChanged -= OnModel;
+    }
+
+    /// <summary>The account the strip speaks of: the one running, and none on a break or when nothing is running.</summary>
+    private string? Account => model.IsTracking && !model.IsOnBreak ? model.ActiveAccount : null;
+
+    private void OnModel(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (e.PropertyName != nameof(TimerModel.Elapsed)) Update(); }
+
+    private static string When(FeedEntry entry, DateTime now)
+        => entry.When.Date == now.Date ? (entry.When.TimeOfDay == TimeSpan.Zero ? "Today" : entry.When.ToString("HH:mm")) : entry.When.Date == now.Date.AddDays(-1) ? "Yest." : entry.When.ToString("d MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
+
+    public void Update()
+    {
+        var account = Account; var items = account is null ? Array.Empty<FeedEntry>() : model.FeedUnreadFor(account);
+        var signature = account + "|" + string.Join(",", items.Select(i => i.Id)) + "|" + model.Engine.Now.ToString("yyyyMMdd");
+        if (signature == shown) return; shown = signature;
+        if (account is null || items.Count == 0) { IsVisible = false; Child = null; return; }
+        var known = model.Accounts.FirstOrDefault(a => a.Name == account); var now = model.Engine.Now;
+        var stack = new StackPanel { Spacing = 2 };
+        var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        if (known is not null) head.Children.Add(new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), VerticalAlignment = VerticalAlignment.Center, Background = new SolidColorBrush(Color.Parse(Ui.Visible(known.Colour))) });
+        var title = Ui.Text("From the feed · " + (known?.Display ?? account), 12, "muted"); title.FontWeight = FontWeight.SemiBold; head.Children.Add(title);
+        stack.Children.Add(head);
+        foreach (var entry in items.Take(Shown))
+        {
+            var id = entry.Id; var key = FeedPage.Key(id); var row = Ui.Grid("*,Auto");
+            var line = Ui.Grid("Auto,*,Auto"); line.ColumnSpacing = 6;
+            Control lead = entry.Urgent ? new IconGlyph(IconKind.Flag) { TintKey = "Finish", VerticalAlignment = VerticalAlignment.Center } : new Border { Width = 5, Height = 5, CornerRadius = new CornerRadius(2.5), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0) , Opacity = .6 };
+            if (lead is Border dot) dot.Classes.Add("accentEdge");
+            Ui.Put(line, lead);
+            var headline = new TextBlock { Text = entry.Headline, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center }; Ui.Put(line, headline, 1);
+            var when = Ui.Text(When(entry, now), 11, "muted"); when.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, when, 2);
+            var button = Ui.Button("", () => open(account, id), "FeedStripItem_" + key);
+            button.Content = line; button.Background = Brushes.Transparent; button.BorderThickness = new Thickness(0); button.Padding = new Thickness(0, 4); button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+            ToolTip.SetTip(button, entry.Headline);
+            Ui.Put(row, button);
+            var read = Ui.IconButton(IconKind.Close, "Mark read", "FeedStripRead_" + key, () => model.SetFeedRead(id, true)); read.Width = 22; read.Height = 22; Ui.Put(row, read, 1);
+            stack.Children.Add(row);
+        }
+        if (items.Count > Shown) { var more = Ui.Text($"+{items.Count - Shown} more", 11, "muted"); more.Name = "FeedStripMore"; more.Margin = new Thickness(11, 0, 0, 0); stack.Children.Add(more); }
+        Child = stack; IsVisible = true;
     }
 }
