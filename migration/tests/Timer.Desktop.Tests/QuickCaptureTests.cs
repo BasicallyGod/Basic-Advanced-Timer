@@ -101,7 +101,7 @@ public sealed class QuickCaptureTests
     public void TheRightClickMenuStartsWithAddNoteAndAsksForTheBox()
     {
         var model = Model(); var menu = Ui.SettingsMenu(model); var asked = 0; model.QuickCaptureRequested += () => asked++;
-        var first = Assert.IsType<MenuItem>(menu.ItemsSource!.Cast<object>().First()); Assert.Equal("AddNoteMenu", first.Name);
+        var first = menu.ItemsSource!.OfType<MenuItem>().Single(m => m.Name == "AddNoteMenu");
         first.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Assert.Equal(1, asked);
     }
 }

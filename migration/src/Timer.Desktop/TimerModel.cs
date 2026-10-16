@@ -901,6 +901,24 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (spec is not null) lines.Add(CaptureKeyLine + spec);
         preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
     }
+    /// <summary>The pill's layout: full, compact or minimal. Kept in the settings file as pillstyle=, and an unknown value is full.</summary>
+    public string PillStyle
+    {
+        get
+        {
+            var saved = preferences.Extras?.AppearanceLines.FirstOrDefault(l => l.StartsWith(PillStyleLine, StringComparison.Ordinal))?[PillStyleLine.Length..];
+            return saved is "compact" or "minimal" ? saved : "full";
+        }
+    }
+    private const string PillStyleLine = "pillstyle=";
+    public void SetPillStyle(string style)
+    {
+        style = style is "compact" or "minimal" ? style : "full"; if (style == PillStyle) return;
+        var extras = preferences.Extras ?? SettingsExtras.Empty;
+        var lines = extras.AppearanceLines.Where(l => !l.StartsWith(PillStyleLine, StringComparison.Ordinal)).ToList();
+        if (style != "full") lines.Add(PillStyleLine + style);
+        preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
+    }
     /// <summary>Asks for the small Quick capture box, from the right-click menu, the shortcut or Settings.</summary>
     public event Action? QuickCaptureRequested;
     public void RequestQuickCapture() => QuickCaptureRequested?.Invoke();

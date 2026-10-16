@@ -260,13 +260,15 @@ public static class Ui
         var versionRule = new Separator { IsVisible = false };
         var collapseRule = new Separator { IsVisible = false };
         // Jots a note without opening the dashboard.
+        var breakItem = new MenuItem { Name = "BreakMenu" }; breakItem.Click += (_, _) => model.ToggleBreak(); // The minimal pill has no break button, so it is here.
         var noteItem = new MenuItem { Name = "AddNoteMenu", Header = "Add note…" }; noteItem.Click += (_, _) => model.RequestQuickCapture();
         var noteRule = new Separator();
-        var menu = new ContextMenu { ItemsSource = new Control[] { noteItem, noteRule, continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
+        var menu = new ContextMenu { ItemsSource = new Control[] { breakItem, noteItem, noteRule, continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
         void Sync()
         {
             var developer = model.DeveloperUnlocked;
             overtimeTest.IsChecked = model.OvertimeTest;
+            breakItem.Header = model.IsOnBreak ? "End break" : "Start break";
             overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer;
             var offer = model.ContinuePreviousText; continueItem.IsVisible = offer is not null; if (offer is not null) continueItem.Header = offer;
             // A divider only goes between two things that are showing, so it never sits at the top of the menu or above the only item.

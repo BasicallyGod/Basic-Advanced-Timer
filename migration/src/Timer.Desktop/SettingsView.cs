@@ -55,6 +55,7 @@ public sealed class SettingsView : ScrollViewer
         };
         syncs.Add(() => { if (!Equals(pillSize.SelectedItem, PillText(model.PillScalePercent))) pillSize.SelectedItem = PillText(model.PillScalePercent); });
         appearance.Children.Add(Row("Pill size", pillSize));
+        appearance.Children.Add(Row("Pill layout", PillLayoutChoices(model, syncs)));
         appearance.Children.Add(Toggle("Keep the pill on top", "PillOnTop", () => model.PillOnTop, v => model.SetPillOnTop(v)));
         appearance.Children.Add(Toggle("Keep the dashboard on top", "DashboardOnTop", () => model.DashboardOnTop, v => model.SetDashboardOnTop(v)));
         appearance.Children.Add(Toggle("Window shadows", "WindowShadows", () => model.Shadows, v => model.SetShadows(v)));
@@ -147,6 +148,51 @@ public sealed class SettingsView : ScrollViewer
         var card = new Border { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Child = stack };
         card.Classes.Add("dayCard");
         return card;
+    }
+    // Each layout is a small picture of the pill with its name and what it shows, so the choice is clear before it is made. The chosen one has the accent outline.
+    private static Control PillLayoutChoices(TimerModel model, List<Action> syncs)
+    {
+        static Border Bar(double width, double height, string key, double radius = 3)
+        {
+            var bar = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(radius), VerticalAlignment = VerticalAlignment.Center };
+            bar.Bind(Border.BackgroundProperty, bar.GetResourceObservable(key)); return bar;
+        }
+        static Control Dots(int count) { var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center }; for (var i = 0; i < count; i++) row.Children.Add(Bar(11, 11, "Line", 6)); return row; }
+        static Control Lines(bool progress)
+        {
+            var stack = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
+            stack.Children.Add(Bar(46, 5, "Ink")); stack.Children.Add(Bar(30, 4, "Muted"));
+            if (progress) stack.Children.Add(Bar(46, 3, "Line"));
+            return stack;
+        }
+        static Control Picture(string key)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            switch (key)
+            {
+                case "compact": row.Children.Add(Bar(12, 12, "Accent", 4)); row.Children.Add(Lines(false)); row.Children.Add(Bar(34, 9, "Ink")); row.Children.Add(Dots(2)); break;
+                case "minimal": row.Children.Add(Bar(14, 14, "Accent", 5)); row.Children.Add(Bar(34, 9, "Ink")); row.Children.Add(Dots(1)); break;
+                default: row.Children.Add(Bar(34, 9, "Ink")); row.Children.Add(Bar(1, 20, "Line", 0)); row.Children.Add(Bar(12, 12, "Accent", 4)); row.Children.Add(Lines(true)); row.Children.Add(Dots(2)); break;
+            }
+            var frame = new Border { Height = 46, HorizontalAlignment = HorizontalAlignment.Stretch, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Child = row, Padding = new Thickness(6, 0) };
+            frame.Classes.Add("chip"); return frame;
+        }
+        var choices = new WrapPanel { Orientation = Orientation.Horizontal };
+        var buttons = new List<(string Key, Button Button)>();
+        foreach (var layout in PillLayouts.All)
+        {
+            var text = new StackPanel { Spacing = 2, Margin = new Thickness(0, 8, 0, 0) };
+            text.Children.Add(Ui.Text(layout.Title, 14));
+            var note = Ui.Text(layout.Description, 12, "muted"); note.FontWeight = Avalonia.Media.FontWeight.Normal; note.TextWrapping = Avalonia.Media.TextWrapping.Wrap; text.Children.Add(note);
+            var card = new StackPanel { Width = 146 }; card.Children.Add(Picture(layout.Key)); card.Children.Add(text);
+            var button = Ui.DialogButton("", () => model.SetPillStyle(layout.Key), "PillLayout_" + layout.Key, false);
+            button.Content = card; button.HorizontalContentAlignment = HorizontalAlignment.Stretch; button.Margin = new Thickness(0, 0, 10, 10); button.Padding = new Thickness(10);
+            button.VerticalAlignment = VerticalAlignment.Top;
+            buttons.Add((layout.Key, button)); choices.Children.Add(button);
+        }
+        void Mark() { foreach (var (key, button) in buttons) button.Classes.Set("mainAction", key == model.PillStyle); }
+        syncs.Add(Mark); Mark();
+        return choices;
     }
     private static Grid Row(string label, Control control)
     {
