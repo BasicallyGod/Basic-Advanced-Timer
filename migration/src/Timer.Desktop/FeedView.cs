@@ -72,6 +72,7 @@ public sealed class FeedPage : Grid
     private readonly WrapPanel filters = new() { Orientation = Orientation.Horizontal };
     private readonly StackPanel stream = new() { Spacing = 8 };
     private readonly TextBlock status = Ui.Text("", 12, "muted");
+    private Button markAllButton = null!;
     private readonly ScrollViewer scroll;
     private readonly HashSet<string> expanded = new();
     private bool unreadOnly, showDone; private string? account, source; private int limit = PageSize;
@@ -80,10 +81,13 @@ public sealed class FeedPage : Grid
     public FeedPage(TimerModel model)
     {
         this.model = model; RowDefinitions = new RowDefinitions("Auto,*"); Margin = new Thickness(0, 0, 0, 4);
-        var bar = Ui.Grid("*,Auto,Auto"); bar.Margin = new Thickness(0, 0, 0, 10); bar.ColumnSpacing = 10;
+        // The controls are one slim row above the stream: what to show on the left, how fresh it is and the two actions on the right, all quiet, so the
+        // entries are what the page is about.
+        var bar = Ui.Grid("*,Auto,Auto,Auto"); bar.Margin = new Thickness(0, 0, 0, 6); bar.ColumnSpacing = 8;
         Ui.Put(bar, filters);
         status.VerticalAlignment = VerticalAlignment.Center; Ui.Put(bar, status, 1);
-        var refresh = Ui.DialogButton("Refresh", () => { model.RefreshFeed(); }, "FeedRefresh"); refresh.Height = 30; Ui.Put(bar, refresh, 2);
+        markAllButton = Quiet("Mark all read", "FeedMarkAllRead", () => { foreach (var entry in model.FeedShown) model.SetFeedRead(entry.Id, true); }); Ui.Put(bar, markAllButton, 2);
+        var refresh = Quiet("Refresh", "FeedRefresh", () => { model.RefreshFeed(); }); Ui.Put(bar, refresh, 3);
         Ui.Put(this, bar);
         scroll = new ScrollViewer { Content = stream, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, Name = "FeedScroll" };
         stream.Margin = new Thickness(0, 0, 10, 0);
@@ -116,15 +120,28 @@ public sealed class FeedPage : Grid
         return $"{(int)span.TotalDays} {((int)span.TotalDays == 1 ? "day" : "days")} ago";
     }
 
+    // A plain word that is lit when it is on, rather than an outlined button, so a row of filters does not read as a row of actions.
     private Button Filter(string text, string name, bool active, Action click)
     {
-        var button = Ui.DialogButton(text, click, name); button.Height = 30; button.Margin = new Thickness(0, 0, 8, 6); button.Classes.Set("mainAction", active); return button;
+        var button = Ui.Button(text, click, name); button.Classes.Add("flat"); button.Height = 28; button.Padding = new Thickness(10, 0); button.Margin = new Thickness(0, 0, 4, 0); button.FontSize = 13;
+        button.Classes.Set("filterOn", active); return button;
+    }
+    private Button Quiet(string text, string name, Action click)
+    {
+        var button = Ui.Button(text, click, name); button.Classes.Add("flat"); button.Height = 28; button.Padding = new Thickness(10, 0); button.FontSize = 13; return button;
+    }
+    private ComboBox Picker(string name, string all, IReadOnlyList<(string Key, string Text)> items, string? current, Action<string?> choose)
+    {
+        var texts = new List<string> { all }; texts.AddRange(items.Select(i => i.Text));
+        var box = new ComboBox { Name = name, ItemsSource = texts, SelectedIndex = Math.Max(0, items.ToList().FindIndex(i => i.Key == current) + 1), Height = 28, MinHeight = 28, Padding = new Thickness(10, 0), FontSize = 13, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
+        box.SelectionChanged += (_, _) => { var index = box.SelectedIndex; var key = index <= 0 ? null : items[index - 1].Key; if (key != current) choose(key); };
+        return box;
     }
 
     public void Rebuild()
     {
         var offset = scroll.Offset; shown = Signature();
-        filters.Children.Clear(); stream.Children.Clear();
+        filters.Children.Clear(); stream.Children.Clear(); markAllButton.IsEnabled = false;
         var all = model.FeedShown; var now = model.Engine.Now;
         status.Text = (model.FeedFolder is null ? "No folder chosen" : model.FeedUnread == 0 ? "All read" : model.FeedUnread + " unread")
             + (model.FeedUpdated is { } updated ? " · updated " + Ago(now, updated) : "");
@@ -132,14 +149,14 @@ public sealed class FeedPage : Grid
         if (!Directory.Exists(model.FeedFolder)) { stream.Children.Add(Empty("The folder could not be found", model.FeedFolder, true)); return; }
         if (model.FeedEntries.Count == 0) { stream.Children.Add(Empty("Nothing in the feed yet", "Entries start at a heading, with a Date: line and #AccountName tags. Settings has a prompt to give your assistant.", false)); return; }
 
-        // Filters. Accounts and sources appear only when there is more than one to choose between.
+        // Filters. Accounts and sources are two short lists, shown only when there is more than one thing to choose between.
         filters.Children.Add(Filter("Unread", "FeedFilterUnread", unreadOnly, () => { unreadOnly = !unreadOnly; Rebuild(); }));
         filters.Children.Add(Filter("Done", "FeedFilterDone", showDone, () => { showDone = !showDone; Rebuild(); }));
         var accounts = all.Select(AccountOf).Where(a => a is not null).Distinct().Cast<string>().OrderBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
-        if (accounts.Count > 0) foreach (var name in accounts) { var picked = name; filters.Children.Add(Filter(NoteShorthand.TagFor(model.Accounts.FirstOrDefault(a => a.Name == name)?.Display ?? name), "FeedFilterAccount_" + Key(name), account == name, () => { account = account == picked ? null : picked; Rebuild(); })); }
-        var sources = all.Select(e => e.Source).Distinct().OrderBy(s => s, StringComparer.OrdinalIgnoreCase).ToList();
-        if (sources.Count > 1) foreach (var name in sources) { var picked = name; filters.Children.Add(Filter(name, "FeedFilterSource_" + Key(name), source == name, () => { source = source == picked ? null : picked; Rebuild(); })); }
-        var markAll = Filter("Mark all read", "FeedMarkAllRead", false, () => { foreach (var entry in model.FeedShown) model.SetFeedRead(entry.Id, true); }); markAll.IsEnabled = model.FeedUnread > 0; filters.Children.Add(markAll);
+        if (accounts.Count > 0) filters.Children.Add(Picker("FeedAccountFilter", "All accounts", accounts.Select(n => (n, NoteShorthand.TagFor(model.Accounts.FirstOrDefault(a => a.Name == n)?.Display ?? n))).ToList(), account, picked => { account = picked; Rebuild(); }));
+        var sources = all.Select(e => e.Source).Distinct().OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+        if (sources.Count > 1) filters.Children.Add(Picker("FeedSourceFilter", "All sources", sources.Select(n => (n, n)).ToList(), source, picked => { source = picked; Rebuild(); }));
+        markAllButton.IsEnabled = model.FeedUnread > 0;
 
         var list = all.Where(e => (showDone || !model.FeedIsDone(e.Id)) && (!unreadOnly || !model.FeedIsRead(e.Id)) && (account is null || AccountOf(e) == account) && (source is null || e.Source == source)).ToList();
         if (list.Count == 0) { stream.Children.Add(Empty("Nothing to show", "Every entry is hidden by the filters above.", false)); return; }
@@ -169,27 +186,34 @@ public sealed class FeedPage : Grid
         var card = new Border { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Child = box, Name = "FeedEmpty" }; card.Classes.Add("dayCard"); return card;
     }
 
+    // The tag lines an entry carries (#Accountone on a line of its own) are what the account mark already says, so they are left out of the words.
+    public static string WithoutTagLines(string body)
+        => string.Join('\n', body.Split('\n').Where(l => !Regex.IsMatch(l.Trim(), @"^(#[A-Za-z0-9_-]+\s*)+$"))).Trim('\n', ' ');
+
     private Control Card(FeedEntry entry, DateTime now)
     {
         var id = entry.Id; var key = Key(id); var open = expanded.Contains(id); var read = model.FeedIsRead(id); var done = model.FeedIsDone(id);
-        var top = new WrapPanel { Orientation = Orientation.Horizontal };
-        top.Children.Add(Pad(Ui.Text(entry.When.TimeOfDay == TimeSpan.Zero ? "" : entry.When.ToString("HH:mm"), 12, "muted")));
-        top.Children.Add(Chip("FeedSource_" + key, entry.Source));
+        // One quiet line says when, about whom and from where; the headline under it is the thing to read.
+        var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var when = entry.When.TimeOfDay == TimeSpan.Zero ? "" : entry.When.ToString("HH:mm");
+        if (when.Length > 0) top.Children.Add(Pad(Ui.Text(when, 12, "muted")));
         var tagged = AccountOf(entry);
-        if (tagged is not null && NoteChips.AccountChip(model, new DayNote(0, entry.When.Date, null, "#" + new string(tagged.Where(c => !char.IsWhiteSpace(c)).ToArray())), this, "FeedAccount_" + key, interactive: false) is { } chip) { chip.Margin = new Thickness(0, 0, 6, 0); top.Children.Add(chip); }
-        if (entry.Urgent) { var flag = new IconGlyph(IconKind.Flag) { TintKey = "Finish", Margin = new Thickness(0, 0, 6, 0) }; ToolTip.SetTip(flag, "Needs action"); top.Children.Add(flag); }
-        if (!read) { var dot = new Border { Name = "FeedUnreadDot_" + key, Width = 8, Height = 8, CornerRadius = new CornerRadius(4), VerticalAlignment = VerticalAlignment.Center }; dot.Classes.Add("accentEdge"); ToolTip.SetTip(dot, "Unread"); top.Children.Add(dot); }
-        var headline = new TextBlock { Text = entry.Headline, FontSize = 15, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap };
+        if (tagged is not null && NoteChips.AccountChip(model, new DayNote(0, entry.When.Date, null, "#" + new string(tagged.Where(c => !char.IsWhiteSpace(c)).ToArray())), this, "FeedAccount_" + key, interactive: false) is { } chip) top.Children.Add(Pad(chip));
+        var from = Ui.Text(entry.Source, 12, "muted"); from.Name = "FeedSource_" + key; from.MaxWidth = 260; from.TextTrimming = TextTrimming.CharacterEllipsis; ToolTip.SetTip(from, entry.Source); top.Children.Add(Pad(from));
+        var headline = new TextBlock { Text = entry.Headline, FontSize = 15, FontWeight = read ? FontWeight.Medium : FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap };
+        var title = Ui.Grid("*,Auto"); title.ColumnSpacing = 8; Ui.Put(title, headline);
+        if (entry.Urgent) { var flag = new IconGlyph(IconKind.Flag) { TintKey = "Finish", VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 0, 0) }; ToolTip.SetTip(flag, "Needs action"); Ui.Put(title, flag, 1); }
         var head = new StackPanel { Spacing = 3, Background = Brushes.Transparent, Name = "FeedOpen_" + key, Cursor = new Cursor(StandardCursorType.Hand) };
-        head.Children.Add(top); head.Children.Add(headline);
-        if (entry.Body.Length > 0)
+        head.Children.Add(top); head.Children.Add(title);
+        var words = WithoutTagLines(entry.Body);
+        if (words.Length > 0)
         {
-            var body = new TextBlock { FontSize = 13, TextWrapping = TextWrapping.Wrap, Name = "FeedBody_" + key }; body.Inlines!.AddRange(FeedText.Inlines(entry.Body));
+            var body = new TextBlock { FontSize = 13, TextWrapping = TextWrapping.Wrap, Name = "FeedBody_" + key }; body.Inlines!.AddRange(FeedText.Inlines(words)); body.Classes.Add("muted");
             if (!open) { body.MaxLines = 2; body.TextTrimming = TextTrimming.CharacterEllipsis; }
             head.Children.Add(body);
         }
         head.Tapped += (_, _) => Toggle(id);
-        var stack = new StackPanel { Spacing = 6 }; stack.Children.Add(head);
+        var stack = new StackPanel { Spacing = 8 }; stack.Children.Add(head);
         if (open)
         {
             var buttons = new WrapPanel { Orientation = Orientation.Horizontal };
@@ -200,8 +224,12 @@ public sealed class FeedPage : Grid
             buttons.Children.Add(Small("Mark above read", "FeedReadAbove_" + key, () => model.MarkFeedReadAbove(id)));
             stack.Children.Add(buttons);
         }
-        var card = new Border { Name = "FeedEntry_" + key, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(16, 10), Child = stack, Opacity = done ? .5 : read ? .72 : 1 };
-        card.Classes.Add("dayCard"); return card;
+        // An unread entry has a dot in the margin, where it can be scanned down without reading, instead of one more badge on every line.
+        var row = Ui.Grid("18,*"); row.Margin = new Thickness(0);
+        if (!read) { var dot = new Border { Name = "FeedUnreadDot_" + key, Width = 8, Height = 8, CornerRadius = new CornerRadius(4), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0) }; dot.Classes.Add("accentEdge"); ToolTip.SetTip(dot, "Unread"); Ui.Put(row, dot); }
+        Ui.Put(row, stack, 1);
+        var card = new Border { Name = "FeedEntry_" + key, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(2, 12, 6, 12), Child = row, Opacity = done ? .5 : read ? .8 : 1 };
+        card.Classes.Add("feedRow"); return card;
     }
 
     /// <summary>Opens an entry in full, or puts it away again. Opening marks it read when that is switched on.</summary>
@@ -223,14 +251,7 @@ public sealed class FeedPage : Grid
         if (id is not null) Avalonia.Threading.Dispatcher.UIThread.Post(() => this.GetVisualDescendants().OfType<Border>().FirstOrDefault(b => b.Name == "FeedEntry_" + Key(id))?.BringIntoView());
     }
 
-    private static Control Pad(Control control) { control.Margin = new Thickness(0, 0, 8, 0); control.VerticalAlignment = VerticalAlignment.Center; return control; }
-
-    private static Border Chip(string name, string text)
-    {
-        var words = new TextBlock { Text = text, FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-        var chip = new Border { Name = name, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(8, 1), Margin = new Thickness(0, 0, 6, 0), Child = words };
-        chip.Classes.Add("chip"); return chip;
-    }
+    private static Control Pad(Control control) { control.VerticalAlignment = VerticalAlignment.Center; return control; }
 }
 
 /// <summary>

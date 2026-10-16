@@ -198,6 +198,22 @@
       <Setter Property="Background" Value="{DynamicResource Surface}" />
       <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
     </Style>
+    <!-- The calendar in the date pickers: soft round days, the accent for the chosen one, no grey blocks (the rest comes from the Calendar resources ThemeEngine writes). -->
+    <Style Selector="CalendarDayButton"><Setter Property="CornerRadius" Value="8" /><Setter Property="Margin" Value="1" /></Style>
+    <Style Selector="CalendarDayButton:selected"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="FontWeight" Value="Bold" /></Style>
+    <Style Selector="CalendarDayButton:selected /template/ Border#Root"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
+    <Style Selector="CalendarDayButton:today"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
+    <Style Selector="CalendarDayButton:today /template/ TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
+    <Style Selector="CalendarDayButton:today /template/ Border#Root"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="CalendarItem /template/ Button"><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
+    <!-- Quiet row tools: hidden until the pointer is over the row or it has focus (Ui.RevealOnHover). -->
+    <Style Selector="Button.hoverReveal"><Setter Property="Opacity" Value="0" /></Style>
+    <Style Selector=".revealing Button.hoverReveal"><Setter Property="Opacity" Value="1" /></Style>
+    <Style Selector="Button.hoverReveal:focus-visible"><Setter Property="Opacity" Value="1" /></Style>
+    <!-- Feed rows are plain lines with a hairline under them; the filters that are on are lit in the accent colour. -->
+    <Style Selector="Border.feedRow"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
+    <Style Selector="Button.flat.filterOn"><Setter Property="Foreground" Value="{DynamicResource Accent}" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+    <Style Selector="Button.flat.filterOn /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
     <Style Selector="Border.accentEdge"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Border.lateEdge"><Setter Property="Background" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector=":is(Border).messageBar.late"><Setter Property="BorderBrush" Value="{DynamicResource Overtime}" /></Style>

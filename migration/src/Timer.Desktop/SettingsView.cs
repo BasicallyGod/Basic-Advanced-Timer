@@ -106,11 +106,14 @@ public sealed class SettingsView : ScrollViewer
 
         // The feed: Markdown files in a folder, written by something else and only ever read here. See FEED.md.
         var feed = new StackPanel { Spacing = 10 };
-        var feedFolder = new TextBox { Name = "FeedFolder", Width = 340, Watermark = "A folder of .md or .txt files", Text = model.FeedFolder ?? "" };
+        var feedFolder = new TextBox { Name = "FeedFolder", Watermark = "A folder of .md or .txt files", Text = model.FeedFolder ?? "" };
         void CommitFolder() { var typed = feedFolder.Text?.Trim() ?? ""; if (typed != (model.FeedFolder ?? "")) model.SetFeedFolder(typed); }
         feedFolder.LostFocus += (_, _) => CommitFolder();
         feedFolder.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) { CommitFolder(); e.Handled = true; } };
-        feed.Children.Add(Row("Folder", Ui.Horizontal(feedFolder, Ui.DialogButton("Browse…", () => FeedFolderPicker.Choose(this, picked => model.SetFeedFolder(picked)), "FeedBrowse"))));
+        // The box takes the room there is and Browse keeps its own, so neither runs past the card however narrow it is.
+        feedFolder.Width = double.NaN; feedFolder.HorizontalAlignment = HorizontalAlignment.Stretch;
+        var folderRow = Ui.Grid("*,Auto"); folderRow.ColumnSpacing = 8; Ui.Put(folderRow, feedFolder); Ui.Put(folderRow, Ui.DialogButton("Browse…", () => FeedFolderPicker.Choose(this, picked => model.SetFeedFolder(picked)), "FeedBrowse"), 1);
+        feed.Children.Add(Row("Folder", folderRow));
         feed.Children.Add(Toggle("Mark an entry read when it is opened", "FeedAutoRead", () => model.FeedAutoRead, v => model.SetFeedAutoRead(v)));
         feed.Children.Add(Toggle("Keep entries for 90 days instead of 30", "FeedLonger", () => model.FeedLonger, v => model.SetFeedLonger(v)));
         var feedNote = Ui.Text(model.FeedNote, 12, "muted"); feedNote.Name = "FeedFolderNote"; feedNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; feed.Children.Add(feedNote);
