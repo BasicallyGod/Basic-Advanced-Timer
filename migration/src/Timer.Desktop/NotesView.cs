@@ -19,7 +19,7 @@ public sealed class NotesPage : Grid
     private readonly TimerModel model;
     private readonly StackPanel rows = new() { Spacing = 4 };
     private readonly ComingUpView coming;
-    private readonly TextBlock heading = new() { FontSize = 20, FontWeight = FontWeight.SemiBold, Classes = { "clock" } };
+    private readonly TextBlock heading = new() { FontSize = 16, FontWeight = FontWeight.SemiBold };
     private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Add a note: 14:30 · ! · @fri · #Account", Padding = new Thickness(10, 7), FontSize = 14 };
     private string shown = ""; private bool dirty;
     private DateTime? targetDay; private Border dayChip = null!; private readonly TextBlock chipText = new() { FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
@@ -27,7 +27,7 @@ public sealed class NotesPage : Grid
     public NotesPage(TimerModel model)
     {
         this.model = model; coming = new ComingUpView(model);
-        ColumnDefinitions = new ColumnDefinitions("2*,16,*"); Margin = new Thickness(0, 0, 0, 4);
+        ColumnDefinitions = new ColumnDefinitions("3*,16,2*"); Margin = new Thickness(0, 0, 0, 4);
         var left = new Border { CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(20, 16) }; left.Classes.Add("dayCard");
         var leftGrid = Ui.Grid("*", "Auto,*,Auto,Auto"); leftGrid.RowSpacing = 10;
         Ui.Put(leftGrid, heading);
@@ -55,7 +55,7 @@ public sealed class NotesPage : Grid
         };
         var right = new Border { CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(20, 16) }; right.Classes.Add("dayCard");
         var rightGrid = Ui.Grid("*", "Auto,*"); rightGrid.RowSpacing = 10;
-        var comingHeading = Ui.Heading("Coming up", 20); Ui.Put(rightGrid, comingHeading);
+        var comingHeading = new TextBlock { Text = "Coming up", FontSize = 16, FontWeight = FontWeight.SemiBold }; Ui.Put(rightGrid, comingHeading);
         Ui.Put(rightGrid, Ui.WithMoreBelow(new ScrollViewer { Content = coming, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 1);
         right.Child = rightGrid; SetColumn(right, 2); Children.Add(right);
         Rebuild();
@@ -100,19 +100,21 @@ public sealed class NotesPage : Grid
             var text = new TextBox { Name = "NoteText_" + id, Text = note.Text, TextWrapping = TextWrapping.Wrap, AcceptsReturn = false, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(4, 2), FontSize = 14, Opacity = note.Done ? .55 : 1 };
             // TextChanged does not fire headless, so the text property is watched instead.
             text.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && text.Text != note.Text) model.SetDayNoteText(id, text.Text ?? ""); };
-            var remove = Ui.IconButton(IconKind.Close, "Remove", "NoteRemove_" + id, () => model.RemoveDayNote(id)); remove.Width = 26; remove.Height = 26;
+            var remove = Ui.IconButton(IconKind.Close, "Remove", "NoteRemove_" + id, () => model.RemoveDayNote(id)); remove.Width = 26; remove.Height = 26; remove.Classes.Add("hoverReveal");
             // A small calendar picks another day for the note, for when it was put on the wrong one or plans change.
-            var when = Ui.IconButton(IconKind.Today, "Move to another day", "NoteMove_" + id, () => { }); when.Width = 26; when.Height = 26;
+            var when = Ui.IconButton(IconKind.Today, "Move to another day", "NoteMove_" + id, () => { }); when.Width = 26; when.Height = 26; when.Classes.Add("hoverReveal");
             var calendar = new Calendar { Name = "NoteCalendar_" + id, SelectedDate = note.Day, DisplayDate = note.Day };
             var flyout = new Flyout { Content = calendar, Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight };
             calendar.SelectedDatesChanged += (_, _) => { if (calendar.SelectedDate is { } picked) { flyout.Hide(); model.MoveDayNote(id, picked); } };
             when.Flyout = flyout;
-            var row = Ui.Grid("Auto,*,Auto,Auto"); row.VerticalAlignment = VerticalAlignment.Center;
+            var row = Ui.Grid("Auto,*,Auto"); row.VerticalAlignment = VerticalAlignment.Center; row.Margin = new Thickness(0, 2);
             Ui.Put(row, tick);
-            // What was recognised in the words is shown under them as chips, each with a cross that takes it back out of the note.
+            // What was recognised in the words is shown under them as quiet marks, each with a cross (shown while the row is under the pointer or has focus) that takes it back out of the note.
             var body = new StackPanel { Spacing = 0 }; body.Children.Add(text);
             if (NoteChips.For(model, note, this) is { } chips) { chips.Margin = new Thickness(8, 0, 0, 2); body.Children.Add(chips); }
-            Ui.Put(row, body, 1); Ui.Put(row, when, 2); Ui.Put(row, remove, 3);
+            var actions = Ui.Horizontal(when, remove); actions.VerticalAlignment = VerticalAlignment.Top; actions.Spacing = 0;
+            Ui.Put(row, body, 1); Ui.Put(row, actions, 2);
+            Ui.RevealOnHover(row);
             rows.Children.Add(row);
         }
         coming.Rebuild();
@@ -128,16 +130,17 @@ public static class NoteChips
     private static Border Chip(string name, Control? lead, string text, string tip, string? clearName, Action? clear, IBrush? ink = null)
     {
         var words = new TextBlock { Text = text, FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-        if (ink is not null) words.Foreground = ink;
+        if (ink is not null) words.Foreground = ink; else words.Classes.Add("muted");
         var row = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         if (lead is not null) row.Children.Add(lead);
         row.Children.Add(words);
         if (clear is not null && clearName is not null)
         {
-            var cross = Ui.IconButton(IconKind.Close, "Take this out of the note", clearName, clear); cross.Width = 18; cross.Height = 18; cross.Padding = new Thickness(0); row.Children.Add(cross);
+            var cross = Ui.IconButton(IconKind.Close, "Take this out of the note", clearName, clear); cross.Width = 18; cross.Height = 18; cross.Padding = new Thickness(0); cross.Classes.Add("hoverReveal"); row.Children.Add(cross);
         }
-        var chip = new Border { Name = name, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(8, 1, clear is null ? 8 : 3, 1), Margin = new Thickness(0, 0, 6, 0), HorizontalAlignment = HorizontalAlignment.Left, Child = row };
-        chip.Classes.Add("chip"); ToolTip.SetTip(chip, tip); return chip;
+        // Quiet marks, not outlined pills: the words are the content and these only say how they were read.
+        var chip = new Border { Name = name, Padding = new Thickness(0, 1, clear is null ? 10 : 2, 1), HorizontalAlignment = HorizontalAlignment.Left, Child = row };
+        ToolTip.SetTip(chip, tip); return chip;
     }
     private static Color Mix(Color a, Color b, double towardsB) => Color.FromRgb((byte)(a.R + (b.R - a.R) * towardsB), (byte)(a.G + (b.G - a.G) * towardsB), (byte)(a.B + (b.B - a.B) * towardsB));
     /// <summary>The chip for the account a note's #Tag names, wearing that account's colour, or null when it names none.</summary>
@@ -168,7 +171,7 @@ public sealed class ComingUpView : StackPanel
 {
     private readonly TimerModel model;
     private readonly bool compact;
-    public ComingUpView(TimerModel model, bool compact = false) { this.model = model; this.compact = compact; Spacing = 4; Rebuild(); }
+    public ComingUpView(TimerModel model, bool compact = false) { this.model = model; this.compact = compact; Spacing = 6; Rebuild(); }
     public static string When(DateTime day, DateTime today)
         => (day.Date - today.Date).Days switch { 0 => "Today", 1 => "Tomorrow", < 7 => day.ToString("dddd", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), _ => day.ToString("ddd d MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) };
     public void Rebuild()
@@ -180,6 +183,7 @@ public sealed class ComingUpView : StackPanel
             Children.Add(Ui.Text("Nothing coming up", compact ? 13 : 14, "muted"));
         }
         // Small, it is the one thing coming next, on a single line.
+        DateTime? day = null;
         foreach (var note in compact ? coming.Take(1) : coming)
         {
             if (compact)
@@ -189,20 +193,26 @@ public sealed class ComingUpView : StackPanel
                 line.Children.Add(new TextBlock { Text = NoteShorthand.Display(note, model.AccountNames), FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis }); Children.Add(line); continue;
             }
             var id = note.Id;
+            // Notes are grouped under their day, so each row only needs its time.
+            if (day != note.Day.Date)
+            {
+                day = note.Day.Date;
+                var heading = Ui.Text(When(day.Value, model.Engine.Now), 12, "muted"); heading.FontWeight = FontWeight.SemiBold; heading.Margin = new Thickness(0, Children.Count == 0 ? 0 : 10, 0, 0); Children.Add(heading);
+            }
             // What kind of thing it is shows in its leading mark: a flag for a deadline (press it when done), a clock for an event, which simply passes,
             // and a tick box for a task, which is the only kind that is ticked off.
             Control tick;
-            if (DayNotes.IsDeadline(note)) { var flag = Ui.IconButton(IconKind.Flag, "Deadline. Press when it is done", "ComingDone_" + id, () => model.ToggleDayNote(id)); flag.Width = 26; flag.Height = 26; tick = flag; }
+            if (DayNotes.IsDeadline(note)) { var flag = Ui.IconButton(IconKind.Flag, "Deadline. Press when it is done", "ComingDone_" + id, () => model.ToggleDayNote(id)); flag.Width = 24; flag.Height = 24; tick = flag; }
             else if (note.At is not null)
             {
-                var mark = new Border { Name = "ComingEvent_" + id, Width = 26, Height = 26, Child = new IconGlyph(IconKind.Clock) { TintKey = "Muted", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+                var mark = new Border { Name = "ComingEvent_" + id, Width = 24, Height = 24, Child = new IconGlyph(IconKind.Clock) { TintKey = "Muted", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
                 ToolTip.SetTip(mark, "Event"); tick = mark;
             }
             else { var box = new CheckBox { Name = "ComingTick_" + id, IsChecked = false, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center }; box.Click += (_, _) => model.ToggleDayNote(id); tick = box; }
-            var when = Ui.Text(When(note.Day, model.Engine.Now) + (note.At is { } at ? " " + at.ToString("hh\\:mm") : ""), 13); when.FontWeight = FontWeight.Bold; // Bold, so when it falls is read first.
-            var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(new TextBlock { Text = NoteShorthand.Display(note, model.AccountNames), FontSize = 14, TextWrapping = TextWrapping.Wrap }); words.Children.Add(when);
-            if (NoteChips.AccountChip(model, note, this, "ComingAccount_" + id, interactive: false) is { } account) { account.Margin = new Thickness(0, 2, 0, 0); words.Children.Add(account); }
-            var row = Ui.Grid("Auto,*"); tick.VerticalAlignment = VerticalAlignment.Center; Ui.Put(row, tick); Ui.Put(row, words, 1); Children.Add(row);
+            var at = Ui.Text(note.At is { } time ? time.ToString("hh\\:mm") : "", 12, "muted"); at.VerticalAlignment = VerticalAlignment.Top; at.Margin = new Thickness(8, 3, 0, 0);
+            var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(new TextBlock { Text = NoteShorthand.Display(note, model.AccountNames), FontSize = 14, TextWrapping = TextWrapping.Wrap });
+            if (NoteChips.AccountChip(model, note, this, "ComingAccount_" + id, interactive: false) is { } account) words.Children.Add(account);
+            var row = Ui.Grid("Auto,*,Auto"); tick.VerticalAlignment = VerticalAlignment.Top; tick.Margin = new Thickness(0, 0, 4, 0); Ui.Put(row, tick); Ui.Put(row, words, 1); Ui.Put(row, at, 2); Children.Add(row);
         }
     }
 }

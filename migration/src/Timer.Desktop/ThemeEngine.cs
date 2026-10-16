@@ -73,6 +73,17 @@ public static class ThemeEngine
         var (offFill, offTrack) = DisabledSliderColours(colours);
         foreach (var key in new[] { "SliderTrackValueFillDisabled", "SliderThumbBackgroundDisabled" }) Put(key, offFill);
         Put("SliderTrackFillDisabled", offTrack);
+        // The calendar (the date pickers in Notes and the header) draws itself from its own resources, which are the computer's greys and blue. It wears the
+        // theme instead: a plain surface, the accent for the chosen day and a ring in it for today, and muted days outside the month.
+        var surface = Color.Parse(colours["Surface"]); var ink = Color.Parse(colours["Ink"]); var muted = Color.Parse(colours["Muted"]); var hover = Color.Parse(colours["Hover"]);
+        foreach (var key in new[] { "CalendarViewBackground", "CalendarViewOutOfScopeBackground", "CalendarViewCalendarItemRevealBackground", "CalendarViewNavigationButtonBackground", "CalendarViewCalendarItemRevealBorderBrush", "CalendarViewNavigationButtonBorderBrush", "CalendarViewBorderBrush" }) Put(key, key.EndsWith("BorderBrush") ? line : surface);
+        foreach (var key in new[] { "CalendarViewForeground", "CalendarViewCalendarItemForeground", "CalendarViewNavigationButtonForegroundPointerOver", "CalendarViewNavigationButtonForegroundPressed" }) Put(key, ink);
+        foreach (var key in new[] { "CalendarViewOutOfScopeForeground", "CalendarViewBlackoutForeground", "CalendarViewWeekDayForegroundDisabled" }) Put(key, muted);
+        Put("CalendarViewTodayForeground", accent);
+        foreach (var key in new[] { "CalendarViewSelectedBorderBrush", "CalendarViewSelectedHoverBorderBrush", "CalendarViewSelectedPressedBorderBrush", "CalendarViewPressedBorderBrush" }) Put(key, accent);
+        Put("CalendarViewHoverBorderBrush", hover);
+        // The thin lines between days would show as a grid of grey bars, so they are left clear.
+        foreach (var key in new[] { "CalendarViewCalendarItemRevealBorderBrush", "CalendarViewNavigationButtonBorderBrush" }) Put(key, Colors.Transparent);
     }
     /// <summary>
     /// Writes only the colours the windows are drawn in, not the pill's recording, break and overtime tints. While a theme is being edited every

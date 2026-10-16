@@ -112,6 +112,19 @@ public static class Ui
     // The buttons in dialogs wear the same quiet outlined look as the dashboard's (Add time, Undo, Start break). The main action of a dialog,
     // such as Save or Export, has an accent outline so it reads as the one to press.
     private static readonly string[] MainActions = { "Save", "Export CSV files", "Apply selected fills", "Group selected", "Move blocks" };
+    /// <summary>
+    /// Shows a row's quiet controls (marked with the hoverReveal class) only while the pointer is over the row or something in it has the keyboard focus,
+    /// so a list of notes is words first and tools second. The controls stay in the layout, so nothing moves when they appear.
+    /// </summary>
+    public static void RevealOnHover(Control row)
+    {
+        bool over = false, focused = false;
+        void Apply() => row.Classes.Set("revealing", over || focused);
+        row.PointerEntered += (_, _) => { over = true; Apply(); };
+        row.PointerExited += (_, _) => { over = false; Apply(); };
+        row.GotFocus += (_, _) => { focused = true; Apply(); };
+        row.LostFocus += (_, _) => { focused = row.IsKeyboardFocusWithin; Apply(); };
+    }
     public static Button DialogButton(string text, Action click, string? name = null, bool? main = null)
     {
         var button = Button(text, click, name);

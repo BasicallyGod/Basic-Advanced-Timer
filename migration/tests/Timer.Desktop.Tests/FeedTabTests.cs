@@ -109,6 +109,12 @@ public sealed class FeedTabTests : IDisposable
         finally { window.Close(); }
     }
 
+    private static void Pick(Window window, string? tag)
+    {
+        var box = window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "FeedAccountFilter");
+        box.SelectedIndex = tag is null ? 0 : ((IEnumerable<string>)box.ItemsSource!).ToList().IndexOf(tag); Dispatcher.UIThread.RunJobs();
+    }
+
     [AvaloniaFact]
     public void WithAutoReadOffOpeningDoesNotMarkAndTheFiltersNarrowTheStream()
     {
@@ -117,9 +123,9 @@ public sealed class FeedTabTests : IDisposable
         {
             window.GetVisualDescendants().OfType<FeedPage>().Single().Toggle("id:acme-delay"); Dispatcher.UIThread.RunJobs();
             Assert.False(model.FeedIsRead("id:acme-delay"));
-            Click(window, "FeedFilterAccount_" + Key("Account two"));
+            Pick(window, "#Accounttwo");
             Assert.Single(window.GetVisualDescendants().OfType<Border>(), b => b.Name?.StartsWith("FeedEntry_", StringComparison.Ordinal) == true);
-            Click(window, "FeedFilterAccount_" + Key("Account two"));
+            Pick(window, null);
             model.SetFeedRead("id:acme-delay", true); Dispatcher.UIThread.RunJobs(); Click(window, "FeedFilterUnread");
             Assert.Single(window.GetVisualDescendants().OfType<Border>(), b => b.Name?.StartsWith("FeedEntry_", StringComparison.Ordinal) == true); // Only the unread one.
             Click(window, "FeedMarkAllRead"); Assert.Equal(0, model.FeedUnread);
