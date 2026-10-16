@@ -979,6 +979,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     public DateTime? FeedUpdated => feedUpdated;
     /// <summary>Files that were left unread (too large, too many, or not readable), each with the reason.</summary>
     public IReadOnlyList<string> FeedSkipped => feedScan.Skipped;
+    /// <summary>The prompt for a scheduled assistant, with the feed folder and the person's own account tags in it.</summary>
+    public string FeedPromptText => FeedPrompt.Build(Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => (a.Name, a.Display)).ToList(), feedOptions.Folder);
     /// <summary>The settings note on the folder: its size, files, and how many entries show or are hidden by the age limit.</summary>
     public string FeedNote { get { var shown = FeedShown.Count; return Feed.Describe(feedScan, shown, feedEntries.Count - shown, FeedRetentionDays); } }
 

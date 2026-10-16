@@ -69,7 +69,9 @@ A Feed tab on the dashboard's icon rail, with a badge showing the unread count.
 
 ## Prompt helper
 
-A **Copy prompt** button in Settings, Feed, puts a ready-made prompt on the clipboard for ChatGPT or Claude scheduled tasks. It describes the format above, lists the person's actual account tags (for example `#AccountOne`, `#Acme`), asks for newest-first entries with a `Date:` line, and asks for a stable `ID:` on each so edits do not make them look new. The tags in the prompt come from the person's accounts at the time it is copied.
+Settings, Feed, shows the prompt for a scheduled ChatGPT or Claude task in full, in a read-only box that follows the folder and the person's accounts, so it can be read again each time a task is set up, with a Copy prompt button. It has the parts a task needs: **what to look for** (the one line the person fills in), **my clients** (the person's own `#Tag` for each account), **where to save** (the feed folder's path, a new file every run named `feed-<short task name>-YYYY-MM-DD-HHMM.md`, earlier files never changed or deleted, or the whole file in the reply when it cannot save to a folder), the entry **format** with `Date:` and `ID:` lines, and the **rules**. A new file each run means a task that cannot read its own earlier output still builds up history, which the age limit then hides; the folder note says how big it has grown.
+
+An assistant that runs in the cloud cannot write to this computer, so the page says so: have it save to a folder that syncs (OneDrive, Dropbox, Google Drive) and choose that same folder here. An assistant that runs on the computer can save straight into the folder.
 
 ## Safety
 

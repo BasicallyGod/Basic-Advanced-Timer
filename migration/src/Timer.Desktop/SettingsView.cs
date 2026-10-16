@@ -98,10 +98,17 @@ public sealed class SettingsView : ScrollViewer
         feed.Children.Add(Toggle("Mark an entry read when it is opened", "FeedAutoRead", () => model.FeedAutoRead, v => model.SetFeedAutoRead(v)));
         feed.Children.Add(Toggle("Keep entries for 90 days instead of 30", "FeedLonger", () => model.FeedLonger, v => model.SetFeedLonger(v)));
         var feedNote = Ui.Text(model.FeedNote, 12, "muted"); feedNote.Name = "FeedFolderNote"; feedNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; feed.Children.Add(feedNote);
-        var copyPrompt = Ui.DialogButton("Copy prompt for ChatGPT or Claude", () => { if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard) _ = clipboard.SetTextAsync(FeedPrompt.Build(model.AccountNames)); model.Notice = "Prompt copied."; }, "FeedCopyPrompt");
-        feed.Children.Add(Row("Prompt", copyPrompt));
+        // The prompt for a scheduled ChatGPT or Claude task, shown in full so it can be read again each time one is set up, and copied from here. It names the
+        // folder the files must reach and the person's own account tags, so it follows both.
+        var promptHeading = Ui.Text("Prompt for a scheduled ChatGPT or Claude task", 14, "muted"); promptHeading.Margin = new Thickness(0, 6, 0, 0); feed.Children.Add(promptHeading);
+        var promptNote = Ui.Text("Give each task this prompt, with your own line under What to look for. An assistant that runs in the cloud cannot write to this computer, so have it save to a folder that syncs (OneDrive, Dropbox, Google Drive) and choose that same folder above.", 12, "muted");
+        promptNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; promptNote.Name = "FeedPromptNote"; feed.Children.Add(promptNote);
+        var promptBox = new TextBox { Name = "FeedPromptText", IsReadOnly = true, AcceptsReturn = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Height = 260, FontSize = 12.5, Text = model.FeedPromptText };
+        feed.Children.Add(promptBox);
+        var copyPrompt = Ui.DialogButton("Copy prompt", () => { if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard) _ = clipboard.SetTextAsync(model.FeedPromptText); model.Notice = "Prompt copied."; }, "FeedCopyPrompt");
+        copyPrompt.HorizontalAlignment = HorizontalAlignment.Left; feed.Children.Add(copyPrompt);
         var feedHelp = Ui.Text("Older entries are hidden, never deleted: the folder is only read. Clear old files by hand to keep it small.", 12, "muted"); feedHelp.TextWrapping = Avalonia.Media.TextWrapping.Wrap; feed.Children.Add(feedHelp);
-        syncs.Add(() => { var shown = model.FeedFolder ?? ""; if (!feedFolder.IsFocused && feedFolder.Text != shown) feedFolder.Text = shown; feedNote.Text = model.FeedNote; });
+        syncs.Add(() => { var shown = model.FeedFolder ?? ""; if (!feedFolder.IsFocused && feedFolder.Text != shown) feedFolder.Text = shown; feedNote.Text = model.FeedNote; if (promptBox.Text != model.FeedPromptText) promptBox.Text = model.FeedPromptText; });
         page.Children.Add(Section("Feed", feed));
 
         // The getting started setup, for anyone who skipped it or wants to look again. Nothing is lost: it starts from the current settings.

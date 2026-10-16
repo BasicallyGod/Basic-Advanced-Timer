@@ -146,10 +146,40 @@ public sealed class FeedTabTests : IDisposable
     }
 
     [Fact]
-    public void TheCopiedPromptNamesTheFormatAndThePersonsOwnAccountTags()
+    public void ThePromptNamesTheFolderTheTagsTheFormatAndAskForANewFileEachRun()
     {
-        var prompt = FeedPrompt.Build(new[] { "Account one", "Internal"});
-        Assert.Contains("#Accountone, #Internal", prompt); Assert.Contains("Date:", prompt); Assert.Contains("ID:", prompt); Assert.Contains("start it with ! if", prompt);
+        var prompt = FeedPrompt.Build(new[] { ("Account one", "Account one"), ("Internal", "Internal") }, @"C:\Users\sam\OneDrive\Feed");
+        Assert.Contains(@"in this folder: C:\Users\sam\OneDrive\Feed", prompt);
+        Assert.Contains("#Accountone  (Account one)", prompt); Assert.Contains("#Internal  (Internal)", prompt);
+        Assert.Contains("WHAT TO LOOK FOR", prompt); Assert.Contains("Replace this line", prompt); // The one part the person fills in.
+        Assert.Contains("feed-<short task name>-YYYY-MM-DD-HHMM.md", prompt); Assert.Contains("never change or delete earlier files", prompt);
+        Assert.Contains("Date: YYYY-MM-DD HH:MM", prompt); Assert.Contains("ID: ", prompt); Assert.Contains("start it with ! if", prompt); Assert.Contains("put the whole file in your reply", prompt);
+        // The prompt it asks for is something the feed reads: its own example entry parses with a date, an ID and an urgent mark.
+        var entry = Feed.Parse("## ! Short headline\nDate: 2026-10-16 08:30\nID: a-stable-name\n#Accountone\nOne sentence.", "wire", new DateTime(2026, 10, 16))[0];
+        Assert.True(entry.Urgent); Assert.True(entry.HasDate); Assert.Equal("id:a-stable-name", entry.Id);
+        Assert.Contains(FeedPrompt.NoFolder, FeedPrompt.Build(Array.Empty<(string, string)>(), null)); // Until a folder is chosen it says where the folder comes from.
+        Assert.Contains("#AccountName", FeedPrompt.Build(Array.Empty<(string, string)>(), null));
+    }
+
+    [AvaloniaFact]
+    public void SettingsShowThePromptInFullAndItFollowsTheFolderAndTheAccounts()
+    {
+        var model = Model(withFolder: false); var (window, _) = Open(model);
+        try
+        {
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            var box = Find<TextBox>(window, "FeedPromptText"); Assert.True(box.IsReadOnly); Assert.True(box.AcceptsReturn);
+            Assert.Contains(FeedPrompt.NoFolder, box.Text); Assert.Contains("#Accountone  (Account one)", box.Text);
+            model.SetFeedFolder(folder); Dispatcher.UIThread.RunJobs();
+            Assert.Contains("in this folder: " + folder, box.Text); Assert.DoesNotContain(FeedPrompt.NoFolder, box.Text);
+            Assert.Equal(model.FeedPromptText, box.Text);
+            Assert.Contains("cannot write to this computer", Find<TextBlock>(window, "FeedPromptNote").Text); // Says why a synced folder is needed for a cloud assistant.
+            Find<Button>(window, "FeedCopyPrompt");
+            // Renaming an account is reflected the next time the page is looked at.
+            model.SetAccounts(model.AccountSettings.Select(a => a.Name == "Account one" ? a with { Name = "Client Alpha" } : a), new Dictionary<string, string> { ["Account one"] = "Client Alpha" }); Dispatcher.UIThread.RunJobs();
+            Assert.Contains("#ClientAlpha  (Client Alpha)", box.Text);
+        }
+        finally { window.Close(); }
     }
 
     [AvaloniaFact]
