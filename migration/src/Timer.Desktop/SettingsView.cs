@@ -159,24 +159,24 @@ public sealed class SettingsView : ScrollViewer
             var bar = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(radius), VerticalAlignment = VerticalAlignment.Center };
             bar.Bind(Border.BackgroundProperty, bar.GetResourceObservable(key)); return bar;
         }
-        static Control Dots(int count) { var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center }; for (var i = 0; i < count; i++) row.Children.Add(Bar(11, 11, "Line", 6)); return row; }
+        static Control Dots(int count) { var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center }; for (var i = 0; i < count; i++) row.Children.Add(Bar(9, 9, "Line", 5)); return row; }
         static Control Lines(bool progress)
         {
             var stack = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
-            stack.Children.Add(Bar(46, 5, "Ink")); stack.Children.Add(Bar(30, 4, "Muted"));
-            if (progress) stack.Children.Add(Bar(46, 3, "Line"));
+            stack.Children.Add(Bar(34, 5, "Ink")); stack.Children.Add(Bar(22, 4, "Muted"));
+            if (progress) stack.Children.Add(Bar(34, 3, "Line"));
             return stack;
         }
         static Control Picture(string key)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             switch (key)
             {
-                case "compact": row.Children.Add(Bar(12, 12, "Accent", 4)); row.Children.Add(Lines(false)); row.Children.Add(Bar(34, 9, "Ink")); row.Children.Add(Dots(2)); break;
+                case "compact": row.Children.Add(Bar(11, 11, "Accent", 4)); row.Children.Add(Lines(false)); row.Children.Add(Bar(28, 9, "Ink")); row.Children.Add(Dots(2)); break;
                 case "minimal": row.Children.Add(Bar(14, 14, "Accent", 5)); row.Children.Add(Bar(34, 9, "Ink")); row.Children.Add(Dots(1)); break;
-                default: row.Children.Add(Bar(34, 9, "Ink")); row.Children.Add(Bar(1, 20, "Line", 0)); row.Children.Add(Bar(12, 12, "Accent", 4)); row.Children.Add(Lines(true)); row.Children.Add(Dots(2)); break;
+                default: row.Children.Add(Bar(28, 9, "Ink")); row.Children.Add(Bar(1, 20, "Line", 0)); row.Children.Add(Bar(11, 11, "Accent", 4)); row.Children.Add(Lines(true)); row.Children.Add(Dots(2)); break;
             }
-            var frame = new Border { Height = 46, HorizontalAlignment = HorizontalAlignment.Stretch, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Child = row, Padding = new Thickness(6, 0) };
+            var frame = new Border { Height = 46, HorizontalAlignment = HorizontalAlignment.Stretch, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Child = row, Padding = new Thickness(6, 0), ClipToBounds = true };
             frame.Classes.Add("chip"); return frame;
         }
         var choices = new WrapPanel { Orientation = Orientation.Horizontal };

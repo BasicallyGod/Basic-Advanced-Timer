@@ -121,6 +121,24 @@ public sealed class PillLayoutTests
     }
 
     [AvaloniaFact]
+    public void EachLayoutPictureFitsInsideItsFrameWithRoomToSpare()
+    {
+        var model = Model(); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); dashboard.UpdateLayout();
+            foreach (var layout in PillLayouts.All)
+            {
+                var frame = Find<Button>(dashboard, "PillLayout_" + layout.Key).GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("chip"));
+                var picture = (Panel)frame.Child!; picture.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                var room = frame.Bounds.Width - frame.Padding.Left - frame.Padding.Right - 2 * frame.BorderThickness.Left;
+                Assert.True(picture.DesiredSize.Width <= room - 4, $"{layout.Key}: the picture is {picture.DesiredSize.Width:0} wide in {room:0}");
+            }
+        }
+        finally { dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
     public void SettingsShowEachLayoutAsAPictureWithItsWordsAndTheChosenOneIsMarked()
     {
         var model = Model(); var dashboard = new DashboardWindow(model); dashboard.Show();
