@@ -102,7 +102,9 @@ public sealed class FeedTabTests : IDisposable
             var page = window.GetVisualDescendants().OfType<FeedPage>().Single();
             Assert.Equal(2, Find<TextBlock>(window, "FeedBody_" + Key("id:acme-delay")).MaxLines);
             page.Toggle("id:acme-delay"); Dispatcher.UIThread.RunJobs();
-            Assert.True(model.FeedIsRead("id:acme-delay")); Assert.Equal(0, Find<TextBlock>(window, "FeedBody_" + Key("id:acme-delay")).MaxLines);
+            Assert.True(model.FeedIsRead("id:acme-delay")); Assert.Equal(0, Find<TextBlock>(window, "FeedDetailBody_" + Key("id:acme-delay")).MaxLines); // In full in the pane beside the list.
+            Assert.True(Find<Border>(window, "FeedDetail").IsVisible); Assert.Equal(2, Find<TextBlock>(window, "FeedBody_" + Key("id:acme-delay")).MaxLines); // The row stays short.
+            Click(window, "FeedDetailClose"); Assert.False(Find<Border>(window, "FeedDetail").IsVisible); page.Toggle("id:acme-delay"); Dispatcher.UIThread.RunJobs();
             Assert.True(Find<Border>(window, "FeedBadge").IsVisible); // One entry is still unread.
             Assert.Equal(1, model.FeedUnread); Click(window, "FeedDone_" + Key("id:acme-delay")); Assert.True(model.FeedIsDone("id:acme-delay"));
         }

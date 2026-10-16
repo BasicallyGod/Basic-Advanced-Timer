@@ -113,6 +113,7 @@ public sealed class NotesPolishTests
             Assert.Contains("For " + far.ToString("ddd d MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), chip.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
             Type(input, "board pack"); Press(input, Key.Enter);
             var note = Assert.Single(model.AllDayNotes); Assert.Equal(far, note.Day); Assert.False(chip.IsVisible); // One note only: the next goes on the day showing again.
+            window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "ComingRange").SelectedIndex = 2; Dispatcher.UIThread.RunJobs(); // Next 6 months.
             Assert.Contains(window.GetVisualDescendants().OfType<CheckBox>(), c => c.Name == "ComingTick_" + note.Id); // Coming up reaches months ahead.
             Type(input, "today note"); Press(input, Key.Enter); Assert.Equal(model.SelectedDate, model.AllDayNotes.Last().Day);
             // A day typed in the words still wins over the picked one.

@@ -581,6 +581,7 @@ public sealed class DashboardWindow : Window
     private bool weekMode, settingsMode, notesMode, feedMode, renderedSettings, renderedNotes, renderedFeed, settingZoom;
     // The Notes and Feed pages stand in for the timeline and week views, with their own editing of nothing, so the toolbar and the zoom bar stay away.
     private bool PageMode => notesMode || feedMode;
+    private Grid bodyGrid = null!; private Control fullColumn = null!; private CompactColumn compactColumn = null!;
     private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
     private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
@@ -646,7 +647,7 @@ public sealed class DashboardWindow : Window
         Ui.Put(railGrid, railFoot, row: 1);
         rail.Child = railGrid; Ui.Put(root, rail);
         Ui.DragHeader(railTop, this);
-        var body = Ui.Grid("340,1,*", "*");
+        var body = Ui.Grid("340,1,*", "*"); bodyGrid = body;
         var sidebar = Ui.Grid("*", "Auto,Auto,*,Auto");
         // The Day elapsed card, with a bar of the accent colour along its top edge.
         var dayCard = new Border { CornerRadius = new CornerRadius(18), ClipToBounds = true, BorderThickness = new Thickness(1) }; dayCard.Classes.Add("dayCard");
@@ -704,7 +705,9 @@ public sealed class DashboardWindow : Window
         Ui.Put(sidebar, summary, row: 3);
         var panel = new Border { Child = sidebar };
         panel.Classes.Add("panel");
-        Ui.Put(body, panel);
+        Ui.Put(body, panel); fullColumn = panel;
+        // On Notes and Feed the column shrinks to a slim strip so the page has the room.
+        compactColumn = new CompactColumn(model, account => ShowFeed(account)); compactColumn.IsVisible = false; Ui.Put(body, compactColumn); Ui.DragHeader(compactColumn, this);
         var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
         var review = Ui.Grid("*", "Auto,*,Auto,Auto");
         review.Margin = new Thickness(22, 16, 22, 18);
@@ -931,6 +934,8 @@ public sealed class DashboardWindow : Window
         day.Classes.Set("startDay", !model.DayStarted); // Green to start the day, red to finish it.
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
+        // Notes and Feed take the room the left column used, which shrinks to the slim strip of clock, controls and account dots.
+        var slim = PageMode && !settingsMode; bodyGrid.ColumnDefinitions[0].Width = new GridLength(slim ? CompactColumn.ColumnWidth : 340); fullColumn.IsVisible = !slim; compactColumn.IsVisible = slim;
         var editing = !PageMode && (!weekMode || model.WeekSection == "entries");
         zoomControls.IsVisible = !weekMode && !settingsMode && !PageMode;
         settingZoom = true; zoomSlider.Value = model.TimelineZoomFraction; settingZoom = false; // Follows the wheel and the buttons too.

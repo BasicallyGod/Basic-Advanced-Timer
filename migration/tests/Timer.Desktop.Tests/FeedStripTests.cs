@@ -87,7 +87,7 @@ public sealed class FeedStripTests : IDisposable
         {
             Click(strip, "FeedStripItem_" + Key("id:a2"));
             var page = window.GetVisualDescendants().OfType<FeedPage>().Single();
-            Assert.True(model.FeedIsRead("id:a2")); Assert.Equal(0, Find<TextBlock>(page, "FeedBody_" + Key("id:a2")).MaxLines); // Open in full.
+            Assert.True(model.FeedIsRead("id:a2")); Assert.Equal(0, Find<TextBlock>(page, "FeedDetailBody_" + Key("id:a2")).MaxLines); // Open in full in the pane.
             var entries = page.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("FeedEntry_", StringComparison.Ordinal) == true).Select(b => b.Name).ToList();
             Assert.DoesNotContain("FeedEntry_" + Key("id:b1"), entries); Assert.Contains("FeedEntry_" + Key("id:a1"), entries); // Only Account one's entries.
             // Clicking from the feed page itself refocuses it too.

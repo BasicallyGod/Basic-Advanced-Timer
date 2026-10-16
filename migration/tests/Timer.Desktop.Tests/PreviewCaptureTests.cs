@@ -35,6 +35,7 @@ public sealed class PreviewCaptureTests
                 void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-" + name + ".png")); }
                 window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NotesTab").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Shot("notes");
                 window.ShowFeed(); Shot("feed");
+                window.GetVisualDescendants().OfType<FeedPage>().Single().Toggle("id:a1"); Shot("feed-selected");
                 window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "FeedTab").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var open = window.GetVisualDescendants().OfType<StackPanel>().FirstOrDefault(p => p.Name?.StartsWith("FeedOpen_") == true); if (open is not null) { Dispatcher.UIThread.RunJobs(); }
                 window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
