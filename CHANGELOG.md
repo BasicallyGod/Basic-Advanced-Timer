@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 16 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Notes tab | pending | A Notes button on the rail opens a page for the day showing, with a box to add a note and Coming up beside it. A note understands a time (14:30), a day (@fri, @tomorrow), a leading ! for a deadline and #AccountName to link an account; each part it understood shows as a chip that can be taken back out. Notes can be ticked, edited, moved to another day and removed, follow an account when it is renamed, and are kept in the database. The shorthand now comes from the shared Timer.Core 0.2.0. |
+
 ## 15 October 2026
 
 | Change | Commit | Details |

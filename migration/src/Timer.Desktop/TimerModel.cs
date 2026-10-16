@@ -176,6 +176,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     private StoreSettings preferences;
     private readonly TimerStore? store;
+    private readonly List<DayNote> dayNotes;
+    private long nextNoteId = 1;
     private int ticks;
     public TimerModel(TrackingEngine? engine = null, StoreSettings? preferences = null, TimerStore? store = null)
     {
@@ -183,6 +185,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, ThemeLibrary.Default, DayOfWeek.Monday);
         this.store = store;
         Editor = store?.Editor ?? new LedgerEditor(Engine);
+        dayNotes = store?.LoadDayNotes() ?? new List<DayNote>();
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
@@ -332,6 +335,16 @@ public sealed class TimerModel : INotifyPropertyChanged
             // Save first so the backup holds the latest entries, then rewrite everything in one go.
             if (store is not null) { store.Save(Engine, preferences); store.Backup("before-rename"); }
             foreach (var (from, to) in renamed) Editor.RenameAccount(from, to);
+        }
+        // Notes tagged with an account follow its rename, and the tag becomes an ordinary word if it is deleted.
+        if (renamed.Count > 0 || deleted.Count > 0)
+        {
+            var before = preferences.Accounts.Select(a => a.Name).ToList(); var map = renamed.ToDictionary(r => r.Key, r => r.Value); var gone = deleted.ToList();
+            for (var i = 0; i < dayNotes.Count; i++)
+            {
+                var text = NoteShorthand.Relink(dayNotes[i].Text, before, map, gone);
+                if (text != dayNotes[i].Text) { dayNotes[i] = dayNotes[i] with { Text = text }; store?.UpdateDayNote(dayNotes[i]); }
+            }
         }
         preferences = preferences with { Accounts = WithColours(values) };
         if (renamed.Count > 0 && SelectedAccount is { } picked && renames.TryGetValue(picked, out var now)) SelectedAccount = now;
@@ -853,6 +866,51 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         messageTimer?.Stop(); messageTimer = null;
         Notice = null; EditError = null; messageSeen = (null, null); Notify();
+    }
+    // ---- Notes on a day. They live in the database, outside the undo history, and feed Coming up. ----
+    public IReadOnlyList<DayNote> AllDayNotes => dayNotes;
+    public IReadOnlyList<DayNote> NotesOn(DateTime day) => dayNotes.Where(n => n.Day.Date == day.Date).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
+    public IReadOnlyList<DayNote> ComingUp(int days = 14) => DayNotes.ComingUp(dayNotes, Engine.Now, days);
+    /// <summary>The names of the accounts a #Tag can link to.</summary>
+    public IReadOnlyList<string> AccountNames => Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name).ToList();
+    /// <summary>Adds a note to a day from what was typed. A time such as 14:30 in the words becomes the note's time.</summary>
+    public void AddDayNote(DateTime day, string typed)
+    {
+        // A day named in the words (@fri, @tomorrow, @21oct) wins over the day showing, and the notice says where the note went, since it may leave the list in view.
+        var parts = NoteShorthand.Parse(typed, Engine.Now); if (parts.Text.Length == 0) return;
+        var target = (parts.Day ?? day).Date;
+        var id = store?.AddDayNote(target, parts.At, parts.Text) ?? nextNoteId++;
+        dayNotes.Add(new DayNote(id, target, parts.At, parts.Text));
+        if (target != day.Date) Notice = "Added to " + target.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
+        Notify();
+    }
+    /// <summary>Takes a note's time back out of the note and puts it into its words, so nothing is lost and it can be set again by typing it.</summary>
+    public void ClearNoteTime(long id) => ChangeNote(id, n => n.At is { } at ? n with { At = null, Text = NoteShorthand.WithTimeInWords(n.Text, at) } : n, true);
+    /// <summary>Takes the deadline marker off a note, which becomes an ordinary one.</summary>
+    public void ClearNoteDeadline(long id) => ChangeNote(id, n => DayNotes.IsDeadline(n) ? n with { Text = NoteShorthand.WithoutDeadline(n.Text) } : n, true);
+    /// <summary>Unlinks a note from its account, leaving the name in its words as an ordinary word.</summary>
+    public void ClearNoteAccount(long id) => ChangeNote(id, n => n with { Text = NoteShorthand.WithoutAccountTag(n.Text, AccountNames) }, true);
+    /// <summary>Moves a note to another day. A notice says where it went when it leaves the day showing, as typing @fri does.</summary>
+    public void MoveDayNote(long id, DateTime day)
+    {
+        var from = dayNotes.FirstOrDefault(n => n.Id == id); if (from is null || from.Day.Date == day.Date) return;
+        ChangeNote(id, n => n with { Day = day.Date }, false);
+        if (day.Date != SelectedDate.Date) Notice = "Moved to " + day.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
+        Notify();
+    }
+    public void ToggleDayNote(long id) => ChangeNote(id, n => n with { Done = !n.Done }, true);
+    /// <summary>Saves a note's words as they are typed, without notifying, so the box being typed in is not rebuilt. Emptying a note leaves it as it was.</summary>
+    public void SetDayNoteText(long id, string text) => ChangeNote(id, n => n with { Text = text.Trim() }, false);
+    public void RemoveDayNote(long id)
+    {
+        if (dayNotes.RemoveAll(n => n.Id == id) == 0) return;
+        store?.DeleteDayNote(id); Notify();
+    }
+    private void ChangeNote(long id, Func<DayNote, DayNote> change, bool notify)
+    {
+        var index = dayNotes.FindIndex(n => n.Id == id); if (index < 0) return;
+        var note = change(dayNotes[index]); if (note == dayNotes[index] || note.Text.Length == 0) return;
+        dayNotes[index] = note; store?.UpdateDayNote(note); if (notify) Notify();
     }
     private void Notify() { ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
 }
