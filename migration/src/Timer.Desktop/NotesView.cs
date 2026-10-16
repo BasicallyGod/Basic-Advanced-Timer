@@ -22,21 +22,36 @@ public sealed class NotesPage : Grid
     private readonly TextBlock heading = new() { FontSize = 20, FontWeight = FontWeight.SemiBold, Classes = { "clock" } };
     private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Add a note: 14:30 · ! · @fri · #Account", Padding = new Thickness(10, 7), FontSize = 14 };
     private string shown = ""; private bool dirty;
+    private DateTime? targetDay; private Border dayChip = null!; private readonly TextBlock chipText = new() { FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
 
     public NotesPage(TimerModel model)
     {
         this.model = model; coming = new ComingUpView(model);
         ColumnDefinitions = new ColumnDefinitions("2*,16,*"); Margin = new Thickness(0, 0, 0, 4);
         var left = new Border { CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(20, 16) }; left.Classes.Add("dayCard");
-        var leftGrid = Ui.Grid("*", "Auto,*,Auto"); leftGrid.RowSpacing = 10;
+        var leftGrid = Ui.Grid("*", "Auto,*,Auto,Auto"); leftGrid.RowSpacing = 10;
         Ui.Put(leftGrid, heading);
         Ui.Put(leftGrid, Ui.WithMoreBelow(new ScrollViewer { Content = rows, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 1);
-        Ui.Put(leftGrid, input, row: 2);
+        // A note can be put on any day: the small calendar beside the box picks it for the next note, and it shows as a chip until the note is added.
+        dayChip = new Border { Name = "NoteDayChip", CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(8, 1, 3, 1), HorizontalAlignment = HorizontalAlignment.Left, IsVisible = false };
+        dayChip.Classes.Add("chip");
+        var chipRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
+        chipRow.Children.Add(chipText);
+        var chipClear = Ui.IconButton(IconKind.Close, "Add it on the day showing instead", "NoteDayClear", () => { targetDay = null; UpdateDayChip(); }); chipClear.Width = 18; chipClear.Height = 18; chipClear.Padding = new Thickness(0); chipRow.Children.Add(chipClear);
+        dayChip.Child = chipRow; Ui.Put(leftGrid, dayChip, row: 2);
+        var inputRow = Ui.Grid("*,Auto"); inputRow.ColumnSpacing = 6; Ui.Put(inputRow, input);
+        var pickDay = Ui.IconButton(IconKind.Today, "Add it on another day", "NoteDayPick", () => { }); pickDay.Width = 36; pickDay.Height = 36; Ui.Put(inputRow, pickDay, 1);
+        var dayCalendar = new Calendar { Name = "NoteDayCalendar" }; var dayFlyout = new Flyout { Content = dayCalendar, Placement = Avalonia.Controls.PlacementMode.TopEdgeAlignedRight };
+        dayCalendar.SelectedDatesChanged += (_, _) => { if (dayCalendar.SelectedDate is { } picked) { targetDay = picked.Date; dayFlyout.Hide(); UpdateDayChip(); input.Focus(); } };
+        dayFlyout.Opening += (_, _) => { dayCalendar.SelectedDate = null; dayCalendar.DisplayDate = targetDay ?? model.SelectedDate; };
+        pickDay.Flyout = dayFlyout;
+        Ui.Put(leftGrid, inputRow, row: 3);
+        TagPicker.Attach(input, leftGrid, model, above: true);
         left.Child = leftGrid; Children.Add(left);
         input.KeyDown += (_, e) =>
         {
             if (e.Key != Key.Enter || string.IsNullOrWhiteSpace(input.Text)) return;
-            var typed = input.Text; input.Text = ""; model.AddDayNote(model.SelectedDate, typed); e.Handled = true;
+            var typed = input.Text; input.Text = ""; var day = targetDay ?? model.SelectedDate; targetDay = null; UpdateDayChip(); model.AddDayNote(day, typed); e.Handled = true;
         };
         var right = new Border { CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(20, 16) }; right.Classes.Add("dayCard");
         var rightGrid = Ui.Grid("*", "Auto,*"); rightGrid.RowSpacing = 10;
@@ -48,6 +63,12 @@ public sealed class NotesPage : Grid
         DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= OnModel; };
         // A rebuild that was held back while a note was being edited happens as soon as that box is left.
         AddHandler(LostFocusEvent, (_, _) => { if (dirty && !Editing()) Rebuild(); });
+    }
+
+    private void UpdateDayChip()
+    {
+        dayChip.IsVisible = targetDay is not null;
+        if (targetDay is { } day) chipText.Text = "For " + day.ToString("ddd d MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
     }
 
     private bool Editing() => TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox box && box != input && this.IsVisualAncestorOf(box);

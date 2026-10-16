@@ -529,7 +529,7 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock dayText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly IconGlyph dayFlag = new(IconKind.Flag);
     private bool hoverBreak;
-    private readonly TextBlock date = Ui.Text("", 14);
+    private readonly TextBlock date = Ui.Text("", 14); private Button datePick = null!;
     private readonly TextBlock today = Ui.Text("", 12, "muted");
     private readonly ContentControl workspace = new();
     private readonly Button day;
@@ -671,6 +671,13 @@ public sealed class DashboardWindow : Window
         var nav = Ui.Grid("*,Auto"); nav.VerticalAlignment = VerticalAlignment.Center;
         Ui.Put(nav, workspaceTitle); headerRow = nav;
         date.Width = 112; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
+        // Pressing the date opens a calendar to jump to any day, so a day weeks away is one click instead of many arrows.
+        datePick = Ui.Button("", () => { }, "DatePick"); datePick.Content = date; datePick.Background = Avalonia.Media.Brushes.Transparent; datePick.BorderThickness = new Thickness(0); datePick.Padding = new Thickness(4, 6); datePick.CornerRadius = new CornerRadius(8);
+        ToolTip.SetTip(datePick, "Pick a day"); Avalonia.Automation.AutomationProperties.SetName(datePick, "Pick a day");
+        var datePicker = new Calendar { Name = "DateCalendar" }; var dateFlyout = new Flyout { Content = datePicker, Placement = Avalonia.Controls.PlacementMode.Bottom }; var settingDate = false;
+        dateFlyout.Opening += (_, _) => { settingDate = true; datePicker.SelectedDate = model.SelectedDate; datePicker.DisplayDate = model.SelectedDate; settingDate = false; };
+        datePicker.SelectedDatesChanged += (_, _) => { if (!settingDate && datePicker.SelectedDate is { } picked) { dateFlyout.Hide(); model.GoToDate(picked, weekMode); } };
+        datePick.Flyout = dateFlyout;
         previous = Ui.IconButton(IconKind.Previous, "Previous day or week", "PreviousPeriod", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }); previous.Width = 30;
         next = Ui.IconButton(IconKind.Next, "Next day or week", "NextPeriod", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }); next.Width = 30;
         // The same quiet outlined look, with a small icon, as Add time, Undo and Merge.
@@ -678,7 +685,7 @@ public sealed class DashboardWindow : Window
         todayButton.Classes.Add("toolButton"); todayButton.Classes.Add("quiet"); todayButton.Height = 34; todayButton.Margin = new Thickness(10, 0, 0, 0); todayButton.Padding = new Thickness(12, 0);
         todayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), new TextBlock { Text = "Today", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
         Avalonia.Automation.AutomationProperties.SetName(todayButton, "Today");
-        Ui.Put(nav, Ui.Horizontal(previous, date, next, todayButton), 1);
+        Ui.Put(nav, Ui.Horizontal(previous, datePick, next, todayButton), 1);
         Ui.Put(review, nav);
         undo = Ui.Button("", () => model.UndoEdit(), "UndoEdit");
         merge = Ui.Button("", () => model.MergeSelection(), "MergeSelected");
@@ -904,7 +911,7 @@ public sealed class DashboardWindow : Window
         Rail(entriesTab, !settingsMode && weekMode && model.WeekSection == "entries");
         Rail(settingsRail, settingsMode);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
-        foreach (var control in new Control[] { previous, date, next, todayButton }) control.IsVisible = !settingsMode && !feedMode; // The feed is a stream, not a day.
+        foreach (var control in new Control[] { previous, datePick, next, todayButton }) control.IsVisible = !settingsMode && !feedMode; // The feed is a stream, not a day.
         if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && !PageMode && (!weekMode || model.WeekSection == "entries");
         if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && !PageMode && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
         workspaceTitle.Text = settingsMode ? "Settings" : notesMode ? "Notes" : feedMode ? "Feed" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };

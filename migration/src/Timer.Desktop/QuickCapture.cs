@@ -28,6 +28,7 @@ public sealed class QuickCaptureWindow : Window
         var heading = Ui.Text("Quick capture", 12, "muted"); heading.FontWeight = FontWeight.SemiBold;
         reading.TextWrapping = TextWrapping.Wrap; reading.Name = "CaptureReading";
         stack.Children.Add(heading); stack.Children.Add(input); stack.Children.Add(reading);
+        TagPicker.Attach(input, stack, model); // Completes a #Tag from the accounts as it is typed.
         var card = new Border { Child = stack, BorderThickness = new Thickness(1) }; card.Classes.Add("panel");
         var host = Ui.Shadowed(card, 18); Ui.SetShadow(host, true, null); Content = host;
         input.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) Read(); };

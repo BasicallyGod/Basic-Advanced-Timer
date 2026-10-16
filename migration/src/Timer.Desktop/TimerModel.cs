@@ -473,6 +473,13 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (following) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = today; }
         Notify();
     }
+    /// <summary>Shows any day, for the date picker in the header. On the week views it will not go past the current week, as the arrows will not.</summary>
+    public void GoToDate(DateTime day, bool weeks = false)
+    {
+        day = day.Date; if (day == SelectedDate.Date) return;
+        if (weeks && WeekStart(day) > WeekStart(Engine.Now)) return;
+        selectedRows.Clear(); TimelineOffset = null; SelectedDate = day; Notify();
+    }
     public void ChangeDate(int days) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
     /// <summary>Steps the Week tab by whole weeks. It never goes past the current week, since there is nothing to review there.</summary>
     public void ChangeWeek(int weeks)
@@ -877,7 +884,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     // ---- Notes on a day. They live in the database, outside the undo history, and feed Coming up. ----
     public IReadOnlyList<DayNote> AllDayNotes => dayNotes;
     public IReadOnlyList<DayNote> NotesOn(DateTime day) => dayNotes.Where(n => n.Day.Date == day.Date).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
-    public IReadOnlyList<DayNote> ComingUp(int days = 14) => DayNotes.ComingUp(dayNotes, Engine.Now, days);
+    public IReadOnlyList<DayNote> ComingUp(int days = 180) => DayNotes.ComingUp(dayNotes, Engine.Now, days);
     /// <summary>The names of the accounts a #Tag can link to.</summary>
     public IReadOnlyList<string> AccountNames => Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name).ToList();
     /// <summary>Adds a note to a day from what was typed. A time such as 14:30 in the words becomes the note's time.</summary>
