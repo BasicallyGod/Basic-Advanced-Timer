@@ -20,7 +20,7 @@ public sealed class NotesPage : Grid
     private readonly StackPanel rows = new() { Spacing = 4 };
     private readonly ComingUpView coming;
     private readonly TextBlock heading = new() { FontSize = 20, FontWeight = FontWeight.SemiBold, Classes = { "clock" } };
-    private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Add a note: 14:30 time · ! deadline · @fri day · #Account", Padding = new Thickness(10, 7), FontSize = 14 };
+    private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Add a note: 14:30 · ! · @fri · #Account", Padding = new Thickness(10, 7), FontSize = 14 };
     private string shown = ""; private bool dirty;
 
     public NotesPage(TimerModel model)
@@ -28,7 +28,7 @@ public sealed class NotesPage : Grid
         this.model = model; coming = new ComingUpView(model);
         ColumnDefinitions = new ColumnDefinitions("2*,16,*"); Margin = new Thickness(0, 0, 0, 4);
         var left = new Border { CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(20, 16) }; left.Classes.Add("dayCard");
-        var leftGrid = Ui.Grid("Auto,*,Auto", "*"); leftGrid.RowSpacing = 10;
+        var leftGrid = Ui.Grid("*", "Auto,*,Auto"); leftGrid.RowSpacing = 10;
         Ui.Put(leftGrid, heading);
         Ui.Put(leftGrid, Ui.WithMoreBelow(new ScrollViewer { Content = rows, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 1);
         Ui.Put(leftGrid, input, row: 2);
@@ -39,7 +39,7 @@ public sealed class NotesPage : Grid
             var typed = input.Text; input.Text = ""; model.AddDayNote(model.SelectedDate, typed); e.Handled = true;
         };
         var right = new Border { CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(20, 16) }; right.Classes.Add("dayCard");
-        var rightGrid = Ui.Grid("Auto,*", "*"); rightGrid.RowSpacing = 10;
+        var rightGrid = Ui.Grid("*", "Auto,*"); rightGrid.RowSpacing = 10;
         var comingHeading = Ui.Heading("Coming up", 20); Ui.Put(rightGrid, comingHeading);
         Ui.Put(rightGrid, Ui.WithMoreBelow(new ScrollViewer { Content = coming, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 1);
         right.Child = rightGrid; SetColumn(right, 2); Children.Add(right);

@@ -55,7 +55,9 @@ public sealed class SettingsView : ScrollViewer
         };
         syncs.Add(() => { if (!Equals(pillSize.SelectedItem, PillText(model.PillScalePercent))) pillSize.SelectedItem = PillText(model.PillScalePercent); });
         appearance.Children.Add(Row("Pill size", pillSize));
-        appearance.Children.Add(Row("Pill layout", PillLayoutChoices(model, syncs)));
+        // The three pictures need the page's whole width, so the label sits above them instead of in the narrow column beside them.
+        var layoutLabel = Ui.Text("Pill layout", 14, "muted"); layoutLabel.Margin = new Thickness(0, 4, 0, 0); appearance.Children.Add(layoutLabel);
+        appearance.Children.Add(PillLayoutChoices(model, syncs));
         appearance.Children.Add(Toggle("Keep the pill on top", "PillOnTop", () => model.PillOnTop, v => model.SetPillOnTop(v)));
         appearance.Children.Add(Toggle("Keep the dashboard on top", "DashboardOnTop", () => model.DashboardOnTop, v => model.SetDashboardOnTop(v)));
         appearance.Children.Add(Toggle("Window shadows", "WindowShadows", () => model.Shadows, v => model.SetShadows(v)));

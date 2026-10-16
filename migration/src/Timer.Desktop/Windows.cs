@@ -214,8 +214,9 @@ public sealed class PillWindow : Window
         if (lastScreen is { } known && known.Bounds == screen.Bounds && known.Scaling == screen.Scaling) return;
         FitToScreen(screen);
     }
-    // Each layout has its own width, and the list needs at least a little room whichever layout is showing.
-    private double CurrentWidth => expanded ? Math.Max(PillLayouts.For(model.PillStyle).Width, 420) : PillLayouts.For(model.PillStyle).Width;
+    // Each layout has its own width, and it is the same open or closed, so opening the list never changes the window's width (the narrow Minimal pill
+    // used to widen when opened, and the window appeared to jump sideways).
+    private double CurrentWidth => PillLayouts.For(model.PillStyle).Width;
     private double DesiredWidth => (CurrentWidth + 2 * Ui.ShadowMargin) * pillScale.ScaleX;
     private double DesiredHeight()
     {

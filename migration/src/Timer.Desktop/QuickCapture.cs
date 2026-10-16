@@ -16,7 +16,7 @@ public sealed class QuickCaptureWindow : Window
 {
     public const double CardWidth = 460;
     private readonly TimerModel model;
-    private readonly TextBox input = new() { Name = "CaptureText", Watermark = "Jot it down: 14:30 Call back · ! deadline · @fri · #Account", Padding = new Thickness(12, 9), FontSize = 15 };
+    private readonly TextBox input = new() { Name = "CaptureText", Watermark = "Jot it down: 14:30 Call back · ! · @fri · #Account", Padding = new Thickness(12, 9), FontSize = 15 };
     private readonly TextBlock reading = Ui.Text("", 12, "muted");
     private bool closing;
     public QuickCaptureWindow(TimerModel model)

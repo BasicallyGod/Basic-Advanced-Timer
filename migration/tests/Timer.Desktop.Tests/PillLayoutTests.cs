@@ -60,7 +60,7 @@ public sealed class PillLayoutTests
     }
 
     [AvaloniaFact]
-    public void TheMinimalBadgeCarriesTheAccountsInitialsAndTheOpenListStillHasRoom()
+    public void TheMinimalBadgeCarriesTheAccountsInitialsAndTheWindowKeepsItsWidthWhenOpened()
     {
         var model = Model(); model.SetPillStyle("minimal"); var pill = new PillWindow(model); pill.Show();
         try
@@ -69,7 +69,8 @@ public sealed class PillLayoutTests
             var badge = Find<Border>(pill, "PillBadge");
             Assert.Equal(PillLayouts.Initials(model.ActiveAccount!), Assert.IsType<TextBlock>(badge.Child).Text);
             pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs();
-            Assert.True(pill.Width / pill.Scale - 2 * Ui.ShadowMargin >= 420 - 1);
+            Assert.Equal(360, pill.Width / pill.Scale - 2 * Ui.ShadowMargin, 1); // The window is no wider open than closed, so it never shifts sideways.
+            pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs(); Assert.Equal(360, pill.Width / pill.Scale - 2 * Ui.ShadowMargin, 1);
         }
         finally { pill.Close(); }
     }
@@ -85,6 +86,26 @@ public sealed class PillLayoutTests
             model.SetPillStyle("compact"); Dispatcher.UIThread.RunJobs(); Assert.IsType<Avalonia.Controls.Shapes.Ellipse>(Find<Border>(pill, "PillBadge").Child);
             // On a break the minimal badge goes back to the amber dot, since a break has no account initials.
             model.SetPillStyle("minimal"); model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.IsType<Avalonia.Controls.Shapes.Ellipse>(Find<Border>(pill, "PillBadge").Child);
+        }
+        finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheAccountNameShowsBesideItsChevronInEveryLayoutThatHasAName()
+    {
+        var model = Model(); var pill = new PillWindow(model); pill.Show();
+        try
+        {
+            var name = model.Accounts.First(a => !BreakAccount.Is(a.Name)).Name; model.ToggleAccount(name);
+            foreach (var layout in new[] { "full", "compact" })
+            {
+                model.SetPillStyle(layout); Dispatcher.UIThread.RunJobs(); pill.UpdateLayout();
+                var text = pill.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == name && t.IsEffectivelyVisible);
+                Assert.True(text.Bounds.Width > 20, layout + ": the name has room"); // It once measured to nothing, leaving the chevron over the line beneath.
+                var chevron = pill.GetVisualDescendants().OfType<Chevron>().Single();
+                var textRight = text.TranslatePoint(new Avalonia.Point(text.Bounds.Width, 0), pill)!.Value.X; var chevronLeft = chevron.TranslatePoint(new Avalonia.Point(0, 0), pill)!.Value.X;
+                Assert.True(chevronLeft >= textRight - 1, layout + ": the chevron sits after the name");
+            }
         }
         finally { pill.Close(); }
     }
