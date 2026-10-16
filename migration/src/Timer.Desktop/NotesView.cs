@@ -22,6 +22,10 @@ public sealed class NotesPage : Grid
     private readonly TextBlock heading = new() { FontSize = 16, FontWeight = FontWeight.SemiBold };
     private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Add a note: 14:30 · ! · @fri · #Account", Padding = new Thickness(10, 7), FontSize = 14 };
     private string shown = ""; private bool dirty;
+    private string kind = "all"; // Which notes the day's list shows: all, tasks, events or deadlines.
+    private readonly StackPanel tabs = new() { Orientation = Orientation.Horizontal, Spacing = 2 };
+    private static readonly (string Key, string Text)[] Kinds = { ("all", "All"), ("tasks", "Tasks"), ("events", "Events"), ("deadlines", "Deadlines") };
+    private static readonly (int Days, string Text)[] Ranges = { (7, "Next 7 days"), (30, "Next 30 days"), (180, "Next 6 months") };
     private DateTime? targetDay; private Border dayChip = null!; private readonly TextBlock chipText = new() { FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
 
     public NotesPage(TimerModel model)
@@ -29,23 +33,26 @@ public sealed class NotesPage : Grid
         this.model = model; coming = new ComingUpView(model);
         ColumnDefinitions = new ColumnDefinitions("3*,16,2*"); Margin = new Thickness(0, 0, 0, 4);
         var left = new Border { CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(20, 16) }; left.Classes.Add("dayCard");
-        var leftGrid = Ui.Grid("*", "Auto,*,Auto,Auto"); leftGrid.RowSpacing = 10;
-        Ui.Put(leftGrid, heading);
-        Ui.Put(leftGrid, Ui.WithMoreBelow(new ScrollViewer { Content = rows, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 1);
+        var leftGrid = Ui.Grid("*", "Auto,Auto,*,Auto,Auto"); leftGrid.RowSpacing = 10;
+        // The day's name on the left and the one main action on the right; under them the tabs that narrow the list to one kind of note.
+        var headRow = Ui.Grid("*,Auto"); Ui.Put(headRow, heading);
+        var add = Ui.DialogButton("Add note", () => input.Focus(), "NoteAddButton", true); add.Height = 32; Ui.Put(headRow, add, 1);
+        Ui.Put(leftGrid, headRow); Ui.Put(leftGrid, tabs, row: 1);
+        Ui.Put(leftGrid, Ui.WithMoreBelow(new ScrollViewer { Content = rows, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 2);
         // A note can be put on any day: the small calendar beside the box picks it for the next note, and it shows as a chip until the note is added.
         dayChip = new Border { Name = "NoteDayChip", CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(8, 1, 3, 1), HorizontalAlignment = HorizontalAlignment.Left, IsVisible = false };
         dayChip.Classes.Add("chip");
         var chipRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
         chipRow.Children.Add(chipText);
         var chipClear = Ui.IconButton(IconKind.Close, "Add it on the day showing instead", "NoteDayClear", () => { targetDay = null; UpdateDayChip(); }); chipClear.Width = 18; chipClear.Height = 18; chipClear.Padding = new Thickness(0); chipRow.Children.Add(chipClear);
-        dayChip.Child = chipRow; Ui.Put(leftGrid, dayChip, row: 2);
+        dayChip.Child = chipRow; Ui.Put(leftGrid, dayChip, row: 3);
         var inputRow = Ui.Grid("*,Auto"); inputRow.ColumnSpacing = 6; Ui.Put(inputRow, input);
         var pickDay = Ui.IconButton(IconKind.Today, "Add it on another day", "NoteDayPick", () => { }); pickDay.Width = 36; pickDay.Height = 36; Ui.Put(inputRow, pickDay, 1);
         var dayCalendar = new Calendar { Name = "NoteDayCalendar" }; var dayFlyout = new Flyout { Content = dayCalendar, Placement = Avalonia.Controls.PlacementMode.TopEdgeAlignedRight };
         dayCalendar.SelectedDatesChanged += (_, _) => { if (dayCalendar.SelectedDate is { } picked) { targetDay = picked.Date; dayFlyout.Hide(); UpdateDayChip(); input.Focus(); } };
         dayFlyout.Opening += (_, _) => { dayCalendar.SelectedDate = null; dayCalendar.DisplayDate = targetDay ?? model.SelectedDate; };
         pickDay.Flyout = dayFlyout;
-        Ui.Put(leftGrid, inputRow, row: 3);
+        Ui.Put(leftGrid, inputRow, row: 4);
         TagPicker.Attach(input, leftGrid, model, above: true);
         left.Child = leftGrid; Children.Add(left);
         input.KeyDown += (_, e) =>
@@ -55,7 +62,10 @@ public sealed class NotesPage : Grid
         };
         var right = new Border { CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(20, 16) }; right.Classes.Add("dayCard");
         var rightGrid = Ui.Grid("*", "Auto,*"); rightGrid.RowSpacing = 10;
-        var comingHeading = new TextBlock { Text = "Coming up", FontSize = 16, FontWeight = FontWeight.SemiBold }; Ui.Put(rightGrid, comingHeading);
+        var comingHeading = new TextBlock { Text = "Coming up", FontSize = 16, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var range = new ComboBox { Name = "ComingRange", ItemsSource = Ranges.Select(r => r.Text).ToList(), SelectedIndex = 1, Height = 28, MinHeight = 28, Padding = new Thickness(10, 0), FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+        range.SelectionChanged += (_, _) => { coming.Days = Ranges[Math.Max(0, range.SelectedIndex)].Days; coming.Rebuild(); };
+        var comingHead = Ui.Grid("*,Auto"); Ui.Put(comingHead, comingHeading); Ui.Put(comingHead, range, 1); Ui.Put(rightGrid, comingHead);
         Ui.Put(rightGrid, Ui.WithMoreBelow(new ScrollViewer { Content = coming, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 1);
         right.Child = rightGrid; SetColumn(right, 2); Children.Add(right);
         Rebuild();
@@ -83,15 +93,24 @@ public sealed class NotesPage : Grid
     }
 
     private string Signature() => model.SelectedDate.ToString("yyyyMMdd") + "|" + model.CurrentTheme.Name + "|" + string.Join(",", model.AccountNames) + "|"
-        + string.Join(";", model.AllDayNotes.Select(n => $"{n.Id}:{n.Day:yyyyMMdd}:{n.At}:{n.Done}:{n.Text}")) + "|" + model.Engine.Now.ToString("yyyyMMdd");
+        + string.Join(";", model.AllDayNotes.Select(n => $"{n.Id}:{n.Day:yyyyMMdd}:{n.At}:{n.Done}:{n.Text}")) + "|" + model.Engine.Now.ToString("yyyyMMdd") + "|" + kind;
 
     public void Rebuild()
     {
         dirty = false; shown = Signature(); rows.Children.Clear();
         var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
         heading.Text = model.SelectedDate.ToString("dddd d MMMM", british);
-        var notes = model.NotesOn(model.SelectedDate);
-        if (notes.Count == 0) rows.Children.Add(Ui.Text("No notes for this day.", 13, "muted"));
+        tabs.Children.Clear();
+        foreach (var (key, text) in Kinds)
+        {
+            var picked = key; var tab = Ui.Button(text, () => { kind = picked; Rebuild(); }, "NotesFilter_" + key);
+            tab.Classes.Add("flat"); tab.Height = 28; tab.Padding = new Thickness(10, 0); tab.FontSize = 13; tab.Classes.Set("filterOn", kind == key); tabs.Children.Add(tab);
+        }
+        var notes = model.NotesOn(model.SelectedDate).Where(n => kind switch
+        {
+            "tasks" => DayNotes.IsTask(n), "events" => n.At is not null && !DayNotes.IsDeadline(n), "deadlines" => DayNotes.IsDeadline(n), _ => true
+        }).ToList();
+        if (notes.Count == 0) rows.Children.Add(Ui.Text(kind == "all" ? "No notes for this day." : "Nothing of this kind on this day.", 13, "muted"));
         foreach (var note in notes)
         {
             var id = note.Id;
@@ -171,13 +190,15 @@ public sealed class ComingUpView : StackPanel
 {
     private readonly TimerModel model;
     private readonly bool compact;
+    /// <summary>How far ahead the list looks, in days.</summary>
+    public int Days { get; set; } = 30;
     public ComingUpView(TimerModel model, bool compact = false) { this.model = model; this.compact = compact; Spacing = 6; Rebuild(); }
     public static string When(DateTime day, DateTime today)
         => (day.Date - today.Date).Days switch { 0 => "Today", 1 => "Tomorrow", < 7 => day.ToString("dddd", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), _ => day.ToString("ddd d MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) };
     public void Rebuild()
     {
         Children.Clear();
-        var coming = model.ComingUp();
+        var coming = model.ComingUp(Days);
         if (coming.Count == 0)
         {
             Children.Add(Ui.Text("Nothing coming up", compact ? 13 : 14, "muted"));
