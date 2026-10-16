@@ -48,9 +48,9 @@ public sealed class NotesPage : Grid
         dayChip.Child = chipRow; Ui.Put(leftGrid, dayChip, row: 3);
         var inputRow = Ui.Grid("*,Auto"); inputRow.ColumnSpacing = 6; Ui.Put(inputRow, input);
         var pickDay = Ui.IconButton(IconKind.Today, "Add it on another day", "NoteDayPick", () => { }); pickDay.Width = 36; pickDay.Height = 36; Ui.Put(inputRow, pickDay, 1);
-        var dayCalendar = new Calendar { Name = "NoteDayCalendar" }; var dayFlyout = new Flyout { Content = dayCalendar, Placement = Avalonia.Controls.PlacementMode.TopEdgeAlignedRight };
-        dayCalendar.SelectedDatesChanged += (_, _) => { if (dayCalendar.SelectedDate is { } picked) { targetDay = picked.Date; dayFlyout.Hide(); UpdateDayChip(); input.Focus(); } };
-        dayFlyout.Opening += (_, _) => { dayCalendar.SelectedDate = null; dayCalendar.DisplayDate = targetDay ?? model.SelectedDate; };
+        var dayCalendar = new SoftDatePicker { Name = "NoteDayCalendar" }; var dayFlyout = new Flyout { Content = dayCalendar, Placement = Avalonia.Controls.PlacementMode.TopEdgeAlignedRight };
+        dayCalendar.DayPicked += picked => { targetDay = picked.Date; dayFlyout.Hide(); UpdateDayChip(); input.Focus(); };
+        dayFlyout.Opening += (_, _) => dayCalendar.View(targetDay ?? model.SelectedDate, targetDay);
         pickDay.Flyout = dayFlyout;
         Ui.Put(leftGrid, inputRow, row: 4);
         TagPicker.Attach(input, leftGrid, model, above: true);
@@ -122,9 +122,10 @@ public sealed class NotesPage : Grid
             var remove = Ui.IconButton(IconKind.Close, "Remove", "NoteRemove_" + id, () => model.RemoveDayNote(id)); remove.Width = 26; remove.Height = 26; remove.Classes.Add("hoverReveal");
             // A small calendar picks another day for the note, for when it was put on the wrong one or plans change.
             var when = Ui.IconButton(IconKind.Today, "Move to another day", "NoteMove_" + id, () => { }); when.Width = 26; when.Height = 26; when.Classes.Add("hoverReveal");
-            var calendar = new Calendar { Name = "NoteCalendar_" + id, SelectedDate = note.Day, DisplayDate = note.Day };
+            var calendar = new SoftDatePicker { Name = "NoteCalendar_" + id };
             var flyout = new Flyout { Content = calendar, Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight };
-            calendar.SelectedDatesChanged += (_, _) => { if (calendar.SelectedDate is { } picked) { flyout.Hide(); model.MoveDayNote(id, picked); } };
+            flyout.Opening += (_, _) => calendar.View(note.Day, note.Day);
+            calendar.DayPicked += picked => { flyout.Hide(); model.MoveDayNote(id, picked); };
             when.Flyout = flyout;
             var row = Ui.Grid("Auto,*,Auto"); row.VerticalAlignment = VerticalAlignment.Center; row.Margin = new Thickness(0, 2);
             Ui.Put(row, tick);

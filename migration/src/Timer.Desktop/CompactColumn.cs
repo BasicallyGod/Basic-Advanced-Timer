@@ -66,31 +66,53 @@ public sealed class CompactColumn : Grid
     /// <summary>Unique short account labels; full names and budget details remain available on each row's tooltip.</summary>
     public static Dictionary<string, string> Short(IReadOnlyList<(string Name, string Display)> accounts)
     {
-        var taken = new HashSet<string>(); var result = new Dictionary<string, string>();
-        for (var pass = 0; pass < 3; pass++)
-            foreach (var (name, display) in accounts)
-            {
-                if (result.ContainsKey(name)) continue;
-                var words = display.Split(' ', StringSplitOptions.RemoveEmptyEntries); var last = words.Length > 0 ? words[^1] : display;
-                var candidate = pass switch
-                {
-                    0 => PillLayouts.Initials(display),
-                    1 => words.Length > 1 && last.All(char.IsDigit) ? char.ToUpperInvariant(display[0]) + last : "",
-                    _ => words.Length > 1 ? (char.ToUpperInvariant(display[0]) + new string(last.Take(2).ToArray()).ToUpperInvariant()) : ""
-                };
-                // Only a candidate that is nobody else's first choice for this pass is taken, so the first two accounts do not both settle for the same letters.
-                if (candidate.Length > 0 && !taken.Contains(candidate) && accounts.Count(o => o.Name != name && !result.ContainsKey(o.Name) && PassLabel(o.Display, pass) == candidate) == 0) { taken.Add(candidate); result[name] = candidate; }
-            }
-        var index = 1;
-        foreach (var (name, _) in accounts) if (!result.ContainsKey(name)) { result[name] = index.ToString(); index++; }
-        return result;
-        static string PassLabel(string display, int pass)
+        // Two characters fit beside the coloured dot and HH:MM in the 96px strip.
+        // Prefer meaningful initials (DLA -> DL, Client 2 -> C2, Account two -> A2);
+        // resolve collisions with unique, fixed-width base-36 codes.
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var choices = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var numberWords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            var words = display.Split(' ', StringSplitOptions.RemoveEmptyEntries); var last = words.Length > 0 ? words[^1] : display;
-            return pass switch { 0 => PillLayouts.Initials(display), 1 => words.Length > 1 && last.All(char.IsDigit) ? char.ToUpperInvariant(display[0]) + last : "", _ => words.Length > 1 ? (char.ToUpperInvariant(display[0]) + new string(last.Take(2).ToArray()).ToUpperInvariant()) : "" };
+            ["one"] = "1", ["two"] = "2", ["three"] = "3", ["four"] = "4",
+            ["five"] = "5", ["six"] = "6", ["seven"] = "7", ["eight"] = "8",
+            ["nine"] = "9", ["ten"] = "A", ["eleven"] = "B", ["twelve"] = "C"
+        };
+        string Candidate(string display)
+        {
+            var words = display.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length == 0) return "";
+            if (words.Length > 1)
+            {
+                var second = words[^1];
+                var suffix = second.Length == 1 || second.All(char.IsDigit) ? second[..1]
+                    : numberWords.TryGetValue(second, out var number) ? number : second[..1];
+                return (words[0][..1] + suffix).ToUpperInvariant();
+            }
+            return words[0][..Math.Min(2, words[0].Length)].ToUpperInvariant();
         }
+        // Assign only labels unique across the input, so there is no arbitrary winner in a collision.
+        var candidates = accounts.Select(a => (a.Name, Candidate: Candidate(a.Display))).ToList();
+        foreach (var item in candidates)
+        {
+            if (item.Candidate.Length == 0 || candidates.Count(x => x.Candidate.Equals(item.Candidate, StringComparison.OrdinalIgnoreCase)) != 1) continue;
+            if (taken.Add(item.Candidate)) choices[item.Name] = item.Candidate;
+        }
+        const string alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        var next = 0;
+        foreach (var account in accounts)
+        {
+            if (choices.ContainsKey(account.Name)) continue;
+            string code;
+            do
+            {
+                var n = next++;
+                code = n < 1296 ? "" + alphabet[(n / 36) % 36] + alphabet[n % 36] : n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+            while (!taken.Add(code));
+            choices[account.Name] = code;
+        }
+        return choices;
     }
-
 
     private void OnModel(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Sync();
 
@@ -104,12 +126,13 @@ public sealed class CompactColumn : Grid
             var name = account.Name;
             var colour = Ui.Visible(account.Colour);
             var isRunning = model.ActiveAccount == name;
-            var label = Ui.Text(labels[name], 11); label.FontWeight = FontWeight.SemiBold;
-            var total = Ui.Text("", 12); total.FontWeight = FontWeight.SemiBold;
-            total.TextAlignment = Avalonia.Media.TextAlignment.Right;
-            var dot = new Border { Width = 9, Height = 9, CornerRadius = new CornerRadius(4.5),
+            var label = Ui.Text(labels[name], 10); label.FontWeight = FontWeight.SemiBold;
+            label.Width = 18; label.TextTrimming = TextTrimming.CharacterEllipsis;
+            var total = Ui.Text("", 11); total.FontWeight = FontWeight.SemiBold;
+            total.MinWidth = 33; total.TextAlignment = Avalonia.Media.TextAlignment.Right;
+            var dot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4),
                 Background = Brush.Parse(colour), VerticalAlignment = VerticalAlignment.Center };
-            var main = Ui.Grid("Auto,*,Auto"); main.ColumnSpacing = 3;
+            var main = Ui.Grid("Auto,*,Auto"); main.ColumnSpacing = 2;
             Ui.Put(main, dot); Ui.Put(main, label, 1); Ui.Put(main, total, 2);
             var track = new Border { Width = ColumnWidth - 24, Height = 3, CornerRadius = new CornerRadius(1.5),
                 ClipToBounds = true, HorizontalAlignment = HorizontalAlignment.Left };
@@ -122,7 +145,7 @@ public sealed class CompactColumn : Grid
             var button = Ui.Button("", () => model.ToggleAccount(name), "CompactDot_" + FeedPage.Key(name));
             button.Classes.Add("rail"); button.Classes.Add("accountCard");
             button.Classes.Set("active", isRunning); button.Width = ColumnWidth - 8; button.Height = 48;
-            button.Padding = new Thickness(4, 4); button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+            button.Padding = new Thickness(3, 4); button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
             button.Content = content;
             Avalonia.Automation.AutomationProperties.SetName(button, account.Display);
             accounts.Children.Add(button);

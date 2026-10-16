@@ -56,7 +56,7 @@ public sealed class SlimColumnTests : IDisposable
             Click(window, "NotesTab"); var slim = window.GetVisualDescendants().OfType<CompactColumn>().Single();
             var list = Find<ScrollViewer>(slim, "CompactAccountScroll");
             Assert.Equal(model.AccountNames.Count, slim.GetVisualDescendants().OfType<Button>().Count(b => b.Name?.StartsWith("CompactDot_") == true));
-            Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "AO");
+            Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "A1");
             Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == model.FormatCompact(model.Today(model.Accounts.First(a => a.Name == "Account one"))));
             Assert.Equal(Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, list.VerticalScrollBarVisibility);
             Click(slim, "CompactDot_" + FeedPage.Key("Account one")); Assert.Equal("Account one", model.ActiveAccount);
@@ -101,9 +101,11 @@ public sealed class SlimColumnTests : IDisposable
     public void AccountLabelsAreShortAndNeverShared()
     {
         var labels = CompactColumn.Short(new[] { ("Account one", "Account one"), ("Account two", "Account two"), ("Account three", "Account three"), ("Account four", "Account four"), ("Account five", "Account five"), ("Internal", "Internal") });
-        Assert.Equal(6, labels.Values.Distinct().Count()); Assert.Equal("AO", labels["Account one"]); Assert.All(labels.Values, l => Assert.InRange(l.Length, 1, 3));
+        Assert.Equal(6, labels.Values.Distinct().Count()); Assert.Equal("A1", labels["Account one"]); Assert.Equal("A2", labels["Account two"]); Assert.Equal("A3", labels["Account three"]); Assert.All(labels.Values, l => Assert.InRange(l.Length, 1, 2));
         var numbered = CompactColumn.Short(new[] { ("Client 1", "Client 1"), ("Client 2", "Client 2"), ("Client 3", "Client 3") });
         Assert.Equal(new[] { "C1", "C2", "C3" }, numbered.Values);
+        var repeated = CompactColumn.Short(new[] { ("X one", "X first"), ("X two", "X second"), ("X three", "X third"), ("Internal", "Internal") });
+        Assert.Equal(4, repeated.Values.Distinct().Count()); Assert.All(repeated.Values, label => Assert.InRange(label.Length, 1, 2));
     }
 
     [AvaloniaFact]

@@ -102,7 +102,7 @@ public sealed class NotesTabTests
             Find<CheckBox>(window, "NoteTick_" + id).RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent)); Dispatcher.UIThread.RunJobs();
             Assert.True(model.AllDayNotes.Single().Done);
             var tomorrow = model.SelectedDate.AddDays(1);
-            ((Calendar)((Flyout)Find<Button>(window, "NoteMove_" + id).Flyout!).Content!).SelectedDate = tomorrow; // The calendar lives in the button's flyout. Dispatcher.UIThread.RunJobs();
+            ((SoftDatePicker)((Flyout)Find<Button>(window, "NoteMove_" + id).Flyout!).Content!).SelectedDate = tomorrow; // The calendar lives in the button's flyout. Dispatcher.UIThread.RunJobs();
             Assert.Empty(model.NotesOn(model.SelectedDate)); Assert.Equal(tomorrow, Assert.Single(model.NotesOn(tomorrow)).Day);
             Assert.Contains("Moved to", model.Notice); // The note left the day showing, so it says where it went.
             model.MoveDayNote(id, model.SelectedDate); Dispatcher.UIThread.RunJobs();
