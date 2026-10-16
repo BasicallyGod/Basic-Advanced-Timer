@@ -614,7 +614,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         string On(int days) => " @" + today.AddDays(days).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
         var notes = new[]
         {
-            "Send the weekly update #Accountone", "Check the invoice numbers #Accounttwo", "16:30 Call with the Account three team #Accountthree",
+            "Send the weekly update #Accountone", "14:25 Send the revised budget #Accounttwo", "Check the invoice numbers #Accounttwo", "16:30 Call with the Account three team #Accountthree",
             "! 17:00 Timesheet to finance", "Book the meeting room" + On(1), "10:00 Planning with Account four #Accountfour" + On(1),
             "! Account five report due #Accountfive" + On(5), "14:00 Review with Account one #Accountone" + On(9), "Renew the software licence" + On(21),
             "! Quarterly review pack #Accountfive" + On(45), "Plan the team away day" + On(90), "! Year-end accounts to Internal #Internal" + On(150)
@@ -836,6 +836,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (closed) return;
         ticks++;
         FollowToday();
+        CheckReminders();
         if (ticks % 60 == 0 && feedOptions.Folder is not null) RefreshFeedInBackground(); // Cloud folders do not always say when a file changed.
         if (ticks % 15 == 0) { Save(); Notify(); }
         else PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Elapsed)));
@@ -904,6 +905,44 @@ public sealed class TimerModel : INotifyPropertyChanged
     public IReadOnlyList<DayNote> AllDayNotes => dayNotes;
     public IReadOnlyList<DayNote> NotesOn(DateTime day) => dayNotes.Where(n => n.Day.Date == day.Date).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
     public IReadOnlyList<DayNote> ComingUp(int days = 180) => DayNotes.ComingUp(dayNotes, Engine.Now, days);
+    // ---- Reminders: notes with a time, shown on the pill and the dashboard when they are near, due or overdue (rules in ReminderRules). ----
+    private readonly Dictionary<long, DateTime> snoozedUntil = new();
+    private readonly HashSet<long> announced = new();
+    private string reminderSignature = "";
+    private const string RemindLine = "remind=", RemindLeadLine = "remindlead=", RemindSnoozeLine = "remindsnooze=";
+    private string? Extra(string key) => preferences.Extras?.AppearanceLines.FirstOrDefault(l => l.StartsWith(key, StringComparison.Ordinal))?[key.Length..];
+    private void SetExtra(string key, string? value)
+    {
+        var extras = preferences.Extras ?? SettingsExtras.Empty;
+        var lines = extras.AppearanceLines.Where(l => !l.StartsWith(key, StringComparison.Ordinal)).ToList();
+        if (value is not null) lines.Add(key + value);
+        preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
+    }
+    public bool RemindersOn => Extra(RemindLine) != "off";
+    public void SetRemindersOn(bool on) => SetExtra(RemindLine, on ? null : "off");
+    /// <summary>Minutes before a note's time that a quiet heads-up starts; 0 for none.</summary>
+    public int ReminderLead => int.TryParse(Extra(RemindLeadLine), out var v) && ReminderRules.LeadChoices.Contains(v) ? v : ReminderRules.DefaultLead;
+    public void SetReminderLead(int minutes) => SetExtra(RemindLeadLine, minutes == ReminderRules.DefaultLead ? null : minutes.ToString());
+    public int ReminderSnooze => int.TryParse(Extra(RemindSnoozeLine), out var v) && ReminderRules.SnoozeChoices.Contains(v) ? v : ReminderRules.DefaultSnooze;
+    public void SetReminderSnooze(int minutes) => SetExtra(RemindSnoozeLine, minutes == ReminderRules.DefaultSnooze ? null : minutes.ToString());
+    public IReadOnlyList<Reminder> Reminders => RemindersOn ? ReminderRules.For(dayNotes, Engine.Now, ReminderLead, snoozedUntil) : System.Array.Empty<Reminder>();
+    /// <summary>The reminder to show a card for: the first one that is due or overdue. A heads-up has no card.</summary>
+    public Reminder? ActiveReminder => Reminders.FirstOrDefault(r => r.State != ReminderState.Soon);
+    public string ReminderLine(Reminder reminder) => ReminderRules.Describe(reminder, Engine.Now);
+    public void SnoozeReminder(long id) { snoozedUntil[id] = Engine.Now.AddMinutes(ReminderSnooze); announced.Remove(id); Notify(); }
+    public void DoneReminder(long id) { if (dayNotes.FirstOrDefault(n => n.Id == id) is { Done: false }) ToggleDayNote(id); }
+    /// <summary>Raised once when a reminder first falls due, so a timer tucked away in the tray can come back.</summary>
+    public event Action<Reminder>? ReminderDue;
+    public event Action? NotesRequested;
+    public void RequestNotes() => NotesRequested?.Invoke();
+    private void CheckReminders()
+    {
+        var now = Reminders;
+        var signature = string.Join(",", now.Select(r => r.Note.Id + ":" + r.State));
+        announced.RemoveWhere(id => now.All(r => r.Note.Id != id || r.State == ReminderState.Soon));
+        foreach (var due in now.Where(r => r.State == ReminderState.Due && announced.Add(r.Note.Id))) ReminderDue?.Invoke(due);
+        if (signature != reminderSignature) { reminderSignature = signature; Notify(); }
+    }
     /// <summary>The names of the accounts a #Tag can link to.</summary>
     public IReadOnlyList<string> AccountNames => Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name).ToList();
     /// <summary>Adds a note to a day from what was typed. A time such as 14:30 in the words becomes the note's time.</summary>

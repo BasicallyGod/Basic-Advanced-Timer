@@ -88,6 +88,22 @@ public sealed class SettingsView : ScrollViewer
         syncs.Add(() => { var shown = model.CaptureShortcut?.ToString() ?? ""; if (shortcut.Text != shown) shortcut.Text = shown; });
         page.Children.Add(Section("Quick capture", capture));
 
+        // Reminders: notes with a time (and deadlines) say so on the pill and the dashboard when they are near, due and overdue.
+        var remind = new StackPanel { Spacing = 10 };
+        remind.Children.Add(Toggle("Remind me of notes with a time", "RemindersOn", () => model.RemindersOn, v => model.SetRemindersOn(v)));
+        string Minutes(int m) => m == 0 ? "None" : m + " minutes";
+        ComboBox Minutes2(string name, int[] choices, Func<int> get, Action<int> set)
+        {
+            var box = new ComboBox { Name = name, ItemsSource = choices.Select(Minutes).ToList(), SelectedItem = Minutes(get()), MinWidth = 140 };
+            box.SelectionChanged += (_, _) => { if (box.SelectedItem is string chosen && chosen != Minutes(get())) set(choices.First(c => Minutes(c) == chosen)); };
+            syncs.Add(() => { if (!Equals(box.SelectedItem, Minutes(get()))) box.SelectedItem = Minutes(get()); });
+            return box;
+        }
+        remind.Children.Add(Row("Heads-up before", Minutes2("ReminderLead", ReminderRules.LeadChoices, () => model.ReminderLead, model.SetReminderLead)));
+        remind.Children.Add(Row("Snooze for", Minutes2("ReminderSnooze", ReminderRules.SnoozeChoices, () => model.ReminderSnooze, model.SetReminderSnooze)));
+        var remindNote = Ui.Text("A heads-up is a quiet dot. At the time a card appears with Snooze and Done, and stays until the note is ticked off. Deadlines with no time remind at 17:00.", 12, "muted"); remindNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; remind.Children.Add(remindNote);
+        page.Children.Add(Section("Reminders", remind));
+
         // The feed: Markdown files in a folder, written by something else and only ever read here. See FEED.md.
         var feed = new StackPanel { Spacing = 10 };
         var feedFolder = new TextBox { Name = "FeedFolder", Width = 340, Watermark = "A folder of .md or .txt files", Text = model.FeedFolder ?? "" };
