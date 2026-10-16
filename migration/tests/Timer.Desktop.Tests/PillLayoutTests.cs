@@ -1,0 +1,122 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Timer.Core;
+using Timer.Storage;
+using Xunit;
+
+namespace Timer.Desktop.Tests;
+
+public sealed class PillLayoutTests
+{
+    private static DateTime Day => new(2026, 10, 14);
+    private static TimerModel Model() { var m = new TimerModel(new TrackingEngine(clock: () => Day.AddHours(10))); m.CompleteSetup(); return m; }
+    private static T Find<T>(Window w, string name) where T : Control => w.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+    private static void Click(Control c) => c.RaiseEvent(new RoutedEventArgs(c is MenuItem ? MenuItem.ClickEvent : Button.ClickEvent));
+
+    [Theory]
+    [InlineData("Account three", "AT")]
+    [InlineData("Northwind Traders", "NT")]
+    [InlineData("Acme", "A")]
+    [InlineData("Client 7", "C7")]
+    [InlineData("", "")]
+    public void InitialsAreTheFirstLettersOfUpToTwoWords(string name, string expected) => Assert.Equal(expected, PillLayouts.Initials(name));
+
+    [Fact]
+    public void TheLayoutChoiceSurvivesARestartAnUnknownOneIsFullAndTheFullChoiceLeavesNoLine()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-pill-layout-" + Guid.NewGuid());
+        try
+        {
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store); Assert.Equal("full", model.PillStyle); model.SetPillStyle("minimal"); model.SetCaptureShortcut(HotkeySpec.Parse("Ctrl+Alt+N")); model.Save(); }
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store); Assert.Equal("minimal", model.PillStyle); Assert.Equal("Ctrl+Alt+N", model.CaptureShortcut!.ToString()); model.SetPillStyle("sideways"); Assert.Equal("full", model.PillStyle); model.SetPillStyle("compact"); model.Save(); }
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store); Assert.Equal("compact", model.PillStyle); model.SetPillStyle("full"); model.Save(); }
+            using (var store = new TimerStore(folder)) { var settings = store.Load(new TrackingEngine()); Assert.DoesNotContain(settings.Extras!.AppearanceLines, l => l.StartsWith("pillstyle=", StringComparison.Ordinal)); }
+        }
+        finally { Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools(); try { Directory.Delete(folder, true); } catch (IOException) { } }
+    }
+
+    [AvaloniaFact]
+    public void EachLayoutGivesThePillItsOwnWidthAndShowsOnlyWhatItPromises()
+    {
+        var model = Model(); var pill = new PillWindow(model); pill.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            double Width() => (pill.Width / pill.Scale) - 2 * Ui.ShadowMargin;
+            Assert.Equal(PillWindow.PillWidth, Width(), 1); Assert.True(Find<Control>(pill, "DayProgress").IsVisible); Assert.True(Find<Button>(pill, "PillBreak").IsVisible);
+            model.SetPillStyle("compact"); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(520, Width(), 1); Assert.False(Find<Control>(pill, "DayProgress").IsVisible); Assert.True(Find<Button>(pill, "PillBreak").IsVisible);
+            model.SetPillStyle("minimal"); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(360, Width(), 1); Assert.DoesNotContain(pill.GetVisualDescendants().OfType<Button>(), b => b.Name == "PillBreak"); // Break is not in the minimal layout.
+            Assert.True(Find<Button>(pill, "PillPause").IsVisible && Find<Button>(pill, "PillDashboard").IsVisible);
+            model.SetPillStyle("full"); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(PillWindow.PillWidth, Width(), 1); Assert.True(Find<Control>(pill, "DayProgress").IsVisible);
+        }
+        finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheMinimalBadgeCarriesTheAccountsInitialsAndTheOpenListStillHasRoom()
+    {
+        var model = Model(); model.SetPillStyle("minimal"); var pill = new PillWindow(model); pill.Show();
+        try
+        {
+            model.ToggleAccount(model.Accounts.First(a => !BreakAccount.Is(a.Name)).Name); Dispatcher.UIThread.RunJobs();
+            var badge = Find<Border>(pill, "PillBadge");
+            Assert.Equal(PillLayouts.Initials(model.ActiveAccount!), Assert.IsType<TextBlock>(badge.Child).Text);
+            pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs();
+            Assert.True(pill.Width / pill.Scale - 2 * Ui.ShadowMargin >= 420 - 1);
+        }
+        finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheFullAndCompactBadgesHoldTheAccountsColourDot()
+    {
+        var model = Model(); var pill = new PillWindow(model); pill.Show();
+        try
+        {
+            model.ToggleAccount(model.Accounts.First(a => !BreakAccount.Is(a.Name)).Name); Dispatcher.UIThread.RunJobs();
+            Assert.IsType<Avalonia.Controls.Shapes.Ellipse>(Find<Border>(pill, "PillBadge").Child);
+            model.SetPillStyle("compact"); Dispatcher.UIThread.RunJobs(); Assert.IsType<Avalonia.Controls.Shapes.Ellipse>(Find<Border>(pill, "PillBadge").Child);
+            // On a break the minimal badge goes back to the amber dot, since a break has no account initials.
+            model.SetPillStyle("minimal"); model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.IsType<Avalonia.Controls.Shapes.Ellipse>(Find<Border>(pill, "PillBadge").Child);
+        }
+        finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheMenuStartsAndEndsABreakBecauseTheMinimalPillHasNoBreakButton()
+    {
+        var model = Model(); var menu = Ui.SettingsMenu(model); var items = menu.ItemsSource!.OfType<MenuItem>().ToList();
+        var breakItem = items.Single(m => m.Name == "BreakMenu"); Assert.Equal("Start break", breakItem.Header);
+        Click(breakItem); Assert.True(model.IsOnBreak);
+        var again = Ui.SettingsMenu(model).ItemsSource!.OfType<MenuItem>().Single(m => m.Name == "BreakMenu"); Assert.Equal("End break", again.Header);
+        Click(again); Assert.False(model.IsOnBreak);
+    }
+
+    [AvaloniaFact]
+    public void SettingsShowEachLayoutAsAPictureWithItsWordsAndTheChosenOneIsMarked()
+    {
+        var model = Model(); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            foreach (var layout in PillLayouts.All)
+            {
+                var button = Find<Button>(dashboard, "PillLayout_" + layout.Key);
+                Assert.Contains(layout.Title, button.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+                Assert.Contains(layout.Description, button.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+            }
+            Assert.Contains("mainAction", Find<Button>(dashboard, "PillLayout_full").Classes);
+            Click(Find<Button>(dashboard, "PillLayout_compact")); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("compact", model.PillStyle);
+            Assert.Contains("mainAction", Find<Button>(dashboard, "PillLayout_compact").Classes); Assert.DoesNotContain("mainAction", Find<Button>(dashboard, "PillLayout_full").Classes);
+        }
+        finally { dashboard.Close(); }
+    }
+}
