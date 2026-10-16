@@ -259,7 +259,10 @@ public static class Ui
         collapse.Click += (_, _) => model.RequestHide();
         var versionRule = new Separator { IsVisible = false };
         var collapseRule = new Separator { IsVisible = false };
-        var menu = new ContextMenu { ItemsSource = new Control[] { continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
+        // Jots a note without opening the dashboard.
+        var noteItem = new MenuItem { Name = "AddNoteMenu", Header = "Add note…" }; noteItem.Click += (_, _) => model.RequestQuickCapture();
+        var noteRule = new Separator();
+        var menu = new ContextMenu { ItemsSource = new Control[] { noteItem, noteRule, continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
         void Sync()
         {
             var developer = model.DeveloperUnlocked;
