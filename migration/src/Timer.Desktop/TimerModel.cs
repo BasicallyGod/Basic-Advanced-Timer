@@ -954,6 +954,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     private Feed.Scan feedScan = new(Array.Empty<FeedEntry>(), 0, 0, Array.Empty<string>());
     private IReadOnlyList<FeedEntry> feedEntries = Array.Empty<FeedEntry>();
     private string feedSignature = ""; private DateTime? feedUpdated;
+    // Each read takes a number, and a background read that finishes after a newer one has started is thrown away, so an old folder listing never overwrites a fresher one.
+    private int feedGeneration;
     private System.IO.FileSystemWatcher? feedWatcher; private Avalonia.Threading.DispatcherTimer? feedDebounce;
     public string? FeedFolder => feedOptions.Folder;
     /// <summary>Whether entries are kept 90 days instead of 30.</summary>
@@ -1022,17 +1024,18 @@ public sealed class TimerModel : INotifyPropertyChanged
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return ""; }
     }
     /// <summary>Reads the folder now, on the calling thread. The feed page, a changed folder setting and the tests use this; the timer's own checks use <see cref="RefreshFeedInBackground"/>.</summary>
-    public void RefreshFeed() { var signature = FeedSignatureOf(out var newest); ApplyScan(Feed.ScanFolder(feedOptions.Folder), signature, newest); }
+    public void RefreshFeed() { Interlocked.Increment(ref feedGeneration); var signature = FeedSignatureOf(out var newest); ApplyScan(Feed.ScanFolder(feedOptions.Folder), signature, newest); }
     /// <summary>Reads the folder on another thread, and only when a file has changed since the last read, so a large folder never holds up the window.</summary>
     public void RefreshFeedInBackground()
     {
         var folder = feedOptions.Folder; var signature = FeedSignatureOf(out var newest);
         if (signature == feedSignature && (folder is not null || feedEntries.Count == 0)) return;
-        if (folder is null) { ApplyScan(new Feed.Scan(Array.Empty<FeedEntry>(), 0, 0, Array.Empty<string>()), "", null); return; }
+        if (folder is null) { Interlocked.Increment(ref feedGeneration); ApplyScan(new Feed.Scan(Array.Empty<FeedEntry>(), 0, 0, Array.Empty<string>()), "", null); return; }
+        var generation = Interlocked.Increment(ref feedGeneration);
         Task.Run(() => Feed.ScanFolder(folder)).ContinueWith(task =>
         {
             if (task.IsFaulted) return;
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (folder == feedOptions.Folder) ApplyScan(task.Result, signature, newest); });
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (folder == feedOptions.Folder && generation == Volatile.Read(ref feedGeneration)) ApplyScan(task.Result, signature, newest); });
         });
     }
     private void ApplyScan(Feed.Scan scan, string signature, DateTime? newest)
