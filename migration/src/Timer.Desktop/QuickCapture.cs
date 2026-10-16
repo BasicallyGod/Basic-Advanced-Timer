@@ -16,7 +16,7 @@ public sealed class QuickCaptureWindow : Window
 {
     public const double CardWidth = 460;
     private readonly TimerModel model;
-    private readonly TextBox input = new() { Name = "CaptureText", Watermark = "Jot it down: 14:30 Call back · ! deadline · @fri · #Account", Padding = new Thickness(12, 9), FontSize = 15 };
+    private readonly TextBox input = new() { Name = "CaptureText", Watermark = "Jot it down: 14:30 Call back · ! · @fri · #Account", Padding = new Thickness(12, 9), FontSize = 15 };
     private readonly TextBlock reading = Ui.Text("", 12, "muted");
     private bool closing;
     public QuickCaptureWindow(TimerModel model)
@@ -28,6 +28,7 @@ public sealed class QuickCaptureWindow : Window
         var heading = Ui.Text("Quick capture", 12, "muted"); heading.FontWeight = FontWeight.SemiBold;
         reading.TextWrapping = TextWrapping.Wrap; reading.Name = "CaptureReading";
         stack.Children.Add(heading); stack.Children.Add(input); stack.Children.Add(reading);
+        TagPicker.Attach(input, stack, model); // Completes a #Tag from the accounts as it is typed.
         var card = new Border { Child = stack, BorderThickness = new Thickness(1) }; card.Classes.Add("panel");
         var host = Ui.Shadowed(card, 18); Ui.SetShadow(host, true, null); Content = host;
         input.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) Read(); };

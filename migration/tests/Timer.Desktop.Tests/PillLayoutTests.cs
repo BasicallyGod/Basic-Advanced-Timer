@@ -60,7 +60,7 @@ public sealed class PillLayoutTests
     }
 
     [AvaloniaFact]
-    public void TheMinimalBadgeCarriesTheAccountsInitialsAndTheOpenListStillHasRoom()
+    public void TheMinimalBadgeCarriesTheAccountsInitialsAndTheWindowKeepsItsWidthWhenOpened()
     {
         var model = Model(); model.SetPillStyle("minimal"); var pill = new PillWindow(model); pill.Show();
         try
@@ -69,7 +69,8 @@ public sealed class PillLayoutTests
             var badge = Find<Border>(pill, "PillBadge");
             Assert.Equal(PillLayouts.Initials(model.ActiveAccount!), Assert.IsType<TextBlock>(badge.Child).Text);
             pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs();
-            Assert.True(pill.Width / pill.Scale - 2 * Ui.ShadowMargin >= 420 - 1);
+            Assert.Equal(360, pill.Width / pill.Scale - 2 * Ui.ShadowMargin, 1); // The window is no wider open than closed, so it never shifts sideways.
+            pill.ToggleExpansion(); Dispatcher.UIThread.RunJobs(); Assert.Equal(360, pill.Width / pill.Scale - 2 * Ui.ShadowMargin, 1);
         }
         finally { pill.Close(); }
     }
@@ -90,6 +91,26 @@ public sealed class PillLayoutTests
     }
 
     [AvaloniaFact]
+    public void TheAccountNameShowsBesideItsChevronInEveryLayoutThatHasAName()
+    {
+        var model = Model(); var pill = new PillWindow(model); pill.Show();
+        try
+        {
+            var name = model.Accounts.First(a => !BreakAccount.Is(a.Name)).Name; model.ToggleAccount(name);
+            foreach (var layout in new[] { "full", "compact" })
+            {
+                model.SetPillStyle(layout); Dispatcher.UIThread.RunJobs(); pill.UpdateLayout();
+                var text = pill.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == name && t.IsEffectivelyVisible);
+                Assert.True(text.Bounds.Width > 20, layout + ": the name has room"); // It once measured to nothing, leaving the chevron over the line beneath.
+                var chevron = pill.GetVisualDescendants().OfType<Chevron>().Single();
+                var textRight = text.TranslatePoint(new Avalonia.Point(text.Bounds.Width, 0), pill)!.Value.X; var chevronLeft = chevron.TranslatePoint(new Avalonia.Point(0, 0), pill)!.Value.X;
+                Assert.True(chevronLeft >= textRight - 1, layout + ": the chevron sits after the name");
+            }
+        }
+        finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
     public void TheMenuStartsAndEndsABreakBecauseTheMinimalPillHasNoBreakButton()
     {
         var model = Model(); var menu = Ui.SettingsMenu(model); var items = menu.ItemsSource!.OfType<MenuItem>().ToList();
@@ -97,6 +118,24 @@ public sealed class PillLayoutTests
         Click(breakItem); Assert.True(model.IsOnBreak);
         var again = Ui.SettingsMenu(model).ItemsSource!.OfType<MenuItem>().Single(m => m.Name == "BreakMenu"); Assert.Equal("End break", again.Header);
         Click(again); Assert.False(model.IsOnBreak);
+    }
+
+    [AvaloniaFact]
+    public void EachLayoutPictureFitsInsideItsFrameWithRoomToSpare()
+    {
+        var model = Model(); var dashboard = new DashboardWindow(model); dashboard.Show();
+        try
+        {
+            dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); dashboard.UpdateLayout();
+            foreach (var layout in PillLayouts.All)
+            {
+                var frame = Find<Button>(dashboard, "PillLayout_" + layout.Key).GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("chip"));
+                var picture = (Panel)frame.Child!; picture.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                var room = frame.Bounds.Width - frame.Padding.Left - frame.Padding.Right - 2 * frame.BorderThickness.Left;
+                Assert.True(picture.DesiredSize.Width <= room - 4, $"{layout.Key}: the picture is {picture.DesiredSize.Width:0} wide in {room:0}");
+            }
+        }
+        finally { dashboard.Close(); }
     }
 
     [AvaloniaFact]

@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -36,6 +37,23 @@ public sealed class NotesTabTests
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "No notes for this day.");
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Nothing coming up");
             Assert.Empty(window.GetVisualDescendants().OfType<Control>().Where(c => c.Name == "TimelineZoom" && c.IsEffectivelyVisible)); // No timeline controls over a notes page.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheNotesPageLaysItsPartsOutInOrderWithTheBoxBelowTheListAndAShortHint()
+    {
+        var (model, window) = Open();
+        try
+        {
+            window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+            var page = window.GetVisualDescendants().OfType<NotesPage>().Single(); var input = Find<TextBox>(window, "NoteInput");
+            var heading = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == model.SelectedDate.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")));
+            Assert.True(input.Bounds.Height < 80); // A box, not a column that fills the card.
+            var headingBottom = heading.TranslatePoint(new Avalonia.Point(0, heading.Bounds.Height), page)!.Value.Y; var inputTop = input.TranslatePoint(new Avalonia.Point(0, 0), page)!.Value.Y;
+            Assert.True(headingBottom <= inputTop); // The heading is above the box, not under it.
+            Assert.True(input.Watermark!.Length < 50); // Short enough to show in full in the box.
         }
         finally { window.Close(); }
     }

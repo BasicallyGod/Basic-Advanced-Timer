@@ -55,7 +55,9 @@ public sealed class SettingsView : ScrollViewer
         };
         syncs.Add(() => { if (!Equals(pillSize.SelectedItem, PillText(model.PillScalePercent))) pillSize.SelectedItem = PillText(model.PillScalePercent); });
         appearance.Children.Add(Row("Pill size", pillSize));
-        appearance.Children.Add(Row("Pill layout", PillLayoutChoices(model, syncs)));
+        // The three pictures need the page's whole width, so the label sits above them instead of in the narrow column beside them.
+        var layoutLabel = Ui.Text("Pill layout", 14, "muted"); layoutLabel.Margin = new Thickness(0, 4, 0, 0); appearance.Children.Add(layoutLabel);
+        appearance.Children.Add(PillLayoutChoices(model, syncs));
         appearance.Children.Add(Toggle("Keep the pill on top", "PillOnTop", () => model.PillOnTop, v => model.SetPillOnTop(v)));
         appearance.Children.Add(Toggle("Keep the dashboard on top", "DashboardOnTop", () => model.DashboardOnTop, v => model.SetDashboardOnTop(v)));
         appearance.Children.Add(Toggle("Window shadows", "WindowShadows", () => model.Shadows, v => model.SetShadows(v)));
@@ -86,6 +88,22 @@ public sealed class SettingsView : ScrollViewer
         syncs.Add(() => { var shown = model.CaptureShortcut?.ToString() ?? ""; if (shortcut.Text != shown) shortcut.Text = shown; });
         page.Children.Add(Section("Quick capture", capture));
 
+        // Reminders: notes with a time (and deadlines) say so on the pill and the dashboard when they are near, due and overdue.
+        var remind = new StackPanel { Spacing = 10 };
+        remind.Children.Add(Toggle("Remind me of notes with a time", "RemindersOn", () => model.RemindersOn, v => model.SetRemindersOn(v)));
+        string Minutes(int m) => m == 0 ? "None" : m + " minutes";
+        ComboBox Minutes2(string name, int[] choices, Func<int> get, Action<int> set)
+        {
+            var box = new ComboBox { Name = name, ItemsSource = choices.Select(Minutes).ToList(), SelectedItem = Minutes(get()), MinWidth = 140 };
+            box.SelectionChanged += (_, _) => { if (box.SelectedItem is string chosen && chosen != Minutes(get())) set(choices.First(c => Minutes(c) == chosen)); };
+            syncs.Add(() => { if (!Equals(box.SelectedItem, Minutes(get()))) box.SelectedItem = Minutes(get()); });
+            return box;
+        }
+        remind.Children.Add(Row("Heads-up before", Minutes2("ReminderLead", ReminderRules.LeadChoices, () => model.ReminderLead, model.SetReminderLead)));
+        remind.Children.Add(Row("Snooze for", Minutes2("ReminderSnooze", ReminderRules.SnoozeChoices, () => model.ReminderSnooze, model.SetReminderSnooze)));
+        var remindNote = Ui.Text("A heads-up is a quiet dot. At the time a card appears with Snooze and Done, and stays until the note is ticked off. Deadlines with no time remind at 17:00.", 12, "muted"); remindNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; remind.Children.Add(remindNote);
+        page.Children.Add(Section("Reminders", remind));
+
         // The feed: Markdown files in a folder, written by something else and only ever read here. See FEED.md.
         var feed = new StackPanel { Spacing = 10 };
         var feedFolder = new TextBox { Name = "FeedFolder", Width = 340, Watermark = "A folder of .md or .txt files", Text = model.FeedFolder ?? "" };
@@ -96,10 +114,17 @@ public sealed class SettingsView : ScrollViewer
         feed.Children.Add(Toggle("Mark an entry read when it is opened", "FeedAutoRead", () => model.FeedAutoRead, v => model.SetFeedAutoRead(v)));
         feed.Children.Add(Toggle("Keep entries for 90 days instead of 30", "FeedLonger", () => model.FeedLonger, v => model.SetFeedLonger(v)));
         var feedNote = Ui.Text(model.FeedNote, 12, "muted"); feedNote.Name = "FeedFolderNote"; feedNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; feed.Children.Add(feedNote);
-        var copyPrompt = Ui.DialogButton("Copy prompt for ChatGPT or Claude", () => { if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard) _ = clipboard.SetTextAsync(FeedPrompt.Build(model.AccountNames)); model.Notice = "Prompt copied."; }, "FeedCopyPrompt");
-        feed.Children.Add(Row("Prompt", copyPrompt));
+        // The prompt for a scheduled ChatGPT or Claude task, shown in full so it can be read again each time one is set up, and copied from here. It names the
+        // folder the files must reach and the person's own account tags, so it follows both.
+        var promptHeading = Ui.Text("Prompt for a scheduled ChatGPT or Claude task", 14, "muted"); promptHeading.Margin = new Thickness(0, 6, 0, 0); feed.Children.Add(promptHeading);
+        var promptNote = Ui.Text("Give each task this prompt, with your own line under What to look for. An assistant that runs in the cloud cannot write to this computer, so have it save to a folder that syncs (OneDrive, Dropbox, Google Drive) and choose that same folder above.", 12, "muted");
+        promptNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; promptNote.Name = "FeedPromptNote"; feed.Children.Add(promptNote);
+        var promptBox = new TextBox { Name = "FeedPromptText", IsReadOnly = true, AcceptsReturn = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Height = 260, FontSize = 12.5, Text = model.FeedPromptText };
+        feed.Children.Add(promptBox);
+        var copyPrompt = Ui.DialogButton("Copy prompt", () => { if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard) _ = clipboard.SetTextAsync(model.FeedPromptText); model.Notice = "Prompt copied."; }, "FeedCopyPrompt");
+        copyPrompt.HorizontalAlignment = HorizontalAlignment.Left; feed.Children.Add(copyPrompt);
         var feedHelp = Ui.Text("Older entries are hidden, never deleted: the folder is only read. Clear old files by hand to keep it small.", 12, "muted"); feedHelp.TextWrapping = Avalonia.Media.TextWrapping.Wrap; feed.Children.Add(feedHelp);
-        syncs.Add(() => { var shown = model.FeedFolder ?? ""; if (!feedFolder.IsFocused && feedFolder.Text != shown) feedFolder.Text = shown; feedNote.Text = model.FeedNote; });
+        syncs.Add(() => { var shown = model.FeedFolder ?? ""; if (!feedFolder.IsFocused && feedFolder.Text != shown) feedFolder.Text = shown; feedNote.Text = model.FeedNote; if (promptBox.Text != model.FeedPromptText) promptBox.Text = model.FeedPromptText; });
         page.Children.Add(Section("Feed", feed));
 
         // The getting started setup, for anyone who skipped it or wants to look again. Nothing is lost: it starts from the current settings.
@@ -157,24 +182,24 @@ public sealed class SettingsView : ScrollViewer
             var bar = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(radius), VerticalAlignment = VerticalAlignment.Center };
             bar.Bind(Border.BackgroundProperty, bar.GetResourceObservable(key)); return bar;
         }
-        static Control Dots(int count) { var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center }; for (var i = 0; i < count; i++) row.Children.Add(Bar(11, 11, "Line", 6)); return row; }
+        static Control Dots(int count) { var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center }; for (var i = 0; i < count; i++) row.Children.Add(Bar(9, 9, "Line", 5)); return row; }
         static Control Lines(bool progress)
         {
             var stack = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
-            stack.Children.Add(Bar(46, 5, "Ink")); stack.Children.Add(Bar(30, 4, "Muted"));
-            if (progress) stack.Children.Add(Bar(46, 3, "Line"));
+            stack.Children.Add(Bar(34, 5, "Ink")); stack.Children.Add(Bar(22, 4, "Muted"));
+            if (progress) stack.Children.Add(Bar(34, 3, "Line"));
             return stack;
         }
         static Control Picture(string key)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             switch (key)
             {
-                case "compact": row.Children.Add(Bar(12, 12, "Accent", 4)); row.Children.Add(Lines(false)); row.Children.Add(Bar(34, 9, "Ink")); row.Children.Add(Dots(2)); break;
+                case "compact": row.Children.Add(Bar(11, 11, "Accent", 4)); row.Children.Add(Lines(false)); row.Children.Add(Bar(28, 9, "Ink")); row.Children.Add(Dots(2)); break;
                 case "minimal": row.Children.Add(Bar(14, 14, "Accent", 5)); row.Children.Add(Bar(34, 9, "Ink")); row.Children.Add(Dots(1)); break;
-                default: row.Children.Add(Bar(34, 9, "Ink")); row.Children.Add(Bar(1, 20, "Line", 0)); row.Children.Add(Bar(12, 12, "Accent", 4)); row.Children.Add(Lines(true)); row.Children.Add(Dots(2)); break;
+                default: row.Children.Add(Bar(28, 9, "Ink")); row.Children.Add(Bar(1, 20, "Line", 0)); row.Children.Add(Bar(11, 11, "Accent", 4)); row.Children.Add(Lines(true)); row.Children.Add(Dots(2)); break;
             }
-            var frame = new Border { Height = 46, HorizontalAlignment = HorizontalAlignment.Stretch, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Child = row, Padding = new Thickness(6, 0) };
+            var frame = new Border { Height = 46, HorizontalAlignment = HorizontalAlignment.Stretch, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Child = row, Padding = new Thickness(6, 0), ClipToBounds = true };
             frame.Classes.Add("chip"); return frame;
         }
         var choices = new WrapPanel { Orientation = Orientation.Horizontal };

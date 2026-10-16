@@ -56,28 +56,51 @@ public sealed record FeedOptions(string? Folder, bool Longer, bool AutoRead, Fee
     }
 }
 
-/// <summary>The prompt that is copied from Settings for a scheduled ChatGPT or Claude task, with the person's own account tags in it.</summary>
+/// <summary>
+/// The prompt a person gives a scheduled ChatGPT or Claude task so that what it writes is something the Feed can read. It is shown in full in Settings, Feed,
+/// every time (so it can be read again when setting up another task) and copied from there. It names the folder the files must end up in and the person's own
+/// account tags, and asks for a new file each run, so earlier files are never overwritten and the folder keeps the history the age limit then hides.
+/// </summary>
 public static class FeedPrompt
 {
-    public static string Build(IReadOnlyList<string> accounts)
+    /// <summary>What stands in for the folder until one is chosen.</summary>
+    public const string NoFolder = "(the feed folder chosen in Settings)";
+
+    public static string Build(IReadOnlyList<(string Name, string Display)> accounts, string? folder)
     {
-        var tags = accounts.Count == 0 ? "#AccountName" : string.Join(", ", accounts.Select(NoteShorthand.TagFor));
+        var tags = accounts.Count == 0 ? new[] { "#AccountName  (the client's name)" } : accounts.Select(a => NoteShorthand.TagFor(a.Name) + "  (" + a.Display + ")").ToArray();
         return string.Join('\n', new[]
         {
-            "Write my client updates as a Markdown file I can drop in a folder, newest first. One entry per item, in exactly this form:",
+            "Write updates for my time-tracking app's feed. Do this every time you run.",
+            "",
+            "WHAT TO LOOK FOR",
+            "(Replace this line with what you want, for example: anything new in the last day about each client below, such as news, announcements and deadlines.)",
+            "",
+            "MY CLIENTS",
+            "Put the matching tag on its own line in each entry that is about a client. My tags are:",
+        }.Concat(tags).Concat(new[]
+        {
+            "Leave the tag out of anything that is not about one client.",
+            "",
+            "WHERE TO SAVE",
+            "Save the result as a new Markdown file in this folder: " + (string.IsNullOrWhiteSpace(folder) ? NoFolder : folder),
+            "Name it feed-<short task name>-YYYY-MM-DD-HHMM.md, using the date and time of this run. Make a new file every run and never change or delete earlier files: my app reads every .md file in the folder and joins them, newest first.",
+            "If you cannot save to a folder, put the whole file in your reply so I can save it there myself.",
+            "",
+            "FORMAT",
+            "Newest entry first, each one in exactly this form:",
             "",
             "## Short headline (start it with ! if it needs action today)",
-            "Date: 2026-10-16 08:30",
+            "Date: YYYY-MM-DD HH:MM",
             "ID: a-short-stable-name-for-this-item",
-            "#AccountName",
+            "#AccountTag",
             "One to three plain sentences. Longer detail is fine when it is useful.",
             "",
-            "Rules:",
-            "- Put the client's tag on its own line in the entry. My tags are: " + tags + ". Use only these; leave the tag out if an item is not about one client.",
+            "RULES",
             "- Always include the Date line, as YYYY-MM-DD with an optional HH:MM.",
-            "- Give every entry an ID line that stays the same if you later reword the entry or write it again.",
-            "- Plain text and simple Markdown only (bold, italic, bullet lists). No HTML, no tables, no images.",
-            "- Keep each entry about one thing. Do not repeat entries you have already written unless they changed.",
-        });
+            "- Always include an ID line. If you write about the same item again, use the same ID.",
+            "- Plain text and simple Markdown only (bold, italic, bullet lists). No HTML, tables, images or links.",
+            "- One entry per item. Do not repeat an item you have already reported unless something has changed.",
+        }));
     }
 }

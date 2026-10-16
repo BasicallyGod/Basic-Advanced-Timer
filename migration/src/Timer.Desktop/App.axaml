@@ -199,6 +199,8 @@
       <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
     </Style>
     <Style Selector="Border.accentEdge"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Border.lateEdge"><Setter Property="Background" Value="{DynamicResource Overtime}" /></Style>
+    <Style Selector=":is(Border).messageBar.late"><Setter Property="BorderBrush" Value="{DynamicResource Overtime}" /></Style>
     <!-- Tabs are plain words along a hairline. The chosen one is brighter and has a green bar under it, which sits on the line. -->
     <Style Selector="Button.tab">
       <Setter Property="Background" Value="Transparent" />
