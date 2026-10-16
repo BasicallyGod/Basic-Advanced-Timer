@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Quick capture | pending | Add note… at the top of the right-click menu opens a small box for a note from anywhere, with no need for the dashboard. It reads the same shorthand as Notes and says how it understood the words as you type. A keyboard shortcut (Ctrl, Alt or Win plus a key) can open it from any app; set it in Settings, Quick capture (off by default). |
 | Notes tab | pending | A Notes button on the rail opens a page for the day showing, with a box to add a note and Coming up beside it. A note understands a time (14:30), a day (@fri, @tomorrow), a leading ! for a deadline and #AccountName to link an account; each part it understood shows as a chip that can be taken back out. Notes can be ticked, edited, moved to another day and removed, follow an account when it is renamed, and are kept in the database. The shorthand now comes from the shared Timer.Core 0.2.0. |
 
 ## 15 October 2026

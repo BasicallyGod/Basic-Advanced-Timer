@@ -884,6 +884,19 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (target != day.Date) Notice = "Added to " + target.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
         Notify();
     }
+    /// <summary>The shortcut that opens Quick capture from any app, or null for none. It is kept in the settings file as capturekey=, which the library hands back untouched.</summary>
+    public HotkeySpec? CaptureShortcut => HotkeySpec.Parse(preferences.Extras?.AppearanceLines.FirstOrDefault(l => l.StartsWith(CaptureKeyLine, StringComparison.Ordinal))?[CaptureKeyLine.Length..]);
+    private const string CaptureKeyLine = "capturekey=";
+    public void SetCaptureShortcut(HotkeySpec? spec)
+    {
+        var extras = preferences.Extras ?? SettingsExtras.Empty;
+        var lines = extras.AppearanceLines.Where(l => !l.StartsWith(CaptureKeyLine, StringComparison.Ordinal)).ToList();
+        if (spec is not null) lines.Add(CaptureKeyLine + spec);
+        preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
+    }
+    /// <summary>Asks for the small Quick capture box, from the right-click menu, the shortcut or Settings.</summary>
+    public event Action? QuickCaptureRequested;
+    public void RequestQuickCapture() => QuickCaptureRequested?.Invoke();
     /// <summary>Takes a note's time back out of the note and puts it into its words, so nothing is lost and it can be set again by typing it.</summary>
     public void ClearNoteTime(long id) => ChangeNote(id, n => n.At is { } at ? n with { At = null, Text = NoteShorthand.WithTimeInWords(n.Text, at) } : n, true);
     /// <summary>Takes the deadline marker off a note, which becomes an ordinary one.</summary>

@@ -71,6 +71,20 @@ public sealed class SettingsView : ScrollViewer
         general.Children.Add(Row("Client accounts", Ui.DialogButton("Accounts and budgets…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new AccountsDialog(model)); }, "EditAccounts")));
         page.Children.Add(Section("Hours and accounts", general));
 
+        // Quick capture: a small box for a note from anywhere. The shortcut is set by pressing it in the box; it needs Ctrl, Alt or the Windows key.
+        var capture = new StackPanel { Spacing = 10 };
+        var shortcut = new TextBox { Name = "CaptureShortcut", IsReadOnly = true, Width = 200, Watermark = "Press a shortcut", Text = model.CaptureShortcut?.ToString() ?? "" };
+        shortcut.KeyDown += (_, e) =>
+        {
+            if (GlobalHotkey.FromKey(e.Key, e.KeyModifiers) is { } spec) { model.SetCaptureShortcut(spec); e.Handled = true; }
+            else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete) { model.SetCaptureShortcut(null); e.Handled = true; }
+        };
+        capture.Children.Add(Row("Shortcut", Ui.Horizontal(shortcut, Ui.DialogButton("Clear", () => model.SetCaptureShortcut(null), "CaptureShortcutClear"))));
+        capture.Children.Add(Row("Open now", Ui.DialogButton("Quick capture", () => model.RequestQuickCapture(), "CaptureOpen")));
+        var captureNote = Ui.Text("Press the keys in the box, with Ctrl, Alt or Win. The right-click menu has Add note too.", 12, "muted"); captureNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; capture.Children.Add(captureNote);
+        syncs.Add(() => { var shown = model.CaptureShortcut?.ToString() ?? ""; if (shortcut.Text != shown) shortcut.Text = shown; });
+        page.Children.Add(Section("Quick capture", capture));
+
         // The getting started setup, for anyone who skipped it or wants to look again. Nothing is lost: it starts from the current settings.
         page.Children.Add(Section("Getting started", Row("Setup", Ui.DialogButton("Run setup again", () => model.RestartSetup(), "RunSetup"))));
         // Hidden until unlocked: ten quick clicks on the About tile. Once unlocked it holds the sample-data demo and a switch to hide the features again.
