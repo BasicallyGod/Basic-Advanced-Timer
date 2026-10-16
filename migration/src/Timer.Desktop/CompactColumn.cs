@@ -101,7 +101,9 @@ public sealed class CompactColumn : Grid
         var labels = Short(visible.Select(a => (a.Name, a.Display)).ToList());
         foreach (var account in visible)
         {
-            var name = account.Name, colour = Ui.Visible(account.Colour), isRunning = model.ActiveAccount == name;
+            var name = account.Name;
+            var colour = Ui.Visible(account.Colour);
+            var isRunning = model.ActiveAccount == name;
             var label = Ui.Text(labels[name], 11); label.FontWeight = FontWeight.SemiBold;
             var total = Ui.Text("", 12); total.FontWeight = FontWeight.SemiBold;
             total.TextAlignment = Avalonia.Media.TextAlignment.Right;
