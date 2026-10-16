@@ -720,9 +720,9 @@ public sealed class DashboardWindow : Window
         // Pressing the date opens a calendar to jump to any day, so a day weeks away is one click instead of many arrows.
         datePick = Ui.Button("", () => { }, "DatePick"); datePick.Content = date; datePick.Background = Avalonia.Media.Brushes.Transparent; datePick.BorderThickness = new Thickness(0); datePick.Padding = new Thickness(4, 6); datePick.CornerRadius = new CornerRadius(8);
         ToolTip.SetTip(datePick, "Pick a day"); Avalonia.Automation.AutomationProperties.SetName(datePick, "Pick a day");
-        var datePicker = new Calendar { Name = "DateCalendar" }; var dateFlyout = new Flyout { Content = datePicker, Placement = Avalonia.Controls.PlacementMode.Bottom }; var settingDate = false;
-        dateFlyout.Opening += (_, _) => { settingDate = true; datePicker.SelectedDate = model.SelectedDate; datePicker.DisplayDate = model.SelectedDate; settingDate = false; };
-        datePicker.SelectedDatesChanged += (_, _) => { if (!settingDate && datePicker.SelectedDate is { } picked) { dateFlyout.Hide(); model.GoToDate(picked, weekMode); } };
+        var datePicker = new SoftDatePicker { Name = "DateCalendar" }; var dateFlyout = new Flyout { Content = datePicker, Placement = Avalonia.Controls.PlacementMode.Bottom };
+        dateFlyout.Opening += (_, _) => datePicker.View(model.SelectedDate, model.SelectedDate);
+        datePicker.DayPicked += picked => { dateFlyout.Hide(); model.GoToDate(picked, weekMode); };
         datePick.Flyout = dateFlyout;
         previous = Ui.IconButton(IconKind.Previous, "Previous day or week", "PreviousPeriod", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }); previous.Width = 30;
         next = Ui.IconButton(IconKind.Next, "Next day or week", "NextPeriod", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }); next.Width = 30;
