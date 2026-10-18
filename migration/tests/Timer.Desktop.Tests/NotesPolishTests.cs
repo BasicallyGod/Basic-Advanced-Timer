@@ -107,7 +107,7 @@ public sealed class NotesPolishTests
         {
             var far = model.SelectedDate.AddDays(75);
             var pick = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NoteDayPick");
-            var calendar = (SoftDatePicker)((Flyout)pick.Flyout!).Content!; ((Flyout)pick.Flyout!).ShowAt(pick); Dispatcher.UIThread.RunJobs();
+            var calendar = (Calendar)((Flyout)pick.Flyout!).Content!; ((Flyout)pick.Flyout!).ShowAt(pick); Dispatcher.UIThread.RunJobs();
             calendar.SelectedDate = far; Dispatcher.UIThread.RunJobs();
             var chip = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "NoteDayChip"); Assert.True(chip.IsVisible);
             Assert.Contains("For " + far.ToString("ddd d MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), chip.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
@@ -129,7 +129,7 @@ public sealed class NotesPolishTests
         try
         {
             var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DatePick");
-            var calendar = (SoftDatePicker)((Flyout)button.Flyout!).Content!; ((Flyout)button.Flyout!).ShowAt(button); Dispatcher.UIThread.RunJobs();
+            var calendar = (Calendar)((Flyout)button.Flyout!).Content!; ((Flyout)button.Flyout!).ShowAt(button); Dispatcher.UIThread.RunJobs();
             var far = model.SelectedDate.AddDays(40); calendar.SelectedDate = far; Dispatcher.UIThread.RunJobs();
             Assert.Equal(far, model.SelectedDate);
             Assert.Contains(far.ToString("ddd d MMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")), window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
