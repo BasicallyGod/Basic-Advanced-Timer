@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| RSS descriptions as plain text | [1bd4597](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/1bd4597) | HTML in a feed's description (Google News sends a list of links) is shown as plain text, with list items as bullets, instead of raw tags. Entries already imported are cleaned on their next refresh. |
 | Persistent Feed and source management | [9e71faa](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/9e71faa3324ea608bb835c6a425edb856730a53d) | Adds folder, paste and RSS/Atom sources with account defaults, status, pause/resume and removal. Reports, originals and read/done states persist in a separate feed.db, including when sources disappear. Imports deduplicate, retry incomplete files and preserve existing folder IDs. Feed details expose safe web links and original reports. Direct provider delivery remains gated on unattended testing; see FEED.md. |
 
 ## 16 October 2026
