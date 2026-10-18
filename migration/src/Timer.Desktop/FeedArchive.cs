@@ -5,7 +5,7 @@ using Timer.Core;
 namespace Timer.Desktop;
 
 public sealed record FeedSource(string Id, string Name, string Kind, string Location, string? Account = null,
-    bool Paused = false, DateTime? LastSuccess = null, string? Error = null);
+    bool Paused = false, DateTime? LastSuccess = null, string? Error = null, bool General = false);
 public sealed record FeedReport(string Key, string Title, string Original, IReadOnlyList<FeedEntry> Entries);
 public sealed record FeedImportResult(FeedSource Source, IReadOnlyList<FeedReport> Reports, string? Error = null);
 
@@ -84,6 +84,21 @@ public sealed class FeedArchive : IDisposable
         while (reader.Read()) result[reader.GetString(0)] = reader.GetString(1);
         return result;
     }
+    /// <summary>The entries that came from a source marked as general news. Worked out from the source as it is now, so changing the mark applies to what was already imported.</summary>
+    public IReadOnlySet<string> GeneralEntries()
+    {
+        var ids = new HashSet<string>();
+        using var lease = Open();
+        foreach (var source in Sources().Where(s => s.General))
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT entries.id FROM entries JOIN reports ON entries.report=reports.id WHERE reports.source=$source";
+            command.Parameters.AddWithValue("$source", source.Id);
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) ids.Add(reader.GetString(0));
+        }
+        return ids;
+    }
     public string? Original(string id) => Scalar("SELECT original FROM reports JOIN entries ON entries.report=reports.id WHERE entries.id=$id", id);
     private string? Scalar(string sql, string id)
     {
@@ -145,7 +160,7 @@ public sealed class FeedArchive : IDisposable
                     if (!item.HasDate && item.Body == previous.Body && item.Headline == previous.Headline) item = item with { When = previous.When };
                 }
                 Execute("INSERT OR REPLACE INTO entries VALUES ($id,$report,$account,$json)",
-                    ("$id", item.Id), ("$report", reportId), ("$account", result.Source.Account), ("$json", JsonSerializer.Serialize(item)));
+                    ("$id", item.Id), ("$report", reportId), ("$account", result.Source.General ? null : result.Source.Account), ("$json", JsonSerializer.Serialize(item)));
             }
         }
         SaveSource(result.Source with { LastSuccess = result.Error is null ? now : result.Source.LastSuccess, Error = result.Error });

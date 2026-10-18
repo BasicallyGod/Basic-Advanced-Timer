@@ -202,7 +202,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (feedStorageError is null) this.preferences = (feedOptions with { Marks = FeedMarks.Empty }).Into(this.preferences);
         if (feedOptions.Folder is not null && !feedArchive.Sources().Any(s => s.Id == "legacy"))
             feedArchive.SaveSource(new FeedSource("legacy", "Original folder", "folder", feedOptions.Folder));
-        feedEntries = feedArchive.Entries(); feedAccounts = feedArchive.Accounts();
+        feedEntries = feedArchive.Entries(); feedAccounts = feedArchive.Accounts(); LoadFeedGeneral();
         WatchFeed(); RefreshFeedInBackground();
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
@@ -1034,6 +1034,12 @@ public sealed class TimerModel : INotifyPropertyChanged
     private Feed.Scan feedScan = new(Array.Empty<FeedEntry>(), 0, 0, Array.Empty<string>());
     private IReadOnlyList<FeedEntry> feedEntries = Array.Empty<FeedEntry>();
     private IReadOnlyDictionary<string, string> feedAccounts = new Dictionary<string, string>();
+    private IReadOnlySet<string> feedGeneral = new HashSet<string>();
+    /// <summary>Changes whenever the set of general-news entries does, so the Feed page knows to redraw.</summary>
+    public int FeedGeneralRevision { get; private set; }
+    private void LoadFeedGeneral() { feedGeneral = feedArchive.GeneralEntries(); FeedGeneralRevision++; }
+    /// <summary>True for an entry from a general-news source: it sits outside account monitoring and is never tied to an account.</summary>
+    public bool FeedIsGeneral(FeedEntry entry) => feedGeneral.Contains(entry.Id);
     private DateTime? feedUpdated;
     private bool feedRefreshing, feedStopped;
     public string? FeedImportError { get; private set; }
@@ -1052,7 +1058,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>The entries young enough to show.</summary>
     public IReadOnlyList<FeedEntry> FeedShown => feedEntries.Where(e => Feed.Within(e, Engine.Now, FeedRetentionDays)).ToList();
     /// <summary>The account an entry is about: the one its first #Tag names, in the headline or the words, or null.</summary>
-    public string? FeedAccountOf(FeedEntry entry) => AccountTags.Find(entry.Headline + "\n" + entry.Body, AccountNames)?.Account ?? (feedAccounts.TryGetValue(entry.Id, out var defaultAccount) ? defaultAccount : null);
+    public string? FeedAccountOf(FeedEntry entry) => FeedIsGeneral(entry) ? null : AccountTags.Find(entry.Headline + "\n" + entry.Body, AccountNames)?.Account ?? (feedAccounts.TryGetValue(entry.Id, out var defaultAccount) ? defaultAccount : null);
     /// <summary>The unread entries about one account, newest first, for the strip under the Day card.</summary>
     public IReadOnlyList<FeedEntry> FeedUnreadFor(string account) => FeedShown.Where(e => !FeedIsRead(e.Id) && FeedAccountOf(e) == account).ToList();
     public bool FeedIsRead(string id) => feedOptions.Marks.Read.Contains(id) || feedOptions.Marks.Done.Contains(id);
@@ -1121,14 +1127,14 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (source.Kind == "rss" && !FeedImporters.SafeUrl(source.Location)) throw new ArgumentException("Enter an HTTP or HTTPS feed URL.");
         if (source.Kind == "folder" && !Path.IsPathFullyQualified(source.Location)) throw new ArgumentException("Choose a full folder path.");
         Interlocked.Increment(ref feedGeneration);
-        feedArchive.SaveSource(source);
+        feedArchive.SaveSource(source); LoadFeedGeneral();
         if (source.Id == "legacy") ApplyFeed(feedOptions with { Folder = source.Location });
         WatchFeed(); Notify(); RefreshFeedInBackground();
     }
     public void RemoveFeedSource(string id)
     {
         if (feedStorageError is not null) throw new InvalidOperationException(feedStorageError);
-        Interlocked.Increment(ref feedGeneration); feedArchive.RemoveSource(id);
+        Interlocked.Increment(ref feedGeneration); feedArchive.RemoveSource(id); LoadFeedGeneral();
         if (id == "legacy") ApplyFeed(feedOptions with { Folder = null });
         WatchFeed(); Notify();
     }
@@ -1139,7 +1145,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (source.Paused) throw new InvalidOperationException("Resume this source before importing.");
         var report = FeedImporters.TextReport(text, source.Name, Engine.Now);
         feedArchive.Import(new FeedImportResult(source, new[] { report }), Engine.Now);
-        feedEntries = feedArchive.Entries(); feedAccounts = feedArchive.Accounts(); feedUpdated = Engine.Now; Notify();
+        feedEntries = feedArchive.Entries(); feedAccounts = feedArchive.Accounts(); LoadFeedGeneral(); feedUpdated = Engine.Now; Notify();
     }
     public void RefreshFeed()
     {
@@ -1179,7 +1185,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         FeedImportError = null;
         foreach (var result in results) feedArchive.Import(result, Engine.Now);
-        feedEntries = feedArchive.Entries(); feedAccounts = feedArchive.Accounts(); feedUpdated = Engine.Now;
+        feedEntries = feedArchive.Entries(); feedAccounts = feedArchive.Accounts(); LoadFeedGeneral(); feedUpdated = Engine.Now;
         var errors = FeedSources.Where(s => s.Error is not null).Select(s => s.Name + ": " + s.Error).ToArray();
         feedScan = new Feed.Scan(feedEntries, 0, 0, errors);
         Notify();

@@ -83,6 +83,18 @@ public sealed class FeedImportTests : IDisposable
     }
 
     [Fact]
+    public void RssDescriptionsWithEscapedHtmlShowAsPlainText()
+    {
+        var rss = "<rss><channel><item><guid>g</guid><title>News</title><link>https://example.com/n</link><description>&lt;ol&gt;&lt;li&gt;&lt;a href=\"https://example.com/a\" target=\"_blank\"&gt;Story one&lt;/a&gt;&amp;nbsp;&amp;nbsp;&lt;font color=\"#6f6f6f\"&gt;Sky Sports&lt;/font&gt;&lt;/li&gt;&lt;li&gt;Story two&lt;/li&gt;&lt;/ol&gt;&lt;script&gt;x()&lt;/script&gt;</description></item></channel></rss>";
+        var body = Assert.Single(FeedImporters.ParseRss(rss, "News", Now).Entries).Body;
+        Assert.DoesNotContain("<", body);
+        Assert.DoesNotContain("x()", body);
+        Assert.Contains("• Story one Sky Sports", body);
+        Assert.Contains("• Story two", body);
+        Assert.Equal("Fish & chips", FeedImporters.PlainText("Fish &amp; chips"));
+    }
+
+    [Fact]
     public void RssAndAtomKeepDatesLinksAndStableIdsAndRejectExternalEntities()
     {
         var rss = "<rss><channel><item><guid>one</guid><title>News</title><link>https://example.com/one</link><pubDate>Sun, 18 Oct 2026 09:00:00 GMT</pubDate><description>Words</description></item></channel></rss>";
@@ -125,6 +137,22 @@ public sealed class FeedImportTests : IDisposable
         model.SaveFeedSource(source with { Paused = true });
         Assert.Throws<InvalidOperationException>(() => model.ImportFeedText(source.Id, "No import"));
         model.RemoveFeedSource(source.Id); Assert.Empty(model.FeedSources); Assert.Equal(2, model.FeedEntries.Count);
+        model.StopForClose();
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void GeneralNewsSitsOutsideAccountsAndTheMarkAppliesToWhatWasImported()
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => Now));
+        var source = new FeedSource("news", "News", "paste", "", "Account one", General: true);
+        model.SaveFeedSource(source); model.ImportFeedText(source.Id, "## Story\nID: one\n#AccountTwo\nWords");
+        var story = model.FeedEntries.Single();
+        Assert.True(model.FeedIsGeneral(story));
+        Assert.Null(model.FeedAccountOf(story));
+        Assert.Empty(model.FeedUnreadFor("Account one")); Assert.Empty(model.FeedUnreadFor("Account two"));
+        model.SaveFeedSource(source with { General = false });
+        Assert.False(model.FeedIsGeneral(story));
+        Assert.Equal("Account two", model.FeedAccountOf(story));
         model.StopForClose();
     }
 

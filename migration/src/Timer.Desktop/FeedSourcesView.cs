@@ -15,6 +15,7 @@ public sealed class FeedSourcesView : StackPanel
     private readonly ComboBox kind = new() { Name = "FeedSourceType", ItemsSource = new[] { "Local or synchronised folder", "Paste / import report", "RSS / Atom news feed" }, SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly TextBox location = new() { Name = "FeedSourceLocation", Watermark = "Folder path or feed URL" };
     private readonly ComboBox account = new() { Name = "FeedSourceAccount", HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly CheckBox general = new() { Name = "FeedSourceGeneral", Content = "General news, outside account monitoring" };
     private readonly TextBox report = new() { Name = "FeedImportText", Watermark = "Paste ordinary text or Markdown here", AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 160 };
     private readonly TextBlock error = new() { Name = "FeedSourceError", TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock help = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12 };
@@ -28,7 +29,7 @@ public sealed class FeedSourcesView : StackPanel
         Children.Add(sources); Children.Add(editor);
         editor.Children.Add(name); editor.Children.Add(kind); editor.Children.Add(location);
         var browse = Ui.DialogButton("Browse folder…", () => FeedFolderPicker.Choose(this, path => location.Text = path), "FeedSourceBrowse");
-        editor.Children.Add(browse); editor.Children.Add(Ui.Text("Default account (entry tags take priority)", 12, "muted")); editor.Children.Add(account);
+        editor.Children.Add(browse); editor.Children.Add(Ui.Text("Default account (entry tags take priority)", 12, "muted")); editor.Children.Add(account); editor.Children.Add(general);
         editor.Children.Add(report); editor.Children.Add(help); editor.Children.Add(error);
         var actions = new WrapPanel { Orientation = Orientation.Horizontal };
         actions.Children.Add(Ui.DialogButton("Save / import", Save, "FeedSourceSave"));
@@ -36,12 +37,12 @@ public sealed class FeedSourcesView : StackPanel
         editor.Children.Add(actions);
         void ShowKind()
         {
-            report.IsVisible = kind.SelectedIndex == 1; location.IsVisible = kind.SelectedIndex != 1; browse.IsVisible = kind.SelectedIndex == 0;
+            report.IsVisible = kind.SelectedIndex == 1; location.IsVisible = kind.SelectedIndex != 1; browse.IsVisible = kind.SelectedIndex == 0; general.IsVisible = kind.SelectedIndex == 2;
             help.Text = kind.SelectedIndex switch
             {
                 0 => "Choose a folder containing .md or .txt reports. For OneDrive or Google Drive, keep this folder available offline. The timer imports while open and catches up next time it starts.",
                 1 => "Paste a report and save it. Headings become entries; dates, IDs and account tags are optional. Reimporting the same report does not duplicate it.",
-                _ => "Enter the publisher's RSS or Atom URL. This is a separate news source, refreshed every minute while the timer is open."
+                _ => "Enter the publisher's RSS or Atom URL. This is a separate news source, refreshed every minute while the timer is open. General news is not tied to an account, so its entries stay out of account filters and the account update strip."
             };
         }
         kind.SelectionChanged += (_, _) => ShowKind(); ShowKind();
@@ -59,7 +60,7 @@ public sealed class FeedSourcesView : StackPanel
         {
             var row = new StackPanel { Spacing = 4 };
             row.Children.Add(Ui.Text(source.Name, 14));
-            var status = Ui.Text((source.Paused ? "Paused" : source.Error is null ? "Ready" : "Needs attention")
+            var status = Ui.Text((source.General ? "General news · " : "") + (source.Paused ? "Paused" : source.Error is null ? "Ready" : "Needs attention")
                 + (source.LastSuccess is { } date ? " · Last import " + date.ToString("g") : " · Not imported yet")
                 + (source.Error is null ? "" : "\n" + source.Error), 12, "muted");
             status.TextWrapping = TextWrapping.Wrap; row.Children.Add(status);
@@ -80,6 +81,8 @@ public sealed class FeedSourcesView : StackPanel
         kind.SelectedIndex = source?.Kind switch { "paste" => 1, "rss" => 2, _ => 0 }; kind.IsEnabled = source is null;
         var accounts = new[] { "No default account" }.Concat(model.AccountNames.Where(n => !Timer.Core.BreakAccount.Is(n))).ToArray();
         account.ItemsSource = accounts; account.SelectedIndex = Math.Max(0, Array.IndexOf(accounts, source?.Account));
+        // A new news feed starts as general news, since most are not about one client.
+        general.IsChecked = source?.General ?? true;
         editor.IsVisible = true;
     }
     private void Try(Action action)
@@ -91,7 +94,7 @@ public sealed class FeedSourcesView : StackPanel
     private void Save() => Try(() =>
     {
         var source = editing is null ? new FeedSource(Guid.NewGuid().ToString("N"), "", "", "") : model.FeedSources.Single(s => s.Id == editing);
-        source = source with { Name = name.Text?.Trim() ?? "", Kind = kind.SelectedIndex switch { 1 => "paste", 2 => "rss", _ => "folder" }, Location = location.Text?.Trim() ?? "", Account = account.SelectedIndex > 0 ? account.SelectedItem as string : null };
+        source = source with { Name = name.Text?.Trim() ?? "", Kind = kind.SelectedIndex switch { 1 => "paste", 2 => "rss", _ => "folder" }, Location = location.Text?.Trim() ?? "", Account = account.SelectedIndex > 0 ? account.SelectedItem as string : null, General = kind.SelectedIndex == 2 && general.IsChecked == true };
         if (source.Kind == "paste" && !string.IsNullOrWhiteSpace(report.Text)) FeedImporters.TextReport(report.Text, source.Name, model.Engine.Now);
         model.SaveFeedSource(source); editing = source.Id;
         if (source.Kind == "paste" && !string.IsNullOrWhiteSpace(report.Text)) model.ImportFeedText(source.Id, report.Text);
