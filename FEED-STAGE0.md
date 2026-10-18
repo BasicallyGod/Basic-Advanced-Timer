@@ -15,11 +15,31 @@ Nothing here needs a code change. The Timer already reads `.md` and `.txt` files
 
 ## The task to schedule
 
-Use the same prompt for every test. Replace the bracketed parts.
+Paste one of these as the scheduled task's instructions. Replace only `DESTINATION` with the folder or location the task can write to (for example "my OneDrive folder Timer-Feed"). The timestamp in the file name stops a run overwriting the one before. The date and time in the title let you tell the runs apart.
 
-> Write a short test report titled "Stage 0 test [provider] [date and time]". Include two items under their own headings. Give each a `Date:` line with today's date and an `ID:` line (`stage0-[provider]-1` and `stage0-[provider]-2`), one sentence of text, and one link to https://example.com. Save it as a new `.md` file named `feed-stage0-[provider]-[YYYY-MM-DD-HHMM].md` in [destination]. Do not overwrite earlier files.
+**Claude**
 
-Schedule it to run a few minutes from now, then again at least an hour later (so run two happens with nobody at the keyboard). Do not open the provider's app during a run.
+```text
+Write a short test report titled "Stage 0 test Claude" with today's date and the current time in the title.
+
+Include two items. Give each its own heading, a "Date:" line with today's date, an "ID:" line (stage0-claude-1 and stage0-claude-2), one sentence of text, and one link to https://example.com.
+
+Save the report as a new .md file named feed-stage0-claude-YYYY-MM-DD-HHMM.md (today's date and the current time) in DESTINATION. Never overwrite an earlier file. When it is saved, reply with only the file name. If you cannot save the file, say so and do not ask me anything.
+```
+
+**ChatGPT**
+
+```text
+Write a short test report titled "Stage 0 test ChatGPT" with today's date and the current time in the title.
+
+Include two items. Give each its own heading, a "Date:" line with today's date, an "ID:" line (stage0-chatgpt-1 and stage0-chatgpt-2), one sentence of text, and one link to https://example.com.
+
+Save the report as a new .md file named feed-stage0-chatgpt-YYYY-MM-DD-HHMM.md (today's date and the current time) in DESTINATION. Never overwrite an earlier file. When it is saved, reply with only the file name. If you cannot save the file, say so and do not ask me anything.
+```
+
+Schedule it to run a few minutes from now, then again at least an hour later, so run two happens with nobody at the keyboard. Do not open the provider's app during a run.
+
+The last sentence of each prompt matters: a run that cannot save should report that plainly instead of waiting for you. Copy that message into the results sheet.
 
 ## Checks
 
