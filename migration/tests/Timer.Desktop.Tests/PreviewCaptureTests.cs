@@ -41,6 +41,7 @@ public sealed class PreviewCaptureTests
                 window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
                 window.GetVisualDescendants().OfType<Control>().First(c => c.Name == "FeedFolder").BringIntoView(); Shot("settings-feed");
                 window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "FeedAddSource").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
                 window.GetVisualDescendants().OfType<Control>().First(c => c.Name == "FeedSourceSave").BringIntoView(); Shot("settings-feed-source");
                 var cal = new Window { Width = 360, Height = 380, Content = new Border { Padding = new Avalonia.Thickness(16), Child = new Calendar { SelectedDate = new DateTime(2026, 10, 16), DisplayDate = new DateTime(2026, 10, 16) } } };
                 cal.RequestedThemeVariant = window.RequestedThemeVariant; cal.Show(); Dispatcher.UIThread.RunJobs(); using var c1 = cal.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var c2 = cal.CaptureRenderedFrame(); c2?.Save(Path.Combine(folder, theme + "-calendar.png")); cal.Close();

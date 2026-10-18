@@ -889,7 +889,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (savedForClose) return true;
         StopWatchingFeed();
-        Engine.StopAccount(); var saved = Save(); if (!saved) Notify();
+        Engine.StopAccount(); var saved = Save(); if (!saved) { WatchFeed(); Notify(); }
         savedForClose = saved; if (saved) feedArchive.Dispose(); return saved;
     }
     /// <summary>Stops watching the feed folder. The timer calls it when it closes.</summary>
@@ -1068,7 +1068,13 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>The settings note on the folder: its size, files, and how many entries show or are hidden by the age limit.</summary>
     public string FeedNote { get { var shown = FeedShown.Count; return $"{shown} entries showing, {feedEntries.Count - shown} hidden as older than {FeedRetentionDays} days. Reports are saved locally." + (feedStorageError is null ? "" : " " + feedStorageError) + (FeedImportError is null ? "" : " " + FeedImportError); } }
 
-    private void ApplyFeed(FeedOptions options) { if (feedStorageError is not null) { FeedImportError = feedStorageError; Notify(); return; } feedArchive.SaveMarks(options.Marks); feedOptions = options; preferences = (options with { Marks = FeedMarks.Empty }).Into(preferences); Save(); Notify(); }
+    private void ApplyFeed(FeedOptions options)
+    {
+        if (feedStorageError is not null) { FeedImportError = feedStorageError; Notify(); return; }
+        try { feedArchive.SaveMarks(options.Marks); }
+        catch (Microsoft.Data.Sqlite.SqliteException e) { FeedImportError = "Could not save Feed state: " + e.Message; Notify(); return; }
+        feedOptions = options; preferences = (options with { Marks = FeedMarks.Empty }).Into(preferences); Save(); Notify();
+    }
     public void SetFeedFolder(string? folder)
     {
         if (feedStorageError is not null) return;

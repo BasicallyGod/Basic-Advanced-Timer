@@ -137,6 +137,18 @@ public sealed class FeedImportTests : IDisposable
         Assert.True(exclusive.Length > 0);
     }
 
+    [Fact]
+    public void FailedStateWriteRollsBackWithoutLosingExistingMarks()
+    {
+        using var archive = new FeedArchive(folder);
+        archive.SaveMarks(new(new HashSet<string> { "old" }, new HashSet<string>()));
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder { DataSource = Path.Combine(folder, "feed.db"), Pooling = false }.ToString());
+        connection.Open(); using var command = connection.CreateCommand();
+        command.CommandText = "CREATE TRIGGER fail_marks BEFORE INSERT ON marks BEGIN SELECT RAISE(ABORT, 'test failure'); END"; command.ExecuteNonQuery();
+        Assert.Throws<Microsoft.Data.Sqlite.SqliteException>(() => archive.SaveMarks(new(new HashSet<string> { "new" }, new HashSet<string>())));
+        Assert.Contains("old", archive.Marks().Read); Assert.DoesNotContain("new", archive.Marks().Read);
+    }
+
     [Avalonia.Headless.XUnit.AvaloniaFact]
     public void AddSourceCanImportPastedTextAndTheFeedShowsItWithoutAFolder()
     {
