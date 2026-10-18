@@ -94,7 +94,7 @@ public sealed class FeedPage : Grid
         var sub = Ui.Grid("*,Auto,Auto"); sub.Margin = new Thickness(0, 0, 0, 6); sub.ColumnSpacing = 4;
         status.VerticalAlignment = VerticalAlignment.Center; status.Margin = new Thickness(10, 0, 0, 0); Ui.Put(sub, status);
         markAllButton = Quiet("Mark all read", "FeedMarkAllRead", () => { foreach (var entry in model.FeedShown) model.SetFeedRead(entry.Id, true); }); Ui.Put(sub, markAllButton, 1);
-        Ui.Put(sub, Quiet("Refresh", "FeedRefresh", () => { model.RefreshFeed(); }), 2);
+        Ui.Put(sub, Quiet("Refresh", "FeedRefresh", () => { model.RefreshFeedInBackground(); }), 2);
         SetRow(sub, 1); Children.Add(sub);
         scroll = new ScrollViewer { Content = stream, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, Name = "FeedScroll" };
         stream.Margin = new Thickness(0, 0, 10, 0);
@@ -115,7 +115,7 @@ public sealed class FeedPage : Grid
         if (Signature() != shown) Rebuild();
     }
 
-    private string Signature() => string.Join(";", model.FeedShown.Select(e => e.Id + (model.FeedIsRead(e.Id) ? "r" : "") + (model.FeedIsDone(e.Id) ? "d" : "")))
+    private string Signature() => string.Join(";", model.FeedShown.Select(e => e.ToString() + (model.FeedIsRead(e.Id) ? "r" : "") + (model.FeedIsDone(e.Id) ? "d" : "")))
         + $"|{model.FeedFolder}|{tab}|{account}|{source}|{search}|{limit}|{selected}|{model.FeedUpdated:s}|{string.Join(",", model.AccountNames)}|{model.Engine.Now:yyyyMMddHHmm}";
 
     private string? AccountOf(FeedEntry entry) => model.FeedAccountOf(entry);
@@ -154,11 +154,10 @@ public sealed class FeedPage : Grid
         var offset = scroll.Offset; shown = Signature();
         tabs.Children.Clear(); pickers.Children.Clear(); stream.Children.Clear(); markAllButton.IsEnabled = false; detail.IsVisible = false; detail.Child = null;
         var all = model.FeedShown; var now = model.Engine.Now;
-        status.Text = (model.FeedFolder is null ? "No folder chosen" : model.FeedUnread == 0 ? "All read" : model.FeedUnread + " unread")
+        status.Text = (model.FeedSources.Count == 0 && model.FeedEntries.Count == 0 ? "No sources" : model.FeedUnread == 0 ? "All read" : model.FeedUnread + " unread")
             + (model.FeedUpdated is { } updated ? " · updated " + Ago(now, updated) : "");
-        if (model.FeedFolder is null) { stream.Children.Add(Empty("Choose a feed folder", "Put Markdown files in a folder (a scheduled ChatGPT or Claude task can write them) and the updates show here, newest first. The files are only ever read.", true)); return; }
-        if (!Directory.Exists(model.FeedFolder)) { stream.Children.Add(Empty("The folder could not be found", model.FeedFolder, true)); return; }
-        if (model.FeedEntries.Count == 0) { stream.Children.Add(Empty("Nothing in the feed yet", "Entries start at a heading, with a Date: line and #AccountName tags. Settings has a prompt to give your assistant.", false)); return; }
+        if (model.FeedSources.Count == 0 && model.FeedEntries.Count == 0) { stream.Children.Add(Empty("Add a source in Settings", "Choose a folder, paste a report, or add an RSS feed in Settings → Feed. Imported reports stay available offline.", true)); return; }
+        if (model.FeedEntries.Count == 0) { stream.Children.Add(Empty("Nothing in the feed yet", "Add a source in Settings or check its status there. Ordinary text and Markdown are supported.", false)); return; }
 
         // All and Unread leave out what is done, and Done shows only that, so an entry is in exactly one place until it is marked.
         tabs.Children.Add(Filter("All", "FeedFilterAll", tab == "all", () => { tab = "all"; Rebuild(); }));
@@ -265,6 +264,19 @@ public sealed class FeedPage : Grid
         buttons.Children.Add(Small("Add to notes", "FeedToNotes_" + key, () => model.AddFeedEntryToNotes(id)));
         buttons.Children.Add(Small("Mark above read", "FeedReadAbove_" + key, () => model.MarkFeedReadAbove(id)));
         stack.Children.Add(buttons);
+        foreach (var url in FeedLinks.Find(entry.Body))
+        {
+            var link = Small(url, "FeedLink_" + key, () =>
+            {
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+                catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { model.Notice = "Could not open this link."; }
+            });
+            link.Content = new TextBlock { Text = url, TextWrapping = TextWrapping.Wrap }; link.Height = double.NaN;
+            ToolTip.SetTip(link, url); stack.Children.Add(link);
+        }
+        if (model.FeedOriginal(id) is { } original)
+            stack.Children.Add(new Expander { Header = "Original report", HorizontalAlignment = HorizontalAlignment.Stretch,
+                Content = new TextBox { Text = original, IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MaxHeight = 300 } });
         return new ScrollViewer { Content = stack, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
     }
 
@@ -348,4 +360,11 @@ public sealed class FeedStrip : Border
         if (items.Count > Shown) { var more = Ui.Text($"+{items.Count - Shown} more", 11, "muted"); more.Name = "FeedStripMore"; more.Margin = new Thickness(11, 0, 0, 0); stack.Children.Add(more); }
         Child = stack; IsVisible = true;
     }
+}
+
+/// <summary>Links open only after a click; arbitrary schemes, embedded images and HTML are never executed.</summary>
+public static class FeedLinks
+{
+    public static IReadOnlyList<string> Find(string text) => Regex.Matches(text, @"https?://[^\s<>\)\]""']+", RegexOptions.IgnoreCase)
+        .Select(m => m.Value.TrimEnd('.', ',', ';')).Where(FeedImporters.SafeUrl).Distinct().Take(30).ToArray();
 }

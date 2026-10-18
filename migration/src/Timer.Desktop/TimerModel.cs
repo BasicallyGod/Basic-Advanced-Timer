@@ -178,6 +178,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     private readonly TimerStore? store;
     private readonly List<DayNote> dayNotes;
     private FeedOptions feedOptions;
+    private readonly FeedArchive feedArchive;
+    private readonly string? feedStorageError;
     private long nextNoteId = 1;
     private int ticks;
     public TimerModel(TrackingEngine? engine = null, StoreSettings? preferences = null, TimerStore? store = null)
@@ -188,7 +190,20 @@ public sealed class TimerModel : INotifyPropertyChanged
         Editor = store?.Editor ?? new LedgerEditor(Engine);
         dayNotes = store?.LoadDayNotes() ?? new List<DayNote>();
         feedOptions = FeedOptions.From(this.preferences);
-        if (feedOptions.Folder is not null) { WatchFeed(); RefreshFeedInBackground(); }
+        try { feedArchive = new FeedArchive(store?.DataFolder); }
+        catch (Exception e) when (e is Microsoft.Data.Sqlite.SqliteException or IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            feedStorageError = "Feed storage is unavailable. Your source files and time records are unchanged. " + e.Message;
+            feedArchive = new FeedArchive(null);
+        }
+        var savedMarks = feedArchive.Marks();
+        feedOptions = feedOptions with { Marks = new FeedMarks(savedMarks.Read.Union(feedOptions.Marks.Read).ToHashSet(), savedMarks.Done.Union(feedOptions.Marks.Done).ToHashSet()) };
+        feedArchive.SaveMarks(feedOptions.Marks);
+        if (feedStorageError is null) this.preferences = (feedOptions with { Marks = FeedMarks.Empty }).Into(this.preferences);
+        if (feedOptions.Folder is not null && !feedArchive.Sources().Any(s => s.Id == "legacy"))
+            feedArchive.SaveSource(new FeedSource("legacy", "Original folder", "folder", feedOptions.Folder));
+        feedEntries = feedArchive.Entries(); feedAccounts = feedArchive.Accounts();
+        WatchFeed(); RefreshFeedInBackground();
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
@@ -837,7 +852,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         ticks++;
         FollowToday();
         CheckReminders();
-        if (ticks % 60 == 0 && feedOptions.Folder is not null) RefreshFeedInBackground(); // Cloud folders do not always say when a file changed.
+        if (ticks % 60 == 0) RefreshFeedInBackground(); // Cloud folders do not always say when a file changed.
         if (ticks % 15 == 0) { Save(); Notify(); }
         else PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Elapsed)));
     }
@@ -875,10 +890,10 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (savedForClose) return true;
         StopWatchingFeed();
         Engine.StopAccount(); var saved = Save(); if (!saved) Notify();
-        savedForClose = saved; return saved;
+        savedForClose = saved; if (saved) feedArchive.Dispose(); return saved;
     }
     /// <summary>Stops watching the feed folder. The timer calls it when it closes.</summary>
-    public void StopWatchingFeed() { feedWatcher?.Dispose(); feedWatcher = null; feedDebounce?.Stop(); }
+    public void StopWatchingFeed() { feedStopped = true; Interlocked.Increment(ref feedGeneration); foreach (var watcher in feedWatchers) watcher.Dispose(); feedWatchers.Clear(); feedDebounce?.Stop(); }
     // Notes and refused-edit messages in the footer fade after a while, so a stale one is never left sitting there.
     // A failed save is not one of these, because it stays until a save works.
     public static readonly TimeSpan MessageLifetime = TimeSpan.FromSeconds(15);
@@ -1018,10 +1033,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     // ---- The feed: updates written into Markdown files by something else, read here and never written. See FEED.md. ----
     private Feed.Scan feedScan = new(Array.Empty<FeedEntry>(), 0, 0, Array.Empty<string>());
     private IReadOnlyList<FeedEntry> feedEntries = Array.Empty<FeedEntry>();
-    private string feedSignature = ""; private DateTime? feedUpdated;
+    private IReadOnlyDictionary<string, string> feedAccounts = new Dictionary<string, string>();
+    private DateTime? feedUpdated;
+    private bool feedRefreshing, feedStopped;
+    public string? FeedImportError { get; private set; }
+    public string? FeedStorageError => feedStorageError;
     // Each read takes a number, and a background read that finishes after a newer one has started is thrown away, so an old folder listing never overwrites a fresher one.
     private int feedGeneration;
-    private System.IO.FileSystemWatcher? feedWatcher; private Avalonia.Threading.DispatcherTimer? feedDebounce;
+    private readonly List<FileSystemWatcher> feedWatchers = new(); private Avalonia.Threading.DispatcherTimer? feedDebounce;
     public string? FeedFolder => feedOptions.Folder;
     /// <summary>Whether entries are kept 90 days instead of 30.</summary>
     public bool FeedLonger => feedOptions.Longer;
@@ -1033,7 +1052,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>The entries young enough to show.</summary>
     public IReadOnlyList<FeedEntry> FeedShown => feedEntries.Where(e => Feed.Within(e, Engine.Now, FeedRetentionDays)).ToList();
     /// <summary>The account an entry is about: the one its first #Tag names, in the headline or the words, or null.</summary>
-    public string? FeedAccountOf(FeedEntry entry) => AccountTags.Find(entry.Headline + "\n" + entry.Body, AccountNames)?.Account;
+    public string? FeedAccountOf(FeedEntry entry) => AccountTags.Find(entry.Headline + "\n" + entry.Body, AccountNames)?.Account ?? (feedAccounts.TryGetValue(entry.Id, out var defaultAccount) ? defaultAccount : null);
     /// <summary>The unread entries about one account, newest first, for the strip under the Day card.</summary>
     public IReadOnlyList<FeedEntry> FeedUnreadFor(string account) => FeedShown.Where(e => !FeedIsRead(e.Id) && FeedAccountOf(e) == account).ToList();
     public bool FeedIsRead(string id) => feedOptions.Marks.Read.Contains(id) || feedOptions.Marks.Done.Contains(id);
@@ -1047,14 +1066,17 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>The prompt for a scheduled assistant, with the feed folder and the person's own account tags in it.</summary>
     public string FeedPromptText => FeedPrompt.Build(Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => (a.Name, a.Display)).ToList(), feedOptions.Folder);
     /// <summary>The settings note on the folder: its size, files, and how many entries show or are hidden by the age limit.</summary>
-    public string FeedNote { get { var shown = FeedShown.Count; return Feed.Describe(feedScan, shown, feedEntries.Count - shown, FeedRetentionDays); } }
+    public string FeedNote { get { var shown = FeedShown.Count; return $"{shown} entries showing, {feedEntries.Count - shown} hidden as older than {FeedRetentionDays} days. Reports are saved locally." + (feedStorageError is null ? "" : " " + feedStorageError) + (FeedImportError is null ? "" : " " + FeedImportError); } }
 
-    private void ApplyFeed(FeedOptions options) { feedOptions = options; preferences = options.Into(preferences); Save(); Notify(); }
+    private void ApplyFeed(FeedOptions options) { if (feedStorageError is not null) { FeedImportError = feedStorageError; Notify(); return; } feedArchive.SaveMarks(options.Marks); feedOptions = options; preferences = (options with { Marks = FeedMarks.Empty }).Into(preferences); Save(); Notify(); }
     public void SetFeedFolder(string? folder)
     {
+        if (feedStorageError is not null) return;
         folder = string.IsNullOrWhiteSpace(folder) ? null : folder.Trim();
         if (folder == feedOptions.Folder) return;
-        ApplyFeed(feedOptions with { Folder = folder }); WatchFeed(); feedSignature = ""; RefreshFeed();
+        if (folder is null) feedArchive.RemoveSource("legacy");
+        else feedArchive.SaveSource(new FeedSource("legacy", "Original folder", "folder", folder));
+        ApplyFeed(feedOptions with { Folder = folder }); WatchFeed(); RefreshFeed();
     }
     public void SetFeedLonger(bool longer) { if (longer != feedOptions.Longer) ApplyFeed(feedOptions with { Longer = longer }); }
     public void SetFeedAutoRead(bool autoRead) { if (autoRead != feedOptions.AutoRead) ApplyFeed(feedOptions with { AutoRead = autoRead }); }
@@ -1080,60 +1102,97 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (feedEntries.FirstOrDefault(e => e.Id == id) is not { } entry) return;
         var words = (entry.Urgent ? "! " : "") + entry.Headline;
-        if (AccountTags.Find(words, AccountNames) is null && AccountTags.Find(entry.Body, AccountNames) is { } found) words += " " + NoteShorthand.TagFor(found.Account);
+        if (AccountTags.Find(words, AccountNames) is null && FeedAccountOf(entry) is { } account) words += " " + NoteShorthand.TagFor(account);
         Notice = "Added to today's notes."; AddDayNote(Engine.Now.Date, words);
     }
-    private string FeedSignatureOf(out DateTime? newest)
+    public IReadOnlyList<FeedSource> FeedSources => feedArchive.Sources();
+    public string? FeedOriginal(string id) => feedArchive.Original(id);
+    public void SaveFeedSource(FeedSource source)
     {
-        newest = null; var folder = feedOptions.Folder; if (folder is null || !Directory.Exists(folder)) return "";
-        try
-        {
-            var files = new DirectoryInfo(folder).EnumerateFiles().Where(f => f.Extension.Equals(".md", StringComparison.OrdinalIgnoreCase) || f.Extension.Equals(".txt", StringComparison.OrdinalIgnoreCase)).OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList();
-            newest = files.Count == 0 ? null : files.Max(f => f.LastWriteTime);
-            return string.Join("|", files.Select(f => $"{f.Name}:{f.Length}:{f.LastWriteTimeUtc.Ticks}"));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return ""; }
+        if (feedStorageError is not null) throw new InvalidOperationException(feedStorageError);
+        if (source.Kind is not ("folder" or "paste" or "rss")) throw new ArgumentException("Choose a supported source type.");
+        if (string.IsNullOrWhiteSpace(source.Name)) throw new ArgumentException("Give the source a name.");
+        if (source.Kind == "rss" && !FeedImporters.SafeUrl(source.Location)) throw new ArgumentException("Enter an HTTP or HTTPS feed URL.");
+        if (source.Kind == "folder" && !Path.IsPathFullyQualified(source.Location)) throw new ArgumentException("Choose a full folder path.");
+        Interlocked.Increment(ref feedGeneration);
+        feedArchive.SaveSource(source);
+        if (source.Id == "legacy") ApplyFeed(feedOptions with { Folder = source.Location });
+        WatchFeed(); Notify(); RefreshFeedInBackground();
     }
-    /// <summary>Reads the folder now, on the calling thread. The feed page, a changed folder setting and the tests use this; the timer's own checks use <see cref="RefreshFeedInBackground"/>.</summary>
-    public void RefreshFeed() { Interlocked.Increment(ref feedGeneration); var signature = FeedSignatureOf(out var newest); ApplyScan(Feed.ScanFolder(feedOptions.Folder), signature, newest); }
-    /// <summary>Reads the folder on another thread, and only when a file has changed since the last read, so a large folder never holds up the window.</summary>
+    public void RemoveFeedSource(string id)
+    {
+        if (feedStorageError is not null) throw new InvalidOperationException(feedStorageError);
+        Interlocked.Increment(ref feedGeneration); feedArchive.RemoveSource(id);
+        if (id == "legacy") ApplyFeed(feedOptions with { Folder = null });
+        WatchFeed(); Notify();
+    }
+    public void ImportFeedText(string sourceId, string text)
+    {
+        if (feedStorageError is not null) throw new InvalidOperationException(feedStorageError);
+        var source = FeedSources.Single(s => s.Id == sourceId);
+        if (source.Paused) throw new InvalidOperationException("Resume this source before importing.");
+        var report = FeedImporters.TextReport(text, source.Name, Engine.Now);
+        feedArchive.Import(new FeedImportResult(source, new[] { report }), Engine.Now);
+        feedEntries = feedArchive.Entries(); feedAccounts = feedArchive.Accounts(); feedUpdated = Engine.Now; Notify();
+    }
+    public void RefreshFeed()
+    {
+        if (feedStorageError is not null || feedStopped) return;
+        Interlocked.Increment(ref feedGeneration);
+        var results = FeedSources.Where(s => !s.Paused && s.Kind != "paste")
+            .Select(s => FeedImporters.ReadAsync(s).GetAwaiter().GetResult()).ToArray();
+        ApplyImports(results);
+    }
     public void RefreshFeedInBackground()
     {
-        var folder = feedOptions.Folder; var signature = FeedSignatureOf(out var newest);
-        if (signature == feedSignature && (folder is not null || feedEntries.Count == 0)) return;
-        if (folder is null) { Interlocked.Increment(ref feedGeneration); ApplyScan(new Feed.Scan(Array.Empty<FeedEntry>(), 0, 0, Array.Empty<string>()), "", null); return; }
-        var generation = Interlocked.Increment(ref feedGeneration);
-        Task.Run(() => Feed.ScanFolder(folder)).ContinueWith(task =>
+        if (feedRefreshing || feedStopped || feedStorageError is not null) return;
+        var sources = FeedSources.Where(s => !s.Paused && s.Kind != "paste").ToArray();
+        if (sources.Length == 0) return;
+        feedRefreshing = true;
+        var generation = Volatile.Read(ref feedGeneration);
+        Task.Run(async () =>
         {
-            if (task.IsFaulted) return;
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (folder == feedOptions.Folder && generation == Volatile.Read(ref feedGeneration)) ApplyScan(task.Result, signature, newest); });
-        });
+            var collected = new List<FeedImportResult>();
+            foreach (var source in sources) collected.Add(await FeedImporters.ReadAsync(source).ConfigureAwait(false));
+            return collected;
+        }).ContinueWith(task => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            feedRefreshing = false;
+            if (feedStopped) return;
+            if (generation != Volatile.Read(ref feedGeneration)) { RefreshFeedInBackground(); return; }
+            try
+            {
+                if (task.IsFaulted) { FeedImportError = task.Exception!.GetBaseException().Message; Notify(); }
+                else ApplyImports(task.Result);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException)
+            { FeedImportError = "Could not save imported reports: " + e.Message; Notify(); }
+        }));
     }
-    private void ApplyScan(Feed.Scan scan, string signature, DateTime? newest)
+    private void ApplyImports(IEnumerable<FeedImportResult> results)
     {
-        feedScan = scan; feedEntries = scan.Entries; feedSignature = signature; feedUpdated = newest;
-        // Marks for entries that are gone from the folder are dropped so the settings stay small. An empty or unreadable folder (a cloud drive that
-        // is offline, say) drops nothing, so the marks are still there when it comes back.
-        if (scan.Files > 0 && scan.Entries.Count > 0)
-        {
-            var ids = scan.Entries.Select(e => e.Id).ToHashSet(); var marks = feedOptions.Marks;
-            var read = marks.Read.Where(ids.Contains).ToHashSet(); var done = marks.Done.Where(ids.Contains).ToHashSet();
-            if (read.Count != marks.Read.Count || done.Count != marks.Done.Count) { feedOptions = feedOptions with { Marks = new FeedMarks(read, done) }; preferences = feedOptions.Into(preferences); Save(); }
-        }
+        FeedImportError = null;
+        foreach (var result in results) feedArchive.Import(result, Engine.Now);
+        feedEntries = feedArchive.Entries(); feedAccounts = feedArchive.Accounts(); feedUpdated = Engine.Now;
+        var errors = FeedSources.Where(s => s.Error is not null).Select(s => s.Name + ": " + s.Error).ToArray();
+        feedScan = new Feed.Scan(feedEntries, 0, 0, errors);
         Notify();
     }
     private void WatchFeed()
     {
-        feedWatcher?.Dispose(); feedWatcher = null;
-        var folder = feedOptions.Folder; if (folder is null || !Directory.Exists(folder)) return;
-        try
+        feedStopped = false;
+        foreach (var watcher in feedWatchers) watcher.Dispose(); feedWatchers.Clear();
+        foreach (var source in FeedSources.Where(s => s.Kind == "folder" && !s.Paused && Directory.Exists(s.Location)))
         {
-            var watcher = new System.IO.FileSystemWatcher(folder) { NotifyFilter = System.IO.NotifyFilters.LastWrite | System.IO.NotifyFilters.FileName | System.IO.NotifyFilters.Size, EnableRaisingEvents = true };
-            void Changed(object? s, EventArgs e) => Avalonia.Threading.Dispatcher.UIThread.Post(QueueFeedRefresh);
-            watcher.Changed += Changed; watcher.Created += Changed; watcher.Deleted += Changed; watcher.Renamed += Changed;
-            feedWatcher = watcher;
+            try
+            {
+                var watcher = new FileSystemWatcher(source.Location) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size };
+                void Changed(object? s, EventArgs e) => Avalonia.Threading.Dispatcher.UIThread.Post(QueueFeedRefresh);
+                watcher.Changed += Changed; watcher.Created += Changed; watcher.Deleted += Changed; watcher.Renamed += Changed;
+                watcher.Error += Changed; watcher.EnableRaisingEvents = true; feedWatchers.Add(watcher);
+            }
+            catch (Exception e) when (e is ArgumentException or IOException or PlatformNotSupportedException or UnauthorizedAccessException) { }
         }
-        catch (Exception e) when (e is ArgumentException or IOException or PlatformNotSupportedException or UnauthorizedAccessException) { }
     }
     // A file being written raises several events; reading waits until they stop.
     private void QueueFeedRefresh()

@@ -106,6 +106,7 @@ public sealed class SettingsView : ScrollViewer
 
         // The feed: Markdown files in a folder, written by something else and only ever read here. See FEED.md.
         var feed = new StackPanel { Spacing = 10 };
+        feed.Children.Add(new FeedSourcesView(model));
         var feedFolder = new TextBox { Name = "FeedFolder", Watermark = "A folder of .md or .txt files", Text = model.FeedFolder ?? "" };
         void CommitFolder() { var typed = feedFolder.Text?.Trim() ?? ""; if (typed != (model.FeedFolder ?? "")) model.SetFeedFolder(typed); }
         feedFolder.LostFocus += (_, _) => CommitFolder();
@@ -113,20 +114,20 @@ public sealed class SettingsView : ScrollViewer
         // The box takes the room there is and Browse keeps its own, so neither runs past the card however narrow it is.
         feedFolder.Width = double.NaN; feedFolder.HorizontalAlignment = HorizontalAlignment.Stretch;
         var folderRow = Ui.Grid("*,Auto"); folderRow.ColumnSpacing = 8; Ui.Put(folderRow, feedFolder); Ui.Put(folderRow, Ui.DialogButton("Browse…", () => FeedFolderPicker.Choose(this, picked => model.SetFeedFolder(picked)), "FeedBrowse"), 1);
-        feed.Children.Add(Row("Folder", folderRow));
+        feed.Children.Add(Row("Original folder", folderRow));
         feed.Children.Add(Toggle("Mark an entry read when it is opened", "FeedAutoRead", () => model.FeedAutoRead, v => model.SetFeedAutoRead(v)));
-        feed.Children.Add(Toggle("Keep entries for 90 days instead of 30", "FeedLonger", () => model.FeedLonger, v => model.SetFeedLonger(v)));
+        feed.Children.Add(Toggle("Show entries for 90 days instead of 30", "FeedLonger", () => model.FeedLonger, v => model.SetFeedLonger(v)));
         var feedNote = Ui.Text(model.FeedNote, 12, "muted"); feedNote.Name = "FeedFolderNote"; feedNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; feed.Children.Add(feedNote);
         // The prompt for a scheduled ChatGPT or Claude task, shown in full so it can be read again each time one is set up, and copied from here. It names the
         // folder the files must reach and the person's own account tags, so it follows both.
         var promptHeading = Ui.Text("Prompt for a scheduled ChatGPT or Claude task", 14, "muted"); promptHeading.Margin = new Thickness(0, 6, 0, 0); feed.Children.Add(promptHeading);
-        var promptNote = Ui.Text("Give each task this prompt, with your own line under What to look for. An assistant that runs in the cloud cannot write to this computer, so have it save to a folder that syncs (OneDrive, Dropbox, Google Drive) and choose that same folder above.", 12, "muted");
+        var promptNote = Ui.Text("Ask your assistant to save reports into the selected folder. A cloud task needs a supported file-writing connector and synchronisation to this computer. Test one scheduled run without intervention first; a synced folder alone does not grant access.", 12, "muted");
         promptNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; promptNote.Name = "FeedPromptNote"; feed.Children.Add(promptNote);
-        var promptBox = new TextBox { Name = "FeedPromptText", IsReadOnly = true, AcceptsReturn = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Height = 260, FontSize = 12.5, Text = model.FeedPromptText };
+        var promptBox = new TextBox { Name = "FeedPromptText", IsReadOnly = true, AcceptsReturn = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Height = 130, FontSize = 12.5, Text = model.FeedPromptText };
         feed.Children.Add(promptBox);
         var copyPrompt = Ui.DialogButton("Copy prompt", () => { if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard) _ = clipboard.SetTextAsync(model.FeedPromptText); model.Notice = "Prompt copied."; }, "FeedCopyPrompt");
         copyPrompt.HorizontalAlignment = HorizontalAlignment.Left; feed.Children.Add(copyPrompt);
-        var feedHelp = Ui.Text("Older entries are hidden, never deleted: the folder is only read. Clear old files by hand to keep it small.", 12, "muted"); feedHelp.TextWrapping = Avalonia.Media.TextWrapping.Wrap; feed.Children.Add(feedHelp);
+        var feedHelp = Ui.Text("Imported reports are kept in feed.db beside timer.db. Include both files when backing up or moving the app. Source files are only read.", 12, "muted"); feedHelp.TextWrapping = Avalonia.Media.TextWrapping.Wrap; feed.Children.Add(feedHelp);
         syncs.Add(() => { var shown = model.FeedFolder ?? ""; if (!feedFolder.IsFocused && feedFolder.Text != shown) feedFolder.Text = shown; feedNote.Text = model.FeedNote; if (promptBox.Text != model.FeedPromptText) promptBox.Text = model.FeedPromptText; });
         page.Children.Add(Section("Feed", feed));
 

@@ -1,106 +1,59 @@
-# Feed: a wire of client updates read from files
+# Feed sources and delivery
 
-Agreed in conversation on 16 October 2026. The shared reader is `Feed` in `Timer.Core` 0.2.0, and the Feed tab, its Settings section and the prompt are built in this app. The account strip (unread items for the account being tracked, under the Day card) is built too.
+The Feed imports reports into `feed.db` beside `timer.db`. External content, source configuration and read/done marks are separate from time records. Include `feed.db` when backing up or moving the data folder, with the app closed. Existing automatic time-ledger backups do not include the Feed archive.
 
-## What it is
+## Add a source
 
-A **Feed** tab on the dashboard that shows a continuous stream of short updates about clients, newest first, like a printout from a news wire. The updates are written by something else (a scheduled ChatGPT or Claude task, a script, or by hand) into Markdown files in a folder. The app only reads them. There is no network access, no account and no API key, so client details stay on the computer and in whatever cloud folder the person already syncs.
+In Settings → Feed, select **Add source**, name it, choose a type and optionally assign a default account. Tags within an entry override the default account. Edit changes future imports; already imported entries retain their account association.
 
-## Principles
+- **Local or synchronised folder:** select the local folder containing `.md` or `.txt` reports. OneDrive, Google Drive and similar services work through their local sync client. Make the folder available offline. The app reads files directly in that folder, not subfolders, and never modifies them.
+- **Paste / import report:** paste ordinary text or Markdown into the source editor and save. Use **Import / edit** to add later reports to that source. Headings split a report into entries; the original report is retained.
+- **RSS / Atom news feed:** enter the publisher's HTTP or HTTPS feed URL. This is independent of assistant reports. No API key is required. HTML is displayed as text rather than executed; external images are not loaded.
 
-- **Read only.** The app never writes to, renames or deletes anything in the feed folder, so a file can be rewritten at any moment without conflicts. Read and done marks live in the app's own settings.
-- **Plain text.** Anything that can write Markdown can feed it. No special tool is needed.
-- **Same words as Notes.** An entry uses the Notes shorthand already in the app (`#Tag` links an account, `!` marks urgency, `@day` and a time are understood), so a feed item can become a day note without rewriting it.
-- **Untrusted input.** The files are treated as untrusted text (see Safety).
+Sources show their last successful check and any import errors. Pause stops automatic imports; Resume restarts them. Remove keeps imported reports and their read/done states. Refresh checks active sources. The original folder setting remains for existing installations, with existing entry IDs and marks preserved.
 
-## The folder
+Folder notifications are debounced, with a one-minute polling fallback. RSS is checked every minute. Imports run while the Timer is open and catch up on startup. Reports remain readable when the source disappears or the computer is offline. Age settings hide older entries without deleting them.
 
-Settings, Feed, has a folder path. Every `.md` and `.txt` file in it (not in subfolders) is a **source**; the file name, without the extension, is the source label. A person might have one file per scheduled task or one per client. The app watches the folder for changes and also has a Refresh button, and shows when the newest file was last written ("Updated 3 hours ago").
+Files are read twice, 400 ms apart, and accepted only if their contents agree. Locked, unavailable, changing, empty and oversized files are retried on a later check. Each report/feed is limited to 1 MB; each folder check considers its newest 200 files. RSS/Atom reads at most 500 entries per response. HTTP requests and downloads have timeouts, and XML DTDs/external entities are prohibited. These bounds prevent a single source from consuming unlimited resources; very large source collections should be split or archived outside the watched folder.
 
-## Entry format
+## Report format and identity
 
-An entry starts at a heading line (`#` or `##`, and so on) and runs to the next heading or the end of the file.
+Ordinary text works without a template. Optional headings, dates and IDs improve structure:
 
-```
-## ! Acme: supplier delay confirmed
-Date: 2026-10-16 08:30
-ID: acme-delay-1016
+```markdown
+## Supplier update
+Date: 2026-10-18 09:30
+ID: supplier-shipment-123
 #AccountOne
-The shipment slipped to Tuesday. Worth a call before the 2pm meeting.
+The revised delivery date is Tuesday. [Original announcement](https://example.com/news).
 ```
 
-- **Headline:** the heading text. A leading `!` marks it urgent (as a leading `!` makes a note a deadline) and is dropped from the shown headline.
-- **Date:** an optional `Date:` line (`2026-10-16`, with an optional time). Without it the entry takes the file's last-written time, and entries without a date in one file are ordered by their position (earlier in the file is newer, matching a file that is written newest first).
-- **ID:** an optional `ID:` line. When present it identifies the entry. When absent the app uses a fingerprint of the date, headline and text.
-- **Tags:** `#AccountName` anywhere in the entry. A tag links an entry to an account only when it names exactly one account the app knows (the same rule as the to-do tag); other tags stay as plain words.
-- **Body:** everything else, shown as plain text with line breaks and simple Markdown (bold, italic, bullet lists). Never HTML.
+Use the same explicit ID when revising an item. IDs are scoped to a source, preventing unrelated assistants' `ID: 1` items from colliding. Repeated identical content within that source deduplicates. Without IDs, content fingerprints identify repeated entries; an unambiguous unchanged heading/date within the same file also survives body edits. Changing the heading, date and body without a stable ID can create a new entry. Reports from independent sources remain independent even if their text matches.
 
-A file with no headings counts as one entry (headline: the file name).
+The Feed retains original report versions for reference. A source update cannot erase an earlier imported entry. Safe HTTP/HTTPS links appear as explicit clickable destinations in the detail pane; file links, scripts and embedded HTML never execute. Adding an entry to Notes and the account update strip use the same account resolution as the Feed.
 
-## Merging
+## Scheduled assistant delivery: verification gate
 
-All sources are read and the entries merged into one stream, newest first. Because a scheduled task may rewrite its whole file each run, entries with the same ID, or the same fingerprint, from any source count as one and show once. An entry whose wording changes without an ID shows as a new entry; the optional `ID:` line is how an author keeps an entry the same through edits.
+Documentation checked on 18 October 2026:
 
-## States
+- [ChatGPT scheduled tasks](https://learn.chatgpt.com/docs/automations) documents scheduled work with connected tools and skills. Desktop tasks that need local files require the computer and app to remain running. Web tasks do not have a persistent local folder.
+- [Claude recurring tasks](https://support.claude.com/en/articles/13854387-schedule-recurring-tasks-in-claude-cowork) documents scheduled sessions with connected tools. Cloud scheduling and local-file scheduling have different execution requirements, including differences for older schedules.
 
-Both are stored in the app's settings (the `feed` JSON section), keyed by ID or fingerprint:
+These capabilities do **not** establish that a particular user's existing task can write a cloud file or call a custom MCP operation without an approval prompt. No provider-account unattended delivery test was performed in this change. There is no cloud relay, direct MCP submission endpoint or built-in paid AI scheduling in this release.
 
-- **Read.** Set automatically when an entry is expanded (this is on by default, with a switch to turn it off), by hand with a toggle, or for everything above a chosen item with Mark everything above as read.
-- **Done.** For entries that need action. Separate from read. Done entries are hidden unless the Done filter is on, and Done can be undone.
+For either provider, first run a small report-writing task against a folder or file-writing connector that the account actually supports. Then configure a scheduled run with the same destination and verify all of the following:
 
-The record for an entry is dropped from settings once the entry is gone from the folder and past retention, so the settings stay small.
+1. A new Markdown/text file reaches the selected local/synchronised folder without manual copying or an approval prompt.
+2. Its entries arrive in the Timer with their date, source, links and account.
+3. A second scheduled run arrives without intervention; refreshing does not duplicate the first report or reset its read/done marks.
+4. Closing/reopening the Timer catches up, and temporarily disconnecting the source leaves imported reports readable.
 
-## Display
+A short instruction for a supported destination is: “Save each report as a new `.md` file in [destination], named `feed-[task]-[date-time].md`. Keep links and publication dates; use stable IDs for items you revise.” A sync folder by itself does not give an assistant permission or tools to write there. If unattended file creation is unavailable, use paste import until the provider supports it.
 
-A Feed tab on the dashboard's icon rail, with a badge showing the unread count.
+Direct delivery remains gated on two successful unattended calls to a submission-only proof of concept, including authentication and retry/deduplication evidence. Only then should a relay be designed with revocable per-user credentials, HTTPS retrieval and retention controls. A closed desktop app cannot itself retrieve reports; a future relay would hold them for the next connection. Optional API-based monitoring and spending controls remain future work.
 
-- One scrolling stream with day dividers (Today, Yesterday, then the date).
-- Each item shows its time, a source chip, account chips, the headline and the first two lines of the body. Clicking expands it to the full text (and marks it read).
-- Unread items are normal weight; read items are dimmed.
-- Filter chips along the top: Unread, an account, a source, and Done.
-- Add to notes on an item makes a day note from it on today (or the day it names) with its tags, using the existing note code.
-- **Account strip:** while an account is being tracked, a slim strip on the dashboard shows up to two unread items tagged with that account, so the briefing is in view when the person switches client.
+## Implementation and validation
 
-## Retention and size
+`FeedImporters` adapts folder/text/RSS inputs into `FeedReport` batches. `FeedArchive` commits reports, entries and source status into a separate SQLite database. `TimerModel` applies background results on the UI thread, discarding results from an obsolete source configuration. Existing Feed presentation, Notes actions, account filtering and dashboard strip consume the same `FeedEntry` model.
 
-- Entries older than **30 days** are hidden, by their date. A setting changes this to **90 days**. Nothing is deleted from the folder, because the app never writes to it.
-- Settings, Feed, shows a note on the folder: its size, the number of files, how many entries are showing, and how many are hidden by retention ("2.4 MB in 18 files. 412 entries showing, 120 hidden as older than 30 days."). A line is shown when the folder is large (over 50 MB) suggesting old files be cleared by hand.
-- Parsing is done on a background thread and only re-done for files whose timestamp or size has changed, so a large folder does not slow the app.
-
-## Prompt helper
-
-Settings, Feed, shows the prompt for a scheduled ChatGPT or Claude task in full, in a read-only box that follows the folder and the person's accounts, so it can be read again each time a task is set up, with a Copy prompt button. It has the parts a task needs: **what to look for** (the one line the person fills in), **my clients** (the person's own `#Tag` for each account), **where to save** (the feed folder's path, a new file every run named `feed-<short task name>-YYYY-MM-DD-HHMM.md`, earlier files never changed or deleted, or the whole file in the reply when it cannot save to a folder), the entry **format** with `Date:` and `ID:` lines, and the **rules**. A new file each run means a task that cannot read its own earlier output still builds up history, which the age limit then hides; the folder note says how big it has grown.
-
-An assistant that runs in the cloud cannot write to this computer, so the page says so: have it save to a folder that syncs (OneDrive, Dropbox, Google Drive) and choose that same folder here. An assistant that runs on the computer can save straight into the folder.
-
-## Safety
-
-- Files are limited in size (1 MB each, and a folder limit on the number of files read; anything over is skipped with a note in Settings).
-- Text is shown as text. No HTML is rendered and no scripts run.
-- Links are shown as plain words and are not opened automatically. Opening one asks first.
-- A tag only links to an account the person already has. A feed file cannot create, rename or change an account, a budget or any time.
-- The folder path is chosen by the person; the app does not search for folders and does not open another app's data folder.
-
-## Where the code goes
-
-- **`Basic-Timer-Core` (shared, 0.2.0):** the entry parser, the merge and duplicate rules, and the retention rule, as pure code with tests. Together with `NoteShorthand` and the shortcut parser, which move there from the desk app so both apps use one copy. No UI types.
-- **This repository:** the folder watcher, the `feed` settings section (read/done marks and options), `FeedView` (the tab and the account strip), the Settings pane, and the prompt text.
-- **The desk app** can add a Feed tile later with no new parsing work.
-
-## Tests
-
-Parser (headings, dates, IDs, tags, files without headings), merge and duplicate rules, retention at 30 and 90 days, the read and done states, the folder note, safety limits, and a visibility audit entry for the new tab in Light and Dark.
-
-## Related work agreed at the same time
-
-1. Port Quick Capture and Notes onto the dashboard as a tab.
-2. Port the pill layouts (Full, Compact, Minimal) and their settings picker.
-
-Both come from the desk app, and both depend on moving `NoteShorthand` into the shared repository first.
-
-## Build order
-
-1. Shared 0.2.0: shorthand and shortcut parsers, then the feed parser.
-2. Dashboard: Notes tab and Quick Capture.
-3. Dashboard: Feed tab, Settings pane, prompt helper.
-4. Pill layouts and settings picker.
+Automated tests use synthetic files and XML: persistence and edits, original-report history, duplicate IDs, offline folders, file limits/locks, RSS/Atom dates and links, and prohibited XML/link content. They do not establish that OneDrive, Google Drive, ChatGPT or Claude can complete an unattended account-specific workflow.

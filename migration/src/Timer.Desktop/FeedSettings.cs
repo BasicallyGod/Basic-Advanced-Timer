@@ -71,36 +71,13 @@ public static class FeedPrompt
         var tags = accounts.Count == 0 ? new[] { "#AccountName  (the client's name)" } : accounts.Select(a => NoteShorthand.TagFor(a.Name) + "  (" + a.Display + ")").ToArray();
         return string.Join('\n', new[]
         {
-            "Write updates for my time-tracking app's feed. Do this every time you run.",
-            "",
-            "WHAT TO LOOK FOR",
-            "(Replace this line with what you want, for example: anything new in the last day about each client below, such as news, announcements and deadlines.)",
-            "",
-            "MY CLIENTS",
-            "Put the matching tag on its own line in each entry that is about a client. My tags are:",
+            "Save each report as a new .md or .txt file in this folder: " + (string.IsNullOrWhiteSpace(folder) ? NoFolder : folder),
+            "Use a different file name each run, for example feed-<task>-YYYY-MM-DD-HHMM.md. Keep links and publication dates.",
+            "Ordinary text is fine. Optionally use headings for separate entries, Date: YYYY-MM-DD HH:MM and ID: a-stable-item-id to preserve identity through edits.",
+            "Optional account tags (otherwise the source's default account applies):",
         }.Concat(tags).Concat(new[]
         {
-            "Leave the tag out of anything that is not about one client.",
-            "",
-            "WHERE TO SAVE",
-            "Save the result as a new Markdown file in this folder: " + (string.IsNullOrWhiteSpace(folder) ? NoFolder : folder),
-            "Name it feed-<short task name>-YYYY-MM-DD-HHMM.md, using the date and time of this run. Make a new file every run and never change or delete earlier files: my app reads every .md file in the folder and joins them, newest first.",
-            "If you cannot save to a folder, put the whole file in your reply so I can save it there myself.",
-            "",
-            "FORMAT",
-            "Newest entry first, each one in exactly this form:",
-            "",
-            "## Short headline (start it with ! if it needs action today)",
-            "Date: YYYY-MM-DD HH:MM",
-            "ID: a-short-stable-name-for-this-item",
-            "#AccountTag",
-            "One to three plain sentences. Longer detail is fine when it is useful.",
-            "",
-            "RULES",
-            "- Always include the Date line, as YYYY-MM-DD with an optional HH:MM.",
-            "- Always include an ID line. If you write about the same item again, use the same ID.",
-            "- Plain text and simple Markdown only (bold, italic, bullet lists). No HTML, tables, images or links.",
-            "- One entry per item. Do not repeat an item you have already reported unless something has changed.",
+            "First verify that a scheduled run can save a file here without intervention. If it cannot, paste the report using Add source in Feed settings."
         }));
     }
 }
