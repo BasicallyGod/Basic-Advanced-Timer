@@ -1,7 +1,9 @@
 using System.Globalization;
+using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using Timer.Core;
@@ -89,6 +91,23 @@ public static class FeedImporters
         }
         return ParseRss(Encoding.UTF8.GetString(buffer.ToArray()), source.Name, DateTime.Now);
     }
+    private static readonly Regex Markup = new("<[a-zA-Z/!][^>]*>", RegexOptions.Compiled);
+    private static readonly Regex Hidden = new("<(script|style)\\b.*?</\\1\\s*>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    private static readonly Regex ListItem = new("<li\\b[^>]*>", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex Breaks = new("<(br|/p|/div|/li|/h[1-6]|/tr)\\b[^>]*>|<(p|div|h[1-6]|tr)\\b[^>]*>", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    /// <summary>Publishers often put HTML in a description (Google News escapes a whole list of links), and the Feed shows text only, so tags are turned into line breaks and bullets and the rest dropped. Nothing is executed or fetched.</summary>
+    public static string PlainText(string value)
+    {
+        if (!Markup.IsMatch(value)) return WebUtility.HtmlDecode(value).Trim();
+        var text = Hidden.Replace(value, "");
+        text = ListItem.Replace(text, "\n• ");
+        text = Breaks.Replace(text, "\n");
+        text = Markup.Replace(text, "");
+        text = WebUtility.HtmlDecode(text).Replace('\u00a0', ' ');
+        text = Regex.Replace(text, "[ \\t]+", " ");
+        text = Regex.Replace(text, " ?\\n ?", "\n");
+        return Regex.Replace(text, "\\n{3,}", "\n\n").Trim();
+    }
     public static FeedReport ParseRss(string xml, string source, DateTime now)
     {
         using var reader = XmlReader.Create(new StringReader(xml), new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, MaxCharactersInDocument = Feed.MaxFileBytes });
@@ -101,7 +120,7 @@ public static class FeedImporters
             var linkNode = item.Elements().FirstOrDefault(e => e.Name.LocalName == "link" && (e.Attribute("rel") is null || (string?)e.Attribute("rel") == "alternate"));
             var link = (string?)linkNode?.Attribute("href") ?? linkNode?.Value;
             var title = Value("title"); if (title.Length == 0) title = source;
-            var body = Value("description", "summary", "content", "encoded");
+            var body = PlainText(Value("description", "summary", "content", "encoded"));
             if (SafeUrl(link)) body += "\n\n" + link;
             var id = Value("guid", "id"); if (id.Length == 0) id = SafeUrl(link) ? link! : title + "\n" + body;
             var hasDate = DateTimeOffset.TryParse(Value("pubDate", "published", "updated", "date"), CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var date);
