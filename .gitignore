@@ -19,3 +19,6 @@ TestResults/
 # Isolated Avalonia migration runtime data
 migration-data/
 **/migration-data/
+
+# External Feed archive and SQLite sidecars
+feed.db*

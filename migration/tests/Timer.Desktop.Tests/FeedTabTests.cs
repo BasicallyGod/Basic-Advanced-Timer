@@ -48,11 +48,11 @@ public sealed class FeedTabTests : IDisposable
         Assert.Equal(new[] { "Supplier delay confirmed", "Quarterly figures out" }, model.FeedShown.Select(e => e.Headline)); // Old news is 76 days old.
         model.SetFeedLonger(true); Assert.Equal(90, model.FeedRetentionDays); Assert.Equal(3, model.FeedShown.Count);
         Assert.Equal(3, model.FeedUnread); // Nothing has been read, so the third counts once it shows.
-        Assert.StartsWith("1 KB in 1 file. 3 entries showing, 0 hidden as older than 90 days.", model.FeedNote);
+        Assert.StartsWith("3 entries showing, 0 hidden as older than 90 days.", model.FeedNote);
     }
 
     [Fact]
-    public void ReadAndDoneMarksPersistAndAreDroppedWhenAnEntryLeavesTheFolder()
+    public void ReadAndDoneMarksAndReportsPersistWhenAnEntryLeavesTheFolder()
     {
         var data = Path.Combine(folder, "data"); using var store = new TimerStore(data); var engine = new TrackingEngine(clock: () => Now);
         var model = new TimerModel(engine, store.Load(engine), store); model.SetFeedFolder(folder);
@@ -60,12 +60,12 @@ public sealed class FeedTabTests : IDisposable
         model.SetFeedRead("id:acme-delay", true); model.SetFeedDone(model.FeedEntries[1].Id, true); model.Save();
         var again = new TimerModel(engine, store.Load(engine), store); again.RefreshFeed();
         Assert.True(again.FeedIsRead("id:acme-delay")); Assert.True(again.FeedIsDone(again.FeedEntries[1].Id)); Assert.Equal(0, again.FeedUnread);
-        // The file is rewritten without the first entry: its mark goes with it, the other stays.
+        // The source loses an entry, but its imported report and state stay available.
         File.WriteAllText(Path.Combine(folder, "daily.md"), Wire[(Wire.IndexOf("## Quarterly", StringComparison.Ordinal))..]); again.RefreshFeed();
-        Assert.False(again.FeedIsRead("id:acme-delay")); Assert.True(again.FeedIsDone(again.FeedEntries[0].Id));
+        Assert.True(again.FeedIsRead("id:acme-delay")); Assert.True(again.FeedIsDone(again.FeedEntries[1].Id));
         // An empty folder (a cloud drive that is offline) drops nothing.
         File.Delete(Path.Combine(folder, "daily.md")); again.RefreshFeed(); File.WriteAllText(Path.Combine(folder, "daily.md"), Wire[(Wire.IndexOf("## Quarterly", StringComparison.Ordinal))..]); again.RefreshFeed();
-        Assert.True(again.FeedIsDone(again.FeedEntries[0].Id));
+        Assert.True(again.FeedIsDone(again.FeedEntries[1].Id));
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public sealed class FeedTabTests : IDisposable
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             var box = Find<TextBox>(window, "FeedFolder"); box.Text = folder; box.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter }); Dispatcher.UIThread.RunJobs();
             Assert.Equal(folder, model.FeedFolder); Assert.Equal(2, model.FeedShown.Count);
-            Assert.StartsWith("1 KB in 1 file. 2 entries showing, 1 hidden as older than 30 days.", Find<TextBlock>(window, "FeedFolderNote").Text);
+            Assert.StartsWith("2 entries showing, 1 hidden as older than 30 days.", Find<TextBlock>(window, "FeedFolderNote").Text);
             var longer = Find<CheckBox>(window, "FeedLonger"); longer.IsChecked = true; longer.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent)); Assert.True(model.FeedLonger); // A raised click does not flip the box itself.
             Find<Button>(window, "FeedBrowse"); Find<Button>(window, "FeedCopyPrompt");
         }
@@ -159,9 +159,9 @@ public sealed class FeedTabTests : IDisposable
         var prompt = FeedPrompt.Build(new[] { ("Account one", "Account one"), ("Internal", "Internal") }, @"C:\Users\sam\OneDrive\Feed");
         Assert.Contains(@"in this folder: C:\Users\sam\OneDrive\Feed", prompt);
         Assert.Contains("#Accountone  (Account one)", prompt); Assert.Contains("#Internal  (Internal)", prompt);
-        Assert.Contains("WHAT TO LOOK FOR", prompt); Assert.Contains("Replace this line", prompt); // The one part the person fills in.
-        Assert.Contains("feed-<short task name>-YYYY-MM-DD-HHMM.md", prompt); Assert.Contains("never change or delete earlier files", prompt);
-        Assert.Contains("Date: YYYY-MM-DD HH:MM", prompt); Assert.Contains("ID: ", prompt); Assert.Contains("start it with ! if", prompt); Assert.Contains("put the whole file in your reply", prompt);
+        Assert.Contains("Ordinary text is fine", prompt);
+        Assert.Contains("feed-<task>-YYYY-MM-DD-HHMM.md", prompt); Assert.Contains("different file name each run", prompt);
+        Assert.Contains("Date: YYYY-MM-DD HH:MM", prompt); Assert.Contains("ID: ", prompt); Assert.Contains("without intervention", prompt); Assert.Contains("paste the report", prompt);
         // The prompt it asks for is something the feed reads: its own example entry parses with a date, an ID and an urgent mark.
         var entry = Feed.Parse("## ! Short headline\nDate: 2026-10-16 08:30\nID: a-stable-name\n#Accountone\nOne sentence.", "wire", new DateTime(2026, 10, 16))[0];
         Assert.True(entry.Urgent); Assert.True(entry.HasDate); Assert.Equal("id:a-stable-name", entry.Id);
@@ -181,7 +181,7 @@ public sealed class FeedTabTests : IDisposable
             model.SetFeedFolder(folder); Dispatcher.UIThread.RunJobs();
             Assert.Contains("in this folder: " + folder, box.Text); Assert.DoesNotContain(FeedPrompt.NoFolder, box.Text);
             Assert.Equal(model.FeedPromptText, box.Text);
-            Assert.Contains("cannot write to this computer", Find<TextBlock>(window, "FeedPromptNote").Text); // Says why a synced folder is needed for a cloud assistant.
+            Assert.Contains("Test one scheduled run without intervention", Find<TextBlock>(window, "FeedPromptNote").Text);
             Find<Button>(window, "FeedCopyPrompt");
             // Renaming an account is reflected the next time the page is looked at.
             model.SetAccounts(model.AccountSettings.Select(a => a.Name == "Account one" ? a with { Name = "Client Alpha" } : a), new Dictionary<string, string> { ["Account one"] = "Client Alpha" }); Dispatcher.UIThread.RunJobs();
