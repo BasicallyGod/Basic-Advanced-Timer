@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 18 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Persistent Feed and source management | [9e71faa](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/9e71faa3324ea608bb835c6a425edb856730a53d) | Adds folder, paste and RSS/Atom sources with account defaults, status, pause/resume and removal. Reports, originals and read/done states persist in a separate feed.db, including when sources disappear. Imports deduplicate, retry incomplete files and preserve existing folder IDs. Feed details expose safe web links and original reports. Direct provider delivery remains gated on unattended testing; see FEED.md. |
+
 ## 16 October 2026
 
 | Change | Commit | Details |
