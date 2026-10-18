@@ -140,6 +140,22 @@ public sealed class FeedImportTests : IDisposable
         model.StopForClose();
     }
 
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void GeneralNewsSitsOutsideAccountsAndTheMarkAppliesToWhatWasImported()
+    {
+        var model = new TimerModel(new TrackingEngine(clock: () => Now));
+        var source = new FeedSource("news", "News", "paste", "", "Account one", General: true);
+        model.SaveFeedSource(source); model.ImportFeedText(source.Id, "## Story\nID: one\n#AccountTwo\nWords");
+        var story = model.FeedEntries.Single();
+        Assert.True(model.FeedIsGeneral(story));
+        Assert.Null(model.FeedAccountOf(story));
+        Assert.Empty(model.FeedUnreadFor("Account one")); Assert.Empty(model.FeedUnreadFor("Account two"));
+        model.SaveFeedSource(source with { General = false });
+        Assert.False(model.FeedIsGeneral(story));
+        Assert.Equal("Account two", model.FeedAccountOf(story));
+        model.StopForClose();
+    }
+
     [Fact]
     public void FeedDatabaseHandlesAreReleasedBetweenOperations()
     {

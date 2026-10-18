@@ -116,8 +116,10 @@ public sealed class FeedPage : Grid
     }
 
     private string Signature() => string.Join(";", model.FeedShown.Select(e => e.ToString() + (model.FeedIsRead(e.Id) ? "r" : "") + (model.FeedIsDone(e.Id) ? "d" : "")))
-        + $"|{model.FeedFolder}|{tab}|{account}|{source}|{search}|{limit}|{selected}|{model.FeedUpdated:s}|{string.Join(",", model.AccountNames)}|{model.Engine.Now:yyyyMMddHHmm}";
+        + $"|{model.FeedFolder}|{tab}|{account}|{source}|{search}|{limit}|{selected}|{model.FeedGeneralRevision}|{model.FeedUpdated:s}|{string.Join(",", model.AccountNames)}|{model.Engine.Now:yyyyMMddHHmm}";
 
+    // A picker key no real account name is likely to match (it starts with a control character).
+    private const string GeneralKey = "\u0001general";
     private string? AccountOf(FeedEntry entry) => model.FeedAccountOf(entry);
 
     public static string Ago(DateTime now, DateTime then)
@@ -164,13 +166,15 @@ public sealed class FeedPage : Grid
         tabs.Children.Add(Filter(model.FeedUnread > 0 ? $"Unread {model.FeedUnread}" : "Unread", "FeedFilterUnread", tab == "unread", () => { tab = "unread"; Rebuild(); }));
         tabs.Children.Add(Filter("Done", "FeedFilterDone", tab == "done", () => { tab = "done"; Rebuild(); }));
         var accounts = all.Select(AccountOf).Where(a => a is not null).Distinct().Cast<string>().OrderBy(a => a, StringComparer.OrdinalIgnoreCase).ToList();
-        if (accounts.Count > 0) pickers.Children.Add(Picker("FeedAccountFilter", "All accounts", accounts.Select(n => (n, NoteShorthand.TagFor(model.Accounts.FirstOrDefault(a => a.Name == n)?.Display ?? n))).ToList(), account, picked => { account = picked; Rebuild(); }));
+        var choices = accounts.Select(n => (n, NoteShorthand.TagFor(model.Accounts.FirstOrDefault(a => a.Name == n)?.Display ?? n))).ToList();
+        if (all.Any(model.FeedIsGeneral)) choices.Add((GeneralKey, "General news"));
+        if (choices.Count > 0) pickers.Children.Add(Picker("FeedAccountFilter", "All accounts", choices, account, picked => { account = picked; Rebuild(); }));
         var sources = all.Select(e => e.Source).Distinct().OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
         if (sources.Count > 1) pickers.Children.Add(Picker("FeedSourceFilter", "All sources", sources.Select(n => (n, n)).ToList(), source, picked => { source = picked; Rebuild(); }));
         markAllButton.IsEnabled = model.FeedUnread > 0;
 
         var list = all.Where(e => tab switch { "done" => model.FeedIsDone(e.Id), "unread" => !model.FeedIsDone(e.Id) && !model.FeedIsRead(e.Id), _ => !model.FeedIsDone(e.Id) })
-            .Where(e => (account is null || AccountOf(e) == account) && (source is null || e.Source == source) && Matches(e)).ToList();
+            .Where(e => (account is null || (account == GeneralKey ? model.FeedIsGeneral(e) : AccountOf(e) == account)) && (source is null || e.Source == source) && Matches(e)).ToList();
         if (list.Count == 0) { stream.Children.Add(Empty("Nothing to show", "Every entry is hidden by the filters above.", false)); return; }
         DateTime? day = null;
         foreach (var entry in list.Take(limit))
@@ -215,6 +219,7 @@ public sealed class FeedPage : Grid
         Panel top = wrap ? new WrapPanel { Orientation = Orientation.Horizontal } : new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         if (when.Length > 0) top.Children.Add(Pad(Ui.Text(when, 12, "muted"), wrap));
         var tagged = AccountOf(entry);
+        if (model.FeedIsGeneral(entry)) { var general = Ui.Text("General news", 12, "muted"); general.Name = "FeedGeneral_" + key; general.FontWeight = FontWeight.SemiBold; top.Children.Add(Pad(general, wrap)); }
         if (tagged is not null && NoteChips.AccountChip(model, new DayNote(0, entry.When.Date, null, "#" + new string(tagged.Where(c => !char.IsWhiteSpace(c)).ToArray())), this, "FeedAccount_" + key, interactive: false) is { } chip) top.Children.Add(Pad(chip, wrap));
         var from = Ui.Text(entry.Source, 12, "muted"); from.Name = "FeedSource_" + key; from.MaxWidth = 220; from.TextTrimming = TextTrimming.CharacterEllipsis; ToolTip.SetTip(from, entry.Source); top.Children.Add(Pad(from, wrap));
         return top;
