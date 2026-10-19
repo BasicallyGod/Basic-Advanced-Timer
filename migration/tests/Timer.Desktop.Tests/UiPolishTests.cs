@@ -118,4 +118,19 @@ public sealed class UiPolishTests : IDisposable
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void PressingTheFirstFeedEntryIsNeverTakenForADragOfTheWindow()
+    {
+        File.WriteAllText(Path.Combine(folder, "wire.md"), "## First\nDate: 2026-10-16 09:00\nID: a\nWords.\n\n## Second\nDate: 2026-10-16 08:00\nID: b\nMore words.\n");
+        var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 16, 12, 0, 0))); model.CompleteSetup(); model.SetFeedFolder(folder); model.RefreshFeed();
+        var window = Open(model, "FeedTab"); // The window is shown on the timeline first, so the full column has bounds that it keeps once hidden.
+        try
+        {
+            var first = window.GetVisualDescendants().OfType<Border>().First(b => b.Name?.StartsWith("FeedEntry_") == true);
+            foreach (var at in new[] { new Point(10, 10), new Point(60, 25), new Point(first.Bounds.Width / 2, 10) })
+                Assert.False(window.InDragZone(first.TranslatePoint(at, window)!.Value));
+        }
+        finally { window.Close(); }
+    }
 }
