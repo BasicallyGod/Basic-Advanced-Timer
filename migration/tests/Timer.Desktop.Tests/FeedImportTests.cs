@@ -157,6 +157,22 @@ public sealed class FeedImportTests : IDisposable
     }
 
     [Fact]
+    public void ImportsAndMarkSavesFromSeveralThreadsNeverOverlap()
+    {
+        using var archive = new FeedArchive(folder);
+        var source = new FeedSource("a", "A", "folder", folder);
+        archive.SaveSource(source);
+        // A SqliteConnection throws on a second transaction, so unguarded overlap showed up as "nested transactions".
+        Parallel.For(0, 24, new ParallelOptions { MaxDegreeOfParallelism = 8 }, i =>
+        {
+            if (i % 3 == 0) archive.SaveMarks(new(new HashSet<string> { "x" + i }, new HashSet<string>()));
+            else archive.Import(new(source, new[] { FeedImporters.TextReport("## Item " + i + "\nBody", "A", Now, "r" + i + ".md") }), Now);
+            _ = archive.Entries();
+        });
+        Assert.Equal(16, archive.Entries().Count);
+    }
+
+    [Fact]
     public void FeedDatabaseHandlesAreReleasedBetweenOperations()
     {
         using var archive = new FeedArchive(folder);

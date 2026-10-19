@@ -15,6 +15,9 @@ public sealed class FeedArchive : IDisposable
     private readonly SqliteConnection connection;
     private readonly bool transient;
     private int leases;
+    // One operation at a time, and one transaction at a time: a SqliteConnection is not thread safe, and a second BeginTransaction on it throws.
+    private readonly object gate = new();
+    private bool inTransaction;
     public FeedArchive(string? dataFolder)
     {
         transient = dataFolder is not null;
@@ -44,10 +47,23 @@ public sealed class FeedArchive : IDisposable
     // An in-memory archive stays open for demo models and tests.
     private IDisposable Open()
     {
-        if (connection.State != System.Data.ConnectionState.Open) connection.Open();
-        leases++;
-        return new Lease(() => { if (--leases == 0 && transient) connection.Close(); });
+        Monitor.Enter(gate);
+        try { if (connection.State != System.Data.ConnectionState.Open) connection.Open(); leases++; }
+        catch { Monitor.Exit(gate); throw; }
+        return new Lease(() => { try { if (--leases == 0 && transient) connection.Close(); } finally { Monitor.Exit(gate); } });
     }
+    private SqliteTransaction Begin()
+    {
+        if (inTransaction) throw new InvalidOperationException("A Feed save began while another Feed save was still open.");
+        try { return Started(connection.BeginTransaction()); }
+        catch (InvalidOperationException) when (transient)
+        {
+            // Nothing of ours is open, so a transaction the connection still remembers was left behind by a failed operation. A new connection clears it.
+            connection.Close(); connection.Open();
+            return Started(connection.BeginTransaction());
+        }
+    }
+    private SqliteTransaction Started(SqliteTransaction transaction) { inTransaction = true; return transaction; }
     private sealed class Lease(Action close) : IDisposable { public void Dispose() => close(); }
 
     private void Execute(string sql, params (string, object?)[] values)
@@ -117,16 +133,16 @@ public sealed class FeedArchive : IDisposable
     public void SaveMarks(FeedMarks marks)
     {
         using var lease = Open();
-        using var transaction = connection.BeginTransaction();
+        using var transaction = Begin(); try {
         Execute("DELETE FROM marks");
         foreach (var id in marks.Read.Union(marks.Done))
             Execute("INSERT INTO marks VALUES ($id,$read,$done)", ("$id", id), ("$read", marks.Read.Contains(id)), ("$done", marks.Done.Contains(id)));
-        transaction.Commit();
+        transaction.Commit(); } finally { inTransaction = false; }
     }
     public void Import(FeedImportResult result, DateTime now)
     {
         using var lease = Open();
-        using var transaction = connection.BeginTransaction();
+        using var transaction = Begin(); try {
         foreach (var report in result.Reports.Reverse())
         {
             var reportId = result.Source.Id + ":" + report.Key + ":" + FeedImporters.Fingerprint(report.Original);
@@ -164,7 +180,7 @@ public sealed class FeedArchive : IDisposable
             }
         }
         SaveSource(result.Source with { LastSuccess = result.Error is null ? now : result.Source.LastSuccess, Error = result.Error });
-        transaction.Commit();
+        transaction.Commit(); } finally { inTransaction = false; }
     }
-    public void Dispose() => connection.Dispose();
+    public void Dispose() { lock (gate) connection.Dispose(); }
 }
