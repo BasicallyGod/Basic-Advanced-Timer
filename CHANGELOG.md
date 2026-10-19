@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 19 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Markdown links in the Feed | [9e38e7a](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/9e38e7a) | A Markdown link in a report shows as its text instead of the raw brackets and address (the address stays available as a link button in the detail pane). |
+
 ## 18 October 2026
 
 | Change | Commit | Details |
