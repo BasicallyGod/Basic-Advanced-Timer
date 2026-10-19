@@ -175,7 +175,7 @@ public sealed class FeedImportTests : IDisposable
     [Avalonia.Headless.XUnit.AvaloniaFact]
     public void MarkdownLinksShowAsTheirText()
     {
-        Assert.Equal("See Example now, and **not** a [bracket].", FeedText.Plain("See [Example](https://example.com/a?b=1) now, and **not** a [bracket]."));
+        Assert.Equal("See Example now, and bold a [bracket].", FeedText.Plain("See [Example](https://example.com/a?b=1) now, and **bold** a [bracket]."));
     }
 
     [Fact]

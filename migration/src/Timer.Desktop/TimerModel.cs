@@ -1158,7 +1158,11 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void RefreshFeedInBackground()
     {
         if (feedRefreshing || feedStopped || feedStorageError is not null) return;
-        var sources = FeedSources.Where(s => !s.Paused && s.Kind != "paste").ToArray();
+        FeedSource[] sources;
+        // The Feed database can be gone (a removed data folder, a drive that went away); that is a message, never a crash.
+        try { sources = FeedSources.Where(s => !s.Paused && s.Kind != "paste").ToArray(); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException)
+        { FeedImportError = "Could not read the Feed sources: " + e.Message; return; }
         if (sources.Length == 0) return;
         feedRefreshing = true;
         var generation = Volatile.Read(ref feedGeneration);
