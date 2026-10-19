@@ -172,7 +172,7 @@ public sealed class FeedImportTests : IDisposable
         Assert.Equal(16, archive.Entries().Count);
     }
 
-    [Fact]
+    [Avalonia.Headless.XUnit.AvaloniaFact]
     public void MarkdownLinksShowAsTheirText()
     {
         Assert.Equal("See Example now, and **not** a [bracket].", FeedText.Plain("See [Example](https://example.com/a?b=1) now, and **not** a [bracket]."));
