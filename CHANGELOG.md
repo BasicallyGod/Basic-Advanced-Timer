@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| No empty title entries | [92d1d4c](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/92d1d4c) | A report's title line, when it only introduces deeper headings, is no longer an entry of its own, and ones already imported are removed on the next refresh. |
 | Markdown links in the Feed | [9e38e7a](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/9e38e7a) | A Markdown link in a report shows as its text instead of the raw brackets and address (the address stays available as a link button in the detail pane). |
 
 ## 18 October 2026
