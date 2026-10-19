@@ -22,7 +22,32 @@ public static class FeedImporters
     {
         if (Encoding.UTF8.GetByteCount(text) > Feed.MaxFileBytes) throw new InvalidDataException("Reports must be smaller than 1 MB.");
         if (string.IsNullOrWhiteSpace(text)) throw new InvalidDataException("The report is empty.");
-        return new FeedReport(key ?? Fingerprint(text.Replace("\r\n", "\n").Trim()), title, text, Feed.Parse(text, title, date));
+        var parsed = Feed.Parse(text, title, date);
+        var titles = TitleHeadings(text);
+        // An entry is left out only when it is a title with nothing of its own, so a flat list of one-line headlines is untouched.
+        var dropped = parsed.Where(e => !e.Urgent && e.Body.Trim().Length == 0 && titles.Contains(Plain(e.Headline))).ToList();
+        return new FeedReport(key ?? Fingerprint(text.Replace("\r\n", "\n").Trim()), title, text, parsed.Except(dropped).ToList(), dropped.Select(e => e.Id).ToList());
+    }
+
+    private static readonly Regex HeadingLine = new(@"^(?<h>#{1,6})[ \t]+(?<t>.+?)[ \t]*#*[ \t]*$", RegexOptions.Compiled);
+    private static readonly Regex FieldLine = new(@"^(date|id)[ \t]*:", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private sealed record Heading(int Level, string Text, bool HasWords);
+    private static string Plain(string headline) => headline.Trim().TrimStart('!').Trim();
+
+    /// <summary>The headings that only introduce deeper headings: nothing of their own under them (Date and ID lines aside) and the next heading is one level or more below.</summary>
+    private static HashSet<string> TitleHeadings(string text)
+    {
+        var headings = new List<Heading>();
+        foreach (var raw in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            var line = raw.Trim();
+            if (HeadingLine.Match(line) is { Success: true } match) headings.Add(new Heading(match.Groups["h"].Length, Plain(match.Groups["t"].Value), false));
+            else if (line.Length > 0 && !FieldLine.IsMatch(line) && headings.Count > 0) headings[^1] = headings[^1] with { HasWords = true };
+        }
+        var titles = new HashSet<string>();
+        for (var i = 0; i + 1 < headings.Count; i++)
+            if (!headings[i].HasWords && headings[i + 1].Level > headings[i].Level) titles.Add(headings[i].Text);
+        return titles;
     }
 
     public static async Task<FeedImportResult> ReadAsync(FeedSource source)

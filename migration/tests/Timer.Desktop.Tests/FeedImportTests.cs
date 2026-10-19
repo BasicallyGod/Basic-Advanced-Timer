@@ -172,6 +172,37 @@ public sealed class FeedImportTests : IDisposable
         Assert.Equal(16, archive.Entries().Count);
     }
 
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void MarkdownLinksShowAsTheirText()
+    {
+        Assert.Equal("See Example now, and bold a [bracket].", FeedText.Plain("See [Example](https://example.com/a?b=1) now, and **bold** a [bracket]."));
+    }
+
+    [Fact]
+    public void ATitleAboveSectionsIsNotAnEntryButAFlatListOfHeadlinesIs()
+    {
+        var titled = FeedImporters.TextReport("# Weekly report - 10:27\n\n## Item 1\nFirst words\n## Item 2\nSecond words", "A", Now);
+        Assert.Equal(new[] { "Item 1", "Item 2" }, titled.Entries.Select(e => e.Headline));
+        Assert.Single(titled.Dropped!);
+        var dated = FeedImporters.TextReport("# Report\nDate: 2026-10-19\n## Item\nWords", "A", Now);
+        Assert.Equal(new[] { "Item" }, dated.Entries.Select(e => e.Headline));
+        var flat = FeedImporters.TextReport("## One\n## Two\nWords", "A", Now);
+        Assert.Equal(new[] { "One", "Two" }, flat.Entries.Select(e => e.Headline));
+        var sole = FeedImporters.TextReport("# Only a headline", "A", Now);
+        Assert.Single(sole.Entries);
+    }
+
+    [Fact]
+    public void AnEarlierImportOfTheSameReportLosesItsTitleEntry()
+    {
+        using var archive = new FeedArchive(folder); var source = new FeedSource("a", "A", "folder", folder);
+        const string text = "# Weekly report\n\n## Item 1\nWords";
+        archive.Import(new(source, new[] { new FeedReport("r.md", "A", text, Feed.Parse(text, "A", Now)) }), Now);
+        Assert.Equal(2, archive.Entries().Count);
+        archive.Import(new(source, new[] { FeedImporters.TextReport(text, "A", Now, "r.md") }), Now);
+        Assert.Equal("Item 1", Assert.Single(archive.Entries()).Headline);
+    }
+
     [Fact]
     public void FeedDatabaseHandlesAreReleasedBetweenOperations()
     {

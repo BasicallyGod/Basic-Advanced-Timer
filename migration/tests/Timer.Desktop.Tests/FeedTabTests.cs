@@ -195,7 +195,8 @@ public sealed class FeedTabTests : IDisposable
     {
         Assert.Equal("a bold and italic word", FeedText.Plain("a **bold** and *italic* word"));
         Assert.Equal("• one\n• two", FeedText.Plain("- one\n* two"));
-        Assert.Equal("<b>not html</b> [not a link](http://x)", FeedText.Plain("<b>not html</b> [not a link](http://x)"));
+        // A Markdown link shows as its text and is never clickable; HTML is still shown as typed.
+        Assert.Equal("<b>not html</b> not a link", FeedText.Plain("<b>not html</b> [not a link](http://x)"));
         var bold = FeedText.Inlines("**strong**").OfType<Run>().Single(); Assert.Equal(Avalonia.Media.FontWeight.Bold, bold.FontWeight);
     }
 

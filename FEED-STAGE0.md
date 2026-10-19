@@ -22,7 +22,7 @@ Paste one of these as the scheduled task's instructions. Replace only `DESTINATI
 ```text
 Write a short test report titled "Stage 0 test Claude" with today's date and the current time in the title.
 
-Include two items. Give each its own heading, a "Date:" line with today's date, an "ID:" line (stage0-claude-1 and stage0-claude-2), one sentence of text, and one link to https://example.com.
+Include two items. Give each its own heading, a "Date:" line with today's date, an "ID:" line that includes the date and time of this run (stage0-claude-YYYYMMDDHHMM-1 and stage0-claude-YYYYMMDDHHMM-2), one sentence of text, and one link to https://example.com.
 
 Save the report as a new .md file named feed-stage0-claude-YYYY-MM-DD-HHMM.md (today's date and the current time) in DESTINATION. Never overwrite an earlier file. When it is saved, reply with only the file name. If you cannot save the file, say so and do not ask me anything.
 ```
@@ -32,12 +32,14 @@ Save the report as a new .md file named feed-stage0-claude-YYYY-MM-DD-HHMM.md (t
 ```text
 Write a short test report titled "Stage 0 test ChatGPT" with today's date and the current time in the title.
 
-Include two items. Give each its own heading, a "Date:" line with today's date, an "ID:" line (stage0-chatgpt-1 and stage0-chatgpt-2), one sentence of text, and one link to https://example.com.
+Include two items. Give each its own heading, a "Date:" line with today's date, an "ID:" line that includes the date and time of this run (stage0-chatgpt-YYYYMMDDHHMM-1 and stage0-chatgpt-YYYYMMDDHHMM-2), one sentence of text, and one link to https://example.com.
 
 Save the report as a new .md file named feed-stage0-chatgpt-YYYY-MM-DD-HHMM.md (today's date and the current time) in DESTINATION. Never overwrite an earlier file. When it is saved, reply with only the file name. If you cannot save the file, say so and do not ask me anything.
 ```
 
 Schedule it to run a few minutes from now, then again at least an hour later, so run two happens with nobody at the keyboard. Do not open the provider's app during a run.
+
+The IDs carry the run's date and time on purpose. The Feed treats a repeated ID within a source as the same item revised, so a second run that reuses an ID updates the earlier entry instead of adding a new one, which would make check 3 fail for the wrong reason.
 
 The last sentence of each prompt matters: a run that cannot save should report that plainly instead of waiting for you. Copy that message into the results sheet.
 
