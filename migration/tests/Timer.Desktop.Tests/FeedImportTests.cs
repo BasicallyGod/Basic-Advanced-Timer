@@ -173,6 +173,12 @@ public sealed class FeedImportTests : IDisposable
     }
 
     [Fact]
+    public void MarkdownLinksShowAsTheirText()
+    {
+        Assert.Equal("See Example now, and **not** a [bracket].", FeedText.Plain("See [Example](https://example.com/a?b=1) now, and **not** a [bracket]."));
+    }
+
+    [Fact]
     public void FeedDatabaseHandlesAreReleasedBetweenOperations()
     {
         using var archive = new FeedArchive(folder);

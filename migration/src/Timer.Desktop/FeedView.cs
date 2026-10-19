@@ -13,10 +13,12 @@ namespace Timer.Desktop;
 
 /// <summary>
 /// Simple Markdown for feed text, and nothing else: **bold**, *italic* or _italic_, and a leading - or * on a line as a bullet. Everything else stays plain words.
-/// There is no HTML, no image and no link handling, because the text comes from a file the app did not write and is only ever shown.
+/// A Markdown link shows as its text. There is no HTML, no image and no link handling, because the text comes from a file the app did not write and is only ever shown.
 /// </summary>
 public static class FeedText
 {
+    // [text](https://...) shows as its text. The address is still offered as a link button in the detail pane, so nothing here is ever clickable.
+    private static readonly Regex Links = new(@"\[(?<t>[^\]\n]+)\]\((?<u>https?://[^)\s]+)\)", RegexOptions.Compiled);
     private static readonly Regex Marks = new(@"\*\*(?<b>.+?)\*\*|__(?<b>.+?)__|\*(?<i>[^*\s][^*]*?)\*|(?<![\p{L}\p{N}])_(?<i>[^_\s][^_]*?)_(?![\p{L}\p{N}])", RegexOptions.Compiled);
 
     public static IReadOnlyList<Inline> Inlines(string text)
@@ -25,7 +27,7 @@ public static class FeedText
         foreach (var raw in (text ?? "").Replace("\r\n", "\n").Split('\n'))
         {
             if (!first) result.Add(new LineBreak()); first = false;
-            var line = raw; var lead = line.TrimStart();
+            var line = Links.Replace(raw, "${t}"); var lead = line.TrimStart();
             if (lead.StartsWith("- ", StringComparison.Ordinal) || lead.StartsWith("* ", StringComparison.Ordinal)) line = new string(' ', line.Length - lead.Length) + "• " + lead[2..];
             var at = 0;
             foreach (Match match in Marks.Matches(line))
