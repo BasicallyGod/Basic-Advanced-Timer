@@ -887,8 +887,15 @@ public sealed class DashboardWindow : Window
     {
         if (identityBlock is null || accountsHeadBlock is null || toolsRow is null) return false;
         double Bottom(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), this)?.Y ?? 0;
-        var sidebarRight = identityBlock.TranslatePoint(new Point(identityBlock.Bounds.Width, 0), this)?.X ?? 0;
-        return point.X <= sidebarRight + 18 ? point.Y <= Bottom(accountsHeadBlock) : point.Y <= Bottom(headerRow ?? toolsRow);
+        // A hidden control keeps the bounds it last had. On Notes and Feed the full column is swapped for the slim strip, so its old edge must not
+        // still count: it lay over the first entry and turned a click on it into a window drag.
+        if (identityBlock.IsEffectivelyVisible && accountsHeadBlock.IsEffectivelyVisible)
+        {
+            var sidebarRight = identityBlock.TranslatePoint(new Point(identityBlock.Bounds.Width, 0), this)?.X ?? 0;
+            if (point.X <= sidebarRight + 18) return point.Y <= Bottom(accountsHeadBlock);
+        }
+        var header = headerRow ?? toolsRow;
+        return header.IsEffectivelyVisible && point.Y <= Bottom(header);
     }
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
     {
