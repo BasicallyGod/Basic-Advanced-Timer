@@ -6,7 +6,8 @@ namespace Timer.Desktop;
 
 public sealed record FeedSource(string Id, string Name, string Kind, string Location, string? Account = null,
     bool Paused = false, DateTime? LastSuccess = null, string? Error = null, bool General = false);
-public sealed record FeedReport(string Key, string Title, string Original, IReadOnlyList<FeedEntry> Entries);
+/// <summary>Dropped lists the IDs of entries left out as structure (a title above sections), so an earlier import of the same report can have them removed.</summary>
+public sealed record FeedReport(string Key, string Title, string Original, IReadOnlyList<FeedEntry> Entries, IReadOnlyList<string>? Dropped = null);
 public sealed record FeedImportResult(FeedSource Source, IReadOnlyList<FeedReport> Reports, string? Error = null);
 
 /// <summary>External content has its own database; imports never write to the time ledger or source files.</summary>
@@ -148,6 +149,9 @@ public sealed class FeedArchive : IDisposable
             var reportId = result.Source.Id + ":" + report.Key + ":" + FeedImporters.Fingerprint(report.Original);
             Execute("INSERT OR REPLACE INTO reports VALUES ($id,$source,$title,$original)",
                 ("$id", reportId), ("$source", result.Source.Id), ("$title", report.Title), ("$original", report.Original));
+            foreach (var dropped in report.Dropped ?? Array.Empty<string>())
+                Execute("DELETE FROM entries WHERE id=$id AND report=$report",
+                    ("$id", result.Source.Id == "legacy" ? dropped : result.Source.Id + ":" + dropped), ("$report", reportId));
             foreach (var entry in report.Entries)
             {
                 // Keep the old folder's IDs so existing read/done marks migrate without guesswork.
