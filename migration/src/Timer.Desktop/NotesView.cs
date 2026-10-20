@@ -54,6 +54,7 @@ public sealed class NotesPage : Grid
         dayCalendar.DayPicked += picked => { targetDay = picked.Date; dayFlyout.Hide(); UpdateDayChip(); input.Focus(); };
         dayFlyout.Opening += (_, _) => dayCalendar.View(targetDay ?? model.SelectedDate, targetDay);
         pickDay.Flyout = dayFlyout;
+        Avalonia.Automation.AutomationProperties.SetName(input, "Add a note"); Avalonia.Automation.AutomationProperties.SetName(tabs, "Kinds of note");
         Ui.Put(leftGrid, inputRow, row: 4);
         TagPicker.Attach(input, leftGrid, model, above: true);
         left.Child = leftGrid; Children.Add(left);
@@ -68,6 +69,7 @@ public sealed class NotesPage : Grid
         var rightGrid = Ui.Grid("*", "Auto,*"); rightGrid.RowSpacing = 10;
         var comingHeading = new TextBlock { Text = "Coming up", FontSize = 16, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         var range = new ComboBox { Name = "ComingRange", ItemsSource = Ranges.Select(r => r.Text).ToList(), SelectedIndex = 1, Height = 28, MinHeight = 28, Padding = new Thickness(10, 0), FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+        Avalonia.Automation.AutomationProperties.SetName(range, "How far ahead Coming up looks");
         range.SelectionChanged += (_, _) => { coming.Days = Ranges[Math.Max(0, range.SelectedIndex)].Days; coming.Rebuild(); };
         var comingHead = Ui.Grid("*,Auto"); Ui.Put(comingHead, comingHeading); Ui.Put(comingHead, range, 1); Ui.Put(rightGrid, comingHead);
         Ui.Put(rightGrid, Ui.WithMoreBelow(new ScrollViewer { Content = coming, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 1);
@@ -135,11 +137,13 @@ public sealed class NotesPage : Grid
             var tick = new CheckBox { Name = "NoteTick_" + id, IsChecked = note.Done, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
             tick.Click += (_, _) => model.ToggleDayNote(id);
             var text = new TextBox { Name = "NoteText_" + id, Text = note.Text, TextWrapping = TextWrapping.Wrap, AcceptsReturn = false, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(4, 2), FontSize = 14, Opacity = note.Done ? .55 : 1 };
+            // Each control says which note it is for, since the rows look alike to a screen reader.
+            Avalonia.Automation.AutomationProperties.SetName(tick, "Done: " + note.Text); Avalonia.Automation.AutomationProperties.SetName(text, "Note text");
             // TextChanged does not fire headless, so the text property is watched instead.
             text.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && text.Text != note.Text) model.SetDayNoteText(id, text.Text ?? ""); };
-            var remove = Ui.IconButton(IconKind.Close, "Remove", "NoteRemove_" + id, () => model.RemoveDayNote(id)); remove.Width = 26; remove.Height = 26; remove.Classes.Add("hoverReveal");
+            var remove = Ui.IconButton(IconKind.Close, "Remove", "NoteRemove_" + id, () => model.RemoveDayNote(id)); remove.Width = 26; remove.Height = 26; remove.Classes.Add("hoverReveal"); Avalonia.Automation.AutomationProperties.SetName(remove, "Remove note: " + note.Text);
             // A small calendar picks another day for the note, for when it was put on the wrong one or plans change.
-            var when = Ui.IconButton(IconKind.Today, "Move to another day", "NoteMove_" + id, () => { }); when.Width = 26; when.Height = 26; when.Classes.Add("hoverReveal");
+            var when = Ui.IconButton(IconKind.Today, "Move to another day", "NoteMove_" + id, () => { }); when.Width = 26; when.Height = 26; when.Classes.Add("hoverReveal"); Avalonia.Automation.AutomationProperties.SetName(when, "Move note to another day: " + note.Text);
             var calendar = new SoftDatePicker { Name = "NoteCalendar_" + id };
             var flyout = new Flyout { Content = calendar, Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight };
             flyout.Opening += (_, _) => calendar.View(note.Day, note.Day);
@@ -242,13 +246,13 @@ public sealed class ComingUpView : StackPanel
             // What kind of thing it is shows in its leading mark: a flag for a deadline (press it when done), a clock for an event, which simply passes,
             // and a tick box for a task, which is the only kind that is ticked off.
             Control tick;
-            if (DayNotes.IsDeadline(note)) { var flag = Ui.IconButton(IconKind.Flag, "Deadline. Press when it is done", "ComingDone_" + id, () => model.ToggleDayNote(id)); flag.Width = 24; flag.Height = 24; tick = flag; }
+            if (DayNotes.IsDeadline(note)) { var flag = Ui.IconButton(IconKind.Flag, "Deadline. Press when it is done", "ComingDone_" + id, () => model.ToggleDayNote(id)); flag.Width = 24; flag.Height = 24; Avalonia.Automation.AutomationProperties.SetName(flag, "Mark deadline done: " + note.Text); tick = flag; }
             else if (note.At is not null)
             {
                 var mark = new Border { Name = "ComingEvent_" + id, Width = 24, Height = 24, Child = new IconGlyph(IconKind.Clock) { TintKey = "Muted", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
-                ToolTip.SetTip(mark, "Event"); tick = mark;
+                ToolTip.SetTip(mark, "Event"); Avalonia.Automation.AutomationProperties.SetName(mark, "Event: " + note.Text); tick = mark;
             }
-            else { var box = new CheckBox { Name = "ComingTick_" + id, IsChecked = false, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center }; box.Click += (_, _) => model.ToggleDayNote(id); tick = box; }
+            else { var box = new CheckBox { Name = "ComingTick_" + id, IsChecked = false, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center }; box.Click += (_, _) => model.ToggleDayNote(id); Avalonia.Automation.AutomationProperties.SetName(box, "Done: " + note.Text); tick = box; }
             var at = Ui.Text(note.At is { } time ? time.ToString("hh\\:mm") : "", 12, "muted"); at.VerticalAlignment = VerticalAlignment.Top; at.Margin = new Thickness(8, 3, 0, 0);
             var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(new TextBlock { Text = NoteShorthand.Display(note, model.AccountNames), FontSize = 14, TextWrapping = TextWrapping.Wrap });
             if (NoteChips.AccountChip(model, note, this, "ComingAccount_" + id, interactive: false) is { } account) words.Children.Add(account);
