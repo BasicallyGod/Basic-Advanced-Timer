@@ -71,7 +71,7 @@ public sealed class QuickCaptureTests
         var model = Model(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            dashboard.OpenSettings();
             var box = dashboard.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "CaptureShortcut");
             box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.N, KeyModifiers = KeyModifiers.Control | KeyModifiers.Alt });
             Assert.Equal("Ctrl+Alt+N", model.CaptureShortcut!.ToString()); Assert.Equal("Ctrl+Alt+N", box.Text);

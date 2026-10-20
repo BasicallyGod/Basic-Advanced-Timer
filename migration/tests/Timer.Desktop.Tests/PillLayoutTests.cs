@@ -126,7 +126,7 @@ public sealed class PillLayoutTests
         var model = Model(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); dashboard.UpdateLayout();
+            dashboard.OpenSettings();
             foreach (var layout in PillLayouts.All)
             {
                 var frame = Find<Button>(dashboard, "PillLayout_" + layout.Key).GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("chip"));
@@ -144,7 +144,7 @@ public sealed class PillLayoutTests
         var model = Model(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            dashboard.OpenSettings();
             foreach (var layout in PillLayouts.All)
             {
                 var button = Find<Button>(dashboard, "PillLayout_" + layout.Key);

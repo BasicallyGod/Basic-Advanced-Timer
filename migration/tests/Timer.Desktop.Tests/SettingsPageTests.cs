@@ -14,8 +14,7 @@ public sealed class SettingsPageTests
 {
     private static void OpenSettings(DashboardWindow window)
     {
-        window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Dispatcher.UIThread.RunJobs();
+        window.OpenSettings();
     }
 
     [AvaloniaFact]
