@@ -53,5 +53,6 @@ public sealed class ReminderCard : Border
         sub.Classes.Set("overtime", late && !inPill); sub.Classes.Set("muted", !late || inPill);
         Classes.Set("late", late && !inPill);
         ToolTip.SetTip(snooze, $"Remind me again in {model.ReminderSnooze} minutes");
+        Avalonia.Automation.AutomationProperties.SetName(snooze, "Snooze reminder: " + title.Text); Avalonia.Automation.AutomationProperties.SetName(done, "Mark done: " + title.Text); Avalonia.Automation.AutomationProperties.SetName(this, "Reminder: " + title.Text + ", " + sub.Text);
     }
 }

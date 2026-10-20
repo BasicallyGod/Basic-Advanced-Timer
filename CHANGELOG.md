@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Notes polish and steadier tests | [c6327d5](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/c6327d5) | Quick capture keeps what was typed when you click away (Escape still discards it). A snooze survives a restart. The Notes, Coming up, reminder and Quick capture controls have accessible names. Headless test input waits for a rendered frame, and a manual workflow repeats the whole suite to find tests that fail now and then. |
 | Notes hardening | [6fd307b](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/6fd307b) | A note the database refuses stays on screen and is saved when it can be, instead of crashing. Undo remove puts a removed note back. A due reminder plays a sound (Settings, Reminders) and restores a minimised timer. A Missed tab lists unfinished tasks and deadlines from earlier days and moves them to today. |
 | Feed moved to alpha | [b97db02](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/b97db02) | The Feed is out of experimental so Notes can ship first. It lives on alpha (which now holds the last experimental build with it) and in history. Experimental has no Feed tab, strip, Settings section or feed.db. Notes, reminders, Quick capture and the slim column are unchanged. |
 

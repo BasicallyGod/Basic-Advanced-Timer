@@ -48,7 +48,7 @@ public sealed class ToolbarAndTrackingTests
                 var args = new CancelRoutedEventArgs(ToolTip.ToolTipOpeningEvent, control); control.RaiseEvent(args); return !args.Cancel; // What hovering does before showing a tip.
             }
             Assert.True(model.Tooltips); Assert.True(Opens(button));
-            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            window.OpenSettings();
             var box = window.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Name == "ShowTooltips");
             Assert.True(box.IsChecked); box.IsChecked = false; box.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); // A real click toggles the box before the handler runs.
             Assert.False(model.Tooltips); Assert.False(Ui.TooltipsOn); Assert.False(Opens(button));

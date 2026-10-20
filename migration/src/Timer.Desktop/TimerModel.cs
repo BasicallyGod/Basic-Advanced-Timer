@@ -186,6 +186,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.store = store;
         Editor = store?.Editor ?? new LedgerEditor(Engine);
         dayNotes = store?.LoadDayNotes() ?? new List<DayNote>();
+        LoadSnoozes();
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
@@ -942,7 +943,25 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>The reminder to show a card for: the first one that is due or overdue. A heads-up has no card.</summary>
     public Reminder? ActiveReminder => Reminders.FirstOrDefault(r => r.State != ReminderState.Soon);
     public string ReminderLine(Reminder reminder) => ReminderRules.Describe(reminder, Engine.Now);
-    public void SnoozeReminder(long id) { snoozedUntil[id] = Engine.Now.AddMinutes(ReminderSnooze); announced.Remove(id); Notify(); }
+    // A snooze is kept in the settings file (as remindsnoozed=id:ticks,...), so a restart does not bring a snoozed reminder straight back.
+    private const string RemindSnoozedLine = "remindsnoozed=";
+    public void SnoozeReminder(long id)
+    {
+        snoozedUntil[id] = Engine.Now.AddMinutes(ReminderSnooze); announced.Remove(id);
+        var live = snoozedUntil.Where(p => p.Value > Engine.Now && p.Key >= 0).Select(p => p.Key + ":" + p.Value.Ticks).ToList();
+        SetExtra(RemindSnoozedLine, live.Count == 0 ? null : string.Join(",", live));
+    }
+    private void LoadSnoozes()
+    {
+        if (Extra(RemindSnoozedLine) is not { Length: > 0 } saved) return;
+        foreach (var part in saved.Split(','))
+        {
+            var bits = part.Split(':');
+            if (bits.Length == 2 && long.TryParse(bits[0], out var id) && long.TryParse(bits[1], out var ticks) && ticks > 0 && ticks < DateTime.MaxValue.Ticks && new DateTime(ticks) > Engine.Now) snoozedUntil[id] = new DateTime(ticks);
+        }
+    }
+    /// <summary>What was typed in Quick capture when it lost focus before being saved, kept in memory for the next time it opens. Null when there is none.</summary>
+    public string? QuickCaptureDraft { get; set; }
     public void DoneReminder(long id) { if (dayNotes.FirstOrDefault(n => n.Id == id) is { Done: false }) ToggleDayNote(id); }
     /// <summary>Raised once when a reminder first falls due, so a timer tucked away in the tray can come back.</summary>
     public event Action<Reminder>? ReminderDue;

@@ -10,7 +10,8 @@ namespace Timer.Desktop;
 /// <summary>
 /// A small box to jot a note or task from anywhere, without opening the dashboard: from the pill's menu or the shortcut chosen in Settings. It takes the
 /// same shorthand as Notes (a time, @day, a leading ! for a deadline, #Account), shows how it was read as you type, and saves through the same notes, so
-/// nothing new is stored. Enter saves and closes, Escape closes, and so does clicking away.
+/// nothing new is stored. Enter saves and closes. Escape throws what was typed away. Clicking away closes the box but keeps the words, which are back,
+/// selected, the next time it opens, so a click on another window never costs what was typed.
 /// </summary>
 public sealed class QuickCaptureWindow : Window
 {
@@ -28,6 +29,7 @@ public sealed class QuickCaptureWindow : Window
         var heading = Ui.Text("Quick capture", 12, "muted"); heading.FontWeight = FontWeight.SemiBold;
         reading.TextWrapping = TextWrapping.Wrap; reading.Name = "CaptureReading";
         stack.Children.Add(heading); stack.Children.Add(input); stack.Children.Add(reading);
+        Avalonia.Automation.AutomationProperties.SetName(input, "Quick capture note"); Avalonia.Automation.AutomationProperties.SetName(this, "Quick capture");
         TagPicker.Attach(input, stack, model); // Completes a #Tag from the accounts as it is typed.
         var card = new Border { Child = stack, BorderThickness = new Thickness(1) }; card.Classes.Add("panel");
         var host = Ui.Shadowed(card, 18); Ui.SetShadow(host, true, null); Content = host;
@@ -35,11 +37,13 @@ public sealed class QuickCaptureWindow : Window
         input.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter) { e.Handled = true; Save(); }
-            else if (e.Key == Key.Escape) { e.Handled = true; Finish(); }
+            else if (e.Key == Key.Escape) { e.Handled = true; model.QuickCaptureDraft = null; Finish(); }
         };
-        // Clicking away is as good as Escape, so the box never lingers over other work.
-        Deactivated += (_, _) => Finish();
-        Opened += (_, _) => { Position = Spot(); input.Focus(); };
+        // Clicking away closes the box so it never lingers over other work, but what was typed is kept for next time.
+        Deactivated += (_, _) => ClickAway();
+        Opened += (_, _) => { Position = Spot(); input.Focus(); if (input.Text?.Length > 0) input.SelectAll(); };
+        // The words left behind by the last click-away come back, so a note started and interrupted is not lost.
+        if (model.QuickCaptureDraft is { Length: > 0 } draft) input.Text = draft;
         Read();
     }
 
@@ -58,8 +62,14 @@ public sealed class QuickCaptureWindow : Window
     /// <summary>Saves what was typed as a note on today (or the day it names) and closes. Empty words just close.</summary>
     public void Save()
     {
-        var typed = input.Text;
+        var typed = input.Text; model.QuickCaptureDraft = null;
         if (!string.IsNullOrWhiteSpace(typed)) model.AddDayNote(model.Engine.Now.Date, typed);
+        Finish();
+    }
+    /// <summary>The box lost focus: it closes, and what was typed is kept for the next time. Public so a test can do what a click on another window does.</summary>
+    public void ClickAway()
+    {
+        if (!closing) model.QuickCaptureDraft = string.IsNullOrWhiteSpace(input.Text) ? null : input.Text;
         Finish();
     }
     private void Finish() { if (closing) return; closing = true; Close(); }

@@ -16,6 +16,8 @@ public sealed class SettingsView : ScrollViewer
     /// <summary>How many quick clicks on the About tile unlock the developer features, and the longest pause allowed between them.</summary>
     public const int UnlockClicks = 10;
     public static readonly TimeSpan UnlockWindow = TimeSpan.FromMilliseconds(700);
+    /// <summary>The clock the quick clicks are timed by; tests replace it, because a slow runner can take longer than the window to deliver ten clicks.</summary>
+    public static Func<DateTime> UnlockClock { get; set; } = () => DateTime.UtcNow;
     private readonly TimerModel model;
     private readonly List<Action> syncs = new();
     public SettingsView(TimerModel model)
@@ -130,7 +132,7 @@ public sealed class SettingsView : ScrollViewer
         aboutSection.PointerPressed += (_, e) =>
         {
             if (!BuildInfo.DeveloperFeatures || model.DeveloperUnlocked) return;
-            var now = DateTime.UtcNow; presses = now - lastPress <= UnlockWindow ? presses + 1 : 1; lastPress = now;
+            var now = UnlockClock(); presses = now - lastPress <= UnlockWindow ? presses + 1 : 1; lastPress = now;
             if (presses >= UnlockClicks) { model.SetDeveloper(true); presses = 0; unlockHint.Text = "Developer features unlocked."; unlockHint.IsVisible = true; }
             else if (presses >= UnlockClicks - 4) { unlockHint.Text = $"{UnlockClicks - presses} more clicks to unlock developer features."; unlockHint.IsVisible = true; }
         };
