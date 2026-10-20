@@ -343,7 +343,7 @@ public sealed class TimerModel : INotifyPropertyChanged
             for (var i = 0; i < dayNotes.Count; i++)
             {
                 var text = NoteShorthand.Relink(dayNotes[i].Text, before, map, gone);
-                if (text != dayNotes[i].Text) { dayNotes[i] = dayNotes[i] with { Text = text }; store?.UpdateDayNote(dayNotes[i]); }
+                if (text != dayNotes[i].Text) { dayNotes[i] = dayNotes[i] with { Text = text }; PersistNote(dayNotes[i]); }
             }
         }
         preferences = preferences with { Accounts = WithColours(values) };
@@ -841,6 +841,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         // Once the app is closing, or its database has been closed, there is nothing left to save and a late tick must not try.
         if (closed || store is { IsDisposed: true }) return true;
+        RetryNoteWrites();
         try { store?.Save(Engine, preferences); LastError = null; return true; }
         // A restart or shutdown can close the database under a save that is already queued. That must be reported, never allowed to crash the app.
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or ObjectDisposedException || error.GetType().Namespace == "Microsoft.Data.Sqlite")
@@ -898,6 +899,21 @@ public sealed class TimerModel : INotifyPropertyChanged
     public IReadOnlyList<DayNote> AllDayNotes => dayNotes;
     public IReadOnlyList<DayNote> NotesOn(DateTime day) => dayNotes.Where(n => n.Day.Date == day.Date).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
     public IReadOnlyList<DayNote> ComingUp(int days = 180) => DayNotes.ComingUp(dayNotes, Engine.Now, days);
+    /// <summary>Tasks and deadlines on earlier days that were never ticked off, the most recent day first, looking back 90 days. An event just passes, so it is not missed.</summary>
+    public IReadOnlyList<DayNote> MissedNotes(int days = 90)
+    {
+        var today = Engine.Now.Date;
+        return dayNotes.Where(n => !n.Done && n.Day.Date < today && n.Day.Date >= today.AddDays(-days) && (DayNotes.IsTask(n) || DayNotes.IsDeadline(n)))
+            .OrderByDescending(n => n.Day.Date).ThenBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
+    }
+    /// <summary>Carries every missed note over to today, so what was not done is on today's list.</summary>
+    public void MoveMissedToToday()
+    {
+        var missed = MissedNotes(); if (missed.Count == 0) return;
+        var today = Engine.Now.Date;
+        foreach (var note in missed) ChangeNote(note.Id, n => n with { Day = today }, false);
+        Notice = missed.Count == 1 ? "Moved 1 note to today." : $"Moved {missed.Count} notes to today."; Notify();
+    }
     // ---- Reminders: notes with a time, shown on the pill and the dashboard when they are near, due or overdue (rules in ReminderRules). ----
     private readonly Dictionary<long, DateTime> snoozedUntil = new();
     private readonly HashSet<long> announced = new();
@@ -918,6 +934,10 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void SetReminderLead(int minutes) => SetExtra(RemindLeadLine, minutes == ReminderRules.DefaultLead ? null : minutes.ToString());
     public int ReminderSnooze => int.TryParse(Extra(RemindSnoozeLine), out var v) && ReminderRules.SnoozeChoices.Contains(v) ? v : ReminderRules.DefaultSnooze;
     public void SetReminderSnooze(int minutes) => SetExtra(RemindSnoozeLine, minutes == ReminderRules.DefaultSnooze ? null : minutes.ToString());
+    private const string RemindSoundLine = "remindsound=";
+    /// <summary>Whether a reminder that falls due makes a short sound. On unless switched off, since a silent reminder is easy to miss.</summary>
+    public bool ReminderSoundOn => Extra(RemindSoundLine) != "off";
+    public void SetReminderSoundOn(bool on) => SetExtra(RemindSoundLine, on ? null : "off");
     public IReadOnlyList<Reminder> Reminders => RemindersOn ? ReminderRules.For(dayNotes, Engine.Now, ReminderLead, snoozedUntil) : System.Array.Empty<Reminder>();
     /// <summary>The reminder to show a card for: the first one that is due or overdue. A heads-up has no card.</summary>
     public Reminder? ActiveReminder => Reminders.FirstOrDefault(r => r.State != ReminderState.Soon);
@@ -944,10 +964,59 @@ public sealed class TimerModel : INotifyPropertyChanged
         // A day named in the words (@fri, @tomorrow, @21oct) wins over the day showing, and the notice says where the note went, since it may leave the list in view.
         var parts = NoteShorthand.Parse(typed, Engine.Now); if (parts.Text.Length == 0) return;
         var target = (parts.Day ?? day).Date;
-        var id = store?.AddDayNote(target, parts.At, parts.Text) ?? nextNoteId++;
+        long id;
+        if (store is null) id = nextNoteId++;
+        else
+        {
+            long stored = 0;
+            // A note the database would not take stays on screen with a negative number and is written when a later try works (RetryNoteWrites).
+            id = NoteStore(() => stored = store.AddDayNote(target, parts.At, parts.Text), "that note") ? stored : --unsavedNoteId;
+        }
         dayNotes.Add(new DayNote(id, target, parts.At, parts.Text));
         if (target != day.Date) Notice = "Added to " + target.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
         Notify();
+    }
+    // ---- A note the database would not take is never lost and never crashes the app: it stays on screen and the write is tried again with each save. ----
+    private long unsavedNoteId;
+    private readonly HashSet<long> staleNotes = new(), pendingDeletes = new();
+    private DateTime lastNoteFailure = DateTime.MinValue;
+    /// <summary>True while any note is on screen but not yet in the database.</summary>
+    public bool NotesUnsaved => staleNotes.Count > 0 || pendingDeletes.Count > 0 || dayNotes.Any(n => n.Id < 0);
+    private bool NoteStore(Action write, string what)
+    {
+        // Whatever stopped the write (a locked file, a full disk, a database closed under it), the person's words must survive it.
+        try { write(); return true; }
+        catch (Exception)
+        {
+            // Said again only when the words change, so typing into a note that cannot be saved does not keep restarting the notice.
+            var said = $"Could not save {what} to disk. It stays on screen and will be tried again.";
+            if (Notice != said) Notice = said;
+            lastNoteFailure = Engine.Now;
+            return false;
+        }
+    }
+    private void PersistNote(DayNote note)
+    {
+        if (store is null || note.Id < 0) return; // An unsaved note is written whole when it is retried.
+        if (NoteStore(() => store.UpdateDayNote(note), "that change")) staleNotes.Remove(note.Id); else staleNotes.Add(note.Id);
+    }
+    /// <summary>Writes again whatever the database refused: notes that were never stored, changes and removals. Called with every save.</summary>
+    public void RetryNoteWrites()
+    {
+        if (store is null || !NotesUnsaved) return;
+        bool Quiet(Action write) { try { write(); return true; } catch (Exception) { return false; } }
+        for (var i = 0; i < dayNotes.Count; i++)
+        {
+            var note = dayNotes[i]; if (note.Id >= 0) continue;
+            long stored = 0;
+            if (!Quiet(() => stored = store.AddDayNote(note.Day, note.At, note.Text))) continue;
+            dayNotes[i] = note with { Id = stored };
+            if (note.Done && !Quiet(() => store.UpdateDayNote(dayNotes[i]))) staleNotes.Add(stored);
+        }
+        foreach (var id in staleNotes.ToList())
+            if (dayNotes.FirstOrDefault(n => n.Id == id) is not { } note || Quiet(() => store.UpdateDayNote(note))) staleNotes.Remove(id);
+        foreach (var id in pendingDeletes.ToList()) if (Quiet(() => store.DeleteDayNote(id))) pendingDeletes.Remove(id);
+        if (!NotesUnsaved && lastNoteFailure != DateTime.MinValue) { lastNoteFailure = DateTime.MinValue; Notice = "Notes saved."; }
     }
     /// <summary>The shortcut that opens Quick capture from any app, or null for none. It is kept in the settings file as capturekey=, which the library hands back untouched.</summary>
     public HotkeySpec? CaptureShortcut => HotkeySpec.Parse(preferences.Extras?.AppearanceLines.FirstOrDefault(l => l.StartsWith(CaptureKeyLine, StringComparison.Ordinal))?[CaptureKeyLine.Length..]);
@@ -997,16 +1066,37 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void ToggleDayNote(long id) => ChangeNote(id, n => n with { Done = !n.Done }, true);
     /// <summary>Saves a note's words as they are typed, without notifying, so the box being typed in is not rebuilt. Emptying a note leaves it as it was.</summary>
     public void SetDayNoteText(long id, string text) => ChangeNote(id, n => n with { Text = text.Trim() }, false);
+    private readonly List<DayNote> removedNotes = new();
+    /// <summary>The note most recently removed, which Undo remove puts back; null when there is none.</summary>
+    public DayNote? LastRemovedNote => removedNotes.Count > 0 ? removedNotes[^1] : null;
     public void RemoveDayNote(long id)
     {
-        if (dayNotes.RemoveAll(n => n.Id == id) == 0) return;
-        store?.DeleteDayNote(id); Notify();
+        var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null) return;
+        dayNotes.Remove(note); staleNotes.Remove(id);
+        removedNotes.Add(note); if (removedNotes.Count > 20) removedNotes.RemoveAt(0);
+        // The notice about the removal is only for one that worked; a refused one says so instead, and the note is removed again when the database allows.
+        if (store is not null && id >= 0 && !NoteStore(() => store.DeleteDayNote(id), "that removal")) pendingDeletes.Add(id);
+        else Notice = "Note removed. Undo remove on the Notes page puts it back.";
+        Notify();
+    }
+    /// <summary>Puts the last removed note back on its own day, ticked or not as it was.</summary>
+    public void RestoreRemovedNote()
+    {
+        if (LastRemovedNote is not { } note) return;
+        removedNotes.RemoveAt(removedNotes.Count - 1);
+        long id;
+        if (store is null) id = nextNoteId++;
+        else { long stored = 0; id = NoteStore(() => stored = store.AddDayNote(note.Day, note.At, note.Text), "that note") ? stored : --unsavedNoteId; }
+        var back = note with { Id = id };
+        dayNotes.Add(back);
+        if (back.Done) PersistNote(back);
+        Notice = "Note put back."; Notify();
     }
     private void ChangeNote(long id, Func<DayNote, DayNote> change, bool notify)
     {
         var index = dayNotes.FindIndex(n => n.Id == id); if (index < 0) return;
         var note = change(dayNotes[index]); if (note == dayNotes[index] || note.Text.Length == 0) return;
-        dayNotes[index] = note; store?.UpdateDayNote(note); if (notify) Notify();
+        dayNotes[index] = note; PersistNote(note); if (notify) Notify();
     }
     private void Notify() { ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
 }

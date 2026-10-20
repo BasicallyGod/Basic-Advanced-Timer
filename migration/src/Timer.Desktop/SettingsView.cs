@@ -91,6 +91,7 @@ public sealed class SettingsView : ScrollViewer
         // Reminders: notes with a time (and deadlines) say so on the pill and the dashboard when they are near, due and overdue.
         var remind = new StackPanel { Spacing = 10 };
         remind.Children.Add(Toggle("Remind me of notes with a time", "RemindersOn", () => model.RemindersOn, v => model.SetRemindersOn(v)));
+        remind.Children.Add(Toggle("Play a short sound when a reminder is due", "ReminderSound", () => model.ReminderSoundOn, v => model.SetReminderSoundOn(v)));
         string Minutes(int m) => m == 0 ? "None" : m + " minutes";
         ComboBox Minutes2(string name, int[] choices, Func<int> get, Action<int> set)
         {

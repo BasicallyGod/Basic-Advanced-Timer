@@ -21,10 +21,10 @@ public sealed class NotesPage : Grid
     private readonly ComingUpView coming;
     private readonly TextBlock heading = new() { FontSize = 16, FontWeight = FontWeight.SemiBold };
     private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Add a note: 14:30 · ! · @fri · #Account", Padding = new Thickness(10, 7), FontSize = 14 };
-    private string shown = ""; private bool dirty;
+    private string shown = ""; private bool dirty; private Button undoRemove = null!;
     private string kind = "all"; // Which notes the day's list shows: all, tasks, events or deadlines.
     private readonly StackPanel tabs = new() { Orientation = Orientation.Horizontal, Spacing = 2 };
-    private static readonly (string Key, string Text)[] Kinds = { ("all", "All"), ("tasks", "Tasks"), ("events", "Events"), ("deadlines", "Deadlines") };
+    private static readonly (string Key, string Text)[] Kinds = { ("all", "All"), ("tasks", "Tasks"), ("events", "Events"), ("deadlines", "Deadlines"), ("missed", "Missed") };
     private static readonly (int Days, string Text)[] Ranges = { (7, "Next 7 days"), (30, "Next 30 days"), (180, "Next 6 months") };
     private DateTime? targetDay; private Border dayChip = null!; private readonly TextBlock chipText = new() { FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
 
@@ -35,8 +35,10 @@ public sealed class NotesPage : Grid
         var left = new Border { CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(20, 16) }; left.Classes.Add("dayCard");
         var leftGrid = Ui.Grid("*", "Auto,Auto,*,Auto,Auto"); leftGrid.RowSpacing = 10;
         // The day's name on the left and the one main action on the right; under them the tabs that narrow the list to one kind of note.
-        var headRow = Ui.Grid("*,Auto"); Ui.Put(headRow, heading);
-        var add = Ui.DialogButton("Add note", () => input.Focus(), "NoteAddButton", true); add.Height = 32; Ui.Put(headRow, add, 1);
+        var headRow = Ui.Grid("*,Auto,Auto"); headRow.ColumnSpacing = 6; Ui.Put(headRow, heading);
+        // A removed note can be put back, so one stray click on the cross never loses it.
+        undoRemove = Ui.DialogButton("Undo remove", () => model.RestoreRemovedNote(), "NoteUndoRemove"); undoRemove.Height = 32; undoRemove.IsVisible = false; Ui.Put(headRow, undoRemove, 1);
+        var add = Ui.DialogButton("Add note", () => input.Focus(), "NoteAddButton", true); add.Height = 32; Ui.Put(headRow, add, 2);
         Ui.Put(leftGrid, headRow); Ui.Put(leftGrid, tabs, row: 1);
         Ui.Put(leftGrid, Ui.WithMoreBelow(new ScrollViewer { Content = rows, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 2);
         // A note can be put on any day: the small calendar beside the box picks it for the next note, and it shows as a chip until the note is added.
@@ -58,7 +60,9 @@ public sealed class NotesPage : Grid
         input.KeyDown += (_, e) =>
         {
             if (e.Key != Key.Enter || string.IsNullOrWhiteSpace(input.Text)) return;
-            var typed = input.Text; input.Text = ""; var day = targetDay ?? model.SelectedDate; targetDay = null; UpdateDayChip(); model.AddDayNote(day, typed); e.Handled = true;
+            e.Handled = true;
+            model.AddDayNote(targetDay ?? model.SelectedDate, input.Text);
+            input.Text = ""; targetDay = null; UpdateDayChip();
         };
         var right = new Border { CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(20, 16) }; right.Classes.Add("dayCard");
         var rightGrid = Ui.Grid("*", "Auto,*"); rightGrid.RowSpacing = 10;
@@ -99,20 +103,34 @@ public sealed class NotesPage : Grid
     {
         dirty = false; shown = Signature(); rows.Children.Clear();
         var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
-        heading.Text = model.SelectedDate.ToString("dddd d MMMM", british);
+        var missed = model.MissedNotes();
+        heading.Text = kind == "missed" ? "Missed" : model.SelectedDate.ToString("dddd d MMMM", british);
+        undoRemove.IsVisible = model.LastRemovedNote is not null;
         tabs.Children.Clear();
         foreach (var (key, text) in Kinds)
         {
-            var picked = key; var tab = Ui.Button(text, () => { kind = picked; Rebuild(); }, "NotesFilter_" + key);
+            var label = key == "missed" && missed.Count > 0 ? $"Missed {missed.Count}" : text;
+            var picked = key; var tab = Ui.Button(label, () => { kind = picked; Rebuild(); }, "NotesFilter_" + key);
             tab.Classes.Add("flat"); tab.Height = 28; tab.Padding = new Thickness(10, 0); tab.FontSize = 13; tab.Classes.Set("filterOn", kind == key); tabs.Children.Add(tab);
         }
-        var notes = model.NotesOn(model.SelectedDate).Where(n => kind switch
+        var notes = kind == "missed" ? missed.ToList() : model.NotesOn(model.SelectedDate).Where(n => kind switch
         {
             "tasks" => DayNotes.IsTask(n), "events" => n.At is not null && !DayNotes.IsDeadline(n), "deadlines" => DayNotes.IsDeadline(n), _ => true
         }).ToList();
-        if (notes.Count == 0) rows.Children.Add(Ui.Text(kind == "all" ? "No notes for this day." : "Nothing of this kind on this day.", 13, "muted"));
+        if (notes.Count == 0) rows.Children.Add(Ui.Text(kind == "all" ? "No notes for this day." : kind == "missed" ? "Nothing missed. Tasks and deadlines you did not tick off on an earlier day show here." : "Nothing of this kind on this day.", 13, "muted"));
+        // Missed notes come from many days, so they are grouped under their day, with one button to carry the lot over to today.
+        if (kind == "missed" && notes.Count > 0)
+        {
+            var carry = Ui.DialogButton("Move all to today", () => model.MoveMissedToToday(), "NotesMissedToToday"); carry.HorizontalAlignment = HorizontalAlignment.Left; rows.Children.Add(carry);
+        }
+        DateTime? groupDay = null;
         foreach (var note in notes)
         {
+            if (kind == "missed" && groupDay != note.Day.Date)
+            {
+                groupDay = note.Day.Date;
+                var dayHeading = Ui.Text(note.Day.ToString("dddd d MMMM", british), 12, "muted"); dayHeading.FontWeight = FontWeight.SemiBold; dayHeading.Margin = new Thickness(0, 8, 0, 0); rows.Children.Add(dayHeading);
+            }
             var id = note.Id;
             var tick = new CheckBox { Name = "NoteTick_" + id, IsChecked = note.Done, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
             tick.Click += (_, _) => model.ToggleDayNote(id);

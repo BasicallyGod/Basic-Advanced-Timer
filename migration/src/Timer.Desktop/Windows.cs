@@ -58,12 +58,22 @@ public sealed class WindowCoordinator
         // Quick capture: a small box over whatever is on screen, from the right-click menu or the chosen shortcut, with no need for the dashboard.
         model.QuickCaptureRequested += ShowQuickCapture;
         // A reminder that falls due while the timer is tucked away brings the pill back; pressing a reminder's words opens Notes.
-        model.ReminderDue += _ => { if (!IsShown) { Pill.Show(); BringToFront(Pill); } };
+        model.ReminderDue += _ => { if (model.ReminderSoundOn) ReminderSound.Play(); BringBackForReminder(); };
         model.NotesRequested += () => { model.ShowToday(); ShowDashboard(); Dashboard.ShowNotes(); };
         hotkey = new GlobalHotkey(model.RequestQuickCapture); hotkey.Watch(Pill); hotkey.Watch(Dashboard);
         Pill.Opened += (_, _) => ApplyShortcut(); Dashboard.Opened += (_, _) => ApplyShortcut();
         model.PropertyChanged += (_, _) => ApplyShortcut();
         Pill.Closed += (_, _) => hotkey.Dispose();
+    }
+    // A window that is hidden to the tray comes back, and one that was only minimised to the taskbar (the way it is tucked away without a tray) is restored,
+    // since a minimised window still counts as visible. If a timer window is already up and in view, the card on it is enough.
+    private void BringBackForReminder()
+    {
+        if (new Window[] { Pill, Dashboard }.Any(w => w.IsVisible && w.WindowState != WindowState.Minimized)) return;
+        if (!Pill.IsVisible && !Dashboard.IsVisible) Pill.Show();
+        var target = Pill.IsVisible ? (Window)Pill : Dashboard;
+        if (target.WindowState == WindowState.Minimized) target.WindowState = WindowState.Normal;
+        BringToFront(target);
     }
     private readonly GlobalHotkey hotkey; private QuickCaptureWindow? capture; private string? appliedShortcut;
     private void ApplyShortcut()

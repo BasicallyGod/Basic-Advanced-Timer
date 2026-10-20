@@ -35,15 +35,32 @@ public static class ReminderRules
         return found.OrderBy(r => r.State == ReminderState.Soon ? 1 : 0).ThenBy(r => r.DueAt).ThenBy(r => r.Note.Id).ToList();
     }
 
+    private static string SoonIn(int minutes) => "In " + minutes + (minutes == 1 ? " minute" : " minutes");
+
     /// <summary>The second line of a reminder card.</summary>
     public static string Describe(Reminder reminder, DateTime now)
     {
         var minutes = (int)Math.Max(0, (now - reminder.DueAt).TotalMinutes);
         return reminder.State switch
         {
-            ReminderState.Soon => "In " + Math.Max(1, (int)Math.Ceiling((reminder.DueAt - now).TotalMinutes)) + " minutes · " + reminder.DueAt.ToString("HH:mm"),
+            ReminderState.Soon => SoonIn(Math.Max(1, (int)Math.Ceiling((reminder.DueAt - now).TotalMinutes))) + " · " + reminder.DueAt.ToString("HH:mm"),
             ReminderState.Due => "Due now · " + reminder.DueAt.ToString("HH:mm"),
             _ => "Overdue by " + (minutes < 60 ? minutes + (minutes == 1 ? " minute" : " minutes") : (minutes / 60) + "h " + (minutes % 60) + "m")
         };
+    }
+}
+
+/// <summary>
+/// The short sound a reminder makes when it falls due, so one behind other windows, or while you are looking elsewhere, is not missed. It is the system's
+/// own alert sound through one Windows call (no files, no install), follows the system volume, and does nothing on other systems.
+/// </summary>
+public static class ReminderSound
+{
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool MessageBeep(uint type);
+    private const uint IconAsterisk = 0x40;
+    public static void Play()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        try { MessageBeep(IconAsterisk); } catch (Exception) { /* No sound is better than a failed reminder. */ }
     }
 }
