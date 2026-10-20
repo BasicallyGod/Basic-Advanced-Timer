@@ -95,7 +95,7 @@ public sealed class TagPicker
             line.Children.Add(new TextBlock { Text = account?.Display ?? matches[i], FontSize = 13 });
             var tag = Ui.Text(NoteShorthand.TagFor(matches[i]), 12, "muted"); line.Children.Add(tag);
             // A button that never takes the focus, so choosing one with the mouse leaves the caret in the box.
-            var row = new Button { Name = "TagPickerRow_" + FeedPage.Key(matches[i]), Content = line, Focusable = false, Padding = new Thickness(8, 5), CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left,
+            var row = new Button { Name = "TagPickerRow_" + Ui.NameKey(matches[i]), Content = line, Focusable = false, Padding = new Thickness(8, 5), CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left,
                 Background = i == selected ? new SolidColorBrush(Ui.ThemeColour(box, "Selected", Colors.LightGray)) : Brushes.Transparent };
             row.Click += (_, _) => Accept(index);
             rows.Children.Add(row);

@@ -9,26 +9,15 @@ using Xunit;
 
 namespace Timer.Desktop.Tests;
 
-public sealed class SlimColumnTests : IDisposable
+public sealed class SlimColumnTests
 {
-    private readonly string folder = Path.Combine(Path.GetTempPath(), "slim-" + Guid.NewGuid().ToString("N"));
-    public SlimColumnTests() => Directory.CreateDirectory(folder);
-    public void Dispose() { Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools(); try { Directory.Delete(folder, true); } catch (IOException) { } }
-
     private static void Click(Visual root, string name) { root.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
     private static DashboardWindow Open(TimerModel model) { var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs(); return window; }
     private static T Find<T>(Visual root, string name) where T : Control => root.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
-    private const string Wire = "## Fintech round\nDate: 2026-10-16 08:45\nID: a2\n#Accounttwo\nA payments firm closed a round.\n\n## Regulator consultation\nDate: 2026-10-16 09:00\nID: a1\n#Accountone\nA regulator opened a consultation.\n";
-    private TimerModel Demo()
-    {
-        File.WriteAllText(Path.Combine(folder, "wire.md"), Wire);
-        var model = TimerModel.CreateDemo(); model.SetFeedFolder(folder); model.RefreshFeed(); return model;
-    }
-
     [AvaloniaFact]
-    public void NotesAndFeedUseASeparateCompactColumnBesideTheUnchangedNavigationRail()
+    public void NotesUsesASeparateCompactColumnBesideTheUnchangedNavigationRail()
     {
-        var model = Demo(); var window = Open(model);
+        var model = TimerModel.CreateDemo(); var window = Open(model);
         try
         {
             var body = window.GetVisualDescendants().OfType<Grid>().First(g => g.ColumnDefinitions.Count == 3 && g.ColumnDefinitions[1].Width.Value == 1);
@@ -40,7 +29,6 @@ public sealed class SlimColumnTests : IDisposable
             Assert.Equal(60, rail.Width); Assert.False(rail.IsVisualAncestorOf(slim));
             Assert.False(window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "AccountScroll").IsEffectivelyVisible);
             Assert.True(Find<ScrollViewer>(slim, "CompactAccountScroll").IsEffectivelyVisible);
-            Click(window, "FeedTab"); Assert.True(slim.IsVisible); Assert.Equal(60, rail.Width);
             Click(window, "TimelineTab"); Assert.False(slim.IsVisible); Assert.Equal(340, body.ColumnDefinitions[0].Width.Value);
             Click(window, "NotesTab"); Click(window, "Settings"); Assert.False(slim.IsVisible); Assert.Equal(60, rail.Width);
         }
@@ -50,7 +38,7 @@ public sealed class SlimColumnTests : IDisposable
     [AvaloniaFact]
     public void SlimControlsKeepTheClockAndFinishDayVisibleWithScrollableAccounts()
     {
-        var model = Demo(); var window = Open(model);
+        var model = TimerModel.CreateDemo(); var window = Open(model);
         try
         {
             Click(window, "NotesTab"); var slim = window.GetVisualDescendants().OfType<CompactColumn>().Single();
@@ -59,7 +47,7 @@ public sealed class SlimColumnTests : IDisposable
             Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "A1");
             Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == model.FormatCompact(model.Today(model.Accounts.First(a => a.Name == "Account one"))));
             Assert.Equal(Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, list.VerticalScrollBarVisibility);
-            Click(slim, "CompactDot_" + FeedPage.Key("Account one")); Assert.Equal("Account one", model.ActiveAccount);
+            Click(slim, "CompactDot_" + Ui.NameKey("Account one")); Assert.Equal("Account one", model.ActiveAccount);
             Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Working");
             Click(slim, "CompactPause"); Assert.False(model.IsTracking);
             Click(slim, "CompactBreak"); Assert.True(model.IsOnBreak);
@@ -67,7 +55,7 @@ public sealed class SlimColumnTests : IDisposable
             var started = model.DayStarted; Click(slim, "CompactDay"); Assert.NotEqual(started, model.DayStarted);
             // The utility strip and the navigation rail are distinct, so even long account lists cannot push out navigation.
             var rail = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("panel") && b.Width == 60);
-            foreach (var name in new[] { "Settings", "QuitTimer", "FeedTab", "NotesTab" })
+            foreach (var name in new[] { "Settings", "QuitTimer", "NotesTab" })
             {
                 var button = Find<Button>(window, name);
                 Assert.True(button.TranslatePoint(new Point(0, button.Bounds.Height), rail)!.Value.Y <= rail.Bounds.Height + 1, name + " falls below the rail");
@@ -109,17 +97,15 @@ public sealed class SlimColumnTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void CompactAccountTooltipsIncludeBudgetAndUnreadInformation()
+    public void CompactAccountTooltipsIncludeBudgetInformation()
     {
-        var model = Demo(); var window = Open(model);
+        var model = TimerModel.CreateDemo(); var window = Open(model);
         try
         {
-            Click(window, "FeedTab"); var slim = window.GetVisualDescendants().OfType<CompactColumn>().Single();
-            var row = Find<Button>(slim, "CompactDot_" + FeedPage.Key("Account one"));
+            Click(window, "NotesTab"); var slim = window.GetVisualDescendants().OfType<CompactColumn>().Single();
+            var row = Find<Button>(slim, "CompactDot_" + Ui.NameKey("Account one"));
             Assert.Contains("Account one", ToolTip.GetTip(row)?.ToString());
-            Assert.Contains("unread", ToolTip.GetTip(row)?.ToString());
-            model.SetFeedRead("id:a1", true); Dispatcher.UIThread.RunJobs();
-            Assert.DoesNotContain("unread", ToolTip.GetTip(row)?.ToString());
+            Assert.Contains("today", ToolTip.GetTip(row)?.ToString());
         }
         finally { window.Close(); }
     }
@@ -154,26 +140,6 @@ public sealed class SlimColumnTests : IDisposable
             Assert.Equal(1, range.SelectedIndex); Assert.False(Shows()); // Next 30 days.
             range.SelectedIndex = 2; Dispatcher.UIThread.RunJobs(); Assert.True(Shows());
             range.SelectedIndex = 0; Dispatcher.UIThread.RunJobs(); Assert.False(Shows());
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void FeedTabsSearchAndDetailPane()
-    {
-        var model = Demo(); var window = Open(model);
-        try
-        {
-            Click(window, "FeedTab"); var page = window.GetVisualDescendants().OfType<FeedPage>().Single();
-            int Entries() => page.GetVisualDescendants().OfType<Border>().Count(b => b.Name?.StartsWith("FeedEntry_") == true);
-            Assert.False(Find<Border>(page, "FeedDetail").IsVisible); Assert.Equal(2, Entries());
-            Find<TextBox>(page, "FeedSearch").Text = "fintech"; Dispatcher.UIThread.RunJobs(); Assert.Equal(1, Entries());
-            Find<TextBox>(page, "FeedSearch").Text = ""; Dispatcher.UIThread.RunJobs(); Assert.Equal(2, Entries());
-            page.Toggle("id:a1"); Dispatcher.UIThread.RunJobs();
-            Assert.True(Find<Border>(page, "FeedDetail").IsVisible); Assert.True(Find<Border>(page, "FeedEntry_" + FeedPage.Key("id:a1")).Classes.Contains("feedSelected"));
-            Click(page, "FeedDone_" + FeedPage.Key("id:a1")); Assert.True(model.FeedIsDone("id:a1")); Assert.Equal(1, Entries()); // Done leaves All.
-            Click(page, "FeedFilterDone"); Assert.Equal(1, Entries()); Assert.True(model.FeedIsDone("id:a1"));
-            Click(page, "FeedFilterUnread"); Assert.Equal(1, Entries()); Assert.False(model.FeedIsDone("id:a2"));
         }
         finally { window.Close(); }
     }

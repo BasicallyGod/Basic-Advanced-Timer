@@ -163,6 +163,8 @@ public static class Ui
         grid.Children.Add(child);
         return child;
     }
+    /// <summary>A name that is safe to give a control, made from any text.</summary>
+    public static string NameKey(string text) => System.Text.RegularExpressions.Regex.Replace(text, @"[^A-Za-z0-9]", "_");
     public static Border Rule() { var b = new Border { Height = 1 }; b.Classes.Add("rule"); return b; }
     public static StackPanel Horizontal(params Control[] children)
     {
@@ -873,7 +875,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Clock, Note, Feed }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Clock, Note }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1016,12 +1018,6 @@ public sealed class IconGlyph : Control
                 // A page with a few lines of writing.
                 context.DrawRectangle(null, pen, new Rect(3.5, 3, 11, 12), 2.5, 2.5);
                 context.DrawLine(pen, new Point(6.5, 7), new Point(11.5, 7)); context.DrawLine(pen, new Point(6.5, 10), new Point(11.5, 10)); context.DrawLine(pen, new Point(6.5, 13), new Point(9, 13));
-                break;
-            case IconKind.Feed:
-                // A dot with two arcs spreading from it: something being broadcast to you.
-                context.DrawEllipse(brush, null, new Point(4.5, 13.5), 1.4, 1.4);
-                context.DrawGeometry(null, pen, Geometry.Parse("M 3.5,8.6 A 6,6 0 0 1 9.4,14.5"));
-                context.DrawGeometry(null, pen, Geometry.Parse("M 3.5,3.6 A 11,11 0 0 1 14.4,14.5"));
                 break;
             case IconKind.Table:
                 // A grid of cells: hours by account.

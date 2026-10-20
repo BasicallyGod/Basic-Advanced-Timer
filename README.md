@@ -24,7 +24,7 @@ Run `Start-Demo.cmd` to try the app with sample accounts and history, without to
 
 ## Data
 
-Time records are kept in `timer.db` (SQLite), imported Feed reports and source state in a separate `feed.db`, with a small `basics-advanced-timer.settings.json` beside it. The database is opened exclusively, so two copies cannot write to one folder, and it is backed up daily. To move computers or make a backup, copy the data folder while the app is closed. None of these data files belongs in Git. See [Feed sources and scheduled delivery](FEED.md) for folder, paste and RSS setup.
+Time records are kept in `timer.db` (SQLite), with a small `basics-advanced-timer.settings.json` beside it. The database is opened exclusively, so two copies cannot write to one folder, and it is backed up daily. To move computers or make a backup, copy the data folder while the app is closed. None of these data files belongs in Git.
 
 ## Moving from the PowerShell version
 

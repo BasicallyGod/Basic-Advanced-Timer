@@ -235,10 +235,6 @@
     <Style Selector="Button.hoverReveal"><Setter Property="Opacity" Value="0" /></Style>
     <Style Selector=".revealing Button.hoverReveal"><Setter Property="Opacity" Value="1" /></Style>
     <Style Selector="Button.hoverReveal:focus-visible"><Setter Property="Opacity" Value="1" /></Style>
-    <!-- Feed rows are plain lines with a hairline under them; the filters that are on are lit in the accent colour. -->
-    <Style Selector="Border.feedRow"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
-    <Style Selector="Border.feedSelected"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
-    <Style Selector="Border.feedDetail"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Button.flat.filterOn"><Setter Property="Foreground" Value="{DynamicResource Accent}" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
     <Style Selector="Button.flat.filterOn /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
     <Style Selector="Border.accentEdge"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
