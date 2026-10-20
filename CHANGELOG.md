@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| NOTES_ROW |  |  |
 | Feed moved to alpha | [b97db02](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/b97db02) | The Feed is out of experimental so Notes can ship first. It lives on alpha (which now holds the last experimental build with it) and in history. Experimental has no Feed tab, strip, Settings section or feed.db. Notes, reminders, Quick capture and the slim column are unchanged. |
 
 ## 19 October 2026
