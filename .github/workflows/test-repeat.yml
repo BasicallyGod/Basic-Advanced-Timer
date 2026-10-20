@@ -1,13 +1,17 @@
 name: Repeat the tests (manual)
 
-# Runs the whole test suite many times on one build, to find tests that fail now and then. It is only ever started by hand (Run workflow), says
-# which tests failed in which runs, and prints the first lines of each failure. Nothing is published.
+# Runs the whole test suite many times on one build, to find tests that fail now and then, says which tests failed in which runs, and prints the
+# first lines of each failure. Nothing is published. Start it by hand (Run workflow), which GitHub offers once this file is on main. Until then a pull
+# request that changes this file runs it too, with the default number of runs.
 on:
   workflow_dispatch:
     inputs:
       times:
         description: How many times to run the whole suite
         default: '8'
+  pull_request:
+    paths:
+      - '.github/workflows/test-repeat.yml'
 
 permissions:
   contents: read
