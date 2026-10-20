@@ -571,16 +571,16 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock today = Ui.Text("", 12, "muted");
     private readonly ContentControl workspace = new();
     private readonly Button day;
-    private FeedStrip feedStrip = null!; private Border feedBadge = null!, notesBadge = null!; private Button feedRail = null!, notesRail = null!, timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
+    private Border notesBadge = null!; private Button notesRail = null!, timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
     private IconGlyph pillGlyph = null!;
     private readonly BreakGlyph dashboardCup = new();
     private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly Button undo;
     private readonly Button merge;
     private EntryDialog? entryEditor;
-    private bool weekMode, settingsMode, notesMode, feedMode, renderedSettings, renderedNotes, renderedFeed, settingZoom;
-    // The Notes and Feed pages stand in for the timeline and week views, with their own editing of nothing, so the toolbar and the zoom bar stay away.
-    private bool PageMode => notesMode || feedMode;
+    private bool weekMode, settingsMode, notesMode, renderedSettings, renderedNotes, settingZoom;
+    // The Notes page stands in for the timeline and week views, with its own editing of nothing, so the toolbar and the zoom bar stay away.
+    private bool PageMode => notesMode;
     private Grid bodyGrid = null!; private Control fullColumn = null!; private CompactColumn compactColumn = null!; private bool compactApplied;
     private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
@@ -622,19 +622,13 @@ public sealed class DashboardWindow : Window
         notesBadge.Classes.Add("accentEdge");
         var notesGlyph = (IconGlyph)notesRail.Content!; notesRail.Content = null;
         notesRail.Content = new Grid { Children = { notesGlyph, notesBadge } };
-        // The Feed button carries a small dot while there is something unread.
-        feedRail = RailButton(IconKind.Feed, "Feed", "FeedTab", () => ShowFeed());
-        feedBadge = new Border { Name = "FeedBadge", Width = 9, Height = 9, CornerRadius = new CornerRadius(4.5), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -3, -3, 0), IsHitTestVisible = false, IsVisible = false };
-        feedBadge.Classes.Add("accentEdge");
-        var feedGlyph = (IconGlyph)feedRail.Content!; feedRail.Content = null; // Taken out of the button first, since a control has one parent.
-        feedRail.Content = new Grid { Children = { feedGlyph, feedBadge } };
         // The way back to the pill is the first thing on the rail, at the top left.
         var backToPill = RailButton(IconKind.Minimise, "Switch to pill", "BackToPill", () => OpenPill?.Invoke());
         pillGlyph = (IconGlyph)backToPill.Content!;
         railTop.Children.Add(backToPill);
         var backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
         foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
-        var notesRule = Ui.Rule(); notesRule.Margin = new Thickness(6, 4); railTop.Children.Add(notesRule); railTop.Children.Add(notesRail); railTop.Children.Add(feedRail);
+        var notesRule = Ui.Rule(); notesRule.Margin = new Thickness(6, 4); railTop.Children.Add(notesRule); railTop.Children.Add(notesRail);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
         settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);
@@ -673,9 +667,7 @@ public sealed class DashboardWindow : Window
         cardStack.Children.Add(identity); dayCard.Child = cardStack;
         var identityHost = new Border { Padding = new Thickness(12, 18, 16, 6), Child = dayCard };
         Ui.DragHeader(identityHost, this, "SidebarDragHeader"); identityBlock = identityHost;
-        // Under the Day card, a slim strip of unread feed items about the account being tracked. It is there only while there are some.
-        feedStrip = new FeedStrip(model, (account, id) => ShowFeed(account, id));
-        Ui.Put(sidebar, new StackPanel { Children = { identityHost, feedStrip } });
+        Ui.Put(sidebar, identityHost);
         var title = Ui.Text("Client accounts", 13, "muted");
         title.Margin = new Thickness(20, 12, 20, 6);
         // The heading alone sets the accounts apart from the card above them, with no divider.
@@ -706,7 +698,7 @@ public sealed class DashboardWindow : Window
         var panel = new Border { Child = sidebar };
         panel.Classes.Add("panel");
         Ui.Put(body, panel); fullColumn = panel;
-        // Notes and Feed swap the full dashboard column for a separate 96px tracking strip; the 60px navigation rail never changes.
+        // Notes swaps the full dashboard column for a separate 96px tracking strip; the 60px navigation rail never changes.
         compactColumn = new CompactColumn(model); Ui.Put(body, compactColumn);
         var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
         var review = Ui.Grid("*", "Auto,*,Auto,Auto");
@@ -887,7 +879,7 @@ public sealed class DashboardWindow : Window
     {
         if (identityBlock is null || accountsHeadBlock is null || toolsRow is null) return false;
         double Bottom(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), this)?.Y ?? 0;
-        // A hidden control keeps the bounds it last had. On Notes and Feed the full column is swapped for the slim strip, so its old edge must not
+        // A hidden control keeps the bounds it last had. On Notes the full column is swapped for the slim strip, so its old edge must not
         // still count: it lay over the first entry and turned a click on it into a window drag.
         if (identityBlock.IsEffectivelyVisible && accountsHeadBlock.IsEffectivelyVisible)
         {
@@ -914,20 +906,14 @@ public sealed class DashboardWindow : Window
     }
     private void ShowTidy() { if (IsVisible) Dialogs.Show(new TidyDialog(model)); }
     private void ShowGroup(string id) { if (IsVisible) Dialogs.Show(new GroupDialog(model, id)); }
-    public void SelectTab(bool showWeek) { settingsMode = false; notesMode = false; feedMode = false; weekMode = showWeek; Refresh(true); }
+    public void SelectTab(bool showWeek) { settingsMode = false; notesMode = false; weekMode = showWeek; Refresh(true); }
     /// <summary>Shows the Notes page. It follows the date the dashboard is on, like the timeline.</summary>
-    public void ShowNotes() { settingsMode = false; weekMode = false; feedMode = false; notesMode = true; Refresh(true); }
-    /// <summary>Shows the Feed page.</summary>
-    public void ShowFeed(string? account = null, string? openId = null)
-    {
-        settingsMode = false; weekMode = false; notesMode = false; feedMode = true; Refresh(true);
-        if (workspace.Content is FeedPage page && (account is not null || openId is not null)) page.Focus(account, openId);
-    }
+    public void ShowNotes() { settingsMode = false; weekMode = false; notesMode = true; Refresh(true); }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
     private void SelectSection(string section)
     {
-        settingsMode = false; notesMode = false; feedMode = false; weekMode = true;
+        settingsMode = false; notesMode = false; weekMode = true;
         if (model.WeekSection != section) model.SetWeekSection(section); else Refresh(true);
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
@@ -952,7 +938,7 @@ public sealed class DashboardWindow : Window
         day.Classes.Set("startDay", !model.DayStarted); // Green to start the day, red to finish it.
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
-        // Navigation stays a fixed 60px. Notes and Feed use an independently scrolling slim tracking strip instead of the full sidebar.
+        // Navigation stays a fixed 60px. Notes uses an independently scrolling slim tracking strip instead of the full sidebar.
         var slim = PageMode && !settingsMode;
         if (slim != compactApplied)
         {
@@ -983,37 +969,35 @@ public sealed class DashboardWindow : Window
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); var glyph = button.Content as IconGlyph ?? (button.Content as Grid)?.Children.OfType<IconGlyph>().FirstOrDefault(); if (glyph is not null) glyph.TintKey = selected ? "Ink" : "Muted"; }
         Rail(timelineRail, !weekMode && !settingsMode && !PageMode);
         Rail(notesRail, !settingsMode && notesMode);
-        Rail(feedRail, !settingsMode && feedMode);
         var reminders = model.Reminders; notesBadge.IsVisible = reminders.Count > 0; notesBadge.Classes.Set("lateEdge", reminders.Any(r => r.State == ReminderState.Overdue));
         var notesTip = reminders.Count > 0 ? $"Notes ({reminders.Count} {(reminders.Count == 1 ? "reminder" : "reminders")})" : "Notes";
         ToolTip.SetTip(notesRail, notesTip); Avalonia.Automation.AutomationProperties.SetName(notesRail, notesTip);
-        if (refreshWorkspace) { var unread = model.FeedUnread; feedBadge.IsVisible = unread > 0; var feedTip = unread > 0 ? $"Feed ({unread} unread)" : "Feed"; ToolTip.SetTip(feedRail, feedTip); Avalonia.Automation.AutomationProperties.SetName(feedRail, feedTip); }
         Rail(overviewTab, !settingsMode && weekMode && model.WeekSection == "overview");
         Rail(hoursTab, !settingsMode && weekMode && model.WeekSection == "hours");
         Rail(entriesTab, !settingsMode && weekMode && model.WeekSection == "entries");
         Rail(settingsRail, settingsMode);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
-        foreach (var control in new Control[] { previous, datePick, next, todayButton }) control.IsVisible = !settingsMode && !feedMode; // The feed is a stream, not a day.
+        foreach (var control in new Control[] { previous, datePick, next, todayButton }) control.IsVisible = !settingsMode;
         if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && !PageMode && (!weekMode || model.WeekSection == "entries");
         if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && !PageMode && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
-        workspaceTitle.Text = settingsMode ? "Settings" : notesMode ? "Notes" : feedMode ? "Feed" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
+        workspaceTitle.Text = settingsMode ? "Settings" : notesMode ? "Notes" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
         // The settings and notes pages are built once when they open, so a model change does not rebuild them under the pointer and lose what is being typed.
-        if (settingsMode ? !renderedSettings : notesMode ? !renderedNotes : feedMode ? !renderedFeed : refreshWorkspace)
+        if (settingsMode ? !renderedSettings : notesMode ? !renderedNotes : refreshWorkspace)
         {
             var oldScroll = workspace.Content is ScrollViewer directOld ? directOld
                 : (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
-            var previous = renderedSettings == settingsMode && !settingsMode && !PageMode && !renderedNotes && !renderedFeed && renderedWeekMode == weekMode && renderedDate == model.SelectedDate
+            var previous = renderedSettings == settingsMode && !settingsMode && !PageMode && !renderedNotes && renderedWeekMode == weekMode && renderedDate == model.SelectedDate
                 ? !weekMode && model.TimelineOffset is double timelineOffset ? new Vector(0, timelineOffset)
                     : oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset : null;
-            workspace.Content = settingsMode ? new SettingsView(model) : notesMode ? new NotesPage(model) : feedMode ? new FeedPage(model) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
+            workspace.Content = settingsMode ? new SettingsView(model) : notesMode ? new NotesPage(model) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
             if (previous is { } offset && workspace.Content is Control control)
             {
                 var scroll = control is ScrollViewer direct ? direct : control.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();
                 if (scroll is not null) scroll.Tag = offset;
             }
-            renderedWeekMode = weekMode; renderedSettings = settingsMode; renderedNotes = notesMode && !settingsMode; renderedFeed = feedMode && !settingsMode;
+            renderedWeekMode = weekMode; renderedSettings = settingsMode; renderedNotes = notesMode && !settingsMode;
             renderedDate = model.SelectedDate;
         }
     }

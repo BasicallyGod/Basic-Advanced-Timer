@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 20 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Feed moved to alpha | [b97db02](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/b97db02) | The Feed is out of experimental so Notes can ship first. It lives on alpha (which now holds the last experimental build with it) and in history. Experimental has no Feed tab, strip, Settings section or feed.db. Notes, reminders, Quick capture and the slim column are unchanged. |
+
 ## 19 October 2026
 
 | Change | Commit | Details |

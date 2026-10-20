@@ -7,7 +7,7 @@ using Timer.Core;
 namespace Timer.Desktop;
 
 /// <summary>
-/// A slim tracking utility beside the unchanged navigation rail on Notes and Feed.
+/// A slim tracking utility beside the unchanged navigation rail on Notes.
 /// Timer and immediate controls stay at the top; the accounts scroll independently;
 /// start/finish day stays fixed at the bottom. The full dashboard column is retained on other pages.
 /// </summary>
@@ -142,7 +142,7 @@ public sealed class CompactColumn : Grid
             track.Child = fill;
             var content = new StackPanel { Spacing = 5, Margin = new Thickness(3, 1) };
             content.Children.Add(main); content.Children.Add(track);
-            var button = Ui.Button("", () => model.ToggleAccount(name), "CompactDot_" + FeedPage.Key(name));
+            var button = Ui.Button("", () => model.ToggleAccount(name), "CompactDot_" + Ui.NameKey(name));
             button.Classes.Add("rail"); button.Classes.Add("accountCard");
             button.Classes.Set("active", isRunning); button.Width = ColumnWidth - 8; button.Height = 48;
             button.Padding = new Thickness(3, 4); button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
@@ -183,9 +183,7 @@ public sealed class CompactColumn : Grid
             row.Track.IsVisible = ratio is not null;
             row.Fill.Width = ratio is { } used ? (ColumnWidth - 24) * Math.Clamp(used, 0, 1) : 0;
             row.Button.Classes.Set("active", model.ActiveAccount == row.Account.Name);
-            var unread = model.FeedUnreadFor(row.Account.Name).Count;
-            ToolTip.SetTip(row.Button, row.Account.Display + " · " + row.Time.Text + " today\n"
-                + model.BudgetLine(row.Account) + (unread > 0 ? $"\n{unread} unread feed items" : ""));
+            ToolTip.SetTip(row.Button, row.Account.Display + " · " + row.Time.Text + " today\n" + model.BudgetLine(row.Account));
         }
     }
 }
