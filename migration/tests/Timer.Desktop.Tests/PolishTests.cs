@@ -21,6 +21,8 @@ public sealed class PolishTests
     [AvaloniaFact]
     public void DeveloperFeaturesAreHiddenUntilTenQuickClicksOnAbout()
     {
+        // Each press is 50 ms after the last by a fake clock, so a slow runner cannot stretch the gap past the unlock window.
+        var fake = new DateTime(2026, 10, 9, 10, 0, 0, DateTimeKind.Utc); SettingsView.UnlockClock = () => fake = fake.AddMilliseconds(50);
         var model = Plain(); var window = new DashboardWindow(model); window.Show();
         try
         {
@@ -43,7 +45,7 @@ public sealed class PolishTests
             model.SetDeveloper(false); Dispatcher.UIThread.RunJobs();
             Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);
         }
-        finally { window.Close(); }
+        finally { window.Close(); SettingsView.UnlockClock = () => DateTime.UtcNow; }
     }
 
     [AvaloniaFact]
