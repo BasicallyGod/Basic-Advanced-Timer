@@ -47,7 +47,7 @@ public sealed class NotesPolishTwoTests : IDisposable
         using (var store = new TimerStore(folder))
         {
             var engine = new TrackingEngine(clock: () => clock); var model = new TimerModel(engine, store.Load(engine), store);
-            model.AddDayNote(clock.Date, "14:25 Call back"); id = model.AllDayNotes.Single().Id;
+            model.AddDayNote(clock.Date, "14:27 Call back"); id = model.AllDayNotes.Single().Id;
             Assert.Equal(ReminderState.Due, model.ActiveReminder!.State);
             model.SnoozeReminder(id); Assert.Null(model.ActiveReminder);
         }
