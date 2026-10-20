@@ -958,17 +958,11 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>The names of the accounts a #Tag can link to.</summary>
     public IReadOnlyList<string> AccountNames => Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name).ToList();
-    /// <summary>True when what was typed leaves some words once its day and tags are taken out. A bare "@fri" has nothing to say (a bare "14:30" is kept as the note's words).</summary>
-    public bool HasNoteWords(string typed) => NoteShorthand.Parse(typed, Engine.Now).Text.Length > 0;
-    /// <summary>
-    /// Adds a note to a day from what was typed. A time such as 14:30 in the words becomes the note's time. False (with a notice) when there are no words
-    /// left, so the caller can keep what was typed instead of losing it.
-    /// </summary>
-    public bool AddDayNote(DateTime day, string typed)
+    /// <summary>Adds a note to a day from what was typed. A time such as 14:30 in the words becomes the note's time.</summary>
+    public void AddDayNote(DateTime day, string typed)
     {
         // A day named in the words (@fri, @tomorrow, @21oct) wins over the day showing, and the notice says where the note went, since it may leave the list in view.
-        var parts = NoteShorthand.Parse(typed, Engine.Now);
-        if (parts.Text.Length == 0) { Notice = "Add some words as well as the day."; Notify(); return false; }
+        var parts = NoteShorthand.Parse(typed, Engine.Now); if (parts.Text.Length == 0) return;
         var target = (parts.Day ?? day).Date;
         long id;
         if (store is null) id = nextNoteId++;
@@ -981,7 +975,6 @@ public sealed class TimerModel : INotifyPropertyChanged
         dayNotes.Add(new DayNote(id, target, parts.At, parts.Text));
         if (target != day.Date) Notice = "Added to " + target.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
         Notify();
-        return true;
     }
     // ---- A note the database would not take is never lost and never crashes the app: it stays on screen and the write is tried again with each save. ----
     private long unsavedNoteId;

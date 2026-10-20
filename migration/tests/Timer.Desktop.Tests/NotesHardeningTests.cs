@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Timer.Desktop.Tests;
 
-/// <summary>What a sense check of the code found in Notes: writes that fail, a removal with no way back, words lost to the shorthand, reminders that could be missed, and tasks left on past days.</summary>
+/// <summary>What a sense check of the code found in Notes: writes that fail, a removal with no way back, reminders that could be missed, and tasks left on past days.</summary>
 public sealed class NotesHardeningTests : IDisposable
 {
     private readonly string folder = Path.Combine(Path.GetTempPath(), "notes-hardening-" + Guid.NewGuid().ToString("N"));
@@ -22,7 +22,6 @@ public sealed class NotesHardeningTests : IDisposable
     private static void Click(Visual root, string name) { root.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
     private static DashboardWindow Open(TimerModel model) { var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs(); Click(window, "NotesTab"); return window; }
     private static int Rows(Visual root) => root.GetVisualDescendants().OfType<TextBox>().Count(t => t.Name?.StartsWith("NoteText_") == true);
-    private static void Enter(TextBox box) { box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Dispatcher.UIThread.RunJobs(); }
 
     [Fact]
     public void ANoteTheDatabaseRefusesStaysOnScreenAndIsWrittenWhenItWorksAgain()
@@ -43,38 +42,6 @@ public sealed class NotesHardeningTests : IDisposable
         Assert.True(model.Save()); // Every save tries the refused writes again.
         Assert.False(model.NotesUnsaved); Assert.DoesNotContain(model.AllDayNotes, n => n.Id < 0);
         Assert.Equal(new[] { "First edited", "Second" }, store.LoadDayNotes().Select(n => n.Text).OrderBy(t => t).ToArray());
-    }
-
-    [Fact]
-    public void OnlyADayIsNotANoteAndTheWordsAreKept()
-    {
-        var model = Model();
-        Assert.False(model.HasNoteWords("@fri")); Assert.True(model.HasNoteWords("Call back 14:30"));
-        Assert.False(model.AddDayNote(Now.Date, "@fri")); Assert.Empty(model.AllDayNotes); Assert.Contains("words", model.Notice);
-        Assert.True(model.AddDayNote(Now.Date, "Call back 14:30")); Assert.Single(model.AllDayNotes);
-    }
-
-    [AvaloniaFact]
-    public void TheNotesBoxAndQuickCaptureKeepADayTypedWithNoWords()
-    {
-        var model = Model(); var window = Open(model);
-        try
-        {
-            var box = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "NoteInput");
-            box.Text = "@fri"; Enter(box);
-            Assert.Equal("@fri", box.Text); Assert.Empty(model.AllDayNotes); // Still there to finish.
-            box.Text = "Call back @fri"; Enter(box);
-            Assert.Equal("", box.Text); Assert.Single(model.AllDayNotes);
-        }
-        finally { window.Close(); }
-        var capture = new QuickCaptureWindow(model); capture.Show();
-        try
-        {
-            var text = capture.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "CaptureText"); text.Text = "@fri"; Enter(text);
-            Assert.True(capture.IsVisible); Assert.Equal("@fri", text.Text); Assert.Single(model.AllDayNotes);
-            Assert.Contains("words", capture.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "CaptureReading").Text);
-        }
-        finally { capture.Close(); }
     }
 
     [Fact]
