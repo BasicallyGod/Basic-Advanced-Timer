@@ -10,7 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
-| Notes hardening | [6fd307b](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/6fd307b) | A note the database refuses stays on screen and is saved when it can be, instead of crashing. Undo remove puts a removed note back. A bare time or day is not added and keeps what was typed. A due reminder plays a sound (Settings, Reminders) and restores a minimised timer. A Missed tab lists unfinished tasks and deadlines from earlier days and moves them to today. |
+| Notes hardening | [6fd307b](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/6fd307b) | A note the database refuses stays on screen and is saved when it can be, instead of crashing. Undo remove puts a removed note back. A day typed with no words (`@fri` alone) is not added and keeps what was typed. A due reminder plays a sound (Settings, Reminders) and restores a minimised timer. A Missed tab lists unfinished tasks and deadlines from earlier days and moves them to today. |
 | Feed moved to alpha | [b97db02](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/b97db02) | The Feed is out of experimental so Notes can ship first. It lives on alpha (which now holds the last experimental build with it) and in history. Experimental has no Feed tab, strip, Settings section or feed.db. Notes, reminders, Quick capture and the slim column are unchanged. |
 
 ## 19 October 2026

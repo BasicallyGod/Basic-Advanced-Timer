@@ -59,8 +59,8 @@ public sealed class QuickCaptureWindow : Window
     public void Save()
     {
         var typed = input.Text;
-        // Only a time or a day, no words: the box stays open with what was typed, and says why, instead of closing on nothing.
-        if (!string.IsNullOrWhiteSpace(typed) && !model.AddDayNote(model.Engine.Now.Date, typed)) { reading.Text = "Add some words as well as the time or day."; return; }
+        // Only a day, no words: the box stays open with what was typed, and says why, instead of closing on nothing.
+        if (!string.IsNullOrWhiteSpace(typed) && !model.AddDayNote(model.Engine.Now.Date, typed)) { reading.Text = "Add some words as well as the day."; return; }
         Finish();
     }
     private void Finish() { if (closing) return; closing = true; Close(); }

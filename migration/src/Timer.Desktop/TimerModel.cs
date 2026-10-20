@@ -958,7 +958,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>The names of the accounts a #Tag can link to.</summary>
     public IReadOnlyList<string> AccountNames => Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name).ToList();
-    /// <summary>True when what was typed leaves some words once its time, day and tags are taken out. A bare "14:30" or "@fri" has nothing to say.</summary>
+    /// <summary>True when what was typed leaves some words once its day and tags are taken out. A bare "@fri" has nothing to say (a bare "14:30" is kept as the note's words).</summary>
     public bool HasNoteWords(string typed) => NoteShorthand.Parse(typed, Engine.Now).Text.Length > 0;
     /// <summary>
     /// Adds a note to a day from what was typed. A time such as 14:30 in the words becomes the note's time. False (with a notice) when there are no words
@@ -968,7 +968,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         // A day named in the words (@fri, @tomorrow, @21oct) wins over the day showing, and the notice says where the note went, since it may leave the list in view.
         var parts = NoteShorthand.Parse(typed, Engine.Now);
-        if (parts.Text.Length == 0) { Notice = "Add some words as well as the time or day."; Notify(); return false; }
+        if (parts.Text.Length == 0) { Notice = "Add some words as well as the day."; Notify(); return false; }
         var target = (parts.Day ?? day).Date;
         long id;
         if (store is null) id = nextNoteId++;
@@ -995,7 +995,10 @@ public sealed class TimerModel : INotifyPropertyChanged
         try { write(); return true; }
         catch (Exception)
         {
-            if (Engine.Now - lastNoteFailure > TimeSpan.FromMinutes(1)) { Notice = $"Could not save {what} to disk. It stays on screen and will be tried again."; lastNoteFailure = Engine.Now; }
+            // Said again only when the words change, so typing into a note that cannot be saved does not keep restarting the notice.
+            var said = $"Could not save {what} to disk. It stays on screen and will be tried again.";
+            if (Notice != said) Notice = said;
+            lastNoteFailure = Engine.Now;
             return false;
         }
     }
@@ -1078,9 +1081,9 @@ public sealed class TimerModel : INotifyPropertyChanged
         var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null) return;
         dayNotes.Remove(note); staleNotes.Remove(id);
         removedNotes.Add(note); if (removedNotes.Count > 20) removedNotes.RemoveAt(0);
-        // The notice is set first, so the one that says the database refused the removal is the one left showing.
-        Notice = "Note removed. Undo remove on the Notes page puts it back.";
+        // The notice about the removal is only for one that worked; a refused one says so instead, and the note is removed again when the database allows.
         if (store is not null && id >= 0 && !NoteStore(() => store.DeleteDayNote(id), "that removal")) pendingDeletes.Add(id);
+        else Notice = "Note removed. Undo remove on the Notes page puts it back.";
         Notify();
     }
     /// <summary>Puts the last removed note back on its own day, ticked or not as it was.</summary>

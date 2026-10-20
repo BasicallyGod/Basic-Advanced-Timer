@@ -61,7 +61,7 @@ public sealed class NotesPage : Grid
         {
             if (e.Key != Key.Enter || string.IsNullOrWhiteSpace(input.Text)) return;
             e.Handled = true;
-            // Only a time or a day, no words: the box keeps what was typed so it can be finished, and the notice says why.
+            // Only a day, no words: the box keeps what was typed so it can be finished, and the notice says why.
             if (!model.AddDayNote(targetDay ?? model.SelectedDate, input.Text)) return;
             input.Text = ""; targetDay = null; UpdateDayChip();
         };

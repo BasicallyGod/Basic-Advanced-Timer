@@ -46,25 +46,24 @@ public sealed class NotesHardeningTests : IDisposable
     }
 
     [Fact]
-    public void OnlyATimeOrADayIsNotANoteAndTheWordsAreKept()
+    public void OnlyADayIsNotANoteAndTheWordsAreKept()
     {
         var model = Model();
-        Assert.False(model.HasNoteWords("14:30")); Assert.False(model.HasNoteWords("@fri"));
-        Assert.True(model.HasNoteWords("Call back 14:30"));
-        Assert.False(model.AddDayNote(Now.Date, "14:30")); Assert.Empty(model.AllDayNotes); Assert.Contains("words", model.Notice);
+        Assert.False(model.HasNoteWords("@fri")); Assert.True(model.HasNoteWords("Call back 14:30"));
+        Assert.False(model.AddDayNote(Now.Date, "@fri")); Assert.Empty(model.AllDayNotes); Assert.Contains("words", model.Notice);
         Assert.True(model.AddDayNote(Now.Date, "Call back 14:30")); Assert.Single(model.AllDayNotes);
     }
 
     [AvaloniaFact]
-    public void TheNotesBoxAndQuickCaptureKeepATimeTypedWithNoWords()
+    public void TheNotesBoxAndQuickCaptureKeepADayTypedWithNoWords()
     {
         var model = Model(); var window = Open(model);
         try
         {
             var box = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "NoteInput");
-            box.Text = "14:30"; Enter(box);
-            Assert.Equal("14:30", box.Text); Assert.Empty(model.AllDayNotes); // Still there to finish.
-            box.Text = "14:30 Call back"; Enter(box);
+            box.Text = "@fri"; Enter(box);
+            Assert.Equal("@fri", box.Text); Assert.Empty(model.AllDayNotes); // Still there to finish.
+            box.Text = "Call back @fri"; Enter(box);
             Assert.Equal("", box.Text); Assert.Single(model.AllDayNotes);
         }
         finally { window.Close(); }
