@@ -127,6 +127,20 @@ public sealed class NoteDetailsTests
         finally { window.Close(); }
     }
 
+    [Fact]
+    public void MovingATickedNoteBringsItBackButChangingItsWordsDoesNot()
+    {
+        var model = Model();
+        Assert.Null(model.AddNote(new NoteEdit(NoteKind.Meeting, "Review", Wednesday.AddDays(2), new TimeSpan(12, 30, 0), new TimeSpan(13, 0, 0), null, null, false)));
+        var id = model.AllDayNotes.Single().Id; model.ToggleDayNote(id);
+        Assert.Empty(model.MeetingsOn(Wednesday.AddDays(2))); // Ticked, so off the timeline.
+        Assert.Null(model.SaveNote(id, new NoteEdit(NoteKind.Meeting, "Review (typo fixed)", Wednesday.AddDays(2), new TimeSpan(12, 30, 0), new TimeSpan(13, 0, 0), null, null, false)));
+        Assert.True(model.AllDayNotes.Single().Done); // Only the words changed.
+        Assert.Null(model.SaveNote(id, new NoteEdit(NoteKind.Meeting, "Review", Wednesday.AddDays(2), new TimeSpan(14, 0, 0), new TimeSpan(14, 30, 0), null, null, false)));
+        Assert.False(model.AllDayNotes.Single().Done); // Moved, so live again.
+        Assert.Single(model.MeetingsOn(Wednesday.AddDays(2)));
+    }
+
     [AvaloniaFact]
     public void EachRowHasADetailsButtonAndAddNoteOpensTheSamePanel()
     {
