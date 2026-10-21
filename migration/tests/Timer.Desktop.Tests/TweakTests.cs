@@ -159,7 +159,7 @@ public sealed class TweakTests
             Assert.Empty(upgraded.Query("PRAGMA foreign_key_check", r => 1));
             upgraded.Execute("UPDATE accounts SET budget_period = 'day' WHERE id = 7"); // Now allowed.
             Assert.Equal("day", upgraded.Scalar("SELECT budget_period FROM accounts WHERE id = 7"));
-            Assert.Single(Directory.GetFiles(Path.Combine(folder, "Backups"), "timer-before-format-3-*.db"));
+            Assert.Single(Directory.GetFiles(Path.Combine(folder, "Backups"), $"timer-before-format-{TimerDatabase.SchemaVersion}-*.db"));
         }
         finally { SqliteConnection.ClearAllPools(); try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
