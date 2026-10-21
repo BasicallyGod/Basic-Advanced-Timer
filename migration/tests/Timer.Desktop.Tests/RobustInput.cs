@@ -24,4 +24,12 @@ internal static class RobustInput
     { Settle(topLevel); HeadlessWindowExtensions.MouseMove(topLevel, point, modifiers); }
     public static void MouseUp(this TopLevel topLevel, Point point, MouseButton button, RawInputModifiers modifiers = RawInputModifiers.None)
     { Settle(topLevel); HeadlessWindowExtensions.MouseUp(topLevel, point, button, modifiers); }
+    /// <summary>
+    /// Moves the pointer onto a point and, if the control there has not yet reacted (a slow runner can hit-test a frame older than the layout), nudges it by a pixel and
+    /// tries again, up to a few times. For tests of what happens under the pointer, never of a move that is meant to be missed.
+    /// </summary>
+    public static void MouseMoveUntil(this TopLevel topLevel, Point point, Func<bool> reacted)
+    {
+        for (var attempt = 0; attempt < 5 && !reacted(); attempt++) MouseMove(topLevel, new Point(point.X + attempt % 2, point.Y));
+    }
 }
