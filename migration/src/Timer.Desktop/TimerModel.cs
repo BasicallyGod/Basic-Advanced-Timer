@@ -1147,7 +1147,10 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (Check(e) is { } error) return error;
         var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null) return "That note is no longer there.";
         var (text, at, end) = Compose(e); var day = e.Day.Date; var series = SeriesOf(note);
-        ChangeNote(id, n => n with { Text = text, Day = day, At = at, End = end }, false);
+        // Moving a ticked note to another day or time means it is live again, so it comes back (a meeting shows on the timeline at its new time). Changing only
+        // the words or account leaves the tick alone.
+        var moved = note.Day.Date != day || note.At != at || note.End != end;
+        ChangeNote(id, n => n with { Text = text, Day = day, At = at, End = end, Done = n.Done && !moved }, false);
         if (series is null) { if (e.Repeat is { } rule) StartSeriesFrom(dayNotes.First(n => n.Id == id), rule); }
         else if (e.AllLater)
         {
