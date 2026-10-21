@@ -233,9 +233,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     public IReadOnlyList<TimerAccount> Accounts => Catalogue().Where(a => !preferences.Accounts.Any(p => p.Name == a.Name && p.Hidden)).ToArray();
     public string? SelectedAccount { get; private set; }
     public string? ActiveAccount => Engine.Active?.Account;
-    public string AccountLabel => IsOnBreak ? "On break" : ActiveAccount ?? (Engine.Finished ? "Day finished" : "Ready when you are");
+    public string AccountLabel => IsOnBreak ? "On break" : ActiveAccount ?? (Engine.Finished ? "Day finished" : "Ready to track");
     public string Label(string account) => BreakAccount.Display(account);
-    public string Status => IsOnBreak ? "On break" : IsTracking ? "Tracking" : "Not tracking";
+    public string Status => IsOnBreak ? "On break" : IsTracking ? "Tracking" : Engine.Finished ? "Day finished" : "Ready to track";
     public bool IsTracking => Engine.Active is not null;
     public bool IsOvertime => Engine.Totals(Engine.Now).Overtime > TimeSpan.Zero;
     public bool DayStarted => Engine.DayRunning;

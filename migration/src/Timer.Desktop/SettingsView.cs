@@ -178,7 +178,7 @@ public sealed class SettingsView : ScrollViewer
             {
                 case "compact": row.Children.Add(Bar(11, 11, "Accent", 4)); row.Children.Add(Lines(false)); row.Children.Add(Bar(28, 9, "Ink")); row.Children.Add(Dots(2)); break;
                 case "minimal": row.Children.Add(Bar(14, 14, "Accent", 5)); row.Children.Add(Bar(34, 9, "Ink")); row.Children.Add(Dots(1)); break;
-                default: row.Children.Add(Bar(28, 9, "Ink")); row.Children.Add(Bar(1, 20, "Line", 0)); row.Children.Add(Bar(11, 11, "Accent", 4)); row.Children.Add(Lines(true)); row.Children.Add(Dots(2)); break;
+                default: row.Children.Add(Bar(11, 11, "Accent", 4)); row.Children.Add(Lines(true)); row.Children.Add(Bar(1, 20, "Line", 0)); row.Children.Add(Bar(28, 9, "Ink")); row.Children.Add(Dots(2)); break;
             }
             var frame = new Border { Height = 46, HorizontalAlignment = HorizontalAlignment.Stretch, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Child = row, Padding = new Thickness(6, 0), ClipToBounds = true };
             frame.Classes.Add("chip"); return frame;

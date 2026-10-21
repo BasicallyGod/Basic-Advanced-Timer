@@ -48,7 +48,7 @@ public sealed class SlimColumnTests
             Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == model.FormatCompact(model.Today(model.Accounts.First(a => a.Name == "Account one"))));
             Assert.Equal(Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, list.VerticalScrollBarVisibility);
             Click(slim, "CompactDot_" + Ui.NameKey("Account one")); Assert.Equal("Account one", model.ActiveAccount);
-            Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Working");
+            Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Tracking");
             Click(slim, "CompactPause"); Assert.False(model.IsTracking);
             Click(slim, "CompactBreak"); Assert.True(model.IsOnBreak);
             Click(slim, "CompactBreak"); Assert.False(model.IsOnBreak);

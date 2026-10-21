@@ -318,10 +318,11 @@ public sealed class PillWindow : Window
         divider = new Border { Width = 1, Height = 42 }; divider.Classes.Add("rule");
         Ui.Put(head, divider, 1);
         // The account, with its colour dot and a chevron that opens the list, the line under it that says what is happening, and how far through the day it is.
-        // A name or line too long for the room slides to its end and back (AutoScrollText) instead of being cut off.
+        // Keep long names stable; the ellipsis and full-text tooltips preserve access to the complete account name.
         account.FontWeight = Avalonia.Media.FontWeight.SemiBold;
         var nameRow = new NameRow();
-        nameRow.Children.Add(new AutoScrollText(account)); nameRow.Children.Add(chevron);
+        account.Name = "PillAccountName"; account.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis;
+        nameRow.Children.Add(account); nameRow.Children.Add(chevron);
         // How far through the working day it is, as a thin bar under the account.
         progressBar.Height = 5; progressBar.Margin = new Thickness(0, 7, 0, 0);
         progressBar.ColumnDefinitions = new ColumnDefinitions("0*,1*");
@@ -329,9 +330,10 @@ public sealed class PillWindow : Window
         var rest = new Border { CornerRadius = new CornerRadius(3), Opacity = .9 }; rest.Classes.Add("rule");
         progressFill = fill; Grid.SetColumn(fill, 0); Grid.SetColumn(rest, 1);
         progressBar.Children.Add(rest); progressBar.Children.Add(fill);
-        progressBar.Name = "DayProgress"; progressBar.IsHitTestVisible = false;
+        progressBar.Name = "DayProgress"; progressBar.IsHitTestVisible = true;
         labels = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
-        labels.Children.Add(nameRow); labels.Children.Add(new AutoScrollText(credited)); labels.Children.Add(progressBar);
+        labels.Children.Add(nameRow); credited.Name = "PillStatus"; credited.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis;
+        labels.Children.Add(credited); labels.Children.Add(progressBar);
         accountButton = Ui.Button("", ToggleExpansion, "PillAccounts");
         // The account's colour sits in a rounded badge to the left of its name, the same badge the desk's tiles wear, so the pill reads as one of them.
         badge.Child = dot;
@@ -466,9 +468,9 @@ public sealed class PillWindow : Window
                 Ui.Put(head, accountButton, 0); Ui.Put(head, timerButton, 1); Ui.Put(head, pause, 2);
                 break;
             default:
-                head.ColumnDefinitions = new ColumnDefinitions("Auto,1,*,Auto,Auto");
-                timerButton.Margin = new Thickness(0, 0, 16, 0); accountButton.Margin = new Thickness(16, 0, 16, 0);
-                Ui.Put(head, timerButton, 0); Ui.Put(head, divider, 1); Ui.Put(head, accountButton, 2); Ui.Put(head, breakButton, 3); Ui.Put(head, pause, 4);
+                head.ColumnDefinitions = new ColumnDefinitions("*,1,Auto,Auto,Auto");
+                accountButton.Margin = new Thickness(0, 0, 16, 0); timerButton.Margin = new Thickness(16, 0, 16, 0);
+                Ui.Put(head, accountButton, 0); Ui.Put(head, divider, 1); Ui.Put(head, timerButton, 2); Ui.Put(head, breakButton, 3); Ui.Put(head, pause, 4);
                 break;
         }
         labels.IsVisible = layout != "minimal";
@@ -525,7 +527,9 @@ public sealed class PillWindow : Window
         initials.Text = named is null ? "" : PillLayouts.Initials(named);
         initials.Foreground = Avalonia.Media.Brushes.Black;
         if (minimal && named is not null) initials.Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse(Ui.InkOn($"#{dotColour.R:X2}{dotColour.G:X2}{dotColour.B:X2}")));
-        ToolTip.SetTip(accountButton, model.PillStyle == "minimal" ? (model.IsOnBreak ? "On break" : named ?? "Accounts") + " · " + model.Status : "Accounts");
+        var accountTip = account.Text + " · " + model.Status;
+        ToolTip.SetTip(accountButton, accountTip); ToolTip.SetTip(account, account.Text); ToolTip.SetTip(credited, credited.Text);
+        Avalonia.Automation.AutomationProperties.SetName(accountButton, "Choose account: " + accountTip);
         // Only the minimal layout's initials sit on a coloured badge. Elsewhere the dot stands alone, since a box around it said nothing the dot did not.
         badge.Background = minimal && named is not null ? new Avalonia.Media.SolidColorBrush(dotColour) : Avalonia.Media.Brushes.Transparent;
         pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
@@ -544,7 +548,10 @@ public sealed class PillWindow : Window
         progressBar.ColumnDefinitions[0].Width = new GridLength(done, GridUnitType.Star);
         progressBar.ColumnDefinitions[1].Width = new GridLength(1.0 - done, GridUnitType.Star);
         progressFill.Classes.Set("progressOvertime", model.IsOvertime && !model.IsOnBreak); progressFill.Classes.Set("progressBreak", model.IsOnBreak);
-        ToolTip.SetTip(progressBar, progress is null ? "No working day today" : $"{(int)(done * 100)}% of the working day");
+        var plan = model.Engine.Plan(model.Engine.Now);
+        var progressTip = progress is null ? "No working day today" : $"{(int)(done * 100)}% of today's working day · {plan.Start:HH:mm}–{plan.End:HH:mm}";
+        ToolTip.SetTip(progressBar, progressTip);
+        Avalonia.Automation.AutomationProperties.SetName(progressBar, progressTip);
         // The capsule's own colour says what is happening, so the pill keeps the ordinary shadow in every state.
         var shadow = (model.Shadows, (string?)null, ActualThemeVariant);
         if (lastShadow != shadow) { lastShadow = shadow; Ui.SetShadow(shadowHost, model.Shadows, null); }

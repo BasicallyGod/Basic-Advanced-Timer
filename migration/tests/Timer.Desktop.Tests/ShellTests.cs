@@ -55,7 +55,7 @@ public sealed class ShellTests
             Dispatcher.UIThread.RunJobs();
             using var initialFrame = window.CaptureRenderedFrame();
             var labels = window.GetVisualDescendants().OfType<TextBlock>().ToArray();
-            var idle = labels.Single(x => x.Text == "Not tracking");
+            var idle = labels.Single(x => x.Text == "Ready to track");
             var overtime = labels.Single(x => x.Text is not null && x.Text.StartsWith("Overtime"));
             Assert.NotEqual(idle.Foreground, overtime.Foreground);
             var overtimeColour = ((ISolidColorBrush)overtime.Foreground!).Color;
@@ -393,7 +393,7 @@ public sealed class ShellTests
             Assert.Equal("Account one", model.ActiveAccount);
             var timerButton = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDashboard");
             var accountButton = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillAccounts");
-            Assert.True(timerButton.Bounds.X < accountButton.Bounds.X && accountButton.Bounds.X < pause.Bounds.X);
+            Assert.True(accountButton.Bounds.X < timerButton.Bounds.X && timerButton.Bounds.X < pause.Bounds.X);
             var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();
             Save(coordinator.Pill, Path.Combine(output, "pill-classic-tracking.png"));
             model.TogglePause(); Save(coordinator.Pill, Path.Combine(output, "pill-classic-paused.png"));
