@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Notification refinements | pending | The smallest pill puts reminder actions below a two-line title. Notification lists scroll, show account context and full-title tooltips, and refresh edited text and countdowns. Badges count only items needing attention. Dismiss acknowledges a meeting alert without completing it or recording time; its end prompt and dismissal across restarts are preserved, and moving it clears the wait. |
 | Notes list refinements | pending | Titles wrap to two lines with full-text tooltips and open the shared editor. Small edit/remove controls retain reserved space. Tasks, meetings and deadlines use checkbox, clock and flag indicators; filters say Meetings and Overdue. Coming up titles use the same wrapping limit. |
 | Shared Notes editor | pending | Add item and Details open the same centred, themed dashboard dialog with a dimmed backdrop and scrolling content. Quick-add stays anchored. Meetings offer Add end time; deadlines offer Add due time and no longer default to 09:00. Enabled time fields validate before saving. |
 | Moving a ticked note brings it back | pending | Saving a ticked note in Details with a new day or time unticks it, so a meeting shows on the timeline at its new time. Changing only the words or account leaves the tick as it was. |

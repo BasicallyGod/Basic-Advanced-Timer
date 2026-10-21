@@ -18,14 +18,18 @@ public sealed class ReminderCard : Border
     private readonly Button snooze, no, done, moreButton;
     private readonly bool inPill;
     private long shownId = -1;
-    private bool followup;
+    private bool followup, meeting;
+    private bool? minimalApplied;
+    private readonly Grid row;
+    private readonly StackPanel words, buttons;
+    private readonly IconGlyph icon;
     public ReminderCard(TimerModel model, bool inPill)
     {
         this.model = model; this.inPill = inPill; Name = "ReminderCard";
         snooze = ReminderUi.SnoozeButton(model, () => shownId, "ReminderSnooze");
         // After a meeting the same card asks whether it took place: No ticks it off, Yes opens Add time on its hours so the account can be chosen.
         no = Ui.Button("No", () => { if (shownId >= 0) model.DoneReminder(shownId); }, "ReminderNo");
-        done = Ui.Button("Done", () => { if (shownId < 0) return; if (followup) model.LogMeeting(shownId); else model.DoneReminder(shownId); }, "ReminderDone");
+        done = Ui.Button("Done", () => { if (shownId < 0) return; if (followup) model.LogMeeting(shownId); else if (meeting) model.DismissMeetingReminder(shownId); else model.DoneReminder(shownId); }, "ReminderDone");
         foreach (var button in new[] { snooze, no, done }) { button.Classes.Add("toolButton"); button.Classes.Add("quiet"); button.Height = 28; button.Padding = new Thickness(10, 0); button.FontSize = 12; }
         done.Classes.Add("mainAction");
         // "+2 more" opens the whole list, so a busy day is one tap away without the card growing.
@@ -33,12 +37,12 @@ public sealed class ReminderCard : Border
         var listFlyout = new Flyout { Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight };
         listFlyout.Opening += (_, _) => listFlyout.Content = new NotificationsPanel(model, () => listFlyout.Hide());
         moreButton.Flyout = listFlyout; ToolTip.SetTip(moreButton, "See everything waiting");
-        var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
+        words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
         words.Children.Add(title); words.Children.Add(sub);
         words.PointerPressed += (_, e) => { if (TopLevel.GetTopLevel(this) is Window window) Ui.CloseMenus(window); model.RequestNotes(); e.Handled = true; };
-        var icon = new IconGlyph(IconKind.Clock) { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-        var buttons = Ui.Horizontal(snooze, no, done); buttons.Spacing = 6; buttons.Margin = new Thickness(6, 0, 0, 0);
-        var row = Ui.Grid("Auto,*,Auto,Auto", "Auto");
+        icon = new IconGlyph(IconKind.Clock) { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+        buttons = Ui.Horizontal(snooze, no, done); buttons.Spacing = 6; buttons.Margin = new Thickness(6, 0, 0, 0);
+        row = Ui.Grid("Auto,*,Auto,Auto", "Auto");
         Ui.Put(row, icon); Ui.Put(row, words, 1); Ui.Put(row, moreButton, 2); Ui.Put(row, buttons, 3);
         Child = row; IsVisible = false;
         if (inPill) { Padding = new Thickness(16, 6, 14, 12); }
@@ -50,6 +54,23 @@ public sealed class ReminderCard : Border
         model.PropertyChanged += (_, _) => Sync();
         Sync();
     }
+    private void LayoutForPill()
+    {
+        var minimal = inPill && model.PillStyle == "minimal";
+        if (minimalApplied == minimal) return;
+        minimalApplied = minimal;
+        row.Children.Clear();
+        row.ColumnDefinitions = new ColumnDefinitions(minimal ? "Auto,*,Auto" : "Auto,*,Auto,Auto");
+        row.RowDefinitions = new RowDefinitions(minimal ? "Auto,Auto" : "Auto");
+        row.RowSpacing = minimal ? 6 : 0;
+        Grid.SetColumnSpan(words, minimal ? 2 : 1);
+        Ui.Put(row, icon); Ui.Put(row, words, 1);
+        Ui.Put(row, moreButton, minimal ? 1 : 2, row: minimal ? 1 : 0);
+        Ui.Put(row, buttons, minimal ? 2 : 3, row: minimal ? 1 : 0);
+        title.MaxLines = minimal ? 2 : 1;
+        title.TextWrapping = minimal ? Avalonia.Media.TextWrapping.Wrap : Avalonia.Media.TextWrapping.NoWrap;
+    }
+
     private void Sync()
     {
         var reminder = inPill ? model.ActiveReminder : model.DashboardReminder;
@@ -58,16 +79,20 @@ public sealed class ReminderCard : Border
         shownId = reminder.Note.Id;
         title.Text = Timer.Core.NoteShorthand.Display(reminder.Note, model.AccountNames);
         sub.Text = model.ReminderLine(reminder);
+        ToolTip.SetTip(title, title.Text); ToolTip.SetTip(sub, sub.Text);
+        ToolTip.SetTip(words, title.Text + "\n" + sub.Text + "\n" + reminder.DueAt.ToString("ddd d MMM HH:mm") + (Timer.Core.NoteShorthand.AccountOf(reminder.Note.Text, model.AccountNames) is { } account ? "\n" + account : ""));
+        LayoutForPill();
         followup = reminder.State == ReminderState.Followup;
-        snooze.IsVisible = !followup; no.IsVisible = followup; done.Content = followup ? "Yes" : "Done";
+        meeting = TimerModel.KindOf(reminder.Note) == NoteKind.Meeting;
+        snooze.IsVisible = !followup; no.IsVisible = followup; done.Content = followup ? "Yes" : meeting ? "Dismiss" : "Done";
         var others = model.MoreReminders(reminder);
         moreButton.IsVisible = others > 0; moreButton.Content = $"+{others} more";
         var late = reminder.State == ReminderState.Overdue;
         sub.Classes.Set("overtime", late && !inPill); sub.Classes.Set("muted", !late || inPill);
         Classes.Set("late", late && !inPill);
-        ToolTip.SetTip(snooze, "Remind me again in a few minutes"); ToolTip.SetTip(no, "It did not take place"); ToolTip.SetTip(done, followup ? "It took place. Add its time" : null);
+        ToolTip.SetTip(snooze, "Remind me again in a few minutes"); ToolTip.SetTip(no, "It did not take place"); ToolTip.SetTip(done, followup ? "It took place. Add its time" : meeting ? "Dismiss this alert without completing the meeting or recording time" : "Mark this item done");
         Avalonia.Automation.AutomationProperties.SetName(snooze, "Snooze reminder: " + title.Text); Avalonia.Automation.AutomationProperties.SetName(no, "Meeting did not take place: " + title.Text);
-        Avalonia.Automation.AutomationProperties.SetName(done, (followup ? "Meeting took place, add its time: " : "Mark done: ") + title.Text); Avalonia.Automation.AutomationProperties.SetName(moreButton, $"{others} more waiting");
+        Avalonia.Automation.AutomationProperties.SetName(done, (followup ? "Meeting took place, add its time: " : meeting ? "Dismiss meeting reminder: " : "Mark done: ") + title.Text); Avalonia.Automation.AutomationProperties.SetName(moreButton, $"{others} more waiting");
         Avalonia.Automation.AutomationProperties.SetName(this, "Reminder: " + title.Text);
     }
 }
