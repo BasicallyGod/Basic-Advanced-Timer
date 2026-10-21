@@ -9,10 +9,10 @@ using Timer.Core;
 namespace Timer.Desktop;
 
 /// <summary>
-/// The Notes page: the notes for the day the dashboard is showing, one line each, with Add note and a quick box to add one, and what is coming up beside them.
-/// A note's kind, day, times, account and repeat are set in its Details (a flyout, NoteDetails), and the shorthand (14:30, !, @fri, #Account, every mon) still
-/// works in the quick box. What was read from the words shows as quiet marks on the row. The page is built once and listens to the model itself, so a tick of the clock never rebuilds it under the pointer, and while a note's words are
-/// being edited it waits until the box is left, so typing is never interrupted.
+/// The Notes page: the notes for the day the dashboard is showing, one line each, with Add item and a quick box to add one, and what is coming up beside them.
+/// A note's kind, day, times, account and repeat are set in the shared editor (NoteDetails), and the shorthand (14:30, !, @fri, #Account, every mon) still
+/// works in the quick box. Titles open the editor and wrap to two lines, with full text in tooltips. The page listens to meaningful model changes,
+/// so a clock tick never rebuilds its rows. Editing happens separately in the modal dialog.
 /// </summary>
 public sealed class NotesPage : Grid
 {
@@ -21,10 +21,10 @@ public sealed class NotesPage : Grid
     private readonly ComingUpView coming;
     private readonly TextBlock heading = new() { FontSize = 16, FontWeight = FontWeight.SemiBold };
     private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Quick add: type a note, press Enter", Padding = new Thickness(10, 7), FontSize = 14 };
-    private string shown = ""; private bool dirty; private Button undoRemove = null!;
+    private string shown = ""; private Button undoRemove = null!;
     private string kind = "all"; // Which notes the day's list shows: all, tasks, events or deadlines.
     private readonly StackPanel tabs = new() { Orientation = Orientation.Horizontal, Spacing = 2 };
-    private static readonly (string Key, string Text)[] Kinds = { ("all", "All"), ("tasks", "Tasks"), ("events", "Events"), ("deadlines", "Deadlines"), ("missed", "Missed") };
+    private static readonly (string Key, string Text)[] Kinds = { ("all", "All"), ("tasks", "Tasks"), ("events", "Meetings"), ("deadlines", "Deadlines"), ("missed", "Overdue") };
     private static readonly (int Days, string Text)[] Ranges = { (7, "Next 7 days"), (30, "Next 30 days"), (180, "Next 6 months") };
     private DateTime? targetDay; private Border dayChip = null!; private readonly TextBlock chipText = new() { FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
 
@@ -38,8 +38,8 @@ public sealed class NotesPage : Grid
         var headRow = Ui.Grid("*,Auto,Auto"); headRow.ColumnSpacing = 6; Ui.Put(headRow, heading);
         // A removed note can be put back, so one stray click on the cross never loses it.
         undoRemove = Ui.DialogButton("Undo remove", () => model.RestoreRemovedNote(), "NoteUndoRemove"); undoRemove.Height = 32; undoRemove.IsVisible = false; Ui.Put(headRow, undoRemove, 1);
-        // Add note opens the same panel as a note's Details, so a meeting, a deadline or a repeat is set with controls, not typed. The box below stays for quick text.
-        var add = Ui.DialogButton("Add note", () => { }, "NoteAddButton", true); add.Height = 32; add.Classes.Add("primary"); add.Flyout = DetailsFlyout(null); Ui.Put(headRow, add, 2);
+        // Add and edit share a modal editor, so its position is independent of the row and quick-add field.
+        var add = Ui.DialogButton("Add item", () => ShowDetails(null), "NoteAddButton", true); add.Height = 32; add.Classes.Add("primary"); Ui.Put(headRow, add, 2);
         Ui.Put(leftGrid, headRow); Ui.Put(leftGrid, tabs, row: 1);
         Ui.Put(leftGrid, Ui.WithMoreBelow(new ScrollViewer { Content = rows, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 2);
         // A note can be put on any day: the small calendar beside the box picks it for the next note, and it shows as a chip until the note is added.
@@ -78,16 +78,12 @@ public sealed class NotesPage : Grid
         Rebuild();
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += OnModel; };
         DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= OnModel; };
-        // A rebuild that was held back while a note was being edited happens as soon as that box is left.
-        AddHandler(LostFocusEvent, (_, _) => { if (dirty && !Editing()) Rebuild(); });
     }
 
-    /// <summary>The flyout for adding a note (note null) or for one note's Details. Its panel is built each time it opens, so it always starts from the note as it is.</summary>
-    private Flyout DetailsFlyout(DayNote? note)
+    private void ShowDetails(DayNote? note)
     {
-        var flyout = new Flyout { Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight };
-        flyout.Opening += (_, _) => flyout.Content = NoteDetails.Build(model, note, model.SelectedDate, () => flyout.Hide());
-        return flyout;
+        if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard)
+            dashboard.Dialogs.Show(new NoteEditorDialog(model, note, model.SelectedDate));
     }
 
     private void UpdateDayChip()
@@ -96,14 +92,11 @@ public sealed class NotesPage : Grid
         if (targetDay is { } day) chipText.Text = "For " + day.ToString("ddd d MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
     }
 
-    private bool Editing() => TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox box && box != input && this.IsVisualAncestorOf(box);
-
     // The clock ticks every second and the model announces itself every few; only a change to what the page shows rebuilds it.
     private void OnModel(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(TimerModel.Elapsed)) return;
         if (Signature() == shown) return;
-        if (Editing()) { dirty = true; return; }
         Rebuild();
     }
 
@@ -112,15 +105,15 @@ public sealed class NotesPage : Grid
 
     public void Rebuild()
     {
-        dirty = false; shown = Signature(); rows.Children.Clear();
+        shown = Signature(); rows.Children.Clear();
         var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
         var missed = model.MissedNotes();
-        heading.Text = kind == "missed" ? "Missed" : model.SelectedDate.ToString("dddd d MMMM", british);
+        heading.Text = kind == "missed" ? "Overdue" : model.SelectedDate.ToString("dddd d MMMM", british);
         undoRemove.IsVisible = model.LastRemovedNote is not null;
         tabs.Children.Clear();
         foreach (var (key, text) in Kinds)
         {
-            var label = key == "missed" && missed.Count > 0 ? $"Missed {missed.Count}" : text;
+            var label = key == "missed" && missed.Count > 0 ? $"Overdue {missed.Count}" : text;
             var picked = key; var tab = Ui.Button(label, () => { kind = picked; Rebuild(); }, "NotesFilter_" + key);
             tab.Classes.Add("flat"); tab.Height = 28; tab.Padding = new Thickness(10, 0); tab.FontSize = 13; tab.Classes.Set("filterOn", kind == key); tabs.Children.Add(tab);
         }
@@ -128,7 +121,7 @@ public sealed class NotesPage : Grid
         {
             "tasks" => DayNotes.IsTask(n), "events" => n.At is not null && !DayNotes.IsDeadline(n), "deadlines" => DayNotes.IsDeadline(n), _ => true
         }).ToList();
-        if (notes.Count == 0) rows.Children.Add(Ui.Text(kind == "all" ? "No notes for this day." : kind == "missed" ? "Nothing missed. Tasks and deadlines you did not tick off on an earlier day show here." : "Nothing of this kind on this day.", 13, "muted"));
+        if (notes.Count == 0) rows.Children.Add(Ui.Text(kind == "all" ? "No notes for this day." : kind == "missed" ? "Nothing overdue. Tasks and deadlines you did not tick off on an earlier day show here." : "Nothing of this kind on this day.", 13, "muted"));
         // Missed notes come from many days, so they are grouped under their day, with one button to carry the lot over to today.
         if (kind == "missed" && notes.Count > 0)
         {
@@ -147,11 +140,14 @@ public sealed class NotesPage : Grid
             tick.Click += (_, _) => model.ToggleDayNote(id);
             // The words show without the ! and the #Tag, which have their own marks on the right.
             var shownWords = NoteShorthand.Display(note, model.AccountNames);
-            var text = new TextBox { Name = "NoteText_" + id, Text = shownWords, TextWrapping = TextWrapping.NoWrap, AcceptsReturn = false, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(4, 2), FontSize = 14, Opacity = note.Done ? .55 : 1, VerticalAlignment = VerticalAlignment.Center };
-            // Each control says which note it is for, since the rows look alike to a screen reader.
-            Avalonia.Automation.AutomationProperties.SetName(tick, "Done: " + shownWords); Avalonia.Automation.AutomationProperties.SetName(text, "Note text");
-            // TextChanged does not fire headless, so the text property is watched instead.
-            text.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && text.Text != shownWords) model.SetDayNoteWords(id, text.Text ?? ""); };
+            var title = new TextBlock { Text = shownWords, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxLines = 2, FontSize = 14 };
+            var text = Ui.Button("", () => ShowDetails(model.AllDayNotes.FirstOrDefault(n => n.Id == id)), "NoteText_" + id);
+            text.Content = title; text.Classes.Add("flat"); text.Classes.Add("noteTitle");
+            text.HorizontalAlignment = HorizontalAlignment.Stretch; text.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+            text.Padding = new Thickness(4, 5); text.Opacity = note.Done ? .55 : 1;
+            ToolTip.SetTip(text, shownWords);
+            Avalonia.Automation.AutomationProperties.SetName(tick, "Done: " + shownWords);
+            Avalonia.Automation.AutomationProperties.SetName(text, "Edit item: " + shownWords);
             // A note that repeats asks which: just this one, or this one and every later one.
             var repeats = model.SeriesOf(note) is not null; Flyout? removeFlyout = null;
             var remove = Ui.IconButton(IconKind.Close, "Remove", "NoteRemove_" + id, () => { if (!repeats) model.RemoveDayNote(id); });
@@ -163,16 +159,30 @@ public sealed class NotesPage : Grid
                 removeFlyout = new Flyout { Content = choice, Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight }; remove.Flyout = removeFlyout;
             }
             remove.Width = 26; remove.Height = 26; remove.Classes.Add("hoverReveal"); Avalonia.Automation.AutomationProperties.SetName(remove, "Remove note: " + shownWords);
-            // Everything else about the note (kind, day, times, account, repeat) is in its Details, which open beside the row.
-            var details = Ui.Button("Details", () => { }, "NoteDetails_" + id); details.Classes.Add("toolButton"); details.Classes.Add("quiet"); details.Classes.Add("hoverReveal"); details.Height = 26; details.Padding = new Thickness(10, 0); details.FontSize = 12;
-            Avalonia.Automation.AutomationProperties.SetName(details, "Details: " + shownWords); details.Flyout = DetailsFlyout(note);
-            var row = Ui.Grid("Auto,*,92,Auto,Auto"); row.VerticalAlignment = VerticalAlignment.Center; row.Margin = new Thickness(0, 2);
-            Ui.Put(row, tick); Ui.Put(row, text, 1);
+            // The same modal editor handles both new and existing items.
+            var details = Ui.IconButton(IconKind.Edit, "Edit item", "NoteDetails_" + id, () => ShowDetails(model.AllDayNotes.FirstOrDefault(n => n.Id == id))); details.Classes.Add("toolButton"); details.Classes.Add("quiet"); details.Classes.Add("hoverReveal"); details.Width = 26; details.Height = 26; details.Padding = new Thickness(0); details.FontSize = 12;
+            Avalonia.Automation.AutomationProperties.SetName(details, "Details: " + shownWords);
+            var row = Ui.Grid("28,*,92,Auto,54"); row.Name = "NoteRow_" + id; row.VerticalAlignment = VerticalAlignment.Center; row.Margin = new Thickness(0, 2);
+            Control indicator = tick;
+            if (TimerModel.KindOf(note) == NoteKind.Meeting)
+            {
+                indicator = new Border { Name = "NoteMeetingMark_" + id, Width = 24, Height = 24, Child = new IconGlyph(IconKind.Clock) { TintKey = "Muted", VerticalAlignment = VerticalAlignment.Center } };
+                ToolTip.SetTip(indicator, "Meeting");
+                Avalonia.Automation.AutomationProperties.SetName(indicator, "Meeting: " + shownWords);
+            }
+            if (DayNotes.IsDeadline(note))
+            {
+                var deadline = Ui.IconButton(IconKind.Flag, note.Done ? "Reopen deadline" : "Mark deadline done", "NoteDeadlineMark_" + id, () => model.ToggleDayNote(id));
+                ((IconGlyph)deadline.Content!).TintKey = "Finish";
+                deadline.Width = 24; deadline.Height = 24; deadline.Padding = new Thickness(0); deadline.Opacity = note.Done ? .55 : 1;
+                Avalonia.Automation.AutomationProperties.SetName(deadline, (note.Done ? "Reopen deadline: " : "Mark deadline done: ") + shownWords);
+                indicator = deadline;
+            }
+            Ui.Put(row, indicator); Ui.Put(row, text, 1);
             // What was read from the words is quiet marks on the right: the time, a flag for a deadline, a repeat mark and the account's dot.
             var marks = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 6, 0) };
             // The times line up in a column of their own, so a list of notes reads down.
             if (note.At is not null) { var when = Ui.Text(NoteTimes.Of(note), 12.5, "muted"); when.Name = "NoteTime_" + id; when.HorizontalAlignment = HorizontalAlignment.Right; when.VerticalAlignment = VerticalAlignment.Center; Ui.Put(row, when, 2); }
-            if (DayNotes.IsDeadline(note)) { var flag = new Border { Name = "NoteDeadlineMark_" + id, Child = new IconGlyph(IconKind.Flag) { TintKey = "Finish" } }; ToolTip.SetTip(flag, "Deadline"); marks.Children.Add(flag); }
             if (model.SeriesOf(note) is { } series) { var again = new Border { Name = "NoteRepeatMark_" + id, Child = new IconGlyph(IconKind.Week) { TintKey = "Muted" } }; ToolTip.SetTip(again, series.Rule.Words()); marks.Children.Add(again); }
             if (NoteShorthand.AccountOf(note.Text, model.AccountNames) is { } linked && model.Accounts.FirstOrDefault(a => a.Name == linked) is { } account)
             {
@@ -261,11 +271,13 @@ public sealed class ComingUpView : StackPanel
             else if (note.At is not null)
             {
                 var mark = new Border { Name = "ComingEvent_" + id, Width = 24, Height = 24, Child = new IconGlyph(IconKind.Clock) { TintKey = "Muted", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
-                ToolTip.SetTip(mark, "Event"); Avalonia.Automation.AutomationProperties.SetName(mark, "Event: " + note.Text); tick = mark;
+                ToolTip.SetTip(mark, "Meeting"); Avalonia.Automation.AutomationProperties.SetName(mark, "Meeting: " + note.Text); tick = mark;
             }
             else { var box = new CheckBox { Name = "ComingTick_" + id, IsChecked = false, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center }; box.Click += (_, _) => model.ToggleDayNote(id); Avalonia.Automation.AutomationProperties.SetName(box, "Done: " + note.Text); tick = box; }
             var at = Ui.Text(NoteTimes.Of(note), 12, "muted"); at.VerticalAlignment = VerticalAlignment.Top; at.Margin = new Thickness(8, 3, 0, 0);
-            var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(new TextBlock { Text = NoteShorthand.Display(note, model.AccountNames), FontSize = 14, TextWrapping = TextWrapping.Wrap });
+            var words = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+            var title = new TextBlock { Text = NoteShorthand.Display(note, model.AccountNames), FontSize = 14, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxLines = 2 };
+            ToolTip.SetTip(title, title.Text); words.Children.Add(title);
             if (NoteChips.AccountChip(model, note, this, "ComingAccount_" + id, interactive: false) is { } account) words.Children.Add(account);
             var row = Ui.Grid("Auto,*,Auto"); tick.VerticalAlignment = VerticalAlignment.Top; tick.Margin = new Thickness(0, 0, 4, 0); Ui.Put(row, tick); Ui.Put(row, words, 1); Ui.Put(row, at, 2); Children.Add(row);
         }

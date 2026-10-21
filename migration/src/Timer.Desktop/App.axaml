@@ -198,6 +198,16 @@
       <Setter Property="Background" Value="{DynamicResource Surface}" />
       <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
     </Style>
+    <!-- Notes inputs use the same quiet surfaces and hairline borders as their containing card. -->
+    <Style Selector="StackPanel.noteEditor TextBox, StackPanel.noteEditor ComboBox">
+      <Setter Property="Background" Value="{DynamicResource Panel}" />
+      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="Padding" Value="10,6" />
+    </Style>
     <!-- Small custom date picker: no system Calendar's heavy ruled grid or bright blue selection. -->
     <Style Selector="Border.softCalendar">
       <Setter Property="Background" Value="{DynamicResource Surface}" />
@@ -231,6 +241,7 @@
     <Style Selector="CalendarDayButton:today /template/ TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
     <Style Selector="CalendarDayButton:today /template/ Border#Root"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="CalendarItem /template/ Button"><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="Button.noteTitle"><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <!-- Quiet row tools: hidden until the pointer is over the row or it has focus (Ui.RevealOnHover). -->
     <Style Selector="Button.hoverReveal"><Setter Property="Opacity" Value="0" /></Style>
     <Style Selector=".revealing Button.hoverReveal"><Setter Property="Opacity" Value="1" /></Style>

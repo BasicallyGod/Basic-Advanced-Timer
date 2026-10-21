@@ -117,14 +117,14 @@ public sealed class SlimColumnTests
         try
         {
             Click(window, "NotesTab");
-            int Rows() => window.GetVisualDescendants().OfType<TextBox>().Count(t => t.Name?.StartsWith("NoteText_") == true);
+            int Rows() => window.GetVisualDescendants().OfType<Button>().Count(t => t.Name?.StartsWith("NoteText_") == true);
             var all = Rows(); Assert.True(all >= 5);
             Click(window, "NotesFilter_tasks"); var tasks = Rows(); Assert.True(tasks > 0 && tasks < all);
-            Assert.All(window.GetVisualDescendants().OfType<TextBox>().Where(t => t.Name?.StartsWith("NoteText_") == true), t => Assert.True(DayNotes.IsTask(model.AllDayNotes.Single(n => "NoteText_" + n.Id == t.Name))));
-            Click(window, "NotesFilter_deadlines"); Assert.All(window.GetVisualDescendants().OfType<TextBox>().Where(t => t.Name?.StartsWith("NoteText_") == true), t => Assert.True(DayNotes.IsDeadline(model.AllDayNotes.Single(n => "NoteText_" + n.Id == t.Name))));
-            Click(window, "NotesFilter_events"); Assert.All(window.GetVisualDescendants().OfType<TextBox>().Where(t => t.Name?.StartsWith("NoteText_") == true), t => Assert.NotNull(model.AllDayNotes.Single(n => "NoteText_" + n.Id == t.Name).At));
+            Assert.All(window.GetVisualDescendants().OfType<Button>().Where(t => t.Name?.StartsWith("NoteText_") == true), t => Assert.True(DayNotes.IsTask(model.AllDayNotes.Single(n => "NoteText_" + n.Id == t.Name))));
+            Click(window, "NotesFilter_deadlines"); Assert.All(window.GetVisualDescendants().OfType<Button>().Where(t => t.Name?.StartsWith("NoteText_") == true), t => Assert.True(DayNotes.IsDeadline(model.AllDayNotes.Single(n => "NoteText_" + n.Id == t.Name))));
+            Click(window, "NotesFilter_events"); Assert.All(window.GetVisualDescendants().OfType<Button>().Where(t => t.Name?.StartsWith("NoteText_") == true), t => Assert.NotNull(model.AllDayNotes.Single(n => "NoteText_" + n.Id == t.Name).At));
             Click(window, "NotesFilter_all"); Assert.Equal(all, Rows());
-            Assert.Equal("Add note", Find<Button>(window, "NoteAddButton").Content);
+            Assert.Equal("Add item", Find<Button>(window, "NoteAddButton").Content);
         }
         finally { window.Close(); }
     }
