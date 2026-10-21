@@ -10,7 +10,7 @@ namespace Timer.Desktop;
 public enum NoteKind { Task, Meeting, Deadline }
 
 /// <summary>What the Details panel asks to be saved: the kind of note, its words, day, times, account and repeat, and whether a change to a repeating note reaches the later ones.</summary>
-public sealed record NoteEdit(NoteKind Kind, string Words, DateTime Day, TimeSpan? Start, TimeSpan? End, string? Account, Recurrence? Repeat, bool AllLater);
+public sealed record NoteEdit(NoteKind Kind, string Words, DateTime Day, TimeSpan? Start, TimeSpan? End, string? Account, Recurrence? Repeat, bool AllLater, bool HasDate = true);
 
 /// <summary>
 /// The panel that adds or edits a note, so none of it has to be typed in the shorthand: a Task, Meeting or Deadline, its words, day, start and end, account, and how it
@@ -35,7 +35,7 @@ public static class NoteDetails
     }
 
     /// <summary>Builds the panel for a new note on <paramref name="day"/> (note null), or for an existing note. <paramref name="close"/> closes the editor.</summary>
-    public static Control Build(TimerModel model, DayNote? note, DateTime day, Action close)
+    public static Control Build(TimerModel model, DayNote? note, DateTime day, Action close, bool hasDate = true)
     {
         var series = note is null ? null : model.SeriesOf(note);
         var kind = note is null ? NoteKind.Task : TimerModel.KindOf(note);
@@ -50,25 +50,35 @@ public static class NoteDetails
         var startBox = new TextBox { Name = "NoteDetailsStart", Text = note?.At is { } at ? at.ToString(@"hh\:mm") : "", Watermark = "HH:mm" };
         var endBox = new TextBox { Name = "NoteDetailsEnd", Text = note?.End is { } until ? until.ToString(@"hh\:mm") : "", Watermark = "HH:mm" };
         var startField = Field("Start", startBox); var endField = Field("End", endBox);
+        var addDate = new CheckBox { Name = "NoteDetailsAddDate", Content = "Add date", IsChecked = note?.HasDate ?? hasDate, IsEnabled = series is null };
+        if (series is not null) ToolTip.SetTip(addDate, "Recurring items need a date.");
+        Control? dateField = null; SoftDatePicker? calendar = null; Action showScheduling = () => { };
         var addTime = new CheckBox { Name = "NoteDetailsAddTime", Content = "Add due time", IsChecked = note?.At is not null };
         var addEnd = new CheckBox { Name = "NoteDetailsAddEnd", Content = "Add end time", IsChecked = note?.End is not null };
         var times = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 10 };
         void ShowKind()
         {
             foreach (var (k, button) in kindButtons) button.Classes.Set("filterOn", k == kind);
-            addTime.IsVisible = kind == NoteKind.Deadline;
+            var dated = kind != NoteKind.Task || addDate.IsChecked == true;
+            addDate.IsVisible = kind == NoteKind.Task;
+            if (dateField is not null) dateField.IsVisible = dated;
+            if (!dated && calendar is not null) calendar.IsVisible = false;
+            addTime.IsVisible = dated && kind != NoteKind.Meeting;
+            addTime.Content = kind == NoteKind.Deadline ? "Add due time" : "Add time";
             addEnd.IsVisible = kind == NoteKind.Meeting;
-            startField.IsVisible = kind == NoteKind.Meeting || kind == NoteKind.Deadline && addTime.IsChecked == true;
+            startField.IsVisible = kind == NoteKind.Meeting || dated && addTime.IsChecked == true;
             endField.IsVisible = kind == NoteKind.Meeting && addEnd.IsChecked == true;
             times.IsVisible = startField.IsVisible;
             times.ColumnDefinitions = new ColumnDefinitions(endField.IsVisible ? "*,*" : "*,0");
-            ((TextBlock)((StackPanel)startField).Children[0]).Text = kind == NoteKind.Deadline ? "Due time (optional)" : "Start";
+            ((TextBlock)((StackPanel)startField).Children[0]).Text = kind == NoteKind.Deadline ? "Due time" : kind == NoteKind.Task ? "Time" : "Start";
+            showScheduling();
         }
         foreach (var (k, text) in new[] { (NoteKind.Task, "Task"), (NoteKind.Meeting, "Meeting"), (NoteKind.Deadline, "Deadline") })
         {
             var picked = k; var button = Ui.Button(text, () => { kind = picked; ShowKind(); }, "NoteKind_" + text); button.Classes.Add("flat"); button.Height = 28; button.Padding = new Thickness(12, 0); button.FontSize = 13; kindButtons[k] = button; kinds.Children.Add(button);
         }
         root.Children.Add(kinds);
+        addDate.IsCheckedChanged += (_, _) => ShowKind();
         addTime.IsCheckedChanged += (_, _) => ShowKind();
         addEnd.IsCheckedChanged += (_, _) => ShowKind();
 
@@ -77,14 +87,15 @@ public static class NoteDetails
 
         // Keep calendar selection inside the editor so it scrolls within the same card.
         var dayText = new TextBlock { Name = "NoteDetailsDay", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, MinWidth = 120, TextAlignment = Avalonia.Media.TextAlignment.Center };
-        var calendar = new SoftDatePicker { Name = "NoteDetailsCalendar", IsVisible = false };
+        calendar = new SoftDatePicker { Name = "NoteDetailsCalendar", IsVisible = false };
         void ShowDay() { dayText.Text = date.ToString("ddd d MMM yyyy", british); calendar.View(date, date); }
         var previous = Ui.IconButton(IconKind.Previous, "Day before", "NoteDetailsPrevious", () => { date = date.AddDays(-1); ShowDay(); });
         var next = Ui.IconButton(IconKind.Next, "Day after", "NoteDetailsNext", () => { date = date.AddDays(1); ShowDay(); });
         var pick = Ui.IconButton(IconKind.Today, "Pick a day", "NoteDetailsPick", () => calendar.IsVisible = !calendar.IsVisible);
         calendar.DayPicked += picked => { date = picked.Date; ShowDay(); calendar.IsVisible = false; };
         var dayRow = Ui.Grid("Auto,*,Auto,Auto"); Ui.Put(dayRow, previous); Ui.Put(dayRow, dayText, 1); Ui.Put(dayRow, next, 2); Ui.Put(dayRow, pick, 3);
-        root.Children.Add(Field("Day", dayRow)); root.Children.Add(calendar); ShowDay();
+        dateField = Field("Day", dayRow, "NoteDetailsDateField");
+        root.Children.Add(addDate); root.Children.Add(dateField); root.Children.Add(calendar); ShowDay();
 
         root.Children.Add(addTime); root.Children.Add(addEnd);
         Grid.SetColumn(endField, 1); times.Children.Add(startField); times.Children.Add(endField); root.Children.Add(times);
@@ -116,7 +127,8 @@ public static class NoteDetails
         var later = new RadioButton { Name = "NoteDetailsScopeLater", GroupName = "scope" + (note?.Id ?? 0), Content = "This and all later" };
         var scope = new StackPanel { Spacing = 2, IsVisible = series is not null };
         scope.Children.Add(Ui.Text("Apply changes to", 12, "muted")); scope.Children.Add(one); scope.Children.Add(later);
-        void ShowScope() { repeatField.IsEnabled = series is null || later.IsChecked == true; }
+        void ShowScope() { repeatField.IsEnabled = (kind != NoteKind.Task || addDate.IsChecked == true) && (series is null || later.IsChecked == true); }
+        showScheduling = ShowScope;
         one.IsCheckedChanged += (_, _) => ShowScope(); later.IsCheckedChanged += (_, _) => ShowScope();
         root.Children.Add(scope);
 
@@ -136,26 +148,27 @@ public static class NoteDetails
         remove.Content = Ui.Horizontal(new IconGlyph(IconKind.Trash), new TextBlock { Text = "Delete", VerticalAlignment = VerticalAlignment.Center, FontSize = 13 }); Avalonia.Automation.AutomationProperties.SetName(remove, "Delete note");
         var save = Ui.DialogButton(note is null ? "Add" : "Save", () =>
         {
+            var dated = kind != NoteKind.Task || addDate.IsChecked == true;
             TimeSpan? start = null, end = null;
-            if ((kind == NoteKind.Meeting || kind == NoteKind.Deadline && addTime.IsChecked == true) && !string.IsNullOrWhiteSpace(startBox.Text)) { start = Time(startBox.Text); if (start is null) { error.Text = "Times are written HH:mm."; return; } }
+            if ((kind == NoteKind.Meeting || dated && addTime.IsChecked == true) && !string.IsNullOrWhiteSpace(startBox.Text)) { start = Time(startBox.Text); if (start is null) { error.Text = "Times are written HH:mm."; return; } }
             if (kind == NoteKind.Meeting && addEnd.IsChecked == true && !string.IsNullOrWhiteSpace(endBox.Text)) { end = Time(endBox.Text); if (end is null) { error.Text = "Times are written HH:mm."; return; } }
-            if (kind == NoteKind.Deadline && addTime.IsChecked == true && start is null) { error.Text = "Enter a due time or turn off Add due time."; return; }
+            if (dated && kind != NoteKind.Meeting && addTime.IsChecked == true && start is null) { error.Text = kind == NoteKind.Deadline ? "Enter a due time or turn off Add due time." : "Enter a time or turn off Add time."; return; }
             if (kind == NoteKind.Meeting && addEnd.IsChecked == true && end is null) { error.Text = "Enter an end time or turn off Add end time."; return; }
             DateTime? last = null;
-            if (repeat.SelectedIndex > 0 && !string.IsNullOrWhiteSpace(untilBox.Text))
+            if (dated && repeat.SelectedIndex > 0 && !string.IsNullOrWhiteSpace(untilBox.Text))
             {
                 last = NoteShorthand.DayFor(untilBox.Text.Trim(), model.Engine.Now);
                 if (last is null) { error.Text = "Repeat until: try 31dec or 2026-12-31."; return; }
             }
             var mask = toggles.Select((t, i) => t.IsChecked == true ? 1 << (int)Week[i] : 0).Sum();
-            if (repeat.SelectedIndex == 5 && mask == 0) { error.Text = "Pick at least one day to repeat on."; return; }
-            Recurrence? rule = repeat.SelectedIndex switch
+            if (dated && repeat.SelectedIndex == 5 && mask == 0) { error.Text = "Pick at least one day to repeat on."; return; }
+            Recurrence? rule = !dated ? null : repeat.SelectedIndex switch
             {
                 1 => new Recurrence(1, Recurrence.AllDays, last), 2 => new Recurrence(1, Recurrence.Weekdays, last), 3 => new Recurrence(1, 0, last), 4 => new Recurrence(2, 0, last),
                 5 => new Recurrence(series is not null && RepeatIndex(series.Rule) == 5 ? series.Rule.EveryWeeks : 1, mask, last), _ => null
             };
             var account = accounts.SelectedItem as string; if (account == NoAccount) account = null;
-            var edit = new NoteEdit(kind, words.Text ?? "", date, start, end, account, rule, series is not null && later.IsChecked == true);
+            var edit = new NoteEdit(kind, words.Text ?? "", date, start, end, account, rule, series is not null && later.IsChecked == true, dated);
             var problem = note is null ? model.AddNote(edit) : model.SaveNote(note.Id, edit);
             if (problem is not null) error.Text = problem; else close();
         }, note is null ? "NoteDetailsAdd" : "NoteDetailsSave", true); save.Classes.Add("primary");
@@ -179,14 +192,14 @@ public static class NoteDetails
 /// <summary>Uses the existing dashboard scrim, theme and size constraints for both add and edit.</summary>
 public sealed class NoteEditorDialog : Dialog
 {
-    public NoteEditorDialog(TimerModel model, DayNote? note, DateTime day)
+    public NoteEditorDialog(TimerModel model, DayNote? note, DateTime day, bool hasDate = true)
     {
         Title = note is null ? "Add item" : "Edit item";
         Width = 420;
         MaxHeight = 720;
         Content = new Border
         {
-            Child = NoteDetails.Build(model, note, day, Close),
+            Child = NoteDetails.Build(model, note, day, Close, hasDate),
             Padding = new Thickness(24, 16, 24, 24)
         };
     }

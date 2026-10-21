@@ -109,3 +109,11 @@ A resizable dashboard (it needs a reactive layout, so it belongs in alpha), over
 ## Timeline viewport behaviour
 
 `ReviewViews.Timeline` adjusts only the render transforms of partly visible hour labels to keep the full labels inside the viewport. Canvas block positions, ticks and pointer-to-time calculations stay unchanged; the ScrollViewer clips at both edges. The default scroll anchor is the earliest recorded block or planned meeting, with the working-day start as fallback. An explicit `TimelineOffset` always takes precedence. Do not add offsets to block geometry to compensate for label placement.
+
+## Explicit task scheduling
+
+This branch requires BasicallyGod.Timer.Core and Timer.Storage 0.5.0. Publish that shared release before merging the app update. Data format 6 is backed up on upgrade; older app builds refuse it. For local review before publication, build the shared branch packages at a unique prerelease version, restore from an external local NuGet source, and override `SharedTimerVersion` on every restore/build/test command rather than editing the dependency pin.
+
+`DayNote.Kind` distinguishes tasks, meetings and deadlines independently of their time; null retains legacy interpretation. `HasDate=false` means an undated task, with Day retained only as capture context. `NoteEdit.HasDate` defaults true for existing callers. The editor offers Add date and Add time for tasks, and a separate Undated filter holds unscheduled items rather than including them on every selected day. The filters wrap within the Notes panel. Quick-add in Undated creates an undated task unless a calendar date was picked; elsewhere one time makes a timed task and an explicit range makes a meeting. Quick capture follows the same single-time rule.
+
+Never infer the new item's type from At alone. Preserve Kind and HasDate in normal writes, retry inserts and undo-remove; propagate Kind through series templates and generated occurrences. Undated items never enter reminders, overdue or calendar views. `DayNotes.IsMeeting` remains the bounded-timeline predicate; use `KindOf` for start-only meeting events. Merely scheduling or completing an item never records time.

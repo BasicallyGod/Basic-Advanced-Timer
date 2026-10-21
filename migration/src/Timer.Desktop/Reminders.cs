@@ -23,7 +23,7 @@ public static class ReminderRules
         var found = new List<Reminder>();
         foreach (var note in notes)
         {
-            if (note.Done || (note.At is null && !DayNotes.IsDeadline(note))) continue;
+            if (!note.HasDate || note.Done || (note.At is null && !DayNotes.IsDeadline(note))) continue;
             // Once a meeting is over it asks, once, whether it took place. Snoozing does not apply to the question, and an answer (done) ends it.
             if (DayNotes.EndsAt(note) is { } over && now >= over)
             {
@@ -36,7 +36,7 @@ public static class ReminderRules
             var since = due;
             if (snoozed is not null && snoozed.TryGetValue(note.Id, out var until)) { if (until > now) continue; if (until > due) since = until; }
             var state = now < due ? ReminderState.Soon : now - since < DueFor ? ReminderState.Due : ReminderState.Overdue;
-            if (state == ReminderState.Overdue && DayNotes.IsMeeting(note)) continue; // A meeting under way is not overdue.
+            if (state == ReminderState.Overdue && (note.Kind == DayNoteKind.Meeting || DayNotes.IsMeeting(note))) continue; // A meeting under way is not overdue.
             found.Add(new Reminder(note, state, due, since));
         }
         // What needs attention comes first, then the soonest.
