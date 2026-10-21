@@ -382,10 +382,10 @@ public sealed class EditingTests
             // The flag waves while the pointer is over the button, and the cup steams. (Headless tests do not run animation timers, so
             // this checks the switches, not the frames.)
             var over = day.TranslatePoint(new Point(day.Bounds.Width / 2, day.Bounds.Height / 2), dashboard)!.Value;
-            dashboard.MouseMove(over); Assert.True(flag.Waving);
+            dashboard.MouseMoveUntil(over, () => flag.Waving); Assert.True(flag.Waving);
             dashboard.MouseMove(new Point(5, 5)); Assert.False(flag.Waving);
             var cup = breakButton.GetVisualDescendants().OfType<BreakGlyph>().Single(); var cupSpot = breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, breakButton.Bounds.Height / 2), dashboard)!.Value;
-            var wasSteaming = cup.Steaming; dashboard.MouseMove(cupSpot); Assert.True(cup.Steaming);
+            var wasSteaming = cup.Steaming; dashboard.MouseMoveUntil(cupSpot, () => cup.Steaming); Assert.True(cup.Steaming);
             model.SetPillScale(null); Dispatcher.UIThread.RunJobs(); Assert.True(cup.Steaming); // A model update while the pointer is over it does not stop the steam, as on the pill.
             dashboard.MouseMove(new Point(5, 5)); Assert.Equal(wasSteaming, cup.Steaming);
         }
