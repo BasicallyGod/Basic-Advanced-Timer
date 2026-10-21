@@ -64,7 +64,7 @@ public sealed class QuickCaptureWindow : Window
     public void Save()
     {
         var typed = input.Text; model.QuickCaptureDraft = null;
-        if (!string.IsNullOrWhiteSpace(typed)) model.AddDayNote(model.Engine.Now.Date, typed);
+        if (!string.IsNullOrWhiteSpace(typed)) model.AddDayNote(model.Engine.Now.Date, typed, taskByDefault: true);
         Finish();
     }
     /// <summary>The box lost focus: it closes, and what was typed is kept for the next time. Public so a test can do what a click on another window does.</summary>
