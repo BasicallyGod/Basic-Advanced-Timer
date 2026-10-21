@@ -21,7 +21,7 @@ public sealed class NotesHardeningTests : IDisposable
     private static TimerModel Model() { var model = new TimerModel(new TrackingEngine(clock: () => Now)); model.CompleteSetup(); return model; }
     private static void Click(Visual root, string name) { root.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
     private static DashboardWindow Open(TimerModel model) { var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs(); Click(window, "NotesTab"); return window; }
-    private static int Rows(Visual root) => root.GetVisualDescendants().OfType<TextBox>().Count(t => t.Name?.StartsWith("NoteText_") == true);
+    private static int Rows(Visual root) => root.GetVisualDescendants().OfType<Button>().Count(t => t.Name?.StartsWith("NoteText_") == true);
 
     [Fact]
     public void ANoteTheDatabaseRefusesStaysOnScreenAndIsWrittenWhenItWorksAgain()
@@ -96,9 +96,9 @@ public sealed class NotesHardeningTests : IDisposable
         var window = Open(model);
         try
         {
-            Assert.Contains("Missed 2", window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NotesFilter_missed").Content?.ToString());
+            Assert.Contains("Overdue 2", window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NotesFilter_missed").Content?.ToString());
             Click(window, "NotesFilter_missed"); Assert.Equal(2, Rows(window));
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Missed"); // The page's heading.
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Overdue"); // The page's heading.
             Click(window, "NotesMissedToToday");
             Assert.Equal(0, Rows(window)); Assert.Equal(2, model.NotesOn(Now.Date).Count);
             Click(window, "NotesFilter_all"); Assert.Equal(2, Rows(window));

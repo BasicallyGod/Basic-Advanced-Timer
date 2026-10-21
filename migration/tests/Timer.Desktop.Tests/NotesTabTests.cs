@@ -133,9 +133,9 @@ public sealed class NotesTabTests
         var (model, window) = Open();
         try
         {
-            Type(window, "keep this"); var page = window.GetVisualDescendants().OfType<NotesPage>().Single(); var row = Find<TextBox>(window, "NoteText_" + model.AllDayNotes[0].Id);
+            Type(window, "keep this"); var page = window.GetVisualDescendants().OfType<NotesPage>().Single(); var row = Find<Button>(window, "NoteText_" + model.AllDayNotes[0].Id);
             for (var i = 0; i < 40; i++) model.Tick(); Dispatcher.UIThread.RunJobs();
-            Assert.Same(page, window.GetVisualDescendants().OfType<NotesPage>().Single()); Assert.Same(row, Find<TextBox>(window, "NoteText_" + model.AllDayNotes[0].Id));
+            Assert.Same(page, window.GetVisualDescendants().OfType<NotesPage>().Single()); Assert.Same(row, Find<Button>(window, "NoteText_" + model.AllDayNotes[0].Id));
         }
         finally { window.Close(); }
     }
@@ -148,7 +148,7 @@ public sealed class NotesTabTests
         {
             Type(window, "still here");
             window.SelectTab(false); Dispatcher.UIThread.RunJobs(); Assert.Empty(window.GetVisualDescendants().OfType<NotesPage>());
-            window.ShowNotes(); Dispatcher.UIThread.RunJobs(); Assert.Contains(window.GetVisualDescendants().OfType<TextBox>(), t => t.Text == "still here");
+            window.ShowNotes(); Dispatcher.UIThread.RunJobs(); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "still here");
         }
         finally { window.Close(); }
     }
