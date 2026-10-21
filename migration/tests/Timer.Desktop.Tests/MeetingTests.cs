@@ -119,8 +119,15 @@ public sealed class MeetingTests
             Assert.Single(window.GetVisualDescendants().OfType<Panel>(), p => p.Name == "TimelineMeeting_" + id);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Border>(), b => b.Name?.StartsWith("TimelineEntry") == true); // Nothing tracked.
             now = Day.AddHours(16); model.Tick(); Dispatcher.UIThread.RunJobs();
-            var yes = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ReminderDone"); var no = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ReminderSnooze");
+            // On the timeline the question sits under the meeting's block, and the floating card leaves it out.
+            var yes = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelinePromptYes_" + id); var no = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelinePromptNo_" + id);
             Assert.Equal("Yes", yes.Content?.ToString()); Assert.Equal("No", no.Content?.ToString());
+            Assert.False(window.GetVisualDescendants().OfType<ReminderCard>().Single().IsVisible);
+            // On another page the card holds it instead, with the same two answers.
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NotesTab").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            var card = window.GetVisualDescendants().OfType<ReminderCard>().Single(); Assert.True(card.IsVisible);
+            Assert.Equal("Yes", card.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ReminderDone").Content?.ToString()); Assert.True(card.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ReminderNo").IsVisible);
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             no.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); }
             Assert.Empty(window.GetVisualDescendants().OfType<Panel>().Where(p => p.Name == "TimelineMeeting_" + id)); // Answered, so the planned block goes.

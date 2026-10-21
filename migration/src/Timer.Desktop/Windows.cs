@@ -582,6 +582,7 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock today = Ui.Text("", 12, "muted");
     private readonly ContentControl workspace = new();
     private readonly Button day;
+    private Border bellBadge = null!; private TextBlock bellCount = null!; private Button bell = null!;
     private Border notesBadge = null!; private Button notesRail = null!, timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
     private IconGlyph pillGlyph = null!;
     private readonly BreakGlyph dashboardCup = new();
@@ -736,7 +737,17 @@ public sealed class DashboardWindow : Window
         todayButton.Classes.Add("toolButton"); todayButton.Classes.Add("quiet"); todayButton.Height = 34; todayButton.Margin = new Thickness(10, 0, 0, 0); todayButton.Padding = new Thickness(12, 0);
         todayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), new TextBlock { Text = "Today", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
         Avalonia.Automation.AutomationProperties.SetName(todayButton, "Today");
-        Ui.Put(nav, Ui.Horizontal(previous, datePick, next, todayButton), 1);
+        // The bell lists everything waiting (what is overdue or due, and what is coming up) in a flyout, with the same buttons as the reminder card.
+        bell = Ui.IconButton(IconKind.Bell, "Notifications", "NotificationsBell", () => { }); bell.Width = 36; bell.Height = 34; bell.Margin = new Thickness(0, 0, 8, 0);
+        bellCount = new TextBlock { FontSize = 9, FontWeight = Avalonia.Media.FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        bellCount.Bind(TextBlock.ForegroundProperty, bellCount.GetResourceObservable("AccentInk"));
+        bellBadge = new Border { Name = "NotificationsBadge", MinWidth = 15, Height = 15, CornerRadius = new CornerRadius(7.5), Padding = new Thickness(3, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 0, 0), IsHitTestVisible = false, IsVisible = false, Child = bellCount };
+        bellBadge.Classes.Add("accentEdge");
+        var bellGlyph = (IconGlyph)bell.Content!; bell.Content = null; bell.Content = new Grid { Children = { bellGlyph, bellBadge } };
+        var bellFlyout = new Flyout { Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight };
+        bellFlyout.Opening += (_, _) => bellFlyout.Content = new NotificationsPanel(model, () => bellFlyout.Hide());
+        bell.Flyout = bellFlyout;
+        Ui.Put(nav, Ui.Horizontal(bell, previous, datePick, next, todayButton), 1);
         Ui.Put(review, nav);
         undo = Ui.Button("", () => model.UndoEdit(), "UndoEdit");
         merge = Ui.Button("", () => model.MergeSelection(), "MergeSelected");
@@ -983,6 +994,9 @@ public sealed class DashboardWindow : Window
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); var glyph = button.Content as IconGlyph ?? (button.Content as Grid)?.Children.OfType<IconGlyph>().FirstOrDefault(); if (glyph is not null) glyph.TintKey = selected ? "Ink" : "Muted"; }
         Rail(timelineRail, !weekMode && !settingsMode && !PageMode);
         Rail(notesRail, !settingsMode && notesMode);
+        model.SetTimelineVisible(!weekMode && !settingsMode && !PageMode); // The timeline holds a meeting's question itself, so the floating card leaves it out.
+        var waitingNow = model.Reminders; bellBadge.IsVisible = waitingNow.Count > 0; bellCount.Text = waitingNow.Count.ToString(); bellBadge.Classes.Set("lateEdge", waitingNow.Any(r => r.State == ReminderState.Overdue));
+        var bellTip = waitingNow.Count > 0 ? $"Notifications ({waitingNow.Count} waiting)" : "Notifications"; ToolTip.SetTip(bell, bellTip); Avalonia.Automation.AutomationProperties.SetName(bell, bellTip);
         var reminders = model.Reminders; notesBadge.IsVisible = reminders.Count > 0; notesBadge.Classes.Set("lateEdge", reminders.Any(r => r.State == ReminderState.Overdue));
         var notesTip = reminders.Count > 0 ? $"Notes ({reminders.Count} {(reminders.Count == 1 ? "reminder" : "reminders")})" : "Notes";
         ToolTip.SetTip(notesRail, notesTip); Avalonia.Automation.AutomationProperties.SetName(notesRail, notesTip);

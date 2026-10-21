@@ -875,7 +875,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Clock, Note }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Clock, Note, Bell }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1014,6 +1014,21 @@ public sealed class IconGlyph : Control
                 // A round face with its two hands.
                 context.DrawEllipse(null, pen, new Point(9, 9), 6.5, 6.5); context.DrawLine(pen, new Point(9, 5.2), new Point(9, 9)); context.DrawLine(pen, new Point(9, 9), new Point(11.8, 10.6));
                 break;
+            case IconKind.Bell:
+            {
+                // A bell: a dome, a flat rim and a small clapper under it.
+                var bell = new StreamGeometry();
+                using (var g = bell.Open())
+                {
+                    g.BeginFigure(new Point(4.5, 12.5), false); g.LineTo(new Point(4.5, 8.5));
+                    g.CubicBezierTo(new Point(4.5, 5.5), new Point(6.5, 3.5), new Point(9, 3.5));
+                    g.CubicBezierTo(new Point(11.5, 3.5), new Point(13.5, 5.5), new Point(13.5, 8.5));
+                    g.LineTo(new Point(13.5, 12.5)); g.EndFigure(false);
+                }
+                context.DrawGeometry(null, pen, bell);
+                context.DrawLine(pen, new Point(3, 12.5), new Point(15, 12.5)); context.DrawLine(pen, new Point(7.7, 15), new Point(10.3, 15));
+                break;
+            }
             case IconKind.Note:
                 // A page with a few lines of writing.
                 context.DrawRectangle(null, pen, new Rect(3.5, 3, 11, 12), 2.5, 2.5);

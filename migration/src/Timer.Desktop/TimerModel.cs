@@ -961,13 +961,30 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void SetReminderSoundOn(bool on) => SetExtra(RemindSoundLine, on ? null : "off");
     public IReadOnlyList<Reminder> Reminders => RemindersOn ? ReminderRules.For(dayNotes, Engine.Now, ReminderLead, snoozedUntil) : System.Array.Empty<Reminder>();
     /// <summary>The reminder to show a card for: the first one that is due or overdue. A heads-up has no card.</summary>
-    public Reminder? ActiveReminder => Reminders.FirstOrDefault(r => r.State != ReminderState.Soon);
+    public Reminder? ActiveReminder => ActiveWhere(_ => true);
+    // The first thing that needs attention, or (when the setting is on) the first heads-up if nothing does.
+    private Reminder? ActiveWhere(Func<Reminder, bool> allowed)
+    {
+        var list = Reminders.Where(allowed).ToList();
+        return list.FirstOrDefault(r => r.State != ReminderState.Soon) ?? (ShowUpcoming ? list.FirstOrDefault() : null);
+    }
+    private const string RemindUpcomingLine = "remindupcoming=";
+    /// <summary>Whether a reminder that is coming up (not yet due) shows on the pill too. Off unless switched on, so the pill only grows for what is due.</summary>
+    public bool ShowUpcoming => Extra(RemindUpcomingLine) == "on";
+    public void SetShowUpcoming(bool on) => SetExtra(RemindUpcomingLine, on ? "on" : null);
+    /// <summary>True while the dashboard is showing the timeline, which then holds a meeting's "did it take place?" itself, so the floating card leaves it out for that day.</summary>
+    public bool TimelineVisible { get; private set; }
+    public void SetTimelineVisible(bool on) { if (TimelineVisible == on) return; TimelineVisible = on; Notify(); }
+    /// <summary>The reminder the dashboard's floating card shows.</summary>
+    public Reminder? DashboardReminder => ActiveWhere(r => !(r.State == ReminderState.Followup && TimelineVisible && r.Note.Day.Date == SelectedDate.Date));
+    /// <summary>How many other reminders there are besides the one a card shows, for its "+2 more".</summary>
+    public int MoreReminders(Reminder? shown) => shown is null ? 0 : Math.Max(0, Reminders.Count - 1);
     public string ReminderLine(Reminder reminder) => ReminderRules.Describe(reminder, Engine.Now);
     // A snooze is kept in the settings file (as remindsnoozed=id:ticks,...), so a restart does not bring a snoozed reminder straight back.
     private const string RemindSnoozedLine = "remindsnoozed=";
-    public void SnoozeReminder(long id)
+    public void SnoozeReminder(long id, int? minutes = null)
     {
-        snoozedUntil[id] = Engine.Now.AddMinutes(ReminderSnooze); announced.Remove(id);
+        snoozedUntil[id] = Engine.Now.AddMinutes(minutes ?? ReminderSnooze); announced.Remove(id);
         var live = snoozedUntil.Where(p => p.Value > Engine.Now && p.Key >= 0).Select(p => p.Key + ":" + p.Value.Ticks).ToList();
         SetExtra(RemindSnoozedLine, live.Count == 0 ? null : string.Join(",", live));
     }

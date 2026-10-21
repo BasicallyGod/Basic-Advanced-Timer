@@ -386,6 +386,9 @@
     <!-- Buttons in dialogs: the same outline, a little more room, and an accent outline on the main action. -->
     <Style Selector="Button.toolButton.dialogButton"><Setter Property="MinHeight" Value="36" /><Setter Property="Padding" Value="16,0" /><Setter Property="FontSize" Value="14" /></Style>
     <Style Selector="Button.toolButton.mainAction"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <!-- The one main action of a panel (Add note, Save) is solid in the accent colour. -->
+    <Style Selector="Button.toolButton.primary"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Button.toolButton.primary:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /><Setter Property="Opacity" Value="0.92" /></Style>
     <Style Selector="Button.toolButton.mainAction:pointerover /template/ ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Button.quiet.breakButton.onBreak">
       <Setter Property="Background" Value="{DynamicResource Break}" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="{DynamicResource Break}" />

@@ -62,7 +62,7 @@ public static class NoteDetails
         root.Children.Add(kinds);
 
         var words = new TextBox { Name = "NoteDetailsWords", Text = note is null ? "" : NoteShorthand.Display(note, model.AccountNames), Watermark = "What is it?", TextWrapping = Avalonia.Media.TextWrapping.Wrap };
-        root.Children.Add(Field("Words", words));
+        root.Children.Add(Field("Title", words));
 
         // The day, with arrows and a calendar that opens inside the panel (a second pop-up inside a flyout is avoided).
         var dayText = new TextBlock { Name = "NoteDetailsDay", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, MinWidth = 120, TextAlignment = Avalonia.Media.TextAlignment.Center };
@@ -120,8 +120,9 @@ public static class NoteDetails
             removeChoices.Children.Add(Ui.DialogButton("Remove this one", () => { close(); model.RemoveDayNote(id); }, "NoteDetailsRemoveOne"));
             removeChoices.Children.Add(Ui.DialogButton("This and all later", () => { close(); model.RemoveSeriesFrom(id); }, "NoteDetailsRemoveLater"));
         }
-        var remove = Ui.Button("Remove…", () => { if (note is null) return; if (series is null) { close(); model.RemoveDayNote(note.Id); } else removeChoices.IsVisible = !removeChoices.IsVisible; }, "NoteDetailsRemove");
-        remove.Classes.Add("flat"); remove.IsVisible = note is not null; remove.FontSize = 13;
+        var remove = Ui.Button("Delete", () => { if (note is null) return; if (series is null) { close(); model.RemoveDayNote(note.Id); } else removeChoices.IsVisible = !removeChoices.IsVisible; }, "NoteDetailsRemove");
+        remove.Classes.Add("flat"); remove.IsVisible = note is not null; remove.FontSize = 13; remove.HorizontalAlignment = HorizontalAlignment.Left;
+        remove.Content = Ui.Horizontal(new IconGlyph(IconKind.Trash), new TextBlock { Text = "Delete", VerticalAlignment = VerticalAlignment.Center, FontSize = 13 }); Avalonia.Automation.AutomationProperties.SetName(remove, "Delete note");
         var save = Ui.DialogButton(note is null ? "Add" : "Save", () =>
         {
             TimeSpan? start = null, end = null;
@@ -144,7 +145,7 @@ public static class NoteDetails
             var edit = new NoteEdit(kind, words.Text ?? "", date, start, end, account, rule, series is not null && later.IsChecked == true);
             var problem = note is null ? model.AddNote(edit) : model.SaveNote(note.Id, edit);
             if (problem is not null) error.Text = problem; else close();
-        }, note is null ? "NoteDetailsAdd" : "NoteDetailsSave", true);
+        }, note is null ? "NoteDetailsAdd" : "NoteDetailsSave", true); save.Classes.Add("primary");
         var cancel = Ui.DialogButton("Cancel", close, "NoteDetailsCancel");
         var buttons = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 8 };
         Grid.SetColumn(cancel, 1); Grid.SetColumn(save, 2); buttons.Children.Add(remove); buttons.Children.Add(cancel); buttons.Children.Add(save);
