@@ -159,7 +159,8 @@ public sealed class CompactColumn : Grid
         clock.Text = model.ClockText;
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
         clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
-        status.Text = onBreak ? "Break" : late ? "Overtime" : model.IsTracking ? "Working" : "Ready";
+        status.Text = model.Status;
+        ToolTip.SetTip(status, model.Status + (late ? " · Overtime" : ""));
         pauseGlyph.Playing = model.IsTracking && !onBreak; pauseGlyph.InvalidateVisual();
         breakGlyph.SetSteaming(onBreak); breakGlyph.InvalidateVisual();
         breakButton.Classes.Set("onBreak", onBreak);

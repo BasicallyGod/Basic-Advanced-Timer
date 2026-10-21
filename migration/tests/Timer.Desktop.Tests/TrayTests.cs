@@ -43,14 +43,14 @@ public sealed class TrayTests
     {
         var now = Day.AddHours(6);
         var engine = new TrackingEngine(clock: () => now); var model = new TimerModel(engine);
-        Assert.Contains("Ready when you are", TrayController.Tooltip(model));
+        Assert.Contains("Ready to track", TrayController.Tooltip(model));
         Assert.Equal("Start day", TrayController.DayLabel(model));
         now = Day.AddHours(10); model.ToggleAccount("Account one"); now = now.AddMinutes(75);
         var text = TrayController.Tooltip(model);
         Assert.Contains("Tracking Account one", text); Assert.True(text.Length <= 127, text);
         Assert.Equal("Pause tracking", TrayController.PauseLabel(model)); Assert.Equal("Finish day", TrayController.DayLabel(model));
         model.TogglePause();
-        Assert.Equal("Resume Account one", TrayController.PauseLabel(model)); Assert.Contains("Not tracking", TrayController.Tooltip(model));
+        Assert.Equal("Resume Account one", TrayController.PauseLabel(model)); Assert.Contains("Ready to track", TrayController.Tooltip(model));
         Assert.NotNull(TrayController.Draw(true)); Assert.NotNull(TrayController.Draw(false));
         var windows = new WindowCoordinator(model, () => { });
         using var tray = new TrayController(model, windows); tray.RefreshMenu();

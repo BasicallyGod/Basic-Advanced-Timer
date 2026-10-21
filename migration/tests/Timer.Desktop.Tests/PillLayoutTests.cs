@@ -158,4 +158,58 @@ public sealed class PillLayoutTests
         }
         finally { dashboard.Close(); }
     }
+    [AvaloniaFact]
+    public void EveryLayoutKeepsAccountTimerAndActionsInOrderWithoutChangingItsWidth()
+    {
+        var model = Model();
+        var old = model.AccountNames[0];
+        var name = "Account with a deliberately long name for the quarterly client reporting programme";
+        model.SetAccounts(model.AccountSettings.Select(a => a.Name == old ? a with { Name = name } : a), new Dictionary<string, string> { [old] = name });
+        model.ToggleAccount(name);
+        var pill = new PillWindow(model); pill.Show();
+        try
+        {
+            foreach (var layout in PillLayouts.All)
+            {
+                model.SetPillStyle(layout.Key); Dispatcher.UIThread.RunJobs();
+                using var frame = pill.CaptureRenderedFrame();
+                var account = Find<Button>(pill, "PillAccounts"); var timer = Find<Button>(pill, "PillDashboard"); var pause = Find<Button>(pill, "PillPause");
+                Assert.True(account.Bounds.Right <= timer.Bounds.Left, layout.Key);
+                Assert.True(timer.Bounds.Right <= pause.Bounds.Left, layout.Key);
+                Assert.Equal(layout.Width, pill.Width / pill.Scale - 2 * Ui.ShadowMargin, 1);
+                Assert.Contains(name, ToolTip.GetTip(account)?.ToString());
+                if (layout.Key != "minimal")
+                {
+                    var label = Find<TextBlock>(pill, "PillAccountName");
+                    Assert.Equal(Avalonia.Media.TextTrimming.CharacterEllipsis, label.TextTrimming);
+                    Assert.Equal(name, ToolTip.GetTip(label)); Assert.True(label.Bounds.Width > 20);
+                    var right = label.TranslatePoint(new Point(label.Bounds.Width, 0), account)!.Value.X;
+                    Assert.True(right <= account.Bounds.Width, layout.Key + ": long names stay inside the account area");
+                }
+                if (Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") is { Length: > 0 } previews)
+                {
+                    Directory.CreateDirectory(previews); frame?.Save(Path.Combine(previews, "pill-consistent-" + layout.Key + ".png"));
+                }
+            }
+            model.SetPillStyle("full"); Dispatcher.UIThread.RunJobs();
+            var progress = Find<Grid>(pill, "DayProgress");
+            Assert.True(progress.IsHitTestVisible);
+            var tip = ToolTip.GetTip(progress)?.ToString();
+            Assert.Contains("today's working day", tip); Assert.Contains("09:00", tip); Assert.Contains("17:00", tip);
+        }
+        finally { pill.Close(); }
+    }
+
+    [Fact]
+    public void IdleBreakAndFinishedWordingIsSharedWithTheTray()
+    {
+        var model = Model();
+        Assert.Equal("Ready to track", model.Status); Assert.Contains(model.Status, TrayController.Tooltip(model));
+        model.ToggleAccount(model.AccountNames[0]); Assert.Equal("Tracking", model.Status);
+        model.TogglePause(); Assert.Equal("Ready to track", model.Status); Assert.Contains(model.Status, TrayController.Tooltip(model));
+        model.ToggleBreak(); Assert.Equal("On break", model.Status); Assert.Contains(model.Status, TrayController.Tooltip(model));
+        model.ToggleBreak(); model.ToggleDay();
+        Assert.Equal("Day finished", model.Status); Assert.Contains(model.Status, TrayController.Tooltip(model));
+    }
+
 }
