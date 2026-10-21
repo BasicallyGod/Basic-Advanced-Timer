@@ -17,11 +17,13 @@ public sealed class ReminderCard : Border
     private readonly Button snooze, done;
     private readonly bool inPill;
     private long shownId = -1;
+    private bool followup;
     public ReminderCard(TimerModel model, bool inPill)
     {
         this.model = model; this.inPill = inPill; Name = "ReminderCard";
-        snooze = Ui.Button("Snooze", () => { if (shownId >= 0) model.SnoozeReminder(shownId); }, "ReminderSnooze");
-        done = Ui.Button("Done", () => { if (shownId >= 0) model.DoneReminder(shownId); }, "ReminderDone");
+        // After a meeting the same two buttons answer "Did it take place?": No ticks it off, Yes opens Add time on its hours so the account can be chosen.
+        snooze = Ui.Button("Snooze", () => { if (shownId < 0) return; if (followup) model.DoneReminder(shownId); else model.SnoozeReminder(shownId); }, "ReminderSnooze");
+        done = Ui.Button("Done", () => { if (shownId < 0) return; if (followup) model.LogMeeting(shownId); else model.DoneReminder(shownId); }, "ReminderDone");
         foreach (var button in new[] { snooze, done }) { button.Classes.Add("toolButton"); button.Classes.Add("quiet"); button.Height = 28; button.Padding = new Thickness(10, 0); button.FontSize = 12; }
         done.Classes.Add("mainAction");
         var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center, Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand) };
@@ -49,10 +51,13 @@ public sealed class ReminderCard : Border
         shownId = reminder.Note.Id;
         title.Text = Timer.Core.NoteShorthand.Display(reminder.Note, model.AccountNames);
         sub.Text = model.ReminderLine(reminder);
+        followup = reminder.State == ReminderState.Followup;
+        snooze.Content = followup ? "No" : "Snooze"; done.Content = followup ? "Yes" : "Done";
         var late = reminder.State == ReminderState.Overdue;
         sub.Classes.Set("overtime", late && !inPill); sub.Classes.Set("muted", !late || inPill);
         Classes.Set("late", late && !inPill);
-        ToolTip.SetTip(snooze, $"Remind me again in {model.ReminderSnooze} minutes");
-        Avalonia.Automation.AutomationProperties.SetName(snooze, "Snooze reminder: " + title.Text); Avalonia.Automation.AutomationProperties.SetName(done, "Mark done: " + title.Text); Avalonia.Automation.AutomationProperties.SetName(this, "Reminder: " + title.Text + ", " + sub.Text);
+        ToolTip.SetTip(snooze, followup ? "It did not take place" : $"Remind me again in {model.ReminderSnooze} minutes");
+        ToolTip.SetTip(done, followup ? "It took place. Add its time" : null);
+        Avalonia.Automation.AutomationProperties.SetName(snooze, (followup ? "Meeting did not take place: " : "Snooze reminder: ") + title.Text); Avalonia.Automation.AutomationProperties.SetName(done, (followup ? "Meeting took place, add its time: " : "Mark done: ") + title.Text); Avalonia.Automation.AutomationProperties.SetName(this, "Reminder: " + title.Text + ", " + sub.Text);
     }
 }

@@ -99,7 +99,7 @@ public sealed class NotesPage : Grid
     }
 
     private string Signature() => model.SelectedDate.ToString("yyyyMMdd") + "|" + model.CurrentTheme.Name + "|" + string.Join(",", model.AccountNames) + "|"
-        + string.Join(";", model.AllDayNotes.Select(n => $"{n.Id}:{n.Day:yyyyMMdd}:{n.At}:{n.Done}:{n.Text}")) + "|" + model.Engine.Now.ToString("yyyyMMdd") + "|" + kind;
+        + string.Join(";", model.AllDayNotes.Select(n => $"{n.Id}:{n.Day:yyyyMMdd}:{n.At}:{n.End}:{n.Done}:{n.Text}")) + "|" + model.Engine.Now.ToString("yyyyMMdd") + "|" + kind;
 
     public void Rebuild()
     {
@@ -200,7 +200,7 @@ public static class NoteChips
         var chips = new WrapPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
         var id = note.Id;
         if (note.At is { } at)
-            chips.Children.Add(Chip("NoteTimeChip_" + id, new IconGlyph(IconKind.Clock) { TintKey = "Muted" }, at.ToString("hh\\:mm"), "Time, taken from the words. The cross puts it back into them.", "NoteTimeClear_" + id, () => model.ClearNoteTime(id)));
+            chips.Children.Add(Chip("NoteTimeChip_" + id, new IconGlyph(IconKind.Clock) { TintKey = "Muted" }, NoteTimes.Of(note), "Time, taken from the words. The cross puts it back into them.", "NoteTimeClear_" + id, () => model.ClearNoteTime(id)));
         if (DayNotes.IsDeadline(note))
             chips.Children.Add(Chip("NoteDeadlineChip_" + id, new IconGlyph(IconKind.Flag) { TintKey = "Finish" }, "Deadline", "A deadline, from the ! at the start. The cross makes it an ordinary note.", "NoteDeadlineClear_" + id, () => model.ClearNoteDeadline(id)));
         if (AccountChip(model, note, host, "NoteAccountChip_" + id, interactive: true) is { } account) chips.Children.Add(account);
@@ -233,7 +233,7 @@ public sealed class ComingUpView : StackPanel
             if (compact)
             {
                 var line = new StackPanel { Spacing = 0 };
-                line.Children.Add(new TextBlock { Text = When(note.Day, model.Engine.Now) + (note.At is { } t ? " " + t.ToString("hh\\:mm") : ""), FontSize = 15, FontWeight = FontWeight.Bold });
+                line.Children.Add(new TextBlock { Text = When(note.Day, model.Engine.Now) + (note.At is not null ? " " + NoteTimes.Of(note) : ""), FontSize = 15, FontWeight = FontWeight.Bold });
                 line.Children.Add(new TextBlock { Text = NoteShorthand.Display(note, model.AccountNames), FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis }); Children.Add(line); continue;
             }
             var id = note.Id;
@@ -253,7 +253,7 @@ public sealed class ComingUpView : StackPanel
                 ToolTip.SetTip(mark, "Event"); Avalonia.Automation.AutomationProperties.SetName(mark, "Event: " + note.Text); tick = mark;
             }
             else { var box = new CheckBox { Name = "ComingTick_" + id, IsChecked = false, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center }; box.Click += (_, _) => model.ToggleDayNote(id); Avalonia.Automation.AutomationProperties.SetName(box, "Done: " + note.Text); tick = box; }
-            var at = Ui.Text(note.At is { } time ? time.ToString("hh\\:mm") : "", 12, "muted"); at.VerticalAlignment = VerticalAlignment.Top; at.Margin = new Thickness(8, 3, 0, 0);
+            var at = Ui.Text(NoteTimes.Of(note), 12, "muted"); at.VerticalAlignment = VerticalAlignment.Top; at.Margin = new Thickness(8, 3, 0, 0);
             var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(new TextBlock { Text = NoteShorthand.Display(note, model.AccountNames), FontSize = 14, TextWrapping = TextWrapping.Wrap });
             if (NoteChips.AccountChip(model, note, this, "ComingAccount_" + id, interactive: false) is { } account) words.Children.Add(account);
             var row = Ui.Grid("Auto,*,Auto"); tick.VerticalAlignment = VerticalAlignment.Top; tick.Margin = new Thickness(0, 0, 4, 0); Ui.Put(row, tick); Ui.Put(row, words, 1); Ui.Put(row, at, 2); Children.Add(row);

@@ -53,7 +53,7 @@ public sealed class QuickCaptureWindow : Window
         if (string.IsNullOrWhiteSpace(typed)) return "A time, @fri for a day, ! for a deadline, #Account to link one.";
         var parts = NoteShorthand.Parse(typed, now);
         var bits = new List<string> { (parts.Day ?? now).Date == now.Date ? "Today" : (parts.Day ?? now).ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) };
-        if (parts.At is { } at) bits.Add(at.ToString(@"hh\:mm"));
+        if (parts.At is { } at) bits.Add(parts.End is { } until ? at.ToString(@"hh\:mm") + "–" + until.ToString(@"hh\:mm") + " meeting" : at.ToString(@"hh\:mm"));
         if (typed.TrimStart().StartsWith('!')) bits.Add("deadline");
         if (AccountTags.Find(typed, accounts) is { } found) bits.Add(found.Account);
         return string.Join(" · ", bits);

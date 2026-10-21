@@ -903,10 +903,11 @@ public sealed class DashboardWindow : Window
     }
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
     {
+        if (!IsVisible && model.MeetingLogPending) Reveal?.Invoke(); // Yes on a meeting's question, from the pill, brings the dashboard up first.
         if (!IsVisible) return;
         if (entryEditor is { IsVisible: true }) return;
         entryEditor = new EntryDialog(model, row, start, end);
-        entryEditor.Closed += (_, _) => entryEditor = null;
+        entryEditor.Closed += (_, _) => { entryEditor = null; model.EndMeetingLog(); };
         Dialogs.Show(entryEditor);
     }
     /// <summary>Set by the coordinator so a request that arrives while only the pill is showing can bring the dashboard up first.</summary>
