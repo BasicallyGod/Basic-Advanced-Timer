@@ -143,7 +143,7 @@ public sealed class TweakTests
             using (var raw = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(folder, TimerDatabase.FileName), Pooling = false }.ToString()))
             {
                 raw.Open();
-                foreach (var sql in new[] { "DROP TABLE day_notes", "PRAGMA foreign_keys = OFF", "BEGIN", TimerDatabase.AccountsTable("accounts_old", false),
+                foreach (var sql in new[] { "DROP TABLE day_notes", "DROP TABLE note_series", "PRAGMA foreign_keys = OFF", "BEGIN", TimerDatabase.AccountsTable("accounts_old", false),
                     "INSERT INTO accounts_old SELECT id, name, colour, position, hidden, budget_seconds, budget_period FROM accounts", "DROP TABLE accounts",
                     "ALTER TABLE accounts_old RENAME TO accounts", "COMMIT", "PRAGMA user_version = 1" })
                 { using var command = raw.CreateCommand(); command.CommandText = sql; command.ExecuteNonQuery(); }
