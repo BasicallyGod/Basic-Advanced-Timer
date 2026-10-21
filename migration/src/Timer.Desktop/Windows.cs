@@ -995,8 +995,8 @@ public sealed class DashboardWindow : Window
         Rail(timelineRail, !weekMode && !settingsMode && !PageMode);
         Rail(notesRail, !settingsMode && notesMode);
         model.SetTimelineVisible(!weekMode && !settingsMode && !PageMode); // The timeline holds a meeting's question itself, so the floating card leaves it out.
-        var pending = model.Reminders; bellBadge.IsVisible = pending.Count > 0; bellCount.Text = pending.Count.ToString(); bellBadge.Classes.Set("lateEdge", pending.Any(r => r.State == ReminderState.Overdue));
-        var bellTip = pending.Count > 0 ? $"Notifications ({pending.Count} waiting)" : "Notifications"; ToolTip.SetTip(bell, bellTip); Avalonia.Automation.AutomationProperties.SetName(bell, bellTip);
+        var waitingNow = model.Reminders; bellBadge.IsVisible = waitingNow.Count > 0; bellCount.Text = waitingNow.Count.ToString(); bellBadge.Classes.Set("lateEdge", waitingNow.Any(r => r.State == ReminderState.Overdue));
+        var bellTip = waitingNow.Count > 0 ? $"Notifications ({waitingNow.Count} waiting)" : "Notifications"; ToolTip.SetTip(bell, bellTip); Avalonia.Automation.AutomationProperties.SetName(bell, bellTip);
         var reminders = model.Reminders; notesBadge.IsVisible = reminders.Count > 0; notesBadge.Classes.Set("lateEdge", reminders.Any(r => r.State == ReminderState.Overdue));
         var notesTip = reminders.Count > 0 ? $"Notes ({reminders.Count} {(reminders.Count == 1 ? "reminder" : "reminders")})" : "Notes";
         ToolTip.SetTip(notesRail, notesTip); Avalonia.Automation.AutomationProperties.SetName(notesRail, notesTip);
