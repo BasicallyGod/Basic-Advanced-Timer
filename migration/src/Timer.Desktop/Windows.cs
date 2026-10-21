@@ -526,7 +526,8 @@ public sealed class PillWindow : Window
         initials.Foreground = Avalonia.Media.Brushes.Black;
         if (minimal && named is not null) initials.Foreground = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse(Ui.InkOn($"#{dotColour.R:X2}{dotColour.G:X2}{dotColour.B:X2}")));
         ToolTip.SetTip(accountButton, model.PillStyle == "minimal" ? (model.IsOnBreak ? "On break" : named ?? "Accounts") + " · " + model.Status : "Accounts");
-        badge.Background = minimal && named is not null ? new Avalonia.Media.SolidColorBrush(dotColour) : new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromArgb(0x40, dotColour.R, dotColour.G, dotColour.B));
+        // Only the minimal layout's initials sit on a coloured badge. Elsewhere the dot stands alone, since a box around it said nothing the dot did not.
+        badge.Background = minimal && named is not null ? new Avalonia.Media.SolidColorBrush(dotColour) : Avalonia.Media.Brushes.Transparent;
         pauseGlyph.Playing = model.IsTracking && !model.IsOnBreak; pauseGlyph.InvalidateVisual();
         breakButton.Classes.Set("onBreak", model.IsOnBreak); breakGlyph.Filled = false; breakGlyph.HotKey = model.ThemeState == "Recording" ? "Accent" : "Break"; breakGlyph.SetSteaming(model.IsOnBreak || pillHoverBreak); breakGlyph.InvalidateVisual();
         ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Start break");
@@ -637,10 +638,10 @@ public sealed class DashboardWindow : Window
         pillGlyph = (IconGlyph)backToPill.Content!;
         railTop.Children.Add(backToPill);
         var backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
-        // Notes sits straight under the Timeline, ahead of the week views, which are used less often.
-        railTop.Children.Add(timelineRail); railTop.Children.Add(notesRail);
+        // The three views used every day sit together at the top (Timeline, Notes, Week overview), and the two used rarely (Hours table, Entries) below a divider.
+        foreach (var button in new[] { timelineRail, notesRail, overviewTab }) railTop.Children.Add(button);
         var weekRule = Ui.Rule(); weekRule.Margin = new Thickness(6, 4); railTop.Children.Add(weekRule);
-        foreach (var button in new[] { overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
+        foreach (var button in new[] { hoursTab, entriesTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
         settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);

@@ -993,8 +993,30 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (dayNotes.FirstOrDefault(n => n.Id == id) is not { } note || DayNotes.EndsAt(note) is not { } end) return;
         var start = note.Day.Date + note.At!.Value;
+        // Time already recorded over the meeting stays as it was (it is what really happened), so only the free part is added, rather than refusing the whole thing.
+        var gaps = FreeParts(start, end);
+        if (gaps.Count == 0) { DoneReminder(id); Notice = "That time was already recorded, so nothing was added."; Notify(); return; }
+        var gap = gaps.OrderByDescending(g => g.End - g.Start).First();
+        if (gap.Start != start || gap.End != end)
+            Notice = $"Part of that time is already recorded, so Add time opens on the free {gap.Start:HH:mm}–{gap.End:HH:mm}" + (gaps.Count > 1 ? " (the longest free part)." : ".");
         meetingToLog = (id, start, end); entryAccountHint = NoteShorthand.AccountOf(note.Text, AccountNames);
-        EditError = null; EntryRequested?.Invoke(null, start, end);
+        EditError = null; EntryRequested?.Invoke(null, gap.Start, gap.End);
+    }
+    /// <summary>The parts of a span with no recorded or running time in them (gaps under a minute are rounding, not time).</summary>
+    private List<(DateTime Start, DateTime End)> FreeParts(DateTime start, DateTime end)
+    {
+        var occupied = Engine.Sessions.Where(s => s.Duration > TimeSpan.Zero && s.From < end && s.To > start).Select(s => (Start: s.From, End: s.To)).ToList();
+        if (Engine.Active is { } active && active.Start < end && Engine.Now > start) occupied.Add((active.Start, Engine.Now));
+        var free = new List<(DateTime Start, DateTime End)>(); var cursor = start;
+        foreach (var span in occupied.OrderBy(o => o.Start))
+        {
+            if (span.Start > cursor) free.Add((cursor, span.Start < end ? span.Start : end));
+            if (span.End > cursor) cursor = span.End;
+            if (cursor >= end) break;
+        }
+        if (cursor < end) free.Add((cursor, end));
+        free.RemoveAll(g => (g.End - g.Start).TotalSeconds < 60);
+        return free;
     }
     /// <summary>The account to start Add time on once, then forgotten.</summary>
     public string? TakeEntryAccountHint() { var hint = entryAccountHint; entryAccountHint = null; return hint; }

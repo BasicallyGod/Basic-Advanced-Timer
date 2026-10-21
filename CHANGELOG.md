@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Meeting fixes and a tidier rail | pending | A planned meeting sits in its own lane at the right of the timeline, so time recorded over it no longer hides it. Yes on a meeting adds only the part not already recorded (and ticks it off at once when all of it is). The rail groups Timeline, Notes and Week overview, with Hours table and Entries below. The pill's dot no longer sits in a grey box. |
 | Recurring notes and meetings | pending | Type `every weekday`, `every mon,wed`, `every 2 weeks fri` (with an optional `until 2026-12-31`) and a note repeats: ordinary dated notes are made eight weeks ahead and topped up each day. Removing one asks this one or this and all later, a No on a meeting skips only that day, and a chip on the note shows the rule, stops it, or gives this note's words to the later ones. Needs the shared packages at 0.4.0 (storage format 5). |
 | Notes second on the rail | [31936e9](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/31936e9) | The rail now reads Timeline, Notes, then Week overview, Hours table and Entries, so Notes is not behind the week views. Nothing was removed. |
 

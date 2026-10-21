@@ -66,6 +66,30 @@ public sealed class MeetingTests
     }
 
     [Fact]
+    public void TimeAlreadyRecordedOverTheMeetingStaysAndOnlyTheFreePartIsOffered()
+    {
+        var model = Model(); var account = FirstAccount(model);
+        model.AddDayNote(Day, "Client call 14:00 - 15:30"); now = Day.AddHours(15).AddMinutes(40);
+        Assert.True(model.EditEntry(null, account, Day.AddHours(13), Day.AddHours(14).AddMinutes(50), "Recorded over it")); // Forgot to answer, recorded over the start.
+        DateTime? from = null, to = null; model.EntryRequested += (_, start, end) => { from = start; to = end; };
+        model.LogMeeting(model.ActiveReminder!.Note.Id);
+        Assert.Equal(Day.AddHours(14).AddMinutes(50), from); Assert.Equal(Day.AddHours(15.5), to); Assert.Contains("already recorded", model.Notice);
+        Assert.True(model.EditEntry(null, account, from!.Value, to!.Value, "Rest of the call"));
+        Assert.Empty(model.MeetingsOn(Day)); Assert.Null(model.ActiveReminder);
+    }
+
+    [Fact]
+    public void ARecordedMeetingIsTickedOffWithoutAskingForAnythingMore()
+    {
+        var model = Model(); var account = FirstAccount(model);
+        model.AddDayNote(Day, "Client call 14:00 - 15:30"); now = Day.AddHours(16);
+        Assert.True(model.EditEntry(null, account, Day.AddHours(14), Day.AddHours(15.5), "Recorded"));
+        var asked = false; model.EntryRequested += (_, _, _) => asked = true;
+        model.LogMeeting(model.ActiveReminder!.Note.Id);
+        Assert.False(asked); Assert.Null(model.ActiveReminder); Assert.Empty(model.MeetingsOn(Day)); Assert.Contains("already recorded", model.Notice);
+    }
+
+    [Fact]
     public void CancellingAddTimeLeavesTheMeetingForANewEntryNotToTickItOff()
     {
         var model = Model(); var account = FirstAccount(model);
