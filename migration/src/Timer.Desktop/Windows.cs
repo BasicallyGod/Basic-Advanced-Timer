@@ -637,8 +637,10 @@ public sealed class DashboardWindow : Window
         pillGlyph = (IconGlyph)backToPill.Content!;
         railTop.Children.Add(backToPill);
         var backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
-        foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
-        var notesRule = Ui.Rule(); notesRule.Margin = new Thickness(6, 4); railTop.Children.Add(notesRule); railTop.Children.Add(notesRail);
+        // Notes sits straight under the Timeline, ahead of the week views, which are used less often.
+        railTop.Children.Add(timelineRail); railTop.Children.Add(notesRail);
+        var weekRule = Ui.Rule(); weekRule.Margin = new Thickness(6, 4); railTop.Children.Add(weekRule);
+        foreach (var button in new[] { overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
         settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);
@@ -901,10 +903,11 @@ public sealed class DashboardWindow : Window
     }
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
     {
+        if (!IsVisible && model.MeetingLogPending) Reveal?.Invoke(); // Yes on a meeting's question, from the pill, brings the dashboard up first.
         if (!IsVisible) return;
         if (entryEditor is { IsVisible: true }) return;
         entryEditor = new EntryDialog(model, row, start, end);
-        entryEditor.Closed += (_, _) => entryEditor = null;
+        entryEditor.Closed += (_, _) => { entryEditor = null; model.EndMeetingLog(); };
         Dialogs.Show(entryEditor);
     }
     /// <summary>Set by the coordinator so a request that arrives while only the pill is showing can bring the dashboard up first.</summary>

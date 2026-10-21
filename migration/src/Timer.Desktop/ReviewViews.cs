@@ -46,6 +46,22 @@ public static class ReviewViews
             var guide = Ui.Rule(); guide.Width = 390; guide.Opacity = .35; guide.Tag = "HourGuide";
             Canvas.SetLeft(guide, CardLeft - 6); Canvas.SetTop(guide, hour * pixelsPerHour + 1.5); canvas.Children.Add(guide);
         }
+        // Meetings planned for the day go in first, so they sit behind the tracked blocks. A dashed outline with a faint fill and no account strip keeps planned time
+        // from being mistaken for tracked time, and nothing here is ever counted.
+        foreach (var meeting in model.MeetingsOn(day))
+        {
+            var bandHeight = Math.Max(MinimumBlockHeight, (meeting.End!.Value - meeting.At!.Value).TotalHours * pixelsPerHour - 4);
+            var outline = new Avalonia.Controls.Shapes.Rectangle { RadiusX = BlockRadius, RadiusY = BlockRadius, StrokeThickness = 1.5, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 4, 3 } };
+            outline.Bind(Avalonia.Controls.Shapes.Shape.StrokeProperty, outline.GetResourceObservable("Muted"));
+            outline.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, outline.GetResourceObservable("Hover"));
+            var words = NoteShorthand.Display(meeting, model.AccountNames);
+            var label = Ui.Text(words + " · " + NoteTimes.Of(meeting) + " · planned", 12, "muted"); label.Margin = new Thickness(12, 4, 8, 0); label.TextTrimming = TextTrimming.CharacterEllipsis;
+            var band = new Panel { Name = "TimelineMeeting_" + meeting.Id, Tag = "Meeting", Width = 380, Height = bandHeight };
+            band.Children.Add(outline); if (bandHeight >= 24) band.Children.Add(label);
+            ToolTip.SetTip(band, $"Planned: {words} · {NoteTimes.Of(meeting)}\nNot tracked time. It asks whether it took place when it ends.");
+            Avalonia.Automation.AutomationProperties.SetName(band, $"Planned meeting: {words}, {NoteTimes.Of(meeting)}");
+            Canvas.SetLeft(band, CardLeft); Canvas.SetTop(band, meeting.At.Value.TotalHours * pixelsPerHour + 2); canvas.Children.Add(band);
+        }
         var groups = model.Editor.Entries(day, day.AddDays(1)).Where(e => e.GroupId is not null && e.Sources.Any(s => s.Duration > TimeSpan.Zero)).ToArray();
         var grouped = groups.SelectMany(e => e.Sources).ToHashSet();
         var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero && !grouped.Contains(s))
@@ -184,6 +200,7 @@ public static class ReviewViews
         {
             foreach (var guide in canvas.Children.OfType<Border>().Where(b => b.Tag is "HourGuide")) guide.Width = Math.Max(220, canvas.Bounds.Width - CardLeft);
             var width = Math.Max(220, canvas.Bounds.Width - CardLeft - 10) / Math.Max(1, ends.Count);
+            foreach (var band in canvas.Children.OfType<Panel>().Where(b => b.Tag is "Meeting")) band.Width = Math.Max(220, canvas.Bounds.Width - CardLeft - 10) - 6;
             foreach (var card in cards) { card.Card.Width = Math.Max(40, width - 6); Canvas.SetLeft(card.Card, CardLeft + card.Lane * width); }
             foreach (var marker in canvas.Children.OfType<Border>().Where(b => b.Tag is "NowLine")) marker.Width = Math.Max(220, canvas.Bounds.Width - SpineX);
         }

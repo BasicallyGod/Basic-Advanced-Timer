@@ -676,7 +676,12 @@ public sealed class TimerModel : INotifyPropertyChanged
         EditError = null; EntryRequested?.Invoke(null, start, end);
     }
     public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note, bool allowOverlap = false)
-        => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note, allowOverlap); });
+    {
+        var saved = ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note, allowOverlap); });
+        // The meeting took place and its time is now recorded, so the note is ticked off and the planned block goes.
+        if (saved && row is null && meetingToLog is { } meeting) { meetingToLog = null; DoneReminder(meeting.Id); }
+        return saved;
+    }
     /// <summary>What lengthening a block to a later end would move, or an explanation when it cannot be done. Nothing is changed.</summary>
     public IReadOnlyList<TimelineChange> PlanExtend(SessionRow row, DateTime end) => Editor.PlanExtend(row, end);
     public bool ExtendEntry(SessionRow row, DateTime end, string note) => ChangeLog(() => Editor.ExtendEnd(row, end, note));
@@ -962,6 +967,24 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>What was typed in Quick capture when it lost focus before being saved, kept in memory for the next time it opens. Null when there is none.</summary>
     public string? QuickCaptureDraft { get; set; }
+    /// <summary>The meetings planned for a day that are not yet answered for: shown on the timeline as planned time, never counted as tracked time.</summary>
+    public IReadOnlyList<DayNote> MeetingsOn(DateTime day) => dayNotes.Where(n => n.Day.Date == day.Date && !n.Done && DayNotes.IsMeeting(n)).OrderBy(n => n.At).ThenBy(n => n.Id).ToList();
+    // A meeting being turned into tracked time: the Add time dialog opens on its hours, and the note is ticked off when that entry is saved.
+    private (long Id, DateTime Start, DateTime End)? meetingToLog;
+    private string? entryAccountHint;
+    public bool MeetingLogPending => meetingToLog is not null;
+    /// <summary>Opens Add time on a meeting's hours, with the account its #Tag names (if any) chosen, for the person to pick or change.</summary>
+    public void LogMeeting(long id)
+    {
+        if (dayNotes.FirstOrDefault(n => n.Id == id) is not { } note || DayNotes.EndsAt(note) is not { } end) return;
+        var start = note.Day.Date + note.At!.Value;
+        meetingToLog = (id, start, end); entryAccountHint = NoteShorthand.AccountOf(note.Text, AccountNames);
+        EditError = null; EntryRequested?.Invoke(null, start, end);
+    }
+    /// <summary>The account to start Add time on once, then forgotten.</summary>
+    public string? TakeEntryAccountHint() { var hint = entryAccountHint; entryAccountHint = null; return hint; }
+    /// <summary>Called when the Add time dialog closes, saved or not, so a later entry is never mistaken for the meeting's.</summary>
+    public void EndMeetingLog() { meetingToLog = null; entryAccountHint = null; }
     public void DoneReminder(long id) { if (dayNotes.FirstOrDefault(n => n.Id == id) is { Done: false }) ToggleDayNote(id); }
     /// <summary>Raised once when a reminder first falls due, so a timer tucked away in the tray can come back.</summary>
     public event Action<Reminder>? ReminderDue;
@@ -972,7 +995,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         var now = Reminders;
         var signature = string.Join(",", now.Select(r => r.Note.Id + ":" + r.State));
         announced.RemoveWhere(id => now.All(r => r.Note.Id != id || r.State == ReminderState.Soon));
-        foreach (var due in now.Where(r => r.State == ReminderState.Due && announced.Add(r.Note.Id))) ReminderDue?.Invoke(due);
+        foreach (var due in now.Where(r => r.State is ReminderState.Due or ReminderState.Followup && announced.Add(r.Note.Id))) ReminderDue?.Invoke(due);
         if (signature != reminderSignature) { reminderSignature = signature; Notify(); }
     }
     /// <summary>The names of the accounts a #Tag can link to.</summary>
@@ -989,9 +1012,9 @@ public sealed class TimerModel : INotifyPropertyChanged
         {
             long stored = 0;
             // A note the database would not take stays on screen with a negative number and is written when a later try works (RetryNoteWrites).
-            id = NoteStore(() => stored = store.AddDayNote(target, parts.At, parts.Text), "that note") ? stored : --unsavedNoteId;
+            id = NoteStore(() => stored = store.AddDayNote(target, parts.At, parts.Text, parts.End), "that note") ? stored : --unsavedNoteId;
         }
-        dayNotes.Add(new DayNote(id, target, parts.At, parts.Text));
+        dayNotes.Add(new DayNote(id, target, parts.At, parts.Text, false, parts.End));
         if (target != day.Date) Notice = "Added to " + target.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
         Notify();
     }
@@ -1069,7 +1092,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public event Action? QuickCaptureRequested;
     public void RequestQuickCapture() => QuickCaptureRequested?.Invoke();
     /// <summary>Takes a note's time back out of the note and puts it into its words, so nothing is lost and it can be set again by typing it.</summary>
-    public void ClearNoteTime(long id) => ChangeNote(id, n => n.At is { } at ? n with { At = null, Text = NoteShorthand.WithTimeInWords(n.Text, at) } : n, true);
+    public void ClearNoteTime(long id) => ChangeNote(id, n => n.At is { } at ? n with { At = null, End = null, Text = NoteShorthand.WithTimeInWords(n.Text, at, n.End) } : n, true);
     /// <summary>Takes the deadline marker off a note, which becomes an ordinary one.</summary>
     public void ClearNoteDeadline(long id) => ChangeNote(id, n => DayNotes.IsDeadline(n) ? n with { Text = NoteShorthand.WithoutDeadline(n.Text) } : n, true);
     /// <summary>Unlinks a note from its account, leaving the name in its words as an ordinary word.</summary>
