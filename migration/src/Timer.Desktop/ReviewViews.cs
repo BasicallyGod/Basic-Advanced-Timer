@@ -34,10 +34,13 @@ public static class ReviewViews
             var tick = new Border { Width = width, Height = 1.5, Opacity = opacity, Tag = "Tick" }; tick.Classes.Add("rule");
             Canvas.SetLeft(tick, SpineX - width - 3); Canvas.SetTop(tick, hours * pixelsPerHour + 1.5); canvas.Children.Add(tick);
         }
+        var hourLabels = new List<(TextBlock Label, TranslateTransform Shift)>();
         for (var hour = 0; hour < 24; hour++)
         {
             // The hour labels share one right edge with the now chip, so the current time lines up with the hours instead of staggering against them.
             var label = Ui.Text($"{hour:00}:00", 12, "muted"); label.Classes.Add("figures"); label.Width = LabelRight; label.TextAlignment = TextAlignment.Right;
+            label.Name = "TimelineHour_" + hour;
+            var shift = new TranslateTransform(); label.RenderTransform = shift; hourLabels.Add((label, shift));
             Canvas.SetTop(label, hour * pixelsPerHour - 6); canvas.Children.Add(label);
             Tick(hour, 10, 1);
             if (pixelsPerHour >= 100) Tick(hour + .5, 6, .8);
@@ -268,12 +271,31 @@ public static class ReviewViews
             model.ClearSelection(); e.Handled = true;
         };
         var plan = model.Engine.Plan(day);
-        var first = intervals.Count > 0 ? intervals.Min(i => i.Start) : plan.Working ? plan.Start : day.AddHours(9);
-        var scroll = new ScrollViewer { Name = "TimelineScroll", Content = canvas,
+        var starts = intervals.Select(i => i.Start).Concat(model.MeetingsOn(day).Select(m => day.Date + m.At!.Value)).ToList();
+        var first = starts.Count > 0 ? starts.Min() : plan.Working ? plan.Start : day.AddHours(9);
+        var scroll = new ScrollViewer { Name = "TimelineScroll", Content = canvas, ClipToBounds = true,
             Tag = new Vector(0, model.TimelineOffset ?? Math.Max(0, (first - day).TotalHours * pixelsPerHour - 24)),
             AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+        // Only a partly visible hour label shifts inward. Blocks, ticks and pointer-to-time maths stay on their original coordinates.
+        void KeepHourLabelsReadable()
+        {
+            var height = scroll.Viewport.Height;
+            if (height <= 0) return;
+            foreach (var (label, shift) in hourLabels)
+            {
+                var top = Canvas.GetTop(label) + canvas.Margin.Top - scroll.Offset.Y;
+                var labelHeight = label.Bounds.Height;
+                var y = labelHeight > 0 && top < height && top + labelHeight > 0
+                    ? Math.Clamp(top, 2, Math.Max(2, height - labelHeight - 2)) - top : 0;
+                if (Math.Abs(shift.Y - y) > .01) shift.Y = y;
+            }
+        }
         scroll.ScrollChanged += (_, _) =>
-        { if (scroll.Tag is null && scroll.Viewport.Height > 0) model.TimelineOffset = scroll.Offset.Y; };
+        {
+            if (scroll.Tag is null && scroll.Viewport.Height > 0) model.TimelineOffset = scroll.Offset.Y;
+            KeepHourLabelsReadable();
+        };
+        scroll.LayoutUpdated += (_, _) => KeepHourLabelsReadable();
         scroll.AddHandler(InputElement.PointerWheelChangedEvent, (_, e) =>
         {
             if (!e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;

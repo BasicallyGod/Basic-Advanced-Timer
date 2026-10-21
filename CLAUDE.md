@@ -105,3 +105,7 @@ A resizable dashboard (it needs a reactive layout, so it belongs in alpha), over
 - `NotificationsPanel` is a height-limited grid with a fixed heading and a scrollable list. Its signature includes title, schedule and timing description so an open list updates without reopening it.
 - The minimal pill keeps its width, uses up to two title lines with full-text tooltips, and puts reminder actions on a second row. Standard and full layouts keep the single-row strip.
 - A meeting alert offers Dismiss, which persists a wait through the existing reminder settings instead of completing the note. A meeting with an end still asks whether it took place at that time; without an end the alert is dismissed through its reminder lookback period. Moving a note clears its prior wait. Tasks and deadlines retain Done, and ended meetings retain their existing No/Yes confirmation and explicit Add time flow.
+
+## Timeline viewport behaviour
+
+`ReviewViews.Timeline` adjusts only the render transforms of partly visible hour labels to keep the full labels inside the viewport. Canvas block positions, ticks and pointer-to-time calculations stay unchanged; the ScrollViewer clips at both edges. The default scroll anchor is the earliest recorded block or planned meeting, with the working-day start as fallback. An explicit `TimelineOffset` always takes precedence. Do not add offsets to block geometry to compensate for label placement.
