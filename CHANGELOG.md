@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 21 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Notes second on the rail | [31936e9](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/31936e9) | The rail now reads Timeline, Notes, then Week overview, Hours table and Entries, so Notes is not behind the week views. Nothing was removed. |
+
 ## 20 October 2026
 
 | Change | Commit | Details |
