@@ -130,8 +130,7 @@ public sealed class RecurringMeetingTests : IDisposable
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NotesTab").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); }
             var first = Series(model)[0];
-            Assert.Contains("Every weekday", window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is not null).Select(t => t.Text!)); // The chip's words.
-            Assert.Single(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "NoteRepeatChip_" + first.Id);
+            Assert.Single(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "NoteRepeatMark_" + first.Id); // The repeat mark on the row.
             var remove = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NoteRemove_" + first.Id);
             Assert.NotNull(remove.Flyout); // A note that repeats asks which, instead of removing at once.
             remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();

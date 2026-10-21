@@ -9,9 +9,9 @@ using Timer.Core;
 namespace Timer.Desktop;
 
 /// <summary>
-/// The Notes page: the notes for the day the dashboard is showing, with a box to add one, and what is coming up beside them. A note is typed in the
-/// shorthand (14:30 sets a time, ! a deadline, @fri a day, #Account links an account) and each part it understood shows as a chip that can be taken back
-/// out. The page is built once and listens to the model itself, so a tick of the clock never rebuilds it under the pointer, and while a note's words are
+/// The Notes page: the notes for the day the dashboard is showing, one line each, with Add note and a quick box to add one, and what is coming up beside them.
+/// A note's kind, day, times, account and repeat are set in its Details (a flyout, NoteDetails), and the shorthand (14:30, !, @fri, #Account, every mon) still
+/// works in the quick box. What was read from the words shows as quiet marks on the row. The page is built once and listens to the model itself, so a tick of the clock never rebuilds it under the pointer, and while a note's words are
 /// being edited it waits until the box is left, so typing is never interrupted.
 /// </summary>
 public sealed class NotesPage : Grid
@@ -20,7 +20,7 @@ public sealed class NotesPage : Grid
     private readonly StackPanel rows = new() { Spacing = 4 };
     private readonly ComingUpView coming;
     private readonly TextBlock heading = new() { FontSize = 16, FontWeight = FontWeight.SemiBold };
-    private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Add a note: 14:30 · ! · @fri · #Account", Padding = new Thickness(10, 7), FontSize = 14 };
+    private readonly TextBox input = new() { Name = "NoteInput", Watermark = "Quick add: type a note, press Enter", Padding = new Thickness(10, 7), FontSize = 14 };
     private string shown = ""; private bool dirty; private Button undoRemove = null!;
     private string kind = "all"; // Which notes the day's list shows: all, tasks, events or deadlines.
     private readonly StackPanel tabs = new() { Orientation = Orientation.Horizontal, Spacing = 2 };
@@ -38,7 +38,8 @@ public sealed class NotesPage : Grid
         var headRow = Ui.Grid("*,Auto,Auto"); headRow.ColumnSpacing = 6; Ui.Put(headRow, heading);
         // A removed note can be put back, so one stray click on the cross never loses it.
         undoRemove = Ui.DialogButton("Undo remove", () => model.RestoreRemovedNote(), "NoteUndoRemove"); undoRemove.Height = 32; undoRemove.IsVisible = false; Ui.Put(headRow, undoRemove, 1);
-        var add = Ui.DialogButton("Add note", () => input.Focus(), "NoteAddButton", true); add.Height = 32; Ui.Put(headRow, add, 2);
+        // Add note opens the same panel as a note's Details, so a meeting, a deadline or a repeat is set with controls, not typed. The box below stays for quick text.
+        var add = Ui.DialogButton("Add note", () => { }, "NoteAddButton", true); add.Height = 32; add.Flyout = DetailsFlyout(null); Ui.Put(headRow, add, 2);
         Ui.Put(leftGrid, headRow); Ui.Put(leftGrid, tabs, row: 1);
         Ui.Put(leftGrid, Ui.WithMoreBelow(new ScrollViewer { Content = rows, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 2);
         // A note can be put on any day: the small calendar beside the box picks it for the next note, and it shows as a chip until the note is added.
@@ -79,6 +80,14 @@ public sealed class NotesPage : Grid
         DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= OnModel; };
         // A rebuild that was held back while a note was being edited happens as soon as that box is left.
         AddHandler(LostFocusEvent, (_, _) => { if (dirty && !Editing()) Rebuild(); });
+    }
+
+    /// <summary>The flyout for adding a note (note null) or for one note's Details. Its panel is built each time it opens, so it always starts from the note as it is.</summary>
+    private Flyout DetailsFlyout(DayNote? note)
+    {
+        var flyout = new Flyout { Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight };
+        flyout.Opening += (_, _) => flyout.Content = NoteDetails.Build(model, note, model.SelectedDate, () => flyout.Hide());
+        return flyout;
     }
 
     private void UpdateDayChip()
@@ -136,11 +145,13 @@ public sealed class NotesPage : Grid
             var id = note.Id;
             var tick = new CheckBox { Name = "NoteTick_" + id, IsChecked = note.Done, MinWidth = 0, VerticalAlignment = VerticalAlignment.Center };
             tick.Click += (_, _) => model.ToggleDayNote(id);
-            var text = new TextBox { Name = "NoteText_" + id, Text = note.Text, TextWrapping = TextWrapping.Wrap, AcceptsReturn = false, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(4, 2), FontSize = 14, Opacity = note.Done ? .55 : 1 };
+            // The words show without the ! and the #Tag, which have their own marks on the right.
+            var shownWords = NoteShorthand.Display(note, model.AccountNames);
+            var text = new TextBox { Name = "NoteText_" + id, Text = shownWords, TextWrapping = TextWrapping.NoWrap, AcceptsReturn = false, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(4, 2), FontSize = 14, Opacity = note.Done ? .55 : 1, VerticalAlignment = VerticalAlignment.Center };
             // Each control says which note it is for, since the rows look alike to a screen reader.
-            Avalonia.Automation.AutomationProperties.SetName(tick, "Done: " + note.Text); Avalonia.Automation.AutomationProperties.SetName(text, "Note text");
+            Avalonia.Automation.AutomationProperties.SetName(tick, "Done: " + shownWords); Avalonia.Automation.AutomationProperties.SetName(text, "Note text");
             // TextChanged does not fire headless, so the text property is watched instead.
-            text.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && text.Text != note.Text) model.SetDayNoteText(id, text.Text ?? ""); };
+            text.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && text.Text != shownWords) model.SetDayNoteWords(id, text.Text ?? ""); };
             // A note that repeats asks which: just this one, or this one and every later one.
             var repeats = model.SeriesOf(note) is not null; Flyout? removeFlyout = null;
             var remove = Ui.IconButton(IconKind.Close, "Remove", "NoteRemove_" + id, () => { if (!repeats) model.RemoveDayNote(id); });
@@ -151,21 +162,25 @@ public sealed class NotesPage : Grid
                 choice.Children.Add(Ui.DialogButton("This and all later", () => { removeFlyout?.Hide(); model.RemoveSeriesFrom(id); }, "NoteRemoveLater_" + id));
                 removeFlyout = new Flyout { Content = choice, Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight }; remove.Flyout = removeFlyout;
             }
-            remove.Width = 26; remove.Height = 26; remove.Classes.Add("hoverReveal"); Avalonia.Automation.AutomationProperties.SetName(remove, "Remove note: " + note.Text);
-            // A small calendar picks another day for the note, for when it was put on the wrong one or plans change.
-            var when = Ui.IconButton(IconKind.Today, "Move to another day", "NoteMove_" + id, () => { }); when.Width = 26; when.Height = 26; when.Classes.Add("hoverReveal"); Avalonia.Automation.AutomationProperties.SetName(when, "Move note to another day: " + note.Text);
-            var calendar = new SoftDatePicker { Name = "NoteCalendar_" + id };
-            var flyout = new Flyout { Content = calendar, Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight };
-            flyout.Opening += (_, _) => calendar.View(note.Day, note.Day);
-            calendar.DayPicked += picked => { flyout.Hide(); model.MoveDayNote(id, picked); };
-            when.Flyout = flyout;
-            var row = Ui.Grid("Auto,*,Auto"); row.VerticalAlignment = VerticalAlignment.Center; row.Margin = new Thickness(0, 2);
-            Ui.Put(row, tick);
-            // What was recognised in the words is shown under them as quiet marks, each with a cross (shown while the row is under the pointer or has focus) that takes it back out of the note.
-            var body = new StackPanel { Spacing = 0 }; body.Children.Add(text);
-            if (NoteChips.For(model, note, this) is { } chips) { chips.Margin = new Thickness(8, 0, 0, 2); body.Children.Add(chips); }
-            var actions = Ui.Horizontal(when, remove); actions.VerticalAlignment = VerticalAlignment.Top; actions.Spacing = 0;
-            Ui.Put(row, body, 1); Ui.Put(row, actions, 2);
+            remove.Width = 26; remove.Height = 26; remove.Classes.Add("hoverReveal"); Avalonia.Automation.AutomationProperties.SetName(remove, "Remove note: " + shownWords);
+            // Everything else about the note (kind, day, times, account, repeat) is in its Details, which open beside the row.
+            var details = Ui.Button("Details", () => { }, "NoteDetails_" + id); details.Classes.Add("toolButton"); details.Classes.Add("quiet"); details.Classes.Add("hoverReveal"); details.Height = 26; details.Padding = new Thickness(10, 0); details.FontSize = 12;
+            Avalonia.Automation.AutomationProperties.SetName(details, "Details: " + shownWords); details.Flyout = DetailsFlyout(note);
+            var row = Ui.Grid("Auto,*,Auto,Auto"); row.VerticalAlignment = VerticalAlignment.Center; row.Margin = new Thickness(0, 2);
+            Ui.Put(row, tick); Ui.Put(row, text, 1);
+            // What was read from the words is quiet marks on the right: the time, a flag for a deadline, a repeat mark and the account's dot.
+            var marks = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 6, 0) };
+            if (note.At is not null) { var when = Ui.Text(NoteTimes.Of(note), 12.5, "muted"); when.Name = "NoteTime_" + id; marks.Children.Add(when); }
+            if (DayNotes.IsDeadline(note)) { var flag = new Border { Name = "NoteDeadlineMark_" + id, Child = new IconGlyph(IconKind.Flag) { TintKey = "Finish" } }; ToolTip.SetTip(flag, "Deadline"); marks.Children.Add(flag); }
+            if (model.SeriesOf(note) is { } series) { var again = new Border { Name = "NoteRepeatMark_" + id, Child = new IconGlyph(IconKind.Week) { TintKey = "Muted" } }; ToolTip.SetTip(again, series.Rule.Words()); marks.Children.Add(again); }
+            if (NoteShorthand.AccountOf(note.Text, model.AccountNames) is { } linked && model.Accounts.FirstOrDefault(a => a.Name == linked) is { } account)
+            {
+                var dot = new Border { Name = "NoteAccountMark_" + id, Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(Color.Parse(Ui.Visible(account.Colour))), VerticalAlignment = VerticalAlignment.Center };
+                ToolTip.SetTip(dot, account.Display); marks.Children.Add(dot);
+            }
+            Ui.Put(row, marks, 2);
+            var actions = Ui.Horizontal(details, remove); actions.VerticalAlignment = VerticalAlignment.Center; actions.Spacing = 2;
+            Ui.Put(row, actions, 3);
             Ui.RevealOnHover(row);
             rows.Children.Add(row);
         }
@@ -173,10 +188,7 @@ public sealed class NotesPage : Grid
     }
 }
 
-/// <summary>
-/// The chips that show what a note's shorthand was taken to mean: its time, whether it is a deadline, and the account its #Tag links to. In Notes each has a
-/// cross that takes that part back out of the note (see TimerModel.ClearNoteTime and the others); elsewhere the account chip is only shown.
-/// </summary>
+/// <summary>The account chip a note's #Tag gives, shown in Coming up. (In Notes the same thing is a small dot on the row, and the rest is in Details.)</summary>
 public static class NoteChips
 {
     private static Border Chip(string name, Control? lead, string text, string tip, string? clearName, Action? clear, IBrush? ink = null)
@@ -203,27 +215,6 @@ public static class NoteChips
         var dot = new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(colour), VerticalAlignment = VerticalAlignment.Center };
         var ink = new SolidColorBrush(TagColours.Text(colour, model));
         return Chip(name, dot, "#" + known.Display, "Linked to " + known.Display, interactive ? name.Replace("Chip", "Clear") : null, interactive ? () => model.ClearNoteAccount(note.Id) : null, ink);
-    }
-    /// <summary>All the chips for one note, or null when it has none.</summary>
-    public static Control? For(TimerModel model, DayNote note, Control host)
-    {
-        var chips = new WrapPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
-        var id = note.Id;
-        if (note.At is { } at)
-            chips.Children.Add(Chip("NoteTimeChip_" + id, new IconGlyph(IconKind.Clock) { TintKey = "Muted" }, NoteTimes.Of(note), "Time, taken from the words. The cross puts it back into them.", "NoteTimeClear_" + id, () => model.ClearNoteTime(id)));
-        if (model.SeriesOf(note) is { } series)
-        {
-            chips.Children.Add(Chip("NoteRepeatChip_" + id, new IconGlyph(IconKind.Week) { TintKey = "Muted" }, series.Rule.Words(), "Repeats. The cross stops it repeating and puts the words back.", "NoteRepeatClear_" + id, () => model.ClearNoteRepeat(id)));
-            if (model.HasLaterInSeries(note))
-            {
-                var apply = Ui.Button("Apply to later", () => model.ApplyToLater(id), "NoteRepeatApply_" + id); apply.Classes.Add("hoverReveal"); apply.FontSize = 12; apply.Padding = new Thickness(6, 0); apply.Height = 20;
-                ToolTip.SetTip(apply, "Give this note's words and time to the later ones"); chips.Children.Add(apply);
-            }
-        }
-        if (DayNotes.IsDeadline(note))
-            chips.Children.Add(Chip("NoteDeadlineChip_" + id, new IconGlyph(IconKind.Flag) { TintKey = "Finish" }, "Deadline", "A deadline, from the ! at the start. The cross makes it an ordinary note.", "NoteDeadlineClear_" + id, () => model.ClearNoteDeadline(id)));
-        if (AccountChip(model, note, host, "NoteAccountChip_" + id, interactive: true) is { } account) chips.Children.Add(account);
-        return chips.Children.Count == 0 ? null : chips;
     }
 }
 

@@ -59,7 +59,7 @@ public sealed class NotesTabTests
     }
 
     [AvaloniaFact]
-    public void ANoteTypedInTheShorthandKeepsItsTimeAndAccountAndShowsThemAsChips()
+    public void ANoteTypedInTheShorthandKeepsItsTimeAndAccountAndShowsThemAsMarks()
     {
         var (model, window) = Open();
         try
@@ -68,7 +68,7 @@ public sealed class NotesTabTests
             var note = Assert.Single(model.NotesOn(model.SelectedDate));
             Assert.Equal(new TimeSpan(14, 30, 0), note.At); Assert.Equal("call Sam #AccountOne", note.Text);
             Assert.Equal("", Find<TextBox>(window, "NoteInput").Text); // The box is empty for the next one.
-            Find<Border>(window, "NoteTimeChip_" + note.Id); Find<Border>(window, "NoteAccountChip_" + note.Id);
+            Find<TextBlock>(window, "NoteTime_" + note.Id); Find<Border>(window, "NoteAccountMark_" + note.Id);
             Assert.Equal("Account one", NoteShorthand.AccountOf(note.Text, model.AccountNames));
         }
         finally { window.Close(); }
@@ -81,12 +81,12 @@ public sealed class NotesTabTests
         try
         {
             Type(window, "! 09:15 send invoice #AccountTwo"); var id = Assert.Single(model.NotesOn(model.SelectedDate)).Id;
-            Find<Button>(window, "NoteTimeClear_" + id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            model.ClearNoteTime(id); Dispatcher.UIThread.RunJobs();
             var note = model.NotesOn(model.SelectedDate).Single();
             Assert.Null(note.At); Assert.StartsWith("! 09:15", note.Text);
-            Find<Button>(window, "NoteDeadlineClear_" + id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            model.ClearNoteDeadline(id); Dispatcher.UIThread.RunJobs();
             Assert.False(DayNotes.IsDeadline(model.NotesOn(model.SelectedDate).Single()));
-            Find<Button>(window, "NoteAccountClear_" + id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            model.ClearNoteAccount(id); Dispatcher.UIThread.RunJobs();
             Assert.DoesNotContain("#", model.NotesOn(model.SelectedDate).Single().Text); Assert.Contains("AccountTwo", model.NotesOn(model.SelectedDate).Single().Text); // Still reads as a sentence.
         }
         finally { window.Close(); }
@@ -102,7 +102,7 @@ public sealed class NotesTabTests
             Find<CheckBox>(window, "NoteTick_" + id).RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent)); Dispatcher.UIThread.RunJobs();
             Assert.True(model.AllDayNotes.Single().Done);
             var tomorrow = model.SelectedDate.AddDays(1);
-            ((SoftDatePicker)((Flyout)Find<Button>(window, "NoteMove_" + id).Flyout!).Content!).SelectedDate = tomorrow; // The calendar lives in the button's flyout. Dispatcher.UIThread.RunJobs();
+            model.MoveDayNote(id, tomorrow); Dispatcher.UIThread.RunJobs(); // The day is changed in the note's Details.
             Assert.Empty(model.NotesOn(model.SelectedDate)); Assert.Equal(tomorrow, Assert.Single(model.NotesOn(tomorrow)).Day);
             Assert.Contains("Moved to", model.Notice); // The note left the day showing, so it says where it went.
             model.MoveDayNote(id, model.SelectedDate); Dispatcher.UIThread.RunJobs();
