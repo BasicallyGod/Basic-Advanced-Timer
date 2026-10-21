@@ -61,8 +61,8 @@ public sealed class NotificationTests
             Assert.Equal("3", Find<TextBlock>(window, "NotificationsCount").Text);
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Needs attention · 2"); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Coming up · 1");
             Assert.NotNull(Find<Button>(window, "NotificationSnooze_" + ids[0]).Flyout);
-            Click(window, "NotificationDone_" + ids[0]); // Call A done.
-            Assert.True(model.AllDayNotes.Single(n => n.Id == ids[0]).Done); Assert.Equal("2", Find<TextBlock>(window, "NotificationsCount").Text);
+            Click(window, "NotificationDone_" + ids[0]); // Acknowledge the meeting alert without completing the scheduled note.
+            Assert.False(model.AllDayNotes.Single(n => n.Id == ids[0]).Done); Assert.Equal("2", Find<TextBlock>(window, "NotificationsCount").Text);
             Assert.Empty(window.GetVisualDescendants().OfType<Control>().Where(c => c.Name == "NotificationItem_" + ids[0]));
             Click(window, "NotificationDone_" + ids[1]); Click(window, "NotificationDone_" + ids[2]);
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Nothing needs you right now.");
@@ -92,7 +92,7 @@ public sealed class NotificationTests
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NotesTab").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); }
             var bell = Find<Button>(window, "NotificationsBell"); Assert.NotNull(bell.Flyout);
-            Assert.True(Find<Border>(window, "NotificationsBadge").IsVisible); Assert.True(Find<Border>(window, "NotificationsBadge").Child is TextBlock { Text: "3" });
+            Assert.True(Find<Border>(window, "NotificationsBadge").IsVisible); Assert.True(Find<Border>(window, "NotificationsBadge").Child is TextBlock { Text: "2" });
             var card = window.GetVisualDescendants().OfType<ReminderCard>().Single(); Assert.True(card.IsVisible);
             var more = card.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ReminderMore"); Assert.True(more.IsVisible); Assert.Equal("+2 more", more.Content?.ToString()); Assert.NotNull(more.Flyout);
             // The Snooze button opens a list of times, and a time chosen snoozes just that reminder for that long.

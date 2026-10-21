@@ -960,6 +960,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool ReminderSoundOn => Extra(RemindSoundLine) != "off";
     public void SetReminderSoundOn(bool on) => SetExtra(RemindSoundLine, on ? null : "off");
     public IReadOnlyList<Reminder> Reminders => RemindersOn ? ReminderRules.For(dayNotes, Engine.Now, ReminderLead, snoozedUntil) : System.Array.Empty<Reminder>();
+    public int AttentionReminderCount => Reminders.Count(r => r.State != ReminderState.Soon);
     /// <summary>The reminder to show a card for: the first one that is due or overdue. A heads-up has no card.</summary>
     public Reminder? ActiveReminder => ActiveWhere(_ => true);
     // The first thing that needs attention, or (when the setting is on) the first heads-up if nothing does.
@@ -984,7 +985,21 @@ public sealed class TimerModel : INotifyPropertyChanged
     private const string RemindSnoozedLine = "remindsnoozed=";
     public void SnoozeReminder(long id, int? minutes = null)
     {
-        snoozedUntil[id] = Engine.Now.AddMinutes(minutes ?? ReminderSnooze); announced.Remove(id);
+        WaitForReminder(id, Engine.Now.AddMinutes(minutes ?? ReminderSnooze));
+    }
+    // Dismissing a scheduled meeting acknowledges the alert, not the activity. Its end can still ask whether it took place.
+    public void DismissMeetingReminder(long id)
+    {
+        if (dayNotes.FirstOrDefault(n => n.Id == id) is not { Done: false } note || KindOf(note) != NoteKind.Meeting) return;
+        WaitForReminder(id, DayNotes.EndsAt(note) ?? DayNotes.DueAt(note).Add(ReminderRules.LookBack).AddSeconds(1));
+    }
+    private void WaitForReminder(long id, DateTime until)
+    {
+        snoozedUntil[id] = until; announced.Remove(id);
+        SaveReminderWaits();
+    }
+    private void SaveReminderWaits()
+    {
         var live = snoozedUntil.Where(p => p.Value > Engine.Now && p.Key >= 0).Select(p => p.Key + ":" + p.Value.Ticks).ToList();
         SetExtra(RemindSnoozedLine, live.Count == 0 ? null : string.Join(",", live));
     }
@@ -1150,6 +1165,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         // Moving a ticked note to another day or time means it is live again, so it comes back (a meeting shows on the timeline at its new time). Changing only
         // the words or account leaves the tick alone.
         var moved = note.Day.Date != day || note.At != at || note.End != end;
+        if (moved && snoozedUntil.Remove(id)) SaveReminderWaits();
         ChangeNote(id, n => n with { Text = text, Day = day, At = at, End = end, Done = n.Done && !moved }, false);
         if (series is null) { if (e.Repeat is { } rule) StartSeriesFrom(dayNotes.First(n => n.Id == id), rule); }
         else if (e.AllLater)
@@ -1327,7 +1343,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public void ToggleDayNote(long id) => ChangeNote(id, n => n with { Done = !n.Done }, true);
     /// <summary>Saves a note's words as they are typed, without notifying, so the box being typed in is not rebuilt. Emptying a note leaves it as it was.</summary>
-    public void SetDayNoteText(long id, string text) => ChangeNote(id, n => n with { Text = text.Trim() }, false);
+    public void SetDayNoteText(long id, string text) => ChangeNote(id, n => n with { Text = text.Trim() }, true);
     private readonly List<DayNote> removedNotes = new();
     /// <summary>The note most recently removed, which Undo remove puts back; null when there is none.</summary>
     public DayNote? LastRemovedNote => removedNotes.Count > 0 ? removedNotes[^1] : null;
