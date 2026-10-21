@@ -99,7 +99,7 @@ public sealed class NotesPage : Grid
     }
 
     private string Signature() => model.SelectedDate.ToString("yyyyMMdd") + "|" + model.CurrentTheme.Name + "|" + string.Join(",", model.AccountNames) + "|"
-        + string.Join(";", model.AllDayNotes.Select(n => $"{n.Id}:{n.Day:yyyyMMdd}:{n.At}:{n.End}:{n.Done}:{n.Text}")) + "|" + model.Engine.Now.ToString("yyyyMMdd") + "|" + kind;
+        + string.Join(";", model.AllDayNotes.Select(n => $"{n.Id}:{n.Day:yyyyMMdd}:{n.At}:{n.End}:{n.SeriesId}:{n.Done}:{n.Text}")) + "|" + model.Engine.Now.ToString("yyyyMMdd") + "|" + kind;
 
     public void Rebuild()
     {
@@ -141,7 +141,17 @@ public sealed class NotesPage : Grid
             Avalonia.Automation.AutomationProperties.SetName(tick, "Done: " + note.Text); Avalonia.Automation.AutomationProperties.SetName(text, "Note text");
             // TextChanged does not fire headless, so the text property is watched instead.
             text.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && text.Text != note.Text) model.SetDayNoteText(id, text.Text ?? ""); };
-            var remove = Ui.IconButton(IconKind.Close, "Remove", "NoteRemove_" + id, () => model.RemoveDayNote(id)); remove.Width = 26; remove.Height = 26; remove.Classes.Add("hoverReveal"); Avalonia.Automation.AutomationProperties.SetName(remove, "Remove note: " + note.Text);
+            // A note that repeats asks which: just this one, or this one and every later one.
+            var repeats = model.SeriesOf(note) is not null; Flyout? removeFlyout = null;
+            var remove = Ui.IconButton(IconKind.Close, "Remove", "NoteRemove_" + id, () => { if (!repeats) model.RemoveDayNote(id); });
+            if (repeats)
+            {
+                var choice = new StackPanel { Spacing = 6, Width = 190 };
+                choice.Children.Add(Ui.DialogButton("Remove this one", () => { removeFlyout?.Hide(); model.RemoveDayNote(id); }, "NoteRemoveOne_" + id));
+                choice.Children.Add(Ui.DialogButton("This and all later", () => { removeFlyout?.Hide(); model.RemoveSeriesFrom(id); }, "NoteRemoveLater_" + id));
+                removeFlyout = new Flyout { Content = choice, Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight }; remove.Flyout = removeFlyout;
+            }
+            remove.Width = 26; remove.Height = 26; remove.Classes.Add("hoverReveal"); Avalonia.Automation.AutomationProperties.SetName(remove, "Remove note: " + note.Text);
             // A small calendar picks another day for the note, for when it was put on the wrong one or plans change.
             var when = Ui.IconButton(IconKind.Today, "Move to another day", "NoteMove_" + id, () => { }); when.Width = 26; when.Height = 26; when.Classes.Add("hoverReveal"); Avalonia.Automation.AutomationProperties.SetName(when, "Move note to another day: " + note.Text);
             var calendar = new SoftDatePicker { Name = "NoteCalendar_" + id };
@@ -201,6 +211,15 @@ public static class NoteChips
         var id = note.Id;
         if (note.At is { } at)
             chips.Children.Add(Chip("NoteTimeChip_" + id, new IconGlyph(IconKind.Clock) { TintKey = "Muted" }, NoteTimes.Of(note), "Time, taken from the words. The cross puts it back into them.", "NoteTimeClear_" + id, () => model.ClearNoteTime(id)));
+        if (model.SeriesOf(note) is { } series)
+        {
+            chips.Children.Add(Chip("NoteRepeatChip_" + id, new IconGlyph(IconKind.Week) { TintKey = "Muted" }, series.Rule.Words(), "Repeats. The cross stops it repeating and puts the words back.", "NoteRepeatClear_" + id, () => model.ClearNoteRepeat(id)));
+            if (model.HasLaterInSeries(note))
+            {
+                var apply = Ui.Button("Apply to later", () => model.ApplyToLater(id), "NoteRepeatApply_" + id); apply.Classes.Add("hoverReveal"); apply.FontSize = 12; apply.Padding = new Thickness(6, 0); apply.Height = 20;
+                ToolTip.SetTip(apply, "Give this note's words and time to the later ones"); chips.Children.Add(apply);
+            }
+        }
         if (DayNotes.IsDeadline(note))
             chips.Children.Add(Chip("NoteDeadlineChip_" + id, new IconGlyph(IconKind.Flag) { TintKey = "Finish" }, "Deadline", "A deadline, from the ! at the start. The cross makes it an ordinary note.", "NoteDeadlineClear_" + id, () => model.ClearNoteDeadline(id)));
         if (AccountChip(model, note, host, "NoteAccountChip_" + id, interactive: true) is { } account) chips.Children.Add(account);

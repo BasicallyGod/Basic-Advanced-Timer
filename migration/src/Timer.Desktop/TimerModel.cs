@@ -177,7 +177,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     private StoreSettings preferences;
     private readonly TimerStore? store;
     private readonly List<DayNote> dayNotes;
-    private long nextNoteId = 1;
+    private long nextNoteId = 1, nextSeriesId = 1;
+    private readonly List<NoteSeries> seriesList;
     private int ticks;
     public TimerModel(TrackingEngine? engine = null, StoreSettings? preferences = null, TimerStore? store = null)
     {
@@ -186,6 +187,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.store = store;
         Editor = store?.Editor ?? new LedgerEditor(Engine);
         dayNotes = store?.LoadDayNotes() ?? new List<DayNote>();
+        seriesList = store?.LoadSeries() ?? new List<NoteSeries>();
         LoadSnoozes();
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
@@ -193,6 +195,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         SelectedDate = Engine.Now.Date; lastToday = SelectedDate;
         // The user's own themes need their colours registered too. The built-in ones were registered when the app started.
         if (Application.Current is { } current && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && this.preferences.Themes is { Count: > 0 } own) ThemeEngine.Register(current, own);
+        MakeSeriesNotes(); // Notes for repeats come up to date as the app starts, and again each day (Tick).
         ApplyTheme(); Ui.ApplyTooltips(this.preferences.Tooltips);
         // When the computer switches between light and dark, System follows it.
         if (Application.Current?.PlatformSettings is { } platform)
@@ -345,6 +348,12 @@ public sealed class TimerModel : INotifyPropertyChanged
             {
                 var text = NoteShorthand.Relink(dayNotes[i].Text, before, map, gone);
                 if (text != dayNotes[i].Text) { dayNotes[i] = dayNotes[i] with { Text = text }; PersistNote(dayNotes[i]); }
+            }
+            // A repeating note's template follows too, or the notes made later would carry the old name.
+            for (var i = 0; i < seriesList.Count; i++)
+            {
+                var text = NoteShorthand.Relink(seriesList[i].Text, before, map, gone);
+                if (text != seriesList[i].Text) { seriesList[i] = seriesList[i] with { Text = text }; PersistSeries(seriesList[i]); }
             }
         }
         preferences = preferences with { Accounts = WithColours(values) };
@@ -839,6 +848,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (closed) return;
         ticks++;
         FollowToday();
+        MakeSeriesNotes();
         CheckReminders();
         if (ticks % 15 == 0) { Save(); Notify(); }
         else PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Elapsed)));
@@ -904,12 +914,17 @@ public sealed class TimerModel : INotifyPropertyChanged
     // ---- Notes on a day. They live in the database, outside the undo history, and feed Coming up. ----
     public IReadOnlyList<DayNote> AllDayNotes => dayNotes;
     public IReadOnlyList<DayNote> NotesOn(DateTime day) => dayNotes.Where(n => n.Day.Date == day.Date).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
-    public IReadOnlyList<DayNote> ComingUp(int days = 180) => DayNotes.ComingUp(dayNotes, Engine.Now, days);
+    /// <summary>What is coming up. A repeating note shows once, as its next time, so a daily meeting does not fill the list.</summary>
+    public IReadOnlyList<DayNote> ComingUp(int days = 180)
+    {
+        var seen = new HashSet<long>();
+        return DayNotes.ComingUp(dayNotes, Engine.Now, days).Where(n => n.SeriesId is not { } series || seen.Add(series)).ToList();
+    }
     /// <summary>Tasks and deadlines on earlier days that were never ticked off, the most recent day first, looking back 90 days. An event just passes, so it is not missed.</summary>
     public IReadOnlyList<DayNote> MissedNotes(int days = 90)
     {
         var today = Engine.Now.Date;
-        return dayNotes.Where(n => !n.Done && n.Day.Date < today && n.Day.Date >= today.AddDays(-days) && (DayNotes.IsTask(n) || DayNotes.IsDeadline(n)))
+        return dayNotes.Where(n => !n.Done && n.Day.Date < today && n.Day.Date >= today.AddDays(-days) && n.SeriesId is null && (DayNotes.IsTask(n) || DayNotes.IsDeadline(n))) // A repeat comes round again, so a missed one is not carried over.
             .OrderByDescending(n => n.Day.Date).ThenBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
     }
     /// <summary>Carries every missed note over to today, so what was not done is on today's list.</summary>
@@ -1000,22 +1015,105 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>The names of the accounts a #Tag can link to.</summary>
     public IReadOnlyList<string> AccountNames => Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name).ToList();
-    /// <summary>Adds a note to a day from what was typed. A time such as 14:30 in the words becomes the note's time.</summary>
+    /// <summary>Adds a note to a day from what was typed. A time such as 14:30 in the words becomes the note's time, and an every phrase makes it repeat.</summary>
     public void AddDayNote(DateTime day, string typed)
     {
         // A day named in the words (@fri, @tomorrow, @21oct) wins over the day showing, and the notice says where the note went, since it may leave the list in view.
         var parts = NoteShorthand.Parse(typed, Engine.Now); if (parts.Text.Length == 0) return;
         var target = (parts.Day ?? day).Date;
+        if (parts.Repeat is { } rule && StartSeries(rule, target, parts)) { Notify(); return; }
+        AddNoteRow(target, parts.At, parts.Text, parts.End, null);
+        if (target != day.Date) Notice = "Added to " + target.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
+        Notify();
+    }
+    /// <summary>Adds one stored note row, kept on screen with a negative number if the database would not take it (RetryNoteWrites).</summary>
+    private DayNote AddNoteRow(DateTime day, TimeSpan? at, string text, TimeSpan? end, long? seriesId)
+    {
         long id;
         if (store is null) id = nextNoteId++;
         else
         {
             long stored = 0;
-            // A note the database would not take stays on screen with a negative number and is written when a later try works (RetryNoteWrites).
-            id = NoteStore(() => stored = store.AddDayNote(target, parts.At, parts.Text, parts.End), "that note") ? stored : --unsavedNoteId;
+            id = NoteStore(() => stored = store.AddDayNote(day, at, text, end, seriesId), "that note") ? stored : --unsavedNoteId;
         }
-        dayNotes.Add(new DayNote(id, target, parts.At, parts.Text, false, parts.End));
-        if (target != day.Date) Notice = "Added to " + target.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
+        var note = new DayNote(id, day, at, text, false, end, seriesId);
+        dayNotes.Add(note); return note;
+    }
+    // ---- Repeating notes. A series holds the template and the notes are ordinary dated notes made ahead (eight weeks), so each can be moved, ticked or removed alone. ----
+    public NoteSeries? SeriesOf(DayNote note) => note.SeriesId is { } id ? seriesList.FirstOrDefault(s => s.Id == id) : null;
+    public bool HasLaterInSeries(DayNote note) => SeriesOf(note) is not null && dayNotes.Any(n => n.SeriesId == note.SeriesId && n.Day.Date > note.Day.Date);
+    private void PersistSeries(NoteSeries series) { if (store is not null && series.Id >= 0) NoteStore(() => store.UpdateSeries(series), "that repeat"); }
+    private bool StartSeries(Recurrence rule, DateTime start, NoteParts parts)
+    {
+        var series = new NoteSeries(0, rule, start, start.AddDays(-1), parts.Text, parts.At, parts.End);
+        if (series.Pending(Engine.Now).Count == 0) { Notice = "That repeat has already ended."; return false; } // Nothing to make, so it is kept as a plain note.
+        long id = nextSeriesId++;
+        if (store is not null)
+        {
+            long stored = 0;
+            if (!NoteStore(() => stored = store.AddSeries(series), "that repeat")) return false; // Not stored, so the words go in as one plain note.
+            id = stored;
+        }
+        seriesList.Add(series with { Id = id });
+        var made = MakeSeriesNotes();
+        Notice = $"Repeats: {made} {(made == 1 ? "note" : "notes")} made. More are added as time goes on.";
+        return true;
+    }
+    /// <summary>Makes the notes each series still needs, from today up to eight weeks ahead. A day already made is never made again, so one removed stays removed.</summary>
+    private int MakeSeriesNotes()
+    {
+        var today = Engine.Now.Date; var made = 0;
+        for (var i = 0; i < seriesList.Count; i++)
+        {
+            var series = seriesList[i]; var reach = today.AddDays(NoteSeries.HorizonDays);
+            if (series.GeneratedTo.Date >= reach) continue;
+            foreach (var day in series.Pending(today)) { AddNoteRow(day, series.At, series.Text, series.End, series.Id); made++; }
+            seriesList[i] = series with { GeneratedTo = reach }; PersistSeries(seriesList[i]);
+        }
+        if (made > 0) Notify();
+        return made;
+    }
+    private bool RemoveNoteRow(DayNote note)
+    {
+        dayNotes.Remove(note); staleNotes.Remove(note.Id);
+        if (store is not null && note.Id >= 0 && !NoteStore(() => store.DeleteDayNote(note.Id), "that removal")) { pendingDeletes.Add(note.Id); return false; }
+        return true;
+    }
+    /// <summary>Removes this note and every later one of its series, and stops the series there. With nothing earlier left, the series goes too.</summary>
+    public void RemoveSeriesFrom(long id)
+    {
+        var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null) return;
+        if (SeriesOf(note) is not { } series) { RemoveDayNote(id); return; }
+        var gone = dayNotes.Where(n => n.SeriesId == series.Id && n.Day.Date >= note.Day.Date).ToList();
+        var allSaved = gone.Aggregate(true, (ok, n) => RemoveNoteRow(n) && ok);
+        if (dayNotes.Any(n => n.SeriesId == series.Id)) { var ended = series with { Rule = series.Rule with { Until = note.Day.Date.AddDays(-1) } }; seriesList[seriesList.FindIndex(s => s.Id == series.Id)] = ended; PersistSeries(ended); }
+        else EndSeries(series);
+        if (allSaved) Notice = $"Removed {gone.Count} {(gone.Count == 1 ? "note" : "notes")} from the repeat.";
+        Notify();
+    }
+    private void EndSeries(NoteSeries series)
+    {
+        seriesList.RemoveAll(s => s.Id == series.Id);
+        if (store is not null && series.Id >= 0) NoteStore(() => store.DeleteSeries(series.Id), "that repeat");
+        for (var i = 0; i < dayNotes.Count; i++) if (dayNotes[i].SeriesId == series.Id) dayNotes[i] = dayNotes[i] with { SeriesId = null }; // The database freed them in the same step.
+    }
+    /// <summary>Gives this note's words, time and end to every later note of its series, and to the template the next ones are made from.</summary>
+    public void ApplyToLater(long id)
+    {
+        var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null || SeriesOf(note) is not { } series) return;
+        var later = dayNotes.Where(n => n.SeriesId == series.Id && n.Day.Date > note.Day.Date && !n.Done).ToList();
+        foreach (var other in later) ChangeNote(other.Id, n => n with { Text = note.Text, At = note.At, End = note.End }, false);
+        var updated = series with { Text = note.Text, At = note.At, End = note.End };
+        seriesList[seriesList.FindIndex(s => s.Id == series.Id)] = updated; PersistSeries(updated);
+        Notice = $"Applied to {later.Count} later {(later.Count == 1 ? "note" : "notes")}."; Notify();
+    }
+    /// <summary>Stops a note repeating: the later notes go, the series ends, and what was typed to make it repeat goes back into the words.</summary>
+    public void ClearNoteRepeat(long id)
+    {
+        var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null || SeriesOf(note) is not { } series) return;
+        foreach (var later in dayNotes.Where(n => n.SeriesId == series.Id && n.Day.Date > note.Day.Date).ToList()) RemoveNoteRow(later);
+        EndSeries(series);
+        ChangeNote(id, n => n with { Text = n.Text + " " + series.Rule.Typed() }, false);
         Notify();
     }
     // ---- A note the database would not take is never lost and never crashes the app: it stays on screen and the write is tried again with each save. ----
@@ -1114,11 +1212,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void RemoveDayNote(long id)
     {
         var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null) return;
-        dayNotes.Remove(note); staleNotes.Remove(id);
         removedNotes.Add(note); if (removedNotes.Count > 20) removedNotes.RemoveAt(0);
         // The notice about the removal is only for one that worked; a refused one says so instead, and the note is removed again when the database allows.
-        if (store is not null && id >= 0 && !NoteStore(() => store.DeleteDayNote(id), "that removal")) pendingDeletes.Add(id);
-        else Notice = "Note removed. Undo remove on the Notes page puts it back.";
+        if (RemoveNoteRow(note)) Notice = "Note removed. Undo remove on the Notes page puts it back.";
         Notify();
     }
     /// <summary>Puts the last removed note back on its own day, ticked or not as it was.</summary>
@@ -1128,8 +1224,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         removedNotes.RemoveAt(removedNotes.Count - 1);
         long id;
         if (store is null) id = nextNoteId++;
-        else { long stored = 0; id = NoteStore(() => stored = store.AddDayNote(note.Day, note.At, note.Text), "that note") ? stored : --unsavedNoteId; }
-        var back = note with { Id = id };
+        else { long stored = 0; id = NoteStore(() => stored = store.AddDayNote(note.Day, note.At, note.Text, note.End, SeriesOf(note)?.Id), "that note") ? stored : --unsavedNoteId; }
+        var back = note with { Id = id, SeriesId = SeriesOf(note)?.Id };
         dayNotes.Add(back);
         if (back.Done) PersistNote(back);
         Notice = "Note put back."; Notify();
