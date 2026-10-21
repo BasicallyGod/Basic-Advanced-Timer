@@ -1095,6 +1095,86 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (made > 0) Notify();
         return made;
     }
+    // ---- Editing a note through its Details panel (and adding one through the same panel), so nothing has to be typed in the shorthand. ----
+    public static NoteKind KindOf(DayNote note) => DayNotes.IsDeadline(note) ? NoteKind.Deadline : note.At is not null ? NoteKind.Meeting : NoteKind.Task;
+    private static string? Check(NoteEdit e)
+    {
+        if (string.IsNullOrWhiteSpace(e.Words)) return "Write something for the note.";
+        if (e.Kind == NoteKind.Meeting && e.Start is null) return "A meeting needs a start time.";
+        if (e.Kind == NoteKind.Meeting && e.Start is { } start && e.End is { } end && end <= start) return "The end must be after the start.";
+        return null;
+    }
+    /// <summary>The note's words, time and end as they are stored: a deadline starts with !, an account is a #Tag at the end, and only a meeting keeps an end.</summary>
+    private (string Text, TimeSpan? At, TimeSpan? End) Compose(NoteEdit e)
+    {
+        var words = e.Words.Trim().TrimStart('!', ' ');
+        if (e.Account is { Length: > 0 } account) words = NoteShorthand.WithoutAccountTag(words, AccountNames) + " " + NoteShorthand.TagFor(account);
+        return ((e.Kind == NoteKind.Deadline ? "! " : "") + words, e.Kind == NoteKind.Task ? null : e.Start, e.Kind == NoteKind.Meeting ? e.End : null);
+    }
+    /// <summary>Adds a note from the panel. Returns what is wrong with it, or null when it was added.</summary>
+    public string? AddNote(NoteEdit e)
+    {
+        if (Check(e) is { } error) return error;
+        var (text, at, end) = Compose(e);
+        var note = AddNoteRow(e.Day.Date, at, text, end, null);
+        if (e.Repeat is { } rule) StartSeriesFrom(note, rule);
+        if (e.Day.Date != SelectedDate.Date) Notice = "Added to " + e.Day.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
+        Notify(); return null;
+    }
+    /// <summary>
+    /// Saves a note from the panel. For a note in a series, the change is to this one only, or (AllLater) to this one and every later one: the words, time and end
+    /// go to them all and a changed repeat remakes the later notes from this day on. Returns what is wrong, or null when it was saved.
+    /// </summary>
+    public string? SaveNote(long id, NoteEdit e)
+    {
+        if (Check(e) is { } error) return error;
+        var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null) return "That note is no longer there.";
+        var (text, at, end) = Compose(e); var day = e.Day.Date; var series = SeriesOf(note);
+        ChangeNote(id, n => n with { Text = text, Day = day, At = at, End = end }, false);
+        if (series is null) { if (e.Repeat is { } rule) StartSeriesFrom(dayNotes.First(n => n.Id == id), rule); }
+        else if (e.AllLater)
+        {
+            var later = dayNotes.Where(n => n.SeriesId == series.Id && n.Day.Date > day && n.Id != id).ToList();
+            if (e.Repeat is null) { foreach (var gone in later) RemoveNoteRow(gone); EndSeries(series); }
+            else if (e.Repeat != series.Rule)
+            {
+                foreach (var gone in later) RemoveNoteRow(gone);
+                var remade = series with { Rule = e.Repeat, Start = day, GeneratedTo = day, Text = text, At = at, End = end };
+                seriesList[seriesList.FindIndex(s => s.Id == series.Id)] = remade; PersistSeries(remade); MakeSeriesNotes();
+            }
+            else
+            {
+                foreach (var other in later.Where(n => !n.Done)) ChangeNote(other.Id, n => n with { Text = text, At = at, End = end }, false);
+                var updated = series with { Text = text, At = at, End = end };
+                seriesList[seriesList.FindIndex(s => s.Id == series.Id)] = updated; PersistSeries(updated);
+            }
+        }
+        Notify(); return null;
+    }
+    /// <summary>Makes a note the first of a new series, which then makes the notes after it.</summary>
+    private void StartSeriesFrom(DayNote note, Recurrence rule)
+    {
+        var series = new NoteSeries(0, rule, note.Day, note.Day, note.Text, note.At, note.End);
+        long id = nextSeriesId++;
+        if (store is not null)
+        {
+            long stored = 0;
+            if (!NoteStore(() => stored = store.AddSeries(series), "that repeat")) return;
+            id = stored;
+        }
+        seriesList.Add(series with { Id = id });
+        ChangeNote(note.Id, n => n with { SeriesId = id }, false);
+        MakeSeriesNotes();
+    }
+    /// <summary>Saves the words typed into a note's row. The row shows the words without the ! and the #Tag (they have their own marks), so they are put back around what was typed.</summary>
+    public void SetDayNoteWords(long id, string words)
+    {
+        var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null) return;
+        if (words.Contains('#') || words.TrimStart().StartsWith('!')) { SetDayNoteText(id, words); return; } // Typed shorthand is kept as typed.
+        var text = (DayNotes.IsDeadline(note) ? "! " : "") + words.Trim();
+        if (NoteShorthand.AccountOf(note.Text, AccountNames) is { } account) text += " " + NoteShorthand.TagFor(account);
+        SetDayNoteText(id, text);
+    }
     private bool RemoveNoteRow(DayNote note)
     {
         dayNotes.Remove(note); staleNotes.Remove(note.Id);

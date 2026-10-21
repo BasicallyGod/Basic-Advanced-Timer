@@ -70,7 +70,7 @@ public sealed class NotesPolishTwoTests : IDisposable
         {
             var all = window.GetVisualDescendants().OfType<Control>().ToList();
             bool Named(Control c) => !string.IsNullOrWhiteSpace(AutomationProperties.GetName(c));
-            foreach (var prefix in new[] { "NoteTick_", "NoteText_", "NoteRemove_", "NoteMove_", "ComingTick_", "ComingDone_", "ComingEvent_" })
+            foreach (var prefix in new[] { "NoteTick_", "NoteText_", "NoteRemove_", "NoteDetails_", "ComingTick_", "ComingDone_", "ComingEvent_" })
             {
                 var group = all.Where(c => c.Name?.StartsWith(prefix, StringComparison.Ordinal) == true).ToList();
                 Assert.All(group, c => Assert.True(Named(c), prefix + " has no name for a screen reader"));
