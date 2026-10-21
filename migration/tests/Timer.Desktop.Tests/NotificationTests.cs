@@ -112,7 +112,7 @@ public sealed class NotificationTests
         try
         {
             for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); }
-            var prompt = Find<Border>(window, "TimelinePrompt_" + id); Assert.Contains("took place", Avalonia.Automation.AutomationProperties.GetName(prompt));
+            var prompt = Find<Border>(window, "TimelinePrompt_" + id); Assert.Contains("take place", Avalonia.Automation.AutomationProperties.GetName(prompt));
             Assert.False(window.GetVisualDescendants().OfType<ReminderCard>().Single().IsVisible); // Not asked twice.
             Assert.NotNull(Find<Button>(window, "TimelinePromptLater_" + id).Flyout);
             Click(window, "TimelinePromptNo_" + id);
