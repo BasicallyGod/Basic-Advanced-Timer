@@ -39,7 +39,7 @@ public sealed class NotesPage : Grid
         // A removed note can be put back, so one stray click on the cross never loses it.
         undoRemove = Ui.DialogButton("Undo remove", () => model.RestoreRemovedNote(), "NoteUndoRemove"); undoRemove.Height = 32; undoRemove.IsVisible = false; Ui.Put(headRow, undoRemove, 1);
         // Add note opens the same panel as a note's Details, so a meeting, a deadline or a repeat is set with controls, not typed. The box below stays for quick text.
-        var add = Ui.DialogButton("Add note", () => { }, "NoteAddButton", true); add.Height = 32; add.Flyout = DetailsFlyout(null); Ui.Put(headRow, add, 2);
+        var add = Ui.DialogButton("Add note", () => { }, "NoteAddButton", true); add.Height = 32; add.Classes.Add("primary"); add.Flyout = DetailsFlyout(null); Ui.Put(headRow, add, 2);
         Ui.Put(leftGrid, headRow); Ui.Put(leftGrid, tabs, row: 1);
         Ui.Put(leftGrid, Ui.WithMoreBelow(new ScrollViewer { Content = rows, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 2);
         // A note can be put on any day: the small calendar beside the box picks it for the next note, and it shows as a chip until the note is added.
@@ -166,11 +166,12 @@ public sealed class NotesPage : Grid
             // Everything else about the note (kind, day, times, account, repeat) is in its Details, which open beside the row.
             var details = Ui.Button("Details", () => { }, "NoteDetails_" + id); details.Classes.Add("toolButton"); details.Classes.Add("quiet"); details.Classes.Add("hoverReveal"); details.Height = 26; details.Padding = new Thickness(10, 0); details.FontSize = 12;
             Avalonia.Automation.AutomationProperties.SetName(details, "Details: " + shownWords); details.Flyout = DetailsFlyout(note);
-            var row = Ui.Grid("Auto,*,Auto,Auto"); row.VerticalAlignment = VerticalAlignment.Center; row.Margin = new Thickness(0, 2);
+            var row = Ui.Grid("Auto,*,92,Auto,Auto"); row.VerticalAlignment = VerticalAlignment.Center; row.Margin = new Thickness(0, 2);
             Ui.Put(row, tick); Ui.Put(row, text, 1);
             // What was read from the words is quiet marks on the right: the time, a flag for a deadline, a repeat mark and the account's dot.
             var marks = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 6, 0) };
-            if (note.At is not null) { var when = Ui.Text(NoteTimes.Of(note), 12.5, "muted"); when.Name = "NoteTime_" + id; marks.Children.Add(when); }
+            // The times line up in a column of their own, so a list of notes reads down.
+            if (note.At is not null) { var when = Ui.Text(NoteTimes.Of(note), 12.5, "muted"); when.Name = "NoteTime_" + id; when.HorizontalAlignment = HorizontalAlignment.Right; when.VerticalAlignment = VerticalAlignment.Center; Ui.Put(row, when, 2); }
             if (DayNotes.IsDeadline(note)) { var flag = new Border { Name = "NoteDeadlineMark_" + id, Child = new IconGlyph(IconKind.Flag) { TintKey = "Finish" } }; ToolTip.SetTip(flag, "Deadline"); marks.Children.Add(flag); }
             if (model.SeriesOf(note) is { } series) { var again = new Border { Name = "NoteRepeatMark_" + id, Child = new IconGlyph(IconKind.Week) { TintKey = "Muted" } }; ToolTip.SetTip(again, series.Rule.Words()); marks.Children.Add(again); }
             if (NoteShorthand.AccountOf(note.Text, model.AccountNames) is { } linked && model.Accounts.FirstOrDefault(a => a.Name == linked) is { } account)
@@ -178,9 +179,9 @@ public sealed class NotesPage : Grid
                 var dot = new Border { Name = "NoteAccountMark_" + id, Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(Color.Parse(Ui.Visible(account.Colour))), VerticalAlignment = VerticalAlignment.Center };
                 ToolTip.SetTip(dot, account.Display); marks.Children.Add(dot);
             }
-            Ui.Put(row, marks, 2);
+            Ui.Put(row, marks, 3);
             var actions = Ui.Horizontal(details, remove); actions.VerticalAlignment = VerticalAlignment.Center; actions.Spacing = 2;
-            Ui.Put(row, actions, 3);
+            Ui.Put(row, actions, 4);
             Ui.RevealOnHover(row);
             rows.Children.Add(row);
         }

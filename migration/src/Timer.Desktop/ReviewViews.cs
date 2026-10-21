@@ -17,7 +17,7 @@ public static class ReviewViews
     // Every block has the same small corner at every zoom level, only a block too short to hold it is rounded as far as it can be.
     public const double BlockRadius = 6;
     // Where the spine runs and where blocks start, from the left of the timeline.
-    private const double SpineX = 58, CardLeft = 80, LabelRight = 40, MeetingLaneWidth = 132;
+    private const double SpineX = 58, CardLeft = 80, LabelRight = 40, MeetingLaneWidth = 132, PromptWidth = 380;
     public static Control Timeline(TimerModel model)
     {
         var day = model.SelectedDate;
@@ -180,6 +180,28 @@ public static class ReviewViews
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
             canvas.Children.Add(card); cards.Add((card, lane));
         }
+        // A meeting that has ended asks here, under its block, whether it took place. It floats over the tracked blocks at the right, and answering it clears it (No ticks the
+        // note off; Yes opens Add time on its hours). The dashboard's floating card leaves this one out while the timeline is showing (TimerModel.TimelineVisible).
+        var prompts = new List<Border>();
+        foreach (var ask in model.Reminders.Where(r => r.State == ReminderState.Followup && r.Note.Day.Date == day.Date && r.Note.End is not null))
+        {
+            var id = ask.Note.Id;
+            var question = new StackPanel { Spacing = 0, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+            question.Children.Add(new TextBlock { Text = "Did it take place?", FontSize = 13, FontWeight = FontWeight.SemiBold });
+            question.Children.Add(Ui.Text(NoteShorthand.Display(ask.Note, model.AccountNames) + " · " + NoteTimes.Of(ask.Note), 12, "muted"));
+            Button Small(Button button, bool main = false) { button.Classes.Add("toolButton"); button.Classes.Add("quiet"); button.Height = 28; button.Padding = new Thickness(10, 0); button.FontSize = 12; if (main) button.Classes.Add("mainAction"); return button; }
+            var no = Small(Ui.Button("No", () => model.DoneReminder(id), "TimelinePromptNo_" + id));
+            var yes = Small(Ui.Button("Yes", () => model.LogMeeting(id), "TimelinePromptYes_" + id), true);
+            var later = Small(ReminderUi.SnoozeButton(model, () => id, "TimelinePromptLater_" + id)); later.Content = "…"; ToolTip.SetTip(later, "Ask me again later");
+            Avalonia.Automation.AutomationProperties.SetName(later, "Ask me again later");
+            var buttons = Ui.Horizontal(no, yes, later); buttons.Spacing = 6; buttons.Margin = new Thickness(10, 0, 0, 0);
+            var promptRow = Ui.Grid("Auto,*,Auto", "Auto"); var clock = new IconGlyph(IconKind.Note) { VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
+            Ui.Put(promptRow, clock); Ui.Put(promptRow, question, 1); Ui.Put(promptRow, buttons, 2);
+            var prompt = new Border { Name = "TimelinePrompt_" + id, Tag = "MeetingPrompt", Width = PromptWidth, Child = promptRow, CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 8, 8, 8) };
+            prompt.Classes.Add("messageBar");
+            Avalonia.Automation.AutomationProperties.SetName(prompt, "Did the meeting take place? " + NoteShorthand.Display(ask.Note, model.AccountNames));
+            Canvas.SetLeft(prompt, CardLeft); Canvas.SetTop(prompt, ask.Note.End!.Value.TotalHours * pixelsPerHour + 6); canvas.Children.Add(prompt); prompts.Add(prompt);
+        }
         // For today, a line across at the current time with a chip in the margin saying what it is. It moves on every half minute while the timeline is on screen.
         if (day == model.Engine.Now.Date)
         {
@@ -206,6 +228,7 @@ public static class ReviewViews
             foreach (var guide in canvas.Children.OfType<Border>().Where(b => b.Tag is "HourGuide")) guide.Width = Math.Max(220, canvas.Bounds.Width - CardLeft);
             // Tracked blocks share what is left after the meeting lanes, which sit at the right-hand edge.
             var trackedWidth = Math.Max(220, canvas.Bounds.Width - CardLeft - 10 - meetingEnds.Count * MeetingLaneWidth);
+            foreach (var prompt in prompts) Canvas.SetLeft(prompt, Math.Max(CardLeft, canvas.Bounds.Width - 10 - PromptWidth));
             foreach (var meeting in meetingBands) Canvas.SetLeft(meeting.Band, CardLeft + trackedWidth + 6 + meeting.Lane * MeetingLaneWidth);
             var width = trackedWidth / Math.Max(1, ends.Count);
             foreach (var card in cards) { card.Card.Width = Math.Max(40, width - 6); Canvas.SetLeft(card.Card, CardLeft + card.Lane * width); }

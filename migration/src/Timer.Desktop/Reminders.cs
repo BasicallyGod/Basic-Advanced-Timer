@@ -25,7 +25,12 @@ public static class ReminderRules
         {
             if (note.Done || (note.At is null && !DayNotes.IsDeadline(note))) continue;
             // Once a meeting is over it asks, once, whether it took place. Snoozing does not apply to the question, and an answer (done) ends it.
-            if (DayNotes.EndsAt(note) is { } over && now >= over) { if (over >= now - LookBack) found.Add(new Reminder(note, ReminderState.Followup, over, over)); continue; }
+            if (DayNotes.EndsAt(note) is { } over && now >= over)
+            {
+                var asleep = snoozed is not null && snoozed.TryGetValue(note.Id, out var wait) && wait > now; // "Remind me later" puts the question off for a while.
+                if (over >= now - LookBack && !asleep) found.Add(new Reminder(note, ReminderState.Followup, over, over));
+                continue;
+            }
             var due = DayNotes.DueAt(note);
             if (due < now - LookBack || due > now.AddMinutes(leadMinutes)) continue;
             var since = due;
