@@ -17,7 +17,7 @@ public sealed class NotesListRefinementTests
     private static void Click(Visual root, string name) { Find<Button>(root, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
     private static DashboardWindow Open(TimerModel model)
     {
-        model.CompleteSetup(); var window = new DashboardWindow(model); window.Show(); window.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "SidebarSlot").Transitions = null;
+        model.CompleteSetup(); var window = new DashboardWindow(model); window.Show();
         Click(window, "NotesTab"); return window;
     }
 

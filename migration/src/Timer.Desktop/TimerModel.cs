@@ -1314,34 +1314,6 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (spec is not null) lines.Add(CaptureKeyLine + spec);
         preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
     }
-    private const string IntegratedRailLine = "integratedrail=";
-    public bool IntegratedRail => preferences.Extras?.AppearanceLines.Contains(IntegratedRailLine + "true") == true;
-    public void SetIntegratedRail(bool enabled)
-    {
-        if (enabled == IntegratedRail) return;
-        var extras = preferences.Extras ?? SettingsExtras.Empty;
-        var lines = extras.AppearanceLines.Where(l => !l.StartsWith(IntegratedRailLine, StringComparison.Ordinal)).ToList();
-        if (enabled) lines.Add(IntegratedRailLine + "true");
-        preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
-    }
-    private const string CompactAccountsLine = "compactaccounts=";
-    public string CompactAccountsStyle
-    {
-        get
-        {
-            var saved = preferences.Extras?.AppearanceLines.FirstOrDefault(l => l.StartsWith(CompactAccountsLine, StringComparison.Ordinal))?[CompactAccountsLine.Length..];
-            return saved is "gauges" or "heatmap" or "capsules" ? saved : "current";
-        }
-    }
-    public void SetCompactAccountsStyle(string style)
-    {
-        style = style is "gauges" or "heatmap" or "capsules" ? style : "current";
-        if (style == CompactAccountsStyle) return;
-        var extras = preferences.Extras ?? SettingsExtras.Empty;
-        var lines = extras.AppearanceLines.Where(l => !l.StartsWith(CompactAccountsLine, StringComparison.Ordinal)).ToList();
-        if (style != "current") lines.Add(CompactAccountsLine + style);
-        preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
-    }
     /// <summary>The pill's layout: full, compact or minimal. Kept in the settings file as pillstyle=, and an unknown value is full.</summary>
     public string PillStyle
     {

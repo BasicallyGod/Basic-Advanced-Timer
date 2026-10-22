@@ -600,8 +600,6 @@ public sealed class DashboardWindow : Window
     private bool weekMode, settingsMode, notesMode, renderedSettings, renderedNotes, settingZoom;
     // The Notes page stands in for the timeline and week views, with its own editing of nothing, so the toolbar and the zoom bar stay away.
     private bool PageMode => notesMode;
-    private Action<bool> applyIntegratedRail = _ => { }; private bool? integratedApplied;
-    private Grid sidebarSlot = null!; private Control fullColumn = null!; private CompactColumn compactColumn = null!; private bool compactApplied;
     private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
     private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
@@ -663,42 +661,7 @@ public sealed class DashboardWindow : Window
         Ui.Put(railGrid, railFoot, row: 1);
         rail.Child = railGrid; Ui.Put(root, rail);
         Ui.DragHeader(railTop, this);
-        var integratedSidebar = new IntegratedSidebar(model);
-        var integratedHost = new Border { Child = integratedSidebar, Width = IntegratedSidebar.RailWidth, IsVisible = false }; integratedHost.Classes.Add("panel");
-        Ui.Put(root, integratedHost);
-        var destinations = new[] { backToPill, timelineRail, notesRail, overviewTab, hoursTab, entriesTab };
-        var originals = destinations.Concat(new[] { settingsRail, quit }).Select(b => (Button: b, Parent: (Panel)b.Parent!, Index: ((Panel)b.Parent!).Children.IndexOf(b))).ToArray();
-        static void Detach(Button button) { if (button.Parent is Panel parent) parent.Children.Remove(button); }
-        applyIntegratedRail = enabled =>
-        {
-            if (integratedApplied == enabled) return;
-            if (integratedApplied is null && !enabled) { integratedApplied = false; return; }
-            integratedApplied = enabled;
-            foreach (var original in originals) Detach(original.Button);
-            if (enabled)
-            {
-                for (var i = 0; i < destinations.Length; i++)
-                {
-                    var button = destinations[i]; button.Width = button.Height = 34; button.HorizontalAlignment = HorizontalAlignment.Center;
-                    Grid.SetColumn(button, i % 2); Grid.SetRow(button, i / 2); integratedSidebar.Navigation.Children.Add(button);
-                }
-                foreach (var (button, slot) in new[] { (settingsRail, integratedSidebar.SettingsSlot), (quit, integratedSidebar.QuitSlot) })
-                {
-                    button.Width = button.Height = 34; button.HorizontalAlignment = HorizontalAlignment.Center; slot.Children.Add(button);
-                }
-            }
-            else
-            {
-                foreach (var original in originals)
-                {
-                    original.Button.ClearValue(WidthProperty); original.Button.ClearValue(HeightProperty); original.Button.ClearValue(HorizontalAlignmentProperty);
-                    original.Button.ClearValue(Grid.ColumnProperty); original.Button.ClearValue(Grid.RowProperty);
-                    original.Parent.Children.Insert(Math.Min(original.Index, original.Parent.Children.Count), original.Button);
-                }
-            }
-            rail.IsVisible = !enabled; integratedHost.IsVisible = enabled;
-        };
-        var body = Ui.Grid("Auto,1,*", "*");
+        var body = Ui.Grid("340,1,*", "*");
         var sidebar = Ui.Grid("*", "Auto,Auto,*,Auto");
         // The Day elapsed card, with a bar of the accent colour along its top edge.
         var dayCard = new Border { CornerRadius = new CornerRadius(18), ClipToBounds = true, BorderThickness = new Thickness(1) }; dayCard.Classes.Add("dayCard");
@@ -754,11 +717,7 @@ public sealed class DashboardWindow : Window
         Ui.Put(sidebar, summary, row: 3);
         var panel = new Border { Child = sidebar, Width = 340, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Classes.Add("panel");
-        sidebarSlot = new Grid { Name = "SidebarSlot", Width = 340, ClipToBounds = true, HorizontalAlignment = HorizontalAlignment.Left };
-        sidebarSlot.Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = WidthProperty, Duration = TimeSpan.FromMilliseconds(180), Easing = new Avalonia.Animation.Easings.CubicEaseOut() } };
-        Ui.Put(body, sidebarSlot); sidebarSlot.Children.Add(panel); fullColumn = panel;
-        // Notes swaps the full dashboard column for a separate 176px account panel; the 60px navigation rail never changes.
-        compactColumn = new CompactColumn(model); sidebarSlot.Children.Add(compactColumn);
+        Ui.Put(body, panel);
         var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
         var review = Ui.Grid("*", "Auto,*,Auto,Auto");
         review.Margin = new Thickness(22, 16, 22, 18);
@@ -836,17 +795,6 @@ public sealed class DashboardWindow : Window
         Ui.Put(tools, zoomSlot, 1);
         tools.Margin = new Thickness(0, 12, 0, 0); zoomBar.Margin = new Thickness(12, 0, 0, 0); // Clear space between Merge and the zoom bar.
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
-        // A short, restrained fade makes the switch between the full and compact sidebar less abrupt.
-        // Keep geometry changes immediate, so mouse targets, tests, and keyboard focus remain predictable.
-        workspace.Transitions = new Avalonia.Animation.Transitions
-        {
-            new Avalonia.Animation.DoubleTransition
-            {
-                Property = Visual.OpacityProperty,
-                Duration = TimeSpan.FromMilliseconds(160),
-                Easing = new Avalonia.Animation.Easings.CubicEaseOut()
-            }
-        };
         Ui.Put(review, workspace, row: 1);
         // Selection feedback has its own strip in the layout, just above the buttons it relates to.
         selectionStrip = new SelectionStrip(model); Ui.Put(review, selectionStrip, row: 2);
@@ -1008,15 +956,6 @@ public sealed class DashboardWindow : Window
         day.Classes.Set("startDay", !model.DayStarted); // Green to start the day, red to finish it.
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
-        // Navigation stays a fixed 60px. Notes uses an independently scrolling slim tracking strip instead of the full sidebar.
-        var integrated = model.IntegratedRail; applyIntegratedRail(integrated);
-        var slim = PageMode && !settingsMode && !integrated;
-        if (slim != compactApplied || sidebarSlot.Width != (integrated ? 0 : slim ? compactColumn.CurrentWidth : 340))
-        {
-            compactApplied = slim;
-            sidebarSlot.Width = integrated ? 0 : slim ? compactColumn.CurrentWidth : 340;
-            fullColumn.IsVisible = !slim && !integrated; compactColumn.IsVisible = slim;
-        }
         var editing = !PageMode && (!weekMode || model.WeekSection == "entries");
         zoomControls.IsVisible = !weekMode && !settingsMode && !PageMode;
         settingZoom = true; zoomSlider.Value = model.TimelineZoomFraction; settingZoom = false; // Follows the wheel and the buttons too.

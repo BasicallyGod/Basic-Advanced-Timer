@@ -165,12 +165,8 @@
     <!-- The dashboard's account rows are soft rounded cards. The recording account's card takes a gentle tint of the tracking colour. -->
     <Style Selector="Button.accountCard"><Setter Property="CornerRadius" Value="12" /></Style>
     <Style Selector="Button.accountCard:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
-    <Style Selector="Button.accountCard.selectedAccount"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BorderThickness" Value="1" /></Style>
-    <Style Selector="Button.integratedAccount"><Setter Property="CornerRadius" Value="7" /></Style>
     <Style Selector="Button.accountCard.active"><Setter Property="Background" Value="{DynamicResource LiveTint}" /></Style>
     <Style Selector="Button.accountCard.active /template/ ContentPresenter#PART_ContentPresenter, Button.accountCard.active:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource LiveTint}" /></Style>
-    <Style Selector="Button.integratedAccount.active"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="1" /></Style>
-    <Style Selector="Button.integratedAccount.active /template/ ContentPresenter#PART_ContentPresenter, Button.integratedAccount.active:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <!-- The rail's icons sit in soft tiles. The chosen one is filled, and the rest are muted until the pointer arrives. -->
     <Style Selector="Button.rail">
       <Setter Property="Width" Value="44" /><Setter Property="Height" Value="44" />
