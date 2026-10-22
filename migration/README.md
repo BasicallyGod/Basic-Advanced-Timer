@@ -67,3 +67,5 @@ Tasks can have a date and optional time, or be left undated using Add date in th
 This scheduling update requires shared packages 0.5.0 and upgrades the database to format 6 after saving a backup. Older builds cannot open that upgraded database; use the pre-upgrade backup for rollback.
 
 The compact account panel keeps names, recorded time and budgets visible beside Notes. The clock remains on the left in Full and Compact pills. Add item and row titles open a bounded flyout beside the item; the dashboard stays visible, and Save, Cancel or Escape closes the form. Recurring items use a repeat-arrows icon.
+
+Three optional [compact account prototypes](COMPACT-SIDEBAR-PROTOTYPES.md) are available under Settings → Appearance and behaviour → Compact accounts: Vertical gauges, Heatmap strips and Integrated capsules. The existing names-and-bars sidebar remains the default. Each experiment keeps today’s recorded time separate from budget usage over the configured period.

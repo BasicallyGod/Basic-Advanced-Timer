@@ -974,10 +974,10 @@ public sealed class DashboardWindow : Window
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
         // Navigation stays a fixed 60px. Notes uses an independently scrolling slim tracking strip instead of the full sidebar.
         var slim = PageMode && !settingsMode;
-        if (slim != compactApplied)
+        if (slim != compactApplied || slim && sidebarSlot.Width != compactColumn.CurrentWidth)
         {
             compactApplied = slim;
-            sidebarSlot.Width = slim ? CompactColumn.ColumnWidth : 340;
+            sidebarSlot.Width = slim ? compactColumn.CurrentWidth : 340;
             fullColumn.IsVisible = !slim; compactColumn.IsVisible = slim;
         }
         var editing = !PageMode && (!weekMode || model.WeekSection == "entries");
