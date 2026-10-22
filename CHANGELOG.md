@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Compact account prototypes | pending | Three opt-in Notes sidebar alternatives—vertical gauges, heatmap strips and integrated capsules—use a 112px column and 42px rows, with configured-period budgets, today’s recorded time, recording markers and explicit over-budget warnings. The prototypes stack hours above minutes and group icon-only playback, break and day controls at the bottom. The current sidebar remains the default; choose alternatives in Settings, Compact accounts. |
 | Sidebar and Notes polish | pending | The compact account panel shows readable names, selection and recording state, with a smoother width transition. Full and Compact pills put the clock on the left. Notes add/edit opens beside the item without blurring the dashboard, with icon-led type choices and a repeat-arrows indicator for recurring items. |
 
 ## 21 October 2026

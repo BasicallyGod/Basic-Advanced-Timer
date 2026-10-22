@@ -8,13 +8,17 @@ namespace Timer.Desktop;
 
 /// <summary>
 /// A compact account panel beside the unchanged navigation rail on Notes.
-/// Timer and immediate controls stay at the top; the accounts scroll independently;
+/// The clock stays at the top; experimental layouts put icon controls at the bottom;
 /// start/finish day stays fixed at the bottom. The full dashboard column is retained on other pages.
 /// </summary>
 public sealed class CompactColumn : Grid
 {
-    public const double ColumnWidth = 176;
+    public const double ColumnWidth = 176, PrototypeWidth = 112;
+    public double CurrentWidth => model.CompactAccountsStyle == "current" ? ColumnWidth : PrototypeWidth;
     private readonly TimerModel model;
+    private readonly VerticalCompactClock verticalClock = new() { IsVisible = false };
+    private readonly StackPanel topTools, footerTools;
+    private bool? appliedExperimental;
     private readonly ClockText clock = new(28, 14) { Text = "00:00:00" };
     private readonly TextBlock status = Ui.Text("", 11, "muted");
     private readonly PauseGlyph pauseGlyph = new();
@@ -25,6 +29,7 @@ public sealed class CompactColumn : Grid
     private readonly StackPanel accounts = new() { Spacing = 4, Margin = new Thickness(6, 0, 6, 0) };
     private readonly ScrollViewer accountScroll;
     private readonly List<(TimerAccount Account, Button Button, TextBlock Time, Border Fill, Border Track)> rows = new();
+    private readonly List<(TimerAccount Account, Button Button, TextBlock Time, CompactBudgetIndicator Gauge, TextBlock Over, TextBlock Live)> prototypeRows = new();
     private string shownAccounts = "\u0001";
 
     public CompactColumn(TimerModel model)
@@ -33,7 +38,7 @@ public sealed class CompactColumn : Grid
         RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto");
         var header = new StackPanel { Spacing = 2, Margin = new Thickness(3, 14, 3, 4), HorizontalAlignment = HorizontalAlignment.Center };
         clock.HorizontalAlignment = HorizontalAlignment.Center; status.HorizontalAlignment = HorizontalAlignment.Center;
-        header.Children.Add(clock); header.Children.Add(status);
+        header.Children.Add(clock); header.Children.Add(verticalClock); header.Children.Add(status);
         Ui.Put(this, header);
 
         Button Tool(string name, string tip, Control icon, Action action)
@@ -45,9 +50,9 @@ public sealed class CompactColumn : Grid
         }
         pause = Tool("CompactPause", "Pause or resume tracking", new Viewbox { Width = 16, Height = 16, Child = pauseGlyph }, model.TogglePause);
         breakButton = Tool("CompactBreak", "Take a break", new Viewbox { Width = 18, Height = 18, Child = breakGlyph }, model.ToggleBreak);
-        var tools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) };
-        tools.Children.Add(pause); tools.Children.Add(breakButton);
-        Ui.Put(this, tools, row: 1);
+        topTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) };
+        topTools.Children.Add(pause); topTools.Children.Add(breakButton);
+        Ui.Put(this, topTools, row: 1);
 
         accountScroll = new ScrollViewer { Name = "CompactAccountScroll", Content = accounts, AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
@@ -56,7 +61,9 @@ public sealed class CompactColumn : Grid
 
         dayButton = Tool("CompactDay", "Start day", Ui.Horizontal(dayFlag, dayLabel), model.ToggleDay);
         dayButton.Width = ColumnWidth - 12; dayButton.Height = 42;
-        var footer = new Border { Child = dayButton, Padding = new Thickness(5, 10, 5, 12) };
+        footerTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center };
+        footerTools.Children.Add(dayButton);
+        var footer = new Border { Child = footerTools, Padding = new Thickness(5, 10, 5, 12) };
         Ui.Put(this, footer, row: 3);
 
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += OnModel; Sync(); };
@@ -85,7 +92,7 @@ public sealed class CompactColumn : Grid
             if (words.Length > 1)
             {
                 var second = words[^1];
-                var suffix = second.Length == 1 || second.All(char.IsDigit) ? second[..1]
+                var suffix = second.All(char.IsDigit) && second.Length <= 2 ? second : second.Length == 1 ? second
                     : numberWords.TryGetValue(second, out var number) ? number : second[..1];
                 return (words[0][..1] + suffix).ToUpperInvariant();
             }
@@ -120,7 +127,13 @@ public sealed class CompactColumn : Grid
     private void RebuildAccounts(IReadOnlyList<TimerAccount> visible)
     {
         var offset = accountScroll.Offset;
-        accounts.Children.Clear(); rows.Clear();
+        accounts.Children.Clear(); rows.Clear(); prototypeRows.Clear();
+        if (model.CompactAccountsStyle != "current")
+        {
+            RebuildPrototypes(visible);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => accountScroll.Offset = offset);
+            return;
+        }
         foreach (var account in visible)
         {
             var name = account.Name;
@@ -155,30 +168,109 @@ public sealed class CompactColumn : Grid
         Avalonia.Threading.Dispatcher.UIThread.Post(() => accountScroll.Offset = offset);
     }
 
+    private void RebuildPrototypes(IReadOnlyList<TimerAccount> visible)
+    {
+        var labels = Short(visible.Select(a => (a.Name, a.Display)).ToList());
+        foreach (var account in visible)
+        {
+            var name = account.Name;
+            var gauge = new CompactBudgetIndicator(model.CompactAccountsStyle, account.Colour) { Name = "CompactBudget_" + Ui.NameKey(name) };
+            var label = Ui.Text(labels[name], 12); label.FontWeight = FontWeight.SemiBold;
+            label.Name = "CompactLabel_" + Ui.NameKey(name);
+            var time = Ui.Text("", 11); time.Classes.Add("figures"); time.Name = "CompactTime_" + Ui.NameKey(name);
+            var over = Ui.Text("!", 12, "overtime"); over.Name = "CompactOver_" + Ui.NameKey(name); over.Width = 8;
+            var live = Ui.Text("●", 8, "live"); live.Name = "CompactLive_" + Ui.NameKey(name); live.Width = 8;
+            var state = Ui.Horizontal(live, over); state.Spacing = 2;
+            var detail = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
+            Control indicator = gauge;
+            if (model.CompactAccountsStyle == "capsules")
+            {
+                var capsule = new Grid(); capsule.Children.Add(gauge);
+                label.HorizontalAlignment = HorizontalAlignment.Center; label.VerticalAlignment = VerticalAlignment.Center;
+                capsule.Children.Add(label); indicator = capsule;
+                detail.Children.Add(time); detail.Children.Add(state);
+            }
+            else
+            {
+                var heading = Ui.Horizontal(label, state); heading.Spacing = 4;
+                detail.Children.Add(heading); detail.Children.Add(time);
+            }
+            var content = Ui.Grid("Auto,*"); content.ColumnSpacing = 6;
+            Ui.Put(content, indicator); Ui.Put(content, detail, 1);
+            var button = Ui.Button("", () => model.ToggleAccount(name), "CompactDot_" + Ui.NameKey(name));
+            button.Classes.Add("rail"); button.Classes.Add("accountCard");
+            // Reserve room for the scrollbar; row height stays a usable click target.
+            button.Width = PrototypeWidth - 22; button.Height = 42;
+            button.Padding = new Thickness(4, 2); button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+            button.Content = content; accounts.Children.Add(button);
+            prototypeRows.Add((account, button, time, gauge, over, live));
+        }
+    }
+
+    private void ApplyControlLayout()
+    {
+        var experimental = model.CompactAccountsStyle != "current";
+        if (experimental == appliedExperimental) return;
+        appliedExperimental = experimental;
+        // Detach before moving existing buttons, preserving their handlers and keyboard behavior.
+        topTools.Children.Clear(); footerTools.Children.Clear();
+        clock.IsVisible = !experimental; verticalClock.IsVisible = experimental; topTools.IsVisible = !experimental;
+        dayLabel.IsVisible = !experimental;
+        pause.Width = breakButton.Width = experimental ? 32 : 38;
+        dayButton.Width = experimental ? 32 : ColumnWidth - 12; dayButton.Height = experimental ? 38 : 42;
+        if (experimental) { footerTools.Children.Add(pause); footerTools.Children.Add(breakButton); }
+        else { topTools.Children.Add(pause); topTools.Children.Add(breakButton); }
+        footerTools.Children.Add(dayButton);
+    }
+
     private void Sync()
     {
+        ApplyControlLayout(); Width = CurrentWidth;
         clock.Text = model.ClockText;
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
         clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
+        verticalClock.Set(model.Elapsed, onBreak, late, model.IsTracking && !onBreak && !late);
         status.Text = model.Status;
         ToolTip.SetTip(status, model.Status + (late ? " · Overtime" : ""));
         pauseGlyph.Playing = model.IsTracking && !onBreak; pauseGlyph.InvalidateVisual();
         breakGlyph.SetSteaming(onBreak); breakGlyph.InvalidateVisual();
         breakButton.Classes.Set("onBreak", onBreak);
-        ToolTip.SetTip(breakButton, onBreak ? "End break" : "Take a break");
+        var pauseTip = model.IsTracking && !onBreak ? "Pause tracking" : "Resume tracking";
+        ToolTip.SetTip(pause, pauseTip); Avalonia.Automation.AutomationProperties.SetName(pause, pauseTip);
+        var breakTip = onBreak ? "End break" : "Take a break";
+        ToolTip.SetTip(breakButton, breakTip); Avalonia.Automation.AutomationProperties.SetName(breakButton, breakTip);
         dayLabel.Text = model.DayStarted ? "Finish day" : "Start day";
         dayFlag.TintKey = model.DayStarted ? "Finish" : "Start";
-        ToolTip.SetTip(dayButton, model.DayStarted ? "Finish day" : "Start day");
+        var dayTip = model.DayStarted ? "Finish day" : "Start day";
+        ToolTip.SetTip(dayButton, dayTip); Avalonia.Automation.AutomationProperties.SetName(dayButton, dayTip);
 
         var visible = model.Accounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
         var signature = string.Join("|", visible.Select(a => a.Name + ":" + a.Display + ":" + a.Colour))
-            + "|" + model.ActiveAccount + "|" + model.CurrentTheme.Name;
+            + "|" + model.CompactAccountsStyle + "|" + model.CurrentTheme.Name;
         if (signature != shownAccounts)
         {
             shownAccounts = signature;
             RebuildAccounts(visible);
         }
 
+        foreach (var row in prototypeRows)
+        {
+            var ratio = model.BudgetRatio(row.Account);
+            var live = model.ActiveAccount == row.Account.Name;
+            row.Time.Text = model.FormatCompact(model.Today(row.Account));
+            row.Gauge.Set(ratio, model.BudgetPace(row.Account));
+            row.Over.IsVisible = ratio > 1; row.Live.IsVisible = live;
+            row.Button.Classes.Set("active", live);
+            row.Button.Classes.Set("selectedAccount", model.SelectedAccount == row.Account.Name);
+            var budget = model.BudgetLine(row.Account);
+            var use = ratio is { } used ? $"{used:P0} used" + (used > 1 ? " · Over budget" : "") : "No budget";
+            var tip = row.Account.Display + " · " + row.Time.Text + " recorded today\n" + budget
+                + (row.Account.Budget is null ? "" : " · " + model.BudgetPeriodNameAt(row.Account, model.Engine.Now))
+                + "\n" + use + (live ? " · Recording" : "")
+                + (model.CompactAccountsStyle == "gauges" && ratio is not null ? "\nTick: progress through the budget period" : "");
+            ToolTip.SetTip(row.Button, tip);
+            Avalonia.Automation.AutomationProperties.SetName(row.Button, tip.Replace('\n', ' '));
+        }
         foreach (var row in rows)
         {
             row.Time.Text = model.FormatCompact(model.Today(row.Account)) + (model.ActiveAccount == row.Account.Name ? " · Recording" : " today");
