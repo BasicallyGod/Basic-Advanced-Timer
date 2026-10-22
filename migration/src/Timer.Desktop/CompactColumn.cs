@@ -8,7 +8,7 @@ namespace Timer.Desktop;
 
 /// <summary>
 /// A compact account panel beside the unchanged navigation rail on Notes.
-/// Timer and immediate controls stay at the top; the accounts scroll independently;
+/// The clock stays at the top; experimental layouts put icon controls at the bottom;
 /// start/finish day stays fixed at the bottom. The full dashboard column is retained on other pages.
 /// </summary>
 public sealed class CompactColumn : Grid
@@ -16,6 +16,9 @@ public sealed class CompactColumn : Grid
     public const double ColumnWidth = 176, PrototypeWidth = 112;
     public double CurrentWidth => model.CompactAccountsStyle == "current" ? ColumnWidth : PrototypeWidth;
     private readonly TimerModel model;
+    private readonly VerticalCompactClock verticalClock = new() { IsVisible = false };
+    private readonly StackPanel topTools, footerTools;
+    private bool? appliedExperimental;
     private readonly ClockText clock = new(28, 14) { Text = "00:00:00" };
     private readonly TextBlock status = Ui.Text("", 11, "muted");
     private readonly PauseGlyph pauseGlyph = new();
@@ -35,7 +38,7 @@ public sealed class CompactColumn : Grid
         RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto");
         var header = new StackPanel { Spacing = 2, Margin = new Thickness(3, 14, 3, 4), HorizontalAlignment = HorizontalAlignment.Center };
         clock.HorizontalAlignment = HorizontalAlignment.Center; status.HorizontalAlignment = HorizontalAlignment.Center;
-        header.Children.Add(clock); header.Children.Add(status);
+        header.Children.Add(clock); header.Children.Add(verticalClock); header.Children.Add(status);
         Ui.Put(this, header);
 
         Button Tool(string name, string tip, Control icon, Action action)
@@ -47,9 +50,9 @@ public sealed class CompactColumn : Grid
         }
         pause = Tool("CompactPause", "Pause or resume tracking", new Viewbox { Width = 16, Height = 16, Child = pauseGlyph }, model.TogglePause);
         breakButton = Tool("CompactBreak", "Take a break", new Viewbox { Width = 18, Height = 18, Child = breakGlyph }, model.ToggleBreak);
-        var tools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) };
-        tools.Children.Add(pause); tools.Children.Add(breakButton);
-        Ui.Put(this, tools, row: 1);
+        topTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 8) };
+        topTools.Children.Add(pause); topTools.Children.Add(breakButton);
+        Ui.Put(this, topTools, row: 1);
 
         accountScroll = new ScrollViewer { Name = "CompactAccountScroll", Content = accounts, AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
@@ -58,7 +61,9 @@ public sealed class CompactColumn : Grid
 
         dayButton = Tool("CompactDay", "Start day", Ui.Horizontal(dayFlag, dayLabel), model.ToggleDay);
         dayButton.Width = ColumnWidth - 12; dayButton.Height = 42;
-        var footer = new Border { Child = dayButton, Padding = new Thickness(5, 10, 5, 12) };
+        footerTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center };
+        footerTools.Children.Add(dayButton);
+        var footer = new Border { Child = footerTools, Padding = new Thickness(5, 10, 5, 12) };
         Ui.Put(this, footer, row: 3);
 
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += OnModel; Sync(); };
@@ -202,21 +207,42 @@ public sealed class CompactColumn : Grid
         }
     }
 
+    private void ApplyControlLayout()
+    {
+        var experimental = model.CompactAccountsStyle != "current";
+        if (experimental == appliedExperimental) return;
+        appliedExperimental = experimental;
+        // Detach before moving existing buttons, preserving their handlers and keyboard behavior.
+        topTools.Children.Clear(); footerTools.Children.Clear();
+        clock.IsVisible = !experimental; verticalClock.IsVisible = experimental; topTools.IsVisible = !experimental;
+        dayLabel.IsVisible = !experimental;
+        pause.Width = breakButton.Width = experimental ? 32 : 38;
+        dayButton.Width = experimental ? 32 : ColumnWidth - 12; dayButton.Height = experimental ? 38 : 42;
+        if (experimental) { footerTools.Children.Add(pause); footerTools.Children.Add(breakButton); }
+        else { topTools.Children.Add(pause); topTools.Children.Add(breakButton); }
+        footerTools.Children.Add(dayButton);
+    }
+
     private void Sync()
     {
-        Width = CurrentWidth; dayButton.Width = CurrentWidth - 12;
+        ApplyControlLayout(); Width = CurrentWidth;
         clock.Text = model.ClockText;
         var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
         clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
+        verticalClock.Set(model.Elapsed, onBreak, late, model.IsTracking && !onBreak && !late);
         status.Text = model.Status;
         ToolTip.SetTip(status, model.Status + (late ? " · Overtime" : ""));
         pauseGlyph.Playing = model.IsTracking && !onBreak; pauseGlyph.InvalidateVisual();
         breakGlyph.SetSteaming(onBreak); breakGlyph.InvalidateVisual();
         breakButton.Classes.Set("onBreak", onBreak);
-        ToolTip.SetTip(breakButton, onBreak ? "End break" : "Take a break");
+        var pauseTip = model.IsTracking && !onBreak ? "Pause tracking" : "Resume tracking";
+        ToolTip.SetTip(pause, pauseTip); Avalonia.Automation.AutomationProperties.SetName(pause, pauseTip);
+        var breakTip = onBreak ? "End break" : "Take a break";
+        ToolTip.SetTip(breakButton, breakTip); Avalonia.Automation.AutomationProperties.SetName(breakButton, breakTip);
         dayLabel.Text = model.DayStarted ? "Finish day" : "Start day";
         dayFlag.TintKey = model.DayStarted ? "Finish" : "Start";
-        ToolTip.SetTip(dayButton, model.DayStarted ? "Finish day" : "Start day");
+        var dayTip = model.DayStarted ? "Finish day" : "Start day";
+        ToolTip.SetTip(dayButton, dayTip); Avalonia.Automation.AutomationProperties.SetName(dayButton, dayTip);
 
         var visible = model.Accounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
         var signature = string.Join("|", visible.Select(a => a.Name + ":" + a.Display + ":" + a.Colour))

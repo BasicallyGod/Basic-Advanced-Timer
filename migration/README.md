@@ -69,3 +69,5 @@ This scheduling update requires shared packages 0.5.0 and upgrades the database 
 The compact account panel keeps names, recorded time and budgets visible beside Notes. The clock remains on the left in Full and Compact pills. Add item and row titles open a bounded flyout beside the item; the dashboard stays visible, and Save, Cancel or Escape closes the form. Recurring items use a repeat-arrows icon.
 
 Three optional [compact account prototypes](COMPACT-SIDEBAR-PROTOTYPES.md) are available under Settings → Appearance and behaviour → Compact accounts: Vertical gauges, Heatmap strips and Integrated capsules. The existing names-and-bars sidebar remains the default. Each experiment keeps today’s recorded time separate from budget usage over the configured period.
+
+The experimental compact layouts show hours above minutes, with seconds omitted from the display. Pause/resume, break and start/finish-day actions are icon-only in a fixed bottom row; hover for action labels; keyboard and screen-reader users retain accessible names. Tracking precision and the original sidebar remain unchanged.

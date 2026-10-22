@@ -160,14 +160,14 @@ public sealed class CompactPrototypeTests
     }
 
     [AvaloniaFact]
-    public void SettingsSwitchesPrototypesWithoutChangingTimerControlsOrTheExpandedDashboard()
+    public void SettingsSwitchesPrototypeControlsWithoutChangingTheExpandedDashboard()
     {
         var model = Model(); var window = Open(model);
         try
         {
             var column = Find<CompactColumn>(window, "CompactColumn");
             var clock = column.GetVisualDescendants().OfType<ClockText>().Single();
-            var pause = Find<Button>(column, "CompactPause"); var pauseSize = pause.Bounds.Size;
+            var pause = Find<Button>(column, "CompactPause");
             Click(window, "Settings");
             var choice = Find<ComboBox>(window, "CompactAccountsStyle"); Assert.Equal(0, choice.SelectedIndex);
             choice.SelectedIndex = 1; Dispatcher.UIThread.RunJobs();
@@ -175,10 +175,60 @@ public sealed class CompactPrototypeTests
             Assert.Equal(340, Find<Grid>(window, "SidebarSlot").Width);
             Click(window, "NotesTab"); using var frame = window.CaptureRenderedFrame();
             Assert.Equal(112, column.Width); Assert.Same(clock, column.GetVisualDescendants().OfType<ClockText>().Single());
-            Assert.Equal(pauseSize, pause.Bounds.Size);
-            Assert.InRange(clock.TranslatePoint(new Point(clock.Bounds.Width, 0), column)!.Value.X, 0, column.Width);
+            Assert.Same(pause, Find<Button>(column, "CompactPause"));
+            Assert.Equal(32, pause.Width); Assert.Equal(38, pause.Height); Assert.False(clock.IsVisible);
+            Assert.True(Find<VerticalCompactClock>(column, "CompactVerticalClock").IsVisible);
+            var vertical = Find<VerticalCompactClock>(column, "CompactVerticalClock");
+            Assert.InRange(vertical.TranslatePoint(new Point(vertical.Bounds.Width, 0), column)!.Value.X, 0, column.Width);
             Click(window, "Settings"); Find<ComboBox>(window, "CompactAccountsStyle").SelectedIndex = 0;
             Click(window, "NotesTab"); Assert.Equal(176, column.Width);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData("gauges")]
+    [InlineData("heatmap")]
+    [InlineData("capsules")]
+    public void PrototypeClockDropsOnlyDisplayedSecondsAndIconControlsStayAtTheBottom(string style)
+    {
+        var instant = Now.Date.AddHours(9).AddMinutes(59).AddSeconds(59);
+        var engine = new TrackingEngine(clock: () => instant);
+        var model = new TimerModel(engine); model.SetCompactAccountsStyle(style);
+        model.ToggleAccount(model.AccountNames[0]); var window = Open(model);
+        try
+        {
+            var column = Find<CompactColumn>(window, "CompactColumn");
+            var scroll = Find<ScrollViewer>(column, "CompactAccountScroll");
+            void CheckClock()
+            {
+                var parts = model.ClockText.Split(':');
+                Assert.Equal(parts[0], Find<TextBlock>(column, "CompactClockHours").Text);
+                Assert.Equal(parts[1], Find<TextBlock>(column, "CompactClockMinutes").Text);
+                Assert.False(column.GetVisualDescendants().OfType<ClockText>().Single().IsVisible);
+            }
+            CheckClock(); instant = instant.AddSeconds(2); model.Tick(); Dispatcher.UIThread.RunJobs(); CheckClock();
+            Assert.Equal(1, model.Elapsed.Seconds); Assert.True(model.IsTracking);
+            using var frame = window.CaptureRenderedFrame();
+            var bottom = scroll.TranslatePoint(new Point(0, scroll.Bounds.Height), column)!.Value.Y;
+            var controls = new[] { "CompactPause", "CompactBreak", "CompactDay" }.Select(n => Find<Button>(column, n)).ToArray();
+            Assert.All(controls, b =>
+            {
+                Assert.True(b.TranslatePoint(default, column)!.Value.Y >= bottom);
+                Assert.InRange(b.TranslatePoint(new Point(b.Bounds.Width, b.Bounds.Height), column)!.Value.X, 0, column.Width);
+                Assert.DoesNotContain(b.GetVisualDescendants().OfType<TextBlock>(), t => t.IsEffectivelyVisible);
+                Assert.False(string.IsNullOrWhiteSpace(ToolTip.GetTip(b)?.ToString()));
+                Assert.Equal(ToolTip.GetTip(b), Avalonia.Automation.AutomationProperties.GetName(b));
+            });
+            Assert.Equal("Pause tracking", ToolTip.GetTip(controls[0]));
+            Click(column, "CompactPause"); Assert.False(model.IsTracking); Assert.Equal("Resume tracking", ToolTip.GetTip(controls[0]));
+            Click(column, "CompactBreak"); Assert.True(model.IsOnBreak); Assert.Equal("End break", ToolTip.GetTip(controls[1]));
+            Click(column, "CompactBreak"); Assert.False(model.IsOnBreak);
+            var started = model.DayStarted; Click(column, "CompactDay"); Assert.NotEqual(started, model.DayStarted);
+            model.SetCompactAccountsStyle("current"); Dispatcher.UIThread.RunJobs(); using var restored = window.CaptureRenderedFrame();
+            Assert.True(column.GetVisualDescendants().OfType<ClockText>().Single().IsVisible);
+            Assert.Equal(38, controls[0].Width); Assert.Equal(164, controls[2].Width);
+            Assert.Contains(controls[2].GetVisualDescendants().OfType<TextBlock>(), t => t.IsEffectivelyVisible);
         }
         finally { window.Close(); }
     }
