@@ -19,7 +19,7 @@ public sealed class PreviewCaptureTests
         foreach (var theme in new[] { "Light", "Dark" })
         {
             var model = TimerModel.CreateDemo(); model.SetTheme(theme);
-            var window = new DashboardWindow(model); window.Show(); window.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "SidebarSlot").Transitions = null; Dispatcher.UIThread.RunJobs();
+            var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
             try
             {
                 void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-" + name + ".png")); }

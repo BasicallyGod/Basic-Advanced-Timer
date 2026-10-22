@@ -148,7 +148,7 @@ public sealed class NoteDetailsTests
     public void AddAndEditUseAnchoredFlyoutsWithoutMovingQuickAdd()
     {
         var model = Model(); model.AddDayNote(Wednesday, "Book the room");
-        var window = new DashboardWindow(model); window.Show(); if (window is DashboardWindow) window.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "SidebarSlot").Transitions = null;
+        var window = new DashboardWindow(model); window.Show();
         try
         {
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NotesTab").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -246,7 +246,7 @@ public sealed class NoteDetailsTests
         model.AddNote(new NoteEdit(NoteKind.Meeting, "Weekly planning", Wednesday, TimeSpan.FromHours(10), TimeSpan.FromHours(11), model.AccountNames[0], new Recurrence(1, 0, null), false));
         var note = model.AllDayNotes.OrderBy(n => n.Day).First();
         var window = new DashboardWindow(model) { Width = width, Height = height }; window.Show();
-        window.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "SidebarSlot").Transitions = null;
+       
         try
         {
             Click(window, "NotesTab");
