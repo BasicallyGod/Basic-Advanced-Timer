@@ -233,4 +233,25 @@ public sealed class CompactPrototypeTests
         finally { window.Close(); }
     }
 
+    [AvaloniaFact]
+    public void StackedClockDigitsKeepTheirBoundsAcrossRolloverWithoutUnitLabels()
+    {
+        var clock = new VerticalCompactClock(); var window = new Window { Width = 112, Height = 200, Content = clock }; window.Show();
+        try
+        {
+            Rect? hourBounds = null, minuteBounds = null;
+            foreach (var elapsed in new[] { new TimeSpan(1, 11, 0), new TimeSpan(8, 59, 59), new TimeSpan(9, 0, 0), TimeSpan.FromHours(100) })
+            {
+                clock.Set(elapsed, false, false, false); using var frame = window.CaptureRenderedFrame();
+                var hours = Find<TextBlock>(clock, "CompactClockHours"); var minutes = Find<TextBlock>(clock, "CompactClockMinutes");
+                hourBounds ??= hours.Bounds; minuteBounds ??= minutes.Bounds;
+                Assert.Equal(hourBounds, hours.Bounds); Assert.Equal(minuteBounds, minutes.Bounds);
+                Assert.Equal(hours.Bounds.Width, minutes.Bounds.Width); Assert.Equal(hours.Bounds.X, minutes.Bounds.X);
+                Assert.Equal(Avalonia.Media.FontFeature.Parse("tnum"), Assert.Single(hours.FontFeatures!));
+                Assert.Equal(2, clock.GetVisualDescendants().OfType<TextBlock>().Count()); Assert.Null(ToolTip.GetTip(clock));
+            }
+        }
+        finally { window.Close(); }
+    }
+
 }

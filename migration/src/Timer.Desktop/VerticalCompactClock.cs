@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 
 namespace Timer.Desktop;
 
@@ -12,14 +13,14 @@ public sealed class VerticalCompactClock : StackPanel
     private readonly TextBlock minutes = Ui.Text("00", 28, "clock");
     public VerticalCompactClock()
     {
-        Name = "CompactVerticalClock"; HorizontalAlignment = HorizontalAlignment.Center;
+        Name = "CompactVerticalClock"; Width = 64; HorizontalAlignment = HorizontalAlignment.Center;
         hours.Name = "CompactClockHours"; minutes.Name = "CompactClockMinutes";
-        Control Line(TextBlock digits, string unit)
+        foreach (var digit in new[] { hours, minutes })
         {
-            var label = Ui.Text(unit, 11, "muted"); label.VerticalAlignment = VerticalAlignment.Bottom; label.Margin = new Thickness(4, 0, 0, 5);
-            var row = Ui.Horizontal(digits, label); row.Spacing = 0; row.HorizontalAlignment = HorizontalAlignment.Center; return row;
+            digit.Width = 64; digit.TextAlignment = TextAlignment.Center;
+            digit.FontFeatures = new FontFeatureCollection { FontFeature.Parse("tnum") };
         }
-        Children.Add(Line(hours, "h")); Children.Add(Line(minutes, "m"));
+        Children.Add(hours); Children.Add(minutes);
     }
     public void Set(TimeSpan elapsed, bool onBreak, bool late, bool live)
     {
@@ -31,6 +32,6 @@ public sealed class VerticalCompactClock : StackPanel
             digit.Classes.Set("clockIdle", !onBreak && !late && !live);
         }
         var description = $"Working time: {(int)elapsed.TotalHours} hours, {elapsed.Minutes} minutes";
-        ToolTip.SetTip(this, description); Avalonia.Automation.AutomationProperties.SetName(this, description);
+        Avalonia.Automation.AutomationProperties.SetName(this, description);
     }
 }

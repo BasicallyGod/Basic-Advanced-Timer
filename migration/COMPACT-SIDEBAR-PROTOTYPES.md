@@ -1,6 +1,6 @@
 # Compact sidebar experiments
 
-In Settings → Appearance and behaviour → Compact accounts, choose **Vertical gauges**, **Heatmap strips**, or **Integrated capsules**. **Current · names and bars** remains the default. The choice is saved locally and can be reversed at any time. These options affect the Notes account column only; the navigation rail, pill and expanded dashboard retain their existing behavior. Experimental sidebars stack hours over minutes at the top, with icon-only pause/resume, break and start/finish-day actions fixed along the bottom. Tooltips and accessible labels describe each action and follow its current state. The original sidebar keeps its horizontal clock and labelled day action.
+In Settings → Appearance and behaviour → Compact accounts, choose **Vertical gauges**, **Heatmap strips**, or **Integrated capsules**. **Current · names and bars** remains the default. The choice is saved locally and can be reversed at any time. These options affect the Notes account column only; the navigation rail, pill and expanded dashboard retain their existing behavior. Experimental sidebars stack hours over minutes at the top in fixed-width tabular digit rows without unit labels, with icon-only pause/resume, break and start/finish-day actions fixed along the bottom. Tooltips and accessible labels describe each action and follow its current state. The original sidebar keeps its horizontal clock and labelled day action.
 
 | Design | Account column | Row height | Budget display |
 |---|---:|---:|---|
