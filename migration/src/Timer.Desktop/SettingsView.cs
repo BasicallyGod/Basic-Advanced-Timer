@@ -60,11 +60,13 @@ public sealed class SettingsView : ScrollViewer
         // The three pictures need the page's whole width, so the label sits above them instead of in the narrow column beside them.
         var layoutLabel = Ui.Text("Pill layout", 14, "muted"); layoutLabel.Margin = new Thickness(0, 4, 0, 0); appearance.Children.Add(layoutLabel);
         appearance.Children.Add(PillLayoutChoices(model, syncs));
+        appearance.Children.Add(Toggle("Integrated dashboard rail (experimental)", "IntegratedRailChoice", () => model.IntegratedRail, v => model.SetIntegratedRail(v)));
         var compactKeys = new[] { "current", "gauges", "heatmap", "capsules" };
         var compactStyles = new ComboBox { Name = "CompactAccountsStyle", ItemsSource = new[] { "Current · names and bars", "Vertical gauges", "Heatmap strips", "Integrated capsules" }, SelectedIndex = Array.IndexOf(compactKeys, model.CompactAccountsStyle) };
         Avalonia.Automation.AutomationProperties.SetName(compactStyles, "Compact accounts (experimental)");
         compactStyles.SelectionChanged += (_, _) => { if (compactStyles.SelectedIndex >= 0) model.SetCompactAccountsStyle(compactKeys[compactStyles.SelectedIndex]); };
-        syncs.Add(() => compactStyles.SelectedIndex = Array.IndexOf(compactKeys, model.CompactAccountsStyle));
+        syncs.Add(() => { compactStyles.SelectedIndex = Array.IndexOf(compactKeys, model.CompactAccountsStyle); compactStyles.IsEnabled = !model.IntegratedRail; });
+        compactStyles.IsEnabled = !model.IntegratedRail;
         appearance.Children.Add(Row("Compact accounts", compactStyles));
         var compactHint = Ui.Text("Experimental alternatives for the Notes sidebar. Current keeps names and horizontal bars.", 12, "muted");
         compactHint.TextWrapping = Avalonia.Media.TextWrapping.Wrap; appearance.Children.Add(compactHint);
