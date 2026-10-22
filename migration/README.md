@@ -71,3 +71,5 @@ The compact account panel keeps names, recorded time and budgets visible beside 
 Three optional [compact account prototypes](COMPACT-SIDEBAR-PROTOTYPES.md) are available under Settings → Appearance and behaviour → Compact accounts: Vertical gauges, Heatmap strips and Integrated capsules. The existing names-and-bars sidebar remains the default. Each experiment keeps today’s recorded time separate from budget usage over the configured period.
 
 The experimental compact layouts show hours above minutes, with seconds omitted from the display. Pause/resume, break and start/finish-day actions are icon-only in a fixed bottom row; hover for action labels; keyboard and screen-reader users retain accessible names. Tracking precision and the original sidebar remain unchanged.
+
+An optional [integrated dashboard rail](INTEGRATED-SIDEBAR-PROTOTYPE.md) is available in Settings → Appearance and behaviour → Integrated dashboard rail (experimental). It combines timer, accounts and all navigation in 88px across dashboard panes. Switch it off to restore the current layout. Account details are available by hover, right-click or Shift+F10.
