@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Timer.Desktop.Tests;
 
-/// <summary>Regressions from the second round of Windows screenshots: a settings row running off its card, a heavy calendar and a cluttered Notes page.</summary>
+/// <summary>Regressions from the second round of Windows screenshots: a settings row running off its card and a heavy calendar.</summary>
 public sealed class UiPolishTests
 {
     private static DashboardWindow Open(TimerModel model, string tab)
@@ -44,7 +44,7 @@ public sealed class UiPolishTests
     public void TheCalendarWearsTheThemeNotTheComputersGreys()
     {
         var model = TimerModel.CreateDemo(); model.SetTheme("Dark");
-        var window = Open(model, "NotesTab");
+        var window = Open(model, "TimelineTab");
         try
         {
             Assert.True(window.TryFindResource("CalendarViewBackground", window.ActualThemeVariant, out var background));
@@ -53,37 +53,5 @@ public sealed class UiPolishTests
             Assert.Equal(0, ((SolidColorBrush)gaps!).Color.A); // No grid of grey bars between the days.
         }
         finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void NotesHeadingsAreQuietAndTheRowToolsWaitForThePointer()
-    {
-        var model = TimerModel.CreateDemo();
-        var window = Open(model, "NotesTab");
-        try
-        {
-            var page = window.GetVisualDescendants().OfType<NotesPage>().Single();
-            foreach (var text in new[] { "Coming up", model.SelectedDate.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) })
-                Assert.False(page.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == text).Classes.Contains("clock"), text + " is in the display face");
-            var remove = page.GetVisualDescendants().OfType<Button>().First(b => b.Name?.StartsWith("NoteRemove_") == true);
-            Assert.Equal(0, remove.Opacity);
-            var row = remove.GetVisualAncestors().OfType<Grid>().First(g => g.Children.Contains(remove.Parent!) || g.Children.OfType<StackPanel>().Any(p => p.Children.Contains(remove)));
-            row.Classes.Add("revealing"); Dispatcher.UIThread.RunJobs();
-            Assert.Equal(1, remove.Opacity);
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void ComingUpGroupsNotesUnderTheirDay()
-    {
-        var model = TimerModel.CreateDemo(); var view = new ComingUpView(model); var host = new Window { Content = view, Width = 400, Height = 800 }; host.Show(); Dispatcher.UIThread.RunJobs();
-        try
-        {
-            var words = view.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
-            Assert.Single(words, "Today"); // Said once, as a heading, not on every row.
-            Assert.Contains("Tomorrow", words);
-        }
-        finally { host.Close(); }
     }
 }

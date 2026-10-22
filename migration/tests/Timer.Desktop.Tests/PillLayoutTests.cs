@@ -31,8 +31,8 @@ public sealed class PillLayoutTests
         var folder = Path.Combine(Path.GetTempPath(), "timer-pill-layout-" + Guid.NewGuid());
         try
         {
-            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store); Assert.Equal("full", model.PillStyle); model.SetPillStyle("minimal"); model.SetCaptureShortcut(HotkeySpec.Parse("Ctrl+Alt+N")); model.Save(); }
-            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store); Assert.Equal("minimal", model.PillStyle); Assert.Equal("Ctrl+Alt+N", model.CaptureShortcut!.ToString()); model.SetPillStyle("sideways"); Assert.Equal("full", model.PillStyle); model.SetPillStyle("compact"); model.Save(); }
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store); Assert.Equal("full", model.PillStyle); model.SetPillStyle("minimal"); model.Save(); }
+            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store); Assert.Equal("minimal", model.PillStyle); model.SetPillStyle("sideways"); Assert.Equal("full", model.PillStyle); model.SetPillStyle("compact"); model.Save(); }
             using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store); Assert.Equal("compact", model.PillStyle); model.SetPillStyle("full"); model.Save(); }
             using (var store = new TimerStore(folder)) { var settings = store.Load(new TrackingEngine()); Assert.DoesNotContain(settings.Extras!.AppearanceLines, l => l.StartsWith("pillstyle=", StringComparison.Ordinal)); }
         }
@@ -162,7 +162,7 @@ public sealed class PillLayoutTests
     public void LayoutsKeepTheClockAtTheLeftExceptForTheMinimalBadge()
     {
         var model = Model();
-        var old = model.AccountNames[0];
+        var old = model.Accounts.First(a => !BreakAccount.Is(a.Name)).Name;
         var name = "Account with a deliberately long name for the quarterly client reporting programme";
         model.SetAccounts(model.AccountSettings.Select(a => a.Name == old ? a with { Name = name } : a), new Dictionary<string, string> { [old] = name });
         model.ToggleAccount(name);
@@ -206,7 +206,7 @@ public sealed class PillLayoutTests
     {
         var model = Model();
         Assert.Equal("Ready to track", model.Status); Assert.Contains(model.Status, TrayController.Tooltip(model));
-        model.ToggleAccount(model.AccountNames[0]); Assert.Equal("Tracking", model.Status);
+        model.ToggleAccount(model.Accounts.First(a => !BreakAccount.Is(a.Name)).Name); Assert.Equal("Tracking", model.Status);
         model.TogglePause(); Assert.Equal("Ready to track", model.Status); Assert.Contains(model.Status, TrayController.Tooltip(model));
         model.ToggleBreak(); Assert.Equal("On break", model.Status); Assert.Contains(model.Status, TrayController.Tooltip(model));
         model.ToggleBreak(); model.ToggleDay();

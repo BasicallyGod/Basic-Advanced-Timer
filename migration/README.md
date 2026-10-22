@@ -59,17 +59,3 @@ dotnet publish migration/src/Timer.Desktop/Timer.Desktop.csproj --configuration 
 ```
 
 Tests use disposable synthetic data only. They cover the engine (early starts, pauses, lunch, finish and resume, overtime, days off, midnight splitting), storage (database, backups, undo, fault injection), the production windows and styles in a headless Avalonia, and the theme engine (contrast, derived tints, editor flow). The workflow runs them on Windows, Linux and macOS, then publishes the Windows build.
-
-## Task dates and times
-
-Tasks can have a date and optional time, or be left undated using Add date in the shared item editor. The Undated filter holds unscheduled tasks separately from the day being viewed; they do not appear in Coming up, overdue or reminders until scheduled. Add item and quick-add within that filter start with an undated task. Elsewhere quick-add stays on the selected day: a single time creates a task reminder, while an explicit start–end range creates a meeting. Meetings require a date and start time, with an optional end; deadlines require a date and have an optional due time. Account assignments and recurring dated tasks remain supported.
-
-This scheduling update requires shared packages 0.5.0 and upgrades the database to format 6 after saving a backup. Older builds cannot open that upgraded database; use the pre-upgrade backup for rollback.
-
-The compact account panel keeps names, recorded time and budgets visible beside Notes. The clock remains on the left in Full and Compact pills. Add item and row titles open a bounded flyout beside the item; the dashboard stays visible, and Save, Cancel or Escape closes the form. Recurring items use a repeat-arrows icon.
-
-Three optional [compact account prototypes](COMPACT-SIDEBAR-PROTOTYPES.md) are available under Settings → Appearance and behaviour → Compact accounts: Vertical gauges, Heatmap strips and Integrated capsules. The existing names-and-bars sidebar remains the default. Each experiment keeps today’s recorded time separate from budget usage over the configured period.
-
-The experimental compact layouts show hours above minutes, with seconds omitted from the display. Pause/resume, break and start/finish-day actions are icon-only in a fixed bottom row; hover for action labels; keyboard and screen-reader users retain accessible names. Tracking precision and the original sidebar remain unchanged.
-
-An optional [integrated dashboard rail](INTEGRATED-SIDEBAR-PROTOTYPE.md) is available in Settings → Appearance and behaviour → Integrated dashboard rail (experimental). It combines timer, accounts and all navigation in 88px across dashboard panes. Switch it off to restore the current layout. Account details are available by hover, right-click or Shift+F10.

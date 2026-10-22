@@ -17,7 +17,7 @@ public static class ReviewViews
     // Every block has the same small corner at every zoom level, only a block too short to hold it is rounded as far as it can be.
     public const double BlockRadius = 6;
     // Where the spine runs and where blocks start, from the left of the timeline.
-    private const double SpineX = 58, CardLeft = 80, LabelRight = 40, MeetingLaneWidth = 132, PromptWidth = 380;
+    private const double SpineX = 58, CardLeft = 80, LabelRight = 40;
     public static Control Timeline(TimerModel model)
     {
         var day = model.SelectedDate;
@@ -48,27 +48,6 @@ public static class ReviewViews
             // A faint guide across, so a block far from the spine can still be read against the hours.
             var guide = Ui.Rule(); guide.Width = 390; guide.Opacity = .35; guide.Tag = "HourGuide";
             Canvas.SetLeft(guide, CardLeft - 6); Canvas.SetTop(guide, hour * pixelsPerHour + 1.5); canvas.Children.Add(guide);
-        }
-        // Meetings planned for the day sit in their own lane down the right-hand side, so tracked time recorded over them never hides them. A dashed outline with
-        // a faint fill and no account strip keeps planned time from being mistaken for tracked time, and nothing here is ever counted.
-        var meetingBands = new List<(Panel Band, int Lane)>(); var meetingEnds = new List<TimeSpan>();
-        foreach (var meeting in model.MeetingsOn(day))
-        {
-            var lane = meetingEnds.FindIndex(end => end <= meeting.At!.Value);
-            if (lane < 0) { lane = meetingEnds.Count; meetingEnds.Add(meeting.End!.Value); } else meetingEnds[lane] = meeting.End!.Value;
-            var bandHeight = Math.Max(MinimumBlockHeight, (meeting.End!.Value - meeting.At!.Value).TotalHours * pixelsPerHour - 4);
-            var outline = new Avalonia.Controls.Shapes.Rectangle { RadiusX = BlockRadius, RadiusY = BlockRadius, StrokeThickness = 1.5, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 4, 3 } };
-            outline.Bind(Avalonia.Controls.Shapes.Shape.StrokeProperty, outline.GetResourceObservable("Muted"));
-            outline.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, outline.GetResourceObservable("Hover"));
-            var words = NoteShorthand.Display(meeting, model.AccountNames);
-            var label = new StackPanel { Spacing = 1, Margin = new Thickness(8, 4, 6, 2) };
-            var name = Ui.Text(words, 12); name.FontWeight = FontWeight.SemiBold; name.TextTrimming = TextTrimming.CharacterEllipsis; label.Children.Add(name);
-            if (bandHeight >= 40) label.Children.Add(Ui.Text(NoteTimes.Of(meeting) + " · planned", 11, "muted"));
-            var band = new Panel { Name = "TimelineMeeting_" + meeting.Id, Tag = "Meeting", Width = MeetingLaneWidth - 6, Height = bandHeight, ClipToBounds = true };
-            band.Children.Add(outline); if (bandHeight >= 22) band.Children.Add(label);
-            ToolTip.SetTip(band, $"Planned: {words} · {NoteTimes.Of(meeting)}\nNot tracked time. It asks whether it took place when it ends.");
-            Avalonia.Automation.AutomationProperties.SetName(band, $"Planned meeting: {words}, {NoteTimes.Of(meeting)}");
-            Canvas.SetLeft(band, CardLeft); Canvas.SetTop(band, meeting.At!.Value.TotalHours * pixelsPerHour + 2); canvas.Children.Add(band); meetingBands.Add((band, lane));
         }
         var groups = model.Editor.Entries(day, day.AddDays(1)).Where(e => e.GroupId is not null && e.Sources.Any(s => s.Duration > TimeSpan.Zero)).ToArray();
         var grouped = groups.SelectMany(e => e.Sources).ToHashSet();
@@ -183,28 +162,6 @@ public static class ReviewViews
             Canvas.SetTop(card, (interval.Start - day).TotalHours * pixelsPerHour + 2);
             canvas.Children.Add(card); cards.Add((card, lane));
         }
-        // A meeting that has ended asks here, under its block, whether it took place. It floats over the tracked blocks at the right, and answering it clears it (No ticks the
-        // note off; Yes opens Add time on its hours). The dashboard's floating card leaves this one out while the timeline is showing (TimerModel.TimelineVisible).
-        var prompts = new List<Border>();
-        foreach (var ask in model.Reminders.Where(r => r.State == ReminderState.Followup && r.Note.Day.Date == day.Date && r.Note.End is not null))
-        {
-            var id = ask.Note.Id;
-            var question = new StackPanel { Spacing = 0, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-            question.Children.Add(new TextBlock { Text = "Did it take place?", FontSize = 13, FontWeight = FontWeight.SemiBold });
-            question.Children.Add(Ui.Text(NoteShorthand.Display(ask.Note, model.AccountNames) + " · " + NoteTimes.Of(ask.Note), 12, "muted"));
-            Button Small(Button button, bool main = false) { button.Classes.Add("toolButton"); button.Classes.Add("quiet"); button.Height = 28; button.Padding = new Thickness(10, 0); button.FontSize = 12; if (main) button.Classes.Add("mainAction"); return button; }
-            var no = Small(Ui.Button("No", () => model.DoneReminder(id), "TimelinePromptNo_" + id));
-            var yes = Small(Ui.Button("Yes", () => model.LogMeeting(id), "TimelinePromptYes_" + id), true);
-            var later = Small(ReminderUi.SnoozeButton(model, () => id, "TimelinePromptLater_" + id)); later.Content = "…"; ToolTip.SetTip(later, "Ask me again later");
-            Avalonia.Automation.AutomationProperties.SetName(later, "Ask me again later");
-            var buttons = Ui.Horizontal(no, yes, later); buttons.Spacing = 6; buttons.Margin = new Thickness(10, 0, 0, 0);
-            var promptRow = Ui.Grid("Auto,*,Auto", "Auto"); var clock = new IconGlyph(IconKind.Note) { VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
-            Ui.Put(promptRow, clock); Ui.Put(promptRow, question, 1); Ui.Put(promptRow, buttons, 2);
-            var prompt = new Border { Name = "TimelinePrompt_" + id, Tag = "MeetingPrompt", Width = PromptWidth, Child = promptRow, CornerRadius = new CornerRadius(12), Padding = new Thickness(12, 8, 8, 8) };
-            prompt.Classes.Add("messageBar");
-            Avalonia.Automation.AutomationProperties.SetName(prompt, "Did the meeting take place? " + NoteShorthand.Display(ask.Note, model.AccountNames));
-            Canvas.SetLeft(prompt, CardLeft); Canvas.SetTop(prompt, ask.Note.End!.Value.TotalHours * pixelsPerHour + 6); canvas.Children.Add(prompt); prompts.Add(prompt);
-        }
         // For today, a line across at the current time with a chip in the margin saying what it is. It moves on every half minute while the timeline is on screen.
         if (day == model.Engine.Now.Date)
         {
@@ -229,11 +186,7 @@ public static class ReviewViews
         void Resize()
         {
             foreach (var guide in canvas.Children.OfType<Border>().Where(b => b.Tag is "HourGuide")) guide.Width = Math.Max(220, canvas.Bounds.Width - CardLeft);
-            // Tracked blocks share what is left after the meeting lanes, which sit at the right-hand edge.
-            var trackedWidth = Math.Max(220, canvas.Bounds.Width - CardLeft - 10 - meetingEnds.Count * MeetingLaneWidth);
-            foreach (var prompt in prompts) Canvas.SetLeft(prompt, Math.Max(CardLeft, canvas.Bounds.Width - 10 - PromptWidth));
-            foreach (var meeting in meetingBands) Canvas.SetLeft(meeting.Band, CardLeft + trackedWidth + 6 + meeting.Lane * MeetingLaneWidth);
-            var width = trackedWidth / Math.Max(1, ends.Count);
+            var width = Math.Max(220, canvas.Bounds.Width - CardLeft - 10) / Math.Max(1, ends.Count);
             foreach (var card in cards) { card.Card.Width = Math.Max(40, width - 6); Canvas.SetLeft(card.Card, CardLeft + card.Lane * width); }
             foreach (var marker in canvas.Children.OfType<Border>().Where(b => b.Tag is "NowLine")) marker.Width = Math.Max(220, canvas.Bounds.Width - SpineX);
         }
@@ -271,8 +224,7 @@ public static class ReviewViews
             model.ClearSelection(); e.Handled = true;
         };
         var plan = model.Engine.Plan(day);
-        var starts = intervals.Select(i => i.Start).Concat(model.MeetingsOn(day).Select(m => day.Date + m.At!.Value)).ToList();
-        var first = starts.Count > 0 ? starts.Min() : plan.Working ? plan.Start : day.AddHours(9);
+        var first = intervals.Count > 0 ? intervals.Min(i => i.Start) : plan.Working ? plan.Start : day.AddHours(9);
         var scroll = new ScrollViewer { Name = "TimelineScroll", Content = canvas, ClipToBounds = true,
             Tag = new Vector(0, model.TimelineOffset ?? Math.Max(0, (first - day).TotalHours * pixelsPerHour - 24)),
             AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };

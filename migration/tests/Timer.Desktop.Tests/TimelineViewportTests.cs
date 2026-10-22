@@ -58,21 +58,11 @@ public sealed class TimelineViewportTests
     }
 
     [AvaloniaFact]
-    public void InitialScrollFindsAnEarlyMeetingAndHonoursAnExplicitPosition()
+    public void AnExplicitScrollPositionIsHonouredWhenOpeningTheDay()
     {
-        var model = Model(); model.AddDayNote(Day, "Early review 06:00 - 06:30");
-        var id = model.AllDayNotes.Single().Id;
-        var window = Open(model);
-        try
-        {
-            var scroll = Find<ScrollViewer>(window, "TimelineScroll"); var meeting = Find<Panel>(window, "TimelineMeeting_" + id);
-            var top = meeting.TranslatePoint(default, scroll)!.Value.Y;
-            Assert.InRange(top, 0, scroll.Viewport.Height - meeting.Height);
-            Assert.Empty(model.Engine.Sessions); // Choosing the view never records the planned meeting.
-        }
-        finally { window.Close(); }
+        var model = Model();
         model.TimelineOffset = 12 * model.TimelinePixelsPerHour;
-        window = Open(model);
+        var window = Open(model);
         try { Assert.Equal(12 * model.TimelinePixelsPerHour, Find<ScrollViewer>(window, "TimelineScroll").Offset.Y, 1); }
         finally { window.Close(); }
     }

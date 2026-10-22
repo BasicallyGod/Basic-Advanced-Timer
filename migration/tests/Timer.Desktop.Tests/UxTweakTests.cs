@@ -120,12 +120,12 @@ public sealed class UxTweakTests
         var window = new Window { Content = target }; window.Show();
         try
         {
-            int Dividers() => menu.ItemsSource!.OfType<Separator>().Skip(1).Count(r => r.IsVisible); // The first divider always follows Add note.
+            int Dividers() => menu.ItemsSource!.OfType<Separator>().Count(r => r.IsVisible);
             menu.Open(target); Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, Dividers()); // Only Collapse to tray is showing, so there is nothing to divide it from.
             menu.Close(); model.SetDeveloper(true); menu.Open(target); Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, Dividers()); // The version, then a divider, then Collapse to tray. Nothing above the version.
-            Assert.False(menu.ItemsSource!.OfType<Separator>().Skip(1).First().IsVisible);
+            Assert.False(menu.ItemsSource!.OfType<Separator>().First().IsVisible);
         }
         finally { window.Close(); }
     }
