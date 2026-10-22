@@ -112,19 +112,6 @@ public static class Ui
     // The buttons in dialogs wear the same quiet outlined look as the dashboard's (Add time, Undo, Start break). The main action of a dialog,
     // such as Save or Export, has an accent outline so it reads as the one to press.
     private static readonly string[] MainActions = { "Save", "Export CSV files", "Apply selected fills", "Group selected", "Move blocks" };
-    /// <summary>
-    /// Shows a row's quiet controls (marked with the hoverReveal class) only while the pointer is over the row or something in it has the keyboard focus,
-    /// so a list of notes is words first and tools second. The controls stay in the layout, so nothing moves when they appear.
-    /// </summary>
-    public static void RevealOnHover(Control row)
-    {
-        bool over = false, focused = false;
-        void Apply() => row.Classes.Set("revealing", over || focused);
-        row.PointerEntered += (_, _) => { over = true; Apply(); };
-        row.PointerExited += (_, _) => { over = false; Apply(); };
-        row.GotFocus += (_, _) => { focused = true; Apply(); };
-        row.LostFocus += (_, _) => { focused = row.IsKeyboardFocusWithin; Apply(); };
-    }
     public static Button DialogButton(string text, Action click, string? name = null, bool? main = null)
     {
         var button = Button(text, click, name);
@@ -163,8 +150,6 @@ public static class Ui
         grid.Children.Add(child);
         return child;
     }
-    /// <summary>A name that is safe to give a control, made from any text.</summary>
-    public static string NameKey(string text) => System.Text.RegularExpressions.Regex.Replace(text, @"[^A-Za-z0-9]", "_");
     public static Border Rule() { var b = new Border { Height = 1 }; b.Classes.Add("rule"); return b; }
     public static StackPanel Horizontal(params Control[] children)
     {
@@ -274,11 +259,8 @@ public static class Ui
         collapse.Click += (_, _) => model.RequestHide();
         var versionRule = new Separator { IsVisible = false };
         var collapseRule = new Separator { IsVisible = false };
-        // Jots a note without opening the dashboard.
         var breakItem = new MenuItem { Name = "BreakMenu" }; breakItem.Click += (_, _) => model.ToggleBreak(); // The minimal pill has no break button, so it is here.
-        var noteItem = new MenuItem { Name = "AddNoteMenu", Header = "Add note…" }; noteItem.Click += (_, _) => model.RequestQuickCapture();
-        var noteRule = new Separator();
-        var menu = new ContextMenu { ItemsSource = new Control[] { breakItem, noteItem, noteRule, continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
+        var menu = new ContextMenu { ItemsSource = new Control[] { breakItem, continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
         void Sync()
         {
             var developer = model.DeveloperUnlocked;
@@ -875,7 +857,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Clock, Note, Bell, Repeat, Task }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -989,13 +971,6 @@ public sealed class IconGlyph : Control
                 context.DrawGeometry(null, pen, Geometry.Parse("M 3.5,3.5 L 3.5,6 Q 3.5,9 9,9 M 14.5,3.5 L 14.5,6 Q 14.5,9 9,9 M 9,9 L 9,14.5"));
                 context.DrawGeometry(null, pen, Geometry.Parse("M 6.5,12 L 9,14.5 L 11.5,12"));
                 break;
-            case IconKind.Repeat:
-                context.DrawGeometry(null, pen, Geometry.Parse("M 3,7 Q 4,3 9,3 Q 13,3 15,6 L 15,2 M 15,6 L 11,6 M 15,11 Q 14,15 9,15 Q 5,15 3,12 L 3,16 M 3,12 L 7,12"));
-                break;
-            case IconKind.Task:
-                context.DrawRectangle(null, pen, new Rect(2.5, 2.5, 13, 13), 3, 3);
-                context.DrawGeometry(null, pen, Geometry.Parse("M 5.5,9 L 8,11.5 L 12.5,6.5"));
-                break;
             case IconKind.Week:
                 // Three bars of different heights on a baseline: an overview of the week, not a calendar.
                 context.DrawLine(pen, new Point(2.5, 15.5), new Point(15.5, 15.5));
@@ -1016,30 +991,6 @@ public sealed class IconGlyph : Control
                 context.DrawLine(pen, new Point(2.5, 7.5), new Point(15.5, 7.5));
                 context.DrawLine(pen, new Point(6, 2), new Point(6, 5)); context.DrawLine(pen, new Point(12, 2), new Point(12, 5));
                 context.DrawEllipse(brush, null, new Point(9, 11.5), 1.4, 1.4);
-                break;
-            case IconKind.Clock:
-                // A round face with its two hands.
-                context.DrawEllipse(null, pen, new Point(9, 9), 6.5, 6.5); context.DrawLine(pen, new Point(9, 5.2), new Point(9, 9)); context.DrawLine(pen, new Point(9, 9), new Point(11.8, 10.6));
-                break;
-            case IconKind.Bell:
-            {
-                // A bell: a dome, a flat rim and a small clapper under it.
-                var bell = new StreamGeometry();
-                using (var g = bell.Open())
-                {
-                    g.BeginFigure(new Point(4.5, 12.5), false); g.LineTo(new Point(4.5, 8.5));
-                    g.CubicBezierTo(new Point(4.5, 5.5), new Point(6.5, 3.5), new Point(9, 3.5));
-                    g.CubicBezierTo(new Point(11.5, 3.5), new Point(13.5, 5.5), new Point(13.5, 8.5));
-                    g.LineTo(new Point(13.5, 12.5)); g.EndFigure(false);
-                }
-                context.DrawGeometry(null, pen, bell);
-                context.DrawLine(pen, new Point(3, 12.5), new Point(15, 12.5)); context.DrawLine(pen, new Point(7.7, 15), new Point(10.3, 15));
-                break;
-            }
-            case IconKind.Note:
-                // A page with a few lines of writing.
-                context.DrawRectangle(null, pen, new Rect(3.5, 3, 11, 12), 2.5, 2.5);
-                context.DrawLine(pen, new Point(6.5, 7), new Point(11.5, 7)); context.DrawLine(pen, new Point(6.5, 10), new Point(11.5, 10)); context.DrawLine(pen, new Point(6.5, 13), new Point(9, 13));
                 break;
             case IconKind.Table:
                 // A grid of cells: hours by account.

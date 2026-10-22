@@ -176,9 +176,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     private StoreSettings preferences;
     private readonly TimerStore? store;
-    private readonly List<DayNote> dayNotes;
-    private long nextNoteId = 1, nextSeriesId = 1;
-    private readonly List<NoteSeries> seriesList;
     private int ticks;
     public TimerModel(TrackingEngine? engine = null, StoreSettings? preferences = null, TimerStore? store = null)
     {
@@ -186,16 +183,12 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, ThemeLibrary.Default, DayOfWeek.Monday);
         this.store = store;
         Editor = store?.Editor ?? new LedgerEditor(Engine);
-        dayNotes = store?.LoadDayNotes() ?? new List<DayNote>();
-        seriesList = store?.LoadSeries() ?? new List<NoteSeries>();
-        LoadSnoozes();
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
         SelectedDate = Engine.Now.Date; lastToday = SelectedDate;
         // The user's own themes need their colours registered too. The built-in ones were registered when the app started.
         if (Application.Current is { } current && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && this.preferences.Themes is { Count: > 0 } own) ThemeEngine.Register(current, own);
-        MakeSeriesNotes(); // Notes for repeats come up to date as the app starts, and again each day (Tick).
         ApplyTheme(); Ui.ApplyTooltips(this.preferences.Tooltips);
         // When the computer switches between light and dark, System follows it.
         if (Application.Current?.PlatformSettings is { } platform)
@@ -339,22 +332,6 @@ public sealed class TimerModel : INotifyPropertyChanged
             // Save first so the backup holds the latest entries, then rewrite everything in one go.
             if (store is not null) { store.Save(Engine, preferences); store.Backup("before-rename"); }
             foreach (var (from, to) in renamed) Editor.RenameAccount(from, to);
-        }
-        // Notes tagged with an account follow its rename, and the tag becomes an ordinary word if it is deleted.
-        if (renamed.Count > 0 || deleted.Count > 0)
-        {
-            var before = preferences.Accounts.Select(a => a.Name).ToList(); var map = renamed.ToDictionary(r => r.Key, r => r.Value); var gone = deleted.ToList();
-            for (var i = 0; i < dayNotes.Count; i++)
-            {
-                var text = NoteShorthand.Relink(dayNotes[i].Text, before, map, gone);
-                if (text != dayNotes[i].Text) { dayNotes[i] = dayNotes[i] with { Text = text }; PersistNote(dayNotes[i]); }
-            }
-            // A repeating note's template follows too, or the notes made later would carry the old name.
-            for (var i = 0; i < seriesList.Count; i++)
-            {
-                var text = NoteShorthand.Relink(seriesList[i].Text, before, map, gone);
-                if (text != seriesList[i].Text) { seriesList[i] = seriesList[i] with { Text = text }; PersistSeries(seriesList[i]); }
-            }
         }
         preferences = preferences with { Accounts = WithColours(values) };
         if (renamed.Count > 0 && SelectedAccount is { } picked && renames.TryGetValue(picked, out var now)) SelectedAccount = now;
@@ -608,26 +585,7 @@ public sealed class TimerModel : INotifyPropertyChanged
             foreach (var (account, minutes) in earlier) { engine.AddSession(account, at, at.AddMinutes(minutes)); at = at.AddMinutes(minutes + 5); }
         }
         if (store is not null) store.Save(engine, prefs);
-        var demo = new TimerModel(engine, prefs, store) { IsDemo = true };
-        demo.SeedDemoNotes(anchor.Date);
-        return demo;
-    }
-    /// <summary>
-    /// Sample notes and reminders for the demo, written in the same shorthand a person would type so they also show how it reads: today's tasks and a timed
-    /// event, a deadline, and notes tagged to accounts, then dated ones days and months ahead so Coming up and the Notes page have something to show.
-    /// </summary>
-    private void SeedDemoNotes(DateTime today)
-    {
-        string On(int days) => " @" + today.AddDays(days).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
-        var notes = new[]
-        {
-            "Send the weekly update #Accountone", "14:25 Send the revised budget #Accounttwo", "Check the invoice numbers #Accounttwo", "16:30 Call with the Account three team #Accountthree",
-            "! 17:00 Timesheet to finance", "Book the meeting room" + On(1), "10:00 Planning with Account four #Accountfour" + On(1),
-            "! Account five report due #Accountfive" + On(5), "14:00 Review with Account one #Accountone" + On(9), "Renew the software licence" + On(21),
-            "! Quarterly review pack #Accountfive" + On(45), "Plan the team away day" + On(90), "! Year-end accounts to Internal #Internal" + On(150)
-        };
-        foreach (var typed in notes) AddDayNote(today, typed);
-        Notice = null;
+        return new TimerModel(engine, prefs, store) { IsDemo = true };
     }
     // Overtime for testing: the demo's shift is cut short so the day is already past its end. It is only for the demo, and can be
     // switched off again, which puts back whatever shift was set for the day before.
@@ -685,12 +643,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         EditError = null; EntryRequested?.Invoke(null, start, end);
     }
     public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note, bool allowOverlap = false)
-    {
-        var saved = ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note, allowOverlap); });
-        // The meeting took place and its time is now recorded, so the note is ticked off and the planned block goes.
-        if (saved && row is null && meetingToLog is { } meeting) { meetingToLog = null; DoneReminder(meeting.Id); }
-        return saved;
-    }
+        => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note, allowOverlap); });
     /// <summary>What lengthening a block to a later end would move, or an explanation when it cannot be done. Nothing is changed.</summary>
     public IReadOnlyList<TimelineChange> PlanExtend(SessionRow row, DateTime end) => Editor.PlanExtend(row, end);
     public bool ExtendEntry(SessionRow row, DateTime end, string note) => ChangeLog(() => Editor.ExtendEnd(row, end, note));
@@ -848,8 +801,6 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (closed) return;
         ticks++;
         FollowToday();
-        MakeSeriesNotes();
-        CheckReminders();
         if (ticks % 15 == 0) { Save(); Notify(); }
         else PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Elapsed)));
     }
@@ -857,7 +808,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         // Once the app is closing, or its database has been closed, there is nothing left to save and a late tick must not try.
         if (closed || store is { IsDisposed: true }) return true;
-        RetryNoteWrites();
         try { store?.Save(Engine, preferences); LastError = null; return true; }
         // A restart or shutdown can close the database under a save that is already queued. That must be reported, never allowed to crash the app.
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or ObjectDisposedException || error.GetType().Namespace == "Microsoft.Data.Sqlite")
@@ -911,409 +861,6 @@ public sealed class TimerModel : INotifyPropertyChanged
         messageTimer?.Stop(); messageTimer = null;
         Notice = null; EditError = null; messageSeen = (null, null); Notify();
     }
-    // ---- Notes on a day. They live in the database, outside the undo history, and feed Coming up. ----
-    public IReadOnlyList<DayNote> AllDayNotes => dayNotes;
-    public IReadOnlyList<DayNote> UndatedNotes => dayNotes.Where(n => !n.HasDate).OrderBy(n => n.Done).ThenBy(n => n.Id).ToList();
-    public IReadOnlyList<DayNote> NotesOn(DateTime day) => dayNotes.Where(n => n.HasDate && n.Day.Date == day.Date).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
-    /// <summary>What is coming up. A repeating note shows once, as its next time, so a daily meeting does not fill the list.</summary>
-    public IReadOnlyList<DayNote> ComingUp(int days = 180)
-    {
-        var seen = new HashSet<long>();
-        return DayNotes.ComingUp(dayNotes, Engine.Now, days).Where(n => n.SeriesId is not { } series || seen.Add(series)).ToList();
-    }
-    /// <summary>Tasks and deadlines on earlier days that were never ticked off, the most recent day first, looking back 90 days. An event just passes, so it is not missed.</summary>
-    public IReadOnlyList<DayNote> MissedNotes(int days = 90)
-    {
-        var today = Engine.Now.Date;
-        return dayNotes.Where(n => n.HasDate && !n.Done && n.Day.Date < today && n.Day.Date >= today.AddDays(-days) && n.SeriesId is null && (DayNotes.IsTask(n) || DayNotes.IsDeadline(n))) // A repeat comes round again, so a missed one is not carried over.
-            .OrderByDescending(n => n.Day.Date).ThenBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList();
-    }
-    /// <summary>Carries every missed note over to today, so what was not done is on today's list.</summary>
-    public void MoveMissedToToday()
-    {
-        var missed = MissedNotes(); if (missed.Count == 0) return;
-        var today = Engine.Now.Date;
-        foreach (var note in missed) ChangeNote(note.Id, n => n with { Day = today }, false);
-        Notice = missed.Count == 1 ? "Moved 1 note to today." : $"Moved {missed.Count} notes to today."; Notify();
-    }
-    // ---- Reminders: notes with a time, shown on the pill and the dashboard when they are near, due or overdue (rules in ReminderRules). ----
-    private readonly Dictionary<long, DateTime> snoozedUntil = new();
-    private readonly HashSet<long> announced = new();
-    private string reminderSignature = "";
-    private const string RemindLine = "remind=", RemindLeadLine = "remindlead=", RemindSnoozeLine = "remindsnooze=";
-    private string? Extra(string key) => preferences.Extras?.AppearanceLines.FirstOrDefault(l => l.StartsWith(key, StringComparison.Ordinal))?[key.Length..];
-    private void SetExtra(string key, string? value)
-    {
-        var extras = preferences.Extras ?? SettingsExtras.Empty;
-        var lines = extras.AppearanceLines.Where(l => !l.StartsWith(key, StringComparison.Ordinal)).ToList();
-        if (value is not null) lines.Add(key + value);
-        preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
-    }
-    public bool RemindersOn => Extra(RemindLine) != "off";
-    public void SetRemindersOn(bool on) => SetExtra(RemindLine, on ? null : "off");
-    /// <summary>Minutes before a note's time that a quiet heads-up starts; 0 for none.</summary>
-    public int ReminderLead => int.TryParse(Extra(RemindLeadLine), out var v) && ReminderRules.LeadChoices.Contains(v) ? v : ReminderRules.DefaultLead;
-    public void SetReminderLead(int minutes) => SetExtra(RemindLeadLine, minutes == ReminderRules.DefaultLead ? null : minutes.ToString());
-    public int ReminderSnooze => int.TryParse(Extra(RemindSnoozeLine), out var v) && ReminderRules.SnoozeChoices.Contains(v) ? v : ReminderRules.DefaultSnooze;
-    public void SetReminderSnooze(int minutes) => SetExtra(RemindSnoozeLine, minutes == ReminderRules.DefaultSnooze ? null : minutes.ToString());
-    private const string RemindSoundLine = "remindsound=";
-    /// <summary>Whether a reminder that falls due makes a short sound. On unless switched off, since a silent reminder is easy to miss.</summary>
-    public bool ReminderSoundOn => Extra(RemindSoundLine) != "off";
-    public void SetReminderSoundOn(bool on) => SetExtra(RemindSoundLine, on ? null : "off");
-    public IReadOnlyList<Reminder> Reminders => RemindersOn ? ReminderRules.For(dayNotes, Engine.Now, ReminderLead, snoozedUntil) : System.Array.Empty<Reminder>();
-    public int AttentionReminderCount => Reminders.Count(r => r.State != ReminderState.Soon);
-    /// <summary>The reminder to show a card for: the first one that is due or overdue. A heads-up has no card.</summary>
-    public Reminder? ActiveReminder => ActiveWhere(_ => true);
-    // The first thing that needs attention, or (when the setting is on) the first heads-up if nothing does.
-    private Reminder? ActiveWhere(Func<Reminder, bool> allowed)
-    {
-        var list = Reminders.Where(allowed).ToList();
-        return list.FirstOrDefault(r => r.State != ReminderState.Soon) ?? (ShowUpcoming ? list.FirstOrDefault() : null);
-    }
-    private const string RemindUpcomingLine = "remindupcoming=";
-    /// <summary>Whether a reminder that is coming up (not yet due) shows on the pill too. Off unless switched on, so the pill only grows for what is due.</summary>
-    public bool ShowUpcoming => Extra(RemindUpcomingLine) == "on";
-    public void SetShowUpcoming(bool on) => SetExtra(RemindUpcomingLine, on ? "on" : null);
-    /// <summary>True while the dashboard is showing the timeline, which then holds a meeting's "did it take place?" itself, so the floating card leaves it out for that day.</summary>
-    public bool TimelineVisible { get; private set; }
-    public void SetTimelineVisible(bool on) { if (TimelineVisible == on) return; TimelineVisible = on; Notify(); }
-    /// <summary>The reminder the dashboard's floating card shows.</summary>
-    public Reminder? DashboardReminder => ActiveWhere(r => !(r.State == ReminderState.Followup && TimelineVisible && r.Note.Day.Date == SelectedDate.Date));
-    /// <summary>How many other reminders there are besides the one a card shows, for its "+2 more".</summary>
-    public int MoreReminders(Reminder? shown) => shown is null ? 0 : Math.Max(0, Reminders.Count - 1);
-    public string ReminderLine(Reminder reminder) => ReminderRules.Describe(reminder, Engine.Now);
-    // A snooze is kept in the settings file (as remindsnoozed=id:ticks,...), so a restart does not bring a snoozed reminder straight back.
-    private const string RemindSnoozedLine = "remindsnoozed=";
-    public void SnoozeReminder(long id, int? minutes = null)
-    {
-        WaitForReminder(id, Engine.Now.AddMinutes(minutes ?? ReminderSnooze));
-    }
-    // Dismissing a scheduled meeting acknowledges the alert, not the activity. Its end can still ask whether it took place.
-    public void DismissMeetingReminder(long id)
-    {
-        if (dayNotes.FirstOrDefault(n => n.Id == id) is not { Done: false } note || KindOf(note) != NoteKind.Meeting) return;
-        WaitForReminder(id, DayNotes.EndsAt(note) ?? DayNotes.DueAt(note).Add(ReminderRules.LookBack).AddSeconds(1));
-    }
-    private void WaitForReminder(long id, DateTime until)
-    {
-        snoozedUntil[id] = until; announced.Remove(id);
-        SaveReminderWaits();
-    }
-    private void SaveReminderWaits()
-    {
-        var live = snoozedUntil.Where(p => p.Value > Engine.Now && p.Key >= 0).Select(p => p.Key + ":" + p.Value.Ticks).ToList();
-        SetExtra(RemindSnoozedLine, live.Count == 0 ? null : string.Join(",", live));
-    }
-    private void LoadSnoozes()
-    {
-        if (Extra(RemindSnoozedLine) is not { Length: > 0 } saved) return;
-        foreach (var part in saved.Split(','))
-        {
-            var bits = part.Split(':');
-            if (bits.Length == 2 && long.TryParse(bits[0], out var id) && long.TryParse(bits[1], out var ticks) && ticks > 0 && ticks < DateTime.MaxValue.Ticks && new DateTime(ticks) > Engine.Now) snoozedUntil[id] = new DateTime(ticks);
-        }
-    }
-    /// <summary>What was typed in Quick capture when it lost focus before being saved, kept in memory for the next time it opens. Null when there is none.</summary>
-    public string? QuickCaptureDraft { get; set; }
-    /// <summary>The meetings planned for a day that are not yet answered for: shown on the timeline as planned time, never counted as tracked time.</summary>
-    public IReadOnlyList<DayNote> MeetingsOn(DateTime day) => dayNotes.Where(n => n.Day.Date == day.Date && !n.Done && DayNotes.IsMeeting(n)).OrderBy(n => n.At).ThenBy(n => n.Id).ToList();
-    // A meeting being turned into tracked time: the Add time dialog opens on its hours, and the note is ticked off when that entry is saved.
-    private (long Id, DateTime Start, DateTime End)? meetingToLog;
-    private string? entryAccountHint;
-    public bool MeetingLogPending => meetingToLog is not null;
-    /// <summary>Opens Add time on a meeting's hours, with the account its #Tag names (if any) chosen, for the person to pick or change.</summary>
-    public void LogMeeting(long id)
-    {
-        if (dayNotes.FirstOrDefault(n => n.Id == id) is not { } note || DayNotes.EndsAt(note) is not { } end) return;
-        var start = note.Day.Date + note.At!.Value;
-        // Time already recorded over the meeting stays as it was (it is what really happened), so only the free part is added, rather than refusing the whole thing.
-        var gaps = FreeParts(start, end);
-        if (gaps.Count == 0) { DoneReminder(id); Notice = "That time was already recorded, so nothing was added."; Notify(); return; }
-        var gap = gaps.OrderByDescending(g => g.End - g.Start).First();
-        if (gap.Start != start || gap.End != end)
-            Notice = $"Part of that time is already recorded, so Add time opens on the free {gap.Start:HH:mm}–{gap.End:HH:mm}" + (gaps.Count > 1 ? " (the longest free part)." : ".");
-        meetingToLog = (id, start, end); entryAccountHint = NoteShorthand.AccountOf(note.Text, AccountNames);
-        EditError = null; EntryRequested?.Invoke(null, gap.Start, gap.End);
-    }
-    /// <summary>The parts of a span with no recorded or running time in them (gaps under a minute are rounding, not time).</summary>
-    private List<(DateTime Start, DateTime End)> FreeParts(DateTime start, DateTime end)
-    {
-        var occupied = Engine.Sessions.Where(s => s.Duration > TimeSpan.Zero && s.From < end && s.To > start).Select(s => (Start: s.From, End: s.To)).ToList();
-        if (Engine.Active is { } active && active.Start < end && Engine.Now > start) occupied.Add((active.Start, Engine.Now));
-        var free = new List<(DateTime Start, DateTime End)>(); var cursor = start;
-        foreach (var span in occupied.OrderBy(o => o.Start))
-        {
-            if (span.Start > cursor) free.Add((cursor, span.Start < end ? span.Start : end));
-            if (span.End > cursor) cursor = span.End;
-            if (cursor >= end) break;
-        }
-        if (cursor < end) free.Add((cursor, end));
-        free.RemoveAll(g => (g.End - g.Start).TotalSeconds < 60);
-        return free;
-    }
-    /// <summary>The account to start Add time on once, then forgotten.</summary>
-    public string? TakeEntryAccountHint() { var hint = entryAccountHint; entryAccountHint = null; return hint; }
-    /// <summary>Called when the Add time dialog closes, saved or not, so a later entry is never mistaken for the meeting's.</summary>
-    public void EndMeetingLog() { meetingToLog = null; entryAccountHint = null; }
-    public void DoneReminder(long id) { if (dayNotes.FirstOrDefault(n => n.Id == id) is { Done: false }) ToggleDayNote(id); }
-    /// <summary>Raised once when a reminder first falls due, so a timer tucked away in the tray can come back.</summary>
-    public event Action<Reminder>? ReminderDue;
-    public event Action? NotesRequested;
-    public void RequestNotes() => NotesRequested?.Invoke();
-    private void CheckReminders()
-    {
-        var now = Reminders;
-        var signature = string.Join(",", now.Select(r => r.Note.Id + ":" + r.State));
-        announced.RemoveWhere(id => now.All(r => r.Note.Id != id || r.State == ReminderState.Soon));
-        foreach (var due in now.Where(r => r.State is ReminderState.Due or ReminderState.Followup && announced.Add(r.Note.Id))) ReminderDue?.Invoke(due);
-        if (signature != reminderSignature) { reminderSignature = signature; Notify(); }
-    }
-    /// <summary>The names of the accounts a #Tag can link to.</summary>
-    public IReadOnlyList<string> AccountNames => Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name).ToList();
-    /// <summary>Adds a note to a day from what was typed. A time such as 14:30 in the words becomes the note's time, and an every phrase makes it repeat.</summary>
-    public void AddDayNote(DateTime day, string typed, bool taskByDefault = false)
-    {
-        // A day named in the words (@fri, @tomorrow, @21oct) wins over the day showing, and the notice says where the note went, since it may leave the list in view.
-        var parts = NoteShorthand.Parse(typed, Engine.Now); if (parts.Text.Length == 0) return;
-        var target = (parts.Day ?? day).Date;
-        DayNoteKind? kind = taskByDefault ? parts.Text.StartsWith('!') ? DayNoteKind.Deadline : parts.End is not null ? DayNoteKind.Meeting : DayNoteKind.Task : null;
-        if (kind == DayNoteKind.Deadline) parts = parts with { End = null };
-        if (parts.Repeat is { } rule && StartSeries(rule, target, parts, kind)) { Notify(); return; }
-        AddNoteRow(target, parts.At, parts.Text, parts.End, null, kind);
-        if (target != day.Date) Notice = "Added to " + target.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
-        Notify();
-    }
-    /// <summary>Adds one stored note row, kept on screen with a negative number if the database would not take it (RetryNoteWrites).</summary>
-    private DayNote AddNoteRow(DateTime day, TimeSpan? at, string text, TimeSpan? end, long? seriesId, DayNoteKind? kind = null, bool hasDate = true)
-    {
-        long id;
-        if (store is null) id = nextNoteId++;
-        else
-        {
-            long stored = 0;
-            id = NoteStore(() => stored = store.AddDayNote(day, at, text, end, seriesId, kind, hasDate), "that note") ? stored : --unsavedNoteId;
-        }
-        var note = new DayNote(id, day, at, text, false, end, seriesId, kind, hasDate);
-        dayNotes.Add(note); return note;
-    }
-    // ---- Repeating notes. A series holds the template and the notes are ordinary dated notes made ahead (eight weeks), so each can be moved, ticked or removed alone. ----
-    public NoteSeries? SeriesOf(DayNote note) => note.SeriesId is { } id ? seriesList.FirstOrDefault(s => s.Id == id) : null;
-    public bool HasLaterInSeries(DayNote note) => SeriesOf(note) is not null && dayNotes.Any(n => n.SeriesId == note.SeriesId && n.Day.Date > note.Day.Date);
-    private void PersistSeries(NoteSeries series) { if (store is not null && series.Id >= 0) NoteStore(() => store.UpdateSeries(series), "that repeat"); }
-    private bool StartSeries(Recurrence rule, DateTime start, NoteParts parts, DayNoteKind? kind = null)
-    {
-        var series = new NoteSeries(0, rule, start, start.AddDays(-1), parts.Text, parts.At, parts.End, kind);
-        if (series.Pending(Engine.Now).Count == 0) { Notice = "That repeat has already ended."; return false; } // Nothing to make, so it is kept as a plain note.
-        long id = nextSeriesId++;
-        if (store is not null)
-        {
-            long stored = 0;
-            if (!NoteStore(() => stored = store.AddSeries(series), "that repeat")) return false; // Not stored, so the words go in as one plain note.
-            id = stored;
-        }
-        seriesList.Add(series with { Id = id });
-        var made = MakeSeriesNotes();
-        Notice = $"Repeats: {made} {(made == 1 ? "note" : "notes")} made. More are added as time goes on.";
-        return true;
-    }
-    /// <summary>Makes the notes each series still needs, from today up to eight weeks ahead. A day already made is never made again, so one removed stays removed.</summary>
-    private int MakeSeriesNotes()
-    {
-        var today = Engine.Now.Date; var made = 0;
-        for (var i = 0; i < seriesList.Count; i++)
-        {
-            var series = seriesList[i]; var reach = today.AddDays(NoteSeries.HorizonDays);
-            if (series.GeneratedTo.Date >= reach) continue;
-            foreach (var day in series.Pending(today)) { AddNoteRow(day, series.At, series.Text, series.End, series.Id, series.Kind); made++; }
-            seriesList[i] = series with { GeneratedTo = reach }; PersistSeries(seriesList[i]);
-        }
-        if (made > 0) Notify();
-        return made;
-    }
-    // ---- Editing a note through its Details panel (and adding one through the same panel), so nothing has to be typed in the shorthand. ----
-    public static NoteKind KindOf(DayNote note) => (NoteKind)DayNotes.KindOf(note);
-    private static string? Check(NoteEdit e)
-    {
-        if (string.IsNullOrWhiteSpace(e.Words)) return "Write something for the note.";
-        if (!e.HasDate && e.Repeat is not null) return "A repeating task needs a date.";
-        try { DayNotes.Validate(new DayNote(0, e.Day, e.Start, e.Words, End: e.End, Kind: (DayNoteKind)e.Kind, HasDate: e.HasDate)); }
-        catch (ArgumentException error) { return error.Message.Split(" (Parameter", StringSplitOptions.None)[0]; }
-        if (e.Kind == NoteKind.Meeting && e.Start is null) return "A meeting needs a start time.";
-        if (e.Kind == NoteKind.Meeting && e.Start is { } start && e.End is { } end && end <= start) return "The end must be after the start.";
-        return null;
-    }
-    /// <summary>The note's words, time and end as they are stored: a deadline starts with !, an account is a #Tag at the end, and only a meeting keeps an end.</summary>
-    private (string Text, TimeSpan? At, TimeSpan? End) Compose(NoteEdit e)
-    {
-        var words = e.Kind == NoteKind.Deadline ? e.Words.Trim().TrimStart('!', ' ') : e.Words.Trim();
-        if (e.Account is { Length: > 0 } account) words = NoteShorthand.WithoutAccountTag(words, AccountNames) + " " + NoteShorthand.TagFor(account);
-        return ((e.Kind == NoteKind.Deadline ? "! " : "") + words, e.Start, e.Kind == NoteKind.Meeting ? e.End : null);
-    }
-    /// <summary>Adds a note from the panel. Returns what is wrong with it, or null when it was added.</summary>
-    public string? AddNote(NoteEdit e)
-    {
-        if (Check(e) is { } error) return error;
-        var (text, at, end) = Compose(e);
-        var note = AddNoteRow(e.Day.Date, at, text, end, null, (DayNoteKind)e.Kind, e.HasDate);
-        if (e.Repeat is { } rule) StartSeriesFrom(note, rule);
-        if (!e.HasDate) Notice = "Added to Undated tasks.";
-        else if (e.Day.Date != SelectedDate.Date) Notice = "Added to " + e.Day.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
-        Notify(); return null;
-    }
-    /// <summary>
-    /// Saves a note from the panel. For a note in a series, the change is to this one only, or (AllLater) to this one and every later one: the words, time and end
-    /// go to them all and a changed repeat remakes the later notes from this day on. Returns what is wrong, or null when it was saved.
-    /// </summary>
-    public string? SaveNote(long id, NoteEdit e)
-    {
-        if (Check(e) is { } error) return error;
-        var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null) return "That note is no longer there.";
-        var (text, at, end) = Compose(e); var day = e.Day.Date; var series = SeriesOf(note);
-        // Moving a ticked note to another day or time means it is live again, so it comes back (a meeting shows on the timeline at its new time). Changing only
-        // the words or account leaves the tick alone.
-        if (series is not null && !e.HasDate) return "A recurring item needs a date. Remove its repeat before making it undated.";
-        var moved = note.Day.Date != day || note.At != at || note.End != end || note.HasDate != e.HasDate;
-        if (moved && snoozedUntil.Remove(id)) SaveReminderWaits();
-        ChangeNote(id, n => n with { Text = text, Day = day, At = at, End = end, Kind = (DayNoteKind)e.Kind, HasDate = e.HasDate, Done = n.Done && !moved }, false);
-        if (series is null) { if (e.Repeat is { } rule) StartSeriesFrom(dayNotes.First(n => n.Id == id), rule); }
-        else if (e.AllLater)
-        {
-            var later = dayNotes.Where(n => n.SeriesId == series.Id && n.Day.Date > day && n.Id != id).ToList();
-            if (e.Repeat is null) { foreach (var gone in later) RemoveNoteRow(gone); EndSeries(series); }
-            else if (e.Repeat != series.Rule)
-            {
-                foreach (var gone in later) RemoveNoteRow(gone);
-                var remade = series with { Rule = e.Repeat, Start = day, GeneratedTo = day, Text = text, At = at, End = end, Kind = (DayNoteKind)e.Kind };
-                seriesList[seriesList.FindIndex(s => s.Id == series.Id)] = remade; PersistSeries(remade); MakeSeriesNotes();
-            }
-            else
-            {
-                foreach (var other in later.Where(n => !n.Done)) ChangeNote(other.Id, n => n with { Text = text, At = at, End = end, Kind = (DayNoteKind)e.Kind }, false);
-                var updated = series with { Text = text, At = at, End = end, Kind = (DayNoteKind)e.Kind };
-                seriesList[seriesList.FindIndex(s => s.Id == series.Id)] = updated; PersistSeries(updated);
-            }
-        }
-        Notify(); return null;
-    }
-    /// <summary>Makes a note the first of a new series, which then makes the notes after it.</summary>
-    private void StartSeriesFrom(DayNote note, Recurrence rule)
-    {
-        var series = new NoteSeries(0, rule, note.Day, note.Day, note.Text, note.At, note.End, note.Kind);
-        long id = nextSeriesId++;
-        if (store is not null)
-        {
-            long stored = 0;
-            if (!NoteStore(() => stored = store.AddSeries(series), "that repeat")) return;
-            id = stored;
-        }
-        seriesList.Add(series with { Id = id });
-        ChangeNote(note.Id, n => n with { SeriesId = id }, false);
-        MakeSeriesNotes();
-    }
-    /// <summary>Saves the words typed into a note's row. The row shows the words without the ! and the #Tag (they have their own marks), so they are put back around what was typed.</summary>
-    public void SetDayNoteWords(long id, string words)
-    {
-        var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null) return;
-        if (words.Contains('#') || words.TrimStart().StartsWith('!')) { SetDayNoteText(id, words); return; } // Typed shorthand is kept as typed.
-        var text = (DayNotes.IsDeadline(note) ? "! " : "") + words.Trim();
-        if (NoteShorthand.AccountOf(note.Text, AccountNames) is { } account) text += " " + NoteShorthand.TagFor(account);
-        SetDayNoteText(id, text);
-    }
-    private bool RemoveNoteRow(DayNote note)
-    {
-        dayNotes.Remove(note); staleNotes.Remove(note.Id);
-        if (store is not null && note.Id >= 0 && !NoteStore(() => store.DeleteDayNote(note.Id), "that removal")) { pendingDeletes.Add(note.Id); return false; }
-        return true;
-    }
-    /// <summary>Removes this note and every later one of its series, and stops the series there. With nothing earlier left, the series goes too.</summary>
-    public void RemoveSeriesFrom(long id)
-    {
-        var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null) return;
-        if (SeriesOf(note) is not { } series) { RemoveDayNote(id); return; }
-        var gone = dayNotes.Where(n => n.SeriesId == series.Id && n.Day.Date >= note.Day.Date).ToList();
-        var allSaved = gone.Aggregate(true, (ok, n) => RemoveNoteRow(n) && ok);
-        if (dayNotes.Any(n => n.SeriesId == series.Id)) { var ended = series with { Rule = series.Rule with { Until = note.Day.Date.AddDays(-1) } }; seriesList[seriesList.FindIndex(s => s.Id == series.Id)] = ended; PersistSeries(ended); }
-        else EndSeries(series);
-        if (allSaved) Notice = $"Removed {gone.Count} {(gone.Count == 1 ? "note" : "notes")} from the repeat.";
-        Notify();
-    }
-    private void EndSeries(NoteSeries series)
-    {
-        seriesList.RemoveAll(s => s.Id == series.Id);
-        if (store is not null && series.Id >= 0) NoteStore(() => store.DeleteSeries(series.Id), "that repeat");
-        for (var i = 0; i < dayNotes.Count; i++) if (dayNotes[i].SeriesId == series.Id) dayNotes[i] = dayNotes[i] with { SeriesId = null }; // The database freed them in the same step.
-    }
-    /// <summary>Gives this note's words, time and end to every later note of its series, and to the template the next ones are made from.</summary>
-    public void ApplyToLater(long id)
-    {
-        var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null || SeriesOf(note) is not { } series) return;
-        var later = dayNotes.Where(n => n.SeriesId == series.Id && n.Day.Date > note.Day.Date && !n.Done).ToList();
-        foreach (var other in later) ChangeNote(other.Id, n => n with { Text = note.Text, At = note.At, End = note.End, Kind = note.Kind }, false);
-        var updated = series with { Text = note.Text, At = note.At, End = note.End, Kind = note.Kind };
-        seriesList[seriesList.FindIndex(s => s.Id == series.Id)] = updated; PersistSeries(updated);
-        Notice = $"Applied to {later.Count} later {(later.Count == 1 ? "note" : "notes")}."; Notify();
-    }
-    /// <summary>Stops a note repeating: the later notes go, the series ends, and what was typed to make it repeat goes back into the words.</summary>
-    public void ClearNoteRepeat(long id)
-    {
-        var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null || SeriesOf(note) is not { } series) return;
-        foreach (var later in dayNotes.Where(n => n.SeriesId == series.Id && n.Day.Date > note.Day.Date).ToList()) RemoveNoteRow(later);
-        EndSeries(series);
-        ChangeNote(id, n => n with { Text = n.Text + " " + series.Rule.Typed() }, false);
-        Notify();
-    }
-    // ---- A note the database would not take is never lost and never crashes the app: it stays on screen and the write is tried again with each save. ----
-    private long unsavedNoteId;
-    private readonly HashSet<long> staleNotes = new(), pendingDeletes = new();
-    private DateTime lastNoteFailure = DateTime.MinValue;
-    /// <summary>True while any note is on screen but not yet in the database.</summary>
-    public bool NotesUnsaved => staleNotes.Count > 0 || pendingDeletes.Count > 0 || dayNotes.Any(n => n.Id < 0);
-    private bool NoteStore(Action write, string what)
-    {
-        // Whatever stopped the write (a locked file, a full disk, a database closed under it), the person's words must survive it.
-        try { write(); return true; }
-        catch (Exception)
-        {
-            // Said again only when the words change, so typing into a note that cannot be saved does not keep restarting the notice.
-            var said = $"Could not save {what} to disk. It stays on screen and will be tried again.";
-            if (Notice != said) Notice = said;
-            lastNoteFailure = Engine.Now;
-            return false;
-        }
-    }
-    private void PersistNote(DayNote note)
-    {
-        if (store is null || note.Id < 0) return; // An unsaved note is written whole when it is retried.
-        if (NoteStore(() => store.UpdateDayNote(note), "that change")) staleNotes.Remove(note.Id); else staleNotes.Add(note.Id);
-    }
-    /// <summary>Writes again whatever the database refused: notes that were never stored, changes and removals. Called with every save.</summary>
-    public void RetryNoteWrites()
-    {
-        if (store is null || !NotesUnsaved) return;
-        bool Quiet(Action write) { try { write(); return true; } catch (Exception) { return false; } }
-        for (var i = 0; i < dayNotes.Count; i++)
-        {
-            var note = dayNotes[i]; if (note.Id >= 0) continue;
-            long stored = 0;
-            if (!Quiet(() => stored = store.AddDayNote(note.Day, note.At, note.Text, note.End, note.SeriesId, note.Kind, note.HasDate))) continue;
-            dayNotes[i] = note with { Id = stored };
-            if (note.Done && !Quiet(() => store.UpdateDayNote(dayNotes[i]))) staleNotes.Add(stored);
-        }
-        foreach (var id in staleNotes.ToList())
-            if (dayNotes.FirstOrDefault(n => n.Id == id) is not { } note || Quiet(() => store.UpdateDayNote(note))) staleNotes.Remove(id);
-        foreach (var id in pendingDeletes.ToList()) if (Quiet(() => store.DeleteDayNote(id))) pendingDeletes.Remove(id);
-        if (!NotesUnsaved && lastNoteFailure != DateTime.MinValue) { lastNoteFailure = DateTime.MinValue; Notice = "Notes saved."; }
-    }
-    /// <summary>The shortcut that opens Quick capture from any app, or null for none. It is kept in the settings file as capturekey=, which the library hands back untouched.</summary>
-    public HotkeySpec? CaptureShortcut => HotkeySpec.Parse(preferences.Extras?.AppearanceLines.FirstOrDefault(l => l.StartsWith(CaptureKeyLine, StringComparison.Ordinal))?[CaptureKeyLine.Length..]);
-    private const string CaptureKeyLine = "capturekey=";
-    public void SetCaptureShortcut(HotkeySpec? spec)
-    {
-        var extras = preferences.Extras ?? SettingsExtras.Empty;
-        var lines = extras.AppearanceLines.Where(l => !l.StartsWith(CaptureKeyLine, StringComparison.Ordinal)).ToList();
-        if (spec is not null) lines.Add(CaptureKeyLine + spec);
-        preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
-    }
     /// <summary>The pill's layout: full, compact or minimal. Kept in the settings file as pillstyle=, and an unknown value is full.</summary>
     public string PillStyle
     {
@@ -1331,56 +878,6 @@ public sealed class TimerModel : INotifyPropertyChanged
         var lines = extras.AppearanceLines.Where(l => !l.StartsWith(PillStyleLine, StringComparison.Ordinal)).ToList();
         if (style != "full") lines.Add(PillStyleLine + style);
         preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
-    }
-    /// <summary>Asks for the small Quick capture box, from the right-click menu, the shortcut or Settings.</summary>
-    public event Action? QuickCaptureRequested;
-    public void RequestQuickCapture() => QuickCaptureRequested?.Invoke();
-    /// <summary>Takes a note's time back out of the note and puts it into its words, so nothing is lost and it can be set again by typing it.</summary>
-    public void ClearNoteTime(long id) => ChangeNote(id, n => n.At is { } at ? n with { At = null, End = null, Kind = n.Kind == DayNoteKind.Meeting ? DayNoteKind.Task : n.Kind, Text = NoteShorthand.WithTimeInWords(n.Text, at, n.End) } : n, true);
-    /// <summary>Takes the deadline marker off a note, which becomes an ordinary one.</summary>
-    public void ClearNoteDeadline(long id) => ChangeNote(id, n => DayNotes.IsDeadline(n) ? n with { Text = NoteShorthand.WithoutDeadline(n.Text), Kind = n.Kind is null ? null : DayNoteKind.Task } : n, true);
-    /// <summary>Unlinks a note from its account, leaving the name in its words as an ordinary word.</summary>
-    public void ClearNoteAccount(long id) => ChangeNote(id, n => n with { Text = NoteShorthand.WithoutAccountTag(n.Text, AccountNames) }, true);
-    /// <summary>Moves a note to another day. A notice says where it went when it leaves the day showing, as typing @fri does.</summary>
-    public void MoveDayNote(long id, DateTime day)
-    {
-        var from = dayNotes.FirstOrDefault(n => n.Id == id); if (from is null || from.HasDate && from.Day.Date == day.Date) return;
-        ChangeNote(id, n => n with { Day = day.Date, HasDate = true }, false);
-        if (day.Date != SelectedDate.Date) Notice = "Moved to " + day.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB")) + ".";
-        Notify();
-    }
-    public void ToggleDayNote(long id) => ChangeNote(id, n => n with { Done = !n.Done }, true);
-    /// <summary>Saves a note's words as they are typed, without notifying, so the box being typed in is not rebuilt. Emptying a note leaves it as it was.</summary>
-    public void SetDayNoteText(long id, string text) => ChangeNote(id, n => n with { Text = text.Trim() }, true);
-    private readonly List<DayNote> removedNotes = new();
-    /// <summary>The note most recently removed, which Undo remove puts back; null when there is none.</summary>
-    public DayNote? LastRemovedNote => removedNotes.Count > 0 ? removedNotes[^1] : null;
-    public void RemoveDayNote(long id)
-    {
-        var note = dayNotes.FirstOrDefault(n => n.Id == id); if (note is null) return;
-        removedNotes.Add(note); if (removedNotes.Count > 20) removedNotes.RemoveAt(0);
-        // The notice about the removal is only for one that worked; a refused one says so instead, and the note is removed again when the database allows.
-        if (RemoveNoteRow(note)) Notice = "Note removed. Undo remove on the Notes page puts it back.";
-        Notify();
-    }
-    /// <summary>Puts the last removed note back on its own day, ticked or not as it was.</summary>
-    public void RestoreRemovedNote()
-    {
-        if (LastRemovedNote is not { } note) return;
-        removedNotes.RemoveAt(removedNotes.Count - 1);
-        long id;
-        if (store is null) id = nextNoteId++;
-        else { long stored = 0; id = NoteStore(() => stored = store.AddDayNote(note.Day, note.At, note.Text, note.End, SeriesOf(note)?.Id, note.Kind, note.HasDate), "that note") ? stored : --unsavedNoteId; }
-        var back = note with { Id = id, SeriesId = SeriesOf(note)?.Id };
-        dayNotes.Add(back);
-        if (back.Done) PersistNote(back);
-        Notice = "Note put back."; Notify();
-    }
-    private void ChangeNote(long id, Func<DayNote, DayNote> change, bool notify)
-    {
-        var index = dayNotes.FindIndex(n => n.Id == id); if (index < 0) return;
-        var note = change(dayNotes[index]); if (note == dayNotes[index] || note.Text.Length == 0) return;
-        dayNotes[index] = note; PersistNote(note); if (notify) Notify();
     }
     private void Notify() { ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
 }

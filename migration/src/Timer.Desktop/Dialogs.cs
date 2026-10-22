@@ -13,8 +13,6 @@ namespace Timer.Desktop;
 public abstract class Dialog : ContentControl
 {
     public string Title { get; protected set; } = "";
-    public Control? Anchor { get; init; }
-    public bool IsFlyout { get; protected set; }
     /// <summary>Raised when the dialog is about to close. Set Cancel to keep it open, such as to ask about unsaved changes first.</summary>
     public event EventHandler<System.ComponentModel.CancelEventArgs>? Closing;
     /// <summary>Raised once, after the dialog has gone.</summary>
@@ -40,7 +38,6 @@ public sealed class DialogHost : Grid
     /// <summary>Raised whenever the first dialog opens or the last one closes.</summary>
     public event Action? OpenChanged;
     public bool Any => open.Count > 0;
-    public bool Modal => open.Any(o => !o.Dialog.IsFlyout);
     public IReadOnlyList<Dialog> Dialogs => open.Select(o => o.Dialog).ToList();
     public void Show(Dialog dialog)
     {
@@ -61,20 +58,11 @@ public sealed class DialogHost : Grid
         dialog.Width = double.NaN; dialog.Height = double.NaN; // The card has the size now, and the dialog fills it.
         var scrim = new Border { Name = "DialogScrim", Opacity = .38 };
         scrim.Classes.Add("scrim");
-        var layer = new Grid();
-        if (!dialog.IsFlyout) layer.Children.Add(scrim);
-        else
-        {
-            layer.Background = Brushes.Transparent; // Outside clicks keep the unsaved form open.
-            card.HorizontalAlignment = HorizontalAlignment.Left; card.VerticalAlignment = VerticalAlignment.Top;
-            card.SizeChanged += (_, _) => FitCards();
-            card.BoxShadow = new BoxShadows(new BoxShadow { Blur = 24, OffsetY = 6, Color = Color.FromArgb(45, 0, 0, 0) });
-        }
-        layer.Children.Add(card);
+        var layer = new Grid(); layer.Children.Add(scrim); layer.Children.Add(card);
         layer.Tag = dialog;
         Children.Add(layer); open.Add((dialog, card)); FitCards();
         IsHitTestVisible = true;
-        OpenChanged?.Invoke();
+        if (open.Count == 1) OpenChanged?.Invoke();
         Avalonia.Threading.Dispatcher.UIThread.Post(() => FocusFirst(dialog), Avalonia.Threading.DispatcherPriority.Loaded);
     }
     internal void Remove(Dialog dialog)
@@ -82,9 +70,7 @@ public sealed class DialogHost : Grid
         var index = open.FindIndex(o => ReferenceEquals(o.Dialog, dialog)); if (index < 0) return;
         var layer = Children.FirstOrDefault(c => ReferenceEquals(c.Tag, dialog));
         open.RemoveAt(index); if (layer is Panel panel) { panel.Children.Clear(); } if (layer is not null) Children.Remove(layer);
-        if (open.Count == 0) IsHitTestVisible = false;
-        OpenChanged?.Invoke();
-        if (dialog.Anchor is { IsEffectivelyVisible: true } anchor) anchor.Focus();
+        if (open.Count == 0) { IsHitTestVisible = false; OpenChanged?.Invoke(); }
     }
     /// <summary>Takes the top dialog away. Returns false when there was none, so the caller can use the key for something else.</summary>
     public bool CloseTop()
@@ -97,17 +83,7 @@ public sealed class DialogHost : Grid
     {
         foreach (var (dialog, card) in open)
         {
-            card.MaxHeight = Math.Min(dialog.MaxHeight, Math.Max(200, Bounds.Height - 48)); card.MaxWidth = Math.Max(240, Bounds.Width - 48);
-            if (dialog.IsFlyout)
-            {
-                var anchor = dialog.Anchor;
-                var point = anchor?.TranslatePoint(new Point(anchor.Bounds.Width, anchor.Bounds.Height), this) ?? new Point(24, 24);
-                var width = double.IsNaN(card.Width) ? 400 : Math.Min(card.Width, card.MaxWidth);
-                var height = card.Bounds.Height > 0 ? card.Bounds.Height : card.MaxHeight;
-                var x = Math.Clamp(point.X + 12, 24, Math.Max(24, Bounds.Width - width - 24));
-                var y = Math.Clamp(point.Y + 8, 24, Math.Max(24, Bounds.Height - height - 24));
-                card.Margin = new Thickness(x, y, 0, 0);
-            }
+            card.MaxHeight = Math.Max(200, Bounds.Height - 48); card.MaxWidth = Math.Max(240, Bounds.Width - 48);
         }
     }
     private static void FocusFirst(Dialog dialog)

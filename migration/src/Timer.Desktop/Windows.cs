@@ -55,38 +55,6 @@ public sealed class WindowCoordinator
             else foreach (var window in new Window[] { Pill, Dashboard }) if (window.IsVisible) window.WindowState = WindowState.Minimized;
         };
         KeepInFront();
-        // Quick capture: a small box over whatever is on screen, from the right-click menu or the chosen shortcut, with no need for the dashboard.
-        model.QuickCaptureRequested += ShowQuickCapture;
-        // A reminder that falls due while the timer is tucked away brings the pill back; pressing a reminder's words opens Notes.
-        model.ReminderDue += _ => { if (model.ReminderSoundOn) ReminderSound.Play(); BringBackForReminder(); };
-        model.NotesRequested += () => { model.ShowToday(); ShowDashboard(); Dashboard.ShowNotes(); };
-        hotkey = new GlobalHotkey(model.RequestQuickCapture); hotkey.Watch(Pill); hotkey.Watch(Dashboard);
-        Pill.Opened += (_, _) => ApplyShortcut(); Dashboard.Opened += (_, _) => ApplyShortcut();
-        model.PropertyChanged += (_, _) => ApplyShortcut();
-        Pill.Closed += (_, _) => hotkey.Dispose();
-    }
-    // A window that is hidden to the tray comes back, and one that was only minimised to the taskbar (the way it is tucked away without a tray) is restored,
-    // since a minimised window still counts as visible. If a timer window is already up and in view, the card on it is enough.
-    private void BringBackForReminder()
-    {
-        if (new Window[] { Pill, Dashboard }.Any(w => w.IsVisible && w.WindowState != WindowState.Minimized)) return;
-        if (!Pill.IsVisible && !Dashboard.IsVisible) Pill.Show();
-        var target = Pill.IsVisible ? (Window)Pill : Dashboard;
-        if (target.WindowState == WindowState.Minimized) target.WindowState = WindowState.Normal;
-        BringToFront(target);
-    }
-    private readonly GlobalHotkey hotkey; private QuickCaptureWindow? capture; private string? appliedShortcut;
-    private void ApplyShortcut()
-    {
-        var wanted = model.CaptureShortcut?.ToString(); if (wanted == appliedShortcut) return;
-        if (hotkey.Apply(model.CaptureShortcut, Pill, Dashboard)) { appliedShortcut = wanted; return; }
-        // A window with no handle yet is tried again when it opens; a shortcut Windows refuses is said once, then left.
-        if (Pill.IsVisible || Dashboard.IsVisible) { appliedShortcut = wanted; model.Notice = $"{wanted} is already used by another app. Choose a different shortcut in Settings."; }
-    }
-    private void ShowQuickCapture()
-    {
-        if (capture is { IsVisible: true }) { capture.Activate(); return; }
-        capture = new QuickCaptureWindow(model); capture.Closed += (_, _) => capture = null; capture.Show(); capture.Activate();
     }
     // Snapping another window over the timer, or a window that is itself on top, can leave the pill or dashboard behind it. So whenever one loses focus
     // it is put back at the front of the topmost windows, and a slow check does the same for one that was covered without a focus change.
@@ -289,7 +257,7 @@ public sealed class PillWindow : Window
     private readonly TextBlock saved = Ui.Text("", 11, "muted");
     private readonly Grid progressBar = new();
     private Border progressFill = null!, shadowHost = null!;
-    private ScrollViewer pillScroll = null!; private ReminderCard reminderCard = null!; private StackPanel reminderHost = null!;
+    private ScrollViewer pillScroll = null!;
     private (bool, string?, Avalonia.Styling.ThemeVariant)? lastShadow;
     public PillWindow(TimerModel model)
     {
@@ -303,7 +271,7 @@ public sealed class PillWindow : Window
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
-        var root = Ui.Grid("*", "82,Auto,*");
+        var root = Ui.Grid("*", "82,*");
         head = Ui.Grid("Auto,1,*,Auto,Auto", "*");
         head.Margin = new Thickness(24, 0, 20, 0);
         timerButton = Ui.Button("", () => OpenDashboard?.Invoke(), "PillDashboard");
@@ -381,16 +349,10 @@ public sealed class PillWindow : Window
         pillScroll = new ScrollViewer { Content = expansion, AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
-        // A reminder that is due sits in its own row under the capsule, so the capsule never moves and the pill keeps its width.
-        reminderCard = new ReminderCard(model, true);
-        reminderHost = new StackPanel { IsVisible = reminderCard.IsVisible }; reminderHost.Children.Add(Ui.Rule()); reminderHost.Children.Add(reminderCard);
-        reminderCard.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { reminderHost.IsVisible = reminderCard.IsVisible; ApplyShape(); } };
-        Ui.Put(root, reminderHost, row: 1);
-        Ui.Put(root, pillScroll, row: 2);
+        Ui.Put(root, pillScroll, row: 1);
         var surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true };
         surface.Classes.Add("surface");
         shadowHost = Ui.Shadowed(surface, CapsuleRadius); surfaceBorder = surface;
-        ApplyShape(); // A reminder already showing when the pill opens makes it a card from the start.
         Content = new Avalonia.Controls.LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
         Opened += (_, _) => FitToScreen(Screens.ScreenFromWindow(this));
         PositionChanged += (_, _) => { FitIfScreenChanged(); SettleSoon(); };
@@ -416,18 +378,16 @@ public sealed class PillWindow : Window
     // The expanded pill grows by a line when a note such as a failed save is showing under the buttons.
     private double WantedHeight()
     {
-        var reminderHeight = 0.0;
-        if (reminderHost.IsVisible) { reminderHost.Measure(new Size(CurrentWidth, double.PositiveInfinity)); reminderHeight = reminderHost.DesiredSize.Height; }
-        if (!expanded) return CollapsedHeight + reminderHeight + 2 * Ui.ShadowMargin;
+        if (!expanded) return CollapsedHeight + 2 * Ui.ShadowMargin;
         // Measured, so there is no dead space whatever the number of accounts or notes showing.
         accountScroll.MaxHeight = ListMaxHeight();
         expansion.Measure(new Size(CurrentWidth, double.PositiveInfinity));
-        return CollapsedHeight + reminderHeight + expansion.DesiredSize.Height + 2 * Ui.ShadowMargin;
+        return CollapsedHeight + expansion.DesiredSize.Height + 2 * Ui.ShadowMargin;
     }
-    // A capsule when there is nothing under the head, a rounded card when the list is open or a reminder is showing.
+    // A capsule when there is nothing under the head, a rounded card when the list is open.
     private void ApplyShape()
     {
-        var radius = new CornerRadius(expanded || reminderHost.IsVisible ? CardRadius : CapsuleRadius);
+        var radius = new CornerRadius(expanded ? CardRadius : CapsuleRadius);
         surfaceBorder.CornerRadius = radius; shadowHost.CornerRadius = radius;
         if (IsVisible) Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (!closedWindow) EnsureSize(); });
     }
@@ -589,17 +549,14 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock today = Ui.Text("", 12, "muted");
     private readonly ContentControl workspace = new();
     private readonly Button day;
-    private Border bellBadge = null!; private TextBlock bellCount = null!; private Button bell = null!;
-    private Border notesBadge = null!; private Button notesRail = null!, timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
+    private Button timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
     private IconGlyph pillGlyph = null!;
     private readonly BreakGlyph dashboardCup = new();
     private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly Button undo;
     private readonly Button merge;
     private EntryDialog? entryEditor;
-    private bool weekMode, settingsMode, notesMode, renderedSettings, renderedNotes, settingZoom;
-    // The Notes page stands in for the timeline and week views, with its own editing of nothing, so the toolbar and the zoom bar stay away.
-    private bool PageMode => notesMode;
+    private bool weekMode, settingsMode, renderedSettings, settingZoom;
     private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
     private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
@@ -634,19 +591,13 @@ public sealed class DashboardWindow : Window
         overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectSection("overview"));
         hoursTab = RailButton(IconKind.Table, "Hours table", "WeekHoursTab", () => SelectSection("hours"));
         entriesTab = RailButton(IconKind.Entries, "Entries", "WeekEntriesTab", () => SelectSection("entries"));
-        notesRail = RailButton(IconKind.Note, "Notes", "NotesTab", ShowNotes);
-        // The Notes button carries a dot while a reminder is near, due or overdue (red for overdue).
-        notesBadge = new Border { Name = "NotesBadge", Width = 9, Height = 9, CornerRadius = new CornerRadius(4.5), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -3, -3, 0), IsHitTestVisible = false, IsVisible = false };
-        notesBadge.Classes.Add("accentEdge");
-        var notesGlyph = (IconGlyph)notesRail.Content!; notesRail.Content = null;
-        notesRail.Content = new Grid { Children = { notesGlyph, notesBadge } };
         // The way back to the pill is the first thing on the rail, at the top left.
         var backToPill = RailButton(IconKind.Minimise, "Switch to pill", "BackToPill", () => OpenPill?.Invoke());
         pillGlyph = (IconGlyph)backToPill.Content!;
         railTop.Children.Add(backToPill);
         var backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
-        // The three views used every day sit together at the top (Timeline, Notes, Week overview), and the two used rarely (Hours table, Entries) below a divider.
-        foreach (var button in new[] { timelineRail, notesRail, overviewTab }) railTop.Children.Add(button);
+        // The two views used every day sit together at the top (Timeline, Week overview), and the two used rarely (Hours table, Entries) below a divider.
+        foreach (var button in new[] { timelineRail, overviewTab }) railTop.Children.Add(button);
         var weekRule = Ui.Rule(); weekRule.Margin = new Thickness(6, 4); railTop.Children.Add(weekRule);
         foreach (var button in new[] { hoursTab, entriesTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
@@ -741,17 +692,7 @@ public sealed class DashboardWindow : Window
         todayButton.Classes.Add("toolButton"); todayButton.Classes.Add("quiet"); todayButton.Height = 34; todayButton.Margin = new Thickness(10, 0, 0, 0); todayButton.Padding = new Thickness(12, 0);
         todayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), new TextBlock { Text = "Today", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
         Avalonia.Automation.AutomationProperties.SetName(todayButton, "Today");
-        // The bell lists everything waiting (what is overdue or due, and what is coming up) in a flyout, with the same buttons as the reminder card.
-        bell = Ui.IconButton(IconKind.Bell, "Notifications", "NotificationsBell", () => { }); bell.Width = 36; bell.Height = 34; bell.Margin = new Thickness(0, 0, 8, 0);
-        bellCount = new TextBlock { FontSize = 9, FontWeight = Avalonia.Media.FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        bellCount.Bind(TextBlock.ForegroundProperty, bellCount.GetResourceObservable("AccentInk"));
-        bellBadge = new Border { Name = "NotificationsBadge", MinWidth = 15, Height = 15, CornerRadius = new CornerRadius(7.5), Padding = new Thickness(3, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 0, 0), IsHitTestVisible = false, IsVisible = false, Child = bellCount };
-        bellBadge.Classes.Add("accentEdge");
-        var bellGlyph = (IconGlyph)bell.Content!; bell.Content = null; bell.Content = new Grid { Children = { bellGlyph, bellBadge } };
-        var bellFlyout = new Flyout { Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight };
-        bellFlyout.Opening += (_, _) => bellFlyout.Content = new NotificationsPanel(model, () => bellFlyout.Hide());
-        bell.Flyout = bellFlyout;
-        Ui.Put(nav, Ui.Horizontal(bell, previous, datePick, next, todayButton), 1);
+        Ui.Put(nav, Ui.Horizontal(previous, datePick, next, todayButton), 1);
         Ui.Put(review, nav);
         undo = Ui.Button("", () => model.UndoEdit(), "UndoEdit");
         merge = Ui.Button("", () => model.MergeSelection(), "MergeSelected");
@@ -806,7 +747,6 @@ public sealed class DashboardWindow : Window
         Ui.Put(root, body, 1);
         // Notes, refused edits and failed saves float over the lowest part of the workspace, above the buttons, so they never push the buttons up.
         Ui.Put(review, new MessageBar(model), row: 1);
-        Ui.Put(review, new ReminderCard(model, false), row: 1); // A reminder that is due floats above the message line.
         // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
         layers.Children.Add(root); dashboardBody = root;
         layers.Children.Add(Dialogs); Dialogs.OpenChanged += UpdateBackdrop; // Last, so a dialog is above the setup too.
@@ -843,17 +783,17 @@ public sealed class DashboardWindow : Window
             // Escape takes the top dialog away first, and only then clears the selection.
             if (e.Key == Avalonia.Input.Key.Escape) { if (!Dialogs.CloseTop()) model.ClearSelection(); e.Handled = true; }
             // Ctrl+C copies the selected blocks and Ctrl+V pastes them on the timeline, but never while typing in a text box.
-            else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key is Avalonia.Input.Key.C or Avalonia.Input.Key.V && !settingsMode && !PageMode && FocusManager?.GetFocusedElement() is not TextBox)
+            else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key is Avalonia.Input.Key.C or Avalonia.Input.Key.V && !settingsMode && FocusManager?.GetFocusedElement() is not TextBox)
             {
                 if (e.Key == Avalonia.Input.Key.C) model.CopySelection(); else if (!weekMode) model.PasteBlocks(model.DefaultPasteTime());
                 e.Handled = true;
             }
             // Enter opens the one selected block, but never while typing in a box or with a button focused (Enter presses that instead).
-            else if (e.Key == Avalonia.Input.Key.Enter && e.KeyModifiers == Avalonia.Input.KeyModifiers.None && !settingsMode && !PageMode && Dialogs.Any == false
+            else if (e.Key == Avalonia.Input.Key.Enter && e.KeyModifiers == Avalonia.Input.KeyModifiers.None && !settingsMode && Dialogs.Any == false
                 && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox or Button) && model.CanEditSelection)
             { model.EditSelection(); e.Handled = true; }
             // Backspace and Delete remove the selected blocks, but never while typing in a text box.
-            else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete && !PageMode && FocusManager?.GetFocusedElement() is not TextBox)
+            else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete && FocusManager?.GetFocusedElement() is not TextBox)
             { if (model.SelectedRows.Count > 0) { model.DeleteSelection(); e.Handled = true; } }
         };
         model.PropertyChanged += Changed;
@@ -888,7 +828,7 @@ public sealed class DashboardWindow : Window
     private void UpdateBackdrop()
     {
         if (dashboardBody is null) return;
-        var covered = onboarding is not null || Dialogs.Modal;
+        var covered = onboarding is not null || Dialogs.Any;
         dashboardBody.Effect = covered ? new Avalonia.Media.BlurEffect { Radius = 7 } : null; dashboardBody.IsHitTestVisible = !covered;
     }
     /// <summary>Whether a point (in window coordinates) is in the part of the dashboard that drags the window.</summary>
@@ -896,23 +836,15 @@ public sealed class DashboardWindow : Window
     {
         if (identityBlock is null || accountsHeadBlock is null || toolsRow is null) return false;
         double Bottom(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), this)?.Y ?? 0;
-        // A hidden control keeps the bounds it last had. On Notes the full column is swapped for the slim strip, so its old edge must not
-        // still count: it lay over the first entry and turned a click on it into a window drag.
-        if (identityBlock.IsEffectivelyVisible && accountsHeadBlock.IsEffectivelyVisible)
-        {
-            var sidebarRight = identityBlock.TranslatePoint(new Point(identityBlock.Bounds.Width, 0), this)?.X ?? 0;
-            if (point.X <= sidebarRight + 18) return point.Y <= Bottom(accountsHeadBlock);
-        }
-        var header = headerRow ?? toolsRow;
-        return header.IsEffectivelyVisible && point.Y <= Bottom(header);
+        var sidebarRight = identityBlock.TranslatePoint(new Point(identityBlock.Bounds.Width, 0), this)?.X ?? 0;
+        return point.X <= sidebarRight + 18 ? point.Y <= Bottom(accountsHeadBlock) : point.Y <= Bottom(headerRow ?? toolsRow);
     }
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
     {
-        if (!IsVisible && model.MeetingLogPending) Reveal?.Invoke(); // Yes on a meeting's question, from the pill, brings the dashboard up first.
         if (!IsVisible) return;
         if (entryEditor is { IsVisible: true }) return;
         entryEditor = new EntryDialog(model, row, start, end);
-        entryEditor.Closed += (_, _) => { entryEditor = null; model.EndMeetingLog(); };
+        entryEditor.Closed += (_, _) => entryEditor = null;
         Dialogs.Show(entryEditor);
     }
     /// <summary>Set by the coordinator so a request that arrives while only the pill is showing can bring the dashboard up first.</summary>
@@ -924,14 +856,12 @@ public sealed class DashboardWindow : Window
     }
     private void ShowTidy() { if (IsVisible) Dialogs.Show(new TidyDialog(model)); }
     private void ShowGroup(string id) { if (IsVisible) Dialogs.Show(new GroupDialog(model, id)); }
-    public void SelectTab(bool showWeek) { settingsMode = false; notesMode = false; weekMode = showWeek; Refresh(true); }
-    /// <summary>Shows the Notes page. It follows the date the dashboard is on, like the timeline.</summary>
-    public void ShowNotes() { settingsMode = false; weekMode = false; notesMode = true; Refresh(true); }
+    public void SelectTab(bool showWeek) { settingsMode = false; weekMode = showWeek; Refresh(true); }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
     private void SelectSection(string section)
     {
-        settingsMode = false; notesMode = false; weekMode = true;
+        settingsMode = false; weekMode = true;
         if (model.WeekSection != section) model.SetWeekSection(section); else Refresh(true);
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
@@ -956,8 +886,8 @@ public sealed class DashboardWindow : Window
         day.Classes.Set("startDay", !model.DayStarted); // Green to start the day, red to finish it.
         day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
-        var editing = !PageMode && (!weekMode || model.WeekSection == "entries");
-        zoomControls.IsVisible = !weekMode && !settingsMode && !PageMode;
+        var editing = (!weekMode || model.WeekSection == "entries");
+        zoomControls.IsVisible = !weekMode && !settingsMode;
         settingZoom = true; zoomSlider.Value = model.TimelineZoomFraction; settingZoom = false; // Follows the wheel and the buttons too.
         zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
@@ -971,40 +901,32 @@ public sealed class DashboardWindow : Window
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); var glyph = button.Content as IconGlyph ?? (button.Content as Grid)?.Children.OfType<IconGlyph>().FirstOrDefault(); if (glyph is not null) glyph.TintKey = selected ? "Ink" : "Muted"; }
-        Rail(timelineRail, !weekMode && !settingsMode && !PageMode);
-        Rail(notesRail, !settingsMode && notesMode);
-        model.SetTimelineVisible(!weekMode && !settingsMode && !PageMode); // The timeline holds a meeting's question itself, so the floating card leaves it out.
-        var waitingNow = model.Reminders; var attention = model.AttentionReminderCount; bellBadge.IsVisible = attention > 0; bellCount.Text = attention.ToString(); bellBadge.Classes.Set("lateEdge", waitingNow.Any(r => r.State == ReminderState.Overdue));
-        var bellTip = waitingNow.Count > 0 ? $"Notifications ({attention} need attention, {waitingNow.Count} total)" : "Notifications"; ToolTip.SetTip(bell, bellTip); Avalonia.Automation.AutomationProperties.SetName(bell, bellTip);
-        var reminders = model.Reminders; notesBadge.IsVisible = attention > 0; notesBadge.Classes.Set("lateEdge", reminders.Any(r => r.State == ReminderState.Overdue));
-        var notesTip = reminders.Count > 0 ? $"Notes ({reminders.Count} {(reminders.Count == 1 ? "reminder" : "reminders")})" : "Notes";
-        ToolTip.SetTip(notesRail, notesTip); Avalonia.Automation.AutomationProperties.SetName(notesRail, notesTip);
+        Rail(timelineRail, !weekMode && !settingsMode);
         Rail(overviewTab, !settingsMode && weekMode && model.WeekSection == "overview");
         Rail(hoursTab, !settingsMode && weekMode && model.WeekSection == "hours");
         Rail(entriesTab, !settingsMode && weekMode && model.WeekSection == "entries");
         Rail(settingsRail, settingsMode);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
         foreach (var control in new Control[] { previous, datePick, next, todayButton }) control.IsVisible = !settingsMode;
-        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && !PageMode && (!weekMode || model.WeekSection == "entries");
-        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && !PageMode && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
-        workspaceTitle.Text = settingsMode ? "Settings" : notesMode ? "Notes" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
+        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && (!weekMode || model.WeekSection == "entries");
+        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
+        workspaceTitle.Text = settingsMode ? "Settings" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
-        // The settings and notes pages are built once when they open, so a model change does not rebuild them under the pointer and lose what is being typed.
-        if (settingsMode ? !renderedSettings : notesMode ? !renderedNotes : refreshWorkspace)
+        if (settingsMode ? !renderedSettings : refreshWorkspace)
         {
             var oldScroll = workspace.Content is ScrollViewer directOld ? directOld
                 : (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
-            var previous = renderedSettings == settingsMode && !settingsMode && !PageMode && !renderedNotes && renderedWeekMode == weekMode && renderedDate == model.SelectedDate
+            var previous = renderedSettings == settingsMode && !settingsMode && renderedWeekMode == weekMode && renderedDate == model.SelectedDate
                 ? !weekMode && model.TimelineOffset is double timelineOffset ? new Vector(0, timelineOffset)
                     : oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset : null;
-            workspace.Content = settingsMode ? new SettingsView(model) : notesMode ? new NotesPage(model) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
+            workspace.Content = settingsMode ? new SettingsView(model) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
             if (previous is { } offset && workspace.Content is Control control)
             {
                 var scroll = control is ScrollViewer direct ? direct : control.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();
                 if (scroll is not null) scroll.Tag = offset;
             }
-            renderedWeekMode = weekMode; renderedSettings = settingsMode; renderedNotes = notesMode && !settingsMode;
+            renderedWeekMode = weekMode; renderedSettings = settingsMode;
             renderedDate = model.SelectedDate;
         }
     }
