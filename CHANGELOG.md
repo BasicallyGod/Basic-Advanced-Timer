@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 22 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Sidebar and Notes polish | pending | The compact account panel shows readable names, selection and recording state, with a smoother width transition. Full and Compact pills put the clock on the left. Notes add/edit opens beside the item without blurring the dashboard, with icon-led type choices and a repeat-arrows indicator for recurring items. |
+
 ## 21 October 2026
 
 | Change | Commit | Details |

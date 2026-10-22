@@ -875,7 +875,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Clock, Note, Bell }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Clock, Note, Bell, Repeat, Task }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -988,6 +988,13 @@ public sealed class IconGlyph : Control
                 // Two lines running together into one.
                 context.DrawGeometry(null, pen, Geometry.Parse("M 3.5,3.5 L 3.5,6 Q 3.5,9 9,9 M 14.5,3.5 L 14.5,6 Q 14.5,9 9,9 M 9,9 L 9,14.5"));
                 context.DrawGeometry(null, pen, Geometry.Parse("M 6.5,12 L 9,14.5 L 11.5,12"));
+                break;
+            case IconKind.Repeat:
+                context.DrawGeometry(null, pen, Geometry.Parse("M 3,7 Q 4,3 9,3 Q 13,3 15,6 L 15,2 M 15,6 L 11,6 M 15,11 Q 14,15 9,15 Q 5,15 3,12 L 3,16 M 3,12 L 7,12"));
+                break;
+            case IconKind.Task:
+                context.DrawRectangle(null, pen, new Rect(2.5, 2.5, 13, 13), 3, 3);
+                context.DrawGeometry(null, pen, Geometry.Parse("M 5.5,9 L 8,11.5 L 12.5,6.5"));
                 break;
             case IconKind.Week:
                 // Three bars of different heights on a baseline: an overview of the week, not a calendar.

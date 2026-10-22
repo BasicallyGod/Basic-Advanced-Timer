@@ -17,7 +17,7 @@ public sealed class NoteDetailsTests
     private TimerModel Model() { var model = new TimerModel(new TrackingEngine(clock: () => now)); model.CompleteSetup(); return model; }
     private static List<DayNote> Series(TimerModel model) => model.AllDayNotes.Where(n => n.SeriesId is not null).OrderBy(n => n.Day).ToList();
 
-    // Panel behaviour is tested separately from the dashboard modal integration.
+    // Panel behaviour is tested separately from the anchored editor integration.
     private static Window Host(Control panel) { var window = new Window { Content = panel, Width = 500, Height = 800 }; window.Show(); Dispatcher.UIThread.RunJobs(); return window; }
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
     private static void Click(Window window, string name) { Find<Button>(window, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
@@ -145,10 +145,10 @@ public sealed class NoteDetailsTests
     }
 
     [AvaloniaFact]
-    public void AddAndEditUseTheSameModalWithoutMovingQuickAdd()
+    public void AddAndEditUseAnchoredFlyoutsWithoutMovingQuickAdd()
     {
         var model = Model(); model.AddDayNote(Wednesday, "Book the room");
-        var window = new DashboardWindow(model); window.Show();
+        var window = new DashboardWindow(model); window.Show(); if (window is DashboardWindow) window.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "SidebarSlot").Transitions = null;
         try
         {
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NotesTab").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -158,7 +158,8 @@ public sealed class NoteDetailsTests
             var before = input.Bounds;
             Click(window, "NoteAddButton");
             var add = Assert.IsType<NoteEditorDialog>(Assert.Single(window.Dialogs.Dialogs)); add.Settle();
-            Assert.NotNull(Find<Border>(window, "DialogScrim"));
+            Assert.True(add.IsFlyout); Assert.NotNull(add.Anchor); Assert.False(window.Dialogs.Modal);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "DialogScrim");
             Assert.Equal("Add item", add.Title); Assert.Equal(before, input.Bounds);
             var card = Find<Border>(window, "DialogCard");
             Assert.True(card.Bounds.Width <= window.Dialogs.Bounds.Width);
@@ -232,6 +233,45 @@ public sealed class NoteDetailsTests
             Click(window, "NoteDetailsAdd");
             Assert.Equal(2, model.AllDayNotes.Count); Assert.All(model.AllDayNotes, n => Assert.Null(n.End));
             Assert.Empty(model.Engine.Sessions);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData("Light", 1140, 740)]
+    [InlineData("Dark", 900, 560)]
+    public void FlyoutKeepsUnsavedEditsAndActionsWithinTheWindow(string theme, double width, double height)
+    {
+        var model = Model(); model.SetTheme(theme);
+        model.AddNote(new NoteEdit(NoteKind.Meeting, "Weekly planning", Wednesday, TimeSpan.FromHours(10), TimeSpan.FromHours(11), model.AccountNames[0], new Recurrence(1, 0, null), false));
+        var note = model.AllDayNotes.OrderBy(n => n.Day).First();
+        var window = new DashboardWindow(model) { Width = width, Height = height }; window.Show();
+        window.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "SidebarSlot").Transitions = null;
+        try
+        {
+            Click(window, "NotesTab");
+            using var first = window.CaptureRenderedFrame();
+            var repeat = Find<Border>(window, "NoteRepeatMark_" + note.Id);
+            Assert.Equal(IconKind.Repeat, Assert.IsType<IconGlyph>(repeat.Child).Kind);
+            Click(window, "NoteText_" + note.Id);
+            var editor = Assert.IsType<NoteEditorDialog>(Assert.Single(window.Dialogs.Dialogs)); editor.Settle();
+            var words = Find<TextBox>(window, "NoteDetailsWords"); words.Text = "Unsaved title";
+            var card = Find<Border>(window, "DialogCard");
+            var corner = card.TranslatePoint(new Point(card.Bounds.Width, card.Bounds.Height), window.Dialogs)!.Value;
+            Assert.InRange(corner.X, 0, window.Dialogs.Bounds.Width);
+            Assert.InRange(corner.Y, 0, window.Dialogs.Bounds.Height);
+            var save = Find<Button>(window, "NoteDetailsSave");
+            Assert.InRange(save.TranslatePoint(new Point(0, save.Bounds.Height), card)!.Value.Y, 0, card.Bounds.Height);
+            Assert.False(window.Dialogs.Modal);
+            var outside = new Point(window.Width - 50, 70);
+            window.MouseDown(outside, Avalonia.Input.MouseButton.Left); window.MouseUp(outside, Avalonia.Input.MouseButton.Left);
+            Assert.Same(editor, Assert.Single(window.Dialogs.Dialogs)); Assert.Equal("Unsaved title", words.Text);
+            if (Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") is { Length: > 0 } folder)
+            {
+                Directory.CreateDirectory(folder); using var frame = window.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, theme + "-notes-flyout.png"));
+            }
+            Click(window, "NoteDetailsCancel");
+            Assert.Equal("Weekly planning", NoteShorthand.Display(model.AllDayNotes.Single(n => n.Id == note.Id), model.AccountNames));
         }
         finally { window.Close(); }
     }

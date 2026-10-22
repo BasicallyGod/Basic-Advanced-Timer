@@ -165,6 +165,7 @@
     <!-- The dashboard's account rows are soft rounded cards. The recording account's card takes a gentle tint of the tracking colour. -->
     <Style Selector="Button.accountCard"><Setter Property="CornerRadius" Value="12" /></Style>
     <Style Selector="Button.accountCard:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
+    <Style Selector="Button.accountCard.selectedAccount"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BorderThickness" Value="1" /></Style>
     <Style Selector="Button.accountCard.active"><Setter Property="Background" Value="{DynamicResource LiveTint}" /></Style>
     <Style Selector="Button.accountCard.active /template/ ContentPresenter#PART_ContentPresenter, Button.accountCard.active:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource LiveTint}" /></Style>
     <!-- The rail's icons sit in soft tiles. The chosen one is filled, and the rest are muted until the pointer arrives. -->
@@ -241,6 +242,7 @@
     <Style Selector="CalendarDayButton:today /template/ TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
     <Style Selector="CalendarDayButton:today /template/ Border#Root"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="CalendarItem /template/ Button"><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="Border.noteRowSurface:pointerover"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
     <Style Selector="Button.noteTitle"><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <!-- Quiet row tools: hidden until the pointer is over the row or it has focus (Ui.RevealOnHover). -->
     <Style Selector="Button.hoverReveal"><Setter Property="Opacity" Value="0" /></Style>

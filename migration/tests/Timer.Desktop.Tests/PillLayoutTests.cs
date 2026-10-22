@@ -159,7 +159,7 @@ public sealed class PillLayoutTests
         finally { dashboard.Close(); }
     }
     [AvaloniaFact]
-    public void EveryLayoutKeepsAccountTimerAndActionsInOrderWithoutChangingItsWidth()
+    public void LayoutsKeepTheClockAtTheLeftExceptForTheMinimalBadge()
     {
         var model = Model();
         var old = model.AccountNames[0];
@@ -174,7 +174,8 @@ public sealed class PillLayoutTests
                 model.SetPillStyle(layout.Key); Dispatcher.UIThread.RunJobs();
                 using var frame = pill.CaptureRenderedFrame();
                 var account = Find<Button>(pill, "PillAccounts"); var timer = Find<Button>(pill, "PillDashboard"); var pause = Find<Button>(pill, "PillPause");
-                Assert.True(account.Bounds.Right <= timer.Bounds.Left, layout.Key);
+                if (layout.Key == "minimal") Assert.True(account.Bounds.Right <= timer.Bounds.Left, layout.Key);
+                else Assert.True(timer.Bounds.Right <= account.Bounds.Left, layout.Key);
                 Assert.True(timer.Bounds.Right <= pause.Bounds.Left, layout.Key);
                 Assert.Equal(layout.Width, pill.Width / pill.Scale - 2 * Ui.ShadowMargin, 1);
                 Assert.Contains(name, ToolTip.GetTip(account)?.ToString());

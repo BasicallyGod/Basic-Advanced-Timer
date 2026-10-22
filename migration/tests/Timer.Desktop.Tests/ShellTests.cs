@@ -393,7 +393,7 @@ public sealed class ShellTests
             Assert.Equal("Account one", model.ActiveAccount);
             var timerButton = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDashboard");
             var accountButton = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillAccounts");
-            Assert.True(accountButton.Bounds.X < timerButton.Bounds.X && timerButton.Bounds.X < pause.Bounds.X);
+            Assert.True(timerButton.Bounds.X < accountButton.Bounds.X && accountButton.Bounds.X < pause.Bounds.X);
             var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();
             Save(coordinator.Pill, Path.Combine(output, "pill-classic-tracking.png"));
             model.TogglePause(); Save(coordinator.Pill, Path.Combine(output, "pill-classic-paused.png"));
