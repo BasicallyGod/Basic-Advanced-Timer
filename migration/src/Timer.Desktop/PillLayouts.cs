@@ -6,8 +6,8 @@ public static class PillLayouts
     public sealed record Layout(string Key, string Title, string Description, double Width);
     public static readonly IReadOnlyList<Layout> All = new[]
     {
-        new Layout("full", "Full", "Account first, then the clock, with today's time and the day's progress.", PillWindow.PillWidth),
-        new Layout("compact", "Compact", "Account first, then the clock. No progress line.", 520),
+        new Layout("full", "Full", "Clock first, then the account, with today's time and the day's progress.", PillWindow.PillWidth),
+        new Layout("compact", "Compact", "Clock first, then the account. No progress line.", 520),
         new Layout("minimal", "Minimal", "Just the account's initials, the clock and pause. Break is in the right-click menu.", 360),
     };
     public static Layout For(string key) => All.FirstOrDefault(l => l.Key == key) ?? All[0];

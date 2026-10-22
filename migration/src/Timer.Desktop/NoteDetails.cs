@@ -14,7 +14,7 @@ public sealed record NoteEdit(NoteKind Kind, string Words, DateTime Day, TimeSpa
 
 /// <summary>
 /// The panel that adds or edits a note, so none of it has to be typed in the shorthand: a Task, Meeting or Deadline, its words, day, start and end, account, and how it
-/// repeats. Both add and edit use this panel inside the same themed dashboard dialog.
+/// repeats. Both add and edit use this panel inside the same anchored editor.
 /// </summary>
 public static class NoteDetails
 {
@@ -75,7 +75,7 @@ public static class NoteDetails
         }
         foreach (var (k, text) in new[] { (NoteKind.Task, "Task"), (NoteKind.Meeting, "Meeting"), (NoteKind.Deadline, "Deadline") })
         {
-            var picked = k; var button = Ui.Button(text, () => { kind = picked; ShowKind(); }, "NoteKind_" + text); button.Classes.Add("flat"); button.Height = 28; button.Padding = new Thickness(12, 0); button.FontSize = 13; kindButtons[k] = button; kinds.Children.Add(button);
+            var picked = k; var button = Ui.Button(text, () => { kind = picked; ShowKind(); }, "NoteKind_" + text); button.Classes.Add("flat"); button.Content = Ui.Horizontal(new IconGlyph(k == NoteKind.Task ? IconKind.Task : k == NoteKind.Meeting ? IconKind.Clock : IconKind.Flag), Ui.Text(text, 13)); Avalonia.Automation.AutomationProperties.SetName(button, text); button.Height = 34; button.Padding = new Thickness(10, 0); button.FontSize = 13; kindButtons[k] = button; kinds.Children.Add(button);
         }
         root.Children.Add(kinds);
         addDate.IsCheckedChanged += (_, _) => ShowKind();
@@ -178,25 +178,26 @@ public static class NoteDetails
         var footer = new StackPanel { Spacing = 8, Margin = new Thickness(0, 10, 0, 0) };
         footer.Children.Add(error); footer.Children.Add(buttons); footer.Children.Add(removeChoices);
         var panel = Ui.Grid("*", "*,Auto"); panel.Name = "NoteDetailsPanel";
-        panel.Children.Add(new ScrollViewer
+        panel.Children.Add(Ui.WithMoreBelow(new ScrollViewer
         {
             Content = root, AllowAutoHide = false,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
-        });
+        }));
         Ui.Put(panel, footer, row: 1);
         ShowKind(); ShowRepeat(); ShowScope();
         return panel;
     }
 }
 
-/// <summary>Uses the existing dashboard scrim, theme and size constraints for both add and edit.</summary>
+/// <summary>An anchored, bounded editor with the dashboard theme and explicit save/cancel actions.</summary>
 public sealed class NoteEditorDialog : Dialog
 {
     public NoteEditorDialog(TimerModel model, DayNote? note, DateTime day, bool hasDate = true)
     {
         Title = note is null ? "Add item" : "Edit item";
-        Width = 420;
-        MaxHeight = 720;
+        IsFlyout = true;
+        Width = 400;
+        MaxHeight = 640;
         Content = new Border
         {
             Child = NoteDetails.Build(model, note, day, Close, hasDate),

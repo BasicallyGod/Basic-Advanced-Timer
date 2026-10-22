@@ -12,7 +12,7 @@ namespace Timer.Desktop.Tests;
 public sealed class SlimColumnTests
 {
     private static void Click(Visual root, string name) { root.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
-    private static DashboardWindow Open(TimerModel model) { var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs(); return window; }
+    private static DashboardWindow Open(TimerModel model) { var window = new DashboardWindow(model); window.Show(); window.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "SidebarSlot").Transitions = null; Dispatcher.UIThread.RunJobs(); return window; }
     private static T Find<T>(Visual root, string name) where T : Control => root.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
     [AvaloniaFact]
     public void NotesUsesASeparateCompactColumnBesideTheUnchangedNavigationRail()
@@ -20,16 +20,15 @@ public sealed class SlimColumnTests
         var model = TimerModel.CreateDemo(); var window = Open(model);
         try
         {
-            var body = window.GetVisualDescendants().OfType<Grid>().First(g => g.ColumnDefinitions.Count == 3 && g.ColumnDefinitions[1].Width.Value == 1);
             var rail = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("panel") && b.Width == 60);
             var slim = window.GetVisualDescendants().OfType<CompactColumn>().Single();
-            Assert.False(slim.IsVisible); Assert.Equal(340, body.ColumnDefinitions[0].Width.Value);
+            Assert.False(slim.IsVisible); Assert.Equal(340, slim.Parent!.GetValue(Control.WidthProperty));
             Click(window, "NotesTab");
-            Assert.True(slim.IsVisible); Assert.Equal(CompactColumn.ColumnWidth, body.ColumnDefinitions[0].Width.Value);
+            Assert.True(slim.IsVisible); Assert.Equal(CompactColumn.ColumnWidth, slim.Parent!.GetValue(Control.WidthProperty));
             Assert.Equal(60, rail.Width); Assert.False(rail.IsVisualAncestorOf(slim));
             Assert.False(window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "AccountScroll").IsEffectivelyVisible);
             Assert.True(Find<ScrollViewer>(slim, "CompactAccountScroll").IsEffectivelyVisible);
-            Click(window, "TimelineTab"); Assert.False(slim.IsVisible); Assert.Equal(340, body.ColumnDefinitions[0].Width.Value);
+            Click(window, "TimelineTab"); Assert.False(slim.IsVisible); Assert.Equal(340, slim.Parent!.GetValue(Control.WidthProperty));
             Click(window, "NotesTab"); Click(window, "Settings"); Assert.False(slim.IsVisible); Assert.Equal(60, rail.Width);
         }
         finally { window.Close(); }
@@ -44,12 +43,17 @@ public sealed class SlimColumnTests
             Click(window, "NotesTab"); var slim = window.GetVisualDescendants().OfType<CompactColumn>().Single();
             var list = Find<ScrollViewer>(slim, "CompactAccountScroll");
             Assert.Equal(model.AccountNames.Count, slim.GetVisualDescendants().OfType<Button>().Count(b => b.Name?.StartsWith("CompactDot_") == true));
-            Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "A1");
-            Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == model.FormatCompact(model.Today(model.Accounts.First(a => a.Name == "Account one"))));
+            Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Account one");
+            Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == model.FormatCompact(model.Today(model.Accounts.First(a => a.Name == "Account one"))) + " today");
             Assert.Equal(Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, list.VerticalScrollBarVisibility);
             Click(slim, "CompactDot_" + Ui.NameKey("Account one")); Assert.Equal("Account one", model.ActiveAccount);
             Assert.Contains(slim.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Tracking");
+            var running = Find<Button>(slim, "CompactDot_" + Ui.NameKey("Account one"));
+            Assert.Contains("active", running.Classes); Assert.Contains("selectedAccount", running.Classes);
+            Assert.Contains(running.GetVisualDescendants().OfType<TextBlock>(), t => t.Text!.Contains("Recording"));
             Click(slim, "CompactPause"); Assert.False(model.IsTracking);
+            running = Find<Button>(slim, "CompactDot_" + Ui.NameKey("Account one"));
+            Assert.DoesNotContain("active", running.Classes); Assert.Contains("selectedAccount", running.Classes);
             Click(slim, "CompactBreak"); Assert.True(model.IsOnBreak);
             Click(slim, "CompactBreak"); Assert.False(model.IsOnBreak);
             var started = model.DayStarted; Click(slim, "CompactDay"); Assert.NotEqual(started, model.DayStarted);

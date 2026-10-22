@@ -38,7 +38,7 @@ public sealed class NotesPage : Grid
         var headRow = Ui.Grid("*,Auto,Auto"); headRow.ColumnSpacing = 6; Ui.Put(headRow, heading);
         // A removed note can be put back, so one stray click on the cross never loses it.
         undoRemove = Ui.DialogButton("Undo remove", () => model.RestoreRemovedNote(), "NoteUndoRemove"); undoRemove.Height = 32; undoRemove.IsVisible = false; Ui.Put(headRow, undoRemove, 1);
-        // Add and edit share a modal editor, so its position is independent of the row and quick-add field.
+        // Add and edit share an anchored editor; quick-add remains in the layout underneath.
         var add = Ui.DialogButton("Add item", () => ShowDetails(null), "NoteAddButton", true); add.Height = 32; add.Classes.Add("primary"); Ui.Put(headRow, add, 2);
         Ui.Put(leftGrid, headRow); Ui.Put(leftGrid, tabs, row: 1);
         Ui.Put(leftGrid, Ui.WithMoreBelow(new ScrollViewer { Content = rows, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 2);
@@ -85,7 +85,11 @@ public sealed class NotesPage : Grid
     private void ShowDetails(DayNote? note)
     {
         if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard)
-            dashboard.Dialogs.Show(new NoteEditorDialog(model, note, model.SelectedDate, hasDate: kind != "undated"));
+            {
+            foreach (var editor in dashboard.Dialogs.Dialogs.OfType<NoteEditorDialog>().ToArray()) editor.Close();
+            var anchor = this.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == (note is null ? "NoteAddButton" : "NoteText_" + note.Id));
+            dashboard.Dialogs.Show(new NoteEditorDialog(model, note, model.SelectedDate, hasDate: kind != "undated") { Anchor = anchor });
+        }
     }
 
     private void UpdateDayChip()
@@ -162,7 +166,7 @@ public sealed class NotesPage : Grid
                 removeFlyout = new Flyout { Content = choice, Placement = Avalonia.Controls.PlacementMode.BottomEdgeAlignedRight }; remove.Flyout = removeFlyout;
             }
             remove.Width = 26; remove.Height = 26; remove.Classes.Add("hoverReveal"); Avalonia.Automation.AutomationProperties.SetName(remove, "Remove note: " + shownWords);
-            // The same modal editor handles both new and existing items.
+            // The same anchored editor handles both new and existing items.
             var details = Ui.IconButton(IconKind.Edit, "Edit item", "NoteDetails_" + id, () => ShowDetails(model.AllDayNotes.FirstOrDefault(n => n.Id == id))); details.Classes.Add("toolButton"); details.Classes.Add("quiet"); details.Classes.Add("hoverReveal"); details.Width = 26; details.Height = 26; details.Padding = new Thickness(0); details.FontSize = 12;
             Avalonia.Automation.AutomationProperties.SetName(details, "Details: " + shownWords);
             var row = Ui.Grid("28,*,92,Auto,54"); row.Name = "NoteRow_" + id; row.VerticalAlignment = VerticalAlignment.Center; row.Margin = new Thickness(0, 2);
@@ -186,7 +190,7 @@ public sealed class NotesPage : Grid
             var marks = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 6, 0) };
             // The times line up in a column of their own, so a list of notes reads down.
             if (note.At is not null) { var when = Ui.Text(NoteTimes.Of(note), 12.5, "muted"); when.Name = "NoteTime_" + id; when.HorizontalAlignment = HorizontalAlignment.Right; when.VerticalAlignment = VerticalAlignment.Center; Ui.Put(row, when, 2); }
-            if (model.SeriesOf(note) is { } series) { var again = new Border { Name = "NoteRepeatMark_" + id, Child = new IconGlyph(IconKind.Week) { TintKey = "Muted" } }; ToolTip.SetTip(again, series.Rule.Words()); marks.Children.Add(again); }
+            if (model.SeriesOf(note) is { } series) { var again = new Border { Name = "NoteRepeatMark_" + id, Child = new IconGlyph(IconKind.Repeat) { TintKey = "Muted" } }; ToolTip.SetTip(again, series.Rule.Words()); marks.Children.Add(again); }
             if (NoteShorthand.AccountOf(note.Text, model.AccountNames) is { } linked && model.Accounts.FirstOrDefault(a => a.Name == linked) is { } account)
             {
                 var dot = new Border { Name = "NoteAccountMark_" + id, Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(Color.Parse(Ui.Visible(account.Colour))), VerticalAlignment = VerticalAlignment.Center };
@@ -196,7 +200,8 @@ public sealed class NotesPage : Grid
             var actions = Ui.Horizontal(details, remove); actions.VerticalAlignment = VerticalAlignment.Center; actions.Spacing = 2;
             Ui.Put(row, actions, 4);
             Ui.RevealOnHover(row);
-            rows.Children.Add(row);
+            var surface = new Border { Child = row, CornerRadius = new CornerRadius(10), Padding = new Thickness(4, 1), Margin = new Thickness(-4, 0) }; surface.Classes.Add("noteRowSurface");
+            rows.Children.Add(surface);
         }
         coming.Rebuild();
     }

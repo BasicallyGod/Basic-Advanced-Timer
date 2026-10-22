@@ -458,9 +458,9 @@ public sealed class PillWindow : Window
         switch (layout)
         {
             case "compact":
-                head.ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto");
+                head.ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto");
                 accountButton.Margin = new Thickness(0, 0, 12, 0); timerButton.Margin = new Thickness(0, 0, 14, 0);
-                Ui.Put(head, accountButton, 0); Ui.Put(head, timerButton, 1); Ui.Put(head, breakButton, 2); Ui.Put(head, pause, 3);
+                Ui.Put(head, timerButton, 0); Ui.Put(head, accountButton, 1); Ui.Put(head, breakButton, 2); Ui.Put(head, pause, 3);
                 break;
             case "minimal":
                 head.ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto");
@@ -468,9 +468,9 @@ public sealed class PillWindow : Window
                 Ui.Put(head, accountButton, 0); Ui.Put(head, timerButton, 1); Ui.Put(head, pause, 2);
                 break;
             default:
-                head.ColumnDefinitions = new ColumnDefinitions("*,1,Auto,Auto,Auto");
-                accountButton.Margin = new Thickness(0, 0, 16, 0); timerButton.Margin = new Thickness(16, 0, 16, 0);
-                Ui.Put(head, accountButton, 0); Ui.Put(head, divider, 1); Ui.Put(head, timerButton, 2); Ui.Put(head, breakButton, 3); Ui.Put(head, pause, 4);
+                head.ColumnDefinitions = new ColumnDefinitions("Auto,1,*,Auto,Auto");
+                accountButton.Margin = new Thickness(16, 0, 16, 0); timerButton.Margin = new Thickness(0, 0, 16, 0);
+                Ui.Put(head, timerButton, 0); Ui.Put(head, divider, 1); Ui.Put(head, accountButton, 2); Ui.Put(head, breakButton, 3); Ui.Put(head, pause, 4);
                 break;
         }
         labels.IsVisible = layout != "minimal";
@@ -600,7 +600,7 @@ public sealed class DashboardWindow : Window
     private bool weekMode, settingsMode, notesMode, renderedSettings, renderedNotes, settingZoom;
     // The Notes page stands in for the timeline and week views, with its own editing of nothing, so the toolbar and the zoom bar stay away.
     private bool PageMode => notesMode;
-    private Grid bodyGrid = null!; private Control fullColumn = null!; private CompactColumn compactColumn = null!; private bool compactApplied;
+    private Grid sidebarSlot = null!; private Control fullColumn = null!; private CompactColumn compactColumn = null!; private bool compactApplied;
     private Slider zoomSlider = null!;
     private Button settingsRail = null!; private Control? headerRow;
     private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
@@ -662,7 +662,7 @@ public sealed class DashboardWindow : Window
         Ui.Put(railGrid, railFoot, row: 1);
         rail.Child = railGrid; Ui.Put(root, rail);
         Ui.DragHeader(railTop, this);
-        var body = Ui.Grid("340,1,*", "*"); bodyGrid = body;
+        var body = Ui.Grid("Auto,1,*", "*");
         var sidebar = Ui.Grid("*", "Auto,Auto,*,Auto");
         // The Day elapsed card, with a bar of the accent colour along its top edge.
         var dayCard = new Border { CornerRadius = new CornerRadius(18), ClipToBounds = true, BorderThickness = new Thickness(1) }; dayCard.Classes.Add("dayCard");
@@ -716,11 +716,13 @@ public sealed class DashboardWindow : Window
         Ui.Put(pair, breakButton); Ui.Put(pair, day, 1);
         summary.Children.Add(pair);
         Ui.Put(sidebar, summary, row: 3);
-        var panel = new Border { Child = sidebar };
+        var panel = new Border { Child = sidebar, Width = 340, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Classes.Add("panel");
-        Ui.Put(body, panel); fullColumn = panel;
-        // Notes swaps the full dashboard column for a separate 96px tracking strip; the 60px navigation rail never changes.
-        compactColumn = new CompactColumn(model); Ui.Put(body, compactColumn);
+        sidebarSlot = new Grid { Name = "SidebarSlot", Width = 340, ClipToBounds = true, HorizontalAlignment = HorizontalAlignment.Left };
+        sidebarSlot.Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = WidthProperty, Duration = TimeSpan.FromMilliseconds(180), Easing = new Avalonia.Animation.Easings.CubicEaseOut() } };
+        Ui.Put(body, sidebarSlot); sidebarSlot.Children.Add(panel); fullColumn = panel;
+        // Notes swaps the full dashboard column for a separate 176px account panel; the 60px navigation rail never changes.
+        compactColumn = new CompactColumn(model); sidebarSlot.Children.Add(compactColumn);
         var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
         var review = Ui.Grid("*", "Auto,*,Auto,Auto");
         review.Margin = new Thickness(22, 16, 22, 18);
@@ -902,7 +904,7 @@ public sealed class DashboardWindow : Window
     private void UpdateBackdrop()
     {
         if (dashboardBody is null) return;
-        var covered = onboarding is not null || Dialogs.Any;
+        var covered = onboarding is not null || Dialogs.Modal;
         dashboardBody.Effect = covered ? new Avalonia.Media.BlurEffect { Radius = 7 } : null; dashboardBody.IsHitTestVisible = !covered;
     }
     /// <summary>Whether a point (in window coordinates) is in the part of the dashboard that drags the window.</summary>
@@ -975,14 +977,8 @@ public sealed class DashboardWindow : Window
         if (slim != compactApplied)
         {
             compactApplied = slim;
-            bodyGrid.ColumnDefinitions[0].Width = new GridLength(slim ? CompactColumn.ColumnWidth : 340);
+            sidebarSlot.Width = slim ? CompactColumn.ColumnWidth : 340;
             fullColumn.IsVisible = !slim; compactColumn.IsVisible = slim;
-            if (IsVisible)
-            {
-                workspace.Opacity = .52;
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => workspace.Opacity = 1,
-                    Avalonia.Threading.DispatcherPriority.Loaded);
-            }
         }
         var editing = !PageMode && (!weekMode || model.WeekSection == "entries");
         zoomControls.IsVisible = !weekMode && !settingsMode && !PageMode;
