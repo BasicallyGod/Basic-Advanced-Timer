@@ -1,7 +1,6 @@
 using Avalonia;
 using Timer.Core;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.VisualTree;
 using Avalonia.LogicalTree;

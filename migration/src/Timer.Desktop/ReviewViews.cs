@@ -259,7 +259,7 @@ public static class ReviewViews
         return root;
     }
 
-    /// <summary>A raised tile in the Time Deck style, used to set the parts of the week views apart.</summary>
+    /// <summary>A raised tile, used to set the parts of the week views apart.</summary>
     private static Border Card(Control child, Thickness padding)
     {
         var card = new Border { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = padding, Child = child };

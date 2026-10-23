@@ -241,7 +241,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool IsDemo { get; private set; }
     public bool Persistent => store is not null;
     public TimeSpan Elapsed => Engine.Totals(Engine.Now).Elapsed;
-    public TimeSpan AccountElapsed => Engine.ActiveElapsed;
     public string ClockText => $"{(int)Elapsed.TotalHours:00}:{Elapsed.Minutes:00}:{Elapsed.Seconds:00}";
     public TimeSpan Allocated => Engine.Totals(Engine.Now).Allocated;
     public TimeSpan Unallocated => Engine.Totals(Engine.Now).Unallocated;
@@ -352,7 +351,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     public DateTime WeekStart(DateTime date) => date.Date.AddDays(-((7 + (int)date.DayOfWeek - (int)preferences.WeekStart) % 7));
     public TimeSpan Today(TimerAccount a) => Engine.Credited(a.Name, Engine.Now.Date, Engine.Now.Date.AddDays(1));
     public TimeSpan OnDay(TimerAccount a, DateTime day) => Engine.Credited(a.Name, day, day.AddDays(1));
-    public TimeSpan Week(TimerAccount a) { var start = WeekStart(SelectedDate); return Engine.Credited(a.Name, start, start.AddDays(7)); }
     /// <summary>The span a budget covers right now, from the account's own period (today, this week, month or quarter).</summary>
     private (DateTime Start, DateTime End) BudgetWindow(TimerAccount a) => BudgetWindowAt(a, Engine.Now);
     /// <summary>The span the budget covers around a reference moment: the day, week, month or quarter that holds it.</summary>
@@ -406,26 +404,12 @@ public sealed class TimerModel : INotifyPropertyChanged
         var (start, end) = BudgetWindow(a);
         return Math.Clamp((Engine.Now - start).TotalSeconds / (end - start).TotalSeconds, 0, 1);
     }
-    public string Format(TimeSpan value)
-    {
-        if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) + "h";
-        var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
-    }
+    public string Format(TimeSpan value) => DecimalHours ? value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) + "h" : Hhmm(value);
     /// <summary>Every duration reads as HH:MM (07:00), or in decimal hours (7.00) when that is chosen. The three formats differ only in how decimal hours are written.</summary>
-    public string FormatShort(TimeSpan value)
-    {
-        if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB"));
-        var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
-    }
+    public string FormatShort(TimeSpan value) => DecimalHours ? value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) : Hhmm(value);
     /// <summary>For tight rows. HH:MM like the rest, or 10.58h in decimal hours.</summary>
-    public string FormatCompact(TimeSpan value)
-    {
-        if (DecimalHours) return value.TotalHours.ToString("0.##", CultureInfo.GetCultureInfo("en-GB")) + "h";
-        var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
-    }
+    public string FormatCompact(TimeSpan value) => DecimalHours ? value.TotalHours.ToString("0.##", CultureInfo.GetCultureInfo("en-GB")) + "h" : Hhmm(value);
+    private static string Hhmm(TimeSpan value) => $"{(value < TimeSpan.Zero ? "-" : "")}{(int)value.Duration().TotalHours:00}:{value.Duration().Minutes:00}";
     /// <summary>The budget for an account row, such as "10h35 / 20h monthly". The period is always said, since it matters when comparing accounts.</summary>
     public string BudgetLine(TimerAccount a) => a.Budget is { } target
         ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)} {(a.Period switch { "day" => "daily", "month" => "monthly", "quarter" => "quarterly", _ => "weekly" })}" : "No budget";

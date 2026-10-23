@@ -35,7 +35,6 @@ public sealed class OnboardingView : Grid
     private ComboBox weekStartBox = new();
     private Button hoursTile = null!, decimalTile = null!;
     public event Action? Finished;
-    public int Step => step;
 
     public OnboardingView(TimerModel model)
     {

@@ -1,7 +1,6 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Layout;
 using Timer.Core;
 
 namespace Timer.Desktop;

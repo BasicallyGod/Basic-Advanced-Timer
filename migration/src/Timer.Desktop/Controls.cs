@@ -914,7 +914,6 @@ public sealed class IconGlyph : Control
     // Waving: the flag ripples while the pointer is over its button, and settles smoothly when it leaves.
     private double amplitude, phase; private bool waving; private DispatcherTimer? waveTimer;
     /// <summary>How far the flag is currently rippling, from 0 (still) to 1 (full).</summary>
-    public double WaveAmount => amplitude;
     public bool Waving
     {
         get => waving;

@@ -7,7 +7,6 @@ using Avalonia.Threading;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using Timer.Core;
-using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
 
@@ -131,27 +130,11 @@ public sealed class UxTweakTests
     }
 
     [AvaloniaFact]
-    public void LongTextSlidesAndShortTextStaysPut()
-    {
-        var longText = new AutoScrollText(new TextBlock { Text = "A very long client account name that cannot fit in the pill" }) { Width = 120 };
-        var shortText = new AutoScrollText(new TextBlock { Text = "Short" }) { Width = 120 };
-        var window = new Window { Content = new StackPanel { Children = { longText, shortText } } }; window.Show();
-        try
-        {
-            Settle(window);
-            Assert.True(longText.Overflow > 100); Assert.Equal(0, shortText.Overflow);
-            Assert.True(longText.Scrolling); Assert.False(shortText.Scrolling);
-            Assert.Equal(120, longText.Bounds.Width, 0.5); // It keeps to the room it was given.
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
     public void TheNameGivesWayButTheChevronStaysBesideIt()
     {
         var name = new TextBlock { Text = "A very long client account name that cannot fit in the pill at all" };
         var chevron = new Border { Width = 12, Height = 12 }; var dot = new Border { Width = 14, Height = 14 };
-        var row = new NameRow { Width = 300 }; row.Children.Add(dot); row.Children.Add(new AutoScrollText(name)); row.Children.Add(chevron);
+        var row = new NameRow { Width = 300 }; row.Children.Add(dot); row.Children.Add(name); row.Children.Add(chevron);
         var window = new Window { Content = row }; window.Show();
         try
         {

@@ -18,11 +18,9 @@ public sealed class SettingsView : ScrollViewer
     public static readonly TimeSpan UnlockWindow = TimeSpan.FromMilliseconds(700);
     /// <summary>The clock the quick clicks are timed by; tests replace it, because a slow runner can take longer than the window to deliver ten clicks.</summary>
     public static Func<DateTime> UnlockClock { get; set; } = () => DateTime.UtcNow;
-    private readonly TimerModel model;
     private readonly List<Action> syncs = new();
     public SettingsView(TimerModel model)
     {
-        this.model = model;
         Name = "SettingsPage"; AllowAutoHide = false;
         HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
         var page = new StackPanel { Spacing = 16, Margin = new Thickness(0, 0, 14, 8), HorizontalAlignment = HorizontalAlignment.Stretch };

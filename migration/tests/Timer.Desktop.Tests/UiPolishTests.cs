@@ -5,7 +5,6 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Timer.Core;
 using Xunit;
 
 namespace Timer.Desktop.Tests;

@@ -1,4 +1,3 @@
-using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -30,8 +29,6 @@ public class ReviewDialog : Dialog
         { Error.Text = error.Message; }
     }
     protected static TextBlock Info(string text) => new() { Text = text, FontSize = 13, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } };
-    protected static DateTime At(DateTime day, string? value)
-        => day.Date + TimeSpan.ParseExact(value ?? "", new[] { @"hh\:mm", @"hh\:mm\:ss" }, CultureInfo.InvariantCulture);
 }
 
 public sealed class GroupDialog : ReviewDialog

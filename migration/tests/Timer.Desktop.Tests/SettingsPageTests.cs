@@ -1,12 +1,10 @@
 using Avalonia;
-using Avalonia.Headless;
 using Xunit;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Timer.Desktop;
 
 namespace Timer.Desktop.Tests;
 

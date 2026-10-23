@@ -5,7 +5,6 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Timer.Core;
-using Timer.Desktop;
 using Xunit;
 
 namespace Timer.Desktop.Tests;
