@@ -35,7 +35,7 @@ public sealed class ReminderPopup : Border
     private readonly WrapPanel quickRow = new() { Orientation = Orientation.Horizontal }, presetRow = new() { Orientation = Orientation.Horizontal };
     private bool syncing;
 
-    public ReminderPopup(Func<DateTime> now, string forText, DateTime? current, Action<DateTime?> answer, Action close)
+    public ReminderPopup(Func<DateTime> now, string forText, DateTime? current, Action<DateTime?> answer, Action close, string heading = "Reminder")
     {
         this.now = now; this.answer = answer; Name = "ReminderPopup";
         var start = current ?? now().Date.AddHours(15);
@@ -46,7 +46,7 @@ public sealed class ReminderPopup : Border
         var column = new StackPanel { Spacing = 10 };
 
         var title = Ui.Grid("Auto,*,Auto"); title.ColumnSpacing = 8;
-        Ui.Put(title, new TextBlock { Text = "Reminder", FontSize = 13, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        Ui.Put(title, new TextBlock { Text = heading, FontSize = 13, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         var who = new TextBlock { Text = forText, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center }; who.Classes.Add("muted"); Ui.Put(title, who, 1);
         var closeButton = Ui.IconButton(IconKind.Close, "Close", "ReminderClose", close); closeButton.Width = 24; closeButton.Height = 24; Ui.Put(title, closeButton, 2);
         column.Children.Add(title);

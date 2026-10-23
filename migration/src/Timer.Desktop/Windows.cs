@@ -180,10 +180,11 @@ public sealed class DashboardWindow : Window
     private readonly ContentControl workspace = new(), timelineHost = new() { Name = "TimelineHost" };
     private Border timelineCard = null!; private MessageBar messageBar = null!; private Grid timelinePage = null!; private SelectedBlockCard selectedCard = null!; private NotesCard notesCard = null!;
     private readonly Button day;
-    private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, addTime = null!;
+    private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, notesTab = null!, addTime = null!, bell = null!;
+    private Border bellBadge = null!; private Control bellHostPanel = null!; private TextBlock bellBadgeText = null!; private TextBox searchBox = null!; private Control searchHost = null!; private Popup bellPopup = null!; private NotesPage? notesPage;
     private readonly Button undo;
     private EntryDialog? entryEditor;
-    private bool weekMode, settingsMode, renderedSettings;
+    private bool weekMode, settingsMode, notesMode, renderedSettings, renderedNotes;
     private Button settingsRail = null!; private Control? headerRow;
     private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
     /// <summary>The pop-ups open over the dashboard. They share its blurred backdrop with the getting started setup.</summary>
@@ -221,7 +222,8 @@ public sealed class DashboardWindow : Window
         timelineRail = RailButton(IconKind.Timeline, "Timeline", "TimelineTab", () => SelectTab(false));
         overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectTab(true));
         var viewsRule = Ui.Rule(); viewsRule.Margin = new Thickness(10, 4); railTop.Children.Add(viewsRule);
-        foreach (var button in new[] { timelineRail, overviewTab }) railTop.Children.Add(button);
+        notesTab = RailButton(IconKind.Note, "Notes", "NotesTab", ShowNotes);
+        foreach (var button in new[] { timelineRail, overviewTab, notesTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
         // The break is in the face, under the primary control, as on the pill.
@@ -259,7 +261,19 @@ public sealed class DashboardWindow : Window
         previous = Ui.Ctl("PreviousPeriod", null, IconKind.Previous, "Previous day or week", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); });
         next = Ui.Ctl("NextPeriod", null, IconKind.Next, "Next day or week", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); });
         todayButton = Ui.Ctl("GoToToday", "Today", IconKind.Today, "Back to today", () => model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days));
-        var steps = Ui.Horizontal(previous, datePick, next, todayButton); steps.Spacing = 8;
+        // The bell opens what is waiting (the reminders that have passed, and the ones coming up), with a count of the ones that need attention. In Notes the header also holds the search box.
+        bell = Ui.Ctl("Notifications", null, IconKind.Bell, "Notifications", ToggleBell); bell.Width = 42;
+        bellBadgeText = new TextBlock { FontSize = 11, FontWeight = Avalonia.Media.FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        bellBadgeText.Bind(TextBlock.ForegroundProperty, bellBadgeText.GetResourceObservable("Panel"));
+        bellBadge = new Border { Name = "NotificationsBadge", MinWidth = 18, Height = 18, CornerRadius = new CornerRadius(9), Padding = new Thickness(4, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, -6, -6, 0), IsHitTestVisible = false, IsVisible = false, Child = bellBadgeText }; bellBadge.Classes.Add("badge");
+        bellPopup = new Popup { Placement = PlacementMode.BottomEdgeAlignedRight, IsLightDismissEnabled = true, Name = "NotificationsPopup" };
+        var bellHost = new Grid { Name = "NotificationsHost" }; bellHostPanel = bellHost; bellHost.Children.Add(bell); bellHost.Children.Add(bellBadge); bellHost.Children.Add(bellPopup); bellPopup.PlacementTarget = bell;
+        searchBox = new TextBox { Name = "NotesSearch", Watermark = "Search notes", Width = 240, Height = 38, MinHeight = 38, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(34, 0, 8, 0) };
+        searchBox.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && notesPage is not null) notesPage.Query = searchBox.Text ?? ""; };
+        var searchGrid = new Grid { Width = 240 }; searchGrid.Children.Add(searchBox); searchGrid.Children.Add(new IconGlyph(IconKind.Search) { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(11, 0, 0, 0), IsHitTestVisible = false, Opacity = .7 });
+        searchHost = searchGrid;
+        var steps = Ui.Horizontal(searchHost, bellHost, previous, datePick, next, todayButton); steps.Spacing = 8;
         Ui.Put(nav, steps, 1);
         // Settings is a gear at the top right, which also closes it again.
         settingsRail = Ui.Ctl("Settings", null, IconKind.Gear, "Settings", ShowSettings); settingsRail.Margin = new Thickness(8, 0, 0, 0);
@@ -534,9 +548,18 @@ public sealed class DashboardWindow : Window
         if (!IsVisible) Reveal?.Invoke();
         if (IsVisible && !Dialogs.Dialogs.OfType<AccountsDialog>().Any()) Dialogs.Show(new AccountsDialog(model));
     }
-    public void SelectTab(bool showWeek) { settingsMode = false; weekMode = showWeek; Refresh(true); }
+    public void SelectTab(bool showWeek) { settingsMode = false; notesMode = false; weekMode = showWeek; Refresh(true); }
+    /// <summary>Shows the Notes page.</summary>
+    public void ShowNotes() { settingsMode = false; weekMode = false; notesMode = true; Refresh(true); }
+    private void ToggleBell()
+    {
+        if (bellPopup.IsOpen) { bellPopup.IsOpen = false; return; }
+        bellPopup.Child = new NotificationsFlyout(model); bellPopup.IsOpen = true;
+    }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
+    // The Notes page is built once and kept: it listens to the model itself, so coming back to it finds the search and the form as they were.
+    private NotesPage NotesPageInstance() { if (notesPage is null) { notesPage = new NotesPage(model) { Query = searchBox.Text ?? "" }; } return notesPage; }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
     private void Refresh(bool refreshWorkspace)
     {
@@ -562,19 +585,24 @@ public sealed class DashboardWindow : Window
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); var glyph = button.Content as IconGlyph ?? (button.Content as Grid)?.Children.OfType<IconGlyph>().FirstOrDefault(); if (glyph is not null) glyph.TintKey = selected ? "Ink" : "Muted"; }
-        Rail(timelineRail, !weekMode && !settingsMode);
+        Rail(timelineRail, !weekMode && !settingsMode && !notesMode);
         Rail(overviewTab, !settingsMode && weekMode);
+        Rail(notesTab, !settingsMode && notesMode);
+        // The bell shows how many reminders have passed without being done.
+        var waiting = model.Notes.AttentionCount; bellBadge.IsVisible = waiting > 0; bellBadgeText.Text = waiting > 99 ? "99+" : waiting.ToString();
+        Avalonia.Automation.AutomationProperties.SetName(bell, waiting > 0 ? $"Notifications, {waiting} need attention" : "Notifications");
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
-        foreach (var control in new Control[] { previous, datePick, next, todayButton }) control.IsVisible = !settingsMode;
+        foreach (var control in new Control[] { previous, datePick, next, todayButton }) control.IsVisible = !settingsMode && !notesMode;
+        bellHostPanel.IsVisible = !settingsMode; searchHost.IsVisible = notesMode && !settingsMode;
         settingsRail.Classes.Set("on", settingsMode);
         // The timeline card and the Selected block card are the Timeline page's alone; the week and the settings fill the workspace.
-        timelinePage.IsVisible = !settingsMode && !weekMode; workspace.IsVisible = settingsMode || weekMode;
-        workspaceTitle.Text = settingsMode ? "Settings" : !weekMode ? "Timeline" : "Week overview";
+        timelinePage.IsVisible = !settingsMode && !weekMode && !notesMode; workspace.IsVisible = settingsMode || weekMode || notesMode;
+        workspaceTitle.Text = settingsMode ? "Settings" : notesMode ? "Notes" : !weekMode ? "Timeline" : "Week overview";
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
-        if (settingsMode ? !renderedSettings : refreshWorkspace)
+        if (settingsMode ? !renderedSettings : notesMode ? !renderedNotes : refreshWorkspace)
         {
-            var timeline = !settingsMode && !weekMode;
+            var timeline = !settingsMode && !weekMode && !notesMode;
             ContentControl host = timeline ? timelineHost : workspace;
             var oldScroll = host.Content is ScrollViewer directOld ? directOld
                 : (host.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
@@ -584,13 +612,13 @@ public sealed class DashboardWindow : Window
                 : oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset;
             // What the other host showed is dropped, so only the page being shown is in the window.
             (timeline ? workspace : timelineHost).Content = null;
-            host.Content = settingsMode ? new SettingsView(model) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
+            host.Content = settingsMode ? new SettingsView(model) : notesMode ? NotesPageInstance() : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
             if (previous is { } offset && host.Content is Control control)
             {
                 var scroll = control is ScrollViewer direct ? direct : control.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();
                 if (scroll is not null) scroll.Tag = offset;
             }
-            renderedWeekMode = weekMode; renderedSettings = settingsMode;
+            renderedWeekMode = weekMode; renderedSettings = settingsMode; renderedNotes = notesMode && !settingsMode;
             renderedDate = model.SelectedDate;
         }
     }
