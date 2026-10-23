@@ -26,7 +26,7 @@ public sealed class MenuAndShellTests
         {
             var items = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).ToList();
             var headers = items.Select(i => i is MenuItem m ? (string?)m.Header : "|").ToList();
-            Assert.Equal(new[] { "Start break", "Continue earlier block", "Test overtime", "|", BuildInfo.Current, "|", "Collapse to tray" }, headers);
+            Assert.Equal(new[] { "Continue earlier block", "Test overtime", "|", BuildInfo.Current, "|", "Collapse to tray" }, headers);
         }
         finally { window.Close(); }
     }
@@ -93,7 +93,7 @@ public sealed class MenuAndShellTests
     public void ReorderableAccountRowsShowAGripAndThePillListDoesNot()
     {
         var model = new TimerModel(Engine());
-        var dashboard = new DashboardWindow(model); dashboard.Show(); var pill = new PillWindow(model); pill.Show(); pill.ToggleExpansion();
+        var dashboard = new DashboardWindow(model); dashboard.Show(); var pill = new PillWindow(model); pill.Show(); pill.ShowPanel();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(); using var pillFrame = pill.CaptureRenderedFrame();

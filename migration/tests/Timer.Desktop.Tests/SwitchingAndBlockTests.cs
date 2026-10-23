@@ -96,9 +96,8 @@ public sealed class SwitchingAndBlockTests
         model.ToggleAccount("Account one"); advance(TimeSpan.FromMinutes(30)); model.ToggleAccount("Account two"); advance(TimeSpan.FromSeconds(15)); model.ToggleAccount("Account one"); Settle(dashboard);
         var button = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ContinuePrevious");
         Assert.True(button.IsVisible); Assert.Contains("Account one", (string)button.Content!);
-        Assert.True(pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillContinue").IsVisible);
         button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
-        Assert.False(button.IsVisible); Assert.False(pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillContinue").IsVisible);
+        Assert.False(button.IsVisible);
         dashboard.Close(); pill.Close();
     }
 

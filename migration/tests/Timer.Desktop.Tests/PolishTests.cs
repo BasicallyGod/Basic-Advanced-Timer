@@ -117,22 +117,6 @@ public sealed class PolishTests
     }
 
     [AvaloniaFact]
-    public void OnABreakThePillsSecondLineSaysSomethingNew()
-    {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var pill = new PillWindow(model); pill.Show();
-        try
-        {
-            if (model.IsTracking) model.TogglePause();
-            model.ToggleBreak(); Settle(pill);
-            var texts = pill.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Where(t => !string.IsNullOrEmpty(t)).ToList();
-            Assert.Equal(1, texts.Count(t => t!.Contains("On break", StringComparison.OrdinalIgnoreCase) || t == "On a break"));
-            Assert.Contains(texts, t => t!.StartsWith("Since ") || t!.StartsWith("Returns to "));
-            Assert.Contains("onBreak", pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillBreak").Classes);
-        }
-        finally { pill.Close(); }
-    }
-
-    [AvaloniaFact]
     public void EveryAccountRowsPlayCircleSitsInTheSameColumn()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();

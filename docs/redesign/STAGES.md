@@ -6,8 +6,8 @@ Defaults agreed: the Light and Dark changes are done inside the app (no shared-p
 
 | Stage | What | Size | State |
 |---|---|---|---|
-| 0 | Groundwork: this folder, a manual-run ZIP on any branch, CLAUDE.md pointer | S | in progress |
-| 1 | The vertical pill (72 by 262), status capsules, mug, click the time, peek and accounts panel, one-item right-click menu. The Full, Compact and Minimal layouts and the pill-style setting go | M | |
+| 0 | Groundwork: this folder, a manual-run ZIP on any branch, CLAUDE.md pointer | S | done (PR 120) |
+| 1 | The vertical pill (72 by 262), status capsules, mug, click the time, peek and accounts panel, one-item right-click menu. The Full, Compact and Minimal layouts and the pill-style setting go | M | in review |
 | 2 | Dashboard shell: 1100 by 720 window, full-height rail, header with date picker, bell and gear, account pop-out, Finish day and Start day, neutral Light palette, slim scrollbars. The old timeline sits inside it for now | M | |
 | 3 | Settings page with Export, Getting started restyled. Hours table, Entries, the theme editor and the move-later setting go | M | |
 | 4 | The new horizontal timeline, view only: gradient blocks, stacking lanes, meeting row, now marker, day totals strip | L | |

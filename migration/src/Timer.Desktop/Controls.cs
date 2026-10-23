@@ -259,13 +259,11 @@ public static class Ui
         collapse.Click += (_, _) => model.RequestHide();
         var versionRule = new Separator { IsVisible = false };
         var collapseRule = new Separator { IsVisible = false };
-        var breakItem = new MenuItem { Name = "BreakMenu" }; breakItem.Click += (_, _) => model.ToggleBreak(); // The minimal pill has no break button, so it is here.
-        var menu = new ContextMenu { ItemsSource = new Control[] { breakItem, continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
+        var menu = new ContextMenu { ItemsSource = new Control[] { continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
         void Sync()
         {
             var developer = model.DeveloperUnlocked;
             overtimeTest.IsChecked = model.OvertimeTest;
-            breakItem.Header = model.IsOnBreak ? "End break" : "Start break";
             overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer;
             var offer = model.ContinuePreviousText; continueItem.IsVisible = offer is not null; if (offer is not null) continueItem.Header = offer;
             // A divider only goes between two things that are showing, so it never sits at the top of the menu or above the only item.
@@ -750,6 +748,8 @@ public sealed class PauseGlyph : Control
     static PauseGlyph() => AffectsRender<PauseGlyph>(GlowProperty);
     public double Glow { get => GetValue(GlowProperty); set => SetValue(GlowProperty, value); }
     public bool Playing { get; set; }
+    /// <summary>A fixed colour for the symbol, for when it sits on a filled circle and must read against that fill rather than the theme's text.</summary>
+    public IBrush? Fixed { get; set; }
     public PauseGlyph()
     {
         Width = Height = 14;
@@ -768,7 +768,7 @@ public sealed class PauseGlyph : Control
         var normal = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
         var tint = this.TryFindResource("Accent", ActualThemeVariant, out var accentValue) ? accentValue as IBrush : normal;
         // The accent can be too faint on a theme's panel, so it is only mixed in as the pointer arrives and the shape itself is what grows.
-        var brush = glow > .5 ? tint : normal;
+        var brush = Fixed ?? (glow > .5 ? tint : normal);
         if (Playing)
         {
             context.DrawRectangle(brush, null, new Rect(2, 1, 4, 12), 1, 1);
