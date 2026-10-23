@@ -93,22 +93,6 @@ public sealed class ToolbarAndTrackingTests
     }
 
     [AvaloniaFact]
-    public void TheBarUnderTheTimelineIsAsTallAsItsButtonsAndLevelWithThem()
-    {
-        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
-        try
-        {
-            Settle(window);
-            var bar = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
-            var add = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "AddTime");
-            Assert.Equal(DashboardWindow.ControlBarHeight, bar.Bounds.Height, 0.5); Assert.Equal(bar.Bounds.Height, add.Bounds.Height, 0.5);
-            double Bottom(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), window)!.Value.Y;
-            Assert.Equal(Bottom(add), Bottom(bar), 0.5);
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
     public void TheEditButtonsShareTheBreakButtonsOutlineAndThePageHasRoomUnderItsTitle()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
@@ -118,7 +102,7 @@ public sealed class ToolbarAndTrackingTests
             foreach (var name in new[] { "AddTime", "UndoEdit" })
             {
                 var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
-                Assert.Contains("quiet", button.Classes); Assert.Contains("toolButton", button.Classes); Assert.Equal(new Thickness(1.5), button.BorderThickness);
+                Assert.Contains("ctl", button.Classes); Assert.Equal(new Thickness(1), button.BorderThickness); Assert.Equal(38, button.Height);
                 Assert.Single(button.GetVisualDescendants().OfType<IconGlyph>()); Assert.NotEmpty(button.GetVisualDescendants().OfType<TextBlock>().Single().Text!);
             }
             var title = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Timeline" && t.Classes.Contains("clock"));

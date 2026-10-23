@@ -148,7 +148,7 @@ public static class Ui
     }
     // The buttons in dialogs wear the same quiet outlined look as the dashboard's (Add time, Undo, Start break). The main action of a dialog,
     // such as Save or Export, has an accent outline so it reads as the one to press.
-    private static readonly string[] MainActions = { "Save", "Export CSV files", "Apply selected fills", "Group selected", "Move blocks" };
+    private static readonly string[] MainActions = { "Save", "Export CSV files" };
     public static Button DialogButton(string text, Action click, string? name = null, bool? main = null)
     {
         var button = Button(text, click, name);
@@ -288,27 +288,38 @@ public static class Ui
         overtimeTest.Click += (_, _) => model.SetOvertimeTest(!model.OvertimeTest);
         // Which build this is, greyed out because it is information, not an action.
         var version = new MenuItem { Header = BuildInfo.Current, IsEnabled = false, IsVisible = false, Name = "BuildVersion" };
-        // Shown for a few minutes after going from one account to another and back, to pick the earlier block up again.
-        var continueItem = new MenuItem { Name = "ContinuePreviousMenu", Header = "Continue earlier block", IsVisible = false };
-        continueItem.Click += (_, _) => model.ContinuePrevious();
         // Tucks the timer away without stopping it. Closing it for good is the cross at the foot of the dashboard's rail.
         var collapse = new MenuItem { Header = "Collapse to tray", Name = "CollapseToTray" };
         collapse.Click += (_, _) => model.RequestHide();
         var versionRule = new Separator { IsVisible = false };
         var collapseRule = new Separator { IsVisible = false };
-        var menu = new ContextMenu { ItemsSource = new Control[] { continueItem, overtimeTest, versionRule, version, collapseRule, collapse } };
+        var menu = new ContextMenu { ItemsSource = new Control[] { overtimeTest, versionRule, version, collapseRule, collapse } };
         void Sync()
         {
             var developer = model.DeveloperUnlocked;
             overtimeTest.IsChecked = model.OvertimeTest;
             overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer;
-            var offer = model.ContinuePreviousText; continueItem.IsVisible = offer is not null; if (offer is not null) continueItem.Header = offer;
             // A divider only goes between two things that are showing, so it never sits at the top of the menu or above the only item.
-            versionRule.IsVisible = (continueItem.IsVisible || overtimeTest.IsVisible) && version.IsVisible;
-            collapseRule.IsVisible = continueItem.IsVisible || overtimeTest.IsVisible || version.IsVisible;
+            versionRule.IsVisible = overtimeTest.IsVisible && version.IsVisible;
+            collapseRule.IsVisible = overtimeTest.IsVisible || version.IsVisible;
         }
         menu.Opened += (_, _) => Sync(); Sync();
         return menu;
+    }
+    /// <summary>
+    /// A button in the dashboard's outlined card look: 38 tall (30 when small), with an icon, words or both. With no words it is a 38 pixel square and
+    /// <paramref name="tip"/> is its tooltip and accessible name. <paramref name="tint"/> names a theme colour for the icon.
+    /// </summary>
+    public static Button Ctl(string name, string? words, IconKind? icon, string tip, Action click, bool small = false, string? tint = null)
+    {
+        var button = Button(words ?? tip, click, name); button.Classes.Add("ctl"); if (small) button.Classes.Add("small");
+        button.Height = small ? 30 : 38;
+        var glyph = icon is { } kind ? new IconGlyph(kind) { TintKey = tint } : null;
+        if (words is null) { button.Width = small ? 30 : 38; button.Padding = new Thickness(0); button.Content = glyph; }
+        else button.Content = glyph is null ? new TextBlock { Text = words, VerticalAlignment = VerticalAlignment.Center }
+            : Horizontal(glyph, new TextBlock { Text = words, VerticalAlignment = VerticalAlignment.Center });
+        ToolTip.SetTip(button, tip); Avalonia.Automation.AutomationProperties.SetName(button, words ?? tip);
+        return button;
     }
     /// <summary>A button that shows only an icon, with its words as the tooltip and the accessible name.</summary>
     public static Button IconButton(IconKind kind, string tip, string name, Action click)
@@ -932,7 +943,7 @@ public sealed class AccountsGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
+public enum IconKind { Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1035,15 +1046,23 @@ public sealed class IconGlyph : Control
             case IconKind.Plus:
                 context.DrawLine(pen, new Point(9, 3.5), new Point(9, 14.5)); context.DrawLine(pen, new Point(3.5, 9), new Point(14.5, 9));
                 break;
+            case IconKind.Note:
+                // A page with a folded corner and two lines of writing: this block has a note.
+                context.DrawGeometry(null, pen, Geometry.Parse("M 5.25,2.25 L 10.5,2.25 L 13.5,5.25 L 13.5,15.75 L 5.25,15.75 Z"));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 10.5,2.25 L 10.5,5.25 L 13.5,5.25 M 7.5,9 L 11.25,9 M 7.5,12 L 11.25,12"));
+                break;
+            case IconKind.Minus:
+                context.DrawLine(pen, new Point(3.5, 9), new Point(14.5, 9));
+                break;
             case IconKind.Undo:
                 // A hook of an arrow curling back to the left.
                 context.DrawGeometry(null, pen, Geometry.Parse("M 7,4.5 L 3.5,8 L 7,11.5"));
                 context.DrawGeometry(null, pen, Geometry.Parse("M 3.8,8 L 10.5,8 Q 14.5,8 14.5,11.2 Q 14.5,14.2 10.5,14.2 L 8.5,14.2"));
                 break;
             case IconKind.Merge:
-                // Two lines running together into one.
-                context.DrawGeometry(null, pen, Geometry.Parse("M 3.5,3.5 L 3.5,6 Q 3.5,9 9,9 M 14.5,3.5 L 14.5,6 Q 14.5,9 9,9 M 9,9 L 9,14.5"));
-                context.DrawGeometry(null, pen, Geometry.Parse("M 6.5,12 L 9,14.5 L 11.5,12"));
+                // Two links of a chain: blocks joined into one.
+                context.DrawGeometry(null, pen, Geometry.Parse("M 7.5,10.5 a 3,3 0 0 0 4.275,0 l 2.25,-2.25 a 3,3 0 0 0 -4.275,-4.275 l -0.75,0.75"));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 10.5,7.5 a 3,3 0 0 0 -4.275,0 l -2.25,2.25 a 3,3 0 0 0 4.275,4.275 l 0.75,-0.75"));
                 break;
             case IconKind.Week:
                 // Three bars of different heights on a baseline: an overview of the week, not a calendar.
@@ -1106,12 +1125,6 @@ public sealed class IconGlyph : Control
                 // Two columns of three dots, the usual sign that something can be picked up and moved, drawn quietly.
                 IBrush quiet = this.TryFindResource("Muted", ActualThemeVariant, out var muted) && muted is IBrush mutedBrush ? mutedBrush : brush;
                 foreach (var x in new[] { 3.0, 7.0 }) foreach (var y in new[] { 4.5, 9.0, 13.5 }) context.DrawEllipse(quiet, null, new Point(x, y), 1.4, 1.4);
-                break;
-            case IconKind.ZoomIn or IconKind.ZoomOut:
-                context.DrawEllipse(null, pen, new Point(8, 8), 6, 6);
-                context.DrawLine(pen, new Point(12.5, 12.5), new Point(16.5, 16.5));
-                context.DrawLine(pen, new Point(5.2, 8), new Point(10.8, 8));
-                if (Kind == IconKind.ZoomIn) context.DrawLine(pen, new Point(8, 5.2), new Point(8, 10.8));
                 break;
             case IconKind.Gear:
             {
@@ -1186,11 +1199,6 @@ public sealed class IconGlyph : Control
                 // An arrow dropping into a tray: save this week out as files.
                 context.DrawLine(pen, new Point(9, 2.5), new Point(9, 11)); context.DrawLine(pen, new Point(5.8, 8), new Point(9, 11.2)); context.DrawLine(pen, new Point(12.2, 8), new Point(9, 11.2));
                 context.DrawLine(pen, new Point(3, 12), new Point(3, 15.5)); context.DrawLine(pen, new Point(3, 15.5), new Point(15, 15.5)); context.DrawLine(pen, new Point(15, 15.5), new Point(15, 12));
-                break;
-            case IconKind.FitDay:
-                // Two arrows pointing away from each other across the corner: the day stretched to fill the space.
-                context.DrawLine(pen, new Point(10, 8), new Point(15, 3)); context.DrawGeometry(null, pen, Geometry.Parse("M 10.6,3 L 15,3 L 15,7.4"));
-                context.DrawLine(pen, new Point(8, 10), new Point(3, 15)); context.DrawGeometry(null, pen, Geometry.Parse("M 7.4,15 L 3,15 L 3,10.6"));
                 break;
         }
     }

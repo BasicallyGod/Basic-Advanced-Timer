@@ -247,7 +247,7 @@ public sealed class WeekDashboardTests
     }
 
     [AvaloniaFact]
-    public void TimelineHasZoomAndFitIconsThatDoWhatTheirTooltipsSay()
+    public void TimelineHasMinusAndPlusZoomButtonsThatDoWhatTheirTooltipsSay()
     {
         var model = Model(false, out var engine, e => { e.Sessions.Add(Row("09:00:00", "60")); e.Sessions.Add(Row("10:30:00", "30")); });
         var window = new DashboardWindow(model); window.Show();
@@ -255,9 +255,9 @@ public sealed class WeekDashboardTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             Button Find(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
-            Assert.Equal("Zoom out", ToolTip.GetTip(Find("TimelineZoomOut"))); Assert.Equal("Fit the day to the window", ToolTip.GetTip(Find("TimelineFit")));
+            Assert.Equal("Zoom out", ToolTip.GetTip(Find("TimelineZoomOut")));
             Assert.Contains("Zoom in", ToolTip.GetTip(Find("TimelineZoomIn"))!.ToString());
-            Assert.All(new[] { "TimelineZoomOut", "TimelineZoomIn", "TimelineFit" }, n => Assert.Null(Find(n).Content as string)); // Icons only, no words.
+            Assert.All(new[] { "TimelineZoomOut", "TimelineZoomIn" }, n => Assert.Null(Find(n).Content as string)); // Icons only, no words.
             var before = model.TimelinePixelsPerHour;
             Find("TimelineZoomIn").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             Assert.Equal(before * 1.2, model.TimelinePixelsPerHour, 3);
@@ -265,22 +265,7 @@ public sealed class WeekDashboardTests
             Assert.Equal(before, model.TimelinePixelsPerHour, 3);
             for (var i = 0; i < 20; i++) model.ZoomTimeline(1, 0, 0);
             Dispatcher.UIThread.RunJobs(); Assert.False(Find("TimelineZoomIn").IsEnabled); Assert.True(Find("TimelineZoomOut").IsEnabled); // At the limit it says so.
-            var viewport = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll").Viewport.Width;
-            Find("TimelineFit").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
-            // 09:00 to 11:00 plus a quarter hour each side is 2.5 hours across the viewport, less the room at either end for the first and last labels.
-            Assert.Equal((viewport - 2 * ReviewViews.TimelineGutter) / 2.5, model.TimelinePixelsPerHour, 1); Assert.Equal(8.75 * model.TimelinePixelsPerHour, model.TimelineOffset!.Value, 1);
         }
         finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void FitUsesTheWorkingDayWhenNothingIsRecordedAndNeverLeavesTheLimits()
-    {
-        var model = Model(false, out _);
-        model.FitTimeline(900); // 09:00 to 17:00 with padding is 8.5 hours, across the width less the room at either end.
-        Assert.Equal((900 - 2 * ReviewViews.TimelineGutter) / 8.5, model.TimelinePixelsPerHour, 3);
-        model.FitTimeline(100000); Assert.Equal(640, model.TimelinePixelsPerHour);
-        model.FitTimeline(10); Assert.Equal(60, model.TimelinePixelsPerHour);
-        model.FitTimeline(0); Assert.True(model.TimelinePixelsPerHour >= 60); // No viewport yet: a sensible size, not a crash.
     }
 }

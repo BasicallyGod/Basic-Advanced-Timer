@@ -35,17 +35,17 @@ public sealed class DialogTests
         var addTime = Find<Button>(dashboard, "AddTime");
         var centre = addTime.TranslatePoint(new Point(addTime.Bounds.Width / 2, addTime.Bounds.Height / 2), dashboard)!.Value;
         Assert.True(dashboard.InputHitTest(centre) is Visual before && before.GetSelfAndVisualAncestors().Contains(addTime)); // Reachable before.
-        model.OpenEntry(engine.Sessions[0]); Settle(dashboard);
+        model.OpenGap(); Settle(dashboard);
         var entry = Assert.Single(dashboard.Dialogs.Dialogs.OfType<EntryDialog>());
         Assert.True(dashboard.Dialogs.Any);
         Assert.False(dashboard.InputHitTest(centre) is Visual after && after.GetSelfAndVisualAncestors().Contains(addTime)); // The dialog layer takes the click.
         Assert.NotNull(Find<Border>(dashboard, "DialogCard")); Assert.NotNull(Find<Border>(dashboard, "DialogScrim"));
         // Opening it again for the same entry does not stack a second one.
-        model.OpenEntry(engine.Sessions[0]); Settle(dashboard); Assert.Single(dashboard.Dialogs.Dialogs);
+        model.OpenGap(); Settle(dashboard); Assert.Single(dashboard.Dialogs.Dialogs);
         Find<Button>(dashboard, "CloseDialog").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
         Assert.False(entry.IsVisible); Assert.False(dashboard.Dialogs.Any);
         Assert.True(dashboard.InputHitTest(centre) is Visual back && back.GetSelfAndVisualAncestors().Contains(addTime)); // Clickable again.
-        model.OpenEntry(engine.Sessions[0]); Settle(dashboard); Assert.True(dashboard.Dialogs.Any);
+        model.OpenGap(); Settle(dashboard); Assert.True(dashboard.Dialogs.Any);
         dashboard.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null); Settle(dashboard);
         Assert.False(dashboard.Dialogs.Any); // Escape took the dialog away first.
         dashboard.Close();
@@ -56,10 +56,10 @@ public sealed class DialogTests
     {
         var model = Model(out var engine); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         model.ToggleSelection(new[] { engine.Sessions[0] });
-        dashboard.Dialogs.Show(new TidyDialog(model)); Settle(dashboard);
+        dashboard.Dialogs.Show(new EntryDialog(model, engine.Sessions[0].To, engine.Sessions[0].To.AddMinutes(30))); Settle(dashboard);
         dashboard.Dialogs.Show(new AccountsDialog(model)); Settle(dashboard);
         Assert.Equal(2, dashboard.Dialogs.Dialogs.Count);
-        dashboard.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null); Assert.IsType<TidyDialog>(Assert.Single(dashboard.Dialogs.Dialogs));
+        dashboard.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null); Assert.IsType<EntryDialog>(Assert.Single(dashboard.Dialogs.Dialogs));
         Assert.Single(model.SelectedRows); // Still selected.
         dashboard.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null); Assert.False(dashboard.Dialogs.Any); Assert.Single(model.SelectedRows);
         dashboard.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null); Assert.Empty(model.SelectedRows); // Now it clears the selection.
@@ -76,8 +76,8 @@ public sealed class DialogTests
         model.ExplainRunning(); Settle(dashboard); // "This block is still recording..."
         Assert.True(bar.IsVisible); Assert.Contains("Still recording", Find<TextBlock>(dashboard, "MessageText").Text);
         Assert.Equal(addTime, Top("AddTime"), 0.5); Assert.Equal(undo, Top("UndoEdit"), 0.5); // Nothing moved.
-        var barBottom = bar.TranslatePoint(new Point(0, bar.Bounds.Height), dashboard)!.Value.Y;
-        Assert.True(barBottom <= addTime, $"The message ends at {barBottom} but the buttons start at {addTime}."); // Above the buttons, not over them.
+        var barTop = bar.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y;
+        Assert.True(barTop > addTime, $"The message starts at {barTop}, below the buttons at {addTime}: it floats over the lowest part of the page."); // Over the Selected block card, not the timeline.
         Find<Button>(dashboard, "DismissMessage").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
         Assert.False(bar.IsVisible); Assert.Null(model.EditError);
         dashboard.Close();
@@ -157,13 +157,12 @@ public sealed class DialogTests
     public void ButtonsInDialogsWearTheDashboardsOutlinedLookAndTheMainActionHasAnAccentOutline()
     {
         var model = Model(out var engine); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
-        dashboard.Dialogs.Show(new EntryDialog(model, engine.Sessions[0], engine.Sessions[0].From, engine.Sessions[0].To)); Settle(dashboard);
-        var save = Find<Button>(dashboard, "SaveEntry"); var delete = Find<Button>(dashboard, "DeleteEntry");
+        dashboard.Dialogs.Show(new EntryDialog(model, engine.Sessions[0].To, engine.Sessions[0].To.AddMinutes(30))); Settle(dashboard);
+        var save = Find<Button>(dashboard, "SaveEntry");
         var cancel = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Cancel");
-        foreach (var button in new[] { save, delete, cancel }) Assert.True(button.Classes.Contains("toolButton") && button.Classes.Contains("quiet"), $"{button.Content} is not in the dashboard's style.");
-        Assert.Contains("mainAction", save.Classes); Assert.DoesNotContain("mainAction", cancel.Classes); Assert.DoesNotContain("mainAction", delete.Classes);
-        var addTime = Find<Button>(dashboard, "AddTime"); // The dashboard's own button shares the class, so the two match.
-        Assert.Contains("toolButton", addTime.Classes);
+        foreach (var button in new[] { save, cancel }) Assert.True(button.Classes.Contains("toolButton") && button.Classes.Contains("quiet"), $"{button.Content} is not in the dashboard's style.");
+        Assert.Contains("mainAction", save.Classes); Assert.DoesNotContain("mainAction", cancel.Classes);
+        Assert.Contains("ctl", Find<Button>(dashboard, "AddTime").Classes); // The dashboard's own buttons have their own outlined card look.
         dashboard.Dialogs.CloseTop(); dashboard.Close();
     }
 }

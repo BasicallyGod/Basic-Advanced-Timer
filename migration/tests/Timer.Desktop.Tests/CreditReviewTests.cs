@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
@@ -63,19 +64,12 @@ public sealed class CreditReviewTests
         engine.Sessions[1] = engine.Sessions[1] with { Account = "Break" }; Assert.Empty(editor.TidyCandidates(Day));
     }
     [AvaloniaFact]
-    public void NativeReviewControlsTidyMergeAndExport()
+    public void MergedBlocksCanBeExportedAndTheWeekOverviewShowsThem()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("10:00:00", "30"), Row("10:33:00", "27") });
         var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
-        var tidy = new TidyDialog(model).Open(dashboard);
-        Dispatcher.UIThread.RunJobs(); using var tidyFrame = tidy.CaptureRenderedFrame();
-        foreach (var box in tidy.GetVisualDescendants().OfType<ComboBox>()) box.SelectedIndex = 1;
-        Capture(tidy, "tidy-day-review");
-        Find<Button>(tidy, "ApplyTidy").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert.Equal(3, engine.Sessions.Count);
-        model.ToggleSelection(engine.Sessions.ToArray()); Assert.True(model.MergeSelection()); // Blocks are merged on the timeline now.
-        var group = Assert.Single(model.Editor.Entries(Day, Day.AddDays(1)), e => e.GroupId is not null).GroupId!;
-        var grouped = new GroupDialog(model, group).Open(dashboard); Capture(grouped, "group-editor"); grouped.Close();
+        model.ToggleSelection(engine.Sessions.ToArray()); Assert.True(model.MergeSelection());
+        Assert.Single(model.Editor.Entries(Day, Day.AddDays(1)), e => e.GroupId is not null);
         Assert.True(model.ExportWeek()); // The export itself is in Settings, Export.
         dashboard.SelectTab(true); Capture(dashboard, "grouped-credit-week");
         Assert.NotNull(model.ExportPath); Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Detail.csv")));
@@ -103,115 +97,112 @@ public sealed class CreditReviewTests
         Assert.Equal(57, engine.Sessions.Sum(s => decimal.Parse(s.Minutes, CultureInfo.InvariantCulture))); dashboard.Close();
     }
     [AvaloniaFact]
-    public void DashboardHasRoundedSurfaceAndSlimScrollbarStillDrags()
+    public void DashboardHasRoundedSurfaceAndTheTimelineScrollsAlongTheDayWithNoScrollBar()
     {
         var model = TimerModel.CreateDemo(() => Day.AddHours(12)); var dashboard = new DashboardWindow(model); dashboard.Show();
-        Capture(dashboard, "dashboard-rounded-slim-scrollbars");
+        Capture(dashboard, "dashboard-rounded");
         var surface = Find<Border>(dashboard, "DashboardSurface"); Assert.Equal(new CornerRadius(20), surface.CornerRadius); Assert.True(surface.ClipToBounds);
         var scroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
-        var bar = scroll.GetVisualDescendants().OfType<ScrollBar>().Single(b => b.Orientation == Avalonia.Layout.Orientation.Horizontal);
-        Assert.InRange(bar.Bounds.Height, 9, 11);
-        Assert.Empty(bar.GetVisualDescendants().OfType<RepeatButton>());
-        var thumb = bar.GetVisualDescendants().OfType<Thumb>().Single();
-        var point = thumb.TranslatePoint(new Point(thumb.Bounds.Width / 2, thumb.Bounds.Height / 2), dashboard)!.Value;
-        var old = scroll.Offset.X; dashboard.MouseDown(point, MouseButton.Left); dashboard.MouseMove(point + new Vector(20, 0)); dashboard.MouseUp(point + new Vector(20, 0), MouseButton.Left);
+        Assert.Equal(ScrollBarVisibility.Hidden, scroll.HorizontalScrollBarVisibility); // Scrolling is implied: the wheel slides along the day.
+        Assert.True(scroll.Extent.Width > scroll.Viewport.Width);
+        var point = scroll.TranslatePoint(new Point(scroll.Bounds.Width / 2, scroll.Bounds.Height / 2), dashboard)!.Value;
+        var old = scroll.Offset.X; dashboard.MouseWheel(point, new Vector(0, -3)); Dispatcher.UIThread.RunJobs();
         Assert.True(scroll.Offset.X > old); dashboard.Close();
     }
 
     [AvaloniaFact]
-    public void TheSelectionStripSitsAboveTheButtonsAndNamesTheSpecificMergeProblem()
+    public void TheSelectedBlockCardSaysWhatIsSelectedAndNamesTheSpecificMergeProblem()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
         engine.Sessions.Add(Row("11:00:00", "30") with { Account = "Other account" });
         var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            var strip = Find<SelectionStrip>(dashboard, "SelectionStrip"); var tools = Find<Button>(dashboard, "AddTime");
-            string Count() => Find<TextBlock>(dashboard, "SelectionCount").Text!; string Note() => Find<TextBlock>(dashboard, "SelectionNote").Text!;
-            Assert.False(strip.IsVisible);
+            string Title() => Find<TextBlock>(dashboard, "SelectedTitle").Text!; string Note() => Find<TextBlock>(dashboard, "SelectedNote").Text!;
+            Assert.Equal("Selected block", Title()); Assert.Contains("Nothing is selected", Find<TextBlock>(dashboard, "SelectedEmpty").Text);
             model.ToggleSelection(new[] { engine.Sessions[0] }); dashboard.UpdateLayout();
-            Assert.True(strip.IsVisible); Assert.Equal("1 block selected", Count()); Assert.Contains("Select another block", Note());
-            var stripBottom = strip.TranslatePoint(new Point(0, strip.Bounds.Height), dashboard)!.Value.Y; var toolsTop = tools.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y;
-            Assert.True(stripBottom <= toolsTop + 0.5, "The strip is in the layout above the buttons, not floating over them.");
+            Assert.Equal("Selected block", Title()); Assert.Equal("09:00:00", Find<TextBox>(dashboard, "SelectedStart").Text);
             model.ToggleSelection(new[] { engine.Sessions[1] }); dashboard.UpdateLayout();
-            Assert.Equal("2 blocks selected", Count()); Assert.Contains("Merge joins them", Note());
+            Assert.Equal("2 blocks selected", Title()); Assert.Contains("Merge joins them", Note());
+            Assert.True(Find<Button>(dashboard, "MergeSelected").IsEnabled);
             model.ToggleSelection(new[] { engine.Sessions[2] }); dashboard.UpdateLayout();
-            Assert.Equal("3 blocks selected", Count()); Assert.Contains("same account", Note());
+            Assert.Equal("3 blocks selected", Title()); Assert.Contains("same account", Note());
+            Assert.False(Find<Button>(dashboard, "MergeSelected").IsEnabled);
             Find<Button>(dashboard, "ClearSelection").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); dashboard.UpdateLayout();
-            Assert.Empty(model.SelectedRows); Assert.False(strip.IsVisible);
+            Assert.Empty(model.SelectedRows); Assert.Equal("Selected block", Title());
         }
         finally { dashboard.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheToolbarButtonsNeverRunUnderTheZoomControls()
+    public void TheBarUnderTheTimelineHasAddTimeAndUndoThenTheFiguresThenZoomInOneRow()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
         var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            var zoom = Find<Border>(dashboard, "TimelineControls");
-            foreach (var selection in new[] { 0, 1, 2 })
-            {
-                model.ClearSelection(); for (var n = 0; n < selection; n++) model.ToggleSelection(new[] { engine.Sessions[n] }); dashboard.UpdateLayout();
-                Capture(dashboard, "toolbar-selection-" + selection);
-                var zoomLeft = zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.X;
-                foreach (var name in new[] { "AddTime", "UndoEdit", "MergeSelected", "EditSelected" })
-                {
-                    var button = dashboard.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == name);
-                    if (!button.IsVisible) continue;
-                    var right = button.TranslatePoint(new Point(button.Bounds.Width, 0), dashboard)!.Value.X;
-                    Assert.True(right <= zoomLeft + 0.5, $"{name} ends at {right} but the zoom controls start at {zoomLeft} with {selection} selected.");
-                }
-            }
+            Capture(dashboard, "timeline-bar");
+            Rect Box(Control c) => new(c.TranslatePoint(default, dashboard)!.Value, c.Bounds.Size);
+            var add = Box(Find<Button>(dashboard, "AddTime")); var undo = Box(Find<Button>(dashboard, "UndoEdit"));
+            var figures = Box(Find<StackPanel>(dashboard, "DayTotals")); var zoom = Box(Find<StackPanel>(dashboard, "TimelineControls"));
+            Assert.True(add.Right <= undo.Left + .5 && undo.Right <= figures.Left + .5 && figures.Right <= zoom.Left + .5, "Add time, Undo, the figures and the zoom run left to right without overlapping.");
+            foreach (var box in new[] { undo, figures, zoom }) Assert.True(Math.Abs(box.Center.Y - add.Center.Y) < 12, "They share one row.");
+            Assert.Equal(2, zoom.Width > 0 ? Find<StackPanel>(dashboard, "TimelineControls").Children.Count : 0); // Zoom out and zoom in, as in the mock.
         }
         finally { dashboard.Close(); }
     }
 
     [AvaloniaFact]
-    public void ClickSelectsABlockAndTheEditButtonOpensTheSelectedOne()
+    public void AClickSelectsOneBlockAndShiftClickAddsAnotherOrTakesOneOut()
     {
-        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30"), Row("11:00:00", "30") });
         var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
-        var opened = new List<SessionRow?>(); model.EntryRequested += (row, _, _) => opened.Add(row);
-        Point Centre(int index) { var card = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + index); return card.TranslatePoint(new Point(card.Width / 2, card.Height / 2), dashboard)!.Value; }
-        Capture(dashboard, "click-select"); dashboard.UpdateLayout();
-        Assert.False(Find<Button>(dashboard, "EditSelected").IsVisible);
-        var first = Centre(0);
-        dashboard.MouseDown(first, MouseButton.Left); dashboard.MouseUp(first, MouseButton.Left);
-        Assert.Same(engine.Sessions[0], Assert.Single(model.SelectedRows)); Assert.Empty(opened);
-        dashboard.UpdateLayout(); var edit = Find<Button>(dashboard, "EditSelected"); Assert.True(edit.IsVisible);
-        edit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert.Same(engine.Sessions[0], Assert.Single(opened));
-        model.ToggleSelection(new[] { engine.Sessions[1] }); // A second block makes it a pair, so there is nothing single to edit.
-        dashboard.UpdateLayout(); Assert.Equal(2, model.SelectedRows.Count); Assert.False(Find<Button>(dashboard, "EditSelected").IsVisible);
-        dashboard.Close();
+        try
+        {
+            Capture(dashboard, "click-select");
+            void Click(int index, RawInputModifiers modifiers = RawInputModifiers.None)
+            {
+                var card = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + index);
+                var point = card.TranslatePoint(new Point(card.Width / 2, card.Height / 2), dashboard)!.Value;
+                dashboard.MouseDown(point, MouseButton.Left, modifiers); dashboard.MouseUp(point, MouseButton.Left, modifiers);
+            }
+            Click(0); Assert.Same(engine.Sessions[0], Assert.Single(model.SelectedRows));
+            Click(1); Assert.Same(engine.Sessions[1], Assert.Single(model.SelectedRows)); // A plain click replaces the selection.
+            Click(2, RawInputModifiers.Shift); Assert.Equal(2, model.SelectedRows.Count); // Shift adds.
+            Click(1, RawInputModifiers.Shift); Assert.Same(engine.Sessions[2], Assert.Single(model.SelectedRows)); // And takes one out.
+            Click(2); Assert.Empty(model.SelectedRows); // A plain click on the only selected block clears it.
+            Click(0); Click(1, RawInputModifiers.Shift); Click(2); Assert.Same(engine.Sessions[2], Assert.Single(model.SelectedRows)); // A plain click on one of several leaves just that one.
+        }
+        finally { dashboard.Close(); }
     }
 
     [AvaloniaFact]
-    public void ClickSelectsWithoutDraggingAndToolbarAndContextMenuMerge()
+    public void ShiftClickSelectsAPairThatTheCardAndTheContextMenuMerge()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:00:00", "30") });
         var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
         var csv = model.Editor.SessionsCsv;
-        void Select(int index)
+        void Select(int index, bool shift)
         {
             Capture(dashboard, "merge-selection");
             var card = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + index);
             var point = card.TranslatePoint(new Point(card.Width / 2, card.Height / 2), dashboard)!.Value;
-            dashboard.MouseDown(point, MouseButton.Left);
-            dashboard.MouseUp(point, MouseButton.Left);
+            var keys = shift ? RawInputModifiers.Shift : RawInputModifiers.None;
+            dashboard.MouseDown(point, MouseButton.Left, keys);
+            dashboard.MouseUp(point, MouseButton.Left, keys);
         }
-        Select(0); Select(1); Assert.Equal(2, model.SelectedRows.Count); Assert.True(model.CanMergeSelection);
+        Select(0, false); Select(1, true); Assert.Equal(2, model.SelectedRows.Count); Assert.True(model.CanMergeSelection);
         model.ToggleSelection(new[] { engine.Sessions[1] }); Assert.Single(model.SelectedRows); Assert.False(model.CanMergeSelection); model.ToggleSelection(new[] { engine.Sessions[1] });
         Capture(dashboard, "merge-two-selected"); Assert.Equal(csv, model.Editor.SessionsCsv);
         Find<Button>(dashboard, "MergeSelected").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Empty(model.SelectedRows); Assert.Single(model.Editor.Entries(Day, Day.AddDays(1)).Where(e => e.GroupId is not null));
+        Assert.Equal("Merged.", model.Notice); Assert.True(model.NoticeHasUndo);
         Capture(dashboard, "merge-combined-selection");
         var groupCard = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is ReviewEntry);
         var p = groupCard.TranslatePoint(new Point(groupCard.Width / 2, 35), dashboard)!.Value;
         dashboard.MouseDown(p, MouseButton.Left); dashboard.MouseUp(p, MouseButton.Left);
-        Select(2); Assert.True(model.CanMergeSelection); Capture(dashboard, "merge-group-and-block");
+        Assert.Equal("Merged block", Find<TextBlock>(dashboard, "SelectedTitle").Text);
+        Select(2, true); Assert.True(model.CanMergeSelection); Capture(dashboard, "merge-group-and-block");
         var last = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry2");
         var menu = last.ContextMenu!.ItemsSource!.OfType<MenuItem>().Single(i => i.Name == "MergeSelectedMenu");
         Assert.True(menu.IsEnabled); menu.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));

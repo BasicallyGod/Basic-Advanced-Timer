@@ -39,34 +39,14 @@ public sealed class TimerModel : INotifyPropertyChanged
         TimelineOffset = OffsetKeeping(offset, pointerX, previous, target);
         Notify();
     }
-    /// <summary>Where the current zoom sits from 0 (most zoomed out) to 1, on the logarithmic scale a zoom slider should use.</summary>
-    public double TimelineZoomFraction => Math.Log(TimelinePixelsPerHour / MinTimelineScale) / Math.Log(MaxTimelineScale / MinTimelineScale);
-    public static double ScaleAt(double fraction) => MinTimelineScale * Math.Pow(MaxTimelineScale / MinTimelineScale, Math.Clamp(fraction, 0, 1));
-    /// <summary>Zooms and scrolls so the day's recorded time, with a little room either side, fills the width given.</summary>
-    public void FitTimeline(double viewportWidth)
-    {
-        var day = SelectedDate.Date;
-        var spans = Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero).Select(s => (s.From, s.To)).ToList();
-        if (Engine.Active is { } active && active.Start < day.AddDays(1) && Engine.Now > day) spans.Add((active.Start < day ? day : active.Start, Engine.Now < day.AddDays(1) ? Engine.Now : day.AddDays(1)));
-        double start, end;
-        if (spans.Count > 0) { start = (spans.Min(s => s.From) - day).TotalHours; end = (spans.Max(s => s.To) - day).TotalHours; }
-        else { var plan = Engine.Plan(day); start = plan.Working ? (plan.Start - day).TotalHours : 9; end = plan.Working ? (plan.End - day).TotalHours : 17; }
-        var padding = 0.25; start = Math.Max(0, start - padding); end = Math.Min(24, end + padding);
-        var hours = Math.Max(end - start, 1.0);
-        TimelinePixelsPerHour = Math.Clamp((viewportWidth > 0 ? viewportWidth - 2 * ReviewViews.TimelineGutter : 800) / hours, 60, 640);
-        TimelineOffset = start * TimelinePixelsPerHour;
-        Notify();
-    }
     public TrackingEngine Engine { get; }
     public LedgerEditor Editor { get; }
     public string? EditError { get; private set; }
-    public event Action<SessionRow?, DateTime, DateTime>? EntryRequested;
-    public event Action<string>? GroupRequested;
-    public event Action? TidyRequested;
+    /// <summary>Asks for the Add time dialog, with the start and end it opens on.</summary>
+    public event Action<DateTime, DateTime>? EntryRequested;
     public event Action? AccountsRequested;
     /// <summary>Asks for the accounts and budgets dialog. The dashboard shows it, and comes up first if only the pill is showing.</summary>
     public void OpenAccounts() => AccountsRequested?.Invoke();
-    public void OpenTidy() => TidyRequested?.Invoke();
     public string? ExportPath { get; private set; }
     private readonly HashSet<SessionRow> selectedRows = new(ReferenceEqualityComparer.Instance);
     public IReadOnlyCollection<SessionRow> SelectedRows => selectedRows;
@@ -79,8 +59,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string MergeHint => SelectedBlockCount < 2 ? "Select two or more blocks to merge them." : CanMergeSelection
         ? (Editor.MergeGapMinutes(selectedRows.ToArray()) is var gapMinutes and > 0 ? $"Press Merge to join them into one block. This adds {Format(TimeSpan.FromMinutes((double)gapMinutes))} of gap time." : "Press Merge to join them into one block.")
         : "To merge, blocks must share an account and day, with only gaps between.";
-    /// <summary>How many blocks are selected, for the selection strip. Null with no selection.</summary>
-    public string? SelectionCountText => SelectedBlockCount is var count and > 0 ? $"{count} {(count == 1 ? "block" : "blocks")} selected" : null;
     /// <summary>One short sentence under the count: what is needed, or what Merge will do. It names the specific problem when blocks cannot be merged.</summary>
     public string? SelectionNote
     {
@@ -103,18 +81,43 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
         var remove = IsSelected(rows);
         foreach (var row in rows) { if (remove) selectedRows.Remove(row); else selectedRows.Add(row); }
-        EditError = null; Notify();
+        EditError = null; Notice = null; Notify();
     }
-    // Clicking a block selects it, and the Edit button (or Enter) opens the one that is selected, so there is no double-click to tell apart from two clicks.
-    private ReviewEntry? SelectedEntry => SelectedBlockCount == 1
-        ? Editor.Entries(WeekStart(SelectedDate), WeekStart(SelectedDate).AddDays(7)).FirstOrDefault(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains)) : null;
-    public bool CanEditSelection => SelectedEntry is not null;
-    /// <summary>The button's word, which is Inspect for a group of entries.</summary>
-    public string EditText => SelectedEntry?.GroupId is not null ? "Inspect" : "Edit";
-    public void EditSelection()
+    /// <summary>
+    /// A click on a block. A plain click selects just that block, and clicking the only selected block again clears the selection; with Shift
+    /// (<paramref name="additive"/>) the block is added to the selection or taken out of it, which is how two blocks are picked to merge.
+    /// </summary>
+    public void SelectBlock(IReadOnlyList<SessionRow> rows, bool additive)
     {
-        if (SelectedEntry is not { } entry) return;
-        if (entry.GroupId is { } group) OpenGroup(group); else OpenEntry(entry.Sources[0]);
+        if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
+        if (additive) { ToggleSelection(rows); return; }
+        var onlyThis = SelectedBlockCount == 1 && IsSelected(rows);
+        selectedRows.Clear();
+        if (!onlyThis) foreach (var row in rows) selectedRows.Add(row);
+        EditError = null; Notice = null; Notify();
+    }
+    /// <summary>A block as the Selected block card shows it: one entry, or a merged group of entries from its first start to its last end.</summary>
+    public sealed record SelectedBlock(string Account, DateTime Start, DateTime End, decimal Minutes, string Note, SessionRow? Row, ReviewEntry? Group)
+    {
+        public bool IsGroup => Group is not null;
+        public IReadOnlyList<SessionRow> Rows => Group?.Sources ?? new[] { Row! };
+    }
+    /// <summary>The selected blocks in time order. Entries of a merged group count as the one block.</summary>
+    public IReadOnlyList<SelectedBlock> SelectedBlocks
+    {
+        get
+        {
+            if (selectedRows.Count == 0) return Array.Empty<SelectedBlock>();
+            var week = WeekStart(SelectedDate);
+            var blocks = new List<SelectedBlock>();
+            foreach (var entry in Editor.Entries(week, week.AddDays(7)).Where(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains)))
+            {
+                var timed = entry.Sources.Where(r => r.Duration > TimeSpan.Zero).ToArray(); if (timed.Length == 0) continue;
+                blocks.Add(entry.GroupId is null ? new(entry.Account, timed[0].From, timed[0].To, entry.Minutes, entry.Note, entry.Sources[0], null)
+                    : new(entry.Account, timed.Min(r => r.From), timed.Max(r => r.To), entry.Minutes, entry.Note, null, entry));
+            }
+            return blocks.OrderBy(b => b.Start).ToArray();
+        }
     }
     public void ClearSelection() { if (selectedRows.Count == 0) return; selectedRows.Clear(); Notify(); }
     // After a quick slip from one account to another and back, the earlier block can be picked up again. Blocks in a group are left alone, since
@@ -177,7 +180,10 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (!CanMergeSelection) { EditError = MergeHint; Notify(); return false; }
         var rows = Engine.Sessions.Where(selectedRows.Contains).ToArray();
-        return ChangeLog(() => { Editor.Group(rows); selectedRows.Clear(); });
+        var gap = Editor.MergeGapMinutes(rows);
+        var done = ChangeLog(() => { Editor.Group(rows); selectedRows.Clear(); });
+        if (done) SayDone(gap > 0 ? $"Merged, with {Format(TimeSpan.FromMinutes((double)gap))} of gap time added." : "Merged.");
+        return done;
     }
     private StoreSettings preferences;
     private readonly TimerStore? store;
@@ -242,7 +248,12 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string Theme => preferences.Theme;
     public string? LastError { get; private set; }
     /// <summary>A one-off message for the footer, such as the note that old timesheet files are not used.</summary>
-    public string? Notice { get; set; }
+    private string? notice;
+    public string? Notice { get => notice; set { notice = value; NoticeHasUndo = false; } }
+    /// <summary>Whether the note on show is for an edit that Undo takes back, so the message offers an Undo button.</summary>
+    public bool NoticeHasUndo { get; private set; }
+    /// <summary>Says that something was done, with an Undo beside the words.</summary>
+    private void SayDone(string text) { Notice = text; NoticeHasUndo = true; Notify(); }
     public bool IsDemo { get; private set; }
     public bool Persistent => store is not null;
     public TimeSpan Elapsed => Engine.Totals(Engine.Now).Elapsed;
@@ -269,6 +280,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (Engine.ContinuedBlock is { } block) { selectedRows.Clear(); Notice = $"Carrying on with the {Label(block.Account)} block from {block.From:HH:mm}."; }
     }
     // The block being recorded has no ledger row yet, so it cannot be dragged or edited until tracking stops.
+    /// <summary>Shows a refused edit in the message bar, such as a time that was typed wrongly in the Selected block card.</summary>
+    public void Refuse(string message) { EditError = message; Notice = null; Notify(); }
     public void ExplainRunning() { EditError = "Still recording. Stop tracking to edit."; Notify(); }
     public void TogglePause()
     {
@@ -472,7 +485,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Adds or removes minutes on an account for a day, as one undoable edit.</summary>
     /// <summary>Moves entries to another account as one undoable edit. Every selected block moves when the one clicked is selected.</summary>
     public bool MoveEntries(IReadOnlyList<SessionRow> rows, string account)
-        => ChangeLog(() => { ValidateAccount(account); Editor.Reassign(rows, account); });
+        => ChangeLog(() => KeepingSelection(rows, () => { ValidateAccount(account); Editor.Reassign(rows, account); }));
     /// <summary>The colour to draw an account's blocks, dots and bars in: very dark colours lifted so they show, then softened if the theme asks for it.</summary>
     public string BlockColour(string accountColour) => BlockLook(accountColour).Fill;
     /// <summary>The colour for an account's slice in a chart or its legend dot. A dark theme tints its blocks down into the surface, which makes thin slices vanish, so charts there use the account's own colour (the block's edge).</summary>
@@ -567,7 +580,6 @@ public sealed class TimerModel : INotifyPropertyChanged
         foreach (var day in Engine.DayStarts.Where(p => p.Key >= Engine.Now.Date && Engine.Schedule.Scheduled(p.Key) is { Working: true } plan && p.Value >= plan.Start).Select(p => p.Key).ToList()) Engine.DayStarts.Remove(day);
         Save(); Notify();
     }
-    public void OpenEntry(SessionRow row) => EntryRequested?.Invoke(row, row.From, row.To);
     public void OpenGap(DateTime? at = null)
     {
         var day = SelectedDate;
@@ -585,13 +597,21 @@ public sealed class TimerModel : INotifyPropertyChanged
         var next = occupied.Where(s => s.Start > start).Select(s => s.Start).DefaultIfEmpty(limit).Min();
         var end = new[] { start.AddMinutes(30), next, limit, day.AddDays(1) }.Min();
         if (end <= start) { EditError = "There is no free recorded-time gap here."; Notify(); return; }
-        EditError = null; EntryRequested?.Invoke(null, start, end);
+        EditError = null; EntryRequested?.Invoke(start, end);
     }
-    public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note, bool allowOverlap = false)
-        => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note, allowOverlap); });
-    /// <summary>What lengthening a block to a later end would move, or an explanation when it cannot be done. Nothing is changed.</summary>
-    public IReadOnlyList<TimelineChange> PlanExtend(SessionRow row, DateTime end) => Editor.PlanExtend(row, end);
-    public bool ExtendEntry(SessionRow row, DateTime end, string note) => ChangeLog(() => Editor.ExtendEnd(row, end, note));
+    public bool AddEntry(string account, DateTime start, DateTime end, string note)
+        => ChangeLog(() => { ValidateAccount(account); Editor.Add(account, start, end, note); });
+    /// <summary>Changes a block's account, times or note in place. Blocks may overlap (they stack on the timeline), so only the block being recorded can refuse it.</summary>
+    public bool EditEntry(SessionRow row, string account, DateTime start, DateTime end, string note)
+        => ChangeLog(() => KeepingSelection(new[] { row }, () => { ValidateAccount(account); Editor.Edit(row, account, start, end, note, allowOverlap: true); }));
+    // An edit replaces a block's row with a new one in the same place, so the selection is moved over to it: editing a selected block leaves it selected.
+    private void KeepingSelection(IReadOnlyList<SessionRow> rows, Action change)
+    {
+        var places = rows.Where(selectedRows.Contains).Select(r => Engine.Sessions.IndexOf(r)).Where(i => i >= 0).ToList();
+        change();
+        foreach (var row in rows) selectedRows.Remove(row);
+        foreach (var place in places) if (place < Engine.Sessions.Count) selectedRows.Add(Engine.Sessions[place]);
+    }
     public bool DragEntry(SessionRow row, DateTime start, DateTime end, bool insert)
         => ChangeLog(() => Editor.EditTimeline(row, start, end, insert));
     /// <summary>Moves an account to a new place among the accounts (hidden ones keep their own places).</summary>
@@ -617,14 +637,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         var rows = Engine.Sessions.Where(selectedRows.Contains).ToArray();
         if (rows.Length == 0) return false;
-        return ChangeLog(() => { Editor.Delete(rows); selectedRows.Clear(); });
+        var done = ChangeLog(() => { Editor.Delete(rows); selectedRows.Clear(); });
+        if (done) SayDone(rows.Length > 1 ? $"Deleted {rows.Length} blocks." : "Deleted.");
+        return done;
     }
     /// <summary>Deletes the given entries as one undoable edit.</summary>
     public bool DeleteEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Delete(rows));
-    public bool UndoEdit() => ChangeLog(Editor.Undo);
-    public void OpenGroup(string id) => GroupRequested?.Invoke(id);
-    public bool UngroupEntries(string id) => ChangeLog(() => Editor.Ungroup(id));
-    public bool TidyDay(IReadOnlyList<GapChoice> choices, int limit) => ChangeLog(() => Editor.Tidy(choices, limit));
+    public bool UndoEdit() { var done = ChangeLog(Editor.Undo); if (done) { Notice = "Undone."; Notify(); } return done; }
+    public bool UngroupEntries(string id) { var done = ChangeLog(() => Editor.Ungroup(id)); if (done) SayDone("Unmerged. The blocks keep their own times."); return done; }
     /// <summary>Exports the week or the whole month that the given day falls in, or the one being viewed when none is given.</summary>
     public bool ExportWeek(bool wholeMonth = false, DateTime? day = null)
     {

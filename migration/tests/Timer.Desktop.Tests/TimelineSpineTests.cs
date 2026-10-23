@@ -52,20 +52,22 @@ public sealed class TimelineSpineTests
     }
 
     [AvaloniaFact]
-    public void TheZoomSliderFollowsTheButtonsAndTheButtonsFollowTheSlider()
+    public void TheZoomButtonsStepByAFifthAndStopAtTheEnds()
     {
         var model = TimerModel.CreateDemo(); var window = Open(model);
         try
         {
-            var slider = window.GetVisualDescendants().OfType<Slider>().Single(s => s.Name == "TimelineZoom");
-            Assert.Equal(model.TimelineZoomFraction, slider.Value, 3);
-            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineZoomIn").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
-            Assert.Equal(model.TimelineZoomFraction, slider.Value, 3);
-            slider.Value = 1; Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame();
-            Assert.Equal(640, model.TimelinePixelsPerHour, 0.5); Assert.False(window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineZoomIn").IsEnabled);
-            slider.Value = 0; Dispatcher.UIThread.RunJobs();
-            Assert.Equal(60, model.TimelinePixelsPerHour, 0.5);
-            Assert.Equal(60, TimerModel.ScaleAt(0), 0.001); Assert.Equal(640, TimerModel.ScaleAt(1), 0.001);
+            Button Zoom(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
+            var start = model.TimelinePixelsPerHour;
+            Zoom("TimelineZoomIn").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame();
+            Assert.Equal(start * 1.2, model.TimelinePixelsPerHour, 3);
+            Zoom("TimelineZoomOut").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(start, model.TimelinePixelsPerHour, 3);
+            for (var i = 0; i < 30; i++) model.ZoomTimeline(1, 0, 0);
+            Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame();
+            Assert.Equal(640, model.TimelinePixelsPerHour, 0.5); Assert.False(Zoom("TimelineZoomIn").IsEnabled);
+            for (var i = 0; i < 40; i++) model.ZoomTimeline(-1, 0, 0);
+            Dispatcher.UIThread.RunJobs(); Assert.Equal(60, model.TimelinePixelsPerHour, 0.5); Assert.False(Zoom("TimelineZoomOut").IsEnabled);
         }
         finally { window.Close(); }
     }

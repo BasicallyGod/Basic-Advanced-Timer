@@ -116,22 +116,6 @@ public sealed class PolishTests
     }
 
     [AvaloniaFact]
-    public void TheZoomBarsIconsAndSliderAreAllCentredOnItsMiddle()
-    {
-        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
-        try
-        {
-            Settle(window);
-            var bar = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
-            double Mid(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
-            var thumb = bar.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Thumb>().Single(); var track = bar.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Track>().Single();
-            Assert.Equal(Mid(bar), Mid(thumb), 0.6); Assert.Equal(Mid(bar), Mid(track), 0.6);
-            foreach (var icon in bar.GetVisualDescendants().OfType<IconGlyph>()) Assert.Equal(Mid(bar), Mid(icon), 0.6);
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
     public void ANameThatDoesNotFitSlidesOnHoverAndGoesBackOnLeave()
     {
         var narrow = new MarqueeText("A very long client account name that cannot fit", 15) { Width = 90 };

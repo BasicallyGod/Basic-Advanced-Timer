@@ -108,15 +108,15 @@ public sealed class SwitchingAndBlockTests
         engine.Sessions.Add(new("2026-10-14", "Account one", "09:00:00", "recorded", "0.50")); // Half a minute: a tiny block.
         engine.Sessions.Add(new("2026-10-14", "Account two", "10:00:00", "recorded", "90.00"));
         var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
-        foreach (var zoom in new[] { 0.0, 0.5, 1.0 })
+        foreach (var scale in new[] { 60.0, 160.0, 640.0 })
         {
-            model.SetTimelineScale(TimerModel.ScaleAt(zoom), 300, 0); Settle(dashboard);
+            model.SetTimelineScale(scale, 300, 0); Settle(dashboard);
             var cards = dashboard.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("TimelineEntry") == true).ToList();
             Assert.Equal(2, cards.Count);
             foreach (var card in cards) Assert.Equal(ReviewViews.CornerFor(1, card.Width, card.Height), card.CornerRadius.TopLeft, 3); // The larger corner, less only for a block too narrow to hold it.
         }
         var today = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "GoToToday");
-        Assert.True(today.Classes.Contains("toolButton") && today.Classes.Contains("quiet"));
+        Assert.Contains("ctl", today.Classes); // The same outlined card look as the other buttons in the header.
         dashboard.Close();
     }
 

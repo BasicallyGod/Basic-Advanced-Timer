@@ -12,20 +12,6 @@ using Xunit;
 
 namespace Timer.Desktop.Tests;
 
-// Makes the database refuse new entries, to stand in for a full disk or a locked file.
-internal static class StorageFaults
-{
-    public static void Block(TimerStore store) => store.Database.Execute("CREATE TRIGGER block_entries BEFORE INSERT ON entries BEGIN SELECT RAISE(ABORT, 'disk full'); END");
-    public static void Unblock(TimerStore store) => store.Database.Execute("DROP TRIGGER block_entries");
-    public static List<SessionRow> Saved(TimerStore store)
-    {
-        var engine = new TrackingEngine();
-        engine.Sessions.AddRange(store.Database.Query("SELECT day, start_at, seconds FROM entries ORDER BY id",
-            r => new SessionRow(r.GetString(0), "x", r.GetString(1)[11..], "y", (r.GetDouble(2) / 60).ToString(System.Globalization.CultureInfo.InvariantCulture))));
-        return engine.Sessions;
-    }
-}
-
 public sealed class EditingTests
 {
     private static TrackingEngine Engine() => new(clock: () => new DateTime(2026, 10, 9, 14, 0, 0));
@@ -135,20 +121,14 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void NoteOnlyDialogPreservesFractionalCreditAndEditingTheSelectionRequestsAnEditor()
+    public void ANoteOnlyEditKeepsFractionalCreditAndClicksSelectWhileDoubleClickAddsTime()
     {
         var engine = Engine(); var row = Row(end: "09:01:01", minutes: "1.01") with { Account = "ACCOUNT ONE" }; engine.Sessions.Add(row);
         var model = new TimerModel(engine);
-        var editor = new EntryDialog(model, row, row.From, row.To).Open(model);
-        try
-        {
-            editor.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryNote").Text = "Short entry note";
-            editor.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Same(row, engine.Sessions.Single()); Assert.Equal("1.01", engine.Sessions.Single().Minutes);
-        }
-        finally { editor.Close(); }
-        var requests = 0; DateTime? gap = null;
-        model.EntryRequested += (entry, from, _) => { if (entry is not null) requests++; else gap = from; };
+        Assert.True(model.EditEntry(row, row.Account, row.From, row.To, "Short entry note"));
+        Assert.Same(row, engine.Sessions.Single()); Assert.Equal("1.01", engine.Sessions.Single().Minutes); Assert.Equal("Short entry note", model.Editor.Note(row));
+        DateTime? gap = null;
+        model.EntryRequested += (from, _) => gap = from;
         var window = new Window { Width = 600, Height = 500, Content = ReviewViews.Timeline(model) }; window.Show();
         try
         {
@@ -157,10 +137,9 @@ public sealed class EditingTests
             var point = card.TranslatePoint(new Point(card.Width / 2, card.Height / 2), window)!.Value;
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
-            Assert.Equal(0, requests); Assert.Empty(model.SelectedRows); // Two clicks select and deselect. There is no double-click edit any more.
+            Assert.Empty(model.SelectedRows); Assert.Null(gap); // Two clicks select and deselect. There is no double-click edit.
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
-            Assert.True(model.CanEditSelection); model.EditSelection();
-            Assert.Equal(1, requests); model.ClearSelection(); Dispatcher.UIThread.RunJobs();
+            Assert.Same(row, Assert.Single(model.SelectedRows)); model.ClearSelection(); Dispatcher.UIThread.RunJobs();
             var canvas = window.GetVisualDescendants().OfType<Canvas>().Single(c => c.Name == "TimelineCanvas");
             var empty = canvas.TranslatePoint(new Point(ReviewViews.TimelineGutter + 9 * model.TimelinePixelsPerHour + 30, 70), window)!.Value; // Past 09:00 in the blank band: 09:20.
             window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
@@ -182,7 +161,7 @@ public sealed class EditingTests
             var model = new TimerModel(engine, prefs, store); Assert.True(model.Save());
             StorageFaults.Block(store);
             var row = engine.Sessions.Single();
-            var dialog = new EntryDialog(model, null, row.To, row.To.AddMinutes(30)).Open(model);
+            var dialog = new EntryDialog(model, row.To, row.To.AddMinutes(30)).Open(model);
             try
             {
                 var button = dialog.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry");
@@ -198,24 +177,22 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void EntryDialogSavesNotesAndGapTimeAndWeekShowsTheEditedEntry()
+    public void EditingSavesNotesAndAddTimeAddsGapTime()
     {
         var engine = Engine(); engine.Sessions.Add(Row());
         var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
         try
         {
-            var row = engine.Sessions[0]; var editor = new EntryDialog(model, row, row.From, row.To).Open(window);
-            var end = editor.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryEnd"); end.Text = "10:15";
-            editor.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryNote").Text = "Drafting\nClient review";
-            editor.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.False(editor.IsVisible); Assert.Equal(TimeSpan.FromMinutes(75), engine.Sessions[0].Duration);
+            var row = engine.Sessions[0];
+            Assert.True(model.EditEntry(row, row.Account, row.From, row.From.AddMinutes(75), "Drafting\nClient review"));
+            Assert.Equal(TimeSpan.FromMinutes(75), engine.Sessions[0].Duration);
             Assert.Equal("Drafting\nClient review", model.Editor.Note(engine.Sessions[0]));
             Dispatcher.UIThread.RunJobs();
             var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath(); Directory.CreateDirectory(output);
-            var add = new EntryDialog(model, null, row.To.AddMinutes(30), row.To.AddMinutes(45)).Open(window);
+            var add = new EntryDialog(model, row.To.AddMinutes(30), row.To.AddMinutes(45)).Open(window);
             Dispatcher.UIThread.RunJobs(); using var addFrame = add.CaptureRenderedFrame(); addFrame?.Save(Path.Combine(output, "entry-editor.png"));
             add.Close();
-            Assert.True(model.EditEntry(null, "Account two", row.To.AddMinutes(30), row.To.AddMinutes(45), "Gap note"));
+            Assert.True(model.AddEntry("Account two", row.To.AddMinutes(30), row.To.AddMinutes(45), "Gap note"));
             Assert.Equal(2, engine.Sessions.Count); Assert.True(model.UndoEdit()); Assert.Single(engine.Sessions);
         }
         finally { window.Close(); }
@@ -318,7 +295,7 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void ZoomAndFitSitInABarUnderTheTimelineTheHintLineIsGoneAndADisabledButtonStaysOutlined()
+    public void ZoomSitsInABarUnderTheTimelineTheHintLineIsGoneAndADisabledButtonStaysOutlined()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
@@ -326,7 +303,7 @@ public sealed class EditingTests
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "ReviewTools"); // The Tools menu is gone.
             var undoButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "UndoEdit");
-            var zoom = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
+            var zoom = dashboard.GetVisualDescendants().OfType<StackPanel>().Single(b => b.Name == "TimelineControls");
             var scrollAbove = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(x => x.Name == "TimelineScroll");
             // One bar under the timeline: Undo (and Add time) on the left, the zoom controls on the right, on the same line.
             Assert.True(undoButton.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y >= scrollAbove.TranslatePoint(new Point(0, scrollAbove.Bounds.Height - 1), dashboard)!.Value.Y);
@@ -336,7 +313,7 @@ public sealed class EditingTests
             var undo = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "UndoEdit");
             Assert.False(undo.IsEnabled); Assert.True(undo.Opacity < 1); // Dimmed by the style, keeping its outline, not a solid grey fill.
             dashboard.SelectTab(true); Dispatcher.UIThread.RunJobs();
-            Assert.False(zoom.IsVisible); // Zoom belongs to the timeline only.
+            Assert.False(zoom.IsEffectivelyVisible); // Zoom belongs to the timeline only.
             // Export and Copy hours table live in Settings, and the Hours table and Entries views are gone.
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name is "ExportWeek" or "WeekHoursTab" or "WeekEntriesTab");
             Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekOverviewTab" && ToolTip.GetTip(b) as string == "Week overview");
@@ -345,16 +322,17 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void TidyDayIsOfferedWhenYouRightClickEmptyTimelineSpace()
+    public void RightClickingEmptyTimelineSpaceOffersAddTimeAndPasteAndNoTidyDay()
     {
-        var model = TimerModel.CreateDemo(); var raised = 0; model.TidyRequested += () => raised++;
+        var model = TimerModel.CreateDemo();
         var window = new Window { Width = 700, Height = 600, Content = ReviewViews.Timeline(model) }; window.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             var canvas = window.GetVisualDescendants().OfType<Canvas>().First(c => c.ContextMenu is not null);
-            var tidy = canvas.ContextMenu!.Items.OfType<MenuItem>().Single(i => i.Name == "TidyDayMenu");
-            tidy.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent)); Assert.Equal(1, raised);
+            var items = canvas.ContextMenu!.Items.OfType<MenuItem>().ToList();
+            Assert.Contains(items, i => i.Name == "PasteHereMenu"); Assert.Contains(items, i => i.Header as string == "Add time…");
+            Assert.DoesNotContain(items, i => i.Name == "TidyDayMenu");
         }
         finally { window.Close(); }
     }

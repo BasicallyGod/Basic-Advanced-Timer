@@ -68,13 +68,13 @@ public static class TimelineGestures
         {
             if (origin is null) return;
             var commit = dragging && delta != TimeSpan.Zero;
-            var change = delta; var mode = edge; var push = nudging; var select = !dragging;
+            var change = delta; var mode = edge; var push = nudging; var select = !dragging; var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
             RestoreNeighbours();
             origin = null; dragging = false; e.Pointer.Capture(null); card.Opacity = 1;
             Canvas.SetLeft(card, oldLeft); card.Width = oldWidth;
             if (commit) model.DragEntry(row, row.From + (mode <= 0 ? change : TimeSpan.Zero),
                 row.To + (mode >= 0 ? change : TimeSpan.Zero), push);
-            else if (select) model.ToggleSelection(new[] { row });
+            else if (select) model.SelectBlock(new[] { row }, shift);
             e.Handled = true;
         };
         card.PointerCaptureLost += (_, _) =>
