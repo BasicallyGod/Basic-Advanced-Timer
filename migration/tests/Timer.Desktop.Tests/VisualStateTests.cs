@@ -1,12 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
-using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
 

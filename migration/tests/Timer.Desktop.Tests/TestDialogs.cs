@@ -1,8 +1,6 @@
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
-using Timer.Desktop;
 
 namespace Timer.Desktop.Tests;
 
@@ -20,7 +18,6 @@ internal static class TestDialogs
         dialog.Closed += (_, _) => dashboard.Close();
         return dialog.Open(dashboard);
     }
-    public static DashboardWindow Dashboard(this Dialog dialog) => (DashboardWindow)TopLevel.GetTopLevel(dialog)!;
     public static void Settle(this Dialog dialog)
     {
         var window = (Window)TopLevel.GetTopLevel(dialog)!;

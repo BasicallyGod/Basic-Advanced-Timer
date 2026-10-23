@@ -1,22 +1,20 @@
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Timer.Core;
-using Timer.Desktop;
 using Xunit;
 
 namespace Timer.Desktop.Tests;
 
-// Renders the dashboard in both Time Deck themes, for looking at when TIMER_PREVIEW_DIR is set.
-public sealed class TimeDeckPreviewTests
+// Renders the dashboard in each built-in theme, for looking at when TIMER_PREVIEW_DIR is set.
+public sealed class ThemePreviewTests
 {
     [AvaloniaTheory]
-    [InlineData("Light", "timedeck-light")]
-    [InlineData("Dark", "timedeck-dark")]
-    [InlineData("After Hours", "timedeck-afterhours")]
-    [InlineData("Botanical", "timedeck-botanical")]
-    [InlineData("Hawthorn", "timedeck-hawthorn")]
-    public void TheDashboardDrawsInEachTimeDeckTheme(string theme, string file)
+    [InlineData("Light", "theme-light")]
+    [InlineData("Dark", "theme-dark")]
+    [InlineData("After Hours", "theme-afterhours")]
+    [InlineData("Botanical", "theme-botanical")]
+    [InlineData("Hawthorn", "theme-hawthorn")]
+    public void TheDashboardDrawsInEachBuiltInTheme(string theme, string file)
     {
         var model = TimerModel.CreateDemo(); model.SetTheme(theme);
         var window = new DashboardWindow(model); window.Show();

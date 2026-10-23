@@ -1,6 +1,5 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Controls;
-using Timer.Desktop;
 using Xunit;
 
 namespace Timer.Desktop.Tests;

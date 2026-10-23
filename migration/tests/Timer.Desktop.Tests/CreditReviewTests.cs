@@ -4,13 +4,11 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Headless.XUnit;
-using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
-using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
 

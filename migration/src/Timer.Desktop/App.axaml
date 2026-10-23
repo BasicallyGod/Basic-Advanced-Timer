@@ -73,17 +73,6 @@
       <Setter Property="FontWeight" Value="Normal" />
     </Style>
     <Style Selector="TextBlock.clockIdle"><Setter Property="Foreground" Value="{DynamicResource Clock}" /></Style>
-    <!-- The main call to action takes the theme accent, with its own text colour for contrast. -->
-    <Style Selector="Button.accentButton /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource Accent}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
-      <Setter Property="Foreground" Value="{DynamicResource AccentInk}" />
-    </Style>
-    <Style Selector="Button.accentButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource Accent}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Ink}" />
-      <Setter Property="Foreground" Value="{DynamicResource AccentInk}" />
-    </Style>
     <Style Selector="TextBlock.idle"><Setter Property="Foreground" Value="{DynamicResource Idle}" /></Style>
     <Style Selector=":is(Border).selectionStrip"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Border.scrollEdge"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
@@ -100,7 +89,6 @@
     <Style Selector="TextBlock.overtime"><Setter Property="Foreground" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.surface"><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
     <Style Selector="Border.panel"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
-    <Style Selector="Border.tabLine"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Border.rule"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Button">
       <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -232,36 +220,6 @@
     <Style Selector="CalendarDayButton:today /template/ Border#Root"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="CalendarItem /template/ Button"><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="Border.accentEdge"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
-    <!-- Tabs are plain words along a hairline. The chosen one is brighter and has a green bar under it, which sits on the line. -->
-    <Style Selector="Button.tab">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource Muted}" />
-      <Setter Property="CornerRadius" Value="0" />
-      <Setter Property="BorderThickness" Value="0,0,0,3" />
-      <Setter Property="BorderBrush" Value="Transparent" />
-      <Setter Property="Padding" Value="12,10,12,9" />
-      <Setter Property="Margin" Value="0,0,4,-1" />
-      <Setter Property="FontSize" Value="15" />
-      <Setter Property="Cursor" Value="Hand" />
-    </Style>
-    <Style Selector="Button.tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
-    </Style>
-    <!-- The standard button style swaps the border colour under the pointer and while pressed, which would wipe the bar under the chosen tab. These keep it. -->
-    <Style Selector="Button.tab:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.tab:pressed /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="BorderBrush" Value="Transparent" />
-    </Style>
-    <Style Selector="Button.tab.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.tab.selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
-    </Style>
-    <Style Selector="Button.tab.selected">
-      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
-    </Style>
-    <Style Selector="Button.tab.selected /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Foreground" Value="{DynamicResource Ink}" />
-    </Style>
     <!-- A button that cannot be used keeps the outlined look, only dimmer, so it never outshines the ones that can. -->
     <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Panel}" />
@@ -325,17 +283,6 @@
     <Style Selector="Button.startDay:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Hover}" />
       <Setter Property="Foreground" Value="{DynamicResource Start}" />
-    </Style>
-    <Style Selector="Button.primary">
-      <Setter Property="Background" Value="{DynamicResource Live}" />
-      <Setter Property="Foreground" Value="{DynamicResource Surface}" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-    </Style>
-    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource Live}" />
-      <Setter Property="Foreground" Value="{DynamicResource Surface}" />
-      <Setter Property="Opacity" Value="0.88" />
     </Style>
     <!-- The dashboard's break and day buttons rest with a quiet outline and take on their own colour when the pointer is over them. Their icons keep their colour either way. -->
     <Style Selector="Button.quiet.breakButton, Button.quiet.finishDay.outlined, Button.quiet.startDay">
@@ -422,12 +369,6 @@
     </Style>
     <Style Selector="Button.pillRound.bare.onBreak /template/ ContentPresenter#PART_ContentPresenter, Button.pillRound.bare.onBreak:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="BorderBrush" Value="Transparent" />
-    </Style>
-    <Style Selector="Button.round">
-      <Setter Property="CornerRadius" Value="24" />
-      <Setter Property="Width" Value="40" />
-      <Setter Property="Height" Value="40" />
-      <Setter Property="Padding" Value="0" />
     </Style>
   </Application.Styles>
 </Application>

@@ -1,12 +1,9 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Timer.Desktop;
 using Xunit;
 
 namespace Timer.Desktop.Tests;

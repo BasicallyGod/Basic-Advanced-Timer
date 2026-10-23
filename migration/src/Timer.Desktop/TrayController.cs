@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Timer.Core;
-using Timer.Storage;
 
 namespace Timer.Desktop;
 
@@ -12,7 +11,6 @@ namespace Timer.Desktop;
 public sealed class TrayController : IDisposable
 {
     private readonly TimerModel model;
-    private readonly WindowCoordinator windows;
     private readonly TrayIcon icon;
     private readonly NativeMenuItem show = new() { Header = "Show timer" };
     private readonly NativeMenuItem dashboard = new() { Header = "Dashboard" };
@@ -25,7 +23,7 @@ public sealed class TrayController : IDisposable
 
     public TrayController(TimerModel model, WindowCoordinator windows)
     {
-        this.model = model; this.windows = windows;
+        this.model = model;
         show.Click += (_, _) => windows.ShowTimer();
         dashboard.Click += (_, _) => windows.ShowDashboard();
         pause.Click += (_, _) => model.TogglePause();

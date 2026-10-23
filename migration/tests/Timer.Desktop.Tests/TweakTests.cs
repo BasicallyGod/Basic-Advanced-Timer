@@ -1,13 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Data.Sqlite;
 using Timer.Core;
 using Timer.Storage;
-using Timer.Desktop;
 using Xunit;
 
 namespace Timer.Desktop.Tests;

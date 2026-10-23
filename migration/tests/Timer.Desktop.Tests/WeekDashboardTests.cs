@@ -5,7 +5,6 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
-using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
 
@@ -42,7 +41,7 @@ public sealed class WeekDashboardTests
         Assert.Equal(Time(table.Rows[3].Total) + Time(table.Rows[4].Total), Time(table.Rows[5].Total));
         Assert.Equal("01:00", table.Rows[3].Cells[1]); Assert.Equal("02:00", table.Rows[3].Cells[4]); Assert.Equal("–", table.Rows[3].Cells[0]);
         var budget = Assert.Single(table.Budgets);
-        Assert.Equal("Account one", budget.Account); Assert.Equal("10:00", budget.Budget); Assert.Equal("02:30", budget.Used); Assert.Equal("This week", budget.Period); Assert.Equal("02:30", budget.ThisWeek);
+        Assert.Equal("Account one", budget.Account); Assert.Equal("10:00", budget.Budget); Assert.Equal("02:30", budget.Used); Assert.Equal("This week", budget.Period);
         Assert.Equal("07:30", budget.Remaining); Assert.Equal(.25, budget.Fraction, 3);
     }
 
