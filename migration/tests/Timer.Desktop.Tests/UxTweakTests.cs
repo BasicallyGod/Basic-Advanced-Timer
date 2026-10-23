@@ -63,7 +63,7 @@ public sealed class UxTweakTests
         {
             var choice = view.GetLogicalDescendants().OfType<ComboBox>().Single(c => c.Name == "ThemeChoice");
             Assert.DoesNotContain("Mine", choice.ItemsSource!.Cast<string>());
-            model.SaveTheme(ThemeLibrary.Light with { Name = "Mine" });
+            model.SaveTheme(AppThemes.Light with { Name = "Mine" });
             Assert.Contains("Mine", choice.ItemsSource!.Cast<string>());
         }
         finally { window.Close(); }
@@ -72,7 +72,7 @@ public sealed class UxTweakTests
     [Fact]
     public void LightAndDarkAccentsKeepClearOfRedGreenAndOrange()
     {
-        foreach (var theme in new[] { ThemeLibrary.Light, ThemeLibrary.Dark })
+        foreach (var theme in new[] { AppThemes.Light, AppThemes.Dark })
         {
             var accent = Color.Parse(theme.Colour("Accent"));
             Assert.True(accent.B > accent.R + 40 && accent.B >= accent.G, $"{theme.Name} accent {theme.Colour("Accent")} is not clearly blue");
@@ -148,7 +148,7 @@ public sealed class UxTweakTests
     [AvaloniaFact]
     public void EveryThemeAndPillStateWritesTooltipColoursFromItsOwnSurfaceAndText()
     {
-        foreach (var theme in ThemeLibrary.BuiltIn)
+        foreach (var theme in AppThemes.BuiltIn)
         {
             ThemeEngine.Register(Application.Current!, new[] { theme });
             foreach (var variant in new[] { ThemeEngine.VariantFor(theme), ThemeEngine.StateVariant(theme, ThemeDerivation.Recording), ThemeEngine.StateVariant(theme, ThemeDerivation.Break), ThemeEngine.StateVariant(theme, ThemeDerivation.Overtime) })
@@ -235,7 +235,7 @@ public sealed class UxTweakTests
     [AvaloniaFact]
     public void WritingATwiceLeavesUnchangedColoursAloneAndAPreviewWritesOnlyTheMainVariant()
     {
-        var theme = ThemeLibrary.BuiltIn.First(t => t.Name == "Botanical"); var app = Application.Current!;
+        var theme = AppThemes.BuiltIn.First(t => t.Name == "Botanical"); var app = Application.Current!;
         ThemeEngine.Register(app, new[] { theme });
         var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
         var ink = dictionary["Ink"]; var accent = dictionary["Accent"];
@@ -271,7 +271,7 @@ public sealed class UxTweakTests
         try
         {
             byte[] Frame() { Settle(window); using var frame = window.CaptureRenderedFrame(); using var stream = new MemoryStream(); frame!.Save(stream); return stream.ToArray(); }
-            ThemeEngine.Register(Application.Current!, ThemeLibrary.BuiltIn);
+            ThemeEngine.Register(Application.Current!, AppThemes.BuiltIn);
             var light = Frame(); window.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark; var dark = Frame();
             Assert.NotEqual(light, dark); // The stroke changed colour, not only the window around it.
         }
@@ -299,7 +299,7 @@ public sealed class UxTweakTests
     [Fact]
     public void SlidersCanBeSeenInEveryBuiltInTheme()
     {
-        foreach (var theme in ThemeLibrary.BuiltIn)
+        foreach (var theme in AppThemes.BuiltIn)
         {
             var (fill, track) = ThemeEngine.SliderColours(theme.Colours);
             string Hex(Avalonia.Media.Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
@@ -369,7 +369,7 @@ public sealed class UxTweakTests
     public void SlidersThatAreSwitchedOffCanStillBeSeenInEveryBuiltInTheme()
     {
         var app = Application.Current!;
-        foreach (var theme in ThemeLibrary.BuiltIn)
+        foreach (var theme in AppThemes.BuiltIn)
         {
             ThemeEngine.Register(app, new[] { theme });
             var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
@@ -437,7 +437,7 @@ public sealed class UxTweakTests
     public void TheRecordingAccountsCardTakesAGentleTintOfTheTrackingColourInEveryTheme()
     {
         var app = Application.Current!;
-        foreach (var theme in ThemeLibrary.BuiltIn)
+        foreach (var theme in AppThemes.BuiltIn)
         {
             ThemeEngine.Register(app, new[] { theme });
             var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];

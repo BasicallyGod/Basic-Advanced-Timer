@@ -10,26 +10,6 @@ using Timer.Core;
 
 namespace Timer.Desktop;
 
-/// <summary>The clock stacked as hours, minutes and seconds, the seconds smaller and quieter, for the narrow vertical pill.</summary>
-public sealed class StackedClock : StackPanel
-{
-    private readonly TextBlock hours, minutes, seconds;
-    public StackedClock()
-    {
-        Spacing = 2; HorizontalAlignment = HorizontalAlignment.Center;
-        hours = new TextBlock { FontSize = 30, Classes = { "clock" }, HorizontalAlignment = HorizontalAlignment.Center };
-        minutes = new TextBlock { FontSize = 30, Classes = { "clock" }, HorizontalAlignment = HorizontalAlignment.Center };
-        seconds = new TextBlock { FontSize = 15, Classes = { "clockLight", "muted" }, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) };
-        Children.Add(hours); Children.Add(minutes); Children.Add(seconds);
-    }
-    /// <summary>The whole clock, as hours:minutes:seconds. Setting it splits it over the three lines.</summary>
-    public string Text
-    {
-        get => hours.Text + ":" + minutes.Text + ":" + seconds.Text;
-        set { var parts = value.Split(':'); hours.Text = parts.Length > 0 ? parts[0] : ""; minutes.Text = parts.Length > 1 ? parts[1] : ""; seconds.Text = parts.Length > 2 ? parts[2] : ""; }
-    }
-}
-
 /// <summary>
 /// The pill: a small vertical card that stays on top. It shows what the timer is doing with one capsule (and a second, blue one only while a
 /// reminder is due), the day clock, a circle that carries the account's initials and pauses or resumes, and the mug that starts a break. Clicking the
@@ -60,25 +40,16 @@ public sealed class PillWindow : Window
     /// <summary>The window width at the size the pill is drawn on this screen.</summary>
     public double WindowWidthNow => (PillWidth + 2 * Ui.ShadowMargin) * Scale;
 
-    private readonly StackedClock clock = new() { Text = "00:00:00" };
-    private readonly Border stateLight = new() { Name = "PillStateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
-    private readonly Border reminderLight = new() { Name = "PillReminderLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3), IsVisible = false };
-    private readonly Avalonia.Controls.Shapes.Ellipse circleFill = new() { Width = 46, Height = 46 };
-    private readonly TextBlock initials = new() { FontSize = 17, Classes = { "clock" }, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-    private readonly PauseGlyph glyph = new();
     private readonly BreakGlyph cup = new();
-    private readonly Border clockTile = new() { Name = "PillClockTile", CornerRadius = new CornerRadius(14), Padding = new Thickness(8, 6), Background = Brushes.Transparent };
     private readonly Border mugTile = new() { Name = "PillMugTile", Width = 40, Height = 40, CornerRadius = new CornerRadius(13), Background = Brushes.Transparent };
-    private readonly Grid circleHost = new() { Width = 46, Height = 46, RenderTransform = new ScaleTransform(1, 1), RenderTransformOrigin = RelativePoint.Center };
-    private readonly Viewbox glyphBox = new() { Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-    private Button clockButton = null!, circle = null!, mug = null!;
+    private Button mug = null!;
+    private StatusFace face = null!;
     private Border surface = null!, shadowHost = null!;
     private readonly Popup peek = new(), panel = new();
     private readonly Grid rootGrid = new();
-    private StackPanel lightsRow = null!;
     private ScrollViewer accountScroll = null!;
     private StackPanel peekRows = null!;
-    private bool hoverCircle, hoverMug, overPill, overFlyout, closedWindow, ensuring;
+    private bool hoverMug, overPill, overFlyout, closedWindow, ensuring;
     private string? activeWhenOpened;
     private DispatcherTimer? openTimer, closeTimer, settleTimer;
     private int? appliedChoice;
@@ -104,24 +75,8 @@ public sealed class PillWindow : Window
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Brushes.Transparent;
 
-        // Two lights: the state, and a reminder that is due.
-        lightsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Height = 14, HorizontalAlignment = HorizontalAlignment.Center, Name = "PillLights" };
-        lightsRow.Children.Add(stateLight); lightsRow.Children.Add(reminderLight);
-        // The clock opens the dashboard.
-        clockButton = Ui.Button("", () => OpenDashboard?.Invoke(), "PillDashboard");
-        clockButton.Classes.Add("pillBare"); clockButton.Padding = new Thickness(0);
-        clockTile.Child = clock; clockButton.Content = clockTile; clockButton.HorizontalAlignment = HorizontalAlignment.Center;
-        clockButton.PointerEntered += (_, _) => SetTileHover(clockTile, true);
-        clockButton.PointerExited += (_, _) => SetTileHover(clockTile, false);
-        ToolTip.SetTip(clockButton, "Open dashboard");
-        Avalonia.Automation.AutomationProperties.SetName(clockButton, "Open dashboard");
-        // The circle carries the running account's initials, and pauses or resumes. The initials give way to the symbol under the pointer.
-        glyphBox.Child = glyph; glyph.Fixed = Brushes.Black;
-        circleHost.Children.Add(circleFill); circleHost.Children.Add(initials); circleHost.Children.Add(glyphBox);
-        circle = Ui.Button("", OnCircle, "PillPause");
-        circle.Classes.Add("pillBare"); circle.Padding = new Thickness(0); circle.Width = 46; circle.Height = 46; circle.Content = circleHost; circle.HorizontalAlignment = HorizontalAlignment.Center;
-        circle.PointerEntered += (_, _) => { hoverCircle = true; glyph.Glow = 1; circleHost.RenderTransform = new ScaleTransform(1.06, 1.06); Refresh(); };
-        circle.PointerExited += (_, _) => { hoverCircle = false; glyph.Glow = 0; circleHost.RenderTransform = new ScaleTransform(1, 1); Refresh(); };
+        // The top of the pill is shared with the dashboard's rail.
+        face = new StatusFace(model, "Pill", "Open dashboard", () => OpenDashboard?.Invoke(), OnCircle);
         // The mug starts a break and shows it is on while one runs. It is amber, with no circle round it.
         cup.Mono = false;
         mugTile.Child = new Viewbox { Width = 26, Height = 26, Child = cup, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -131,8 +86,7 @@ public sealed class PillWindow : Window
         mug.PointerExited += (_, _) => { hoverMug = false; cup.SetSteaming(model.IsOnBreak); SetTileHover(mugTile, false); };
 
         var column = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        column.Children.Add(lightsRow); clockButton.Margin = new Thickness(0, 4, 0, 0); column.Children.Add(clockButton);
-        circle.Margin = new Thickness(0, 6, 0, 0); column.Children.Add(circle); column.Children.Add(mug);
+        column.Children.Add(face); column.Children.Add(mug);
         var root = rootGrid; root.Background = Brushes.Transparent; root.Children.Add(column);
         Ui.PillGestures(root, this);
         surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true, Width = PillWidth, Height = PillHeight, BorderThickness = new Thickness(1) };
@@ -314,7 +268,6 @@ public sealed class PillWindow : Window
         Refresh();
     }
     private Color ThemeColourOr(string key, string fallback) => Ui.ThemeColour(this, key, Color.Parse(fallback));
-    private static string Hex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
     /// <summary>The first letters of up to two words, so Account three reads AT, Northwind Traders reads NT and Client 7 reads C7.</summary>
     public static string Initials(string name)
     {
@@ -325,41 +278,17 @@ public sealed class PillWindow : Window
     }
     private void Refresh()
     {
-        var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak; var live = model.IsTracking && !onBreak && !late;
-        var key = onBreak ? "Break" : late ? "Overtime" : live ? "Live" : "Idle";
-        var stateName = onBreak ? "On break" : late ? "Overtime" : live ? "Recording" : "Not recording";
-        // The light's colour is the state, and the circle and the ring repeat it, so the light never carries it alone.
+        face.Refresh();
+        var onBreak = model.IsOnBreak;
+        var (key, _) = StatusFace.State(model);
         var stateColour = ThemeColourOr(key, "#8A8F98");
-        stateLight.Background = new SolidColorBrush(stateColour);
-        ToolTip.SetTip(lightsRow, stateName); Avalonia.Automation.AutomationProperties.SetName(stateLight, stateName);
-        // The reminder light is there only while a reminder is due, and pulses. It only notifies.
-        reminderLight.IsVisible = model.ReminderDue; reminderLight.Background = new SolidColorBrush(ThemeColourOr("Accent", "#3558C8"));
-        Ui.Pulse(reminderLight, model.ReminderDue);
-        Avalonia.Automation.AutomationProperties.SetName(reminderLight, "A reminder is due");
-        clock.Text = model.ClockText;
-
-        var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);
-        var who = onBreak ? model.ResumeAccount : model.ActiveAccount ?? selected?.Name;
-        var circleColour = ThemeColourOr(key == "Idle" ? "Live" : key, "#34D399");
-        circleFill.Fill = new SolidColorBrush(circleColour);
-        var ink = Color.Parse(Ui.InkOn(Hex(circleColour)));
-        initials.Foreground = new SolidColorBrush(ink); glyph.Fixed = new SolidColorBrush(ink);
-        initials.Text = who is null ? "" : Initials(who);
-        // Initials while an account runs, and the symbol at rest, under the pointer, or when there is no account to name.
-        var showGlyph = hoverCircle || (!model.IsTracking && !onBreak) || initials.Text.Length == 0;
-        initials.IsVisible = !showGlyph; glyphBox.IsVisible = showGlyph;
-        glyph.Playing = model.IsTracking && !onBreak; glyph.InvalidateVisual();
-        var circleTip = onBreak ? "End break" + (model.ResumeAccount is { } back ? " and resume " + back : "")
-            : model.IsTracking ? "Pause. Tracking " + (model.ActiveAccount is { } active ? model.Accounts.FirstOrDefault(a => a.Name == active)?.Display ?? active : "")
-            : selected is not null ? "Start " + selected.Display : "Choose an account";
-        ToolTip.SetTip(circle, circleTip); Avalonia.Automation.AutomationProperties.SetName(circle, circleTip);
 
         // The mug is lit while a break runs, and its steam moves.
-        mugTile.Background = onBreak ? new SolidColorBrush(Color.FromArgb(0x33, ThemeColourOr("Break", "#F5A524").R, ThemeColourOr("Break", "#F5A524").G, ThemeColourOr("Break", "#F5A524").B)) : hoverMug ? mugTile.Background : Brushes.Transparent;
+        var amber = ThemeColourOr("Break", "#F5A524");
+        mugTile.Background = onBreak ? new SolidColorBrush(Color.FromArgb(0x33, amber.R, amber.G, amber.B)) : hoverMug ? mugTile.Background : Brushes.Transparent;
         cup.SetSteaming(onBreak || hoverMug); cup.InvalidateVisual();
         var mugTip = onBreak ? "End break" + (model.ResumeAccount is { } returnTo ? " and resume " + returnTo : "") : "Start break";
         ToolTip.SetTip(mug, mugTip); Avalonia.Automation.AutomationProperties.SetName(mug, mugTip);
-        Avalonia.Automation.AutomationProperties.SetName(clockButton, "Open dashboard. Working time " + model.ClockText);
 
         // A ring and a glow in the state's colour round the pill while it is doing something, and the plain edge and shadow when it is idle.
         surface.BorderThickness = new Thickness(key == "Idle" ? 1 : 2);

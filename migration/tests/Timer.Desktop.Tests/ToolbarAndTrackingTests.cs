@@ -91,7 +91,7 @@ public sealed class ToolbarAndTrackingTests
     [Fact]
     public void TheRecordingPillsGreenReadsOnItsDarkSurfaceInBothThemes()
     {
-        foreach (var theme in ThemeLibrary.BuiltIn)
+        foreach (var theme in AppThemes.BuiltIn)
         {
             var variant = ThemeDerivation.Variant(theme, ThemeDerivation.Recording);
             Assert.True(ThemeColours.Contrast(variant["Live"], variant["Surface"]) >= 4.5, theme.Name);

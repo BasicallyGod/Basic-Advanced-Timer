@@ -82,11 +82,11 @@ public sealed class TrayTests
             Dispatcher.UIThread.RunJobs();
             Assert.NotNull(windows.Pill.Icon); Assert.NotNull(windows.Dashboard.Icon); Assert.NotNull(dialog.Icon);
             var dark = WindowChrome.Colours(dialog)!.Value;
-            Assert.True(dark.Dark); Assert.Equal(Timer.Core.ThemeLibrary.Dark.Colour("Surface").ToUpperInvariant(), dark.Caption.ToUpperInvariant());
-            Assert.Equal(Timer.Core.ThemeLibrary.Dark.Colour("Ink").ToUpperInvariant(), dark.Text.ToUpperInvariant());
+            Assert.True(dark.Dark); Assert.Equal(AppThemes.Dark.Colour("Surface").ToUpperInvariant(), dark.Caption.ToUpperInvariant());
+            Assert.Equal(AppThemes.Dark.Colour("Ink").ToUpperInvariant(), dark.Text.ToUpperInvariant());
             model.SetTheme("Light"); Dispatcher.UIThread.RunJobs();
             var light = WindowChrome.Colours(dialog)!.Value;
-            Assert.False(light.Dark); Assert.Equal(Timer.Core.ThemeLibrary.Light.Colour("Surface").ToUpperInvariant(), light.Caption.ToUpperInvariant());
+            Assert.False(light.Dark); Assert.Equal(AppThemes.Light.Colour("Surface").ToUpperInvariant(), light.Caption.ToUpperInvariant());
         }
         finally { windows.Quit(); }
     }

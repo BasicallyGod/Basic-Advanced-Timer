@@ -63,6 +63,9 @@ public static class ThemeEngine
         // when the theme and the computer disagreed, and in the recording pill. They wear the theme's surface, text and line instead.
         // A gentle wash of the tracking colour over the surface, for the card of the account that is recording.
         Put("LiveTint", Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Live"], ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000") ? .24 : .14)));
+        // The scroll bar thumb is a quiet grey a little darker than the lines, and darker again under the pointer.
+        Put("ScrollThumb", Color.Parse(ThemeColours.Mix(colours["Line"], colours["Ink"], .13)));
+        Put("ScrollThumbHover", Color.Parse(ThemeColours.Mix(colours["Line"], colours["Ink"], .3)));
         Put("ToolTipBackground", Color.Parse(colours["Surface"]));
         Put("ToolTipForeground", Color.Parse(colours["Ink"]));
         Put("ToolTipBorderBrush", line);
