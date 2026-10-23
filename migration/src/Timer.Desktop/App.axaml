@@ -90,7 +90,7 @@
     <Style Selector="TextBlock.budgetWarning"><Setter Property="Foreground" Value="{DynamicResource BudgetWarning}" /></Style>
     <Style Selector="TextBlock.overtime"><Setter Property="Foreground" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.surface"><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
-    <Style Selector="Border.flyoutCard"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
+    <Style Selector=":is(Border).flyoutCard"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Border.panel"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
     <Style Selector="Border.rule"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Button">
@@ -185,8 +185,9 @@
       <Setter Property="BoxShadow" Value="0 6 20 0 #88000000" />
     </Style>
     <!-- The Day elapsed card is a raised tile with a bar of the accent colour along its top edge. -->
+    <Style Selector="TextBlock.overtimeText"><Setter Property="Foreground" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.dayCard">
-      <Setter Property="Background" Value="{DynamicResource Surface}" />
+      <Setter Property="Background" Value="{DynamicResource Panel}" />
       <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
     </Style>
     <!-- Small custom date picker: no system Calendar's heavy ruled grid or bright blue selection. -->

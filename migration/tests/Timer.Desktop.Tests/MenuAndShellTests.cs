@@ -93,7 +93,7 @@ public sealed class MenuAndShellTests
     public void ReorderableAccountRowsShowAGripAndThePillListDoesNot()
     {
         var model = new TimerModel(Engine());
-        var dashboard = new DashboardWindow(model); dashboard.Show(); var pill = new PillWindow(model); pill.Show(); pill.ShowPanel();
+        var dashboard = new DashboardWindow(model); dashboard.Show(); var pill = new PillWindow(model); pill.Show(); pill.ShowPanel(); dashboard.ShowAccountsPanel();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(); using var pillFrame = pill.CaptureRenderedFrame();

@@ -1,6 +1,7 @@
 using Avalonia;
 using Timer.Core;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.VisualTree;
 using Avalonia.LogicalTree;
@@ -35,14 +36,19 @@ public sealed class WindowCoordinator
         Pill.OpenDashboard = () =>
         {
             model.ShowToday();
-            Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin);
+            PlaceByCard(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin, 1);
             Dashboard.Show();
             Pill.CloseFlyouts(); // So it is a capsule again when you come back.
             Pill.Hide();
             Dashboard.Activate();
         };
         Dashboard.Reveal = ShowDashboard;
-        Dashboard.OpenPill = () => { Pill.CloseFlyouts(); Pill.Show(); Dashboard.Hide(); Pill.Activate(); };
+        Dashboard.OpenPill = () =>
+        {
+            Dashboard.CloseFlyouts(); Pill.CloseFlyouts();
+            PlaceByCard(Pill, Dashboard, Pill.WindowWidthNow, Pill.WindowHeightNow, Pill.Scale);
+            Pill.Show(); Dashboard.Hide(); Pill.Activate();
+        };
         Pill.Closed += (_, _) => exit();
         Dashboard.Closed += (_, _) => exit();
         Pill.Closing += OnClosing; Dashboard.Closing += OnClosing;
@@ -90,7 +96,7 @@ public sealed class WindowCoordinator
     }
     public void ShowDashboard()
     {
-        if (!Dashboard.IsVisible) { model.ShowToday(); Fit(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin); Dashboard.Show(); }
+        if (!Dashboard.IsVisible) { model.ShowToday(); PlaceByCard(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin, 1); Dashboard.Show(); }
         Pill.CloseFlyouts(); Pill.Hide(); BringToFront(Dashboard);
     }
     // The tray icon's left click shows the timer, or hides it when it is already in front.
@@ -121,33 +127,41 @@ public sealed class WindowCoordinator
         quitting = true;
         Pill.Close(); Dashboard.Close();
     }
-    private static void Fit(Window target, Window source, double width, double height)
+    /// <summary>
+    /// Puts the target window so its card (the window less the room kept round it for the shadow) starts where the source's card starts, so the rail
+    /// opens where the pill was and the pill comes back where the rail ended up. It slides up or left when it would run off the screen.
+    /// The pill is drawn smaller than its design size, so its room round the card is smaller in the same proportion.
+    /// </summary>
+    /// <summary>How far, in device pixels, one window must sit from the other for their cards to line up: the room round a card shrinks with the pill's scale.</summary>
+    public static int CardShift(double sourceScale, double targetScale, double screenScaling) => (int)Math.Round(Ui.ShadowMargin * (sourceScale - targetScale) * screenScaling);
+    private static void PlaceByCard(Window target, Window source, double width, double height, double targetScale)
     {
-        var screen = source.Screens.ScreenFromWindow(source);
+        var screen = source.Screens.ScreenFromWindow(source) ?? target.Screens.ScreenFromWindow(target);
         if (screen is null) return;
-        var area = screen.WorkingArea;
-        var scale = screen.Scaling;
+        var area = screen.WorkingArea; var scale = screen.Scaling;
+        var sourceScale = source is PillWindow pill ? pill.Scale : 1.0;
         target.Width = Math.Min(width, area.Width / scale);
         target.Height = Math.Min(height, area.Height / scale);
+        // The card sits one margin in from its window, and the margin shrinks with the pill's scale.
+        var shift = CardShift(sourceScale, targetScale, scale);
         target.Position = new PixelPoint(
-            Math.Clamp(source.Position.X, area.X, Math.Max(area.X, area.Right - (int)(target.Width * scale))),
-            Math.Clamp(source.Position.Y, area.Y, Math.Max(area.Y, area.Bottom - (int)(target.Height * scale))));
+            Math.Clamp(source.Position.X + shift, area.X, Math.Max(area.X, area.Right - (int)(target.Width * scale))),
+            Math.Clamp(source.Position.Y + shift, area.Y, Math.Max(area.Y, area.Bottom - (int)(target.Height * scale))));
     }
 }
 
 public sealed class DashboardWindow : Window
 {
     /// <summary>The dashboard's fixed size, before the room kept around it for its shadow.</summary>
-    public const double DashboardWidth = 1080, DashboardHeight = 680;
+    public const double DashboardWidth = 1100, DashboardHeight = 720;
+    /// <summary>The rail's width, the same as the pill's, so it reads as the pill opened out.</summary>
+    public const double RailWidth = PillWindow.PillWidth;
     /// <summary>The height of the Start break and Finish day buttons, and of the bar under the timeline.</summary>
     public const double ControlBarHeight = 42;
     public Action? OpenPill { get; set; }
     private readonly TimerModel model;
-    private readonly ClockText clock = new(46, 26) { Text = "00:00:00" };
     private readonly TextBlock workspaceTitle = new() { FontSize = 26, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Center };
-    private readonly Avalonia.Controls.Shapes.Ellipse accountDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
     private Button todayButton = null!;
-    private readonly TextBlock account = Ui.Text("", 16);
     // The slider takes whatever room the buttons beside it leave, so a fourth button (Edit) never runs under the zoom bar.
     private static Grid ZoomRow(Control fit, Control zoomOut, Control slider, Control zoomIn)
     {
@@ -156,20 +170,23 @@ public sealed class DashboardWindow : Window
         Ui.Put(row, fit); Ui.Put(row, zoomOut, 1); Ui.Put(row, slider, 2); Ui.Put(row, zoomIn, 3);
         return row;
     }
-    private Border zoomControls = new(); private SelectionStrip? selectionStrip; private Control? identityBlock, accountsHeadBlock, toolsRow; private Button zoomOut = new(), zoomIn = new();
-    private readonly TextBlock allocatedValue = new TextBlock { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
-    private readonly TextBlock unallocatedValue = new TextBlock { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
-    private readonly TextBlock dayText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
-    private readonly IconGlyph dayFlag = new(IconKind.Flag);
+    private Border zoomControls = new(); private SelectionStrip? selectionStrip; private Control? toolsRow, totalsStrip, railBorder; private Button zoomOut = new(), zoomIn = new();
+    private readonly IconGlyph dayFlag = new(IconKind.Flag), daySun = new(IconKind.Sunrise);
+    private StatusFace face = null!;
+    private Popup accountsPopup = null!, finishPopup = null!;
+    private Button accountsButton = null!;
+    private readonly TextBlock finishSummary = Ui.Text("", 13, "muted");
+    private readonly Border dayTile = new() { Name = "DayTile", Width = 40, Height = 40, CornerRadius = new CornerRadius(13), Background = Avalonia.Media.Brushes.Transparent };
+    private readonly Border breakTile = new() { Name = "BreakTile", Width = 40, Height = 40, CornerRadius = new CornerRadius(13), Background = Avalonia.Media.Brushes.Transparent };
+    private readonly TextBlock workingValue = Value(), allocatedValue = Value(), unallocatedValue = Value(), overtimeValue = Value();
+    private Control overtimeStat = null!;
+    private static TextBlock Value() => new() { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private bool hoverBreak;
     private readonly TextBlock date = Ui.Text("", 14); private Button datePick = null!;
-    private readonly TextBlock today = Ui.Text("", 12, "muted");
     private readonly ContentControl workspace = new();
     private readonly Button day;
     private Button timelineRail = null!, breakButton = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
-    private IconGlyph pillGlyph = null!;
     private readonly BreakGlyph dashboardCup = new();
-    private readonly TextBlock dashboardBreakText = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold };
     private readonly Button undo;
     private readonly Button merge;
     private EntryDialog? entryEditor;
@@ -193,106 +210,59 @@ public sealed class DashboardWindow : Window
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
-        // A narrow rail of icons picks the view and holds settings, then the day lives in the left column (the Day elapsed card, the accounts,
-        // and the break and day buttons at the foot). The right column is a titled workspace with the date to step through.
+        // The rail is the pill opened out: it runs the full height, with the same lights, clock and circle at its top, the views below them, and the
+        // break, day and close controls at its foot. The workspace beside it has a header with the date and the gear.
         var root = Ui.Grid("Auto,*", "*");
-        var rail = new Border { Width = 60 }; rail.Classes.Add("panel");
+        var rail = new Border { Width = RailWidth, BorderThickness = new Thickness(0, 0, 1, 0), Name = "DashboardRail" }; rail.Classes.Add("panel");
+        rail.Bind(Border.BorderBrushProperty, rail.GetResourceObservable("Line")); railBorder = rail;
         var railGrid = Ui.Grid("*", "*,Auto");
-        var railTop = new StackPanel { Margin = new Thickness(0, 18, 0, 0), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
+        var railTop = new StackPanel { Margin = new Thickness(0, 18, 0, 0), Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
         Button RailButton(IconKind kind, string tip, string name, Action click)
         {
-            var button = Ui.Button("", click, name); button.Classes.Add("rail"); button.Content = new IconGlyph(kind);
+            var button = Ui.Button("", click, name); button.Classes.Add("rail"); button.Content = new IconGlyph(kind); button.HorizontalAlignment = HorizontalAlignment.Center;
             ToolTip.SetTip(button, tip); Avalonia.Automation.AutomationProperties.SetName(button, tip); return button;
         }
+        // The clock goes back to the pill, and the circle pauses or resumes, as on the pill. With no account to run, it opens the accounts.
+        face = new StatusFace(model, "Rail", "Collapse to pill", () => OpenPill?.Invoke(), OnRailCircle);
+        railTop.Children.Add(face);
+        accountsButton = RailButton(IconKind.Accounts, "Accounts", "RailAccounts", () => { if (accountsPopup.IsOpen) accountsPopup.IsOpen = false; else ShowAccountsPanel(); });
+        accountsButton.Margin = new Thickness(0, 4, 0, 0); railTop.Children.Add(accountsButton);
         timelineRail = RailButton(IconKind.Timeline, "Timeline", "TimelineTab", () => SelectTab(false));
         overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectSection("overview"));
         hoursTab = RailButton(IconKind.Table, "Hours table", "WeekHoursTab", () => SelectSection("hours"));
         entriesTab = RailButton(IconKind.Entries, "Entries", "WeekEntriesTab", () => SelectSection("entries"));
-        // The way back to the pill is the first thing on the rail, at the top left.
-        var backToPill = RailButton(IconKind.Minimise, "Switch to pill", "BackToPill", () => OpenPill?.Invoke());
-        pillGlyph = (IconGlyph)backToPill.Content!;
-        railTop.Children.Add(backToPill);
-        var backRule = Ui.Rule(); backRule.Margin = new Thickness(6, 4); railTop.Children.Add(backRule);
-        // The two views used every day sit together at the top (Timeline, Week overview), and the two used rarely (Hours table, Entries) below a divider.
-        foreach (var button in new[] { timelineRail, overviewTab }) railTop.Children.Add(button);
-        var weekRule = Ui.Rule(); weekRule.Margin = new Thickness(6, 4); railTop.Children.Add(weekRule);
-        foreach (var button in new[] { hoursTab, entriesTab }) railTop.Children.Add(button);
+        var viewsRule = Ui.Rule(); viewsRule.Margin = new Thickness(10, 4); railTop.Children.Add(viewsRule);
+        foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
-        var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center };
-        settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings);
-        railFoot.Children.Add(settingsRail);
+        var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
+        // The break is a plain amber mug, like the pill's, and the day is a flag to finish it or a sunrise to start it.
+        dashboardCup.Mono = false;
+        breakTile.Child = new Viewbox { Width = 26, Height = 26, Child = dashboardCup, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        breakButton = Ui.Button("", model.ToggleBreak, "DashboardBreak");
+        breakButton.Classes.Add("pillBare"); breakButton.Content = breakTile; breakButton.HorizontalAlignment = HorizontalAlignment.Center;
+        breakButton.PointerEntered += (_, _) => { hoverBreak = true; dashboardCup.SetSteaming(true); HoverTile(breakTile, true); };
+        breakButton.PointerExited += (_, _) => { hoverBreak = false; dashboardCup.SetSteaming(model.IsOnBreak); HoverTile(breakTile, false); }; // Steam rises under the pointer too.
+        dayTile.Child = new Grid { Children = { dayFlag, daySun }, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        day = Ui.Button("", OnDayButton, "DashboardDay");
+        day.Classes.Add("pillBare"); day.Content = dayTile; day.HorizontalAlignment = HorizontalAlignment.Center;
+        day.PointerEntered += (_, _) => { dayFlag.Waving = true; HoverTile(dayTile, true); }; day.PointerExited += (_, _) => { dayFlag.Waving = false; HoverTile(dayTile, false); }; // The flag waves under the pointer.
+        railFoot.Children.Add(breakButton); railFoot.Children.Add(day);
         // Closes the timer for good. It goes red under the pointer, so it is never pressed by accident.
         var quit = RailButton(IconKind.Close, "Close timer", "QuitTimer", () => model.RequestQuit()); quit.Classes.Add("quit");
         var quitGlyph = (IconGlyph)quit.Content!;
         quit.PointerEntered += (_, _) => quitGlyph.TintKey = "Finish"; quit.PointerExited += (_, _) => quitGlyph.TintKey = null;
         railFoot.Children.Add(quit);
         Ui.Put(railGrid, railFoot, row: 1);
+        BuildRailPopups(railGrid);
         rail.Child = railGrid; Ui.Put(root, rail);
-        Ui.DragHeader(railTop, this);
-        var body = Ui.Grid("340,1,*", "*");
-        var sidebar = Ui.Grid("*", "Auto,Auto,*,Auto");
-        // The Day elapsed card, with a bar of the accent colour along its top edge.
-        var dayCard = new Border { CornerRadius = new CornerRadius(18), ClipToBounds = true, BorderThickness = new Thickness(1) }; dayCard.Classes.Add("dayCard");
-        var cardStack = new StackPanel();
-        var accentEdge = new Border { Height = 4 }; accentEdge.Classes.Add("accentEdge");
-        cardStack.Children.Add(accentEdge);
-        var identity = new StackPanel { Margin = new Thickness(18, 14, 18, 16), Spacing = 2 };
-        var topRow = Ui.Grid("*,Auto");
-        Ui.Put(topRow, Ui.Text("Working time", 12, "muted")); Ui.Put(topRow, today, 1);
-        identity.Children.Add(topRow); identity.Children.Add(clock);
-        var live = new StackPanel { Spacing = 4, Margin = new Thickness(0, 4, 0, 12) };
-        live.Children.Add(Ui.Horizontal(accountDot, account)); live.Children.Add(new TrackingLabels(model));
-        identity.Children.Add(live);
-        // A hairline keeps the clock and who is running apart from the day's totals under it.
-        var cardRule = Ui.Rule(); cardRule.Margin = new Thickness(0, 0, 0, 10); identity.Children.Add(cardRule);
-        // Two figures side by side, a small label over each, with a hairline between them.
-        var stats = Ui.Grid("*,1,*");
-        var allocatedStat = new StackPanel { Spacing = 1 }; allocatedStat.Children.Add(Ui.Text("Allocated", 12, "muted")); allocatedStat.Children.Add(allocatedValue);
-        var unallocatedStat = new StackPanel { Spacing = 1, Margin = new Thickness(16, 0, 0, 0) }; unallocatedStat.Children.Add(Ui.Text("Unallocated", 12, "muted")); unallocatedStat.Children.Add(unallocatedValue);
-        var statDivider = new Border { Width = 1, Margin = new Thickness(0, 2) }; statDivider.Classes.Add("rule");
-        Ui.Put(stats, allocatedStat); Ui.Put(stats, statDivider, 1); Ui.Put(stats, unallocatedStat, 2);
-        identity.Children.Add(stats);
-        cardStack.Children.Add(identity); dayCard.Child = cardStack;
-        var identityHost = new Border { Padding = new Thickness(12, 18, 16, 6), Child = dayCard };
-        Ui.DragHeader(identityHost, this, "SidebarDragHeader"); identityBlock = identityHost;
-        Ui.Put(sidebar, identityHost);
-        var title = Ui.Text("Client accounts", 13, "muted");
-        title.Margin = new Thickness(20, 12, 20, 6);
-        // The heading alone sets the accounts apart from the card above them, with no divider.
-        // "Today" sits over the bold daily totals, since each row also shows a weekly or monthly figure and the two could be mistaken for each other.
-        var todayHead = Ui.Text("Today", 11, "muted"); todayHead.HorizontalAlignment = HorizontalAlignment.Right; todayHead.VerticalAlignment = VerticalAlignment.Bottom;
-        todayHead.Margin = new Thickness(0, 12, 58, 6); todayHead.Name = "TodayHeading";
-        var headLine = Ui.Grid("*,Auto"); Ui.Put(headLine, title); Ui.Put(headLine, todayHead, 1);
-        var accountsHead = new StackPanel(); accountsHead.Children.Add(headLine); accountsHeadBlock = accountsHead;
-        Ui.Put(sidebar, accountsHead, row: 1);
-        Ui.Put(sidebar, Ui.WithMoreBelow(new ScrollViewer { Name = "AccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled }), row: 2);
-        var summary = new StackPanel { Margin = new Thickness(18, 12, 18, 18), Spacing = 10 };
-        // The break is its own control, apart from the account rows above it, because it stops time going to any account.
-        breakButton = Ui.Button("", model.ToggleBreak, "DashboardBreak");
-        breakButton.Classes.Add("breakButton"); breakButton.Classes.Add("quiet"); breakButton.HorizontalAlignment = HorizontalAlignment.Stretch; breakButton.Height = ControlBarHeight;
-        breakButton.Content = Ui.Horizontal(dashboardCup, dashboardBreakText);
-        breakButton.PointerEntered += (_, _) => { hoverBreak = true; dashboardCup.SetSteaming(true); };
-        breakButton.PointerExited += (_, _) => { hoverBreak = false; dashboardCup.SetSteaming(model.IsOnBreak || hoverBreak); }; // Steam rises under the pointer too.
-        day = Ui.Button("", model.ToggleDay, "DashboardDay"); day.Classes.Add("outlined"); day.Classes.Add("quiet");
-        day.HorizontalAlignment = HorizontalAlignment.Stretch; day.Height = ControlBarHeight; day.Content = Ui.Horizontal(dayFlag, dayText);
-        day.PointerEntered += (_, _) => dayFlag.Waving = true; day.PointerExited += (_, _) => dayFlag.Waving = false; // The flag waves under the pointer.
-        // Side by side, so the pair takes one row at the foot of the column.
-        var pair = Ui.Grid("*,*"); breakButton.Margin = new Thickness(0, 0, 4, 0); day.Margin = new Thickness(4, 0, 0, 0);
-        breakButton.Padding = new Thickness(6, 0); day.Padding = new Thickness(6, 0);
-        Ui.Put(pair, breakButton); Ui.Put(pair, day, 1);
-        summary.Children.Add(pair);
-        Ui.Put(sidebar, summary, row: 3);
-        var panel = new Border { Child = sidebar, Width = 340, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Classes.Add("panel");
-        Ui.Put(body, panel);
-        var divider = new Border(); divider.Classes.Add("rule"); Ui.Put(body, divider, 1);
-        var review = Ui.Grid("*", "Auto,*,Auto,Auto");
+        Ui.DragHeader(railTop, this, "RailDragHeader");
+        var body = Ui.Grid("*", "*");
+        var review = Ui.Grid("*", "Auto,*,Auto,Auto,Auto");
         review.Margin = new Thickness(22, 16, 22, 18);
         // The workspace's name on the left; on the right the date to step through and a button back to today.
         // In Week views the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
         // The date has a fixed width, so the arrows stay put whatever its text says.
-        var nav = Ui.Grid("*,Auto"); nav.VerticalAlignment = VerticalAlignment.Center;
+        var nav = Ui.Grid("*,Auto,Auto"); nav.VerticalAlignment = VerticalAlignment.Center;
         Ui.Put(nav, workspaceTitle); headerRow = nav;
         date.Width = 112; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
         // Pressing the date opens a calendar to jump to any day, so a day weeks away is one click instead of many arrows.
@@ -310,6 +280,9 @@ public sealed class DashboardWindow : Window
         todayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), new TextBlock { Text = "Today", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
         Avalonia.Automation.AutomationProperties.SetName(todayButton, "Today");
         Ui.Put(nav, Ui.Horizontal(previous, datePick, next, todayButton), 1);
+        // Settings is a gear at the top right, which also closes it again.
+        settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings); settingsRail.Margin = new Thickness(12, 0, 0, 0);
+        Ui.Put(nav, settingsRail, 2);
         Ui.Put(review, nav);
         undo = Ui.Button("", () => model.UndoEdit(), "UndoEdit");
         merge = Ui.Button("", () => model.MergeSelection(), "MergeSelected");
@@ -355,12 +328,13 @@ public sealed class DashboardWindow : Window
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
         Ui.Put(review, workspace, row: 1);
         // Selection feedback has its own strip in the layout, just above the buttons it relates to.
-        selectionStrip = new SelectionStrip(model); Ui.Put(review, selectionStrip, row: 2);
-        Ui.Put(review, tools, row: 3);
+        selectionStrip = new SelectionStrip(model); Ui.Put(review, selectionStrip, row: 3);
+        Ui.Put(review, tools, row: 4);
+        totalsStrip = BuildTotals(); Ui.Put(review, totalsStrip, row: 2);
         // The title row's empty middle still drags the window.
         var rightColumn = Ui.Grid("*", "*");
         Ui.Put(rightColumn, review); Ui.DragHeader(nav, this);
-        Ui.Put(body, rightColumn, 2);
+        Ui.Put(body, rightColumn);
         Ui.Put(root, body, 1);
         // Notes, refused edits and failed saves float over the lowest part of the workspace, above the buttons, so they never push the buttons up.
         Ui.Put(review, new MessageBar(model), row: 1);
@@ -421,6 +395,78 @@ public sealed class DashboardWindow : Window
         Refresh(true);
         UpdateOnboarding();
     }
+    // ---- the rail's pop-ups
+    private void BuildRailPopups(Panel host)
+    {
+        // The account list opens beside the rail, as it does beside the pill.
+        var panel = new AccountsPanel(model, "Rail", true, () => { accountsPopup.IsOpen = false; model.OpenAccounts(); });
+        accountsPopup = new Popup { PlacementTarget = accountsButton, Placement = PlacementMode.Right, HorizontalOffset = 8, IsLightDismissEnabled = true, Child = panel,
+            PlacementConstraintAdjustment = Avalonia.Controls.Primitives.PopupPositioning.PopupPositionerConstraintAdjustment.FlipX | Avalonia.Controls.Primitives.PopupPositioning.PopupPositionerConstraintAdjustment.SlideY };
+        railAccountScroll = panel.Scroll;
+        // Finishing the day asks first, in a small card beside the button, since it stops the clock and the running account.
+        var title = Ui.Text("Finish day?", 15); title.FontWeight = Avalonia.Media.FontWeight.SemiBold;
+        finishSummary.Name = "FinishDaySummary"; finishSummary.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
+        var cancel = Ui.DialogButton("Cancel", () => finishPopup.IsOpen = false, "FinishDayCancel", false);
+        var confirm = Ui.DialogButton("Finish day", () => { finishPopup.IsOpen = false; model.ToggleDay(); }, "FinishDayConfirm", true);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right }; buttons.Children.Add(cancel); buttons.Children.Add(confirm);
+        var card = new Border { Name = "FinishDayCard", Width = 280, Padding = new Thickness(16), CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1) };
+        card.Classes.Add("surface"); card.Classes.Add("flyoutCard");
+        var stack = new StackPanel { Spacing = 10 }; stack.Children.Add(title); stack.Children.Add(finishSummary); stack.Children.Add(buttons); card.Child = stack;
+        finishPopup = new Popup { PlacementTarget = day, Placement = PlacementMode.Right, HorizontalOffset = 8, IsLightDismissEnabled = true, Child = card,
+            PlacementConstraintAdjustment = Avalonia.Controls.Primitives.PopupPositioning.PopupPositionerConstraintAdjustment.FlipX | Avalonia.Controls.Primitives.PopupPositioning.PopupPositionerConstraintAdjustment.SlideY };
+        host.Children.Add(accountsPopup); host.Children.Add(finishPopup);
+    }
+    private ScrollViewer? railAccountScroll;
+    /// <summary>Whether the account list beside the rail, or the Finish day question, is open.</summary>
+    public bool AccountsOpen => accountsPopup.IsOpen;
+    public bool FinishQuestionOpen => finishPopup.IsOpen;
+    /// <summary>The account list's scroll box, so tests can read its limit.</summary>
+    public ScrollViewer? AccountScroll => railAccountScroll;
+    /// <summary>Opens the accounts beside the rail. Choosing one starts or switches to it and puts the list away.</summary>
+    public void ShowAccountsPanel()
+    {
+        finishPopup.IsOpen = false;
+        if (railAccountScroll is not null) railAccountScroll.MaxHeight = Math.Max(3 * 70, Height - 2 * Ui.ShadowMargin - 190);
+        accountsActive = model.ActiveAccount; accountsPopup.IsOpen = true;
+    }
+    private string? accountsActive;
+    /// <summary>Puts the account list and the Finish day question away, so the dashboard is plain again when it comes back.</summary>
+    public void CloseFlyouts() { accountsPopup.IsOpen = false; finishPopup.IsOpen = false; }
+    private void OnRailCircle()
+    {
+        var chosen = model.Accounts.Any(a => a.Name == model.SelectedAccount);
+        // With nothing to run or resume, the accounts open so one can be picked.
+        if (model.IsTracking || chosen) model.TogglePause(); else ShowAccountsPanel();
+    }
+    // Starting the day just does it. Finishing it asks first, and says what will stop.
+    private void OnDayButton()
+    {
+        if (!model.DayStarted) { model.ToggleDay(); return; }
+        accountsPopup.IsOpen = false;
+        var lines = new List<string> { "Working time " + model.Format(model.Engine.Totals(model.Engine.Now).Working) + "." };
+        lines.Add("Allocated " + model.Format(model.Allocated) + ", unallocated " + model.Format(model.Unallocated) + ".");
+        if (model.IsTracking && model.Accounts.FirstOrDefault(a => a.Name == model.ActiveAccount) is { } running) lines.Add(running.Display + " stops.");
+        if (model.Engine.Totals(model.Engine.Now).Overtime > TimeSpan.Zero) lines.Add("Overtime " + model.Format(model.Engine.Totals(model.Engine.Now).Overtime) + ".");
+        lines.Add("Start day undoes it.");
+        finishSummary.Text = string.Join("\n", lines);
+        finishPopup.IsOpen = true;
+    }
+    private static void HoverTile(Border tile, bool on) => tile.Background = on ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var brush) && brush is Avalonia.Media.IBrush hover ? hover : Avalonia.Media.Brushes.Transparent) : Avalonia.Media.Brushes.Transparent;
+    // The day's figures in one line under the timeline: the working time (the clock), what is on accounts and what is not, and any overtime.
+    private Control BuildTotals()
+    {
+        Control Stat(string label, TextBlock value, string name)
+        {
+            var row = Ui.Horizontal(Ui.Text(label, 13, "muted"), value); row.Spacing = 6; row.Name = name; return row;
+        }
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 22, Name = "DayTotals", Margin = new Thickness(2, 12, 0, 0) };
+        strip.Children.Add(Stat("Working time", workingValue, "TotalsWorking"));
+        strip.Children.Add(Stat("Allocated", allocatedValue, "TotalsAllocated"));
+        strip.Children.Add(Stat("Unallocated", unallocatedValue, "TotalsUnallocated"));
+        overtimeStat = Stat("Overtime", overtimeValue, "TotalsOvertime"); strip.Children.Add(overtimeStat);
+        overtimeValue.Classes.Add("overtimeText");
+        return strip;
+    }
     /// <summary>Whether the getting started setup is showing over the dashboard.</summary>
     public bool SetupShowing => onboarding is not null;
     // The setup shows for as long as the model says it is not done, over a blurred dashboard that cannot be clicked, and goes when it is finished or skipped.
@@ -451,10 +497,11 @@ public sealed class DashboardWindow : Window
     /// <summary>Whether a point (in window coordinates) is in the part of the dashboard that drags the window.</summary>
     public bool InDragZone(Point point)
     {
-        if (identityBlock is null || accountsHeadBlock is null || toolsRow is null) return false;
+        if (railBorder is null || headerRow is null) return false;
         double Bottom(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), this)?.Y ?? 0;
-        var sidebarRight = identityBlock.TranslatePoint(new Point(identityBlock.Bounds.Width, 0), this)?.X ?? 0;
-        return point.X <= sidebarRight + 18 ? point.Y <= Bottom(accountsHeadBlock) : point.Y <= Bottom(headerRow ?? toolsRow);
+        var railRight = railBorder.TranslatePoint(new Point(railBorder.Bounds.Width, 0), this)?.X ?? 0;
+        // The whole rail and the header row, wherever there is no control.
+        return point.X <= railRight || point.Y <= Bottom(headerRow);
     }
     private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
     {
@@ -484,24 +531,24 @@ public sealed class DashboardWindow : Window
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
     private void Refresh(bool refreshWorkspace)
     {
-        clock.Text = model.ClockText;
-        // Amber on a break, red in overtime, green while tracking, full-strength text otherwise. A break outranks overtime.
-        var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak;
-        clock.SetState(onBreak, late, model.IsTracking && !onBreak && !late);
-        var shownAccount = onBreak ? null : model.Accounts.FirstOrDefault(a => a.Name == (model.ActiveAccount ?? model.SelectedAccount));
-        accountDot.IsVisible = shownAccount is not null; if (shownAccount is not null) accountDot.Fill = Avalonia.Media.Brush.Parse(Ui.Visible(shownAccount.Colour));
-        account.Text = model.IsOnBreak ? (model.ResumeAccount is { } backTo ? "Then back to " + backTo : "No account running") : model.AccountLabel;
-        today.Text = model.Engine.Now.ToString("dddd d MMMM", System.Globalization.CultureInfo.GetCultureInfo("en-GB"));
+        face.Refresh();
+        var onBreak = model.IsOnBreak;
         var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
         date.Text = weekMode ? "Week of " + model.WeekStart(model.SelectedDate).ToString("d MMM", british) : model.SelectedDate.ToString("ddd d MMM", british);
         next.IsEnabled = !weekMode || model.CanStepForwardAWeek;
         ToolTip.SetTip(previous, weekMode ? "Previous week" : "Previous day"); ToolTip.SetTip(next, weekMode ? "Next week" : "Next day");
-        allocatedValue.Text = model.Format(model.Allocated);
-        unallocatedValue.Text = model.Format(model.Unallocated);
-        dayText.Text = model.DayStarted ? "Finish day" : "Start day";
-        dayFlag.TintKey = model.DayStarted ? "Finish" : "Start";
-        day.Classes.Set("startDay", !model.DayStarted); // Green to start the day, red to finish it.
-        day.Classes.Set("finishDay", model.DayStarted); // Red when it would finish the day; the dashboard keeps it as an outline.
+        var totals = model.Engine.Totals(model.Engine.Now);
+        workingValue.Text = model.Format(totals.Working + totals.Overtime); allocatedValue.Text = model.Format(model.Allocated); unallocatedValue.Text = model.Format(model.Unallocated);
+        overtimeValue.Text = model.Format(totals.Overtime); overtimeStat.IsVisible = totals.Overtime > TimeSpan.Zero;
+        if (totalsStrip is not null) totalsStrip.IsVisible = !weekMode && !settingsMode;
+        // The day button is a flag to finish the day, or a sunrise to start it (again). Finish is red and Start is green.
+        dayFlag.IsVisible = model.DayStarted; daySun.IsVisible = !model.DayStarted;
+        dayFlag.TintKey = "Finish"; daySun.TintKey = "Start";
+        day.Classes.Set("startDay", !model.DayStarted); day.Classes.Set("finishDay", model.DayStarted);
+        var dayTip = model.DayStarted ? "Finish day" : model.Engine.Finished ? "Start day again" : "Start day";
+        ToolTip.SetTip(day, dayTip); Avalonia.Automation.AutomationProperties.SetName(day, dayTip);
+        if (finishPopup.IsOpen && !model.DayStarted) finishPopup.IsOpen = false;
+        if (accountsPopup.IsOpen && model.ActiveAccount != accountsActive) accountsPopup.IsOpen = false; // Choosing an account puts the list away.
         // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
         var editing = (!weekMode || model.WeekSection == "entries");
         zoomControls.IsVisible = !weekMode && !settingsMode;
@@ -510,11 +557,12 @@ public sealed class DashboardWindow : Window
         addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
         merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
         edit.IsVisible = editing && model.CanEditSelection; if (edit.IsVisible && edit.Content is Panel editRow && editRow.Children.OfType<TextBlock>().FirstOrDefault() is { } editText) editText.Text = model.EditText;
-        pillGlyph.DotKey = model.IsOnBreak ? "Break" : model.IsTracking ? "Live" : "Idle";
-        dashboardCup.Filled = model.IsOnBreak; dashboardCup.SetSteaming(model.IsOnBreak || hoverBreak); dashboardCup.InvalidateVisual();
-        dashboardBreakText.Text = model.IsOnBreak ? "Finish break" : "Start break";
-        breakButton.Classes.Set("onBreak", model.IsOnBreak);
-        ToolTip.SetTip(breakButton, model.IsOnBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Take a break");
+        dashboardCup.Filled = onBreak; dashboardCup.SetSteaming(onBreak || hoverBreak); dashboardCup.InvalidateVisual();
+        breakButton.Classes.Set("onBreak", onBreak);
+        var amber = Ui.ThemeColour(this, "Break", Avalonia.Media.Color.Parse("#F5A524"));
+        breakTile.Background = onBreak ? new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromArgb(0x33, amber.R, amber.G, amber.B)) : hoverBreak ? breakTile.Background : Avalonia.Media.Brushes.Transparent;
+        var breakTip = onBreak ? "End break" + (model.ResumeAccount is { } resumeTo ? " and resume " + resumeTo : "") : "Start break";
+        ToolTip.SetTip(breakButton, breakTip); Avalonia.Automation.AutomationProperties.SetName(breakButton, breakTip);
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); var glyph = button.Content as IconGlyph ?? (button.Content as Grid)?.Children.OfType<IconGlyph>().FirstOrDefault(); if (glyph is not null) glyph.TintKey = selected ? "Ink" : "Muted"; }
@@ -523,6 +571,7 @@ public sealed class DashboardWindow : Window
         Rail(hoursTab, !settingsMode && weekMode && model.WeekSection == "hours");
         Rail(entriesTab, !settingsMode && weekMode && model.WeekSection == "entries");
         Rail(settingsRail, settingsMode);
+        Rail(accountsButton, accountsPopup.IsOpen);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
         foreach (var control in new Control[] { previous, datePick, next, todayButton }) control.IsVisible = !settingsMode;
         if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && (!weekMode || model.WeekSection == "entries");

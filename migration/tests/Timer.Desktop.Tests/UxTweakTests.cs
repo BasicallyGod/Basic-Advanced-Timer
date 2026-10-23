@@ -161,15 +161,17 @@ public sealed class UxTweakTests
     }
 
     [AvaloniaFact]
-    public void BackToPillIsFirstOnTheRailAndCloseTimerIsAtTheFootBelowSettings()
+    public void TheClockIsFirstOnTheRailAndGoesBackToThePillAndCloseTimerIsAtTheFoot()
     {
-        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show(); var back = 0; window.OpenPill = () => back++;
         try
         {
             Settle(window);
             double Top(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Point(0, 0), window)!.Value.Y; }
-            Assert.True(Top("BackToPill") < Top("TimelineTab"));
-            Assert.True(Top("QuitTimer") > Top("Settings"));
+            Assert.True(Top("RailDashboard") < Top("RailPause")); Assert.True(Top("RailPause") < Top("RailAccounts")); Assert.True(Top("RailAccounts") < Top("TimelineTab"));
+            Assert.True(Top("DashboardBreak") < Top("DashboardDay")); Assert.True(Top("DashboardDay") < Top("QuitTimer")); Assert.True(Top("QuitTimer") > Top("WeekEntriesTab"));
+            Assert.Equal("Collapse to pill", ToolTip.GetTip(window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "RailDashboard")));
+            window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "RailDashboard").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.Equal(1, back);
             var quits = 0; model.QuitRequested += () => quits++;
             window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "QuitTimer").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(1, quits);
@@ -274,24 +276,6 @@ public sealed class UxTweakTests
             ThemeEngine.Register(Application.Current!, AppThemes.BuiltIn);
             var light = Frame(); window.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark; var dark = Frame();
             Assert.NotEqual(light, dark); // The stroke changed colour, not only the window around it.
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void ThePillIconsDotTakesTheStatusColourOfTheDay()
-    {
-        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
-        try
-        {
-            Settle(window);
-            var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BackToPill");
-            var glyph = (IconGlyph)button.Content!;
-            Assert.Equal(IconKind.Minimise, glyph.Kind); Assert.Equal("Switch to pill", ToolTip.GetTip(button));
-            if (!model.IsTracking) model.ToggleAccount("Account one"); Settle(window);
-            Assert.Equal("Live", glyph.DotKey);
-            model.TogglePause(); Settle(window); Assert.Equal("Idle", glyph.DotKey);
-            model.ToggleBreak(); Settle(window); Assert.Equal("Break", glyph.DotKey);
         }
         finally { window.Close(); }
     }
@@ -418,7 +402,7 @@ public sealed class UxTweakTests
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model); window.Show();
         try
         {
-            Settle(window);
+            window.ShowAccountsPanel(); Settle(window);
             var rows = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")).ToList();
             Assert.NotEmpty(rows);
             Assert.All(rows, row => Assert.DoesNotContain(row.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.EndsWith('%'))); // No percentage on the row itself.

@@ -106,6 +106,7 @@ public sealed class AccountEditingTests
         var window = new DashboardWindow(model); window.Show();
         try
         {
+            window.ShowAccountsPanel();
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             Button Row(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
             var first = Row("Account0"); var height = first.Bounds.Height;
@@ -149,6 +150,7 @@ public sealed class AccountEditingTests
         var window = new DashboardWindow(model); window.Show();
         try
         {
+            window.ShowAccountsPanel();
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             Button Row(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
             var first = Row("Account0"); var height = first.Bounds.Height; var second = Row("Account1");

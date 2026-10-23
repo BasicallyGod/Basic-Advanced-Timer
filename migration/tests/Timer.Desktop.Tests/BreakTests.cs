@@ -60,20 +60,21 @@ public sealed class BreakTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             model.ToggleAccount("Account one"); now = now.AddMinutes(10); Dispatcher.UIThread.RunJobs();
+            dashboard.ShowAccountsPanel(); Dispatcher.UIThread.RunJobs(); using var panelFrame = dashboard.CaptureRenderedFrame(); // The accounts open beside the rail.
             var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.StartsWith("Account") == true && char.IsDigit(b.Name[^1])).ToList();
             Assert.Equal(model.Accounts.Count - 1, rows.Count);
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Break");
             var dashboardBreak = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
             var pillBreak = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillBreak");
-            Assert.Contains("breakButton", dashboardBreak.Classes); Assert.DoesNotContain("onBreak", dashboardBreak.Classes);
-            Assert.Contains(dashboardBreak.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Start break");
+            dashboard.CloseFlyouts(); Assert.DoesNotContain("onBreak", dashboardBreak.Classes);
+            Assert.Equal("Start break", ToolTip.GetTip(dashboardBreak));
             // A slow runner may still be settling the layout, so it is finished before the button's position is read.
             Dispatcher.UIThread.RunJobs(); dashboard.UpdateLayout();
             var point = dashboardBreak.TranslatePoint(new Point(dashboardBreak.Bounds.Width / 2, dashboardBreak.Bounds.Height / 2), dashboard)!.Value;
             dashboard.MouseDown(point, MouseButton.Left); dashboard.MouseUp(point, MouseButton.Left); Dispatcher.UIThread.RunJobs();
             now = now.AddMinutes(30); model.ChangeDate(0); Dispatcher.UIThread.RunJobs();
             Assert.True(model.IsOnBreak); Assert.Contains("onBreak", dashboardBreak.Classes); Assert.Equal("Break", model.ThemeState);
-            Assert.Contains(dashboardBreak.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Finish break");
+            Assert.StartsWith("End break", ToolTip.GetTip(dashboardBreak)?.ToString());
             Assert.Equal("On break", ToolTip.GetTip(pill.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "PillLights")));
             Assert.True(pill.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming); // The steam moves while the break is on.
             Assert.True(dashboard.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming);

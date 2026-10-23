@@ -170,16 +170,8 @@ public sealed class PillWindow : Window
         peekCard.PointerExited += (_, _) => { overFlyout = false; ScheduleClose(); };
         ConfigurePopup(peek, new LayoutTransformControl { LayoutTransform = pillScale, Child = peekCard }, false);
         // The account list: the dashboard's account rows with their budget bars, then Manage accounts.
-        var heading = Ui.Grid("*,Auto"); heading.Margin = new Thickness(6, 0, 6, 6);
-        var title = Ui.Text("Accounts", 15); title.FontWeight = FontWeight.SemiBold; Ui.Put(heading, title);
-        Ui.Put(heading, Ui.Text("Today", 12, "muted"), 1);
-        accountScroll = new ScrollViewer { Name = "PillAccountScroll", Content = new AccountList(model, bars: true), AllowAutoHide = false,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        var manage = Ui.DialogButton("Manage accounts", () => { CloseFlyouts(); model.OpenAccounts(); }, "PillManageAccounts", false);
-        manage.HorizontalAlignment = HorizontalAlignment.Stretch; manage.HorizontalContentAlignment = HorizontalAlignment.Center; manage.Margin = new Thickness(6, 8, 6, 0);
-        var list = new StackPanel { Spacing = 2 }; list.Children.Add(heading); list.Children.Add(Ui.WithMoreBelow(accountScroll)); list.Children.Add(manage);
-        var panelCard = new Border { Name = "PillPanel", Width = 320, Padding = new Thickness(8, 12, 8, 12), CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Child = list };
-        panelCard.Classes.Add("surface"); panelCard.Classes.Add("flyoutCard");
+        var panelCard = new AccountsPanel(model, "Pill", false, () => { CloseFlyouts(); model.OpenAccounts(); });
+        accountScroll = panelCard.Scroll;
         panelCard.PointerEntered += (_, _) => { overFlyout = true; closeTimer?.Stop(); };
         panelCard.PointerExited += (_, _) => overFlyout = false;
         ConfigurePopup(panel, new LayoutTransformControl { LayoutTransform = pillScale, Child = panelCard }, true);

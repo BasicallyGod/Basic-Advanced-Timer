@@ -471,7 +471,8 @@ public sealed class AccountList : StackPanel
     {
         this.model = model; this.reorderable = reorderable; this.bars = bars;
         Rebuild();
-        AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
+        // A list that sat hidden (in a pop-up) missed the changes made meanwhile, so it catches up when it is shown.
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Changed(null, new System.ComponentModel.PropertyChangedEventArgs(null)); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
     }
     // The break has its own button, set apart from the accounts, so it is not one of the rows.
@@ -857,7 +858,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -976,6 +977,21 @@ public sealed class IconGlyph : Control
                 context.DrawLine(pen, new Point(4.5, 13), new Point(4.5, 9 - hover));
                 context.DrawLine(pen, new Point(9, 13), new Point(9, 3.5 - hover));
                 context.DrawLine(pen, new Point(13.5, 13), new Point(13.5, 6.5 - hover));
+                break;
+            case IconKind.Accounts:
+                // Two rows, each a round swatch and a line: the accounts as a short list.
+                foreach (var y in new[] { 5.0, 12.5 })
+                {
+                    context.DrawEllipse(null, pen, new Point(4.8, y), 2.1, 2.1);
+                    context.DrawLine(pen, new Point(9.5, y), new Point(15.5, y));
+                }
+                break;
+            case IconKind.Sunrise:
+                // A half sun on the horizon with short rays: the day beginning.
+                context.DrawLine(pen, new Point(2, 13.5), new Point(16, 13.5));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 5.5,13.5 A 3.5,3.5 0 0 1 12.5,13.5"));
+                context.DrawLine(pen, new Point(9, 4.5 - hover), new Point(9, 6.5)); context.DrawLine(pen, new Point(3.8, 7.6), new Point(5.2, 8.9));
+                context.DrawLine(pen, new Point(14.2, 7.6), new Point(12.8, 8.9));
                 break;
             case IconKind.Close:
                 context.DrawLine(pen, new Point(4.5, 4.5), new Point(13.5, 13.5)); context.DrawLine(pen, new Point(13.5, 4.5), new Point(4.5, 13.5));
