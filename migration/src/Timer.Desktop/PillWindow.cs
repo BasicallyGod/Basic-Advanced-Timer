@@ -232,9 +232,9 @@ public sealed class PillWindow : Window
 
         // A ring and a glow in the state's colour round the pill while it is doing something, and the plain edge and shadow when it is idle.
         surface.BorderThickness = new Thickness(key == "Idle" ? 1 : 1.5);
-        surface.BorderBrush = key == "Idle" ? (this.TryFindResource("Line", ActualThemeVariant, out var line) && line is IBrush lineBrush ? lineBrush : Brushes.Gray) : new SolidColorBrush(Color.FromArgb(200, stateColour.R, stateColour.G, stateColour.B));
+        surface.BorderBrush = key == "Idle" ? (this.TryFindResource("Line", ActualThemeVariant, out var line) && line is IBrush lineBrush ? lineBrush : Brushes.Gray) : new SolidColorBrush(Color.FromArgb(179, stateColour.R, stateColour.G, stateColour.B));
         if (drawer is not null) SyncDrawerRing();
         var shadow = (model.Shadows, key, ActualThemeVariant);
-        if (lastShadow != shadow) { lastShadow = shadow; Ui.SetShadow(shadowHost, model.Shadows, key == "Idle" ? null : key); }
+        if (lastShadow != shadow) { lastShadow = shadow; Ui.SetPillShadow(shadowHost, model.Shadows, key == "Idle" ? null : key); }
     }
 }

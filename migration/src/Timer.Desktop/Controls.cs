@@ -58,6 +58,27 @@ public static class Ui
             host.BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 6, Blur = 22, Spread = 0, Color = ThemeColour(host, "ShadowColor", Color.FromArgb(90, 0, 0, 0)) });
         else host.BoxShadow = default;
     }
+    /// <summary>
+    /// Avalonia turns a shadow's blur into a Gaussian with sigma 0.2887 x blur + 0.5, where a CSS blur has sigma of half the blur, so the same number
+    /// spreads about a third less. This gives the Avalonia blur that spreads like the CSS one the mock is drawn with.
+    /// </summary>
+    public static double CssBlur(double css) => Math.Round((css / 2 - 0.5) / 0.288675, 1);
+    /// <summary>
+    /// The pill's own halo, drawn as the mock draws it: a glow of a 12 pixel CSS blur in the state's colour at 16 per cent (22 on a dark theme) while it is doing something,
+    /// and at rest a light shadow dropped 6 pixels with an 18 pixel blur (10 per cent warm black, or 40 per cent black on a dark theme) rather than the heavier shadow cards use.
+    /// </summary>
+    public static void SetPillShadow(Border host, bool shadows, string? glow)
+    {
+        var dark = SoftTint.IsDark(host);
+        if (glow is not null)
+        {
+            var colour = ThemeColour(host, glow, Colors.Gray);
+            host.BoxShadow = new BoxShadows(new BoxShadow { Blur = CssBlur(12), Spread = 0, Color = Color.FromArgb((byte)Math.Round((dark ? .22 : .16) * 255), colour.R, colour.G, colour.B) });
+        }
+        else if (shadows)
+            host.BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 6, Blur = CssBlur(18), Spread = 0, Color = dark ? Color.FromArgb(102, 0, 0, 0) : Color.FromArgb(26, 30, 30, 20) });
+        else host.BoxShadow = default;
+    }
     // An animation that has stopped (its window was hidden or the control left the tree, which ends a repeating one) must not still count as running,
     // or asking for it again does nothing and the dot stays still for good. So the task is kept, and a finished one is started afresh.
     private sealed record PulseRun(CancellationTokenSource Source, RunningAnimation Run);
