@@ -37,7 +37,8 @@ public sealed class StatusFace : StackPanel
     private readonly TimerModel model;
     private readonly StackedClock clock = new() { Text = "00:00:00" };
     private readonly Border stateLight, reminderLight;
-    private readonly Avalonia.Controls.Shapes.Ellipse circleFill = new() { Width = 46, Height = 46 };
+    // The play button is a rounded square, to match the accounts icon beside it.
+    private readonly Avalonia.Controls.Shapes.Rectangle circleFill = new() { Width = 46, Height = 46, RadiusX = 14, RadiusY = 14 };
     private readonly TextBlock initials = new() { FontSize = 17, Classes = { "clock" }, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly PauseGlyph glyph = new();
     private readonly Border clockTile;
@@ -146,24 +147,27 @@ public sealed class StatusFace : StackPanel
 
 
 /// <summary>
-/// The break control on the pill and on the rail: an amber circle with a white cup, a little smaller than the play circle. The amber is the theme's
-/// break colour deepened until the white cup holds 4.5 to 1 on it. It brightens under the pointer, and on a break it wears a soft ring while the
-/// steam moves.
+/// The break control. On the pill it is a rounded square in the theme's break orange with a cup on it (white, or dark where white would not read on the
+/// theme's orange); on the dashboard's rail it is a plain orange cup in a quiet tile, in keeping with the red flag and the close cross beside it. Either
+/// way it brightens or tints under the pointer, and on a break it is lit and the steam moves.
 /// </summary>
 public sealed class BreakButton : Button
 {
     private readonly TimerModel model;
-    private readonly BreakGlyph cup = new() { Filled = true, Mono = false };
-    private readonly Border circle = new() { Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Background = Brushes.DarkGoldenrod };
+    private readonly bool filled;
+    private readonly BreakGlyph cup = new() { Mono = false };
+    private readonly Border tile = new() { Width = 40, Height = 40, CornerRadius = new CornerRadius(13), Background = Brushes.Transparent };
     private bool hover;
     public BreakGlyph Cup => cup;
-    public BreakButton(TimerModel model, string name)
+    /// <param name="filled">The pill's look, a filled square, rather than the rail's plain cup.</param>
+    public BreakButton(TimerModel model, string name, bool filled)
     {
-        this.model = model; Name = name;
+        this.model = model; this.filled = filled; Name = name;
         Click += (_, _) => model.ToggleBreak();
         Classes.Add("pillBare"); Padding = new Thickness(0); Width = 46; Height = 46; HorizontalAlignment = HorizontalAlignment.Center;
-        circle.Child = new Viewbox { Width = 20, Height = 20, Child = cup, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        Content = circle;
+        // Drawn at its own size, so its line is as thin as the flag's and the cross's.
+        tile.Child = cup; cup.HorizontalAlignment = HorizontalAlignment.Center; cup.VerticalAlignment = VerticalAlignment.Center;
+        Content = tile;
         PointerEntered += (_, _) => { hover = true; cup.SetSteaming(true); Refresh(); };
         PointerExited += (_, _) => { hover = false; cup.SetSteaming(model.IsOnBreak); Refresh(); };
         ActualThemeVariantChanged += (_, _) => Refresh();
@@ -172,10 +176,21 @@ public sealed class BreakButton : Button
     public void Refresh()
     {
         var onBreak = model.IsOnBreak;
-        var amber = Ui.BreakCircleColour(Ui.ThemeColour(this, "Break", Color.Parse("#F5A524")));
-        var hex = $"#{amber.R:X2}{amber.G:X2}{amber.B:X2}";
-        circle.Background = new SolidColorBrush(hover ? Color.Parse(ThemeColours.Mix(hex, "#FFFFFF", .12)) : amber);
-        circle.BoxShadow = onBreak ? BoxShadows.Parse("0 0 0 3 #66F5A524") : default;
+        var orange = Ui.ThemeColour(this, "Break", Color.Parse("#F5A524"));
+        var hex = $"#{orange.R:X2}{orange.G:X2}{orange.B:X2}";
+        cup.Filled = false;
+        if (filled)
+        {
+            tile.Background = new SolidColorBrush(hover ? Color.Parse(ThemeColours.Mix(hex, "#FFFFFF", .12)) : orange);
+            // White where it reads on the orange, otherwise a dark brown.
+            cup.Fixed = ThemeColours.Contrast(hex, "#FFFFFF") >= 2.9 ? Brushes.White : new SolidColorBrush(Color.Parse("#2A1A05"));
+            tile.BoxShadow = onBreak ? BoxShadows.Parse($"0 0 0 3 #66{orange.R:X2}{orange.G:X2}{orange.B:X2}") : default;
+        }
+        else
+        {
+            cup.Fixed = null; // The theme's break orange.
+            tile.Background = onBreak ? new SolidColorBrush(Color.FromArgb(0x33, orange.R, orange.G, orange.B)) : hover && tile.TryFindResource("Hover", ActualThemeVariant, out var h) && h is IBrush hb ? hb : Brushes.Transparent;
+        }
         cup.SetSteaming(onBreak || hover); cup.InvalidateVisual();
         var tip = onBreak ? "End break" + (model.ResumeAccount is { } returnTo ? " and resume " + returnTo : "") : "Start break";
         ToolTip.SetTip(this, tip); Avalonia.Automation.AutomationProperties.SetName(this, tip);

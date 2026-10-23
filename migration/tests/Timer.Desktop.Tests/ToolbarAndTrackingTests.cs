@@ -70,7 +70,7 @@ public sealed class ToolbarAndTrackingTests
             Assert.True(model.IsTracking); Assert.Equal("Recording", model.ThemeState);
             var green = Color.Parse(model.CurrentTheme.Colour("Live")); Assert.True(green.G > green.R + 20, "The theme's tracking colour is green.");
             var light = dash.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "RailStateLight");
-            var circle = dash.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "RailPause").GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Single();
+            var circle = dash.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "RailPause").GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>().Single();
             Assert.Equal(green, ((ISolidColorBrush)light.Background!).Color); Assert.Equal(green, ((ISolidColorBrush)circle.Fill!).Color);
             // On a break the green goes, and the light and circle take the break colour.
             model.ToggleBreak(); Settle(dash);

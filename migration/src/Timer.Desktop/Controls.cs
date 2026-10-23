@@ -51,7 +51,8 @@ public static class Ui
         if (glow is not null)
         {
             var colour = ThemeColour(host, glow, Colors.Gray);
-            host.BoxShadow = new BoxShadows(new BoxShadow { Blur = 26, Spread = 2, Color = Color.FromArgb(150, colour.R, colour.G, colour.B) });
+            // A soft halo, not a strong glow: it only has to say the state without pulling the eye.
+            host.BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, Spread = 0, Color = Color.FromArgb(64, colour.R, colour.G, colour.B) });
         }
         else if (shadows)
             host.BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 6, Blur = 22, Spread = 0, Color = ThemeColour(host, "ShadowColor", Color.FromArgb(90, 0, 0, 0)) });
@@ -244,13 +245,6 @@ public static class Ui
     /// The right-click menu is kept short on purpose: the hours format, which build this is, the overtime tester (demo only) and Close timer.
     /// Everything else lives on the settings page.
     /// </summary>
-    /// <summary>The break circle's colour: the theme's break amber, deepened until a white cup on it holds 4.5 to 1.</summary>
-    public static Avalonia.Media.Color BreakCircleColour(Avalonia.Media.Color amber)
-    {
-        var hex = $"#{amber.R:X2}{amber.G:X2}{amber.B:X2}";
-        for (var weight = 0.0; weight <= .6 && Timer.Core.ThemeColours.Contrast(hex, "#FFFFFF") < 4.5; weight += .04) hex = Timer.Core.ThemeColours.Mix($"#{amber.R:X2}{amber.G:X2}{amber.B:X2}", "#000000", weight);
-        return Avalonia.Media.Color.Parse(hex);
-    }
     public static ContextMenu SettingsMenu(TimerModel model)
     {
         // Inside the demo you can switch overtime on and off to see how it looks. Like the version, it shows only once developer features are unlocked.
@@ -326,7 +320,8 @@ public sealed class AccountIndicator : Control
         var centre = new Point(21, 21);
         var ink = Resource("Ink");
         var running = model.ActiveAccount == Account.Name;
-        if (!Ring) context.DrawEllipse(running ? Resource("Accent") : null, running ? null : new Pen(Resource("Line"), 2), centre, 19, 19);
+        // Without the ring the button is a rounded square, like the pill's circle and the accounts icon, not a circle.
+        if (!Ring) context.DrawRectangle(running ? Resource("Accent") : null, running ? null : new Pen(Resource("Line"), 2), new Rect(2, 2, 38, 38), 12, 12);
         if (Ring && Account.Budget is { } budget)
         {
             context.DrawEllipse(null, new Pen(Resource("Line"), 3), centre, 19, 19);
@@ -352,7 +347,10 @@ public sealed class AccountIndicator : Control
         var accent = Resource("Accent"); var accentInk = Resource("AccentInk");
         if (glow > 0 && !BreakAccount.Is(Account.Name))
         {
-            using (context.PushOpacity(glow)) context.DrawEllipse(accent, null, centre, Ring ? 15 : 19, Ring ? 15 : 19);
+            using (context.PushOpacity(glow))
+            {
+                if (Ring) context.DrawEllipse(accent, null, centre, 15, 15); else context.DrawRectangle(accent, null, new Rect(2, 2, 38, 38), 12, 12);
+            }
         }
         // On the plain circle a running account is already filled with the accent, so its pause bars are drawn in the accent's own text colour.
         if (!Ring && running) ink = accentInk;
@@ -474,7 +472,7 @@ public sealed class AccountList : StackPanel
     private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Period)> rows = new();
     private readonly bool reorderable, bars, compact;
     /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
-    /// <param name="compact">With bars, a shorter row for the pill's narrow drawer: the swatch, name and time, and the bar, without the budget words or the play circle.</param>
+    /// <param name="compact">With bars, a shorter row for the pill's narrow drawer: the name and time, the bar and the play button, without the budget words.</param>
     public AccountList(TimerModel model, bool reorderable = false, bool bars = false, bool compact = false)
     {
         this.model = model; this.reorderable = reorderable; this.bars = bars; this.compact = compact;
@@ -523,7 +521,7 @@ public sealed class AccountList : StackPanel
                 labels.Children.Add(nameLine); if (!compact) labels.Children.Add(budgetLine);
                 if (account.Budget is not null) { bar = new BudgetBar(); labels.Children.Add(bar); }
                 icon.Margin = new Thickness(8, 0, 0, 0);
-                Ui.Put(grid, labels, shift); if (!compact) Ui.Put(grid, icon, 1 + shift);
+                Ui.Put(grid, labels, shift); Ui.Put(grid, icon, 1 + shift);
                 // A rounded card inset from the edges, so the recording account's soft highlight has room to show.
                 row.Classes.Add("accountCard"); row.Margin = new Thickness(0); row.Height = compact ? 54 : 70;
             }
@@ -796,6 +794,8 @@ public sealed class BreakGlyph : Control
     public static readonly TimeSpan SteamCycle = TimeSpan.FromSeconds(3.2), SteamEase = TimeSpan.FromMilliseconds(600);
     private bool wanted;
     public bool Filled { get; set; }
+    /// <summary>A fixed colour for the cup, for when it sits on a filled square and must read against that fill.</summary>
+    public IBrush? Fixed { get; set; }
     /// <summary>Draws the cup in plain text colour, and in <see cref="HotKey"/> only while the pointer is over its button.</summary>
     public bool Mono { get; set; }
     private bool hot;
@@ -845,7 +845,7 @@ public sealed class BreakGlyph : Control
     {
         IBrush? brush = null;
         var key = Mono ? (Hot ? HotKey : "Ink") : "Break";
-        if (Filled) brush = Brushes.White; else if (this.TryFindResource(key, ActualThemeVariant, out var value)) brush = value as IBrush;
+        if (Fixed is not null) brush = Fixed; else if (Filled) brush = Brushes.White; else if (this.TryFindResource(key, ActualThemeVariant, out var value)) brush = value as IBrush;
         var pen = new Pen(brush ?? Brushes.Gray, IconGlyph.StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         context.DrawGeometry(null, pen, Geometry.Parse("M 3,7 L 3,12 Q 3,15.5 6.5,15.5 L 9.5,15.5 Q 13,15.5 13,12 L 13,7 Z"));
         context.DrawGeometry(null, pen, Geometry.Parse("M 13,8 L 14.5,8 Q 16.5,8 16.5,10 Q 16.5,12 14.5,12 L 13,12"));

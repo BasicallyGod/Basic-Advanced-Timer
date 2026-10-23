@@ -109,7 +109,7 @@ public sealed class DashboardShellTests
             Click(day); Settle(window);
             Assert.True(window.FinishQuestionOpen); Assert.True(model.DayStarted); // Nothing has happened yet.
             var summary = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "FinishDaySummary").Text!;
-            Assert.Contains("Working time", summary); Assert.Contains("Allocated", summary); Assert.Contains("Account one stops.", summary); Assert.Contains("Start day undoes it.", summary);
+            Assert.Matches(@"^Working time \d\d:\d\d\.$", summary); // Just the working time: the card is small.
             Click(Find<Button>(window, "FinishDayCancel")); Assert.False(window.FinishQuestionOpen); Assert.True(model.DayStarted);
             Click(day); Settle(window); Click(Find<Button>(window, "FinishDayConfirm")); Settle(window);
             Assert.False(window.FinishQuestionOpen); Assert.False(model.DayStarted); Assert.False(model.IsTracking);

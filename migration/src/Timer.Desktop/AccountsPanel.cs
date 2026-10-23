@@ -17,10 +17,8 @@ public sealed class AccountsPanel : Grid
     public AccountsPanel(TimerModel model, string prefix, bool compact, bool reorderable, Action manage)
     {
         Name = prefix + "Panel"; RowDefinitions = new RowDefinitions("Auto,*,Auto");
-        var heading = Ui.Grid("*,Auto"); // The heading lines up with the rows below it: the name starts where theirs do, and Today sits over the column of daily times, which the play circle pushes in from the edge.
-        heading.Margin = new Thickness(10, 0, compact ? 10 : 54, 8);
-        var title = compact ? Ui.Text("Accounts", 15) : Ui.Heading("Accounts"); title.FontWeight = FontWeight.SemiBold; Ui.Put(heading, title);
-        var todayHead = Ui.Text("Today", 12, "muted"); todayHead.Name = "TodayHeading"; todayHead.VerticalAlignment = VerticalAlignment.Center; Ui.Put(heading, todayHead, 1);
+        var heading = new Grid { Margin = new Thickness(10, 0, 10, 8) };
+        var title = compact ? Ui.Text("Accounts", 15) : Ui.Heading("Accounts"); title.FontWeight = FontWeight.SemiBold; heading.Children.Add(title);
         Scroll = new ScrollViewer { Name = prefix + "AccountScroll", Content = new AccountList(model, reorderable: reorderable, bars: true, compact: compact), AllowAutoHide = false,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         var button = Ui.DialogButton("Manage accounts", manage, prefix + "ManageAccounts", false);

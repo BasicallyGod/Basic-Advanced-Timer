@@ -237,8 +237,8 @@ public sealed class DashboardWindow : Window
         foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
-        // The break is the pill's amber circle with a white cup, and the day is a flag to finish it or a sunrise to start it.
-        breakButton = new BreakButton(model, "DashboardBreak");
+        // The break is a plain orange cup, in keeping with the flag and the cross, and the day is a flag to finish it or a sunrise to start it.
+        breakButton = new BreakButton(model, "DashboardBreak", filled: false);
         dayTile.Child = new Grid { Children = { dayFlag, daySun }, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         day = Ui.Button("", OnDayButton, "DashboardDay");
         day.Classes.Add("pillBare"); day.Content = dayTile; day.HorizontalAlignment = HorizontalAlignment.Center;
@@ -464,12 +464,8 @@ public sealed class DashboardWindow : Window
     {
         if (!model.DayStarted) { model.ToggleDay(); return; }
         CloseAccounts();
-        var lines = new List<string> { "Working time " + model.Format(model.Engine.Totals(model.Engine.Now).Working) + "." };
-        lines.Add("Allocated " + model.Format(model.Allocated) + ", unallocated " + model.Format(model.Unallocated) + ".");
-        if (model.IsTracking && model.Accounts.FirstOrDefault(a => a.Name == model.ActiveAccount) is { } running) lines.Add(running.Display + " stops.");
-        if (model.Engine.Totals(model.Engine.Now).Overtime > TimeSpan.Zero) lines.Add("Overtime " + model.Format(model.Engine.Totals(model.Engine.Now).Overtime) + ".");
-        lines.Add("Start day undoes it.");
-        finishSummary.Text = string.Join("\n", lines);
+        // Just the working time: what stops is plain from the button, and the card stays small.
+        finishSummary.Text = "Working time " + model.Format(model.Engine.Totals(model.Engine.Now).Working) + ".";
         finishPopup.IsOpen = true;
     }
     private static void HoverTile(Border tile, bool on) => tile.Background = on ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var brush) && brush is Avalonia.Media.IBrush hover ? hover : Avalonia.Media.Brushes.Transparent) : Avalonia.Media.Brushes.Transparent;
