@@ -51,10 +51,47 @@ public static class Ui
         if (glow is not null)
         {
             var colour = ThemeColour(host, glow, Colors.Gray);
-            host.BoxShadow = new BoxShadows(new BoxShadow { Blur = 26, Spread = 2, Color = Color.FromArgb(150, colour.R, colour.G, colour.B) });
+            // A soft halo, not a strong glow: it only has to say the state without pulling the eye.
+            host.BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, Spread = 0, Color = Color.FromArgb(48, colour.R, colour.G, colour.B) });
         }
         else if (shadows)
             host.BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 6, Blur = 22, Spread = 0, Color = ThemeColour(host, "ShadowColor", Color.FromArgb(90, 0, 0, 0)) });
+        else host.BoxShadow = default;
+    }
+    /// <summary>
+    /// Avalonia turns a shadow's blur into a Gaussian with sigma 0.2887 x blur + 0.5, where a CSS blur has sigma of half the blur, so the same number
+    /// spreads about a third less. This gives the Avalonia blur that spreads like the CSS one the mock is drawn with.
+    /// </summary>
+    public static double CssBlur(double css) => Math.Round((css / 2 - 0.5) / 0.288675, 1);
+    /// <summary>
+    /// The colour of the pill's ring and halo for a state. On a Light theme it is the mock's bright mint, amber or coral, because the theme's own state
+    /// colours are deeper there and the same glow read about one and a half times as strong; a dark theme uses its own state colours, which are close to them.
+    /// </summary>
+    public static Color PillStateColour(Control host, string state)
+    {
+        if (!SoftTint.IsDark(host))
+            switch (state)
+            {
+                case "Live": return Color.FromRgb(52, 211, 153);
+                case "Break": return Color.FromRgb(245, 165, 36);
+                case "Overtime": return Color.FromRgb(248, 113, 113);
+            }
+        return ThemeColour(host, state, Colors.Gray);
+    }
+    /// <summary>
+    /// The pill's own halo, drawn as the mock draws it: a glow of a 12 pixel CSS blur in the state's colour at 16 per cent (22 on a dark theme) while it is doing something,
+    /// and at rest a light shadow dropped 6 pixels with an 18 pixel blur (10 per cent warm black, or 40 per cent black on a dark theme) rather than the heavier shadow cards use.
+    /// </summary>
+    public static void SetPillShadow(Border host, bool shadows, string? glow)
+    {
+        var dark = SoftTint.IsDark(host);
+        if (glow is not null)
+        {
+            var colour = PillStateColour(host, glow);
+            host.BoxShadow = new BoxShadows(new BoxShadow { Blur = CssBlur(12), Spread = 0, Color = Color.FromArgb((byte)Math.Round((dark ? .22 : .16) * 255), colour.R, colour.G, colour.B) });
+        }
+        else if (shadows)
+            host.BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 6, Blur = CssBlur(18), Spread = 0, Color = dark ? Color.FromArgb(102, 0, 0, 0) : Color.FromArgb(26, 30, 30, 20) });
         else host.BoxShadow = default;
     }
     // An animation that has stopped (its window was hidden or the control left the tree, which ends a repeating one) must not still count as running,
@@ -244,13 +281,6 @@ public static class Ui
     /// The right-click menu is kept short on purpose: the hours format, which build this is, the overtime tester (demo only) and Close timer.
     /// Everything else lives on the settings page.
     /// </summary>
-    /// <summary>The break circle's colour: the theme's break amber, deepened until a white cup on it holds 4.5 to 1.</summary>
-    public static Avalonia.Media.Color BreakCircleColour(Avalonia.Media.Color amber)
-    {
-        var hex = $"#{amber.R:X2}{amber.G:X2}{amber.B:X2}";
-        for (var weight = 0.0; weight <= .6 && Timer.Core.ThemeColours.Contrast(hex, "#FFFFFF") < 4.5; weight += .04) hex = Timer.Core.ThemeColours.Mix($"#{amber.R:X2}{amber.G:X2}{amber.B:X2}", "#000000", weight);
-        return Avalonia.Media.Color.Parse(hex);
-    }
     public static ContextMenu SettingsMenu(TimerModel model)
     {
         // Inside the demo you can switch overtime on and off to see how it looks. Like the version, it shows only once developer features are unlocked.
@@ -326,7 +356,15 @@ public sealed class AccountIndicator : Control
         var centre = new Point(21, 21);
         var ink = Resource("Ink");
         var running = model.ActiveAccount == Account.Name;
-        if (!Ring) context.DrawEllipse(running ? Resource("Accent") : null, running ? null : new Pen(Resource("Line"), 2), centre, 19, 19);
+        // Without the ring the button is a rounded square, like the pill's circle and the accounts icon, not a circle.
+        // The play button is a soft green tile with a green symbol, deeper while it is running or under the pointer, like the pill's primary control.
+        var liveColour = Resource("Live") is SolidColorBrush liveBrush ? liveBrush.Color : Colors.SeaGreen;
+        if (!Ring)
+        {
+            var tint = running ? .30 : .14 + .16 * Math.Clamp(Glow, 0, 1);
+            context.DrawRectangle(new SolidColorBrush(Color.FromArgb((byte)(tint * 255), liveColour.R, liveColour.G, liveColour.B)), null, new Rect(2, 2, 38, 38), 12, 12);
+            ink = new SolidColorBrush(liveColour);
+        }
         if (Ring && Account.Budget is { } budget)
         {
             context.DrawEllipse(null, new Pen(Resource("Line"), 3), centre, 19, 19);
@@ -350,18 +388,21 @@ public sealed class AccountIndicator : Control
         // Under the hand, the button fills with the accent colour and its symbol grows a little and turns to the accent's own text colour.
         var glow = Math.Clamp(Glow, 0, 1);
         var accent = Resource("Accent"); var accentInk = Resource("AccentInk");
-        if (glow > 0 && !BreakAccount.Is(Account.Name))
+        if (Ring && glow > 0 && !BreakAccount.Is(Account.Name))
         {
-            using (context.PushOpacity(glow)) context.DrawEllipse(accent, null, centre, Ring ? 15 : 19, Ring ? 15 : 19);
+            using (context.PushOpacity(glow))
+            {
+                context.DrawEllipse(accent, null, centre, 15, 15);
+            }
         }
-        // On the plain circle a running account is already filled with the accent, so its pause bars are drawn in the accent's own text colour.
-        if (!Ring && running) ink = accentInk;
-        using var grow = context.PushTransform(Matrix.CreateTranslation(-21, -21) * Matrix.CreateScale(1 + .08 * glow, 1 + .08 * glow) * Matrix.CreateTranslation(21, 21));
+        // Only the ring version grows under the pointer; the plain tile shifts its tint instead, which its own edges would otherwise clip.
+        var grown = Ring ? 1 + .08 * glow : 1;
+        using var grow = context.PushTransform(Matrix.CreateTranslation(-21, -21) * Matrix.CreateScale(grown, grown) * Matrix.CreateTranslation(21, 21));
         if (model.ActiveAccount == Account.Name)
         {
             context.DrawRectangle(ink, null, new Rect(15, 14, 4, 14), 1, 1);
             context.DrawRectangle(ink, null, new Rect(23, 14, 4, 14), 1, 1);
-            if (glow > 0)
+            if (Ring && glow > 0)
                 using (context.PushOpacity(glow)) { context.DrawRectangle(accentInk, null, new Rect(15, 14, 4, 14), 1, 1); context.DrawRectangle(accentInk, null, new Rect(23, 14, 4, 14), 1, 1); }
         }
         else if (BreakAccount.Is(Account.Name))
@@ -379,7 +420,7 @@ public sealed class AccountIndicator : Control
         {
             var triangle = Geometry.Parse("M 17,13 L 28,21 L 17,29 Z");
             context.DrawGeometry(ink, null, triangle);
-            if (glow > 0) using (context.PushOpacity(glow)) context.DrawGeometry(accentInk, null, triangle);
+            if (Ring && glow > 0) using (context.PushOpacity(glow)) context.DrawGeometry(accentInk, null, triangle);
         }
     }
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -474,7 +515,7 @@ public sealed class AccountList : StackPanel
     private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Period)> rows = new();
     private readonly bool reorderable, bars, compact;
     /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
-    /// <param name="compact">With bars, a shorter row for the pill's narrow drawer: the swatch, name and time, and the bar, without the budget words or the play circle.</param>
+    /// <param name="compact">With bars, a shorter row for the pill's narrow drawer: the name and time, the bar and the play button, without the budget words.</param>
     public AccountList(TimerModel model, bool reorderable = false, bool bars = false, bool compact = false)
     {
         this.model = model; this.reorderable = reorderable; this.bars = bars; this.compact = compact;
@@ -523,7 +564,7 @@ public sealed class AccountList : StackPanel
                 labels.Children.Add(nameLine); if (!compact) labels.Children.Add(budgetLine);
                 if (account.Budget is not null) { bar = new BudgetBar(); labels.Children.Add(bar); }
                 icon.Margin = new Thickness(8, 0, 0, 0);
-                Ui.Put(grid, labels, shift); if (!compact) Ui.Put(grid, icon, 1 + shift);
+                Ui.Put(grid, labels, shift); Ui.Put(grid, icon, 1 + shift);
                 // A rounded card inset from the edges, so the recording account's soft highlight has room to show.
                 row.Classes.Add("accountCard"); row.Margin = new Thickness(0); row.Height = compact ? 54 : 70;
             }
@@ -796,6 +837,8 @@ public sealed class BreakGlyph : Control
     public static readonly TimeSpan SteamCycle = TimeSpan.FromSeconds(3.2), SteamEase = TimeSpan.FromMilliseconds(600);
     private bool wanted;
     public bool Filled { get; set; }
+    /// <summary>A fixed colour for the cup, for when it sits on a filled square and must read against that fill.</summary>
+    public IBrush? Fixed { get; set; }
     /// <summary>Draws the cup in plain text colour, and in <see cref="HotKey"/> only while the pointer is over its button.</summary>
     public bool Mono { get; set; }
     private bool hot;
@@ -845,7 +888,7 @@ public sealed class BreakGlyph : Control
     {
         IBrush? brush = null;
         var key = Mono ? (Hot ? HotKey : "Ink") : "Break";
-        if (Filled) brush = Brushes.White; else if (this.TryFindResource(key, ActualThemeVariant, out var value)) brush = value as IBrush;
+        if (Fixed is not null) brush = Fixed; else if (Filled) brush = Brushes.White; else if (this.TryFindResource(key, ActualThemeVariant, out var value)) brush = value as IBrush;
         var pen = new Pen(brush ?? Brushes.Gray, IconGlyph.StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         context.DrawGeometry(null, pen, Geometry.Parse("M 3,7 L 3,12 Q 3,15.5 6.5,15.5 L 9.5,15.5 Q 13,15.5 13,12 L 13,7 Z"));
         context.DrawGeometry(null, pen, Geometry.Parse("M 13,8 L 14.5,8 Q 16.5,8 16.5,10 Q 16.5,12 14.5,12 L 13,12"));
@@ -877,7 +920,7 @@ public sealed class AccountsGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1004,6 +1047,13 @@ public sealed class IconGlyph : Control
                     context.DrawEllipse(null, pen, new Point(4.8, y), 2.1, 2.1);
                     context.DrawLine(pen, new Point(9.5, y), new Point(15.5, y));
                 }
+                break;
+            case IconKind.Sliders:
+                // Two lines, each broken by a round knob: the settings of the accounts.
+                context.DrawLine(pen, new Point(3, 5.3), new Point(10.5, 5.3)); context.DrawLine(pen, new Point(13.5, 5.3), new Point(15, 5.3));
+                context.DrawEllipse(null, pen, new Point(12, 5.3), 1.5, 1.5);
+                context.DrawLine(pen, new Point(3, 12.7), new Point(4.5, 12.7)); context.DrawLine(pen, new Point(7.5, 12.7), new Point(15, 12.7));
+                context.DrawEllipse(null, pen, new Point(6, 12.7), 1.5, 1.5);
                 break;
             case IconKind.Sunrise:
                 // A half sun on the horizon with short rays: the day beginning.

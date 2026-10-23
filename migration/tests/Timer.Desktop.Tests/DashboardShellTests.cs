@@ -91,6 +91,11 @@ public sealed class DashboardShellTests
         try
         {
             window.ShowAccountsPanel(); Settle(window);
+            var manage = Find<Button>(window, "RailManageAccounts"); var drawer = Find<Border>(window, "AccountsDrawer");
+            Assert.Equal(IconKind.Sliders, ((IconGlyph)manage.Content!).Kind); Assert.Equal("Manage accounts", ToolTip.GetTip(manage)?.ToString()); // One icon, no words.
+            var at = manage.TranslatePoint(default, drawer)!.Value;
+            Assert.True(at.Y < 40, $"icon top {at.Y}"); Assert.InRange(drawer.Bounds.Width - (at.X + manage.Bounds.Width), 10, 18); // Top right of the drawer.
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "Manage accounts");
             Click(Find<Button>(window, "RailManageAccounts")); Settle(window);
             Assert.False(window.AccountsOpen); Assert.True(window.Dialogs.Dialogs.OfType<AccountsDialog>().Any());
         }
@@ -109,7 +114,7 @@ public sealed class DashboardShellTests
             Click(day); Settle(window);
             Assert.True(window.FinishQuestionOpen); Assert.True(model.DayStarted); // Nothing has happened yet.
             var summary = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "FinishDaySummary").Text!;
-            Assert.Contains("Working time", summary); Assert.Contains("Allocated", summary); Assert.Contains("Account one stops.", summary); Assert.Contains("Start day undoes it.", summary);
+            Assert.Matches(@"^Working time \d\d:\d\d\.$", summary); // Just the working time: the card is small.
             Click(Find<Button>(window, "FinishDayCancel")); Assert.False(window.FinishQuestionOpen); Assert.True(model.DayStarted);
             Click(day); Settle(window); Click(Find<Button>(window, "FinishDayConfirm")); Settle(window);
             Assert.False(window.FinishQuestionOpen); Assert.False(model.DayStarted); Assert.False(model.IsTracking);

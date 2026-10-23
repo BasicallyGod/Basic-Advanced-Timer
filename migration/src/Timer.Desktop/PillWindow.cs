@@ -13,15 +13,15 @@ namespace Timer.Desktop;
 /// <summary>
 /// The pill: a small vertical card that stays on top. It shows what the timer is doing with one capsule (and a second, blue one only while a
 /// reminder is due), the day clock, a circle that carries the account's initials and pauses or resumes, the Accounts button, and the amber circle that
-/// starts a break. Clicking the time opens the dashboard. The Accounts button unfolds the list sideways from the pill as one capsule with it, and
-/// folds it away again.
+/// starts a break. Clicking the time opens the dashboard. The Accounts button unfolds the list sideways from the pill as one capsule with it; it stays open
+/// while accounts are chosen, so a wrong choice can be put right at once, and the button, Escape or a click elsewhere folds it away.
 /// </summary>
 public sealed class PillWindow : Window
 {
     public Action? OpenDashboard { get; set; }
     private readonly TimerModel model;
     /// <summary>The pill's own size before it is scaled for the screen, and the room kept around it for its shadow or glow.</summary>
-    public const double PillWidth = 72, PillHeight = 300, PillRadius = 36;
+    public const double PillWidth = 72, PillHeight = 316, PillRadius = 36;
     public static double BaseWindowHeight => PillHeight + 2 * Ui.ShadowMargin;
     // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
     // A narrow screen (its width in device independent pixels over 1800, never above 95 per cent or below 80 per cent), and a screen with a low
@@ -41,7 +41,6 @@ public sealed class PillWindow : Window
     /// <summary>The window width at the size the pill is drawn on this screen.</summary>
     public double WindowWidthNow => (PillWidth + 2 * Ui.ShadowMargin) * Scale;
 
-    private BreakButton mug = null!;
     private StatusFace face = null!;
     private Border surface = null!, shadowHost = null!;
     private readonly Popup panel = new();
@@ -50,7 +49,6 @@ public sealed class PillWindow : Window
     private Border drawer = null!;
     private bool overDrawer, closedWindow, ensuring, closingByCode;
     private long dismissedAt;
-    private string? activeWhenOpened;
     private DispatcherTimer? settleTimer;
     private int? appliedChoice;
     private (PixelRect Bounds, double Scaling)? lastScreen;
@@ -77,13 +75,10 @@ public sealed class PillWindow : Window
         Background = Brushes.Transparent;
 
         // The top of the pill is shared with the dashboard's rail.
-        face = new StatusFace(model, "Pill", "Open dashboard", () => OpenDashboard?.Invoke(), OnCircle, ToggleAccounts);
-        // The break is an amber circle with a white cup, shared with the rail.
-        mug = new BreakButton(model, "PillBreak");
-
+        face = new StatusFace(model, "Pill", "PillBreak", "Open dashboard", () => OpenDashboard?.Invoke(), OnCircle, ToggleAccounts);
         // From the top, so the rail's top can start at the same distance from its own edge and nothing moves when one becomes the other.
         var column = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, TopInset, 0, 0) };
-        column.Children.Add(face); column.Children.Add(mug);
+        column.Children.Add(face);
         var root = rootGrid; root.Background = Brushes.Transparent; root.Children.Add(column);
         Ui.PillGestures(root, this);
         surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true, Width = PillWidth, Height = PillHeight, BorderThickness = new Thickness(1) };
@@ -193,7 +188,6 @@ public sealed class PillWindow : Window
     /// <summary>Opens the account drawer beside the pill. It closes when an account is chosen, with Escape, or by pressing the button again.</summary>
     public void ShowPanel()
     {
-        activeWhenOpened = model.ActiveAccount;
         SetOpenLook(true); panel.IsOpen = true;
     }
     // Pressing the button while the drawer is open closes it. Light dismiss has already closed it by the time the click arrives, so a close that
@@ -218,7 +212,6 @@ public sealed class PillWindow : Window
     {
         // A new pill size from settings takes effect straight away, even while the pill is hidden behind the dashboard.
         if (model.PillScalePercent != appliedChoice) FitToScreen(Screens.ScreenFromWindow(this));
-        if (PanelOpen && model.ActiveAccount != activeWhenOpened) CloseFlyouts(); // Choosing an account puts the drawer away.
         Refresh();
     }
     private Color ThemeColourOr(string key, string fallback) => Ui.ThemeColour(this, key, Color.Parse(fallback));
@@ -235,15 +228,13 @@ public sealed class PillWindow : Window
         face.Refresh();
         var onBreak = model.IsOnBreak;
         var (key, _) = StatusFace.State(model);
-        var stateColour = ThemeColourOr(key, "#8A8F98");
-
-        mug.Refresh();
+        var stateColour = key == "Idle" ? Colors.Gray : Ui.PillStateColour(this, key);
 
         // A ring and a glow in the state's colour round the pill while it is doing something, and the plain edge and shadow when it is idle.
-        surface.BorderThickness = new Thickness(key == "Idle" ? 1 : 2);
-        surface.BorderBrush = key == "Idle" ? (this.TryFindResource("Line", ActualThemeVariant, out var line) && line is IBrush lineBrush ? lineBrush : Brushes.Gray) : new SolidColorBrush(stateColour);
+        surface.BorderThickness = new Thickness(key == "Idle" ? 1 : 1.5);
+        surface.BorderBrush = key == "Idle" ? (this.TryFindResource("Line", ActualThemeVariant, out var line) && line is IBrush lineBrush ? lineBrush : Brushes.Gray) : new SolidColorBrush(Color.FromArgb(179, stateColour.R, stateColour.G, stateColour.B));
         if (drawer is not null) SyncDrawerRing();
         var shadow = (model.Shadows, key, ActualThemeVariant);
-        if (lastShadow != shadow) { lastShadow = shadow; Ui.SetShadow(shadowHost, model.Shadows, key == "Idle" ? null : key); }
+        if (lastShadow != shadow) { lastShadow = shadow; Ui.SetPillShadow(shadowHost, model.Shadows, key == "Idle" ? null : key); }
     }
 }
