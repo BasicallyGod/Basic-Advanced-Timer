@@ -187,8 +187,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
         SelectedDate = Engine.Now.Date; lastToday = SelectedDate;
-        // The user's own themes need their colours registered too. The built-in ones were registered when the app started.
-        if (Application.Current is { } current && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && this.preferences.Themes is { Count: > 0 } own) ThemeEngine.Register(current, own);
+        // Only Light and Dark are offered now, so a saved choice of a retired theme or one of the user's own becomes Light or Dark (the theme stays in the file).
+        this.preferences = this.preferences with { Theme = AppThemes.Resolve(this.preferences.Theme, this.preferences.Themes) };
         ApplyTheme(); Ui.ApplyTooltips(this.preferences.Tooltips);
         // When the computer switches between light and dark, System follows it.
         if (Application.Current?.PlatformSettings is { } platform)
@@ -456,62 +456,11 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (target > WeekStart(Engine.Now)) return;
         selectedRows.Clear(); TimelineOffset = null; SelectedDate = target; Notify();
     }
-    /// <summary>Which part of the Week tab is showing: overview, hours or entries.</summary>
-    public string WeekSection { get; private set; } = "overview";
-    public void SetWeekSection(string section)
-    {
-        if (section is not ("overview" or "hours" or "entries") || section == WeekSection) return;
-        WeekSection = section; Notify();
-    }
     public bool CanStepForwardAWeek => WeekStart(SelectedDate) < WeekStart(Engine.Now);
     /// <summary>Adds or removes minutes on an account for a day, as one undoable edit.</summary>
     /// <summary>Moves entries to another account as one undoable edit. Every selected block moves when the one clicked is selected.</summary>
     public bool MoveEntries(IReadOnlyList<SessionRow> rows, string account)
         => ChangeLog(() => { ValidateAccount(account); Editor.Reassign(rows, account); });
-    /// <summary>Shows a theme as it is being edited, without saving it. <see cref="EndThemePreview"/> puts the saved look back.</summary>
-    public void PreviewTheme(ThemeDefinition theme)
-    {
-        if (Application.Current is not { } app || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;
-        ThemeEngine.RegisterPreview(app, theme); app.RequestedThemeVariant = ThemeEngine.VariantFor(theme); appliedVariant = null; previewedTheme = theme.Name;
-    }
-    // Only the theme that was being edited needs its saved colours put back, not every theme there is.
-    private string? previewedTheme;
-    public void EndThemePreview()
-    {
-        if (previewedTheme is { } name && Application.Current is { } app && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && Themes.FirstOrDefault(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } saved)
-            ThemeEngine.Register(app, new[] { saved });
-        previewedTheme = null; appliedVariant = null; ApplyTheme(); Notify();
-    }
-    /// <summary>Saves one of the user's own themes. <paramref name="replacing"/> is its earlier name, so a rename replaces it, and the theme stays selected if it was.</summary>
-    public void SaveTheme(ThemeDefinition theme, string? replacing = null)
-    {
-        if (!ThemeStorage.IsUsableName(theme.Name)) throw new ArgumentException("Choose a name of up to 40 characters for the theme. System is reserved.");
-        if (AppThemes.BuiltIn.Any(t => t.Name.Equals(theme.Name, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException($"\"{theme.Name}\" is a built-in theme. Choose another name.");
-        var own = (preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
-        if (own.Any(t => t.Name.Equals(theme.Name, StringComparison.OrdinalIgnoreCase) && !t.Name.Equals(replacing, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException($"There is already a theme called \"{theme.Name}\".");
-        if (ThemeTokens.Names.Any(n => !ThemeTokens.IsValid(n, theme.Colours.GetValueOrDefault(n)))) throw new ArgumentException("Every colour must be a valid hex colour.");
-        var index = own.FindIndex(t => t.Name.Equals(replacing ?? theme.Name, StringComparison.OrdinalIgnoreCase));
-        var saved = theme with { BuiltIn = false };
-        if (index >= 0) own[index] = saved; else own.Add(saved);
-        preferences = preferences with { Themes = own, Theme = Theme.Equals(replacing, StringComparison.OrdinalIgnoreCase) ? saved.Name : Theme };
-        if (Application.Current is { } app && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) ThemeEngine.Register(app, new[] { saved });
-        appliedVariant = null; ApplyTheme(); Save(); Notify();
-    }
-    /// <summary>Copies a theme under a new name, so a built-in one can be made your own. Returns the new name, and selects it.</summary>
-    public string DuplicateTheme(string name)
-    {
-        var source = Themes.First(t => t.Name == name);
-        var copy = source.Name + " copy"; var number = 2;
-        while (Themes.Any(t => t.Name.Equals(copy, StringComparison.OrdinalIgnoreCase))) copy = source.Name + " copy " + number++;
-        SaveTheme(source with { Name = copy, BuiltIn = false }); SetTheme(copy); return copy;
-    }
-    public void DeleteTheme(string name)
-    {
-        var own = (preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
-        if (own.RemoveAll(t => t.Name == name) == 0) throw new ArgumentException("Only your own themes can be deleted.");
-        preferences = preferences with { Themes = own, Theme = Theme == name ? ThemeLibrary.System : Theme };
-        appliedVariant = null; ApplyTheme(); Save(); Notify();
-    }
     /// <summary>The colour to draw an account's blocks, dots and bars in: very dark colours lifted so they show, then softened if the theme asks for it.</summary>
     public string BlockColour(string accountColour) => BlockLook(accountColour).Fill;
     /// <summary>The colour for an account's slice in a chart or its legend dot. A dark theme tints its blocks down into the surface, which makes thin slices vanish, so charts there use the account's own colour (the block's edge).</summary>
@@ -662,7 +611,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool DeleteEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Delete(rows));
     public bool UndoEdit() => ChangeLog(Editor.Undo);
     public void OpenGroup(string id) => GroupRequested?.Invoke(id);
-    public bool GroupEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Group(rows));
     public bool UngroupEntries(string id) => ChangeLog(() => Editor.Ungroup(id));
     public bool TidyDay(IReadOnlyList<GapChoice> choices, int limit) => ChangeLog(() => Editor.Tidy(choices, limit));
     /// <summary>Exports the week or the whole month that the given day falls in, or the one being viewed when none is given.</summary>
@@ -707,7 +655,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string ThemeState => IsOnBreak ? "Break" : IsOvertime ? "Overtime" : IsTracking ? "Recording" : "Normal";
     private ThemeVariant? appliedVariant;
     /// <summary>Every theme on offer: the built-in ones, then the user's own.</summary>
-    public IReadOnlyList<ThemeDefinition> Themes => AppThemes.BuiltIn.Concat(preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
+    public IReadOnlyList<ThemeDefinition> Themes => AppThemes.BuiltIn;
     /// <summary>The theme actually in use. System is Light or Dark, whichever the computer is using.</summary>
     public ThemeDefinition CurrentTheme
     {
@@ -732,8 +680,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool IsOnBreak => BreakAccount.Is(ActiveAccount);
     /// <summary>Whether hovering a control shows its tooltip. Switched off, the words are still the accessible names.</summary>
     /// <summary>Whether a longer entry that runs into later blocks moves them without asking first. Chosen by a tick box in the entry window, and in settings.</summary>
-    public bool MoveLaterAlways => preferences.MoveLaterAlways;
-    public void SetMoveLaterAlways(bool on) { preferences = preferences with { MoveLaterAlways = on }; Save(); Notify(); }
     /// <summary>The pill size chosen by hand, as a percentage of its design size, or null for the automatic size that follows the screen.</summary>
     /// <summary>Whether the pill and the dashboard stay in front of other windows. Either can be let go, so the dashboard can drop back behind other work.</summary>
     public bool PillOnTop => preferences.PillOnTop;

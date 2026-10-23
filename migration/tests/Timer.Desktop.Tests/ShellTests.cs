@@ -187,13 +187,13 @@ public sealed class ShellTests
         window.Show();
         try
         {
-            Assert.Empty(window.GetVisualDescendants().OfType<ComboBox>()); // Nothing to choose until the settings page is opened.
+            Assert.Empty(window.GetVisualDescendants().OfType<Button>().Where(b => b.Name is "ThemeDark" or "ThemeLight" or "ThemeSystem")); // Nothing to choose until the settings page is opened.
             Assert.NotNull(window.ContextMenu);
             window.OpenSettings();
-            var choice = window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "ThemeChoice");
-            Assert.Equal(new[] { "System", "Light", "Dark", "After Hours", "Botanical", "Hawthorn" }, choice.Items.Cast<string>());
+            var tiles = window.GetVisualDescendants().OfType<Button>().Where(b => b.Name is "ThemeSystem" or "ThemeLight" or "ThemeDark").Select(b => b.Name!).ToList();
+            Assert.Equal(new[] { "ThemeSystem", "ThemeLight", "ThemeDark" }, tiles); // System, Light and Dark, as three small pictures.
             var elapsed = model.Elapsed;
-            choice.SelectedItem = "Dark";
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ThemeDark").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Assert.Equal("Dark", model.Theme);
             Assert.Equal(elapsed, model.Elapsed);
         }

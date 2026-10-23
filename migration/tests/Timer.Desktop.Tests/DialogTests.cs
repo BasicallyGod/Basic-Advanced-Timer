@@ -57,7 +57,7 @@ public sealed class DialogTests
         var model = Model(out var engine); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         model.ToggleSelection(new[] { engine.Sessions[0] });
         dashboard.Dialogs.Show(new TidyDialog(model)); Settle(dashboard);
-        dashboard.Dialogs.Show(new ExportDialog(model)); Settle(dashboard);
+        dashboard.Dialogs.Show(new AccountsDialog(model)); Settle(dashboard);
         Assert.Equal(2, dashboard.Dialogs.Dialogs.Count);
         dashboard.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null); Assert.IsType<TidyDialog>(Assert.Single(dashboard.Dialogs.Dialogs));
         Assert.Single(model.SelectedRows); // Still selected.
@@ -126,17 +126,15 @@ public sealed class DialogTests
     }
 
     [AvaloniaFact]
-    public void TheSettingsPageOpensAccountsHoursAndThemesAsDialogsAndTheThemeEditorStillAsksAboutUnsavedEdits()
+    public void TheSettingsPageOpensAccountsAsADialogAndADialogCanRefuseToClose()
     {
         var model = Model(out _); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         Find<Button>(dashboard, "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
         Find<Button>(dashboard, "EditAccounts").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
-        Assert.IsType<AccountsDialog>(Assert.Single(dashboard.Dialogs.Dialogs)); dashboard.Dialogs.CloseTop();
-        Find<Button>(dashboard, "EditThemes").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
-        var themes = Assert.IsType<ThemesDialog>(Assert.Single(dashboard.Dialogs.Dialogs));
-        // A close that a dialog refuses leaves it open, which is how the theme editor asks about unsaved edits.
-        var refuse = true; themes.Closing += (_, e) => e.Cancel = refuse;
-        Assert.True(dashboard.Dialogs.CloseTop()); Assert.True(themes.IsVisible); Assert.True(dashboard.Dialogs.Any);
+        var accounts = Assert.IsType<AccountsDialog>(Assert.Single(dashboard.Dialogs.Dialogs));
+        // A close that a dialog refuses leaves it open, which is how a dialog with unsaved edits can ask first.
+        var refuse = true; accounts.Closing += (_, e) => e.Cancel = refuse;
+        Assert.True(dashboard.Dialogs.CloseTop()); Assert.True(accounts.IsVisible); Assert.True(dashboard.Dialogs.Any);
         refuse = false; dashboard.Dialogs.CloseTop(); Assert.False(dashboard.Dialogs.Any);
         dashboard.Close();
     }

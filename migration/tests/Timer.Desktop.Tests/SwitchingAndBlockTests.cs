@@ -182,7 +182,7 @@ public sealed class SwitchingAndBlockTests
     public void ABlockInAGroupIsNotTakenOutOfItToBeCarriedOn()
     {
         var (model, engine, _) = AtTenThirty(new SessionRow("2026-10-14", "Account one", "10:00:00", "added", "20.00"), new SessionRow("2026-10-14", "Account one", "10:20:00", "added", "40.00"));
-        Assert.True(model.GroupEntries(engine.Sessions.ToList()));
+        model.ToggleSelection(engine.Sessions.ToList()); Assert.True(model.MergeSelection());
         model.ToggleAccount("Account one");
         Assert.Equal(2, engine.Sessions.Count); Assert.Null(engine.ContinuedBlock);
     }

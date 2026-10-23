@@ -36,13 +36,10 @@ public sealed class EntryDialog : Dialog
         DateTime shoveEnd = default;
         var shove = new Border { Name = "ShovePrompt", IsVisible = false, Padding = new Thickness(12), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1) };
         shove.Classes.Add("chip");
-        // Ticking this keeps the choice, so a longer entry moves the blocks after it without asking again. Settings has the same switch.
-        var always = new CheckBox { Name = "AlwaysShove", Content = "Always move later blocks, without asking" };
         var shoveButtons = Ui.Horizontal(
             Ui.DialogButton("Move blocks", () =>
             {
                 shove.IsVisible = false;
-                if (always.IsChecked == true) model.SetMoveLaterAlways(true);
                 if (row is not null && model.ExtendEntry(row, shoveEnd, note.Text ?? "")) Close(); else error.Text = model.LastError ?? model.EditError;
             }, "ShoveConfirm"),
             // The longer entry goes in as it is, over the top of the blocks after it. Those hours are then counted twice, which is for the person to decide.
@@ -52,7 +49,7 @@ public sealed class EntryDialog : Dialog
                 if (row is not null && model.EditEntry(row, row.Account, row.From, shoveEnd, note.Text ?? "", allowOverlap: true)) Close(); else error.Text = model.LastError ?? model.EditError;
             }, "ShoveOverlap"),
             Ui.DialogButton("Keep editing", () => shove.IsVisible = false, "ShoveCancel"));
-        var shoveStack = new StackPanel { Spacing = 8 }; shoveStack.Children.Add(shoveText); shoveStack.Children.Add(always); shoveStack.Children.Add(shoveButtons); shove.Child = shoveStack;
+        var shoveStack = new StackPanel { Spacing = 8 }; shoveStack.Children.Add(shoveText); shoveStack.Children.Add(shoveButtons); shove.Child = shoveStack;
         root.Children.Add(shove);
         until.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) shove.IsVisible = false; };
         DateTime Parse(string? value, bool finish)
@@ -112,10 +109,7 @@ public sealed class EntryDialog : Dialog
                         shoveEnd = newEnd; error.Text = "";
                         shoveText.Text = $"Ending this block at {(newEnd == start.Date.AddDays(1) ? "24:00" : newEnd.ToString("HH:mm:ss"))} runs into the next {(later.Count == 1 ? "block" : later.Count + " blocks")}. "
                             + $"{(later.Count == 1 ? "It" : "They")} can move later by up to {model.FormatShort(most)} so nothing overlaps, or this can overlap {(later.Count == 1 ? "it" : "them")}, which counts those hours twice. Undo puts everything back.";
-                        // With the choice already kept, the blocks simply move.
-                        if (model.MoveLaterAlways)
-                        { if (model.ExtendEntry(row, newEnd, note.Text ?? "")) Close(); else error.Text = model.LastError ?? model.EditError; return; }
-                        always.IsChecked = false; shove.IsVisible = true; return;
+                        shove.IsVisible = true; return;
                     }
                 }
                 var previous = model.Editor.UndoState;

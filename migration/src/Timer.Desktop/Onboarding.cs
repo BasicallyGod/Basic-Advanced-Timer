@@ -1,3 +1,4 @@
+using Avalonia.VisualTree;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -42,18 +43,21 @@ public sealed class OnboardingView : Grid
         // A veil over the dashboard, which is also blurred beneath it by the window, and a card in the middle.
         Background = new SolidColorBrush(Color.FromArgb(120, 8, 10, 14));
         decimalChoice = model.DecimalHours;
-        var card = new Border { Name = "SetupCard", Width = 560, MinHeight = 440, CornerRadius = new CornerRadius(22), BorderThickness = new Thickness(1), Padding = new Thickness(30, 24, 30, 22), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        var card = new Border { Name = "SetupCard", Width = 720, MinHeight = 540, CornerRadius = new CornerRadius(24), BorderThickness = new Thickness(1), Padding = new Thickness(28, 22, 28, 20), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 12, Blur = 40, Color = Color.FromArgb(90, 0, 0, 0) }) };
         card.Classes.Add("dayCard");
-        var layout = new StackPanel { Spacing = 14 };
-        var top = Ui.Grid("*,Auto"); Ui.Put(top, stepLabel);
-        var skip = Ui.Button("Skip setup", () => Skip(), "SetupSkip"); skip.Classes.Add("flat"); Ui.Put(top, skip, 1);
-        layout.Children.Add(top); layout.Children.Add(title); layout.Children.Add(subtitle); layout.Children.Add(body); layout.Children.Add(error);
+        var layout = new StackPanel { Spacing = 12 };
+        // The pill's own outline at the top left, then the step and its name, and the steps as dots at the right with the current one in the accent.
+        var top = Ui.Grid("Auto,*,Auto"); var heading = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0) };
+        stepLabel.FontWeight = FontWeight.SemiBold; heading.Children.Add(stepLabel); heading.Children.Add(title);
+        Ui.Put(top, PillIcon()); Ui.Put(top, heading, 1); dots.Spacing = 7; Ui.Put(top, dots, 2);
+        layout.Children.Add(top); layout.Children.Add(subtitle); layout.Children.Add(body); layout.Children.Add(error);
+        var skip = Ui.Button("Skip setup", () => Skip(), "SetupSkip"); skip.Classes.Add("flat");
         back = Ui.DialogButton("Back", () => Go(-1), "SetupBack", main: false);
         next = Ui.DialogButton("Next", () => Advance(), "SetupNext", main: true);
-        // Equal outer columns keep the dots in the middle, whatever the width of Back (hidden on the first step) and of Next or Start tracking.
-        var footer = Ui.Grid("*,Auto,*"); footer.Margin = new Thickness(0, 8, 0, 0);
-        Ui.Put(footer, back); back.HorizontalAlignment = HorizontalAlignment.Left; Ui.Put(footer, dots, 1); dots.HorizontalAlignment = HorizontalAlignment.Center; Ui.Put(footer, next, 2); next.HorizontalAlignment = HorizontalAlignment.Right;
+        // Skip is at the left, and Back and Next at the right, so the main action is always where the eye ends.
+        var footer = Ui.Grid("Auto,*,Auto,Auto"); footer.Margin = new Thickness(0, 10, 0, 0);
+        Ui.Put(footer, skip); Ui.Put(footer, back, 2); back.Margin = new Thickness(0, 0, 8, 0); Ui.Put(footer, next, 3);
         layout.Children.Add(footer);
         card.Child = layout; Children.Add(card);
         Focusable = true;
@@ -93,8 +97,9 @@ public sealed class OnboardingView : Grid
         dots.Children.Clear();
         for (var i = 0; i < StepCount; i++)
         {
-            var dot = new Avalonia.Controls.Shapes.Ellipse { Width = 8, Height = 8 };
-            dot.Classes.Add(i == index ? "stepDot" : "idle");
+            var dot = new Avalonia.Controls.Shapes.Ellipse { Width = 9, Height = 9 };
+            // The current step is the accent, the steps done are a softer accent, and the ones to come are quiet.
+            dot.Classes.Add(i <= index ? "stepDot" : "idle"); if (i < index) dot.Opacity = .45;
             dots.Children.Add(dot);
         }
         (title.Text, subtitle.Text, body.Content) = index switch
@@ -244,7 +249,10 @@ public sealed class OnboardingView : Grid
 
     private Control ReadyStep()
     {
-        var panel = new StackPanel { Spacing = 12 };
+        var panel = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        // The pill as it will look, drawn from the same parts as the real one.
+        panel.Children.Add(new Border { Child = DrawnPill(), Margin = new Thickness(6, 4, 28, 0), VerticalAlignment = VerticalAlignment.Top });
+        var points = new StackPanel { Spacing = 11 }; Grid.SetColumn(points, 1);
         StackPanel Point(string heading, string text)
         {
             var block = new StackPanel { Spacing = 2 };
@@ -252,15 +260,46 @@ public sealed class OnboardingView : Grid
             block.Children.Add(new TextBlock { Text = text, FontSize = 13, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
             return block;
         }
-        panel.Children.Add(Point("The tray.", "Closing a window hides the timer to the notification area and tracking carries on. Use the cross at the foot of the dashboard to close the timer for good."));
-        panel.Children.Add(Point("The pill and this dashboard.", "Click the clock on the pill to open the dashboard, and the account name to pick what you are working on."));
-        panel.Children.Add(Point("Your data.", model.DataFolder is { } folder ? $"Stays on this computer in {folder}, with a backup each day." : "Stays on this computer, with a backup each day."));
+        points.Children.Add(Point("Click the time.", "On the pill it opens the dashboard. In the dashboard it collapses back to the pill."));
+        points.Children.Add(Point("The green square.", "It shows the account you are on and pauses or resumes it. With no account chosen it opens the list."));
+        points.Children.Add(Point("Breaks.", "The cup under it starts a break, and the green square resumes your account."));
+        points.Children.Add(Point("Accounts.", "The three bars at the foot open the account list beside the pill. Choosing an account starts it."));
+        points.Children.Add(Point("Settings.", "The gear at the top right of the dashboard holds the theme, hours, export and Run setup again."));
+        points.Children.Add(Point("The tray.", "Closing a window hides the timer to the notification area and tracking carries on. The cross at the foot of the dashboard closes it for good."));
+        points.Children.Add(Point("Your data.", model.DataFolder is { } folder ? $"Stays on this computer in {folder}, with a backup each day." : "Stays on this computer, with a backup each day."));
         if (model.AutoStart?.Available == true)
         {
-            var startup = new CheckBox { Content = "Start the timer when I sign in to Windows", IsChecked = model.AutoStart.IsEnabled, Name = "SetupStartup", Margin = new Thickness(0, 6, 0, 0) };
+            var startup = new CheckBox { Content = "Start the timer when I sign in to Windows", IsChecked = model.AutoStart.IsEnabled, Name = "SetupStartup", Margin = new Thickness(0, 4, 0, 0) };
             startup.Click += (_, _) => { model.SetAutoStart(startup.IsChecked == true); startup.IsChecked = model.AutoStart?.IsEnabled == true; };
-            panel.Children.Add(startup);
+            points.Children.Add(startup);
         }
+        panel.Children.Add(points);
         return panel;
+    }
+
+    // The pill's outline in the accent colour: a tall capsule with its light on top and a tile below, as the small icon beside the step.
+    private static Control PillIcon()
+    {
+        var capsule = new Border { Width = 28, Height = 44, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1.8), VerticalAlignment = VerticalAlignment.Center, Name = "SetupPillIcon" };
+        capsule.Bind(Border.BorderBrushProperty, capsule.GetResourceObservable("Accent"));
+        var inside = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Spacing = 5 };
+        var light = new Border { Width = 3, Height = 7, CornerRadius = new CornerRadius(1.5), HorizontalAlignment = HorizontalAlignment.Center }; light.Bind(Border.BackgroundProperty, light.GetResourceObservable("Live"));
+        var tile = new Border { Width = 13, Height = 13, CornerRadius = new CornerRadius(4), HorizontalAlignment = HorizontalAlignment.Center, Opacity = .35 }; tile.Bind(Border.BackgroundProperty, tile.GetResourceObservable("Accent"));
+        var tile2 = new Border { Width = 13, Height = 13, CornerRadius = new CornerRadius(4), HorizontalAlignment = HorizontalAlignment.Center, Opacity = .35 }; tile2.Bind(Border.BackgroundProperty, tile2.GetResourceObservable("Break"));
+        inside.Children.Add(light); inside.Children.Add(tile); inside.Children.Add(tile2); capsule.Child = inside;
+        return capsule;
+    }
+
+    // The pill itself, drawn for show: the same lights, clock and three tiles as the real one, with nothing that can be pressed.
+    private Control DrawnPill()
+    {
+        var face = new StatusFace(model, "Setup", "SetupBreak", "", () => { }, () => { }, () => { });
+        face.Refresh();
+        var column = new StackPanel { Margin = new Thickness(0, PillWindow.TopInset - PillWindow.EdgeThickness, 0, 0), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Children = { face } };
+        var card = new Border { Name = "SetupPill", Width = PillWindow.PillWidth, Height = PillWindow.PillHeight, CornerRadius = new CornerRadius(PillWindow.PillRadius), BorderThickness = new Thickness(PillWindow.EdgeThickness), Child = column, IsHitTestVisible = false, Focusable = false };
+        card.Classes.Add("surface");
+        Avalonia.Automation.AutomationProperties.SetAccessibilityView(card, Avalonia.Automation.AccessibilityView.Raw);
+        card.AttachedToVisualTree += (_, _) => { foreach (var button in face.GetVisualDescendants().OfType<Button>()) { button.IsTabStop = false; button.Focusable = false; } };
+        return card;
     }
 }

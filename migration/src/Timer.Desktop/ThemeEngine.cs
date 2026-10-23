@@ -89,15 +89,6 @@ public static class ThemeEngine
         foreach (var key in new[] { "CalendarViewCalendarItemRevealBorderBrush", "CalendarViewNavigationButtonBorderBrush" }) Put(key, Colors.Transparent);
     }
     /// <summary>
-    /// Writes only the colours the windows are drawn in, not the pill's recording, break and overtime tints. While a theme is being edited every
-    /// slider move writes the theme again, and the three tints made that four times the work for nothing anybody could see.
-    /// </summary>
-    public static void RegisterPreview(Application app, ThemeDefinition theme)
-    {
-        Write(app, VariantFor(theme), theme.Colours);
-        Applied?.Invoke();
-    }
-    /// <summary>
     /// The colours a slider is drawn in: the filled part and the thumb, which are the accent unless it is too faint on the theme's window and panels, and
     /// the empty track, which is the theme's quiet text colour pulled towards the surface until it can be seen on both. The theme's own line colour
     /// is only a hairline against its panel, which is nearly invisible as a track (in Hawthorn the whole slider was hard to find).
@@ -116,7 +107,7 @@ public static class ThemeEngine
         => (Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Ink"], .5)), Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Ink"], .28)));
     /// <summary>Raised after theme colours are written, so windows with their own chrome (title bars) can follow a change or a preview.</summary>
     public static event Action? Applied;
-    /// <summary>Makes every theme, built-in and the user's own, available to the app. Safe to call again after a theme changes.</summary>
+    /// <summary>Makes the themes available to the app.</summary>
     public static void Register(Application app, IEnumerable<ThemeDefinition> themes)
     {
         foreach (var theme in themes)

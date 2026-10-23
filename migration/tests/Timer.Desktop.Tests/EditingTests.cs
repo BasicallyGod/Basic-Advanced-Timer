@@ -210,10 +210,8 @@ public sealed class EditingTests
             editor.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.False(editor.IsVisible); Assert.Equal(TimeSpan.FromMinutes(75), engine.Sessions[0].Duration);
             Assert.Equal("Drafting\nClient review", model.Editor.Note(engine.Sessions[0]));
-            window.SelectTab(true); model.SetWeekSection("entries"); Dispatcher.UIThread.RunJobs(); using var week = window.CaptureRenderedFrame();
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Drafting\nClient review");
+            Dispatcher.UIThread.RunJobs();
             var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath(); Directory.CreateDirectory(output);
-            using var settled = window.CaptureRenderedFrame(); settled?.Save(Path.Combine(output, "week-editable-entries.png"));
             var add = new EntryDialog(model, null, row.To.AddMinutes(30), row.To.AddMinutes(45)).Open(window);
             Dispatcher.UIThread.RunJobs(); using var addFrame = add.CaptureRenderedFrame(); addFrame?.Save(Path.Combine(output, "entry-editor.png"));
             add.Close();
@@ -337,15 +335,11 @@ public sealed class EditingTests
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsVisible), t => t.Text is not null && t.Text.Contains("Click blocks to select"));
             var undo = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "UndoEdit");
             Assert.False(undo.IsEnabled); Assert.True(undo.Opacity < 1); // Dimmed by the style, keeping its outline, not a solid grey fill.
-            model.SetWeekSection("overview"); dashboard.SelectTab(true); Dispatcher.UIThread.RunJobs();
+            dashboard.SelectTab(true); Dispatcher.UIThread.RunJobs();
             Assert.False(zoom.IsVisible); // Zoom belongs to the timeline only.
-            Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "ExportWeek"); // Export lives only on the Overview tab.
-            model.SetWeekSection("hours"); Dispatcher.UIThread.RunJobs();
-            var export = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ExportWeek"); var copy = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CopyHours");
-            Assert.Equal(IconKind.Export, ((IconGlyph)export.Content!).Kind); Assert.Equal(IconKind.Copy, ((IconGlyph)copy.Content!).Kind); Assert.Equal("Export hours…", ToolTip.GetTip(export));
-            Assert.InRange(Math.Abs(export.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y - copy.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y), 0, 2); // Same line.
+            // Export and Copy hours table live in Settings, and the Hours table and Entries views are gone.
+            Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name is "ExportWeek" or "WeekHoursTab" or "WeekEntriesTab");
             Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekOverviewTab" && ToolTip.GetTip(b) as string == "Week overview");
-            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekHoursTab" && ToolTip.GetTip(b) as string == "Hours table");
         }
         finally { dashboard.Close(); }
     }
