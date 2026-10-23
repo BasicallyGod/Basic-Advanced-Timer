@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Messages and errors</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.pg{--bg1:#F4F4F1;--bg2:#ECECE8;--ink:#18233A;--muted:#5A6070;--line:#E2E2DD;--card:#FFFFFF;--card2:#F7F7F5;--accent:#3558C8;--accentInk:#FFFFFF;--soft:#E8EEFF}
+.pg.dark{--bg1:#0F1420;--bg2:#131A2A;--ink:#EEF2FB;--muted:#A7B2CA;--line:#2D3853;--card:#1A2234;--card2:#212B42;--accent:#7C9BFF;--accentInk:#0E1530;--soft:#25335A}
+.pg{color-scheme:light}.pg.dark{color-scheme:dark}
+:where(.pg) button{font:inherit;color:inherit;cursor:pointer}
+.pg button:focus-visible,.pg input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:0 1px 2px rgba(40,60,120,.06)}
+.lbl{font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.toast{box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:10px 10px 10px 12px;background:var(--card);border:1.5px solid var(--muted);border-radius:16px;box-shadow:0 10px 28px rgba(20,30,70,.18);max-width:470px}
+.toast.ok{border-color:var(--accent)}
+.toast.hold{border:2px solid var(--ink)}
+.toastIcon{width:28px;height:28px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;box-sizing:border-box}
+.toast.ok .toastIcon{background:var(--soft);color:var(--accent)}
+.toast.warn .toastIcon,.toast.hold .toastIcon{color:var(--ink);border:1.6px solid var(--ink)}
+.small{height:30px;border-radius:10px;font-size:13px;padding:0 12px;border:1px solid transparent;font-weight:500;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center}
+.small.soft{color:var(--accent);background:var(--soft)}
+.small.solid{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.iconbtn{background:transparent;border:0;color:var(--muted);width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0}
+.iconbtn:hover{background:var(--card2);color:var(--ink)}
+.field{height:38px;box-sizing:border-box;border:1px solid var(--line);background:var(--card2);color:var(--ink);border-radius:11px;padding:0 10px;font:400 14px 'Inter',system-ui,sans-serif;width:100%}
+.field.bad{border:2px solid var(--ink)}
+.row{display:grid;grid-template-columns:190px minmax(0,1fr);gap:18px;align-items:center}
+@media (prefers-reduced-motion:reduce){*{transition:none}}
+</style>
+</helmet>
+<div class="pg {{modeClass}}" style="width: 1100px; height: 720px; box-sizing: border-box; padding: 36px 32px 28px; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink); display: flex; flex-direction: column; gap: 20px">
+
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 700">Messages and errors</h1>
+    <p style="margin: 0; font-size: 14px; color: var(--muted); max-width: 900px; line-height: 1.45">Messages float over the lowest part of the workspace, so they never move a button. They say what happened in one sentence and offer the button that helps. They never use red, because red means overtime or a spent budget. An icon and a heavier outline carry the difference instead.</p>
+  </div>
+
+  <div style="display: flex; gap: 20px; align-items: flex-start; flex-grow: 1; min-height: 0">
+    <div class="panel" style="width: 660px; flex-shrink: 0; padding: 20px 22px; display: flex; flex-direction: column; gap: 18px; box-sizing: border-box">
+      <span class="lbl">Floating messages</span>
+
+      <div class="row">
+        <div><div style="font-size: 14px; font-weight: 600">Done</div><div style="font-size: 12.5px; color: var(--muted); line-height: 1.4">After a change you can undo. Fades after 15 seconds.</div></div>
+        <div class="toast ok">
+          <span class="toastIcon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+          <span style="flex-grow: 1; font-size: 13.5px; line-height: 1.4">Merged, with 00:05 of gap time added.</span>
+          <button type="button" class="small soft">Undo</button>
+          <button type="button" class="iconbtn" aria-label="Dismiss"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div><div style="font-size: 14px; font-weight: 600">Done for you</div><div style="font-size: 12.5px; color: var(--muted); line-height: 1.4">Starting a recording right after a quick slip carries the earlier block on.</div></div>
+        <div class="toast ok">
+          <span class="toastIcon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+          <span style="flex-grow: 1; font-size: 13.5px; line-height: 1.4">Carried on Account one's earlier block. The 00:03 slip is included.</span>
+          <button type="button" class="small soft">Undo</button>
+          <button type="button" class="iconbtn" aria-label="Dismiss"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div><div style="font-size: 14px; font-weight: 600">Not possible</div><div style="font-size: 12.5px; color: var(--muted); line-height: 1.4">An edit the timeline can't take. Nothing changed. Fades after 15 seconds.</div></div>
+        <div class="toast warn">
+          <span class="toastIcon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5v7"/><path d="M12 17.5h.01"/></svg></span>
+          <span style="flex-grow: 1; font-size: 13.5px; line-height: 1.4">That would overlap an earlier block.</span>
+          <button type="button" class="iconbtn" aria-label="Dismiss"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div><div style="font-size: 14px; font-weight: 600">Needs you</div><div style="font-size: 12.5px; color: var(--muted); line-height: 1.4">Stays until it works. Dismissing hides it until it changes.</div></div>
+        <div class="toast hold">
+          <span class="toastIcon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5v7"/><path d="M12 17.5h.01"/></svg></span>
+          <span style="flex-grow: 1; font-size: 13.5px; line-height: 1.4"><b>Not saved.</b> Your changes are kept here until a save works.</span>
+          <button type="button" class="small solid">Try again</button>
+          <button type="button" class="iconbtn" aria-label="Dismiss"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+      <div class="panel" style="padding: 20px 22px; display: flex; flex-direction: column; gap: 12px">
+        <span class="lbl">Beside a field</span>
+        <div style="font-size: 13px; color: var(--muted); line-height: 1.4">A typing slip is told next to the field, so nothing floats.</div>
+        <div style="display: flex; gap: 12px">
+          <label style="display: flex; flex-direction: column; gap: 5px; width: 110px"><span class="lbl">Start</span><input class="field" type="text" value="09:30"></label>
+          <label style="display: flex; flex-direction: column; gap: 5px; width: 110px"><span class="lbl">End</span><input class="field bad" type="text" value="9.5h" aria-invalid="true"></label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 13px"><span style="width: 20px; height: 20px; border-radius: 50%; border: 1.6px solid var(--ink); display: flex; align-items: center; justify-content: center; flex-shrink: 0" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5v7"/><path d="M12 17.5h.01"/></svg></span>End looks like 10:30.</div>
+      </div>
+
+      <div class="panel" style="padding: 20px 22px; display: flex; flex-direction: column; gap: 10px">
+        <span class="lbl">Rules</span>
+        <ul style="margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.55; color: var(--ink)">
+          <li>One sentence, in plain words.</li>
+          <li>Say what happened, then offer Undo or Try again.</li>
+          <li>Done is a tick on the accent. Not possible and Needs you are a ring with a mark, never red.</li>
+          <li>The icon always carries the meaning, so colour is never alone.</li>
+          <li>Selection is not a message: it stays in the Selected block card.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:720}}">
+class Component extends DCLogic {
+  renderVals() {
+    return { modeClass: (this.props.mode ?? 'light') === 'dark' ? 'dark' : '' };
+  }
+}
+</script>
+</body>
+</html>

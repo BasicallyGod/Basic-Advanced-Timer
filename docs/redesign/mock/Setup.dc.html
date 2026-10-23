@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Getting started</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.root{--bg1:#F4F4F1;--bg2:#ECECE8;--card:#FFFFFF;--card2:#F7F7F5;--line:#E2E2DD;--ink:#18233A;--muted:#5A6070;--accent:#3558C8;--accentInk:#FFFFFF;--soft:#E8EEFF;--shadow:0 1px 2px rgba(30,30,20,.06);--rail1:#FFFFFF;--rail2:#F6F6F4;--railLine:#E2E2DD;--lateInk:#B3363F;--scrim:rgba(24,35,58,.38);--amber:#B96F00;--amberSoft:#FFF1D6;--pill1:#FFFFFF;--pill2:#F3F3F0;--pillLine:#DDDDD8;--clock:#18233A;--scroll:#C9C9C4}
+.root.dark{--bg1:#0F1420;--bg2:#131A2A;--card:#1A2234;--card2:#212B42;--line:#2D3853;--ink:#EEF2FB;--muted:#A7B2CA;--accent:#7C9BFF;--accentInk:#0E1530;--soft:#25335A;--shadow:0 1px 2px rgba(0,0,0,.25);--rail1:#1C2334;--rail2:#121826;--railLine:#2E3852;--lateInk:#FF9A9A;--scrim:rgba(5,8,16,.58);--amber:#F5B84A;--amberSoft:#3A2E14;--pill1:#202839;--pill2:#121826;--pillLine:#2E3852;--clock:#F3F6FF;--scroll:#46526F}
+.root{color-scheme:light}.root.dark{color-scheme:dark}
+:where(.root) button{font:inherit;color:inherit;cursor:pointer}
+.root button:focus-visible,.root input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ctl{white-space:nowrap;background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:12px;height:38px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;font-size:14px;font-weight:500}
+.ctl:hover{background:var(--card2)}
+.ctl.primary{background:var(--accent);border-color:var(--accent);color:var(--accentInk)}
+.ctl.primary:hover{background:var(--accent);filter:brightness(1.06)}
+.ctl.text{border-color:transparent;background:transparent;color:var(--muted)}
+.ctl.text:hover{color:var(--ink);background:var(--card2)}
+.field{height:34px;box-sizing:border-box;border:1px solid var(--line);background:var(--card2);color:var(--ink);border-radius:11px;padding:0 10px;font:400 14px 'Inter',system-ui,sans-serif;min-width:0;width:100%}
+.field:disabled{opacity:.45}
+.tick{appearance:none;-webkit-appearance:none;width:20px;height:20px;margin:0;border-radius:50%;border:1.6px solid var(--muted);background:transparent;display:grid;place-content:center;cursor:pointer;flex-shrink:0;transition:background .15s,border-color .15s}
+.tick:hover{border-color:var(--accent)}
+.tick:checked{background:var(--accent);border-color:var(--accent)}
+.tick:checked::after{content:"";width:5px;height:9px;border:solid var(--accentInk);border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:34px;box-sizing:border-box;background:var(--card2)}
+.segb{flex:1;border:0;background:transparent;font-size:12.5px;font-weight:600;color:var(--muted);padding:0 10px}
+.segb:hover{color:var(--ink)}
+.segb.on{background:var(--accent);color:var(--accentInk)}
+.sw{width:30px;height:30px;border-radius:10px;border:0;padding:0;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.lbl{font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.choice{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;border:2px solid var(--line);background:var(--card2);border-radius:16px;padding:14px 16px;flex:1}
+.choice:hover{border-color:var(--accent)}
+.choice.on{border-color:var(--accent);background:var(--soft)}
+.stepdot{width:10px;height:10px;border-radius:50%;box-sizing:border-box;border:1.6px solid var(--muted);background:transparent}
+.stepdot.done{background:var(--muted);border-color:var(--muted)}
+.stepdot.cur{background:var(--accent);border-color:var(--accent);width:26px;border-radius:6px}
+.mp .body{fill:none;stroke:currentColor;stroke-width:1.7;transform-box:fill-box;transform-origin:center;transition:transform .18s ease,fill .18s ease}
+.mp .dotc{fill:currentColor;transition:fill .18s ease}
+.mp .ln{fill:currentColor;opacity:.75}
+.mp:hover .body{transform:scaleX(1.3);fill:rgba(124,155,255,.22)}
+.mp:hover .dotc{fill:#34D399}
+@media (prefers-reduced-motion:reduce){.tick,.mp .body,.mp .dotc{transition:none}}
+.root *{scrollbar-width:thin;scrollbar-color:var(--scroll) transparent}
+.root *::-webkit-scrollbar{width:10px;height:10px}
+.root *::-webkit-scrollbar-track{background:transparent}
+.root *::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:2px solid transparent;background-clip:content-box}
+.root *::-webkit-scrollbar-thumb:hover{background:var(--muted);background-clip:content-box}
+</style>
+</helmet>
+<div class="root {{modeClass}}" style="width: 1100px; height: 720px; box-sizing: border-box; display: flex; position: relative; overflow: hidden; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink)">
+
+  <div aria-hidden="true" style="position: absolute; inset: 0; display: flex; filter: blur(5px)">
+    <div style="width: 76px; height: 100%; background: linear-gradient(180deg, var(--rail1), var(--rail2)); border-right: 1px solid var(--railLine)"></div>
+    <div style="flex-grow: 1; padding: 20px 22px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+      <div style="height: 44px; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 30px; font-weight: 700; padding-left: 4px">Today</div>
+      <div style="height: 250px; background: var(--card); border: 1px solid var(--line); border-radius: 20px"></div>
+      <div style="display: flex; gap: 14px; flex-grow: 1"><div style="flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 20px"></div><div style="flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 20px"></div></div>
+    </div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: var(--scrim)"></div>
+
+  <div role="dialog" aria-label="Getting started" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 760px; height: 600px; box-sizing: border-box; background: var(--card); border: 1px solid var(--line); border-radius: 24px; box-shadow: 0 18px 48px rgba(10,16,40,.28); display: flex; flex-direction: column; overflow: hidden">
+
+    <div style="display: flex; align-items: center; gap: 14px; padding: 20px 26px 0">
+      <svg class="mp" width="30" height="30" viewBox="0 0 24 24" aria-hidden="true" style="color: var(--ink)"><rect class="body" x="6.5" y="2.5" width="11" height="19" rx="5.5"/><circle class="dotc" cx="12" cy="7.4" r="1.7"/><rect class="ln" x="9.2" y="11.2" width="5.6" height="1.7" rx=".85"/><rect class="ln" x="10.2" y="14.8" width="3.6" height="1.7" rx=".85"/></svg>
+      <div style="flex-grow: 1">
+        <div style="font-size: 12px; color: var(--muted); font-weight: 600">{{stepOf}}</div>
+        <div style="font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 26px; font-weight: 700; line-height: 1.15">{{title}}</div>
+      </div>
+      <div style="display: flex; gap: 6px; align-items: center" role="img" aria-label="{{stepOf}}">
+        <sc-for list="{{dots}}" as="d" hint-placeholder-count="4"><span class="{{d.cls}}"></span></sc-for>
+      </div>
+    </div>
+    <div style="padding: 6px 26px 0; font-size: 14px; color: var(--muted); line-height: 1.45; min-height: 42px">{{lead}}</div>
+
+    <div style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 12px 26px 8px">
+
+      <sc-if value="{{s1}}" hint-placeholder-val="{{ true }}">
+        <div style="display: grid; grid-template-columns: 30px minmax(0,1fr) 92px 108px 30px; gap: 8px 10px; align-items: center">
+          <span></span><span class="lbl">Account</span><span class="lbl">Budget</span><span class="lbl">Per</span><span></span>
+          <sc-for list="{{accounts}}" as="a" hint-placeholder-count="3">
+            <button type="button" class="sw" onClick="{{a.cycle}}" aria-label="{{a.colourLabel}}" title="Change colour" style="{{a.swatch}}"></button>
+            <input class="field" type="text" value="{{a.name}}" onChange="{{a.rename}}" aria-label="Account name">
+            <input class="field" type="text" value="{{a.budget}}" onChange="{{a.setBudget}}" aria-label="Budget, HH:MM" placeholder="None">
+            <div class="seg" role="group" aria-label="Budget period"><button type="button" class="{{a.wCls}}" onClick="{{a.perW}}" style="flex: 1">Week</button><button type="button" class="{{a.mCls}}" onClick="{{a.perM}}" style="flex: 1">Month</button></div>
+            <button type="button" onClick="{{a.remove}}" aria-label="{{a.removeLabel}}" title="Remove" style="width: 30px; height: 30px; border: 0; background: transparent; color: var(--muted); border-radius: 9px; display: flex; align-items: center; justify-content: center; padding: 0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+          </sc-for>
+        </div>
+        <div style="margin-top: 12px"><button type="button" class="ctl" onClick="{{addAccount}}" disabled="{{full}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add account</button></div>
+      </sc-if>
+
+      <sc-if value="{{s2}}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: 1fr 96px 20px 96px; gap: 8px 12px; align-items: center; max-width: 470px">
+          <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+            <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500"><input type="checkbox" class="tick" checked="{{d.on}}" onChange="{{d.flip}}">{{d.name}}</label>
+            <input class="field" type="text" value="{{d.start}}" onChange="{{d.setStart}}" disabled="{{d.off}}" aria-label="{{d.startLabel}}">
+            <span style="text-align: center; color: var(--muted)">–</span>
+            <input class="field" type="text" value="{{d.end}}" onChange="{{d.setEnd}}" disabled="{{d.off}}" aria-label="{{d.endLabel}}">
+          </sc-for>
+        </div>
+        <div style="margin-top: 14px; font-size: 13.5px; color: var(--muted)">{{weekTotal}}</div>
+      </sc-if>
+
+      <sc-if value="{{s3}}" hint-placeholder-val="{{ false }}">
+        <div class="lbl" style="margin-bottom: 8px">How hours are written</div>
+        <div style="display: flex; gap: 12px">
+          <button type="button" class="{{hhCls}}" onClick="{{pickHH}}" aria-pressed="{{hhOn}}"><span style="font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 700">01:30</span><span style="font-size: 13px; color: var(--muted)">Hours and minutes</span></button>
+          <button type="button" class="{{decCls}}" onClick="{{pickDec}}" aria-pressed="{{decOn}}"><span style="font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 700">1.50h</span><span style="font-size: 13px; color: var(--muted)">Decimal hours, as timesheets often want</span></button>
+        </div>
+        <div class="lbl" style="margin: 20px 0 8px">The week starts on</div>
+        <div class="seg" role="group" aria-label="Week starts on" style="width: 300px; height: 38px">
+          <sc-for list="{{weekStarts}}" as="w" hint-placeholder-count="3"><button type="button" class="{{w.cls}}" onClick="{{w.pick}}" aria-pressed="{{w.on}}" style="font-size: 13.5px">{{w.name}}</button></sc-for>
+        </div>
+        <div style="margin-top: 16px; font-size: 13px; color: var(--muted)">Both can be changed later in Settings.</div>
+      </sc-if>
+
+      <sc-if value="{{s4}}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; gap: 22px; align-items: flex-start">
+          <div style="width: 72px; height: 262px; box-sizing: border-box; border-radius: 36px; padding: 16px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; background: linear-gradient(180deg, var(--pill1), var(--pill2)); border: 1px solid var(--pillLine); flex-shrink: 0" aria-hidden="true">
+            <div style="display: flex; align-items: center; height: 14px"><span style="width: 6px; height: 14px; border-radius: 3px; background: #34D399; display: block"></span></div>
+            <div style="display: flex; flex-direction: column; align-items: center; font-family: 'Bricolage Grotesque', system-ui, sans-serif; color: var(--clock); line-height: 1; margin-top: 4px"><span style="font-size: 30px; font-weight: 700">00</span><span style="font-size: 30px; font-weight: 700; margin-top: 2px">00</span><span style="font-size: 15px; font-weight: 600; margin-top: 4px; opacity: .7">00</span></div>
+            <div style="width: 46px; height: 46px; border-radius: 50%; margin-top: 6px; background: linear-gradient(135deg,#9DF2D2,#34D399); display: flex; align-items: center; justify-content: center; color: #10281F"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></div>
+            <div style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: var(--amber)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3v2M12 3v2"/></svg></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex-grow: 1; min-width: 0">
+            <sc-for list="{{tips}}" as="t" hint-placeholder-count="4">
+              <div style="border: 1px solid var(--line); background: var(--card2); border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px">
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600"><span style="width: 28px; height: 28px; border-radius: 9px; background: var(--soft); color: var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0" aria-hidden="true">
+                  <sc-if value="{{t.isClock}}" hint-placeholder-val="{{ true }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="5.5"/><circle cx="12" cy="7.4" r="1.2" fill="currentColor"/><path d="M9.5 12.5h5M10.5 16h3"/></svg></sc-if>
+                  <sc-if value="{{t.isMug}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3v2M12 3v2"/></svg></sc-if>
+                  <sc-if value="{{t.isNote}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15z"/><path d="M10 21h4"/></svg></sc-if>
+                  <sc-if value="{{t.isGear}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg></sc-if>
+                </span>{{t.title}}</div>
+                <div style="font-size: 13px; color: var(--muted); line-height: 1.45">{{t.text}}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 10px; padding: 14px 26px 20px; border-top: 1px solid var(--line)">
+      <button type="button" class="ctl text" onClick="{{skip}}">Skip setup</button>
+      <span role="status" style="flex-grow: 1; font-size: 12.5px; color: var(--muted); text-align: right">{{status}}</span>
+      <sc-if value="{{canBack}}" hint-placeholder-val="{{ false }}"><button type="button" class="ctl" onClick="{{back}}">Back</button></sc-if>
+      <button type="button" class="ctl primary" onClick="{{next}}">{{nextLabel}}</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:720}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      step: 1,
+      status: '',
+      format: 'hhmm',
+      weekStart: 'Mon',
+      nextId: 4,
+      accounts: [
+        { id: 1, name: 'Account one', ci: 0, budget: '10:00', per: 'W' },
+        { id: 2, name: 'Account two', ci: 1, budget: '', per: 'W' },
+        { id: 3, name: 'Account three', ci: 2, budget: '', per: 'W' }
+      ],
+      days: [
+        { n: 'Monday', on: true, s: '09:00', e: '17:30' },
+        { n: 'Tuesday', on: true, s: '09:00', e: '17:30' },
+        { n: 'Wednesday', on: true, s: '09:00', e: '17:30' },
+        { n: 'Thursday', on: true, s: '09:00', e: '17:30' },
+        { n: 'Friday', on: true, s: '09:00', e: '17:00' },
+        { n: 'Saturday', on: false, s: '09:00', e: '17:00' },
+        { n: 'Sunday', on: false, s: '09:00', e: '17:00' }
+      ]
+    };
+  }
+  renderVals() {
+    const mode = this.props.mode ?? 'light';
+    const step = this.state.step;
+    const pal = [
+      ['#A8D4FF', '#7F98F7'], ['#B2EFD6', '#5FD6AE'], ['#FFD9B8', '#FF9F84'], ['#E8D0FF', '#C197F8'],
+      ['#EEF6B0', '#B9DF82'], ['#FFC9DE', '#F28DB4'], ['#BFEFF3', '#6CC7D6'], ['#FFE6A6', '#F2BD4B']
+    ];
+    const heads = [
+      ['Your accounts', 'Time is tracked against accounts, such as clients or projects. Add the ones you use. A budget is optional.'],
+      ['Working hours', 'Your days and shifts give the day its progress, and the time after them counts as overtime.'],
+      ['Hours and week', 'Choose how hours are written and which day your week starts on.'],
+      ['A few things to know', 'The timer lives in a small pill that stays on top of your other windows.']
+    ];
+    const setAcc = (list) => this.setState({ accounts: list, status: '' });
+    const updA = (id, p) => setAcc(this.state.accounts.map((a) => (a.id === id ? { ...a, ...p } : a)));
+    const okB = (v) => /^\d{1,3}:[0-5]\d$/.test(v) || /^\d{1,3}$/.test(v);
+    const fmtB = (v) => (/^\d{1,3}$/.test(v) ? v.padStart(2, '0') + ':00' : v.padStart(5, '0'));
+    const accounts = this.state.accounts.map((a) => ({
+      name: a.name, budget: a.budget,
+      swatch: 'background:linear-gradient(135deg,' + pal[a.ci % pal.length][0] + ',' + pal[a.ci % pal.length][1] + ')',
+      colourLabel: 'Change colour of ' + a.name,
+      removeLabel: 'Remove ' + a.name,
+      wCls: a.per === 'W' && a.budget ? 'segb on' : 'segb',
+      mCls: a.per === 'M' && a.budget ? 'segb on' : 'segb',
+      cycle: () => updA(a.id, { ci: (a.ci + 1) % pal.length }),
+      rename: (e) => { const v = e.target.value.trim(); if (v) updA(a.id, { name: v }); },
+      setBudget: (e) => {
+        const v = e.target.value.trim();
+        if (!v) return updA(a.id, { budget: '' });
+        if (!okB(v)) return this.setState({ status: 'A budget looks like 10:00.' });
+        updA(a.id, { budget: fmtB(v) });
+      },
+      perW: () => updA(a.id, { per: 'W' }),
+      perM: () => updA(a.id, { per: 'M' }),
+      remove: () => { if (this.state.accounts.length > 1) setAcc(this.state.accounts.filter((x) => x.id !== a.id)); else this.setState({ status: 'Keep at least one account.' }); }
+    }));
+    const updD = (i, p) => this.setState({ days: this.state.days.map((d, k) => (k === i ? { ...d, ...p } : d)), status: '' });
+    const okT = (v) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(v);
+    const toMin = (t) => parseInt(t.slice(0, t.indexOf(':')), 10) * 60 + parseInt(t.slice(t.indexOf(':') + 1), 10);
+    const days = this.state.days.map((d, i) => ({
+      name: d.n, on: d.on, off: !d.on, start: d.s, end: d.e,
+      startLabel: d.n + ' start', endLabel: d.n + ' end',
+      flip: () => updD(i, { on: !d.on }),
+      setStart: (e) => { const v = e.target.value.trim(); if (okT(v)) updD(i, { s: v.padStart(5, '0') }); else this.setState({ status: 'Times look like 09:00.' }); },
+      setEnd: (e) => { const v = e.target.value.trim(); if (okT(v)) updD(i, { e: v.padStart(5, '0') }); else this.setState({ status: 'Times look like 17:30.' }); }
+    }));
+    const mins = this.state.days.filter((d) => d.on && toMin(d.e) > toMin(d.s)).reduce((t, d) => t + toMin(d.e) - toMin(d.s), 0);
+    const dec = this.state.format === 'dec';
+    const weekTotal = 'That is ' + (dec ? (mins / 60).toFixed(2) + 'h' : String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0')) + ' scheduled each week.';
+    const ws = ['Mon', 'Sun', 'Sat'];
+    return {
+      modeClass: mode === 'dark' ? 'dark' : '',
+      stepOf: 'Step ' + step + ' of 4',
+      title: heads[step - 1][0],
+      lead: heads[step - 1][1],
+      dots: [1, 2, 3, 4].map((n) => ({ cls: n === step ? 'stepdot cur' : n < step ? 'stepdot done' : 'stepdot' })),
+      s1: step === 1, s2: step === 2, s3: step === 3, s4: step === 4,
+      accounts: accounts,
+      full: this.state.accounts.length >= 8,
+      addAccount: () => {
+        const id = this.state.nextId;
+        this.setState({ nextId: id + 1, status: '', accounts: [...this.state.accounts, { id: id, name: 'New account', ci: this.state.accounts.length, budget: '', per: 'W' }] });
+      },
+      days: days,
+      weekTotal: weekTotal,
+      hhCls: dec ? 'choice' : 'choice on', decCls: dec ? 'choice on' : 'choice',
+      hhOn: !dec, decOn: dec,
+      pickHH: () => this.setState({ format: 'hhmm' }),
+      pickDec: () => this.setState({ format: 'dec' }),
+      weekStarts: ws.map((w) => ({ name: w === 'Mon' ? 'Monday' : w === 'Sun' ? 'Sunday' : 'Saturday', on: this.state.weekStart === w, cls: this.state.weekStart === w ? 'segb on' : 'segb', pick: () => this.setState({ weekStart: w }) })),
+      tips: [
+        { isClock: true, isMug: false, isNote: false, isGear: false, title: 'Click the time', text: 'On the pill it opens the dashboard. In the dashboard it collapses back to the pill.' },
+        { isClock: false, isMug: true, isNote: false, isGear: false, title: 'Breaks', text: 'The mug under the circle starts a break. The circle resumes your account.' },
+        { isClock: false, isMug: false, isNote: true, isGear: false, title: 'Notes and reminders', text: 'Add notes for the day, tag an account with #, and set a reminder with the bell.' },
+        { isClock: false, isMug: false, isNote: false, isGear: true, title: 'Settings', text: 'The gear at the top right holds themes, hours, export and Run setup again.' }
+      ],
+      status: this.state.status,
+      canBack: step > 1,
+      nextLabel: step === 4 ? 'Start tracking' : 'Next',
+      back: () => this.setState({ step: step - 1, status: '' }),
+      next: () => this.setState({ step: step === 4 ? 1 : step + 1, status: step === 4 ? 'Setup finished. The dashboard opens.' : '' }),
+      skip: () => this.setState({ status: 'Setup skipped. The starting accounts stay as they are.' })
+    };
+  }
+}
+</script>
+</body>
+</html>

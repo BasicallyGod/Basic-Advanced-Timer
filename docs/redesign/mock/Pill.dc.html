@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pill states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.pg{--bg1:#F4F4F1;--bg2:#ECECE8;--ink:#18233A;--muted:#5A6070;--line:#E2E2DD;--card:#FFFFFF;--card2:#F7F7F5;--accent:#3558C8;--soft:#E8EEFF;--pill1:#FFFFFF;--pill2:#F3F3F0;--pillLine:#DDDDD8;--clock:#18233A;--clockSec:#5A6070;--roundBg:#FFFFFF;--roundLine:#BDBDB7;--roundInk:#2D323C;--amber:#B96F00;--amberLine:#E7B66A;--expandBg:#E8EEFF;--expandInk:#3558C8;--quietDot:#C9C9C4;--idleDot:#7A849C;--shadowBase:0 3px 10px rgba(30,30,20,.12);--track:#EAEAE6;--calloutBg:#18233A;--calloutInk:#FFFFFF;--amberSoft:#FFF1D6}
+.pg.dark{--bg1:#0F1420;--bg2:#131A2A;--ink:#EEF2FB;--muted:#A7B2CA;--line:#2D3853;--card:#1A2234;--card2:#212B42;--accent:#7C9BFF;--soft:#25335A;--pill1:#202839;--pill2:#121826;--pillLine:#2E3852;--clock:#F3F6FF;--clockSec:#A9B5CF;--roundBg:#1C2436;--roundLine:#3A4560;--roundInk:#E6ECFA;--amber:#F5B84A;--amberLine:#8A6420;--expandBg:#26335A;--expandInk:#A9BEFF;--quietDot:#2D3750;--idleDot:#4A5570;--shadowBase:0 3px 10px rgba(0,0,0,.35);--track:#252F48;--calloutBg:#EEF2FB;--calloutInk:#0E1530;--amberSoft:#3A2E14}
+.pill{width:72px;height:262px;box-sizing:border-box;border-radius:36px;padding:16px 0 16px;display:flex;flex-direction:column;align-items:center;gap:10px;background:linear-gradient(180deg,var(--pill1),var(--pill2));border:1px solid var(--pillLine);flex-shrink:0}
+.dot{width:10px;height:10px;border-radius:50%;display:block}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(96,150,255,.75)}70%{box-shadow:0 0 0 7px rgba(96,150,255,0)}100%{box-shadow:0 0 0 0 rgba(96,150,255,0)}}
+.dot.pulse{animation:pulse 1.8s ease-out infinite}
+@media (prefers-reduced-motion:reduce){.dot.pulse{animation:none}}
+.circle{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#10281F;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 1px 2px rgba(20,30,60,.18)}
+.brk{width:40px;height:40px;border-radius:13px;color:var(--amber);display:flex;align-items:center;justify-content:center}
+.brk:hover,.brk.on{background:var(--amberSoft)}
+.brk.on .steam,.brk:hover .steam{animation:steam 1.4s ease-in-out infinite}
+@keyframes steam{0%,100%{transform:translateY(0);opacity:.95}50%{transform:translateY(-1.6px);opacity:.45}}
+@media (prefers-reduced-motion:reduce){.brk:hover .steam,.brk.on .steam{animation:none}}
+.expand{width:44px;height:32px;border-radius:12px;background:var(--expandBg);color:var(--expandInk);display:flex;align-items:center;justify-content:center}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 6px 18px rgba(20,30,70,.12)}
+.mp .body{fill:none;stroke:currentColor;stroke-width:1.7;transform-box:fill-box;transform-origin:center;transition:transform .18s ease,fill .18s ease}
+.mp .dotc{fill:currentColor;transition:fill .18s ease}
+.mp .ln{fill:currentColor;opacity:.75}
+.mp:hover .body{transform:scaleX(1.3);fill:rgba(124,155,255,.22)}
+.mp:hover .dotc{fill:#34D399}
+@media (prefers-reduced-motion:reduce){.mp .body,.mp .dotc{transition:none}}
+.callout{position:relative;background:var(--calloutBg);color:var(--calloutInk);font-size:12px;font-weight:600;border-radius:9px;padding:5px 10px;white-space:nowrap}
+.callout:before{content:"";position:absolute;left:-5px;top:50%;margin-top:-5px;border-style:solid;border-width:5px 5px 5px 0;border-color:transparent var(--calloutBg) transparent transparent}
+.cap{width:6px;height:14px;border-radius:3px;display:block;flex-shrink:0}
+.cap.pulse{animation:pulse 1.8s ease-out infinite}
+@media (prefers-reduced-motion:reduce){.cap.pulse{animation:none}}
+</style>
+</helmet>
+<div class="pg {{modeClass}}" style="width: 1180px; height: 720px; box-sizing: border-box; padding: 40px 24px 28px; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink); display: flex; flex-direction: column; gap: 22px">
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 700">The pill</h1>
+    <p style="margin: 0; font-size: 14px; color: var(--muted)">About 72 wide by 262 tall at 100 per cent. One vertical capsule shows the recording state, and a second blue one appears beside it only while a reminder is due. The circle shows the running account's initials, and pause or resume when the pointer is over it. The amber mug under it starts a break, and while on a break it stays lit and steams, so the pill never shows two cups. There is no Finish day button and no open button: clicking the time opens the dashboard.</p>
+  </div>
+  <div style="display: flex; align-items: flex-start; gap: 0">
+    <sc-for list="{{pills}}" as="p" hint-placeholder-count="5">
+      <div style="{{p.colStyle}}">
+        <div style="font-size: 14px; font-weight: 600">{{p.label}}</div>
+        <div style="font-size: 12px; color: var(--muted); line-height: 1.35; margin-bottom: 8px; min-height: 36px">{{p.sub}}</div>
+        <div style="display: flex; align-items: flex-start; gap: 8px">
+          <div class="pill" style="{{p.glow}}">
+            <div style="display: flex; gap: 6px; align-items: center; height: 14px">
+              <span class="cap" role="img" aria-label="{{p.dotLabel}}" style="{{p.dotStyle}}"></span>
+              <sc-if value="{{p.due}}" hint-placeholder-val="{{ false }}"><span class="cap pulse" role="img" aria-label="A reminder is due" style="background:#6096FF"></span></sc-if>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; font-family: 'Bricolage Grotesque', system-ui, sans-serif; color: var(--clock); line-height: 1; margin-top: 4px">
+              <span style="font-size: 30px; font-weight: 700">{{p.h}}</span>
+              <span style="font-size: 30px; font-weight: 700; margin-top: 2px">{{p.m}}</span>
+              <span style="font-size: 15px; font-weight: 600; margin-top: 4px; color: var(--clockSec)">{{p.s}}</span>
+            </div>
+            <div class="circle" style="{{p.circle}}; margin-top: 6px">
+              <sc-if value="{{p.faceIni}}" hint-placeholder-val="{{ true }}"><span style="font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-weight: 700; font-size: 17px">A1</span></sc-if>
+              <sc-if value="{{p.facePlay}}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></sc-if>
+            </div>
+            <div class="brk {{p.brkCls}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path class="steam" d="M8 3v2M12 3v2"/></svg></div>
+          </div>
+
+          <sc-if value="{{p.isPeek}}" hint-placeholder-val="{{ false }}">
+            <div class="card" style="width: 156px; padding: 10px; margin-top: 70px; display: flex; flex-direction: column; gap: 8px">
+              <div style="display: flex; gap: 10px; align-items: center"><span style="width: 34px; height: 34px; border-radius: 11px; background: linear-gradient(135deg,#A8D4FF,#7F98F7); flex-shrink: 0"></span><div><div style="font-size: 13px; font-weight: 600">Account one</div><div style="font-size: 12px; color: var(--muted)">01:45</div></div></div>
+              <div style="display: flex; gap: 10px; align-items: center"><span style="width: 34px; height: 34px; border-radius: 11px; background: linear-gradient(135deg,#B2EFD6,#5FD6AE); flex-shrink: 0"></span><div><div style="font-size: 13px; font-weight: 600">Account two</div><div style="font-size: 12px; color: var(--muted)">01:00</div></div></div>
+              <div style="display: flex; gap: 10px; align-items: center"><span style="width: 34px; height: 34px; border-radius: 11px; background: linear-gradient(135deg,#FFD9B8,#FF9F84); flex-shrink: 0"></span><div><div style="font-size: 13px; font-weight: 600">Account three</div><div style="font-size: 12px; color: var(--muted)">00:40</div></div></div>
+              <div style="font-size: 12.5px; color: var(--accent); font-weight: 600; background: var(--soft); border-radius: 10px; padding: 7px 10px">All accounts ›</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{p.isPanel}}" hint-placeholder-val="{{ false }}">
+            <div class="card" style="width: 232px; padding: 14px; margin-top: 8px; display: flex; flex-direction: column; gap: 10px">
+              <div style="display: flex; align-items: center; justify-content: space-between"><div style="font-size: 15px; font-weight: 600">Accounts</div><div style="font-size: 12px; font-weight: 500; border: 1px solid var(--line); border-radius: 9px; padding: 4px 9px">Today</div></div>
+              <sc-for list="{{accounts}}" as="a" hint-placeholder-count="3">
+                <div style="{{a.rowStyle}}">
+                  <span style="{{a.swatch}}"></span>
+                  <div style="flex-grow: 1; min-width: 0">
+                    <div style="display: flex; justify-content: space-between; gap: 6px"><span style="font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{a.name}}</span><span style="font-size: 12px; color: var(--muted)">{{a.time}}</span></div>
+                    <div style="display: flex; align-items: center; gap: 6px; margin-top: 5px"><span style="flex-grow: 1; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden"><span style="{{a.bar}}"></span></span><span style="font-size: 11px; color: var(--muted); width: 28px; text-align: right">{{a.pct}}</span></div>
+                  </div>
+                </div>
+              </sc-for>
+              <div style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 36px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; font-weight: 500; background: var(--card2)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Manage accounts</div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display: flex; gap: 16px; margin-top: auto">
+    <div class="card" style="flex: 1; padding: 14px 16px; display: flex; gap: 14px; align-items: center">
+      <div style="width: 52px; height: 52px; flex-shrink: 0; border-radius: 16px; background: linear-gradient(180deg,var(--pill1),var(--pill2)); border: 1px solid var(--pillLine); display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-weight: 700; font-size: 15px; line-height: 1.05; color: var(--clock)"><span>04</span><span>47</span></div>
+      <div style="min-width: 0">
+        <div style="font-size: 14px; font-weight: 600">Open: click the time on the pill</div>
+        <div style="font-size: 12.5px; color: var(--muted); line-height: 1.4; margin-top: 3px">As today. The tooltip says Open dashboard, and Enter does it when the pill has focus.</div>
+      </div>
+    </div>
+    <div class="card" style="flex: 1; padding: 14px 16px; display: flex; gap: 14px; align-items: center">
+      <div style="width: 52px; height: 52px; flex-shrink: 0; border-radius: 16px; background: var(--card2); border: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-weight: 700; font-size: 15px; line-height: 1.05; color: var(--clock)"><span>04</span><span>47</span></div>
+      <div style="min-width: 0">
+        <div style="font-size: 14px; font-weight: 600">Collapse: click the time in the dashboard</div>
+        <div style="font-size: 12.5px; color: var(--muted); line-height: 1.4; margin-top: 3px">The same click that opens the dashboard from the pill collapses it from the rail. The time gets a soft highlight on hover, and the tooltip says which way it goes. No icon takes up room.</div>
+      </div>
+    </div>
+    <div class="card" style="flex: 1; padding: 14px 16px">
+      <div style="font-size: 14px; font-weight: 600">Popups and access</div>
+      <div style="font-size: 12.5px; color: var(--muted); line-height: 1.4; margin-top: 3px">Hover shows the peek and a click on the peek opens the panel. Manage accounts brings the dashboard up and opens Accounts and budgets. Popups flip left near a screen edge, and the pill never changes width.</div>
+    </div>
+    <div class="card" style="flex: 1; padding: 14px 16px">
+      <div style="font-size: 14px; font-weight: 600">Right-click</div>
+      <div style="margin-top: 8px; display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card2); font-size: 13px; font-weight: 500"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8l8 8 8-8"/><path d="M5 20h14"/></svg>Collapse to tray</div>
+      <div style="font-size: 12.5px; color: var(--muted); line-height: 1.4; margin-top: 8px">One item. The mug starts a break, and starting a recording right after a quick slip carries the earlier block on by itself.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:720}}">
+class Component extends DCLogic {
+  renderVals() {
+    const mode = this.props.mode ?? 'light';
+    const dark = mode === 'dark';
+    const base = 'box-shadow: var(--shadowBase)';
+    const glow = (c, a) => 'box-shadow: 0 0 0 2px rgba(' + c + ',.9), 0 0 14px rgba(' + c + ',' + (dark ? a * 0.7 : a * 0.45) + ')';
+    const green = 'background: linear-gradient(135deg, #9DF2D2, #34D399)';
+    const amber = 'background: linear-gradient(135deg, #FFD08A, #F5A524)';
+    const red = 'background: linear-gradient(135deg, #FFC2C2, #FF8585)';
+    const off = 'background:var(--idleDot)';
+    const quiet = 'background:var(--quietDot)';
+    const blue = 'background:#6096FF';
+    const mk = (o) => Object.assign({
+      colStyle: 'width: 108px; flex-shrink: 0', label: '', sub: '', h: '04', m: '47', s: '35',
+      glow: base, dotStyle: 'background:#34D399', dotLabel: 'Recording', due: false,
+      circle: green, faceIni: true, facePlay: false, brkCls: '', isPeek: false, isPanel: false
+    }, o);
+    const pills = [
+      mk({ label: 'Idle', sub: 'Ready to track', glow: base, dotStyle: off, dotLabel: 'Not recording', faceIni: false, facePlay: true }),
+      mk({ label: 'Running', sub: 'Initials. Pause under the pointer', glow: glow('52,211,153', .5) }),
+      mk({ label: 'Break', sub: 'Circle turns amber. The mug is lit', h: '00', m: '23', s: '14', glow: glow('245,165,36', .5), dotStyle: 'background:#F5A524', dotLabel: 'On break', circle: amber, brkCls: 'on'}),
+      mk({ label: 'Overtime', sub: 'Red until the day ends', h: '08', m: '12', s: '14', glow: glow('248,113,113', .5), dotStyle: 'background:#F87171', dotLabel: 'Overtime', circle: red }),
+      mk({ label: 'Reminder due', sub: 'A blue capsule pulses beside it', glow: glow('52,211,153', .5), due: true }),
+      mk({ label: 'Hover (peek)', sub: 'A few accounts and today\'s time', colStyle: 'width: 240px; flex-shrink: 0', glow: glow('52,211,153', .5), isPeek: true }),
+      mk({ label: 'Click: accounts panel', sub: 'Slides out over the content', colStyle: 'width: 316px; flex-shrink: 0', glow: glow('52,211,153', .5), isPanel: true })
+    ];
+    const a = [
+      { n: 'Account one', t: '01:45', p: 88, c: ['#A8D4FF', '#7F98F7'], run: true },
+      { n: 'Account two', t: '01:00', p: 60, c: ['#B2EFD6', '#5FD6AE'] },
+      { n: 'Account three', t: '00:40', p: 46, c: ['#FFD9B8', '#FF9F84'] },
+      { n: 'Account four', t: '00:35', p: 54, c: ['#E8D0FF', '#C197F8'] },
+      { n: 'Account five', t: '00:30', p: 39, c: ['#EEF6B0', '#B9DF82'] }
+    ];
+    const accounts = a.map((x) => ({
+      name: x.n, time: x.t, pct: x.p + '%',
+      rowStyle: 'display:flex;align-items:center;gap:10px;padding:6px;border-radius:12px;' + (x.run ? 'box-shadow:0 0 0 2px #34D399;background:' + (dark ? '#183029' : '#F1FBF7') : ''),
+      swatch: 'width:32px;height:32px;border-radius:10px;flex-shrink:0;background:linear-gradient(135deg,' + x.c[0] + ',' + x.c[1] + ')',
+      bar: 'display:block;height:100%;width:' + x.p + '%;background:' + (x.p >= 80 ? '#E39A12' : (dark ? '#8793B0' : '#6E727C'))
+    }));
+    return { modeClass: dark ? 'dark' : '', pills: pills, accounts: accounts };
+  }
+}
+</script>
+</body>
+</html>
