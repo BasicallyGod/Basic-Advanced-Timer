@@ -228,7 +228,7 @@ public sealed class PillWindow : Window
         face.Refresh();
         var onBreak = model.IsOnBreak;
         var (key, _) = StatusFace.State(model);
-        var stateColour = ThemeColourOr(key, "#8A8F98");
+        var stateColour = key == "Idle" ? Colors.Gray : Ui.PillStateColour(this, key);
 
         // A ring and a glow in the state's colour round the pill while it is doing something, and the plain edge and shadow when it is idle.
         surface.BorderThickness = new Thickness(key == "Idle" ? 1 : 1.5);

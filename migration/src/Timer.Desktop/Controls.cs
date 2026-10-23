@@ -64,6 +64,21 @@ public static class Ui
     /// </summary>
     public static double CssBlur(double css) => Math.Round((css / 2 - 0.5) / 0.288675, 1);
     /// <summary>
+    /// The colour of the pill's ring and halo for a state. On a Light theme it is the mock's bright mint, amber or coral, because the theme's own state
+    /// colours are deeper there and the same glow read about one and a half times as strong; a dark theme uses its own state colours, which are close to them.
+    /// </summary>
+    public static Color PillStateColour(Control host, string state)
+    {
+        if (!SoftTint.IsDark(host))
+            switch (state)
+            {
+                case "Live": return Color.FromRgb(52, 211, 153);
+                case "Break": return Color.FromRgb(245, 165, 36);
+                case "Overtime": return Color.FromRgb(248, 113, 113);
+            }
+        return ThemeColour(host, state, Colors.Gray);
+    }
+    /// <summary>
     /// The pill's own halo, drawn as the mock draws it: a glow of a 12 pixel CSS blur in the state's colour at 16 per cent (22 on a dark theme) while it is doing something,
     /// and at rest a light shadow dropped 6 pixels with an 18 pixel blur (10 per cent warm black, or 40 per cent black on a dark theme) rather than the heavier shadow cards use.
     /// </summary>
@@ -72,7 +87,7 @@ public static class Ui
         var dark = SoftTint.IsDark(host);
         if (glow is not null)
         {
-            var colour = ThemeColour(host, glow, Colors.Gray);
+            var colour = PillStateColour(host, glow);
             host.BoxShadow = new BoxShadows(new BoxShadow { Blur = CssBlur(12), Spread = 0, Color = Color.FromArgb((byte)Math.Round((dark ? .22 : .16) * 255), colour.R, colour.G, colour.B) });
         }
         else if (shadows)
