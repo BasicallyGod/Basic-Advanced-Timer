@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
@@ -15,6 +16,7 @@ public sealed class PillTests
     private static DateTime Day => new(2026, 10, 14);
     private static TimerModel Model() { var m = new TimerModel(new TrackingEngine(clock: () => Day.AddHours(10))); m.CompleteSetup(); return m; }
     private static T Find<T>(Window w, string name) where T : Control => w.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+    private static void Click(Control c) => c.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     private static string? Tip(Control c) => ToolTip.GetTip(c)?.ToString();
     private static void ClickAt(Window w, Control c)
     {
@@ -137,35 +139,76 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void HoverShowsFewAccountsAndAllAccountsOpensTheListWhichClosesOnAChoice()
+    public void TheAccountsButtonUnfoldsTheDrawerAndFoldsItAgainAndChoosingAnAccountPutsItAway()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            Assert.False(pill.PeekOpen); Assert.False(pill.PanelOpen);
-            pill.ShowPeek(); Assert.True(pill.PeekOpen); Assert.False(pill.PanelOpen);
-            pill.ShowPanel(); Assert.False(pill.PeekOpen); Assert.True(pill.PanelOpen);
-            Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5); // The pill never grows for them.
+            Assert.False(pill.PanelOpen); Assert.Equal("Accounts", ToolTip.GetTip(pill.AccountsButton));
+            Click(pill.AccountsButton); Assert.True(pill.PanelOpen); Assert.Equal("Close the accounts", ToolTip.GetTip(pill.AccountsButton));
+            Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5); // The pill never grows for it.
+            Assert.Equal(new CornerRadius(PillWindow.PillRadius, 0, 0, PillWindow.PillRadius), Find<Border>(pill, "PillSurface").CornerRadius); // One capsule: square where they join.
+            Click(pill.AccountsButton); Assert.False(pill.PanelOpen); Assert.Equal(new CornerRadius(PillWindow.PillRadius), Find<Border>(pill, "PillSurface").CornerRadius);
+            Click(pill.AccountsButton); Dispatcher.UIThread.RunJobs();
             model.ToggleAccount("Account two"); Dispatcher.UIThread.RunJobs();
-            Assert.False(pill.PanelOpen); // Choosing an account puts the list away.
-            pill.ShowPeek(); pill.CloseFlyouts(); Assert.False(pill.PeekOpen);
+            Assert.False(pill.PanelOpen); // Choosing an account puts the drawer away.
+            pill.ShowPanel(); pill.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Assert.False(pill.PanelOpen); // So does Escape.
         }
         finally { pill.Close(); }
     }
 
     [AvaloniaFact]
-    public void AManyAccountListStopsAtThreeFifthsOfTheScreenAndScrolls()
+    public void TheDrawerIsAsTallAsThePillAndItsListScrollsInsideIt()
     {
         var model = new TimerModel(new TrackingEngine(), new StoreSettings(Enumerable.Range(1, 25).Select(i => new AccountSettings("Client " + i)).ToList(), false, "System", DayOfWeek.Monday));
         var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            pill.ShowPanel(); Dispatcher.UIThread.RunJobs();
-            var screen = pill.Screens.ScreenFromWindow(pill); var screenHeight = screen is null ? 800 : screen.WorkingArea.Height / screen.Scaling;
-            Assert.True(pill.AccountScroll.MaxHeight * pill.Scale <= PillWindow.OpenShareOfScreen * screenHeight, $"{pill.AccountScroll.MaxHeight} of {screenHeight}");
-            Assert.True(pill.AccountScroll.MaxHeight >= PillWindow.FewestRows * 70);
+            pill.ShowPanel(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+            var drawer = Find<Border>(pill, "PillDrawer");
+            Assert.Equal(PillWindow.PillHeight, drawer.Bounds.Height, 0.5); Assert.Equal(PillWindow.DrawerWidth, drawer.Bounds.Width, 0.5);
+            var scroll = pill.AccountScroll;
+            Assert.True(scroll.Extent.Height > scroll.Viewport.Height + 1); // Twenty-five accounts do not fit, so it scrolls.
+            Assert.True(scroll.Viewport.Height >= 3 * 54 - 1); // At least three of the short rows show.
+            Assert.Empty(pill.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip)); // The pill's list is not reordered.
         }
         finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ThePillIsThreeHundredTallWithTheAccountsButtonUnderTheCircleAndTheBreakCircleBelowIt()
+    {
+        var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+        try
+        {
+            Assert.Equal(300, PillWindow.PillHeight); Assert.Equal(PillWindow.PillHeight, Find<Border>(pill, "PillSurface").Height);
+            double Y(Control c) => c.TranslatePoint(default, pill)!.Value.Y;
+            Assert.True(Y(Find<Button>(pill, "PillPause")) < Y(pill.AccountsButton)); Assert.True(Y(pill.AccountsButton) < Y(Find<Button>(pill, "PillBreak")));
+            var surface = Find<Border>(pill, "PillSurface"); var bottom = surface.TranslatePoint(new Point(0, surface.Bounds.Height), pill)!.Value.Y;
+            Assert.True(Y(Find<Button>(pill, "PillBreak")) + 46 * pill.Scale <= bottom + 0.5, $"break bottom {Y(Find<Button>(pill, "PillBreak")) + 46 * pill.Scale} card bottom {bottom} scale {pill.Scale}"); // Everything fits inside the card.
+        }
+        finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheBreakIsAnAmberCircleWithAWhiteCupThatHoldsContrastAndRingsOnABreak()
+    {
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = Model(); model.SetTheme(theme); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+            try
+            {
+                var circle = Find<Button>(pill, "PillBreak").GetVisualDescendants().OfType<Border>().Single(b => b.Width == 40);
+                Assert.Equal(20, circle.CornerRadius.TopLeft); // A circle, not a rounded square.
+                var fill = ((Avalonia.Media.ISolidColorBrush)circle.Background!).Color; var hex = $"#{fill.R:X2}{fill.G:X2}{fill.B:X2}";
+                Assert.True(ThemeColours.Contrast(hex, "#FFFFFF") >= 4.5, theme + " " + hex); // White reads on it.
+                Assert.True(fill.R > fill.B + 40, "still amber"); Assert.Equal(0, circle.BoxShadow.Count);
+                model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.True(circle.BoxShadow.Count > 0); // A soft ring while a break is on.
+                Assert.True(Find<Button>(pill, "PillBreak").GetVisualDescendants().OfType<BreakGlyph>().Single().Filled); // The cup is drawn white.
+            }
+            finally { pill.Close(); model.SetTheme("System"); }
+        }
     }
 
     [AvaloniaFact]

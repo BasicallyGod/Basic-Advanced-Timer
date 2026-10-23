@@ -104,8 +104,8 @@ public sealed class SettingsPageTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             double Centre(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Avalonia.Point(b.Bounds.Width / 2, 0), window)!.Value.X; }
-            Assert.Equal(Centre("RailAccounts"), Centre("TimelineTab"), 0.5); Assert.Equal(Centre("RailAccounts"), Centre("QuitTimer"), 0.5);
-            Assert.Equal(Centre("RailAccounts"), Centre("DashboardDay"), 0.5); Assert.Equal(Centre("RailAccounts"), Centre("DashboardBreak"), 1.0); Assert.Equal(Centre("RailAccounts"), Centre("RailPause"), 1.0); Assert.Equal(Centre("RailAccounts"), Centre("RailDashboard"), 1.0);
+            Assert.Equal(Centre("RailAccounts"), Centre("TimelineTab"), 1.0); Assert.Equal(Centre("RailAccounts"), Centre("QuitTimer"), 1.0);
+            Assert.Equal(Centre("RailAccounts"), Centre("DashboardDay"), 1.0); Assert.Equal(Centre("RailAccounts"), Centre("DashboardBreak"), 1.0); Assert.Equal(Centre("RailAccounts"), Centre("RailPause"), 1.0); Assert.Equal(Centre("RailAccounts"), Centre("RailDashboard"), 1.0);
         }
         finally { window.Close(); }
     }

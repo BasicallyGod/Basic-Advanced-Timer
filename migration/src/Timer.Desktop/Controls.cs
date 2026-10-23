@@ -244,6 +244,13 @@ public static class Ui
     /// The right-click menu is kept short on purpose: the hours format, which build this is, the overtime tester (demo only) and Close timer.
     /// Everything else lives on the settings page.
     /// </summary>
+    /// <summary>The break circle's colour: the theme's break amber, deepened until a white cup on it holds 4.5 to 1.</summary>
+    public static Avalonia.Media.Color BreakCircleColour(Avalonia.Media.Color amber)
+    {
+        var hex = $"#{amber.R:X2}{amber.G:X2}{amber.B:X2}";
+        for (var weight = 0.0; weight <= .6 && Timer.Core.ThemeColours.Contrast(hex, "#FFFFFF") < 4.5; weight += .04) hex = Timer.Core.ThemeColours.Mix($"#{amber.R:X2}{amber.G:X2}{amber.B:X2}", "#000000", weight);
+        return Avalonia.Media.Color.Parse(hex);
+    }
     public static ContextMenu SettingsMenu(TimerModel model)
     {
         // Inside the demo you can switch overtime on and off to see how it looks. Like the version, it shows only once developer features are unlocked.
@@ -465,11 +472,12 @@ public sealed class AccountList : StackPanel
 {
     private readonly TimerModel model;
     private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Period)> rows = new();
-    private readonly bool reorderable, bars;
+    private readonly bool reorderable, bars, compact;
     /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
-    public AccountList(TimerModel model, bool reorderable = false, bool bars = false)
+    /// <param name="compact">With bars, a shorter row for the pill's narrow drawer: the swatch, name and time, and the bar, without the budget words or the play circle.</param>
+    public AccountList(TimerModel model, bool reorderable = false, bool bars = false, bool compact = false)
     {
-        this.model = model; this.reorderable = reorderable; this.bars = bars;
+        this.model = model; this.reorderable = reorderable; this.bars = bars; this.compact = compact;
         Rebuild();
         // A list that sat hidden (in a pop-up) missed the changes made meanwhile, so it catches up when it is shown.
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Changed(null, new System.ComponentModel.PropertyChangedEventArgs(null)); };
@@ -517,12 +525,12 @@ public sealed class AccountList : StackPanel
                 var period = Ui.Text("", 12, "muted"); period.TextAlignment = Avalonia.Media.TextAlignment.Right; period.VerticalAlignment = VerticalAlignment.Center;
                 var budgetLine = Ui.Grid("*,Auto"); Ui.Put(budgetLine, budget); Ui.Put(budgetLine, period, 1); period.Name = "BudgetPeriod";
                 percent = period; // The row's second quiet text, kept under the old name in the row list.
-                labels.Children.Add(nameLine); labels.Children.Add(budgetLine);
+                labels.Children.Add(nameLine); if (!compact) labels.Children.Add(budgetLine);
                 if (account.Budget is not null) { bar = new BudgetBar(); labels.Children.Add(bar); }
                 icon.Margin = new Thickness(8, 0, 0, 0);
-                Ui.Put(grid, labels, shift); Ui.Put(grid, icon, 1 + shift);
+                Ui.Put(grid, labels, shift); if (!compact) Ui.Put(grid, icon, 1 + shift);
                 // A rounded card inset from the edges, so the recording account's soft highlight has room to show.
-                row.Classes.Add("accountCard"); row.Margin = new Thickness(10, 0); row.Height = 70;
+                row.Classes.Add("accountCard"); row.Margin = compact ? new Thickness(0) : new Thickness(10, 0); row.Height = compact ? 54 : 70;
             }
             else
             {
@@ -854,6 +862,22 @@ public sealed class BreakGlyph : Control
             var rise = phase * 3.5 * flow; var alpha = 1.0 + (Math.Sin(phase * Math.PI) - 1.0) * flow;
             using (context.PushOpacity(Math.Clamp(alpha, 0.0, 1.0)))
                 context.DrawLine(pen, new Point(x, 4 - rise), new Point(x, 1.5 - rise));
+        }
+    }
+}
+
+/// <summary>The accounts icon: three short bars, each in a different account-like colour, the one coloured icon on the pill and the rail.</summary>
+public sealed class AccountsGlyph : Control
+{
+    private static readonly (string From, string To)[] Colours = { ("#A8D4FF", "#7F98F7"), ("#B2EFD6", "#5FD6AE"), ("#FFD9B8", "#FF9F84") };
+    public AccountsGlyph() { Width = 20; Height = 19; }
+    public override void Render(DrawingContext context)
+    {
+        for (var i = 0; i < 3; i++)
+        {
+            var brush = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                GradientStops = { new GradientStop(Color.Parse(Colours[i].From), 0), new GradientStop(Color.Parse(Colours[i].To), 1) } };
+            context.DrawRectangle(brush, null, new Rect(0, i * 7, 20, 5), 2.5, 2.5);
         }
     }
 }

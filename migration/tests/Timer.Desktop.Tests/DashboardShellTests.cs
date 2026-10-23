@@ -136,6 +136,52 @@ public sealed class DashboardShellTests
         finally { window.Close(); }
     }
 
+    [AvaloniaFact]
+    public void TheRailsTopIsDrawnAtThePillsSizeAndPlaceSoNothingJumps()
+    {
+        var model = Model(); model.SetPillScale(90);
+        var pill = new PillWindow(model); pill.Show(); var dash = new DashboardWindow(model); dash.Show();
+        dash.RailScaleSource = () => pill.Scale; dash.SetRailScale(pill.Scale); Settle(pill); Settle(dash);
+        try
+        {
+            Assert.Equal(.9, pill.Scale, 3); Assert.Equal(DashboardWindow.RailWidth * .9, dash.RailWidthNow, 0.01);
+            Assert.Equal(dash.RailWidthNow, Find<Border>(dash, "DashboardRail").Bounds.Width, 0.5); // The rail is as wide as the pill is drawn.
+            var surface = Find<Border>(pill, "PillSurface"); var rail = Find<Border>(dash, "DashboardRail");
+            foreach (var name in new[] { "Dashboard", "Pause", "Accounts" })
+            {
+                var inPill = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Pill" + name); var inRail = dash.GetVisualDescendants().OfType<Button>().Single(b => b.Name == (name == "Dashboard" ? "RailDashboard" : "Rail" + name));
+                var fromPill = inPill.TranslatePoint(default, surface)!.Value.Y * pill.Scale; // The pill's own units, drawn at its scale.
+                var fromRail = inRail.TranslatePoint(default, rail)!.Value.Y;
+                Assert.True(Math.Abs(fromPill - fromRail) <= 1.0, $"{name}: pill {fromPill} rail {fromRail}");
+                Assert.Equal(inPill.Bounds.Height * pill.Scale, inRail.Bounds.Height * dash.RailWidthNow / DashboardWindow.RailWidth, 1.0); // And at the same size.
+            }
+        }
+        finally { dash.Close(); pill.Close(); model.SetPillScale(null); }
+    }
+
+    [AvaloniaFact]
+    public void TheRailsAccountsUnfoldFromItsEdgeFullHeightAndEscapeOrTheDimmedPageFoldsThemAway()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var layer = Find<Grid>(window, "AccountsLayer"); var drawer = Find<Border>(window, "AccountsDrawer"); var rail = Find<Border>(window, "DashboardRail"); var surface = Find<Border>(window, "DashboardSurface");
+            Assert.False(layer.IsVisible);
+            Click(Find<Button>(window, "RailAccounts")); Settle(window);
+            Assert.True(layer.IsVisible); Assert.True(window.AccountsOpen);
+            Assert.Equal(surface.Bounds.Height, drawer.Bounds.Height, 0.5); // Full height.
+            Assert.Equal(rail.TranslatePoint(new Point(rail.Bounds.Width, 0), window)!.Value.X, drawer.TranslatePoint(default, window)!.Value.X, 0.5); // It starts at the rail's edge.
+            Assert.Equal(DashboardWindow.RailWidth, rail.Bounds.Width, 0.5); // The rail itself does not move.
+            Assert.Equal("Close the accounts", ToolTip.GetTip(Find<Button>(window, "RailAccounts")));
+            window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape }); Assert.False(window.AccountsOpen);
+            Click(Find<Button>(window, "RailAccounts")); Settle(window); Assert.True(window.AccountsOpen);
+            var scrim = Find<Border>(window, "AccountsScrim"); var at = scrim.TranslatePoint(new Point(scrim.Bounds.Width - 30, scrim.Bounds.Height / 2), window)!.Value;
+            window.MouseDown(at, MouseButton.Left); window.MouseUp(at, MouseButton.Left); Assert.False(window.AccountsOpen); // A click on the dimmed page.
+            Assert.Equal("Accounts", ToolTip.GetTip(Find<Button>(window, "RailAccounts")));
+        }
+        finally { window.Close(); }
+    }
+
     [Fact]
     public void TheRailAndThePillLineUpTheirCardsWhateverTheScale()
     {

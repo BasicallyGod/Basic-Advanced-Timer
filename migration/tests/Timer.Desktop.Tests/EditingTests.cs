@@ -427,7 +427,7 @@ public sealed class EditingTests
             model.ToggleBreak(); model.SetOvertimeTest(false); Settle();
             // Break and day sit one above the other at the foot of the rail.
             var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak"); var day = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay");
-            Assert.InRange(Math.Abs(breakButton.TranslatePoint(default, dashboard)!.Value.X - day.TranslatePoint(default, dashboard)!.Value.X), 0, 1);
+            Assert.InRange(Math.Abs(breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, 0), dashboard)!.Value.X - day.TranslatePoint(new Point(day.Bounds.Width / 2, 0), dashboard)!.Value.X), 0, 1); // The same centre line.
             Assert.True(day.TranslatePoint(default, dashboard)!.Value.Y > breakButton.TranslatePoint(default, dashboard)!.Value.Y);
             // The window can be picked up by the rail and the header row, but not by a button or the timeline.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");

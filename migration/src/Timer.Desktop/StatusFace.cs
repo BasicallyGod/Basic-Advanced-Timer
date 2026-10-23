@@ -13,9 +13,10 @@ public sealed class StackedClock : StackPanel
     public StackedClock()
     {
         Spacing = 2; HorizontalAlignment = HorizontalAlignment.Center;
-        hours = new TextBlock { FontSize = 30, Classes = { "clock" }, HorizontalAlignment = HorizontalAlignment.Center };
-        minutes = new TextBlock { FontSize = 30, Classes = { "clock" }, HorizontalAlignment = HorizontalAlignment.Center };
-        seconds = new TextBlock { FontSize = 15, Classes = { "clockLight", "muted" }, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) };
+        // The lines are as tall as their type, so the three stack tightly and the pill's height holds.
+        hours = new TextBlock { FontSize = 30, LineHeight = 30, Classes = { "clock" }, HorizontalAlignment = HorizontalAlignment.Center };
+        minutes = new TextBlock { FontSize = 30, LineHeight = 30, Classes = { "clock" }, HorizontalAlignment = HorizontalAlignment.Center };
+        seconds = new TextBlock { FontSize = 15, LineHeight = 15, Classes = { "clockLight", "muted" }, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) };
         Children.Add(hours); Children.Add(minutes); Children.Add(seconds);
     }
     /// <summary>The whole clock, as hours:minutes:seconds. Setting it splits it over the three lines.</summary>
@@ -47,8 +48,11 @@ public sealed class StatusFace : StackPanel
     public StackPanel Lights { get; }
     public Button ClockButton { get; }
     public Button Circle { get; }
+    public Button AccountsButton { get; }
+    private readonly Border accountsTile = new() { Width = 46, Height = 32, CornerRadius = new CornerRadius(12), Background = Brushes.Transparent, Child = new AccountsGlyph { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+    private bool accountsOpen, hoverAccounts;
 
-    public StatusFace(TimerModel model, string prefix, string clockTip, Action clockClick, Action circleClick)
+    public StatusFace(TimerModel model, string prefix, string clockTip, Action clockClick, Action circleClick, Action accountsClick)
     {
         this.model = model; this.clockTip = clockTip;
         Spacing = 10; HorizontalAlignment = HorizontalAlignment.Center;
@@ -57,7 +61,7 @@ public sealed class StatusFace : StackPanel
         Lights = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Height = 14, HorizontalAlignment = HorizontalAlignment.Center, Name = prefix + "Lights" };
         Lights.Children.Add(stateLight); Lights.Children.Add(reminderLight);
         // The clock moves between the pill and the dashboard.
-        clockTile = new Border { Name = prefix + "ClockTile", CornerRadius = new CornerRadius(14), Padding = new Thickness(8, 6), Background = Brushes.Transparent, Child = clock };
+        clockTile = new Border { Name = prefix + "ClockTile", CornerRadius = new CornerRadius(14), Padding = new Thickness(8, 4), Background = Brushes.Transparent, Child = clock };
         ClockButton = Ui.Button("", clockClick, prefix + "Dashboard");
         ClockButton.Classes.Add("pillBare"); ClockButton.Padding = new Thickness(0); ClockButton.Content = clockTile; ClockButton.HorizontalAlignment = HorizontalAlignment.Center;
         ClockButton.PointerEntered += (_, _) => SetTileHover(clockTile, true);
@@ -71,12 +75,30 @@ public sealed class StatusFace : StackPanel
         // Under the pointer the circle shifts its colour a little instead of growing, which the button's square edges would clip.
         Circle.PointerEntered += (_, _) => { hoverCircle = true; Refresh(); };
         Circle.PointerExited += (_, _) => { hoverCircle = false; Refresh(); };
+        // The accounts button is the same on the pill and the rail: it opens the account list beside the window, and closes it again.
+        AccountsButton = Ui.Button("", accountsClick, prefix + "Accounts");
+        AccountsButton.Classes.Add("pillBare"); AccountsButton.Padding = new Thickness(0); AccountsButton.Content = accountsTile; AccountsButton.HorizontalAlignment = HorizontalAlignment.Center;
+        AccountsButton.PointerEntered += (_, _) => { hoverAccounts = true; PaintAccountsTile(); };
+        AccountsButton.PointerExited += (_, _) => { hoverAccounts = false; PaintAccountsTile(); };
+        SetAccountsOpen(false);
         Children.Add(Lights); ClockButton.Margin = new Thickness(0, 4, 0, 0); Children.Add(ClockButton);
-        Circle.Margin = new Thickness(0, 6, 0, 0); Children.Add(Circle);
+        Circle.Margin = new Thickness(0, 6, 0, 0); Children.Add(Circle); Children.Add(AccountsButton);
         ActualThemeVariantChanged += (_, _) => Refresh();
         Refresh();
     }
 
+    /// <summary>Marks the accounts button as pressed while the list is open, and words its tooltip for what pressing it will do.</summary>
+    public void SetAccountsOpen(bool open)
+    {
+        accountsOpen = open; PaintAccountsTile();
+        var tip = open ? "Close the accounts" : "Accounts";
+        ToolTip.SetTip(AccountsButton, tip); Avalonia.Automation.AutomationProperties.SetName(AccountsButton, tip);
+    }
+    private void PaintAccountsTile()
+    {
+        var key = accountsOpen ? "Selected" : hoverAccounts ? "Hover" : null;
+        accountsTile.Background = key is not null && accountsTile.TryFindResource(key, accountsTile.ActualThemeVariant, out var brush) && brush is IBrush found ? found : Brushes.Transparent;
+    }
     private static void SetTileHover(Border tile, bool on) => tile.Background = on ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var brush) && brush is IBrush hover ? hover : Brushes.Transparent) : Brushes.Transparent;
     private Color ThemeColourOr(string key, string fallback) => Ui.ThemeColour(this, key, Color.Parse(fallback));
     private static string Hex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
@@ -118,6 +140,44 @@ public sealed class StatusFace : StackPanel
             : selected is not null ? "Start " + selected.Display : "Choose an account";
         ToolTip.SetTip(Circle, circleTip); Avalonia.Automation.AutomationProperties.SetName(Circle, circleTip);
         Avalonia.Automation.AutomationProperties.SetName(ClockButton, clockTip + ". Working time " + model.ClockText);
+        PaintAccountsTile();
     }
 }
 
+
+/// <summary>
+/// The break control on the pill and on the rail: an amber circle with a white cup, a little smaller than the play circle. The amber is the theme's
+/// break colour deepened until the white cup holds 4.5 to 1 on it. It brightens under the pointer, and on a break it wears a soft ring while the
+/// steam moves.
+/// </summary>
+public sealed class BreakButton : Button
+{
+    private readonly TimerModel model;
+    private readonly BreakGlyph cup = new() { Filled = true, Mono = false };
+    private readonly Border circle = new() { Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Background = Brushes.DarkGoldenrod };
+    private bool hover;
+    public BreakGlyph Cup => cup;
+    public BreakButton(TimerModel model, string name)
+    {
+        this.model = model; Name = name;
+        Click += (_, _) => model.ToggleBreak();
+        Classes.Add("pillBare"); Padding = new Thickness(0); Width = 46; Height = 46; HorizontalAlignment = HorizontalAlignment.Center;
+        circle.Child = new Viewbox { Width = 20, Height = 20, Child = cup, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        Content = circle;
+        PointerEntered += (_, _) => { hover = true; cup.SetSteaming(true); Refresh(); };
+        PointerExited += (_, _) => { hover = false; cup.SetSteaming(model.IsOnBreak); Refresh(); };
+        ActualThemeVariantChanged += (_, _) => Refresh();
+        Refresh();
+    }
+    public void Refresh()
+    {
+        var onBreak = model.IsOnBreak;
+        var amber = Ui.BreakCircleColour(Ui.ThemeColour(this, "Break", Color.Parse("#F5A524")));
+        var hex = $"#{amber.R:X2}{amber.G:X2}{amber.B:X2}";
+        circle.Background = new SolidColorBrush(hover ? Color.Parse(ThemeColours.Mix(hex, "#FFFFFF", .12)) : amber);
+        circle.BoxShadow = onBreak ? BoxShadows.Parse("0 0 0 3 #66F5A524") : default;
+        cup.SetSteaming(onBreak || hover); cup.InvalidateVisual();
+        var tip = onBreak ? "End break" + (model.ResumeAccount is { } returnTo ? " and resume " + returnTo : "") : "Start break";
+        ToolTip.SetTip(this, tip); Avalonia.Automation.AutomationProperties.SetName(this, tip);
+    }
+}

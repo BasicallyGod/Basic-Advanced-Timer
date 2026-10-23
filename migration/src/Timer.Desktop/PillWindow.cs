@@ -12,21 +12,22 @@ namespace Timer.Desktop;
 
 /// <summary>
 /// The pill: a small vertical card that stays on top. It shows what the timer is doing with one capsule (and a second, blue one only while a
-/// reminder is due), the day clock, a circle that carries the account's initials and pauses or resumes, and the mug that starts a break. Clicking the
-/// time opens the dashboard. Hovering shows a few accounts beside it, and clicking that opens the full list.
+/// reminder is due), the day clock, a circle that carries the account's initials and pauses or resumes, the Accounts button, and the amber circle that
+/// starts a break. Clicking the time opens the dashboard. The Accounts button unfolds the list sideways from the pill as one capsule with it, and
+/// folds it away again.
 /// </summary>
 public sealed class PillWindow : Window
 {
     public Action? OpenDashboard { get; set; }
     private readonly TimerModel model;
     /// <summary>The pill's own size before it is scaled for the screen, and the room kept around it for its shadow or glow.</summary>
-    public const double PillWidth = 72, PillHeight = 262, PillRadius = 36;
+    public const double PillWidth = 72, PillHeight = 300, PillRadius = 36;
     public static double BaseWindowHeight => PillHeight + 2 * Ui.ShadowMargin;
     // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
-    // A narrow screen (its width in device independent pixels over 1800, never above 85 per cent or below 70 per cent), and a screen with a low
+    // A narrow screen (its width in device independent pixels over 1800, never above 95 per cent or below 80 per cent), and a screen with a low
     // Windows scale, because it has fewer pixels to the inch, so the same pill looks bigger on it. Windows scale 125 per cent or more gives the
     // largest pill, and 100 per cent the smallest, with the steps between spread evenly. The smaller of the two wins.
-    public const double ScreenWidthDivisor = 1800, LargestScale = 0.85, SmallestScale = 0.7, LargestScaleFromDisplayScale = 1.25;
+    public const double ScreenWidthDivisor = 1800, LargestScale = 0.95, SmallestScale = 0.8, LargestScaleFromDisplayScale = 1.25;
     public static double ScaleFor(double screenWidth, double displayScale = LargestScaleFromDisplayScale)
     {
         var byWidth = Math.Clamp(screenWidth / ScreenWidthDivisor, SmallestScale, LargestScale);
@@ -40,33 +41,33 @@ public sealed class PillWindow : Window
     /// <summary>The window width at the size the pill is drawn on this screen.</summary>
     public double WindowWidthNow => (PillWidth + 2 * Ui.ShadowMargin) * Scale;
 
-    private readonly BreakGlyph cup = new();
-    private readonly Border mugTile = new() { Name = "PillMugTile", Width = 40, Height = 40, CornerRadius = new CornerRadius(13), Background = Brushes.Transparent };
-    private Button mug = null!;
+    private BreakButton mug = null!;
     private StatusFace face = null!;
     private Border surface = null!, shadowHost = null!;
-    private readonly Popup peek = new(), panel = new();
+    private readonly Popup panel = new();
     private readonly Grid rootGrid = new();
     private ScrollViewer accountScroll = null!;
-    private StackPanel peekRows = null!;
-    private bool hoverMug, overPill, overFlyout, closedWindow, ensuring;
+    private Border drawer = null!;
+    private bool overDrawer, closedWindow, ensuring, closingByCode;
+    private long dismissedAt;
     private string? activeWhenOpened;
-    private DispatcherTimer? openTimer, closeTimer, settleTimer;
+    private DispatcherTimer? settleTimer;
     private int? appliedChoice;
     private (PixelRect Bounds, double Scaling)? lastScreen;
     private (bool, string, ThemeVariant)? lastShadow;
 
-    /// <summary>The pill's own state for tests and for the coordinator: whether the hover card or the account list is open.</summary>
-    public bool PeekOpen => peek.IsOpen;
+    /// <summary>Whether the account drawer is open beside the pill.</summary>
     public bool PanelOpen => panel.IsOpen;
     /// <summary>The account list's scroll box, so tests can read its limit.</summary>
     public ScrollViewer AccountScroll => accountScroll;
+    /// <summary>The Accounts button on the pill's face.</summary>
+    public Button AccountsButton => face.AccountsButton;
 
     public PillWindow(TimerModel model)
     {
         this.model = model;
         Title = "Basic’s Advanced Timer"; WindowChrome.Attach(this);
-        // One item for now: the menu is kept to what the pill itself cannot do. Starting a break is the mug.
+        // One item for now: the menu is kept to what the pill itself cannot do. Starting a break is the amber circle.
         ContextMenu = Ui.SettingsMenu(model);
         Width = PillWidth + 2 * Ui.ShadowMargin; Height = BaseWindowHeight;
         CanResize = false;
@@ -76,16 +77,12 @@ public sealed class PillWindow : Window
         Background = Brushes.Transparent;
 
         // The top of the pill is shared with the dashboard's rail.
-        face = new StatusFace(model, "Pill", "Open dashboard", () => OpenDashboard?.Invoke(), OnCircle);
-        // The mug starts a break and shows it is on while one runs. It is amber, with no circle round it.
-        cup.Mono = false;
-        mugTile.Child = new Viewbox { Width = 26, Height = 26, Child = cup, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        mug = Ui.Button("", model.ToggleBreak, "PillBreak");
-        mug.Classes.Add("pillBare"); mug.Padding = new Thickness(0); mug.Content = mugTile; mug.HorizontalAlignment = HorizontalAlignment.Center;
-        mug.PointerEntered += (_, _) => { hoverMug = true; cup.SetSteaming(true); SetTileHover(mugTile, true); };
-        mug.PointerExited += (_, _) => { hoverMug = false; cup.SetSteaming(model.IsOnBreak); SetTileHover(mugTile, false); };
+        face = new StatusFace(model, "Pill", "Open dashboard", () => OpenDashboard?.Invoke(), OnCircle, ToggleAccounts);
+        // The break is an amber circle with a white cup, shared with the rail.
+        mug = new BreakButton(model, "PillBreak");
 
-        var column = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        // From the top, so the rail's top can start at the same distance from its own edge and nothing moves when one becomes the other.
+        var column = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, TopInset, 0, 0) };
         column.Children.Add(face); column.Children.Add(mug);
         var root = rootGrid; root.Background = Brushes.Transparent; root.Children.Add(column);
         Ui.PillGestures(root, this);
@@ -93,18 +90,17 @@ public sealed class PillWindow : Window
         surface.Classes.Add("surface");
         shadowHost = Ui.Shadowed(surface, PillRadius);
         Content = new LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
-        surface.PointerEntered += (_, _) => { overPill = true; ScheduleOpen(); };
-        surface.PointerExited += (_, _) => { overPill = false; ScheduleClose(); };
 
-        BuildFlyouts();
+        BuildDrawer();
         Opened += (_, _) => FitToScreen(Screens.ScreenFromWindow(this));
         PositionChanged += (_, _) => { FitIfScreenChanged(); SettleSoon(); };
         ScalingChanged += (_, _) => FitIfScreenChanged();
-        Closed += (_, _) => { closedWindow = true; settleTimer?.Stop(); openTimer?.Stop(); closeTimer?.Stop(); };
+        Closed += (_, _) => { closedWindow = true; settleTimer?.Stop(); };
         // Whenever the real size is not the wanted one, say after a drag or a change made while hidden, it is put right.
         SizeChanged += (_, _) => { if (IsVisible && !ensuring && !closedWindow && (Math.Abs(ClientSize.Width - WindowWidthNow) > 1.5 || Math.Abs(ClientSize.Height - WindowHeightNow) > 1.5)) EnsureSize(); };
         Activated += (_, _) => EnsureSize();
-        Deactivated += (_, _) => { if (!overFlyout) CloseFlyouts(); };
+        Deactivated += (_, _) => { if (!overDrawer) CloseFlyouts(); };
+        KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Escape && PanelOpen) { CloseFlyouts(); e.Handled = true; } };
         model.PropertyChanged += Changed;
         ActualThemeVariantChanged += (_, _) => { lastShadow = null; Refresh(); };
         Closed += (_, _) => model.PropertyChanged -= Changed;
@@ -159,90 +155,57 @@ public sealed class PillWindow : Window
         }, DispatcherPriority.Background);
     }
 
-    // ---- the hover card and the account list
-    private void BuildFlyouts()
+    // ---- the account drawer
+    private void BuildDrawer()
     {
-        // The hover card: a few accounts with today's time, and a way to the full list.
-        peekRows = new StackPanel { Spacing = 8 };
-        var peekCard = new Border { Name = "PillPeek", Width = 168, Padding = new Thickness(10), CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Child = peekRows };
-        peekCard.Classes.Add("surface"); peekCard.Classes.Add("flyoutCard");
-        peekCard.PointerEntered += (_, _) => { overFlyout = true; closeTimer?.Stop(); };
-        peekCard.PointerExited += (_, _) => { overFlyout = false; ScheduleClose(); };
-        ConfigurePopup(peek, new LayoutTransformControl { LayoutTransform = pillScale, Child = peekCard }, false);
-        // The account list: the dashboard's account rows with their budget bars, then Manage accounts.
-        var panelCard = new AccountsPanel(model, "Pill", false, () => { CloseFlyouts(); model.OpenAccounts(); });
-        accountScroll = panelCard.Scroll;
-        panelCard.PointerEntered += (_, _) => { overFlyout = true; closeTimer?.Stop(); };
-        panelCard.PointerExited += (_, _) => overFlyout = false;
-        ConfigurePopup(panel, new LayoutTransformControl { LayoutTransform = pillScale, Child = panelCard }, true);
-        panel.Closed += (_, _) => overFlyout = false;
-        // The popups belong to the pill's tree, so they inherit its theme.
-        rootGrid.Children.Add(peek); rootGrid.Children.Add(panel);
+        // The list unfolds from the pill's right edge as one capsule with it: the same surface, the same ring, no gap, and rounded only on the outside.
+        var content = new AccountsPanel(model, "Pill", compact: true, reorderable: false, () => { CloseFlyouts(); model.OpenAccounts(); });
+        accountScroll = content.Scroll;
+        drawer = new Border { Name = "PillDrawer", Width = DrawerWidth, Height = PillHeight, Padding = new Thickness(14, 14, 14, 12), CornerRadius = new CornerRadius(0, 28, 28, 0), Child = content };
+        drawer.Classes.Add("surface");
+        drawer.PointerEntered += (_, _) => overDrawer = true;
+        drawer.PointerExited += (_, _) => overDrawer = false;
+        panel.PlacementTarget = surface; panel.Placement = PlacementMode.Right; panel.HorizontalOffset = 0; panel.VerticalOffset = 0;
+        panel.PlacementConstraintAdjustment = PopupPositionerConstraintAdjustment.FlipX | PopupPositionerConstraintAdjustment.SlideY;
+        panel.IsLightDismissEnabled = true; panel.Child = new LayoutTransformControl { LayoutTransform = pillScale, Child = drawer };
+        panel.Closed += (_, _) => { overDrawer = false; if (!closingByCode) dismissedAt = Environment.TickCount64; SetOpenLook(false); };
+        // The popup belongs to the pill's tree, so it inherits its theme.
+        rootGrid.Children.Add(panel);
     }
-    private void ConfigurePopup(Popup popup, Control child, bool dismissOnOutsideClick)
+    /// <summary>The drawer's width, beside the pill's own 72.</summary>
+    public const double DrawerWidth = 262;
+    /// <summary>How far the lights sit below the card's top edge, on the pill and on the rail.</summary>
+    public const double TopInset = 14;
+    /// <summary>The most of a screen's height the drawer's list may take is its own height, so it never grows past the pill; it scrolls inside.</summary>
+    public const double FewestRows = 3;
+    // While the drawer is open the pill's right side is square, so the two read as one capsule, and the button shows pressed.
+    private void SetOpenLook(bool open)
     {
-        popup.PlacementTarget = surface; popup.Placement = PlacementMode.Right; popup.HorizontalOffset = 8;
-        popup.PlacementConstraintAdjustment = PopupPositionerConstraintAdjustment.FlipX | PopupPositionerConstraintAdjustment.SlideY;
-        popup.IsLightDismissEnabled = dismissOnOutsideClick; popup.Child = child;
+        surface.CornerRadius = open ? new CornerRadius(PillRadius, 0, 0, PillRadius) : new CornerRadius(PillRadius);
+        face.SetAccountsOpen(open); SyncDrawerRing();
     }
-    private void ScheduleOpen()
+    private void SyncDrawerRing()
     {
-        closeTimer?.Stop();
-        if (PanelOpen || PeekOpen) return;
-        openTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
-        openTimer.Tick -= OnOpenTick; openTimer.Tick += OnOpenTick; openTimer.Stop(); openTimer.Start();
+        var thickness = surface.BorderThickness.Left;
+        drawer.BorderThickness = new Thickness(0, thickness, thickness, thickness);
+        drawer.BorderBrush = surface.BorderBrush;
     }
-    private void OnOpenTick(object? sender, EventArgs e) { openTimer?.Stop(); if (overPill && !closedWindow && IsVisible) ShowPeek(); }
-    private void ScheduleClose()
-    {
-        openTimer?.Stop();
-        closeTimer ??= new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
-        closeTimer.Tick -= OnCloseTick; closeTimer.Tick += OnCloseTick; closeTimer.Stop(); closeTimer.Start();
-    }
-    private void OnCloseTick(object? sender, EventArgs e) { closeTimer?.Stop(); if (!overPill && !overFlyout && peek.IsOpen) peek.IsOpen = false; }
-    /// <summary>Shows a few accounts with today's time beside the pill. The one running comes first, then the ones with the most time today.</summary>
-    public void ShowPeek()
-    {
-        if (PanelOpen) return;
-        peekRows.Children.Clear();
-        var accounts = model.Accounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
-        var shown = accounts.OrderByDescending(a => a.Name == model.ActiveAccount).ThenByDescending(a => model.Today(a)).Take(3).ToList();
-        for (var i = 0; i < shown.Count; i++)
-        {
-            var account = shown[i];
-            var swatch = new Border { Width = 34, Height = 34, CornerRadius = new CornerRadius(11), Background = Brush.Parse(Ui.Visible(account.Colour)), VerticalAlignment = VerticalAlignment.Center };
-            var name = Ui.Text(account.Display, 13); name.FontWeight = FontWeight.SemiBold; name.TextTrimming = TextTrimming.CharacterEllipsis;
-            var time = Ui.Text(model.Format(model.Today(account)), 12, "muted");
-            var texts = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center }; texts.Children.Add(name); texts.Children.Add(time);
-            var row = Ui.Grid("Auto,*"); swatch.Margin = new Thickness(0, 0, 10, 0); Ui.Put(row, swatch); Ui.Put(row, texts, 1);
-            var button = Ui.Button("", () => { CloseFlyouts(); model.ToggleAccount(account.Name); }, "PeekAccount" + i);
-            button.Classes.Add("pillBare"); button.HorizontalContentAlignment = HorizontalAlignment.Stretch; button.Content = row;
-            peekRows.Children.Add(button);
-        }
-        var all = Ui.Button("All accounts ›", ShowPanel, "PillAllAccounts"); all.Classes.Add("peekAll");
-        all.HorizontalAlignment = HorizontalAlignment.Stretch; all.HorizontalContentAlignment = HorizontalAlignment.Left;
-        peekRows.Children.Add(all);
-        peek.IsOpen = true;
-    }
-    /// <summary>Opens the list of accounts beside the pill, with their budgets. It closes when an account is chosen or anywhere else is clicked.</summary>
+    /// <summary>Opens the account drawer beside the pill. It closes when an account is chosen, with Escape, or by pressing the button again.</summary>
     public void ShowPanel()
     {
-        peek.IsOpen = false; openTimer?.Stop();
-        accountScroll.MaxHeight = ListMaxHeight();
         activeWhenOpened = model.ActiveAccount;
-        panel.IsOpen = true;
+        SetOpenLook(true); panel.IsOpen = true;
     }
-    /// <summary>The most of a screen's height the list takes: three fifths of it, in the pill's own units, never less than a few rows.</summary>
-    public const double OpenShareOfScreen = 0.6, FewestRows = 3;
-    private double ListMaxHeight()
+    // Pressing the button while the drawer is open closes it. Light dismiss has already closed it by the time the click arrives, so a close that
+    // just happened from the same press is not undone by opening it again.
+    private void ToggleAccounts()
     {
-        var screenHeight = 800.0;
-        if (!closedWindow && Screens.ScreenFromWindow(this) is { } screen) screenHeight = screen.WorkingArea.Height / screen.Scaling;
-        var room = screenHeight * OpenShareOfScreen / Scale - 130;
-        return Math.Max(FewestRows * 70, room);
+        if (panel.IsOpen) { CloseFlyouts(); return; }
+        if (Environment.TickCount64 - dismissedAt < 300) return;
+        ShowPanel();
     }
-    /// <summary>Puts the hover card and the account list away, so the pill is a plain capsule again when it comes back from the dashboard.</summary>
-    public void CloseFlyouts() { openTimer?.Stop(); closeTimer?.Stop(); overFlyout = false; peek.IsOpen = false; panel.IsOpen = false; }
+    /// <summary>Puts the account drawer away, so the pill is a plain capsule again when it comes back from the dashboard.</summary>
+    public void CloseFlyouts() { closingByCode = true; try { panel.IsOpen = false; } finally { closingByCode = false; } overDrawer = false; SetOpenLook(false); }
 
     // ---- behaviour
     private void OnCircle()
@@ -251,12 +214,11 @@ public sealed class PillWindow : Window
         // With nothing to run or resume, the list opens so an account can be picked.
         if (model.IsTracking || chosen) model.TogglePause(); else ShowPanel();
     }
-    private static void SetTileHover(Border tile, bool on) => tile.Background = on ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var brush) && brush is IBrush hover ? hover : Brushes.Transparent) : Brushes.Transparent;
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         // A new pill size from settings takes effect straight away, even while the pill is hidden behind the dashboard.
         if (model.PillScalePercent != appliedChoice) FitToScreen(Screens.ScreenFromWindow(this));
-        if (PanelOpen && model.ActiveAccount != activeWhenOpened) CloseFlyouts();
+        if (PanelOpen && model.ActiveAccount != activeWhenOpened) CloseFlyouts(); // Choosing an account puts the drawer away.
         Refresh();
     }
     private Color ThemeColourOr(string key, string fallback) => Ui.ThemeColour(this, key, Color.Parse(fallback));
@@ -275,16 +237,12 @@ public sealed class PillWindow : Window
         var (key, _) = StatusFace.State(model);
         var stateColour = ThemeColourOr(key, "#8A8F98");
 
-        // The mug is lit while a break runs, and its steam moves.
-        var amber = ThemeColourOr("Break", "#F5A524");
-        mugTile.Background = onBreak ? new SolidColorBrush(Color.FromArgb(0x33, amber.R, amber.G, amber.B)) : hoverMug ? mugTile.Background : Brushes.Transparent;
-        cup.SetSteaming(onBreak || hoverMug); cup.InvalidateVisual();
-        var mugTip = onBreak ? "End break" + (model.ResumeAccount is { } returnTo ? " and resume " + returnTo : "") : "Start break";
-        ToolTip.SetTip(mug, mugTip); Avalonia.Automation.AutomationProperties.SetName(mug, mugTip);
+        mug.Refresh();
 
         // A ring and a glow in the state's colour round the pill while it is doing something, and the plain edge and shadow when it is idle.
         surface.BorderThickness = new Thickness(key == "Idle" ? 1 : 2);
         surface.BorderBrush = key == "Idle" ? (this.TryFindResource("Line", ActualThemeVariant, out var line) && line is IBrush lineBrush ? lineBrush : Brushes.Gray) : new SolidColorBrush(stateColour);
+        if (drawer is not null) SyncDrawerRing();
         var shadow = (model.Shadows, key, ActualThemeVariant);
         if (lastShadow != shadow) { lastShadow = shadow; Ui.SetShadow(shadowHost, model.Shadows, key == "Idle" ? null : key); }
     }

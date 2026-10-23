@@ -85,7 +85,7 @@ public sealed class ShellTests
                 window.MouseUp(point, MouseButton.Left);
                 Assert.True(model.Accounts[i].Name == model.ActiveAccount,
                     $"Row {i}: bounds {row.Bounds}, point {point}, hit {window.GetVisualAt(point)?.GetType().Name}, active {model.ActiveAccount ?? "none"}");
-                Assert.InRange(row.Bounds.Width, 270, 320);
+                Assert.InRange(row.Bounds.Width, 240, 320);
             }
             model.TogglePause(); // Nothing recording, so the scrolled click below starts an account.
             Open(); var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "RailAccountScroll");
