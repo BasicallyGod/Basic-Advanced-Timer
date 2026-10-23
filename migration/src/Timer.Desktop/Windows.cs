@@ -158,21 +158,11 @@ public sealed class DashboardWindow : Window
     public const double DashboardWidth = 1100, DashboardHeight = 720;
     /// <summary>The rail's width, the same as the pill's, so it reads as the pill opened out.</summary>
     public const double RailWidth = PillWindow.PillWidth;
-    /// <summary>The height of the Start break and Finish day buttons, and of the bar under the timeline.</summary>
-    public const double ControlBarHeight = 42;
     public Action? OpenPill { get; set; }
     private readonly TimerModel model;
     private readonly TextBlock workspaceTitle = new() { FontSize = 26, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Center };
     private Button todayButton = null!;
-    // The slider takes whatever room the buttons beside it leave, so a fourth button (Edit) never runs under the zoom bar.
-    private static Grid ZoomRow(Control fit, Control zoomOut, Control slider, Control zoomIn)
-    {
-        var row = Ui.Grid("Auto,Auto,*,Auto", "*"); row.ColumnSpacing = 4; row.VerticalAlignment = VerticalAlignment.Center;
-        foreach (var button in new[] { fit, zoomOut, zoomIn }) button.VerticalAlignment = VerticalAlignment.Center;
-        Ui.Put(row, fit); Ui.Put(row, zoomOut, 1); Ui.Put(row, slider, 2); Ui.Put(row, zoomIn, 3);
-        return row;
-    }
-    private Border zoomControls = new(); private SelectionStrip? selectionStrip; private Control? toolsRow, totalsStrip, railBorder; private Button zoomOut = new(), zoomIn = new();
+    private Control? totalsStrip, railBorder; private Button zoomOut = null!, zoomIn = null!;
     private readonly IconGlyph dayFlag = new(IconKind.Flag), daySun = new(IconKind.Sunrise);
     private StatusFace face = null!;
     private Popup finishPopup = null!;
@@ -188,14 +178,12 @@ public sealed class DashboardWindow : Window
     private static TextBlock Value() => new() { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock date = Ui.Text("", 14); private Button datePick = null!;
     private readonly ContentControl workspace = new(), timelineHost = new() { Name = "TimelineHost" };
-    private Border timelineCard = null!; private MessageBar messageBar = null!; private Panel messageHome = null!, timelineCardGrid = null!, reviewPanel = null!;
+    private Border timelineCard = null!; private MessageBar messageBar = null!; private Grid timelinePage = null!; private SelectedBlockCard selectedCard = null!;
     private readonly Button day;
-    private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, addTime = null!, edit = null!;
+    private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, addTime = null!;
     private readonly Button undo;
-    private readonly Button merge;
     private EntryDialog? entryEditor;
-    private bool weekMode, settingsMode, renderedSettings, settingZoom;
-    private Slider zoomSlider = null!;
+    private bool weekMode, settingsMode, renderedSettings;
     private Button settingsRail = null!; private Control? headerRow;
     private readonly Grid layers = new(); private Control? dashboardBody; private OnboardingView? onboarding;
     /// <summary>The pop-ups open over the dashboard. They share its blurred backdrop with the getting started setup.</summary>
@@ -260,84 +248,52 @@ public sealed class DashboardWindow : Window
         // The date has a fixed width, so the arrows stay put whatever its text says.
         var nav = Ui.Grid("*,Auto,Auto"); nav.VerticalAlignment = VerticalAlignment.Center;
         Ui.Put(nav, workspaceTitle); headerRow = nav;
-        date.Width = 112; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
+        date.Width = 104; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
         // Pressing the date opens a calendar to jump to any day, so a day weeks away is one click instead of many arrows.
-        datePick = Ui.Button("", () => { }, "DatePick"); datePick.Content = date; datePick.Background = Avalonia.Media.Brushes.Transparent; datePick.BorderThickness = new Thickness(0); datePick.Padding = new Thickness(4, 6); datePick.CornerRadius = new CornerRadius(8);
-        ToolTip.SetTip(datePick, "Pick a day"); Avalonia.Automation.AutomationProperties.SetName(datePick, "Pick a day");
+        datePick = Ui.Ctl("DatePick", null, null, "Pick a day", () => { });
+        datePick.Width = double.NaN; datePick.Padding = new Thickness(12, 0); datePick.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), date);
         var datePicker = new SoftDatePicker { Name = "DateCalendar" }; var dateFlyout = new Flyout { Content = datePicker, Placement = Avalonia.Controls.PlacementMode.Bottom };
         dateFlyout.Opening += (_, _) => datePicker.View(model.SelectedDate, model.SelectedDate);
         datePicker.DayPicked += picked => { dateFlyout.Hide(); model.GoToDate(picked, weekMode); };
         datePick.Flyout = dateFlyout;
-        previous = Ui.IconButton(IconKind.Previous, "Previous day or week", "PreviousPeriod", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); }); previous.Width = 30;
-        next = Ui.IconButton(IconKind.Next, "Next day or week", "NextPeriod", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); }); next.Width = 30;
-        // The same quiet outlined look, with a small icon, as Add time, Undo and Merge.
-        todayButton = Ui.Button("", () => model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days), "GoToToday");
-        todayButton.Classes.Add("toolButton"); todayButton.Classes.Add("quiet"); todayButton.Height = 34; todayButton.Margin = new Thickness(10, 0, 0, 0); todayButton.Padding = new Thickness(12, 0);
-        todayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), new TextBlock { Text = "Today", VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
-        Avalonia.Automation.AutomationProperties.SetName(todayButton, "Today");
-        Ui.Put(nav, Ui.Horizontal(previous, datePick, next, todayButton), 1);
+        previous = Ui.Ctl("PreviousPeriod", null, IconKind.Previous, "Previous day or week", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); });
+        next = Ui.Ctl("NextPeriod", null, IconKind.Next, "Next day or week", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); });
+        todayButton = Ui.Ctl("GoToToday", "Today", IconKind.Today, "Back to today", () => model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days));
+        var steps = Ui.Horizontal(previous, datePick, next, todayButton); steps.Spacing = 8;
+        Ui.Put(nav, steps, 1);
         // Settings is a gear at the top right, which also closes it again.
-        settingsRail = RailButton(IconKind.Gear, "Settings", "Settings", ShowSettings); settingsRail.Margin = new Thickness(12, 0, 0, 0);
+        settingsRail = Ui.Ctl("Settings", null, IconKind.Gear, "Settings", ShowSettings); settingsRail.Margin = new Thickness(8, 0, 0, 0);
         Ui.Put(nav, settingsRail, 2);
         Ui.Put(review, nav);
-        undo = Ui.Button("", () => model.UndoEdit(), "UndoEdit");
-        merge = Ui.Button("", () => model.MergeSelection(), "MergeSelected");
-        edit = Ui.Button("", () => model.EditSelection(), "EditSelected");
-        // Editing buttons sit on the left and only where they apply; Tools stays on the right. Hours and minutes is in Settings.
-        addTime = Ui.Button("", () => model.OpenGap(), "AddTime");
-        // The same quiet outlined look as Start break and Finish day, each with a small icon: a plus in the accent colour, and plain ones for the rest.
-        (Button Button, IconKind Icon, string Words, string? Tint)[] toolSpecs = { (addTime, IconKind.Plus, "Add time", "Accent"), (undo, IconKind.Undo, "Undo", null), (merge, IconKind.Merge, "Merge", null), (edit, IconKind.Edit, "Edit", null) };
-        foreach (var (toolButton, icon, words, tint) in toolSpecs)
-        {
-            toolButton.Classes.Add("toolButton"); toolButton.Classes.Add("quiet");
-            toolButton.Content = Ui.Horizontal(new IconGlyph(icon) { TintKey = tint }, new TextBlock { Text = words, VerticalAlignment = VerticalAlignment.Center, FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold });
-            Avalonia.Automation.AutomationProperties.SetName(toolButton, words);
-        }
-        addTime.Classes.Add("addButton");
-        var edits = Ui.Horizontal(addTime, undo, merge, edit);
-        // Zoom and fit sit beside Tools in this row, applying to the timeline underneath. They show only on the Timeline tab.
+        // The bar under the timeline, as in the mock: Add time and Undo on the left, the day's figures in the middle and the zoom buttons on the right.
+        addTime = Ui.Ctl("AddTime", "Add time", IconKind.Plus, "Add time to this day", () => model.OpenGap(), tint: "Accent"); addTime.Classes.Add("accentOutline");
+        undo = Ui.Ctl("UndoEdit", "Undo", IconKind.Undo, "Undo the last change", () => model.UndoEdit());
+        // Zoom steps by a fifth each press, about the middle of what is showing. Hold Ctrl and use the wheel to zoom about the pointer.
         ScrollViewer? TimelineScroll() => timelineHost.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
-        zoomOut = Ui.IconButton(IconKind.ZoomOut, "Zoom out", "TimelineZoomOut", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Width / 2, s.Offset.X); });
-        zoomIn = Ui.IconButton(IconKind.ZoomIn, "Zoom in (or hold Ctrl and use the mouse wheel)", "TimelineZoomIn", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Width / 2, s.Offset.X); });
-        var fit = Ui.IconButton(IconKind.FitDay, "Fit the day to the window", "TimelineFit", () => { if (TimelineScroll() is { } s) model.FitTimeline(s.Viewport.Width); });
-        // The zoom controls sit in a bar under the timeline: fit the day, zoom out, a slider, zoom in. They show only on the Timeline view.
-        zoomSlider = new Slider { Name = "TimelineZoom", Minimum = 0, Maximum = 1, MinWidth = 50, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center, Value = model.TimelineZoomFraction,
-            // The standard slider draws its track a little below the middle of its own box, so the box is lifted by the same amount (drawing only, no layout change) to put the track on the bar's centre line.
-            RenderTransform = new Avalonia.Media.TranslateTransform(0, -5) };
-        Avalonia.Automation.AutomationProperties.SetName(zoomSlider, "Zoom"); ToolTip.SetTip(zoomSlider, "Zoom the timeline");
-        zoomSlider.PropertyChanged += (_, e) =>
-        {
-            if (e.Property != Avalonia.Controls.Primitives.RangeBase.ValueProperty || settingZoom) return;
-            if (TimelineScroll() is { } s) model.SetTimelineScale(TimerModel.ScaleAt(zoomSlider.Value), s.Viewport.Width / 2, s.Offset.X);
-        };
-        var zoomBar = new Border { Name = "TimelineControls", Child = ZoomRow(fit, zoomOut, zoomSlider, zoomIn), HorizontalAlignment = HorizontalAlignment.Right, CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 0), Height = ControlBarHeight, BorderThickness = new Thickness(1), };
-        zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
-        // Add time, Undo and Merge sit on the left of a bar under the workspace, and the zoom controls on its right, so the working area has the whole height above.
-        // The bar is as tall as the Start break and Finish day buttons beside it, so the two bottom rows line up. Its buttons fill that height.
-        addTime.Height = ControlBarHeight; undo.Height = ControlBarHeight; merge.Height = ControlBarHeight; edit.Height = ControlBarHeight;
-        var tools = Ui.Grid("Auto,*"); toolsRow = tools; Ui.Put(tools, edits);
-        // The zoom bar is as wide as the room left beside the buttons, up to a limit, so its slider is long when nothing is crowding it and short when Edit is showing.
-        var zoomSlot = new Grid(); zoomSlot.Children.Add(zoomBar);
-        zoomSlot.SizeChanged += (_, e) => zoomBar.Width = Math.Clamp(e.NewSize.Width - 12, 120, 262);
-        Ui.Put(tools, zoomSlot, 1);
-        tools.Margin = new Thickness(0, 12, 0, 0); zoomBar.Margin = new Thickness(12, 0, 0, 0); // Clear space between Merge and the zoom bar.
+        zoomOut = Ui.Ctl("TimelineZoomOut", null, IconKind.Minus, "Zoom out", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Width / 2, s.Offset.X); });
+        zoomIn = Ui.Ctl("TimelineZoomIn", null, IconKind.Plus, "Zoom in (or hold Ctrl and use the mouse wheel)", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Width / 2, s.Offset.X); });
+        var zoom = Ui.Horizontal(zoomOut, zoomIn); zoom.Spacing = 6; zoom.Name = "TimelineControls";
+        totalsStrip = BuildTotals();
+        var tools = Ui.Grid("Auto,*,Auto"); tools.Margin = new Thickness(14, 6, 14, 0);
+        Ui.Put(tools, Ui.Horizontal(addTime, undo)); Ui.Put(tools, totalsStrip, 1); Ui.Put(tools, zoom, 2);
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
         Ui.Put(review, workspace, row: 1);
-        // The timeline is a card: the day across the top, the day's figures under it, then the selection line and the buttons. The week and the settings
-        // fill the workspace instead, so the card is shown for the timeline alone.
-        selectionStrip = new SelectionStrip(model); totalsStrip = BuildTotals();
-        var cardGrid = Ui.Grid("*", "Auto,Auto,Auto,Auto");
-        timelineCardGrid = cardGrid; Ui.Put(cardGrid, timelineHost); Ui.Put(cardGrid, totalsStrip, 0, 1); Ui.Put(cardGrid, selectionStrip, 0, 2); Ui.Put(cardGrid, tools, 0, 3);
-        timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Padding = new Thickness(0, 12, 0, 12), Margin = new Thickness(0, 14, 0, 0), VerticalAlignment = VerticalAlignment.Top };
-        timelineCard.Classes.Add("dayCard"); tools.Margin = new Thickness(14, 10, 14, 0);
-        Ui.Put(review, timelineCard, row: 1);
+        // The timeline is a card (the day across the top, its bar of buttons and figures under it) over the Selected block card. The week and the settings
+        // fill the workspace instead, so these two are shown for the timeline alone.
+        var cardGrid = Ui.Grid("*", "Auto,Auto"); Ui.Put(cardGrid, timelineHost); Ui.Put(cardGrid, tools, 0, 1);
+        timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Padding = new Thickness(0, 14, 0, 12), VerticalAlignment = VerticalAlignment.Top };
+        timelineCard.Classes.Add("dayCard");
+        selectedCard = new SelectedBlockCard(model) { Margin = new Thickness(0, 14, 0, 0) };
+        timelinePage = Ui.Grid("*", "Auto,*"); timelinePage.Margin = new Thickness(0, 14, 0, 0); timelinePage.Name = "TimelinePage";
+        Ui.Put(timelinePage, timelineCard); Ui.Put(timelinePage, selectedCard, 0, 1);
+        Ui.Put(review, timelinePage, row: 1);
         // The title row's empty middle still drags the window.
         var rightColumn = Ui.Grid("*", "*");
         Ui.Put(rightColumn, review); Ui.DragHeader(nav, this);
         Ui.Put(body, rightColumn);
         Ui.Put(root, body, 1);
-        // Notes, refused edits and failed saves float over the lowest part of the workspace, above the buttons, so they never push the buttons up.
-        messageBar = new MessageBar(model); messageHome = reviewPanel = review; Ui.Put(review, messageBar, row: 1);
+        // Notes, refused edits and failed saves float over the lowest part of the workspace, so they never push anything up.
+        messageBar = new MessageBar(model); Ui.Put(review, messageBar, row: 1);
         // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
         layers.Children.Add(root); dashboardBody = root;
         BuildAccountsLayer(); layers.Children.Add(accountsLayer);
@@ -380,10 +336,6 @@ public sealed class DashboardWindow : Window
                 if (e.Key == Avalonia.Input.Key.C) model.CopySelection(); else if (!weekMode) model.PasteBlocks(model.DefaultPasteTime());
                 e.Handled = true;
             }
-            // Enter opens the one selected block, but never while typing in a box or with a button focused (Enter presses that instead).
-            else if (e.Key == Avalonia.Input.Key.Enter && e.KeyModifiers == Avalonia.Input.KeyModifiers.None && !settingsMode && Dialogs.Any == false
-                && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox or Button) && model.CanEditSelection)
-            { model.EditSelection(); e.Handled = true; }
             // Backspace and Delete remove the selected blocks, but never while typing in a text box.
             else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete && FocusManager?.GetFocusedElement() is not TextBox)
             { if (model.SelectedRows.Count > 0) { model.DeleteSelection(); e.Handled = true; } }
@@ -391,8 +343,8 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += Changed;
         model.PropertyChanged += (_, _) => UpdateOnboarding();
         model.EntryRequested += ShowEntry;
-        model.GroupRequested += ShowGroup; model.TidyRequested += ShowTidy; model.AccountsRequested += ShowAccounts;
-        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.GroupRequested -= ShowGroup; model.TidyRequested -= ShowTidy; model.AccountsRequested -= ShowAccounts; };
+        model.AccountsRequested += ShowAccounts;
+        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.AccountsRequested -= ShowAccounts; };
         Refresh(true);
         UpdateOnboarding();
     }
@@ -485,7 +437,7 @@ public sealed class DashboardWindow : Window
             if (head is StackPanel headRow) headRow.Spacing = 5;
             var column = new StackPanel { Name = name, Spacing = 0 }; column.Children.Add(head); column.Children.Add(value); return column;
         }
-        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 22, Name = "DayTotals", HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 12, 0, 0) };
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, Name = "DayTotals", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         workingValue.Name = "TotalsWorkingValue";
         strip.Children.Add(Stat("Working time", workingValue, "TotalsWorking"));
         strip.Children.Add(dayBar); strip.Children.Add(noSchedule);
@@ -521,7 +473,7 @@ public sealed class DashboardWindow : Window
             Border Part(string key, int column, bool hatched = false)
             {
                 var part = new Border { Name = "DayBar" + key, [Grid.ColumnProperty] = column };
-                if (hatched) part.Background = ReviewViews.Hatch(model); else part.Classes.Add("bar" + key);
+                if (hatched) { part.Background = ReviewViews.Stripes(model); part.Opacity = .7; } else part.Classes.Add("bar" + key);
                 return part;
             }
             grid.Children.Add(Part("Allocated", 0)); grid.Children.Add(Part("Unallocated", 1, true)); grid.Children.Add(Part("Overtime", 2));
@@ -566,11 +518,11 @@ public sealed class DashboardWindow : Window
         // The whole rail and the header row, wherever there is no control.
         return point.X <= railRight || point.Y <= Bottom(headerRow);
     }
-    private void ShowEntry(Timer.Core.SessionRow? row, DateTime start, DateTime end)
+    private void ShowEntry(DateTime start, DateTime end)
     {
         if (!IsVisible) return;
         if (entryEditor is { IsVisible: true }) return;
-        entryEditor = new EntryDialog(model, row, start, end);
+        entryEditor = new EntryDialog(model, start, end);
         entryEditor.Closed += (_, _) => entryEditor = null;
         Dialogs.Show(entryEditor);
     }
@@ -581,8 +533,6 @@ public sealed class DashboardWindow : Window
         if (!IsVisible) Reveal?.Invoke();
         if (IsVisible && !Dialogs.Dialogs.OfType<AccountsDialog>().Any()) Dialogs.Show(new AccountsDialog(model));
     }
-    private void ShowTidy() { if (IsVisible) Dialogs.Show(new TidyDialog(model)); }
-    private void ShowGroup(string id) { if (IsVisible) Dialogs.Show(new GroupDialog(model, id)); }
     public void SelectTab(bool showWeek) { settingsMode = false; weekMode = showWeek; Refresh(true); }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
@@ -604,14 +554,8 @@ public sealed class DashboardWindow : Window
         ToolTip.SetTip(day, dayTip); Avalonia.Automation.AutomationProperties.SetName(day, dayTip);
         if (finishPopup.IsOpen && !model.DayStarted) finishPopup.IsOpen = false;
         if (accountsLayer.IsVisible && model.ActiveAccount != accountsActive) CloseAccounts(); // Choosing an account puts the list away.
-        // Editing buttons show only where they apply: Merge when blocks are selected, and none on the overview.
-        var editing = !weekMode;
-        zoomControls.IsVisible = !weekMode && !settingsMode;
-        settingZoom = true; zoomSlider.Value = model.TimelineZoomFraction; settingZoom = false; // Follows the wheel and the buttons too.
+        // The bar under the timeline belongs to the Timeline page alone, and zoom stops at its ends.
         zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
-        addTime.IsVisible = editing; undo.IsVisible = editing; merge.IsVisible = editing && model.SelectedBlockCount > 0;
-        merge.IsEnabled = model.CanMergeSelection; ToolTip.SetTip(merge, model.MergeHint);
-        edit.IsVisible = editing && model.CanEditSelection; if (edit.IsVisible && edit.Content is Panel editRow && editRow.Children.OfType<TextBlock>().FirstOrDefault() is { } editText) editText.Text = model.EditText;
         breakButton.Refresh(); breakButton.Classes.Set("onBreak", onBreak);
         if (RailScaleSource is { } source) SetRailScale(source());
         undo.IsEnabled = model.Editor.CanUndo;
@@ -619,25 +563,11 @@ public sealed class DashboardWindow : Window
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); var glyph = button.Content as IconGlyph ?? (button.Content as Grid)?.Children.OfType<IconGlyph>().FirstOrDefault(); if (glyph is not null) glyph.TintKey = selected ? "Ink" : "Muted"; }
         Rail(timelineRail, !weekMode && !settingsMode);
         Rail(overviewTab, !settingsMode && weekMode);
-        Rail(settingsRail, settingsMode);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
         foreach (var control in new Control[] { previous, datePick, next, todayButton }) control.IsVisible = !settingsMode;
-        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted;
-        // The timeline card is the timeline's alone; the week and the settings fill the workspace.
-        timelineCard.IsVisible = !settingsMode && !weekMode; workspace.IsVisible = settingsMode || weekMode;
-        // Notes, refused edits and failed saves float over the lowest part of what is showing: over the day's figures on the timeline card (above its buttons),
-        // and over the foot of the workspace on the other pages.
-        var wantedHome = timelineCard.IsVisible ? timelineCardGrid : reviewPanel;
-        if (!ReferenceEquals(messageHome, wantedHome))
-        {
-            messageHome.Children.Remove(messageBar); messageHome = wantedHome;
-            if (messageHome is Grid homeGrid)
-            {
-                // On the card it spans the timeline and the figures, so it sits at the foot of the figures without making any row taller.
-                Grid.SetRow(messageBar, 1 - Convert.ToInt32(ReferenceEquals(homeGrid, timelineCardGrid)));
-                Grid.SetRowSpan(messageBar, ReferenceEquals(homeGrid, timelineCardGrid) ? 2 : 1); homeGrid.Children.Add(messageBar);
-            }
-        }
+        settingsRail.Classes.Set("on", settingsMode);
+        // The timeline card and the Selected block card are the Timeline page's alone; the week and the settings fill the workspace.
+        timelinePage.IsVisible = !settingsMode && !weekMode; workspace.IsVisible = settingsMode || weekMode;
         workspaceTitle.Text = settingsMode ? "Settings" : !weekMode ? "Timeline" : "Week overview";
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.

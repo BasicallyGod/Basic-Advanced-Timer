@@ -30,7 +30,7 @@ public sealed class SettingsPageTests
             Assert.Contains(all.OfType<Button>(), b => b.Name == "ThemeLight"); Assert.Contains(all.OfType<Button>(), b => b.Name == "EditAccounts");
             Assert.Contains(all.OfType<CheckBox>(), c => c.Name == "WindowShadows");
             Assert.DoesNotContain(all.OfType<Button>(), b => b.Name == "PreviousPeriod" && b.IsVisible); // There is no date to step through here.
-            Assert.Contains("selected", window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").Classes);
+            Assert.Contains("on", window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").Classes); // The gear is lit while Settings shows.
             // Going back to a view brings the date controls back.
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<SettingsView>(), s => s.Name == "SettingsPage");

@@ -134,7 +134,7 @@ public sealed class HorizontalTimelineTests
     }
 
     [AvaloniaFact]
-    public void TheMessageSitsOverTheFiguresOnTheCardWithoutMakingAnyRowTaller()
+    public void TheMessageFloatsBelowTheTimelineCardWithoutMakingAnyRowTaller()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
@@ -143,7 +143,7 @@ public sealed class HorizontalTimelineTests
             model.ExplainRunning(); Settle(window);
             var bar = Find<Border>(window, "MessageBar"); Assert.True(bar.IsVisible);
             Assert.Equal(before, card.Bounds.Height, 0.5);
-            Assert.True(card.GetVisualDescendants().Contains(bar));
+            Assert.True(bar.TranslatePoint(default, window)!.Value.Y > card.TranslatePoint(new Point(0, card.Bounds.Height), window)!.Value.Y - 1); // Over the page below the card, not the timeline.
         }
         finally { window.Close(); }
     }

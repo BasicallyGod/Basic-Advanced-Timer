@@ -50,6 +50,7 @@ public static class ThemeEngine
         }
         // The standard controls take their colours from their own named resources, which default to the computer's accent colour. Pointing the ones that
         // show "on" or "filled" at the theme's accent keeps sliders and tick boxes in step with the rest of the app.
+        var ink0 = Color.Parse(colours["Ink"]);
         var accent = Color.Parse(colours["Accent"]); var accentInk = Color.Parse(colours["AccentInk"]); var line = Color.Parse(colours["Line"]);
         var (sliderFill, sliderTrack) = SliderColours(colours);
         foreach (var key in new[] { "CheckBoxCheckBackgroundFillChecked", "CheckBoxCheckBackgroundFillCheckedPointerOver", "CheckBoxCheckBackgroundFillCheckedPressed",
@@ -66,6 +67,14 @@ public static class ThemeEngine
         // The scroll bar thumb is a quiet grey a little darker than the lines, and darker again under the pointer.
         Put("ScrollThumb", Color.Parse(ThemeColours.Mix(colours["Line"], colours["Ink"], .13)));
         Put("ScrollThumbHover", Color.Parse(ThemeColours.Mix(colours["Line"], colours["Ink"], .3)));
+        // Right-click menus are drawn from the standard menu resources, which are the computer's own greys. They wear the theme's panel, text, hover and line.
+        Put("MenuFlyoutPresenterBackground", Color.Parse(colours["Panel"]));
+        Put("MenuFlyoutPresenterBorderBrush", line);
+        Put("MenuFlyoutItemBackgroundPointerOver", Color.Parse(colours["Hover"]));
+        Put("MenuFlyoutItemBackgroundPressed", Color.Parse(colours["Selected"]));
+        foreach (var key in new[] { "MenuFlyoutItemForeground", "MenuFlyoutItemForegroundPointerOver", "MenuFlyoutItemForegroundPressed" }) Put(key, ink0);
+        foreach (var key in new[] { "MenuFlyoutItemForegroundDisabled", "MenuFlyoutItemKeyboardAcceleratorTextForeground", "MenuFlyoutItemKeyboardAcceleratorTextForegroundPointerOver", "MenuFlyoutItemKeyboardAcceleratorTextForegroundPressed", "MenuFlyoutSubItemChevron", "MenuFlyoutSubItemChevronPointerOver", "MenuFlyoutSubItemChevronPressed" }) Put(key, Color.Parse(colours["Muted"]));
+        Put("MenuFlyoutSeparatorBackground", line);
         Put("ToolTipBackground", Color.Parse(colours["Surface"]));
         Put("ToolTipForeground", Color.Parse(colours["Ink"]));
         Put("ToolTipBorderBrush", line);

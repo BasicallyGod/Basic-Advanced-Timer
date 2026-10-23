@@ -20,7 +20,8 @@ public static class ReviewViews
     // The hours run across the top, the blocks sit in one band under them, and for today a chip under the band names the time.
     /// <summary>The room before midnight and after the last hour, so the first and last hour labels sit fully in view.</summary>
     public const double TimelineGutter = 34;
-    private const double LabelRow = 22, BandTop = 34, BandHeight = 76, LaneGap = 4, TimelineHeight = 142, LabelWidth = 44;
+    // The room between the hours and the blocks (BandTop) is the row for planned meetings, which arrive with Notes; it is kept so the day does not move when they do.
+    private const double LabelRow = 22, BandTop = 92, BandHeight = 76, LaneGap = 4, TimelineHeight = 204, LabelWidth = 44;
     /// <summary>The corner a block has when the band holds this many lanes: the larger for one, the smaller for more.</summary>
     public static double CornerFor(int lanes, double width, double height) => Math.Min(lanes <= 1 ? BlockRadius : LaneRadius, Math.Min(width, height) / 2);
     /// <summary>How much of a block to show. One lane has the full block, two a line of duration and account, three the duration alone, and four or more the colour with the tooltip.</summary>
@@ -80,6 +81,17 @@ public static class ReviewViews
         {
             StartPoint = new RelativePoint(0, 0, RelativeUnit.Absolute), EndPoint = new RelativePoint(12, 12, RelativeUnit.Absolute), SpreadMethod = GradientSpreadMethod.Repeat,
             GradientStops = { new GradientStop(a, 0), new GradientStop(a, .5), new GradientStop(b, .5), new GradientStop(b, 1) }
+        };
+    }
+
+    /// <summary>Thin diagonal stripes in the quiet bar colour on nothing, for the day bar's unallocated time: the stripes of <see cref="Hatch"/> are too faint on the bar's track.</summary>
+    internal static Brush Stripes(TimerModel model)
+    {
+        var stripe = Color.Parse(model.CurrentTheme.Colour("Muted"));
+        return new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Absolute), EndPoint = new RelativePoint(5, 5, RelativeUnit.Absolute), SpreadMethod = GradientSpreadMethod.Repeat,
+            GradientStops = { new GradientStop(stripe, 0), new GradientStop(stripe, .4), new GradientStop(Colors.Transparent, .4), new GradientStop(Colors.Transparent, 1) }
         };
     }
 
@@ -143,11 +155,12 @@ public static class ReviewViews
             var ink = isBreak ? model.CurrentTheme.Colour("Muted") : look.Text;
             var display = model.Label(interval.Account);
             // What is written on the block depends on the room it has: the whole block, a line, the duration alone, or nothing but the colour.
-            var text = new StackPanel { Spacing = 2, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = detail == BlockDetail.Full ? new Thickness(10, 6, 10, 6) : new Thickness(8, 0) };
-            TextBlock Duration(double size) { var d = Ui.Text(model.Format(duration), size); d.Classes.Add("clock"); d.FontWeight = FontWeight.Bold; d.Name = "BlockDuration"; return d; }
+            var text = new StackPanel { Spacing = 2, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = detail == BlockDetail.Full ? new Thickness(width < 84 ? 7 : 10, 6) : new Thickness(8, 0) };
+            // The duration is in the ordinary typeface, semibold: the display face at bold was too heavy to read at this size.
+            TextBlock Duration(double size) { var d = Ui.Text(model.Format(duration), size); d.FontWeight = FontWeight.SemiBold; d.Name = "BlockDuration"; return d; }
             TextBlock Name(double size, bool short_) { var n = Ui.Text(short_ ? PillWindow.Initials(display) : display, size); n.FontWeight = FontWeight.SemiBold; n.TextTrimming = TextTrimming.CharacterEllipsis; n.Name = "BlockName"; return n; }
             var recording = interval.Row is null && interval.Group is null;
-            var note = interval.Group is { } groupNote ? "Merged block · " + groupNote.Note : recording ? "Recording now" : interval.Row is { } noteRow ? model.Editor.Note(noteRow) : "";
+            var note = interval.Group is { } groupNote ? groupNote.Note : recording ? "Recording now" : interval.Row is { } noteRow ? model.Editor.Note(noteRow) : "";
             switch (detail)
             {
                 case BlockDetail.Full when width >= 56:
@@ -163,7 +176,8 @@ public static class ReviewViews
                     break;
             }
             foreach (var child in text.GetLogicalDescendants().OfType<TextBlock>()) child.Foreground = Brush.Parse(ink);
-            var card = new Border { Width = width, Height = height, ClipToBounds = true, CornerRadius = new CornerRadius(CornerFor(laneCount, width, height)) };
+            // The card itself is not clipped, or the selection ring round it would be cut off; what is inside it is clipped instead.
+            var card = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(CornerFor(laneCount, width, height)) };
             if (isBreak) { card.Background = Hatch(model); card.BorderBrush = Brush.Parse(model.CurrentTheme.Colour("Line")); card.BorderThickness = new Thickness(1); }
             else
             {
@@ -171,7 +185,7 @@ public static class ReviewViews
                 var deeper = DeeperEnd(look);
                 card.Background = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative), GradientStops = { new GradientStop(Color.Parse(look.Fill), 0), new GradientStop(Color.Parse(deeper), 1) } };
             }
-            var content = new Grid(); content.Children.Add(text);
+            var content = new Grid { ClipToBounds = true }; content.Children.Add(text);
             // The gaps inside a merged block are lighter, and a small link marks it as merged.
             if (interval.Group is { } mergedGroup)
             {
@@ -200,8 +214,7 @@ public static class ReviewViews
             if (interval.Row is { } row)
             {
                 card.Tag = row; card.Name = "TimelineEntry" + model.Engine.Sessions.IndexOf(row);
-                var edit = new MenuItem { Header = "Edit entry / note…" }; edit.Click += (_, _) => model.OpenEntry(row);
-                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { edit, MoveMenu(model, new[] { row }), CopyMenu(model, new[] { row }), MergeMenu(model), new Separator(), DeleteMenu(model, new[] { row }) } };
+                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { MoveMenu(model, new[] { row }), CopyMenu(model, new[] { row }), MergeMenu(model), new Separator(), DeleteMenu(model, new[] { row }) } };
                 TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour);
             }
             if (recording)
@@ -211,9 +224,7 @@ public static class ReviewViews
                 if (text.Children.OfType<TextBlock>().FirstOrDefault(t => t.Name == "BlockName") is { } liveName) liveName.Text = "● " + liveName.Text;
                 else if (text.Children.OfType<StackPanel>().SelectMany(p => p.Children.OfType<TextBlock>()).FirstOrDefault(t => t.Name == "BlockName") is { } inlineName) inlineName.Text = "● " + inlineName.Text;
                 var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
-                var again = new MenuItem { Name = "ContinuePreviousBlockMenu", Header = model.ContinuePreviousText ?? "Continue earlier block", IsVisible = model.CanContinuePrevious };
-                again.Click += (_, _) => model.ContinuePrevious();
-                card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop, again } };
+                card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };
                 card.PointerPressed += (_, e) =>
                 { if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) { model.ExplainRunning(); e.Handled = true; } };
             }
@@ -229,13 +240,12 @@ public static class ReviewViews
                 card.PointerReleased += (_, e) =>
                 {
                     if (groupPress is { } p)
-                    { var movement = e.GetPosition(canvas) - p; if (movement.X * movement.X + movement.Y * movement.Y <= 25) model.ToggleSelection(group.Sources); }
+                    { var movement = e.GetPosition(canvas) - p; if (movement.X * movement.X + movement.Y * movement.Y <= 25) model.SelectBlock(group.Sources, e.KeyModifiers.HasFlag(KeyModifiers.Shift)); }
                     groupPress = null; e.Handled = true;
                 };
                 card.Tag = group; card.Name = "TimelineGroup" + group.GroupId + "-" + interval.Start.ToString("HHmmss");
-                var editGroup = new MenuItem { Header = "Inspect / edit grouped entries…" }; editGroup.Click += (_, _) => model.OpenGroup(group.GroupId!);
-                var ungroup = new MenuItem { Header = "Ungroup" }; ungroup.Click += (_, _) => model.UngroupEntries(group.GroupId!);
-                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { editGroup, ungroup, CopyMenu(model, group.Sources), MergeMenu(model) } };
+                var ungroup = new MenuItem { Header = "Unmerge", Name = "UnmergeMenu" }; ungroup.Click += (_, _) => model.UngroupEntries(group.GroupId!);
+                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { ungroup, CopyMenu(model, group.Sources), MergeMenu(model) } };
                 ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} merged entries · {model.Format(duration)}\nClick to select");
             }
             Canvas.SetLeft(card, X(interval.Start) + 1); Canvas.SetTop(card, BandTop + lane * (height + LaneGap));
@@ -264,11 +274,10 @@ public static class ReviewViews
         DateTime clicked = day.AddHours(9);
         DateTime At(double x) => day.AddMinutes(Math.Clamp(Math.Floor((x - TimelineGutter) / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);
-        var tidy = new MenuItem { Header = "Tidy day…", Name = "TidyDayMenu" }; tidy.Click += (_, _) => model.OpenTidy();
         // Paste puts the copied blocks with the first at the time that was right-clicked, snapped to five minutes like Add time.
         var paste = new MenuItem { Header = "Paste here", Name = "PasteHereMenu", InputGesture = new KeyGesture(Key.V, KeyModifiers.Control), IsEnabled = model.CanPaste };
         paste.Click += (_, _) => model.PasteBlocks(clicked);
-        canvas.ContextMenu = new ContextMenu { ItemsSource = new Control[] { add, paste, tidy, MergeMenu(model) } };
+        canvas.ContextMenu = new ContextMenu { ItemsSource = new Control[] { add, paste, MergeMenu(model) } };
         // Ctrl+V pastes where the pointer last was on this timeline.
         canvas.PointerMoved += (_, e) => model.PasteTime = At(e.GetPosition(canvas).X);
         canvas.PointerExited += (_, _) => model.PasteTime = null;
@@ -298,7 +307,7 @@ public static class ReviewViews
         // The timeline scrolls along the day, and opens with the first block (or the start of the working day) a little way in from the left.
         var scroll = new ScrollViewer { Name = "TimelineScroll", Content = canvas, ClipToBounds = true,
             Tag = new Vector(model.TimelineOffset ?? Math.Max(0, X(first) - 56), 0),
-            AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+            AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
         // Only a partly visible hour label shifts inward. Blocks, ticks and pointer-to-time maths stay on their original coordinates.
         void KeepHourLabelsReadable()
         {

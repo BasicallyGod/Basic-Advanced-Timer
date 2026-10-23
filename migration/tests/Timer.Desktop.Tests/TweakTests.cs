@@ -51,18 +51,6 @@ public sealed class TweakTests
         Assert.Null(model.EditError); Assert.Null(model.Notice);
     }
 
-    [AvaloniaFact]
-    public void MergeAndTheZoomBarHaveRoomBetweenThem()
-    {
-        var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
-        var merge = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "MergeSelected");
-        var zoom = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
-        var mergeRight = merge.TranslatePoint(new Point(merge.Bounds.Width, 0), dashboard)!.Value.X;
-        var zoomLeft = zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.X;
-        Assert.True(zoomLeft - mergeRight >= 24, $"Only {zoomLeft - mergeRight} px between Merge and the zoom bar.");
-        dashboard.Close();
-    }
-
     [Fact]
     public void AMonthExportCoversEveryDayOfTheMonthAndTheHundredthsStillAddUpExactly()
     {
