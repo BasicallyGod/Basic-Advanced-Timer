@@ -178,6 +178,24 @@ public sealed class PolishTests
     }
 
     [AvaloniaFact]
+    public void ASlidingNameNeverGrowsPastItsRoomOrOverTheTimeBesideIt()
+    {
+        var marquee = new MarqueeText("A very long client account name that cannot fit", 15);
+        var time = new TextBlock { Text = "01:30" };
+        var grid = new Grid { Width = 200, ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        grid.Children.Add(new NameRow { Spacing = 0, Children = { new Border { Width = 10, Height = 10 }, marquee, new Border { Width = 8, Height = 8 } } }); Grid.SetColumn(time, 1); grid.Children.Add(time);
+        var window = new Window { Width = 300, Height = 120, Content = grid }; window.Show();
+        try
+        {
+            Settle(window); var room = marquee.Bounds.Width; Assert.True(room > 20 && room < 200, $"room {room}");
+            marquee.Hover(true); Settle(window);
+            Assert.True(marquee.Scrolling); Assert.InRange(marquee.Bounds.Width, room - 0.5, room + 2); // The box keeps its size (the trimmed name left a pixel or so spare), so the clock beside it is not run over.
+            var right = marquee.TranslatePoint(new Point(marquee.Bounds.Width, 0), window)!.Value.X; Assert.True(right <= time.TranslatePoint(default, window)!.Value.X + 0.5);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void EveryAccountRowNameCanSlide()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();

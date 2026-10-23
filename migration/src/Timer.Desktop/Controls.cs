@@ -479,6 +479,18 @@ public sealed class MarqueeText : Border
         DetachedFromVisualTree += (_, _) => Reset();
     }
     public TextBlock Label => text;
+    // The box is never wider than the room it is given, however long the whole name is, so a name sliding past its edge is clipped there instead of
+    // making the row wider and running over the time beside it.
+    protected override Size MeasureOverride(Size available)
+    {
+        text.Measure(Scrolling ? new Size(double.PositiveInfinity, available.Height) : available);
+        return new Size(Math.Min(text.DesiredSize.Width, available.Width), text.DesiredSize.Height);
+    }
+    protected override Size ArrangeOverride(Size final)
+    {
+        text.Arrange(new Rect(0, 0, Math.Max(final.Width, text.DesiredSize.Width), final.Height));
+        return final;
+    }
     /// <summary>Whether the name is sliding now, which only happens while hovered and only when it did not fit.</summary>
     public bool Scrolling { get; private set; }
     public void Hover(bool on)
@@ -489,14 +501,14 @@ public sealed class MarqueeText : Border
         text.TextTrimming = TextTrimming.None; text.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var full = text.DesiredSize.Width; var room = Bounds.Width;
         if (full <= room + .5) { text.TextTrimming = TextTrimming.CharacterEllipsis; return; }
-        text.Width = full; Scrolling = true; hold = .35;
+        text.Width = full; Scrolling = true; hold = .6;
         var distance = full - room + 4; var last = DateTime.UtcNow;
         timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         timer.Tick += (_, _) =>
         {
             var now = DateTime.UtcNow; var seconds = Math.Min(.1, (now - last).TotalSeconds); last = now;
             if (hold > 0) { hold -= seconds; return; }
-            offset = Math.Min(distance, offset + 55 * seconds);
+            offset = Math.Min(distance, offset + 28 * seconds);
             text.RenderTransform = new Avalonia.Media.TranslateTransform(-offset, 0);
             if (offset >= distance) timer?.Stop();
         };
