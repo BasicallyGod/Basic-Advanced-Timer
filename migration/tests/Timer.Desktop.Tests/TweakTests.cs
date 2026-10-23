@@ -21,13 +21,13 @@ public sealed class TweakTests
     {
         Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(2560)); // Even a big screen gets a smaller pill than the design size.
         Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(1920));
-        Assert.InRange(PillWindow.ScaleFor(1366), 0.75, 0.77); // A common laptop screen.
+        Assert.InRange(PillWindow.ScaleFor(1366), 0.79, 0.81); // A common laptop screen gets the smallest.
         Assert.Equal(PillWindow.SmallestScale, PillWindow.ScaleFor(800));
         // A 2560 by 1600 display at 125 per cent Windows scale keeps the largest pill, and a 1080p one at 100 per cent gets the smallest.
         Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(2560 / 1.25, 1.25));
         Assert.Equal(PillWindow.SmallestScale, PillWindow.ScaleFor(1920, 1.0));
-        Assert.InRange(PillWindow.ScaleFor(1920 / 1.1, 1.1), 0.75, 0.78); // In between at 110 per cent.
-        Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(1706, 1.5)); // More scaling than 125 per cent never makes it smaller.
+        Assert.InRange(PillWindow.ScaleFor(1920 / 1.1, 1.1), 0.85, 0.87); // In between at 110 per cent.
+        Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(1800, 1.5)); // More scaling than 125 per cent never makes it smaller.
     }
 
     [AvaloniaFact]

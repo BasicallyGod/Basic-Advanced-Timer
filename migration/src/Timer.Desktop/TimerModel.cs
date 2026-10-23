@@ -486,7 +486,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void SaveTheme(ThemeDefinition theme, string? replacing = null)
     {
         if (!ThemeStorage.IsUsableName(theme.Name)) throw new ArgumentException("Choose a name of up to 40 characters for the theme. System is reserved.");
-        if (ThemeLibrary.BuiltIn.Any(t => t.Name.Equals(theme.Name, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException($"\"{theme.Name}\" is a built-in theme. Choose another name.");
+        if (AppThemes.BuiltIn.Any(t => t.Name.Equals(theme.Name, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException($"\"{theme.Name}\" is a built-in theme. Choose another name.");
         var own = (preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
         if (own.Any(t => t.Name.Equals(theme.Name, StringComparison.OrdinalIgnoreCase) && !t.Name.Equals(replacing, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException($"There is already a theme called \"{theme.Name}\".");
         if (ThemeTokens.Names.Any(n => !ThemeTokens.IsValid(n, theme.Colours.GetValueOrDefault(n)))) throw new ArgumentException("Every colour must be a valid hex colour.");
@@ -707,7 +707,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string ThemeState => IsOnBreak ? "Break" : IsOvertime ? "Overtime" : IsTracking ? "Recording" : "Normal";
     private ThemeVariant? appliedVariant;
     /// <summary>Every theme on offer: the built-in ones, then the user's own.</summary>
-    public IReadOnlyList<ThemeDefinition> Themes => ThemeLibrary.BuiltIn.Concat(preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
+    public IReadOnlyList<ThemeDefinition> Themes => AppThemes.BuiltIn.Concat(preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
     /// <summary>The theme actually in use. System is Light or Dark, whichever the computer is using.</summary>
     public ThemeDefinition CurrentTheme
     {
@@ -715,7 +715,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         {
             if (Theme != ThemeLibrary.System && Themes.FirstOrDefault(t => t.Name == Theme) is { } chosen) return chosen;
             var dark = Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant == Avalonia.Platform.PlatformThemeVariant.Dark;
-            return dark ? ThemeLibrary.Dark : ThemeLibrary.Light;
+            return dark ? AppThemes.Dark : AppThemes.Light;
         }
     }
     /// <summary>The theme the pill wears by itself: tinted amber on a break, red in overtime, otherwise null so it follows the rest of the app.</summary>

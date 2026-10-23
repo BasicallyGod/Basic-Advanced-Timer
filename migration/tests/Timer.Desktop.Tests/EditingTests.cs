@@ -297,9 +297,9 @@ public sealed class EditingTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsVisible), t => t.Text is not null && (t.Text.Contains("Sample data") || t.Text.Contains("saved locally") || t.Text.Contains("Test session")));
-            var settings = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings"); var back = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BackToPill");
-            Assert.IsType<IconGlyph>(settings.Content); Assert.IsType<IconGlyph>(back.Content); // A gear and a minimise bar, not words.
-            Assert.Equal(IconKind.Gear, ((IconGlyph)settings.Content!).Kind); Assert.Equal(IconKind.Minimise, ((IconGlyph)back.Content!).Kind);
+            var settings = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings");
+            Assert.IsType<IconGlyph>(settings.Content); Assert.Equal(IconKind.Gear, ((IconGlyph)settings.Content!).Kind); // A gear, not words.
+            Assert.Empty(window.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "BackToPill")); // The clock on the rail is the way back to the pill.
         }
         finally { window.Close(); }
     }
@@ -310,7 +310,7 @@ public sealed class EditingTests
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
+            dashboard.ShowAccountsPanel(); Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("account")).ToList();
             Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(70, r.Bounds.Height, 0.5)); // Tall enough for the name, the budget line and its bar.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
@@ -374,10 +374,11 @@ public sealed class EditingTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             var day = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay"); var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
-            var flag = day.GetVisualDescendants().OfType<IconGlyph>().Single(); var label = day.GetVisualDescendants().OfType<TextBlock>().Single(); var breakLabel = breakButton.GetVisualDescendants().OfType<TextBlock>().Single();
-            Assert.Equal(breakLabel.FontSize, label.FontSize); Assert.Equal(breakLabel.FontWeight, label.FontWeight); Assert.Equal(breakLabel.FontFamily, label.FontFamily); // The same type on both buttons.
-            void Check() { var started = model.DayStarted; Assert.Equal(started, day.Classes.Contains("finishDay")); Assert.Equal(!started, day.Classes.Contains("startDay")); } // Red once running, green before.
+            var flag = day.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Kind == IconKind.Flag); var sun = day.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Kind == IconKind.Sunrise);
+            Assert.Equal(2, day.GetVisualDescendants().OfType<IconGlyph>().Count()); // A flag to finish the day and a sunrise to start it; one shows at a time.
+            void Check() { var started = model.DayStarted; Assert.Equal(started, day.Classes.Contains("finishDay")); Assert.Equal(!started, day.Classes.Contains("startDay")); Assert.Equal(started, flag.IsVisible); Assert.Equal(!started, sun.IsVisible); Assert.Equal("Finish", flag.TintKey); Assert.Equal("Start", sun.TintKey); } // A red flag once running, a green sunrise before.
             Check(); model.ToggleDay(); Dispatcher.UIThread.RunJobs(); Check(); model.ToggleDay(); Dispatcher.UIThread.RunJobs(); Check();
+            Assert.False(dashboard.FinishQuestionOpen); // Starting the day does not ask anything.
             // The flag waves while the pointer is over the button, and the cup steams. (Headless tests do not run animation timers, so
             // this checks the switches, not the frames.)
             var over = day.TranslatePoint(new Point(day.Bounds.Width / 2, day.Bounds.Height / 2), dashboard)!.Value;
@@ -392,54 +393,51 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void MessagesAppearUnderTheReviewOnlyAndNeverChangeTheLeftColumnHeight()
+    public void MessagesAppearInTheWorkspaceOnlyAndNeverChangeTheTimelineHeight()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
-            var scroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "AccountScroll"); var before = scroll.Bounds.Height;
+            var scroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll"); var before = scroll.Bounds.Height;
             model.Notice = "A message for the footer"; model.ToggleFormat(); model.ToggleFormat(); Dispatcher.UIThread.RunJobs(); using var again = dashboard.CaptureRenderedFrame();
             var message = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "A message for the footer" && t.IsVisible);
-            Assert.True(message.TranslatePoint(new Point(0, 0), dashboard)!.Value.X > 300); // In the right column, under the tabs' content.
+            Assert.True(message.TranslatePoint(new Point(0, 0), dashboard)!.Value.X > DashboardWindow.RailWidth); // In the workspace, beside the rail.
             Assert.Equal(before, scroll.Bounds.Height, 0.5);
         }
         finally { dashboard.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheDashboardClockFollowsBreakAndOvertimeTheBreakButtonsSitSideBySideWithAnOutlineAndTheTopDragsTheWindow()
+    public void TheRailsLightFollowsBreakAndOvertimeTheFootStacksBreakAboveDayAndTheRailAndHeaderDragTheWindow()
     {
         var now = new DateTime(2026, 10, 9, 12, 0, 0);
         var model = TimerModel.CreateDemo(() => now); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
-            var clock = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 46 && t.Classes.Contains("clock"));
+            var lights = dashboard.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "RailLights");
             void Settle() { Dispatcher.UIThread.RunJobs(); using var f = dashboard.CaptureRenderedFrame(); }
-            // The clock is amber on a break, with the status line amber too, and red in overtime.
+            // The light is amber on a break and red in overtime, and a break outranks overtime.
             if (model.IsOnBreak) model.ToggleBreak();
-            model.ToggleBreak(); Settle(); Assert.Contains("break", clock.Classes); Assert.DoesNotContain("live", clock.Classes);
-            var status = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "On break"); Assert.Contains("break", status.Classes);
-            model.ToggleBreak(); Settle(); Assert.DoesNotContain("break", clock.Classes);
-            model.SetOvertimeTest(true); Settle(); Assert.True(model.IsOvertime); Assert.Contains("overtime", clock.Classes); Assert.DoesNotContain("clockIdle", clock.Classes);
-            model.ToggleBreak(); Settle(); Assert.Contains("break", clock.Classes); Assert.DoesNotContain("overtime", clock.Classes); // A break outranks overtime.
+            model.ToggleBreak(); Settle(); Assert.Equal("On break", ToolTip.GetTip(lights));
+            model.ToggleBreak(); Settle(); Assert.NotEqual("On break", ToolTip.GetTip(lights));
+            model.SetOvertimeTest(true); Settle(); Assert.True(model.IsOvertime); Assert.Equal("Overtime", ToolTip.GetTip(lights));
+            model.ToggleBreak(); Settle(); Assert.Equal("On break", ToolTip.GetTip(lights));
             model.ToggleBreak(); model.SetOvertimeTest(false); Settle();
-            // Break and day buttons share a row and rest with an outline.
+            // Break and day sit one above the other at the foot of the rail.
             var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak"); var day = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay");
-            Assert.InRange(Math.Abs(breakButton.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y - day.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y), 0, 1);
-            Assert.True(day.TranslatePoint(new Point(0, 0), dashboard)!.Value.X > breakButton.TranslatePoint(new Point(breakButton.Bounds.Width - 1, 0), dashboard)!.Value.X - 1);
-            Assert.NotEqual(Avalonia.Media.Brushes.Transparent, breakButton.BorderBrush); Assert.True(breakButton.BorderThickness.Left > 0);
-            // The window can be picked up by the identity block, the accounts heading, and the tab and action rows, but not by a button or the timeline.
+            Assert.InRange(Math.Abs(breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, 0), dashboard)!.Value.X - day.TranslatePoint(new Point(day.Bounds.Width / 2, 0), dashboard)!.Value.X), 0, 1); // The same centre line.
+            Assert.True(day.TranslatePoint(default, dashboard)!.Value.Y > breakButton.TranslatePoint(default, dashboard)!.Value.Y);
+            // The window can be picked up by the rail and the header row, but not by a button or the timeline.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
             var tabAt = tab.TranslatePoint(new Point(tab.Bounds.Width / 2, tab.Bounds.Height / 2), dashboard)!.Value;
-            Assert.True(dashboard.InDragZone(new Point(tabAt.X + 200, tabAt.Y))); // Empty space beside the tabs.
-            Assert.True(dashboard.InDragZone(clock.TranslatePoint(new Point(10, 10), dashboard)!.Value));
+            Assert.True(dashboard.InDragZone(new Point(tabAt.X, tabAt.Y + 40))); // Empty rail beside and between the buttons.
+            var title = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Timeline" && t.Classes.Contains("clock"));
+            Assert.True(dashboard.InDragZone(title.TranslatePoint(new Point(10, 10), dashboard)!.Value));
             var timelineScroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
             Assert.False(dashboard.InDragZone(timelineScroll.TranslatePoint(new Point(100, 100), dashboard)!.Value));
-            var accountRow = dashboard.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("account"));
-            Assert.False(dashboard.InDragZone(accountRow.TranslatePoint(new Point(50, 10), dashboard)!.Value));
-            Assert.False(Ui.IsPlainSurface(tab)); Assert.True(Ui.IsPlainSurface(clock));
+            Assert.False(Ui.IsPlainSurface(tab)); Assert.True(Ui.IsPlainSurface(title));
         }
         finally { dashboard.Close(); }
     }
@@ -456,9 +454,9 @@ public sealed class EditingTests
             // The whole capsule is the overtime colour while recording, and its line says how much overtime there is.
             Assert.Equal("Overtime", model.ThemeState);
             Assert.Equal("Overtime", ToolTip.GetTip(pill.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "PillLights")));
-            Assert.Equal("Start break", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak").GetVisualDescendants().OfType<TextBlock>().Single().Text);
+            Assert.Equal("Start break", ToolTip.GetTip(dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak")));
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs();
-            Assert.Equal("Finish break", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak").GetVisualDescendants().OfType<TextBlock>().Single().Text);
+            Assert.StartsWith("End break", ToolTip.GetTip(dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak"))?.ToString());
         }
         finally { dashboard.Close(); pill.Close(); model.SetOvertimeTest(false); }
     }

@@ -244,6 +244,13 @@ public static class Ui
     /// The right-click menu is kept short on purpose: the hours format, which build this is, the overtime tester (demo only) and Close timer.
     /// Everything else lives on the settings page.
     /// </summary>
+    /// <summary>The break circle's colour: the theme's break amber, deepened until a white cup on it holds 4.5 to 1.</summary>
+    public static Avalonia.Media.Color BreakCircleColour(Avalonia.Media.Color amber)
+    {
+        var hex = $"#{amber.R:X2}{amber.G:X2}{amber.B:X2}";
+        for (var weight = 0.0; weight <= .6 && Timer.Core.ThemeColours.Contrast(hex, "#FFFFFF") < 4.5; weight += .04) hex = Timer.Core.ThemeColours.Mix($"#{amber.R:X2}{amber.G:X2}{amber.B:X2}", "#000000", weight);
+        return Avalonia.Media.Color.Parse(hex);
+    }
     public static ContextMenu SettingsMenu(TimerModel model)
     {
         // Inside the demo you can switch overtime on and off to see how it looks. Like the version, it shows only once developer features are unlocked.
@@ -465,13 +472,15 @@ public sealed class AccountList : StackPanel
 {
     private readonly TimerModel model;
     private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Period)> rows = new();
-    private readonly bool reorderable, bars;
+    private readonly bool reorderable, bars, compact;
     /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
-    public AccountList(TimerModel model, bool reorderable = false, bool bars = false)
+    /// <param name="compact">With bars, a shorter row for the pill's narrow drawer: the swatch, name and time, and the bar, without the budget words or the play circle.</param>
+    public AccountList(TimerModel model, bool reorderable = false, bool bars = false, bool compact = false)
     {
-        this.model = model; this.reorderable = reorderable; this.bars = bars;
+        this.model = model; this.reorderable = reorderable; this.bars = bars; this.compact = compact;
         Rebuild();
-        AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
+        // A list that sat hidden (in a pop-up) missed the changes made meanwhile, so it catches up when it is shown.
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Changed(null, new System.ComponentModel.PropertyChangedEventArgs(null)); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
     }
     // The break has its own button, set apart from the accounts, so it is not one of the rows.
@@ -482,14 +491,9 @@ public sealed class AccountList : StackPanel
         foreach (var account in Listed(model))
         {
             var row = new Button { Name = "Account" + rows.Count, Classes = { "account" } };
-            // Where rows can be dragged to reorder them, a grip at the left says so.
-            var shift = reorderable ? 1 : 0;
-            var grid = Ui.Grid(reorderable ? "10,*,Auto" : bars ? "*,Auto" : "38,*,Auto");
-            if (reorderable)
-            {
-                var grip = new IconGlyph(IconKind.Grip) { Cursor = new Cursor(StandardCursorType.SizeAll), VerticalAlignment = VerticalAlignment.Center, Name = "Grip" + rows.Count };
-                ToolTip.SetTip(grip, "Drag to change the order"); Ui.Put(grid, grip);
-            }
+            // Rows can still be dragged to reorder them where that is allowed, but there is no handle: it only took room from the row.
+            const int shift = 0;
+            var grid = Ui.Grid(bars ? "*,Auto" : "38,*,Auto");
             var icon = new AccountIndicator(account, model) { Ring = !bars };
             var dot = Ui.Text("●", 10, "live"); dot.IsVisible = false;
             var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(bars ? 8 : 10, 0, 10, 0) };
@@ -516,12 +520,12 @@ public sealed class AccountList : StackPanel
                 var period = Ui.Text("", 12, "muted"); period.TextAlignment = Avalonia.Media.TextAlignment.Right; period.VerticalAlignment = VerticalAlignment.Center;
                 var budgetLine = Ui.Grid("*,Auto"); Ui.Put(budgetLine, budget); Ui.Put(budgetLine, period, 1); period.Name = "BudgetPeriod";
                 percent = period; // The row's second quiet text, kept under the old name in the row list.
-                labels.Children.Add(nameLine); labels.Children.Add(budgetLine);
+                labels.Children.Add(nameLine); if (!compact) labels.Children.Add(budgetLine);
                 if (account.Budget is not null) { bar = new BudgetBar(); labels.Children.Add(bar); }
                 icon.Margin = new Thickness(8, 0, 0, 0);
-                Ui.Put(grid, labels, shift); Ui.Put(grid, icon, 1 + shift);
+                Ui.Put(grid, labels, shift); if (!compact) Ui.Put(grid, icon, 1 + shift);
                 // A rounded card inset from the edges, so the recording account's soft highlight has room to show.
-                row.Classes.Add("accountCard"); row.Margin = new Thickness(10, 0); row.Height = 70;
+                row.Classes.Add("accountCard"); row.Margin = new Thickness(0); row.Height = compact ? 54 : 70;
             }
             else
             {
@@ -857,7 +861,23 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next }
+/// <summary>The accounts icon: three short bars, each in a different account-like colour, the one coloured icon on the pill and the rail.</summary>
+public sealed class AccountsGlyph : Control
+{
+    private static readonly (string From, string To)[] Colours = { ("#A8D4FF", "#7F98F7"), ("#B2EFD6", "#5FD6AE"), ("#FFD9B8", "#FF9F84") };
+    public AccountsGlyph() { Width = 20; Height = 19; }
+    public override void Render(DrawingContext context)
+    {
+        for (var i = 0; i < 3; i++)
+        {
+            var brush = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                GradientStops = { new GradientStop(Color.Parse(Colours[i].From), 0), new GradientStop(Color.Parse(Colours[i].To), 1) } };
+            context.DrawRectangle(brush, null, new Rect(0, i * 7, 20, 5), 2.5, 2.5);
+        }
+    }
+}
+
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -976,6 +996,21 @@ public sealed class IconGlyph : Control
                 context.DrawLine(pen, new Point(4.5, 13), new Point(4.5, 9 - hover));
                 context.DrawLine(pen, new Point(9, 13), new Point(9, 3.5 - hover));
                 context.DrawLine(pen, new Point(13.5, 13), new Point(13.5, 6.5 - hover));
+                break;
+            case IconKind.Accounts:
+                // Two rows, each a round swatch and a line: the accounts as a short list.
+                foreach (var y in new[] { 5.0, 12.5 })
+                {
+                    context.DrawEllipse(null, pen, new Point(4.8, y), 2.1, 2.1);
+                    context.DrawLine(pen, new Point(9.5, y), new Point(15.5, y));
+                }
+                break;
+            case IconKind.Sunrise:
+                // A half sun on the horizon with short rays: the day beginning.
+                context.DrawLine(pen, new Point(2, 13.5), new Point(16, 13.5));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 5.5,13.5 A 3.5,3.5 0 0 1 12.5,13.5"));
+                context.DrawLine(pen, new Point(9, 4.5 - hover), new Point(9, 6.5)); context.DrawLine(pen, new Point(3.8, 7.6), new Point(5.2, 8.9));
+                context.DrawLine(pen, new Point(14.2, 7.6), new Point(12.8, 8.9));
                 break;
             case IconKind.Close:
                 context.DrawLine(pen, new Point(4.5, 4.5), new Point(13.5, 13.5)); context.DrawLine(pen, new Point(13.5, 4.5), new Point(4.5, 13.5));

@@ -22,7 +22,7 @@
               <Thumb Name="PART_Thumb">
                 <Thumb.Template>
                   <ControlTemplate>
-                    <Border Background="{DynamicResource Muted}" CornerRadius="3" Margin="1" Opacity="0.5" />
+                    <Border Name="ThumbFill" Background="{DynamicResource ScrollThumb}" CornerRadius="4" Margin="1" />
                   </ControlTemplate>
                 </Thumb.Template>
               </Thumb>
@@ -34,9 +34,9 @@
       </Setter>
     </Style>
     <Style Selector="ScrollBar:vertical">
-      <Setter Property="Width" Value="7" /><Setter Property="MinWidth" Value="7" /><Setter Property="MaxWidth" Value="7" />
+      <Setter Property="Width" Value="10" /><Setter Property="MinWidth" Value="10" /><Setter Property="MaxWidth" Value="10" />
     </Style>
-    <Style Selector="ScrollBar:vertical /template/ Thumb"><Setter Property="MinHeight" Value="24" /><Setter Property="MinWidth" Value="5" /></Style>
+    <Style Selector="ScrollBar:vertical /template/ Thumb"><Setter Property="MinHeight" Value="24" /><Setter Property="MinWidth" Value="8" /></Style>
     <!-- Scroll bars stay out of sight until the pointer is over the area they belong to, so they never distract from the content. -->
     <Style Selector="ScrollViewer ScrollBar">
       <Setter Property="Opacity" Value="0" />
@@ -45,9 +45,11 @@
     <Style Selector="ScrollViewer:pointerover ScrollBar"><Setter Property="Opacity" Value="1" /></Style>
     <Style Selector="ScrollBar:vertical /template/ Track"><Setter Property="IsDirectionReversed" Value="True" /></Style>
     <Style Selector="ScrollBar:horizontal">
-      <Setter Property="Height" Value="7" /><Setter Property="MinHeight" Value="7" /><Setter Property="MaxHeight" Value="7" />
+      <Setter Property="Height" Value="10" /><Setter Property="MinHeight" Value="10" /><Setter Property="MaxHeight" Value="10" />
     </Style>
-    <Style Selector="ScrollBar:horizontal /template/ Thumb"><Setter Property="MinHeight" Value="6" /><Setter Property="MinWidth" Value="24" /></Style>
+    <Style Selector="ScrollBar:horizontal /template/ Thumb"><Setter Property="MinHeight" Value="8" /><Setter Property="MinWidth" Value="24" /></Style>
+    <!-- The thumb is a quiet grey that darkens under the pointer, on a transparent track. -->
+    <Style Selector="ScrollBar /template/ Thumb:pointerover /template/ Border#ThumbFill"><Setter Property="Background" Value="{DynamicResource ScrollThumbHover}" /></Style>
     <Style Selector="Window">
       <!-- Fixed-width digits, so a clock or total does not shift its neighbours as the numbers change. -->
       <Setter Property="TextElement.FontFeatures" Value="tnum" />
@@ -88,7 +90,7 @@
     <Style Selector="TextBlock.budgetWarning"><Setter Property="Foreground" Value="{DynamicResource BudgetWarning}" /></Style>
     <Style Selector="TextBlock.overtime"><Setter Property="Foreground" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.surface"><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
-    <Style Selector="Border.flyoutCard"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
+    <Style Selector=":is(Border).flyoutCard"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Border.panel"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
     <Style Selector="Border.rule"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Button">
@@ -152,7 +154,7 @@
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
     <!-- The dashboard's account rows are soft rounded cards. The recording account's card takes a gentle tint of the tracking colour. -->
-    <Style Selector="Button.accountCard"><Setter Property="CornerRadius" Value="12" /></Style>
+    <Style Selector="Button.accountCard"><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="10,6" /></Style>
     <Style Selector="Button.accountCard:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
     <Style Selector="Button.accountCard.active"><Setter Property="Background" Value="{DynamicResource LiveTint}" /></Style>
     <Style Selector="Button.accountCard.active /template/ ContentPresenter#PART_ContentPresenter, Button.accountCard.active:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource LiveTint}" /></Style>
@@ -183,8 +185,9 @@
       <Setter Property="BoxShadow" Value="0 6 20 0 #88000000" />
     </Style>
     <!-- The Day elapsed card is a raised tile with a bar of the accent colour along its top edge. -->
+    <Style Selector="TextBlock.overtimeText"><Setter Property="Foreground" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.dayCard">
-      <Setter Property="Background" Value="{DynamicResource Surface}" />
+      <Setter Property="Background" Value="{DynamicResource Panel}" />
       <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
     </Style>
     <!-- Small custom date picker: no system Calendar's heavy ruled grid or bright blue selection. -->

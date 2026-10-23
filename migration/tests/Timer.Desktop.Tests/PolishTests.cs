@@ -90,6 +90,7 @@ public sealed class PolishTests
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model); window.Show();
         try
         {
+            window.ShowAccountsPanel();
             Settle(window);
             var lines = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Where(t => t is not null).ToList();
             Assert.Contains(lines, t => t!.EndsWith(" / 20:00")); Assert.Contains("This month", lines); Assert.Contains("This week", lines); Assert.Contains("This quarter", lines); // The period sits beside the usage, not tacked on its end.
@@ -101,27 +102,12 @@ public sealed class PolishTests
     }
 
     [AvaloniaFact]
-    public void TheStatusDotAndTheAccountDotShareACentreLine()
-    {
-        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
-        try
-        {
-            Settle(window);
-            var card = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("dayCard"));
-            var dots = card.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().ToList();
-            Assert.Equal(2, dots.Count);
-            double Centre(Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, 0), window)!.Value.X;
-            Assert.Equal(Centre(dots[0]), Centre(dots[1]), 0.6);
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
     public void EveryAccountRowsPlayCircleSitsInTheSameColumn()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
         try
         {
+            window.ShowAccountsPanel();
             Settle(window);
             var xs = window.GetVisualDescendants().OfType<AccountIndicator>().Select(i => Math.Round(i.TranslatePoint(default, window)!.Value.X, 1)).Distinct().ToList();
             Assert.Single(xs); // A long name or a wide percentage never pushes a row's button aside.
@@ -195,7 +181,7 @@ public sealed class PolishTests
     public void EveryAccountRowNameCanSlide()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
-        try { Settle(window); Assert.True(window.GetVisualDescendants().OfType<MarqueeText>().Count(m => m.Name == "AccountName") >= 7); }
+        try { window.ShowAccountsPanel(); Settle(window); Assert.True(window.GetVisualDescendants().OfType<MarqueeText>().Count(m => m.Name == "AccountName") >= 7); }
         finally { window.Close(); }
     }
 }

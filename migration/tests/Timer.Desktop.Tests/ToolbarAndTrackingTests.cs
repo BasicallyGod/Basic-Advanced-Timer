@@ -59,39 +59,31 @@ public sealed class ToolbarAndTrackingTests
     }
 
     [AvaloniaFact]
-    public void TrackingTurnsTheClockSecondsAndStatusGreenOnTheDashboardAndThePill()
+    public void TrackingTurnsTheRailsLightAndCircleGreenAndABreakTurnsThemAmber()
     {
         var now = new DateTime(2026, 10, 9, 10, 0, 0);
-        var model = TimerModel.CreateDemo(() => now); var dash = new DashboardWindow(model); dash.Show(); var pill = new PillWindow(model); pill.Show();
+        var model = TimerModel.CreateDemo(() => now); var dash = new DashboardWindow(model); dash.Show();
         try
         {
             if (model.IsTracking) model.TogglePause();
-            model.ToggleAccount("Account one"); Settle(dash); Settle(pill);
+            model.ToggleAccount("Account one"); Settle(dash);
             Assert.True(model.IsTracking); Assert.Equal("Recording", model.ThemeState);
             var green = Color.Parse(model.CurrentTheme.Colour("Live")); Assert.True(green.G > green.R + 20, "The theme's tracking colour is green.");
-            void Check(Window window, string name)
-            {
-                var main = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Classes.Contains("clock"));
-                var seconds = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Classes.Contains("clockLight"));
-                Assert.Contains("live", main.Classes); Assert.Contains("live", seconds.Classes);
-                Assert.True(seconds.Opacity < 1 && main.Opacity == 1, name + " seconds are the lighter shade");
-                Assert.True(((ISolidColorBrush)main.Foreground!).Color.G > ((ISolidColorBrush)main.Foreground!).Color.R, name + " clock is green");
-                Assert.Equal(((ISolidColorBrush)main.Foreground!).Color, ((ISolidColorBrush)seconds.Foreground!).Color);
-            }
-            Check(dash, "dashboard"); // The pill shows the state with its light and ring instead of a green clock.
-            var status = dash.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Tracking" && t.Classes.Contains("live"));
-            Assert.True(((ISolidColorBrush)status.Foreground!).Color.G > ((ISolidColorBrush)status.Foreground!).Color.R);
-            // On a break the green goes, and the clock takes the break colour.
+            var light = dash.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "RailStateLight");
+            var circle = dash.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "RailPause").GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Single();
+            Assert.Equal(green, ((ISolidColorBrush)light.Background!).Color); Assert.Equal(green, ((ISolidColorBrush)circle.Fill!).Color);
+            // On a break the green goes, and the light and circle take the break colour.
             model.ToggleBreak(); Settle(dash);
-            Assert.DoesNotContain("live", dash.GetVisualDescendants().OfType<TextBlock>().First(t => t.Classes.Contains("clock")).Classes);
+            var amber = Color.Parse(model.CurrentTheme.Colour("Break"));
+            Assert.Equal(amber, ((ISolidColorBrush)light.Background!).Color); Assert.Equal(amber, ((ISolidColorBrush)circle.Fill!).Color);
         }
-        finally { dash.Close(); pill.Close(); }
+        finally { dash.Close(); }
     }
 
     [Fact]
     public void TheRecordingPillsGreenReadsOnItsDarkSurfaceInBothThemes()
     {
-        foreach (var theme in ThemeLibrary.BuiltIn)
+        foreach (var theme in AppThemes.BuiltIn)
         {
             var variant = ThemeDerivation.Variant(theme, ThemeDerivation.Recording);
             Assert.True(ThemeColours.Contrast(variant["Live"], variant["Surface"]) >= 4.5, theme.Name);
@@ -100,18 +92,17 @@ public sealed class ToolbarAndTrackingTests
     }
 
     [AvaloniaFact]
-    public void TheBarUnderTheTimelineIsAsTallAsTheBreakAndDayButtonsAndLevelWithThem()
+    public void TheBarUnderTheTimelineIsAsTallAsItsButtonsAndLevelWithThem()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
         try
         {
             Settle(window);
             var bar = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
-            var breakButton = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
             var add = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "AddTime");
-            Assert.Equal(breakButton.Bounds.Height, bar.Bounds.Height, 0.5); Assert.Equal(breakButton.Bounds.Height, add.Bounds.Height, 0.5);
+            Assert.Equal(DashboardWindow.ControlBarHeight, bar.Bounds.Height, 0.5); Assert.Equal(bar.Bounds.Height, add.Bounds.Height, 0.5);
             double Bottom(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), window)!.Value.Y;
-            Assert.Equal(Bottom(breakButton), Bottom(bar), 0.5); Assert.Equal(Bottom(breakButton), Bottom(add), 0.5);
+            Assert.Equal(Bottom(add), Bottom(bar), 0.5);
         }
         finally { window.Close(); }
     }
@@ -133,9 +124,6 @@ public sealed class ToolbarAndTrackingTests
             var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
             var gap = scroll.TranslatePoint(new Point(0, 0), window)!.Value.Y - (title.TranslatePoint(new Point(0, title.Bounds.Height), window)!.Value.Y);
             Assert.True(gap >= 14, $"only {gap:0}px between the title and the timeline");
-            // The card's account dot sits close to the name beside it.
-            var dot = window.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().First(e => e.Width == 10 && e.Margin == default);
-            Assert.Equal(default, dot.Margin);
         }
         finally { window.Close(); }
     }
