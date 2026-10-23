@@ -154,7 +154,7 @@
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
     <!-- The dashboard's account rows are soft rounded cards. The recording account's card takes a gentle tint of the tracking colour. -->
-    <Style Selector="Button.accountCard"><Setter Property="CornerRadius" Value="12" /></Style>
+    <Style Selector="Button.accountCard"><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="10,6" /></Style>
     <Style Selector="Button.accountCard:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
     <Style Selector="Button.accountCard.active"><Setter Property="Background" Value="{DynamicResource LiveTint}" /></Style>
     <Style Selector="Button.accountCard.active /template/ ContentPresenter#PART_ContentPresenter, Button.accountCard.active:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource LiveTint}" /></Style>

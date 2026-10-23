@@ -491,14 +491,9 @@ public sealed class AccountList : StackPanel
         foreach (var account in Listed(model))
         {
             var row = new Button { Name = "Account" + rows.Count, Classes = { "account" } };
-            // Where rows can be dragged to reorder them, a grip at the left says so.
-            var shift = reorderable ? 1 : 0;
-            var grid = Ui.Grid(reorderable ? "10,*,Auto" : bars ? "*,Auto" : "38,*,Auto");
-            if (reorderable)
-            {
-                var grip = new IconGlyph(IconKind.Grip) { Cursor = new Cursor(StandardCursorType.SizeAll), VerticalAlignment = VerticalAlignment.Center, Name = "Grip" + rows.Count };
-                ToolTip.SetTip(grip, "Drag to change the order"); Ui.Put(grid, grip);
-            }
+            // Rows can still be dragged to reorder them where that is allowed, but there is no handle: it only took room from the row.
+            const int shift = 0;
+            var grid = Ui.Grid(bars ? "*,Auto" : "38,*,Auto");
             var icon = new AccountIndicator(account, model) { Ring = !bars };
             var dot = Ui.Text("●", 10, "live"); dot.IsVisible = false;
             var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(bars ? 8 : 10, 0, 10, 0) };
@@ -530,7 +525,7 @@ public sealed class AccountList : StackPanel
                 icon.Margin = new Thickness(8, 0, 0, 0);
                 Ui.Put(grid, labels, shift); if (!compact) Ui.Put(grid, icon, 1 + shift);
                 // A rounded card inset from the edges, so the recording account's soft highlight has room to show.
-                row.Classes.Add("accountCard"); row.Margin = compact ? new Thickness(0) : new Thickness(10, 0); row.Height = compact ? 54 : 70;
+                row.Classes.Add("accountCard"); row.Margin = new Thickness(0); row.Height = compact ? 54 : 70;
             }
             else
             {
