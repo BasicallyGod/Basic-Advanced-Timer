@@ -14,31 +14,36 @@ public sealed record TimerAccount(string Name, string Colour, TimeSpan? Budget, 
 
 public sealed class TimerModel : INotifyPropertyChanged
 {
-    public double TimelinePixelsPerHour { get; private set; } = 160;
+    /// <summary>How many pixels an hour takes along the timeline: about ten working hours fit the dashboard at this scale.</summary>
+    public double TimelinePixelsPerHour { get; private set; } = 90;
+    /// <summary>How far the timeline is scrolled along its width, or nothing to open on the first block of the day.</summary>
     public double? TimelineOffset { get; set; }
-    public void ZoomTimeline(double wheel, double pointerY, double offset)
+    // The hours start a gutter in from the left of the timeline's content, so the time under a point is found from there.
+    private static double OffsetKeeping(double offset, double pointerX, double previous, double target)
+        => Math.Max(0, ReviewViews.TimelineGutter + (offset + pointerX - ReviewViews.TimelineGutter) / previous * target - pointerX);
+    public void ZoomTimeline(double wheel, double pointerX, double offset)
     {
         if (wheel == 0) return;
         var previous = TimelinePixelsPerHour;
         TimelinePixelsPerHour = Math.Clamp(previous * Math.Pow(1.2, wheel), 60, 640);
-        TimelineOffset = Math.Max(0, (offset + pointerY) / previous * TimelinePixelsPerHour - pointerY);
+        TimelineOffset = OffsetKeeping(offset, pointerX, previous, TimelinePixelsPerHour);
         Notify();
     }
     public const double MinTimelineScale = 60, MaxTimelineScale = 640;
-    /// <summary>Sets the zoom to an exact scale (as the slider does), keeping the time at the pointer's height where it was.</summary>
-    public void SetTimelineScale(double pixelsPerHour, double pointerY, double offset)
+    /// <summary>Sets the zoom to an exact scale (as the slider does), keeping the time under the pointer where it was.</summary>
+    public void SetTimelineScale(double pixelsPerHour, double pointerX, double offset)
     {
         var previous = TimelinePixelsPerHour; var target = Math.Clamp(pixelsPerHour, MinTimelineScale, MaxTimelineScale);
         if (Math.Abs(target - previous) < .01) return;
         TimelinePixelsPerHour = target;
-        TimelineOffset = Math.Max(0, (offset + pointerY) / previous * target - pointerY);
+        TimelineOffset = OffsetKeeping(offset, pointerX, previous, target);
         Notify();
     }
     /// <summary>Where the current zoom sits from 0 (most zoomed out) to 1, on the logarithmic scale a zoom slider should use.</summary>
     public double TimelineZoomFraction => Math.Log(TimelinePixelsPerHour / MinTimelineScale) / Math.Log(MaxTimelineScale / MinTimelineScale);
     public static double ScaleAt(double fraction) => MinTimelineScale * Math.Pow(MaxTimelineScale / MinTimelineScale, Math.Clamp(fraction, 0, 1));
-    /// <summary>Zooms and scrolls so the day's recorded time, with a little room either side, fills the height given.</summary>
-    public void FitTimeline(double viewportHeight)
+    /// <summary>Zooms and scrolls so the day's recorded time, with a little room either side, fills the width given.</summary>
+    public void FitTimeline(double viewportWidth)
     {
         var day = SelectedDate.Date;
         var spans = Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero).Select(s => (s.From, s.To)).ToList();
@@ -48,7 +53,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         else { var plan = Engine.Plan(day); start = plan.Working ? (plan.Start - day).TotalHours : 9; end = plan.Working ? (plan.End - day).TotalHours : 17; }
         var padding = 0.25; start = Math.Max(0, start - padding); end = Math.Min(24, end + padding);
         var hours = Math.Max(end - start, 1.0);
-        TimelinePixelsPerHour = Math.Clamp((viewportHeight > 0 ? viewportHeight : 400) / hours, 60, 640);
+        TimelinePixelsPerHour = Math.Clamp((viewportWidth > 0 ? viewportWidth - 2 * ReviewViews.TimelineGutter : 800) / hours, 60, 640);
         TimelineOffset = start * TimelinePixelsPerHour;
         Notify();
     }
@@ -244,6 +249,13 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string ClockText => $"{(int)Elapsed.TotalHours:00}:{Elapsed.Minutes:00}:{Elapsed.Seconds:00}";
     public TimeSpan Allocated => Engine.Totals(Engine.Now).Allocated;
     public TimeSpan Unallocated => Engine.Totals(Engine.Now).Unallocated;
+    /// <summary>The time on breaks on a day, kept apart from working time, including a break that is running now.</summary>
+    public TimeSpan BreakTimeOn(DateTime day)
+    {
+        day = day.Date;
+        var saved = Engine.Sessions.Where(s => s.Day == day && BreakAccount.Is(s.Account)).Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
+        return saved + Engine.ActiveElapsedOn(day, includeBreak: true) - Engine.ActiveElapsedOn(day);
+    }
     public event PropertyChangedEventHandler? PropertyChanged;
     public void ToggleAccount(string name)
     {

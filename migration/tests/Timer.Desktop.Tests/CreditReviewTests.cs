@@ -109,13 +109,13 @@ public sealed class CreditReviewTests
         Capture(dashboard, "dashboard-rounded-slim-scrollbars");
         var surface = Find<Border>(dashboard, "DashboardSurface"); Assert.Equal(new CornerRadius(20), surface.CornerRadius); Assert.True(surface.ClipToBounds);
         var scroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
-        var bar = scroll.GetVisualDescendants().OfType<ScrollBar>().Single(b => b.Orientation == Avalonia.Layout.Orientation.Vertical);
-        Assert.InRange(bar.Bounds.Width, 9, 11);
+        var bar = scroll.GetVisualDescendants().OfType<ScrollBar>().Single(b => b.Orientation == Avalonia.Layout.Orientation.Horizontal);
+        Assert.InRange(bar.Bounds.Height, 9, 11);
         Assert.Empty(bar.GetVisualDescendants().OfType<RepeatButton>());
         var thumb = bar.GetVisualDescendants().OfType<Thumb>().Single();
         var point = thumb.TranslatePoint(new Point(thumb.Bounds.Width / 2, thumb.Bounds.Height / 2), dashboard)!.Value;
-        var old = scroll.Offset.Y; dashboard.MouseDown(point, MouseButton.Left); dashboard.MouseMove(point + new Vector(0, 20)); dashboard.MouseUp(point + new Vector(0, 20), MouseButton.Left);
-        Assert.True(scroll.Offset.Y > old); dashboard.Close();
+        var old = scroll.Offset.X; dashboard.MouseDown(point, MouseButton.Left); dashboard.MouseMove(point + new Vector(20, 0)); dashboard.MouseUp(point + new Vector(20, 0), MouseButton.Left);
+        Assert.True(scroll.Offset.X > old); dashboard.Close();
     }
 
     [AvaloniaFact]
@@ -174,7 +174,7 @@ public sealed class CreditReviewTests
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30") });
         var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
         var opened = new List<SessionRow?>(); model.EntryRequested += (row, _, _) => opened.Add(row);
-        Point Centre(int index) { var card = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + index); return card.TranslatePoint(new Point(70, card.Height / 2), dashboard)!.Value; }
+        Point Centre(int index) { var card = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + index); return card.TranslatePoint(new Point(card.Width / 2, card.Height / 2), dashboard)!.Value; }
         Capture(dashboard, "click-select"); dashboard.UpdateLayout();
         Assert.False(Find<Button>(dashboard, "EditSelected").IsVisible);
         var first = Centre(0);
@@ -198,7 +198,7 @@ public sealed class CreditReviewTests
         {
             Capture(dashboard, "merge-selection");
             var card = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + index);
-            var point = card.TranslatePoint(new Point(70, card.Height / 2), dashboard)!.Value;
+            var point = card.TranslatePoint(new Point(card.Width / 2, card.Height / 2), dashboard)!.Value;
             dashboard.MouseDown(point, MouseButton.Left);
             dashboard.MouseUp(point, MouseButton.Left);
         }
@@ -209,7 +209,7 @@ public sealed class CreditReviewTests
         Assert.Empty(model.SelectedRows); Assert.Single(model.Editor.Entries(Day, Day.AddDays(1)).Where(e => e.GroupId is not null));
         Capture(dashboard, "merge-combined-selection");
         var groupCard = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is ReviewEntry);
-        var p = groupCard.TranslatePoint(new Point(70, 35), dashboard)!.Value;
+        var p = groupCard.TranslatePoint(new Point(groupCard.Width / 2, 35), dashboard)!.Value;
         dashboard.MouseDown(p, MouseButton.Left); dashboard.MouseUp(p, MouseButton.Left);
         Select(2); Assert.True(model.CanMergeSelection); Capture(dashboard, "merge-group-and-block");
         var last = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry2");
@@ -224,17 +224,17 @@ public sealed class CreditReviewTests
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "50"), Row("09:53:00", "55") });
         var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
         model.ToggleSelection(engine.Sessions.ToArray()); Capture(window, "merge-menu-before");
-        var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(Canvas.GetTop).ToArray();
-        Assert.Equal(2, cards.Length); var tops = cards.Select(Canvas.GetTop).ToArray();
-        var heights = cards.Select(b => b.Height).ToArray(); var csv = model.Editor.SessionsCsv;
+        var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(Canvas.GetLeft).ToArray();
+        Assert.Equal(2, cards.Length); var tops = cards.Select(Canvas.GetLeft).ToArray();
+        var heights = cards.Select(b => b.Width).ToArray(); var csv = model.Editor.SessionsCsv;
         IPointer? pointer = null; cards[1].PointerPressed += (_, e) => pointer = e.Pointer;
-        var point = cards[1].TranslatePoint(new Point(70, 30), window)!.Value;
+        var point = cards[1].TranslatePoint(new Point(cards[1].Width / 2, 30), window)!.Value;
         window.MouseDown(point, MouseButton.Right); window.MouseUp(point, MouseButton.Right);
         Assert.NotNull(pointer); Assert.True(cards[1].ContextMenu!.IsOpen);
         // Exercise the capture-loss notification produced by native popup transitions.
         pointer!.Capture(cards[1]); pointer.Capture(null);
         Capture(window, "merge-menu-open");
-        Assert.Equal(tops, cards.Select(Canvas.GetTop).ToArray()); Assert.Equal(heights, cards.Select(b => b.Height).ToArray());
+        Assert.Equal(tops, cards.Select(Canvas.GetLeft).ToArray()); Assert.Equal(heights, cards.Select(b => b.Width).ToArray());
         Assert.All(cards, b => { Assert.True(b.IsVisible); Assert.Equal(1, b.Opacity); });
         Assert.Equal(2, model.SelectedRows.Count); Assert.Equal(csv, model.Editor.SessionsCsv);
         var menu = cards[1].ContextMenu!.ItemsSource!.OfType<MenuItem>().Single(item => item.Name == "MergeSelectedMenu");
@@ -247,13 +247,13 @@ public sealed class CreditReviewTests
         var engine = Engine(); engine.Sessions.Add(Row("09:00:00", "50"));
         var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show(); Capture(window, "capture-cancel-before");
         var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is SessionRow);
-        var top = Canvas.GetTop(card); var height = card.Height; var csv = model.Editor.SessionsCsv;
+        var left = Canvas.GetLeft(card); var width = card.Width; var csv = model.Editor.SessionsCsv;
         IPointer? pointer = null; card.AddHandler(InputElement.PointerPressedEvent, (_, e) => pointer = e.Pointer, RoutingStrategies.Tunnel, true);
-        var point = card.TranslatePoint(new Point(70, 30), window)!.Value;
-        window.MouseDown(point, MouseButton.Left); window.MouseMove(point + new Vector(0, 20), RawInputModifiers.LeftMouseButton);
-        Assert.NotEqual(top, Canvas.GetTop(card)); Assert.NotNull(pointer); pointer!.Capture(null);
-        Assert.Equal(top, Canvas.GetTop(card)); Assert.Equal(height, card.Height); Assert.Equal(1, card.Opacity);
-        window.MouseUp(point + new Vector(0, 20), MouseButton.Left);
+        var point = card.TranslatePoint(new Point(card.Width / 2, card.Height / 2), window)!.Value;
+        window.MouseDown(point, MouseButton.Left); window.MouseMove(point + new Vector(20, 0), RawInputModifiers.LeftMouseButton);
+        Assert.NotEqual(left, Canvas.GetLeft(card)); Assert.NotNull(pointer); pointer!.Capture(null);
+        Assert.Equal(left, Canvas.GetLeft(card)); Assert.Equal(width, card.Width); Assert.Equal(1, card.Opacity);
+        window.MouseUp(point + new Vector(20, 0), MouseButton.Left);
         Assert.Equal(csv, model.Editor.SessionsCsv); window.Close();
     }
     [AvaloniaFact]
@@ -263,13 +263,13 @@ public sealed class CreditReviewTests
             int index, double fraction, double minutes, DateTime expectedFrom, DateTime expectedTo)
         {
             var engine = Engine(); engine.Sessions.AddRange(new[] { Row(firstStart, firstMinutes), Row(nextStart, nextMinutes) });
-            var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+            var model = new TimerModel(engine); model.SetTimelineScale(160, 0, 0); model.TimelineOffset = null; var window = new DashboardWindow(model); window.Show(); // 160 pixels an hour.
             try
             {
                 Capture(window, "snap-neighbour-before"); var original = model.Editor.SessionsCsv;
                 var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + index);
-                var point = card.TranslatePoint(new Point(70, card.Height * fraction), window)!.Value;
-                var target = point + new Vector(0, minutes / 60 * 160);
+                var point = card.TranslatePoint(new Point(card.Width * fraction, card.Height / 2), window)!.Value;
+                var target = point + new Vector(minutes / 60 * 160, 0);
                 window.MouseDown(point, MouseButton.Left); window.MouseMove(target); window.MouseUp(target, MouseButton.Left);
                 Assert.Null(model.EditError); Assert.Equal(expectedFrom, engine.Sessions[index].From); Assert.Equal(expectedTo, engine.Sessions[index].To);
                 Assert.True(model.UndoEdit()); Assert.Equal(original, model.Editor.SessionsCsv);
@@ -339,11 +339,11 @@ public sealed class CreditReviewTests
         {
             Capture(window, "zoom-before");
             var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
-            var oldOffset = scroll.Offset.Y;
+            var oldOffset = scroll.Offset.X;
             model.ZoomTimeline(1, 120, oldOffset);
             Capture(window, "zoom-after");
             scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
-            Assert.Equal((oldOffset + 120) * 1.2 - 120, scroll.Offset.Y, 4);
+            Assert.Equal(ReviewViews.TimelineGutter + (oldOffset + 120 - ReviewViews.TimelineGutter) * 1.2 - 120, scroll.Offset.X, 4);
         }
         finally { window.Close(); }
     }
@@ -351,11 +351,12 @@ public sealed class CreditReviewTests
     public void TimelineZoomKeepsPointerTimeAndClampsScale()
     {
         var model = new TimerModel(Engine());
+        var gutter = ReviewViews.TimelineGutter;
         model.ZoomTimeline(1, 120, 800);
-        Assert.Equal(192, model.TimelinePixelsPerHour);
-        Assert.Equal(984, model.TimelineOffset!.Value, 5);
+        Assert.Equal(108, model.TimelinePixelsPerHour);
+        Assert.Equal(gutter + (800 + 120 - gutter) * 1.2 - 120, model.TimelineOffset!.Value, 5);
         model.ZoomTimeline(-1, 120, model.TimelineOffset.Value);
-        Assert.Equal(160, model.TimelinePixelsPerHour, 5);
+        Assert.Equal(90, model.TimelinePixelsPerHour, 5);
         Assert.Equal(800, model.TimelineOffset!.Value, 5);
         model.ZoomTimeline(100, 0, 0); Assert.Equal(640, model.TimelinePixelsPerHour);
         model.ZoomTimeline(-100, 0, 0); Assert.Equal(60, model.TimelinePixelsPerHour);
@@ -365,14 +366,14 @@ public sealed class CreditReviewTests
     public void DragBeyondNestleThresholdInsertsAndPreviewsNeighbours()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:00:00", "30") });
-        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show(); Capture(window, "nudge-before");
+        var model = new TimerModel(engine); model.SetTimelineScale(160, 0, 0); model.TimelineOffset = null; var window = new DashboardWindow(model); window.Show(); Capture(window, "nudge-before");
         try
         {
-            var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(Canvas.GetTop).ToArray();
-            var csv = model.Editor.SessionsCsv; var oldTop = Canvas.GetTop(cards[1]);
-            var point = cards[0].TranslatePoint(new Point(70, 30), window)!.Value; var target = point + new Vector(0, 20.0 / 60 * 160);
+            var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(Canvas.GetLeft).ToArray();
+            var csv = model.Editor.SessionsCsv; var oldLeft = Canvas.GetLeft(cards[1]);
+            var point = cards[0].TranslatePoint(new Point(cards[0].Width / 2, cards[0].Height / 2), window)!.Value; var target = point + new Vector(20.0 / 60 * 160, 0);
             window.MouseDown(point, MouseButton.Left); window.MouseMove(target);
-            Assert.True(Canvas.GetTop(cards[1]) < oldTop); Assert.Equal(csv, model.Editor.SessionsCsv);
+            Assert.True(Canvas.GetLeft(cards[1]) < oldLeft); Assert.Equal(csv, model.Editor.SessionsCsv);
             window.MouseUp(target, MouseButton.Left); Assert.Null(model.EditError); Assert.Empty(model.SelectedRows);
             Assert.Equal(Day.AddHours(9), engine.Sessions[1].From); Assert.Equal(Day.AddHours(9.5), engine.Sessions[0].From); Assert.True(model.UndoEdit()); Assert.Equal(csv, model.Editor.SessionsCsv);
         }
@@ -391,7 +392,7 @@ public sealed class CreditReviewTests
         Assert.Throws<ArgumentException>(() => editor.Group(new[] { engine.Sessions[1], engine.Sessions[2] }));
     }
     [AvaloniaFact]
-    public void OldNonconsecutiveGroupsRenderSeparateSectionsAndWeekClickSelects()
+    public void OldNonconsecutiveGroupsRenderAsOneMergedBlockAndClickSelectsAllItsEntries()
     {
         var engine = Engine();
         var folder = Path.Combine(Path.GetTempPath(), "timer-old-group-" + Guid.NewGuid());
@@ -406,10 +407,11 @@ public sealed class CreditReviewTests
             using var store = new TimerStore(folder); engine = Engine(); var preferences = store.Load(engine); var model = new TimerModel(engine, preferences, store);
             model.CompleteSetup(); // A new database opens with the getting started setup over the dashboard, which would catch these clicks.
             var window = new DashboardWindow(model); window.Show(); Capture(window, "legacy-group-sections");
-            Assert.Equal(2, window.GetVisualDescendants().OfType<Border>().Count(b => b.Tag is ReviewEntry));
+            Assert.Single(window.GetVisualDescendants().OfType<Border>(), b => b.Tag is ReviewEntry); // One block from the first entry to the last, the gap drawn lighter.
+            Assert.NotEmpty(window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is "Seam"));
             // A merged card on the timeline selects all of its entries, and they cannot be merged again.
             var card = window.GetVisualDescendants().OfType<Border>().First(b => b.Tag is ReviewEntry);
-            var point = card.TranslatePoint(new Point(50, 15), window)!.Value;
+            var point = card.TranslatePoint(new Point(card.Width / 4, 15), window)!.Value;
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             Assert.Equal(2, model.SelectedRows.Count); Assert.False(model.CanMergeSelection); window.Close();
         }
@@ -460,8 +462,8 @@ public sealed class CreditReviewTests
     {
         var engine = Engine(); engine.Sessions.Add(Row("10:00:00", "30")); var model = new TimerModel(engine);
         var window = new DashboardWindow(model); window.Show(); Capture(window, "click-to-add-timeline");
-        var ten = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "10:00");
-        var point = ten.TranslatePoint(new Point(180, 168), window)!.Value; // 11:00
+        var canvas = window.GetVisualDescendants().OfType<Canvas>().Single(c => c.Name == "TimelineCanvas");
+        var point = canvas.TranslatePoint(new Point(ReviewViews.TimelineGutter + 11 * model.TimelinePixelsPerHour, 70), window)!.Value; // 11:00, in the blank band
         window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
         Assert.Empty(window.Dialogs.Dialogs.OfType<EntryDialog>()); // A single click adds nothing.
         window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);

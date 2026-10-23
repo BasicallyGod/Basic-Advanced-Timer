@@ -34,20 +34,21 @@ public sealed class TimelineViewportTests
         var window = Open(model);
         try
         {
-            var scroll = Find<ScrollViewer>(window, "TimelineScroll"); var canvas = Assert.IsType<Canvas>(scroll.Content);
-            var card = Find<Border>(window, "TimelineEntry0"); var originalTop = Canvas.GetTop(card); var originalHeight = card.Height;
+            var scroll = Find<ScrollViewer>(window, "TimelineScroll");
+            var card = Find<Border>(window, "TimelineEntry0"); var originalLeft = Canvas.GetLeft(card); var originalWidth = card.Width;
             var label = Find<TextBlock>(window, "TimelineHour_10");
-            scroll.Offset = new Vector(0, Canvas.GetTop(label) + canvas.Margin.Top + 12); Settle(window);
-            Assert.True(label.TranslatePoint(default, scroll)!.Value.Y >= 0);
-            Assert.True(((TranslateTransform)label.RenderTransform!).Y > 0);
-            Assert.Equal(originalTop, Canvas.GetTop(card)); Assert.Equal(originalHeight, card.Height);
-            Assert.True(card.TranslatePoint(default, scroll)!.Value.Y < 0); // The block is clipped, not shifted down with the label.
+            // Scroll until the 10:00 label is cut by the left edge: its centre, where the block starts, is just outside.
+            scroll.Offset = new Vector(Canvas.GetLeft(label) + label.Bounds.Width * .75, 0); Settle(window);
+            Assert.True(label.TranslatePoint(default, scroll)!.Value.X >= 0);
+            Assert.True(((TranslateTransform)label.RenderTransform!).X > 0);
+            Assert.Equal(originalLeft, Canvas.GetLeft(card)); Assert.Equal(originalWidth, card.Width);
+            Assert.True(card.TranslatePoint(default, scroll)!.Value.X < 0); // The block is clipped, not shifted along with the label.
             label = Find<TextBlock>(window, "TimelineHour_12");
-            scroll.Offset = new Vector(0, Canvas.GetTop(label) + canvas.Margin.Top - scroll.Viewport.Height + 4); Settle(window);
-            var bottom = label.TranslatePoint(new Point(0, label.Bounds.Height), scroll)!.Value.Y;
-            Assert.True(bottom <= scroll.Viewport.Height);
-            Assert.True(((TranslateTransform)label.RenderTransform!).Y < 0);
-            Assert.Equal(originalTop, Canvas.GetTop(card)); Assert.Equal(originalHeight, card.Height);
+            scroll.Offset = new Vector(Canvas.GetLeft(label) - scroll.Viewport.Width + label.Bounds.Width / 4, 0); Settle(window);
+            var right = label.TranslatePoint(new Point(label.Bounds.Width, 0), scroll)!.Value.X;
+            Assert.True(right <= scroll.Viewport.Width);
+            Assert.True(((TranslateTransform)label.RenderTransform!).X < 0);
+            Assert.Equal(originalLeft, Canvas.GetLeft(card)); Assert.Equal(originalWidth, card.Width);
             Assert.True(scroll.ClipToBounds);
             if (Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") is { Length: > 0 } previews)
             {
@@ -63,7 +64,7 @@ public sealed class TimelineViewportTests
         var model = Model();
         model.TimelineOffset = 12 * model.TimelinePixelsPerHour;
         var window = Open(model);
-        try { Assert.Equal(12 * model.TimelinePixelsPerHour, Find<ScrollViewer>(window, "TimelineScroll").Offset.Y, 1); }
+        try { Assert.Equal(12 * model.TimelinePixelsPerHour, Find<ScrollViewer>(window, "TimelineScroll").Offset.X, 1); }
         finally { window.Close(); }
     }
 
@@ -75,9 +76,9 @@ public sealed class TimelineViewportTests
         try
         {
             var scroll = Find<ScrollViewer>(window, "TimelineScroll"); var card = Find<Border>(window, "TimelineEntry0");
-            var top = card.TranslatePoint(default, scroll)!.Value.Y;
-            Assert.InRange(top, 0, scroll.Viewport.Height - card.Height);
-            var now = Find<Border>(window, "NowMarker"); Assert.Equal(2, now.Height);
+            var left = card.TranslatePoint(default, scroll)!.Value.X;
+            Assert.InRange(left, 0, scroll.Viewport.Width - card.Width);
+            var now = Find<Border>(window, "NowMarker"); Assert.Equal(2, now.Width);
         }
         finally { window.Close(); }
     }

@@ -136,7 +136,7 @@ public sealed class DashboardShellTests
             var totals = Find<StackPanel>(window, "DayTotals"); var timeline = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
             Assert.True(totals.TranslatePoint(default, window)!.Value.Y >= timeline.TranslatePoint(new Point(0, timeline.Bounds.Height), window)!.Value.Y - 1);
             Assert.True(totals.IsVisible); Assert.False(Find<StackPanel>(window, "TotalsOvertime").IsVisible); // Overtime shows only when there is some.
-            window.SelectTab(true); Settle(window); Assert.False(totals.IsVisible); // The week has its own figures.
+            window.SelectTab(true); Settle(window); Assert.False(totals.IsEffectivelyVisible); // The week has its own figures.
         }
         finally { window.Close(); }
     }

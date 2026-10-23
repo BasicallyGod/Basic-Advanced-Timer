@@ -85,8 +85,8 @@ public sealed class BreakTests
                 using var dashboardFrame = dashboard.CaptureRenderedFrame(); dashboardFrame?.Save(Path.Combine(folder, "break-dashboard.png"));
                 using var pillFrame = pill.CaptureRenderedFrame(); pillFrame?.Save(Path.Combine(folder, "break-pill.png"));
             }
-            var timeline = dashboard.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is "Break" or "● Break").ToList(); // A short recording block puts its dot in front of the name.
-            Assert.NotEmpty(timeline); // The running break block is labelled Break.
+            var running = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineRecording"); // A block that has only just begun is too narrow to write on,
+            Assert.Contains("Break", ToolTip.GetTip(running)!.ToString()); // so the running break block says what it is in its tooltip.
             pillBreak.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             Assert.False(model.IsOnBreak); Assert.Equal("Account one", model.ActiveAccount); Assert.DoesNotContain("onBreak", pillBreak.Classes);
             Assert.False(pill.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming); // And it is still when the break ends.
