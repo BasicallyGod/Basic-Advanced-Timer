@@ -68,8 +68,9 @@ public sealed class StatusFace : StackPanel
         circleHost.Children.Add(circleFill); circleHost.Children.Add(initials); circleHost.Children.Add(glyphBox);
         Circle = Ui.Button("", circleClick, prefix + "Pause");
         Circle.Classes.Add("pillBare"); Circle.Padding = new Thickness(0); Circle.Width = 46; Circle.Height = 46; Circle.Content = circleHost; Circle.HorizontalAlignment = HorizontalAlignment.Center;
-        Circle.PointerEntered += (_, _) => { hoverCircle = true; glyph.Glow = 1; circleHost.RenderTransform = new ScaleTransform(1.06, 1.06); Refresh(); };
-        Circle.PointerExited += (_, _) => { hoverCircle = false; glyph.Glow = 0; circleHost.RenderTransform = new ScaleTransform(1, 1); Refresh(); };
+        // Under the pointer the circle shifts its colour a little instead of growing, which the button's square edges would clip.
+        Circle.PointerEntered += (_, _) => { hoverCircle = true; Refresh(); };
+        Circle.PointerExited += (_, _) => { hoverCircle = false; Refresh(); };
         Children.Add(Lights); ClockButton.Margin = new Thickness(0, 4, 0, 0); Children.Add(ClockButton);
         Circle.Margin = new Thickness(0, 6, 0, 0); Children.Add(Circle);
         ActualThemeVariantChanged += (_, _) => Refresh();
@@ -102,8 +103,10 @@ public sealed class StatusFace : StackPanel
         var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);
         var who = onBreak ? model.ResumeAccount : model.ActiveAccount ?? selected?.Name;
         var circleColour = ThemeColourOr(key == "Idle" ? "Live" : key, "#34D399");
-        circleFill.Fill = new SolidColorBrush(circleColour);
         var ink = Color.Parse(Ui.InkOn(Hex(circleColour)));
+        // A hovered circle moves a tenth of the way towards its own symbol colour, so it reads as pressable without changing size.
+        var shown = hoverCircle ? Color.Parse(ThemeColours.Mix(Hex(circleColour), Hex(ink), .14)) : circleColour;
+        circleFill.Fill = new SolidColorBrush(shown);
         initials.Foreground = new SolidColorBrush(ink); glyph.Fixed = new SolidColorBrush(ink);
         initials.Text = who is null ? "" : PillWindow.Initials(who);
         // Initials while an account runs, and the symbol at rest, under the pointer, or when there is no account to name.

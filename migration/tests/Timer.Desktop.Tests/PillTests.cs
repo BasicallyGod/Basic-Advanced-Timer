@@ -77,6 +77,24 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
+    public void HoveringTheCircleShiftsItsColourInsteadOfGrowingItSoNothingIsClipped()
+    {
+        var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var button = Find<Button>(pill, "PillPause"); var fill = button.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Single();
+            Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+            var rest = ((Avalonia.Media.ISolidColorBrush)fill.Fill!).Color;
+            var over = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), pill)!.Value;
+            pill.MouseMoveUntil(over, () => ((Avalonia.Media.ISolidColorBrush)fill.Fill!).Color != rest);
+            Assert.NotEqual(rest, ((Avalonia.Media.ISolidColorBrush)fill.Fill!).Color);
+            Assert.True(button.Content is Grid host && host.RenderTransform is Avalonia.Media.ScaleTransform { ScaleX: 1, ScaleY: 1 }); // The size does not change.
+            pill.MouseMove(new Point(2, 2)); Assert.Equal(rest, ((Avalonia.Media.ISolidColorBrush)fill.Fill!).Color);
+        }
+        finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
     public void TheReminderLightShowsOnlyWhileAReminderIsDue()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
