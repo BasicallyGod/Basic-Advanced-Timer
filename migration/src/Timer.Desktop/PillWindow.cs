@@ -156,11 +156,15 @@ public sealed class PillWindow : Window
         // The list unfolds from the pill's right edge as one capsule with it: the same surface, the same ring, no gap, and rounded only on the outside.
         var content = new AccountsPanel(model, "Pill", compact: true, reorderable: false, () => { CloseFlyouts(); model.OpenAccounts(); });
         accountScroll = content.Scroll;
-        drawer = new Border { Name = "PillDrawer", Width = DrawerWidth, Height = PillHeight, Padding = new Thickness(14, 14, 14, 12), CornerRadius = new CornerRadius(0, 28, 28, 0), Child = content };
+        // The drawer starts SeamOverlap under the pill's edge, because the two are separate windows and a screen scale puts their edges on different pixels: with no
+        // overlap a hair of gap showed the pill's ring and glow, and the desktop behind, between them. A hairline in the theme's line colour marks where the pill ends.
+        var seam = new Border { Name = "PillSeam", Width = 1, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(SeamOverlap - 14 - SeamOverlap, -14, 0, -12), IsHitTestVisible = false };
+        seam.Bind(Border.BackgroundProperty, seam.GetResourceObservable("Line"));
+        drawer = new Border { Name = "PillDrawer", Width = DrawerWidth, Height = PillHeight, Padding = new Thickness(14 + SeamOverlap, 14, 14, 12), CornerRadius = new CornerRadius(0, 28, 28, 0), Child = new Grid { Children = { content, seam } } };
         drawer.Classes.Add("surface");
         drawer.PointerEntered += (_, _) => overDrawer = true;
         drawer.PointerExited += (_, _) => overDrawer = false;
-        panel.PlacementTarget = surface; panel.Placement = PlacementMode.Right; panel.HorizontalOffset = 0; panel.VerticalOffset = 0;
+        panel.PlacementTarget = surface; panel.Placement = PlacementMode.Right; panel.HorizontalOffset = -SeamOverlap; panel.VerticalOffset = 0;
         panel.PlacementConstraintAdjustment = PopupPositionerConstraintAdjustment.FlipX | PopupPositionerConstraintAdjustment.SlideY;
         panel.IsLightDismissEnabled = true; panel.Child = new LayoutTransformControl { LayoutTransform = pillScale, Child = drawer };
         panel.Closed += (_, _) => { overDrawer = false; if (!closingByCode) dismissedAt = Environment.TickCount64; SetOpenLook(false); };
@@ -169,6 +173,8 @@ public sealed class PillWindow : Window
     }
     /// <summary>The drawer's width, beside the pill's own 72.</summary>
     public const double DrawerWidth = 262;
+    /// <summary>How far the drawer reaches under the pill's right edge, so no gap shows between the two windows at any screen scale.</summary>
+    public const double SeamOverlap = 3;
     /// <summary>How far the lights sit below the card's top edge, on the pill and on the rail.</summary>
     public const double TopInset = 14;
     /// <summary>The card's edge is this thick in every state, so the contents never move when a ring comes and goes; the column starts under it so the lights sit TopInset from the edge.</summary>

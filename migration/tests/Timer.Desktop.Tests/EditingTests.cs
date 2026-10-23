@@ -113,7 +113,7 @@ public sealed class EditingTests
     {
         var engine = Engine(); engine.Sessions.Add(Row());
         engine.Sessions.Add(Row("11:00:00", "12:00:00") with { Account = "Account two" });
-        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+        var model = new TimerModel(engine); model.SetTimelineScale(160, 0, 0); model.TimelineOffset = null; var window = new DashboardWindow(model); window.Show(); // 160 pixels an hour.
         try
         {
             void Layout() { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var settled = window.CaptureRenderedFrame(); }
@@ -121,8 +121,8 @@ public sealed class EditingTests
             {
                 Layout();
                 var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry0");
-                var point = card.TranslatePoint(new Point(80, card.Height * fraction), window)!.Value;
-                window.MouseDown(point, MouseButton.Left); window.MouseMove(point + new Vector(0, pixels)); window.MouseUp(point + new Vector(0, pixels), MouseButton.Left);
+                var point = card.TranslatePoint(new Point(card.Width * fraction, card.Height / 2), window)!.Value;
+                window.MouseDown(point, MouseButton.Left); window.MouseMove(point + new Vector(pixels, 0)); window.MouseUp(point + new Vector(pixels, 0), MouseButton.Left);
             }
             Drag(.5, 80); Assert.Equal(9, engine.Sessions[0].From.Hour); Assert.Equal(30, engine.Sessions[0].From.Minute);
             Assert.Equal(TimeSpan.FromHours(1), engine.Sessions[0].Duration); Assert.True(model.UndoEdit());
@@ -154,15 +154,15 @@ public sealed class EditingTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var settled = window.CaptureRenderedFrame();
             var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry0");
-            var point = card.TranslatePoint(new Point(80, 1), window)!.Value;
+            var point = card.TranslatePoint(new Point(card.Width / 2, card.Height / 2), window)!.Value;
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             Assert.Equal(0, requests); Assert.Empty(model.SelectedRows); // Two clicks select and deselect. There is no double-click edit any more.
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             Assert.True(model.CanEditSelection); model.EditSelection();
             Assert.Equal(1, requests); model.ClearSelection(); Dispatcher.UIThread.RunJobs();
-            var nine = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
-            var empty = nine.TranslatePoint(new Point(200, 60), window)!.Value; // The label sits five pixels above its hour's tick.
+            var canvas = window.GetVisualDescendants().OfType<Canvas>().Single(c => c.Name == "TimelineCanvas");
+            var empty = canvas.TranslatePoint(new Point(ReviewViews.TimelineGutter + 9 * model.TimelinePixelsPerHour + 30, 70), window)!.Value; // Past 09:00 in the blank band: 09:20.
             window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
             Assert.Null(gap); // One click adds nothing.
             window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
@@ -264,9 +264,9 @@ public sealed class EditingTests
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
-            var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(b => Canvas.GetTop(b)).ToList();
-            Assert.NotEqual(Avalonia.Media.Color.Parse("#102030"), ((Avalonia.Media.ISolidColorBrush)cards[0].Background!).Color); // A very dark colour is lifted a little so it shows.
-            Assert.True(cards[0].Height >= ReviewViews.MinimumBlockHeight); // One minute is only a few pixels at this zoom, but it can be clicked.
+            var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(b => Canvas.GetLeft(b)).ToList();
+            Assert.NotEqual(Avalonia.Media.Color.Parse("#102030"), ((Avalonia.Media.LinearGradientBrush)cards[0].Background!).GradientStops[0].Color); // A very dark colour is lifted a little so it shows.
+            Assert.True(cards[0].Width >= ReviewViews.MinimumBlockWidth); // One minute is only a few pixels at this zoom, but it can be clicked.
             model.ToggleSelection(new[] { engine.Sessions[1] }); Dispatcher.UIThread.RunJobs(); using var again = window.CaptureRenderedFrame();
             var selected = window.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is SessionRow row && ReferenceEquals(row, engine.Sessions[1]));
             var lines = selected.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();

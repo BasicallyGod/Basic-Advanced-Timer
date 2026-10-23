@@ -93,19 +93,18 @@ public sealed class DialogTests
     }
 
     [AvaloniaFact]
-    public void ASelectedBlockShowsInItsLeftEdgeInTheAccentColourAndHasNoOutline()
+    public void ASelectedBlockShowsAsARingInTheAccentColourAndItsTextIsUntouched()
     {
         var model = Model(out var engine); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
-        Border Edge(int index) => Find<Border>(dashboard, "TimelineEntry" + index).GetVisualDescendants().OfType<Border>().First(b => b.Name == "BlockEdge");
-        var plain = Edge(0); Assert.DoesNotContain("selectedEdge", plain.Classes); Assert.Equal(5, plain.Bounds.Width, 0.5);
+        Border Card(int index) => Find<Border>(dashboard, "TimelineEntry" + index);
+        Assert.Equal(0, Card(0).BoxShadow.Count); Assert.DoesNotContain("mergeSelected", Card(0).Classes);
         model.ToggleSelection(new[] { engine.Sessions[0] }); Settle(dashboard);
-        var card = Find<Border>(dashboard, "TimelineEntry0"); var edge = Edge(0);
-        Assert.Contains("selectedEdge", edge.Classes); Assert.Equal(8, edge.Bounds.Width, 0.5); // Wider, in the accent colour.
-        Assert.Equal(new Thickness(0), card.BorderThickness); // No outline round the block.
+        var card = Card(0);
+        Assert.Contains("mergeSelected", card.Classes); Assert.Equal(new Thickness(0), card.BorderThickness); // A ring round the block, not a border that moves its text.
+        Assert.Equal(1, card.BoxShadow.Count); var ring = card.BoxShadow[0]; Assert.Equal(3, ring.Spread); Assert.Equal(0, ring.Blur);
         Assert.True(dashboard.TryFindResource("Accent", dashboard.ActualThemeVariant, out var found));
-        var accent = Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(found).Color;
-        Assert.Equal(accent, Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(edge.Background).Color);
-        Assert.DoesNotContain("selectedEdge", Edge(1).Classes); // The other block is untouched.
+        Assert.Equal(Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(found).Color, ring.Color); // In the theme's accent colour.
+        Assert.Equal(0, Card(1).BoxShadow.Count); Assert.DoesNotContain("mergeSelected", Card(1).Classes); // The other block is untouched.
         dashboard.Close();
     }
 

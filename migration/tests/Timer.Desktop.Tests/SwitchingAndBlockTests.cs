@@ -113,7 +113,7 @@ public sealed class SwitchingAndBlockTests
             model.SetTimelineScale(TimerModel.ScaleAt(zoom), 300, 0); Settle(dashboard);
             var cards = dashboard.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("TimelineEntry") == true).ToList();
             Assert.Equal(2, cards.Count);
-            foreach (var card in cards) Assert.Equal(Math.Min(ReviewViews.BlockRadius, card.Height / 2), card.CornerRadius.TopLeft, 3);
+            foreach (var card in cards) Assert.Equal(ReviewViews.CornerFor(1, card.Width, card.Height), card.CornerRadius.TopLeft, 3); // The larger corner, less only for a block too narrow to hold it.
         }
         var today = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "GoToToday");
         Assert.True(today.Classes.Contains("toolButton") && today.Classes.Contains("quiet"));
@@ -128,8 +128,9 @@ public sealed class SwitchingAndBlockTests
         engine.Sessions.Add(new("2026-10-14", "Account two", "09:30:00", "recorded", "10.00"));
         var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         var cards = dashboard.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("TimelineEntry") == true).ToList();
-        Assert.Equal(2, cards.Count); Assert.Equal(cards[0].Width, cards[1].Width, 1);
-        Assert.Equal(Canvas.GetLeft(cards[0]), Canvas.GetLeft(cards[1]), 1); // Same lane.
+        Assert.Equal(2, cards.Count); Assert.Equal(cards[0].Height, cards[1].Height, 1); // Both keep the whole band,
+        Assert.Equal(Canvas.GetTop(cards[0]), Canvas.GetTop(cards[1]), 1); // in the same lane, one after the other.
+        Assert.True(Canvas.GetLeft(cards[1]) > Canvas.GetLeft(cards[0]));
         dashboard.Close();
     }
 

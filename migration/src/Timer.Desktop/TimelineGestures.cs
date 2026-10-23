@@ -14,19 +14,19 @@ public static class TimelineGestures
         Point? origin = null;
         var edge = 0;
         var delta = TimeSpan.Zero;
-        var oldTop = Canvas.GetTop(card); var oldHeight = card.Height;
+        var oldLeft = Canvas.GetLeft(card); var oldWidth = card.Width;
         var dragging = false;
         var nudging = false;
-        var previews = new Dictionary<Border, (double Top, double Height)>();
+        var previews = new Dictionary<Border, (double Left, double Width)>();
         void RestoreNeighbours()
-        { foreach (var p in previews) { Canvas.SetTop(p.Key, p.Value.Top); p.Key.Height = p.Value.Height; p.Key.Opacity = 1; } previews.Clear(); }
+        { foreach (var p in previews) { Canvas.SetLeft(p.Key, p.Value.Left); p.Key.Width = p.Value.Width; p.Key.Opacity = 1; } previews.Clear(); }
         card.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
             origin = e.GetPosition(canvas); delta = TimeSpan.Zero; dragging = false;
-            oldTop = Canvas.GetTop(card); oldHeight = card.Height;
-            var y = e.GetPosition(card).Y;
-            edge = EdgeAt(y, oldHeight);
+            oldLeft = Canvas.GetLeft(card); oldWidth = card.Width;
+            var x = e.GetPosition(card).X;
+            edge = EdgeAt(x, oldWidth);
             e.Handled = true; e.Pointer.Capture(card);
         };
         card.PointerMoved += (_, e) =>
@@ -34,18 +34,18 @@ public static class TimelineGestures
             if (origin is not { } start)
             {
                 // Show the resize cursor over an edge handle so short blocks are discoverable.
-                card.Cursor = new Cursor(EdgeAt(e.GetPosition(card).Y, card.Height) == 0 ? StandardCursorType.SizeAll : StandardCursorType.SizeNorthSouth);
+                card.Cursor = new Cursor(EdgeAt(e.GetPosition(card).X, card.Width) == 0 ? StandardCursorType.SizeAll : StandardCursorType.SizeWestEast);
                 return;
             }
             var moved = e.GetPosition(canvas) - start;
-            if (!dragging && Math.Abs(moved.Y) < 5) return;
+            if (!dragging && Math.Abs(moved.X) < 5) return;
             dragging = true;
-            delta = SnapDelta(model, row, edge, TimeSpan.FromHours(moved.Y / pixelsPerHour), pixelsPerHour, out nudging);
+            delta = SnapDelta(model, row, edge, TimeSpan.FromHours(moved.X / pixelsPerHour), pixelsPerHour, out nudging);
             RestoreNeighbours();
             var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero);
             var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
-            Canvas.SetTop(card, oldTop + (edge <= 0 ? delta.TotalHours * pixelsPerHour : 0));
-            card.Height = Math.Max(ReviewViews.MinimumBlockHeight, (until - from).TotalHours * pixelsPerHour - 4);
+            Canvas.SetLeft(card, oldLeft + (edge <= 0 ? delta.TotalHours * pixelsPerHour : 0));
+            card.Width = Math.Max(ReviewViews.MinimumBlockWidth, (until - from).TotalHours * pixelsPerHour - 2);
             card.Opacity = .75;
             if (nudging)
             {
@@ -55,8 +55,8 @@ public static class TimelineGestures
                     {
                         foreach (var neighbour in canvas.Children.OfType<Border>().Where(b => ReferenceEquals(b.Tag, change.Source)))
                         {
-                            previews[neighbour] = (Canvas.GetTop(neighbour), neighbour.Height);
-                            Canvas.SetTop(neighbour, (change.Updated.From - row.Day).TotalHours * pixelsPerHour + 2); neighbour.Opacity = .75;
+                            previews[neighbour] = (Canvas.GetLeft(neighbour), neighbour.Width);
+                            Canvas.SetLeft(neighbour, ReviewViews.TimelineGutter + (change.Updated.From - row.Day).TotalHours * pixelsPerHour + 1); neighbour.Opacity = .75;
                         }
                     }
                 }
@@ -71,7 +71,7 @@ public static class TimelineGestures
             var change = delta; var mode = edge; var push = nudging; var select = !dragging;
             RestoreNeighbours();
             origin = null; dragging = false; e.Pointer.Capture(null); card.Opacity = 1;
-            Canvas.SetTop(card, oldTop); card.Height = oldHeight;
+            Canvas.SetLeft(card, oldLeft); card.Width = oldWidth;
             if (commit) model.DragEntry(row, row.From + (mode <= 0 ? change : TimeSpan.Zero),
                 row.To + (mode >= 0 ? change : TimeSpan.Zero), push);
             else if (select) model.ToggleSelection(new[] { row });
@@ -83,19 +83,19 @@ public static class TimelineGestures
             if (origin is null) return;
             RestoreNeighbours();
             origin = null; dragging = false; card.Opacity = 1;
-            Canvas.SetTop(card, oldTop); card.Height = oldHeight;
+            Canvas.SetLeft(card, oldLeft); card.Width = oldWidth;
         };
         card.Cursor = new Cursor(StandardCursorType.SizeAll);
     }
-    /// <summary>Which edge a press at <paramref name="y"/> grabs, -1 top, 1 bottom, 0 for moving the whole block.</summary>
-    public static int EdgeAt(double y, double height)
+    /// <summary>Which edge a press at <paramref name="x"/> grabs, -1 the start (left), 1 the end (right), 0 for moving the whole block.</summary>
+    public static int EdgeAt(double x, double width)
     {
-        // Tall cards keep 8px handles. Shorter ones share the height in thirds so the middle still
-        // moves the block, and the very shortest are split in halves because resizing matters more
+        // Wide blocks keep 8px handles. Narrower ones share the width in thirds so the middle still
+        // moves the block, and the very narrowest are split in halves because resizing matters more
         // than moving there (zooming in gives a block back its middle).
-        var zone = height >= 24 ? 8 : height >= 10 ? height / 3 : height / 2;
-        if (y < zone) return -1;
-        if (y > height - zone) return 1;
+        var zone = width >= 24 ? 8 : width >= 10 ? width / 3 : width / 2;
+        if (x < zone) return -1;
+        if (x > width - zone) return 1;
         return 0;
     }
     /// <summary>Keeps a drag inside its day and above the minimum length, so the preview and the saved value always agree.</summary>

@@ -187,7 +187,8 @@ public sealed class DashboardWindow : Window
     private Control overtimeStat = null!;
     private static TextBlock Value() => new() { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock date = Ui.Text("", 14); private Button datePick = null!;
-    private readonly ContentControl workspace = new();
+    private readonly ContentControl workspace = new(), timelineHost = new() { Name = "TimelineHost" };
+    private Border timelineCard = null!; private MessageBar messageBar = null!; private Panel messageHome = null!, timelineCardGrid = null!, reviewPanel = null!;
     private readonly Button day;
     private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, addTime = null!, edit = null!;
     private readonly Button undo;
@@ -252,7 +253,7 @@ public sealed class DashboardWindow : Window
         rail.Child = railGrid; Ui.Put(root, rail);
         Ui.DragHeader(railTop, this, "RailDragHeader");
         var body = Ui.Grid("*", "*");
-        var review = Ui.Grid("*", "Auto,*,Auto,Auto,Auto");
+        var review = Ui.Grid("*", "Auto,*");
         review.Margin = new Thickness(22, 16, 22, 18);
         // The workspace's name on the left; on the right the date to step through and a button back to today.
         // In Week views the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
@@ -295,10 +296,10 @@ public sealed class DashboardWindow : Window
         addTime.Classes.Add("addButton");
         var edits = Ui.Horizontal(addTime, undo, merge, edit);
         // Zoom and fit sit beside Tools in this row, applying to the timeline underneath. They show only on the Timeline tab.
-        ScrollViewer? TimelineScroll() => workspace.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
-        zoomOut = Ui.IconButton(IconKind.ZoomOut, "Zoom out", "TimelineZoomOut", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Height / 2, s.Offset.Y); });
-        zoomIn = Ui.IconButton(IconKind.ZoomIn, "Zoom in (or hold Ctrl and use the mouse wheel)", "TimelineZoomIn", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Height / 2, s.Offset.Y); });
-        var fit = Ui.IconButton(IconKind.FitDay, "Fit the day to the window", "TimelineFit", () => { if (TimelineScroll() is { } s) model.FitTimeline(s.Viewport.Height); });
+        ScrollViewer? TimelineScroll() => timelineHost.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
+        zoomOut = Ui.IconButton(IconKind.ZoomOut, "Zoom out", "TimelineZoomOut", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Width / 2, s.Offset.X); });
+        zoomIn = Ui.IconButton(IconKind.ZoomIn, "Zoom in (or hold Ctrl and use the mouse wheel)", "TimelineZoomIn", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Width / 2, s.Offset.X); });
+        var fit = Ui.IconButton(IconKind.FitDay, "Fit the day to the window", "TimelineFit", () => { if (TimelineScroll() is { } s) model.FitTimeline(s.Viewport.Width); });
         // The zoom controls sit in a bar under the timeline: fit the day, zoom out, a slider, zoom in. They show only on the Timeline view.
         zoomSlider = new Slider { Name = "TimelineZoom", Minimum = 0, Maximum = 1, MinWidth = 50, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center, Value = model.TimelineZoomFraction,
             // The standard slider draws its track a little below the middle of its own box, so the box is lifted by the same amount (drawing only, no layout change) to put the track on the bar's centre line.
@@ -307,7 +308,7 @@ public sealed class DashboardWindow : Window
         zoomSlider.PropertyChanged += (_, e) =>
         {
             if (e.Property != Avalonia.Controls.Primitives.RangeBase.ValueProperty || settingZoom) return;
-            if (TimelineScroll() is { } s) model.SetTimelineScale(TimerModel.ScaleAt(zoomSlider.Value), s.Viewport.Height / 2, s.Offset.Y);
+            if (TimelineScroll() is { } s) model.SetTimelineScale(TimerModel.ScaleAt(zoomSlider.Value), s.Viewport.Width / 2, s.Offset.X);
         };
         var zoomBar = new Border { Name = "TimelineControls", Child = ZoomRow(fit, zoomOut, zoomSlider, zoomIn), HorizontalAlignment = HorizontalAlignment.Right, CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 0), Height = ControlBarHeight, BorderThickness = new Thickness(1), };
         zoomBar.Classes.Add("chip"); zoomControls = zoomBar;
@@ -322,17 +323,21 @@ public sealed class DashboardWindow : Window
         tools.Margin = new Thickness(0, 12, 0, 0); zoomBar.Margin = new Thickness(12, 0, 0, 0); // Clear space between Merge and the zoom bar.
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
         Ui.Put(review, workspace, row: 1);
-        // Selection feedback has its own strip in the layout, just above the buttons it relates to.
-        selectionStrip = new SelectionStrip(model); Ui.Put(review, selectionStrip, row: 3);
-        Ui.Put(review, tools, row: 4);
-        totalsStrip = BuildTotals(); Ui.Put(review, totalsStrip, row: 2);
+        // The timeline is a card: the day across the top, the day's figures under it, then the selection line and the buttons. The week and the settings
+        // fill the workspace instead, so the card is shown for the timeline alone.
+        selectionStrip = new SelectionStrip(model); totalsStrip = BuildTotals();
+        var cardGrid = Ui.Grid("*", "Auto,Auto,Auto,Auto");
+        timelineCardGrid = cardGrid; Ui.Put(cardGrid, timelineHost); Ui.Put(cardGrid, totalsStrip, 0, 1); Ui.Put(cardGrid, selectionStrip, 0, 2); Ui.Put(cardGrid, tools, 0, 3);
+        timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Padding = new Thickness(0, 12, 0, 12), Margin = new Thickness(0, 14, 0, 0), VerticalAlignment = VerticalAlignment.Top };
+        timelineCard.Classes.Add("dayCard"); tools.Margin = new Thickness(14, 10, 14, 0);
+        Ui.Put(review, timelineCard, row: 1);
         // The title row's empty middle still drags the window.
         var rightColumn = Ui.Grid("*", "*");
         Ui.Put(rightColumn, review); Ui.DragHeader(nav, this);
         Ui.Put(body, rightColumn);
         Ui.Put(root, body, 1);
         // Notes, refused edits and failed saves float over the lowest part of the workspace, above the buttons, so they never push the buttons up.
-        Ui.Put(review, new MessageBar(model), row: 1);
+        messageBar = new MessageBar(model); messageHome = reviewPanel = review; Ui.Put(review, messageBar, row: 1);
         // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
         layers.Children.Add(root); dashboardBody = root;
         BuildAccountsLayer(); layers.Children.Add(accountsLayer);
@@ -468,19 +473,62 @@ public sealed class DashboardWindow : Window
     }
     private static void HoverTile(Border tile, bool on) => tile.Background = on ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var brush) && brush is Avalonia.Media.IBrush hover ? hover : Avalonia.Media.Brushes.Transparent) : Avalonia.Media.Brushes.Transparent;
     // The day's figures in one line under the timeline: the working time (the clock), what is on accounts and what is not, and any overtime.
+    // The day's figures under the timeline: Working time (red once over the schedule), a bar of the scheduled day, then Allocated, Unallocated, Breaks and Overtime.
+    private readonly TextBlock breaksValue = Value(); private readonly Border dayBar = new() { Name = "DayBar", Width = 150, Height = 10, CornerRadius = new CornerRadius(5), ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock noSchedule = new() { Name = "NoSchedule", Text = "Nothing is scheduled. Only tracked time counts.", FontSize = 12, TextWrapping = Avalonia.Media.TextWrapping.Wrap, MaxWidth = 170, VerticalAlignment = VerticalAlignment.Center, Classes = { "muted" } };
     private Control BuildTotals()
     {
-        Control Stat(string label, TextBlock value, string name)
+        Control Stat(string label, TextBlock value, string name, Control? dot = null)
         {
-            var row = Ui.Horizontal(Ui.Text(label, 13, "muted"), value); row.Spacing = 6; row.Name = name; return row;
+            var words = Ui.Text(label, 11, "muted"); words.VerticalAlignment = VerticalAlignment.Center;
+            var head = dot is null ? (Control)words : Ui.Horizontal(dot, words);
+            if (head is StackPanel headRow) headRow.Spacing = 5;
+            var column = new StackPanel { Name = name, Spacing = 0 }; column.Children.Add(head); column.Children.Add(value); return column;
         }
-        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 22, Name = "DayTotals", Margin = new Thickness(2, 12, 0, 0) };
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 22, Name = "DayTotals", HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 12, 0, 0) };
+        workingValue.Name = "TotalsWorkingValue";
         strip.Children.Add(Stat("Working time", workingValue, "TotalsWorking"));
+        strip.Children.Add(dayBar); strip.Children.Add(noSchedule);
         strip.Children.Add(Stat("Allocated", allocatedValue, "TotalsAllocated"));
         strip.Children.Add(Stat("Unallocated", unallocatedValue, "TotalsUnallocated"));
+        var amber = new Avalonia.Controls.Shapes.Ellipse { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center }; amber.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, amber.GetResourceObservable("Break"));
+        strip.Children.Add(Stat("Breaks", breaksValue, "TotalsBreaks", amber));
         overtimeStat = Stat("Overtime", overtimeValue, "TotalsOvertime"); strip.Children.Add(overtimeStat);
         overtimeValue.Classes.Add("overtimeText");
+        ToolTip.SetTip(strip.Children[3], "Time on accounts"); ToolTip.SetTip(strip.Children[4], "Working time with nothing recorded on an account"); ToolTip.SetTip(strip.Children[5], "Kept apart from working time");
         return strip;
+    }
+    // The bar is the scheduled day: time on accounts solid, working time with nothing on an account hatched, overtime in red at the end. A day off has no bar.
+    private void UpdateTotals()
+    {
+        var shown = model.SelectedDate.Date;
+        var totals = model.Engine.Totals(shown); var plan = model.Engine.Plan(shown);
+        var working = totals.Working + totals.Overtime;
+        workingValue.Text = model.Format(working); allocatedValue.Text = model.Format(totals.Allocated); unallocatedValue.Text = model.Format(totals.Unallocated);
+        breaksValue.Text = model.Format(model.BreakTimeOn(shown));
+        overtimeValue.Text = model.Format(totals.Overtime); overtimeStat.IsVisible = totals.Overtime > TimeSpan.Zero;
+        workingValue.Classes.Set("overtimeText", totals.Overtime > TimeSpan.Zero);
+        var scheduled = plan.Working ? plan.End - plan.Start : TimeSpan.Zero;
+        dayBar.IsVisible = scheduled > TimeSpan.Zero; noSchedule.IsVisible = scheduled <= TimeSpan.Zero;
+        if (scheduled > TimeSpan.Zero)
+        {
+            // The bar is as long as the longer of the schedule and the time worked, so overtime has room at the end.
+            var whole = Math.Max(scheduled.TotalSeconds, working.TotalSeconds);
+            var allocatedPart = Math.Min(totals.Allocated.TotalSeconds, Math.Min(working.TotalSeconds, scheduled.TotalSeconds));
+            var unallocatedPart = Math.Max(0, Math.Min(scheduled.TotalSeconds, working.TotalSeconds) - allocatedPart);
+            var overtimePart = totals.Overtime.TotalSeconds;
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{allocatedPart:0.###}*,{unallocatedPart:0.###}*,{overtimePart:0.###}*,{Math.Max(0, whole - allocatedPart - unallocatedPart - overtimePart):0.###}*") };
+            Border Part(string key, int column, bool hatched = false)
+            {
+                var part = new Border { Name = "DayBar" + key, [Grid.ColumnProperty] = column };
+                if (hatched) part.Background = ReviewViews.Hatch(model); else part.Classes.Add("bar" + key);
+                return part;
+            }
+            grid.Children.Add(Part("Allocated", 0)); grid.Children.Add(Part("Unallocated", 1, true)); grid.Children.Add(Part("Overtime", 2));
+            dayBar.Child = grid; dayBar.Classes.Add("track");
+            ToolTip.SetTip(dayBar, $"Scheduled {plan.Start:HH:mm} to {plan.End:HH:mm}. Allocated {model.Format(totals.Allocated)}, unallocated {model.Format(totals.Unallocated)}" + (totals.Overtime > TimeSpan.Zero ? $", overtime {model.Format(totals.Overtime)}." : "."));
+            Avalonia.Automation.AutomationProperties.SetName(dayBar, $"The scheduled day, {model.Format(working)} worked");
+        }
     }
     /// <summary>Whether the getting started setup is showing over the dashboard.</summary>
     public bool SetupShowing => onboarding is not null;
@@ -547,10 +595,7 @@ public sealed class DashboardWindow : Window
         date.Text = weekMode ? "Week of " + model.WeekStart(model.SelectedDate).ToString("d MMM", british) : model.SelectedDate.ToString("ddd d MMM", british);
         next.IsEnabled = !weekMode || model.CanStepForwardAWeek;
         ToolTip.SetTip(previous, weekMode ? "Previous week" : "Previous day"); ToolTip.SetTip(next, weekMode ? "Next week" : "Next day");
-        var totals = model.Engine.Totals(model.Engine.Now);
-        workingValue.Text = model.Format(totals.Working + totals.Overtime); allocatedValue.Text = model.Format(model.Allocated); unallocatedValue.Text = model.Format(model.Unallocated);
-        overtimeValue.Text = model.Format(totals.Overtime); overtimeStat.IsVisible = totals.Overtime > TimeSpan.Zero;
-        if (totalsStrip is not null) totalsStrip.IsVisible = !weekMode && !settingsMode;
+        UpdateTotals();
         // The day button is a flag to finish the day, or a sunrise to start it (again). Finish is red and Start is green.
         dayFlag.IsVisible = model.DayStarted; daySun.IsVisible = !model.DayStarted;
         dayFlag.TintKey = "Finish"; daySun.TintKey = "Start";
@@ -577,20 +622,39 @@ public sealed class DashboardWindow : Window
         Rail(settingsRail, settingsMode);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
         foreach (var control in new Control[] { previous, datePick, next, todayButton }) control.IsVisible = !settingsMode;
-        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && !weekMode;
-        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && !weekMode; // Nothing to put in it on the overview.
+        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted;
+        // The timeline card is the timeline's alone; the week and the settings fill the workspace.
+        timelineCard.IsVisible = !settingsMode && !weekMode; workspace.IsVisible = settingsMode || weekMode;
+        // Notes, refused edits and failed saves float over the lowest part of what is showing: over the day's figures on the timeline card (above its buttons),
+        // and over the foot of the workspace on the other pages.
+        var wantedHome = timelineCard.IsVisible ? timelineCardGrid : reviewPanel;
+        if (!ReferenceEquals(messageHome, wantedHome))
+        {
+            messageHome.Children.Remove(messageBar); messageHome = wantedHome;
+            if (messageHome is Grid homeGrid)
+            {
+                // On the card it spans the timeline and the figures, so it sits at the foot of the figures without making any row taller.
+                Grid.SetRow(messageBar, 1 - Convert.ToInt32(ReferenceEquals(homeGrid, timelineCardGrid)));
+                Grid.SetRowSpan(messageBar, ReferenceEquals(homeGrid, timelineCardGrid) ? 2 : 1); homeGrid.Children.Add(messageBar);
+            }
+        }
         workspaceTitle.Text = settingsMode ? "Settings" : !weekMode ? "Timeline" : "Week overview";
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
         if (settingsMode ? !renderedSettings : refreshWorkspace)
         {
-            var oldScroll = workspace.Content is ScrollViewer directOld ? directOld
-                : (workspace.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
-            var previous = renderedSettings == settingsMode && !settingsMode && renderedWeekMode == weekMode && renderedDate == model.SelectedDate
-                ? !weekMode && model.TimelineOffset is double timelineOffset ? new Vector(0, timelineOffset)
-                    : oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset : null;
-            workspace.Content = settingsMode ? new SettingsView(model) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
-            if (previous is { } offset && workspace.Content is Control control)
+            var timeline = !settingsMode && !weekMode;
+            ContentControl host = timeline ? timelineHost : workspace;
+            var oldScroll = host.Content is ScrollViewer directOld ? directOld
+                : (host.Content as Control)?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+            var same = renderedSettings == settingsMode && !settingsMode && renderedWeekMode == weekMode && renderedDate == model.SelectedDate;
+            // The scroll position is kept when the same day is drawn again: along the day for the timeline, down the page for the week.
+            Vector? previous = !same ? null : timeline ? (model.TimelineOffset is double timelineOffset ? new Vector(timelineOffset, 0) : oldScroll?.Tag is Vector pendingAlong ? pendingAlong : oldScroll?.Offset)
+                : oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset;
+            // What the other host showed is dropped, so only the page being shown is in the window.
+            (timeline ? workspace : timelineHost).Content = null;
+            host.Content = settingsMode ? new SettingsView(model) : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
+            if (previous is { } offset && host.Content is Control control)
             {
                 var scroll = control is ScrollViewer direct ? direct : control.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();
                 if (scroll is not null) scroll.Tag = offset;

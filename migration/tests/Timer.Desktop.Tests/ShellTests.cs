@@ -139,10 +139,10 @@ public sealed class ShellTests
                 model.SetTheme(theme);
                 dashboard.SelectTab(false);
                 Save(dashboard, Path.Combine(output, $"dashboard-timeline-{theme}.png"));
-                Assert.True(dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll").Offset.Y > 1000);
+                Assert.True(dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll").Offset.X > 500); // Opened part way along the day, on the first block.
                 var nine = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
                 var ninePoint = nine.TranslatePoint(new Point(0, 0), dashboard)!.Value;
-                Assert.InRange(ninePoint.Y, 100, 400);
+                Assert.InRange(ninePoint.X, 100, 500); Assert.InRange(ninePoint.Y, 100, 400);
                 dashboard.SelectTab(true);
                 Save(dashboard, Path.Combine(output, $"dashboard-week-{theme}.png"));
                 Save(pill, Path.Combine(output, $"pill-{theme}.png"));

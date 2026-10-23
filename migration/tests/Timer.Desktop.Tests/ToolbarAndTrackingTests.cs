@@ -16,19 +16,20 @@ public sealed class ToolbarAndTrackingTests
     private static void Settle(Window window) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
 
     [AvaloniaFact]
-    public void TheNowChipAndTheHourLabelsShareTheirRightEdge()
+    public void TheNowChipSitsUnderTheMarkerAtTheCurrentTimeAndSaysWhatTimeItIs()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
         try
         {
             Settle(window);
-            var chip = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "NowChip"); var text = (TextBlock)chip.Child!;
-            var label = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "09:00");
-            double Right(TextBlock t) => t.TranslatePoint(new Point(t.Bounds.Width, 0), window)!.Value.X - (t.TextAlignment == TextAlignment.Right ? 0 : 0);
-            // Both are right-aligned in boxes whose right edges meet, once the chip's own padding is taken off.
-            var chipTextRight = chip.TranslatePoint(new Point(chip.Bounds.Width - chip.Padding.Right, 0), window)!.Value.X;
-            Assert.Equal(Right(label), chipTextRight, 0.5);
-            Assert.Equal(TextAlignment.Right, label.TextAlignment); Assert.Equal(TextAlignment.Right, text.TextAlignment);
+            var chip = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "NowChip"); var line = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "NowMarker");
+            Assert.Equal(model.Engine.Now.ToString("HH:mm"), ((TextBlock)chip.Child!).Text);
+            double Centre(Border b) => b.TranslatePoint(new Point(b.Bounds.Width / 2, 0), window)!.Value.X;
+            Assert.Equal(Centre(line), Centre(chip), 0.6); // The chip is centred on the line.
+            // And the line is where the current time falls on the hours: so many hours from midnight, at so many pixels an hour, after the gutter.
+            var hour = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "TimelineHour_12");
+            var twelve = hour.TranslatePoint(new Point(hour.Bounds.Width / 2, 0), window)!.Value.X;
+            Assert.Equal(twelve + (model.Engine.Now.TimeOfDay.TotalHours - 12) * model.TimelinePixelsPerHour, Centre(line), 1.0);
         }
         finally { window.Close(); }
     }

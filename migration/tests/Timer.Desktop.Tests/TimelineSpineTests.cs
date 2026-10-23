@@ -18,12 +18,12 @@ public sealed class TimelineSpineTests
     }
 
     [AvaloniaFact]
-    public void TheTimelineHasASpineWithHourTicksMoreOfThemAsYouZoomAndNoDotsOnIt()
+    public void TheTimelineHasAnAxisWithHourTicksMoreOfThemAsYouZoomAndNoDotsOnIt()
     {
         var model = TimerModel.CreateDemo(); var window = Open(model);
         try
         {
-            Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "TimelineSpine");
+            Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "TimelineAxis");
             int Ticks() => window.GetVisualDescendants().OfType<Border>().Count(b => b.Tag is "Tick");
             model.SetTimelineScale(80, 200, 0); Dispatcher.UIThread.RunJobs(); using var f0 = window.CaptureRenderedFrame();
             Assert.Equal(24, Ticks()); // One for each hour when zoomed out.

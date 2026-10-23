@@ -200,6 +200,21 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
+    public void TheDrawerReachesUnderThePillsEdgeSoNoGapShowsBetweenTheTwoWindows()
+    {
+        var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            pill.ShowPanel(); Dispatcher.UIThread.RunJobs();
+            var popup = pill.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Popup>().Single();
+            Assert.Equal(-PillWindow.SeamOverlap, popup.HorizontalOffset); Assert.True(PillWindow.SeamOverlap >= PillWindow.EdgeThickness); // It covers the pill's ring, so the ring cannot show at the seam.
+            var seam = Find<Border>(pill, "PillSeam"); var drawer = Find<Border>(pill, "PillDrawer");
+            Assert.Equal(1, seam.Bounds.Width); Assert.Equal(PillWindow.SeamOverlap, seam.TranslatePoint(default, drawer)!.Value.X, 0.5); // A hairline where the pill ends.
+        }
+        finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
     public void TheGlowStopsAtThePillsRightEdgeWhileTheListIsOpen()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
