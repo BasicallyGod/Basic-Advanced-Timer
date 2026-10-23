@@ -59,7 +59,7 @@ public sealed class ToolbarAndTrackingTests
     }
 
     [AvaloniaFact]
-    public void TrackingTurnsTheRailsLightAndCircleGreenAndABreakTurnsThemAmber()
+    public void TrackingTurnsTheRailsLightAndPrimaryControlGreenAndABreakTurnsTheLightAmber()
     {
         var now = new DateTime(2026, 10, 9, 10, 0, 0);
         var model = TimerModel.CreateDemo(() => now); var dash = new DashboardWindow(model); dash.Show();
@@ -70,12 +70,12 @@ public sealed class ToolbarAndTrackingTests
             Assert.True(model.IsTracking); Assert.Equal("Recording", model.ThemeState);
             var green = Color.Parse(model.CurrentTheme.Colour("Live")); Assert.True(green.G > green.R + 20, "The theme's tracking colour is green.");
             var light = dash.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "RailStateLight");
-            var circle = dash.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "RailPause").GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>().Single();
-            Assert.Equal(green, ((ISolidColorBrush)light.Background!).Color); Assert.Equal(green, ((ISolidColorBrush)circle.Fill!).Color);
-            // On a break the green goes, and the light and circle take the break colour.
+            var tile = dash.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "RailPrimaryTile");
+            Assert.Equal(green, ((ISolidColorBrush)light.Background!).Color); Assert.Equal(green.G, ((ISolidColorBrush)tile.Background!).Color.G); // The light, and a soft tint of the same green.
+            // On a break the light takes the break colour, and the primary control stays green with the account's initials.
             model.ToggleBreak(); Settle(dash);
             var amber = Color.Parse(model.CurrentTheme.Colour("Break"));
-            Assert.Equal(amber, ((ISolidColorBrush)light.Background!).Color); Assert.Equal(amber, ((ISolidColorBrush)circle.Fill!).Color);
+            Assert.Equal(amber, ((ISolidColorBrush)light.Background!).Color); Assert.Equal(green.G, ((ISolidColorBrush)tile.Background!).Color.G);
         }
         finally { dash.Close(); }
     }

@@ -52,7 +52,7 @@ public static class Ui
         {
             var colour = ThemeColour(host, glow, Colors.Gray);
             // A soft halo, not a strong glow: it only has to say the state without pulling the eye.
-            host.BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, Spread = 0, Color = Color.FromArgb(64, colour.R, colour.G, colour.B) });
+            host.BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, Spread = 0, Color = Color.FromArgb(48, colour.R, colour.G, colour.B) });
         }
         else if (shadows)
             host.BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 6, Blur = 22, Spread = 0, Color = ThemeColour(host, "ShadowColor", Color.FromArgb(90, 0, 0, 0)) });
@@ -321,7 +321,14 @@ public sealed class AccountIndicator : Control
         var ink = Resource("Ink");
         var running = model.ActiveAccount == Account.Name;
         // Without the ring the button is a rounded square, like the pill's circle and the accounts icon, not a circle.
-        if (!Ring) context.DrawRectangle(running ? Resource("Accent") : null, running ? null : new Pen(Resource("Line"), 2), new Rect(2, 2, 38, 38), 12, 12);
+        // The play button is a soft green tile with a green symbol, deeper while it is running or under the pointer, like the pill's primary control.
+        var liveColour = Resource("Live") is SolidColorBrush liveBrush ? liveBrush.Color : Colors.SeaGreen;
+        if (!Ring)
+        {
+            var tint = running ? .30 : .14 + .16 * Math.Clamp(Glow, 0, 1);
+            context.DrawRectangle(new SolidColorBrush(Color.FromArgb((byte)(tint * 255), liveColour.R, liveColour.G, liveColour.B)), null, new Rect(2, 2, 38, 38), 12, 12);
+            ink = new SolidColorBrush(liveColour);
+        }
         if (Ring && Account.Budget is { } budget)
         {
             context.DrawEllipse(null, new Pen(Resource("Line"), 3), centre, 19, 19);
@@ -345,21 +352,21 @@ public sealed class AccountIndicator : Control
         // Under the hand, the button fills with the accent colour and its symbol grows a little and turns to the accent's own text colour.
         var glow = Math.Clamp(Glow, 0, 1);
         var accent = Resource("Accent"); var accentInk = Resource("AccentInk");
-        if (glow > 0 && !BreakAccount.Is(Account.Name))
+        if (Ring && glow > 0 && !BreakAccount.Is(Account.Name))
         {
             using (context.PushOpacity(glow))
             {
-                if (Ring) context.DrawEllipse(accent, null, centre, 15, 15); else context.DrawRectangle(accent, null, new Rect(2, 2, 38, 38), 12, 12);
+                context.DrawEllipse(accent, null, centre, 15, 15);
             }
         }
-        // On the plain circle a running account is already filled with the accent, so its pause bars are drawn in the accent's own text colour.
-        if (!Ring && running) ink = accentInk;
-        using var grow = context.PushTransform(Matrix.CreateTranslation(-21, -21) * Matrix.CreateScale(1 + .08 * glow, 1 + .08 * glow) * Matrix.CreateTranslation(21, 21));
+        // Only the ring version grows under the pointer; the plain tile shifts its tint instead, which its own edges would otherwise clip.
+        var grown = Ring ? 1 + .08 * glow : 1;
+        using var grow = context.PushTransform(Matrix.CreateTranslation(-21, -21) * Matrix.CreateScale(grown, grown) * Matrix.CreateTranslation(21, 21));
         if (model.ActiveAccount == Account.Name)
         {
             context.DrawRectangle(ink, null, new Rect(15, 14, 4, 14), 1, 1);
             context.DrawRectangle(ink, null, new Rect(23, 14, 4, 14), 1, 1);
-            if (glow > 0)
+            if (Ring && glow > 0)
                 using (context.PushOpacity(glow)) { context.DrawRectangle(accentInk, null, new Rect(15, 14, 4, 14), 1, 1); context.DrawRectangle(accentInk, null, new Rect(23, 14, 4, 14), 1, 1); }
         }
         else if (BreakAccount.Is(Account.Name))
@@ -377,7 +384,7 @@ public sealed class AccountIndicator : Control
         {
             var triangle = Geometry.Parse("M 17,13 L 28,21 L 17,29 Z");
             context.DrawGeometry(ink, null, triangle);
-            if (glow > 0) using (context.PushOpacity(glow)) context.DrawGeometry(accentInk, null, triangle);
+            if (Ring && glow > 0) using (context.PushOpacity(glow)) context.DrawGeometry(accentInk, null, triangle);
         }
     }
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)

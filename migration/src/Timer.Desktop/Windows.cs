@@ -226,7 +226,7 @@ public sealed class DashboardWindow : Window
             ToolTip.SetTip(button, tip); Avalonia.Automation.AutomationProperties.SetName(button, tip); return button;
         }
         // The clock goes back to the pill, and the circle pauses or resumes, as on the pill. With no account to run, it opens the accounts.
-        face = new StatusFace(model, "Rail", "Collapse to pill", () => OpenPill?.Invoke(), OnRailCircle, ToggleAccountsPanel);
+        face = new StatusFace(model, "Rail", "DashboardBreak", "Collapse to pill", () => OpenPill?.Invoke(), OnRailCircle, ToggleAccountsPanel);
         // The top is drawn at the pill's own size, so the clock, circle and accounts button stay put and the same size when one becomes the other.
         railTop.Children.Add(new LayoutTransformControl { LayoutTransform = railScale, Child = face, HorizontalAlignment = HorizontalAlignment.Center });
         timelineRail = RailButton(IconKind.Timeline, "Timeline", "TimelineTab", () => SelectTab(false));
@@ -237,13 +237,13 @@ public sealed class DashboardWindow : Window
         foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
-        // The break is a plain orange cup, in keeping with the flag and the cross, and the day is a flag to finish it or a sunrise to start it.
-        breakButton = new BreakButton(model, "DashboardBreak", filled: false);
+        // The break is in the face, under the primary control, as on the pill.
+        breakButton = face.Break;
         dayTile.Child = new Grid { Children = { dayFlag, daySun }, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         day = Ui.Button("", OnDayButton, "DashboardDay");
         day.Classes.Add("pillBare"); day.Content = dayTile; day.HorizontalAlignment = HorizontalAlignment.Center;
         day.PointerEntered += (_, _) => { dayFlag.Waving = true; HoverTile(dayTile, true); }; day.PointerExited += (_, _) => { dayFlag.Waving = false; HoverTile(dayTile, false); }; // The flag waves under the pointer.
-        railFoot.Children.Add(breakButton); railFoot.Children.Add(day);
+        railFoot.Children.Add(day);
         // Closes the timer for good. It goes red under the pointer, so it is never pressed by accident.
         var quit = RailButton(IconKind.Close, "Close timer", "QuitTimer", () => model.RequestQuit()); quit.Classes.Add("quit");
         var quitGlyph = (IconGlyph)quit.Content!;
