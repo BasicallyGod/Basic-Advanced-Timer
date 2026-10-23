@@ -91,6 +91,11 @@ public sealed class DashboardShellTests
         try
         {
             window.ShowAccountsPanel(); Settle(window);
+            var manage = Find<Button>(window, "RailManageAccounts"); var drawer = Find<Border>(window, "AccountsDrawer");
+            Assert.Equal(IconKind.Sliders, ((IconGlyph)manage.Content!).Kind); Assert.Equal("Manage accounts", ToolTip.GetTip(manage)?.ToString()); // One icon, no words.
+            var at = manage.TranslatePoint(default, drawer)!.Value;
+            Assert.True(at.Y < 40, $"icon top {at.Y}"); Assert.InRange(drawer.Bounds.Width - (at.X + manage.Bounds.Width), 10, 18); // Top right of the drawer.
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "Manage accounts");
             Click(Find<Button>(window, "RailManageAccounts")); Settle(window);
             Assert.False(window.AccountsOpen); Assert.True(window.Dialogs.Dialogs.OfType<AccountsDialog>().Any());
         }

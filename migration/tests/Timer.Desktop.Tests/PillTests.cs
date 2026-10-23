@@ -182,6 +182,25 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
+    public void ManageAccountsIsOneIconAtTheTopRightOfTheDrawerAndOpensTheAccountsDialog()
+    {
+        var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            pill.ShowPanel(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+            var manage = Find<Button>(pill, "PillManageAccounts"); var drawer = Find<Border>(pill, "PillDrawer");
+            Assert.IsType<IconGlyph>(manage.Content); Assert.Equal(IconKind.Sliders, ((IconGlyph)manage.Content!).Kind); // An icon, with no words on it.
+            Assert.Equal("Manage accounts", Tip(manage)); Assert.Equal("Manage accounts", Avalonia.Automation.AutomationProperties.GetName(manage));
+            var at = manage.TranslatePoint(default, drawer)!.Value;
+            Assert.True(at.Y < 30, $"icon top {at.Y}"); // In the heading row,
+            Assert.InRange(drawer.Bounds.Width - (at.X + manage.Bounds.Width), 10, 18); // against the right padding.
+            Assert.DoesNotContain(pill.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "Manage accounts"); // The button at the foot is gone.
+            var scroll = pill.AccountScroll; Assert.True(scroll.TranslatePoint(new Point(0, scroll.Bounds.Height), drawer)!.Value.Y >= drawer.Bounds.Height - 18); // The list runs to the foot.
+        }
+        finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
     public void TheDrawerIsAsTallAsThePillAndItsListScrollsInsideIt()
     {
         var model = new TimerModel(new TrackingEngine(), new StoreSettings(Enumerable.Range(1, 25).Select(i => new AccountSettings("Client " + i)).ToList(), false, "System", DayOfWeek.Monday));

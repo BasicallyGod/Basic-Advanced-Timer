@@ -920,7 +920,7 @@ public sealed class AccountsGlyph : Control
     }
 }
 
-public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise }
+public enum IconKind { ZoomIn, ZoomOut, FitDay, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1047,6 +1047,13 @@ public sealed class IconGlyph : Control
                     context.DrawEllipse(null, pen, new Point(4.8, y), 2.1, 2.1);
                     context.DrawLine(pen, new Point(9.5, y), new Point(15.5, y));
                 }
+                break;
+            case IconKind.Sliders:
+                // Two lines, each broken by a round knob: the settings of the accounts.
+                context.DrawLine(pen, new Point(3, 5.3), new Point(10.5, 5.3)); context.DrawLine(pen, new Point(13.5, 5.3), new Point(15, 5.3));
+                context.DrawEllipse(null, pen, new Point(12, 5.3), 1.5, 1.5);
+                context.DrawLine(pen, new Point(3, 12.7), new Point(4.5, 12.7)); context.DrawLine(pen, new Point(7.5, 12.7), new Point(15, 12.7));
+                context.DrawEllipse(null, pen, new Point(6, 12.7), 1.5, 1.5);
                 break;
             case IconKind.Sunrise:
                 // A half sun on the horizon with short rays: the day beginning.
