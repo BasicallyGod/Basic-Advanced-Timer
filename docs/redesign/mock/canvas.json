@@ -1,0 +1,204 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Accounts.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Account pop-out",
+      "w": 1100,
+      "x": 0,
+      "y": 1800
+    },
+    "AccountsDialog.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Accounts and budgets",
+      "w": 1100,
+      "x": 1180,
+      "y": 1800
+    },
+    "EntryDialog.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Add time",
+      "w": 1100,
+      "x": 0,
+      "y": 3700
+    },
+    "Icon.dc.html": {
+      "h": 760,
+      "title": "Application icon",
+      "w": 1100,
+      "x": 1180,
+      "y": 2700
+    },
+    "Main.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Dashboard, timeline view",
+      "w": 1100,
+      "x": 0,
+      "y": 0
+    },
+    "Messages.dc.html": {
+      "h": 720,
+      "title": "Messages and errors",
+      "w": 1100,
+      "x": 1180,
+      "y": 3700
+    },
+    "Notes.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Notes page",
+      "w": 1100,
+      "x": 0,
+      "y": 4600
+    },
+    "Pill.dc.html": {
+      "h": 720,
+      "title": "Pill states",
+      "w": 1178,
+      "x": 1180,
+      "y": 31
+    },
+    "Settings.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Settings",
+      "w": 1100,
+      "x": 1180,
+      "y": 900
+    },
+    "Setup.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Getting started",
+      "w": 1100,
+      "x": 0,
+      "y": 2700
+    },
+    "Week.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Week overview",
+      "w": 1100,
+      "x": 0,
+      "y": 900
+    },
+    "Lights.dc.html": {
+      "h": 1080,
+      "title": "Status lights",
+      "w": 1180,
+      "x": 1180,
+      "y": 4600
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-10-23T12:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "n1": {
+      "text": "Mock at the real window size (1100 by 720). Tweaks: Light or Dark, the recording state and the day (running, day off, finished). Click a block to select it, and shift-click to add more (the short call over the client review shows how overlapping blocks stack, and an End that runs into the next block stacks too), then shift-click a second Account one block to try Merge. A merged block can be unmerged. Add a note, or add a meeting: click a time in the dashed row above the blocks, or use Add meeting in the Notes card. Finish day on the rail asks first, and Start day takes its place when the day is not running. The totals under the timeline are the day's Working time. The date button opens a calendar (dots show days with time; the mock draws the same blocks for every day). Messages float over the lowest part of the workspace. Settings is the gear at the top right. Click the time to collapse.",
+      "w": 520,
+      "x": -587,
+      "y": 354
+    },
+    "n10": {
+      "text": "How messages and errors look. No red: red means overtime or a spent budget. Try a bad time in the Selected block card on the dashboard to see them live.",
+      "w": 520,
+      "x": 2358,
+      "y": 4020
+    },
+    "n11": {
+      "text": "The Notes page, third on the rail. Add a note or a meeting with the bell for its reminder, pick a view or an account on the left and search above. Click a note or meeting to change it in the same box, where Save, Delete and Cancel appear.",
+      "w": 520,
+      "x": -600,
+      "y": 4839
+    },
+    "n2": {
+      "text": "Light and Dark both change the pill. One vertical capsule shows the state, and a second blue one pulses beside it only when a reminder is due. It only notifies. Clicking the time opens the dashboard from the pill and collapses it from the rail. The amber mug under the circle starts a break. On a break the circle turns amber and keeps the initials, and the mug stays lit and steams, so there is only one cup.",
+      "w": 520,
+      "x": 2418,
+      "y": 330
+    },
+    "n3": {
+      "text": "Week overview. Working time against the scheduled week, a schedule line and overtime caps on the chart, meetings and open tasks under each day, a Chart or Table switch, and a pace note on each budget. Use the arrows or the calendar to change week, and click a day to open it in the timeline.",
+      "w": 520,
+      "x": -635,
+      "y": 1183
+    },
+    "n4": {
+      "text": "Settings in the new look, with Export here. Click a section on the left, and a theme to try it.",
+      "w": 520,
+      "x": 2360,
+      "y": 1203
+    },
+    "n5": {
+      "text": "The account pop-out, opened from the account switch button under the circle. Click a row to record to it. Manage accounts opens Accounts and budgets.",
+      "w": 520,
+      "x": -600,
+      "y": 2076
+    },
+    "n6": {
+      "text": "Accounts and budgets as a dialog over the dashboard. Click a colour to change it, tick In tracker, mark a delete with the bin and press Save.",
+      "w": 520,
+      "x": 2335,
+      "y": 2015
+    },
+    "n7": {
+      "text": "Getting started, on the new card style. Next, Back and Skip setup work. The current step dot is the accent.",
+      "w": 520,
+      "x": -600,
+      "y": 3030
+    },
+    "n8": {
+      "text": "The application icon: the pill from the rail on a deep blue tile, with simpler small sizes.",
+      "w": 520,
+      "x": 2335,
+      "y": 3030
+    },
+    "n9": {
+      "text": "Add time, opened from the button under the timeline. Time over other blocks is allowed: they stack in lanes. Try a Start that lands inside an earlier block.",
+      "w": 520,
+      "x": -600,
+      "y": 3964
+    },
+    "title": {
+      "kind": "title1",
+      "maxW": 2360,
+      "text": "Vertical pill and dashboard",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    },
+    "n13": {
+      "text": "The status light options. Row three is chosen and now used on the pill and the rail.",
+      "w": 520,
+      "x": 1180,
+      "y": 5740
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Pill.dc.html",
+    "Week.dc.html",
+    "Settings.dc.html",
+    "Accounts.dc.html",
+    "AccountsDialog.dc.html",
+    "Setup.dc.html",
+    "Icon.dc.html",
+    "EntryDialog.dc.html",
+    "Messages.dc.html",
+    "Notes.dc.html",
+    "Lights.dc.html"
+  ],
+  "pages": [],
+  "title": "Vertical pill and dashboard mock"
+}

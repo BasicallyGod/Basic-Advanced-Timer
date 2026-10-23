@@ -119,3 +119,17 @@ jobs:
           path: artifacts/windows-preview/
           if-no-files-found: error
           retention-days: 14
+      # A manual run on any other branch keeps its own ZIP, so a feature branch can be tried without merging it first.
+      - name: Name the feature-branch build
+        if: runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && github.ref_name != 'experimental' && github.ref_name != 'alpha'
+        id: branchname
+        shell: pwsh
+        run: '"name=$($env:GITHUB_REF_NAME -replace ''[^A-Za-z0-9._-]'', ''-'')" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8'
+      - name: Upload feature-branch Windows build
+        if: runner.os == 'Windows' && github.event_name == 'workflow_dispatch' && github.ref_name != 'experimental' && github.ref_name != 'alpha'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BasicsAdvancedTimer-Windows-${{ steps.branchname.outputs.name }}
+          path: artifacts/windows-preview/
+          if-no-files-found: error
+          retention-days: 7

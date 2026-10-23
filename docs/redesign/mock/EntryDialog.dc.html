@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Add time</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.root{--bg1:#F4F4F1;--bg2:#ECECE8;--card:#FFFFFF;--card2:#F7F7F5;--line:#E2E2DD;--ink:#18233A;--muted:#5A6070;--accent:#3558C8;--accentInk:#FFFFFF;--soft:#E8EEFF;--shadow:0 1px 2px rgba(30,30,20,.06);--rail1:#FFFFFF;--rail2:#F6F6F4;--railLine:#E2E2DD;--scrim:rgba(24,35,58,.38);--grid:#EAEAE6;--hatchA:#F1F1EE;--hatchB:#E3E3DF;--scroll:#C9C9C4}
+.root.dark{--bg1:#0F1420;--bg2:#131A2A;--card:#1A2234;--card2:#212B42;--line:#2D3853;--ink:#EEF2FB;--muted:#A7B2CA;--accent:#7C9BFF;--accentInk:#0E1530;--soft:#25335A;--shadow:0 1px 2px rgba(0,0,0,.25);--rail1:#1C2334;--rail2:#121826;--railLine:#2E3852;--scrim:rgba(5,8,16,.58);--grid:#252F48;--hatchA:#222B42;--hatchB:#2B3652;--scroll:#46526F}
+.root{color-scheme:light}.root.dark{color-scheme:dark}
+:where(.root) button{font:inherit;color:inherit;cursor:pointer}
+.root button:focus-visible,.root input:focus-visible,.root a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ctl{white-space:nowrap;background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:12px;height:38px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;font-size:14px;font-weight:500;text-decoration:none}
+.ctl:hover{background:var(--card2)}
+.ctl.primary{background:var(--accent);border-color:var(--accent);color:var(--accentInk)}
+.ctl.primary:hover{background:var(--accent);filter:brightness(1.06)}
+.ctl:disabled{opacity:.5;cursor:not-allowed}
+.field{height:38px;box-sizing:border-box;border:1px solid var(--line);background:var(--card2);color:var(--ink);border-radius:11px;padding:0 10px;font:400 14px 'Inter',system-ui,sans-serif;min-width:0;width:100%}
+.iconbtn{background:transparent;border:0;color:var(--muted);width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0;text-decoration:none}
+.iconbtn:hover{background:var(--card2);color:var(--ink)}
+.lbl{font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.selWrap{display:flex;align-items:center;gap:8px;height:38px;box-sizing:border-box;border:1px solid var(--line);background:var(--card2);border-radius:12px;padding:0 6px 0 10px;width:100%;text-align:left}
+.selWrap:hover{border-color:var(--accent)}
+.sugg{position:absolute;left:0;right:0;top:62px;z-index:12;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 20px rgba(20,30,70,.14);padding:4px}
+.sugg button{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;border-radius:8px;padding:7px 8px;font-size:13px;text-align:left}
+.sugg button:hover{background:var(--card2)}
+.pv{position:absolute;top:0;bottom:0;border-radius:8px;box-sizing:border-box}
+.msg{display:flex;align-items:center;gap:10px;font-size:13px;line-height:1.4}
+.msgIcon{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;box-sizing:border-box}
+.root *{scrollbar-width:thin;scrollbar-color:var(--scroll) transparent}
+.root *::-webkit-scrollbar{width:10px;height:10px}
+.root *::-webkit-scrollbar-track{background:transparent}
+.root *::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:2px solid transparent;background-clip:content-box}
+.root *::-webkit-scrollbar-thumb:hover{background:var(--muted);background-clip:content-box}
+</style>
+</helmet>
+<div class="root {{modeClass}}" style="width: 1100px; height: 720px; box-sizing: border-box; display: flex; position: relative; overflow: hidden; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink)">
+
+  <div aria-hidden="true" style="position: absolute; inset: 0; display: flex; filter: blur(5px)">
+    <div style="width: 76px; height: 100%; background: linear-gradient(180deg, var(--rail1), var(--rail2)); border-right: 1px solid var(--railLine)"></div>
+    <div style="flex-grow: 1; padding: 20px 22px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+      <div style="height: 44px; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 30px; font-weight: 700; padding-left: 4px">Today</div>
+      <div style="height: 250px; background: var(--card); border: 1px solid var(--line); border-radius: 20px"></div>
+      <div style="display: flex; gap: 14px; flex-grow: 1"><div style="flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 20px"></div><div style="flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 20px"></div></div>
+    </div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: var(--scrim)"></div>
+
+  <div role="dialog" aria-label="Add time" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 680px; box-sizing: border-box; background: var(--card); border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 18px 48px rgba(10,16,40,.28); padding: 20px 22px 18px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <div style="display: flex; align-items: baseline; gap: 12px"><h2 style="margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 22px; font-weight: 700">Add time</h2><span style="font-size: 13px; color: var(--muted)">Thu 22 Oct</span></div>
+      <a class="iconbtn" href="Main.dc.html" aria-label="Close" title="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1.7fr 1fr 1fr 1fr; gap: 12px">
+      <div style="display: flex; flex-direction: column; gap: 5px; min-width: 0; position: relative"><span class="lbl">Account</span>
+        <button type="button" class="selWrap" onClick="{{toggleDd}}" aria-haspopup="listbox" aria-expanded="{{ddOpen}}" aria-label="Account"><span style="{{accSwatch}}"></span><span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px">{{accName}}</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; color: var(--muted)"><path d="M6 9l6 6 6-6"/></svg></button>
+        <sc-if value="{{ddOpen}}" hint-placeholder-val="{{ false }}">
+          <div class="sugg" role="listbox" aria-label="Account">
+            <sc-for list="{{accOpts}}" as="o" hint-placeholder-count="3"><button type="button" role="option" onClick="{{o.pick}}" aria-selected="{{o.on}}"><span style="{{o.dot}}"></span><span style="font-weight: 600">{{o.name}}</span></button></sc-for>
+          </div>
+        </sc-if>
+      </div>
+      <label style="display: flex; flex-direction: column; gap: 5px; min-width: 0"><span class="lbl">Start</span><input class="field" type="text" value="{{startText}}" onChange="{{onStart}}"></label>
+      <label style="display: flex; flex-direction: column; gap: 5px; min-width: 0"><span class="lbl">End</span><input class="field" type="text" value="{{endText}}" onChange="{{onEnd}}"></label>
+      <label style="display: flex; flex-direction: column; gap: 5px; min-width: 0"><span class="lbl">Length</span><input class="field" type="text" value="{{lenText}}" onChange="{{onLen}}"></label>
+    </div>
+    <label style="display: flex; flex-direction: column; gap: 5px"><span class="lbl">Entry note</span><input class="field" type="text" value="{{note}}" onChange="{{onNote}}" placeholder="Optional"></label>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <span class="lbl">The day with it added</span>
+      <div style="position: relative; height: 18px; margin: 0 5px; font-size: 11px; color: var(--muted); font-weight: 500"><sc-for list="{{ticks}}" as="t" hint-placeholder-count="6"><span style="{{t.style}}">{{t.label}}</span></sc-for></div>
+      <div style="position: relative; height: 56px; padding: 4px; box-sizing: border-box; border-radius: 10px; background: var(--card2); border: 1px solid var(--line)" role="img" aria-label="{{previewAria}}"><div style="position: relative; height: 100%">
+        <sc-for list="{{pv}}" as="b" hint-placeholder-count="6"><div class="pv" style="{{b.style}}"></div></sc-for>
+      </div></div>
+      <div class="msg" role="status" style="min-height: 22px">
+        <span class="msgIcon" aria-hidden="true" style="{{resIconStyle}}">
+          <sc-if value="{{resOk}}" hint-placeholder-val="{{ true }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></sc-if>
+          <sc-if value="{{resWarn}}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5v7"/><path d="M12 17.5h.01"/></svg></sc-if>
+        </span>
+        <span>{{resText}}</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 10px">
+      <span role="status" style="flex-grow: 1; font-size: 12.5px; color: var(--muted)">{{status}}</span>
+      <a class="ctl" href="Main.dc.html">Cancel</a>
+      <button type="button" class="ctl primary" onClick="{{add}}" disabled="{{addOff}}">Add time</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:720}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      acct: 1,
+      s: 11 + 30 / 60,
+      e: 12 + 15 / 60,
+      note: 'Call',
+      ddOpen: false,
+      msg: '',
+      status: '',
+      nextId: 8,
+      blks: [
+        { id: 'b1', acct: 0, s: 8.5, e: 9.5 },
+        { id: 'b7', acct: 0, s: 9 + 35 / 60, e: 10 },
+        { id: 'b2', acct: 1, s: 10 + 5 / 60, e: 11 + 5 / 60 },
+        { id: 'b8', acct: 3, s: 10 + 40 / 60, e: 11 },
+        { id: 'b3', acct: 2, s: 11 + 10 / 60, e: 11 + 55 / 60 },
+        { id: 'b4', acct: 5, s: 12, e: 13 },
+        { id: 'b5', acct: 0, s: 13 + 5 / 60, e: 13 + 40 / 60 },
+        { id: 'b6', acct: 4, s: 13 + 45 / 60, e: 14 + 17 / 60, run: true }
+      ]
+    };
+  }
+  renderVals() {
+    const mode = this.props.mode ?? 'light';
+    const accts = [
+      { n: 'Account one', c: ['#A8D4FF', '#7F98F7'] },
+      { n: 'Account two', c: ['#B2EFD6', '#5FD6AE'] },
+      { n: 'Account three', c: ['#FFD9B8', '#FF9F84'] },
+      { n: 'Account four', c: ['#E8D0FF', '#C197F8'] },
+      { n: 'Account five', c: ['#EEF6B0', '#B9DF82'] },
+      { n: 'Break', c: ['#E2E7F2', '#E2E7F2'] }
+    ];
+    const pad = (n) => String(n).padStart(2, '0');
+    const hm = (t) => { const h = Math.floor(t + 1e-9); const m = Math.round((t - h) * 60); return pad(h + Math.floor(m / 60)) + ':' + pad(m % 60); };
+    const x = (t) => ((t - 8) / 10) * 100;
+    const parseT = (v) => { const m = /^(\d{1,2})[:.](\d{2})$/.exec(String(v).trim()); if (!m) return null; const h = +m[1]; const mi = +m[2]; if (h > 23 || mi > 59) return null; return h + mi / 60; };
+    const parseLen = (v) => { const t = String(v).trim(); let m = /^(\d+)[:.](\d{2})$/.exec(t); if (m) return (+m[1] * 60 + +m[2]) / 60; m = /^(\d+)$/.exec(t); if (m) return +m[1] / 60; return null; };
+    const st = this.state;
+    const len = st.e - st.s;
+    const swatch = (i) => 'width:14px;height:14px;border-radius:50%;flex-shrink:0;' + (i === 5 ? 'background:repeating-linear-gradient(135deg,var(--hatchA) 0 3px,var(--hatchB) 3px 6px);border:1px solid var(--line)' : 'background:linear-gradient(135deg,' + accts[i].c[0] + ',' + accts[i].c[1] + ')');
+    const fill = (i) => (i === 5 ? 'background:repeating-linear-gradient(135deg,var(--hatchA) 0 4px,var(--hatchB) 4px 8px);border:1px solid var(--line)' : 'background:linear-gradient(135deg,' + accts[i].c[0] + ',' + accts[i].c[1] + ')');
+
+    // Time over other blocks is allowed: they stack in lanes. Only times that make no sense are refused.
+    const plan = (() => {
+      if (!(st.e > st.s + 1 / 120)) return { err: 'End has to be after the start.' };
+      if (st.s < 8) return { err: 'The day axis starts at 08:00.' };
+      if (st.e > 18) return { err: 'The day axis ends at 18:00.' };
+      if (st.msg) return { err: st.msg };
+      return {};
+    })();
+    const all = st.blks.map((b) => ({ id: b.id, s: b.s, e: b.e, acct: b.acct, fresh: false }));
+    all.push({ id: 'new', s: st.s, e: st.e, acct: st.acct, fresh: true });
+    const lanes = {};
+    (() => {
+      const order = all.slice().sort((p, q) => p.s - q.s || p.e - q.e);
+      let cluster = []; let reach = -1;
+      const flush = () => {
+        const ends = [];
+        cluster.forEach((u) => { let l = ends.findIndex((en) => en <= u.s + 1e-6); if (l < 0) { l = ends.length; ends.push(u.e); } else ends[l] = u.e; lanes[u.id] = { lane: l, n: 0 }; });
+        cluster.forEach((u) => { lanes[u.id].n = ends.length; });
+      };
+      order.forEach((u) => { if (cluster.length && u.s < reach - 1e-6) { cluster.push(u); reach = Math.max(reach, u.e); } else { if (cluster.length) flush(); cluster = [u]; reach = u.e; } });
+      if (cluster.length) flush();
+    })();
+    const pv = all.filter((b) => b.e > b.s).map((b) => {
+      const lp = lanes[b.id] || { lane: 0, n: 1 };
+      const h = (100 - 4 * (lp.n - 1)) / lp.n;
+      return { style: 'left:' + x(b.s) + '%;width:' + ((b.e - b.s) / 10 * 100) + '%;top:' + (lp.lane * (h + 4)) + '%;height:' + h + '%;' + fill(b.acct) + (b.fresh ? ';box-shadow:0 0 0 2px var(--accent);z-index:2' : ';opacity:.6') };
+    });
+    const ticks = [8, 10, 12, 14, 16, 18].map((h) => ({ label: pad(h) + ':00', style: 'position:absolute;top:0;transform:translateX(-50%);left:' + x(h) + '%' }));
+    const err = !!plan.err;
+    const resText = err ? plan.err : 'Adds ' + hm(len) + ' to ' + accts[st.acct].n + '.';
+    const setTimes = (s, e) => this.setState({ s: s, e: e, msg: '', status: '' });
+    return {
+      modeClass: mode === 'dark' ? 'dark' : '',
+      accName: accts[st.acct].n,
+      accSwatch: swatch(st.acct),
+      ddOpen: st.ddOpen,
+      toggleDd: () => this.setState({ ddOpen: !st.ddOpen }),
+      accOpts: accts.slice(0, 5).map((a, i) => ({ name: a.n, on: st.acct === i, dot: swatch(i), pick: () => this.setState({ acct: i, ddOpen: false, status: '' }) })),
+      startText: hm(st.s), endText: hm(st.e), lenText: hm(len),
+      onStart: (e) => { const t = parseT(e.target.value); if (t == null) { this.setState({ msg: 'Start looks like 09:30.' }); return; } setTimes(t, t + len); },
+      onEnd: (e) => { const t = parseT(e.target.value); if (t == null) { this.setState({ msg: 'End looks like 10:30.' }); return; } setTimes(st.s, t); },
+      onLen: (e) => { const l = parseLen(e.target.value); if (l == null || l <= 0) { this.setState({ msg: 'Length looks like 1:30, or 90 for minutes.' }); return; } setTimes(st.s, st.s + l); },
+      note: st.note,
+      onNote: (e) => this.setState({ note: e.target.value, status: '' }),
+      ticks: ticks,
+      pv: pv,
+      previewAria: 'The day with the new block added. ' + resText,
+      resText: resText,
+      resOk: !err,
+      resWarn: err,
+      resIconStyle: err ? 'border:1.6px solid var(--ink);color:var(--ink)' : 'background:var(--soft);color:var(--accent)',
+      status: st.status,
+      addOff: err,
+      add: () => {
+        if (plan.err) return;
+        this.setState({ blks: [...st.blks, { id: 'n' + st.nextId, acct: st.acct, s: st.s, e: st.e }], nextId: st.nextId + 1, msg: '', status: 'Added ' + hm(len) + ' to ' + accts[st.acct].n + '.' });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>
