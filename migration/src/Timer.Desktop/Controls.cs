@@ -943,7 +943,7 @@ public sealed class AccountsGlyph : Control
     }
 }
 
-public enum IconKind { Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
+public enum IconKind { Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1045,6 +1045,11 @@ public sealed class IconGlyph : Control
                 break;
             case IconKind.Plus:
                 context.DrawLine(pen, new Point(9, 3.5), new Point(9, 14.5)); context.DrawLine(pen, new Point(3.5, 9), new Point(14.5, 9));
+                break;
+            case IconKind.Note:
+                // A page with a folded corner and two lines of writing: this block has a note.
+                context.DrawGeometry(null, pen, Geometry.Parse("M 5.25,2.25 L 10.5,2.25 L 13.5,5.25 L 13.5,15.75 L 5.25,15.75 Z"));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 10.5,2.25 L 10.5,5.25 L 13.5,5.25 M 7.5,9 L 11.25,9 M 7.5,12 L 11.25,12"));
                 break;
             case IconKind.Minus:
                 context.DrawLine(pen, new Point(3.5, 9), new Point(14.5, 9));

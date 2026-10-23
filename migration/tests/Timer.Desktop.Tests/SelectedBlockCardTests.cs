@@ -67,6 +67,7 @@ public sealed class SelectedBlockCardTests
             var note = Find<TextBox>(window, "SelectedNote"); note.Text = "Drafting"; Enter(note); Settle(window);
             Assert.Equal("Drafting", model.Editor.Note(engine.Sessions[0])); Assert.Equal("30", engine.Sessions[0].Minutes);
             Assert.Contains("• Drafting", window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)); // The block on the timeline shows the first line.
+            Assert.Contains(window.GetVisualDescendants().OfType<IconGlyph>(), g => g.Name == "NoteMark" && g.Kind == IconKind.Note); // And a small page mark in its corner.
         }
         finally { window.Close(); }
     }
@@ -183,6 +184,25 @@ public sealed class SelectedBlockCardTests
                 Assert.Equal(Color.Parse(theme.Colour("Panel")), ((SolidColorBrush)dictionary["MenuFlyoutPresenterBackground"]!).Color);
                 Assert.Equal(Color.Parse(theme.Colour("Hover")), ((SolidColorBrush)dictionary["MenuFlyoutItemBackgroundPointerOver"]!).Color);
                 Assert.Equal(Color.Parse(theme.Colour("Ink")), ((SolidColorBrush)dictionary["MenuFlyoutItemForeground"]!).Color);
+            }
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void FieldsAreRoundedWithASoftFillAndTheAccentWhenFocusedInBothThemes()
+    {
+        var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            model.SelectBlock(new[] { model.Engine.Sessions[0] }, false); Settle(window);
+            Assert.Equal(new CornerRadius(11), Find<TextBox>(window, "SelectedStart").CornerRadius); Assert.Equal(new CornerRadius(12), Find<ComboBox>(window, "SelectedAccount").CornerRadius);
+            foreach (var theme in new[] { AppThemes.Light, AppThemes.Dark })
+            {
+                var dictionary = (ResourceDictionary)Avalonia.Application.Current!.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)]!;
+                Assert.Equal(Color.Parse(theme.Colour("Accent")), ((SolidColorBrush)dictionary["TextControlBorderBrushFocused"]!).Color);
+                Assert.Equal(Color.Parse(theme.Colour("Line")), ((SolidColorBrush)dictionary["TextControlBorderBrush"]!).Color);
+                Assert.NotEqual(Color.Parse(theme.Colour("Panel")), ((SolidColorBrush)dictionary["TextControlBackground"]!).Color); // A shade off the card, as in the mock.
             }
         }
         finally { window.Close(); }

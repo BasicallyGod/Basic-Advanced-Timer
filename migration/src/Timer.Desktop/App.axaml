@@ -110,6 +110,9 @@
     <!-- Right-click menus: rounded, with a little room round the items, in the theme's colours (ThemeEngine writes the menu resources). -->
     <Style Selector="ContextMenu"><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="6" /></Style>
     <Style Selector="ContextMenu MenuItem"><Setter Property="CornerRadius" Value="8" /><Setter Property="Padding" Value="10,7" /><Setter Property="FontSize" Value="13" /></Style>
+    <!-- Fields: rounded, as the mock draws them (ThemeEngine writes their fill, hairline and focus colours). -->
+    <Style Selector="TextBox"><Setter Property="CornerRadius" Value="11" /></Style>
+    <Style Selector="ComboBox"><Setter Property="CornerRadius" Value="12" /></Style>
     <Style Selector="Border.plainChip"><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
     <Style Selector="Border.selectedRow"><Setter Property="Background" Value="{DynamicResource Surface}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Border.chip">
