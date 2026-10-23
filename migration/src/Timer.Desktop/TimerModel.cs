@@ -41,6 +41,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public TrackingEngine Engine { get; }
     public LedgerEditor Editor { get; }
+    /// <summary>Notes and meetings (see <see cref="NotesModel"/>), kept beside this model so the two stay apart.</summary>
+    public NotesModel Notes { get; }
     public string? EditError { get; private set; }
     /// <summary>Asks for the Add time dialog, with the start and end it opens on.</summary>
     public event Action<DateTime, DateTime>? EntryRequested;
@@ -194,6 +196,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, ThemeLibrary.Default, DayOfWeek.Monday);
         this.store = store;
         Editor = store?.Editor ?? new LedgerEditor(Engine);
+        Notes = new NotesModel(store, () => Engine.Now, () => ReviewAccounts.Select(a => a.Name).ToList());
+        Notes.Changed += Notify;
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
@@ -280,6 +284,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (Engine.ContinuedBlock is { } block) { selectedRows.Clear(); Notice = $"Carrying on with the {Label(block.Account)} block from {block.From:HH:mm}."; }
     }
     // The block being recorded has no ledger row yet, so it cannot be dragged or edited until tracking stops.
+    /// <summary>Says that something was done, in the message bar, with no Undo (notes are outside the undo history).</summary>
+    public void Tell(string text) { Notice = text; Notify(); }
     /// <summary>Shows a refused edit in the message bar, such as a time that was typed wrongly in the Selected block card.</summary>
     public void Refuse(string message) { EditError = message; Notice = null; Notify(); }
     public void ExplainRunning() { EditError = "Still recording. Stop tracking to edit."; Notify(); }
@@ -351,6 +357,7 @@ public sealed class TimerModel : INotifyPropertyChanged
             if (store is not null && deleted.Any(d => AccountHistory(d).Entries > 0)) { store.Save(Engine, preferences); store.Backup("before-delete"); }
             foreach (var name in deleted) Editor.DeleteAccount(name);
         }
+        if (renamed.Count > 0 || deleted.Count > 0) Notes.Relink(preferences.Accounts.Select(a => a.Name), renames, deleted);
         if (renamed.Count > 0)
         {
             // Save first so the backup holds the latest entries, then rewrite everything in one go.
@@ -543,7 +550,9 @@ public sealed class TimerModel : INotifyPropertyChanged
             foreach (var (account, minutes) in earlier) { engine.AddSession(account, at, at.AddMinutes(minutes)); at = at.AddMinutes(minutes + 5); }
         }
         if (store is not null) store.Save(engine, prefs);
-        return new TimerModel(engine, prefs, store) { IsDemo = true };
+        var demo = new TimerModel(engine, prefs, store) { IsDemo = true };
+        demo.Notes.SeedDemo(anchor.Date, prefs.Accounts.Select(x => x.Name).ToList());
+        return demo;
     }
     // Overtime for testing: the demo's shift is cut short so the day is already past its end. It is only for the demo, and can be
     // switched off again, which puts back whatever shift was set for the day before.
@@ -763,6 +772,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (closed) return;
         ticks++;
         FollowToday();
+        Notes.MakeSeriesNotes(); // A repeating meeting's next days are made as time goes on.
+        if (ticks % 60 == 0) Notes.RetryUnsaved();
         if (ticks % 15 == 0) { Save(); Notify(); }
         else PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Elapsed)));
     }

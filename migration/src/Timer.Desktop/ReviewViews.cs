@@ -21,7 +21,7 @@ public static class ReviewViews
     /// <summary>The room before midnight and after the last hour, so the first and last hour labels sit fully in view.</summary>
     public const double TimelineGutter = 34;
     // The room between the hours and the blocks (BandTop) is the row for planned meetings, which arrive with Notes; it is kept so the day does not move when they do.
-    private const double LabelRow = 22, BandTop = 92, BandHeight = 76, LaneGap = 4, TimelineHeight = 204, LabelWidth = 44;
+    private const double LabelRow = 22, BandTop = 92, BandHeight = 76, LaneGap = 4, TimelineHeight = 204, LabelWidth = 44, MeetingTop = 30, MeetingHeight = 56;
     /// <summary>The corner a block has when the band holds this many lanes: the larger for one, the smaller for more.</summary>
     public static double CornerFor(int lanes, double width, double height) => Math.Min(lanes <= 1 ? BlockRadius : LaneRadius, Math.Min(width, height) / 2);
     /// <summary>How much of a block to show. One lane has the full block, two a line of duration and account, three the duration alone, and four or more the colour with the tooltip.</summary>
@@ -94,6 +94,8 @@ public static class ReviewViews
             GradientStops = { new GradientStop(stripe, 0), new GradientStop(stripe, .4), new GradientStop(Colors.Transparent, .4), new GradientStop(Colors.Transparent, 1) }
         };
     }
+
+    private static string Hm(TimeSpan? time) => time is { } t ? t.ToString(@"hh\:mm") : "";
 
     public static Control Timeline(TimerModel model)
     {
@@ -253,6 +255,51 @@ public static class ReviewViews
             }
             Canvas.SetLeft(card, X(interval.Start) + 1); Canvas.SetTop(card, BandTop + lane * (height + LaneGap));
             canvas.Children.Add(card);
+        }
+        // Planned meetings sit in the row above the blocks as dashed cards, and a click on a free place in that row starts a new one. A meeting is planned time:
+        // it is never counted as tracked time, and a block under it is not affected.
+        {
+            var lane = new Border { Name = "MeetingLane", Width = 24 * pixelsPerHour, Height = MeetingHeight, Background = Brushes.Transparent, CornerRadius = new CornerRadius(12), Cursor = new Cursor(StandardCursorType.Arrow) };
+            lane.Classes.Add("meetingLane");
+            var hint = new TextBlock { Text = "+ Add a meeting", FontSize = 12, FontWeight = FontWeight.SemiBold, Opacity = 0, IsHitTestVisible = false, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+            hint.Classes.Add("muted"); lane.Child = hint;
+            ToolTip.SetTip(lane, "Click a time to add a meeting");
+            Avalonia.Automation.AutomationProperties.SetName(lane, "Add a meeting. Click a time in this row");
+            lane.PointerEntered += (_, _) => { hint.Opacity = .85; lane.Classes.Add("over"); };
+            lane.PointerExited += (_, _) => { hint.Opacity = 0; lane.Classes.Remove("over"); };
+            Point? pressed = null;
+            lane.PointerPressed += (_, e) => { if (e.GetCurrentPoint(lane).Properties.IsLeftButtonPressed) { pressed = e.GetPosition(canvas); e.Handled = true; } };
+            lane.PointerReleased += (_, e) =>
+            {
+                if (pressed is { } p && Math.Abs(e.GetPosition(canvas).X - p.X) <= 5 && e.InitialPressMouseButton == MouseButton.Left)
+                    model.Notes.RequestNewMeeting(day.AddHours((e.GetPosition(canvas).X - TimelineGutter) / pixelsPerHour));
+                pressed = null; e.Handled = true;
+            };
+            Canvas.SetLeft(lane, TimelineGutter); Canvas.SetTop(lane, MeetingTop); canvas.Children.Add(lane);
+            var planned = model.Notes.MeetingsOn(day);
+            var places = PlaceLanes(planned.Select(m => (m, day + m.At!.Value, day + m.End!.Value)));
+            foreach (var meeting in planned)
+            {
+                var (row, rows) = places[meeting];
+                var width = Math.Max(24, (meeting.End!.Value - meeting.At!.Value).TotalHours * pixelsPerHour - 2);
+                var height = rows == 1 ? MeetingHeight : (MeetingHeight - LaneGap * (rows - 1)) / rows;
+                var title = new TextBlock { Text = model.Notes.Text(meeting), FontSize = 12, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+                var head = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 5 }; head.Children.Add(new IconGlyph(IconKind.Today)); head.Children.Add(title);
+                if (model.Notes.SeriesOf(meeting) is not null) head.Children.Add(new IconGlyph(IconKind.Repeat) { Opacity = .8 });
+                var body = new StackPanel { Spacing = 2, Margin = rows == 1 ? new Thickness(8, 6) : new Thickness(8, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+                body.Children.Add(head);
+                if (rows == 1) { var span = new TextBlock { Text = Hm(meeting.At) + "–" + Hm(meeting.End), FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis }; span.Classes.Add("muted"); body.Children.Add(span); }
+                var frame = new Avalonia.Controls.Shapes.Rectangle { RadiusX = 12, RadiusY = 12, StrokeThickness = 1.5, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 4, 3 } };
+                frame.Classes.Add("meetingFrame");
+                var card = new Grid { Width = width, Height = height, ClipToBounds = true, Name = "TimelineMeeting" + meeting.Id, Tag = meeting, Cursor = new Cursor(StandardCursorType.Hand) };
+                card.Children.Add(frame); card.Children.Add(body);
+                ToolTip.SetTip(card, model.Notes.Text(meeting) + " · " + Hm(meeting.At) + "–" + Hm(meeting.End) + " · planned, not tracked\nClick to edit");
+                Avalonia.Automation.AutomationProperties.SetName(card, "Meeting " + model.Notes.Text(meeting) + ", " + Hm(meeting.At) + " to " + Hm(meeting.End));
+                card.PointerEntered += (_, _) => frame.Classes.Add("over"); card.PointerExited += (_, _) => frame.Classes.Remove("over");
+                card.PointerPressed += (_, e) => { if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) e.Handled = true; };
+                card.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) model.Notes.RequestEditMeeting(meeting.Id); e.Handled = true; };
+                Canvas.SetLeft(card, X(day + meeting.At.Value) + 1); Canvas.SetTop(card, MeetingTop + row * (height + LaneGap)); canvas.Children.Add(card);
+            }
         }
         // For today, a line down through the band at the current time, a dot at the top and a chip under it saying what it is. It moves on every half minute while on screen.
         if (day == model.Engine.Now.Date)

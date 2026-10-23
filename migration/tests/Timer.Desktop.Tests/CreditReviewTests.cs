@@ -454,7 +454,7 @@ public sealed class CreditReviewTests
         var engine = Engine(); engine.Sessions.Add(Row("10:00:00", "30")); var model = new TimerModel(engine);
         var window = new DashboardWindow(model); window.Show(); Capture(window, "click-to-add-timeline");
         var canvas = window.GetVisualDescendants().OfType<Canvas>().Single(c => c.Name == "TimelineCanvas");
-        var point = canvas.TranslatePoint(new Point(ReviewViews.TimelineGutter + 11 * model.TimelinePixelsPerHour, 70), window)!.Value; // 11:00, in the blank band
+        var point = canvas.TranslatePoint(new Point(ReviewViews.TimelineGutter + 11 * model.TimelinePixelsPerHour, 150), window)!.Value; // 11:00, in the blank band
         window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
         Assert.Empty(window.Dialogs.Dialogs.OfType<EntryDialog>()); // A single click adds nothing.
         window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);

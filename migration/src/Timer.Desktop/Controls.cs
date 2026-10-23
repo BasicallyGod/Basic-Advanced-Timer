@@ -943,7 +943,7 @@ public sealed class AccountsGlyph : Control
     }
 }
 
-public enum IconKind { Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
+public enum IconKind { Bell, Repeat, Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1045,6 +1045,17 @@ public sealed class IconGlyph : Control
                 break;
             case IconKind.Plus:
                 context.DrawLine(pen, new Point(9, 3.5), new Point(9, 14.5)); context.DrawLine(pen, new Point(3.5, 9), new Point(14.5, 9));
+                break;
+            case IconKind.Bell:
+                context.DrawGeometry(null, pen, Geometry.Parse("M 4.5,12.75 L 4.5,8.25 A 4.5,4.5 0 0 1 13.5,8.25 L 13.5,12.75 L 14.625,14.25 L 3.375,14.25 Z"));
+                context.DrawLine(pen, new Point(7.5, 15.75), new Point(10.5, 15.75));
+                break;
+            case IconKind.Repeat:
+                // Two arrows chasing each other round a loop: this repeats.
+                context.DrawGeometry(null, pen, Geometry.Parse("M 12.75,2.25 L 15.75,5.25 L 12.75,8.25"));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 2.25,8.25 L 2.25,6.75 A 1.5,1.5 0 0 1 3.75,5.25 L 15.75,5.25"));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 5.25,15.75 L 2.25,12.75 L 5.25,9.75"));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 15.75,9.75 L 15.75,11.25 A 1.5,1.5 0 0 1 14.25,12.75 L 2.25,12.75"));
                 break;
             case IconKind.Note:
                 // A page with a folded corner and two lines of writing: this block has a note.
