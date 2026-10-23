@@ -92,7 +92,7 @@ public sealed class PillTests
             var over = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), pill)!.Value;
             pill.MouseMoveUntil(over, () => ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A > rest.A);
             Assert.True(((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A > rest.A); // A stronger tint under the pointer.
-            Assert.Equal(46, tile.Bounds.Width, 0.5); // And no change of size.
+            Assert.Equal(StatusFace.TileSize, tile.Bounds.Width, 0.5); // And no change of size.
             pill.MouseMove(new Point(2, 2)); Assert.Equal(rest, ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color);
         }
         finally { pill.Close(); }
@@ -202,17 +202,30 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void ThePillIsThreeHundredTallWithTheBreakUnderThePrimaryControlAndTheAccountsButtonAtTheFoot()
+    public void ThePillHoldsTheThreeSquareControlsWithTheBreakUnderThePrimaryControlAndTheAccountsButtonAtTheFoot()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
         try
         {
-            Assert.Equal(300, PillWindow.PillHeight); Assert.Equal(PillWindow.PillHeight, Find<Border>(pill, "PillSurface").Height);
+            Assert.Equal(316, PillWindow.PillHeight); Assert.Equal(PillWindow.PillHeight, Find<Border>(pill, "PillSurface").Height);
             double Y(Control c) => c.TranslatePoint(default, pill)!.Value.Y;
             var primary = Find<Button>(pill, "PillPause"); var brk = Find<Button>(pill, "PillBreak");
             Assert.True(Y(primary) < Y(brk)); Assert.True(Y(brk) < Y(pill.AccountsButton)); // Timer, primary control, break, accounts.
             var surface = Find<Border>(pill, "PillSurface"); var bottom = surface.TranslatePoint(new Point(0, surface.Bounds.Height), pill)!.Value.Y;
             Assert.True(Y(pill.AccountsButton) + pill.AccountsButton.Bounds.Height * pill.Scale <= bottom + 0.5, $"accounts bottom {Y(pill.AccountsButton) + pill.AccountsButton.Bounds.Height * pill.Scale} card bottom {bottom} scale {pill.Scale}"); // Everything fits inside the card.
+            // The three controls are one size and shape, with the same room on both sides and a gap between them, so none crowds the card's edge.
+            Border Tile(Control c) => c.GetVisualDescendants().OfType<Border>().First(x => x.Width == StatusFace.TileSize);
+            var tiles = new[] { Tile(primary), Tile(brk), Tile(pill.AccountsButton) };
+            foreach (var t in tiles)
+            {
+                Assert.Equal(StatusFace.TileSize, t.Bounds.Width); Assert.Equal(StatusFace.TileSize, t.Bounds.Height); Assert.Equal(StatusFace.TileRadius, t.CornerRadius.TopLeft);
+                var left = t.TranslatePoint(default, surface)!.Value.X; var right = surface.Bounds.Width - (left + t.Bounds.Width);
+                Assert.InRange(left, 12, 16); Assert.True(Math.Abs(right - left) <= 0.5, $"left {left} right {right}"); // Room for the focus ring, centred.
+            }
+            double Top(Control c) => c.TranslatePoint(default, surface)!.Value.Y;
+            Assert.InRange(Top(tiles[1]) - (Top(tiles[0]) + StatusFace.TileSize), 8, 14); Assert.InRange(Top(tiles[2]) - (Top(tiles[1]) + StatusFace.TileSize), 8, 14);
+            var room = surface.Bounds.Height - (Top(tiles[2]) + StatusFace.TileSize);
+            Assert.True(room >= 12, $"room under the accounts button {room}");
         }
         finally { pill.Close(); }
     }
@@ -226,9 +239,9 @@ public sealed class PillTests
             try
             {
                 var button = Find<Button>(pill, "PillBreak");
-                var tile = button.GetVisualDescendants().OfType<Border>().Single(b => b.Width == 40); var cup = button.GetVisualDescendants().OfType<BreakGlyph>().Single();
+                var tile = button.GetVisualDescendants().OfType<Border>().Single(b => b.Width == StatusFace.TileSize); var cup = button.GetVisualDescendants().OfType<BreakGlyph>().Single();
                 var orange = Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("Break"));
-                Assert.Equal(13, tile.CornerRadius.TopLeft); // A rounded square, like the primary control and the accounts icon.
+                Assert.Equal(StatusFace.TileRadius, tile.CornerRadius.TopLeft); // A rounded square, like the primary control and the accounts icon.
                 var rest = ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color; Assert.InRange(rest.A, 30, 60); Assert.Equal(orange.R, rest.R); // A soft tint of the theme's orange.
                 Assert.Null(cup.Fixed); Assert.Equal(0, tile.BoxShadow.Count); // The cup is the theme's orange, with no ring.
                 model.ToggleBreak(); Dispatcher.UIThread.RunJobs();
@@ -252,7 +265,7 @@ public sealed class PillTests
             var brk = Find<Button>(window, "DashboardBreak"); var accounts = Find<Button>(window, "RailAccounts");
             Assert.True(Y(Find<Button>(window, "RailPause")) < Y(brk)); Assert.True(Y(brk) < Y(accounts)); Assert.True(Y(accounts) < Y(Find<Button>(window, "TimelineTab"))); // As on the pill.
             Assert.True(Y(brk) < Y(Find<Button>(window, "DashboardDay"))); // And no longer at the foot with the flag.
-            var tile = brk.GetVisualDescendants().OfType<Border>().Single(b => b.Width == 40); Assert.InRange(((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A, 30, 60);
+            var tile = brk.GetVisualDescendants().OfType<Border>().Single(b => b.Width == StatusFace.TileSize); Assert.InRange(((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A, 30, 60);
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.Equal(255, ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A);
         }
         finally { window.Close(); }

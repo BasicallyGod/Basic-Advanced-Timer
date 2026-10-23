@@ -60,9 +60,22 @@ public sealed class StatusFace : StackPanel
     private readonly Border stateLight, reminderLight;
     private readonly TextBlock initials = new() { FontSize = 17, Classes = { "clock" }, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly PauseGlyph glyph = new();
+    /// <summary>The primary control, the break and the Accounts button are all this square, so they read as one set with the same room either side in the pill.</summary>
+    public const double TileSize = 44, TileRadius = 14;
+    /// <summary>
+    /// Each tile's button is this much larger on every side and pulled back by the same amount, so the ring that marks keyboard focus or a break is drawn
+    /// inside the button (a button clips what falls outside it) without moving the tile or its neighbours.
+    /// </summary>
+    public const double RingRoom = 4;
+    public static void MakeRoomForRing(Button button, double top = 0)
+    {
+        button.Width = button.Height = TileSize + 2 * RingRoom; button.Padding = new Thickness(RingRoom);
+        button.Margin = new Thickness(-RingRoom, top - RingRoom, -RingRoom, -RingRoom);
+        button.HorizontalContentAlignment = HorizontalAlignment.Center; button.VerticalContentAlignment = VerticalAlignment.Center;
+    }
     private readonly Border clockTile;
     // The primary control is a rounded square, to match the accounts icon beside it.
-    private readonly Border primaryTile = new() { Width = 46, Height = 46, CornerRadius = new CornerRadius(14) };
+    private readonly Border primaryTile = new() { Width = StatusFace.TileSize, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius) };
     private readonly Viewbox glyphBox = new() { Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly string clockTip;
     private bool hoverCircle, circleFocus, accountsFocus;
@@ -71,13 +84,14 @@ public sealed class StatusFace : StackPanel
     public Button Circle { get; }
     public Button AccountsButton { get; }
     public BreakButton Break { get; }
-    private readonly Border accountsTile = new() { Width = 46, Height = 32, CornerRadius = new CornerRadius(12), Background = Brushes.Transparent, Child = new AccountsGlyph { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+    private readonly Border accountsTile = new() { Width = StatusFace.TileSize, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius), Background = Brushes.Transparent, Child = new AccountsGlyph { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
     private bool accountsOpen, hoverAccounts;
 
     public StatusFace(TimerModel model, string prefix, string breakName, string clockTip, Action clockClick, Action circleClick, Action accountsClick)
     {
         this.model = model; this.clockTip = clockTip;
-        Spacing = 10; HorizontalAlignment = HorizontalAlignment.Center;
+        // As wide as the pill inside its edge, so the tiles sit centred on whole pixels (the clock tile alone is an odd width).
+        Spacing = 10; HorizontalAlignment = HorizontalAlignment.Center; Width = PillWindow.PillWidth - 2;
         stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
         reminderLight = new Border { Name = prefix + "ReminderLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3), IsVisible = false };
         Lights = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Height = 14, HorizontalAlignment = HorizontalAlignment.Center, Name = prefix + "Lights" };
@@ -94,7 +108,7 @@ public sealed class StatusFace : StackPanel
         primaryTile.Name = prefix + "PrimaryTile";
         var host = new Grid(); host.Children.Add(initials); host.Children.Add(glyphBox); primaryTile.Child = host;
         Circle = Ui.Button("", circleClick, prefix + "Pause");
-        Circle.Classes.Add("pillBare"); Circle.Padding = new Thickness(0); Circle.Width = 46; Circle.Height = 46; Circle.Content = primaryTile; Circle.HorizontalAlignment = HorizontalAlignment.Center;
+        Circle.Classes.Add("pillBare"); Circle.Content = primaryTile; MakeRoomForRing(Circle, 6); Circle.HorizontalAlignment = HorizontalAlignment.Center;
         // Under the pointer the tint deepens instead of the button growing, which its edges would clip.
         Circle.PointerEntered += (_, _) => { hoverCircle = true; Refresh(); };
         Circle.PointerExited += (_, _) => { hoverCircle = false; Refresh(); };
@@ -102,13 +116,13 @@ public sealed class StatusFace : StackPanel
         Break = new BreakButton(model, breakName);
         // The accounts button is the same on the pill and the rail: it opens the account list beside the window, and closes it again.
         AccountsButton = Ui.Button("", accountsClick, prefix + "Accounts");
-        AccountsButton.Classes.Add("pillBare"); AccountsButton.Padding = new Thickness(0); AccountsButton.Content = accountsTile; AccountsButton.HorizontalAlignment = HorizontalAlignment.Center;
+        AccountsButton.Classes.Add("pillBare"); AccountsButton.Content = accountsTile; MakeRoomForRing(AccountsButton); AccountsButton.HorizontalAlignment = HorizontalAlignment.Center;
         AccountsButton.PointerEntered += (_, _) => { hoverAccounts = true; PaintAccountsTile(); };
         AccountsButton.PointerExited += (_, _) => { hoverAccounts = false; PaintAccountsTile(); };
         SoftTint.WatchKeyboardFocus(AccountsButton, f => { accountsFocus = f; PaintAccountsTile(); });
         SetAccountsOpen(false);
         Children.Add(Lights); ClockButton.Margin = new Thickness(0, 4, 0, 0); Children.Add(ClockButton);
-        Circle.Margin = new Thickness(0, 6, 0, 0); Children.Add(Circle); Children.Add(Break); Children.Add(AccountsButton);
+        Children.Add(Circle); Children.Add(Break); Children.Add(AccountsButton);
         ActualThemeVariantChanged += (_, _) => Refresh();
         Refresh();
     }
@@ -184,14 +198,14 @@ public sealed class BreakButton : Button
 {
     private readonly TimerModel model;
     private readonly BreakGlyph cup = new() { Mono = false };
-    private readonly Border tile = new() { Width = 40, Height = 40, CornerRadius = new CornerRadius(13), Background = Brushes.Transparent };
+    private readonly Border tile = new() { Width = StatusFace.TileSize, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius), Background = Brushes.Transparent };
     private bool hover, focus;
     public BreakGlyph Cup => cup;
     public BreakButton(TimerModel model, string name)
     {
         this.model = model; Name = name;
         Click += (_, _) => model.ToggleBreak();
-        Classes.Add("pillBare"); Padding = new Thickness(0); Width = 46; Height = 46; HorizontalAlignment = HorizontalAlignment.Center;
+        Classes.Add("pillBare"); StatusFace.MakeRoomForRing(this); HorizontalAlignment = HorizontalAlignment.Center;
         // Drawn at its own size, so its line is as thin as the other icons'.
         tile.Child = cup; cup.HorizontalAlignment = HorizontalAlignment.Center; cup.VerticalAlignment = VerticalAlignment.Center;
         Content = tile;

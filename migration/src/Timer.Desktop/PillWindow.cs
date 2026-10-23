@@ -21,7 +21,7 @@ public sealed class PillWindow : Window
     public Action? OpenDashboard { get; set; }
     private readonly TimerModel model;
     /// <summary>The pill's own size before it is scaled for the screen, and the room kept around it for its shadow or glow.</summary>
-    public const double PillWidth = 72, PillHeight = 300, PillRadius = 36;
+    public const double PillWidth = 72, PillHeight = 316, PillRadius = 36;
     public static double BaseWindowHeight => PillHeight + 2 * Ui.ShadowMargin;
     // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
     // A narrow screen (its width in device independent pixels over 1800, never above 95 per cent or below 80 per cent), and a screen with a low
