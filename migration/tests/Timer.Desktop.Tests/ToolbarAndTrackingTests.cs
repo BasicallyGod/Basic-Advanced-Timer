@@ -78,7 +78,7 @@ public sealed class ToolbarAndTrackingTests
                 Assert.True(((ISolidColorBrush)main.Foreground!).Color.G > ((ISolidColorBrush)main.Foreground!).Color.R, name + " clock is green");
                 Assert.Equal(((ISolidColorBrush)main.Foreground!).Color, ((ISolidColorBrush)seconds.Foreground!).Color);
             }
-            Check(dash, "dashboard"); Check(pill, "pill");
+            Check(dash, "dashboard"); // The pill shows the state with its light and ring instead of a green clock.
             var status = dash.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Tracking" && t.Classes.Contains("live"));
             Assert.True(((ISolidColorBrush)status.Foreground!).Color.G > ((ISolidColorBrush)status.Foreground!).Color.R);
             // On a break the green goes, and the clock takes the break colour.

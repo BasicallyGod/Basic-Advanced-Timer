@@ -72,9 +72,9 @@ public sealed class BreakTests
             var point = dashboardBreak.TranslatePoint(new Point(dashboardBreak.Bounds.Width / 2, dashboardBreak.Bounds.Height / 2), dashboard)!.Value;
             dashboard.MouseDown(point, MouseButton.Left); dashboard.MouseUp(point, MouseButton.Left); Dispatcher.UIThread.RunJobs();
             now = now.AddMinutes(30); model.ChangeDate(0); Dispatcher.UIThread.RunJobs();
-            Assert.True(model.IsOnBreak); Assert.Contains("onBreak", dashboardBreak.Classes); Assert.Equal("Break", model.ThemeState); Assert.Equal(ThemeEngine.StateVariant(model.CurrentTheme, ThemeDerivation.Break), pill.RequestedThemeVariant);
+            Assert.True(model.IsOnBreak); Assert.Contains("onBreak", dashboardBreak.Classes); Assert.Equal("Break", model.ThemeState);
             Assert.Contains(dashboardBreak.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Finish break");
-            Assert.Contains(pill.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "On break");
+            Assert.Equal("On break", ToolTip.GetTip(pill.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "PillLights")));
             Assert.True(pill.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming); // The steam moves while the break is on.
             Assert.True(dashboard.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming);
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");

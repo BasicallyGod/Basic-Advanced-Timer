@@ -36,7 +36,7 @@ public sealed class TweakTests
         var pill = new PillWindow(TimerModel.CreateDemo()); pill.Show(); Settle(pill);
         Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5); // The window keeps the pill's proportions at whatever size it is drawn.
         var before = pill.Scale; pill.FitToScreen(null); Assert.Equal(before, pill.Scale); // No screen to measure (a hidden pill) leaves the size as it is.
-        Assert.Equal(pill.CollapsedWindowHeightNow, pill.Height, 0.5);
+        Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5);
         pill.Close();
     }
 
@@ -289,10 +289,10 @@ public sealed class TweakTests
         var pill = new PillWindow(TimerModel.CreateDemo());
         pill.FitToScreen(FakeScreen(1920, 1080, 1.0)); Assert.Equal(PillWindow.SmallestScale, pill.Scale, 3);
         pill.Show(); Settle(pill);
-        Assert.Equal(pill.CollapsedWindowHeightNow, pill.Height, 0.5); Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5);
+        Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5); Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5);
         Assert.Equal(pill.Height, pill.ClientSize.Height, 1.5); // The real window, not only the request.
         var card = pill.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PillSurface");
-        Assert.Equal(PillWindow.CollapsedHeight * pill.Scale, card.Bounds.Height * pill.Scale, 2.0); // No white card below the capsule.
+        Assert.Equal(PillWindow.PillHeight * pill.Scale, card.Bounds.Height * pill.Scale, 2.0); // No white card below the capsule.
         pill.Close();
     }
 
@@ -301,11 +301,11 @@ public sealed class TweakTests
     {
         var pill = new PillWindow(TimerModel.CreateDemo()); pill.Show(); Settle(pill);
         pill.Height = pill.Height + 60; Settle(pill); // Something left the window taller than the pill.
-        Assert.Equal(pill.CollapsedWindowHeightNow, pill.Height, 0.5);
+        Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5);
         pill.Width = pill.Width - 80; Settle(pill); // And narrower, so the account box would be cut off.
         Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5);
-        pill.ToggleExpansion(); Settle(pill); Assert.True(pill.Height > pill.CollapsedWindowHeightNow + 40); // An open pill still gets its taller size.
-        pill.ToggleExpansion(); Settle(pill); Assert.Equal(pill.CollapsedWindowHeightNow, pill.Height, 0.5);
+        pill.ShowPanel(); Settle(pill); Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5); // The account list is a pop-up, so the window keeps its size.
+        pill.CloseFlyouts(); Settle(pill); Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5);
         pill.Close();
     }
 
@@ -314,11 +314,11 @@ public sealed class TweakTests
     {
         var pill = new PillWindow(TimerModel.CreateDemo()); pill.Show(); Settle(pill);
         pill.FitToScreen(FakeScreen(2560, 1600, 1.25)); Settle(pill);
-        Assert.Equal(PillWindow.LargestScale, pill.Scale, 3); Assert.Equal(pill.CollapsedWindowHeightNow, pill.Height, 0.5);
+        Assert.Equal(PillWindow.LargestScale, pill.Scale, 3); Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5);
         Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5);
         pill.Hide(); pill.FitToScreen(FakeScreen(1920, 1080, 1.0)); // Changed while hidden, as when the dashboard was up.
         pill.Show(); Settle(pill);
-        Assert.Equal(pill.CollapsedWindowHeightNow, pill.Height, 0.5); Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5);
+        Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5); Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5);
         Assert.Equal(pill.Width, pill.ClientSize.Width, 1.5);
         pill.Close();
     }

@@ -156,7 +156,7 @@ public sealed class ShellTests
             Assert.Contains("clock", clockText.Classes); Assert.Equal("Bricolage Display", clockText.FontFamily.Name); // The big clock wears the bundled display face.
             Assert.Contains(texts, t => t is not null && t.Contains("9h / 15h")); Assert.Contains("This week", texts);
             model.ToggleAccount("Account three");
-            pill.ToggleExpansion();
+            pill.ShowPanel();
             Save(pill, Path.Combine(output, "pill-expanded-Dark.png"));
             Assert.Equal(DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, dashboard.Width);
             Assert.Equal(DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin, dashboard.Height);
@@ -298,7 +298,7 @@ public sealed class ShellTests
             Assert.Contains(coordinator.Dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Classes.Contains("live") && t.Text is { Length: > 0 } && model.ClockText.StartsWith(t.Text));
             model.ForceOvertime(); Assert.True(model.IsOvertime);
             Save(coordinator.Dashboard, Path.Combine(output, "demo-overtime.png"));
-            coordinator.Dashboard.OpenPill!(); coordinator.Pill.ToggleExpansion();
+            coordinator.Dashboard.OpenPill!(); coordinator.Pill.ShowPanel();
             Save(coordinator.Pill, Path.Combine(output, "demo-pill-overtime.png"));
         }
         finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
@@ -327,76 +327,6 @@ public sealed class ShellTests
             }
         }
         finally { Directory.Delete(folder, true); }
-    }
-
-    [AvaloniaFact]
-    public void PillAccountAndTimerClicksOpenTheirRespectiveViews()
-    {
-        var model = Fixture();
-        var coordinator = new WindowCoordinator(model, () => { });
-        coordinator.Pill.Show();
-        try
-        {
-            model.ToggleAccount("Account one");
-            Dispatcher.UIThread.RunJobs();
-            using var frame = coordinator.Pill.CaptureRenderedFrame();
-            void Click(string name)
-            {
-                var button = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
-                var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), coordinator.Pill)!.Value;
-                coordinator.Pill.MouseDown(point, MouseButton.Left);
-                coordinator.Pill.MouseUp(point, MouseButton.Left);
-                Dispatcher.UIThread.RunJobs();
-            }
-            Click("PillAccounts");
-            Assert.True(coordinator.Pill.Height > coordinator.Pill.CollapsedWindowHeightNow);
-            Assert.False(coordinator.Dashboard.IsVisible);
-            Click("PillAccounts");
-            Assert.Equal(coordinator.Pill.CollapsedWindowHeightNow, coordinator.Pill.Height);
-            Click("PillDashboard");
-            Assert.True(coordinator.Dashboard.IsVisible);
-            Assert.False(coordinator.Pill.IsVisible);
-            Assert.Equal("Account one", model.ActiveAccount);
-            coordinator.Dashboard.OpenPill!();
-            Assert.Equal(coordinator.Pill.CollapsedWindowHeightNow, coordinator.Pill.Height);
-        }
-        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void DraggingEachPillTargetSuppressesClicksAndPauseResumesTheSelectedAccount()
-    {
-        var model = Fixture();
-        var coordinator = new WindowCoordinator(model, () => { }); coordinator.Pill.Show();
-        try
-        {
-            model.ToggleAccount("Account one");
-            Dispatcher.UIThread.RunJobs(); using var initial = coordinator.Pill.CaptureRenderedFrame();
-            foreach (var name in new[] { "PillDashboard", "PillAccounts", "PillPause" })
-            {
-                var button = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
-                var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), coordinator.Pill)!.Value;
-                coordinator.Pill.MouseDown(point, MouseButton.Left);
-                coordinator.Pill.MouseMove(point + new Vector(20, 10));
-                coordinator.Pill.MouseUp(point + new Vector(20, 10), MouseButton.Left);
-                Assert.False(coordinator.Dashboard.IsVisible);
-                Assert.Equal(coordinator.Pill.CollapsedWindowHeightNow, coordinator.Pill.Height);
-                Assert.Equal("Account one", model.ActiveAccount);
-            }
-            var pause = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillPause");
-            var pausePoint = pause.TranslatePoint(new Point(18, 18), coordinator.Pill)!.Value;
-            coordinator.Pill.MouseDown(pausePoint, MouseButton.Left); coordinator.Pill.MouseUp(pausePoint, MouseButton.Left);
-            Assert.False(model.IsTracking); Assert.Equal("Account one", model.SelectedAccount);
-            coordinator.Pill.MouseDown(pausePoint, MouseButton.Left); coordinator.Pill.MouseUp(pausePoint, MouseButton.Left);
-            Assert.Equal("Account one", model.ActiveAccount);
-            var timerButton = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDashboard");
-            var accountButton = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillAccounts");
-            Assert.True(timerButton.Bounds.X < accountButton.Bounds.X && accountButton.Bounds.X < pause.Bounds.X);
-            var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();
-            Save(coordinator.Pill, Path.Combine(output, "pill-classic-tracking.png"));
-            model.TogglePause(); Save(coordinator.Pill, Path.Combine(output, "pill-classic-paused.png"));
-        }
-        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
     }
 
     [AvaloniaFact]

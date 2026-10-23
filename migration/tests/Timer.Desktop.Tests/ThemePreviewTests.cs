@@ -53,7 +53,7 @@ public sealed class ThemePreviewTests
             model.ToggleAccount("Account three"); Shot("recording");
             model.SetOvertimeTest(true); Shot("overtime"); model.SetOvertimeTest(false);
             model.ToggleBreak(); Shot("break"); model.ToggleBreak();
-            pill.ToggleExpansion(); Shot("expanded");
+            pill.ShowPanel(); Shot("expanded");
         }
         finally { pill.Close(); model.SetTheme("System"); }
     }

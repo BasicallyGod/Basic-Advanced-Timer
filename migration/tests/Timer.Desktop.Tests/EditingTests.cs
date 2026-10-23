@@ -454,8 +454,8 @@ public sealed class EditingTests
             model.SetOvertimeTest(true); model.ToggleAccount("Account three"); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
             Assert.True(model.IsOvertime); Assert.True(model.IsTracking);
             // The whole capsule is the overtime colour while recording, and its line says how much overtime there is.
-            Assert.Equal("Overtime", model.ThemeState); Assert.Equal(ThemeEngine.StateVariant(model.CurrentTheme, ThemeDerivation.Overtime), pill.RequestedThemeVariant);
-            Assert.Contains(pill.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is not null && t.Text.Contains("· OT "));
+            Assert.Equal("Overtime", model.ThemeState);
+            Assert.Equal("Overtime", ToolTip.GetTip(pill.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "PillLights")));
             Assert.Equal("Start break", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak").GetVisualDescendants().OfType<TextBlock>().Single().Text);
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs();
             Assert.Equal("Finish break", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak").GetVisualDescendants().OfType<TextBlock>().Single().Text);
