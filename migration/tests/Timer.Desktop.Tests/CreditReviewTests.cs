@@ -63,7 +63,7 @@ public sealed class CreditReviewTests
         engine.Sessions[1] = engine.Sessions[1] with { Account = "Break" }; Assert.Empty(editor.TidyCandidates(Day));
     }
     [AvaloniaFact]
-    public void NativeReviewControlsGroupTidyAndExport()
+    public void NativeReviewControlsTidyMergeAndExport()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("10:00:00", "30"), Row("10:33:00", "27") });
         var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
@@ -73,17 +73,13 @@ public sealed class CreditReviewTests
         Capture(tidy, "tidy-day-review");
         Find<Button>(tidy, "ApplyTidy").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(3, engine.Sessions.Count);
-        var grouping = new GroupDialog(model).Open(dashboard);
-        Dispatcher.UIThread.RunJobs(); using var groupFrame = grouping.CaptureRenderedFrame();
-        foreach (var box in grouping.GetVisualDescendants().OfType<CheckBox>()) box.IsChecked = true;
-        Capture(grouping, "group-editor");
-        Find<Button>(grouping, "SaveGroup").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert.Contains(model.Editor.Entries(Day, Day.AddDays(1)), e => e.GroupId is not null);
-        var export = new ExportDialog(model).Open(dashboard); Find<Button>(export, "ExportCsv").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Capture(export, "weekly-export-result");
-        dashboard.SelectTab(true); model.SetWeekSection("entries"); Capture(dashboard, "grouped-credit-week");
+        model.ToggleSelection(engine.Sessions.ToArray()); Assert.True(model.MergeSelection()); // Blocks are merged on the timeline now.
+        var group = Assert.Single(model.Editor.Entries(Day, Day.AddDays(1)), e => e.GroupId is not null).GroupId!;
+        var grouped = new GroupDialog(model, group).Open(dashboard); Capture(grouped, "group-editor"); grouped.Close();
+        Assert.True(model.ExportWeek()); // The export itself is in Settings, Export.
+        dashboard.SelectTab(true); Capture(dashboard, "grouped-credit-week");
         Assert.NotNull(model.ExportPath); Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Detail.csv")));
-        Directory.Delete(model.ExportPath!, true); export.Close(); dashboard.Close();
+        Directory.Delete(model.ExportPath!, true); dashboard.Close();
     }
 
     [Fact]
@@ -95,16 +91,14 @@ public sealed class CreditReviewTests
         Assert.Equal(Day.AddDays(1).AddHours(10), engine.Sessions.Single().From);
     }
     [AvaloniaFact]
-    public void GroupIsOneTimelineCardAndWeekUngroupRestoresSourceCards()
+    public void GroupIsOneTimelineCardAndUngroupRestoresSourceCards()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "27") });
-        var model = new TimerModel(engine); model.GroupEntries(engine.Sessions.ToArray());
+        var model = new TimerModel(engine); model.Editor.Group(engine.Sessions.ToArray());
         var dashboard = new DashboardWindow(model); dashboard.Show(); Capture(dashboard, "combined-group-timeline");
         Assert.Single(dashboard.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is ReviewEntry));
         Assert.Empty(dashboard.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow));
-        dashboard.SelectTab(true); model.SetWeekSection("entries"); Capture(dashboard, "explicit-ungroup-week");
-        var ungroup = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name?.StartsWith("Ungroup") == true);
-        ungroup.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); dashboard.SelectTab(false); Capture(dashboard, "ungrouped-timeline");
+        model.UngroupEntries(model.Editor.Entries(Day, Day.AddDays(1)).Single(e => e.GroupId is not null).GroupId!); Capture(dashboard, "ungrouped-timeline");
         Assert.Equal(2, dashboard.GetVisualDescendants().OfType<Border>().Count(b => b.Tag is SessionRow));
         Assert.Equal(57, engine.Sessions.Sum(s => decimal.Parse(s.Minutes, CultureInfo.InvariantCulture))); dashboard.Close();
     }
@@ -413,10 +407,9 @@ public sealed class CreditReviewTests
             model.CompleteSetup(); // A new database opens with the getting started setup over the dashboard, which would catch these clicks.
             var window = new DashboardWindow(model); window.Show(); Capture(window, "legacy-group-sections");
             Assert.Equal(2, window.GetVisualDescendants().OfType<Border>().Count(b => b.Tag is ReviewEntry));
-            window.SelectTab(true); model.SetWeekSection("entries"); Capture(window, "week-ctrl-selection");
-            var entry = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekReviewEntry");
-            entry.BringIntoView(); Dispatcher.UIThread.RunJobs(); // The table above is taller now, so scroll the entry into view first.
-            var point = entry.TranslatePoint(new Point(50, 15), window)!.Value;
+            // A merged card on the timeline selects all of its entries, and they cannot be merged again.
+            var card = window.GetVisualDescendants().OfType<Border>().First(b => b.Tag is ReviewEntry);
+            var point = card.TranslatePoint(new Point(50, 15), window)!.Value;
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             Assert.Equal(2, model.SelectedRows.Count); Assert.False(model.CanMergeSelection); window.Close();
         }

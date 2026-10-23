@@ -182,6 +182,40 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
+    public void NothingOnThePillMovesWhenAGlowComesAndGoes()
+    {
+        var demo = TimerModel.CreateDemo(); demo.CompleteSetup(); var pill = new PillWindow(demo); pill.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var surface = Find<Border>(pill, "PillSurface");
+            Point At(Control c) => c.TranslatePoint(default, pill)!.Value;
+            (double, double, Point, Point, Point, Point) Snapshot() { Dispatcher.UIThread.RunJobs(); using var f = pill.CaptureRenderedFrame();
+                return (surface.BorderThickness.Left, surface.Bounds.Width, At(Find<StackPanel>(pill, "PillLights")), At(Find<Button>(pill, "PillDashboard")), At(Find<Button>(pill, "PillPause")), At(pill.AccountsButton)); }
+            var idle = Snapshot();
+            demo.ToggleAccount("Account one"); Assert.Equal(idle, Snapshot()); // Recording.
+            demo.ToggleBreak(); Assert.Equal(idle, Snapshot()); // A break.
+            demo.ToggleBreak(); demo.SetOvertimeTest(true); demo.ToggleAccount("Account three"); Assert.Equal(idle, Snapshot()); // Overtime.
+        }
+        finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheGlowStopsAtThePillsRightEdgeWhileTheListIsOpen()
+    {
+        var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var host = Find<Border>(pill, "ShadowHost");
+            Assert.Null(host.Clip);
+            pill.ShowPanel(); Dispatcher.UIThread.RunJobs();
+            var clip = Assert.IsType<Avalonia.Media.RectangleGeometry>(host.Clip); Assert.Equal(PillWindow.PillWidth, clip.Rect.Right, 0.01); // Nothing is drawn past the pill's own edge,
+            Assert.True(clip.Rect.Left < 0 && clip.Rect.Top < 0 && clip.Rect.Bottom > PillWindow.PillHeight); // but the glow still shows on the other sides.
+            pill.CloseFlyouts(); Assert.Null(host.Clip); // And it comes back with the list closed.
+        }
+        finally { pill.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ManageAccountsIsOneIconAtTheTopRightOfTheDrawerAndOpensTheAccountsDialog()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();

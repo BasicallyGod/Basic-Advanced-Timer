@@ -322,6 +322,18 @@
     <Style Selector="Button.choiceTile.selected /template/ ContentPresenter, Button.choiceTile.selected:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="2" />
     </Style>
+    <!-- The section list on the settings page: quiet rows, and the chosen one in the selection tint with the accent for its words. -->
+    <Style Selector="Button.settingsNav">
+      <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="12,9" /><Setter Property="FontSize" Value="14" /><Setter Property="FontWeight" Value="Medium" />
+    </Style>
+    <Style Selector="Button.settingsNav:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="Button.settingsNav.selected /template/ ContentPresenter, Button.settingsNav.selected:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="Foreground" Value="{DynamicResource Accent}" />
+    </Style>
+    <Style Selector="Button.settingsNav.selected"><Setter Property="FontWeight" Value="SemiBold" /></Style>
+    <!-- A theme picture keeps its own colours, so a chosen one shows by its accent border alone. -->
+    <Style Selector="Button.choiceTile.themeTile.selected /template/ ContentPresenter, Button.choiceTile.themeTile.selected:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
     <!-- Add time, Undo and Merge use the same resting outline as the break and day buttons, and light up their border under the pointer. -->
     <Style Selector="Button.toolButton">
       <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Ink}" />

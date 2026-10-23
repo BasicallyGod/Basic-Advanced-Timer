@@ -11,9 +11,6 @@ public sealed class ThemePreviewTests
     [AvaloniaTheory]
     [InlineData("Light", "theme-light")]
     [InlineData("Dark", "theme-dark")]
-    [InlineData("After Hours", "theme-afterhours")]
-    [InlineData("Botanical", "theme-botanical")]
-    [InlineData("Hawthorn", "theme-hawthorn")]
     public void TheDashboardDrawsInEachBuiltInTheme(string theme, string file)
     {
         var model = TimerModel.CreateDemo(); model.SetTheme(theme);
@@ -31,9 +28,6 @@ public sealed class ThemePreviewTests
     [AvaloniaTheory]
     [InlineData("Light", "pill-light")]
     [InlineData("Dark", "pill-dark")]
-    [InlineData("After Hours", "pill-afterhours")]
-    [InlineData("Botanical", "pill-botanical")]
-    [InlineData("Hawthorn", "pill-hawthorn")]
     public void ThePillDrawsInEachState(string theme, string file)
     {
         var model = TimerModel.CreateDemo(); model.SetTheme(theme);
@@ -76,7 +70,6 @@ public sealed class ThemePreviewTests
             model.SetOvertimeTest(true); model.ToggleAccount("Account one"); Shot("dash-overtime"); model.SetOvertimeTest(false);
             model.ToggleBreak(); Shot("dash-break"); model.ToggleBreak();
             window.SelectTab(true); Shot("week");
-            model.SetWeekSection("hours"); Shot("hours"); model.SetWeekSection("entries"); Shot("entries"); model.SetWeekSection("overview");
             Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.Button>().Single(b => b.Name == "Settings").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
             Shot("settings");
         }

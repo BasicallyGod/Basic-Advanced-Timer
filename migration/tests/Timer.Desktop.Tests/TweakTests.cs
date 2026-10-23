@@ -85,27 +85,42 @@ public sealed class TweakTests
     }
 
     [AvaloniaFact]
-    public void TheExportDialogOffersAWeekAndAMonthEachWithAListAndWritesTheOneChosen()
+    public void TheExportSectionOffersAWeekAndAMonthEachWithAListAndWritesTheOneChosen()
     {
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));
-        var window = new ExportDialog(model).Open(model);
-        T Get<T>(string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
-        var week = Get<RadioButton>("ExportWeekChoice"); var month = Get<RadioButton>("ExportMonthChoice");
-        var weekPick = Get<ComboBox>("ExportWeekPick"); var monthPick = Get<ComboBox>("ExportMonthPick");
-        Assert.True(week.IsChecked); Assert.False(month.IsChecked);
-        // The lists start on the week and month being viewed, and reach back over the recorded days.
-        Assert.Equal("5 Oct to 11 Oct 2026", weekPick.SelectedItem); Assert.Equal("October 2026", monthPick.SelectedItem);
-        Assert.True(weekPick.ItemCount >= 12 && monthPick.ItemCount >= 12);
-        // Choosing from the month list picks the month, and exports that month, not the one being viewed.
-        monthPick.SelectedIndex = 2; Assert.True(month.IsChecked); Assert.False(week.IsChecked);
-        Get<Button>("ExportCsv").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        Assert.NotNull(model.ExportPath); Assert.Contains("Month-202608", model.ExportPath);
-        Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Detail.csv")) && File.Exists(Path.Combine(model.ExportPath!, "Summary.csv")));
-        // Choosing from the week list goes back to a week.
-        weekPick.SelectedIndex = 3; Assert.True(week.IsChecked);
-        Get<Button>("ExportCsv").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        Assert.Contains("Week-20260914", model.ExportPath); // Three weeks before the week of 5 October.
-        window.Close();
+        var view = new SettingsView(model); var window = new Window { Width = 900, Height = 600, Content = view }; window.Show(); view.ShowSection("export");
+        T Get<T>(string name) where T : Control => view.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+        void Click(string name) => Get<Button>(name).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        try
+        {
+            var pick = Get<ComboBox>("ExportPeriodPick");
+            // The list starts on the week being viewed, and reaches back over the recorded days.
+            Assert.Equal("5 Oct to 11 Oct 2026", pick.SelectedItem); Assert.True(pick.ItemCount >= 12);
+            Click("ExportMonthChoice"); Assert.Equal("October 2026", pick.SelectedItem); Assert.True(pick.ItemCount >= 12);
+            // The month chosen is the one exported, not the one being viewed.
+            pick.SelectedIndex = 2; Click("ExportCsv");
+            Assert.NotNull(model.ExportPath); Assert.Contains("Month-202608", model.ExportPath);
+            Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Detail.csv")) && File.Exists(Path.Combine(model.ExportPath!, "Summary.csv")));
+            Assert.StartsWith("Both files saved", Get<TextBlock>("ExportResult").Text); Assert.False(Get<Button>("CopyHours").IsEnabled); // There is no table to copy for a month.
+            Click("ExportWeekChoice"); pick.SelectedIndex = 3; Click("ExportCsv");
+            Assert.Contains("Week-20260914", model.ExportPath); // Three weeks before the week of 5 October.
+            Assert.True(Get<Button>("CopyHours").IsEnabled);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void CopyHoursTableCopiesTheChosenWeeksTableReadyForATimesheet()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));
+        var view = new SettingsView(model); var window = new Window { Width = 900, Height = 600, Content = view }; window.Show(); view.ShowSection("export");
+        try
+        {
+            view.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CopyHours").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.NotNull(view.CopiedText); Assert.Contains("\t", view.CopiedText); Assert.Contains("Account one", view.CopiedText);
+            var (table, _) = ReviewViews.WeekTableFor(model, model.WeekStart(model.SelectedDate)); Assert.Equal(table.ToTsv(), view.CopiedText);
+        }
+        finally { window.Close(); }
     }
 
     [Fact]
@@ -258,14 +273,15 @@ public sealed class TweakTests
     }
 
     [AvaloniaFact]
-    public void TheSettingsPageHasAPillSizeChoiceThatSetsAndShowsTheSize()
+    public void TheSettingsPageHasAPillSizeSliderWithAnAutomaticTickThatSetsAndShowsTheSize()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
-        var box = dashboard.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "PillSize");
-        Assert.Equal("Automatic", box.SelectedItem); Assert.Contains("120%", (IEnumerable<string>)box.ItemsSource!);
-        box.SelectedItem = "80%"; Assert.Equal(80, model.PillScalePercent);
-        box.SelectedItem = "Automatic"; Assert.Null(model.PillScalePercent);
+        var slider = dashboard.GetVisualDescendants().OfType<Slider>().Single(c => c.Name == "PillSize"); var automatic = dashboard.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Name == "PillSizeAutomatic");
+        Assert.True(automatic.IsChecked); Assert.False(slider.IsEnabled); Assert.Null(model.PillScalePercent); // Automatic to begin with, so the slider waits.
+        automatic.IsChecked = false; automatic.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.True(slider.IsEnabled); Assert.Equal(100, model.PillScalePercent);
+        slider.Value = 80; Assert.Equal(80, model.PillScalePercent);
+        automatic.IsChecked = true; automatic.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.Null(model.PillScalePercent); Assert.False(slider.IsEnabled);
         dashboard.Close();
     }
 

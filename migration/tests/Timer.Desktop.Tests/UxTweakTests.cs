@@ -54,21 +54,6 @@ public sealed class UxTweakTests
         finally { window.Close(); }
     }
 
-    [AvaloniaFact]
-    public void ThemesMadeAfterTheSettingsPageWasBuiltAppearInItsList()
-    {
-        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
-        var view = new SettingsView(model); var window = new Window { Content = view }; window.Show();
-        try
-        {
-            var choice = view.GetLogicalDescendants().OfType<ComboBox>().Single(c => c.Name == "ThemeChoice");
-            Assert.DoesNotContain("Mine", choice.ItemsSource!.Cast<string>());
-            model.SaveTheme(AppThemes.Light with { Name = "Mine" });
-            Assert.Contains("Mine", choice.ItemsSource!.Cast<string>());
-        }
-        finally { window.Close(); }
-    }
-
     [Fact]
     public void LightAndDarkAccentsKeepClearOfRedGreenAndOrange()
     {
@@ -169,7 +154,7 @@ public sealed class UxTweakTests
             Settle(window);
             double Top(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Point(0, 0), window)!.Value.Y; }
             Assert.True(Top("RailDashboard") < Top("RailPause")); Assert.True(Top("RailPause") < Top("RailAccounts")); Assert.True(Top("RailAccounts") < Top("TimelineTab"));
-            Assert.True(Top("DashboardBreak") < Top("DashboardDay")); Assert.True(Top("DashboardDay") < Top("QuitTimer")); Assert.True(Top("QuitTimer") > Top("WeekEntriesTab"));
+            Assert.True(Top("DashboardBreak") < Top("DashboardDay")); Assert.True(Top("DashboardDay") < Top("QuitTimer")); Assert.True(Top("QuitTimer") > Top("WeekOverviewTab"));
             Assert.Equal("Collapse to pill", ToolTip.GetTip(window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "RailDashboard")));
             window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "RailDashboard").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.Equal(1, back);
             var quits = 0; model.QuitRequested += () => quits++;
@@ -206,7 +191,7 @@ public sealed class UxTweakTests
         var model = new TimerModel(new TrackingEngine()); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            dashboard.Dialogs.Show(new ThemesDialog(model)); Settle(dashboard);
+            dashboard.Dialogs.Show(new AccountsDialog(model)); Settle(dashboard);
             Assert.Contains("clock", dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "DialogTitle").Classes);
         }
         finally { dashboard.Close(); }
@@ -235,19 +220,17 @@ public sealed class UxTweakTests
     }
 
     [AvaloniaFact]
-    public void WritingATwiceLeavesUnchangedColoursAloneAndAPreviewWritesOnlyTheMainVariant()
+    public void WritingAThemeTwiceLeavesUnchangedColoursAlone()
     {
-        var theme = AppThemes.BuiltIn.First(t => t.Name == "Botanical"); var app = Application.Current!;
+        var theme = AppThemes.Dark; var app = Application.Current!;
         ThemeEngine.Register(app, new[] { theme });
         var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
         var ink = dictionary["Ink"]; var accent = dictionary["Accent"];
         ThemeEngine.Register(app, new[] { theme });
         Assert.Same(ink, dictionary["Ink"]); Assert.Same(accent, dictionary["Accent"]); // Nothing changed, so nothing was replaced.
         var edited = new Dictionary<string, string>(theme.Colours) { ["Accent"] = "#123456" };
-        var recording = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.StateVariant(theme, ThemeDerivation.Recording)]; var recordingAccent = recording["Accent"];
-        ThemeEngine.RegisterPreview(app, theme with { Colours = edited });
+        ThemeEngine.Register(app, new[] { theme with { Colours = edited } });
         Assert.NotSame(accent, dictionary["Accent"]); Assert.Same(ink, dictionary["Ink"]); // Only the colour that moved was replaced.
-        Assert.Same(recordingAccent, recording["Accent"]); // A preview leaves the pill's tinted variants alone.
         ThemeEngine.Register(app, new[] { theme }); // Put back.
     }
 
@@ -506,7 +489,7 @@ public sealed class UxTweakTests
     }
 
     [AvaloniaFact]
-    public void TheRunningRecordingCountsInTheWeekTableTheChartAndTheEntriesDayTotal()
+    public void TheRunningRecordingCountsInTheWeekTable()
     {
         var now = new DateTime(2026, 10, 9, 12, 0, 0); var model = BudgetModel(() => now, out var engine);
         model.ToggleAccount("Weekly"); now = now.AddHours(2); // Two hours running, nothing saved yet.
@@ -514,12 +497,5 @@ public sealed class UxTweakTests
         var table = WeekTable.Build(model, new WeekExport(model.Editor, engine, week), week, new[] { 0, 1, 2, 3, 4 });
         var allocated = table.Rows.Single(r => r.Label == "Allocated"); Assert.Equal("02:00", allocated.Cells[4]); Assert.Equal("02:00", allocated.Total);
         Assert.Equal("02:00", table.Rows.Single(r => r.Label == "Weekly").Total);
-        var window = new DashboardWindow(model); window.Show();
-        try
-        {
-            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekEntriesTab").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "DayAllocated" && t.Text!.Contains("02:00"));
-        }
-        finally { window.Close(); }
     }
 }

@@ -29,7 +29,7 @@ public sealed class PolishTests
             Assert.False(menu.Single(m => m.Name == "BuildVersion").IsVisible); Assert.False(menu.Single(m => m.Name == "TestOvertime").IsVisible);
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); Settle(window);
             Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible); // No sample-data demo yet.
-            window.GetVisualDescendants().OfType<ScrollViewer>().Single(x => x.Name == "SettingsPage").Offset = new Vector(0, 5000); Settle(window); // About is at the foot of the page.
+            window.GetVisualDescendants().OfType<SettingsView>().Single().ShowSection("about"); Settle(window); // About is its own section.
             var about = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "AboutSection");
             var point = about.TranslatePoint(new Point(20, 20), window)!.Value;
             for (var i = 0; i < SettingsView.UnlockClicks - 1; i++) { window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left); }
@@ -132,33 +132,6 @@ public sealed class PolishTests
     }
 
     [AvaloniaFact]
-    public void EntriesRunByStartTimeWithinEachDay()
-    {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model); window.Show();
-        try
-        {
-            window.SelectTab(true); model.SetWeekSection("entries"); Settle(window);
-            var rows = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("entryRow")).ToList();
-            Assert.True(rows.Count > 6);
-            // Each row's time range is the second small line; read the starts in on-screen order and check they climb within a day.
-            static string? Start(Button b) => b.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).FirstOrDefault(t => t is { Length: 13 } && t[2] == ':' && t[5] == ' ')?[..5];
-            var ordered = rows.Select(r => (Y: r.TranslatePoint(default, window)!.Value.Y, Start: Start(r))).Where(r => r.Start is not null).OrderBy(r => r.Y).ToList();
-            // Each row belongs to the day heading above it; within one heading the starts must never fall.
-            var headings = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is { } x && x.Contains(' ') && System.Globalization.CultureInfo.GetCultureInfo("en-GB").DateTimeFormat.DayNames.Contains(x.Split(' ')[0]))
-                .Select(t => t.TranslatePoint(default, window)!.Value.Y).OrderBy(y => y).ToList();
-            Assert.True(headings.Count >= 3);
-            foreach (var day in ordered.GroupBy(o => headings.Count(h => h < o.Y)))
-            {
-                var starts = day.Select(d => d.Start!).ToList();
-                Assert.Equal(starts.OrderBy(x => x, StringComparer.Ordinal).ToList(), starts);
-            }
-            var tuesday = ordered.GroupBy(o => headings.Count(h => h < o.Y)).Select(g => g.Select(d => d.Start!).ToList()).First(g => g.Contains("09:00") && g.Count > 3);
-            Assert.Equal("09:00", tuesday[0]); // Account two, which the old account-name order put fifth.
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
     public void ANameThatDoesNotFitSlidesOnHoverAndGoesBackOnLeave()
     {
         var narrow = new MarqueeText("A very long client account name that cannot fit", 15) { Width = 90 };
@@ -173,6 +146,24 @@ public sealed class PolishTests
             narrow.Hover(false);
             Assert.False(narrow.Scrolling); Assert.Equal(Avalonia.Media.TextTrimming.CharacterEllipsis, narrow.Label.TextTrimming); Assert.Null(narrow.Label.RenderTransform); Assert.True(double.IsNaN(narrow.Label.Width));
             short_.Hover(true); Assert.False(short_.Scrolling); // A name that fits stays put.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ASlidingNameNeverGrowsPastItsRoomOrOverTheTimeBesideIt()
+    {
+        var marquee = new MarqueeText("A very long client account name that cannot fit", 15);
+        var time = new TextBlock { Text = "01:30" };
+        var grid = new Grid { Width = 200, ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        grid.Children.Add(new NameRow { Spacing = 0, Children = { new Border { Width = 10, Height = 10 }, marquee, new Border { Width = 8, Height = 8 } } }); Grid.SetColumn(time, 1); grid.Children.Add(time);
+        var window = new Window { Width = 300, Height = 120, Content = grid }; window.Show();
+        try
+        {
+            Settle(window); var room = marquee.Bounds.Width; Assert.True(room > 20 && room < 200, $"room {room}");
+            marquee.Hover(true); Settle(window);
+            Assert.True(marquee.Scrolling); Assert.InRange(marquee.Bounds.Width, room - 0.5, room + 2); // The box keeps its size (the trimmed name left a pixel or so spare), so the clock beside it is not run over.
+            var right = marquee.TranslatePoint(new Point(marquee.Bounds.Width, 0), window)!.Value.X; Assert.True(right <= time.TranslatePoint(default, window)!.Value.X + 0.5);
         }
         finally { window.Close(); }
     }

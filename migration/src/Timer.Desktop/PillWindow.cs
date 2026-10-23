@@ -77,11 +77,11 @@ public sealed class PillWindow : Window
         // The top of the pill is shared with the dashboard's rail.
         face = new StatusFace(model, "Pill", "PillBreak", "Open dashboard", () => OpenDashboard?.Invoke(), OnCircle, ToggleAccounts);
         // From the top, so the rail's top can start at the same distance from its own edge and nothing moves when one becomes the other.
-        var column = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, TopInset, 0, 0) };
+        var column = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, TopInset - EdgeThickness, 0, 0) };
         column.Children.Add(face);
         var root = rootGrid; root.Background = Brushes.Transparent; root.Children.Add(column);
         Ui.PillGestures(root, this);
-        surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true, Width = PillWidth, Height = PillHeight, BorderThickness = new Thickness(1) };
+        surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true, Width = PillWidth, Height = PillHeight, BorderThickness = new Thickness(EdgeThickness) };
         surface.Classes.Add("surface");
         shadowHost = Ui.Shadowed(surface, PillRadius);
         Content = new LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
@@ -171,6 +171,8 @@ public sealed class PillWindow : Window
     public const double DrawerWidth = 262;
     /// <summary>How far the lights sit below the card's top edge, on the pill and on the rail.</summary>
     public const double TopInset = 14;
+    /// <summary>The card's edge is this thick in every state, so the contents never move when a ring comes and goes; the column starts under it so the lights sit TopInset from the edge.</summary>
+    public const double EdgeThickness = 1.5;
     /// <summary>The most of a screen's height the drawer's list may take is its own height, so it never grows past the pill; it scrolls inside.</summary>
     public const double FewestRows = 3;
     // While the drawer is open the pill's right side is square, so the two read as one capsule, and the button shows pressed.
@@ -178,6 +180,8 @@ public sealed class PillWindow : Window
     {
         surface.CornerRadius = open ? new CornerRadius(PillRadius, 0, 0, PillRadius) : new CornerRadius(PillRadius);
         face.SetAccountsOpen(open); SyncDrawerRing();
+        // The glow stops at the pill's right edge while the list is open, so none shows in the seam between the two.
+        shadowHost.Clip = open ? new RectangleGeometry(new Rect(-Ui.ShadowMargin, -Ui.ShadowMargin, Ui.ShadowMargin + PillWidth, PillHeight + 2 * Ui.ShadowMargin)) : null;
     }
     private void SyncDrawerRing()
     {
@@ -231,7 +235,8 @@ public sealed class PillWindow : Window
         var stateColour = key == "Idle" ? Colors.Gray : Ui.PillStateColour(this, key);
 
         // A ring and a glow in the state's colour round the pill while it is doing something, and the plain edge and shadow when it is idle.
-        surface.BorderThickness = new Thickness(key == "Idle" ? 1 : 1.5);
+        // The same thickness in every state: a thicker edge only while something is happening moved the contents by half a pixel, which showed as a jump.
+        surface.BorderThickness = new Thickness(EdgeThickness);
         surface.BorderBrush = key == "Idle" ? (this.TryFindResource("Line", ActualThemeVariant, out var line) && line is IBrush lineBrush ? lineBrush : Brushes.Gray) : new SolidColorBrush(Color.FromArgb(179, stateColour.R, stateColour.G, stateColour.B));
         if (drawer is not null) SyncDrawerRing();
         var shadow = (model.Shadows, key, ActualThemeVariant);

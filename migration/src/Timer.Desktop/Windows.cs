@@ -189,7 +189,7 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock date = Ui.Text("", 14); private Button datePick = null!;
     private readonly ContentControl workspace = new();
     private readonly Button day;
-    private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, hoursTab = null!, entriesTab = null!, addTime = null!, edit = null!;
+    private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, addTime = null!, edit = null!;
     private readonly Button undo;
     private readonly Button merge;
     private EntryDialog? entryEditor;
@@ -230,11 +230,9 @@ public sealed class DashboardWindow : Window
         // The top is drawn at the pill's own size, so the clock, circle and accounts button stay put and the same size when one becomes the other.
         railTop.Children.Add(new LayoutTransformControl { LayoutTransform = railScale, Child = face, HorizontalAlignment = HorizontalAlignment.Center });
         timelineRail = RailButton(IconKind.Timeline, "Timeline", "TimelineTab", () => SelectTab(false));
-        overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectSection("overview"));
-        hoursTab = RailButton(IconKind.Table, "Hours table", "WeekHoursTab", () => SelectSection("hours"));
-        entriesTab = RailButton(IconKind.Entries, "Entries", "WeekEntriesTab", () => SelectSection("entries"));
+        overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectTab(true));
         var viewsRule = Ui.Rule(); viewsRule.Margin = new Thickness(10, 4); railTop.Children.Add(viewsRule);
-        foreach (var button in new[] { timelineRail, overviewTab, hoursTab, entriesTab }) railTop.Children.Add(button);
+        foreach (var button in new[] { timelineRail, overviewTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
         // The break is in the face, under the primary control, as on the pill.
@@ -540,11 +538,6 @@ public sealed class DashboardWindow : Window
     public void SelectTab(bool showWeek) { settingsMode = false; weekMode = showWeek; Refresh(true); }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
-    private void SelectSection(string section)
-    {
-        settingsMode = false; weekMode = true;
-        if (model.WeekSection != section) model.SetWeekSection(section); else Refresh(true);
-    }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
     private void Refresh(bool refreshWorkspace)
     {
@@ -566,8 +559,8 @@ public sealed class DashboardWindow : Window
         ToolTip.SetTip(day, dayTip); Avalonia.Automation.AutomationProperties.SetName(day, dayTip);
         if (finishPopup.IsOpen && !model.DayStarted) finishPopup.IsOpen = false;
         if (accountsLayer.IsVisible && model.ActiveAccount != accountsActive) CloseAccounts(); // Choosing an account puts the list away.
-        // Editing buttons show only where they apply: Merge when blocks are selected, and neither on the overview or the hours table.
-        var editing = (!weekMode || model.WeekSection == "entries");
+        // Editing buttons show only where they apply: Merge when blocks are selected, and none on the overview.
+        var editing = !weekMode;
         zoomControls.IsVisible = !weekMode && !settingsMode;
         settingZoom = true; zoomSlider.Value = model.TimelineZoomFraction; settingZoom = false; // Follows the wheel and the buttons too.
         zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
@@ -580,15 +573,13 @@ public sealed class DashboardWindow : Window
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); var glyph = button.Content as IconGlyph ?? (button.Content as Grid)?.Children.OfType<IconGlyph>().FirstOrDefault(); if (glyph is not null) glyph.TintKey = selected ? "Ink" : "Muted"; }
         Rail(timelineRail, !weekMode && !settingsMode);
-        Rail(overviewTab, !settingsMode && weekMode && model.WeekSection == "overview");
-        Rail(hoursTab, !settingsMode && weekMode && model.WeekSection == "hours");
-        Rail(entriesTab, !settingsMode && weekMode && model.WeekSection == "entries");
+        Rail(overviewTab, !settingsMode && weekMode);
         Rail(settingsRail, settingsMode);
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
         foreach (var control in new Control[] { previous, datePick, next, todayButton }) control.IsVisible = !settingsMode;
-        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && (!weekMode || model.WeekSection == "entries");
-        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && (!weekMode || model.WeekSection == "entries"); // Nothing to put in it on the overview or the hours table.
-        workspaceTitle.Text = settingsMode ? "Settings" : !weekMode ? "Timeline" : model.WeekSection switch { "hours" => "Hours table", "entries" => "Entries", _ => "Week overview" };
+        if (selectionStrip is not null) selectionStrip.IsVisible = selectionStrip.Wanted && !settingsMode && !weekMode;
+        if (toolsRow is not null) toolsRow.IsVisible = !settingsMode && !weekMode; // Nothing to put in it on the overview.
+        workspaceTitle.Text = settingsMode ? "Settings" : !weekMode ? "Timeline" : "Week overview";
         todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
         if (settingsMode ? !renderedSettings : refreshWorkspace)

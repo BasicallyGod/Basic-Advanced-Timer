@@ -66,53 +66,30 @@ public sealed class EntryLengthTests
     }
 
     [AvaloniaFact]
-    public void TickingAlwaysMoveKeepsTheChoiceSoTheNextLongerEntryMovesBlocksWithoutAsking()
+    public void ALongerLengthAsksEveryTimeAndMovingTheBlocksChainsThemLater()
     {
         var model = Model(out var engine);
         var window = new EntryDialog(model, engine.Sessions[0], engine.Sessions[0].From, engine.Sessions[0].To).Open(model);
         try
         {
             Dispatcher.UIThread.RunJobs();
-            Assert.False(model.MoveLaterAlways);
             Type(window, "EntryLength", "0:45"); Click(window, "SaveEntry");
-            Find<CheckBox>(window, "AlwaysShove").IsChecked = true; Click(window, "ShoveConfirm");
-            Assert.True(model.MoveLaterAlways);
+            Assert.True(Find<Border>(window, "ShovePrompt").IsVisible);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<CheckBox>(), c => c.Name == "AlwaysShove"); // There is no way to stop being asked.
+            Click(window, "ShoveConfirm");
             Assert.Equal("09:45:00", engine.Sessions[1].Start); Assert.Equal("10:15:00", engine.Sessions[2].Start);
         }
         finally { window.Close(); }
-        var again = new EntryDialog(model, engine.Sessions[0], engine.Sessions[0].From, engine.Sessions[0].To).Open(model);
-        try
-        {
-            Dispatcher.UIThread.RunJobs();
-            Type(again, "EntryLength", "1:00"); Click(again, "SaveEntry");
-            Assert.False(again.IsVisible); // No question this time.
-            Assert.Equal("10:00:00", engine.Sessions[1].Start); Assert.Equal("10:30:00", engine.Sessions[2].Start);
-        }
-        finally { again.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheChoiceCanBeSwitchedBackOffInSettings()
+    public void SettingsHasNoSwitchForMovingLaterBlocks()
     {
-        var model = Model(out _); model.SetMoveLaterAlways(true);
+        var model = Model(out _);
         var dashboard = new DashboardWindow(model); dashboard.Show(); Dispatcher.UIThread.RunJobs();
         Click(dashboard, "Settings"); Dispatcher.UIThread.RunJobs();
-        var box = Find<CheckBox>(dashboard, "MoveLaterAlways"); Assert.True(box.IsChecked);
-        box.IsChecked = false; box.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); // A real click toggles the box before the handler runs.
-        Assert.False(model.MoveLaterAlways);
+        Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<CheckBox>(), c => c.Name == "MoveLaterAlways");
         dashboard.Close();
-    }
-
-    [Fact]
-    public void TheChoiceIsSavedAndLoadedAgain()
-    {
-        var folder = Path.Combine(Path.GetTempPath(), "timer-shove-" + Guid.NewGuid());
-        try
-        {
-            using (var store = new TimerStore(folder)) { var engine = new TrackingEngine(); var prefs = store.Load(engine); Assert.False(prefs.MoveLaterAlways); store.Save(engine, prefs with { MoveLaterAlways = true }); }
-            using (var store = new TimerStore(folder)) Assert.True(store.Load(new TrackingEngine()).MoveLaterAlways);
-        }
-        finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
 
     [Fact]
