@@ -188,7 +188,7 @@ public sealed class NotesTests
         try
         {
             model.Notes.RequestNewMeeting(Day.AddHours(13).AddMinutes(8)); Settle(window);
-            Assert.Equal("13:15", Find<TextBox>(window, "MeetingStart").Text); Assert.Equal("14:15", Find<TextBox>(window, "MeetingEnd").Text); // An hour long.
+            Assert.Equal("13:15", Find<TextBox>(window, "MeetingStart").Text); Assert.Equal("13:45", Find<TextBox>(window, "MeetingEnd").Text); // Half an hour long.
             Assert.Equal("Add meeting", Assert.IsType<TextBlock>(Find<Button>(window, "SubmitNote").Content).Text);
         }
         finally { window.Close(); }
@@ -251,7 +251,7 @@ public sealed class NotesTests
         {
             Click(window, "NoteAddReminder_" + id);
             Assert.True(Find<Avalonia.Controls.Primitives.Popup>(window, "ReminderHost").IsOpen);
-            Click(window, "ReminderDayTomorrow"); Click(window, "hourUp"); Click(window, "ReminderTime9"); Click(window, "ReminderSet");
+            Click(window, "ReminderCell_20261010"); Click(window, "hourUp"); Click(window, "ReminderTime9"); Click(window, "ReminderSet");
             Assert.Equal(Day.AddDays(1).AddHours(9), NotesModel.ReminderOf(model.Notes.Find(id)!)); Assert.False(Find<Avalonia.Controls.Primitives.Popup>(window, "ReminderHost").IsOpen);
             Assert.Equal("Notes (0)", Find<TextBlock>(window, "NotesTitle").Text); // Today's card no longer lists it.
             model.ChangeDate(1); Settle(window); Assert.Equal("Notes (1)", Find<TextBlock>(window, "NotesTitle").Text);
@@ -262,17 +262,17 @@ public sealed class NotesTests
     }
 
     [AvaloniaFact]
-    public void ThePopupStepsInFiveMinutesTurnsPastDaysOffWarnsOfAPastTimeAndIsClosedByItsCross()
+    public void ThePopupStartsAtMiddayStepsInFiveMinutesTurnsPastDaysOffAndIsClosedByItsCross()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             Click(window, "AddNote"); Click(window, "FormBell");
             Assert.False(Find<Button>(window, "ReminderCell_20261008").IsEnabled); Assert.True(Find<Button>(window, "ReminderCell_20261010").IsEnabled); // Yesterday is off; tomorrow is on.
-            Assert.Equal("15", Find<TextBox>(window, "ReminderHour").Text); Click(window, "minutesUp"); Assert.Equal("05", Find<TextBox>(window, "ReminderMinute").Text);
+            Assert.Equal("12", Find<TextBox>(window, "ReminderHour").Text); Click(window, "minutesUp"); Assert.Equal("05", Find<TextBox>(window, "ReminderMinute").Text);
             Click(window, "minutesDown"); Click(window, "minutesDown"); Assert.Equal("55", Find<TextBox>(window, "ReminderMinute").Text);
-            Click(window, "ReminderTime9"); Assert.Contains("already past", Find<TextBlock>(window, "ReminderSummary").Text); // 09:00 today, at ten past ten... the demo clock reads 10:00.
-            Click(window, "ReminderDayTomorrow"); Assert.DoesNotContain("already past", Find<TextBlock>(window, "ReminderSummary").Text); Assert.StartsWith("Tomorrow, 09:00", Find<TextBlock>(window, "ReminderSummary").Text);
+            Click(window, "ReminderTime9"); Assert.Equal("Today, 09:00", Find<TextBlock>(window, "ReminderSummary").Text); // No warning that it has passed.
+            Click(window, "ReminderCell_20261010"); Assert.StartsWith("Tomorrow, 09:00", Find<TextBlock>(window, "ReminderSummary").Text);
             Click(window, "ReminderClose"); Assert.False(Find<Avalonia.Controls.Primitives.Popup>(window, "ReminderHost").IsOpen);
         }
         finally { window.Close(); }
@@ -284,9 +284,9 @@ public sealed class NotesTests
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Click(window, "AddNote"); Type(window, "NoteField", "Call back"); Click(window, "FormBell"); Click(window, "ReminderDayTomorrow"); Click(window, "ReminderSet");
+            Click(window, "AddNote"); Type(window, "NoteField", "Call back"); Click(window, "FormBell"); Click(window, "ReminderCell_20261010"); Click(window, "ReminderSet");
             Assert.NotNull(Find<Button>(window, "FormReminder")); Click(window, "SubmitNote");
-            var note = model.Notes.All.Single(); Assert.Equal(Day.AddDays(1).AddHours(15), NotesModel.ReminderOf(note)); Assert.Contains("reminder for Tomorrow, 15:00", model.Notice);
+            var note = model.Notes.All.Single(); Assert.Equal(Day.AddDays(1).AddHours(12), NotesModel.ReminderOf(note)); Assert.Contains("reminder for Tomorrow, 12:00", model.Notice);
         }
         finally { window.Close(); }
     }

@@ -270,6 +270,7 @@ public sealed class DashboardWindow : Window
         bellBadge = new Border { Name = "NotificationsBadge", MinWidth = 18, Height = 18, CornerRadius = new CornerRadius(9), Padding = new Thickness(4, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, -6, -6, 0), IsHitTestVisible = false, IsVisible = false, Child = bellBadgeText }; bellBadge.Classes.Add("badge");
         bellPopup = new Popup { Placement = PlacementMode.BottomEdgeAlignedRight, IsLightDismissEnabled = true, Name = "NotificationsPopup" };
+        bellPopup.Opened += (_, _) => bell.Classes.Set("on", true); bellPopup.Closed += (_, _) => { if (((Avalonia.LogicalTree.ILogical)bell).IsAttachedToLogicalTree) bell.Classes.Set("on", false); };
         var bellHost = new Grid { Name = "NotificationsHost" }; bellHostPanel = bellHost; bellHost.Children.Add(bell); bellHost.Children.Add(bellBadge); bellHost.Children.Add(bellPopup); bellPopup.PlacementTarget = bell;
         searchBox = new TextBox { Name = "NotesSearch", Watermark = "Search notes", Width = 240, Height = 38, MinHeight = 38, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(34, 0, 8, 0) };
         searchBox.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && notesPage is not null) notesPage.Query = searchBox.Text ?? ""; };
@@ -556,7 +557,11 @@ public sealed class DashboardWindow : Window
     private void ToggleBell()
     {
         if (bellPopup.IsOpen) { bellPopup.IsOpen = false; return; }
-        bellPopup.Child = new NotificationsFlyout(model); bellPopup.IsOpen = true;
+        // The card hangs from a small point under the bell, so it reads as coming from it; the room round it is for its shadow.
+        var flyout = new NotificationsFlyout(model) { Margin = new Thickness(8, 9, 8, 12) };
+        var point = new Border { Width = 12, Height = 12, BorderThickness = new Thickness(1, 1, 0, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 8 + bell.Bounds.Width / 2 - 6, 0), RenderTransform = new Avalonia.Media.RotateTransform(45), IsHitTestVisible = false, Name = "NotificationsPoint" };
+        point.Classes.Add("surface");
+        bellPopup.Child = new Grid { Children = { flyout, point } }; bellPopup.HorizontalOffset = 8; bellPopup.VerticalOffset = 2; bellPopup.IsOpen = true;
     }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     // "19 – 25 Oct", or "28 Sep – 4 Oct" when the week crosses a month.

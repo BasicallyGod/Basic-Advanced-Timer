@@ -29,7 +29,7 @@ public sealed class NotesCard : Border
     private string? shown;
     // The form's state.
     private Form form = Form.None; private long? editing;
-    private string draft = "", startText = "09:00", endText = "10:00"; private string? draftAccount; private DateTime? draftReminder; private RepeatChoice draftRepeat;
+    private string draft = "", startText = "12:00", endText = "12:30"; private string? draftAccount; private DateTime? draftReminder; private RepeatChoice draftRepeat;
     private DateTime formDay;
     private (long Id, bool Delete)? scope;
 
@@ -133,7 +133,7 @@ public sealed class NotesCard : Border
     {
         Open(Form.Meeting, fresh: true);
         var snapped = new TimeSpan(Math.Clamp((int)Math.Round(start.TimeOfDay.TotalMinutes / 15) * 15, 0, 23 * 60 + 45) * TimeSpan.TicksPerMinute);
-        var end = snapped + TimeSpan.FromHours(1); if (end >= TimeSpan.FromDays(1)) end = new TimeSpan(23, 59, 0);
+        var end = snapped + TimeSpan.FromMinutes(30); if (end >= TimeSpan.FromDays(1)) end = new TimeSpan(23, 59, 0);
         startText = snapped.ToString(@"hh\:mm"); endText = end.ToString(@"hh\:mm"); DrawForm();
     }
     private void OnEditMeeting(long id)
@@ -150,7 +150,7 @@ public sealed class NotesCard : Border
         // Pressing the button of the form that is open closes it; any other press opens that form, empty.
         if (form == kind && editing is null && !fresh) { Close(); return; }
         form = kind; editing = null; formDay = model.SelectedDate.Date; scope = null; CloseReminder(); DrawOverlay();
-        draft = ""; draftAccount = null; draftReminder = null; startText = "09:00"; endText = "10:00"; draftRepeat = RepeatChoice.None;
+        draft = ""; draftAccount = null; draftReminder = null; startText = "12:00"; endText = "12:30"; draftRepeat = RepeatChoice.None;
         DrawForm();
     }
     private void Close() { form = Form.None; editing = null; scope = null; CloseReminder(); DrawOverlay(); DrawForm(); }
@@ -192,14 +192,22 @@ public sealed class NotesCard : Border
         field.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Submit(); e.Handled = true; } else if (e.Key == Key.Escape) { Close(); e.Handled = true; } };
         if (meeting)
         {
-            var times = Ui.Grid("Auto,Auto,Auto,*,Auto"); times.ColumnSpacing = 8;
+            var times = Ui.Grid("Auto,Auto,Auto,Auto,*,Auto"); times.ColumnSpacing = 8;
             var start = TimeBox("MeetingStart", startText, v => startText = v); var end = TimeBox("MeetingEnd", endText, v => endText = v);
-            Ui.Put(times, start); Ui.Put(times, new TextBlock { Text = "–", VerticalAlignment = VerticalAlignment.Center, Classes = { "muted" } }, 1); Ui.Put(times, end, 2);
+            // The day, by a small calendar, so a meeting can go on any day and not only the one showing.
+            var dayWords = new TextBlock { Text = NoteDates.Day(formDay, model.Engine.Now), VerticalAlignment = VerticalAlignment.Center };
+            var dayButton = Ui.Ctl("MeetingDay", null, null, "Choose the day", () => { }, small: true); dayButton.Width = double.NaN; dayButton.Padding = new Thickness(10, 0);
+            dayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), dayWords);
+            var picker = new SoftDatePicker { Name = "MeetingCalendar" }; var dayFlyout = new Flyout { Content = picker, Placement = PlacementMode.Bottom };
+            dayFlyout.Opening += (_, _) => picker.View(formDay, formDay);
+            picker.DayPicked += picked => { formDay = picked.Date; dayFlyout.Hide(); DrawForm(); };
+            dayButton.Flyout = dayFlyout; Ui.Put(times, dayButton);
+            Ui.Put(times, start, 1); Ui.Put(times, new TextBlock { Text = "–", VerticalAlignment = VerticalAlignment.Center, Classes = { "muted" } }, 2); Ui.Put(times, end, 3);
             var repeat = new ComboBox { Name = "MeetingRepeat", ItemsSource = Enum.GetValues<RepeatChoice>().Select(NotesModel.Label).ToList(), HorizontalAlignment = HorizontalAlignment.Stretch, Height = 30, MinHeight = 30, FontSize = 13 };
             repeat.SelectedItem = NotesModel.Label(draftRepeat);
             repeat.SelectionChanged += (_, _) => { if (repeat.SelectedItem is string label) draftRepeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };
-            Ui.Put(times, repeat, 3);
-            if (editing is { } id) Ui.Put(times, Ui.Ctl("MeetingDelete", "Delete", null, "Remove this meeting", () => { if (Notes.Find(id) is { } found) AskRemove(found); }, small: true), 4);
+            Ui.Put(times, repeat, 4);
+            if (editing is { } id) Ui.Put(times, Ui.Ctl("MeetingDelete", "Delete", null, "Remove this meeting", () => { if (Notes.Find(id) is { } found) AskRemove(found); }, small: true), 5);
             column.Children.Add(times);
         }
         formHost.Content = column;

@@ -89,7 +89,7 @@ public sealed class NotesPageTests
             Assert.True(Find<Avalonia.Controls.Primitives.Popup>(window, "NotificationsPopup").IsOpen);
             var id = IdOf(model, "Send the budget"); Assert.NotNull(Find<Border>(window, "Notification_" + id)); Assert.NotNull(Find<Border>(window, "Notification_" + IdOf(model, "Follow up on the brief")));
             Click(window, "NotificationReschedule_" + id); Assert.True(Find<Avalonia.Controls.Primitives.Popup>(window, "RescheduleHost").IsOpen);
-            Click(window, "ReminderDayTomorrow"); Click(window, "ReminderSet");
+            Click(window, "ReminderCell_20261010"); Click(window, "ReminderSet");
             Assert.Equal(Day.AddDays(1).AddHours(8), NotesModel.ReminderOf(model.Notes.Find(id)!)); Assert.Equal(0, model.Notes.AttentionCount); Assert.False(badge.IsVisible);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "Notification_" + id + "x");
         }
@@ -167,9 +167,9 @@ public sealed class NotesPageTests
             Type(window, "PageNoteField", "Draft the plan"); Click(window, "PageSubmit");
             Assert.Equal("Draft the plan", model.Notes.Text(Assert.Single(model.Notes.All))); Assert.Equal("Note added.", model.Notice);
             Click(window, "PageKindMeeting"); Type(window, "PageNoteField", "Review"); Type(window, "PageLength", "0:30");
-            Click(window, "PageWhen"); Click(window, "ReminderSet"); // Today at the pop-up's own default, 09:00.
+            Click(window, "PageWhen"); Click(window, "ReminderSet"); // Today at the pop-up's own default, midday.
             Click(window, "PageSubmit");
-            var meeting = model.Notes.MeetingsOn(Day).Single(); Assert.Equal(TimeSpan.FromHours(9), meeting.At); Assert.Equal(TimeSpan.FromHours(9.5), meeting.End);
+            var meeting = model.Notes.MeetingsOn(Day).Single(); Assert.Equal(TimeSpan.FromHours(12), meeting.At); Assert.Equal(TimeSpan.FromHours(12.5), meeting.End);
         }
         finally { window.Close(); }
     }

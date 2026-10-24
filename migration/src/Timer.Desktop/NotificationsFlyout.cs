@@ -70,16 +70,17 @@ public sealed class NotificationsFlyout : Border
         var notes = model.Notes; var account = notes.AccountOf(note); var due = NotesModel.ReminderOf(note)!.Value; var today = model.Engine.Now;
         var grid = Ui.Grid("Auto,*,Auto"); grid.ColumnSpacing = 10;
         var dot = NoteParts.Dot(model, account, 12); dot.VerticalAlignment = VerticalAlignment.Top; dot.Margin = new Thickness(0, 3, 0, 0); Ui.Put(grid, dot);
-        var text = new StackPanel { Spacing = 2 };
+        var text = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(new TextBlock { Text = notes.Text(note), FontSize = 13.5, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap });
         var when = late ? (due.Date == today.Date ? "Overdue since " + due.ToString("HH:mm") : "Overdue since " + NoteDates.When(due, today)) : NoteDates.When(due, today);
         text.Children.Add(late ? NoteParts.Ink(when, "Overtime", 12) : NoteParts.Ink(when, "Muted", 12));
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, late ? 6 : 0, 0, 0) };
+        Ui.Put(grid, text, 1);
+        // Done and Reschedule are small icons at the right of the row, so the words keep the room.
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
         Button? reschedule = null;
-        if (late) { var done = Ui.Ctl("NotificationDone_" + note.Id, "Done", null, "Done", () => notes.Toggle(note.Id), small: true); done.Classes.Add("primary"); buttons.Children.Add(done); }
-        reschedule = Ui.Ctl("NotificationReschedule_" + note.Id, "Reschedule", null, "Change the date or time", () => Reschedule(note.Id, reschedule!), small: true); buttons.Children.Add(reschedule);
-        if (late) { text.Children.Add(buttons); Ui.Put(grid, text, 1); }
-        else { Ui.Put(grid, text, 1); buttons.VerticalAlignment = VerticalAlignment.Top; Ui.Put(grid, buttons, 2); }
+        if (late) { var done = Ui.Ctl("NotificationDone_" + note.Id, null, IconKind.Check, "Done", () => notes.Toggle(note.Id), small: true); done.Classes.Add("primary"); buttons.Children.Add(done); }
+        reschedule = Ui.Ctl("NotificationReschedule_" + note.Id, null, IconKind.Clock, "Reschedule", () => Reschedule(note.Id, reschedule!), small: true); buttons.Children.Add(reschedule);
+        Ui.Put(grid, buttons, 2);
         var card = new Border { Child = grid, CornerRadius = new CornerRadius(14), Padding = new Thickness(10), BorderThickness = new Thickness(1), Name = "Notification_" + note.Id };
         card.Classes.Add(late ? "lateRow" : "noteRow");
         return card;

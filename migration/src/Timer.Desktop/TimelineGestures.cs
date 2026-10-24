@@ -9,7 +9,11 @@ namespace Timer.Desktop;
 public static class TimelineGestures
 {
 
-    public static void Attach(Border card, Canvas canvas, TimerModel model, SessionRow row, double pixelsPerHour)
+    /// <summary>
+    /// A selected block also gets a grab handle on each edge that reaches a little outside it, where its ring is. The ring is not part of the block, so a press there would
+    /// otherwise land on a neighbour (or the empty canvas) and start dragging that one, which made resizing a selected block fail now and then.
+    /// </summary>
+    public static void Attach(Border card, Canvas canvas, TimerModel model, SessionRow row, double pixelsPerHour, bool selected = false)
     {
         Point? origin = null;
         var edge = 0;
@@ -20,16 +24,16 @@ public static class TimelineGestures
         var previews = new Dictionary<Border, (double Left, double Width)>();
         void RestoreNeighbours()
         { foreach (var p in previews) { Canvas.SetLeft(p.Key, p.Value.Left); p.Key.Width = p.Value.Width; p.Key.Opacity = 1; } previews.Clear(); }
-        card.PointerPressed += (_, e) =>
+        void Press(Control source, PointerPressedEventArgs e, int? forced)
         {
-            if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
+            if (!e.GetCurrentPoint(source).Properties.IsLeftButtonPressed) return;
             origin = e.GetPosition(canvas); delta = TimeSpan.Zero; dragging = false;
             oldLeft = Canvas.GetLeft(card); oldWidth = card.Width;
-            var x = e.GetPosition(card).X;
-            edge = EdgeAt(x, oldWidth);
-            e.Handled = true; e.Pointer.Capture(card);
-        };
-        card.PointerMoved += (_, e) =>
+            edge = forced ?? EdgeAt(e.GetPosition(card).X, oldWidth);
+            e.Handled = true; e.Pointer.Capture(source);
+        }
+        card.PointerPressed += (_, e) => Press(card, e, null);
+        void Move(PointerEventArgs e)
         {
             if (origin is not { } start)
             {
@@ -63,8 +67,9 @@ public static class TimelineGestures
                 catch (ArgumentException) { } // Final validation reports a blocked insertion without changing the ledger.
             }
             e.Handled = true;
-        };
-        card.PointerReleased += (_, e) =>
+        }
+        card.PointerMoved += (_, e) => Move(e);
+        void Release(PointerReleasedEventArgs e)
         {
             if (origin is null) return;
             var commit = dragging && delta != TimeSpan.Zero;
@@ -76,16 +81,30 @@ public static class TimelineGestures
                 row.To + (mode >= 0 ? change : TimeSpan.Zero), push);
             else if (select) model.SelectBlock(new[] { row }, shift);
             e.Handled = true;
-        };
-        card.PointerCaptureLost += (_, _) =>
+        }
+        card.PointerReleased += (_, e) => Release(e);
+        void Lost()
         {
             // Context menus can release capture without a left-button gesture.
             if (origin is null) return;
             RestoreNeighbours();
             origin = null; dragging = false; card.Opacity = 1;
             Canvas.SetLeft(card, oldLeft); card.Width = oldWidth;
-        };
+        }
+        card.PointerCaptureLost += (_, _) => Lost();
         card.Cursor = new Cursor(StandardCursorType.SizeAll);
+        if (!selected) return;
+        foreach (var side in new[] { -1, 1 })
+        {
+            var reach = Math.Min(12, Math.Max(5, card.Width / 2 + 4));
+            var handle = new Border { Name = side < 0 ? "TimelineHandleStart" : "TimelineHandleEnd", Width = reach, Height = card.Height, Background = Avalonia.Media.Brushes.Transparent, ZIndex = 6, Cursor = new Cursor(StandardCursorType.SizeWestEast) };
+            Canvas.SetLeft(handle, side < 0 ? Canvas.GetLeft(card) - 4 : Canvas.GetLeft(card) + card.Width - reach + 4); Canvas.SetTop(handle, Canvas.GetTop(card));
+            handle.PointerPressed += (_, e) => Press(handle, e, side);
+            handle.PointerMoved += (_, e) => { if (origin is not null) Move(e); };
+            handle.PointerReleased += (_, e) => Release(e);
+            handle.PointerCaptureLost += (_, _) => Lost();
+            canvas.Children.Add(handle);
+        }
     }
     /// <summary>Which edge a press at <paramref name="x"/> grabs, -1 the start (left), 1 the end (right), 0 for moving the whole block.</summary>
     public static int EdgeAt(double x, double width)

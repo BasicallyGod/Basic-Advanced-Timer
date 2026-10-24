@@ -160,7 +160,13 @@ public static class ReviewViews
             var text = new StackPanel { Spacing = 2, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = detail == BlockDetail.Full ? new Thickness(width < 84 ? 7 : 10, 6) : new Thickness(8, 0) };
             // The duration is in the ordinary typeface, semibold: the display face at bold was too heavy to read at this size.
             TextBlock Duration(double size) { var d = Ui.Text(model.Format(duration), size); d.FontWeight = FontWeight.SemiBold; d.Name = "BlockDuration"; return d; }
-            TextBlock Name(double size, bool short_) { var n = Ui.Text(short_ ? PillWindow.Initials(display) : display, size); n.FontWeight = FontWeight.SemiBold; n.TextTrimming = TextTrimming.CharacterEllipsis; n.Name = "BlockName"; return n; }
+            // A name too long for its block slides past on hover so the whole of it can be read (the same MarqueeText as the account lists).
+            var marquees = new List<MarqueeText>();
+            Control Name(double size, bool short_)
+            {
+                if (short_) { var n = Ui.Text(PillWindow.Initials(display), size); n.FontWeight = FontWeight.SemiBold; n.TextTrimming = TextTrimming.CharacterEllipsis; n.Name = "BlockName"; return n; }
+                var m = new MarqueeText(display, size); m.Label.FontWeight = FontWeight.SemiBold; m.Label.Name = "BlockName"; marquees.Add(m); return m;
+            }
             var recording = interval.Row is null && interval.Group is null;
             var note = interval.Group is { } groupNote ? groupNote.Note : recording ? "Recording now" : interval.Row is { } noteRow ? model.Editor.Note(noteRow) : "";
             switch (detail)
@@ -180,6 +186,7 @@ public static class ReviewViews
             foreach (var child in text.GetLogicalDescendants().OfType<TextBlock>()) child.Foreground = Brush.Parse(ink);
             // The card itself is not clipped, or the selection ring round it would be cut off; what is inside it is clipped instead.
             var card = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(CornerFor(laneCount, width, height)) };
+            if (marquees.Count > 0) { card.PointerEntered += (_, _) => marquees.ForEach(m => m.Hover(true)); card.PointerExited += (_, _) => marquees.ForEach(m => m.Hover(false)); }
             if (isBreak) { card.Background = Hatch(model); card.BorderBrush = Brush.Parse(model.CurrentTheme.Colour("Line")); card.BorderThickness = new Thickness(1); }
             else
             {
@@ -208,7 +215,14 @@ public static class ReviewViews
             // A block with a note carries a small page mark in its corner, when it is wide enough for the note's first line.
             if (interval.Row is { } notedRow && detail == BlockDetail.Full && width >= 140 && !string.IsNullOrWhiteSpace(model.Editor.Note(notedRow)))
                 content.Children.Add(new IconGlyph(IconKind.Note) { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 8, 7), IsHitTestVisible = false, Opacity = .75, Name = "NoteMark" });
+            // A block too small for the page mark still shows that it has a note, with a small folded corner at the top right.
+            if (!content.Children.OfType<IconGlyph>().Any(g => g.Name == "NoteMark") && width >= 8 && !recording && !string.IsNullOrWhiteSpace(note) && (interval.Row is not null || interval.Group is not null))
+            {
+                var fold = new Avalonia.Controls.Shapes.Polygon { Name = "NoteCorner", Points = new Points { new Point(0, 0), new Point(10, 0), new Point(10, 10) }, Fill = Brush.Parse(ink), Opacity = .7, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, IsHitTestVisible = false, Width = Math.Min(10, width), Height = 10 };
+                content.Children.Add(fold);
+            }
             card.Child = content;
+            var addedEarly = false;
             var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
             if (model.IsSelected(selectionSources))
             {
@@ -220,14 +234,14 @@ public static class ReviewViews
             {
                 card.Tag = row; card.Name = "TimelineEntry" + model.Engine.Sessions.IndexOf(row);
                 card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { MoveMenu(model, new[] { row }), CopyMenu(model, new[] { row }), MergeMenu(model), new Separator(), DeleteMenu(model, new[] { row }) } };
-                TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour);
+                Canvas.SetLeft(card, X(interval.Start) + 1); Canvas.SetTop(card, BandTop + lane * (height + LaneGap)); canvas.Children.Add(card); addedEarly = true;
+                TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour, model.IsSelected(selectionSources));
             }
             if (recording)
             {
                 // The block that is recording now. A green outline and the stop menu make it clear why it can't be dragged.
                 card.Classes.Add("recording"); card.Name = "TimelineRecording"; card.Cursor = new Cursor(StandardCursorType.Arrow);
-                if (text.Children.OfType<TextBlock>().FirstOrDefault(t => t.Name == "BlockName") is { } liveName) liveName.Text = "● " + liveName.Text;
-                else if (text.Children.OfType<StackPanel>().SelectMany(p => p.Children.OfType<TextBlock>()).FirstOrDefault(t => t.Name == "BlockName") is { } inlineName) inlineName.Text = "● " + inlineName.Text;
+                if (text.GetLogicalDescendants().OfType<TextBlock>().FirstOrDefault(t => t.Name == "BlockName") is { } liveName) liveName.Text = "● " + liveName.Text;
                 var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };
                 card.PointerPressed += (_, e) =>
@@ -253,8 +267,7 @@ public static class ReviewViews
                 card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { ungroup, CopyMenu(model, group.Sources), MergeMenu(model) } };
                 ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} merged entries · {model.Format(duration)}\nClick to select");
             }
-            Canvas.SetLeft(card, X(interval.Start) + 1); Canvas.SetTop(card, BandTop + lane * (height + LaneGap));
-            canvas.Children.Add(card);
+            if (!addedEarly) { Canvas.SetLeft(card, X(interval.Start) + 1); Canvas.SetTop(card, BandTop + lane * (height + LaneGap)); canvas.Children.Add(card); }
         }
         // Planned meetings sit in the row above the blocks as dashed cards, and a click on a free place in that row starts a new one. A meeting is planned time:
         // it is never counted as tracked time, and a block under it is not affected.
@@ -284,8 +297,10 @@ public static class ReviewViews
                 var width = Math.Max(24, (meeting.End!.Value - meeting.At!.Value).TotalHours * pixelsPerHour - 2);
                 var height = rows == 1 ? MeetingHeight : (MeetingHeight - LaneGap * (rows - 1)) / rows;
                 var title = new TextBlock { Text = model.Notes.Text(meeting), FontSize = 12, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-                var head = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 5 }; head.Children.Add(new IconGlyph(IconKind.Today)); head.Children.Add(title);
-                if (model.Notes.SeriesOf(meeting) is not null) head.Children.Add(new IconGlyph(IconKind.Repeat) { Opacity = .8 });
+                // A grid, so the name takes what is left beside the marks and is cut with an ellipsis, however narrow the block is at this zoom.
+                var head = Ui.Grid(width >= 60 ? "Auto,*,Auto" : "*"); head.ColumnSpacing = 5;
+                if (width >= 60) { Ui.Put(head, new IconGlyph(IconKind.Today)); Ui.Put(head, title, 1); if (model.Notes.SeriesOf(meeting) is not null) Ui.Put(head, new IconGlyph(IconKind.Repeat) { Opacity = .8 }, 2); }
+                else Ui.Put(head, title);
                 var body = new StackPanel { Spacing = 2, Margin = rows == 1 ? new Thickness(8, 6) : new Thickness(8, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
                 body.Children.Add(head);
                 if (rows == 1) { var span = new TextBlock { Text = Hm(meeting.At) + "–" + Hm(meeting.End), FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis }; span.Classes.Add("muted"); body.Children.Add(span); }
@@ -304,10 +319,10 @@ public static class ReviewViews
         // For today, a line down through the band at the current time, a dot at the top and a chip under it saying what it is. It moves on every half minute while on screen.
         if (day == model.Engine.Now.Date)
         {
-            var nowLine = new Border { Name = "NowMarker", Width = 2, Height = BandHeight + 16, Tag = "NowLine", IsHitTestVisible = false }; nowLine.Classes.Add("nowLine");
-            var nowDot = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, Tag = "NowDot", IsHitTestVisible = false }; nowDot.Classes.Add("nowDot");
+            var nowLine = new Border { Name = "NowMarker", Width = 2, Height = BandHeight + 16, Tag = "NowLine", IsHitTestVisible = false, ZIndex = 10 }; nowLine.Classes.Add("nowLine");
+            var nowDot = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, Tag = "NowDot", IsHitTestVisible = false, ZIndex = 10 }; nowDot.Classes.Add("nowDot");
             var nowText = new TextBlock { FontSize = 12, FontWeight = FontWeight.SemiBold, TextAlignment = TextAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Classes = { "figures", "nowChipText" } };
-            var nowChip = new Border { Name = "NowChip", Child = nowText, CornerRadius = new CornerRadius(7), Height = 20, MinWidth = 48, Padding = new Thickness(8, 0), IsHitTestVisible = false }; nowChip.Classes.Add("nowChip");
+            var nowChip = new Border { Name = "NowChip", Child = nowText, CornerRadius = new CornerRadius(7), Height = 20, MinWidth = 48, Padding = new Thickness(8, 0), IsHitTestVisible = false, ZIndex = 10 }; nowChip.Classes.Add("nowChip");
             canvas.Children.Add(nowLine); canvas.Children.Add(nowDot); canvas.Children.Add(nowChip);
             void PlaceNow()
             {
@@ -324,10 +339,11 @@ public static class ReviewViews
         DateTime clicked = day.AddHours(9);
         DateTime At(double x) => day.AddMinutes(Math.Clamp(Math.Floor((x - TimelineGutter) / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);
+        var addMeeting = new MenuItem { Header = "Add meeting…", Name = "AddMeetingMenu" }; addMeeting.Click += (_, _) => model.Notes.RequestNewMeeting(clicked);
         // Paste puts the copied blocks with the first at the time that was right-clicked, snapped to five minutes like Add time.
         var paste = new MenuItem { Header = "Paste here", Name = "PasteHereMenu", InputGesture = new KeyGesture(Key.V, KeyModifiers.Control), IsEnabled = model.CanPaste };
         paste.Click += (_, _) => model.PasteBlocks(clicked);
-        canvas.ContextMenu = new ContextMenu { ItemsSource = new Control[] { add, paste, MergeMenu(model) } };
+        canvas.ContextMenu = new ContextMenu { ItemsSource = new Control[] { add, addMeeting, paste, MergeMenu(model) } };
         // Ctrl+V pastes where the pointer last was on this timeline.
         canvas.PointerMoved += (_, e) => model.PasteTime = At(e.GetPosition(canvas).X);
         canvas.PointerExited += (_, _) => model.PasteTime = null;

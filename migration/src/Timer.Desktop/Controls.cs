@@ -943,7 +943,7 @@ public sealed class AccountsGlyph : Control
     }
 }
 
-public enum IconKind { Search, Bell, Repeat, Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
+public enum IconKind { Check, Clock, Search, Bell, Repeat, Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1048,6 +1048,15 @@ public sealed class IconGlyph : Control
                 break;
             case IconKind.Search:
                 context.DrawEllipse(null, pen, new Point(8, 8), 4.9, 4.9); context.DrawLine(pen, new Point(11.7, 11.7), new Point(15, 15));
+                break;
+            case IconKind.Check:
+                // A tick: this is done.
+                context.DrawGeometry(null, pen, Geometry.Parse("M 3.75,9.5 L 7.5,13.25 L 14.25,5"));
+                break;
+            case IconKind.Clock:
+                // A clock face: move this to another time.
+                context.DrawEllipse(null, pen, new Point(9, 9), 6.25, 6.25);
+                context.DrawGeometry(null, pen, Geometry.Parse("M 9,5.25 L 9,9 L 11.75,10.5"));
                 break;
             case IconKind.Bell:
                 context.DrawGeometry(null, pen, Geometry.Parse("M 4.5,12.75 L 4.5,8.25 A 4.5,4.5 0 0 1 13.5,8.25 L 13.5,12.75 L 14.625,14.25 L 3.375,14.25 Z"));

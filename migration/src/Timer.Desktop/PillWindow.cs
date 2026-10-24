@@ -153,52 +153,75 @@ public sealed class PillWindow : Window
     // ---- the account drawer
     private void BuildDrawer()
     {
-        // The list unfolds from the pill's right edge as one capsule with it: the same surface, the same ring, no gap, and rounded only on the outside.
+        // The list slides out from behind the pill, which keeps its own shape, ring and glow: the drawer starts Behind pixels under the pill's right edge and is
+        // cut away where the pill's capsule is, so what shows is the part beside it, with its own rounded corners tucked behind the pill's.
         var content = new AccountsPanel(model, "Pill", compact: true, reorderable: false, () => { CloseFlyouts(); model.OpenAccounts(); });
         accountScroll = content.Scroll;
-        // The drawer starts SeamOverlap under the pill's edge, because the two are separate windows and a screen scale puts their edges on different pixels: with no
-        // overlap a hair of gap showed the pill's ring and glow, and the desktop behind, between them. A hairline in the theme's line colour marks where the pill ends.
-        var seam = new Border { Name = "PillSeam", Width = 1, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(SeamOverlap - 14 - SeamOverlap, -14, 0, -12), IsHitTestVisible = false };
-        seam.Bind(Border.BackgroundProperty, seam.GetResourceObservable("Line"));
-        drawer = new Border { Name = "PillDrawer", Width = DrawerWidth, Height = PillHeight, Padding = new Thickness(14 + SeamOverlap, 14, 14, 12), CornerRadius = new CornerRadius(0, 28, 28, 0), Child = new Grid { Children = { content, seam } } };
+        drawer = new Border { Name = "PillDrawer", Width = DrawerWidth, Height = PillHeight, Padding = new Thickness(Behind + 14, 14, 14, 12), CornerRadius = new CornerRadius(28, PillRadius, PillRadius, 28), Child = content, RenderTransform = drawerSlide };
         drawer.Classes.Add("surface");
         drawer.PointerEntered += (_, _) => overDrawer = true;
         drawer.PointerExited += (_, _) => overDrawer = false;
-        panel.PlacementTarget = surface; panel.Placement = PlacementMode.Right; panel.HorizontalOffset = -SeamOverlap; panel.VerticalOffset = 0;
+        // The cut-out stays put while the drawer slides, so the pill is never covered on the way.
+        var holder = new Grid { Name = "PillDrawerHolder", Width = DrawerWidth, Height = PillHeight, Clip = BehindPill() }; holder.Children.Add(drawer);
+        panel.PlacementTarget = surface; panel.Placement = PlacementMode.Right; panel.HorizontalOffset = -Behind * Scale; panel.VerticalOffset = 0;
         panel.PlacementConstraintAdjustment = PopupPositionerConstraintAdjustment.FlipX | PopupPositionerConstraintAdjustment.SlideY;
-        panel.IsLightDismissEnabled = true; panel.Child = new LayoutTransformControl { LayoutTransform = pillScale, Child = drawer };
+        panel.IsLightDismissEnabled = true; panel.Child = new LayoutTransformControl { LayoutTransform = pillScale, Child = holder };
         panel.Closed += (_, _) => { overDrawer = false; if (!closingByCode) dismissedAt = Environment.TickCount64; SetOpenLook(false); };
         // The popup belongs to the pill's tree, so it inherits its theme.
         rootGrid.Children.Add(panel);
     }
     /// <summary>The drawer's width, beside the pill's own 72.</summary>
     public const double DrawerWidth = 262;
-    /// <summary>How far the drawer reaches under the pill's right edge, so no gap shows between the two windows at any screen scale.</summary>
-    public const double SeamOverlap = 3;
+    /// <summary>How far the drawer reaches under the pill's right edge. It is the room the pill keeps clear either side of its controls, so nothing of the pill is under the drawer's window.</summary>
+    public const double Behind = 14;
+    // The drawer's own area less the pill's capsule, which is where the pill shows through. Drawn a hair inside the pill's edge, so no sliver of desktop shows between.
+    public static Geometry BehindPill()
+    {
+        const double inset = .5; var left = Behind - PillWidth + inset; var right = Behind - inset; var top = inset; var bottom = PillHeight - inset; var r = PillRadius - inset;
+        var capsule = new StreamGeometry();
+        using (var c = capsule.Open())
+        {
+            c.BeginFigure(new Point(left + r, top), true);
+            c.LineTo(new Point(right - r, top)); c.ArcTo(new Point(right, top + r), new Size(r, r), 0, false, SweepDirection.Clockwise);
+            c.LineTo(new Point(right, bottom - r)); c.ArcTo(new Point(right - r, bottom), new Size(r, r), 0, false, SweepDirection.Clockwise);
+            c.LineTo(new Point(left + r, bottom)); c.ArcTo(new Point(left, bottom - r), new Size(r, r), 0, false, SweepDirection.Clockwise);
+            c.LineTo(new Point(left, top + r)); c.ArcTo(new Point(left + r, top), new Size(r, r), 0, false, SweepDirection.Clockwise);
+            c.EndFigure(true);
+        }
+        return new CombinedGeometry(GeometryCombineMode.Exclude, new RectangleGeometry(new Rect(0, 0, DrawerWidth, PillHeight)), capsule);
+    }
+    private readonly TranslateTransform drawerSlide = new();
+    private DispatcherTimer? slideTimer;
+    // Slides the drawer out from behind the pill, easing out over a fifth of a second. The first step is taken on a tick, so where nothing ticks (headless) it simply stands at its place.
+    private void SlideOut()
+    {
+        slideTimer?.Stop(); var from = -(DrawerWidth - 24); var started = Environment.TickCount64;
+        slideTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(8) };
+        slideTimer.Tick += (_, _) =>
+        {
+            var t = Math.Min(1, (Environment.TickCount64 - started) / 180.0); var eased = 1 - Math.Pow(1 - t, 3);
+            drawerSlide.X = from * (1 - eased); if (t >= 1) slideTimer?.Stop();
+        };
+        slideTimer.Start();
+    }
     /// <summary>How far the lights sit below the card's top edge, on the pill and on the rail.</summary>
     public const double TopInset = 14;
     /// <summary>The card's edge is this thick in every state, so the contents never move when a ring comes and goes; the column starts under it so the lights sit TopInset from the edge.</summary>
     public const double EdgeThickness = 1.5;
     /// <summary>The most of a screen's height the drawer's list may take is its own height, so it never grows past the pill; it scrolls inside.</summary>
     public const double FewestRows = 3;
-    // While the drawer is open the pill's right side is square, so the two read as one capsule, and the button shows pressed.
-    private void SetOpenLook(bool open)
-    {
-        surface.CornerRadius = open ? new CornerRadius(PillRadius, 0, 0, PillRadius) : new CornerRadius(PillRadius);
-        face.SetAccountsOpen(open); SyncDrawerRing();
-        // The glow stops at the pill's right edge while the list is open, so none shows in the seam between the two.
-        shadowHost.Clip = open ? new RectangleGeometry(new Rect(-Ui.ShadowMargin, -Ui.ShadowMargin, Ui.ShadowMargin + PillWidth, PillHeight + 2 * Ui.ShadowMargin)) : null;
-    }
+    // While the drawer is open the Accounts button shows pressed; the pill itself keeps its shape and glow.
+    private void SetOpenLook(bool open) { face.SetAccountsOpen(open); SyncDrawerRing(); }
     private void SyncDrawerRing()
     {
         var thickness = surface.BorderThickness.Left;
-        drawer.BorderThickness = new Thickness(0, thickness, thickness, thickness);
+        drawer.BorderThickness = new Thickness(thickness);
         drawer.BorderBrush = surface.BorderBrush;
     }
     /// <summary>Opens the account drawer beside the pill. It closes when an account is chosen, with Escape, or by pressing the button again.</summary>
     public void ShowPanel()
     {
-        SetOpenLook(true); panel.IsOpen = true;
+        SetOpenLook(true); panel.HorizontalOffset = -Behind * Scale; panel.IsOpen = true; SlideOut();
     }
     // Pressing the button while the drawer is open closes it. Light dismiss has already closed it by the time the click arrives, so a close that
     // just happened from the same press is not undone by opening it again.
