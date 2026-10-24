@@ -113,14 +113,13 @@
     <!-- Fields: rounded, as the mock draws them (ThemeEngine writes their fill, hairline and focus colours). -->
     <Style Selector="TextBox"><Setter Property="CornerRadius" Value="11" /></Style>
     <Style Selector="ComboBox"><Setter Property="CornerRadius" Value="12" /></Style>
-    <!-- Round option chips (the reminder pop-up's quick days and times): a soft fill, and the accent when chosen. -->
-    <Style Selector="Button.ctl.pillOpt"><Setter Property="CornerRadius" Value="999" /><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
-    <Style Selector="Button.ctl.pillOpt.optOn"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
-    <Style Selector="Button.ctl.pillOpt.optOn:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Button.softDay:disabled"><Setter Property="Opacity" Value="0.35" /></Style>
     <!-- Notes: the chips (an accent one for a reminder, a red one once it is late), the rows, the round tick and the form's box. -->
     <Style Selector="Border.lateRow"><Setter Property="Background" Value="{DynamicResource LateTint}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <!-- The Notes page: the views down the left, a row being changed, the rule under the form and the form's accent-edged box. -->
+    <Style Selector="Button.weekDay"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="CornerRadius" Value="12" /></Style>
+    <Style Selector="Button.weekDay /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
+    <Style Selector="Button.weekDay:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
     <Style Selector="Button.vitem"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="CornerRadius" Value="10" /><Setter Property="Padding" Value="10,7" /></Style>
     <Style Selector="Button.vitem /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
     <Style Selector="Button.vitem:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
@@ -396,6 +395,10 @@
     <Style Selector="Button.ctl.primary:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="Opacity" Value="0.92" /></Style>
     <Style Selector="Button.ctl.on"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="Foreground" Value="{DynamicResource Accent}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <Style Selector="Button.ctl.on:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="Foreground" Value="{DynamicResource Accent}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+    <!-- Round option chips (the reminder pop-up's quick days and times): a soft fill, and the accent when chosen. -->
+    <Style Selector="Button.ctl.pillOpt"><Setter Property="CornerRadius" Value="999" /><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
+    <Style Selector="Button.ctl.pillOpt.optOn"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Button.ctl.pillOpt.optOn:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <!-- Add time, Undo and Merge use the same resting outline as the break and day buttons, and light up their border under the pointer. -->
     <Style Selector="Button.toolButton">
       <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Ink}" />

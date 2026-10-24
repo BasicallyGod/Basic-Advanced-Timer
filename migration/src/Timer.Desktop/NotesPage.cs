@@ -25,7 +25,7 @@ public sealed class NotesPage : Grid
     private NoteView view = NoteView.All; private string? accountFilter; private string query = "";
     private string? shown;
     // The form.
-    private bool meeting; private long? editing; private string draft = "", lengthText = "01:00"; private string? account; private DateTime? when; private RepeatChoice repeat;
+    private bool meeting; private long? editing; private string draft = "", lengthText = "00:30"; private string? account; private DateTime? when; private RepeatChoice repeat;
     private string? error; private (long Id, bool Delete)? scope; private bool archived;
 
     public NotesPage(TimerModel model)
@@ -133,7 +133,7 @@ public sealed class NotesPage : Grid
 
     private void ResetForm()
     {
-        meeting = false; editing = null; draft = ""; lengthText = "01:00"; account = null; when = null; repeat = RepeatChoice.None; error = null; scope = null; archived = false; whenHost.IsOpen = false;
+        meeting = false; editing = null; draft = ""; lengthText = "00:30"; account = null; when = null; repeat = RepeatChoice.None; error = null; scope = null; archived = false; whenHost.IsOpen = false;
         DrawForm();
     }
 
@@ -142,7 +142,7 @@ public sealed class NotesPage : Grid
         meeting = NotesModel.IsMeeting(note); editing = note.Id; draft = Notes.Text(note); account = Notes.AccountOf(note); error = null; scope = null; whenHost.IsOpen = false;
         archived = meeting && Notes.IsArchivedRepeat(note);
         if (meeting) { when = note.Day.Date + note.At!.Value; lengthText = TimeText.ShowLength(note.End!.Value - note.At.Value); repeat = Notes.RepeatOf(note); }
-        else { when = NotesModel.ReminderOf(note); repeat = RepeatChoice.None; lengthText = "01:00"; }
+        else { when = NotesModel.ReminderOf(note); repeat = RepeatChoice.None; lengthText = "00:30"; }
         shown = null; Sync(); DrawForm();
     }
 
@@ -166,18 +166,18 @@ public sealed class NotesPage : Grid
         column.Children.Add(top);
 
         var options = new WrapPanel { Orientation = Orientation.Horizontal };
-        void Add(Control control) { control.Margin = new Thickness(0, 0, 8, 6); options.Children.Add(control); }
+        void Add(Control control) { control.Margin = new Thickness(0, 0, 6, 6); options.Children.Add(control); }
         if (editing is not null)
         {
             var label = NoteParts.Chip(model, meeting ? "Editing a meeting" : "Editing a note", "plain"); label.Height = 36; label.Padding = new Thickness(12, 0); Add(label);
         }
         else
         {
-            var seg = Ui.Horizontal(Seg("PageKindNote", "Note", !meeting, () => { meeting = false; when = null; error = null; DrawForm(); }), Seg("PageKindMeeting", "Meeting", meeting, () => { meeting = true; when = model.SelectedDate.Date.AddHours(9); error = null; DrawForm(); }));
+            var seg = Ui.Horizontal(Seg("PageKindNote", "Note", !meeting, () => { meeting = false; when = null; error = null; DrawForm(); }), Seg("PageKindMeeting", "Meeting", meeting, () => { meeting = true; when = model.SelectedDate.Date.AddHours(12); error = null; DrawForm(); }));
             seg.Spacing = 2; Add(seg);
         }
         var names = new List<string> { "No account" }; names.AddRange(model.Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name));
-        var accounts = new ComboBox { Name = "PageAccount", ItemsSource = names, Width = 160, Height = 36, MinHeight = 36, IsEnabled = !archived, FontSize = 13.5,
+        var accounts = new ComboBox { Name = "PageAccount", ItemsSource = names, Width = 150, Height = 36, MinHeight = 36, IsEnabled = !archived, FontSize = 13.5,
             ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<string>((name, _) => Ui.Horizontal(name == "No account" ? NoteParts.Dot(model, null) : NoteParts.Dot(model, name), new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center })) };
         accounts.SelectedItem = account is null ? "No account" : names.FirstOrDefault(n => n.Equals(account, StringComparison.OrdinalIgnoreCase)) ?? "No account";
         accounts.SelectionChanged += (_, _) => account = accounts.SelectedItem is string chosen && chosen != "No account" ? chosen : null;
@@ -187,11 +187,11 @@ public sealed class NotesPage : Grid
         whenButton.Content = Ui.Horizontal(new IconGlyph(meeting ? IconKind.Today : IconKind.Bell), new TextBlock { Text = whenText, FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center }); Add(whenButton);
         if (meeting)
         {
-            var length = new TextBox { Name = "PageLength", Text = lengthText, Width = 64, Height = 36, MinHeight = 36, TextAlignment = TextAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, IsEnabled = !archived };
+            var length = new TextBox { Name = "PageLength", Text = lengthText, Width = 58, Height = 36, MinHeight = 36, TextAlignment = TextAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, IsEnabled = !archived };
             length.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) lengthText = length.Text ?? ""; };
             Avalonia.Automation.AutomationProperties.SetName(length, "Length, H:MM");
             var lengthLabel = Ui.Horizontal(NoteParts.Ink("Length", "Muted", 12.5), length); lengthLabel.Spacing = 6; Add(lengthLabel);
-            var repeats = new ComboBox { Name = "PageRepeat", ItemsSource = Enum.GetValues<RepeatChoice>().Select(NotesModel.Label).ToList(), Width = 170, Height = 36, MinHeight = 36, FontSize = 13.5, IsEnabled = !archived };
+            var repeats = new ComboBox { Name = "PageRepeat", ItemsSource = Enum.GetValues<RepeatChoice>().Select(NotesModel.Label).ToList(), Width = 150, Height = 36, MinHeight = 36, FontSize = 13.5, IsEnabled = !archived };
             repeats.SelectedItem = NotesModel.Label(repeat);
             repeats.SelectionChanged += (_, _) => { if (repeats.SelectedItem is string label) repeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };
             Add(repeats);
@@ -224,7 +224,7 @@ public sealed class NotesPage : Grid
         formHost.Content = column;
     }
 
-    private static Button Seg(string name, string text, bool on, Action click)
+    internal static Button Seg(string name, string text, bool on, Action click)
     {
         var button = Ui.Button(text, click, name); button.Classes.Add("ctl"); button.Classes.Add("pillOpt"); button.Classes.Set("optOn", on); button.Height = 36; button.Padding = new Thickness(14, 0); button.FontSize = 13.5;
         return button;

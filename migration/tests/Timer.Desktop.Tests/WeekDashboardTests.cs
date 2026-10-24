@@ -89,7 +89,7 @@ public sealed class WeekDashboardTests
             previous.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             Assert.Equal(new DateTime(2026, 9, 28), model.SelectedDate); Assert.True(next.IsEnabled);
             var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Week of " + new DateTime(2026, 9, 28).ToString("d MMM", british));
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == $"{new DateTime(2026, 9, 28).ToString("d MMM", british)} – {new DateTime(2026, 10, 4).ToString("d MMM", british)}");
             next.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             Assert.Equal(new DateTime(2026, 10, 5), model.SelectedDate); Assert.False(next.IsEnabled);
             window.SelectTab(false); Dispatcher.UIThread.RunJobs(); // Timeline steps by days.
@@ -154,16 +154,11 @@ public sealed class WeekDashboardTests
         try
         {
             window.SelectTab(true); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
-            var bars = window.GetVisualDescendants().OfType<WeekBars>().Single();
-            Assert.Equal(5, bars.Bars.Count); // A bar per working day, with no working-day line.
+            var columns = window.GetVisualDescendants().OfType<Button>().Where(c => c.Name?.StartsWith("WeekDay_") == true).ToList();
+            Assert.Equal(5, columns.Count); // A column per working day, with no weekend.
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "By account");
-            // Each column is that day's working time: the accounts' blocks, then what went to no account as a neutral block on top.
-            Assert.Equal(4, bars.Bars[4].Segments.Count); Assert.Equal("Unallocated", bars.Bars[4].Segments[^1].Account);
-            Assert.Equal(1.5, bars.Bars[4].Segments[0].Hours, 3); Assert.Equal(TimeSpan.FromHours(bars.Bars[4].Segments.Sum(s => s.Hours)), TimeSpan.FromHours(bars.Bars[4].Hours));
-            Assert.Contains("Account one  01:30", bars.Bars[4].Tooltip); Assert.Contains("Working time", bars.Bars[4].Tooltip); Assert.Contains("Unallocated", bars.Bars[4].Tooltip);
             var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
-            Assert.Contains("Working time", texts); Assert.Contains("Allocated to accounts", texts); Assert.Contains("Unallocated", texts); Assert.DoesNotContain("Worked this week", texts);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "BreaksNote" && t.Text!.StartsWith("Breaks ") && t.Text.EndsWith("not counted in working time")); // Breaks apart and quieter.
+            Assert.Contains("Working time", texts); Assert.Contains("Allocated", texts); Assert.Contains("Unallocated", texts); Assert.Contains("Breaks", texts); Assert.DoesNotContain("Worked this week", texts);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "CopyHours"); // No wall of numbers on the overview.
             // The rail has the timeline and the overview, and nothing for the hours table or the entries, which went with Settings taking Export.
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name is "WeekHoursTab" or "WeekEntriesTab");
@@ -230,13 +225,13 @@ public sealed class WeekDashboardTests
         try
         {
             window.SelectTab(true); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs();
-            var lines = window.GetVisualDescendants().OfType<Grid>().Where(g => g.ColumnDefinitions.Count == 5 && g.Children.Count >= 3 && g.MinHeight == 36).ToList();
+            var lines = window.GetVisualDescendants().OfType<Grid>().Where(g => g.Name?.StartsWith("WeekAccount_") == true).ToList();
             Assert.Equal(7, lines.Count);
             double Centre(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
             foreach (var line in lines)
             {
                 var name = line.Children.OfType<TextBlock>().First(t => Grid.GetColumn(t) == 1);
-                foreach (var other in line.Children.OfType<Control>().Where(c => Grid.GetColumn(c) is 0 or 2 or 3 or 4))
+                foreach (var other in line.Children.OfType<Control>().Where(c => Grid.GetColumn(c) is 0 or 2 or 3 or 4 or 5 or 6))
                     Assert.True(Math.Abs(Centre(other) - Centre(name)) < 1.5, $"{name.Text}: column {Grid.GetColumn(other)} is {Centre(other) - Centre(name):0.0}px off");
             }
             Assert.Equal(1, lines.Select(l => Math.Round(l.Bounds.Height)).Distinct().Count()); // Rows are the same height with or without a budget.

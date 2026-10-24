@@ -169,7 +169,7 @@ public sealed class PillTests
             Assert.False(pill.PanelOpen); Assert.Equal("Accounts", ToolTip.GetTip(pill.AccountsButton));
             Click(pill.AccountsButton); Assert.True(pill.PanelOpen); Assert.Equal("Close the accounts", ToolTip.GetTip(pill.AccountsButton));
             Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5); // The pill never grows for it.
-            Assert.Equal(new CornerRadius(PillWindow.PillRadius, 0, 0, PillWindow.PillRadius), Find<Border>(pill, "PillSurface").CornerRadius); // One capsule: square where they join.
+            Assert.Equal(new CornerRadius(PillWindow.PillRadius), Find<Border>(pill, "PillSurface").CornerRadius); // The pill keeps its shape; the drawer slides out from behind it.
             Click(pill.AccountsButton); Assert.False(pill.PanelOpen); Assert.Equal(new CornerRadius(PillWindow.PillRadius), Find<Border>(pill, "PillSurface").CornerRadius);
             Click(pill.AccountsButton); Dispatcher.UIThread.RunJobs();
             model.ToggleAccount("Account two"); Dispatcher.UIThread.RunJobs();
@@ -200,32 +200,22 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void TheDrawerReachesUnderThePillsEdgeSoNoGapShowsBetweenTheTwoWindows()
+    public void TheDrawerSlidesOutFromBehindThePillWhichKeepsItsShapeAndItsGlow()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
+            var card = Find<Border>(pill, "PillSurface"); var host = Find<Border>(pill, "ShadowHost");
             pill.ShowPanel(); Dispatcher.UIThread.RunJobs();
             var popup = pill.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Popup>().Single();
-            Assert.Equal(-PillWindow.SeamOverlap, popup.HorizontalOffset); Assert.True(PillWindow.SeamOverlap >= PillWindow.EdgeThickness); // It covers the pill's ring, so the ring cannot show at the seam.
-            var seam = Find<Border>(pill, "PillSeam"); var drawer = Find<Border>(pill, "PillDrawer");
-            Assert.Equal(1, seam.Bounds.Width); Assert.Equal(PillWindow.SeamOverlap, seam.TranslatePoint(default, drawer)!.Value.X, 0.5); // A hairline where the pill ends.
-        }
-        finally { pill.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void TheGlowStopsAtThePillsRightEdgeWhileTheListIsOpen()
-    {
-        var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
-        try
-        {
-            var host = Find<Border>(pill, "ShadowHost");
-            Assert.Null(host.Clip);
-            pill.ShowPanel(); Dispatcher.UIThread.RunJobs();
-            var clip = Assert.IsType<Avalonia.Media.RectangleGeometry>(host.Clip); Assert.Equal(PillWindow.PillWidth, clip.Rect.Right, 0.01); // Nothing is drawn past the pill's own edge,
-            Assert.True(clip.Rect.Left < 0 && clip.Rect.Top < 0 && clip.Rect.Bottom > PillWindow.PillHeight); // but the glow still shows on the other sides.
-            pill.CloseFlyouts(); Assert.Null(host.Clip); // And it comes back with the list closed.
+            Assert.Equal(-PillWindow.Behind * pill.Scale, popup.HorizontalOffset, 0.01); // It starts under the pill's edge,
+            Assert.Equal(new CornerRadius(PillWindow.PillRadius), card.CornerRadius); // while the pill keeps all four round corners,
+            Assert.Null(host.Clip); // and its glow, which is not cut off at the seam.
+            var holder = Find<Grid>(pill, "PillDrawerHolder");
+            Assert.IsType<Avalonia.Media.CombinedGeometry>(holder.Clip); // The drawer is cut away where the pill's capsule is.
+            Assert.Equal(Avalonia.Media.GeometryCombineMode.Exclude, ((Avalonia.Media.CombinedGeometry)holder.Clip!).GeometryCombineMode);
+            Assert.Equal(PillWindow.DrawerWidth, Find<Border>(pill, "PillDrawer").Bounds.Width, 0.5);
+            pill.CloseFlyouts(); Assert.Equal(new CornerRadius(PillWindow.PillRadius), card.CornerRadius);
         }
         finally { pill.Close(); }
     }

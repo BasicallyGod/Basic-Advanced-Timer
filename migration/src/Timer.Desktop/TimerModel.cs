@@ -488,6 +488,12 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (target > WeekStart(Engine.Now)) return;
         selectedRows.Clear(); TimelineOffset = null; SelectedDate = target; Notify();
     }
+    /// <summary>Whether the Week overview shows its table in place of the chart. Kept for the session only.</summary>
+    public bool WeekAsTable { get; private set; }
+    public void SetWeekAsTable(bool table) { if (WeekAsTable == table) return; WeekAsTable = table; Notify(); }
+    /// <summary>Asked for by a day in the week chart: the dashboard shows that day on the Timeline page.</summary>
+    public event Action<DateTime>? OpenDayRequested;
+    public void OpenDayInTimeline(DateTime day) { GoToDate(day); OpenDayRequested?.Invoke(day.Date); }
     public bool CanStepForwardAWeek => WeekStart(SelectedDate) < WeekStart(Engine.Now);
     /// <summary>Adds or removes minutes on an account for a day, as one undoable edit.</summary>
     /// <summary>Moves entries to another account as one undoable edit. Every selected block moves when the one clicked is selected.</summary>

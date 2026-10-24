@@ -161,7 +161,7 @@ public sealed class DashboardWindow : Window
     public Action? OpenPill { get; set; }
     private readonly TimerModel model;
     private readonly TextBlock workspaceTitle = new() { FontSize = 26, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Center };
-    private Button todayButton = null!;
+    private Button todayButton = null!; private TextBlock todayWords = null!;
     private Control? totalsStrip, railBorder; private Button zoomOut = null!, zoomIn = null!;
     private readonly IconGlyph dayFlag = new(IconKind.Flag), daySun = new(IconKind.Sunrise);
     private StatusFace face = null!;
@@ -221,6 +221,7 @@ public sealed class DashboardWindow : Window
         railTop.Children.Add(new LayoutTransformControl { LayoutTransform = railScale, Child = face, HorizontalAlignment = HorizontalAlignment.Center });
         timelineRail = RailButton(IconKind.Timeline, "Timeline", "TimelineTab", () => SelectTab(false));
         overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectTab(true));
+        model.OpenDayRequested += _ => SelectTab(false);
         var viewsRule = Ui.Rule(); viewsRule.Margin = new Thickness(10, 4); railTop.Children.Add(viewsRule);
         notesTab = RailButton(IconKind.Note, "Notes", "NotesTab", ShowNotes);
         foreach (var button in new[] { timelineRail, overviewTab, notesTab }) railTop.Children.Add(button);
@@ -250,7 +251,7 @@ public sealed class DashboardWindow : Window
         // The date has a fixed width, so the arrows stay put whatever its text says.
         var nav = Ui.Grid("*,Auto,Auto"); nav.VerticalAlignment = VerticalAlignment.Center;
         Ui.Put(nav, workspaceTitle); headerRow = nav;
-        date.Width = 104; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
+        date.Width = 124; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
         // Pressing the date opens a calendar to jump to any day, so a day weeks away is one click instead of many arrows.
         datePick = Ui.Ctl("DatePick", null, null, "Pick a day", () => { });
         datePick.Width = double.NaN; datePick.Padding = new Thickness(12, 0); datePick.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), date);
@@ -260,7 +261,8 @@ public sealed class DashboardWindow : Window
         datePick.Flyout = dateFlyout;
         previous = Ui.Ctl("PreviousPeriod", null, IconKind.Previous, "Previous day or week", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); });
         next = Ui.Ctl("NextPeriod", null, IconKind.Next, "Next day or week", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); });
-        todayButton = Ui.Ctl("GoToToday", "Today", IconKind.Today, "Back to today", () => model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days));
+        todayButton = Ui.Ctl("GoToToday", "Today", IconKind.Today, "Back to today", () => { if (weekMode) model.GoToDate(model.Engine.Now.Date, true); else model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days); });
+        todayWords = (TextBlock)((StackPanel)todayButton.Content!).Children[1];
         // The bell opens what is waiting (the reminders that have passed, and the ones coming up), with a count of the ones that need attention. In Notes the header also holds the search box.
         bell = Ui.Ctl("Notifications", null, IconKind.Bell, "Notifications", ToggleBell); bell.Width = 42;
         bellBadgeText = new TextBlock { FontSize = 11, FontWeight = Avalonia.Media.FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -268,6 +270,7 @@ public sealed class DashboardWindow : Window
         bellBadge = new Border { Name = "NotificationsBadge", MinWidth = 18, Height = 18, CornerRadius = new CornerRadius(9), Padding = new Thickness(4, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, -6, -6, 0), IsHitTestVisible = false, IsVisible = false, Child = bellBadgeText }; bellBadge.Classes.Add("badge");
         bellPopup = new Popup { Placement = PlacementMode.BottomEdgeAlignedRight, IsLightDismissEnabled = true, Name = "NotificationsPopup" };
+        bellPopup.Opened += (_, _) => bell.Classes.Set("on", true); bellPopup.Closed += (_, _) => { if (((Avalonia.LogicalTree.ILogical)bell).IsAttachedToLogicalTree) bell.Classes.Set("on", false); };
         var bellHost = new Grid { Name = "NotificationsHost" }; bellHostPanel = bellHost; bellHost.Children.Add(bell); bellHost.Children.Add(bellBadge); bellHost.Children.Add(bellPopup); bellPopup.PlacementTarget = bell;
         searchBox = new TextBox { Name = "NotesSearch", Watermark = "Search notes", Width = 240, Height = 38, MinHeight = 38, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(34, 0, 8, 0) };
         searchBox.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && notesPage is not null) notesPage.Query = searchBox.Text ?? ""; };
@@ -554,9 +557,19 @@ public sealed class DashboardWindow : Window
     private void ToggleBell()
     {
         if (bellPopup.IsOpen) { bellPopup.IsOpen = false; return; }
-        bellPopup.Child = new NotificationsFlyout(model); bellPopup.IsOpen = true;
+        // The card hangs from a small point under the bell, so it reads as coming from it; the room round it is for its shadow.
+        var flyout = new NotificationsFlyout(model) { Margin = new Thickness(8, 9, 8, 12) };
+        var point = new Border { Width = 12, Height = 12, BorderThickness = new Thickness(1, 1, 0, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 8 + bell.Bounds.Width / 2 - 6, 0), RenderTransform = new Avalonia.Media.RotateTransform(45), IsHitTestVisible = false, Name = "NotificationsPoint" };
+        point.Classes.Add("surface");
+        bellPopup.Child = new Grid { Children = { flyout, point } }; bellPopup.HorizontalOffset = 8; bellPopup.VerticalOffset = 2; bellPopup.IsOpen = true;
     }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
+    // "19 – 25 Oct", or "28 Sep – 4 Oct" when the week crosses a month.
+    private static string WeekRange(DateTime start, System.Globalization.CultureInfo culture)
+    {
+        var end = start.AddDays(6);
+        return start.Month == end.Month ? $"{start.Day} – {end.ToString("d MMM", culture)}" : $"{start.ToString("d MMM", culture)} – {end.ToString("d MMM", culture)}";
+    }
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
     // The Notes page is built once and kept: it listens to the model itself, so coming back to it finds the search and the form as they were.
     private NotesPage NotesPageInstance() { if (notesPage is null) { notesPage = new NotesPage(model) { Query = searchBox.Text ?? "" }; } return notesPage; }
@@ -566,7 +579,8 @@ public sealed class DashboardWindow : Window
         face.Refresh();
         var onBreak = model.IsOnBreak;
         var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
-        date.Text = weekMode ? "Week of " + model.WeekStart(model.SelectedDate).ToString("d MMM", british) : model.SelectedDate.ToString("ddd d MMM", british);
+        date.Text = weekMode ? WeekRange(model.WeekStart(model.SelectedDate), british) : model.SelectedDate.ToString("ddd d MMM", british);
+        todayWords.Text = weekMode ? "This week" : "Today"; ToolTip.SetTip(todayButton, weekMode ? "Back to this week" : "Back to today");
         next.IsEnabled = !weekMode || model.CanStepForwardAWeek;
         ToolTip.SetTip(previous, weekMode ? "Previous week" : "Previous day"); ToolTip.SetTip(next, weekMode ? "Next week" : "Next day");
         UpdateTotals();
@@ -598,7 +612,7 @@ public sealed class DashboardWindow : Window
         // The timeline card and the Selected block card are the Timeline page's alone; the week and the settings fill the workspace.
         timelinePage.IsVisible = !settingsMode && !weekMode && !notesMode; workspace.IsVisible = settingsMode || weekMode || notesMode;
         workspaceTitle.Text = settingsMode ? "Settings" : notesMode ? "Notes" : !weekMode ? "Timeline" : "Week overview";
-        todayButton.IsEnabled = model.SelectedDate.Date != model.Engine.Now.Date;
+        todayButton.IsEnabled = weekMode ? model.WeekStart(model.SelectedDate) != model.WeekStart(model.Engine.Now) : model.SelectedDate.Date != model.Engine.Now.Date;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
         if (settingsMode ? !renderedSettings : notesMode ? !renderedNotes : refreshWorkspace)
         {
