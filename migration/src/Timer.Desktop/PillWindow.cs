@@ -204,7 +204,7 @@ public sealed class PillWindow : Window
     {
         slideTimer?.Stop(); var from = -(DrawerWidth - 24); var started = Environment.TickCount64;
         // It starts hidden behind the pill, before it is first drawn, or its first frame would show it fully open.
-        if (!SlideEnabled) { drawerSlide.X = 0; return; }
+        if (!SlideEnabled || Motion.Reduced) { drawerSlide.X = 0; return; }
         drawerSlide.X = from;
         slideTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(8) };
         slideTimer.Tick += (_, _) =>
@@ -218,8 +218,6 @@ public sealed class PillWindow : Window
     public const double TopInset = 14;
     /// <summary>The card's edge is this thick in every state, so the contents never move when a ring comes and goes; the column starts under it so the lights sit TopInset from the edge.</summary>
     public const double EdgeThickness = 1.5;
-    /// <summary>The most of a screen's height the drawer's list may take is its own height, so it never grows past the pill; it scrolls inside.</summary>
-    public const double FewestRows = 3;
     // While the drawer is open the Accounts button shows pressed; the pill itself keeps its shape and glow.
     private void SetOpenLook(bool open) { face.SetAccountsOpen(open); drawerFiller.IsVisible = open; SyncDrawerRing(); }
     private void SyncDrawerRing()
@@ -259,7 +257,6 @@ public sealed class PillWindow : Window
         if (model.PillScalePercent != appliedChoice) FitToScreen(Screens.ScreenFromWindow(this));
         Refresh();
     }
-    private Color ThemeColourOr(string key, string fallback) => Ui.ThemeColour(this, key, Color.Parse(fallback));
     /// <summary>The first letters of up to two words, so Account three reads AT, Northwind Traders reads NT and Client 7 reads C7.</summary>
     public static string Initials(string name)
     {
@@ -271,7 +268,6 @@ public sealed class PillWindow : Window
     private void Refresh()
     {
         face.Refresh();
-        var onBreak = model.IsOnBreak;
         var (key, _) = StatusFace.State(model);
         var stateColour = key == "Idle" ? Colors.Gray : Ui.PillStateColour(this, key);
 

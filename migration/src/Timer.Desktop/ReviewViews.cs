@@ -415,7 +415,7 @@ public static class ReviewViews
         var reconciled = new WeekExport(model.Editor, model.Engine, day);
         return (WeekTable.Build(model, reconciled, day, days), days);
     }
-    public static Control Week(TimerModel model) => WeekOverview.Build(model, model.WeekAsTable);
+    public static Control Week(TimerModel model) => WeekOverview.Build(model);
     // Moves the clicked entry, or every selected block when the clicked one is selected, to another account.
     private static MenuItem MoveMenu(TimerModel model, IReadOnlyList<SessionRow> clicked)
     {
@@ -459,16 +459,6 @@ public static class ReviewViews
         scroll.LayoutUpdated += (_, _) =>
         {
             if (scroll.Tag is Vector offset && scroll.Viewport.Width > 0 && scroll.Extent.Width > scroll.Viewport.Width)
-            { scroll.Offset = offset; scroll.Tag = null; }
-        };
-    }
-    private static void DeferOffset(ScrollViewer scroll)
-    {
-        // Hidden windows can attach before they have a viewport. Keep the requested
-        // position until a visible layout can apply it, rather than saving a clamped zero.
-        scroll.LayoutUpdated += (_, _) =>
-        {
-            if (scroll.Tag is Vector offset && scroll.Viewport.Height > 0 && scroll.Extent.Height > scroll.Viewport.Height)
             { scroll.Offset = offset; scroll.Tag = null; }
         };
     }

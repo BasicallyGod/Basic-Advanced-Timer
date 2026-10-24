@@ -25,7 +25,6 @@ public sealed class ReminderPopup : Border
 {
     private static readonly int[] Presets = { 9, 12, 15, 17 };
     private readonly Func<DateTime> now;
-    private readonly Action<DateTime?> answer;
     private DateTime chosen, month;
     private int hour, minute;
     private readonly Grid days = new();
@@ -39,7 +38,7 @@ public sealed class ReminderPopup : Border
 
     public ReminderPopup(Func<DateTime> now, string forText, DateTime? current, Action<DateTime?> answer, Action close, string heading = "Reminder")
     {
-        this.now = now; this.answer = answer; Name = "ReminderPopup";
+        this.now = now; Name = "ReminderPopup";
         var start = current ?? now().Date.AddHours(12); allowPast = heading != "Reminder";
         chosen = start.Date; hour = start.Hour; minute = start.Minute / 5 * 5; month = new DateTime(chosen.Year, chosen.Month, 1);
         CornerRadius = new CornerRadius(16); BorderThickness = new Thickness(1); Padding = new Thickness(12); Width = 376;

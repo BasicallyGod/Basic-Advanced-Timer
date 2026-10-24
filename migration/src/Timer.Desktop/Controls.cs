@@ -36,7 +36,7 @@ public static class Ui
         card.CornerRadius = new CornerRadius(radius);
         var host = new Border { Margin = new Thickness(ShadowMargin), CornerRadius = new CornerRadius(radius), Child = card, Name = "ShadowHost" };
         // The shadow and the glow fade into each other, so pressing play or pause does not make the edge jump.
-        host.Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.BoxShadowsTransition { Property = Border.BoxShadowProperty, Duration = TimeSpan.FromMilliseconds(350) } };
+        host.Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.BoxShadowsTransition { Property = Border.BoxShadowProperty, Duration = Motion.Ease(350) } };
         return host;
     }
     public static Color ThemeColour(Control control, string key, Color fallback)
@@ -101,6 +101,12 @@ public static class Ui
     /// <summary>Fades a control in and out gently while <paramref name="on"/> is true, as the live dot does while an account is recording.</summary>
     public static void Pulse(Control control, bool on)
     {
+        // With less motion asked for, the light just stays on, steadily.
+        if (Motion.Reduced)
+        {
+            if (pulses.TryGetValue(control, out var still)) { still.Source.Cancel(); pulses.Remove(control); }
+            control.Opacity = 1; return;
+        }
         if (pulses.TryGetValue(control, out var running))
         {
             if (on && running.Run.Alive) return;
@@ -634,7 +640,7 @@ public sealed class AccountList : StackPanel
     // The rows it passes slide aside to show where the account will land, and on release it glides into its new place,
     // or back to where it was if the drag came to nothing, instead of snapping.
     private static Avalonia.Animation.Transitions Glide(int milliseconds) => new()
-    { new Avalonia.Animation.TransformOperationsTransition { Property = Visual.RenderTransformProperty, Duration = TimeSpan.FromMilliseconds(milliseconds), Easing = new Avalonia.Animation.Easings.CubicEaseOut() } };
+    { new Avalonia.Animation.TransformOperationsTransition { Property = Visual.RenderTransformProperty, Duration = Motion.Ease(milliseconds), Easing = new Avalonia.Animation.Easings.CubicEaseOut() } };
     private static Avalonia.Media.Transformation.TransformOperations Shift(double y)
         => Avalonia.Media.Transformation.TransformOperations.Parse($"translateY({y.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px)");
     private (string Name, double Offset)? pendingGlide;
@@ -762,33 +768,6 @@ public sealed class TrackingLabels : StackPanel
     }
 }
 
-/// <summary>A clock whose hours and minutes are heavy and whose seconds are lighter and dimmer, so the figure that matters stands out.</summary>
-public sealed class ClockText : StackPanel
-{
-    private readonly TextBlock main, seconds;
-    public ClockText(double size, double secondsSize)
-    {
-        Orientation = Orientation.Horizontal;
-        main = new TextBlock { FontSize = size, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Bottom };
-        seconds = new TextBlock { FontSize = secondsSize, Classes = { "clockLight", "muted" }, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(1, 0, 0, size * .12) };
-        Children.Add(main); Children.Add(seconds);
-    }
-    /// <summary>Colours the hours and minutes by a style class (break, overtime, live or clockIdle). The seconds stay dim.</summary>
-    public void SetState(bool onBreak, bool late, bool live)
-    {
-        main.Classes.Set("break", onBreak); main.Classes.Set("overtime", late); main.Classes.Set("live", live);
-        main.Classes.Set("clockIdle", !onBreak && !late && !live);
-        // The seconds take the same colour as the rest of the clock when it is tracking, on a break or in overtime, only lighter.
-        seconds.Classes.Set("break", onBreak); seconds.Classes.Set("overtime", late); seconds.Classes.Set("live", live); seconds.Opacity = onBreak || late || live ? .78 : 1; // Quieter than the main digits, but still easy to read.
-    }
-    /// <summary>The whole clock, as hours:minutes:seconds. Setting it splits the seconds off to be drawn lighter.</summary>
-    public string Text
-    {
-        get => main.Text + seconds.Text;
-        set { var cut = value.LastIndexOf(':'); main.Text = cut > 0 ? value[..cut] : value; seconds.Text = cut > 0 ? value[cut..] : ""; }
-    }
-}
-
 public sealed class Chevron : Control
 {
     public bool Expanded { get; set; }
@@ -873,10 +852,17 @@ public sealed class BreakGlyph : Control
     public BreakGlyph()
     {
         Width = Height = 18;
-        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = FlowProperty, Duration = SteamEase, Easing = new Avalonia.Animation.Easings.CubicEaseInOut() } };
+        Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = FlowProperty, Duration = Motion.Ease(SteamEase), Easing = new Avalonia.Animation.Easings.CubicEaseInOut() } };
     }
     public void SetSteaming(bool on)
     {
+        // With less motion asked for, the cup shows its steam still while it is lit, and nothing moves.
+        if (Motion.Reduced)
+        {
+            wanted = on; Flow = on ? 1 : 0; Steam = 0;
+            if (steaming is not null) { steaming.Cancel(); steaming = null; }
+            return;
+        }
         if (on && Steaming) return;
         wanted = on;
         if (!on)
@@ -949,7 +935,7 @@ public enum IconKind { Check, Clock, Search, Bell, Repeat, Note, Minus, Grip, Ge
 public sealed class IconGlyph : Control
 {
     public const double StrokeWidth = 1.6;
-    public static readonly TimeSpan HoverDuration = TimeSpan.FromMilliseconds(200);
+    public static TimeSpan HoverDuration => Motion.Ease(200);
     public static readonly StyledProperty<double> HoverProperty = AvaloniaProperty.Register<IconGlyph, double>(nameof(Hover));
     static IconGlyph() => AffectsRender<IconGlyph>(HoverProperty);
     public double Hover { get => GetValue(HoverProperty); set => SetValue(HoverProperty, value); }
@@ -1005,8 +991,8 @@ public sealed class IconGlyph : Control
         get => waving;
         set
         {
-            waving = value;
-            if (waveTimer is not null || Kind != IconKind.Flag) return;
+            waving = value && !Motion.Reduced;
+            if (waveTimer is not null || Kind != IconKind.Flag || !waving) return;
             waveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
             waveTimer.Tick += (_, _) =>
             {

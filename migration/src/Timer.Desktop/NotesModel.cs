@@ -72,7 +72,6 @@ public sealed class NotesModel
     public bool IsLate(DayNote note) => !note.Done && ReminderOf(note) is { } due && due < now();
 
     public NoteSeries? SeriesOf(DayNote note) => note.SeriesId is { } id ? series.FirstOrDefault(s => s.Id == id) : null;
-    public bool HasLaterInSeries(DayNote note) => SeriesOf(note) is not null && notes.Any(n => n.SeriesId == note.SeriesId && n.Day.Date > note.Day.Date);
     public static RepeatChoice ChoiceOf(Recurrence? rule) => rule switch
     {
         null => RepeatChoice.None,
