@@ -92,10 +92,11 @@ body{margin:0}
 .stp:hover{background:var(--card2);color:var(--ink)}
 .tin{width:44px;height:30px;box-sizing:border-box;text-align:center;border:1px solid var(--line);background:var(--card2);color:var(--ink);border-radius:10px;font:600 14px 'Inter',system-ui,sans-serif;padding:0}
 .remindPop{position:absolute;left:332px;top:124px;width:404px;z-index:40;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 10px 28px rgba(20,30,70,.16);padding:12px;display:flex;flex-direction:column;gap:10px;box-sizing:border-box}
-.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:36px;box-sizing:border-box;background:var(--card2);flex-shrink:0}
-.segb{border:0;background:transparent;font-size:12.5px;font-weight:600;color:var(--muted);padding:0 11px}
-.segb:hover{color:var(--ink)}
-.segb.on{background:var(--accent);color:var(--accentInk)}
+/* One switch: a rounded track holding both choices, the chosen one filled with the accent. */
+.seg{display:flex;gap:2px;border:1px solid var(--line);border-radius:999px;height:36px;box-sizing:border-box;padding:3px;background:var(--bg1);flex-shrink:0}
+.segb{border:0;border-radius:999px;background:transparent;font-size:13px;font-weight:500;color:var(--muted);padding:0 15px}
+.segb:hover{background:rgba(110,120,150,.14);color:var(--ink)}
+.segb.on,.segb.on:hover{background:var(--accent);color:var(--accentInk)}
 .root *{scrollbar-width:thin;scrollbar-color:var(--scroll) transparent}
 .root *::-webkit-scrollbar{width:10px;height:10px}
 .root *::-webkit-scrollbar-track{background:transparent}
@@ -182,6 +183,9 @@ svg.ri{display:block;fill:currentColor}
             <input class="field" type="text" value="{{draft}}" onChange="{{onDraft}}" aria-label="{{draftAria}}" placeholder="{{draftHint}}" disabled="{{archEdit}}" style="height: 36px; border-color: var(--accent)">
             <sc-if value="{{canSubmit}}" hint-placeholder-val="{{ true }}"><button type="submit" class="ctl primary small" style="height: 36px; padding: 0 16px; flex-shrink: 0">{{submitLabel}}</button></sc-if>
           </div>
+          <sc-if value="{{hasSugg}}" hint-placeholder-val="{{ false }}"><div class="sugg" role="listbox" aria-label="Accounts">
+            <sc-for list="{{sugg}}" as="g" hint-placeholder-count="2"><button type="button" role="option" onClick="{{g.pick}}"><span style="{{g.dot}}"></span><span style="font-weight: 600">{{g.tag}}</span><span style="color: var(--muted)">{{g.name}}</span></button></sc-for>
+          </div></sc-if>
           <div style="display: flex; gap: 8px; flex-wrap: wrap; position: relative">
             <sc-if value="{{isEditing}}" hint-placeholder-val="{{ false }}"><span class="chip" style="height: 36px; box-sizing: border-box; padding: 0 12px; font-size: 13px; font-weight: 600; flex-shrink: 0">{{editLabel}}</span></sc-if>
             <sc-if value="{{notEditing}}" hint-placeholder-val="{{ true }}"><div class="seg" role="group" aria-label="What to add">
@@ -341,6 +345,8 @@ class Component extends DCLogic {
     const fail = (where, msg) => this.setState({ err: msg, errAt: where });
     const upd = (id, patch) => this.setState({ notes: st.notes.map((n) => (n.id === id ? { ...n, ...patch } : n)), err: '' });
     const startKey = (n) => (n.meet ? n.meet.s : n.time || '99:99');
+    const suggMatch = /#([A-Za-z0-9_-]*)$/.exec(this.state.draft || '');
+    const suggList = suggMatch ? accts.map((a, i) => ({ n: a.n, i: i })).filter((x) => x.n.replace(/\s/g, '').toLowerCase().startsWith(suggMatch[1].toLowerCase())).slice(0, 4) : [];
     const acctOpts = (cur, pick) => [{ name: 'No account', i: -1 }].concat(accts.map((a, i) => ({ name: a.n, i: i }))).map((o) => ({ name: o.name, on: cur === o.i, dot: dot(o.i, true), pick: () => pick(o.i) }));
 
     // ---- filter and group
@@ -461,6 +467,9 @@ class Component extends DCLogic {
       views: views, accountFilters: accountFilters,
       // add box
       draft: st.draft, onDraft: (e) => this.setState({ draft: e.target.value }),
+      // A # word at the end of the box offers the accounts; choosing one sets the account and takes the word out.
+      hasSugg: suggList.length > 0,
+      sugg: suggList.map((x) => ({ tag: '#' + x.n.replace(/\s/g, ''), name: x.n, dot: dot(x.i, true), pick: () => this.setState({ draftAcct: x.i, draft: st.draft.slice(0, suggMatch.index).trimEnd() }) })),
       isNoteKind: st.kind === 'note', isMeetKind: st.kind === 'meeting',
       noteCls: st.kind === 'note' ? 'segb on' : 'segb', meetCls: st.kind === 'meeting' ? 'segb on' : 'segb',
       kindNote: () => this.setState({ kind: 'note', err: '' }), kindMeet: () => this.setState({ kind: 'meeting', err: '' }),
