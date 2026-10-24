@@ -223,8 +223,9 @@ public sealed class DashboardWindow : Window
         overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectTab(true));
         model.OpenDayRequested += _ => SelectTab(false);
         var viewsRule = Ui.Rule(); viewsRule.Margin = new Thickness(10, 4); railTop.Children.Add(viewsRule);
-        notesTab = RailButton(IconKind.Note, "Notes", "NotesTab", ShowNotes);
-        foreach (var button in new[] { timelineRail, overviewTab, notesTab }) railTop.Children.Add(button);
+        notesTab = RailButton(IconKind.NotesList, "Notes", "NotesTab", ShowNotes);
+        // Timeline, then Notes, then the Week overview.
+        foreach (var button in new[] { timelineRail, notesTab, overviewTab }) railTop.Children.Add(button);
         Ui.Put(railGrid, railTop);
         var railFoot = new StackPanel { Margin = new Thickness(0, 0, 0, 14), Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
         // The break is in the face, under the primary control, as on the pill.

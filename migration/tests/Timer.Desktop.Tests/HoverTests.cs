@@ -35,7 +35,7 @@ public sealed class HoverTests
     [AvaloniaFact]
     public void PillAndNavigationIconsChangeOnHoverAndReturnToTheSameRestingDrawing()
     {
-        foreach (var kind in new[] { IconKind.Minimise, IconKind.Gear, IconKind.Timeline, IconKind.Week, IconKind.Undo, IconKind.Previous, IconKind.Next })
+        foreach (var kind in new[] { IconKind.Minimise, IconKind.Gear, IconKind.Undo, IconKind.Previous, IconKind.Next })
         {
             var glyph = new IconGlyph(kind) { Transitions = null };
             var window = new Window { Content = glyph, Width = 72, Height = 72 }; window.Show();

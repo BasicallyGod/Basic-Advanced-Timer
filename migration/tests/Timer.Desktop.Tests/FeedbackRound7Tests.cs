@@ -171,4 +171,46 @@ public sealed class FeedbackRound7Tests
         }
         finally { pill.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheRailListsTimelineThenNotesThenTheWeekOverview()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            double Y(string name) => Find<Button>(window, name).TranslatePoint(default, window)!.Value.Y;
+            Assert.True(Y("TimelineTab") < Y("NotesTab") && Y("NotesTab") < Y("WeekOverviewTab"));
+        }
+        finally { window.Close(); }
+    }
+
+    private static byte[] Pixels(Control control)
+    {
+        var bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(72, 72)); bitmap.Render(control);
+        using var stream = new MemoryStream(); bitmap.Save(stream); return stream.ToArray();
+    }
+
+    [AvaloniaFact]
+    public void TheRailIconsPlayALoopThatStartsAndEndsAtRest()
+    {
+        foreach (var (kind, seconds) in new[] { (IconKind.Timeline, 0.55), (IconKind.Week, 0.2), (IconKind.NotesList, 1.3) })
+        {
+            var glyph = new IconGlyph(kind); var window = new Window { Content = glyph, Width = 72, Height = 72 }; window.Show();
+            try
+            {
+                Dispatcher.UIThread.RunJobs(); var rest = Pixels(glyph);
+                glyph.PlaySeconds = seconds; Dispatcher.UIThread.RunJobs(); Assert.NotEqual(rest, Pixels(glyph));
+                glyph.PlaySeconds = 0; Dispatcher.UIThread.RunJobs(); Assert.Equal(rest, Pixels(glyph));
+            }
+            finally { window.Close(); }
+        }
+        for (var bar = 0; bar < 3; bar++) { Assert.Equal(0, RailMotion.BarOffset(bar, 0), 6); Assert.Equal(0, RailMotion.BarOffset(bar, RailMotion.BarSeconds[bar]), 6); }
+        for (var column = 0; column < 3; column++) { Assert.Equal(1, RailMotion.ColumnScale(column, 0), 6); Assert.Equal(1, RailMotion.ColumnScale(column, RailMotion.ColumnSeconds * 2), 6); }
+        Assert.Equal(1, RailMotion.TickProgress(0), 6); Assert.Equal(1, RailMotion.TickProgress(RailMotion.NotesSeconds), 6); Assert.Equal(0, RailMotion.CrossProgress(0), 6); Assert.Equal(0, RailMotion.CrossProgress(RailMotion.NotesSeconds), 6);
+        // The tick and the cross take turns: never both whole at once.
+        for (var s = 0.0; s < RailMotion.NotesSeconds; s += .05) Assert.True(RailMotion.TickProgress(s) < .5 || RailMotion.CrossProgress(s) < .5);
+        // The bars never move in step, and the columns spring a beat apart.
+        Assert.NotEqual(RailMotion.BarOffset(0, 1) / 1.6, RailMotion.BarOffset(1, 1) / -1.6, 3);
+        Assert.NotEqual(RailMotion.ColumnScale(0, .3), RailMotion.ColumnScale(1, .3), 3);
+    }
 }
