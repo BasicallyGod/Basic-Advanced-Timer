@@ -12,8 +12,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 body{margin:0}
-.root{--bg1:#F4F4F1;--bg2:#ECECE8;--card:#FFFFFF;--card2:#F7F7F5;--line:#E2E2DD;--ink:#18233A;--muted:#5A6070;--accent:#3558C8;--accentInk:#FFFFFF;--soft:#E8EEFF;--grid:#EAEAE6;--hatchA:#F1F1EE;--hatchB:#E3E3DF;--meetBg:#F7F7F5;--meetLine:#8FA2D6;--shadow:0 1px 2px rgba(30,30,20,.06);--rail1:#FFFFFF;--rail2:#F6F6F4;--railLine:#E2E2DD;--railIcon:#4A4F5A;--railHover:#EDEDEA;--railDivider:#E2E2DD;--clock:#18233A;--clockSec:#5A6070;--roundBg:#FFFFFF;--roundLine:#BDBDB7;--roundInk:#2D323C;--amber:#B96F00;--amberLine:#E7B66A;--flag:#C93A3A;--quietDot:#7A849C;--lateInk:#B3363F;--lateBg:#FDECEC;--railShadow:none;--liveTint:#F1FBF7;--barNeutral:#6E727C;--track:#EAEAE6;--amberSoft:#FFF1D6;--startInk:#0B7A52;--scroll:#C9C9C4}
-.root.dark{--bg1:#0F1420;--bg2:#131A2A;--card:#1A2234;--card2:#212B42;--line:#2D3853;--ink:#EEF2FB;--muted:#A7B2CA;--accent:#7C9BFF;--accentInk:#0E1530;--soft:#25335A;--grid:#252F48;--hatchA:#222B42;--hatchB:#2B3652;--meetBg:#1F2940;--meetLine:#5E72A4;--shadow:0 1px 2px rgba(0,0,0,.25);--rail1:#1C2334;--rail2:#121826;--railLine:#2E3852;--railIcon:#C8D1E6;--railHover:rgba(255,255,255,.10);--railDivider:#2E3852;--clock:#F3F6FF;--clockSec:#A9B5CF;--roundBg:#1C2436;--roundLine:#3A4560;--roundInk:#E6ECFA;--amber:#F5B84A;--amberLine:#8A6420;--flag:#FF9A9A;--quietDot:#4A5570;--lateInk:#FF9A9A;--lateBg:#3A2226;--railShadow:none;--liveTint:#183029;--barNeutral:#8793B0;--track:#252F48;--amberSoft:#3A2E14;--startInk:#5FE0AE;--scroll:#46526F}
+.root{--bg1:#F4F4F1;--bg2:#ECECE8;--card:#FFFFFF;--card2:#F7F7F5;--line:#E2E2DD;--ink:#18233A;--muted:#5A6070;--accent:#3558C8;--accentInk:#FFFFFF;--soft:#E8EEFF;--grid:#EAEAE6;--hatchA:#F1F1EE;--hatchB:#E3E3DF;--meetBg:#F7F7F5;--meetLine:#8FA2D6;--shadow:0 1px 2px rgba(30,30,20,.06);--rail1:#FFFFFF;--rail2:#F6F6F4;--railLine:#E2E2DD;--railIcon:#4A4F5A;--railHover:#EDEDEA;--railDivider:#E2E2DD;--clock:#18233A;--clockSec:#5A6070;--roundBg:#FFFFFF;--roundLine:#BDBDB7;--roundInk:#2D323C;--amber:#E07A10;--amberLine:#E7B66A;--flag:#C93A3A;--quietDot:#7A849C;--lateInk:#B3363F;--lateBg:#FDECEC;--railShadow:none;--liveTint:#F1FBF7;--barNeutral:#6E727C;--track:#EAEAE6;--amberSoft:#FFF1D6;--startInk:#0B7A52;--scroll:#C9C9C4}
+.root.dark{--bg1:#0F1420;--bg2:#131A2A;--card:#1A2234;--card2:#212B42;--line:#2D3853;--ink:#EEF2FB;--muted:#A7B2CA;--accent:#7C9BFF;--accentInk:#0E1530;--soft:#25335A;--grid:#252F48;--hatchA:#222B42;--hatchB:#2B3652;--meetBg:#1F2940;--meetLine:#5E72A4;--shadow:0 1px 2px rgba(0,0,0,.25);--rail1:#1C2334;--rail2:#121826;--railLine:#2E3852;--railIcon:#C8D1E6;--railHover:rgba(255,255,255,.10);--railDivider:#2E3852;--clock:#F3F6FF;--clockSec:#A9B5CF;--roundBg:#1C2436;--roundLine:#3A4560;--roundInk:#E6ECFA;--amber:#FF9A3C;--amberLine:#8A6420;--flag:#FF9A9A;--quietDot:#4A5570;--lateInk:#FF9A9A;--lateBg:#3A2226;--railShadow:none;--liveTint:#183029;--barNeutral:#8793B0;--track:#252F48;--amberSoft:#3A2E14;--startInk:#5FE0AE;--scroll:#46526F}
 :where(.root) button{font:inherit;color:inherit;cursor:pointer}
 .root{color-scheme:light}.root.dark{color-scheme:dark}
 .root button:focus-visible,.root input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -24,13 +24,24 @@ a.nav{text-decoration:none}
 .nav:hover{background:var(--railHover);color:var(--ink)}
 .nav.on{background:linear-gradient(135deg,#5E80FB,#3558C8);color:#fff}
 .nav.quit:hover{background:var(--lateBg);color:var(--lateInk)}
-.play{width:46px;height:46px;border-radius:50%;border:0;padding:0;color:#10281F;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 1px 2px rgba(20,30,60,.18)}
+.play{width:44px;height:44px;border-radius:14px;border:0;padding:0;color:#10281F;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 1px 2px rgba(20,30,60,.18)}
 .play .face{display:flex;align-items:center;justify-content:center;width:100%;height:100%}
 .play .hov{display:none;align-items:center;justify-content:center;width:100%;height:100%}
 .play:hover .face{display:none}
 .play:hover .hov{display:flex}
-.brk{width:40px;height:40px;border-radius:13px;border:0;background:transparent;color:var(--amber);display:flex;align-items:center;justify-content:center;padding:0}
+.brk{width:44px;height:44px;border-radius:14px;border:0;background:transparent;color:var(--amber);display:flex;align-items:center;justify-content:center;padding:0}
 .brk:hover{background:var(--amberSoft)}
+.root{--live:#1F8F5F;--ovt:#D9363E}
+.root.dark{--live:#34D399;--ovt:#FF7A7A}
+.play{--tone:var(--live);color:var(--tone);background:color-mix(in srgb,var(--tone) 20%,transparent);box-shadow:none;transition:background .15s ease}
+.play:hover{background:color-mix(in srgb,var(--tone) 32%,transparent)}
+.brk{background:color-mix(in srgb,var(--amber) 16%,transparent);transition:background .15s ease}
+.brk:hover{background:color-mix(in srgb,var(--amber) 28%,transparent)}
+.brk.on{background:var(--amber);color:#fff;box-shadow:0 0 0 3px color-mix(in srgb,var(--amber) 32%,transparent)}
+.root.dark .brk.on{color:#2A1A05}
+.accT{background:color-mix(in srgb,var(--ink) 5%,transparent);transition:background .15s ease}
+.accT:hover{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.accT.open{background:color-mix(in srgb,var(--accent) 22%,transparent)}
 .brk.on{background:var(--amberSoft)}
 .brk.on .steam{animation:steam 1.4s ease-in-out infinite}
 .blk{position:absolute;border:0;border-radius:12px;padding:8px 10px;text-align:left;color:#14213D;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.5)}
@@ -60,11 +71,17 @@ a.nav{text-decoration:none}
 .acctPanel{position:absolute;left:84px;top:178px;width:264px;z-index:40;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 28px rgba(20,30,70,.16);padding:14px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box}
 .acctRow{display:flex;align-items:center;gap:10px;padding:6px;border:0;border-radius:12px;background:transparent;text-align:left;width:100%}
 .acctRow:hover{background:var(--card2)}
+.playSq{width:36px;height:36px;border-radius:11px;border:2px solid var(--line);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--ink);box-sizing:border-box}
+.playSq.run{background:var(--accent);border-color:var(--accent);color:var(--accentInk)}
+.acctRow:hover .playSq{background:var(--accent);border-color:var(--accent);color:var(--accentInk)}
+.nav.open{background:var(--soft)}
+
 .small{height:30px;border-radius:10px;font-size:13px;padding:0 11px}
 .ctl.primary{background:var(--accent);border-color:var(--accent);color:var(--accentInk)}
 .ctl.primary:hover{background:var(--accent);filter:brightness(1.06)}
 a.ctl{text-decoration:none}
-.flyout{position:absolute;left:0;top:48px;width:372px;z-index:30;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 28px rgba(20,30,70,.16);padding:14px;display:flex;flex-direction:column;gap:10px;box-sizing:border-box}
+.flyPoint{position:absolute;top:-7px;right:15px;width:12px;height:12px;box-sizing:border-box;background:var(--card);border-left:1px solid var(--line);border-top:1px solid var(--line);transform:rotate(45deg)}
+.flyout{position:absolute;right:0;top:52px;width:372px;z-index:30;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 28px rgba(20,30,70,.16);padding:14px;display:flex;flex-direction:column;gap:10px;box-sizing:border-box}
 .sugg{position:absolute;left:0;right:0;top:44px;z-index:12;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 20px rgba(20,30,70,.14);padding:4px}
 .sugg button{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;border-radius:8px;padding:7px 8px;font-size:13px;text-align:left}
 .sugg button:hover{background:var(--card2)}
@@ -99,7 +116,7 @@ a.ctl{text-decoration:none}
 .day.blank{visibility:hidden}
 .stp{width:44px;height:20px;border:0;background:transparent;color:var(--muted);border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0}
 .stp:hover{background:var(--card2);color:var(--ink)}
-.tin{width:44px;height:34px;box-sizing:border-box;text-align:center;border:1px solid var(--line);background:var(--card2);color:var(--ink);border-radius:10px;font:700 18px 'Bricolage Grotesque',system-ui,sans-serif;padding:0}
+.tin{width:44px;height:30px;box-sizing:border-box;text-align:center;border:1px solid var(--line);background:var(--card2);color:var(--ink);border-radius:10px;font:600 14px 'Inter',system-ui,sans-serif;padding:0}
 .selWrap{display:flex;align-items:center;gap:8px;height:38px;box-sizing:border-box;border:1px solid var(--line);background:var(--card2);border-radius:12px;padding:0 6px 0 10px}
 .selWrap:hover{border-color:var(--accent)}
 .datePop{position:absolute;left:50%;top:48px;transform:translateX(-50%);width:312px;z-index:30;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 28px rgba(20,30,70,.16);padding:14px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box}
@@ -149,7 +166,7 @@ a.ctl{text-decoration:none}
 </helmet>
 <div class="root {{modeClass}}" style="width: 1100px; height: 720px; box-sizing: border-box; display: flex; position: relative; overflow: hidden; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink)">
 
-  <nav aria-label="Timer and navigation" style="width: 76px; flex-shrink: 0; height: 100%; box-sizing: border-box; padding: 14px 0 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; background: linear-gradient(180deg, var(--rail1), var(--rail2)); border-right: 1px solid var(--railLine); box-shadow: var(--railShadow)">
+  <nav aria-label="Timer and navigation" style="position: relative; z-index: 45; width: 76px; flex-shrink: 0; height: 100%; box-sizing: border-box; padding: 14px 0 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; background: linear-gradient(180deg, var(--rail1), var(--rail2)); border-right: 1px solid var(--railLine); box-shadow: var(--railShadow)">
     <div style="display: flex; gap: 6px; align-items: center; height: 14px" role="group" aria-label="Recording and reminder status">
       <span class="cap" role="img" aria-label="{{dotLabel}}" style="background: {{dotColour}}"></span>
 <sc-if value="{{hasAttention}}" hint-placeholder-val="{{ true }}"><span class="cap pulse" role="img" aria-label="A reminder is due" style="background: #6096FF"></span></sc-if>
@@ -169,13 +186,13 @@ a.ctl{text-decoration:none}
         <sc-if value="{{playOnHover}}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></sc-if>
       </span>
     </button>
-    <button class="nav" onClick="{{toggleAccts}}" aria-label="Switch account" aria-expanded="{{acctsOpen}}" title="Switch account" style="width: 46px; height: 34px; border-radius: 12px; margin-top: -2px"><span style="display: flex; flex-direction: column; gap: 3px" aria-hidden="true"><span style="width: 20px; height: 5px; border-radius: 3px; background: linear-gradient(135deg,#A8D4FF,#7F98F7)"></span><span style="width: 20px; height: 5px; border-radius: 3px; background: linear-gradient(135deg,#B2EFD6,#5FD6AE)"></span><span style="width: 20px; height: 5px; border-radius: 3px; background: linear-gradient(135deg,#FFD9B8,#FF9F84)"></span></span></button>
+    <button class="brk {{breakCls}}" aria-label="{{breakLabel}}" aria-pressed="{{isBreak}}" title="{{breakLabel}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path class="steam" d="M8 3v2M12 3v2"/></svg></button>
+    <button class="nav accT {{acctCls}}" onClick="{{toggleAccts}}" aria-label="Accounts" aria-expanded="{{acctsOpen}}" title="{{acctTip}}" style="width: 44px; height: 44px; border-radius: 14px"><span style="display: flex; flex-direction: column; gap: 3px" aria-hidden="true"><span style="width: 20px; height: 5px; border-radius: 3px; background: linear-gradient(135deg,#A8D4FF,#7F98F7)"></span><span style="width: 20px; height: 5px; border-radius: 3px; background: linear-gradient(135deg,#B2EFD6,#5FD6AE)"></span><span style="width: 20px; height: 5px; border-radius: 3px; background: linear-gradient(135deg,#FFD9B8,#FF9F84)"></span></span></button>
     <div style="width: 30px; height: 1px; background: var(--railDivider); margin: 4px 0 2px"></div>
     <a class="nav on" href="Main.dc.html" aria-label="Timeline" aria-current="page" title="Timeline"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="9" height="3.6" rx="1.4"/><rect x="9.5" y="10.4" width="11" height="3.6" rx="1.4"/><path d="M3 19h18M7 19v-1.4M12 19v-1.4M17 19v-1.4"/></svg></a>
     <a class="nav" href="Week.dc.html" aria-label="Week overview" title="Week overview"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20V12M10 20V6M15 20v-6M20 20V9"/></svg></a>
     <a class="nav" href="Notes.dc.html" aria-label="Notes" title="Notes"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9.5 13h7M9.5 17h5"/></svg></a>
     <div style="flex-grow: 1"></div>
-    <button class="brk {{breakCls}}" aria-label="{{breakLabel}}" aria-pressed="{{isBreak}}" title="{{breakLabel}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path class="steam" d="M8 3v2M12 3v2"/></svg></button>
     <sc-if value="{{canFinish}}" hint-placeholder-val="{{ true }}"><button class="nav finish" onClick="{{openFinish}}" aria-label="Finish day" aria-expanded="{{finishOpen}}" title="Finish day" style="color: var(--flag)"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path class="cloth" d="M5 5h13l-3 4 3 4H5"/></svg></button></sc-if>
     <sc-if value="{{canStart}}" hint-placeholder-val="{{ false }}"><button class="nav start" onClick="{{startDay}}" aria-label="{{startLabel}}" title="{{startLabel}}"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 19h18"/><g class="sun"><path d="M7 19a5 5 0 0 1 10 0"/><path d="M12 7v3M5.4 11.4l2 2M18.6 11.4l-2 2"/></g></svg></button></sc-if>
     <div style="width: 30px; height: 1px; background: var(--railDivider); margin: 2px 0"></div>
@@ -191,20 +208,22 @@ a.ctl{text-decoration:none}
   </sc-if>
 
   <sc-if value="{{acctsOpen}}" hint-placeholder-val="{{ false }}">
-    <div class="acctPanel" role="dialog" aria-label="Switch account">
-      <div style="display: flex; align-items: center; justify-content: space-between"><div style="font-size: 15px; font-weight: 600">Accounts</div><div style="font-size: 12px; color: var(--muted)">Click one to record to it</div></div>
-      <sc-for list="{{acctRows}}" as="a" hint-placeholder-count="3">
+    <button type="button" onClick="{{toggleAccts}}" aria-label="Close the accounts" style="position: absolute; left: 76px; top: 0; right: 0; bottom: 0; border: 0; padding: 0; background: rgba(24,35,58,.18); z-index: 40; cursor: default"></button>
+    <aside class="acctDrawer" role="dialog" aria-label="Accounts" style="position: absolute; left: 76px; top: 0; bottom: 0; width: 300px; z-index: 42; box-sizing: border-box; padding: 20px 14px; background: linear-gradient(180deg, var(--rail1), var(--rail2)); border-right: 1px solid var(--railLine); box-shadow: 8px 0 28px rgba(20,30,70,.16); display: flex; flex-direction: column; gap: 6px">
+      <div style="font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 24px; font-weight: 700; height: 44px; display: flex; align-items: center; padding: 0 10px">Accounts</div>
+      <sc-for list="{{acctRows}}" as="a" hint-placeholder-count="5">
         <button class="acctRow" onClick="{{a.pick}}" style="{{a.rowStyle}}" aria-pressed="{{a.running}}">
-          <span style="{{a.swatch}}"></span>
           <span style="flex-grow: 1; min-width: 0; display: block">
-            <span style="display: flex; justify-content: space-between; gap: 6px"><span style="font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{a.name}}</span><span style="font-size: 12px; color: var(--muted)">{{a.time}}</span></span>
-            <span style="display: block; font-size: 11.5px; margin-top: 1px; {{a.subStyle}}">{{a.sub}}</span>
+            <span style="display: flex; justify-content: space-between; gap: 6px; align-items: center"><span style="display: flex; align-items: center; gap: 7px; min-width: 0"><span style="{{a.dot}}"></span><span style="font-size: 13.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{a.name}}</span></span><span style="font-size: 13.5px; font-weight: 600">{{a.time}}</span></span>
+            <span style="display: block; font-size: 11.5px; margin-top: 2px; {{a.subStyle}}">{{a.sub}}</span>
             <sc-if value="{{a.hasBar}}" hint-placeholder-val="{{ true }}"><span style="display: block; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; margin-top: 5px"><span style="{{a.bar}}"></span></span></sc-if>
           </span>
+          <span class="playSq {{a.sqCls}}" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="{{a.sqIcon}}"/></svg></span>
         </button>
       </sc-for>
-      <a class="ctl" href="AccountsDialog.dc.html" style="height: 36px; margin-top: 2px" title="Opens Accounts and budgets"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Manage accounts</a>
-    </div>
+      <div style="flex-grow: 1"></div>
+      <a class="ctl" href="AccountsDialog.dc.html" style="height: 38px" title="Opens Accounts and budgets"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Manage accounts</a>
+    </aside>
   </sc-if>
 
   <main style="flex-grow: 1; min-width: 0; padding: 20px 22px 20px 20px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box">
@@ -212,11 +231,11 @@ a.ctl{text-decoration:none}
     <header style="display: flex; align-items: center; gap: 10px; height: 44px; position: relative; z-index: 30">
       <h1 style="margin: 0 auto 0 4px; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 30px; font-weight: 700; letter-spacing: -0.01em">{{dateTitle}}</h1>
       <div style="position: relative">
-        <button class="ctl bell" onClick="{{toggleBell}}" aria-label="{{bellLabel}}" aria-expanded="{{bellOpen}}" style="width: 42px; padding: 0; position: relative"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15z"/><path d="M10 21h4"/></svg>
+        <button class="{{bellCls}}" onClick="{{toggleBell}}" aria-label="{{bellLabel}}" aria-expanded="{{bellOpen}}" style="width: 42px; padding: 0; position: relative"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15z"/><path d="M10 21h4"/></svg>
           <sc-if value="{{hasAttention}}" hint-placeholder-val="{{ true }}"><span style="position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; box-sizing: border-box; border-radius: 9px; background: var(--lateInk); color: var(--card); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 4px">{{attentionCount}}</span></sc-if>
         </button>
         <sc-if value="{{bellOpen}}" hint-placeholder-val="{{ false }}">
-          <div class="flyout" role="dialog" aria-label="Notifications">
+          <div class="flyout" role="dialog" aria-label="Notifications"><span class="flyPoint" aria-hidden="true"></span>
             <div style="display: flex; align-items: center; justify-content: space-between"><div style="font-size: 15px; font-weight: 600">Notifications</div><div style="font-size: 12px; color: var(--muted)">Reminders from your notes</div></div>
             <sc-if value="{{hasAttention}}" hint-placeholder-val="{{ true }}">
               <div style="font-size: 12px; font-weight: 600; color: var(--lateInk); text-transform: uppercase; letter-spacing: .04em">Needs attention</div>
@@ -224,11 +243,11 @@ a.ctl{text-decoration:none}
             <sc-for list="{{attention}}" as="r" hint-placeholder-count="1">
               <div style="display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 14px; background: var(--lateBg)">
                 <span style="{{r.dot}}"></span>
-                <div style="flex-grow: 1; min-width: 0">
+                <div style="flex-grow: 1; min-width: 0; align-self: center">
                   <div style="font-size: 13.5px; font-weight: 600; line-height: 1.3">{{r.text}}</div>
                   <div style="font-size: 12px; color: var(--lateInk); margin-top: 2px; font-weight: 500">{{r.when}}</div>
-                  <div style="display: flex; gap: 6px; margin-top: 8px"><button class="ctl small primary" onClick="{{r.toggle}}">Done</button><button class="ctl small">Reschedule</button></div>
                 </div>
+                <div style="display: flex; gap: 4px; align-self: center; flex-shrink: 0"><button class="ctl small primary" onClick="{{r.toggle}}" aria-label="Done" title="Done" style="width: 30px; padding: 0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg></button><button class="ctl small" aria-label="Reschedule" title="Reschedule" style="width: 30px; padding: 0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg></button></div>
               </div>
             </sc-for>
             <sc-if value="{{hasSoon}}" hint-placeholder-val="{{ true }}">
@@ -241,7 +260,7 @@ a.ctl{text-decoration:none}
                   <div style="font-size: 13.5px; font-weight: 600; line-height: 1.3">{{r.text}}</div>
                   <div style="font-size: 12px; color: var(--muted); margin-top: 2px">{{r.when}}</div>
                 </div>
-                <button class="ctl small" style="flex-shrink: 0">Reschedule</button>
+                <button class="ctl small" aria-label="Reschedule" title="Reschedule" style="flex-shrink: 0; width: 30px; padding: 0; align-self: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg></button>
               </div>
             </sc-for>
             <sc-if value="{{nothingWaiting}}" hint-placeholder-val="{{ false }}"><div style="font-size: 13px; color: var(--muted); padding: 8px 2px">Nothing is waiting.</div></sc-if>
@@ -406,6 +425,7 @@ a.ctl{text-decoration:none}
             </div>
             <sc-if value="{{isMeetingForm}}" hint-placeholder-val="{{ false }}">
               <div style="position: relative; display: flex; align-items: center; gap: 8px">
+                <button type="button" class="ctl small" aria-label="Choose the day" title="Choose the day" style="padding: 0 10px; flex-shrink: 0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Today</button>
                 <input class="field" type="text" value="{{mS}}" onChange="{{onMS}}" aria-label="Start time, HH:MM" style="width: 64px; text-align: center">
                 <span style="color: var(--muted)">–</span>
                 <input class="field" type="text" value="{{mE}}" onChange="{{onME}}" aria-label="End time, HH:MM" style="width: 64px; text-align: center">
@@ -432,12 +452,10 @@ a.ctl{text-decoration:none}
                 </div>
               </div>
               <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px">
-                <div class="lbl">Day</div>
-                <div style="display: flex; gap: 5px; flex-wrap: wrap"><sc-for list="{{popDays}}" as="d" hint-placeholder-count="3"><button type="button" class="{{d.cls}}" onClick="{{d.pick}}" aria-pressed="{{d.on}}">{{d.name}}</button></sc-for></div>
-                <div class="lbl" style="margin-top: 4px">Time</div>
+                <div class="lbl">Time</div>
                 <div style="display: flex; align-items: center; gap: 4px">
                   <div style="display: flex; flex-direction: column; align-items: center"><button type="button" class="stp" onClick="{{hUp}}" aria-label="Later hour"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button><input class="tin" type="text" value="{{popHStr}}" onChange="{{onH}}" aria-label="Hour" maxlength="2"><button type="button" class="stp" onClick="{{hDown}}" aria-label="Earlier hour"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div>
-                  <span style="font: 700 18px 'Bricolage Grotesque', system-ui, sans-serif; color: var(--muted)">:</span>
+                  <span style="font: 700 14px 'Inter', system-ui, sans-serif; color: var(--muted)">:</span>
                   <div style="display: flex; flex-direction: column; align-items: center"><button type="button" class="stp" onClick="{{mUp}}" aria-label="Later by five minutes"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button><input class="tin" type="text" value="{{popMStr}}" onChange="{{onM}}" aria-label="Minutes" maxlength="2"><button type="button" class="stp" onClick="{{mDown}}" aria-label="Earlier by five minutes"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div>
                 </div>
                 <div style="display: flex; gap: 5px; flex-wrap: wrap"><sc-for list="{{popTimes}}" as="t" hint-placeholder-count="4"><button type="button" class="{{t.cls}}" onClick="{{t.pick}}" aria-pressed="{{t.on}}">{{t.name}}</button></sc-for></div>
@@ -499,7 +517,7 @@ a.ctl{text-decoration:none}
   </sc-if>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;rec&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;running&quot;,&quot;idle&quot;,&quot;break&quot;,&quot;overtime&quot;],&quot;default&quot;:&quot;idle&quot;,&quot;section&quot;:&quot;Pill state&quot;},&quot;day&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;running&quot;,&quot;dayoff&quot;,&quot;finished&quot;],&quot;default&quot;:&quot;running&quot;,&quot;section&quot;:&quot;Day&quot;},&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:720}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;rec&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;running&quot;,&quot;idle&quot;,&quot;break&quot;,&quot;overtime&quot;],&quot;default&quot;:&quot;idle&quot;,&quot;section&quot;:&quot;Pill state&quot;},&quot;day&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;running&quot;,&quot;dayoff&quot;,&quot;finished&quot;],&quot;default&quot;:&quot;running&quot;,&quot;section&quot;:&quot;Day&quot;},&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:720}}">
 class Component extends DCLogic {
   constructor(props) {
     super(props);
@@ -529,8 +547,8 @@ class Component extends DCLogic {
       draftRem: null,
       kind: 'note',
       editId: null,
-      mS: '09:00',
-      mE: '10:00',
+      mS: '12:00',
+      mE: '12:30',
       mRepeat: 'none',
       repDd: false,
       info: '',
@@ -675,7 +693,7 @@ class Component extends DCLogic {
         ini: b.ini,
         note: '• ' + b.note,
         rowStyle: mode === 'full' ? '' : 'display:flex;align-items:center;gap:8px;height:100%;min-width:0',
-        durStyle: mode === 'full' ? "font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:700;font-size:15px;line-height:1.15;white-space:nowrap" : "font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:700;line-height:1;white-space:nowrap;font-size:" + (mode === 'inline' ? '13px' : '11px'),
+        durStyle: mode === 'full' ? "font-weight:600;font-size:15px;line-height:1.15;white-space:nowrap" : "font-weight:600;line-height:1;white-space:nowrap;font-size:" + (mode === 'inline' ? '13px' : '11px'),
         nameStyle: mode === 'full' ? 'font-size:13px;font-weight:600;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' : 'font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis',
         showAcct: mode === 'full' ? w >= 0.7 : mode === 'inline' && w >= 0.9,
         showIni: mode === 'full' ? w < 0.7 : mode === 'inline' && w < 0.9,
@@ -792,10 +810,10 @@ class Component extends DCLogic {
     const colours = { running: '#34D399', idle: '#8D97AE', break: '#F5A524', overtime: '#F87171' };
     const labels = { running: 'Recording', idle: 'Not recording', break: 'On break', overtime: 'Overtime' };
     const circles = {
-      running: 'background: linear-gradient(135deg, #9DF2D2, #34D399)',
-      idle: 'background: linear-gradient(135deg, #9DF2D2, #34D399)',
-      break: 'background: linear-gradient(135deg, #FFD08A, #F5A524)',
-      overtime: 'background: linear-gradient(135deg, #FFC2C2, #FF8585)'
+      running: '',
+      idle: '',
+      break: '',
+      overtime: '--tone: var(--ovt)'
     };
 
     // ---- notes and reminders
@@ -805,7 +823,7 @@ class Component extends DCLogic {
       const note = target === 'new' ? null : this.state.notes.find((q) => q.id === target);
       const rem = target === 'new' ? this.state.draftRem : note && note.rem;
       const ts = rem ? rem.ts : todayTs;
-      const t = rem ? rem.t : '15:00';
+      const t = rem ? rem.t : '12:00';
       const label = target === 'new' ? (this.state.draft.replace(/#\w*$/, '').trim() || (this.state.kind === 'meeting' ? 'New meeting' : 'New note')) : (note ? note.text : '');
       this.setState({ popOpen: true, popTarget: target, popFor: label, popTs: ts, popMonth: monthOffset(ts), popH: +t.slice(0, 2), popM: +t.slice(3, 5) });
     };
@@ -824,7 +842,7 @@ class Component extends DCLogic {
       const st = this.state;
       if (st.composerOpen && st.kind === kind && !st.editId) { this.setState({ composerOpen: false, popOpen: false, repDd: false, info: '', scopeOpen: false }); return; }
       const fresh = !st.composerOpen || !!st.editId;
-      this.setState({ composerOpen: true, kind: kind, editId: null, popOpen: false, repDd: false, info: '', infoBad: false, scopeOpen: false, ...(fresh ? { draft: '', draftAcct: -1, draftRem: null, mS: '09:00', mE: '10:00', mRepeat: 'none' } : {}) });
+      this.setState({ composerOpen: true, kind: kind, editId: null, popOpen: false, repDd: false, info: '', infoBad: false, scopeOpen: false, ...(fresh ? { draft: '', draftAcct: -1, draftRem: null, mS: '12:00', mE: '12:30', mRepeat: 'none' } : {}) });
     };
     const applyMeeting = (scope) => {
       const st = this.state;
@@ -959,7 +977,7 @@ class Component extends DCLogic {
       playOnHover: rec === 'break',
       playLabel: rec === 'idle' ? 'Start tracking' : rec === 'break' ? 'End break and resume' : 'Pause. Tracking ' + accts[this.state.runAcct].n,
       runIni: 'A' + (this.state.runAcct + 1),
-      acctsOpen: this.state.acctsOpen,
+      acctsOpen: this.state.acctsOpen, acctCls: this.state.acctsOpen ? 'open' : '', acctTip: this.state.acctsOpen ? 'Close the accounts' : 'Accounts',
       toggleAccts: () => this.setState({ acctsOpen: !this.state.acctsOpen }),
       acctRows: accts.slice(0, 5).map((a, i) => {
         const t = pdur(Math.floor(shown.filter((u) => u.acct === i).reduce((tt, u) => tt + (u.e - u.s) * 60, 0) + 1e-6));
@@ -967,8 +985,9 @@ class Component extends DCLogic {
         const sub = ['08:48 of 10:00 this week', '12:00 of 20:00 this month', '03:41 of 08:00 this week', '16:30 of 15:00 this month', 'No budget'][i];
         const run = i === this.state.runAcct;
         return {
-          name: a.n, time: t, sub: sub, hasBar: p > 0, subStyle: p >= 100 ? 'color:var(--lateInk);font-weight:600' : 'color:var(--muted)', running: run,
-          rowStyle: run ? 'box-shadow:0 0 0 2px #34D399;background:var(--liveTint)' : '',
+          name: a.n, time: t, sub: sub, hasBar: p > 0,
+          dot: 'width:10px;height:10px;border-radius:50%;flex-shrink:0;background:' + a.c[1], sqCls: run ? 'run' : '', sqIcon: run ? 'M7 5h3.6v14H7zM13.4 5H17v14h-3.6z' : 'M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z', subStyle: p >= 100 ? 'color:var(--lateInk);font-weight:600' : 'color:var(--muted)', running: run,
+          rowStyle: 'padding:8px 10px;' + (run ? 'background:var(--liveTint)' : ''),
           swatch: 'width:32px;height:32px;border-radius:10px;flex-shrink:0;display:block;background:linear-gradient(135deg,' + a.c[0] + ',' + a.c[1] + ')',
           bar: 'display:block;height:100%;width:' + Math.min(p, 100) + '%;background:' + (p >= 100 ? '#D64545' : p >= 80 ? '#E39A12' : 'var(--barNeutral)'),
           pick: () => this.setState({ runAcct: i, acctsOpen: false })
@@ -1079,8 +1098,8 @@ class Component extends DCLogic {
       mDown: stepM(-5),
       onH: (e) => { const v = parseInt(e.target.value, 10); if (v >= 0 && v <= 23) this.setState({ popH: v }); },
       onM: (e) => { const v = parseInt(e.target.value, 10); if (v >= 0 && v <= 59) this.setState({ popM: v }); },
-      popSummary: dayLabel(this.state.popTs) + ', ' + popTime + (popLate ? ' (already past)' : ''),
-      popSummaryStyle: 'font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' + (popLate ? 'color:var(--lateInk)' : 'color:var(--ink)'),
+      popSummary: dayLabel(this.state.popTs) + ', ' + popTime,
+      popSummaryStyle: 'font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;' + 'color:var(--ink)',
       closePop: () => this.setState({ popOpen: false }),
       setRemind: () => {
         if (this.state.popTarget === 'new') this.setState({ draftRem: popRem, popOpen: false });
@@ -1113,7 +1132,7 @@ class Component extends DCLogic {
         let h = 15;
         try { const r = e.currentTarget.getBoundingClientRect(); const f = (e.clientX - r.left) / r.width; h = 8 + Math.max(0, Math.min(1, f)) * 10; } catch (err) { h = 15; }
         const s0 = Math.min(17, Math.max(8, Math.floor(h * 4) / 4));
-        this.setState({ composerOpen: true, kind: 'meeting', editId: null, draft: '', draftAcct: -1, draftRem: null, mS: hm(s0), mE: hm(Math.min(18, s0 + 1)), mRepeat: 'none', popOpen: false, repDd: false, info: '', infoBad: false, scopeOpen: false });
+        this.setState({ composerOpen: true, kind: 'meeting', editId: null, draft: '', draftAcct: -1, draftRem: null, mS: hm(s0), mE: hm(Math.min(18, s0 + 0.5)), mRepeat: 'none', popOpen: false, repDd: false, info: '', infoBad: false, scopeOpen: false });
       },
       hasInfo: !!this.state.info,
       info: this.state.info,
@@ -1165,6 +1184,7 @@ class Component extends DCLogic {
         this.setState({ nextId: id + 1, draft: '', draftAcct: -1, draftRem: null, notes: [...st.notes, { id: id, text: text, acct: st.draftAcct, rem: st.draftRem, done: false, repeat: 'none', meet: null }] });
       },
       bellOpen: this.state.bellOpen,
+      bellCls: this.state.bellOpen ? 'ctl bell on' : 'ctl bell',
       toggleBell: () => this.setState({ bellOpen: !this.state.bellOpen }),
       attention: attention,
       soon: soon,
