@@ -228,8 +228,6 @@ public static class Ui
         foreach (var c in children) p.Children.Add(c);
         return p;
     }
-    public static bool IsDragSurface(object? source) => source is Visual visual
-        && visual is not Avalonia.Controls.Button && !visual.GetVisualAncestors().OfType<Button>().Any();
     /// <summary>True for anything that is not a control you use: the bare panel and plain text, not buttons, boxes, lists, sliders or scroll bars.</summary>
     public static bool IsPlainSurface(object? source) => source is Visual visual
         && visual is not (Avalonia.Controls.Button or TextBox or ComboBox or Avalonia.Controls.Slider or Avalonia.Controls.Primitives.ScrollBar or Avalonia.Controls.Primitives.Thumb or ListBox)
@@ -247,7 +245,8 @@ public static class Ui
         header.Name = name;
         header.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         {
-            if (IsDragSurface(e.Source) && e.GetCurrentPoint(window).Properties.IsLeftButtonPressed)
+            // Boxes count as controls too, or a press on the Notes search box would start dragging the window and the box could never be clicked into.
+            if (IsPlainSurface(e.Source) && e.GetCurrentPoint(window).Properties.IsLeftButtonPressed)
             { CloseMenus(window); window.BeginMoveDrag(e); e.Handled = true; }
         }, RoutingStrategies.Tunnel);
     }
@@ -623,7 +622,7 @@ public sealed class AccountList : StackPanel
                 var nameLine = Ui.Grid("*,Auto"); var nameStack = new NameRow { Spacing = 0 }; // The live dot follows the name closely instead of sitting out by today's time.
                 marquee = new MarqueeText(account.Display, 15) { Name = "AccountName" }; var nameText = marquee; dot.Margin = new Thickness(8, 0, 0, 0);
                 nameStack.Children.Add(swatch); nameStack.Children.Add(nameText); nameStack.Children.Add(dot);
-                today = Ui.Text(model.Format(model.Today(account)), 15); today.Classes.Add("figures"); today.FontWeight = Avalonia.Media.FontWeight.SemiBold; today.VerticalAlignment = VerticalAlignment.Center; today.TextAlignment = Avalonia.Media.TextAlignment.Right;
+                today = Ui.Text(model.Format(model.Today(account)), 15); today.FontWeight = Avalonia.Media.FontWeight.Bold; today.VerticalAlignment = VerticalAlignment.Center; today.TextAlignment = Avalonia.Media.TextAlignment.Right;
                 Ui.Put(nameLine, nameStack); Ui.Put(nameLine, today, 1);
                 // The budget used is in the text colour (red once spent) and the period it covers is quiet and lines up with today's time above it.
                 budget.Classes.Remove("muted"); budget.FontSize = 13;

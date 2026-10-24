@@ -12,7 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 body{margin:0}
-.root{--bg1:#F4F4F1;--bg2:#ECECE8;--card:#FFFFFF;--card2:#F7F7F5;--line:#E2E2DD;--ink:#18233A;--muted:#5A6070;--accent:#3558C8;--accentInk:#FFFFFF;--soft:#E8EEFF;--grid:#EAEAE6;--hatchA:#F1F1EE;--hatchB:#E3E3DF;--meetBg:#F7F7F5;--meetLine:#8FA2D6;--shadow:0 1px 2px rgba(30,30,20,.06);--rail1:#FFFFFF;--rail2:#F6F6F4;--railLine:#E2E2DD;--railIcon:#4A4F5A;--railHover:#EDEDEA;--railDivider:#E2E2DD;--clock:#18233A;--clockSec:#5A6070;--roundBg:#FFFFFF;--roundLine:#BDBDB7;--roundInk:#2D323C;--amber:#E07A10;--amberLine:#E7B66A;--flag:#C93A3A;--quietDot:#7A849C;--lateInk:#B3363F;--lateBg:#FDECEC;--railShadow:none;--liveTint:#F1FBF7;--barNeutral:#6E727C;--track:#EAEAE6;--amberSoft:#FFF1D6;--startInk:#0B7A52;--scroll:#C9C9C4}
+.root{--bg1:#F4F4F1;--bg2:#ECECE8;--card:#FFFFFF;--card2:#F7F7F5;--line:#E2E2DD;--ink:#18233A;--muted:#5A6070;--accent:#3558C8;--accentInk:#FFFFFF;--soft:#E8EEFF;--grid:#EAEAE6;--hatchA:#F1F1EE;--hatchB:#E3E3DF;--meetBg:#F7F7F5;--meetLine:#8FA2D6;--shadow:0 1px 2px rgba(30,30,20,.06);--rail1:#FFFFFF;--rail2:#F6F6F4;--railLine:#E2E2DD;--railIcon:#858994;--railHover:#EDEDEA;--railDivider:#E2E2DD;--clock:#18233A;--clockSec:#5A6070;--roundBg:#FFFFFF;--roundLine:#BDBDB7;--roundInk:#2D323C;--amber:#E07A10;--amberLine:#E7B66A;--flag:#C93A3A;--quietDot:#7A849C;--lateInk:#B3363F;--lateBg:#FDECEC;--railShadow:none;--liveTint:#F1FBF7;--barNeutral:#6E727C;--track:#EAEAE6;--amberSoft:#FFF1D6;--startInk:#0B7A52;--scroll:#C9C9C4}
 .root.dark{--bg1:#0F1420;--bg2:#131A2A;--card:#1A2234;--card2:#212B42;--line:#2D3853;--ink:#EEF2FB;--muted:#A7B2CA;--accent:#7C9BFF;--accentInk:#0E1530;--soft:#25335A;--grid:#252F48;--hatchA:#222B42;--hatchB:#2B3652;--meetBg:#1F2940;--meetLine:#5E72A4;--shadow:0 1px 2px rgba(0,0,0,.25);--rail1:#1C2334;--rail2:#121826;--railLine:#2E3852;--railIcon:#C8D1E6;--railHover:rgba(255,255,255,.10);--railDivider:#2E3852;--clock:#F3F6FF;--clockSec:#A9B5CF;--roundBg:#1C2436;--roundLine:#3A4560;--roundInk:#E6ECFA;--amber:#FF9A3C;--amberLine:#8A6420;--flag:#FF9A9A;--quietDot:#4A5570;--lateInk:#FF9A9A;--lateBg:#3A2226;--railShadow:none;--liveTint:#183029;--barNeutral:#8793B0;--track:#252F48;--amberSoft:#3A2E14;--startInk:#5FE0AE;--scroll:#46526F}
 :where(.root) button{font:inherit;color:inherit;cursor:pointer}
 .root{color-scheme:light}.root.dark{color-scheme:dark}
@@ -271,7 +271,7 @@ svg.ri{display:block;fill:currentColor}
         </button>
         <sc-if value="{{bellOpen}}" hint-placeholder-val="{{ false }}">
           <div class="flyout" role="dialog" aria-label="Notifications"><svg class="flyPoint" width="20" height="12" viewBox="0 0 20 12" aria-hidden="true"><path d="M0 12L10 0l10 12z" fill="var(--card)"/><path d="M.5 11.5L10 1.2l9.5 10.3" fill="none" stroke="var(--line)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <div style="display: flex; align-items: center; justify-content: space-between"><div style="font-size: 15px; font-weight: 600">Notifications</div><div style="font-size: 12px; color: var(--muted)">Reminders from your notes</div></div>
+            <div style="display: flex; align-items: center; justify-content: space-between"><div style="font-size: 15px; font-weight: 600">Notifications</div></div>
             <sc-if value="{{hasAttention}}" hint-placeholder-val="{{ true }}">
               <div style="font-size: 12px; font-weight: 600; color: var(--lateInk); text-transform: uppercase; letter-spacing: .04em">Needs attention</div>
             </sc-if>
@@ -349,8 +349,8 @@ svg.ri{display:block;fill:currentColor}
           <sc-if value="{{day.hasOT}}" hint-placeholder-val="{{ false }}"><div style="display: flex; flex-direction: column"><span class="statL" style="color: var(--lateInk)">Overtime</span><span class="statV" style="color: var(--lateInk)">{{day.ot}}</span></div></sc-if>
         </div>
         <div style="display: flex; gap: 6px" role="group" aria-label="Zoom">
-          <button class="ctl" aria-label="Zoom out" style="width: 38px; padding: 0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
-          <button class="ctl" aria-label="Zoom in" style="width: 38px; padding: 0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+          <button class="ctl" aria-label="Zoom out" title="Zoom out · Ctrl scroll" style="width: 38px; padding: 0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+          <button class="ctl" aria-label="Zoom in" title="Zoom in · Ctrl scroll" style="width: 38px; padding: 0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
         </div>
       </div>
     </section>
@@ -406,15 +406,13 @@ svg.ri{display:block;fill:currentColor}
               </div>
             </sc-for>
           </div>
-          <div style="font-size: 13px; color: var(--ink); line-height: 1.4">{{selNote}}</div>
           <div style="display: flex; align-items: center; gap: 8px; margin-top: auto">
-            <button type="button" class="{{mergeCls}}" onClick="{{merge}}" disabled="{{mergeOff}}" title="{{mergeHint}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Merge</button>
+            <button type="button" class="{{mergeCls}}" onClick="{{merge}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>Merge</button>
             <button type="button" class="ctl small" onClick="{{copyBlock}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>{{copyLabel}}</button>
             <button type="button" class="ctl small" onClick="{{deleteBlock}}" disabled="{{multiRunning}}" title="Delete the selected blocks. Not while one is recording"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>Delete</button>
           </div>
         </sc-if>
 
-        <div style="font-size: 12px; color: var(--muted); margin-top: auto">{{hintText}}</div>
       </section>
 
       <section aria-label="Notes for the day" style="position: relative; flex: 1 1 0; min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 10px">
@@ -766,13 +764,13 @@ class Component extends DCLogic {
 
     // The merge rule, in the words the app uses: same account and day, with only gaps between.
     const mergeRule = (() => {
-      const hint = 'To merge, blocks must share an account and day, with only gaps between.';
-      if (selUnits.length === 0) return { can: false, note: '', hint: 'Select two or more blocks to merge them.' };
-      if (selUnits.length < 2) return { can: false, note: 'Select another block to merge.', hint: 'Select two or more blocks to merge them.' };
-      if (selUnits.some((u) => u.acct !== selUnits[0].acct)) return { can: false, note: 'Choose blocks from the same account to merge.', hint: hint };
-      if (selUnits.some((u) => u.running)) return { can: false, note: 'Stop recording to merge the block being recorded.', hint: hint };
+      const hint = 'Same account and day, with only gaps between';
+      if (selUnits.length === 0) return { can: false, note: '', hint: 'Pick a second block' };
+      if (selUnits.length < 2) return { can: false, note: 'Pick a second block', hint: 'Pick a second block' };
+      if (selUnits.some((u) => u.acct !== selUnits[0].acct)) return { can: false, note: 'Same account only', hint: 'Same account only' };
+      if (selUnits.some((u) => u.running)) return { can: false, note: 'Stop recording first', hint: 'Stop recording first' };
       const s0 = Math.min(...selUnits.map((u) => u.s)); const e0 = Math.max(...selUnits.map((u) => u.e));
-      if (shown.some((o) => selUnits.indexOf(o) < 0 && o.s < e0 - 1e-6 && o.e > s0 + 1e-6)) return { can: false, note: 'Other time sits between these blocks, so they cannot be merged.', hint: hint };
+      if (shown.some((o) => selUnits.indexOf(o) < 0 && o.s < e0 - 1e-6 && o.e > s0 + 1e-6)) return { can: false, note: 'Time in between: can’t merge', hint: 'Time in between: can’t merge' };
       const gap = Math.max(0, Math.round(((e0 - s0) - selUnits.reduce((t, u) => t + (u.e - u.s), 0)) * 60));
       return gap > 0
         ? { can: true, gap: gap, note: 'Merge joins them and adds ' + pdur(gap) + ' of gap time.', hint: 'Press Merge to join them into one block. This adds ' + pdur(gap) + ' of gap time.' }
@@ -796,7 +794,7 @@ class Component extends DCLogic {
       hasBar: true,
       hasNoSchedule: false,
       allocStyle: 'height:100%;flex-shrink:0;background:var(--barNeutral);width:' + (allocMin / barTotal * 100) + '%',
-      unStyle: 'height:100%;flex-shrink:0;opacity:.55;background:repeating-linear-gradient(135deg,var(--barNeutral) 0 2px,transparent 2px 5px);width:' + (unMin / barTotal * 100) + '%',
+      unStyle: 'height:100%;flex-shrink:0;opacity:.55;background:repeating-linear-gradient(135deg,var(--barNeutral) 0 1.5px,transparent 1.5px 3.4px);width:' + (unMin / barTotal * 100) + '%',
       brkStyle: 'height:100%;flex-shrink:0;background:var(--amber);width:' + (brkMin / barTotal * 100) + '%',
       otStyle: 'position:absolute;right:0;top:0;bottom:0;background:#D64545;width:' + (otMin / barTotal * 100) + '%',
       barTip: (schedMin ? 'Scheduled 08:30–17:30, ' + pdur(schedMin) + ' of working time. ' : 'Nothing is scheduled. ') + pdur(workMin) + ' so far' + (otMin ? ', ' + pdur(otMin) + ' of it overtime.' : '.'),
@@ -944,7 +942,7 @@ class Component extends DCLogic {
     // ---- messages float over the workspace
     const st0 = this.state;
     const toast = st0.editMsg ? { warn: true, text: st0.editMsg, undo: false }
-      : st0.cardNote ? { warn: false, text: st0.cardNote, undo: !!st0.undo && st0.cardNote !== 'Undone.' }
+      : st0.cardNote ? { warn: false, text: st0.cardNote, undo: !!st0.undo && st0.cardNote !== 'Undone' }
       : st0.info ? { warn: !!st0.infoBad, text: st0.info, undo: false } : null;
 
     // ---- the date picker
@@ -1024,7 +1022,7 @@ class Component extends DCLogic {
       blocks: blocks,
       nowStyle: 'position:absolute;top:22px;bottom:20px;width:2px;background:var(--accent);z-index:4;left:calc(' + nowX + '% - 1px)',
       nowDotStyle: 'position:absolute;top:17px;width:10px;height:10px;border-radius:50%;background:var(--accent);z-index:5;left:calc(' + nowX + '% - 5px)',
-      nowChipStyle: 'position:absolute;bottom:0;transform:translateX(-50%);background:var(--accent);color:var(--accentInk);font-size:12px;font-weight:600;padding:2px 8px;border-radius:7px;z-index:5;left:' + nowX + '%',
+      nowChipStyle: 'position:absolute;bottom:0;transform:translateX(-50%);background:var(--accent);color:var(--accentInk);font-size:12px;font-weight:700;padding:2px 8px;border-radius:7px;z-index:5;left:' + nowX + '%',
       clk: clk,
       day: day,
       canFinish: dayState === 'running',
@@ -1037,13 +1035,12 @@ class Component extends DCLogic {
       confirmFinish: () => setDay('finished'),
       finishText: finishText,
       undoOff: !this.state.undo,
-      onUndo: () => { if (this.state.undo) this.setState({ blks: this.state.undo, undo: null, selIds: [], editMsg: '', cardNote: 'Undone.', copied: false }); },
+      onUndo: () => { if (this.state.undo) this.setState({ blks: this.state.undo, undo: null, selIds: [], editMsg: '', cardNote: 'Undone', copied: false }); },
       noSel: selUnits.length === 0,
       isSingle: !!cur,
       isMulti: multi,
       cardTitle: multi ? selUnits.length + ' blocks selected' : cur && cur.isGroup ? 'Merged block' : 'Selected block',
       emptyText: emptyDay ? 'Nothing is recorded yet today. Start the day, or press play on an account.' : 'Nothing is selected. Click a block on the timeline.',
-      hintText: multi ? 'Shift-click a selected block to take it out of the selection.' : 'Shift-click a second block to select both and merge them. Drag an edge to resize.',
       sel: cur ? {
         name: cur.brk ? 'Break' : cur.name,
         swatch: swatchOf(cur),
@@ -1069,20 +1066,18 @@ class Component extends DCLogic {
         }))
       } : { opts: [], chips: [], swatch: '', start: '', end: '', len: '', note: '', name: '', running: false, isGroup: false, groupCount: '', noAcct: false, noStart: false, noEnd: false },
       selRows: selUnits.map((u) => ({ swatch: swatchOf(u), name: u.brk ? 'Break' : u.name, span: hm(u.s) + '–' + hm(u.e), dur: dur(u.s, u.e) })),
-      selNote: mergeRule.note,
       mergeHint: mergeRule.hint,
-      mergeOff: !mergeRule.can,
       mergeCls: mergeRule.can ? 'ctl small primary' : 'ctl small',
       multiRunning: selUnits.some((u) => u.running),
       merge: () => {
         if (!mergeRule.can) { this.setState({ editMsg: mergeRule.hint }); return; }
         const g = this.state.nextGrp;
         const ids = memberIds(selUnits);
-        commit(this.state.blks.map((b) => (ids.indexOf(b.id) >= 0 ? { ...b, grp: g } : b)), { nextGrp: g + 1, selIds: ['g' + g], copied: false, editMsg: '', cardNote: 'Merged' + (mergeRule.gap ? ', with ' + pdur(mergeRule.gap) + ' of gap time added' : '') + '.' });
+        commit(this.state.blks.map((b) => (ids.indexOf(b.id) >= 0 ? { ...b, grp: g } : b)), { nextGrp: g + 1, selIds: ['g' + g], copied: false, editMsg: '', cardNote: 'Merged' + (mergeRule.gap ? ' · ' + pdur(mergeRule.gap) + ' gap added' : '') });
       },
       ungroup: () => {
         const ids = cur.members.map((m) => m.id);
-        commit(this.state.blks.map((b) => (ids.indexOf(b.id) >= 0 ? { ...b, grp: 0 } : b)), { selIds: ids, copied: false, editMsg: '', cardNote: 'Unmerged. The blocks keep their own times.' });
+        commit(this.state.blks.map((b) => (ids.indexOf(b.id) >= 0 ? { ...b, grp: 0 } : b)), { selIds: ids, copied: false, editMsg: '', cardNote: 'Unmerged' });
       },
       clearSel: () => this.setState({ selIds: [], copied: false, editMsg: '', cardNote: '' }),
       editMsg: this.state.editMsg,

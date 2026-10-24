@@ -117,7 +117,7 @@ public sealed class SelectedBlockCardTests
             model.ToggleSelection(engine.Sessions.ToArray()); Settle(window);
             Assert.Equal("3 blocks selected", Find<TextBlock>(window, "SelectedTitle").Text);
             Assert.Equal(3, Find<ScrollViewer>(window, "SelectedRows").GetVisualDescendants().OfType<Border>().Count(b => b.Classes.Contains("selectedRow")));
-            Assert.Equal("Shift-click a selected block to take it out of the selection.", Find<TextBlock>(window, "SelectedHint").Text);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "SelectedHint"); // Nothing is written under the card.
             Click(window, "DeleteSelected"); Settle(window);
             Assert.Empty(engine.Sessions); Assert.Equal("3 blocks deleted", model.Notice);
             Assert.True(model.UndoEdit()); Assert.Equal(3, engine.Sessions.Count);

@@ -30,7 +30,7 @@ public sealed class SelectedBlockCard : Border
 
     private string Signature(IReadOnlyList<TimerModel.SelectedBlock> blocks)
         => string.Join("|", blocks.Select(b => $"{b.Account};{b.Start.Ticks};{b.End.Ticks};{b.Minutes};{b.Note};{b.Group?.Sources.Count}"))
-            + $"#{model.EditError}#{model.CanMergeSelection}#{model.SelectionNote}#{model.SelectedDate:yyyyMMdd}#{model.ReviewAccounts.Count}";
+            + $"#{model.EditError}#{model.CanMergeSelection}#{model.SelectedDate:yyyyMMdd}#{model.ReviewAccounts.Count}";
 
     /// <summary>Redraws the card if what it shows has changed since it was last drawn.</summary>
     public void Sync()
@@ -71,12 +71,11 @@ public sealed class SelectedBlockCard : Border
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }; Ui.Put(header, actions, 2);
         return (header, actions);
     }
-    private TextBlock Hint(string text) { var hint = new TextBlock { Name = "SelectedHint", Text = text, FontSize = 12, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Bottom }; hint.Classes.Add("muted"); return hint; }
-    private Grid Page(Control top, Control body, string hint)
+    // No notes under the card: what a click or a refused merge needs to say goes to the toast.
+    private Grid Page(Control top, Control body)
     {
-        var page = Ui.Grid("*", "Auto,Auto,*,Auto"); page.RowDefinitions[2].Height = new GridLength(1, GridUnitType.Star);
+        var page = Ui.Grid("*", "Auto,Auto,*");
         Ui.Put(page, top); body.Margin = new Thickness(0, 12, 0, 0); Ui.Put(page, body, 0, 1);
-        var foot = Hint(hint); foot.Margin = new Thickness(0, 12, 0, 0); Ui.Put(page, foot, 0, 3);
         return page;
     }
 
@@ -89,7 +88,7 @@ public sealed class SelectedBlockCard : Border
         var message = new TextBlock { Name = "SelectedEmpty", FontSize = 13, TextWrapping = TextWrapping.Wrap,
             Text = anything ? "Nothing is selected. Click a block on the timeline." : $"Nothing is recorded yet {when}. Start the day, or press play on an account." };
         message.Classes.Add("muted");
-        return Page(header, message, "Shift-click a second block to select both and merge them. Drag an edge to resize.");
+        return Page(header, message);
     }
 
     private Control Single(TimerModel.SelectedBlock block)
@@ -148,7 +147,7 @@ public sealed class SelectedBlockCard : Border
         var note = new TextBox { Name = "SelectedNote", Text = block.Note, Height = 38, Watermark = group ? "" : "Add a note", IsEnabled = !group, HorizontalAlignment = HorizontalAlignment.Stretch };
         var noteField = new StackPanel { Spacing = 5 }; noteField.Children.Add(Label("Entry note")); noteField.Children.Add(note); body.Children.Add(noteField);
         if (!group) Committing(note, () => { if ((note.Text ?? "").Trim() != block.Note.Trim()) model.EditEntry(block.Row!, block.Row!.Account, block.Start, block.End, note.Text ?? ""); });
-        return Page(header, body, "Shift-click a second block to select both and merge them. Drag an edge to resize.");
+        return Page(header, body);
     }
 
     private Control Several(IReadOnlyList<TimerModel.SelectedBlock> blocks)
@@ -170,14 +169,14 @@ public sealed class SelectedBlockCard : Border
             rows.Children.Add(card);
         }
         body.Children.Add(new ScrollViewer { Content = rows, MaxHeight = 128, Name = "SelectedRows" });
-        var note = new TextBlock { Name = "SelectedNote", Text = model.SelectionNote ?? "", FontSize = 13, TextWrapping = TextWrapping.Wrap }; body.Children.Add(note);
-        var merge = Ui.Ctl("MergeSelected", "Merge", IconKind.Merge, model.MergeHint, () => model.MergeSelection(), small: true);
-        merge.IsEnabled = model.CanMergeSelection; merge.Classes.Set("primary", model.CanMergeSelection);
+        // Merge is always pressable: when it cannot work, pressing it says why in the toast.
+        var merge = Ui.Ctl("MergeSelected", "Merge", IconKind.Merge, null, () => model.MergeSelection(), small: true);
+        merge.Classes.Set("primary", model.CanMergeSelection);
         var buttons = Ui.Horizontal(merge,
             Ui.Ctl("CopySelected", "Copy", IconKind.Copy, "Copy", () => model.CopySelection(), small: true, key: "Ctrl C"),
             Ui.Ctl("DeleteSelected", "Delete", IconKind.Trash, "Delete", () => model.DeleteSelection(), small: true, key: "Del"));
         body.Children.Add(buttons);
-        return Page(header, body, "Shift-click a selected block to take it out of the selection.");
+        return Page(header, body);
     }
 
     private static TextBox Box(string name, string text, bool enabled) => new() { Name = name, Text = text, Height = 38, IsEnabled = enabled, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center };

@@ -151,7 +151,7 @@ public sealed class FeedbackRound7Tests
         var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); Settle(window);
         try
         {
-            var chart = Find<Grid>(window, "WeekChart_"); var counts = Find<StackPanel>(window, "WeekDayMeetings");
+            var chart = Find<Grid>(window, "WeekChart_"); var counts = Find<Grid>(window, "WeekDayMeetings");
             var bottom = counts.TranslatePoint(new Point(0, counts.Bounds.Height), chart)!.Value.Y; Assert.True(bottom <= chart.Bounds.Height - 4, $"counts end at {bottom} of {chart.Bounds.Height}");
             var label = Find<TextBlock>(window, "WeekScheduleLabel"); var last = window.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.StartsWith("WeekDay_") == true).OrderBy(b => b.TranslatePoint(default, window)!.Value.X).Last();
             var lastRight = last.TranslatePoint(new Point(last.Bounds.Width, 0), window)!.Value.X; Assert.True(label.TranslatePoint(default, window)!.Value.X >= lastRight);

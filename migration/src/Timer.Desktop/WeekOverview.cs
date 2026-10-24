@@ -131,9 +131,7 @@ public static class WeekOverview
         var inChart = !model.WeekAsTable;
         var head = Ui.Grid("Auto,*,Auto"); head.Margin = new Thickness(0, 0, 0, 6);
         var title = Ui.Text("Time by day", 15); title.FontWeight = FontWeight.SemiBold; Ui.Put(head, title);
-        var hint = Ui.Text(inChart ? "Hover a day for the split, click it to open that day" : "Hours by account and day", 12, "muted"); hint.Margin = new Thickness(12, 0); hint.VerticalAlignment = VerticalAlignment.Center; Ui.Put(head, hint, 1);
-        var seg = Ui.Horizontal(NotesPage.Seg("WeekChart", "Chart", inChart, () => model.SetWeekAsTable(false)), NotesPage.Seg("WeekTable", "Table", !inChart, () => model.SetWeekAsTable(true))); seg.Spacing = 2;
-        foreach (var b in seg.Children.OfType<Button>()) b.Height = 30;
+        var seg = NotesPage.Switch(NotesPage.Seg("WeekChart", "Chart", inChart, () => model.SetWeekAsTable(false)), NotesPage.Seg("WeekTable", "Table", !inChart, () => model.SetWeekAsTable(true))); seg.Height = 36;
         Ui.Put(head, seg, 2);
         var body = new StackPanel(); body.Children.Add(head);
         body.Children.Add(inChart ? Chart(model, w) : Table(model, grid));
@@ -191,7 +189,8 @@ public static class WeekOverview
         if (d.Off) body = new Border { Name = "WeekOff", Width = 46, Height = 28, CornerRadius = new CornerRadius(10), Background = ReviewViews.Hatch(model), Opacity = .7, HorizontalAlignment = HorizontalAlignment.Center };
 
         var total = Ui.Text(d.Off ? "Off" : d.HasTime ? model.FormatShort(d.Working) : "–", d.Off || !d.HasTime ? 12 : 12.5, overtime ? "overtime" : d.HasTime ? null : "muted");
-        total.FontWeight = d.HasTime ? FontWeight.SemiBold : FontWeight.Normal; total.Classes.Add("figures"); total.HorizontalAlignment = HorizontalAlignment.Center; total.Margin = new Thickness(0, 0, 0, 4); total.Name = "WeekDayTotal";
+        // The ordinary typeface, semibold: the display face was too heavy over the columns.
+        total.FontWeight = d.HasTime ? FontWeight.SemiBold : FontWeight.Normal; total.HorizontalAlignment = HorizontalAlignment.Center; total.Margin = new Thickness(0, 0, 0, 4); total.Name = "WeekDayTotal";
         var cap = new Border { Name = "WeekOvertimeCap", Height = 3, Width = 46, CornerRadius = new CornerRadius(2), Background = Brush(model, "Overtime"), IsVisible = overtime, HorizontalAlignment = HorizontalAlignment.Center };
 
         var label = Ui.Horizontal(); label.HorizontalAlignment = HorizontalAlignment.Center; label.Spacing = 5; label.VerticalAlignment = VerticalAlignment.Top;
@@ -202,9 +201,18 @@ public static class WeekOverview
         if (d.Marked) label.Children.Add(new Border { Name = "WeekDayMarker", Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Brush(model, "Ink"), VerticalAlignment = VerticalAlignment.Center });
         label.Margin = new Thickness(0, 6, 0, 0);
 
-        var counts = Ui.Horizontal(); counts.Spacing = 8; counts.HorizontalAlignment = HorizontalAlignment.Center; counts.Margin = new Thickness(0, 2, 0, 8);
-        if (d.Meetings > 0) { var m = Ui.Horizontal(new IconGlyph(IconKind.Today) { Width = 12, Height = 12 }, Ui.Text(d.Meetings.ToString(), 11, "muted")); m.Spacing = 5; m.Name = "WeekDayMeetings"; counts.Children.Add(m); }
-        if (d.Tasks > 0) { var t = Ui.Horizontal(new IconGlyph(IconKind.Note) { Width = 12, Height = 12 }, Ui.Text(d.Tasks.ToString(), 11, "muted")); t.Spacing = 5; t.Name = "WeekDayTasks"; counts.Children.Add(t); }
+        var counts = Ui.Horizontal(); counts.Spacing = 10; counts.HorizontalAlignment = HorizontalAlignment.Center; counts.Margin = new Thickness(0, 2, 0, 8);
+        // Each count is a quiet icon and its number on one centre line, in the muted colour of the day names, so the pair reads as one small label.
+        Control Count(string name, IconKind icon, int n)
+        {
+            var pair = Ui.Grid("Auto,Auto"); pair.ColumnSpacing = 4; pair.Name = name; pair.VerticalAlignment = VerticalAlignment.Center;
+            pair.SetValue(Avalonia.Controls.Documents.TextElement.ForegroundProperty, Brush(model, "Muted"));
+            Ui.Put(pair, new IconGlyph(icon) { Width = 13, Height = 13, VerticalAlignment = VerticalAlignment.Center });
+            var number = Ui.Text(n.ToString(), 11.5, "muted"); number.VerticalAlignment = VerticalAlignment.Center; number.FontWeight = FontWeight.Medium; Ui.Put(pair, number, 1);
+            return pair;
+        }
+        if (d.Meetings > 0) counts.Children.Add(Count("WeekDayMeetings", IconKind.Today, d.Meetings));
+        if (d.Tasks > 0) counts.Children.Add(Count("WeekDayTasks", IconKind.Note, d.Tasks));
 
         var bottom = new Grid { RowDefinitions = new RowDefinitions("*,Auto,Auto,Auto,Auto,Auto") };
         void Row(Control c, int r) { Grid.SetRow(c, r); bottom.Children.Add(c); }

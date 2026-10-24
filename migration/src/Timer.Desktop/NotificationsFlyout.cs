@@ -40,7 +40,6 @@ public sealed class NotificationsFlyout : Border
         shown = signature; column.Children.Clear();
         var head = Ui.Grid("*,Auto");
         Ui.Put(head, new TextBlock { Text = "Notifications", FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        var sub = new TextBlock { Text = "Reminders from your notes", FontSize = 12, VerticalAlignment = VerticalAlignment.Center }; sub.Classes.Add("muted"); Ui.Put(head, sub, 1);
         column.Children.Add(head);
         var overdue = model.Notes.Overdue; var soon = model.Notes.ComingUp();
         if (overdue.Count > 0)

@@ -98,6 +98,9 @@ public static class ThemeEngine
         var darkTheme = ThemeColours.Contrast(colours["Surface"], "#FFFFFF") > ThemeColours.Contrast(colours["Surface"], "#000000");
         // The pill and its drawer wear the same colour as the dashboard's rail (the card colour) on a dark theme, so one becomes the other without a change of shade; on a light theme they keep the page colour.
         Put("PillBody", Color.Parse(darkTheme ? colours["Panel"] : colours["Surface"]));
+        // The rail's view icons: on Light a softer grey than the quiet text colour (about 3.4 to 1 on the page), the chosen one in the quiet colour on its tint; on Dark the quiet colour and the ink as before.
+        Put("RailIcon", Color.Parse(darkTheme ? colours["Muted"] : ThemeColours.Mix(colours["Muted"], colours["Surface"], .28)));
+        Put("RailIconOn", Color.Parse(darkTheme ? colours["Ink"] : colours["Muted"]));
         var field = Color.Parse(darkTheme ? ThemeColours.Mix(colours["Panel"], "#FFFFFF", .05) : ThemeColours.Mix(colours["Panel"], colours["Surface"], .5));
         foreach (var key in new[] { "TextControlBackground", "TextControlBackgroundPointerOver", "TextControlBackgroundFocused", "ComboBoxBackground", "ComboBoxBackgroundPointerOver", "ComboBoxBackgroundPressed", "ComboBoxBackgroundUnfocused" }) Put(key, field);
         foreach (var key in new[] { "TextControlBorderBrush", "TextControlBorderBrushPointerOver", "ComboBoxBorderBrush", "ComboBoxBorderBrushPressed" }) Put(key, line);

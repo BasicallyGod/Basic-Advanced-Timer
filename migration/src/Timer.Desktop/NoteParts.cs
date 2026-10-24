@@ -54,4 +54,26 @@ public static class NoteParts
 
     /// <summary>The time of a meeting as 09:15–10:00.</summary>
     public static string Span(DayNote note) => note.At is { } a && note.End is { } z ? a.ToString(@"hh\:mm") + "–" + z.ToString(@"hh\:mm") : "";
+
+    /// <summary>
+    /// A word at the end of the words that starts with # offers the accounts that match it, as buttons in <paramref name="host"/> (named <paramref name="idPrefix"/> and the
+    /// account). <paramref name="pick"/> is told the chosen account and the words with the # word taken out. Returns the first offer, so Tab or Enter can take it.
+    /// </summary>
+    public static (string Account, string Words)? ShowSuggestions(TimerModel model, string draft, StackPanel host, string idPrefix, Action<string, string> pick)
+    {
+        host.Children.Clear();
+        var match = System.Text.RegularExpressions.Regex.Match(draft ?? "", @"#([\p{L}\p{N}_-]*)$");
+        if (!match.Success) { host.IsVisible = false; return null; }
+        var typed = match.Groups[1].Value; var rest = draft![..match.Index].TrimEnd();
+        var options = model.Accounts.Where(a => !BreakAccount.Is(a.Name) && a.Name.Replace(" ", "").StartsWith(typed, StringComparison.OrdinalIgnoreCase)).Take(4).ToList();
+        foreach (var option in options)
+        {
+            var button = Ui.Button("", () => pick(option.Name, rest), idPrefix + option.Name.Replace(" ", ""));
+            button.Classes.Add("flat"); button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Left;
+            button.Content = Ui.Horizontal(Dot(model, option.Name), new TextBlock { Text = "#" + option.Name.Replace(" ", ""), FontWeight = FontWeight.SemiBold, FontSize = 13 }, Ink(option.Name, "Muted", 13));
+            host.Children.Add(button);
+        }
+        host.IsVisible = options.Count > 0;
+        return options.Count > 0 ? (options[0].Name, rest) : null;
+    }
 }

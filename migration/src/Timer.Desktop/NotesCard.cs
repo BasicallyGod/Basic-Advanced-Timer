@@ -223,21 +223,7 @@ public sealed class NotesCard : Border
 
     // A word that starts with # offers the accounts that match it. Choosing one puts its chip in the box and takes the word out.
     private void ShowSuggestions(StackPanel host)
-    {
-        host.Children.Clear();
-        var match = System.Text.RegularExpressions.Regex.Match(draft, @"#([\p{L}\p{N}_-]*)$");
-        if (!match.Success) { host.IsVisible = false; return; }
-        var typed = match.Groups[1].Value;
-        var options = model.Accounts.Where(a => a.Name.Replace(" ", "").StartsWith(typed, StringComparison.OrdinalIgnoreCase)).Take(4).ToList();
-        foreach (var option in options)
-        {
-            var pick = Ui.Button("", () => { draftAccount = option.Name; draft = draft[..match.Index].TrimEnd(); DrawForm(); }, "Suggest_" + option.Name.Replace(" ", ""));
-            pick.Classes.Add("flat"); pick.HorizontalAlignment = HorizontalAlignment.Stretch; pick.HorizontalContentAlignment = HorizontalAlignment.Left;
-            pick.Content = Ui.Horizontal(NoteParts.Dot(model, option.Name), new TextBlock { Text = "#" + option.Name.Replace(" ", ""), FontWeight = FontWeight.SemiBold, FontSize = 13 }, NoteParts.Ink(option.Name, "Muted", 13));
-            host.Children.Add(pick);
-        }
-        host.IsVisible = options.Count > 0;
-    }
+        => NoteParts.ShowSuggestions(model, draft, host, "Suggest_", (name, rest) => { draftAccount = name; draft = rest; DrawForm(); });
 
     private void Submit()
     {
