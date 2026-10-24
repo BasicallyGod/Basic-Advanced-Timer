@@ -42,7 +42,7 @@ public sealed class PillWindow : Window
     public double WindowWidthNow => (PillWidth + 2 * Ui.ShadowMargin) * Scale;
 
     private StatusFace face = null!;
-    private Border surface = null!, shadowHost = null!;
+    private Border surface = null!, shadowHost = null!, drawerFiller = null!;
     private readonly Popup panel = new();
     private readonly Grid rootGrid = new();
     private ScrollViewer accountScroll = null!;
@@ -84,6 +84,11 @@ public sealed class PillWindow : Window
         surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true, Width = PillWidth, Height = PillHeight, BorderThickness = new Thickness(EdgeThickness) };
         surface.Classes.Add("surface");
         shadowHost = Ui.Shadowed(surface, PillRadius);
+        // While the drawer is open, a square of the drawer's own surface sits behind the pill's right half, so the corners the capsule cuts away show the drawer
+        // tucked behind them. It lives in the pill's window, not the drawer's, so the drawer's window never lies over the pill's controls.
+        drawerFiller = new Border { Name = "PillDrawerFiller", Width = PillRadius, Height = PillHeight, HorizontalAlignment = HorizontalAlignment.Right, IsVisible = false, IsHitTestVisible = false };
+        drawerFiller.Classes.Add("surface");
+        shadowHost.Child = null; shadowHost.Child = new Grid { Children = { drawerFiller, surface } };
         Content = new LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
 
         BuildDrawer();
@@ -157,7 +162,7 @@ public sealed class PillWindow : Window
         // cut away where the pill's capsule is, so what shows is the part beside it, with its own rounded corners tucked behind the pill's.
         var content = new AccountsPanel(model, "Pill", compact: true, reorderable: false, () => { CloseFlyouts(); model.OpenAccounts(); });
         accountScroll = content.Scroll;
-        drawer = new Border { Name = "PillDrawer", Width = DrawerWidth, Height = PillHeight, Padding = new Thickness(Behind + 14, 14, 14, 12), CornerRadius = new CornerRadius(28, PillRadius, PillRadius, 28), Child = content, RenderTransform = drawerSlide };
+        drawer = new Border { Name = "PillDrawer", Width = DrawerWidth, Height = PillHeight, Padding = new Thickness(Behind + 14, 14, 14, 12), CornerRadius = new CornerRadius(0, PillRadius, PillRadius, 0), Child = content, RenderTransform = drawerSlide };
         drawer.Classes.Add("surface");
         drawer.PointerEntered += (_, _) => overDrawer = true;
         drawer.PointerExited += (_, _) => overDrawer = false;
@@ -171,9 +176,9 @@ public sealed class PillWindow : Window
         rootGrid.Children.Add(panel);
     }
     /// <summary>The drawer's width, beside the pill's own 72.</summary>
-    public const double DrawerWidth = 262;
+    public const double DrawerWidth = 251;
     /// <summary>How far the drawer reaches under the pill's right edge. It is the room the pill keeps clear either side of its controls, so nothing of the pill is under the drawer's window.</summary>
-    public const double Behind = 14;
+    public const double Behind = 3;
     // The drawer's own area less the pill's capsule, which is where the pill shows through. Drawn a hair inside the pill's edge, so no sliver of desktop shows between.
     public static Geometry BehindPill()
     {
@@ -211,12 +216,14 @@ public sealed class PillWindow : Window
     /// <summary>The most of a screen's height the drawer's list may take is its own height, so it never grows past the pill; it scrolls inside.</summary>
     public const double FewestRows = 3;
     // While the drawer is open the Accounts button shows pressed; the pill itself keeps its shape and glow.
-    private void SetOpenLook(bool open) { face.SetAccountsOpen(open); SyncDrawerRing(); }
+    private void SetOpenLook(bool open) { face.SetAccountsOpen(open); drawerFiller.IsVisible = open; SyncDrawerRing(); }
     private void SyncDrawerRing()
     {
         var thickness = surface.BorderThickness.Left;
-        drawer.BorderThickness = new Thickness(thickness);
+        // No ring on the drawer's pill side: there it is square and meets the pill (and the square behind it), so the top and bottom rings run on from them.
+        drawer.BorderThickness = new Thickness(0, thickness, thickness, thickness);
         drawer.BorderBrush = surface.BorderBrush;
+        drawerFiller.BorderThickness = new Thickness(0, thickness, 0, thickness); drawerFiller.BorderBrush = surface.BorderBrush;
     }
     /// <summary>Opens the account drawer beside the pill. It closes when an account is chosen, with Escape, or by pressing the button again.</summary>
     public void ShowPanel()
