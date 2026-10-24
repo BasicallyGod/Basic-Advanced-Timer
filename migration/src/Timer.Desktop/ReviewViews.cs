@@ -87,14 +87,14 @@ public static class ReviewViews
         };
     }
 
-    /// <summary>Thin diagonal stripes in the quiet bar colour on nothing, for the day bar's unallocated time: the stripes of <see cref="Hatch"/> are too faint on the bar's track.</summary>
+    /// <summary>Thin diagonal stripes in the quiet bar colour on nothing, for the day bar's unallocated time, close together so even a short block shows several as stripes: the stripes of <see cref="Hatch"/> are too faint on the bar's track.</summary>
     internal static Brush Stripes(TimerModel model)
     {
         var stripe = Color.Parse(model.CurrentTheme.Colour("Muted"));
         return new LinearGradientBrush
         {
-            StartPoint = new RelativePoint(0, 0, RelativeUnit.Absolute), EndPoint = new RelativePoint(5, 5, RelativeUnit.Absolute), SpreadMethod = GradientSpreadMethod.Repeat,
-            GradientStops = { new GradientStop(stripe, 0), new GradientStop(stripe, .4), new GradientStop(Colors.Transparent, .4), new GradientStop(Colors.Transparent, 1) }
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Absolute), EndPoint = new RelativePoint(3.4, 3.4, RelativeUnit.Absolute), SpreadMethod = GradientSpreadMethod.Repeat,
+            GradientStops = { new GradientStop(stripe, 0), new GradientStop(stripe, .45), new GradientStop(Colors.Transparent, .45), new GradientStop(Colors.Transparent, 1) }
         };
     }
 
@@ -328,15 +328,15 @@ public static class ReviewViews
         {
             var nowLine = new Border { Name = "NowMarker", Width = 2, Height = BandBottom + 8 - AxisY, Tag = "NowLine", IsHitTestVisible = false, ZIndex = 10 }; nowLine.Classes.Add("nowLine");
             var nowDot = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, Tag = "NowDot", IsHitTestVisible = false, ZIndex = 10 }; nowDot.Classes.Add("nowDot");
-            var nowText = new TextBlock { FontSize = 12, FontWeight = FontWeight.SemiBold, TextAlignment = TextAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Classes = { "figures", "nowChipText" } };
-            var nowChip = new Border { Name = "NowChip", Child = nowText, CornerRadius = new CornerRadius(7), Height = 20, MinWidth = 48, Padding = new Thickness(8, 0), IsHitTestVisible = false, ZIndex = 10 }; nowChip.Classes.Add("nowChip");
+            var nowText = new TextBlock { FontSize = 12, FontWeight = FontWeight.Bold, TextAlignment = TextAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Classes = { "nowChipText" } };
+            var nowChip = new Border { Name = "NowChip", Child = nowText, CornerRadius = new CornerRadius(7), Height = 20, Width = 52, IsHitTestVisible = false, ZIndex = 10 }; nowChip.Classes.Add("nowChip"); // A fixed width, so it stays centred on the line whatever the digits.
             canvas.Children.Add(nowLine); canvas.Children.Add(nowDot); canvas.Children.Add(nowChip);
             void PlaceNow()
             {
                 var now = model.Engine.Now; var x = X(now);
                 Canvas.SetLeft(nowLine, x - 1); Canvas.SetTop(nowLine, AxisY);
                 Canvas.SetLeft(nowDot, x - 5); Canvas.SetTop(nowDot, AxisY - 4);
-                nowText.Text = now.ToString("HH:mm"); Canvas.SetLeft(nowChip, x - nowChip.MinWidth / 2); Canvas.SetTop(nowChip, BandBottom + 10);
+                nowText.Text = now.ToString("HH:mm"); Canvas.SetLeft(nowChip, x - nowChip.Width / 2); Canvas.SetTop(nowChip, BandBottom + 10);
             }
             PlaceNow();
             DispatcherTimer? nowTimer = null;

@@ -292,7 +292,7 @@ public sealed class DashboardWindow : Window
         undo = Ui.Ctl("UndoEdit", "Undo", IconKind.Undo, "Undo the last change", () => model.UndoEdit());
         // Zoom steps by a fifth each press, about the middle of what is showing. Hold Ctrl and use the wheel to zoom about the pointer.
         ScrollViewer? TimelineScroll() => timelineHost.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
-        zoomOut = Ui.Ctl("TimelineZoomOut", null, IconKind.Minus, "Zoom out", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Width / 2, s.Offset.X); });
+        zoomOut = Ui.Ctl("TimelineZoomOut", null, IconKind.Minus, "Zoom out", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Width / 2, s.Offset.X); }, key: "Ctrl scroll");
         zoomIn = Ui.Ctl("TimelineZoomIn", null, IconKind.Plus, "Zoom in", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Width / 2, s.Offset.X); }, key: "Ctrl scroll");
         var zoom = Ui.Horizontal(zoomOut, zoomIn); zoom.Spacing = 6; zoom.Name = "TimelineControls";
         totalsStrip = BuildTotals();

@@ -39,12 +39,13 @@ public static class RailMotion
     public static double TickProgress(double seconds)
     {
         var u = seconds % NotesSeconds / NotesSeconds;
-        return u < .22 ? 1 : u < .30 ? 1 - Smooth((u - .22) / .08) : u < .78 ? 0 : u < .90 ? Smooth((u - .78) / .12) : 1;
+        // The tick starts to go within a tenth of a second of the pointer arriving, so the icon answers at once.
+        return u < .03 ? 1 : u < .11 ? 1 - Smooth((u - .03) / .08) : u < .56 ? 0 : u < .68 ? Smooth((u - .56) / .12) : 1;
     }
     /// <summary>How much of the cross in the bottom box is drawn, from 0 to 1, while the tick is away.</summary>
     public static double CrossProgress(double seconds)
     {
         var u = seconds % NotesSeconds / NotesSeconds;
-        return u < .30 ? 0 : u < .40 ? Smooth((u - .30) / .10) : u < .70 ? 1 : u < .78 ? 1 - Smooth((u - .70) / .08) : 0;
+        return u < .10 ? 0 : u < .20 ? Smooth((u - .10) / .10) : u < .48 ? 1 : u < .56 ? 1 - Smooth((u - .48) / .08) : 0;
     }
 }

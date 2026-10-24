@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Timer.Core;
 
 namespace Timer.Desktop;
@@ -161,8 +162,14 @@ public sealed class NotesPage : Grid
         field.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) draft = field.Text ?? ""; };
         field.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Submit(); e.Handled = true; } };
         Ui.Put(top, field);
+        // A word starting with # offers the accounts that match it, as in the Notes card: choosing one sets the account and takes the word out of the note.
+        var suggestions = new StackPanel { Name = "PageSuggestions", IsVisible = false }; suggestions.Classes.Add("suggestions");
+        void Choose(string name, string rest) { account = name; draft = rest; DrawForm(); Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (formHost.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(t => t.Name == "PageNoteField") is { } again) { again.Focus(); again.CaretIndex = again.Text?.Length ?? 0; } }); }
+        (string Account, string Words)? first = null;
+        field.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) first = NoteParts.ShowSuggestions(model, field.Text ?? "", suggestions, "PageSuggest_", Choose); };
+        field.AddHandler(KeyDownEvent, (_, e) => { if (first is { } offer && suggestions.IsVisible && e.Key is Key.Tab or Key.Enter) { Choose(offer.Account, offer.Words); e.Handled = true; } }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         if (!archived) { var submit = Ui.Ctl("PageSubmit", editing is not null ? "Save" : "Add", null, editing is not null ? "Save" : "Add", Submit, small: true); submit.Classes.Add("primary"); submit.Height = 36; submit.Padding = new Thickness(16, 0); Ui.Put(top, submit, 1); }
-        column.Children.Add(top);
+        column.Children.Add(top); column.Children.Add(suggestions);
 
         var options = new WrapPanel { Orientation = Orientation.Horizontal };
         void Add(Control control) { control.Margin = new Thickness(0, 0, 6, 6); options.Children.Add(control); }
@@ -172,8 +179,7 @@ public sealed class NotesPage : Grid
         }
         else
         {
-            var seg = Ui.Horizontal(Seg("PageKindNote", "Note", !meeting, () => { meeting = false; when = null; error = null; DrawForm(); }), Seg("PageKindMeeting", "Meeting", meeting, () => { meeting = true; when = model.SelectedDate.Date.AddHours(12); error = null; DrawForm(); }));
-            seg.Spacing = 2; Add(seg);
+            Add(Switch(Seg("PageKindNote", "Note", !meeting, () => { meeting = false; when = null; error = null; DrawForm(); }), Seg("PageKindMeeting", "Meeting", meeting, () => { meeting = true; when = model.SelectedDate.Date.AddHours(12); error = null; DrawForm(); })));
         }
         var names = new List<string> { "No account" }; names.AddRange(model.Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name));
         var accounts = new ComboBox { Name = "PageAccount", ItemsSource = names, Width = 150, Height = 36, MinHeight = 36, IsEnabled = !archived, FontSize = 13.5,
@@ -223,10 +229,17 @@ public sealed class NotesPage : Grid
         formHost.Content = column;
     }
 
+    /// <summary>One choice of a two-way switch. Put the choices in <see cref="Switch"/> so they read as one control.</summary>
     internal static Button Seg(string name, string text, bool on, Action click)
     {
-        var button = Ui.Button(text, click, name); button.Classes.Add("ctl"); button.Classes.Add("pillOpt"); button.Classes.Set("optOn", on); button.Height = 36; button.Padding = new Thickness(14, 0); button.FontSize = 13.5;
+        var button = Ui.Button(text, click, name); button.Classes.Add("seg"); button.Classes.Set("optOn", on); button.Height = 30; button.FontSize = 13.5;
         return button;
+    }
+    /// <summary>The track that holds a switch's choices, 36 tall like the boxes beside it.</summary>
+    internal static Border Switch(params Button[] choices)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 }; foreach (var c in choices) row.Children.Add(c);
+        var track = new Border { Child = row, Height = 36, VerticalAlignment = VerticalAlignment.Center }; track.Classes.Add("segTrack"); return track;
     }
 
     private void OpenWhen()

@@ -264,12 +264,12 @@ public sealed class ShellTests
                 Assert.Equal(window is DashboardWindow ? 2 : 1, headers.Count);
                 foreach (var header in headers)
                 {
-                    Assert.NotNull(header.Background); Assert.True(Ui.IsDragSurface(header));
-                    if (header.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => !t.GetVisualAncestors().OfType<Button>().Any()) is { } label) Assert.Equal(window is DashboardWindow, Ui.IsDragSurface(label)); // Text outside a button drags.
+                    Assert.NotNull(header.Background); Assert.True(Ui.IsPlainSurface(header));
+                    if (header.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => !t.GetVisualAncestors().OfType<Button>().Any()) is { } label) Assert.Equal(window is DashboardWindow, Ui.IsPlainSurface(label)); // Text outside a button drags.
                     if (header.GetVisualDescendants().OfType<Button>().FirstOrDefault() is { } button)
                     {
-                        Assert.False(Ui.IsDragSurface(button));
-                        Assert.All(button.GetVisualDescendants(), child => Assert.False(Ui.IsDragSurface(child)));
+                        Assert.False(Ui.IsPlainSurface(button));
+                        Assert.All(button.GetVisualDescendants(), child => Assert.False(Ui.IsPlainSurface(child)));
                     }
                 }
             }

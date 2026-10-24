@@ -66,22 +66,15 @@ public sealed class TimerModel : INotifyPropertyChanged
         .Count(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains));
     public bool CanMergeSelection => SelectedBlockCount >= 2 && selectedRows.Select(s => s.Day).Distinct().Count() == 1
         && selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() == 1 && Editor.CanCombine(selectedRows.ToArray());
-    /// <summary>The full rule for merging, for the Merge button's tooltip and a refused merge.</summary>
-    public string MergeHint => SelectedBlockCount < 2 ? "Pick a second block" : CanMergeSelection
-        ? (Editor.MergeGapMinutes(selectedRows.ToArray()) is var gapMinutes and > 0 ? $"Joins them · adds {Format(TimeSpan.FromMinutes((double)gapMinutes))} gap" : "Joins them")
-        : "Same account and day, with only gaps between";
-    /// <summary>One short sentence under the count: what is needed, or what Merge will do. It names the specific problem when blocks cannot be merged.</summary>
-    public string? SelectionNote
+    /// <summary>Why a merge can or cannot work, in a few words: the Merge menu item's tooltip, and the toast when Merge is pressed and refused.</summary>
+    public string MergeHint
     {
         get
         {
-            var count = SelectedBlockCount; if (count == 0) return null;
+            var count = SelectedBlockCount;
             if (count < 2) return "Pick a second block";
             if (CanMergeSelection)
-            {
-                var gap = Editor.MergeGapMinutes(selectedRows.ToArray());
-                return gap > 0 ? $"Merge joins them · adds {Format(TimeSpan.FromMinutes((double)gap))} gap" : "Merge joins them";
-            }
+                return Editor.MergeGapMinutes(selectedRows.ToArray()) is var gapMinutes and > 0 ? $"Joins them · adds {Format(TimeSpan.FromMinutes((double)gapMinutes))} gap" : "Joins them";
             if (selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() > 1) return "Same account only";
             if (selectedRows.Select(s => s.Day).Distinct().Count() > 1) return "Same day only";
             return "Time in between: can’t merge";
