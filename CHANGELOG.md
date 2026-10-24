@@ -10,7 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
-| Redesign round 7: week overview, bell and calendar, notes rows, timeline | pending | PENDING |
+| Redesign round 7: week overview, bell and calendar, notes rows, timeline | [3b9e4c8](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/3b9e4c80fb172ffa653ba9e65aa676ce29114506) | The pill and its drawer wear the rail's colour on Dark and the drawer slides out more slowly. The bell's card and the date's calendar hang from a point and close when their button is pressed again or on a press elsewhere. Meeting rows have equal space above and below, half hours have clear ticks, and a cut-short meeting name slides on hover. The Notes card drops its count and centres its rows, the Selected block title stays still, the rail buttons no longer flash, and the reminder light pulses a ring as the mock draws it. The week overview drops the change on last week, shortens By account, sets the totals in the ordinary typeface, keeps the day counts in view and clears the schedule words from the columns. The day bar is always the same width and shows time on an unscheduled day. A Round 7 board draws two proposals (tooltips and rail icons) that are not built. |
 
 ## 22 October 2026
 
