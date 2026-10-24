@@ -127,6 +127,34 @@ public static class Ui
         };
         pulses.Add(control, new PulseRun(source, new RunningAnimation(animation.RunAsync(control, source.Token))));
     }
+    /// <summary>
+    /// The reminder light's pulse, as the mock draws it: a ring in <paramref name="colour"/> that starts at the light's edge and swells to seven pixels while it fades out,
+    /// every 1.8 seconds. The light itself stays steady.
+    /// </summary>
+    public static void PulseRing(Border light, bool on, Color colour)
+    {
+        if (Motion.Reduced) { if (pulses.TryGetValue(light, out var still)) { still.Source.Cancel(); pulses.Remove(light); } light.BoxShadow = default; return; }
+        if (pulses.TryGetValue(light, out var running))
+        {
+            if (on && running.Run.Alive) return;
+            running.Source.Cancel(); pulses.Remove(light); light.BoxShadow = default;
+            if (!on) return;
+        }
+        if (!on) return;
+        string Ring(double spread, double alpha) => FormattableString.Invariant($"0 0 0 {spread} #{(byte)Math.Round(alpha * 255):X2}{colour.R:X2}{colour.G:X2}{colour.B:X2}");
+        var source = new CancellationTokenSource();
+        var animation = new Avalonia.Animation.Animation
+        {
+            Duration = TimeSpan.FromSeconds(1.8), IterationCount = Avalonia.Animation.IterationCount.Infinite, Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
+            Children =
+            {
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0), Setters = { new Setter(Border.BoxShadowProperty, BoxShadows.Parse(Ring(0, .75))) } },
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(.7), Setters = { new Setter(Border.BoxShadowProperty, BoxShadows.Parse(Ring(7, 0))) } },
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1), Setters = { new Setter(Border.BoxShadowProperty, BoxShadows.Parse(Ring(0, 0))) } },
+            }
+        };
+        pulses.Add(light, new PulseRun(source, new RunningAnimation(animation.RunAsync(light, source.Token))));
+    }
     public static bool IsPulsing(Control control) => pulses.TryGetValue(control, out var run) && run.Run.Alive;
     /// <summary>A heading in the app's display face, the same as the dashboard's workspace title, so every page and pop-up names itself alike.</summary>
     public static TextBlock Heading(string text, double size = 20)
@@ -316,7 +344,18 @@ public static class Ui
     /// A button in the dashboard's outlined card look: 38 tall (30 when small), with an icon, words or both. With no words it is a 38 pixel square and
     /// <paramref name="tip"/> is its tooltip and accessible name. <paramref name="tint"/> names a theme colour for the icon.
     /// </summary>
-    public static Button Ctl(string name, string? words, IconKind? icon, string tip, Action click, bool small = false, string? tint = null)
+    /// <summary>
+    /// What a tooltip holds: the action in a word or two and, when there is one, its shortcut as a small key, as the Round 7 board draws it. A button that already
+    /// has words gets no tooltip, except to show its shortcut.
+    /// </summary>
+    public static object Tip(string text, string? key = null)
+    {
+        if (key is null) return text;
+        var chip = new Border { CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(1), Padding = new Thickness(5, 0), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = key, FontSize = 11, FontWeight = FontWeight.Medium } };
+        chip.Classes.Add("tipKey");
+        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { new TextBlock { Text = text }, chip } };
+    }
+    public static Button Ctl(string name, string? words, IconKind? icon, string tip, Action click, bool small = false, string? tint = null, string? key = null)
     {
         var button = Button(words ?? tip, click, name); button.Classes.Add("ctl"); if (small) button.Classes.Add("small");
         button.Height = small ? 30 : 38;
@@ -324,7 +363,8 @@ public static class Ui
         if (words is null) { button.Width = small ? 30 : 38; button.Padding = new Thickness(0); button.Content = glyph; }
         else button.Content = glyph is null ? new TextBlock { Text = words, VerticalAlignment = VerticalAlignment.Center }
             : Horizontal(glyph, new TextBlock { Text = words, VerticalAlignment = VerticalAlignment.Center });
-        ToolTip.SetTip(button, tip); Avalonia.Automation.AutomationProperties.SetName(button, words ?? tip);
+        if (words is null || key is not null) ToolTip.SetTip(button, Tip(words is null ? tip : words, key));
+        Avalonia.Automation.AutomationProperties.SetName(button, words ?? tip);
         return button;
     }
     /// <summary>A button that shows only an icon, with its words as the tooltip and the accessible name.</summary>
@@ -929,7 +969,7 @@ public sealed class AccountsGlyph : Control
     }
 }
 
-public enum IconKind { Check, Clock, Search, Bell, Repeat, Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
+public enum IconKind { NotesList, Check, Clock, Search, Bell, Repeat, Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -939,10 +979,13 @@ public sealed class IconGlyph : Control
     public static readonly StyledProperty<double> HoverProperty = AvaloniaProperty.Register<IconGlyph, double>(nameof(Hover));
     static IconGlyph() => AffectsRender<IconGlyph>(HoverProperty);
     public double Hover { get => GetValue(HoverProperty); set => SetValue(HoverProperty, value); }
+    /// <summary>The three rail icons are drawn on the same 18 unit grid as the others, a little larger, and play a short loop while the pointer is over them.</summary>
+    public const double RailSize = 22;
+    private static bool IsRail(IconKind kind) => kind is IconKind.Timeline or IconKind.Week or IconKind.NotesList;
     public IconKind Kind { get; }
     public IconGlyph(IconKind kind)
     {
-        Kind = kind; Width = Height = 18;
+        Kind = kind; Width = Height = IsRail(kind) ? RailSize : 18;
         if (kind == IconKind.Grip) Width = 10; // A narrow strip, so the grip takes little of the row.
         Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = HoverProperty, Duration = HoverDuration } };
     }
@@ -959,7 +1002,7 @@ public sealed class IconGlyph : Control
     {
         if (owner is not null) { owner.PropertyChanged -= OwnerChanged; owner.GotFocus -= OwnerFocused; owner.LostFocus -= OwnerBlurred; }
         owner = null; keyboardFocus = false; Hover = 0;
-        Waving = false;
+        Waving = false; Play(false);
         base.OnDetachedFromVisualTree(e);
     }
     private void OwnerChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -970,7 +1013,27 @@ public sealed class IconGlyph : Control
     // left the icon held open for good and the next mouse-over had nothing to play.
     private void OwnerFocused(object? sender, GotFocusEventArgs e) { keyboardFocus = e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional; UpdateHover(); }
     private void OwnerBlurred(object? sender, RoutedEventArgs e) { keyboardFocus = false; UpdateHover(); }
-    private void UpdateHover() => Hover = owner is { IsEffectivelyEnabled: true } && (owner.IsPointerOver || keyboardFocus) ? 1 : 0;
+    private void UpdateHover()
+    {
+        Hover = owner is { IsEffectivelyEnabled: true } && (owner.IsPointerOver || keyboardFocus) ? 1 : 0;
+        Play(IsRail(Kind) && owner is { IsEffectivelyEnabled: true, IsPointerOver: true });
+    }
+    // The rail icons loop while the pointer is over them and settle back to rest when it leaves. Less motion asked for means they stay still.
+    private DispatcherTimer? playTimer; private readonly System.Diagnostics.Stopwatch playClock = new(); private double playSeconds;
+    private void Play(bool on)
+    {
+        on &= !Motion.Reduced;
+        if (on && playTimer is null)
+        {
+            playClock.Restart(); playSeconds = 0;
+            playTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
+            playTimer.Tick += (_, _) => { playSeconds = playClock.Elapsed.TotalSeconds; InvalidateVisual(); };
+            playTimer.Start();
+        }
+        else if (!on && playTimer is not null) { playTimer.Stop(); playTimer = null; playSeconds = 0; InvalidateVisual(); }
+    }
+    /// <summary>The seconds into its loop that the icon is drawn at (0 while at rest). The tests set it to look at a moment of the loop.</summary>
+    public double PlaySeconds { get => playSeconds; set { playSeconds = value; InvalidateVisual(); } }
     private string? dotKey;
     /// <summary>The theme brush the pill icon's dot turns to under the pointer, such as Live while tracking, so the icon says how the day is going.</summary>
     public string? DotKey { get => dotKey; set { if (dotKey == value) return; dotKey = value; InvalidateVisual(); } }
@@ -1003,6 +1066,37 @@ public sealed class IconGlyph : Control
             waveTimer.Start();
         }
     }
+    private static Geometry RoundBox(Rect box)
+    {
+        const double r = 1.8;
+        return Geometry.Parse(FormattableString.Invariant($"M {box.X + r},{box.Y} H {box.Right - r} A {r},{r} 0 0 1 {box.Right},{box.Y + r} V {box.Bottom - r} A {r},{r} 0 0 1 {box.Right - r},{box.Bottom} H {box.X + r} A {r},{r} 0 0 1 {box.X},{box.Bottom - r} V {box.Y + r} A {r},{r} 0 0 1 {box.X + r},{box.Y} Z"));
+    }
+    /// <summary>
+    /// A box with strokes cut out of it, each drawn as far as <paramref name="progress"/> along itself (0 leaves the box whole), so a mark can draw itself in and be
+    /// taken back. The pieces are cut one at a time, since cutting them as a group lets overlapping pieces of opposite winding cancel.
+    /// </summary>
+    private static Geometry CutOut(Rect box, Point[][] strokes, double progress)
+    {
+        Geometry shape = RoundBox(box);
+        if (progress <= 0.001) return shape;
+        const double half = .7;
+        Geometry Dot(Point at) => new EllipseGeometry(new Rect(at.X - half, at.Y - half, half * 2, half * 2));
+        foreach (var stroke in strokes)
+        {
+            var length = 0.0; for (var i = 1; i < stroke.Length; i++) length += Math.Sqrt(Math.Pow(stroke[i].X - stroke[i - 1].X, 2) + Math.Pow(stroke[i].Y - stroke[i - 1].Y, 2));
+            var left = length * Math.Min(1, progress);
+            shape = new CombinedGeometry(GeometryCombineMode.Exclude, shape, Dot(stroke[0]));
+            for (var i = 1; i < stroke.Length && left > 0; i++)
+            {
+                var from = stroke[i - 1]; var to = stroke[i]; var span = Math.Sqrt(Math.Pow(to.X - from.X, 2) + Math.Pow(to.Y - from.Y, 2));
+                var take = Math.Min(1, left / span); var end = new Point(from.X + (to.X - from.X) * take, from.Y + (to.Y - from.Y) * take); left -= span;
+                var nx = -(to.Y - from.Y) / span * half; var ny = (to.X - from.X) / span * half;
+                var quad = new PolylineGeometry(new[] { new Point(from.X + nx, from.Y + ny), new Point(end.X + nx, end.Y + ny), new Point(end.X - nx, end.Y - ny), new Point(from.X - nx, from.Y - ny) }, true);
+                shape = new CombinedGeometry(GeometryCombineMode.Exclude, new CombinedGeometry(GeometryCombineMode.Exclude, shape, quad), Dot(end));
+            }
+        }
+        return shape;
+    }
     public override void Render(DrawingContext context)
     {
         IBrush brush = this.TryFindResource(TintKey ?? "Ink", ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;
@@ -1011,18 +1105,26 @@ public sealed class IconGlyph : Control
         // Every icon keeps its hit target and layout still. Only a small part of the drawing moves.
         var angle = Kind == IconKind.Gear ? hover * Math.PI / 9 : Kind == IconKind.Undo ? -hover * Math.PI / 15 : 0;
         using var turn = context.PushTransform(Matrix.CreateTranslation(-9, -9) * Matrix.CreateRotation(angle) * Matrix.CreateTranslation(9, 9));
+        using var grow = IsRail(Kind) ? context.PushTransform(Matrix.CreateScale(Bounds.Width / 18.0, Bounds.Height / 18.0)) : default;
         switch (Kind)
         {
             case IconKind.Timeline:
-                // A spine with three blocks of different lengths beside it, drawn apart from each other: the day as a column of time.
-                context.DrawLine(pen, new Point(3.5, 2), new Point(3.5, 16));
-                // Solid bars rather than outlines, so the gaps between them stay open at button size.
-                for (var i = 0; i < 3; i++)
-                {
-                    var shift = hover * (i == 1 ? -1 : 1);
-                    context.DrawLine(pen, new Point(7.5 + shift, 3 + i * 6), new Point(14.5 + shift - (i == 1 ? 2 : 0), 3 + i * 6));
-                }
+            {
+                // Three solid bars of different lengths, staggered: the day as blocks in time. While played they slide a little, each at its own pace.
+                var bars = new[] { new Rect(2.5, 3.6, 8.5, 3), new Rect(6.5, 7.6, 9, 3), new Rect(4, 11.6, 6.5, 3) };
+                for (var i = 0; i < 3; i++) context.DrawRectangle(brush, null, bars[i].Translate(new Vector(RailMotion.BarOffset(i, playSeconds), 0)), 1.5, 1.5);
                 break;
+            }
+            case IconKind.NotesList:
+            {
+                // A solid box with a tick cut out of it, an empty solid box under it, and a line for each: the notes as a list to tick off. While played the tick
+                // draws itself in the top box and is taken back, and a cross draws itself in the bottom box in its turn.
+                var thin = new Pen(brush, 1.7, lineCap: PenLineCap.Round);
+                context.DrawLine(thin, new Point(10.4, 5.2), new Point(15.6, 5.2)); context.DrawLine(thin, new Point(10.4, 13.2), new Point(15.6, 13.2));
+                context.DrawGeometry(brush, null, CutOut(new Rect(1.8, 2, 6.4, 6.4), new[] { new[] { new Point(3.2, 5.05), new Point(4.6, 6.45), new Point(6.9, 3.65) } }, RailMotion.TickProgress(playSeconds)));
+                context.DrawGeometry(brush, null, CutOut(new Rect(1.8, 10, 6.4, 6.4), new[] { new[] { new Point(3.9, 12.1), new Point(6.1, 14.3) }, new[] { new Point(6.1, 12.1), new Point(3.9, 14.3) } }, RailMotion.CrossProgress(playSeconds)));
+                break;
+            }
             case IconKind.Trash:
                 // A bin: a lid with a handle, and a tapering body with two slats.
                 context.DrawLine(pen, new Point(3, 5), new Point(15, 5)); context.DrawLine(pen, new Point(7, 5), new Point(7, 3)); context.DrawLine(pen, new Point(7, 3), new Point(11, 3)); context.DrawLine(pen, new Point(11, 3), new Point(11, 5));
@@ -1074,12 +1176,17 @@ public sealed class IconGlyph : Control
                 context.DrawGeometry(null, pen, Geometry.Parse("M 10.5,7.5 a 3,3 0 0 0 -4.275,0 l -2.25,2.25 a 3,3 0 0 0 4.275,4.275 l 0.75,-0.75"));
                 break;
             case IconKind.Week:
-                // Three bars of different heights on a baseline: an overview of the week, not a calendar.
-                context.DrawLine(pen, new Point(2.5, 15.5), new Point(15.5, 15.5));
-                context.DrawLine(pen, new Point(4.5, 13), new Point(4.5, 9 - hover));
-                context.DrawLine(pen, new Point(9, 13), new Point(9, 3.5 - hover));
-                context.DrawLine(pen, new Point(13.5, 13), new Point(13.5, 6.5 - hover));
+            {
+                // Three solid columns on a line: the week at a glance. While played they spring up from the line one after another.
+                context.DrawLine(new Pen(brush, 1.25, lineCap: PenLineCap.Round), new Point(2, 15.8), new Point(16, 15.8));
+                var columns = new[] { new Rect(2.8, 8.6, 2.8, 5.6), new Rect(7.6, 4.6, 2.8, 9.6), new Rect(12.4, 7, 2.8, 7.2) };
+                for (var i = 0; i < 3; i++)
+                {
+                    var rise = RailMotion.ColumnScale(i, playSeconds); var c = columns[i]; var h = c.Height * rise;
+                    context.DrawRectangle(brush, null, new Rect(c.X, c.Bottom - h, c.Width, h), 1.4, 1.4);
+                }
                 break;
+            }
             case IconKind.Accounts:
                 // Two rows, each a round swatch and a line: the accounts as a short list.
                 foreach (var y in new[] { 5.0, 12.5 })

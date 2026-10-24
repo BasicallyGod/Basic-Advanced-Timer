@@ -24,7 +24,7 @@ public static class ReviewViews
     public const double BlockInset = 3, BlockGap = 2 * BlockInset;
     // The axis sits under the hour labels, with a clear gap before the row for planned meetings, and the blocks sit under that row. A day with no meetings has no row, so its
     // blocks take the height of both. They always end at BandBottom, where the chip that names the time hangs under them.
-    private const double LabelRow = 22, AxisY = LabelRow + 6, MeetingTop = 44, MeetingHeight = 48, BandTopWithMeetings = 102, BandTopFree = 46, BandBottom = 176, LaneGap = 4, TimelineHeight = 210, LabelWidth = 44;
+    private const double LabelRow = 22, AxisY = LabelRow + 6, MeetGap = 14, MeetingTop = AxisY + MeetGap, MeetingHeight = 48, BandTopWithMeetings = MeetingTop + MeetingHeight + MeetGap, BandTopFree = 46, BandBottom = 176, LaneGap = 4, TimelineHeight = 210, LabelWidth = 44;
     /// <summary>The corner a block has when the band holds this many lanes: the larger for one, the smaller for more.</summary>
     public static double CornerFor(int lanes, double width, double height) => Math.Min(lanes <= 1 ? BlockRadius : LaneRadius, Math.Min(width, height) / 2);
     /// <summary>How much of a block to show. One lane has the full block, two a line of duration and account, three the duration alone, and four or more the colour with the tooltip.</summary>
@@ -122,9 +122,10 @@ public static class ReviewViews
             label.Name = "TimelineHour_" + hour;
             var shift = new TranslateTransform(); label.RenderTransform = shift; hourLabels.Add((label, shift));
             Canvas.SetLeft(label, TimelineGutter + hour * pixelsPerHour - LabelWidth / 2); Canvas.SetTop(label, 0); canvas.Children.Add(label);
-            Tick(hour, 6, 1);
-            if (pixelsPerHour >= 100) Tick(hour + .5, 4, .8);
-            if (pixelsPerHour >= 260) { Tick(hour + .25, 3, .6); Tick(hour + .75, 3, .6); }
+            // The half hours are nearly as tall as the hours and as dark, with a faint line down through the band, so they can be read at a glance.
+            Tick(hour, 9, 1);
+            Tick(hour + .5, 6, 1);
+            if (pixelsPerHour >= 260) { Tick(hour + .25, 4, .75); Tick(hour + .75, 4, .75); }
         }
         // A faint line down through the band at each hour, so a block can be read against the hours.
         for (var hour = 0; hour <= 24; hour++)
@@ -132,6 +133,11 @@ public static class ReviewViews
             var guide = new Border { Width = 1, Height = TimelineHeight - LabelRow - 12, Opacity = .45, Tag = "HourGuide", IsHitTestVisible = false }; guide.Classes.Add("rule");
             Canvas.SetLeft(guide, TimelineGutter + hour * pixelsPerHour - .5); Canvas.SetTop(guide, LabelRow + 8); canvas.Children.Add(guide);
         }
+        for (var hour = 0; hour < 24; hour++)
+            {
+                var half = new Border { Width = 1, Height = TimelineHeight - LabelRow - 12, Opacity = .22, Tag = "HalfGuide", IsHitTestVisible = false }; half.Classes.Add("rule");
+                Canvas.SetLeft(half, TimelineGutter + (hour + .5) * pixelsPerHour - .5); Canvas.SetTop(half, LabelRow + 8); canvas.Children.Add(half);
+            }
         var groups = model.Editor.Entries(day, day.AddDays(1)).Where(e => e.GroupId is not null && e.Sources.Any(s => s.Duration > TimeSpan.Zero)).ToArray();
         var grouped = groups.SelectMany(e => e.Sources).ToHashSet();
         var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero && !grouped.Contains(s))
@@ -266,7 +272,7 @@ public static class ReviewViews
                 card.Tag = group; card.Name = "TimelineGroup" + group.GroupId + "-" + interval.Start.ToString("HHmmss");
                 var ungroup = new MenuItem { Header = "Unmerge", Name = "UnmergeMenu" }; ungroup.Click += (_, _) => model.UngroupEntries(group.GroupId!);
                 card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { ungroup, CopyMenu(model, group.Sources), MergeMenu(model) } };
-                ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} merged entries · {model.Format(duration)}\nClick to select");
+                ToolTip.SetTip(card, $"{model.Label(group.Account)} · {model.Format(duration)}\nMerged, {group.Sources.Count} blocks");
             }
             if (!addedEarly) { Canvas.SetLeft(card, X(interval.Start) + BlockInset); Canvas.SetTop(card, bandTop + lane * (height + LaneGap)); canvas.Children.Add(card); }
         }
@@ -275,7 +281,7 @@ public static class ReviewViews
         {
             var lane = new Border { Name = "MeetingLane", Width = 24 * pixelsPerHour, Height = MeetingHeight, Background = Brushes.Transparent, CornerRadius = new CornerRadius(12), Cursor = new Cursor(StandardCursorType.Arrow) };
             lane.Classes.Add("meetingLane");
-            ToolTip.SetTip(lane, "Click a time to add a meeting");
+            ToolTip.SetTip(lane, "Add meeting");
             Avalonia.Automation.AutomationProperties.SetName(lane, "Add a meeting. Click a time in this row");
             lane.PointerEntered += (_, _) => lane.Classes.Add("over");
             lane.PointerExited += (_, _) => lane.Classes.Remove("over");
@@ -296,7 +302,8 @@ public static class ReviewViews
                 var (row, rows) = places[meeting];
                 var width = Math.Max(24, (meeting.End!.Value - meeting.At!.Value).TotalHours * pixelsPerHour - 2);
                 var height = rows == 1 ? MeetingHeight : (MeetingHeight - LaneGap * (rows - 1)) / rows;
-                var title = new TextBlock { Text = model.Notes.Text(meeting), FontSize = 12, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+                // A name cut short slides past on hover so all of it can be read, like a block's name.
+                var title = new MarqueeText(model.Notes.Text(meeting), 12) { VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }; title.Label.FontWeight = FontWeight.SemiBold;
                 // A grid, so the name takes what is left beside the marks and is cut with an ellipsis, however narrow the block is at this zoom.
                 var head = Ui.Grid(width >= 60 ? "Auto,*,Auto" : "*"); head.ColumnSpacing = 5;
                 if (width >= 60) { Ui.Put(head, new IconGlyph(IconKind.Today)); Ui.Put(head, title, 1); if (model.Notes.SeriesOf(meeting) is not null) Ui.Put(head, new IconGlyph(IconKind.Repeat) { Opacity = .8 }, 2); }
@@ -308,9 +315,9 @@ public static class ReviewViews
                 frame.Classes.Add("meetingFrame");
                 var card = new Grid { Width = width, Height = height, ClipToBounds = true, Name = "TimelineMeeting" + meeting.Id, Tag = meeting, Cursor = new Cursor(StandardCursorType.Hand) };
                 card.Children.Add(frame); card.Children.Add(body);
-                ToolTip.SetTip(card, model.Notes.Text(meeting) + " · " + Hm(meeting.At) + "–" + Hm(meeting.End) + " · planned, not tracked\nClick to edit");
+                ToolTip.SetTip(card, model.Notes.Text(meeting) + "\n" + Hm(meeting.At) + "–" + Hm(meeting.End) + " · planned");
                 Avalonia.Automation.AutomationProperties.SetName(card, "Meeting " + model.Notes.Text(meeting) + ", " + Hm(meeting.At) + " to " + Hm(meeting.End));
-                card.PointerEntered += (_, _) => frame.Classes.Add("over"); card.PointerExited += (_, _) => frame.Classes.Remove("over");
+                card.PointerEntered += (_, _) => { frame.Classes.Add("over"); title.Hover(true); }; card.PointerExited += (_, _) => { frame.Classes.Remove("over"); title.Hover(false); };
                 card.PointerPressed += (_, e) => { if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) e.Handled = true; };
                 card.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) model.Notes.RequestEditMeeting(meeting.Id); e.Handled = true; };
                 Canvas.SetLeft(card, X(day + meeting.At.Value) + 1); Canvas.SetTop(card, MeetingTop + row * (height + LaneGap)); canvas.Children.Add(card);

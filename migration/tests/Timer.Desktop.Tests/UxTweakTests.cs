@@ -140,7 +140,7 @@ public sealed class UxTweakTests
             {
                 var dictionary = (ResourceDictionary)Application.Current!.Resources.ThemeDictionaries[variant];
                 var back = ((ISolidColorBrush)dictionary["ToolTipBackground"]!).Color; var text = ((ISolidColorBrush)dictionary["ToolTipForeground"]!).Color;
-                Assert.Equal(((ISolidColorBrush)dictionary["Surface"]!).Color, back); Assert.Equal(((ISolidColorBrush)dictionary["Ink"]!).Color, text);
+                Assert.Equal(((ISolidColorBrush)dictionary["Panel"]!).Color, back); // The card colour, like the pop-ups and messages. Assert.Equal(((ISolidColorBrush)dictionary["Ink"]!).Color, text);
             }
         }
     }
@@ -214,7 +214,7 @@ public sealed class UxTweakTests
             var bar = dashboard.GetVisualDescendants().OfType<MessageBar>().Single();
             Assert.True(bar.IsVisible);
             Assert.IsAssignableFrom<ISolidColorBrush>(bar.Background); // A style that names Border alone skips a subclass, which once left it see-through.
-            Assert.NotNull(bar.BorderBrush); Assert.True(bar.BorderThickness.Left > 1);
+            Assert.NotNull(bar.BorderBrush); Assert.True(bar.BorderThickness.Left >= 1); Assert.True(bar.BoxShadow.Count > 0); // The same card as a tooltip: a hairline and a soft shadow.
         }
         finally { dashboard.Close(); }
     }

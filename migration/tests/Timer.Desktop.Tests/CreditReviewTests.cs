@@ -126,7 +126,7 @@ public sealed class CreditReviewTests
             Assert.Equal("2 blocks selected", Title()); Assert.Contains("Merge joins them", Note());
             Assert.True(Find<Button>(dashboard, "MergeSelected").IsEnabled);
             model.ToggleSelection(new[] { engine.Sessions[2] }); dashboard.UpdateLayout();
-            Assert.Equal("3 blocks selected", Title()); Assert.Contains("same account", Note());
+            Assert.Equal("3 blocks selected", Title()); Assert.Contains("Same account", Note());
             Assert.False(Find<Button>(dashboard, "MergeSelected").IsEnabled);
             Find<Button>(dashboard, "ClearSelection").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); dashboard.UpdateLayout();
             Assert.Empty(model.SelectedRows); Assert.Equal("Selected block", Title());
@@ -196,7 +196,7 @@ public sealed class CreditReviewTests
         Capture(dashboard, "merge-two-selected"); Assert.Equal(csv, model.Editor.SessionsCsv);
         Find<Button>(dashboard, "MergeSelected").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Empty(model.SelectedRows); Assert.Single(model.Editor.Entries(Day, Day.AddDays(1)).Where(e => e.GroupId is not null));
-        Assert.Equal("Merged.", model.Notice); Assert.True(model.NoticeHasUndo);
+        Assert.Equal("Merged", model.Notice); Assert.True(model.NoticeHasUndo);
         Capture(dashboard, "merge-combined-selection");
         var groupCard = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is ReviewEntry);
         var p = groupCard.TranslatePoint(new Point(groupCard.Width / 2, 35), dashboard)!.Value;

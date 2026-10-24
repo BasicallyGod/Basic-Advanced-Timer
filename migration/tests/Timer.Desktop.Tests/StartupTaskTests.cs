@@ -41,7 +41,7 @@ public sealed class StartupTaskTests
     {
         var model = Timer.Desktop.TimerModel.CreateDemo(); model.AutoStart = new StartupTaskSetting(new FakeHost { State = StartupState.DisabledByUser });
         model.SetAutoStart(true);
-        Assert.Contains("Could not change starting with Windows", model.LastError); Assert.Contains("Settings, Apps, Startup", model.LastError);
+        Assert.Contains("Couldn’t change Start with Windows", model.LastError); Assert.Contains("Settings, Apps, Startup", model.LastError);
     }
 
     [Fact]

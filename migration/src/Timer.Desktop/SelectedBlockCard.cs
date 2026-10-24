@@ -20,7 +20,7 @@ public sealed class SelectedBlockCard : Border
     public SelectedBlockCard(TimerModel model)
     {
         this.model = model; Name = "SelectedBlockCard";
-        CornerRadius = new CornerRadius(20); BorderThickness = new Thickness(1); Padding = new Thickness(18, 16);
+        CornerRadius = new CornerRadius(20); BorderThickness = new Thickness(1); Padding = new Thickness(18, 14, 18, 16);
         Classes.Add("dayCard");
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Sync(); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
@@ -62,8 +62,10 @@ public sealed class SelectedBlockCard : Border
     }
     private (Grid Header, StackPanel Actions) Header(string title, params Control[] chips)
     {
-        var header = Ui.Grid("Auto,*,Auto"); header.MinHeight = 30;
+        // A fixed height, so the title stays put whether or not there are buttons beside it (one block selected, none, or several).
+        var header = Ui.Grid("Auto,*,Auto"); header.RowDefinitions = new RowDefinitions("*"); header.Height = 30;
         var words = Ui.Horizontal(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Name = "SelectedTitle" });
+        words.VerticalAlignment = VerticalAlignment.Center;
         foreach (var chip in chips) words.Children.Add(chip);
         Ui.Put(header, words);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }; Ui.Put(header, actions, 2);
@@ -94,9 +96,9 @@ public sealed class SelectedBlockCard : Border
     {
         var group = block.IsGroup;
         var (header, actions) = Header(group ? "Merged block" : "Selected block", group ? new[] { (Control)Chip($"Merged, {block.Group!.Sources.Count(r => r.Duration > TimeSpan.Zero)} blocks", true) } : Array.Empty<Control>());
-        if (group) actions.Children.Add(Ui.Ctl("UnmergeSelected", "Unmerge", IconKind.Merge, "Put the blocks back as they were", () => model.UngroupEntries(block.Group!.GroupId!), small: true));
-        actions.Children.Add(Ui.Ctl("CopySelected", "Copy", IconKind.Copy, "Copy the block (Ctrl+C), then paste it on the timeline (Ctrl+V)", () => model.CopySelection(), small: true));
-        actions.Children.Add(Ui.Ctl("DeleteSelected", "Delete", IconKind.Trash, "Delete this block", () => model.DeleteSelection(), small: true));
+        if (group) actions.Children.Add(Ui.Ctl("UnmergeSelected", "Unmerge", IconKind.Merge, "Unmerge", () => model.UngroupEntries(block.Group!.GroupId!), small: true));
+        actions.Children.Add(Ui.Ctl("CopySelected", "Copy", IconKind.Copy, "Copy", () => model.CopySelection(), small: true, key: "Ctrl C"));
+        actions.Children.Add(Ui.Ctl("DeleteSelected", "Delete", IconKind.Trash, "Delete", () => model.DeleteSelection(), small: true, key: "Del"));
         var day = block.Start.Date;
         var body = new StackPanel { Spacing = 12 };
         var fields = Ui.Grid("1.7*,*,*,*"); fields.ColumnSpacing = 10;
@@ -120,16 +122,16 @@ public sealed class SelectedBlockCard : Border
         {
             void Commit(string which)
             {
-                if (!TimeText.TryParseClock(start.Text, day, false, out var newStart)) { model.Refuse("Start looks like 09:30."); return; }
+                if (!TimeText.TryParseClock(start.Text, day, false, out var newStart)) { model.Refuse("Start: try 09:30"); return; }
                 DateTime newEnd;
                 if (which == "length")
                 {
-                    if (TimeText.ParseLength(length.Text) is not { } span) { model.Refuse("Length looks like 1:30, or 90 for minutes."); return; }
+                    if (TimeText.ParseLength(length.Text) is not { } span) { model.Refuse("Length: try 1:30 or 90"); return; }
                     newEnd = newStart + span;
                 }
-                else if (!TimeText.TryParseClock(end.Text, day, true, out newEnd)) { model.Refuse("End looks like 10:30."); return; }
-                if (newEnd <= newStart) { model.Refuse("End has to be after the start."); return; }
-                if (newEnd > day.AddDays(1)) { model.Refuse("That runs past midnight."); return; }
+                else if (!TimeText.TryParseClock(end.Text, day, true, out newEnd)) { model.Refuse("End: try 10:30"); return; }
+                if (newEnd <= newStart) { model.Refuse("End must be after start"); return; }
+                if (newEnd > day.AddDays(1)) { model.Refuse("Can’t pass midnight"); return; }
                 if (newStart == block.Start && newEnd == block.End) { shown = null; Sync(); return; }
                 model.EditEntry(block.Row!, block.Row!.Account, newStart, newEnd, block.Note);
             }
@@ -152,7 +154,7 @@ public sealed class SelectedBlockCard : Border
     private Control Several(IReadOnlyList<TimerModel.SelectedBlock> blocks)
     {
         var (header, actions) = Header($"{blocks.Count} blocks selected");
-        actions.Children.Add(Ui.Ctl("ClearSelection", "Clear selection", null, "Clear the selection (Esc)", () => model.ClearSelection(), small: true));
+        actions.Children.Add(Ui.Ctl("ClearSelection", "Clear selection", null, "Clear selection", () => model.ClearSelection(), small: true, key: "Esc"));
         var body = new StackPanel { Spacing = 12 };
         var rows = new StackPanel { Spacing = 6 };
         foreach (var block in blocks)
@@ -172,8 +174,8 @@ public sealed class SelectedBlockCard : Border
         var merge = Ui.Ctl("MergeSelected", "Merge", IconKind.Merge, model.MergeHint, () => model.MergeSelection(), small: true);
         merge.IsEnabled = model.CanMergeSelection; merge.Classes.Set("primary", model.CanMergeSelection);
         var buttons = Ui.Horizontal(merge,
-            Ui.Ctl("CopySelected", "Copy", IconKind.Copy, "Copy the blocks (Ctrl+C), then paste them on the timeline (Ctrl+V)", () => model.CopySelection(), small: true),
-            Ui.Ctl("DeleteSelected", "Delete", IconKind.Trash, "Delete the selected blocks", () => model.DeleteSelection(), small: true));
+            Ui.Ctl("CopySelected", "Copy", IconKind.Copy, "Copy", () => model.CopySelection(), small: true, key: "Ctrl C"),
+            Ui.Ctl("DeleteSelected", "Delete", IconKind.Trash, "Delete", () => model.DeleteSelection(), small: true, key: "Del"));
         body.Children.Add(buttons);
         return Page(header, body, "Shift-click a selected block to take it out of the selection.");
     }

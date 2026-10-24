@@ -60,8 +60,8 @@ public sealed partial class App : Application
                 var preferences = store.Load(engine);
                 model = new TimerModel(engine, preferences, store);
                 if (store.AdjustmentsRemoved > 0)
-                    model.Notice = $"{store.AdjustmentsRemoved} time adjustment{(store.AdjustmentsRemoved == 1 ? " was" : "s were")} removed. A copy of your database is in Backups.";
-                else if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files were left alone. This version starts empty.";
+                    model.Notice = $"{store.AdjustmentsRemoved} time adjustment{(store.AdjustmentsRemoved == 1 ? "" : "s")} removed · a copy is in Backups";
+                else if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files left alone · starting empty";
                 if (!model.Save()) throw new IOException(model.LastError);
                 // Only an explicit data folder is remembered; the default one sits beside the program and needs no argument.
                 // A test build started by the updater is offered the setting only when the updater says where to find itself, so the

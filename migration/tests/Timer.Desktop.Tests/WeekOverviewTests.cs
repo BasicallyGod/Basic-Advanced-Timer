@@ -42,7 +42,6 @@ public sealed class WeekOverviewTests
         var w = WeekOverview.Figures(model, new DateTime(2026, 10, 5));
         Assert.True(w.Current); Assert.Equal(TimeSpan.FromMinutes(180), w.Allocated); Assert.Equal(w.Allocated + w.Unallocated, w.Working);
         Assert.Equal(TimeSpan.FromMinutes(30), w.Breaks); Assert.Equal(5, w.Days.Count);
-        Assert.Equal(w.Working - WeekOverview.Figures(model, new DateTime(2026, 9, 28)).Working, w.Change);
         Assert.True(w.Scheduled > TimeSpan.Zero);
     }
 
@@ -65,7 +64,7 @@ public sealed class WeekOverviewTests
             Assert.Equal(model.Format(w.Working), Find<TextBlock>(window, "WeekWorking").Text); Assert.Equal(model.FormatShort(w.Allocated), Find<TextBlock>(window, "WeekAllocated").Text);
             Assert.Equal("Scheduled " + model.FormatShort(w.Scheduled), Find<TextBlock>(window, "WeekScheduled").Text); Assert.EndsWith("to go", Find<TextBlock>(window, "WeekToGo").Text);
             Assert.NotNull(Find<Border>(window, "WeekBar")); Assert.False(Find<Border>(window, "WeekBarOvertime").IsVisible);
-            Assert.NotNull(Find<Border>(window, "WeekScheduleLine")); Assert.StartsWith("Schedule ", Find<TextBlock>(window, "WeekScheduleLabel").Text);
+            Assert.NotNull(Find<Border>(window, "WeekScheduleLine")); Assert.StartsWith("Schedule", Find<TextBlock>(window, "WeekScheduleLabel").Text); Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "WeekChange");
             var friday = Find<Button>(window, "WeekDay_20261009");
             Assert.Contains("working time", Avalonia.Automation.AutomationProperties.GetName(friday)); Assert.NotNull(ToolTip.GetTip(friday));
             Assert.Contains(friday.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "WeekDayLabel" || t.Text == "Fri 9"); // Today's label stands out.
@@ -119,13 +118,15 @@ public sealed class WeekOverviewTests
     }
 
     [AvaloniaFact]
-    public void TheAccountsListHasShareAndPaceAndTheHeaderNamesTheWeekAndOffersThisWeek()
+    public void TheAccountsListIsKeptShortAndTheHeaderNamesTheWeekAndOffersThisWeek()
     {
         var model = Model(e => e.Sessions.AddRange(new[] { Row("07:00:00", "720"), Row("11:00:00", "30", "Account two") }));
         var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); Settle(window);
         try
         {
-            Assert.Equal("Over by 02:00", window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "WeekPace").Text);
+            // The row keeps to the time and the budget; the share of the week and the pace are in its hover detail.
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "WeekPace" || t.Text is "Share" or "Pace");
+            Assert.Contains("Over by 02:00", ToolTip.GetTip((Control)Find<Grid>(window, "WeekAccount_Accountone").Parent!)!.ToString());
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "WeekNoBudget" && t.Text == "No budget");
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "5 – 11 Oct");
             var thisWeek = Find<Button>(window, "GoToToday"); Assert.False(thisWeek.IsEnabled);

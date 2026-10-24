@@ -13,7 +13,7 @@
 <style>
 body{margin:0}
 .pg{--bg1:#F4F4F1;--bg2:#ECECE8;--ink:#18233A;--muted:#5A6070;--line:#E2E2DD;--card:#FFFFFF;--card2:#F7F7F5;--accent:#3558C8;--accentInk:#FFFFFF;--soft:#E8EEFF;--pill1:#FFFFFF;--pill2:#F3F3F0;--pillLine:#DDDDD8;--clock:#18233A;--clockSec:#5A6070;--hover:#EDEDEA;--brk:#E07A10;--brkInk:#FFFFFF;--quietDot:#C9C9C4;--idleDot:#7A849C;--shadowBase:0 3px 10px rgba(30,30,20,.12);--track:#EAEAE6;--liveTint:#F1FBF7;--barNeutral:#6E727C}
-.pg.dark{--bg1:#0F1420;--bg2:#131A2A;--ink:#EEF2FB;--muted:#A7B2CA;--line:#2D3853;--card:#1A2234;--card2:#212B42;--accent:#7C9BFF;--accentInk:#0E1530;--soft:#25335A;--pill1:#202839;--pill2:#121826;--pillLine:#2E3852;--clock:#F3F6FF;--clockSec:#A9B5CF;--hover:rgba(255,255,255,.10);--brk:#FF9A3C;--brkInk:#2A1A05;--quietDot:#2D3750;--idleDot:#4A5570;--shadowBase:0 3px 10px rgba(0,0,0,.35);--track:#252F48;--liveTint:#183029;--barNeutral:#8793B0}
+.pg.dark{--bg1:#0F1420;--bg2:#131A2A;--ink:#EEF2FB;--muted:#A7B2CA;--line:#2D3853;--card:#1A2234;--card2:#212B42;--accent:#7C9BFF;--accentInk:#0E1530;--soft:#25335A;--pill1:#1C2334;--pill2:#121826;--pillLine:#2E3852;--clock:#F3F6FF;--clockSec:#A9B5CF;--hover:rgba(255,255,255,.10);--brk:#FF9A3C;--brkInk:#2A1A05;--quietDot:#2D3750;--idleDot:#4A5570;--shadowBase:0 3px 10px rgba(0,0,0,.35);--track:#252F48;--liveTint:#183029;--barNeutral:#8793B0}
 .pg{color-scheme:light}.pg.dark{color-scheme:dark}
 :where(.pg) button{font:inherit;color:inherit;cursor:pointer}
 .pg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -46,7 +46,7 @@ body{margin:0}
 .dRow:hover .playSq{background:var(--accent);border-color:var(--accent);color:var(--accentInk)}
 </style>
 </helmet>
-<div class="pg {{modeClass}}" style="width: 1180px; height: 720px; box-sizing: border-box; padding: 40px 24px 28px; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink); display: flex; flex-direction: column; gap: 22px">
+<div class="pg {{modeClass}}" style="width: 1180px; height: 780px; box-sizing: border-box; padding: 40px 24px 28px; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink); display: flex; flex-direction: column; gap: 22px">
   <div style="display: flex; flex-direction: column; gap: 4px">
     <h1 style="margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 700">The pill</h1>
     <p style="margin: 0; font-size: 14px; color: var(--muted); max-width: 1020px; line-height: 1.45">About 72 wide by 300 tall at 100 per cent. One vertical capsule shows the recording state, and a second blue one appears beside it only while a reminder is due. The rounded square shows the running account's initials, and pause or resume when the pointer is over it. The three bars open the accounts, and the orange square at the foot starts a break. A soft ring and halo show the state without pulling the eye. There is no Finish day button: clicking the time opens the dashboard.</p>
@@ -128,7 +128,7 @@ body{margin:0}
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:720}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:780}}">
 class Component extends DCLogic {
   constructor(props) {
     super(props);

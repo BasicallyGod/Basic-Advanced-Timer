@@ -65,7 +65,7 @@ public sealed class TrayTests
         Assert.True(model.TaskbarButton); Assert.True(windows.Pill.ShowInTaskbar);
         model.TrayAvailable = true; windows.HideToTray = true;
         model.SetTaskbarButton(false);
-        Assert.False(model.TaskbarButton); Assert.False(windows.Pill.ShowInTaskbar); Assert.False(windows.Dashboard.ShowInTaskbar); Assert.Contains("notification area", model.Notice);
+        Assert.False(model.TaskbarButton); Assert.False(windows.Pill.ShowInTaskbar); Assert.False(windows.Dashboard.ShowInTaskbar); Assert.Contains("tray", model.Notice);
         model.SetTaskbarButton(true);
         Assert.True(windows.Pill.ShowInTaskbar); Assert.True(windows.Dashboard.ShowInTaskbar);
         windows.Quit();
