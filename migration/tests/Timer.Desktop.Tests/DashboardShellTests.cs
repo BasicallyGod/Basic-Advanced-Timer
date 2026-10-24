@@ -41,7 +41,7 @@ public sealed class DashboardShellTests
         try
         {
             Assert.Equal("Not recording", ToolTip.GetTip(Find<StackPanel>(window, "RailLights")));
-            Assert.False(Find<Border>(window, "RailReminderLight").IsVisible);
+            Assert.Equal("No reminders waiting", Avalonia.Automation.AutomationProperties.GetName(Find<Border>(window, "RailReminderLight"))); // Always there, grey, until one is due.
             model.ToggleAccount("Account one"); Settle(window);
             Assert.Equal("Recording", ToolTip.GetTip(Find<StackPanel>(window, "RailLights")));
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "AO");

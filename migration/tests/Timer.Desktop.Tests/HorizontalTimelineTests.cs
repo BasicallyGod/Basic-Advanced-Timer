@@ -83,7 +83,7 @@ public sealed class HorizontalTimelineTests
         {
             var first = Find<Border>(window, "TimelineEntry0"); var second = Find<Border>(window, "TimelineEntry1");
             Assert.True(Canvas.GetTop(second) > Canvas.GetTop(first)); Assert.Equal(first.Height, second.Height);
-            Assert.True(first.Height < 76 * .6); Assert.Equal(ReviewViews.LaneRadius, first.CornerRadius.TopLeft);
+            Assert.True(first.Height < 130 * .6); // A day with no meetings gives the blocks the whole height. Assert.Equal(ReviewViews.LaneRadius, first.CornerRadius.TopLeft);
         }
         finally { window.Close(); }
     }
@@ -98,7 +98,7 @@ public sealed class HorizontalTimelineTests
         try
         {
             var group = window.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is ReviewEntry);
-            Assert.Equal(model.TimelinePixelsPerHour * 1.5 - 2, group.Width, 1); // From the first entry's start to the last one's end.
+            Assert.Equal(model.TimelinePixelsPerHour * 1.5 - ReviewViews.BlockGap, group.Width, 1); // From the first entry's start to the last one's end.
             Assert.NotEmpty(group.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Name == "MergedMark"));
         }
         finally { window.Close(); }

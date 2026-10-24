@@ -270,13 +270,13 @@ public sealed class DashboardWindow : Window
         bellBadge = new Border { Name = "NotificationsBadge", MinWidth = 18, Height = 18, CornerRadius = new CornerRadius(9), Padding = new Thickness(4, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, -6, -6, 0), IsHitTestVisible = false, IsVisible = false, Child = bellBadgeText }; bellBadge.Classes.Add("badge");
         bellPopup = new Popup { Placement = PlacementMode.BottomEdgeAlignedRight, IsLightDismissEnabled = true, Name = "NotificationsPopup" };
-        bellPopup.Opened += (_, _) => bell.Classes.Set("on", true); bellPopup.Closed += (_, _) => { if (((Avalonia.LogicalTree.ILogical)bell).IsAttachedToLogicalTree) bell.Classes.Set("on", false); };
+        bellPopup.Opened += (_, _) => bell.Classes.Set("on", true); bellPopup.Closed += (_, _) => { bellClosedAt = Environment.TickCount64; if (((Avalonia.LogicalTree.ILogical)bell).IsAttachedToLogicalTree) bell.Classes.Set("on", false); };
         var bellHost = new Grid { Name = "NotificationsHost" }; bellHostPanel = bellHost; bellHost.Children.Add(bell); bellHost.Children.Add(bellBadge); bellHost.Children.Add(bellPopup); bellPopup.PlacementTarget = bell;
         searchBox = new TextBox { Name = "NotesSearch", Watermark = "Search notes", Width = 240, Height = 38, MinHeight = 38, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(34, 0, 8, 0) };
         searchBox.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && notesPage is not null) notesPage.Query = searchBox.Text ?? ""; };
         var searchGrid = new Grid { Width = 240 }; searchGrid.Children.Add(searchBox); searchGrid.Children.Add(new IconGlyph(IconKind.Search) { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(11, 0, 0, 0), IsHitTestVisible = false, Opacity = .7 });
         searchHost = searchGrid;
-        var steps = Ui.Horizontal(searchHost, bellHost, previous, datePick, next, todayButton); steps.Spacing = 8;
+        var steps = Ui.Horizontal(searchHost, previous, datePick, next, todayButton, bellHost); steps.Spacing = 8;
         Ui.Put(nav, steps, 1);
         // Settings is a gear at the top right, which also closes it again.
         settingsRail = Ui.Ctl("Settings", null, IconKind.Gear, "Settings", ShowSettings); settingsRail.Margin = new Thickness(8, 0, 0, 0);
@@ -483,20 +483,22 @@ public sealed class DashboardWindow : Window
         if (scheduled > TimeSpan.Zero)
         {
             // The bar is as long as the longer of the schedule and the time worked, so overtime has room at the end.
-            var whole = Math.Max(scheduled.TotalSeconds, working.TotalSeconds);
+            var breaks = model.BreakTimeOn(shown);
+            var whole = Math.Max(scheduled.TotalSeconds, working.TotalSeconds + breaks.TotalSeconds);
             var allocatedPart = Math.Min(totals.Allocated.TotalSeconds, Math.Min(working.TotalSeconds, scheduled.TotalSeconds));
             var unallocatedPart = Math.Max(0, Math.Min(scheduled.TotalSeconds, working.TotalSeconds) - allocatedPart);
             var overtimePart = totals.Overtime.TotalSeconds;
-            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{allocatedPart:0.###}*,{unallocatedPart:0.###}*,{overtimePart:0.###}*,{Math.Max(0, whole - allocatedPart - unallocatedPart - overtimePart):0.###}*") };
+            var breaksPart = breaks.TotalSeconds;
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{allocatedPart:0.###}*,{unallocatedPart:0.###}*,{breaksPart:0.###}*,{overtimePart:0.###}*,{Math.Max(0, whole - allocatedPart - unallocatedPart - breaksPart - overtimePart):0.###}*") };
             Border Part(string key, int column, bool hatched = false)
             {
                 var part = new Border { Name = "DayBar" + key, [Grid.ColumnProperty] = column };
                 if (hatched) { part.Background = ReviewViews.Stripes(model); part.Opacity = .7; } else part.Classes.Add("bar" + key);
                 return part;
             }
-            grid.Children.Add(Part("Allocated", 0)); grid.Children.Add(Part("Unallocated", 1, true)); grid.Children.Add(Part("Overtime", 2));
+            grid.Children.Add(Part("Allocated", 0)); grid.Children.Add(Part("Unallocated", 1, true)); grid.Children.Add(Part("Breaks", 2)); grid.Children.Add(Part("Overtime", 3));
             dayBar.Child = grid; dayBar.Classes.Add("track");
-            ToolTip.SetTip(dayBar, $"Scheduled {plan.Start:HH:mm} to {plan.End:HH:mm}. Allocated {model.Format(totals.Allocated)}, unallocated {model.Format(totals.Unallocated)}" + (totals.Overtime > TimeSpan.Zero ? $", overtime {model.Format(totals.Overtime)}." : "."));
+            ToolTip.SetTip(dayBar, $"Scheduled {plan.Start:HH:mm} to {plan.End:HH:mm}. Allocated {model.Format(totals.Allocated)}, unallocated {model.Format(totals.Unallocated)}, breaks {model.Format(breaks)}" + (totals.Overtime > TimeSpan.Zero ? $", overtime {model.Format(totals.Overtime)}." : "."));
             Avalonia.Automation.AutomationProperties.SetName(dayBar, $"The scheduled day, {model.Format(working)} worked");
         }
     }
@@ -554,13 +556,20 @@ public sealed class DashboardWindow : Window
     public void SelectTab(bool showWeek) { settingsMode = false; notesMode = false; weekMode = showWeek; Refresh(true); }
     /// <summary>Shows the Notes page.</summary>
     public void ShowNotes() { settingsMode = false; weekMode = false; notesMode = true; Refresh(true); }
+    private long bellClosedAt;
     private void ToggleBell()
     {
         if (bellPopup.IsOpen) { bellPopup.IsOpen = false; return; }
-        // The card hangs from a small point under the bell, so it reads as coming from it; the room round it is for its shadow.
+        // Light dismiss has already closed the card by the time a press on the bell is clicked, so the press that closed it must not open it again.
+        if (Environment.TickCount64 - bellClosedAt < 300) return;
+        // The card hangs from a point under the bell, so it reads as coming from it: a small triangle of the card's own fill over its top edge, with only its two slanted
+        // sides drawn in the line colour, so the card's border runs into it. The room round the card is for its shadow.
         var flyout = new NotificationsFlyout(model) { Margin = new Thickness(8, 9, 8, 12) };
-        var point = new Border { Width = 12, Height = 12, BorderThickness = new Thickness(1, 1, 0, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 8 + bell.Bounds.Width / 2 - 6, 0), RenderTransform = new Avalonia.Media.RotateTransform(45), IsHitTestVisible = false, Name = "NotificationsPoint" };
-        point.Classes.Add("surface");
+        var fill = new Avalonia.Controls.Shapes.Path { Data = Avalonia.Media.Geometry.Parse("M0,10 L10,0 L20,10 Z") };
+        fill.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, fill.GetResourceObservable("Panel"));
+        var edges = new Avalonia.Controls.Shapes.Path { Data = Avalonia.Media.Geometry.Parse("M0.5,10.5 L10,1 L19.5,10.5"), StrokeThickness = 1.2, StrokeJoin = Avalonia.Media.PenLineJoin.Round, StrokeLineCap = Avalonia.Media.PenLineCap.Round };
+        edges.Bind(Avalonia.Controls.Shapes.Shape.StrokeProperty, edges.GetResourceObservable("Line"));
+        var point = new Canvas { Name = "NotificationsPoint", Width = 20, Height = 11, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 8 + Math.Max(38, bell.Bounds.Width) / 2 - 10, 0), IsHitTestVisible = false, Children = { fill, edges } };
         bellPopup.Child = new Grid { Children = { flyout, point } }; bellPopup.HorizontalOffset = 8; bellPopup.VerticalOffset = 2; bellPopup.IsOpen = true;
     }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.

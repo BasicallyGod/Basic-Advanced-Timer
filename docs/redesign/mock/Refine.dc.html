@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Round 2: options (decided)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.pg{--bg1:#F4F4F1;--bg2:#ECECE8;--ink:#18233A;--muted:#5A6070;--line:#E2E2DD;--card:#FFFFFF;--card2:#F7F7F5;--accent:#3558C8;--soft:#E8EEFF;--pill1:#FFFFFF;--pill2:#F3F3F0;--pillLine:#DDDDD8;--clock:#18233A;--clockSec:#5A6070;--hover:#EDEDEA;--track:#EAEAE6;--barNeutral:#6E727C;--liveTint:#F1FBF7;--shadow:0 3px 10px rgba(30,30,20,.12);--flag:#C93A3A;--railIcon:#4A4F5A;--guide:#D64545;--scrim:rgba(24,35,58,.16)}
+.pg.dark{--bg1:#0F1420;--bg2:#131A2A;--ink:#EEF2FB;--muted:#A7B2CA;--line:#2D3853;--card:#1A2234;--card2:#212B42;--accent:#7C9BFF;--soft:#25335A;--pill1:#202839;--pill2:#121826;--pillLine:#2E3852;--clock:#F3F6FF;--clockSec:#A9B5CF;--hover:rgba(255,255,255,.10);--track:#252F48;--barNeutral:#8793B0;--liveTint:#183029;--shadow:0 3px 10px rgba(0,0,0,.35);--flag:#FF9A9A;--railIcon:#C8D1E6;--guide:#FF8A8A;--scrim:rgba(0,0,0,.34)}
+.pg{color-scheme:light}.pg.dark{color-scheme:dark}
+:where(.pg) button{font:inherit;color:inherit;cursor:pointer}
+.pg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.cap{width:6px;height:14px;border-radius:3px;display:block;flex-shrink:0}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(96,150,255,.75)}70%{box-shadow:0 0 0 7px rgba(96,150,255,0)}100%{box-shadow:0 0 0 0 rgba(96,150,255,0)}}
+.cap.pulse{animation:pulse 1.8s ease-out infinite}
+@media (prefers-reduced-motion:reduce){.cap.pulse{animation:none}}
+.pill{width:72px;box-sizing:border-box;padding:16px 0;display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0}
+.pillBox{border-radius:36px;background:linear-gradient(180deg,var(--pill1),var(--pill2));border:1px solid var(--pillLine);box-shadow:var(--shadow)}
+.clockCol{display:flex;flex-direction:column;align-items:center;font-family:'Bricolage Grotesque',system-ui,sans-serif;color:var(--clock);line-height:1;margin-top:4px}
+.circle{width:46px;height:46px;border-radius:50%;border:0;padding:0;display:flex;align-items:center;justify-content:center;color:#10281F;background:linear-gradient(135deg,#9DF2D2,#34D399);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 1px 2px rgba(20,30,60,.18);font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:700;font-size:17px;transition:filter .15s ease}
+.circle:hover{filter:brightness(.93) saturate(1.05)}
+.acc{width:46px;height:32px;border-radius:12px;border:0;background:transparent;display:flex;align-items:center;justify-content:center;padding:0}
+.acc:hover{background:var(--hover)}
+.acc.on{background:var(--soft)}
+.bars{display:flex;flex-direction:column;gap:3px}
+.bars i{display:block;width:20px;height:5px;border-radius:3px}
+.brkC{width:40px;height:40px;border-radius:50%;border:0;padding:0;display:flex;align-items:center;justify-content:center;color:#fff;background:linear-gradient(135deg,#CF8206,#B96F00);box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 1px 2px rgba(20,30,60,.18);transition:filter .15s ease}
+.brkC:hover{filter:brightness(1.08)}
+.brkC.on{box-shadow:0 0 0 3px rgba(245,165,36,.45),inset 0 1px 0 rgba(255,255,255,.3)}
+.brkC:hover .steam,.brkC.on .steam{animation:steam 1.4s ease-in-out infinite}
+@keyframes steam{0%,100%{transform:translateY(0);opacity:.95}50%{transform:translateY(-1.6px);opacity:.45}}
+@media (prefers-reduced-motion:reduce){.brkC:hover .steam,.brkC.on .steam{animation:none}}
+.drawer{box-sizing:border-box;display:flex;flex-direction:column;gap:6px;padding:14px 14px 12px;border-left:1px solid var(--pillLine)}
+.dRow{display:flex;align-items:center;gap:10px;padding:5px 6px;border-radius:12px;border:0;background:transparent;width:100%;text-align:left}
+.dRow:hover{background:var(--hover)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px}
+.icn{width:40px;height:40px;border-radius:13px;border:0;background:transparent;color:var(--railIcon);display:flex;align-items:center;justify-content:center;padding:0}
+.icn:hover{background:var(--hover)}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);background:var(--soft);border-radius:8px;padding:3px 8px}
+.guideLine{position:absolute;left:-14px;right:-14px;height:0;border-top:1px dashed var(--guide)}
+</style>
+</helmet>
+<div class="pg {{modeClass}}" style="width: 1180px; height: 1700px; box-sizing: border-box; padding: 40px 32px 32px; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink); display: flex; flex-direction: column; gap: 30px">
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <h1 style="margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 700">Round 2: from the first Windows test</h1>
+    <p style="margin: 0; font-size: 14px; color: var(--muted); max-width: 940px; line-height: 1.45">Five things to settle before more code: how accounts open from the pill and the rail (notes 1 and 5), the break button (2 and 4), the accounts icon (7), and the pill and rail matching in size (6). The circle no longer grows under the pointer (3): it shifts colour instead, which is already built. <b style="color: var(--ink); font-weight: 600">Decided and built.</b> The Pill and Account drawer boards now show the result. Two things changed after testing and are not drawn below: the play button, the account rows' play buttons and the break are rounded squares rather than circles, and the break is the theme's orange (a plain orange cup on the rail), not the deeper amber.</p>
+  </div>
+
+  <!-- 1. Accounts on the pill -->
+  <section style="display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; align-items: center; gap: 10px"><h2 style="margin: 0; font-size: 18px; font-weight: 600">1. Accounts, part of the pill</h2><span class="tag">Recommended: A</span></div>
+    <p style="margin: 0; font-size: 13px; color: var(--muted); max-width: 940px; line-height: 1.45">The pill gains an Accounts button under the circle, the same one the rail has, so the top of the pill and the top of the rail are the same thing. Pressing it unfolds the list sideways from the pill, joined to it as one capsule. Pressing it again, pressing Esc or choosing an account folds it away. Nothing opens on hover, so no tooltip fights it. The pill is about 36 taller (300 instead of 262).</p>
+    <div style="display: flex; align-items: flex-start; gap: 36px">
+
+      <div style="width: 120px; flex-shrink: 0">
+        <div style="font-size: 14px; font-weight: 600">A. Folded</div>
+        <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px; min-height: 32px; line-height: 1.35">The new button</div>
+        <div class="pill pillBox" style="height: 300px">
+          <div style="display: flex; gap: 6px; align-items: center; height: 14px"><span class="cap" role="img" aria-label="Recording" style="background: #34D399"></span></div>
+          <div class="clockCol"><span style="font-size: 30px; font-weight: 700">04</span><span style="font-size: 30px; font-weight: 700; margin-top: 2px">47</span><span style="font-size: 15px; font-weight: 600; margin-top: 4px; color: var(--clockSec)">35</span></div>
+          <button class="circle" aria-label="Pause. Tracking Account one" style="margin-top: 6px">A1</button>
+          <button class="acc" aria-label="Accounts" aria-expanded="false" title="Accounts"><span class="bars" aria-hidden="true"><i style="background: linear-gradient(135deg,#A8D4FF,#7F98F7)"></i><i style="background: linear-gradient(135deg,#B2EFD6,#5FD6AE)"></i><i style="background: linear-gradient(135deg,#FFD9B8,#FF9F84)"></i></span></button>
+          <button class="brkC" aria-label="Start break" title="Start break"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path class="steam" d="M8 3v2M12 3v2"/></svg></button>
+        </div>
+      </div>
+
+      <div style="width: 380px; flex-shrink: 0">
+        <div style="font-size: 14px; font-weight: 600">A. Unfolded (try the button)</div>
+        <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px; min-height: 32px; line-height: 1.35">One capsule: the pill, a hairline, then the list. Rows are 52 tall with a budget bar, and four show before it scrolls.</div>
+        <div style="display: flex; border-radius: 36px 28px 28px 36px; background: linear-gradient(180deg,var(--pill1),var(--pill2)); border: 1px solid var(--pillLine); box-shadow: var(--shadow); width: fit-content; overflow: hidden">
+          <div class="pill" style="height: 298px">
+            <div style="display: flex; gap: 6px; align-items: center; height: 14px"><span class="cap" role="img" aria-label="Recording" style="background: #34D399"></span></div>
+            <div class="clockCol"><span style="font-size: 30px; font-weight: 700">04</span><span style="font-size: 30px; font-weight: 700; margin-top: 2px">47</span><span style="font-size: 15px; font-weight: 600; margin-top: 4px; color: var(--clockSec)">35</span></div>
+            <button class="circle" aria-label="Pause. Tracking Account one" style="margin-top: 6px">A1</button>
+            <button class="acc {{openCls}}" aria-label="Accounts" aria-expanded="{{open}}" title="{{openTip}}" onClick="{{toggle}}"><span class="bars" aria-hidden="true"><i style="background: linear-gradient(135deg,#A8D4FF,#7F98F7)"></i><i style="background: linear-gradient(135deg,#B2EFD6,#5FD6AE)"></i><i style="background: linear-gradient(135deg,#FFD9B8,#FF9F84)"></i></span></button>
+            <button class="brkC" aria-label="Start break" title="Start break"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path class="steam" d="M8 3v2M12 3v2"/></svg></button>
+          </div>
+          <sc-if value="{{open}}" hint-placeholder-val="{{ true }}">
+            <div class="drawer" style="width: 262px; height: 298px">
+              <div style="display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px"><span style="font-size: 14px; font-weight: 600">Accounts</span><span style="font-size: 11.5px; color: var(--muted)">Today</span></div>
+              <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; flex-grow: 1">
+                <sc-for list="{{rows}}" as="a" hint-placeholder-count="4">
+                  <button class="dRow" style="{{a.rowStyle}}">
+                    <span style="{{a.swatch}}"></span>
+                    <span style="flex-grow: 1; min-width: 0; display: block">
+                      <span style="display: flex; justify-content: space-between; gap: 6px"><span style="font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{a.name}}</span><span style="font-size: 12px; color: var(--muted)">{{a.time}}</span></span>
+                      <span style="display: block; height: 5px; border-radius: 3px; background: var(--track); overflow: hidden; margin-top: 6px"><span style="{{a.bar}}"></span></span>
+                    </span>
+                  </button>
+                </sc-for>
+              </div>
+              <button class="dRow" style="justify-content: center; border: 1px solid var(--line); height: 34px; font-size: 12.5px; font-weight: 500; background: var(--card2)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Manage accounts</button>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+
+      <div style="width: 300px; flex-shrink: 0">
+        <div style="font-size: 14px; font-weight: 600">B. Accounts replace the pill's body</div>
+        <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px; min-height: 32px; line-height: 1.35">Same size, no pop-up: the clock and circle give way to account circles. No budgets here; they stay in the dashboard.</div>
+        <div class="pill pillBox" style="height: 300px; gap: 8px; padding-top: 14px">
+          <div style="display: flex; gap: 6px; align-items: center; height: 14px"><span class="cap" role="img" aria-label="Recording" style="background: #34D399"></span></div>
+          <button class="circle" aria-label="Account one, recording" style="box-shadow: 0 0 0 3px rgba(52,211,153,.5), inset 0 1px 0 rgba(255,255,255,.55)">A1</button>
+          <button class="circle" aria-label="Account two" style="background: linear-gradient(135deg,#B2EFD6,#5FD6AE)">A2</button>
+          <button class="circle" aria-label="Account three" style="background: linear-gradient(135deg,#FFD9B8,#FF9F84)">A3</button>
+          <button class="circle" aria-label="Account four" style="background: linear-gradient(135deg,#E8D0FF,#C197F8)">A4</button>
+          <button class="acc on" aria-label="Back to the clock" title="Back to the clock"><span class="bars" aria-hidden="true"><i style="background: linear-gradient(135deg,#A8D4FF,#7F98F7)"></i><i style="background: linear-gradient(135deg,#B2EFD6,#5FD6AE)"></i><i style="background: linear-gradient(135deg,#FFD9B8,#FF9F84)"></i></span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. The rail -->
+  <section style="display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; align-items: center; gap: 10px"><h2 style="margin: 0; font-size: 18px; font-weight: 600">2. On the dashboard: the rail unfolds</h2><span class="tag">Recommended</span></div>
+    <p style="margin: 0; font-size: 13px; color: var(--muted); max-width: 940px; line-height: 1.45">The same button on the rail unfolds the list from the rail's right edge, full height, in the rail's own colours, with its inner margins on the page's 20 px grid, so it reads as the rail opening rather than a card laid over the page. The page behind dims a little. The button, Esc or a click on the dimmed page folds it away.</p>
+    <div style="width: 1116px; height: 450px; overflow: hidden; border-radius: 14px; position: relative; border: 1px solid var(--line)">
+      <div style="width: 1100px; height: 720px; transform: scale(.625); transform-origin: top left; position: relative; background: linear-gradient(135deg,var(--bg1),var(--bg2))">
+        <div style="position: absolute; left: 0; top: 0; width: 76px; height: 720px; box-sizing: border-box; padding: 14px 0 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; background: linear-gradient(180deg,var(--pill1),var(--pill2)); border-right: 1px solid var(--pillLine); z-index: 3">
+          <div style="display: flex; gap: 6px; align-items: center; height: 14px"><span class="cap" style="background: #34D399"></span></div>
+          <div class="clockCol"><span style="font-size: 30px; font-weight: 700">04</span><span style="font-size: 30px; font-weight: 700; margin-top: 2px">47</span><span style="font-size: 15px; font-weight: 600; margin-top: 4px; color: var(--clockSec)">35</span></div>
+          <div class="circle" style="margin-top: 6px">A1</div>
+          <div class="acc on" style="margin-top: -2px"><span class="bars"><i style="background: linear-gradient(135deg,#A8D4FF,#7F98F7)"></i><i style="background: linear-gradient(135deg,#B2EFD6,#5FD6AE)"></i><i style="background: linear-gradient(135deg,#FFD9B8,#FF9F84)"></i></span></div>
+          <div style="width: 30px; height: 1px; background: var(--line); margin: 4px 0 2px"></div>
+          <div class="icn" style="background: var(--soft)"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="9" height="3.6" rx="1.4"/><rect x="9.5" y="10.4" width="11" height="3.6" rx="1.4"/><path d="M3 19h18M7 19v-1.4M12 19v-1.4M17 19v-1.4"/></svg></div>
+          <div class="icn"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V12M10 20V6M15 20v-6M20 20V9"/></svg></div>
+        </div>
+        <div style="position: absolute; left: 76px; right: 0; top: 0; bottom: 0; background: var(--scrim); z-index: 1"></div>
+        <div style="position: absolute; left: 76px; top: 0; bottom: 0; width: 320px; box-sizing: border-box; padding: 20px 20px 20px; background: linear-gradient(180deg,var(--pill1),var(--pill2)); border-right: 1px solid var(--pillLine); box-shadow: 8px 0 28px rgba(20,30,70,.16); display: flex; flex-direction: column; gap: 8px; z-index: 2">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; height: 44px; align-items: center"><span style="font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 24px; font-weight: 700">Accounts</span><span style="font-size: 12px; color: var(--muted)">Today</span></div>
+          <div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1">
+            <sc-for list="{{rowsFull}}" as="a" hint-placeholder-count="6">
+              <div style="{{a.rowStyle}}">
+                <span style="{{a.swatch}}"></span>
+                <span style="flex-grow: 1; min-width: 0; display: block">
+                  <span style="display: flex; justify-content: space-between; gap: 6px"><span style="font-size: 13px; font-weight: 600">{{a.name}}</span><span style="font-size: 13px; font-weight: 600">{{a.time}}</span></span>
+                  <span style="display: flex; justify-content: space-between; gap: 6px; font-size: 11.5px; color: var(--muted); margin-top: 1px"><span>{{a.sub}}</span><span>{{a.period}}</span></span>
+                  <span style="display: block; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; margin-top: 5px"><span style="{{a.bar}}"></span></span>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 38px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; font-weight: 500; background: var(--card)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Manage accounts</div>
+        </div>
+        <div style="position: absolute; left: 76px; right: 0; top: 0; height: 100%; padding: 20px 22px 20px 20px; box-sizing: border-box; z-index: 0">
+          <div style="font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 30px; font-weight: 700; height: 44px; margin-left: 4px">Timeline</div>
+          <div style="margin-top: 14px; height: 560px; border-radius: 20px; background: var(--card); border: 1px solid var(--line)"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Break button and icon set -->
+  <section style="display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; align-items: center; gap: 10px"><h2 style="margin: 0; font-size: 18px; font-weight: 600">3. Break: an amber circle with a white cup</h2></div>
+    <p style="margin: 0; font-size: 13px; color: var(--muted); max-width: 940px; line-height: 1.45">Drawn like the play circle, a little smaller (40 against 46), so it no longer lights up as a rounded square. The amber is deepened a little (about #B96F00) so the white cup holds 4.5 to 1. Hover brightens it, and on a break it carries a soft ring while the steam moves. The rail's foot then has one family of icons: the same 20 px box and 1.8 stroke for the flag and the cross (today the cup is a heavier drawing than they are).</p>
+    <div style="display: flex; gap: 36px; align-items: flex-start">
+      <div style="display: flex; gap: 24px; align-items: flex-start">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px"><button class="brkC" aria-label="Start break"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path class="steam" d="M8 3v2M12 3v2"/></svg></button><span style="font-size: 12px; color: var(--muted)">Rest</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px"><button class="brkC" aria-label="Start break" style="filter: brightness(1.08)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path class="steam" d="M8 3v2M12 3v2"/></svg></button><span style="font-size: 12px; color: var(--muted)">Hover</span></div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px"><button class="brkC on" aria-label="End break"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path class="steam" d="M8 3v2M12 3v2"/></svg></button><span style="font-size: 12px; color: var(--muted)">On a break</span></div>
+      </div>
+      <div class="card" style="padding: 12px 14px; display: flex; gap: 16px; align-items: center">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; border-radius: 20px; background: linear-gradient(180deg,var(--pill1),var(--pill2)); border: 1px solid var(--pillLine)">
+          <button class="brkC" aria-label="Start break"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path class="steam" d="M8 3v2M12 3v2"/></svg></button>
+          <button class="icn" aria-label="Finish day" style="color: var(--flag)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4"/><path d="M5 5h13l-3 4 3 4H5"/></svg></button>
+          <button class="icn" aria-label="Close timer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        </div>
+        <div style="font-size: 12.5px; color: var(--muted); line-height: 1.45; max-width: 330px"><b style="color: var(--ink); font-weight: 600">The rail's foot.</b> One 20 px box and one 1.8 stroke for all three, so none looks heavier. Only the break is a filled circle, because it is the one control that changes the pill's state.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Size match -->
+  <section style="display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; align-items: center; gap: 10px"><h2 style="margin: 0; font-size: 18px; font-weight: 600">4. No jump when the pill opens</h2><span class="tag">Built in code, not drawn here</span></div>
+    <p style="margin: 0; font-size: 13px; color: var(--muted); max-width: 940px; line-height: 1.45">Today the pill is drawn at 70 to 85 per cent and the rail at 100, so the clock and circle jump when one becomes the other. The proposal: the pill is drawn a little larger (80 to 95 per cent by screen), and the rail's top and width follow the pill's size exactly, so the clock, the circle and the Accounts button stay put and the same size when the dashboard opens. The workspace to the right stays at 100 per cent, so its text is unchanged. Below, the pill and the rail's top at the same size, with guides at the same heights.</p>
+    <div style="display: flex; gap: 44px; align-items: flex-start; padding-left: 14px">
+      <div style="position: relative">
+        <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px">Pill</div>
+        <div class="pill pillBox" style="height: 300px; transform: scale(.9); transform-origin: top left; margin-bottom: -30px">
+          <div style="display: flex; gap: 6px; align-items: center; height: 14px"><span class="cap" style="background: #34D399"></span></div>
+          <div class="clockCol"><span style="font-size: 30px; font-weight: 700">04</span><span style="font-size: 30px; font-weight: 700; margin-top: 2px">47</span><span style="font-size: 15px; font-weight: 600; margin-top: 4px; color: var(--clockSec)">35</span></div>
+          <div class="circle" style="margin-top: 6px">A1</div>
+          <div class="acc"><span class="bars"><i style="background: linear-gradient(135deg,#A8D4FF,#7F98F7)"></i><i style="background: linear-gradient(135deg,#B2EFD6,#5FD6AE)"></i><i style="background: linear-gradient(135deg,#FFD9B8,#FF9F84)"></i></span></div>
+          <div class="brkC"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3v2M12 3v2"/></svg></div>
+        </div>
+        <span class="guideLine" style="top: 47px"></span><span class="guideLine" style="top: 160px"></span><span class="guideLine" style="top: 199px"></span>
+      </div>
+      <div style="position: relative">
+        <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px">Rail, top (cropped)</div>
+        <div style="width: 65px; height: 270px; overflow: hidden; border-radius: 0 0 0 0; background: linear-gradient(180deg,var(--pill1),var(--pill2)); border: 1px solid var(--pillLine); border-bottom: 0; box-sizing: border-box">
+          <div style="transform: scale(.9); transform-origin: top left; width: 72px; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 0 0">
+            <div style="display: flex; gap: 6px; align-items: center; height: 14px"><span class="cap" style="background: #34D399"></span></div>
+            <div class="clockCol"><span style="font-size: 30px; font-weight: 700">04</span><span style="font-size: 30px; font-weight: 700; margin-top: 2px">47</span><span style="font-size: 15px; font-weight: 600; margin-top: 4px; color: var(--clockSec)">35</span></div>
+            <div class="circle" style="margin-top: 6px">A1</div>
+            <div class="acc"><span class="bars"><i style="background: linear-gradient(135deg,#A8D4FF,#7F98F7)"></i><i style="background: linear-gradient(135deg,#B2EFD6,#5FD6AE)"></i><i style="background: linear-gradient(135deg,#FFD9B8,#FF9F84)"></i></span></div>
+          </div>
+        </div>
+        <span class="guideLine" style="top: 47px"></span><span class="guideLine" style="top: 160px"></span><span class="guideLine" style="top: 199px"></span>
+      </div>
+      <div class="card" style="padding: 14px 16px; max-width: 420px; align-self: center">
+        <div style="font-size: 13px; font-weight: 600">Numbers</div>
+        <div style="font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-top: 4px">Pill drawn at 80 to 95 per cent (it was 70 to 85). Rail width = pill width at that size (65 at 90 per cent, not 76). The rail's lights, clock, circle and Accounts button use the same scale. Icons below the divider stay full size.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Icon -->
+  <section style="display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; align-items: center; gap: 10px"><h2 style="margin: 0; font-size: 18px; font-weight: 600">5. The Accounts icon</h2></div>
+    <p style="margin: 0; font-size: 13px; color: var(--muted); max-width: 940px; line-height: 1.45">Back to the mock's three stacked bars, each in an account's own gradient. It is the one coloured icon on the rail, which is how it says "accounts", and it stays in its tile when the list is open.</p>
+    <div style="display: flex; gap: 22px; align-items: center">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px"><button class="acc" aria-label="Accounts"><span class="bars" aria-hidden="true"><i style="background: linear-gradient(135deg,#A8D4FF,#7F98F7)"></i><i style="background: linear-gradient(135deg,#B2EFD6,#5FD6AE)"></i><i style="background: linear-gradient(135deg,#FFD9B8,#FF9F84)"></i></span></button><span style="font-size: 12px; color: var(--muted)">Rest</span></div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px"><button class="acc" aria-label="Accounts" style="background: var(--hover)"><span class="bars" aria-hidden="true"><i style="background: linear-gradient(135deg,#A8D4FF,#7F98F7)"></i><i style="background: linear-gradient(135deg,#B2EFD6,#5FD6AE)"></i><i style="background: linear-gradient(135deg,#FFD9B8,#FF9F84)"></i></span></button><span style="font-size: 12px; color: var(--muted)">Hover</span></div>
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px"><button class="acc on" aria-label="Accounts" aria-expanded="true"><span class="bars" aria-hidden="true"><i style="background: linear-gradient(135deg,#A8D4FF,#7F98F7)"></i><i style="background: linear-gradient(135deg,#B2EFD6,#5FD6AE)"></i><i style="background: linear-gradient(135deg,#FFD9B8,#FF9F84)"></i></span></button><span style="font-size: 12px; color: var(--muted)">List open</span></div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:1700}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { open: true };
+  }
+  renderVals() {
+    const mode = this.props.mode ?? 'light';
+    const dark = mode === 'dark';
+    const a = [
+      { n: 'Account one', t: '01:45', p: 88, c: ['#A8D4FF', '#7F98F7'], run: true, sub: '08:45 / 15:00', per: 'This week' },
+      { n: 'Account two', t: '01:00', p: 60, c: ['#B2EFD6', '#5FD6AE'], sub: '04:00 / 04:30', per: 'This week' },
+      { n: 'Account three', t: '00:40', p: 100, c: ['#FFD9B8', '#FF9F84'], sub: '02:55 / 02:30', per: 'This week' },
+      { n: 'Account four', t: '00:35', p: 54, c: ['#E8D0FF', '#C197F8'], sub: '10:35 / 20:00', per: 'This month' },
+      { n: 'Account five', t: '00:30', p: 20, c: ['#EEF6B0', '#B9DF82'], sub: '08:00 / 40:00', per: 'This quarter' },
+      { n: 'Internal', t: '00:00', p: 0, c: ['#F4C6E0', '#E48DBB'], sub: 'No budget', per: '' }
+    ];
+    const swatch = (x, s) => 'width:' + s + 'px;height:' + s + 'px;border-radius:10px;flex-shrink:0;display:block;background:linear-gradient(135deg,' + x.c[0] + ',' + x.c[1] + ')';
+    const bar = (x) => 'display:block;height:100%;width:' + Math.min(x.p, 100) + '%;background:' + (x.p >= 100 ? '#D64545' : x.p >= 80 ? '#E39A12' : (dark ? '#8793B0' : '#6E727C'));
+    const run = (x) => x.run ? 'box-shadow:0 0 0 2px #34D399;background:' + (dark ? '#183029' : '#F1FBF7') : '';
+    const rows = a.slice(0, 4).map((x) => ({ name: x.n, time: x.t, swatch: swatch(x, 30), bar: bar(x), rowStyle: run(x) }));
+    const rowsFull = a.map((x) => ({
+      name: x.n, time: x.t, sub: x.sub, period: x.per, swatch: swatch(x, 34), bar: bar(x),
+      rowStyle: 'display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:12px;' + run(x)
+    }));
+    const open = this.state.open;
+    return {
+      modeClass: dark ? 'dark' : '', rows: rows, rowsFull: rowsFull,
+      open: open, openCls: open ? 'on' : '', openTip: open ? 'Close the accounts' : 'Accounts',
+      toggle: () => this.setState({ open: !this.state.open })
+    };
+  }
+}
+</script>
+</body>
+</html>

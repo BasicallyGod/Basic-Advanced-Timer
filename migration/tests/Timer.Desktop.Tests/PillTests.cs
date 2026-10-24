@@ -122,7 +122,7 @@ public sealed class PillTests
     public void TheReminderLightShowsOnlyWhileAReminderIsDue()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
-        try { Assert.False(Find<Border>(pill, "PillReminderLight").IsVisible); Assert.False(model.ReminderDue); }
+        try { Assert.Equal("No reminders waiting", Avalonia.Automation.AutomationProperties.GetName(Find<Border>(pill, "PillReminderLight"))); Assert.False(model.ReminderDue); }
         finally { pill.Close(); }
     }
 

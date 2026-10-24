@@ -5,7 +5,7 @@
     "Accounts.dc.html": {
       "h": 720,
       "is_interactive": true,
-      "title": "Account pop-out",
+      "title": "Account drawer",
       "w": 1100,
       "x": 0,
       "y": 1800
@@ -33,6 +33,13 @@
       "x": 1180,
       "y": 2700
     },
+    "Lights.dc.html": {
+      "h": 1080,
+      "title": "Status lights",
+      "w": 1180,
+      "x": 1180,
+      "y": 4600
+    },
     "Main.dc.html": {
       "h": 720,
       "is_interactive": true,
@@ -58,10 +65,27 @@
     },
     "Pill.dc.html": {
       "h": 720,
-      "title": "Pill states",
+      "is_interactive": true,
+      "title": "Pill states (round 3, superseded)",
       "w": 1178,
       "x": 1180,
       "y": 31
+    },
+    "PillSoft.dc.html": {
+      "h": 2000,
+      "is_interactive": true,
+      "title": "Pill states (as built)",
+      "w": 1180,
+      "x": 3000,
+      "y": 0
+    },
+    "Refine.dc.html": {
+      "h": 1700,
+      "is_interactive": true,
+      "title": "Round 2: options (decided)",
+      "w": 1180,
+      "x": 0,
+      "y": 5800
     },
     "Settings.dc.html": {
       "h": 720,
@@ -86,13 +110,6 @@
       "w": 1100,
       "x": 0,
       "y": 900
-    },
-    "Lights.dc.html": {
-      "h": 1080,
-      "title": "Status lights",
-      "w": 1180,
-      "x": 1180,
-      "y": 4600
     }
   },
   "createdOnFiles": {
@@ -105,7 +122,7 @@
   },
   "notes": {
     "n1": {
-      "text": "Mock at the real window size (1100 by 720). Tweaks: Light or Dark, the recording state and the day (running, day off, finished). Click a block to select it, and shift-click to add more (the short call over the client review shows how overlapping blocks stack, and an End that runs into the next block stacks too), then shift-click a second Account one block to try Merge. A merged block can be unmerged. Add a note, or add a meeting: click a time in the dashed row above the blocks, or use Add meeting in the Notes card. Finish day on the rail asks first, and Start day takes its place when the day is not running. The totals under the timeline are the day's Working time. The date button opens a calendar (dots show days with time; the mock draws the same blocks for every day). Messages float over the lowest part of the workspace. Settings is the gear at the top right. Click the time to collapse.",
+      "text": "Mock at the real window size (1100 by 720). Tweaks: Light or Dark, the recording state and the day (running, day off, finished). Click a block to select it, and shift-click to add more (the short call over the client review shows how overlapping blocks stack, and an End that runs into the next block stacks too), then shift-click a second Account one block to try Merge. A merged block can be unmerged. Add a note, or add a meeting: click a time in the dashed row above the blocks, or use Add meeting in the Notes card. Finish day on the rail asks first, and Start day takes its place when the day is not running. The totals under the timeline are the day's Working time. The date button opens a calendar (dots show days with time; the mock draws the same blocks for every day). Messages float over the lowest part of the workspace. Settings is the gear at the top right. Click the time to collapse. The bell's card hangs from a point under it, with Done and Reschedule as icons. A day with no meetings gives its blocks the whole height. The bell sits next to the gear, and pressing it again closes its card.",
       "w": 520,
       "x": -587,
       "y": 354
@@ -117,13 +134,31 @@
       "y": 4020
     },
     "n11": {
-      "text": "The Notes page, third on the rail. Add a note or a meeting with the bell for its reminder, pick a view or an account on the left and search above. Click a note or meeting to change it in the same box, where Save, Delete and Cancel appear.",
+      "text": "The Notes page, third on the rail. Add a note or a meeting with the bell for its reminder, pick a view or an account on the left and search above. Click a note or meeting to change it in the same box, where Save, Delete and Cancel appear. Reminders start at 12:00 and the day comes from the month. A meeting is half an hour by default.",
       "w": 520,
       "x": -600,
       "y": 4839
     },
+    "n13": {
+      "text": "The status light options. Row three is chosen and now used on the pill and the rail.",
+      "w": 520,
+      "x": 1180,
+      "y": 5740
+    },
+    "n14": {
+      "text": "Round 2: the options we chose between, kept for the record. The decisions are built and drawn on the Pill and Account drawer boards, with two later changes: rounded squares instead of circles, and the theme's orange for the break.",
+      "w": 520,
+      "x": 1260,
+      "y": 5840
+    },
+    "n15": {
+      "text": "The pill and the rail as built: timer, primary control, break, then accounts at the foot, every control a soft tint of its colour with a solid fill only for the break while it is on, and every control's states including keyboard focus, in Light and Dark. The rail's top is the same column, and its foot keeps Finish day and Close timer. The three controls are the same 44 pixel rounded square on the pill and the rail, and the pill is 316 tall. In the account drawer, Manage accounts is a single sliders icon at the top right. The account list slides out from behind the pill, which keeps its shape, ring and glow. The reminder light is always there: grey until a reminder is due, then blue and pulsing.",
+      "w": 520,
+      "x": 3000,
+      "y": -240
+    },
     "n2": {
-      "text": "Light and Dark both change the pill. One vertical capsule shows the state, and a second blue one pulses beside it only when a reminder is due. It only notifies. Clicking the time opens the dashboard from the pill and collapses it from the rail. The amber mug under the circle starts a break. On a break the circle turns amber and keeps the initials, and the mug stays lit and steams, so there is only one cup.",
+      "text": "The round 3 pill, kept for the record: it has the break at the foot and the accounts under the circle. The current pill is the Pill states (as built) board to the right. There the Accounts button is at the foot, under the break.",
       "w": 520,
       "x": 2418,
       "y": 330
@@ -141,7 +176,7 @@
       "y": 1203
     },
     "n5": {
-      "text": "The account pop-out, opened from the account switch button under the circle. Click a row to record to it. Manage accounts opens Accounts and budgets.",
+      "text": "The account drawer, opened from the three-bar button under the break. It unfolds from the rail's edge at full height over a dimmed page. Click a row to record to it, and the button, Esc or the dimmed page closes it. The sliders icon at the top right opens Accounts and budgets.",
       "w": 520,
       "x": -600,
       "y": 2076
@@ -177,12 +212,6 @@
       "w": 240,
       "x": 0,
       "y": -260
-    },
-    "n13": {
-      "text": "The status light options. Row three is chosen and now used on the pill and the rail.",
-      "w": 520,
-      "x": 1180,
-      "y": 5740
     }
   },
   "order": [
@@ -197,7 +226,9 @@
     "EntryDialog.dc.html",
     "Messages.dc.html",
     "Notes.dc.html",
-    "Lights.dc.html"
+    "Lights.dc.html",
+    "Refine.dc.html",
+    "PillSoft.dc.html"
   ],
   "pages": [],
   "title": "Vertical pill and dashboard mock"
