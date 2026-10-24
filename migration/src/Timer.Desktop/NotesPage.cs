@@ -224,7 +224,7 @@ public sealed class NotesPage : Grid
         formHost.Content = column;
     }
 
-    private static Button Seg(string name, string text, bool on, Action click)
+    internal static Button Seg(string name, string text, bool on, Action click)
     {
         var button = Ui.Button(text, click, name); button.Classes.Add("ctl"); button.Classes.Add("pillOpt"); button.Classes.Set("optOn", on); button.Height = 36; button.Padding = new Thickness(14, 0); button.FontSize = 13.5;
         return button;
