@@ -13,7 +13,7 @@ Defaults agreed: the Light and Dark changes are done inside the app (no shared-p
 | 4 | The new horizontal timeline, view only: gradient blocks, stacking lanes, meeting row, now marker, day totals strip | L | built, without the meeting row (it needs Notes, Stage 6); the area under the timeline card stays empty until Stage 5 |
 | 5 | Timeline interaction: select and shift-click, drag, the Selected block card, Merge and Unmerge, Undo, Add time, floating messages, automatic Continue earlier block. Tidy day and the old Group and Edit dialogs go | L | built with the round 4 feedback, except the automatic Continue (it stays an offer in the toast, as the engine cannot yet undo a continue), editing a merged block's note, and dragging over a neighbour (see item 80) |
 | 6a | Notes: `NotesModel` on the shared notes model, the Notes card with its note and meeting forms, the reminder pop-up, meetings and repeats on the timeline | L | built (no Every month, see item 81) |
-| 6b | The bell and its flyout, the reminder light on the pill and rail, the due capsule, then the Notes page | L | |
+| 6b | The bell and its flyout, the reminder light on the pill and rail, the due capsule, then the Notes page | L | built (item 82) |
 | 7 | Week overview: totals strip, schedule line, Chart or Table, pace, day markers | M | |
 | 8 | Polish: the pill app icon, tray glyph and Store tiles, animation audit, contrast tests for the new Light, accessibility, dead code, docs, repeat-tests run | M | |
 

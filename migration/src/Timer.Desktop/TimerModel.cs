@@ -834,7 +834,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         messageTimer?.Stop(); messageTimer = null;
         Notice = null; EditError = null; messageSeen = (null, null); Notify();
     }
-    /// <summary>True while a reminder is due, which lights the pill's second (blue) light. Notes bring reminders back in a later stage, so nothing sets it yet.</summary>
-    public bool ReminderDue => false;
+    /// <summary>True while a reminder is due (its time has passed and it is not ticked off), which lights the blue light on the pill and the rail.</summary>
+    public bool ReminderDue => Notes.AttentionCount > 0;
     private void Notify() { ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
 }

@@ -73,36 +73,12 @@ public sealed class NotesCard : Border
         foreach (var note in items) list.Children.Add(Row(note));
     }
 
-    private static TextBlock Ink(string text, string token, double size = 12) { var t = new TextBlock { Text = text, FontSize = size, VerticalAlignment = VerticalAlignment.Center }; t.Bind(TextBlock.ForegroundProperty, t.GetResourceObservable(token)); return t; }
-
-    private Border Chip(string text, string tone, IconKind? icon = null, Control? lead = null)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
-        var token = tone switch { "accent" => "Accent", "late" => "Overtime", "quiet" => "Muted", _ => "Ink" };
-        if (lead is not null) row.Children.Add(lead);
-        if (icon is { } kind) row.Children.Add(new IconGlyph(kind) { TintKey = token == "Ink" ? null : token });
-        row.Children.Add(Ink(text, token));
-        var chip = new Border { Child = row, CornerRadius = new CornerRadius(999), Padding = new Thickness(8, 2), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center };
-        chip.Classes.Add("chip"); chip.Classes.Add(tone == "accent" ? "accentChip" : tone == "late" ? "lateChip" : "plainChip");
-        return chip;
-    }
-    private Control Dot(string? account)
-    {
-        IBrush fill = new SolidColorBrush(Colors.Gray);
-        if (account is not null && model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(account, StringComparison.OrdinalIgnoreCase))?.Colour is { } colour)
-        {
-            var look = model.BlockLook(colour);
-            fill = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative), GradientStops = { new GradientStop(Color.Parse(look.Fill), 0), new GradientStop(Color.Parse(ReviewViews.DeeperEnd(look)), 1) } };
-        }
-        return new Border { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = fill, VerticalAlignment = VerticalAlignment.Center };
-    }
-
     private Control Row(DayNote note)
     {
         var meeting = NotesModel.IsMeeting(note); var words = Notes.Text(note); var account = Notes.AccountOf(note);
         var line = Ui.Grid("Auto,*,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Top;
         // A note has a round tick; a meeting has a calendar mark instead, and is opened by its name.
-        Control lead = meeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) } : Tick(note);
+        Control lead = meeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) } : NoteParts.Tick(model, Notes, note);
         Ui.Put(line, lead);
         var column = new StackPanel { Spacing = 5 };
         if (meeting)
@@ -118,16 +94,16 @@ public sealed class NotesCard : Border
         }
         var chips = new WrapPanel { Orientation = Orientation.Horizontal };
         void Add(Control chip) { chip.Margin = new Thickness(0, 0, 6, 4); chips.Children.Add(chip); }
-        if (meeting) Add(Chip(note.At is { } a && note.End is { } z ? a.ToString(@"hh\:mm") + "–" + z.ToString(@"hh\:mm") : "", "plain"));
+        if (meeting) Add(NoteParts.Chip(model, NoteParts.Span(note), "plain"));
         var repeat = Notes.RepeatOf(note);
         if (meeting && Notes.SeriesOf(note) is { } series)
-            Add(Chip(repeat == RepeatChoice.None ? series.Rule.Words() : NotesModel.Label(repeat), "quiet", IconKind.Repeat));
-        if (account is not null) { var chip = Chip("#" + account.Replace(" ", ""), "plain", null, Dot(account)); Add(chip); }
+            Add(NoteParts.Chip(model, repeat == RepeatChoice.None ? series.Rule.Words() : NotesModel.Label(repeat), "quiet", IconKind.Repeat));
+        if (account is not null) { var chip = NoteParts.Chip(model, "#" + account.Replace(" ", ""), "plain", null, NoteParts.Dot(model, account)); Add(chip); }
         if (!meeting && NotesModel.ReminderOf(note) is { } due)
         {
             var late = Notes.IsLate(note);
             var chip = Ui.Button("", () => OpenReminder(note.Id), "NoteReminder_" + note.Id); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0);
-            chip.Content = Chip(NoteDates.When(due, model.Engine.Now), late ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change the date or time"); chip.Margin = new Thickness(0, 0, 6, 4); chips.Children.Add(chip);
+            chip.Content = NoteParts.Chip(model, NoteDates.When(due, model.Engine.Now), late ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change the date or time"); chip.Margin = new Thickness(0, 0, 6, 4); chips.Children.Add(chip);
         }
         column.Children.Add(chips);
         Ui.Put(line, column, 1);
@@ -139,16 +115,6 @@ public sealed class NotesCard : Border
         Ui.Put(line, remove, 3);
         var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9) }; card.Classes.Add("noteRow");
         return card;
-    }
-
-    private Button Tick(DayNote note)
-    {
-        var ring = new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1.6), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) };
-        ring.Classes.Add("tick"); ring.Classes.Set("tickDone", note.Done);
-        var button = Ui.Button("", () => Notes.Toggle(note.Id), "NoteDone_" + note.Id); button.Classes.Add("pillBare"); button.Padding = new Thickness(0); button.Content = ring; button.VerticalAlignment = VerticalAlignment.Top;
-        if (note.Done) ring.Child = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse("M 5.5,10.5 L 8.8,13.8 L 14.5,7"), StrokeThickness = 2, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round, Stroke = new SolidColorBrush(Colors.White), Name = "TickMark" };
-        Avalonia.Automation.AutomationProperties.SetName(button, "Done: " + Notes.Text(note)); ToolTip.SetTip(button, note.Done ? "Not done" : "Done");
-        return button;
     }
 
     // ---- Removing, with the question for a repeating meeting ----
@@ -202,14 +168,14 @@ public sealed class NotesCard : Border
         // The words, with the account chip and the reminder chip inside the same box.
         var box = Ui.Grid("Auto,*,Auto"); box.ColumnSpacing = 6;
         var frame = new Border { Child = box, Height = 36, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(10, 0, 6, 0) }; frame.Classes.Add("composer");
-        if (draftAccount is { } account) { var chip = Chip("#" + account.Replace(" ", ""), "plain", null, Dot(account)); chip.VerticalAlignment = VerticalAlignment.Center; Ui.Put(box, chip); }
+        if (draftAccount is { } account) { var chip = NoteParts.Chip(model, "#" + account.Replace(" ", ""), "plain", null, NoteParts.Dot(model, account)); chip.VerticalAlignment = VerticalAlignment.Center; Ui.Put(box, chip); }
         field = new TextBox { Name = "NoteField", Text = draft, Watermark = meeting ? "Meeting name, # for an account" : "Write a note, # for an account", BorderThickness = new Thickness(0), Background = Brushes.Transparent, Height = 30, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0) };
         field.Classes.Add("bareField");
         Ui.Put(box, field, 1);
         if (!meeting && draftReminder is { } reminder)
         {
             var chip = Ui.Button("", () => OpenReminder(null), "FormReminder"); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0);
-            chip.Content = Chip(NoteDates.When(reminder, model.Engine.Now), model.Engine.Now > reminder ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change the reminder"); Ui.Put(box, chip, 2);
+            chip.Content = NoteParts.Chip(model, NoteDates.When(reminder, model.Engine.Now), model.Engine.Now > reminder ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change the reminder"); Ui.Put(box, chip, 2);
         }
         var row = Ui.Grid("*,Auto,Auto"); row.ColumnSpacing = 6;
         Ui.Put(row, frame);
@@ -260,7 +226,7 @@ public sealed class NotesCard : Border
         {
             var pick = Ui.Button("", () => { draftAccount = option.Name; draft = draft[..match.Index].TrimEnd(); DrawForm(); }, "Suggest_" + option.Name.Replace(" ", ""));
             pick.Classes.Add("flat"); pick.HorizontalAlignment = HorizontalAlignment.Stretch; pick.HorizontalContentAlignment = HorizontalAlignment.Left;
-            pick.Content = Ui.Horizontal(Dot(option.Name), new TextBlock { Text = "#" + option.Name.Replace(" ", ""), FontWeight = FontWeight.SemiBold, FontSize = 13 }, Ink(option.Name, "Muted", 13));
+            pick.Content = Ui.Horizontal(NoteParts.Dot(model, option.Name), new TextBlock { Text = "#" + option.Name.Replace(" ", ""), FontWeight = FontWeight.SemiBold, FontSize = 13 }, NoteParts.Ink(option.Name, "Muted", 13));
             host.Children.Add(pick);
         }
         host.IsVisible = options.Count > 0;

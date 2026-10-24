@@ -7,6 +7,12 @@ namespace Timer.Desktop;
 /// <summary>How often a meeting repeats. The shared packages hold repeats by weeks and days, so these are the ones they can write.</summary>
 public enum RepeatChoice { None, Day, Weekday, Week }
 
+/// <summary>The views down the left of the Notes page.</summary>
+public enum NoteView { All, Today, Overdue, Upcoming, Meetings, Done }
+
+/// <summary>A heading and the notes under it on the Notes page.</summary>
+public sealed record NoteGroup(string Label, bool Bad, IReadOnlyList<DayNote> Notes);
+
 /// <summary>
 /// Notes and meetings, kept apart from <see cref="TimerModel"/> as the Notes spec advises. A note is a <see cref="DayNote"/> in the shared storage: a plain note is an
 /// undated task, or a dated one when it has a reminder (the reminder is its day and time); a meeting is a note with a start and an end, which is planned time and
@@ -86,6 +92,77 @@ public sealed class NotesModel
     {
         RepeatChoice.Day => "Every day", RepeatChoice.Weekday => "Every weekday", RepeatChoice.Week => "Every week", _ => "Does not repeat"
     };
+
+    // ---- What is waiting: the bell, the reminder light and the Notes page ----
+
+    /// <summary>Reminders whose time has passed and that are not ticked off, the oldest first. They stay until ticked off or changed.</summary>
+    public IReadOnlyList<DayNote> Overdue => notes.Where(IsLate).OrderBy(n => ReminderOf(n)).ThenBy(n => n.Id).ToList();
+    /// <summary>How many reminders need attention. The light on the pill and the rail is on while this is not zero.</summary>
+    public int AttentionCount => notes.Count(IsLate);
+    /// <summary>Reminders still to come, soonest first.</summary>
+    public IReadOnlyList<DayNote> ComingUp(int limit = 6)
+        => notes.Where(n => !n.Done && ReminderOf(n) is { } due && due >= now()).OrderBy(n => ReminderOf(n)).ThenBy(n => n.Id).Take(limit).ToList();
+
+    /// <summary>
+    /// What the Notes page lists: everything, but only the next day of a repeating meeting (not its eight weeks) and no meeting that has gone, unless it was ticked off.
+    /// </summary>
+    public IReadOnlyList<DayNote> Listed()
+    {
+        var today = now().Date; var firstOf = new HashSet<long>();
+        var list = new List<DayNote>();
+        foreach (var n in notes.OrderBy(n => n.Day).ThenBy(n => n.At).ThenBy(n => n.Id))
+        {
+            if (IsMeeting(n) && !n.Done)
+            {
+                if (n.Day.Date < today) continue;
+                if (n.SeriesId is { } id && n.Day.Date > today && !firstOf.Add(id)) continue; // One occurrence of a series is enough in a list.
+                if (n.SeriesId is { } today1 && n.Day.Date == today) firstOf.Add(today1);
+            }
+            list.Add(n);
+        }
+        return list;
+    }
+
+    /// <summary>The listed notes that match what was typed in the search box (its words or its account) and the account chosen, if any.</summary>
+    public IReadOnlyList<DayNote> Matching(string search, string? account)
+    {
+        var words = search.Trim();
+        return Listed().Where(n => (account is null || string.Equals(AccountOf(n), account, StringComparison.OrdinalIgnoreCase))
+            && (words.Length == 0 || Text(n).Contains(words, StringComparison.OrdinalIgnoreCase) || (AccountOf(n)?.Contains(words, StringComparison.OrdinalIgnoreCase) ?? false))).ToList();
+    }
+
+    public bool InView(DayNote n, NoteView view)
+    {
+        var today = now().Date;
+        return view switch
+        {
+            NoteView.Today => n.HasDate && n.Day.Date == today,
+            NoteView.Overdue => IsLate(n),
+            NoteView.Upcoming => n.HasDate && n.Day.Date > today && !n.Done,
+            NoteView.Meetings => IsMeeting(n),
+            NoteView.Done => n.Done,
+            _ => true
+        };
+    }
+
+    /// <summary>The Notes page's list in groups: Overdue, then each day from today, then notes with no date, then Done. Each group is in time order.</summary>
+    public IReadOnlyList<NoteGroup> Groups(IReadOnlyList<DayNote> shown)
+    {
+        var today = now().Date; var groups = new List<NoteGroup>();
+        var overdue = shown.Where(IsLate).OrderBy(n => ReminderOf(n)).ToList();
+        if (overdue.Count > 0) groups.Add(new("Overdue", true, overdue));
+        var open = shown.Where(n => !IsLate(n) && !n.Done).ToList();
+        foreach (var day in open.Where(n => n.HasDate).Select(n => n.Day.Date).Distinct().OrderBy(d => d))
+        {
+            var label = NoteDates.Day(day, today) + (day == today || day == today.AddDays(1) ? " · " + day.ToString("d MMM", CultureInfo.GetCultureInfo("en-GB")) : "");
+            groups.Add(new(label, false, open.Where(n => n.HasDate && n.Day.Date == day).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList()));
+        }
+        var undated = open.Where(n => !n.HasDate).OrderBy(n => n.Id).ToList();
+        if (undated.Count > 0) groups.Add(new("No date", false, undated));
+        var done = shown.Where(n => n.Done).OrderByDescending(n => n.Day).ThenByDescending(n => n.Id).ToList();
+        if (done.Count > 0) groups.Add(new("Done", false, done));
+        return groups;
+    }
 
     // ---- Changing notes ----
 
