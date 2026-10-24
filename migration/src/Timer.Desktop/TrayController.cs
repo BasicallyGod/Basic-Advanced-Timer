@@ -18,8 +18,8 @@ public sealed class TrayController : IDisposable
     private readonly NativeMenuItem day = new();
     private readonly NativeMenuItem reset = new() { Header = "Reset position" };
     private readonly NativeMenuItem close = new() { Header = "Close timer" };
-    private WindowIcon? recordingIcon, idleIcon;
-    private bool? shownRecording;
+    private readonly Dictionary<(bool, bool, bool), WindowIcon> icons = new();
+    private (bool Recording, bool Reminder, bool Dark)? shown;
 
     public TrayController(TimerModel model, WindowCoordinator windows)
     {
@@ -65,23 +65,33 @@ public sealed class TrayController : IDisposable
     {
         var text = Tooltip(model);
         if (icon.ToolTipText != text) icon.ToolTipText = text;
-        if (shownRecording != model.IsTracking)
+        var now = (model.IsTracking, model.ReminderDue, TaskbarIsDark());
+        if (shown != now)
         {
-            shownRecording = model.IsTracking;
-            icon.Icon = model.IsTracking ? recordingIcon ??= Draw(true) : idleIcon ??= Draw(false);
+            shown = now;
+            if (!icons.TryGetValue(now, out var drawn)) icons[now] = drawn = Draw(now.Item1, now.Item2, now.Item3);
+            icon.Icon = drawn;
         }
     }
-    // A clock face, green while recording and slate when not, so the state shows without opening anything.
-    public static WindowIcon Draw(bool recording)
+    // The taskbar follows the computer's light or dark setting, not the timer's own theme.
+    private static bool TaskbarIsDark() => Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant == Avalonia.Platform.PlatformThemeVariant.Dark;
+    /// <summary>
+    /// The pill's outline with its two lights and the bars for the time, in one colour (white on a dark taskbar, near black on a light one), as the app icon draws it
+    /// at small sizes. The state light turns green while recording and the reminder light blue while one is due, so the tray says what the pill's lights say.
+    /// </summary>
+    public static WindowIcon Draw(bool recording, bool reminderDue = false, bool dark = false)
     {
         var bitmap = new RenderTargetBitmap(new PixelSize(64, 64));
         using (var context = bitmap.CreateDrawingContext())
+        using (context.PushTransform(Matrix.CreateScale(.25, .25)))
         {
-            var face = new SolidColorBrush(Color.Parse(recording ? "#337A50" : "#4A5860"));
-            context.DrawEllipse(face, null, new Point(32, 32), 29, 29);
-            var pen = new Pen(Brushes.White, 5, lineCap: PenLineCap.Round);
-            context.DrawLine(pen, new Point(32, 32), new Point(32, 14));
-            context.DrawLine(pen, new Point(32, 32), new Point(44, 38));
+            var line = dark ? Colors.White : Color.Parse("#141824");
+            var ink = new SolidColorBrush(line);
+            context.DrawRectangle(null, new Pen(ink, 18), new Rect(79, 33, 98, 190), 49, 49);
+            context.DrawRectangle(new SolidColorBrush(recording ? Color.Parse("#34D399") : line), null, new Rect(106, 68, 20, 38), 10, 10);
+            context.DrawRectangle(new SolidColorBrush(reminderDue ? Color.Parse("#6096FF") : line), null, new Rect(130, 68, 20, 38), 10, 10);
+            context.DrawRectangle(ink, null, new Rect(98, 134, 60, 22), 11, 11);
+            context.DrawRectangle(ink, null, new Rect(98, 166, 60, 22), 11, 11);
         }
         return new WindowIcon(bitmap);
     }

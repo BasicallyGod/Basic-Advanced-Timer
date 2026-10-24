@@ -51,6 +51,7 @@ public sealed class TrayTests
         model.TogglePause();
         Assert.Equal("Resume Account one", TrayController.PauseLabel(model)); Assert.Contains("Ready to track", TrayController.Tooltip(model));
         Assert.NotNull(TrayController.Draw(true)); Assert.NotNull(TrayController.Draw(false));
+        foreach (var recording in new[] { false, true }) foreach (var due in new[] { false, true }) foreach (var dark in new[] { false, true }) Assert.NotNull(TrayController.Draw(recording, due, dark)); // The pill's two lights and both taskbar themes.
         var windows = new WindowCoordinator(model, () => { });
         using var tray = new TrayController(model, windows); tray.RefreshMenu();
     }
