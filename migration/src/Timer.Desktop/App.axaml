@@ -113,6 +113,24 @@
     <!-- Fields: rounded, as the mock draws them (ThemeEngine writes their fill, hairline and focus colours). -->
     <Style Selector="TextBox"><Setter Property="CornerRadius" Value="11" /></Style>
     <Style Selector="ComboBox"><Setter Property="CornerRadius" Value="12" /></Style>
+    <!-- Round option chips (the reminder pop-up's quick days and times): a soft fill, and the accent when chosen. -->
+    <Style Selector="Button.ctl.pillOpt"><Setter Property="CornerRadius" Value="999" /><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
+    <Style Selector="Button.ctl.pillOpt.optOn"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Button.ctl.pillOpt.optOn:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Button.softDay:disabled"><Setter Property="Opacity" Value="0.35" /></Style>
+    <!-- Notes: the chips (an accent one for a reminder, a red one once it is late), the rows, the round tick and the form's box. -->
+    <Style Selector="Border.accentChip"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+    <Style Selector="Border.lateChip"><Setter Property="Background" Value="{DynamicResource LateTint}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+    <Style Selector="Border.noteRow"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
+    <Style Selector="Border.tick"><Setter Property="BorderBrush" Value="{DynamicResource Muted}" /></Style>
+    <Style Selector="Border.tick.tickDone"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Border.composer"><Setter Property="Background" Value="{DynamicResource TextControlBackground}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="TextBox.bareField, TextBox.bareField:pointerover, TextBox.bareField:focus"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+    <Style Selector="TextBox.bareField /template/ Border#PART_BorderElement, TextBox.bareField:pointerover /template/ Border#PART_BorderElement, TextBox.bareField:focus /template/ Border#PART_BorderElement"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /></Style>
+    <!-- Planned meetings on the timeline: dashed cards (the frame is a dashed rectangle, since a border cannot be dashed), and the row they sit in. -->
+    <Style Selector="Rectangle.meetingFrame"><Setter Property="Stroke" Value="{DynamicResource MeetLine}" /><Setter Property="Fill" Value="{DynamicResource MeetBg}" /></Style>
+    <Style Selector="Rectangle.meetingFrame.over"><Setter Property="Fill" Value="{DynamicResource Selected}" /></Style>
+    <Style Selector="Border.meetingLane.over"><Setter Property="Background" Value="{DynamicResource MeetBg}" /></Style>
     <Style Selector="Border.plainChip"><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
     <Style Selector="Border.selectedRow"><Setter Property="Background" Value="{DynamicResource Surface}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Border.chip">

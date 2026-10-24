@@ -178,7 +178,7 @@ public sealed class DashboardWindow : Window
     private static TextBlock Value() => new() { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock date = Ui.Text("", 14); private Button datePick = null!;
     private readonly ContentControl workspace = new(), timelineHost = new() { Name = "TimelineHost" };
-    private Border timelineCard = null!; private MessageBar messageBar = null!; private Grid timelinePage = null!; private SelectedBlockCard selectedCard = null!;
+    private Border timelineCard = null!; private MessageBar messageBar = null!; private Grid timelinePage = null!; private SelectedBlockCard selectedCard = null!; private NotesCard notesCard = null!;
     private readonly Button day;
     private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, addTime = null!;
     private readonly Button undo;
@@ -283,9 +283,10 @@ public sealed class DashboardWindow : Window
         var cardGrid = Ui.Grid("*", "Auto,Auto"); Ui.Put(cardGrid, timelineHost); Ui.Put(cardGrid, tools, 0, 1);
         timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Padding = new Thickness(0, 14, 0, 12), VerticalAlignment = VerticalAlignment.Top };
         timelineCard.Classes.Add("dayCard");
-        selectedCard = new SelectedBlockCard(model) { Margin = new Thickness(0, 14, 0, 0) };
-        timelinePage = Ui.Grid("*", "Auto,*"); timelinePage.Margin = new Thickness(0, 14, 0, 0); timelinePage.Name = "TimelinePage";
-        Ui.Put(timelinePage, timelineCard); Ui.Put(timelinePage, selectedCard, 0, 1);
+        selectedCard = new SelectedBlockCard(model) { Margin = new Thickness(0, 14, 7, 0) };
+        notesCard = new NotesCard(model) { Margin = new Thickness(7, 14, 0, 0) };
+        timelinePage = Ui.Grid("1.15*,*", "Auto,*"); timelinePage.Margin = new Thickness(0, 14, 0, 0); timelinePage.Name = "TimelinePage";
+        Ui.Put(timelinePage, timelineCard); Grid.SetColumnSpan(timelineCard, 2); Ui.Put(timelinePage, selectedCard, 0, 1); Ui.Put(timelinePage, notesCard, 1, 1);
         Ui.Put(review, timelinePage, row: 1);
         // The title row's empty middle still drags the window.
         var rightColumn = Ui.Grid("*", "*");
