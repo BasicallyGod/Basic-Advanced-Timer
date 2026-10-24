@@ -49,7 +49,7 @@ public static class TimelineGestures
             var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero);
             var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
             Canvas.SetLeft(card, oldLeft + (edge <= 0 ? delta.TotalHours * pixelsPerHour : 0));
-            card.Width = Math.Max(ReviewViews.MinimumBlockWidth, (until - from).TotalHours * pixelsPerHour - 2);
+            card.Width = Math.Max(ReviewViews.MinimumBlockWidth, (until - from).TotalHours * pixelsPerHour - ReviewViews.BlockGap);
             card.Opacity = .75;
             if (nudging)
             {
@@ -60,7 +60,7 @@ public static class TimelineGestures
                         foreach (var neighbour in canvas.Children.OfType<Border>().Where(b => ReferenceEquals(b.Tag, change.Source)))
                         {
                             previews[neighbour] = (Canvas.GetLeft(neighbour), neighbour.Width);
-                            Canvas.SetLeft(neighbour, ReviewViews.TimelineGutter + (change.Updated.From - row.Day).TotalHours * pixelsPerHour + 1); neighbour.Opacity = .75;
+                            Canvas.SetLeft(neighbour, ReviewViews.TimelineGutter + (change.Updated.From - row.Day).TotalHours * pixelsPerHour + ReviewViews.BlockInset); neighbour.Opacity = .75;
                         }
                     }
                 }

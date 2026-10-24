@@ -32,7 +32,7 @@ public sealed class ReminderPopup : Border
     private readonly TextBlock monthTitle = new() { FontSize = 13, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox hourBox = new() { Name = "ReminderHour", MaxLength = 2 }, minuteBox = new() { Name = "ReminderMinute", MaxLength = 2 };
     private readonly TextBlock summary = new() { Name = "ReminderSummary", FontSize = 12.5, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-    private readonly WrapPanel presetRow = new() { Orientation = Orientation.Horizontal };
+    private readonly Avalonia.Controls.Primitives.UniformGrid presetRow = new() { Columns = 2 };
     private bool syncing;
     // A reminder cannot be set for a day that has gone, but a meeting can be put on one (to note what happened), so only the reminder greys them.
     private readonly bool allowPast;
@@ -42,7 +42,7 @@ public sealed class ReminderPopup : Border
         this.now = now; this.answer = answer; Name = "ReminderPopup";
         var start = current ?? now().Date.AddHours(12); allowPast = heading != "Reminder";
         chosen = start.Date; hour = start.Hour; minute = start.Minute / 5 * 5; month = new DateTime(chosen.Year, chosen.Month, 1);
-        CornerRadius = new CornerRadius(16); BorderThickness = new Thickness(1); Padding = new Thickness(12); Width = 350;
+        CornerRadius = new CornerRadius(16); BorderThickness = new Thickness(1); Padding = new Thickness(12); Width = 376;
         Classes.Add("surface"); Classes.Add("flyoutCard");
         BoxShadow = BoxShadows.Parse("0 10 28 0 #29141E46");
         var column = new StackPanel { Spacing = 10 };
@@ -122,7 +122,7 @@ public sealed class ReminderPopup : Border
         {
             var text = preset.ToString("00", CultureInfo.InvariantCulture) + ":00";
             var button = Option(text, hour == preset && minute == 0, () => { hour = preset; minute = 0; Redraw(true); }); button.Name = "ReminderTime" + preset;
-            button.Margin = new Thickness(0, 0, 5, 5); presetRow.Children.Add(button);
+            button.Margin = new Thickness(0, 0, 4, 5); button.Padding = new Thickness(4, 0); button.HorizontalAlignment = HorizontalAlignment.Stretch; presetRow.Children.Add(button);
         }
         summary.Text = NoteDates.When(Chosen, today);
     }

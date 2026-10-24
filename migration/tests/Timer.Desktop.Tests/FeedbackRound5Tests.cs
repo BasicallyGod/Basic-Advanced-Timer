@@ -55,15 +55,15 @@ public sealed class FeedbackRound5Tests
     }
 
     [AvaloniaFact]
-    public void ABlockTooSmallForThePageMarkStillShowsItHasANoteWithAFoldedCorner()
+    public void ABlockTooSmallForThePageMarkStillShowsItHasANoteWithASmallDot()
     {
         var model = Model(out var engine); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             model.SelectBlock(new[] { engine.Sessions[0] }, false); Settle(window); var noteBox = Find<TextBox>(window, "SelectedNote"); noteBox.Text = "Called the client"; noteBox.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter }); model.SelectBlock(new[] { engine.Sessions[0] }, false); model.SelectBlock(new[] { engine.Sessions[2] }, false); Settle(window);
             var noted = Find<Border>(window, "TimelineEntry0");
-            Assert.Contains(noted.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Polygon>(), p => p.Name == "NoteCorner"); // At 90 pixels an hour half an hour is too narrow for the page mark.
-            Assert.DoesNotContain(Find<Border>(window, "TimelineEntry1").GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Polygon>(), p => p.Name == "NoteCorner"); // And a block with no note has none.
+            Assert.Contains(noted.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>(), p => p.Name == "NoteDot"); // At 90 pixels an hour half an hour is too narrow for the page mark.
+            Assert.DoesNotContain(Find<Border>(window, "TimelineEntry1").GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>(), p => p.Name == "NoteDot"); // And a block with no note has none.
         }
         finally { window.Close(); }
     }
@@ -143,7 +143,7 @@ public sealed class FeedbackRound5Tests
             Assert.IsType<IconGlyph>(done.Content); Assert.Equal(IconKind.Check, ((IconGlyph)done.Content!).Kind); Assert.Equal(IconKind.Clock, ((IconGlyph)reschedule.Content!).Kind);
             Assert.True(done.Width <= 32 && reschedule.Width <= 32);
             Assert.True(done.TranslatePoint(default, row)!.Value.X > row.Bounds.Width / 2); // At the right of the row.
-            Assert.NotNull(Find<Border>(window, "NotificationsPoint")); Assert.Contains("on", Find<Button>(window, "Notifications").Classes); // The bell shows pressed while it is open.
+            Assert.NotNull(Find<Canvas>(window, "NotificationsPoint")); Assert.Contains("on", Find<Button>(window, "Notifications").Classes); // The bell shows pressed while it is open.
         }
         finally { window.Close(); }
     }

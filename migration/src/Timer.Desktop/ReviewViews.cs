@@ -20,8 +20,11 @@ public static class ReviewViews
     // The hours run across the top, the blocks sit in one band under them, and for today a chip under the band names the time.
     /// <summary>The room before midnight and after the last hour, so the first and last hour labels sit fully in view.</summary>
     public const double TimelineGutter = 34;
-    // The room between the hours and the blocks (BandTop) is the row for planned meetings, which arrive with Notes; it is kept so the day does not move when they do.
-    private const double LabelRow = 22, BandTop = 92, BandHeight = 76, LaneGap = 4, TimelineHeight = 204, LabelWidth = 44, MeetingTop = 30, MeetingHeight = 56;
+    /// <summary>The room a block keeps clear each side, so the selection ring (3 pixels) round one block never lies over its neighbour: blocks are drawn this far in from their times.</summary>
+    public const double BlockInset = 3, BlockGap = 2 * BlockInset;
+    // The axis sits under the hour labels, with a clear gap before the row for planned meetings, and the blocks sit under that row. A day with no meetings has no row, so its
+    // blocks take the height of both. They always end at BandBottom, where the chip that names the time hangs under them.
+    private const double LabelRow = 22, AxisY = LabelRow + 6, MeetingTop = 44, MeetingHeight = 48, BandTopWithMeetings = 102, BandTopFree = 46, BandBottom = 176, LaneGap = 4, TimelineHeight = 210, LabelWidth = 44;
     /// <summary>The corner a block has when the band holds this many lanes: the larger for one, the smaller for more.</summary>
     public static double CornerFor(int lanes, double width, double height) => Math.Min(lanes <= 1 ? BlockRadius : LaneRadius, Math.Min(width, height) / 2);
     /// <summary>How much of a block to show. One lane has the full block, two a line of duration and account, three the duration alone, and four or more the colour with the tooltip.</summary>
@@ -101,11 +104,12 @@ public static class ReviewViews
     {
         var day = model.SelectedDate;
         var pixelsPerHour = model.TimelinePixelsPerHour;
+        var planned = model.Notes.MeetingsOn(day); var bandTop = planned.Count > 0 ? BandTopWithMeetings : BandTopFree; var bandHeight = BandBottom - bandTop;
         double X(DateTime time) => TimelineGutter + (time - day).TotalHours * pixelsPerHour;
         // A little room before the first hour and after the last lets the end labels sit fully in view.
         var canvas = new Canvas { Name = "TimelineCanvas", Width = 24 * pixelsPerHour + 2 * TimelineGutter, Height = TimelineHeight, Background = Brushes.Transparent };
         var axis = new Border { Name = "TimelineAxis", Height = 1, Width = 24 * pixelsPerHour, Opacity = .8 }; axis.Classes.Add("rule");
-        Canvas.SetLeft(axis, TimelineGutter); Canvas.SetTop(axis, LabelRow + 6); canvas.Children.Add(axis);
+        Canvas.SetLeft(axis, TimelineGutter); Canvas.SetTop(axis, AxisY); canvas.Children.Add(axis);
         void Tick(double hours, double height, double opacity)
         {
             var tick = new Border { Width = 1.5, Height = height, Opacity = opacity, Tag = "Tick" }; tick.Classes.Add("rule");
@@ -152,8 +156,8 @@ public static class ReviewViews
             var isBreak = BreakAccount.Is(interval.Account);
             var end = interval.End > day.AddDays(1) ? day.AddDays(1) : interval.End;
             var duration = interval.Group is { } groupDuration ? TimeSpan.FromMinutes((double)groupDuration.Minutes) : end - interval.Start;
-            var width = Math.Max(MinimumBlockWidth, (end - interval.Start).TotalHours * pixelsPerHour - 2);
-            var height = laneCount == 1 ? BandHeight : (BandHeight - LaneGap * (laneCount - 1)) / laneCount;
+            var width = Math.Max(MinimumBlockWidth, (end - interval.Start).TotalHours * pixelsPerHour - BlockGap);
+            var height = laneCount == 1 ? bandHeight : (bandHeight - LaneGap * (laneCount - 1)) / laneCount;
             var ink = isBreak ? model.CurrentTheme.Colour("Muted") : look.Text;
             var display = model.Label(interval.Account);
             // What is written on the block depends on the room it has: the whole block, a line, the duration alone, or nothing but the colour.
@@ -215,12 +219,9 @@ public static class ReviewViews
             // A block with a note carries a small page mark in its corner, when it is wide enough for the note's first line.
             if (interval.Row is { } notedRow && detail == BlockDetail.Full && width >= 140 && !string.IsNullOrWhiteSpace(model.Editor.Note(notedRow)))
                 content.Children.Add(new IconGlyph(IconKind.Note) { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 8, 7), IsHitTestVisible = false, Opacity = .75, Name = "NoteMark" });
-            // A block too small for the page mark still shows that it has a note, with a small folded corner at the top right.
-            if (!content.Children.OfType<IconGlyph>().Any(g => g.Name == "NoteMark") && width >= 8 && !recording && !string.IsNullOrWhiteSpace(note) && (interval.Row is not null || interval.Group is not null))
-            {
-                var fold = new Avalonia.Controls.Shapes.Polygon { Name = "NoteCorner", Points = new Points { new Point(0, 0), new Point(10, 0), new Point(10, 10) }, Fill = Brush.Parse(ink), Opacity = .7, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, IsHitTestVisible = false, Width = Math.Min(10, width), Height = 10 };
-                content.Children.Add(fold);
-            }
+            // A block too small for the page mark still shows that it has a note, with a small dot at its top right, well inside the block so the selection ring never meets it.
+            if (!content.Children.OfType<IconGlyph>().Any(g => g.Name == "NoteMark") && width >= 16 && !recording && !string.IsNullOrWhiteSpace(note) && (interval.Row is not null || interval.Group is not null))
+                content.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Name = "NoteDot", Width = 7, Height = 7, Fill = Brush.Parse(ink), Opacity = .8, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Margin = new Thickness(0, 8, 8, 0), IsHitTestVisible = false });
             card.Child = content;
             var addedEarly = false;
             var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
@@ -234,7 +235,7 @@ public static class ReviewViews
             {
                 card.Tag = row; card.Name = "TimelineEntry" + model.Engine.Sessions.IndexOf(row);
                 card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { MoveMenu(model, new[] { row }), CopyMenu(model, new[] { row }), MergeMenu(model), new Separator(), DeleteMenu(model, new[] { row }) } };
-                Canvas.SetLeft(card, X(interval.Start) + 1); Canvas.SetTop(card, BandTop + lane * (height + LaneGap)); canvas.Children.Add(card); addedEarly = true;
+                Canvas.SetLeft(card, X(interval.Start) + BlockInset); Canvas.SetTop(card, bandTop + lane * (height + LaneGap)); canvas.Children.Add(card); addedEarly = true;
                 TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour, model.IsSelected(selectionSources));
             }
             if (recording)
@@ -267,19 +268,17 @@ public static class ReviewViews
                 card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { ungroup, CopyMenu(model, group.Sources), MergeMenu(model) } };
                 ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} merged entries · {model.Format(duration)}\nClick to select");
             }
-            if (!addedEarly) { Canvas.SetLeft(card, X(interval.Start) + 1); Canvas.SetTop(card, BandTop + lane * (height + LaneGap)); canvas.Children.Add(card); }
+            if (!addedEarly) { Canvas.SetLeft(card, X(interval.Start) + BlockInset); Canvas.SetTop(card, bandTop + lane * (height + LaneGap)); canvas.Children.Add(card); }
         }
         // Planned meetings sit in the row above the blocks as dashed cards, and a click on a free place in that row starts a new one. A meeting is planned time:
         // it is never counted as tracked time, and a block under it is not affected.
         {
             var lane = new Border { Name = "MeetingLane", Width = 24 * pixelsPerHour, Height = MeetingHeight, Background = Brushes.Transparent, CornerRadius = new CornerRadius(12), Cursor = new Cursor(StandardCursorType.Arrow) };
             lane.Classes.Add("meetingLane");
-            var hint = new TextBlock { Text = "+ Add a meeting", FontSize = 12, FontWeight = FontWeight.SemiBold, Opacity = 0, IsHitTestVisible = false, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-            hint.Classes.Add("muted"); lane.Child = hint;
             ToolTip.SetTip(lane, "Click a time to add a meeting");
             Avalonia.Automation.AutomationProperties.SetName(lane, "Add a meeting. Click a time in this row");
-            lane.PointerEntered += (_, _) => { hint.Opacity = .85; lane.Classes.Add("over"); };
-            lane.PointerExited += (_, _) => { hint.Opacity = 0; lane.Classes.Remove("over"); };
+            lane.PointerEntered += (_, _) => lane.Classes.Add("over");
+            lane.PointerExited += (_, _) => lane.Classes.Remove("over");
             Point? pressed = null;
             lane.PointerPressed += (_, e) => { if (e.GetCurrentPoint(lane).Properties.IsLeftButtonPressed) { pressed = e.GetPosition(canvas); e.Handled = true; } };
             lane.PointerReleased += (_, e) =>
@@ -289,7 +288,8 @@ public static class ReviewViews
                 pressed = null; e.Handled = true;
             };
             Canvas.SetLeft(lane, TimelineGutter); Canvas.SetTop(lane, MeetingTop); canvas.Children.Add(lane);
-            var planned = model.Notes.MeetingsOn(day);
+            // With no meetings the row is under the blocks, which take its height; a free place in it still starts a meeting.
+            if (planned.Count == 0) lane.ZIndex = -1;
             var places = PlaceLanes(planned.Select(m => (m, day + m.At!.Value, day + m.End!.Value)));
             foreach (var meeting in planned)
             {
@@ -319,7 +319,7 @@ public static class ReviewViews
         // For today, a line down through the band at the current time, a dot at the top and a chip under it saying what it is. It moves on every half minute while on screen.
         if (day == model.Engine.Now.Date)
         {
-            var nowLine = new Border { Name = "NowMarker", Width = 2, Height = BandHeight + 16, Tag = "NowLine", IsHitTestVisible = false, ZIndex = 10 }; nowLine.Classes.Add("nowLine");
+            var nowLine = new Border { Name = "NowMarker", Width = 2, Height = BandBottom + 8 - AxisY, Tag = "NowLine", IsHitTestVisible = false, ZIndex = 10 }; nowLine.Classes.Add("nowLine");
             var nowDot = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, Tag = "NowDot", IsHitTestVisible = false, ZIndex = 10 }; nowDot.Classes.Add("nowDot");
             var nowText = new TextBlock { FontSize = 12, FontWeight = FontWeight.SemiBold, TextAlignment = TextAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Classes = { "figures", "nowChipText" } };
             var nowChip = new Border { Name = "NowChip", Child = nowText, CornerRadius = new CornerRadius(7), Height = 20, MinWidth = 48, Padding = new Thickness(8, 0), IsHitTestVisible = false, ZIndex = 10 }; nowChip.Classes.Add("nowChip");
@@ -327,9 +327,9 @@ public static class ReviewViews
             void PlaceNow()
             {
                 var now = model.Engine.Now; var x = X(now);
-                Canvas.SetLeft(nowLine, x - 1); Canvas.SetTop(nowLine, BandTop - 8);
-                Canvas.SetLeft(nowDot, x - 5); Canvas.SetTop(nowDot, BandTop - 12);
-                nowText.Text = now.ToString("HH:mm"); Canvas.SetLeft(nowChip, x - nowChip.MinWidth / 2); Canvas.SetTop(nowChip, BandTop + BandHeight + 10);
+                Canvas.SetLeft(nowLine, x - 1); Canvas.SetTop(nowLine, AxisY);
+                Canvas.SetLeft(nowDot, x - 5); Canvas.SetTop(nowDot, AxisY - 4);
+                nowText.Text = now.ToString("HH:mm"); Canvas.SetLeft(nowChip, x - nowChip.MinWidth / 2); Canvas.SetTop(nowChip, BandBottom + 10);
             }
             PlaceNow();
             DispatcherTimer? nowTimer = null;

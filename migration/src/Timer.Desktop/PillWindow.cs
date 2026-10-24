@@ -198,9 +198,14 @@ public sealed class PillWindow : Window
     private readonly TranslateTransform drawerSlide = new();
     private DispatcherTimer? slideTimer;
     // Slides the drawer out from behind the pill, easing out over a fifth of a second. The first step is taken on a tick, so where nothing ticks (headless) it simply stands at its place.
+    /// <summary>Whether the drawer eases out. The tests switch it off: nothing ticks there, so the drawer would stay where it starts.</summary>
+    public static bool SlideEnabled { get; set; } = true;
     private void SlideOut()
     {
         slideTimer?.Stop(); var from = -(DrawerWidth - 24); var started = Environment.TickCount64;
+        // It starts hidden behind the pill, before it is first drawn, or its first frame would show it fully open.
+        if (!SlideEnabled) { drawerSlide.X = 0; return; }
+        drawerSlide.X = from;
         slideTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(8) };
         slideTimer.Tick += (_, _) =>
         {
@@ -228,7 +233,7 @@ public sealed class PillWindow : Window
     /// <summary>Opens the account drawer beside the pill. It closes when an account is chosen, with Escape, or by pressing the button again.</summary>
     public void ShowPanel()
     {
-        SetOpenLook(true); panel.HorizontalOffset = -Behind * Scale; panel.IsOpen = true; SlideOut();
+        SetOpenLook(true); panel.HorizontalOffset = -Behind * Scale; SlideOut(); panel.IsOpen = true;
     }
     // Pressing the button while the drawer is open closes it. Light dismiss has already closed it by the time the click arrives, so a close that
     // just happened from the same press is not undone by opening it again.

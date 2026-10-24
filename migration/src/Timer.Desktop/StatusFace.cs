@@ -93,7 +93,7 @@ public sealed class StatusFace : StackPanel
         // As wide as the pill inside its edge, so the tiles sit centred on whole pixels (the clock tile alone is an odd width).
         Spacing = 10; HorizontalAlignment = HorizontalAlignment.Center; Width = PillWindow.PillWidth - 2;
         stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
-        reminderLight = new Border { Name = prefix + "ReminderLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3), IsVisible = false };
+        reminderLight = new Border { Name = prefix + "ReminderLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
         Lights = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Height = 14, HorizontalAlignment = HorizontalAlignment.Center, Name = prefix + "Lights" };
         Lights.Children.Add(stateLight); Lights.Children.Add(reminderLight);
         // The clock moves between the pill and the dashboard.
@@ -160,10 +160,12 @@ public sealed class StatusFace : StackPanel
         var stateColour = ThemeColourOr(key, "#8A8F98");
         stateLight.Background = new SolidColorBrush(stateColour);
         ToolTip.SetTip(Lights, stateName); Avalonia.Automation.AutomationProperties.SetName(stateLight, stateName);
-        // The reminder light is there only while a reminder is due, and pulses. It only notifies.
-        reminderLight.IsVisible = model.ReminderDue; reminderLight.Background = new SolidColorBrush(ThemeColourOr("Accent", "#3558C8"));
+        // The reminder light is always there: blue and pulsing while a reminder is due, and a quiet grey when nothing is waiting. It only notifies.
+        var grey = ThemeColourOr("Idle", "#8A8F98");
+        reminderLight.Background = new SolidColorBrush(model.ReminderDue ? ThemeColourOr("Accent", "#3558C8") : Color.FromArgb(150, grey.R, grey.G, grey.B));
         Ui.Pulse(reminderLight, model.ReminderDue);
-        Avalonia.Automation.AutomationProperties.SetName(reminderLight, "A reminder is due");
+        var reminderWords = model.ReminderDue ? "A reminder is due" : "No reminders waiting";
+        ToolTip.SetTip(reminderLight, reminderWords); Avalonia.Automation.AutomationProperties.SetName(reminderLight, reminderWords);
         clock.Text = model.ClockText;
 
         var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);
