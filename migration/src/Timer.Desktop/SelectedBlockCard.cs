@@ -20,7 +20,7 @@ public sealed class SelectedBlockCard : Border
     public SelectedBlockCard(TimerModel model)
     {
         this.model = model; Name = "SelectedBlockCard";
-        CornerRadius = new CornerRadius(20); BorderThickness = new Thickness(1); Padding = new Thickness(18, 16);
+        CornerRadius = new CornerRadius(20); BorderThickness = new Thickness(1); Padding = new Thickness(18, 14, 18, 16);
         Classes.Add("dayCard");
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Sync(); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
@@ -62,8 +62,10 @@ public sealed class SelectedBlockCard : Border
     }
     private (Grid Header, StackPanel Actions) Header(string title, params Control[] chips)
     {
-        var header = Ui.Grid("Auto,*,Auto"); header.MinHeight = 30;
+        // A fixed height, so the title stays put whether or not there are buttons beside it (one block selected, none, or several).
+        var header = Ui.Grid("Auto,*,Auto"); header.RowDefinitions = new RowDefinitions("*"); header.Height = 30;
         var words = Ui.Horizontal(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Name = "SelectedTitle" });
+        words.VerticalAlignment = VerticalAlignment.Center;
         foreach (var chip in chips) words.Children.Add(chip);
         Ui.Put(header, words);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }; Ui.Put(header, actions, 2);

@@ -1,0 +1,174 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Headless;
+using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Timer.Core;
+using Timer.Storage;
+using Xunit;
+
+namespace Timer.Desktop.Tests;
+
+// The seventh round of feedback on the experimental build: the pill's colour and slide, the bell and the calendar, the week overview, the notes rows and the day bar.
+public sealed class FeedbackRound7Tests
+{
+    private static DateTime Day => new(2026, 10, 9);
+    private static SessionRow Row(string start, string minutes, string account = "Account one") => new(Day.ToString("yyyy-MM-dd"), account, start, "added", minutes);
+    private static TimerModel Model(string theme = "Light", bool meeting = false)
+    {
+        var engine = new TrackingEngine(clock: () => Day.AddHours(16));
+        engine.Sessions.AddRange(new[] { Row("09:00:00", "60"), Row("10:00:00", "60", "Account two") });
+        var model = new TimerModel(engine, new StoreSettings(new() { new("Account one"), new("Account two") }, false, theme, DayOfWeek.Monday)); model.CompleteSetup();
+        if (meeting) model.Notes.AddMeeting(Day, TimeSpan.FromHours(14), TimeSpan.FromHours(15), "A meeting with a name far too long to fit in its card", null, RepeatChoice.None);
+        return model;
+    }
+    private static T Find<T>(Control root, string name) where T : Control => root.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+    private static void Settle(Window window) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
+    private static void Click(Window window, string name) { Find<Button>(window, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window); }
+    private static Point Centre(Window window, Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), window)!.Value;
+    private static void Press(Window window, Point at) { window.MouseDown(at, MouseButton.Left); window.MouseUp(at, MouseButton.Left); Settle(window); }
+
+    [AvaloniaFact]
+    public void ThePillAndItsDrawerWearTheRailsColourOnDarkAndTheDrawerTakesLongerToSlide()
+    {
+        var model = Model("Dark"); var pill = new PillWindow(model); pill.Show(); var dash = new DashboardWindow(model); dash.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            Avalonia.Media.Color Of(Border b) => ((Avalonia.Media.ISolidColorBrush)b.Background!).Color;
+            Assert.Equal(Of(Find<Border>(dash, "DashboardRail")), Of(Find<Border>(pill, "PillSurface")));
+            Assert.True(PillWindow.SlideMilliseconds >= 350);
+        }
+        finally { pill.Close(); dash.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void PressingTheBellOrTheDateAgainClosesItsCardAndAPressOutsideDoesToo()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var bell = Find<Popup>(window, "NotificationsPopup"); var calendar = Find<Popup>(window, "DateCalendarPopup");
+            // As a person does it: a real press and release on the button, twice.
+            Press(window, Centre(window, Find<Button>(window, "Notifications"))); Assert.True(bell.IsOpen);
+            Press(window, Centre(window, Find<Button>(window, "Notifications"))); Assert.False(bell.IsOpen);
+            Press(window, Centre(window, Find<Button>(window, "DatePick"))); Assert.True(calendar.IsOpen);
+            Press(window, Centre(window, Find<Button>(window, "DatePick"))); Assert.False(calendar.IsOpen);
+            // A press somewhere else closes them, and so does Escape.
+            Press(window, Centre(window, Find<Button>(window, "Notifications"))); Assert.True(bell.IsOpen);
+            Press(window, new Point(300, 640)); Assert.False(bell.IsOpen);
+            Press(window, Centre(window, Find<Button>(window, "DatePick"))); Assert.True(calendar.IsOpen);
+            window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null); Settle(window); Assert.False(calendar.IsOpen);
+            // The calendar hangs from the date button by a point, like the bell's card.
+            Press(window, Centre(window, Find<Button>(window, "DatePick"))); Assert.NotEmpty(window.GetVisualDescendants().OfType<Canvas>().Where(c => c.Name == "NotificationsPoint"));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheNotesCardHasNoCountAndItsRowsAreCentredOnTheirTick()
+    {
+        var model = Model(); model.Notes.AddNote("Tidy the shared drive", null, null); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            Assert.Equal("Notes", Find<TextBlock>(window, "NotesTitle").Text);
+            var note = model.Notes.All.Single(); var tick = Find<Button>(window, "NoteDone_" + note.Id); var text = Find<TextBlock>(window, "NoteText_" + note.Id); var remove = Find<Button>(window, "NoteRemove_" + note.Id);
+            double MidY(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
+            Assert.InRange(Math.Abs(MidY(text) - MidY(tick)), 0, 1.5); Assert.InRange(Math.Abs(MidY(remove) - MidY(tick)), 0, 1.5);
+            // Ticked, the tick mark sits in the middle of its circle.
+            model.Notes.Toggle(note.Id); Settle(window);
+            var ring = Find<Button>(window, "NoteDone_" + note.Id).GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("tick"));
+            var mark = ring.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single(p => p.Name == "TickMark"); var centre = mark.Data!.Bounds.Center; var inner = ring.Bounds.Width - 2 * ring.BorderThickness.Left;
+            Assert.InRange(centre.X - inner / 2, -.4, .4); Assert.InRange(centre.Y - inner / 2, -.4, .4);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheSelectedBlockTitleStaysWhereItIsWhetherOrNotABlockIsSelected()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            double Y() => Find<TextBlock>(window, "SelectedTitle").TranslatePoint(default, window)!.Value.Y;
+            var none = Y(); model.SelectBlock(new[] { model.Engine.Sessions[0] }, false); Settle(window); var one = Y();
+            model.SelectBlock(new[] { model.Engine.Sessions[1] }, true); Settle(window); var two = Y();
+            model.ClearSelection(); Settle(window);
+            Assert.Equal(none, one, 0.5); Assert.Equal(none, two, 0.5); Assert.Equal(none, Y(), 0.5);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void AMeetingsNameSlidesOnHoverAndTheGapsAboveAndBelowTheMeetingRowAreEqual()
+    {
+        var model = Model(meeting: true); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var card = Find<Grid>(window, "TimelineMeeting" + model.Notes.All.Single().Id); var name = card.GetVisualDescendants().OfType<MarqueeText>().Single();
+            Assert.False(name.Scrolling);
+            var axis = Find<Border>(window, "TimelineAxis"); var block = Find<Border>(window, "TimelineEntry0");
+            Assert.Equal(Canvas.GetTop(card) - Canvas.GetTop(axis), Canvas.GetTop(block) - (Canvas.GetTop(card) + card.Height), 0.5);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheHalfHoursAreAsClearAsTheHours()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var ticks = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is "Tick").ToList();
+            var tall = ticks.Max(t => t.Height); var halves = ticks.Where(t => t.Height is > 5.5 and < 7).ToList();
+            Assert.NotEmpty(halves); Assert.True(halves.All(h => h.Opacity >= 1)); Assert.True(tall - halves[0].Height <= 3.5);
+            Assert.NotEmpty(window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is "HalfGuide"));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheWeekTableTotalsUseTheOrdinaryTypefaceAndTheWorkingTimeRowHasRoom()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); Settle(window); model.SetWeekAsTable(true); Settle(window);
+        try
+        {
+            var totals = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name == "WeekTableTotal").ToList();
+            Assert.NotEmpty(totals); Assert.All(totals, t => Assert.False(t.Classes.Contains("figures")));
+            var working = Find<Grid>(window, "WeekTableRow_Workingtime"); var account = Find<Grid>(window, "WeekTableRow_Accountone");
+            Assert.True(working.Bounds.Height >= account.Bounds.Height + 8);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheWeekChartKeepsTheCountsInViewAndTheScheduleWordsApartFromTheColumns()
+    {
+        var model = Model(); model.Notes.AddMeeting(Day, TimeSpan.FromHours(14), TimeSpan.FromHours(15), "Review", null, RepeatChoice.None); model.Notes.AddNote("Chase", null, Day.AddHours(18));
+        var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); Settle(window);
+        try
+        {
+            var chart = Find<Grid>(window, "WeekChart_"); var counts = Find<StackPanel>(window, "WeekDayMeetings");
+            var bottom = counts.TranslatePoint(new Point(0, counts.Bounds.Height), chart)!.Value.Y; Assert.True(bottom <= chart.Bounds.Height - 4, $"counts end at {bottom} of {chart.Bounds.Height}");
+            var label = Find<TextBlock>(window, "WeekScheduleLabel"); var last = window.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.StartsWith("WeekDay_") == true).OrderBy(b => b.TranslatePoint(default, window)!.Value.X).Last();
+            var lastRight = last.TranslatePoint(new Point(last.Bounds.Width, 0), window)!.Value.X; Assert.True(label.TranslatePoint(default, window)!.Value.X >= lastRight);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheReminderLightPulsesARingWhileAReminderIsDueAndIsStillWhenNot()
+    {
+        var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var light = Find<Border>(pill, "PillReminderLight"); Assert.False(Ui.IsPulsing(light));
+            model.Notes.AddNote("Send the budget", null, Day.AddHours(8)); Dispatcher.UIThread.RunJobs(); Assert.True(Ui.IsPulsing(light));
+            Assert.Equal(1.0, light.Opacity); // The light itself stays steady; the ring swells round it.
+        }
+        finally { pill.Close(); }
+    }
+}

@@ -44,10 +44,10 @@ public static class NoteParts
     /// <summary>The round tick that marks a note done (or not done).</summary>
     public static Button Tick(NotesModel notes, DayNote note)
     {
-        var ring = new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1.6), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) };
+        var ring = new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1.6), VerticalAlignment = VerticalAlignment.Center };
         ring.Classes.Add("tick"); ring.Classes.Set("tickDone", note.Done);
-        var button = Ui.Button("", () => notes.Toggle(note.Id), "NoteDone_" + note.Id); button.Classes.Add("pillBare"); button.Padding = new Thickness(0); button.Content = ring; button.VerticalAlignment = VerticalAlignment.Top;
-        if (note.Done) ring.Child = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse("M 5.5,10.5 L 8.8,13.8 L 14.5,7"), StrokeThickness = 2, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round, Stroke = new SolidColorBrush(Colors.White), Name = "TickMark" };
+        var button = Ui.Button("", () => notes.Toggle(note.Id), "NoteDone_" + note.Id); button.Classes.Add("pillBare"); button.Padding = new Thickness(0); button.Content = ring; button.VerticalAlignment = VerticalAlignment.Center;
+        if (note.Done) ring.Child = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse("M 3.9,8.6 L 7.2,11.9 L 12.9,5.1"), StrokeThickness = 2, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round, Stroke = new SolidColorBrush(Colors.White), Name = "TickMark" };
         Avalonia.Automation.AutomationProperties.SetName(button, "Done: " + notes.Text(note)); ToolTip.SetTip(button, note.Done ? "Not done" : "Done");
         return button;
     }

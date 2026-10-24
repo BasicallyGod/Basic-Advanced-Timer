@@ -21,6 +21,8 @@ public sealed class NotesTests
         var model = new TimerModel(engine, new StoreSettings(new() { new("Account one"), new("Account two") }, false, "Light", DayOfWeek.Monday)); model.CompleteSetup(); return model;
     }
     private static T Find<T>(Control root, string name) where T : Control => root.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+    // The notes card no longer counts its notes in its title, so the rows it lists are counted.
+    private static int Listed(Window window) => window.GetVisualDescendants().OfType<Border>().Count(b => b.Classes.Contains("noteRow"));
     private static void Settle(Window window) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
     private static void Click(Window window, string name) { Find<Button>(window, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window); }
     private static void Type(Window window, string name, string text) { Find<TextBox>(window, name).Text = text; Dispatcher.UIThread.RunJobs(); }
@@ -123,12 +125,12 @@ public sealed class NotesTests
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Assert.Equal("Notes (0)", Find<TextBlock>(window, "NotesTitle").Text); Assert.False(window.GetVisualDescendants().OfType<TextBox>().Any(t => t.Name == "NoteField"));
+            Assert.Equal(0, Listed(window)); Assert.False(window.GetVisualDescendants().OfType<TextBox>().Any(t => t.Name == "NoteField"));
             Click(window, "AddNote"); Type(window, "NoteField", "Draft the plan #Accountt");
             var suggestion = Find<Button>(window, "Suggest_Accounttwo"); suggestion.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window);
             Assert.Equal("Draft the plan", Find<TextBox>(window, "NoteField").Text); // The tag went into a chip, and the words stay.
             Click(window, "SubmitNote");
-            Assert.Equal("Notes (1)", Find<TextBlock>(window, "NotesTitle").Text); Assert.Equal("Account two", model.Notes.AccountOf(model.Notes.All.Single()));
+            Assert.Equal(1, Listed(window)); Assert.Equal("Account two", model.Notes.AccountOf(model.Notes.All.Single()));
             Assert.Equal("Note added.", Find<TextBlock>(window, "MessageText").Text); Assert.False(window.GetVisualDescendants().OfType<TextBox>().Any(t => t.Name == "NoteField")); // The form closed.
         }
         finally { window.Close(); }
@@ -162,7 +164,7 @@ public sealed class NotesTests
             Assert.True(Canvas.GetTop(card) < 92); // In the meeting row above the blocks.
             Assert.Equal(0.75 * model.TimelinePixelsPerHour - 2, card.Width, 1);
             Assert.Empty(model.Engine.Sessions); // Planned, never tracked.
-            Assert.Equal("Notes (1)", Find<TextBlock>(window, "NotesTitle").Text);
+            Assert.Equal(1, Listed(window));
         }
         finally { window.Close(); }
     }
@@ -221,7 +223,7 @@ public sealed class NotesTests
             model.Notes.AddMeeting(Day, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Stand-up", null, RepeatChoice.Day); Settle(window);
             var today = model.Notes.MeetingsOn(Day).Single();
             Click(window, "NoteRemove_" + today.Id); Assert.NotNull(Find<Border>(window, "ScopeQuestion")); Click(window, "ScopeAll");
-            Assert.Empty(model.Notes.All); Assert.Equal("Notes (0)", Find<TextBlock>(window, "NotesTitle").Text);
+            Assert.Empty(model.Notes.All); Assert.Equal(0, Listed(window));
         }
         finally { window.Close(); }
     }
@@ -253,8 +255,8 @@ public sealed class NotesTests
             Assert.True(Find<Avalonia.Controls.Primitives.Popup>(window, "ReminderHost").IsOpen);
             Click(window, "ReminderCell_20261010"); Click(window, "hourUp"); Click(window, "ReminderTime9"); Click(window, "ReminderSet");
             Assert.Equal(Day.AddDays(1).AddHours(9), NotesModel.ReminderOf(model.Notes.Find(id)!)); Assert.False(Find<Avalonia.Controls.Primitives.Popup>(window, "ReminderHost").IsOpen);
-            Assert.Equal("Notes (0)", Find<TextBlock>(window, "NotesTitle").Text); // Today's card no longer lists it.
-            model.ChangeDate(1); Settle(window); Assert.Equal("Notes (1)", Find<TextBlock>(window, "NotesTitle").Text);
+            Assert.Equal(0, Listed(window)); // Today's card no longer lists it.
+            model.ChangeDate(1); Settle(window); Assert.Equal(1, Listed(window));
             Click(window, "NoteReminder_" + id); Click(window, "ReminderRemove");
             Assert.False(model.Notes.Find(id)!.HasDate); Assert.Null(NotesModel.ReminderOf(model.Notes.Find(id)!));
         }

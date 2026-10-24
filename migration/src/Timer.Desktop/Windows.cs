@@ -253,12 +253,15 @@ public sealed class DashboardWindow : Window
         Ui.Put(nav, workspaceTitle); headerRow = nav;
         date.Width = 124; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
         // Pressing the date opens a calendar to jump to any day, so a day weeks away is one click instead of many arrows.
-        datePick = Ui.Ctl("DatePick", null, null, "Pick a day", () => { });
+        datePick = Ui.Ctl("DatePick", null, null, "Pick a day", () => dateCalendar.IsOpen = !dateCalendar.IsOpen);
         datePick.Width = double.NaN; datePick.Padding = new Thickness(12, 0); datePick.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), date);
-        var datePicker = new SoftDatePicker { Name = "DateCalendar" }; var dateFlyout = new Flyout { Content = datePicker, Placement = Avalonia.Controls.PlacementMode.Bottom };
-        dateFlyout.Opening += (_, _) => datePicker.View(model.SelectedDate, model.SelectedDate);
-        datePicker.DayPicked += picked => { dateFlyout.Hide(); model.GoToDate(picked, weekMode); };
-        datePick.Flyout = dateFlyout;
+        // The calendar hangs from the date button by a point, like the bell's card, and the same button closes it again.
+        var datePicker = new SoftDatePicker { Name = "DateCalendar", BoxShadow = Avalonia.Media.BoxShadows.Parse("0 10 28 0 #29141E46") }; datePicker.Classes.Add("flyoutCard");
+        dateCalendar = new Popup { Placement = Avalonia.Controls.PlacementMode.Bottom, Name = "DateCalendarPopup", PlacementTarget = datePick, Child = HangingCard.Hang(datePicker, -1), VerticalOffset = 2 };
+        HangingCard.CloseOnOutsidePress(dateCalendar, datePick);
+        dateCalendar.Opened += (_, _) => { datePicker.View(model.SelectedDate, model.SelectedDate); datePick.Classes.Set("on", true); };
+        dateCalendar.Closed += (_, _) => { if (((Avalonia.LogicalTree.ILogical)datePick).IsAttachedToLogicalTree) datePick.Classes.Set("on", false); };
+        datePicker.DayPicked += picked => { dateCalendar.IsOpen = false; model.GoToDate(picked, weekMode); };
         previous = Ui.Ctl("PreviousPeriod", null, IconKind.Previous, "Previous day or week", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); });
         next = Ui.Ctl("NextPeriod", null, IconKind.Next, "Next day or week", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); });
         todayButton = Ui.Ctl("GoToToday", "Today", IconKind.Today, "Back to today", () => { if (weekMode) model.GoToDate(model.Engine.Now.Date, true); else model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days); });
@@ -269,14 +272,15 @@ public sealed class DashboardWindow : Window
         bellBadgeText.Bind(TextBlock.ForegroundProperty, bellBadgeText.GetResourceObservable("Panel"));
         bellBadge = new Border { Name = "NotificationsBadge", MinWidth = 18, Height = 18, CornerRadius = new CornerRadius(9), Padding = new Thickness(4, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, -6, -6, 0), IsHitTestVisible = false, IsVisible = false, Child = bellBadgeText }; bellBadge.Classes.Add("badge");
-        bellPopup = new Popup { Placement = PlacementMode.BottomEdgeAlignedRight, IsLightDismissEnabled = true, Name = "NotificationsPopup" };
-        bellPopup.Opened += (_, _) => bell.Classes.Set("on", true); bellPopup.Closed += (_, _) => { bellClosedAt = Environment.TickCount64; if (((Avalonia.LogicalTree.ILogical)bell).IsAttachedToLogicalTree) bell.Classes.Set("on", false); };
+        bellPopup = new Popup { Placement = PlacementMode.BottomEdgeAlignedRight, Name = "NotificationsPopup" }; HangingCard.CloseOnOutsidePress(bellPopup, bell);
+        bellPopup.Opened += (_, _) => bell.Classes.Set("on", true); bellPopup.Closed += (_, _) => { if (((Avalonia.LogicalTree.ILogical)bell).IsAttachedToLogicalTree) bell.Classes.Set("on", false); };
         var bellHost = new Grid { Name = "NotificationsHost" }; bellHostPanel = bellHost; bellHost.Children.Add(bell); bellHost.Children.Add(bellBadge); bellHost.Children.Add(bellPopup); bellPopup.PlacementTarget = bell;
         searchBox = new TextBox { Name = "NotesSearch", Watermark = "Search notes", Width = 240, Height = 38, MinHeight = 38, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(34, 0, 8, 0) };
         searchBox.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && notesPage is not null) notesPage.Query = searchBox.Text ?? ""; };
         var searchGrid = new Grid { Width = 240 }; searchGrid.Children.Add(searchBox); searchGrid.Children.Add(new IconGlyph(IconKind.Search) { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(11, 0, 0, 0), IsHitTestVisible = false, Opacity = .7 });
         searchHost = searchGrid;
-        var steps = Ui.Horizontal(searchHost, previous, datePick, next, todayButton, bellHost); steps.Spacing = 8;
+        var dateHost = new Grid { Children = { datePick, dateCalendar } };
+        var steps = Ui.Horizontal(searchHost, previous, dateHost, next, todayButton, bellHost); steps.Spacing = 8;
         Ui.Put(nav, steps, 1);
         // Settings is a gear at the top right, which also closes it again.
         settingsRail = Ui.Ctl("Settings", null, IconKind.Gear, "Settings", ShowSettings); settingsRail.Margin = new Thickness(8, 0, 0, 0);
@@ -445,7 +449,6 @@ public sealed class DashboardWindow : Window
     // The day's figures in one line under the timeline: the working time (the clock), what is on accounts and what is not, and any overtime.
     // The day's figures under the timeline: Working time (red once over the schedule), a bar of the scheduled day, then Allocated, Unallocated, Breaks and Overtime.
     private readonly TextBlock breaksValue = Value(); private readonly Border dayBar = new() { Name = "DayBar", Width = 150, Height = 10, CornerRadius = new CornerRadius(5), ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock noSchedule = new() { Name = "NoSchedule", Text = "Nothing is scheduled. Only tracked time counts.", FontSize = 12, TextWrapping = Avalonia.Media.TextWrapping.Wrap, MaxWidth = 170, VerticalAlignment = VerticalAlignment.Center, Classes = { "muted" } };
     private Control BuildTotals()
     {
         Control Stat(string label, TextBlock value, string name, Control? dot = null)
@@ -458,7 +461,7 @@ public sealed class DashboardWindow : Window
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, Name = "DayTotals", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         workingValue.Name = "TotalsWorkingValue";
         strip.Children.Add(Stat("Working time", workingValue, "TotalsWorking"));
-        strip.Children.Add(dayBar); strip.Children.Add(noSchedule);
+        strip.Children.Add(dayBar);
         strip.Children.Add(Stat("Allocated", allocatedValue, "TotalsAllocated"));
         strip.Children.Add(Stat("Unallocated", unallocatedValue, "TotalsUnallocated"));
         var amber = new Avalonia.Controls.Shapes.Ellipse { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center }; amber.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, amber.GetResourceObservable("Break"));
@@ -479,14 +482,21 @@ public sealed class DashboardWindow : Window
         overtimeValue.Text = model.Format(totals.Overtime); overtimeStat.IsVisible = totals.Overtime > TimeSpan.Zero;
         workingValue.Classes.Set("overtimeText", totals.Overtime > TimeSpan.Zero);
         var scheduled = plan.Working ? plan.End - plan.Start : TimeSpan.Zero;
-        dayBar.IsVisible = scheduled > TimeSpan.Zero; noSchedule.IsVisible = scheduled <= TimeSpan.Zero;
-        if (scheduled > TimeSpan.Zero)
+        // The bar is always there and always the same width, so the figures beside it never move from one day to the next. A day with nothing scheduled and no time
+        // shows an empty track; a day with time but no schedule (a weekend) shows the time on it, all of it as working time.
+        var breaks = model.BreakTimeOn(shown);
+        if (scheduled <= TimeSpan.Zero && working + breaks <= TimeSpan.Zero)
+        {
+            dayBar.Child = null; dayBar.Classes.Add("track");
+            ToolTip.SetTip(dayBar, "Nothing is scheduled. Only tracked time counts."); Avalonia.Automation.AutomationProperties.SetName(dayBar, "Nothing is scheduled or recorded");
+        }
+        else
         {
             // The bar is as long as the longer of the schedule and the time worked, so overtime has room at the end.
-            var breaks = model.BreakTimeOn(shown);
             var whole = Math.Max(scheduled.TotalSeconds, working.TotalSeconds + breaks.TotalSeconds);
-            var allocatedPart = Math.Min(totals.Allocated.TotalSeconds, Math.Min(working.TotalSeconds, scheduled.TotalSeconds));
-            var unallocatedPart = Math.Max(0, Math.Min(scheduled.TotalSeconds, working.TotalSeconds) - allocatedPart);
+            var reach = scheduled > TimeSpan.Zero ? scheduled.TotalSeconds : working.TotalSeconds;
+            var allocatedPart = Math.Min(totals.Allocated.TotalSeconds, Math.Min(working.TotalSeconds, reach));
+            var unallocatedPart = Math.Max(0, Math.Min(reach, working.TotalSeconds) - allocatedPart);
             var overtimePart = totals.Overtime.TotalSeconds;
             var breaksPart = breaks.TotalSeconds;
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{allocatedPart:0.###}*,{unallocatedPart:0.###}*,{breaksPart:0.###}*,{overtimePart:0.###}*,{Math.Max(0, whole - allocatedPart - unallocatedPart - breaksPart - overtimePart):0.###}*") };
@@ -498,7 +508,7 @@ public sealed class DashboardWindow : Window
             }
             grid.Children.Add(Part("Allocated", 0)); grid.Children.Add(Part("Unallocated", 1, true)); grid.Children.Add(Part("Breaks", 2)); grid.Children.Add(Part("Overtime", 3));
             dayBar.Child = grid; dayBar.Classes.Add("track");
-            ToolTip.SetTip(dayBar, $"Scheduled {plan.Start:HH:mm} to {plan.End:HH:mm}. Allocated {model.Format(totals.Allocated)}, unallocated {model.Format(totals.Unallocated)}, breaks {model.Format(breaks)}" + (totals.Overtime > TimeSpan.Zero ? $", overtime {model.Format(totals.Overtime)}." : "."));
+            ToolTip.SetTip(dayBar, (scheduled > TimeSpan.Zero ? $"Scheduled {plan.Start:HH:mm} to {plan.End:HH:mm}. " : "Nothing is scheduled. ") + $"Allocated {model.Format(totals.Allocated)}, unallocated {model.Format(totals.Unallocated)}, breaks {model.Format(breaks)}" + (totals.Overtime > TimeSpan.Zero ? $", overtime {model.Format(totals.Overtime)}." : "."));
             Avalonia.Automation.AutomationProperties.SetName(dayBar, $"The scheduled day, {model.Format(working)} worked");
         }
     }
@@ -556,21 +566,14 @@ public sealed class DashboardWindow : Window
     public void SelectTab(bool showWeek) { settingsMode = false; notesMode = false; weekMode = showWeek; Refresh(true); }
     /// <summary>Shows the Notes page.</summary>
     public void ShowNotes() { settingsMode = false; weekMode = false; notesMode = true; Refresh(true); }
-    private long bellClosedAt;
+    private Popup dateCalendar = null!;
     private void ToggleBell()
     {
         if (bellPopup.IsOpen) { bellPopup.IsOpen = false; return; }
-        // Light dismiss has already closed the card by the time a press on the bell is clicked, so the press that closed it must not open it again.
-        if (Environment.TickCount64 - bellClosedAt < 300) return;
         // The card hangs from a point under the bell, so it reads as coming from it: a small triangle of the card's own fill over its top edge, with only its two slanted
         // sides drawn in the line colour, so the card's border runs into it. The room round the card is for its shadow.
-        var flyout = new NotificationsFlyout(model) { Margin = new Thickness(8, 9, 8, 12) };
-        var fill = new Avalonia.Controls.Shapes.Path { Data = Avalonia.Media.Geometry.Parse("M0,10 L10,0 L20,10 Z") };
-        fill.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, fill.GetResourceObservable("Panel"));
-        var edges = new Avalonia.Controls.Shapes.Path { Data = Avalonia.Media.Geometry.Parse("M0.5,10.5 L10,1 L19.5,10.5"), StrokeThickness = 1.2, StrokeJoin = Avalonia.Media.PenLineJoin.Round, StrokeLineCap = Avalonia.Media.PenLineCap.Round };
-        edges.Bind(Avalonia.Controls.Shapes.Shape.StrokeProperty, edges.GetResourceObservable("Line"));
-        var point = new Canvas { Name = "NotificationsPoint", Width = 20, Height = 11, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 8 + Math.Max(38, bell.Bounds.Width) / 2 - 10, 0), IsHitTestVisible = false, Children = { fill, edges } };
-        bellPopup.Child = new Grid { Children = { flyout, point } }; bellPopup.HorizontalOffset = 8; bellPopup.VerticalOffset = 2; bellPopup.IsOpen = true;
+        var flyout = new NotificationsFlyout(model);
+        bellPopup.Child = HangingCard.Hang(flyout, Math.Max(38, bell.Bounds.Width) / 2); bellPopup.HorizontalOffset = 8; bellPopup.VerticalOffset = 2; bellPopup.IsOpen = true;
     }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     // "19 – 25 Oct", or "28 Sep – 4 Oct" when the week crosses a month.

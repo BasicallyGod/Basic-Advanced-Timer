@@ -26,11 +26,11 @@ public sealed class TimelineSpineTests
             Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "TimelineAxis");
             int Ticks() => window.GetVisualDescendants().OfType<Border>().Count(b => b.Tag is "Tick");
             model.SetTimelineScale(80, 200, 0); Dispatcher.UIThread.RunJobs(); using var f0 = window.CaptureRenderedFrame();
-            Assert.Equal(24, Ticks()); // One for each hour when zoomed out.
+            Assert.Equal(48, Ticks()); // An hour and a half hour each, even when zoomed out, so the half hours can always be read.
             model.SetTimelineScale(160, 200, 0); Dispatcher.UIThread.RunJobs(); using var f1 = window.CaptureRenderedFrame();
-            Assert.Equal(48, Ticks()); // Halves appear.
+            Assert.Equal(48, Ticks());
             model.SetTimelineScale(400, 200, 0); Dispatcher.UIThread.RunJobs(); using var f2 = window.CaptureRenderedFrame();
-            Assert.Equal(96, Ticks()); // And quarters.
+            Assert.Equal(96, Ticks()); // And quarters when zoomed in.
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Ellipse>(), e => e.Tag is "SpineDot"); // The block's own edge strip already carries the account colour.
         }
         finally { window.Close(); }

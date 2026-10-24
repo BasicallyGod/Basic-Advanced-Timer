@@ -17,7 +17,7 @@ public sealed record WeekDay(DateTime Date, bool IsToday, bool Off, bool HasTime
 
 /// <summary>The week for the totals strip and the chart.</summary>
 public sealed record WeekFigures(DateTime Start, IReadOnlyList<WeekDay> Days, TimeSpan Working, TimeSpan Allocated, TimeSpan Unallocated, TimeSpan Breaks,
-    TimeSpan Overtime, TimeSpan Scheduled, TimeSpan? Change, bool Current);
+    TimeSpan Overtime, TimeSpan Scheduled, bool Current);
 
 /// <summary>The Week overview page, as the mock draws it: a totals strip, the day chart or table, and the accounts with their budgets and pace.</summary>
 public static class WeekOverview
@@ -58,9 +58,7 @@ public static class WeekOverview
         var unallocated = working7 - allocatedWeek; if (unallocated < TimeSpan.Zero) unallocated = TimeSpan.Zero;
         var breaks = week.Aggregate(TimeSpan.Zero, (sum, d) => sum + model.BreakTimeOn(d));
         var scheduled = week.Aggregate(TimeSpan.Zero, (sum, d) => engine.Plan(d) is { Working: true } p ? sum + (p.End - p.Start) : sum);
-        var last = weekStart.AddDays(-7).Date; var before = Enumerable.Range(0, 7).Aggregate(TimeSpan.Zero, (sum, i) => sum + WorkingOn(last.AddDays(i)));
-        return new WeekFigures(weekStart, days, working7, allocatedWeek, unallocated, breaks, overtime, scheduled, before > TimeSpan.Zero ? working7 - before : null,
-            today >= weekStart && today < weekStart.AddDays(7));
+        return new WeekFigures(weekStart, days, working7, allocatedWeek, unallocated, breaks, overtime, scheduled, today >= weekStart && today < weekStart.AddDays(7));
     }
 
     public static Control Build(TimerModel model)
@@ -97,8 +95,7 @@ public static class WeekOverview
     {
         var overtime = w.Overtime > TimeSpan.Zero;
         var big = Ui.Text(model.Format(w.Working), 34, overtime ? "overtime" : null); big.Classes.Add("clock"); big.Name = "WeekWorking";
-        var change = Ui.Text(w.Change is { } c ? (c >= TimeSpan.Zero ? "+" : "–") + model.FormatShort(c.Duration()) + " on last week" : "", 11, "muted"); change.Name = "WeekChange"; change.MinHeight = 14;
-        var left = new StackPanel { MinWidth = 128, VerticalAlignment = VerticalAlignment.Center }; left.Children.Add(Ui.Text("Working time", 11, "muted")); left.Children.Add(big); left.Children.Add(change);
+        var left = new StackPanel { MinWidth = 128, VerticalAlignment = VerticalAlignment.Center }; left.Children.Add(Ui.Text("Working time", 11, "muted")); left.Children.Add(big);
 
         var gap = w.Scheduled - w.Working;
         var rightWords = w.Current ? model.FormatShort(gap > TimeSpan.Zero ? gap : TimeSpan.Zero) + " to go"
@@ -143,7 +140,8 @@ public static class WeekOverview
         var tile = Tile(body, new Thickness(18, 12, 18, 10)); tile.Name = "WeekByDay"; return tile;
     }
 
-    private const double ChartHeight = 216, BelowBars = 46, Gutter = 44;
+    // BelowBars is the room under the columns for the day name and the meeting and task counts, which are never cut off; the schedule line has a gutter of its own at the right so its words never meet a day's total.
+    private const double ChartHeight = 232, BelowBars = 62, Gutter = 44, RightGutter = 58;
     private static Control Chart(TimerModel model, WeekFigures w)
     {
         var british = CultureInfo.GetCultureInfo("en-GB");
@@ -162,13 +160,13 @@ public static class WeekOverview
         if (schedule > TimeSpan.Zero)
         {
             var at = BelowBars + schedule.TotalHours * perHour;
-            chart.Children.Add(new Border { Name = "WeekScheduleLine", Height = 1.5, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(Gutter, 0, 0, at), Opacity = .7,
+            chart.Children.Add(new Border { Name = "WeekScheduleLine", Height = 1.5, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(Gutter, 0, RightGutter - 4, at), Opacity = .7,
                 Background = new DrawingBrush { Stretch = Stretch.None, TileMode = TileMode.Tile, DestinationRect = new RelativeRect(0, 0, 7, 1.5, RelativeUnit.Absolute),
                     Drawing = new GeometryDrawing { Brush = muted, Geometry = new RectangleGeometry(new Rect(0, 0, 4, 1.5)) } } });
-            var label = new TextBlock { Name = "WeekScheduleLabel", Text = "Schedule " + model.FormatShort(schedule), FontSize = 11, Foreground = muted, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 2, at + 3) };
+            var label = new TextBlock { Name = "WeekScheduleLabel", Text = "Schedule\n" + model.FormatShort(schedule), FontSize = 11, Foreground = muted, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, at - 14) };
             chart.Children.Add(label);
         }
-        var columns = new Grid { Margin = new Thickness(Gutter, 0, 0, 0) };
+        var columns = new Grid { Margin = new Thickness(Gutter, 0, RightGutter, 0) };
         for (var i = 0; i < w.Days.Count; i++)
         {
             columns.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
@@ -204,15 +202,15 @@ public static class WeekOverview
         if (d.Marked) label.Children.Add(new Border { Name = "WeekDayMarker", Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Brush(model, "Ink"), VerticalAlignment = VerticalAlignment.Center });
         label.Margin = new Thickness(0, 6, 0, 0);
 
-        var counts = Ui.Horizontal(); counts.Spacing = 8; counts.Height = 14; counts.HorizontalAlignment = HorizontalAlignment.Center; counts.Margin = new Thickness(0, 2, 0, 0);
-        if (d.Meetings > 0) { var m = Ui.Horizontal(new IconGlyph(IconKind.Today) { Width = 12, Height = 12 }, Ui.Text(d.Meetings.ToString(), 11, "muted")); m.Spacing = 3; m.Name = "WeekDayMeetings"; counts.Children.Add(m); }
-        if (d.Tasks > 0) { var t = Ui.Horizontal(new IconGlyph(IconKind.Note) { Width = 12, Height = 12 }, Ui.Text(d.Tasks.ToString(), 11, "muted")); t.Spacing = 3; t.Name = "WeekDayTasks"; counts.Children.Add(t); }
+        var counts = Ui.Horizontal(); counts.Spacing = 8; counts.HorizontalAlignment = HorizontalAlignment.Center; counts.Margin = new Thickness(0, 2, 0, 8);
+        if (d.Meetings > 0) { var m = Ui.Horizontal(new IconGlyph(IconKind.Today) { Width = 12, Height = 12 }, Ui.Text(d.Meetings.ToString(), 11, "muted")); m.Spacing = 5; m.Name = "WeekDayMeetings"; counts.Children.Add(m); }
+        if (d.Tasks > 0) { var t = Ui.Horizontal(new IconGlyph(IconKind.Note) { Width = 12, Height = 12 }, Ui.Text(d.Tasks.ToString(), 11, "muted")); t.Spacing = 5; t.Name = "WeekDayTasks"; counts.Children.Add(t); }
 
         var bottom = new Grid { RowDefinitions = new RowDefinitions("*,Auto,Auto,Auto,Auto,Auto") };
         void Row(Control c, int r) { Grid.SetRow(c, r); bottom.Children.Add(c); }
         Row(total, 1); Row(cap, 2); Row(body, 3); Row(label, 4); Row(counts, 5);
         // The label and the counts always take the same room, so the columns stand on one line whatever they carry.
-        label.MinHeight = 22; counts.MinHeight = 14;
+        label.MinHeight = 22; counts.MinHeight = 17;
         var button = new Button { Name = "WeekDay_" + d.Date.ToString("yyyyMMdd"), Content = bottom, Padding = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Bottom };
         button.Classes.Add("weekDay");
         button.Click += (_, _) => model.OpenDayInTimeline(d.Date);
@@ -253,7 +251,8 @@ public static class WeekOverview
         var count = grid.Headers.Length - 2;
         var columns = "26,1.5*," + string.Join(",", Enumerable.Repeat("*", count)) + ",64";
         var holder = new StackPanel { Name = "WeekTableView" };
-        Grid Line(double height) { var g = Ui.Grid(columns); g.MinHeight = height; return g; }
+        // One stretching row, so the words sit in the middle of a tall line.
+        Grid Line(double height) { var g = Ui.Grid(columns); g.RowDefinitions = new RowDefinitions("*"); g.MinHeight = height; return g; }
         var heads = Line(26);
         Ui.Put(heads, Ui.Text("Account", 12, "muted"), 1);
         for (var i = 0; i < count; i++) { var h = Ui.Text(grid.Headers[i + 1].Split(' ')[0] + " " + int.Parse(grid.Headers[i + 1].Split(' ')[1][..2]), 12, "muted"); h.HorizontalAlignment = HorizontalAlignment.Right; Ui.Put(heads, h, 2 + i); }
@@ -261,46 +260,37 @@ public static class WeekOverview
         var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
         foreach (var row in grid.Rows.Where(r => r.Label != WeekTable.AllocatedLabel && r.Label != WeekTable.BreaksLabel))
         {
-            var heavy = row.Label == WeekTable.WorkingLabel; var line = Line(28); line.Name = "WeekTableRow_" + row.Label.Replace(" ", "");
-            var cell = new Border { BorderThickness = new Thickness(0, heavy ? 2 : 1, 0, 0), Child = line }; cell.BorderBrush = Brush(model, heavy ? "Line" : "Hover");
+            var heavy = row.Label == WeekTable.WorkingLabel; var line = Line(heavy ? 40 : 28); line.Name = "WeekTableRow_" + row.Label.Replace(" ", "");
+            var cell = new Border { BorderThickness = new Thickness(0, heavy ? 2 : 1, 0, 0), Child = line, Margin = new Thickness(0, heavy ? 4 : 0, 0, 0) }; cell.BorderBrush = Brush(model, heavy ? "Line" : "Hover");
             var account = accounts.FirstOrDefault(a => a.Display == row.Label);
             if (account is not null) Ui.Put(line, new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = new SolidColorBrush(Color.Parse(model.ChartColour(account.Colour))), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center });
             else if (row.Label == WeekTable.UnallocatedLabel) Ui.Put(line, new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = ReviewViews.Hatch(model), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center });
             var name = Ui.Text(row.Label, 13.5); name.FontWeight = heavy ? FontWeight.Bold : row.Label == WeekTable.UnallocatedLabel ? FontWeight.Normal : FontWeight.Medium; name.TextTrimming = TextTrimming.CharacterEllipsis; name.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, name, 1);
-            for (var i = 0; i < count; i++) { var t = Ui.Text(row.Cells[i], 13, "muted"); t.Classes.Add("figures"); t.HorizontalAlignment = HorizontalAlignment.Right; t.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, t, 2 + i); }
-            var sum = Ui.Text(row.Total, 13, null); sum.FontWeight = FontWeight.SemiBold; sum.Classes.Add("figures"); sum.HorizontalAlignment = HorizontalAlignment.Right; sum.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, sum, 2 + count);
+            for (var i = 0; i < count; i++) { var t = Ui.Text(row.Cells[i], 13, heavy ? null : "muted"); t.Classes.Add("figures"); t.HorizontalAlignment = HorizontalAlignment.Right; t.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, t, 2 + i); }
+            // The totals are in the ordinary typeface, semibold: the display face at a heavy weight was hard to read at this size.
+            var sum = Ui.Text(row.Total, 13.5, null); sum.FontWeight = heavy ? FontWeight.Bold : FontWeight.SemiBold; sum.HorizontalAlignment = HorizontalAlignment.Right; sum.VerticalAlignment = VerticalAlignment.Center; sum.Name = "WeekTableTotal"; Ui.Put(line, sum, 2 + count);
             holder.Children.Add(cell);
         }
         return holder;
     }
 
-    // ---- By account: the week, its share, the budget over its own period and a word for the pace ----
+    // ---- By account: the week's time and the budget, kept to what can be read at a glance. The share of the week and the pace word are in the hover detail. ----
     private static Control ByAccount(TimerModel model, WeekFigures w, WeekTable grid)
     {
-        var tile = new StackPanel { Name = "WeekByAccount" };
-        var head = Ui.Grid("*,Auto"); var title = Ui.Text("By account", 15); title.FontWeight = FontWeight.SemiBold; Ui.Put(head, title);
-        Ui.Put(head, Ui.Text("Budget used over its period, and whether you are ahead of it", 12, "muted"), 1); tile.Children.Add(head);
-        const string columns = "26,*,64,48,170,150,92";
-        var heads = Ui.Grid(columns); heads.Margin = new Thickness(0, 6, 0, 2);
-        Ui.Put(heads, Ui.Text("Account", 12, "muted"), 1);
-        var thisWeek = Ui.Text("This week", 12, "muted"); thisWeek.HorizontalAlignment = HorizontalAlignment.Right; Ui.Put(heads, thisWeek, 2);
-        var share = Ui.Text("Share", 12, "muted"); share.HorizontalAlignment = HorizontalAlignment.Right; Ui.Put(heads, share, 3);
-        var budgetHead = Ui.Text("Budget", 12, "muted"); budgetHead.Margin = new Thickness(18, 0, 0, 0); Ui.Put(heads, budgetHead, 4);
-        var paceHead = Ui.Text("Pace", 12, "muted"); paceHead.HorizontalAlignment = HorizontalAlignment.Right; Ui.Put(heads, paceHead, 6);
-        tile.Children.Add(heads);
+        var tile = new StackPanel { Name = "WeekByAccount", Spacing = 2 };
+        var title = Ui.Text("By account", 15); title.FontWeight = FontWeight.SemiBold; title.Margin = new Thickness(0, 0, 0, 6); tile.Children.Add(title);
+        const string columns = "26,1.2*,64,18,2*,200";
         var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
         var weekEnd = w.Start.AddDays(7);
         foreach (var account in accounts)
         {
-            var time = grid.Rows.First(r => r.Label == account.Display);
             var week = Enumerable.Range(0, 7).Aggregate(TimeSpan.Zero, (sum, i) => sum + model.OnDay(account, w.Start.AddDays(i)));
-            var line = Ui.Grid(columns); line.Height = 30; line.Name = "WeekAccount_" + account.Name.Replace(" ", "");
-            var row = new Border { BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = Brush(model, "Hover"), Child = line, Padding = new Thickness(0, 0, 0, 0) };
+            var line = Ui.Grid(columns); line.Height = 34; line.Name = "WeekAccount_" + account.Name.Replace(" ", "");
+            var row = new Border { BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = Brush(model, "Hover"), Child = line };
             Ui.Put(line, new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = new SolidColorBrush(Color.Parse(model.ChartColour(account.Colour))), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center });
             var name = Ui.Text(account.Display, 14); name.FontWeight = FontWeight.Medium; name.TextTrimming = TextTrimming.CharacterEllipsis; name.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, name, 1);
-            var total = Ui.Text(model.FormatShort(week), 14); total.Classes.Add("figures"); total.HorizontalAlignment = HorizontalAlignment.Right; total.VerticalAlignment = VerticalAlignment.Center; total.Name = "WeekAccountTotal"; Ui.Put(line, total, 2);
-            var pct = w.Working > TimeSpan.Zero ? $"{Math.Round(week.TotalSeconds / w.Working.TotalSeconds * 100):0}%" : "–";
-            var shareText = Ui.Text(pct, 13, "muted"); shareText.Classes.Add("figures"); shareText.HorizontalAlignment = HorizontalAlignment.Right; shareText.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, shareText, 3);
+            var total = Ui.Text(model.FormatShort(week), 14); total.FontWeight = FontWeight.SemiBold; total.HorizontalAlignment = HorizontalAlignment.Right; total.VerticalAlignment = VerticalAlignment.Center; total.Name = "WeekAccountTotal"; Ui.Put(line, total, 2);
+            var pct = w.Working > TimeSpan.Zero ? $"{Math.Round(week.TotalSeconds / w.Working.TotalSeconds * 100):0}% of the week's working time" : "";
             var budget = grid.Budgets.FirstOrDefault(b => b.Account == account.Display);
             if (account.Budget is { } target && budget is not null)
             {
@@ -308,24 +298,25 @@ public static class WeekOverview
                 var (from, to) = model.BudgetWindowAt(account, reference);
                 var elapsed = Math.Clamp((Min(model.Engine.Now, Min(weekEnd, to)) - from).TotalSeconds / (to - from).TotalSeconds, 0, 1);
                 var over = budget.Fraction >= 1; var warn = budget.Fraction >= .8 && !over;
-                var track = Ui.Grid("0*,1*"); track.Height = 6; track.Margin = new Thickness(18, 0, 4, 0); track.VerticalAlignment = VerticalAlignment.Center;
+                var track = Ui.Grid("0*,1*"); track.Height = 6; track.VerticalAlignment = VerticalAlignment.Center;
                 var fraction = Math.Clamp(budget.Fraction, 0.0, 1.0);
                 track.ColumnDefinitions[0].Width = new GridLength(fraction, GridUnitType.Star); track.ColumnDefinitions[1].Width = new GridLength(1.0 - fraction, GridUnitType.Star);
                 var rest = new Border { CornerRadius = new CornerRadius(3), Height = 6 }; rest.Classes.Add("rule"); Grid.SetColumn(rest, 1);
                 var fill = new Border { CornerRadius = new CornerRadius(3), Height = 6 }; fill.Classes.Add("budgetFill"); fill.Classes.Set("budgetWarn", warn); fill.Classes.Set("budgetOver", over);
                 track.Children.Add(rest); track.Children.Add(fill); Ui.Put(line, track, 4);
-                var caption = Ui.Text($"{budget.Used} / {budget.Budget} {budget.Period.ToLowerInvariant()}", 12, over ? "overtime" : warn ? "budgetWarning" : "muted");
-                caption.Name = "BudgetCaption"; caption.Margin = new Thickness(8, 0, 0, 0); caption.TextTrimming = TextTrimming.CharacterEllipsis; caption.VerticalAlignment = VerticalAlignment.Center;
+                // One short caption: what is used of the budget, and the period only when it is not the week.
+                var period = budget.Period.Equals("This week", StringComparison.OrdinalIgnoreCase) ? "" : "  " + budget.Period.ToLowerInvariant().Replace("this ", "");
+                var caption = Ui.Text($"{budget.Used} of {budget.Budget}{period}", 12.5, over ? "overtime" : warn ? "budgetWarning" : "muted");
+                caption.Name = "BudgetCaption"; caption.Margin = new Thickness(12, 0, 0, 0); caption.TextTrimming = TextTrimming.CharacterEllipsis; caption.VerticalAlignment = VerticalAlignment.Center;
                 if (over || warn) caption.FontWeight = FontWeight.SemiBold;
-                ToolTip.SetTip(caption, $"{budget.Fraction * 100:0}% of the {budget.Period.ToLowerInvariant()} budget used, with {elapsed * 100:0}% of the period gone"); Ui.Put(line, caption, 5);
-                var pace = Ui.Text(PaceOf(used, target, elapsed, model.FormatShort), 12, over ? "overtime" : "muted"); pace.Name = "WeekPace"; pace.HorizontalAlignment = HorizontalAlignment.Right; pace.VerticalAlignment = VerticalAlignment.Center;
-                if (over) pace.FontWeight = FontWeight.SemiBold;
-                Ui.Put(line, pace, 6);
+                Ui.Put(line, caption, 5);
+                var detail = $"{budget.Fraction * 100:0}% of the {budget.Period.ToLowerInvariant()} budget used, with {elapsed * 100:0}% of the period gone. {PaceOf(used, target, elapsed, model.FormatShort)}." + (pct.Length > 0 ? " " + pct + "." : "");
+                ToolTip.SetTip(row, detail);
             }
-            else { var none = Ui.Text("No budget", 12, "muted"); none.Margin = new Thickness(18, 0, 0, 0); none.VerticalAlignment = VerticalAlignment.Center; none.Name = "WeekNoBudget"; Ui.Put(line, none, 4).SetValue(Grid.ColumnSpanProperty, 2); }
+            else { var none = Ui.Text("No budget", 12.5, "muted"); none.VerticalAlignment = VerticalAlignment.Center; none.Name = "WeekNoBudget"; Ui.Put(line, none, 4).SetValue(Grid.ColumnSpanProperty, 2); if (pct.Length > 0) ToolTip.SetTip(row, pct + "."); }
             tile.Children.Add(row);
         }
-        var box = Tile(tile, new Thickness(18, 12, 18, 10)); return box;
+        return Tile(tile, new Thickness(18, 12, 18, 10));
     }
     private static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
 }

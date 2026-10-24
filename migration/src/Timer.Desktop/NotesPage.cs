@@ -107,8 +107,8 @@ public sealed class NotesPage : Grid
     private Control Row(DayNote note)
     {
         var isMeeting = NotesModel.IsMeeting(note); var words = Notes.Text(note); var acct = Notes.AccountOf(note);
-        var line = Ui.Grid("Auto,*,Auto"); line.ColumnSpacing = 10;
-        Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) } : NoteParts.Tick(Notes, note);
+        var line = Ui.Grid("Auto,*,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
+        Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
         Ui.Put(line, lead);
         var text = new TextBlock { Text = words, FontSize = 14, TextWrapping = TextWrapping.Wrap, FontWeight = isMeeting ? FontWeight.SemiBold : FontWeight.Normal, Name = "PageNoteText_" + note.Id };
         if (note.Done) { text.TextDecorations = TextDecorations.Strikethrough; text.Classes.Add("muted"); }
@@ -118,11 +118,11 @@ public sealed class NotesPage : Grid
         if (isMeeting) Add(NoteParts.Chip(NoteDates.Day(note.Day, model.Engine.Now) + ", " + NoteParts.Span(note), "plain"));
         else if (NotesModel.ReminderOf(note) is { } due) Add(NoteParts.Chip(NoteDates.When(due, model.Engine.Now), Notes.IsLate(note) ? "late" : "accent", IconKind.Bell));
         if (isMeeting && Notes.SeriesOf(note) is { } series) Add(NoteParts.Chip(Notes.RepeatOf(note) == RepeatChoice.None ? series.Rule.Words() : NotesModel.Label(Notes.RepeatOf(note)), "quiet", IconKind.Repeat));
-        var stack = new StackPanel { Spacing = 5 }; stack.Children.Add(text); stack.Children.Add(chips);
+        var stack = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center }; stack.Children.Add(text); if (chips.Children.Count > 0) stack.Children.Add(chips);
         var main = Ui.Button("", () => Edit(note), "PageNoteOpen_" + note.Id); main.Classes.Add("pillBare"); main.Content = stack; main.Padding = new Thickness(0); main.HorizontalContentAlignment = HorizontalAlignment.Left; main.HorizontalAlignment = HorizontalAlignment.Stretch;
         Avalonia.Automation.AutomationProperties.SetName(main, (isMeeting ? "Edit meeting: " : "Edit note: ") + words);
         Ui.Put(line, main, 1);
-        var remove = Ui.IconButton(IconKind.Close, isMeeting ? "Remove meeting" : "Remove note", "PageNoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Top; Ui.Put(line, remove, 2);
+        var remove = Ui.IconButton(IconKind.Close, isMeeting ? "Remove meeting" : "Remove note", "PageNoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, remove, 2);
         var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9), Name = "PageRow_" + note.Id }; card.Classes.Add("noteRow");
         if (editing == note.Id) card.Classes.Add("rowSelected"); // The row being changed has the accent edge.
         return card;

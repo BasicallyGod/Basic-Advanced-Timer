@@ -398,7 +398,7 @@ a.ctl{text-decoration:none}
 
       <section aria-label="Notes for the day" style="position: relative; flex: 1 1 0; min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 10px">
         <div style="display: flex; align-items: center; justify-content: space-between">
-          <div style="font-size: 15px; font-weight: 600">Notes ({{noteCount}})</div>
+          <div style="font-size: 15px; font-weight: 600">Notes</div>
 <div style="display: flex; gap: 6px">
             <button class="ctl small" onClick="{{openNote}}" aria-expanded="{{noteOpen}}" style="{{noteBtnStyle}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add note</button>
             <button class="ctl small" onClick="{{openMeetingForm}}" aria-expanded="{{meetOpen}}" style="{{meetBtnStyle}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add meeting</button>
@@ -772,13 +772,13 @@ class Component extends DCLogic {
       label: dayState === 'finished' ? 'Finished 14:17' : dayState === 'dayoff' ? 'Day off' : dayState === 'fresh' ? 'Started 14:17' : 'Working time',
       work: pdur(workMin),
       workStyle: otMin > 0 ? 'color:var(--lateInk)' : '',
-      hasBar: schedMin > 0,
-      hasNoSchedule: schedMin === 0,
+      hasBar: true,
+      hasNoSchedule: false,
       allocStyle: 'height:100%;flex-shrink:0;background:var(--barNeutral);width:' + (allocMin / barTotal * 100) + '%',
       unStyle: 'height:100%;flex-shrink:0;opacity:.55;background:repeating-linear-gradient(135deg,var(--barNeutral) 0 2px,transparent 2px 5px);width:' + (unMin / barTotal * 100) + '%',
       brkStyle: 'height:100%;flex-shrink:0;background:var(--amber);width:' + (brkMin / barTotal * 100) + '%',
       otStyle: 'position:absolute;right:0;top:0;bottom:0;background:#D64545;width:' + (otMin / barTotal * 100) + '%',
-      barTip: 'Scheduled 08:30–17:30, ' + pdur(schedMin) + ' of working time. ' + pdur(workMin) + ' so far' + (otMin ? ', ' + pdur(otMin) + ' of it overtime.' : '.'),
+      barTip: (schedMin ? 'Scheduled 08:30–17:30, ' + pdur(schedMin) + ' of working time. ' : 'Nothing is scheduled. ') + pdur(workMin) + ' so far' + (otMin ? ', ' + pdur(otMin) + ' of it overtime.' : '.'),
       barAria: 'Working time ' + pdur(workMin) + ' of ' + pdur(schedMin) + ' scheduled',
       alloc: pdur(allocMin), un: pdur(unMin), brk: pdur(brkMin), hasOT: otMin > 0, ot: pdur(otMin)
     };
@@ -808,6 +808,8 @@ class Component extends DCLogic {
         lineStyle: 'position:absolute;top:22px;bottom:0;width:1px;background:var(--grid);left:' + x(h) + '%',
         labelStyle: 'position:absolute;top:0;transform:translateX(-50%);font-size:12px;color:var(--muted);left:' + x(h) + '%;font-weight:500'
       });
+      // The half hours are a tick as dark as the hours' and a faint line down through the band, so they can be read at a glance.
+      if (h < 18) hours.push({ label: '', lineStyle: 'position:absolute;top:15px;bottom:0;width:1px;background:linear-gradient(var(--muted) 0 7px,var(--grid) 7px);opacity:.75;left:' + x(h + 0.5) + '%', labelStyle: 'display:none' });
     }
     const nowX = x(nowH);
     const colours = { running: '#34D399', idle: '#8D97AE', break: '#F5A524', overtime: '#F87171' };

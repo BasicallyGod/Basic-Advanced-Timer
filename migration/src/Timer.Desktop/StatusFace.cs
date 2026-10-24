@@ -163,7 +163,7 @@ public sealed class StatusFace : StackPanel
         // The reminder light is always there: blue and pulsing while a reminder is due, and a quiet grey when nothing is waiting. It only notifies.
         var grey = ThemeColourOr("Idle", "#8A8F98");
         reminderLight.Background = new SolidColorBrush(model.ReminderDue ? ThemeColourOr("Accent", "#3558C8") : Color.FromArgb(150, grey.R, grey.G, grey.B));
-        Ui.Pulse(reminderLight, model.ReminderDue);
+        Ui.PulseRing(reminderLight, model.ReminderDue, ThemeColourOr("Accent", "#3558C8"));
         var reminderWords = model.ReminderDue ? "A reminder is due" : "No reminders waiting";
         ToolTip.SetTip(reminderLight, reminderWords); Avalonia.Automation.AutomationProperties.SetName(reminderLight, reminderWords);
         clock.Text = model.ClockText;

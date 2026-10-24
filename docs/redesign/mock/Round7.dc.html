@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tooltips and rail icons</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.pg{--bg1:#F4F4F1;--bg2:#ECECE8;--ink:#18233A;--muted:#5A6070;--line:#E2E2DD;--card:#FFFFFF;--card2:#F7F7F5;--accent:#3558C8;--soft:#E8EEFF;--hover:#EDEDEA;--tipNowBg:#2B2F38;--tipNowInk:#F2F3F5;--shadow:0 6px 18px rgba(20,30,70,.16)}
+.pg.dark{--bg1:#0F1420;--bg2:#131A2A;--ink:#EEF2FB;--muted:#A7B2CA;--line:#2D3853;--card:#1A2234;--card2:#212B42;--accent:#7C9BFF;--soft:#25335A;--hover:rgba(255,255,255,.10);--tipNowBg:#E9ECF2;--tipNowInk:#1B1F29;--shadow:0 6px 18px rgba(0,0,0,.45)}
+.pg{color-scheme:light}.pg.dark{color-scheme:dark}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:0 1px 2px rgba(30,30,20,.06)}
+.h2{font-size:15px;font-weight:600}
+.sub{font-size:12.5px;color:var(--muted);line-height:1.45}
+.cap{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.row{display:grid;grid-template-columns:150px 1fr 1fr;gap:12px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+.ctl{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-size:13px;color:var(--ink)}
+.icoBtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.tipNow{display:inline-block;max-width:250px;padding:7px 9px;border-radius:3px;background:var(--tipNowBg);color:var(--tipNowInk);font-size:12px;line-height:1.35;border:1px solid rgba(128,128,128,.4)}
+.tipNew{display:inline-flex;align-items:center;gap:8px;padding:5px 9px;border-radius:10px;background:var(--card);color:var(--ink);font-size:12.5px;font-weight:600;border:1px solid var(--line);box-shadow:var(--shadow)}
+.key{font-size:11px;font-weight:500;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:0 5px;line-height:17px}
+.none{font-size:12.5px;color:var(--muted);font-style:italic}
+.tile{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.tile.on{background:var(--soft);color:var(--accent)}
+.rail{width:72px;box-sizing:border-box;padding:12px 0;border-radius:24px;background:var(--card);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:6px}
+svg.i{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+svg.sm{width:20px;height:20px}
+</style>
+</helmet>
+<div class="pg {{modeClass}}" style="width: 1180px; height: 1560px; box-sizing: border-box; padding: 36px 32px 28px; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink); display: flex; flex-direction: column; gap: 18px">
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 700">Tooltips and rail icons</h1>
+    <p style="margin: 0; font-size: 14px; color: var(--muted); max-width: 1000px; line-height: 1.45">Two things to decide before they are built. Tooltips say too much and look like the computer's, not the app's. And the Notes button on the rail sits under the Timeline button with an icon that reads much the same.</p>
+  </div>
+
+  <div class="panel" style="padding: 20px 24px 14px">
+    <div style="display: flex; gap: 28px">
+      <div style="flex: 1; min-width: 0">
+        <div class="h2">Tooltips, now and proposed</div>
+        <div class="sub" style="margin-bottom: 8px">The same controls. The left tip is the computer's own box with a sentence in it. The right one is the app's card: panel colour, a hairline, a soft shadow, the action in a word or two, and the shortcut as a small key.</div>
+        <div class="row" style="border-top: none"><span class="cap">Control</span><span class="cap">Now</span><span class="cap">Proposed</span></div>
+        <sc-for list="{{tips}}" as="t" hint-placeholder-count="10">
+          <div class="row">
+            <div>
+              <sc-if value="{{t.isWords}}" hint-placeholder-val="{{ false }}"><span class="ctl">{{t.control}}</span></sc-if>
+              <sc-if value="{{t.isIcon}}" hint-placeholder-val="{{ false }}"><span class="icoBtn" aria-hidden="true"><svg class="i sm" viewBox="0 0 18 18"><path d="{{t.path}}"/></svg></span></sc-if>
+              <sc-if value="{{t.isPlain}}" hint-placeholder-val="{{ false }}"><span style="font-size: 13px">{{t.control}}</span></sc-if>
+            </div>
+            <div><span class="tipNow">{{t.now}}</span></div>
+            <div>
+              <sc-if value="{{t.hasNew}}" hint-placeholder-val="{{ true }}"><span class="tipNew">{{t.newWords}}<sc-if value="{{t.hasKey}}" hint-placeholder-val="{{ false }}"><span class="key">{{t.key}}</span></sc-if></span></sc-if>
+              <sc-if value="{{t.noNew}}" hint-placeholder-val="{{ false }}"><span class="none">{{t.why}}</span></sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="width: 300px; flex: none; display: flex; flex-direction: column; gap: 14px; padding-top: 2px">
+        <div class="h2">The rules</div>
+        <div class="sub"><b style="color: var(--ink)">A button with words needs no tip.</b> Add time, Undo and Copy already say what they do. The tip stays only to show a shortcut.</div>
+        <div class="sub"><b style="color: var(--ink)">An icon gets its action in one to three words.</b> Copy, Delete, Zoom out, Collapse.</div>
+        <div class="sub"><b style="color: var(--ink)">Facts are lines, never sentences.</b> A day, a budget or a bar shows its figures one to a line. The budget keeps its pace as "On pace".</div>
+        <div class="sub"><b style="color: var(--ink)">One card everywhere.</b> The same as menus and pop-ups, in both themes, with no arrow. It appears after about half a second and goes at once.</div>
+        <div class="cap" style="margin-top: 4px">A day in the week chart</div>
+        <div class="tipNew" style="display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 9px 12px; border-radius: 12px; font-weight: 400; width: 218px; box-sizing: border-box">
+          <div style="display: flex; justify-content: space-between; font-weight: 600"><span>Fri 9 Oct</span><span>08:00</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px"><span style="display: flex; align-items: center; gap: 6px"><i style="width: 8px; height: 8px; border-radius: 4px; background: #91B7D5; display: block"></i>Account one</span><span>02:30</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px"><span style="display: flex; align-items: center; gap: 6px"><i style="width: 8px; height: 8px; border-radius: 4px; background: #9CC3A6; display: block"></i>Account two</span><span>04:00</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--muted)"><span>Unallocated</span><span>01:30</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" style="padding: 20px 24px 22px">
+    <div class="h2">Rail icons</div>
+    <div class="sub" style="margin-bottom: 14px">Timeline, Week overview and Notes, from the top. Today the timeline icon is a column of lines and the Notes icon a page of lines, so the two read as the same thing. Each option below gives the three different shapes: wide, tall and upright. The first is the one I would pick.</div>
+    <div style="display: flex; gap: 22px">
+      <sc-for list="{{options}}" as="o" hint-placeholder-count="4">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; align-items: center">
+          <div class="rail">
+            <sc-for list="{{o.icons}}" as="ic" hint-placeholder-count="3">
+              <div class="{{ic.cls}}"><svg class="i" viewBox="0 0 18 18" role="img" aria-label="{{ic.name}}"><path d="{{ic.d}}"/><path d="{{ic.d2}}" style="{{ic.d2s}}"/><path d="{{ic.d3}}" style="{{ic.d3s}}"/></svg></div>
+            </sc-for>
+          </div>
+          <div style="font-size: 13.5px; font-weight: 600; text-align: center">{{o.name}}</div>
+          <div class="sub" style="text-align: center; min-height: 54px">{{o.sub}}</div>
+          <div style="display: flex; gap: 10px; color: var(--ink)">
+            <sc-for list="{{o.icons}}" as="ic" hint-placeholder-count="3">
+              <div style="width: 54px; height: 54px; border-radius: 14px; background: var(--card2); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center"><svg class="i" style="width: 34px; height: 34px" viewBox="0 0 18 18" aria-hidden="true"><path d="{{ic.d}}"/><path d="{{ic.d2}}" style="{{ic.d2s}}"/><path d="{{ic.d3}}" style="{{ic.d3s}}"/></svg></div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:1560}}">
+class Component extends DCLogic {
+  renderVals() {
+    const dark = (this.props.mode ?? 'light') === 'dark';
+    const copy = 'M6.2 6.2h7.3v7.3H6.2z M4.5 11.8V4.5h7.3';
+    const trash = 'M4 5.2h10 M7.2 5.2V3.6h3.6v1.6 M5.3 5.2l.6 9.2h6.2l.6-9.2 M7.6 7.8v4.6 M10.4 7.8v4.6';
+    const undo = 'M5.2 7.2h5.3a3.3 3.3 0 0 1 0 6.6H6.5 M7.6 4.6 5 7.2l2.6 2.6';
+    const minus = 'M4 9h10';
+    const base = { isWords: false, isIcon: false, isPlain: false, hasNew: true, noNew: false, hasKey: false, key: '', why: '', path: '', control: '' };
+    const tips = [
+      { ...base, isIcon: true, path: copy, now: 'Copy the block (Ctrl+C), then paste it on the timeline (Ctrl+V)', newWords: 'Copy', hasKey: true, key: 'Ctrl C' },
+      { ...base, isIcon: true, path: trash, now: 'Delete the selected blocks', newWords: 'Delete', hasKey: true, key: 'Del' },
+      { ...base, isWords: true, control: 'Add time', now: 'Add time to this day', hasNew: false, noNew: true, why: 'None: the button says it' },
+      { ...base, isWords: true, control: 'Undo', now: 'Undo the last change', hasNew: false, noNew: true, why: 'None: the button says it' },
+      { ...base, isWords: true, control: 'Clear selection', now: 'Clear the selection (Esc)', newWords: 'Clear selection', hasKey: true, key: 'Esc' },
+      { ...base, isIcon: true, path: minus, now: 'Zoom out', newWords: 'Zoom out' },
+      { ...base, isPlain: true, control: 'Continue earlier block', now: 'Take back the switch and carry on with the earlier block', newWords: 'Carry on the earlier block' },
+      { ...base, isPlain: true, control: 'Day bar, nothing scheduled', now: 'Nothing is scheduled. Only tracked time counts.', newWords: 'No schedule' },
+      { ...base, isPlain: true, control: 'Meeting row', now: 'Click a time to add a meeting', newWords: 'Add meeting' },
+      { ...base, isPlain: true, control: 'In tracker tick', now: 'Show this account in the tracker list', newWords: 'In tracker' },
+      { ...base, isPlain: true, control: 'Account name box', now: 'Edit the name to rename this account', hasNew: false, noNew: true, why: 'None: it is a text box' },
+      { ...base, isPlain: true, control: 'Budget row', now: '62% of the month budget used, with 45% of the period gone. On pace. 12% of the week’s working time.', newWords: '62% used · 45% of month gone · On pace' }
+    ];
+    const g = (d, d2, d3, name, on, f2, f3) => ({ d, d2: d2 || '', d3: d3 || '', d2s: f2 || '', d3s: f3 || '', name, cls: 'tile' + (on ? ' on' : '') });
+    const options = [
+      { name: 'A. Blocks, columns, page', sub: 'The day as blocks on a line, the week as columns, and a page with a tick for a note.', icons: [
+        g('M2 14.6h14 M2.5 4.8h4v7.2h-4z M8.5 4.8h2v7.2h-2z M12.5 4.8h3v7.2h-3z', '', '', 'Timeline', true),
+        g('M3.6 14V9 M7.2 14V4.6 M10.8 14V7.4 M14.4 14V3.6', '', '', 'Week overview', false),
+        g('M4.75 2.25h6l2.75 2.75v10.75h-8.75z M10.75 2.25V5h2.75', 'M6.9 10.2l1.6 1.6 3-3.5', '', 'Notes', false) ] },
+      { name: 'B. Clock, calendar, sticky note', sub: 'A clock for the day, a calendar week for the week, a square note with a fold.', icons: [
+        g('M9 2.75a6.25 6.25 0 1 0 0 12.5 6.25 6.25 0 0 0 0-12.5z', 'M9 5.5v3.7l2.5 1.5', '', 'Timeline', true),
+        g('M3 4.25h12a.75.75 0 0 1 .75.75v9.5a.75.75 0 0 1-.75.75H3a.75.75 0 0 1-.75-.75V5a.75.75 0 0 1 .75-.75z M2.25 7.75h13.5', 'M5.75 10.5h.01 M9 10.5h.01 M12.25 10.5h.01 M5.75 13h.01 M9 13h.01', 'stroke-width: 2', 'Week overview', false),
+        g('M3.5 3h11a.75.75 0 0 1 .75.75v7.5l-4 4H3.5a.75.75 0 0 1-.75-.75V3.75A.75.75 0 0 1 3.5 3z M11.25 15.25v-3a1 1 0 0 1 1-1h3', 'M5.5 6.5h6.5 M5.5 9.25h3.5', '', 'Notes', false) ] },
+      { name: 'C. Bars, schedule, checklist', sub: 'Staggered bars for the day, columns under a dashed schedule line, a checklist for notes.', icons: [
+        g('M2.5 3.5h7.5a1.2 1.2 0 0 1 1.2 1.2v.1A1.2 1.2 0 0 1 10 6H2.5z M6.8 7.5h8.2a1.2 1.2 0 0 1 0 2.5H6.8z M4.2 11.7h5.6a1.2 1.2 0 0 1 0 2.5H4.2z', '', '', 'Timeline', true),
+        g('M2.5 15.5h13 M4.5 13V9.5 M9 13V6.6 M13.5 13V8.4', 'M2.5 4.6h13', 'stroke-dasharray: 1.6 1.9; stroke-width: 1.2', 'Week overview', false),
+        g('M3 3.6h3v3H3z M8.5 5h6.5 M3 9.6h3v3H3z M8.5 11h6.5', 'M3.7 5.1l.8.8 1.2-1.4', '', 'Notes', false) ] }
+    ];
+    return { modeClass: dark ? 'dark' : '', tips: tips, options: options };
+  }
+}
+</script>
+</body>
+</html>

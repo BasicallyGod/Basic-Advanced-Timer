@@ -91,6 +91,7 @@
     <Style Selector="TextBlock.overtime"><Setter Property="Foreground" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.surface"><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
     <Style Selector=":is(Border).flyoutCard"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
+    <Style Selector="Border.pillBody"><Setter Property="Background" Value="{DynamicResource PillBody}" /></Style>
     <Style Selector="Border.panel"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
     <Style Selector="Border.rule"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Button">
@@ -210,12 +211,16 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="Cursor" Value="Hand" />
     </Style>
-    <Style Selector="Button.rail.selected /template/ ContentPresenter#PART_ContentPresenter, Button.rail.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <!-- Every state is written out, and there is no fade: the standard button's own bright hover colour showed for a moment as the pointer arrived, before the fade settled on the chosen tile's colour. -->
+    <Style Selector="Button.rail:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.rail:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Hover}" />
+    </Style>
+    <Style Selector="Button.rail.selected /template/ ContentPresenter#PART_ContentPresenter, Button.rail.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.rail.selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
     <!-- The close icon stays still, with the same soft hover surface as the other rail controls. -->
     <Style Selector="Button.quit:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
-    <Style Selector="Button.rail /template/ ContentPresenter#PART_ContentPresenter, Button.iconButton /template/ ContentPresenter#PART_ContentPresenter">
+    <Style Selector="Button.iconButton /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Transitions"><Transitions><BrushTransition Property="Background" Duration="0:0:0.2" /></Transitions></Setter>
     </Style>
     <!-- The floating message is raised off the timeline, with the accent for an outline, so it is easy to see against any block. -->

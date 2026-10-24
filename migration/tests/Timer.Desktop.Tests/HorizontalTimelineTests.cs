@@ -122,13 +122,18 @@ public sealed class HorizontalTimelineTests
     }
 
     [AvaloniaFact]
-    public void ADayWithNoScheduleSaysSoInsteadOfDrawingABar()
+    public void ADayWithNoScheduleKeepsTheBarAtTheSameWidthAndShowsTimeRecordedOnIt()
     {
         var model = Model(() => new DateTime(2026, 10, 10, 18, 0, 0)); // A Saturday, which is off by default.
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Assert.True(Find<TextBlock>(window, "NoSchedule").IsEffectivelyVisible); Assert.False(Find<Border>(window, "DayBar").IsVisible);
+            var bar = Find<Border>(window, "DayBar"); Assert.True(bar.IsVisible); Assert.Equal(150, bar.Width); Assert.Empty(window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name == "NoSchedule"));
+            Assert.Contains("Nothing is scheduled", ToolTip.GetTip(bar)!.ToString());
+            // Time recorded on a day with no schedule is drawn as working time on the bar, at the same width, with no warning that nothing is scheduled.
+            model.Engine.Sessions.Add(new SessionRow("2026-10-10", "Account one", "09:00:00", "added", "90")); model.ChangeDate(0); Settle(window);
+            Assert.Equal(150, bar.Width); Assert.NotNull(bar.Child); Assert.True(bar.GetVisualDescendants().OfType<Border>().Any(b => b.Name == "DayBarAllocated"));
+            Assert.DoesNotContain("Nothing is scheduled. Only", ToolTip.GetTip(bar)!.ToString());
         }
         finally { window.Close(); }
     }

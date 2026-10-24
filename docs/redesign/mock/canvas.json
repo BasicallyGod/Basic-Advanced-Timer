@@ -110,6 +110,13 @@
       "w": 1100,
       "x": 0,
       "y": 900
+    },
+    "Round7.dc.html": {
+      "h": 1560,
+      "title": "Round 7: tooltips and rail icons (proposals)",
+      "w": 1180,
+      "x": 3000,
+      "y": 2200
     }
   },
   "createdOnFiles": {
@@ -164,7 +171,7 @@
       "y": 330
     },
     "n3": {
-      "text": "Week overview. Working time against the scheduled week, a schedule line and overtime caps on the chart, meetings and open tasks under each day, a Chart or Table switch, and a pace note on each budget. Use the arrows or the calendar to change week, and click a day to open it in the timeline.",
+      "text": "Week overview. Working time against the scheduled week, a schedule line (its words sit in a gutter at the right) and overtime caps on the chart, meetings and open tasks under each day, a Chart or Table switch, and each account's week with its budget bar. Use the arrows or the calendar to change week, and click a day to open it in the timeline.",
       "w": 520,
       "x": -635,
       "y": 1183
@@ -212,6 +219,12 @@
       "w": 240,
       "x": 0,
       "y": -260
+    },
+    "n16": {
+      "text": "Two proposals to decide before they are built: a quieter tooltip in the app's own card style, and new rail icons so Timeline, Week overview and Notes stop looking alike. Switch Light or Dark in the Tweaks.",
+      "w": 520,
+      "x": 2400,
+      "y": 2240
     }
   },
   "order": [
@@ -228,7 +241,8 @@
     "Notes.dc.html",
     "Lights.dc.html",
     "Refine.dc.html",
-    "PillSoft.dc.html"
+    "PillSoft.dc.html",
+    "Round7.dc.html"
   ],
   "pages": [],
   "title": "Vertical pill and dashboard mock"

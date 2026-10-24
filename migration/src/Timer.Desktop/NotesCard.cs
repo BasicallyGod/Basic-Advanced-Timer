@@ -21,7 +21,7 @@ public sealed class NotesCard : Border
     private enum Form { None, Note, Meeting }
     private readonly TimerModel model;
     private NotesModel Notes => model.Notes;
-    private readonly TextBlock title = new() { FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Name = "NotesTitle" };
+    private readonly TextBlock title = new() { Text = "Notes", FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Name = "NotesTitle" };
     private readonly Button addNote, addMeeting;
     private readonly ContentControl formHost = new() { Name = "NotesForm" };
     private readonly StackPanel list = new() { Spacing = 8, Name = "NotesList" };
@@ -64,7 +64,7 @@ public sealed class NotesCard : Border
         if (signature == shown) return;
         shown = signature;
         var items = Notes.ForDay(model.SelectedDate);
-        title.Text = $"Notes ({items.Count})";
+        
         list.Children.Clear();
         if (items.Count == 0)
         {
@@ -76,11 +76,11 @@ public sealed class NotesCard : Border
     private Control Row(DayNote note)
     {
         var meeting = NotesModel.IsMeeting(note); var words = Notes.Text(note); var account = Notes.AccountOf(note);
-        var line = Ui.Grid("Auto,*,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Top;
+        var line = Ui.Grid("Auto,*,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
         // A note has a round tick; a meeting has a calendar mark instead, and is opened by its name.
-        Control lead = meeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) } : NoteParts.Tick(Notes, note);
+        Control lead = meeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
         Ui.Put(line, lead);
-        var column = new StackPanel { Spacing = 5 };
+        var column = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         if (meeting)
         {
             var name = Ui.Button(words, () => Notes.RequestEditMeeting(note.Id), "NoteEdit_" + note.Id); name.Classes.Add("flat"); name.Padding = new Thickness(0); name.FontWeight = FontWeight.SemiBold; name.FontSize = 14; name.Bind(TemplatedControl.ForegroundProperty, name.GetResourceObservable("Ink"));
@@ -105,13 +105,14 @@ public sealed class NotesCard : Border
             var chip = Ui.Button("", () => OpenReminder(note.Id), "NoteReminder_" + note.Id); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0);
             chip.Content = NoteParts.Chip(NoteDates.When(due, model.Engine.Now), late ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change the date or time"); chip.Margin = new Thickness(0, 0, 6, 4); chips.Children.Add(chip);
         }
-        column.Children.Add(chips);
+        // With no chips the words stand alone, so they are centred on the tick and the buttons rather than lifted by the gap above an empty row.
+        if (chips.Children.Count > 0) column.Children.Add(chips);
         Ui.Put(line, column, 1);
         if (!meeting && NotesModel.ReminderOf(note) is null)
         {
-            var bell = Ui.IconButton(IconKind.Bell, "Add a reminder", "NoteAddReminder_" + note.Id, () => OpenReminder(note.Id)); bell.Width = 28; bell.Height = 28; bell.VerticalAlignment = VerticalAlignment.Top; Ui.Put(line, bell, 2);
+            var bell = Ui.IconButton(IconKind.Bell, "Add a reminder", "NoteAddReminder_" + note.Id, () => OpenReminder(note.Id)); bell.Width = 28; bell.Height = 28; bell.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, bell, 2);
         }
-        var remove = Ui.IconButton(IconKind.Close, meeting ? "Remove meeting" : "Remove note", "NoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Top;
+        var remove = Ui.IconButton(IconKind.Close, meeting ? "Remove meeting" : "Remove note", "NoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center;
         Ui.Put(line, remove, 3);
         var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9) }; card.Classes.Add("noteRow");
         return card;

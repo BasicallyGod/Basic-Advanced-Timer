@@ -82,12 +82,12 @@ public sealed class PillWindow : Window
         var root = rootGrid; root.Background = Brushes.Transparent; root.Children.Add(column);
         Ui.PillGestures(root, this);
         surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true, Width = PillWidth, Height = PillHeight, BorderThickness = new Thickness(EdgeThickness) };
-        surface.Classes.Add("surface");
+        surface.Classes.Add("pillBody");
         shadowHost = Ui.Shadowed(surface, PillRadius);
         // While the drawer is open, a square of the drawer's own surface sits behind the pill's right half, so the corners the capsule cuts away show the drawer
         // tucked behind them. It lives in the pill's window, not the drawer's, so the drawer's window never lies over the pill's controls.
         drawerFiller = new Border { Name = "PillDrawerFiller", Width = PillRadius, Height = PillHeight, HorizontalAlignment = HorizontalAlignment.Right, IsVisible = false, IsHitTestVisible = false };
-        drawerFiller.Classes.Add("surface");
+        drawerFiller.Classes.Add("pillBody");
         shadowHost.Child = null; shadowHost.Child = new Grid { Children = { drawerFiller, surface } };
         Content = new LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
 
@@ -163,7 +163,7 @@ public sealed class PillWindow : Window
         var content = new AccountsPanel(model, "Pill", compact: true, reorderable: false, () => { CloseFlyouts(); model.OpenAccounts(); });
         accountScroll = content.Scroll;
         drawer = new Border { Name = "PillDrawer", Width = DrawerWidth, Height = PillHeight, Padding = new Thickness(Behind + 14, 14, 14, 12), CornerRadius = new CornerRadius(0, PillRadius, PillRadius, 0), Child = content, RenderTransform = drawerSlide };
-        drawer.Classes.Add("surface");
+        drawer.Classes.Add("pillBody");
         drawer.PointerEntered += (_, _) => overDrawer = true;
         drawer.PointerExited += (_, _) => overDrawer = false;
         // The cut-out stays put while the drawer slides, so the pill is never covered on the way.
@@ -197,9 +197,11 @@ public sealed class PillWindow : Window
     }
     private readonly TranslateTransform drawerSlide = new();
     private DispatcherTimer? slideTimer;
-    // Slides the drawer out from behind the pill, easing out over a fifth of a second. The first step is taken on a tick, so where nothing ticks (headless) it simply stands at its place.
+    // Slides the drawer out from behind the pill, easing out over SlideMilliseconds. The first step is taken on a tick, so where nothing ticks (headless) it simply stands at its place.
     /// <summary>Whether the drawer eases out. The tests switch it off: nothing ticks there, so the drawer would stay where it starts.</summary>
     public static bool SlideEnabled { get; set; } = true;
+    /// <summary>How long the drawer takes to ease out; a fifth of a second read as a snap.</summary>
+    public const double SlideMilliseconds = 420;
     private void SlideOut()
     {
         slideTimer?.Stop(); var from = -(DrawerWidth - 24); var started = Environment.TickCount64;
@@ -209,7 +211,7 @@ public sealed class PillWindow : Window
         slideTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(8) };
         slideTimer.Tick += (_, _) =>
         {
-            var t = Math.Min(1, (Environment.TickCount64 - started) / 180.0); var eased = 1 - Math.Pow(1 - t, 3);
+            var t = Math.Min(1, (Environment.TickCount64 - started) / SlideMilliseconds); var eased = 1 - Math.Pow(1 - t, 3);
             drawerSlide.X = from * (1 - eased); if (t >= 1) slideTimer?.Stop();
         };
         slideTimer.Start();

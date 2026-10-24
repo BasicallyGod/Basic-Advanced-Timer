@@ -127,6 +127,34 @@ public static class Ui
         };
         pulses.Add(control, new PulseRun(source, new RunningAnimation(animation.RunAsync(control, source.Token))));
     }
+    /// <summary>
+    /// The reminder light's pulse, as the mock draws it: a ring in <paramref name="colour"/> that starts at the light's edge and swells to seven pixels while it fades out,
+    /// every 1.8 seconds. The light itself stays steady.
+    /// </summary>
+    public static void PulseRing(Border light, bool on, Color colour)
+    {
+        if (Motion.Reduced) { if (pulses.TryGetValue(light, out var still)) { still.Source.Cancel(); pulses.Remove(light); } light.BoxShadow = default; return; }
+        if (pulses.TryGetValue(light, out var running))
+        {
+            if (on && running.Run.Alive) return;
+            running.Source.Cancel(); pulses.Remove(light); light.BoxShadow = default;
+            if (!on) return;
+        }
+        if (!on) return;
+        string Ring(double spread, double alpha) => FormattableString.Invariant($"0 0 0 {spread} #{(byte)Math.Round(alpha * 255):X2}{colour.R:X2}{colour.G:X2}{colour.B:X2}");
+        var source = new CancellationTokenSource();
+        var animation = new Avalonia.Animation.Animation
+        {
+            Duration = TimeSpan.FromSeconds(1.8), IterationCount = Avalonia.Animation.IterationCount.Infinite, Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
+            Children =
+            {
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0), Setters = { new Setter(Border.BoxShadowProperty, BoxShadows.Parse(Ring(0, .75))) } },
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(.7), Setters = { new Setter(Border.BoxShadowProperty, BoxShadows.Parse(Ring(7, 0))) } },
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1), Setters = { new Setter(Border.BoxShadowProperty, BoxShadows.Parse(Ring(0, 0))) } },
+            }
+        };
+        pulses.Add(light, new PulseRun(source, new RunningAnimation(animation.RunAsync(light, source.Token))));
+    }
     public static bool IsPulsing(Control control) => pulses.TryGetValue(control, out var run) && run.Run.Alive;
     /// <summary>A heading in the app's display face, the same as the dashboard's workspace title, so every page and pop-up names itself alike.</summary>
     public static TextBlock Heading(string text, double size = 20)

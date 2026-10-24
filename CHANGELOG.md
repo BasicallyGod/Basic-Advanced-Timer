@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 24 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Redesign round 7: week overview, bell and calendar, notes rows, timeline | pending | PENDING |
+
 ## 22 October 2026
 
 | Change | Commit | Details |
