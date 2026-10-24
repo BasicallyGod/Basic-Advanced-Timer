@@ -53,16 +53,16 @@ body{margin:0}
         <rect x="98" y="166" width="60" height="22" rx="11" fill="currentColor" opacity=".9"/>
       </symbol>
       <symbol id="appIcon" viewBox="0 0 256 256">
-        <rect width="256" height="256" rx="58" fill="url(#tileGrad)"/>
-        <use href="#glyph" style="color: #FFFFFF"/>
+        <rect x="1.5" y="1.5" width="253" height="253" rx="56.5" fill="#FFFFFF" stroke="#D5D9E2" stroke-width="3"/>
+        <use href="#glyph" style="color: #141824"/>
       </symbol>
       <symbol id="appIconSmall" viewBox="0 0 256 256">
-        <rect width="256" height="256" rx="58" fill="url(#tileGrad)"/>
-        <use href="#glyphSmall" style="color: #FFFFFF"/>
+        <rect x="1.5" y="1.5" width="253" height="253" rx="56.5" fill="#FFFFFF" stroke="#D5D9E2" stroke-width="3"/>
+        <use href="#glyphSmall" style="color: #141824"/>
       </symbol>
-      <symbol id="tileLight" viewBox="0 0 256 256">
-        <rect x="1.5" y="1.5" width="253" height="253" rx="56.5" fill="#FFFFFF" stroke="#D9DFEC" stroke-width="3"/>
-        <use href="#glyph" style="color: #18233A"/>
+      <symbol id="tileDark" viewBox="0 0 256 256">
+        <rect x="1.5" y="1.5" width="253" height="253" rx="56.5" fill="#141824" stroke="#2E3852" stroke-width="3"/>
+        <use href="#glyph" style="color: #FFFFFF"/>
       </symbol>
       <symbol id="oldIcon" viewBox="0 0 256 256">
         <circle cx="128" cy="128" r="118" fill="#145232"/>
@@ -83,13 +83,13 @@ body{margin:0}
 
   <div style="display: flex; flex-direction: column; gap: 4px">
     <h1 style="margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 700">Application icon</h1>
-    <p style="margin: 0; font-size: 14px; color: var(--muted); max-width: 900px; line-height: 1.45">One drawing in one colour: the pill as a line outline, with its two lights (the state light and the reminder light) and a stack of bars for the hours, minutes and seconds, like the mark on the Getting started card. On the deep blue tile it is white; without the tile it takes the colour of whatever it sits on. It replaces the green clock in the taskbar, the title bars, the tray, the installer and the Store tiles. Small sizes drop the seconds bar, thicken the outline and enlarge the lights so they still read. The lights are short and sit close together at the top, as on the pill, so the mark reads as a clock column and not a face or a pause symbol.</p>
+    <p style="margin: 0; font-size: 14px; color: var(--muted); max-width: 900px; line-height: 1.45">One drawing in one colour: the pill as a line outline, with its two lights (the state light and the reminder light) and a stack of bars for the hours, minutes and seconds, like the mark on the Getting started card. The icon is a white tile with the line in near black, with no gradient and no blue. A dark tile with a white line is the version for dark surfaces, and without a tile the line takes the colour of whatever it sits on, which is how the tray draws it. It replaces the green clock in the taskbar, the title bars, the tray, the installer and the Store tiles. Small sizes drop the seconds bar, thicken the outline and enlarge the lights so they still read. The lights are short and sit close together at the top, as on the pill, so the mark reads as a clock column and not a face or a pause symbol.</p>
   </div>
 
   <div style="display: flex; gap: 20px; align-items: flex-start">
     <div class="card" style="padding: 22px 26px; display: flex; flex-direction: column; align-items: center; gap: 12px; width: 300px; box-sizing: border-box">
-      <button class="hero" aria-label="App icon, 210 pixels. The two lights take their colours when the pointer is over it." title="Hover: the lights take their colours, as on the pill"><svg width="210" height="210" viewBox="0 0 256 256" aria-hidden="true"><rect width="256" height="256" rx="58" fill="url(#tileGrad)"/><rect x="77" y="31" width="102" height="194" rx="51" fill="none" stroke="#FFFFFF" stroke-width="14"/><rect class="lightA" x="112" y="64" width="14" height="28" rx="7" fill="#FFFFFF"/><rect class="lightB" x="130" y="64" width="14" height="28" rx="7" fill="#FFFFFF"/><rect x="100" y="118" width="56" height="18" rx="9" fill="#FFFFFF" opacity=".9"/><rect x="100" y="146" width="56" height="18" rx="9" fill="#FFFFFF" opacity=".9"/><rect x="114" y="176" width="28" height="12" rx="6" fill="#FFFFFF" opacity=".6"/></svg></button>
-      <div style="font-size: 13px; color: var(--muted); text-align: center">256 pixel master. Hover it: the lights show green and blue.</div>
+      <button class="hero" aria-label="App icon, 210 pixels. The two lights take their colours when the pointer is over it." title="Hover: the lights take their colours, as on the pill"><svg width="210" height="210" viewBox="0 0 256 256" aria-hidden="true"><rect x="1.5" y="1.5" width="253" height="253" rx="56.5" fill="#FFFFFF" stroke="#D5D9E2" stroke-width="3"/><rect x="77" y="31" width="102" height="194" rx="51" fill="none" stroke="#141824" stroke-width="14"/><rect class="lightA" x="112" y="64" width="14" height="28" rx="7" fill="#141824"/><rect class="lightB" x="130" y="64" width="14" height="28" rx="7" fill="#141824"/><rect x="100" y="118" width="56" height="18" rx="9" fill="#141824" opacity=".9"/><rect x="100" y="146" width="56" height="18" rx="9" fill="#141824" opacity=".9"/><rect x="114" y="176" width="28" height="12" rx="6" fill="#141824" opacity=".6"/></svg></button>
+      <div style="font-size: 13px; color: var(--muted); text-align: center">256 pixel master. Hover it: the lights show their state and reminder colours.</div>
     </div>
 
     <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px">
@@ -115,12 +115,12 @@ body{margin:0}
         </div>
       </div>
       <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
-        <div class="lbl">Other treatments of the same drawing</div>
+        <div class="lbl">The same drawing on other grounds</div>
         <div style="display: flex; align-items: flex-end; gap: 26px">
-          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><svg width="96" height="96" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIcon"/></svg><span style="font-size: 12px; color: var(--muted)">Deep blue tile (chosen)</span></div>
-          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><svg width="96" height="96" viewBox="0 0 256 256" aria-hidden="true"><use href="#tileLight"/></svg><span style="font-size: 12px; color: var(--muted)">White tile, dark line</span></div>
-          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><span class="tbLight" style="display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 22px; box-sizing: border-box"><svg width="76" height="76" viewBox="0 0 256 256" aria-hidden="true"><use href="#glyph"/></svg></span><span style="font-size: 12px; color: var(--muted)">No tile, on light</span></div>
-          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><span class="tbDark" style="display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 22px; box-sizing: border-box"><svg width="76" height="76" viewBox="0 0 256 256" aria-hidden="true"><use href="#glyph"/></svg></span><span style="font-size: 12px; color: var(--muted)">No tile, on dark</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><svg width="96" height="96" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIcon"/></svg><span style="font-size: 12px; color: var(--muted)">White tile, dark line (the icon)</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><svg width="96" height="96" viewBox="0 0 256 256" aria-hidden="true"><use href="#tileDark"/></svg><span style="font-size: 12px; color: var(--muted)">Dark tile, white line (dark surfaces)</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><span class="tbLight" style="display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 22px; box-sizing: border-box"><svg width="76" height="76" viewBox="0 0 256 256" aria-hidden="true"><use href="#glyph"/></svg></span><span style="font-size: 12px; color: var(--muted)">No tile, on light (tray)</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><span class="tbDark" style="display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 22px; box-sizing: border-box"><svg width="76" height="76" viewBox="0 0 256 256" aria-hidden="true"><use href="#glyph"/></svg></span><span style="font-size: 12px; color: var(--muted)">No tile, on dark (tray)</span></div>
         </div>
       </div>
     </div>
