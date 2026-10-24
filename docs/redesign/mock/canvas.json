@@ -142,7 +142,7 @@
       "y": 4160
     },
     "n11": {
-      "text": "The Notes page, third on the rail. Add a note or a meeting with the bell for its reminder, pick a view or an account on the left and search above. Click a note or meeting to change it in the same box, where Save, Delete and Cancel appear. Reminders start at 12:00 and the day comes from the month. A meeting is half an hour by default.",
+      "text": "The Notes page, second on the rail, under Timeline. Add a note or a meeting with the bell for its reminder, pick a view or an account on the left and search above. Click a note or meeting to change it in the same box, where Save, Delete and Cancel appear. Reminders start at 12:00 and the day comes from the month. A meeting is half an hour by default.",
       "w": 520,
       "x": -600,
       "y": 4839
@@ -222,7 +222,7 @@
       "y": -260
     },
     "n16": {
-      "text": "Two proposals: a quieter tooltip in the app's own card style (still to decide), and the rail icons, now chosen: Timeline bars, Week columns and a ticked box for Notes. Hover a rail icon to see it move. Switch Light or Dark in the Tweaks.",
+      "text": "Two proposals, now both agreed and built: the tooltips in the app's own card (a button with words needs none), and the rail icons, in the order Timeline, Notes, Week overview. Hover a rail icon to see it move. Switch Light or Dark in the Tweaks.",
       "w": 520,
       "x": 2400,
       "y": 2240
