@@ -64,7 +64,7 @@ body{margin:0}
             <div class="pill pillBox" style="{{p.glow}}">
               <div style="display: flex; gap: 6px; align-items: center; height: 14px">
                 <span class="cap" role="img" aria-label="{{p.dotLabel}}" style="{{p.dotStyle}}"></span>
-                <sc-if value="{{p.due}}" hint-placeholder-val="{{ false }}"><span class="cap pulse" role="img" aria-label="A reminder is due" style="background:#6096FF"></span></sc-if>
+                <span class="cap {{p.dueCls}}" role="img" aria-label="{{p.dueLabel}}" style="{{p.dueStyle}}"></span>
               </div>
               <div class="clockCol">
                 <span style="font-size: 30px; font-weight: 700">{{p.h}}</span>
@@ -108,7 +108,7 @@ body{margin:0}
             </sc-if>
             <div style="position: absolute; left: 0; top: 0; z-index: 2; border-radius: 36px; background: linear-gradient(180deg,var(--pill1),var(--pill2)); border: 1px solid var(--pillLine); width: fit-content; overflow: hidden; box-shadow: {{s.openGlow}}">
             <div class="pill" style="height: 314px; padding-top: 13px">
-              <div style="display: flex; gap: 6px; align-items: center; height: 14px"><span class="cap" role="img" aria-label="Recording" style="background: #34D399"></span></div>
+              <div style="display: flex; gap: 6px; align-items: center; height: 14px"><span class="cap" role="img" aria-label="Recording" style="background: #34D399"></span><span class="cap" role="img" aria-label="No reminders waiting" style="background: var(--idleDot); opacity: .6"></span></div>
               <div class="clockCol"><span style="font-size: 30px; font-weight: 700">04</span><span style="font-size: 30px; font-weight: 700; margin-top: 2px">47</span><span style="font-size: 15px; font-weight: 600; margin-top: 4px; color: var(--clockSec)">35</span></div>
               <button class="ctl prim" aria-label="{{runLabel}}" style="{{s.runStyle}}; margin-top: 6px"><span>{{runIni}}</span></button>
               <button class="ctl brkT" aria-label="Start break" title="Start break" style="{{s.brkRest}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"></path><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"></path><path d="M8 3v2M12 3v2"></path></svg></button>
@@ -210,9 +210,10 @@ class Component extends DCLogic {
         mk({ label: 'Break: hover', sub: 'Hover to start a break', isIni: false, isPause: true, brk: brk('hover') }),
         mk({ label: 'Break: on', sub: 'Initials stay, the cup is lit', h: '00', m: '23', s: '14', glow: glow('245,165,36'), dotStyle: 'background:#F5A524', dotLabel: 'On break', brk: brk('active'), brkCls: 'steamOn', brkLabel: 'End break and resume Account one' }),
         mk({ label: 'Overtime', sub: 'Red until the day ends', h: '08', m: '12', s: '14', glow: glow('248,113,113'), dotStyle: 'background:#F87171', dotLabel: 'Overtime', prim: prim('red') }),
-        mk({ label: 'Reminder due', sub: 'A blue capsule pulses', due: true }),
+        mk({ label: 'Reminder due', sub: 'The grey light turns blue and pulses', due: true }),
         mk({ label: 'Accounts: hover', sub: 'Hover tints the bars', acc: acc('hover') })
       ];
+      pills.forEach((p) => { p.dueCls = p.due ? 'pulse' : ''; p.dueLabel = p.due ? 'A reminder is due' : 'No reminders waiting'; p.dueStyle = p.due ? 'background:#6096FF' : 'background:var(--idleDot);opacity:.6'; });
       const tile = (cls, style, label, o) => Object.assign({ cls: cls, style: style, label: label, steam: '', isIni: false, isPlay: false, isPause: false, isCup: false, isBars: false }, o);
       const groups = [
         { title: 'Primary control', items: [

@@ -80,7 +80,7 @@ a.nav{text-decoration:none}
 .ctl.primary{background:var(--accent);border-color:var(--accent);color:var(--accentInk)}
 .ctl.primary:hover{background:var(--accent);filter:brightness(1.06)}
 a.ctl{text-decoration:none}
-.flyPoint{position:absolute;top:-7px;right:15px;width:12px;height:12px;box-sizing:border-box;background:var(--card);border-left:1px solid var(--line);border-top:1px solid var(--line);transform:rotate(45deg)}
+.flyPoint{position:absolute;top:-11px;right:11px;display:block}
 .flyout{position:absolute;right:0;top:52px;width:372px;z-index:30;background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 28px rgba(20,30,70,.16);padding:14px;display:flex;flex-direction:column;gap:10px;box-sizing:border-box}
 .sugg{position:absolute;left:0;right:0;top:44px;z-index:12;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 20px rgba(20,30,70,.14);padding:4px}
 .sugg button{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;border-radius:8px;padding:7px 8px;font-size:13px;text-align:left}
@@ -145,10 +145,8 @@ a.ctl{text-decoration:none}
 .dayBar{width:150px;height:10px;border-radius:5px;background:var(--track);display:flex;overflow:hidden;position:relative;flex-shrink:0}
 .selWrap:disabled{opacity:.6;cursor:default}
 .selWrap:disabled:hover{border-color:var(--line)}
-.lane{position:absolute;left:0;right:0;top:30px;height:56px;border:0;border-radius:12px;background:transparent;padding:0;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:copy}
+.lane{position:absolute;left:0;right:0;top:38px;height:48px;border:0;border-radius:12px;background:transparent;padding:0;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:copy}
 .lane:hover{background:var(--meetBg)}
-.laneHint{font-size:12px;font-weight:600;opacity:0;pointer-events:none}
-.lane:hover .laneHint{opacity:.85}
 .meet{text-align:left;cursor:pointer}
 .meet:hover{background:var(--soft)}
 .linkText{border:0;background:transparent;padding:0;text-align:left;font-size:14px;line-height:1.35;font-weight:600;color:var(--ink)}
@@ -169,7 +167,7 @@ a.ctl{text-decoration:none}
   <nav aria-label="Timer and navigation" style="position: relative; z-index: 45; width: 76px; flex-shrink: 0; height: 100%; box-sizing: border-box; padding: 14px 0 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; background: linear-gradient(180deg, var(--rail1), var(--rail2)); border-right: 1px solid var(--railLine); box-shadow: var(--railShadow)">
     <div style="display: flex; gap: 6px; align-items: center; height: 14px" role="group" aria-label="Recording and reminder status">
       <span class="cap" role="img" aria-label="{{dotLabel}}" style="background: {{dotColour}}"></span>
-<sc-if value="{{hasAttention}}" hint-placeholder-val="{{ true }}"><span class="cap pulse" role="img" aria-label="A reminder is due" style="background: #6096FF"></span></sc-if>
+<span class="{{remCls}}" role="img" aria-label="{{remLabel}}" style="{{remStyle}}"></span>
     </div>
     <button class="clockBtn" aria-label="{{clk.aria}}" title="Collapse to the pill" style="margin-top: 4px; {{clk.style}}">
       <span style="font-size: 30px; font-weight: 700">{{clk.h}}</span>
@@ -230,12 +228,28 @@ a.ctl{text-decoration:none}
 
     <header style="display: flex; align-items: center; gap: 10px; height: 44px; position: relative; z-index: 30">
       <h1 style="margin: 0 auto 0 4px; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 30px; font-weight: 700; letter-spacing: -0.01em">{{dateTitle}}</h1>
+      <button class="ctl" onClick="{{prevDay}}" aria-label="Previous day" style="width: 38px; padding: 0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div style="position: relative">
+        <button class="ctl" onClick="{{togglePick}}" aria-haspopup="dialog" aria-expanded="{{pickOpen}}" aria-label="{{dateAria}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>{{dateLabel}}</button>
+        <sc-if value="{{pickOpen}}" hint-placeholder-val="{{ false }}">
+          <div class="datePop" role="dialog" aria-label="Pick a date">
+            <div style="display: flex; align-items: center; justify-content: space-between"><button type="button" class="iconbtn" onClick="{{pickPrev}}" aria-label="Previous month"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><span style="font-size: 14px; font-weight: 600">{{pickTitle}}</span><button type="button" class="iconbtn" onClick="{{pickNext}}" aria-label="Next month"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></div>
+            <div class="pcal"><span class="calHead">Mo</span><span class="calHead">Tu</span><span class="calHead">We</span><span class="calHead">Th</span><span class="calHead">Fr</span><span class="calHead">Sa</span><span class="calHead">Su</span></div>
+            <div class="pcal" role="group" aria-label="Days">
+              <sc-for list="{{pickCells}}" as="c" hint-placeholder-count="42"><button type="button" class="{{c.cls}}" onClick="{{c.pick}}" aria-pressed="{{c.on}}" aria-label="{{c.aria}}">{{c.label}}<sc-if value="{{c.dot}}" hint-placeholder-val="{{ false }}"><span class="tdot"></span></sc-if></button></sc-for>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 10px"><span class="statL" style="display: flex; align-items: center; gap: 6px"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--barNeutral)"></span>Time recorded</span><button type="button" class="ctl small" onClick="{{pickToday}}">Today</button></div>
+          </div>
+        </sc-if>
+      </div>
+      <button class="ctl" onClick="{{nextDay}}" aria-label="Next day" style="width: 38px; padding: 0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+      <button class="ctl" onClick="{{goToday}}" disabled="{{isToday}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Today</button>
       <div style="position: relative">
         <button class="{{bellCls}}" onClick="{{toggleBell}}" aria-label="{{bellLabel}}" aria-expanded="{{bellOpen}}" style="width: 42px; padding: 0; position: relative"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15z"/><path d="M10 21h4"/></svg>
           <sc-if value="{{hasAttention}}" hint-placeholder-val="{{ true }}"><span style="position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; box-sizing: border-box; border-radius: 9px; background: var(--lateInk); color: var(--card); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 4px">{{attentionCount}}</span></sc-if>
         </button>
         <sc-if value="{{bellOpen}}" hint-placeholder-val="{{ false }}">
-          <div class="flyout" role="dialog" aria-label="Notifications"><span class="flyPoint" aria-hidden="true"></span>
+          <div class="flyout" role="dialog" aria-label="Notifications"><svg class="flyPoint" width="20" height="12" viewBox="0 0 20 12" aria-hidden="true"><path d="M0 12L10 0l10 12z" fill="var(--card)"/><path d="M.5 11.5L10 1.2l9.5 10.3" fill="none" stroke="var(--line)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <div style="display: flex; align-items: center; justify-content: space-between"><div style="font-size: 15px; font-weight: 600">Notifications</div><div style="font-size: 12px; color: var(--muted)">Reminders from your notes</div></div>
             <sc-if value="{{hasAttention}}" hint-placeholder-val="{{ true }}">
               <div style="font-size: 12px; font-weight: 600; color: var(--lateInk); text-transform: uppercase; letter-spacing: .04em">Needs attention</div>
@@ -267,22 +281,6 @@ a.ctl{text-decoration:none}
           </div>
         </sc-if>
       </div>
-      <button class="ctl" onClick="{{prevDay}}" aria-label="Previous day" style="width: 38px; padding: 0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
-      <div style="position: relative">
-        <button class="ctl" onClick="{{togglePick}}" aria-haspopup="dialog" aria-expanded="{{pickOpen}}" aria-label="{{dateAria}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>{{dateLabel}}</button>
-        <sc-if value="{{pickOpen}}" hint-placeholder-val="{{ false }}">
-          <div class="datePop" role="dialog" aria-label="Pick a date">
-            <div style="display: flex; align-items: center; justify-content: space-between"><button type="button" class="iconbtn" onClick="{{pickPrev}}" aria-label="Previous month"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><span style="font-size: 14px; font-weight: 600">{{pickTitle}}</span><button type="button" class="iconbtn" onClick="{{pickNext}}" aria-label="Next month"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button></div>
-            <div class="pcal"><span class="calHead">Mo</span><span class="calHead">Tu</span><span class="calHead">We</span><span class="calHead">Th</span><span class="calHead">Fr</span><span class="calHead">Sa</span><span class="calHead">Su</span></div>
-            <div class="pcal" role="group" aria-label="Days">
-              <sc-for list="{{pickCells}}" as="c" hint-placeholder-count="42"><button type="button" class="{{c.cls}}" onClick="{{c.pick}}" aria-pressed="{{c.on}}" aria-label="{{c.aria}}">{{c.label}}<sc-if value="{{c.dot}}" hint-placeholder-val="{{ false }}"><span class="tdot"></span></sc-if></button></sc-for>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 10px"><span class="statL" style="display: flex; align-items: center; gap: 6px"><span style="width: 5px; height: 5px; border-radius: 50%; background: var(--barNeutral)"></span>Time recorded</span><button type="button" class="ctl small" onClick="{{pickToday}}">Today</button></div>
-          </div>
-        </sc-if>
-      </div>
-      <button class="ctl" onClick="{{nextDay}}" aria-label="Next day" style="width: 38px; padding: 0"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
-      <button class="ctl" onClick="{{goToday}}" disabled="{{isToday}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Today</button>
       <button class="ctl gear" aria-label="Settings" title="Settings" style="width: 38px; padding: 0"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
     </header>
 
@@ -292,7 +290,7 @@ a.ctl{text-decoration:none}
           <div style="{{h.lineStyle}}"></div>
           <div style="{{h.labelStyle}}">{{h.label}}</div>
         </sc-for>
-        <button type="button" class="lane" onClick="{{laneClick}}" aria-label="Add a meeting. Click a time in this row" title="Click a time to add a meeting"><span class="laneHint">+ Add a meeting</span></button>
+        <button type="button" class="lane" onClick="{{laneClick}}" aria-label="Add a meeting. Click a time in this row" title="Click a time to add a meeting"></button>
         <sc-for list="{{meetings}}" as="m" hint-placeholder-count="2">
           <button type="button" class="meet" onClick="{{m.pick}}" style="{{m.style}}" title="{{m.tip}}" aria-label="{{m.aria}}">
             <div style="display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; white-space: nowrap"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span style="overflow: hidden; text-overflow: ellipsis">{{m.title}}</span><sc-if value="{{m.isRepeat}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; opacity: .8"><path d="M17 3l4 4-4 4"/><path d="M3 11V9a2 2 0 0 1 2-2h16"/><path d="M7 21l-4-4 4-4"/><path d="M21 13v2a2 2 0 0 1-2 2H3"/></svg></sc-if></div>
@@ -309,6 +307,7 @@ a.ctl{text-decoration:none}
             <sc-if value="{{b.showNote}}" hint-placeholder-val="{{ true }}"><div style="font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{b.note}}</div></sc-if>
             <sc-for list="{{b.seams}}" as="g" hint-placeholder-count="1"><span style="{{g.style}}" aria-hidden="true"></span></sc-for>
             <sc-if value="{{b.isGroup}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: absolute; right: 8px; bottom: 7px; opacity: .8"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></sc-if>
+            <sc-if value="{{b.hasDot}}" hint-placeholder-val="{{ false }}"><span style="position: absolute; top: 8px; right: 8px; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .8" aria-hidden="true"></span></sc-if>
             <sc-if value="{{b.hasDoc}}" hint-placeholder-val="{{ true }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: absolute; right: 8px; bottom: 7px; opacity: .75"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/></svg></sc-if>
           </button>
         </sc-for>
@@ -321,7 +320,7 @@ a.ctl{text-decoration:none}
         <button class="ctl" onClick="{{onUndo}}" disabled="{{undoOff}}" title="Undo the last change"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 8H4V3"/><path d="M4.5 8A8 8 0 1 1 4 13"/></svg>Undo</button>
         <div style="flex-grow: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 16px" role="group" aria-label="Day totals">
           <div style="display: flex; flex-direction: column"><span class="statL">{{day.label}}</span><span class="statV" style="{{day.workStyle}}">{{day.work}}</span></div>
-          <sc-if value="{{day.hasBar}}" hint-placeholder-val="{{ true }}"><div class="dayBar" role="img" aria-label="{{day.barAria}}" title="{{day.barTip}}"><span style="{{day.allocStyle}}"></span><span style="{{day.unStyle}}"></span><span style="{{day.otStyle}}"></span></div></sc-if>
+          <sc-if value="{{day.hasBar}}" hint-placeholder-val="{{ true }}"><div class="dayBar" role="img" aria-label="{{day.barAria}}" title="{{day.barTip}}"><span style="{{day.allocStyle}}"></span><span style="{{day.unStyle}}"></span><span style="{{day.brkStyle}}"></span><span style="{{day.otStyle}}"></span></div></sc-if>
           <sc-if value="{{day.hasNoSchedule}}" hint-placeholder-val="{{ false }}"><span class="statL" style="max-width: 150px; white-space: normal">Nothing is scheduled. Only tracked time counts.</span></sc-if>
           <div style="display: flex; flex-direction: column" title="Time on accounts"><span class="statL">Allocated</span><span class="statV">{{day.alloc}}</span></div>
           <div style="display: flex; flex-direction: column" title="Working time with nothing recorded on an account"><span class="statL">Unallocated</span><span class="statV">{{day.un}}</span></div>
@@ -458,7 +457,7 @@ a.ctl{text-decoration:none}
                   <span style="font: 700 14px 'Inter', system-ui, sans-serif; color: var(--muted)">:</span>
                   <div style="display: flex; flex-direction: column; align-items: center"><button type="button" class="stp" onClick="{{mUp}}" aria-label="Later by five minutes"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button><input class="tin" type="text" value="{{popMStr}}" onChange="{{onM}}" aria-label="Minutes" maxlength="2"><button type="button" class="stp" onClick="{{mDown}}" aria-label="Earlier by five minutes"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div>
                 </div>
-                <div style="display: flex; gap: 5px; flex-wrap: wrap"><sc-for list="{{popTimes}}" as="t" hint-placeholder-count="4"><button type="button" class="{{t.cls}}" onClick="{{t.pick}}" aria-pressed="{{t.on}}">{{t.name}}</button></sc-for></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px"><sc-for list="{{popTimes}}" as="t" hint-placeholder-count="4"><button type="button" class="{{t.cls}}" onClick="{{t.pick}}" aria-pressed="{{t.on}}">{{t.name}}</button></sc-for></div>
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px">
@@ -669,11 +668,13 @@ class Component extends DCLogic {
       });
       if (cluster.length) flush();
     })();
+    const hasMeetings = this.state.notes.some((n) => n.meet && !n.skip);
     const blocks = shown.map((b) => {
       const w = b.e - b.s;
       const lp = lanePlace[b.id] || { lane: 0, n: 1 };
-      const laneH = lp.n === 1 ? 76 : (76 - 4 * (lp.n - 1)) / lp.n;
-      const laneTop = 92 + lp.lane * (laneH + 4);
+      const bandTop = hasMeetings ? 98 : 40; const bandH = 170 - bandTop;
+      const laneH = lp.n === 1 ? bandH : (bandH - 4 * (lp.n - 1)) / lp.n;
+      const laneTop = bandTop + lp.lane * (laneH + 4);
       const mode = lp.n === 1 ? 'full' : lp.n === 2 ? 'inline' : lp.n === 3 ? 'tiny' : 'bare';
       const selected = selUnits.indexOf(b) >= 0;
       const grad = b.brk ? '' : 'background: linear-gradient(135deg, ' + b.c[0] + ', ' + b.c[1] + ');';
@@ -687,7 +688,7 @@ class Component extends DCLogic {
       return {
         id: b.id,
         cls: b.brk ? 'blk hatch' : 'blk',
-        style: 'left:' + x(b.s) + '%;width:' + (w / 10 * 100) + '%;top:' + laneTop + 'px;height:' + laneH + 'px;' + (mode === 'full' ? '' : 'padding:0 8px;border-radius:8px;') + grad + (selected ? 'box-shadow:0 0 0 3px var(--accent);z-index:3;' : ''),
+        style: 'left:calc(' + x(b.s) + '% + 3px);width:calc(' + (w / 10 * 100) + '% - 6px);top:' + laneTop + 'px;height:' + laneH + 'px;' + (mode === 'full' ? '' : 'padding:0 8px;border-radius:8px;') + grad + (selected ? 'box-shadow:0 0 0 3px var(--accent);z-index:3;' : ''),
         dur: dur(b.s, b.e),
         name: b.brk ? 'Lunch' : b.name,
         ini: b.ini,
@@ -698,7 +699,8 @@ class Component extends DCLogic {
         showAcct: mode === 'full' ? w >= 0.7 : mode === 'inline' && w >= 0.9,
         showIni: mode === 'full' ? w < 0.7 : mode === 'inline' && w < 0.9,
         showNote: mode === 'full' && w >= 1.2,
-        hasDoc: mode === 'full' && !!b.doc && w >= 1.2 && !b.isGroup,
+        hasDoc: mode === 'full' && !!b.doc && w >= 1.45 && !b.isGroup,
+        hasDot: !!b.doc && !b.isGroup && !(mode === 'full' && w >= 1.45) && w >= 0.2,
         isGroup: b.isGroup && mode === 'full',
         seams: seams,
         selected: selected,
@@ -765,7 +767,7 @@ class Component extends DCLogic {
     if (rec === 'overtime') { workMin = 502; allocMin = 470; }
     const unMin = Math.max(0, workMin - allocMin);
     const otMin = schedMin ? Math.max(0, workMin - schedMin) : 0;
-    const barTotal = Math.max(workMin, schedMin) || 1;
+    const barTotal = Math.max(workMin + brkMin, schedMin) || 1;
     const day = {
       label: dayState === 'finished' ? 'Finished 14:17' : dayState === 'dayoff' ? 'Day off' : dayState === 'fresh' ? 'Started 14:17' : 'Working time',
       work: pdur(workMin),
@@ -774,6 +776,7 @@ class Component extends DCLogic {
       hasNoSchedule: schedMin === 0,
       allocStyle: 'height:100%;flex-shrink:0;background:var(--barNeutral);width:' + (allocMin / barTotal * 100) + '%',
       unStyle: 'height:100%;flex-shrink:0;opacity:.55;background:repeating-linear-gradient(135deg,var(--barNeutral) 0 2px,transparent 2px 5px);width:' + (unMin / barTotal * 100) + '%',
+      brkStyle: 'height:100%;flex-shrink:0;background:var(--amber);width:' + (brkMin / barTotal * 100) + '%',
       otStyle: 'position:absolute;right:0;top:0;bottom:0;background:#D64545;width:' + (otMin / barTotal * 100) + '%',
       barTip: 'Scheduled 08:30–17:30, ' + pdur(schedMin) + ' of working time. ' + pdur(workMin) + ' so far' + (otMin ? ', ' + pdur(otMin) + ' of it overtime.' : '.'),
       barAria: 'Working time ' + pdur(workMin) + ' of ' + pdur(schedMin) + ' scheduled',
@@ -795,7 +798,7 @@ class Component extends DCLogic {
       isRepeat: n.repeat !== 'none',
       aria: 'Planned: ' + n.text + ', ' + hm(n.meet.s) + ' to ' + hm(n.meet.e) + (n.repeat !== 'none' ? ', ' + repText(n.repeat).toLowerCase() : '') + '. Click to edit',
       tip: 'Planned: ' + n.text + ' ' + hm(n.meet.s) + '–' + hm(n.meet.e) + '. Not tracked time. Click to edit.',
-      style: 'left:' + x(n.meet.s) + '%;width:' + ((n.meet.e - n.meet.s) / 10 * 100) + '%;top:34px;height:48px;box-sizing:border-box;' + (this.state.editId === n.id ? 'box-shadow:0 0 0 3px var(--accent);z-index:3;' : ''),
+      style: 'left:' + x(n.meet.s) + '%;width:' + ((n.meet.e - n.meet.s) / 10 * 100) + '%;top:38px;height:48px;box-sizing:border-box;' + (this.state.editId === n.id ? 'box-shadow:0 0 0 3px var(--accent);z-index:3;' : ''),
       pick: () => openMeeting(n.id)
     }));
     const hours = [];
@@ -996,8 +999,8 @@ class Component extends DCLogic {
       hours: hours,
       meetings: meetings,
       blocks: blocks,
-      nowStyle: 'position:absolute;top:18px;bottom:20px;width:2px;background:var(--accent);z-index:4;left:calc(' + nowX + '% - 1px)',
-      nowDotStyle: 'position:absolute;top:14px;width:10px;height:10px;border-radius:50%;background:var(--accent);z-index:5;left:calc(' + nowX + '% - 5px)',
+      nowStyle: 'position:absolute;top:22px;bottom:20px;width:2px;background:var(--accent);z-index:4;left:calc(' + nowX + '% - 1px)',
+      nowDotStyle: 'position:absolute;top:17px;width:10px;height:10px;border-radius:50%;background:var(--accent);z-index:5;left:calc(' + nowX + '% - 5px)',
       nowChipStyle: 'position:absolute;bottom:0;transform:translateX(-50%);background:var(--accent);color:var(--accentInk);font-size:12px;font-weight:600;padding:2px 8px;border-radius:7px;z-index:5;left:' + nowX + '%',
       clk: clk,
       day: day,
@@ -1183,6 +1186,9 @@ class Component extends DCLogic {
         const id = st.nextId;
         this.setState({ nextId: id + 1, draft: '', draftAcct: -1, draftRem: null, notes: [...st.notes, { id: id, text: text, acct: st.draftAcct, rem: st.draftRem, done: false, repeat: 'none', meet: null }] });
       },
+      remCls: attention.length > 0 ? 'cap pulse' : 'cap',
+      remLabel: attention.length > 0 ? 'A reminder is due' : 'No reminders waiting',
+      remStyle: attention.length > 0 ? 'background: #6096FF' : 'background: #8D97AE; opacity: .6',
       bellOpen: this.state.bellOpen,
       bellCls: this.state.bellOpen ? 'ctl bell on' : 'ctl bell',
       toggleBell: () => this.setState({ bellOpen: !this.state.bellOpen }),

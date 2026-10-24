@@ -250,7 +250,7 @@ body{margin:0}
                   <span style="font: 700 14px 'Inter', system-ui, sans-serif; color: var(--muted)">:</span>
                   <div style="display: flex; flex-direction: column; align-items: center"><button type="button" class="stp" onClick="{{mUp}}" aria-label="Later by five minutes"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button><input class="tin" type="text" value="{{popMStr}}" onChange="{{onM}}" aria-label="Minutes" maxlength="2"><button type="button" class="stp" onClick="{{mDown}}" aria-label="Earlier by five minutes"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></div>
                 </div>
-                <div style="display: flex; gap: 5px; flex-wrap: wrap"><sc-for list="{{popTimes}}" as="t" hint-placeholder-count="4"><button type="button" class="{{t.cls}}" onClick="{{t.pick}}" aria-pressed="{{t.on}}">{{t.name}}</button></sc-for></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px"><sc-for list="{{popTimes}}" as="t" hint-placeholder-count="4"><button type="button" class="{{t.cls}}" onClick="{{t.pick}}" aria-pressed="{{t.on}}">{{t.name}}</button></sc-for></div>
               </div>
             </div>
             <div style="display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px">
