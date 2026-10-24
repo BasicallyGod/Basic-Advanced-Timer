@@ -202,7 +202,6 @@ public sealed class BreakButton : Button
     private readonly BreakGlyph cup = new() { Mono = false };
     private readonly Border tile = new() { Width = StatusFace.TileSize, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius), Background = Brushes.Transparent };
     private bool hover, focus;
-    public BreakGlyph Cup => cup;
     public BreakButton(TimerModel model, string name)
     {
         this.model = model; Name = name;
@@ -220,7 +219,6 @@ public sealed class BreakButton : Button
     public void Refresh()
     {
         var onBreak = model.IsOnBreak;
-        var dark = SoftTint.IsDark(this);
         var orange = Ui.ThemeColour(this, "Break", Color.Parse("#F5A524"));
         var hex = $"#{orange.R:X2}{orange.G:X2}{orange.B:X2}";
         cup.Filled = false;

@@ -17,9 +17,9 @@ Run `Start-Demo.cmd` to try the app with sample accounts and history, without to
 - Start, stop and switch between client accounts, with Break and Lunch, from the pill or the dashboard.
 - Set working hours by weekday, days off and one-off starts. Start day and Finish day work throughout the day, and time beyond the usual finish is shown as overtime.
 - Track budgets by week, month or quarter, with a ring on each account.
-- Review each day on a scrollable, zoomable timeline. Drag blocks to move or resize them, add, merge, group and delete time, tidy small gaps, add or remove minutes for the day, and keep notes. Every edit can be undone, and the history survives a restart.
-- Review the week as an overview, an hours table and a list of entries. Export a summary and detailed CSV with decimal hours that add up exactly.
-- Follow Windows light or dark by default, choose Light or Dark, or make your own theme in the theme editor. Choose decimal hours or hours and minutes, and the size of the interface.
+- Review each day on a scrollable, zoomable timeline. Drag blocks to move or resize them, add, merge and delete time, and keep notes and planned meetings with reminders. Every time edit can be undone, and the history survives a restart.
+- Review the week as a chart or table of time by day, with each account's budget and pace. Export a summary and detailed CSV with decimal hours that add up exactly.
+- Follow Windows light or dark by default, or choose Light or Dark. Choose decimal hours or hours and minutes, and the size of the pill.
 - Start with Windows, with an app icon on the taskbar and a notification area icon. The taskbar button can be switched off to run from the tray alone. The window has no close button, so it cannot be closed by accident.
 
 ## Data

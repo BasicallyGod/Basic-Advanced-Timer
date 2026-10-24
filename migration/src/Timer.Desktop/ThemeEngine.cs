@@ -31,6 +31,20 @@ public static class ThemeEngine
         return variant;
     }
     // Colours are written into the dictionary that is already registered when there is one, so screens that are open repaint at once.
+    /// <summary>
+    /// The colour taken from <paramref name="colour"/> towards <paramref name="ink"/>, a twentieth at a time, until it holds <paramref name="target"/> to 1
+    /// on every one of the grounds (or is the ink itself). It is how a colour meant for bars and rings is made fit to set small text in.
+    /// </summary>
+    public static string TextShade(string colour, string ink, IEnumerable<string> grounds, double target = 4.5)
+    {
+        var list = grounds.ToList();
+        for (var step = 0; step <= 20; step++)
+        {
+            var shade = step == 0 ? colour : ThemeColours.Mix(colour, ink, step / 20.0);
+            if (list.All(g => ThemeColours.Contrast(shade, g) >= target)) return shade;
+        }
+        return ink;
+    }
     private static void Write(Application app, ThemeVariant variant, IReadOnlyDictionary<string, string> colours)
     {
         if (!app.Resources.ThemeDictionaries.TryGetValue(variant, out var found) || found is not ResourceDictionary dictionary)
@@ -66,6 +80,9 @@ public static class ThemeEngine
         Put("LiveTint", Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Live"], ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000") ? .24 : .14)));
         // The scroll bar thumb is a quiet grey a little darker than the lines, and darker again under the pointer.
         Put("LateTint", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["Overtime"], .14)));
+        // Amber and the accent are right for bars and rings but too pale to read as small text on the light themes, so their words use a shade of each taken towards the text colour until it holds 4.5 to 1 on every ground it sits on.
+        Put("BudgetWarningText", Color.Parse(TextShade(colours["BudgetWarning"], colours["Ink"], new[] { colours["Panel"], colours["Surface"], colours["Hover"] })));
+        Put("AccentText", Color.Parse(TextShade(colours["Accent"], colours["Ink"], new[] { colours["Panel"], colours["Surface"], colours["Hover"], colours["Selected"] })));
         Put("ScrollThumb", Color.Parse(ThemeColours.Mix(colours["Line"], colours["Ink"], .13)));
         Put("ScrollThumbHover", Color.Parse(ThemeColours.Mix(colours["Line"], colours["Ink"], .3)));
         // Right-click menus are drawn from the standard menu resources, which are the computer's own greys. They wear the theme's panel, text, hover and line.

@@ -45,7 +45,7 @@ public sealed class NotesCard : Border
         var scroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, Name = "NotesScroll" };
         var body = Ui.Grid("*", "Auto,Auto,*"); body.RowSpacing = 10;
         Ui.Put(body, header); Ui.Put(body, formHost, 0, 1); Ui.Put(body, scroll, 0, 2);
-        overlay.Children.Add(body); overlay.Children.Add(reminderHost); reminderHost.PlacementTarget = title; reminderHost.Closed += (_, _) => popup = null; Child = overlay;
+        overlay.Children.Add(body); overlay.Children.Add(reminderHost); reminderHost.PlacementTarget = title; Child = overlay;
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditMeetingRequested += OnEditMeeting; Sync(); };
         DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditMeetingRequested -= OnEditMeeting; };
         Sync();
@@ -78,7 +78,7 @@ public sealed class NotesCard : Border
         var meeting = NotesModel.IsMeeting(note); var words = Notes.Text(note); var account = Notes.AccountOf(note);
         var line = Ui.Grid("Auto,*,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Top;
         // A note has a round tick; a meeting has a calendar mark instead, and is opened by its name.
-        Control lead = meeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) } : NoteParts.Tick(model, Notes, note);
+        Control lead = meeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) } : NoteParts.Tick(Notes, note);
         Ui.Put(line, lead);
         var column = new StackPanel { Spacing = 5 };
         if (meeting)
@@ -94,16 +94,16 @@ public sealed class NotesCard : Border
         }
         var chips = new WrapPanel { Orientation = Orientation.Horizontal };
         void Add(Control chip) { chip.Margin = new Thickness(0, 0, 6, 4); chips.Children.Add(chip); }
-        if (meeting) Add(NoteParts.Chip(model, NoteParts.Span(note), "plain"));
+        if (meeting) Add(NoteParts.Chip(NoteParts.Span(note), "plain"));
         var repeat = Notes.RepeatOf(note);
         if (meeting && Notes.SeriesOf(note) is { } series)
-            Add(NoteParts.Chip(model, repeat == RepeatChoice.None ? series.Rule.Words() : NotesModel.Label(repeat), "quiet", IconKind.Repeat));
-        if (account is not null) { var chip = NoteParts.Chip(model, "#" + account.Replace(" ", ""), "plain", null, NoteParts.Dot(model, account)); Add(chip); }
+            Add(NoteParts.Chip(repeat == RepeatChoice.None ? series.Rule.Words() : NotesModel.Label(repeat), "quiet", IconKind.Repeat));
+        if (account is not null) { var chip = NoteParts.Chip("#" + account.Replace(" ", ""), "plain", null, NoteParts.Dot(model, account)); Add(chip); }
         if (!meeting && NotesModel.ReminderOf(note) is { } due)
         {
             var late = Notes.IsLate(note);
             var chip = Ui.Button("", () => OpenReminder(note.Id), "NoteReminder_" + note.Id); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0);
-            chip.Content = NoteParts.Chip(model, NoteDates.When(due, model.Engine.Now), late ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change the date or time"); chip.Margin = new Thickness(0, 0, 6, 4); chips.Children.Add(chip);
+            chip.Content = NoteParts.Chip(NoteDates.When(due, model.Engine.Now), late ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change the date or time"); chip.Margin = new Thickness(0, 0, 6, 4); chips.Children.Add(chip);
         }
         column.Children.Add(chips);
         Ui.Put(line, column, 1);
@@ -155,8 +155,6 @@ public sealed class NotesCard : Border
     }
     private void Close() { form = Form.None; editing = null; scope = null; CloseReminder(); DrawOverlay(); DrawForm(); }
 
-    /// <summary>Whether a form is open (for tests), and which.</summary>
-    public bool FormOpen => form != Form.None;
 
     private TextBox field = null!;
     private void DrawForm()
@@ -168,14 +166,14 @@ public sealed class NotesCard : Border
         // The words, with the account chip and the reminder chip inside the same box.
         var box = Ui.Grid("Auto,*,Auto"); box.ColumnSpacing = 6;
         var frame = new Border { Child = box, Height = 36, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(10, 0, 6, 0) }; frame.Classes.Add("composer");
-        if (draftAccount is { } account) { var chip = NoteParts.Chip(model, "#" + account.Replace(" ", ""), "plain", null, NoteParts.Dot(model, account)); chip.VerticalAlignment = VerticalAlignment.Center; Ui.Put(box, chip); }
+        if (draftAccount is { } account) { var chip = NoteParts.Chip("#" + account.Replace(" ", ""), "plain", null, NoteParts.Dot(model, account)); chip.VerticalAlignment = VerticalAlignment.Center; Ui.Put(box, chip); }
         field = new TextBox { Name = "NoteField", Text = draft, Watermark = meeting ? "Meeting name, # for an account" : "Write a note, # for an account", BorderThickness = new Thickness(0), Background = Brushes.Transparent, Height = 30, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0) };
         field.Classes.Add("bareField");
         Ui.Put(box, field, 1);
         if (!meeting && draftReminder is { } reminder)
         {
             var chip = Ui.Button("", () => OpenReminder(null), "FormReminder"); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0);
-            chip.Content = NoteParts.Chip(model, NoteDates.When(reminder, model.Engine.Now), model.Engine.Now > reminder ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change the reminder"); Ui.Put(box, chip, 2);
+            chip.Content = NoteParts.Chip(NoteDates.When(reminder, model.Engine.Now), model.Engine.Now > reminder ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change the reminder"); Ui.Put(box, chip, 2);
         }
         var row = Ui.Grid("*,Auto,Auto"); row.ColumnSpacing = 6;
         Ui.Put(row, frame);
@@ -274,7 +272,7 @@ public sealed class NotesCard : Border
 
     // ---- The pop-ups over the card: the reminder and the question about a repeating meeting ----
 
-    private long? popupTarget; private Control? popup;
+    private long? popupTarget;
     private readonly Avalonia.Controls.Primitives.Popup reminderHost = new() { Placement = PlacementMode.Bottom, IsLightDismissEnabled = true, Name = "ReminderHost" };
     private void OpenReminder(long? noteId)
     {
@@ -287,9 +285,9 @@ public sealed class NotesCard : Border
             if (popupTarget is { } target) Notes.SetReminder(target, answered); else { draftReminder = answered; DrawForm(); }
             CloseReminder();
         }, CloseReminder);
-        reminderHost.Child = content; reminderHost.IsOpen = true; popup = content;
+        reminderHost.Child = content; reminderHost.IsOpen = true;
     }
-    private void CloseReminder() { reminderHost.IsOpen = false; reminderHost.Child = null; popup = null; }
+    private void CloseReminder() { reminderHost.IsOpen = false; reminderHost.Child = null; }
 
     private void DrawOverlay()
     {

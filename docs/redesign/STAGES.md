@@ -15,6 +15,6 @@ Defaults agreed: the Light and Dark changes are done inside the app (no shared-p
 | 6a | Notes: `NotesModel` on the shared notes model, the Notes card with its note and meeting forms, the reminder pop-up, meetings and repeats on the timeline | L | built (no Every month, see item 81) |
 | 6b | The bell and its flyout, the reminder light on the pill and rail, the due capsule, then the Notes page | L | built (item 82) |
 | 7 | Week overview: totals strip, schedule line, Chart or Table, pace, day markers | M | built (item 83) |
-| 8 | Polish: the pill app icon, tray glyph and Store tiles, animation audit, contrast tests for the new Light, accessibility, dead code, docs, repeat-tests run | M | |
+| 8 | Polish: the pill app icon, tray glyph and Store tiles, animation audit, contrast tests for the new Light, accessibility, dead code, docs, repeat-tests run | M | built (item 88). The manual Repeat the tests workflow can only run once its file is on `main`, so the suite was run three times in a row locally instead |
 
 Drops for the owner to test: Drop 1 is stages 1 and 2, Drop 2 is stages 3 to 5, Drop 3 is stages 6 to 8.

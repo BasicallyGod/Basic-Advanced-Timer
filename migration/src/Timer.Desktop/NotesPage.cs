@@ -49,7 +49,6 @@ public sealed class NotesPage : Grid
     /// <summary>The words in the header's search box. The list and the counts follow them.</summary>
     public string Query { get => query; set { query = value ?? ""; shown = null; Sync(); } }
     public NoteView View => view;
-    public bool FormEditing => editing is not null;
 
     // ---- The views, the accounts and the list ----
 
@@ -109,16 +108,16 @@ public sealed class NotesPage : Grid
     {
         var isMeeting = NotesModel.IsMeeting(note); var words = Notes.Text(note); var acct = Notes.AccountOf(note);
         var line = Ui.Grid("Auto,*,Auto"); line.ColumnSpacing = 10;
-        Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) } : NoteParts.Tick(model, Notes, note);
+        Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) } : NoteParts.Tick(Notes, note);
         Ui.Put(line, lead);
         var text = new TextBlock { Text = words, FontSize = 14, TextWrapping = TextWrapping.Wrap, FontWeight = isMeeting ? FontWeight.SemiBold : FontWeight.Normal, Name = "PageNoteText_" + note.Id };
         if (note.Done) { text.TextDecorations = TextDecorations.Strikethrough; text.Classes.Add("muted"); }
         var chips = new WrapPanel { Orientation = Orientation.Horizontal };
         void Add(Control chip) { chip.Margin = new Thickness(0, 0, 6, 0); chips.Children.Add(chip); }
-        if (acct is not null) Add(NoteParts.Chip(model, "#" + acct.Replace(" ", ""), "plain", null, NoteParts.Dot(model, acct)));
-        if (isMeeting) Add(NoteParts.Chip(model, NoteDates.Day(note.Day, model.Engine.Now) + ", " + NoteParts.Span(note), "plain"));
-        else if (NotesModel.ReminderOf(note) is { } due) Add(NoteParts.Chip(model, NoteDates.When(due, model.Engine.Now), Notes.IsLate(note) ? "late" : "accent", IconKind.Bell));
-        if (isMeeting && Notes.SeriesOf(note) is { } series) Add(NoteParts.Chip(model, Notes.RepeatOf(note) == RepeatChoice.None ? series.Rule.Words() : NotesModel.Label(Notes.RepeatOf(note)), "quiet", IconKind.Repeat));
+        if (acct is not null) Add(NoteParts.Chip("#" + acct.Replace(" ", ""), "plain", null, NoteParts.Dot(model, acct)));
+        if (isMeeting) Add(NoteParts.Chip(NoteDates.Day(note.Day, model.Engine.Now) + ", " + NoteParts.Span(note), "plain"));
+        else if (NotesModel.ReminderOf(note) is { } due) Add(NoteParts.Chip(NoteDates.When(due, model.Engine.Now), Notes.IsLate(note) ? "late" : "accent", IconKind.Bell));
+        if (isMeeting && Notes.SeriesOf(note) is { } series) Add(NoteParts.Chip(Notes.RepeatOf(note) == RepeatChoice.None ? series.Rule.Words() : NotesModel.Label(Notes.RepeatOf(note)), "quiet", IconKind.Repeat));
         var stack = new StackPanel { Spacing = 5 }; stack.Children.Add(text); stack.Children.Add(chips);
         var main = Ui.Button("", () => Edit(note), "PageNoteOpen_" + note.Id); main.Classes.Add("pillBare"); main.Content = stack; main.Padding = new Thickness(0); main.HorizontalContentAlignment = HorizontalAlignment.Left; main.HorizontalAlignment = HorizontalAlignment.Stretch;
         Avalonia.Automation.AutomationProperties.SetName(main, (isMeeting ? "Edit meeting: " : "Edit note: ") + words);
@@ -169,7 +168,7 @@ public sealed class NotesPage : Grid
         void Add(Control control) { control.Margin = new Thickness(0, 0, 6, 6); options.Children.Add(control); }
         if (editing is not null)
         {
-            var label = NoteParts.Chip(model, meeting ? "Editing a meeting" : "Editing a note", "plain"); label.Height = 36; label.Padding = new Thickness(12, 0); Add(label);
+            var label = NoteParts.Chip(meeting ? "Editing a meeting" : "Editing a note", "plain"); label.Height = 36; label.Padding = new Thickness(12, 0); Add(label);
         }
         else
         {

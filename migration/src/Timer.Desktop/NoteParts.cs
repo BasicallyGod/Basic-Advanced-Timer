@@ -17,7 +17,7 @@ public static class NoteParts
     }
 
     /// <summary>A small pill: tone is plain, accent (a reminder), late (a reminder that has passed) or quiet (a repeat).</summary>
-    public static Border Chip(TimerModel model, string text, string tone, IconKind? icon = null, Control? lead = null)
+    public static Border Chip(string text, string tone, IconKind? icon = null, Control? lead = null)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
         var token = tone switch { "accent" => "Accent", "late" => "Overtime", "quiet" => "Muted", _ => "Ink" };
@@ -42,7 +42,7 @@ public static class NoteParts
     }
 
     /// <summary>The round tick that marks a note done (or not done).</summary>
-    public static Button Tick(TimerModel model, NotesModel notes, DayNote note)
+    public static Button Tick(NotesModel notes, DayNote note)
     {
         var ring = new Border { Width = 20, Height = 20, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1.6), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 1, 0, 0) };
         ring.Classes.Add("tick"); ring.Classes.Set("tickDone", note.Done);

@@ -63,13 +63,13 @@ public static class WeekOverview
             today >= weekStart && today < weekStart.AddDays(7));
     }
 
-    public static Control Build(TimerModel model, bool table)
+    public static Control Build(TimerModel model)
     {
         var start = model.WeekStart(model.SelectedDate);
-        var figures = Figures(model, start); var (grid, days) = ReviewViews.WeekTableFor(model, start);
+        var figures = Figures(model, start); var (grid, _) = ReviewViews.WeekTableFor(model, start);
         var root = new StackPanel { Spacing = 14, Margin = new Thickness(0, 0, 14, 4) };
         root.Children.Add(Totals(model, figures));
-        root.Children.Add(ByDay(model, figures, grid, days, start));
+        root.Children.Add(ByDay(model, figures, grid));
         root.Children.Add(ByAccount(model, figures, grid));
         var scroll = new ScrollViewer { Content = root, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
         return Ui.WithMoreBelow(scroll);
@@ -129,7 +129,7 @@ public static class WeekOverview
     }
 
     // ---- Time by day: the chart or the table ----
-    private static Control ByDay(TimerModel model, WeekFigures w, WeekTable grid, int[] shown, DateTime start)
+    private static Control ByDay(TimerModel model, WeekFigures w, WeekTable grid)
     {
         var inChart = !model.WeekAsTable;
         var head = Ui.Grid("Auto,*,Auto"); head.Margin = new Thickness(0, 0, 0, 6);
@@ -172,12 +172,12 @@ public static class WeekOverview
         for (var i = 0; i < w.Days.Count; i++)
         {
             columns.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
-            var column = Column(model, w, w.Days[i], perHour, i >= 3 && w.Days.Count > 3, british); Grid.SetColumn(column, i); columns.Children.Add(column);
+            var column = Column(model, w.Days[i], perHour, i >= 3 && w.Days.Count > 3, british); Grid.SetColumn(column, i); columns.Children.Add(column);
         }
         chart.Children.Add(columns); return chart;
     }
 
-    private static Control Column(TimerModel model, WeekFigures w, WeekDay d, double perHour, bool flip, CultureInfo british)
+    private static Control Column(TimerModel model, WeekDay d, double perHour, bool flip, CultureInfo british)
     {
         var overtime = d.Overtime > TimeSpan.Zero;
         var stack = new StackPanel { Width = 46, HorizontalAlignment = HorizontalAlignment.Center };

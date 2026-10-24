@@ -25,8 +25,6 @@ public sealed class SettingsView : Grid
     private readonly Dictionary<string, (Button Nav, Control Body, string Title, string Intro)> sections = new();
     private readonly TextBlock title = Ui.Heading("", 22), intro = Ui.Text("", 13, "muted");
     private string current = "appearance";
-    /// <summary>The section showing now: appearance, behaviour, hours, accounts, export or about.</summary>
-    public string Section => current;
 
     public SettingsView(TimerModel model)
     {
