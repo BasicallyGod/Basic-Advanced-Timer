@@ -610,7 +610,7 @@ public sealed class DashboardWindow : Window
         if (RailScaleSource is { } source) SetRailScale(source());
         undo.IsEnabled = model.Editor.CanUndo;
         ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo {label.ToLowerInvariant()}" : null);
-        void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); var glyph = button.Content as IconGlyph ?? (button.Content as Grid)?.Children.OfType<IconGlyph>().FirstOrDefault(); if (glyph is not null) glyph.TintKey = selected ? "Ink" : "Muted"; }
+        void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); var glyph = button.Content as IconGlyph ?? (button.Content as Grid)?.Children.OfType<IconGlyph>().FirstOrDefault(); if (glyph is not null) glyph.TintKey = selected ? "RailIconOn" : "RailIcon"; }
         Rail(timelineRail, !weekMode && !settingsMode && !notesMode);
         Rail(overviewTab, !settingsMode && weekMode);
         Rail(notesTab, !settingsMode && notesMode);

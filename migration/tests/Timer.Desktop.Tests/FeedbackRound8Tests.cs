@@ -150,4 +150,22 @@ public sealed class FeedbackRound8Tests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheRailIconsAreASofterGreyOnLightButStillReadAgainstThePageAndTheChosenTile()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            Avalonia.Media.Color Resource(string key) { Assert.True(window.TryFindResource(key, window.ActualThemeVariant, out var v)); return ((Avalonia.Media.ISolidColorBrush)v!).Color; }
+            double Ratio(Avalonia.Media.Color a, Avalonia.Media.Color b) { double L(Avalonia.Media.Color c) { double F(byte x) { var v = x / 255.0; return v <= .03928 ? v / 12.92 : Math.Pow((v + .055) / 1.055, 2.4); } return .2126 * F(c.R) + .7152 * F(c.G) + .0722 * F(c.B); } var (hi, lo) = (Math.Max(L(a), L(b)), Math.Min(L(a), L(b))); return (hi + .05) / (lo + .05); }
+            var icon = Resource("RailIcon"); var muted = Resource("Muted");
+            Assert.True(Ratio(icon, Resource("Surface")) >= 3, "Readable on the page.");
+            Assert.True(Ratio(icon, Resource("Surface")) < Ratio(muted, Resource("Surface")), "Lighter than the quiet text colour.");
+            Assert.True(Ratio(Resource("RailIconOn"), Resource("Selected")) >= 3, "The chosen icon reads on its tint.");
+            Assert.Equal("RailIconOn", Find<Button>(window, "TimelineTab").GetVisualDescendants().OfType<IconGlyph>().Single().TintKey);
+            Assert.Equal("RailIcon", Find<Button>(window, "NotesTab").GetVisualDescendants().OfType<IconGlyph>().Single().TintKey);
+        }
+        finally { window.Close(); }
+    }
 }
