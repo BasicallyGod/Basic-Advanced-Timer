@@ -207,7 +207,7 @@ public sealed class TweakTests
     {
         var model = CopyModel(out var engine);
         engine.Sessions.Add(new("2026-10-13", "Account one", "09:00:00", "recorded", "60.00"));
-        Assert.False(model.CopyBlocks(engine.Sessions.ToList())); Assert.False(model.CanPaste); Assert.Contains("one day", model.EditError);
+        Assert.False(model.CopyBlocks(engine.Sessions.ToList())); Assert.False(model.CanPaste); Assert.Contains("One day", model.EditError);
         Assert.False(model.PasteBlocks(new DateTime(2026, 10, 14, 13, 0, 0)));
         Assert.Equal(3, engine.Sessions.Count);
     }

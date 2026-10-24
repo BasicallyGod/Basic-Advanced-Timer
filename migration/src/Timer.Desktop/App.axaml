@@ -91,6 +91,10 @@
     <Style Selector="TextBlock.overtime"><Setter Property="Foreground" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.surface"><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
     <Style Selector=":is(Border).flyoutCard"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
+    <!-- Tooltips are the app's own card: the panel colour, a hairline, rounded, with the action in a word or two and a shortcut as a small key. -->
+    <Style Selector="ToolTip"><Setter Property="CornerRadius" Value="10" /><Setter Property="Padding" Value="9,5" /><Setter Property="FontSize" Value="12.5" /><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="BorderThickness" Value="1" /><Setter Property="MaxWidth" Value="320" /></Style>
+    <Style Selector="Border.tipKey"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
+    <Style Selector="Border.tipKey TextBlock"><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
     <Style Selector="Border.pillBody"><Setter Property="Background" Value="{DynamicResource PillBody}" /></Style>
     <Style Selector="Border.panel"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
     <Style Selector="Border.rule"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
@@ -223,14 +227,15 @@
     <Style Selector="Button.iconButton /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Transitions"><Transitions><BrushTransition Property="Background" Duration="0:0:0.2" /></Transitions></Setter>
     </Style>
-    <!-- The floating message is raised off the timeline, with the accent for an outline, so it is easy to see against any block. -->
+    <!-- The floating message is the tooltips' card, a little larger: the panel colour, a hairline and a soft shadow, so it is easy to see against any block. -->
     <Style Selector=":is(Border).messageBar">
       <Setter Property="Background" Value="{DynamicResource Panel}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
-      <Setter Property="BorderThickness" Value="1.5" />
-      <Setter Property="BoxShadow" Value="0 10 28 0 #33141E46" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BoxShadow" Value="0 6 18 0 #29141E46" />
     </Style>
-    <Style Selector=":is(Border).messageBar.warn"><Setter Property="BorderBrush" Value="{DynamicResource Muted}" /></Style>
+    <!-- A failed save stays until a save works, so its edge is heavier. -->
+    <Style Selector=":is(Border).messageBar.hold"><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /><Setter Property="BorderThickness" Value="1.5" /></Style>
     <Style Selector="Border.okIcon"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
     <Style Selector="Border.warnIcon"><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /><Setter Property="BorderThickness" Value="1.6" /></Style>
     <!-- The Day elapsed card is a raised tile with a bar of the accent colour along its top edge. -->

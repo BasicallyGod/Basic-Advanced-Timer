@@ -213,4 +213,36 @@ public sealed class FeedbackRound7Tests
         Assert.NotEqual(RailMotion.BarOffset(0, 1) / 1.6, RailMotion.BarOffset(1, 1) / -1.6, 3);
         Assert.NotEqual(RailMotion.ColumnScale(0, .3), RailMotion.ColumnScale(1, .3), 3);
     }
+
+    [AvaloniaFact]
+    public void AButtonWithWordsHasNoTooltipExceptToShowItsShortcut()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            Assert.Null(ToolTip.GetTip(Find<Button>(window, "AddTime"))); // It says Add time already.
+            Assert.Null(ToolTip.GetTip(Find<Button>(window, "GoToToday")));
+            model.SelectBlock(new[] { model.Engine.Sessions[0] }, false); Settle(window);
+            var copy = ToolTip.GetTip(Find<Button>(window, "CopySelected")); Assert.IsType<StackPanel>(copy); // "Copy" and its key.
+            Assert.Contains(((StackPanel)copy!).GetVisualDescendants().Concat(((StackPanel)copy).Children).OfType<TextBlock>(), x => x.Text == "Ctrl C");
+            Assert.NotNull(ToolTip.GetTip(Find<Button>(window, "TimelineZoomOut"))); // An icon is named.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void AMessageIsAFewWordsWithAQuietDetailAndTheSharedPackagesSentencesAreShortened()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            model.Tell("Merged · 00:05 gap added"); Settle(window);
+            Assert.Equal("Merged", Find<TextBlock>(window, "MessageText").Text); Assert.Equal("00:05 gap added", Find<TextBlock>(window, "MessageDetail").Text);
+            model.Tell("Undone"); Settle(window); Assert.False(Find<TextBlock>(window, "MessageDetail").IsVisible);
+            model.Refuse("This interval overlaps recorded or running time. Choose a free gap."); Settle(window);
+            Assert.Equal("Overlaps another block", Find<TextBlock>(window, "MessageText").Text);
+            model.Refuse("Merge blocks with only blank gaps between them. Overlapping or intervening time cannot be merged."); Assert.Equal("Time in between: can’t merge", model.EditError);
+        }
+        finally { window.Close(); }
+    }
 }

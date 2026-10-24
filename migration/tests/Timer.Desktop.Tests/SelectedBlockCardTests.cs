@@ -81,10 +81,10 @@ public sealed class SelectedBlockCardTests
             model.SelectBlock(new[] { engine.Sessions[2] }, false); Settle(window);
             Click(window, "DeleteSelected"); Settle(window);
             Assert.Equal(2, engine.Sessions.Count); Assert.Empty(model.SelectedRows);
-            var bar = Find<Border>(window, "MessageBar"); Assert.True(bar.IsVisible); Assert.Equal("Deleted.", Find<TextBlock>(window, "MessageText").Text);
+            var bar = Find<Border>(window, "MessageBar"); Assert.True(bar.IsVisible); Assert.Equal("Deleted", Find<TextBlock>(window, "MessageText").Text);
             Assert.True(Find<Button>(window, "UndoMessage").IsVisible);
             Click(window, "UndoMessage"); Settle(window);
-            Assert.Equal(3, engine.Sessions.Count); Assert.Equal("Undone.", model.Notice); Assert.False(Find<Button>(window, "UndoMessage").IsVisible);
+            Assert.Equal(3, engine.Sessions.Count); Assert.Equal("Undone", model.Notice); Assert.False(Find<Button>(window, "UndoMessage").IsVisible);
         }
         finally { window.Close(); }
     }
@@ -96,7 +96,7 @@ public sealed class SelectedBlockCardTests
         try
         {
             model.ToggleSelection(new[] { engine.Sessions[0], engine.Sessions[1] }); Assert.True(model.MergeSelection()); Settle(window);
-            Assert.Equal("Merged.", Find<TextBlock>(window, "MessageText").Text);
+            Assert.Equal("Merged", Find<TextBlock>(window, "MessageText").Text);
             var group = model.Editor.Entries(Day, Day.AddDays(1)).Single(e => e.GroupId is not null);
             model.SelectBlock(group.Sources, false); Settle(window);
             Assert.Equal("Merged block", Find<TextBlock>(window, "SelectedTitle").Text);
@@ -119,7 +119,7 @@ public sealed class SelectedBlockCardTests
             Assert.Equal(3, Find<ScrollViewer>(window, "SelectedRows").GetVisualDescendants().OfType<Border>().Count(b => b.Classes.Contains("selectedRow")));
             Assert.Equal("Shift-click a selected block to take it out of the selection.", Find<TextBlock>(window, "SelectedHint").Text);
             Click(window, "DeleteSelected"); Settle(window);
-            Assert.Empty(engine.Sessions); Assert.Equal("Deleted 3 blocks.", model.Notice);
+            Assert.Empty(engine.Sessions); Assert.Equal("3 blocks deleted", model.Notice);
             Assert.True(model.UndoEdit()); Assert.Equal(3, engine.Sessions.Count);
         }
         finally { window.Close(); }
@@ -135,7 +135,7 @@ public sealed class SelectedBlockCardTests
             var bar = Find<MessageBar>(window, "MessageBar"); Assert.True(bar.IsWarning); Assert.Contains("warn", bar.Classes); Assert.False(Find<Button>(window, "UndoMessage").IsVisible);
             model.ExpireMessages(); Settle(window);
             Assert.True(model.CopyBlocks(model.Engine.Sessions.Take(1).ToList())); Settle(window);
-            Assert.False(bar.IsWarning); Assert.DoesNotContain("warn", bar.Classes); Assert.Equal("Copied 1 block.", Find<TextBlock>(window, "MessageText").Text);
+            Assert.False(bar.IsWarning); Assert.DoesNotContain("warn", bar.Classes); Assert.Equal("1 block copied", Find<TextBlock>(window, "MessageText").Text);
         }
         finally { window.Close(); }
     }

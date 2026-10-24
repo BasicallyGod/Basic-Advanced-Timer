@@ -74,9 +74,9 @@ public sealed class EntryLengthTests
             model.ToggleSelection(new[] { engine.Sessions[0] }); Dispatcher.UIThread.RunJobs();
             var end = Find<TextBox>(window, "SelectedEnd");
             Type(window, "SelectedEnd", "08:00:00"); end.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter }); Dispatcher.UIThread.RunJobs();
-            Assert.Equal("End has to be after the start.", model.EditError); Assert.Equal("09:30:00", Find<TextBox>(window, "SelectedEnd").Text); Assert.Equal("09:30:00", engine.Sessions[0].To.ToString("HH:mm:ss"));
+            Assert.Equal("End must be after start", model.EditError); Assert.Equal("09:30:00", Find<TextBox>(window, "SelectedEnd").Text); Assert.Equal("09:30:00", engine.Sessions[0].To.ToString("HH:mm:ss"));
             Type(window, "SelectedStart", "nine"); Find<TextBox>(window, "SelectedStart").RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter }); Dispatcher.UIThread.RunJobs();
-            Assert.Equal("Start looks like 09:30.", model.EditError);
+            Assert.Equal("Start: try 09:30", model.EditError);
         }
         finally { window.Close(); }
     }

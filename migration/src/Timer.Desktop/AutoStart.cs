@@ -101,14 +101,14 @@ public sealed class StartupTaskSetting : IAutoStart
         if (enabled)
         {
             if (state is StartupState.Enabled or StartupState.EnabledByPolicy) return;
-            if (state == StartupState.DisabledByPolicy) throw new InvalidOperationException("Your organisation does not allow this app to start with Windows.");
+            if (state == StartupState.DisabledByPolicy) throw new InvalidOperationException("Blocked by your organisation");
             if (state == StartupState.DisabledByUser) throw new InvalidOperationException("It is switched off in Windows. Turn it on under Settings, Apps, Startup.");
             if (host.RequestEnable() is not (StartupState.Enabled or StartupState.EnabledByPolicy))
                 throw new InvalidOperationException("Windows did not allow it. Turn it on under Settings, Apps, Startup.");
         }
         else
         {
-            if (state == StartupState.EnabledByPolicy) throw new InvalidOperationException("Your organisation turns this on, so it cannot be switched off here.");
+            if (state == StartupState.EnabledByPolicy) throw new InvalidOperationException("Set by your organisation");
             if (state == StartupState.Enabled) host.Disable();
         }
     }

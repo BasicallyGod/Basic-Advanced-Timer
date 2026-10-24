@@ -293,7 +293,7 @@ public sealed class DashboardWindow : Window
         // Zoom steps by a fifth each press, about the middle of what is showing. Hold Ctrl and use the wheel to zoom about the pointer.
         ScrollViewer? TimelineScroll() => timelineHost.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
         zoomOut = Ui.Ctl("TimelineZoomOut", null, IconKind.Minus, "Zoom out", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Width / 2, s.Offset.X); });
-        zoomIn = Ui.Ctl("TimelineZoomIn", null, IconKind.Plus, "Zoom in (or hold Ctrl and use the mouse wheel)", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Width / 2, s.Offset.X); });
+        zoomIn = Ui.Ctl("TimelineZoomIn", null, IconKind.Plus, "Zoom in", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Width / 2, s.Offset.X); }, key: "Ctrl scroll");
         var zoom = Ui.Horizontal(zoomOut, zoomIn); zoom.Spacing = 6; zoom.Name = "TimelineControls";
         totalsStrip = BuildTotals();
         var tools = Ui.Grid("Auto,*,Auto"); tools.Margin = new Thickness(14, 6, 14, 0);
@@ -469,7 +469,6 @@ public sealed class DashboardWindow : Window
         strip.Children.Add(Stat("Breaks", breaksValue, "TotalsBreaks", amber));
         overtimeStat = Stat("Overtime", overtimeValue, "TotalsOvertime"); strip.Children.Add(overtimeStat);
         overtimeValue.Classes.Add("overtimeText");
-        ToolTip.SetTip(strip.Children[3], "Time on accounts"); ToolTip.SetTip(strip.Children[4], "Working time with nothing recorded on an account"); ToolTip.SetTip(strip.Children[5], "Kept apart from working time");
         return strip;
     }
     // The bar is the scheduled day: time on accounts solid, working time with nothing on an account hatched, overtime in red at the end. A day off has no bar.
@@ -489,7 +488,7 @@ public sealed class DashboardWindow : Window
         if (scheduled <= TimeSpan.Zero && working + breaks <= TimeSpan.Zero)
         {
             dayBar.Child = null; dayBar.Classes.Add("track");
-            ToolTip.SetTip(dayBar, "Nothing is scheduled. Only tracked time counts."); Avalonia.Automation.AutomationProperties.SetName(dayBar, "Nothing is scheduled or recorded");
+            ToolTip.SetTip(dayBar, "No schedule"); Avalonia.Automation.AutomationProperties.SetName(dayBar, "Nothing is scheduled or recorded");
         }
         else
         {
@@ -509,7 +508,7 @@ public sealed class DashboardWindow : Window
             }
             grid.Children.Add(Part("Allocated", 0)); grid.Children.Add(Part("Unallocated", 1, true)); grid.Children.Add(Part("Breaks", 2)); grid.Children.Add(Part("Overtime", 3));
             dayBar.Child = grid; dayBar.Classes.Add("track");
-            ToolTip.SetTip(dayBar, (scheduled > TimeSpan.Zero ? $"Scheduled {plan.Start:HH:mm} to {plan.End:HH:mm}. " : "Nothing is scheduled. ") + $"Allocated {model.Format(totals.Allocated)}, unallocated {model.Format(totals.Unallocated)}, breaks {model.Format(breaks)}" + (totals.Overtime > TimeSpan.Zero ? $", overtime {model.Format(totals.Overtime)}." : "."));
+            ToolTip.SetTip(dayBar, (scheduled > TimeSpan.Zero ? $"Scheduled {plan.Start:HH:mm}–{plan.End:HH:mm}" : "No schedule") + $"\nAllocated {model.Format(totals.Allocated)} · Unallocated {model.Format(totals.Unallocated)} · Breaks {model.Format(breaks)}" + (totals.Overtime > TimeSpan.Zero ? $"\nOvertime {model.Format(totals.Overtime)}" : ""));
             Avalonia.Automation.AutomationProperties.SetName(dayBar, $"The scheduled day, {model.Format(working)} worked");
         }
     }
@@ -593,7 +592,7 @@ public sealed class DashboardWindow : Window
         var onBreak = model.IsOnBreak;
         var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
         date.Text = weekMode ? WeekRange(model.WeekStart(model.SelectedDate), british) : model.SelectedDate.ToString("ddd d MMM", british);
-        todayWords.Text = weekMode ? "This week" : "Today"; ToolTip.SetTip(todayButton, weekMode ? "Back to this week" : "Back to today");
+        todayWords.Text = weekMode ? "This week" : "Today";
         next.IsEnabled = !weekMode || model.CanStepForwardAWeek;
         ToolTip.SetTip(previous, weekMode ? "Previous week" : "Previous day"); ToolTip.SetTip(next, weekMode ? "Next week" : "Next day");
         UpdateTotals();
@@ -610,7 +609,7 @@ public sealed class DashboardWindow : Window
         breakButton.Refresh(); breakButton.Classes.Set("onBreak", onBreak);
         if (RailScaleSource is { } source) SetRailScale(source());
         undo.IsEnabled = model.Editor.CanUndo;
-        ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo: {label} ({model.Editor.UndoCount} available)" : "No edit to undo");
+        ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo {label.ToLowerInvariant()}" : null);
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); var glyph = button.Content as IconGlyph ?? (button.Content as Grid)?.Children.OfType<IconGlyph>().FirstOrDefault(); if (glyph is not null) glyph.TintKey = selected ? "Ink" : "Muted"; }
         Rail(timelineRail, !weekMode && !settingsMode && !notesMode);
         Rail(overviewTab, !settingsMode && weekMode);

@@ -43,7 +43,16 @@ public sealed class TimerModel : INotifyPropertyChanged
     public LedgerEditor Editor { get; }
     /// <summary>Notes and meetings (see <see cref="NotesModel"/>), kept beside this model so the two stay apart.</summary>
     public NotesModel Notes { get; }
-    public string? EditError { get; private set; }
+    private string? editError;
+    /// <summary>The refusal being shown. The shared packages word theirs as sentences, so those are put into the app's few words here.</summary>
+    public string? EditError { get => editError; private set => editError = value is null ? null : Plain(value); }
+    private static string Plain(string message)
+        => message.Contains("overlaps recorded or running time", StringComparison.OrdinalIgnoreCase) ? "Overlaps another block"
+         : message.Contains("moved into recorded or running time", StringComparison.OrdinalIgnoreCase) || message.Contains("moved into running time", StringComparison.OrdinalIgnoreCase) ? "Can’t move into other time"
+         : message.Contains("intervening time cannot be merged", StringComparison.OrdinalIgnoreCase) ? "Time in between: can’t merge"
+         : message.Contains("legacy note key", StringComparison.OrdinalIgnoreCase) ? "Edit these together"
+         : message.Contains("start at the same time", StringComparison.OrdinalIgnoreCase) ? "Same start: can’t move to one account"
+         : message;
     /// <summary>Asks for the Add time dialog, with the start and end it opens on.</summary>
     public event Action<DateTime, DateTime>? EntryRequested;
     public event Action? AccountsRequested;
@@ -58,24 +67,24 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool CanMergeSelection => SelectedBlockCount >= 2 && selectedRows.Select(s => s.Day).Distinct().Count() == 1
         && selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() == 1 && Editor.CanCombine(selectedRows.ToArray());
     /// <summary>The full rule for merging, for the Merge button's tooltip and a refused merge.</summary>
-    public string MergeHint => SelectedBlockCount < 2 ? "Select two or more blocks to merge them." : CanMergeSelection
-        ? (Editor.MergeGapMinutes(selectedRows.ToArray()) is var gapMinutes and > 0 ? $"Press Merge to join them into one block. This adds {Format(TimeSpan.FromMinutes((double)gapMinutes))} of gap time." : "Press Merge to join them into one block.")
-        : "To merge, blocks must share an account and day, with only gaps between.";
+    public string MergeHint => SelectedBlockCount < 2 ? "Pick a second block" : CanMergeSelection
+        ? (Editor.MergeGapMinutes(selectedRows.ToArray()) is var gapMinutes and > 0 ? $"Joins them · adds {Format(TimeSpan.FromMinutes((double)gapMinutes))} gap" : "Joins them")
+        : "Same account and day, with only gaps between";
     /// <summary>One short sentence under the count: what is needed, or what Merge will do. It names the specific problem when blocks cannot be merged.</summary>
     public string? SelectionNote
     {
         get
         {
             var count = SelectedBlockCount; if (count == 0) return null;
-            if (count < 2) return "Select another block to merge.";
+            if (count < 2) return "Pick a second block";
             if (CanMergeSelection)
             {
                 var gap = Editor.MergeGapMinutes(selectedRows.ToArray());
-                return gap > 0 ? $"Merge joins them and adds {Format(TimeSpan.FromMinutes((double)gap))} of gap time." : "Merge joins them into one block.";
+                return gap > 0 ? $"Merge joins them · adds {Format(TimeSpan.FromMinutes((double)gap))} gap" : "Merge joins them";
             }
-            if (selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() > 1) return "Choose blocks from the same account to merge.";
-            if (selectedRows.Select(s => s.Day).Distinct().Count() > 1) return "Choose blocks from the same day to merge.";
-            return "Other time sits between these blocks, so they cannot be merged.";
+            if (selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() > 1) return "Same account only";
+            if (selectedRows.Select(s => s.Day).Distinct().Count() > 1) return "Same day only";
+            return "Time in between: can’t merge";
         }
     }
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
@@ -132,17 +141,19 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool CanContinuePrevious => ContinuableNow() is not null;
     /// <summary>What the option says, such as the account and the time its earlier block began, or null when it is not on offer.</summary>
-    public string? ContinuePreviousText => ContinuableNow() is { } blocks ? $"Continue {Label(blocks.Earlier.Account)} from {blocks.Earlier.From:HH:mm}" : null;
+    public string? ContinuePreviousText => ContinuableNow() is { } blocks ? $"Continue {Label(blocks.Earlier.Account)}" : null;
+    /// <summary>What the offer says beside its button: the slip, as the account it was and its length.</summary>
+    public string? ContinuePreviousNote => ContinuableNow() is { } blocks ? $"Switched · {FormatShort(blocks.Between.Duration)} on {Label(blocks.Between.Account)}" : null;
     /// <summary>Takes back a switch made by mistake. The short block between is dropped and the earlier block carries on as one, including the time of the slip.</summary>
     public bool ContinuePrevious()
     {
-        if (ContinuableNow() is null) { EditError = "Nothing recent to take back."; Notify(); return false; }
+        if (ContinuableNow() is null) { EditError = "Nothing to take back"; Notify(); return false; }
         if (!Save()) { EditError = LastError; Notify(); return false; }
         var removed = Engine.ContinuePrevious();
         if (removed is { } blocks) Editor.DropNotes(new[] { (blocks.Between.Account, blocks.Between.Date, blocks.Between.Start) });
         selectedRows.Clear();
         var saved = Save();
-        Notice = removed is { } done ? $"Carrying on with {Label(done.Earlier.Account)} from {done.Earlier.From:HH:mm}." : null;
+        Notice = removed is { } done ? $"Carrying on {Label(done.Earlier.Account)} from {done.Earlier.From:HH:mm}" : null;
         Notify(); return saved;
     }
     // Copied blocks stay inside the app, not on the system clipboard, so they can carry their credited minutes and notes exactly.
@@ -155,20 +166,20 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         var chosen = Engine.Sessions.Where(s => rows.Any(r => ReferenceEquals(r, s)) && s.Duration > TimeSpan.Zero).OrderBy(s => s.From).ToList();
         if (chosen.Count == 0) return false;
-        if (chosen.Select(s => s.Day).Distinct().Count() > 1) { EditError = "Copy blocks from one day at a time."; Notify(); return false; }
+        if (chosen.Select(s => s.Day).Distinct().Count() > 1) { EditError = "One day at a time"; Notify(); return false; }
         var first = chosen[0].From;
         copied = chosen.Select(s => new LedgerEditor.ClipBlock(s.Account, s.From - first, s.Minutes, Editor.Note(s))).ToList();
-        EditError = null; Notice = copied.Count == 1 ? "Copied 1 block." : $"Copied {copied.Count} blocks.";
+        EditError = null; Notice = copied.Count == 1 ? "1 block copied" : $"{copied.Count} blocks copied";
         Notify(); return true;
     }
     public bool CopySelection() => CopyBlocks(Engine.Sessions.Where(selectedRows.Contains).ToList());
     /// <summary>Pastes the copied blocks with the first at this time on the day shown. One undo step, and the time is credited like Add time.</summary>
     public bool PasteBlocks(DateTime at)
     {
-        if (!CanPaste) { EditError = "Copy some blocks first."; Notify(); return false; }
+        if (!CanPaste) { EditError = "Copy blocks first"; Notify(); return false; }
         var count = copied.Count;
         var done = ChangeLog(() => { foreach (var block in copied) ValidateAccount(block.Account); Editor.Paste(copied, at); });
-        if (done) { Notice = count == 1 ? "Pasted 1 block." : $"Pasted {count} blocks."; Notify(); }
+        if (done) { Notice = count == 1 ? "1 block pasted" : $"{count} blocks pasted"; Notify(); }
         return done;
     }
     /// <summary>The time Ctrl+V uses on the day shown, which is the pointer's place on the timeline, or straight after the day's last block.</summary>
@@ -184,7 +195,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         var rows = Engine.Sessions.Where(selectedRows.Contains).ToArray();
         var gap = Editor.MergeGapMinutes(rows);
         var done = ChangeLog(() => { Editor.Group(rows); selectedRows.Clear(); });
-        if (done) SayDone(gap > 0 ? $"Merged, with {Format(TimeSpan.FromMinutes((double)gap))} of gap time added." : "Merged.");
+        if (done) SayDone(gap > 0 ? $"Merged · {Format(TimeSpan.FromMinutes((double)gap))} gap added" : "Merged");
         return done;
     }
     private StoreSettings preferences;
@@ -281,14 +292,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     // Tells the user when pressing play carried on a block that was already there, since no new block appears.
     private void NoteContinuedBlock()
     {
-        if (Engine.ContinuedBlock is { } block) { selectedRows.Clear(); Notice = $"Carrying on with the {Label(block.Account)} block from {block.From:HH:mm}."; }
+        if (Engine.ContinuedBlock is { } block) { selectedRows.Clear(); Notice = $"Carrying on {Label(block.Account)} from {block.From:HH:mm}"; }
     }
     // The block being recorded has no ledger row yet, so it cannot be dragged or edited until tracking stops.
     /// <summary>Says that something was done, in the message bar, with no Undo (notes are outside the undo history).</summary>
     public void Tell(string text) { Notice = text; Notify(); }
     /// <summary>Shows a refused edit in the message bar, such as a time that was typed wrongly in the Selected block card.</summary>
     public void Refuse(string message) { EditError = message; Notice = null; Notify(); }
-    public void ExplainRunning() { EditError = "Still recording. Stop tracking to edit."; Notify(); }
+    public void ExplainRunning() { EditError = "Still recording · stop to edit"; Notify(); }
     public void TogglePause()
     {
         // On a break, resume ends the break and goes back to the account that was running before it.
@@ -454,7 +465,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (BudgetRatio(a) is not { } ratio) return "No budget";
         var period = a.Period is "day" or "month" or "quarter" ? (a.Period == "day" ? "working day" : a.Period) : "week";
-        return $"{Math.Round(ratio * 100)}% used{(ratio >= 1 ? ", over budget" : "")}. The line is how far through the {period} you are.";
+        return $"{Math.Round(ratio * 100)}% used{(ratio >= 1 ? " · over budget" : "")}\nLine: how far through the {period}";
     }
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
@@ -609,7 +620,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         }
         var next = occupied.Where(s => s.Start > start).Select(s => s.Start).DefaultIfEmpty(limit).Min();
         var end = new[] { start.AddMinutes(30), next, limit, day.AddDays(1) }.Min();
-        if (end <= start) { EditError = "There is no free recorded-time gap here."; Notify(); return; }
+        if (end <= start) { EditError = "No gap here"; Notify(); return; }
         EditError = null; EntryRequested?.Invoke(start, end);
     }
     public bool AddEntry(string account, DateTime start, DateTime end, string note)
@@ -650,13 +661,13 @@ public sealed class TimerModel : INotifyPropertyChanged
         var rows = Engine.Sessions.Where(selectedRows.Contains).ToArray();
         if (rows.Length == 0) return false;
         var done = ChangeLog(() => { Editor.Delete(rows); selectedRows.Clear(); });
-        if (done) SayDone(rows.Length > 1 ? $"Deleted {rows.Length} blocks." : "Deleted.");
+        if (done) SayDone(rows.Length > 1 ? $"{rows.Length} blocks deleted" : "Deleted");
         return done;
     }
     /// <summary>Deletes the given entries as one undoable edit.</summary>
     public bool DeleteEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Delete(rows));
-    public bool UndoEdit() { var done = ChangeLog(Editor.Undo); if (done) { Notice = "Undone."; Notify(); } return done; }
-    public bool UngroupEntries(string id) { var done = ChangeLog(() => Editor.Ungroup(id)); if (done) SayDone("Unmerged. The blocks keep their own times."); return done; }
+    public bool UndoEdit() { var done = ChangeLog(Editor.Undo); if (done) { Notice = "Undone"; Notify(); } return done; }
+    public bool UngroupEntries(string id) { var done = ChangeLog(() => Editor.Ungroup(id)); if (done) SayDone("Unmerged"); return done; }
     /// <summary>Exports the week or the whole month that the given day falls in, or the one being viewed when none is given.</summary>
     public bool ExportWeek(bool wholeMonth = false, DateTime? day = null)
     {
@@ -756,7 +767,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (!TrayAvailable && !on) return;
         preferences = preferences with { TaskbarButton = on };
-        if (!on) Notice = "The timer now runs from the notification area. Click its icon to bring the timer back.";
+        if (!on) Notice = "Running from the tray · click its icon to open";
         Save(); Notify();
     }
     /// <summary>How far through the working day it is, from 0 to 1, or null on a day off.</summary>
@@ -786,7 +797,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         try { store?.Save(Engine, preferences); LastError = null; return true; }
         // A restart or shutdown can close the database under a save that is already queued. That must be reported, never allowed to crash the app.
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or ObjectDisposedException || error.GetType().Namespace == "Microsoft.Data.Sqlite")
-        { LastError = "Could not save. Time remains in memory; retrying. " + error.Message; return false; }
+        { LastError = "Not saved · kept on screen, retrying · " + error.Message; return false; }
     }
     private bool closed;
     /// <summary>Called as the app exits, before the database is closed, so the clock's tick stops saving.</summary>
@@ -797,7 +808,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         try { AutoStart?.Set(enabled); LastError = null; }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException or PlatformNotSupportedException)
-        { LastError = "Could not change starting with Windows. " + error.Message; }
+        { LastError = "Couldn’t change Start with Windows · " + error.Message; }
         Notify();
     }
     public event Action? HideRequested;

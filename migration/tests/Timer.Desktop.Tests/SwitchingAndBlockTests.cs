@@ -49,7 +49,7 @@ public sealed class SwitchingAndBlockTests
         model.ToggleAccount("Account one"); advance(TimeSpan.FromMinutes(30));
         model.ToggleAccount("Account two"); advance(TimeSpan.FromSeconds(20)); // A slip of the finger.
         model.ToggleAccount("Account one"); advance(TimeSpan.FromSeconds(10));
-        Assert.True(model.CanContinuePrevious); Assert.Contains("09:00", model.ContinuePreviousText);
+        Assert.True(model.CanContinuePrevious); Assert.StartsWith("Continue ", model.ContinuePreviousText); Assert.Contains("Switched", model.ContinuePreviousNote);
         Assert.Equal(2, engine.Sessions.Count);
         Assert.True(model.ContinuePrevious());
         Assert.Empty(engine.Sessions); // The slip and the earlier block are both gone, the account is running from the start of the earlier block.

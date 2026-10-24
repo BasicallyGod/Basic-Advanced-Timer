@@ -163,9 +163,9 @@ public sealed class NotesPageTests
         try
         {
             Click(window, "NotesTab");
-            Click(window, "PageSubmit"); Assert.Equal("Write something for the note.", Find<TextBlock>(window, "PageError").Text); // Told beside the field.
+            Click(window, "PageSubmit"); Assert.Equal("Write a note first", Find<TextBlock>(window, "PageError").Text); // Told beside the field.
             Type(window, "PageNoteField", "Draft the plan"); Click(window, "PageSubmit");
-            Assert.Equal("Draft the plan", model.Notes.Text(Assert.Single(model.Notes.All))); Assert.Equal("Note added.", model.Notice);
+            Assert.Equal("Draft the plan", model.Notes.Text(Assert.Single(model.Notes.All))); Assert.Equal("Note added", model.Notice);
             Click(window, "PageKindMeeting"); Type(window, "PageNoteField", "Review"); Type(window, "PageLength", "0:30");
             Click(window, "PageWhen"); Click(window, "ReminderSet"); // Today at the pop-up's own default, midday.
             Click(window, "PageSubmit");

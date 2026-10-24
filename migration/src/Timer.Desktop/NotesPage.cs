@@ -148,7 +148,7 @@ public sealed class NotesPage : Grid
     private void AskRemove(DayNote note)
     {
         if (Notes.SeriesOf(note) is not null && NotesModel.IsMeeting(note)) { editing ??= null; scope = (note.Id, true); DrawForm(); return; }
-        Notes.Remove(note.Id); if (editing == note.Id) ResetForm(); model.Tell(NotesModel.IsMeeting(note) ? "Meeting removed." : "Note removed.");
+        Notes.Remove(note.Id); if (editing == note.Id) ResetForm(); model.Tell(NotesModel.IsMeeting(note) ? "Meeting removed" : "Note removed");
     }
 
     private void DrawForm()
@@ -161,7 +161,7 @@ public sealed class NotesPage : Grid
         field.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) draft = field.Text ?? ""; };
         field.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Submit(); e.Handled = true; } };
         Ui.Put(top, field);
-        if (!archived) { var submit = Ui.Ctl("PageSubmit", editing is not null ? "Save" : "Add", null, editing is not null ? "Save the changes" : "Add it", Submit, small: true); submit.Classes.Add("primary"); submit.Height = 36; submit.Padding = new Thickness(16, 0); Ui.Put(top, submit, 1); }
+        if (!archived) { var submit = Ui.Ctl("PageSubmit", editing is not null ? "Save" : "Add", null, editing is not null ? "Save" : "Add", Submit, small: true); submit.Classes.Add("primary"); submit.Height = 36; submit.Padding = new Thickness(16, 0); Ui.Put(top, submit, 1); }
         column.Children.Add(top);
 
         var options = new WrapPanel { Orientation = Orientation.Horizontal };
@@ -201,8 +201,8 @@ public sealed class NotesPage : Grid
         {
             var row = Ui.Grid("*,Auto,Auto"); row.ColumnSpacing = 8;
             if (archived) { var note = new TextBlock { Text = "A repeating note from an earlier version. It stays as it is.", FontSize = 12.5, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Name = "PageArchivedNote" }; note.Classes.Add("muted"); Ui.Put(row, note); }
-            Ui.Put(row, Ui.Ctl("PageDelete", "Delete", IconKind.Trash, "Remove it", () => { if (Notes.Find(id) is { } found) AskRemove(found); }, small: true), 1);
-            Ui.Put(row, Ui.Ctl("PageCancel", "Cancel", null, "Stop changing it", () => { ResetForm(); shown = null; Sync(); }, small: true), 2);
+            Ui.Put(row, Ui.Ctl("PageDelete", "Delete", IconKind.Trash, "Delete", () => { if (Notes.Find(id) is { } found) AskRemove(found); }, small: true), 1);
+            Ui.Put(row, Ui.Ctl("PageCancel", "Cancel", null, "Cancel", () => { ResetForm(); shown = null; Sync(); }, small: true), 2);
             column.Children.Add(row);
         }
         if (scope is { } asked)
@@ -242,16 +242,16 @@ public sealed class NotesPage : Grid
     private void Submit()
     {
         error = null; var words = draft.Trim();
-        if (words.Length == 0) { error = meeting ? "Write a name for the meeting." : "Write something for the note."; DrawForm(); return; }
+        if (words.Length == 0) { error = meeting ? "Name the meeting" : "Write a note first"; DrawForm(); return; }
         if (!meeting)
         {
             var problem = editing is { } id ? Notes.EditNote(id, words, account, when) : Notes.AddNote(words, account, when);
             if (problem is not null) { error = problem; DrawForm(); return; }
-            var said = editing is not null ? "Note saved." : when is { } at ? "Note added with a reminder for " + NoteDates.When(at, model.Engine.Now) + "." : "Note added.";
+            var said = editing is not null ? "Note saved" : when is { } at ? "Note added · reminder " + NoteDates.When(at, model.Engine.Now) : "Note added";
             ResetForm(); shown = null; Sync(); model.Tell(said); return;
         }
         if (when is not { } start) { error = "Pick the day and time the meeting starts."; DrawForm(); return; }
-        if (TimeText.ParseLength(lengthText) is not { } length) { error = "Length looks like 1:30, or 90 for minutes."; DrawForm(); return; }
+        if (TimeText.ParseLength(lengthText) is not { } length) { error = "Length: try 1:30 or 90"; DrawForm(); return; }
         var end = start.TimeOfDay + length; if (end >= TimeSpan.FromDays(1)) { error = "A meeting has to fall within one day."; DrawForm(); return; }
         if (editing is { } meetingId)
         {
@@ -260,7 +260,7 @@ public sealed class NotesPage : Grid
         }
         var failed = Notes.AddMeeting(start.Date, start.TimeOfDay, end, words, account, repeat);
         if (failed is not null) { error = failed; DrawForm(); return; }
-        var message = repeat == RepeatChoice.None ? "Meeting added." : "Meeting added. It repeats " + NotesModel.Label(repeat).ToLowerInvariant() + ".";
+        var message = repeat == RepeatChoice.None ? "Meeting added" : "Meeting added · repeats " + NotesModel.RepeatWords(repeat);
         ResetForm(); shown = null; Sync(); model.Tell(message);
     }
 
@@ -269,13 +269,13 @@ public sealed class NotesPage : Grid
         var start = when!.Value; var end = start.TimeOfDay + TimeText.ParseLength(lengthText)!.Value;
         var problem = Notes.EditMeeting(id, draft.Trim(), account, start.Date, start.TimeOfDay, end, repeat, allLater);
         if (problem is not null) { error = problem; scope = null; DrawForm(); return; }
-        ResetForm(); shown = null; Sync(); model.Tell(allLater ? "Meeting saved for this day and all later." : "Changed for this day only. The series carries on as before.");
+        ResetForm(); shown = null; Sync(); model.Tell(allLater ? "Saved for this day and all later" : "Changed for this day only");
     }
 
     private void Answer((long Id, bool Delete) asked, bool later)
     {
         scope = null;
-        if (asked.Delete) { Notes.Remove(asked.Id, later); if (editing == asked.Id) ResetForm(); shown = null; Sync(); DrawForm(); model.Tell(later ? "This meeting and all later ones removed." : "Meeting removed for this day. The series carries on."); }
+        if (asked.Delete) { Notes.Remove(asked.Id, later); if (editing == asked.Id) ResetForm(); shown = null; Sync(); DrawForm(); model.Tell(later ? "Removed from this day on" : "Removed for this day"); }
         else Apply(asked.Id, later);
     }
 }

@@ -129,11 +129,11 @@ public sealed class HorizontalTimelineTests
         try
         {
             var bar = Find<Border>(window, "DayBar"); Assert.True(bar.IsVisible); Assert.Equal(150, bar.Width); Assert.Empty(window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name == "NoSchedule"));
-            Assert.Contains("Nothing is scheduled", ToolTip.GetTip(bar)!.ToString());
+            Assert.Contains("No schedule", ToolTip.GetTip(bar)!.ToString());
             // Time recorded on a day with no schedule is drawn as working time on the bar, at the same width, with no warning that nothing is scheduled.
             model.Engine.Sessions.Add(new SessionRow("2026-10-10", "Account one", "09:00:00", "added", "90")); model.ChangeDate(0); Settle(window);
             Assert.Equal(150, bar.Width); Assert.NotNull(bar.Child); Assert.True(bar.GetVisualDescendants().OfType<Border>().Any(b => b.Name == "DayBarAllocated"));
-            Assert.DoesNotContain("Nothing is scheduled. Only", ToolTip.GetTip(bar)!.ToString());
+            Assert.DoesNotContain("Nothing is scheduled", ToolTip.GetTip(bar)!.ToString());
         }
         finally { window.Close(); }
     }

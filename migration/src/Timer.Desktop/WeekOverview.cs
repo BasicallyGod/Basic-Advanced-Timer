@@ -111,7 +111,7 @@ public static class WeekOverview
         var overlay = new Grid { ColumnDefinitions = new ColumnDefinitions($"{Math.Max(0, whole - w.Overtime.TotalSeconds):0.###}*,{w.Overtime.TotalSeconds:0.###}*") };
         overlay.Children.Add(new Border { Name = "WeekBarOvertime", Background = Brush(model, "Overtime"), [Grid.ColumnProperty] = 1, IsVisible = overtime });
         var layers = new Grid(); layers.Children.Add(parts); layers.Children.Add(overlay); bar.Child = layers;
-        ToolTip.SetTip(bar, $"Allocated {model.FormatShort(w.Allocated)}, unallocated {model.FormatShort(w.Unallocated)}" + (overtime ? $", overtime {model.FormatShort(w.Overtime)}" : ""));
+        ToolTip.SetTip(bar, $"Allocated {model.FormatShort(w.Allocated)} · Unallocated {model.FormatShort(w.Unallocated)}" + (overtime ? $"\nOvertime {model.FormatShort(w.Overtime)}" : ""));
         Avalonia.Automation.AutomationProperties.SetName(bar, $"Working time {model.FormatShort(w.Working)} of {model.FormatShort(w.Scheduled)} scheduled");
         var middle = new StackPanel { Spacing = 7, VerticalAlignment = VerticalAlignment.Center }; middle.Children.Add(words); middle.Children.Add(bar);
 
@@ -219,29 +219,26 @@ public static class WeekOverview
         return button;
     }
 
+    // A day's tooltip, as the Round 7 board draws it: the day and its working time, a line per account, then what is on no account. No sentences.
     private static Control DayTip(TimerModel model, WeekDay d, CultureInfo british)
     {
-        var tip = new StackPanel { Spacing = 2, MinWidth = 180 };
-        tip.Children.Add(Ui.Text(d.Date.ToString("dddd d MMMM", british) + (d.IsToday ? " (today)" : ""), 13)); ((TextBlock)tip.Children[0]).FontWeight = FontWeight.SemiBold;
-        tip.Children.Add(Ui.Text(d.Off ? "Day off. Only tracked time counts." : d.HasTime ? "Working time " + model.FormatShort(d.Working) : "Nothing recorded yet.", 12, "muted"));
-        foreach (var (account, time) in d.Accounts)
+        var tip = new StackPanel { Spacing = 3, MinWidth = 190 };
+        var head = Ui.Grid("*,Auto"); head.ColumnSpacing = 16;
+        var title = Ui.Text(d.Date.ToString("ddd d MMM", british) + (d.IsToday ? " · today" : ""), 13); title.FontWeight = FontWeight.SemiBold; Ui.Put(head, title);
+        Ui.Put(head, Ui.Text(d.Off ? "Off" : d.HasTime ? model.FormatShort(d.Working) : "–", 13), 1); tip.Children.Add(head);
+        if (d.Off) return tip;
+        void Line(Control mark, string name, TimeSpan time, bool quiet = false)
         {
             var row = Ui.Grid("Auto,*,Auto"); row.ColumnSpacing = 7;
-            Ui.Put(row, new Border { Width = 9, Height = 9, CornerRadius = new CornerRadius(5), Background = new SolidColorBrush(Color.Parse(model.ChartColour(account.Colour))), VerticalAlignment = VerticalAlignment.Center });
-            Ui.Put(row, Ui.Text(account.Display, 12.5), 1); Ui.Put(row, Ui.Text(model.FormatShort(time), 12.5), 2); tip.Children.Add(row);
+            Ui.Put(row, mark); Ui.Put(row, Ui.Text(name, 12, quiet ? "muted" : null), 1); Ui.Put(row, Ui.Text(model.FormatShort(time), 12, quiet ? "muted" : null), 2); tip.Children.Add(row);
         }
-        if (d.HasTime)
-        {
-            var row = Ui.Grid("Auto,*,Auto"); row.ColumnSpacing = 7;
-            Ui.Put(row, new Border { Width = 9, Height = 9, CornerRadius = new CornerRadius(5), Background = ReviewViews.Hatch(model), VerticalAlignment = VerticalAlignment.Center });
-            Ui.Put(row, Ui.Text("Unallocated", 12.5), 1); Ui.Put(row, Ui.Text(model.FormatShort(d.Unallocated), 12.5), 2); tip.Children.Add(row);
-        }
-        void Note(string text) { var t = Ui.Text(text, 12, "muted"); t.Margin = new Thickness(0, 3, 0, 0); tip.Children.Add(t); }
+        Control Dot(IBrush fill) => new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = fill, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var (account, time) in d.Accounts) Line(Dot(new SolidColorBrush(Color.Parse(model.ChartColour(account.Colour)))), account.Display, time);
+        if (d.HasTime && d.Unallocated > TimeSpan.FromSeconds(30)) Line(Dot(ReviewViews.Hatch(model)), "Unallocated", d.Unallocated, quiet: true);
+        void Note(string text) { var line = Ui.Text(text, 12, "muted"); line.Margin = new Thickness(0, 2, 0, 0); tip.Children.Add(line); }
         if (d.Overtime > TimeSpan.Zero) Note("Overtime " + model.FormatShort(d.Overtime));
-        if (d.Unallocated >= TimeSpan.FromMinutes(30)) Note(model.FormatShort(d.Unallocated) + " unallocated");
         if (d.Overlaps) Note("Some blocks overlap");
-        if (d.Meetings > 0 || d.Tasks > 0) Note($"{d.Meetings} meeting{(d.Meetings == 1 ? "" : "s")}, {d.Tasks} open task{(d.Tasks == 1 ? "" : "s")}");
-        var open = Ui.Text("Open this day ›", 11.5, "accent"); open.FontWeight = FontWeight.SemiBold; open.Margin = new Thickness(0, 5, 0, 0); tip.Children.Add(open);
+        if (d.Meetings > 0 || d.Tasks > 0) Note($"{d.Meetings} meeting{(d.Meetings == 1 ? "" : "s")} · {d.Tasks} open task{(d.Tasks == 1 ? "" : "s")}");
         return tip;
     }
 
@@ -290,7 +287,7 @@ public static class WeekOverview
             Ui.Put(line, new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = new SolidColorBrush(Color.Parse(model.ChartColour(account.Colour))), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center });
             var name = Ui.Text(account.Display, 14); name.FontWeight = FontWeight.Medium; name.TextTrimming = TextTrimming.CharacterEllipsis; name.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, name, 1);
             var total = Ui.Text(model.FormatShort(week), 14); total.FontWeight = FontWeight.SemiBold; total.HorizontalAlignment = HorizontalAlignment.Right; total.VerticalAlignment = VerticalAlignment.Center; total.Name = "WeekAccountTotal"; Ui.Put(line, total, 2);
-            var pct = w.Working > TimeSpan.Zero ? $"{Math.Round(week.TotalSeconds / w.Working.TotalSeconds * 100):0}% of the week's working time" : "";
+            var pct = w.Working > TimeSpan.Zero ? $"{Math.Round(week.TotalSeconds / w.Working.TotalSeconds * 100):0}% of the week" : "";
             var budget = grid.Budgets.FirstOrDefault(b => b.Account == account.Display);
             if (account.Budget is { } target && budget is not null)
             {
@@ -310,10 +307,10 @@ public static class WeekOverview
                 caption.Name = "BudgetCaption"; caption.Margin = new Thickness(12, 0, 0, 0); caption.TextTrimming = TextTrimming.CharacterEllipsis; caption.VerticalAlignment = VerticalAlignment.Center;
                 if (over || warn) caption.FontWeight = FontWeight.SemiBold;
                 Ui.Put(line, caption, 5);
-                var detail = $"{budget.Fraction * 100:0}% of the {budget.Period.ToLowerInvariant()} budget used, with {elapsed * 100:0}% of the period gone. {PaceOf(used, target, elapsed, model.FormatShort)}." + (pct.Length > 0 ? " " + pct + "." : "");
+                var detail = $"{budget.Fraction * 100:0}% used · {elapsed * 100:0}% of {budget.Period.ToLowerInvariant().Replace("this ", "")} gone · {PaceOf(used, target, elapsed, model.FormatShort)}" + (pct.Length > 0 ? "\n" + pct : "");
                 ToolTip.SetTip(row, detail);
             }
-            else { var none = Ui.Text("No budget", 12.5, "muted"); none.VerticalAlignment = VerticalAlignment.Center; none.Name = "WeekNoBudget"; Ui.Put(line, none, 4).SetValue(Grid.ColumnSpanProperty, 2); if (pct.Length > 0) ToolTip.SetTip(row, pct + "."); }
+            else { var none = Ui.Text("No budget", 12.5, "muted"); none.VerticalAlignment = VerticalAlignment.Center; none.Name = "WeekNoBudget"; Ui.Put(line, none, 4).SetValue(Grid.ColumnSpanProperty, 2); if (pct.Length > 0) ToolTip.SetTip(row, pct); }
             tile.Children.Add(row);
         }
         return Tile(tile, new Thickness(18, 12, 18, 10));

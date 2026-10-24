@@ -87,6 +87,8 @@ public sealed class NotesModel
     public RepeatChoice RepeatOf(DayNote note) => ChoiceOf(SeriesOf(note)?.Rule);
     /// <summary>A repeat the Notes card cannot change (one made by an older build: every other week, or on chosen days). It is shown and can be removed.</summary>
     public bool IsArchivedRepeat(DayNote note) => SeriesOf(note) is { } s && ChoiceOf(s.Rule) == RepeatChoice.None;
+    /// <summary>How a repeat reads at the end of a message: "daily", "on weekdays", "weekly".</summary>
+    public static string RepeatWords(RepeatChoice choice) => choice switch { RepeatChoice.Day => "daily", RepeatChoice.Weekday => "on weekdays", RepeatChoice.Week => "weekly", _ => "" };
     public static string Label(RepeatChoice choice) => choice switch
     {
         RepeatChoice.Day => "Every day", RepeatChoice.Weekday => "Every weekday", RepeatChoice.Week => "Every week", _ => "Does not repeat"
@@ -174,7 +176,7 @@ public sealed class NotesModel
     /// <summary>Adds a note. With a reminder it is dated and timed; without, it is an undated task. Returns what is wrong, or null.</summary>
     public string? AddNote(string words, string? account, DateTime? reminder)
     {
-        if (string.IsNullOrWhiteSpace(words)) return "Write something for the note.";
+        if (string.IsNullOrWhiteSpace(words)) return "Write a note first";
         var text = Compose(words, account);
         if (reminder is { } when) AddRow(when.Date, when.TimeOfDay.Truncate(), text, null, null, DayNoteKind.Task, true);
         else AddRow(now().Date, null, text, null, null, DayNoteKind.Task, false);
@@ -184,7 +186,7 @@ public sealed class NotesModel
     /// <summary>Adds a meeting on a day, with a repeat if one is chosen. Returns what is wrong, or null.</summary>
     public string? AddMeeting(DateTime day, TimeSpan start, TimeSpan end, string words, string? account, RepeatChoice repeat)
     {
-        if (string.IsNullOrWhiteSpace(words)) return "Write a name for the meeting.";
+        if (string.IsNullOrWhiteSpace(words)) return "Name the meeting";
         if (MeetingTimeProblem(start, end) is { } problem) return problem;
         var row = AddRow(day.Date, start, Compose(words, account), end, null, DayNoteKind.Meeting, true);
         if (RuleOf(repeat) is { } rule) StartSeriesFrom(row, rule);
@@ -198,7 +200,7 @@ public sealed class NotesModel
     public string? EditNote(long id, string words, string? account, DateTime? reminder)
     {
         if (Find(id) is not { } note) return "That note is no longer there.";
-        if (string.IsNullOrWhiteSpace(words)) return "Write something for the note.";
+        if (string.IsNullOrWhiteSpace(words)) return "Write a note first";
         var text = Compose(words, account);
         Change(id, n => reminder is { } when ? n with { Text = text, Day = when.Date, At = when.TimeOfDay.Truncate(), HasDate = true, Done = n.Done && ReminderOf(n) == when }
             : n with { Text = text, Day = now().Date, At = null, HasDate = false });
@@ -219,7 +221,7 @@ public sealed class NotesModel
     public string? EditMeeting(long id, string words, string? account, DateTime day, TimeSpan start, TimeSpan end, RepeatChoice repeat, bool allLater)
     {
         if (Find(id) is not { } meeting) return "That meeting is no longer there.";
-        if (string.IsNullOrWhiteSpace(words)) return "Write a name for the meeting.";
+        if (string.IsNullOrWhiteSpace(words)) return "Name the meeting";
         if (MeetingTimeProblem(start, end) is { } problem) return problem;
         var text = Compose(words, account); var current = SeriesOf(meeting);
         Change(id, n => n with { Text = text, Day = day.Date, At = start, End = end, Kind = DayNoteKind.Meeting, HasDate = true });
@@ -358,7 +360,7 @@ public sealed class NotesModel
     private bool Try(Action write, string what)
     {
         try { write(); Fault = null; return true; }
-        catch (Exception) { Fault = $"Could not save {what} to disk. It stays on screen and will be tried again."; return false; }
+        catch (Exception) { Fault = $"{char.ToUpperInvariant(what[0])}{what[1..]} not saved · will retry"; return false; }
     }
 
     /// <summary>True while any note is on screen but not yet in the database.</summary>

@@ -344,7 +344,18 @@ public static class Ui
     /// A button in the dashboard's outlined card look: 38 tall (30 when small), with an icon, words or both. With no words it is a 38 pixel square and
     /// <paramref name="tip"/> is its tooltip and accessible name. <paramref name="tint"/> names a theme colour for the icon.
     /// </summary>
-    public static Button Ctl(string name, string? words, IconKind? icon, string tip, Action click, bool small = false, string? tint = null)
+    /// <summary>
+    /// What a tooltip holds: the action in a word or two and, when there is one, its shortcut as a small key, as the Round 7 board draws it. A button that already
+    /// has words gets no tooltip, except to show its shortcut.
+    /// </summary>
+    public static object Tip(string text, string? key = null)
+    {
+        if (key is null) return text;
+        var chip = new Border { CornerRadius = new CornerRadius(5), BorderThickness = new Thickness(1), Padding = new Thickness(5, 0), VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = key, FontSize = 11, FontWeight = FontWeight.Medium } };
+        chip.Classes.Add("tipKey");
+        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { new TextBlock { Text = text }, chip } };
+    }
+    public static Button Ctl(string name, string? words, IconKind? icon, string tip, Action click, bool small = false, string? tint = null, string? key = null)
     {
         var button = Button(words ?? tip, click, name); button.Classes.Add("ctl"); if (small) button.Classes.Add("small");
         button.Height = small ? 30 : 38;
@@ -352,7 +363,8 @@ public static class Ui
         if (words is null) { button.Width = small ? 30 : 38; button.Padding = new Thickness(0); button.Content = glyph; }
         else button.Content = glyph is null ? new TextBlock { Text = words, VerticalAlignment = VerticalAlignment.Center }
             : Horizontal(glyph, new TextBlock { Text = words, VerticalAlignment = VerticalAlignment.Center });
-        ToolTip.SetTip(button, tip); Avalonia.Automation.AutomationProperties.SetName(button, words ?? tip);
+        if (words is null || key is not null) ToolTip.SetTip(button, Tip(words is null ? tip : words, key));
+        Avalonia.Automation.AutomationProperties.SetName(button, words ?? tip);
         return button;
     }
     /// <summary>A button that shows only an icon, with its words as the tooltip and the accessible name.</summary>

@@ -207,7 +207,7 @@ public sealed class SettingsView : Grid
         periodLabel.Text = wholeMonth ? "Month" : "Week";
         weekChoice.Classes.Set("mainAction", !wholeMonth); monthChoice.Classes.Set("mainAction", wholeMonth);
         // The hours table is laid out by week, so there is nothing to copy for a month.
-        copyHours.IsEnabled = !wholeMonth; ToolTip.SetTip(copyHours, wholeMonth ? "The hours table is a week. Choose Week to copy it." : "Copy the table to the clipboard, ready to paste into a timesheet");
+        copyHours.IsEnabled = !wholeMonth; ToolTip.SetTip(copyHours, wholeMonth ? "Week only" : null);
     }
     private void ChoosePeriod(bool month) { wholeMonth = month; FillPeriods(selectShown: true); exportResult.IsVisible = exportError.IsVisible = false; }
     private DateTime? ChosenDay() => wholeMonth ? months.ElementAtOrDefault(periodPick.SelectedIndex) : weeks.ElementAtOrDefault(periodPick.SelectedIndex);

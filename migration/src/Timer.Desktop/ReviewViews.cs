@@ -272,7 +272,7 @@ public static class ReviewViews
                 card.Tag = group; card.Name = "TimelineGroup" + group.GroupId + "-" + interval.Start.ToString("HHmmss");
                 var ungroup = new MenuItem { Header = "Unmerge", Name = "UnmergeMenu" }; ungroup.Click += (_, _) => model.UngroupEntries(group.GroupId!);
                 card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { ungroup, CopyMenu(model, group.Sources), MergeMenu(model) } };
-                ToolTip.SetTip(card, $"{model.Label(group.Account)} · {group.Sources.Count} merged entries · {model.Format(duration)}\nClick to select");
+                ToolTip.SetTip(card, $"{model.Label(group.Account)} · {model.Format(duration)}\nMerged, {group.Sources.Count} blocks");
             }
             if (!addedEarly) { Canvas.SetLeft(card, X(interval.Start) + BlockInset); Canvas.SetTop(card, bandTop + lane * (height + LaneGap)); canvas.Children.Add(card); }
         }
@@ -281,7 +281,7 @@ public static class ReviewViews
         {
             var lane = new Border { Name = "MeetingLane", Width = 24 * pixelsPerHour, Height = MeetingHeight, Background = Brushes.Transparent, CornerRadius = new CornerRadius(12), Cursor = new Cursor(StandardCursorType.Arrow) };
             lane.Classes.Add("meetingLane");
-            ToolTip.SetTip(lane, "Click a time to add a meeting");
+            ToolTip.SetTip(lane, "Add meeting");
             Avalonia.Automation.AutomationProperties.SetName(lane, "Add a meeting. Click a time in this row");
             lane.PointerEntered += (_, _) => lane.Classes.Add("over");
             lane.PointerExited += (_, _) => lane.Classes.Remove("over");
@@ -315,7 +315,7 @@ public static class ReviewViews
                 frame.Classes.Add("meetingFrame");
                 var card = new Grid { Width = width, Height = height, ClipToBounds = true, Name = "TimelineMeeting" + meeting.Id, Tag = meeting, Cursor = new Cursor(StandardCursorType.Hand) };
                 card.Children.Add(frame); card.Children.Add(body);
-                ToolTip.SetTip(card, model.Notes.Text(meeting) + " · " + Hm(meeting.At) + "–" + Hm(meeting.End) + " · planned, not tracked\nClick to edit");
+                ToolTip.SetTip(card, model.Notes.Text(meeting) + "\n" + Hm(meeting.At) + "–" + Hm(meeting.End) + " · planned");
                 Avalonia.Automation.AutomationProperties.SetName(card, "Meeting " + model.Notes.Text(meeting) + ", " + Hm(meeting.At) + " to " + Hm(meeting.End));
                 card.PointerEntered += (_, _) => { frame.Classes.Add("over"); title.Hover(true); }; card.PointerExited += (_, _) => { frame.Classes.Remove("over"); title.Hover(false); };
                 card.PointerPressed += (_, e) => { if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) e.Handled = true; };

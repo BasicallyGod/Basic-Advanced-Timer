@@ -108,7 +108,7 @@ public static class ThemeEngine
         Put("ComboBoxDropDownBackground", Color.Parse(colours["Panel"])); Put("ComboBoxDropDownBorderBrush", line);
         foreach (var key in new[] { "ComboBoxItemBackgroundPointerOver", "ComboBoxItemBackgroundPressed" }) Put(key, Color.Parse(colours["Hover"]));
         foreach (var key in new[] { "ComboBoxItemBackgroundSelected", "ComboBoxItemBackgroundSelectedPointerOver", "ComboBoxItemBackgroundSelectedPressed" }) Put(key, Color.Parse(colours["Selected"]));
-        Put("ToolTipBackground", Color.Parse(colours["Surface"]));
+        Put("ToolTipBackground", Color.Parse(colours["Panel"]));
         Put("ToolTipForeground", Color.Parse(colours["Ink"]));
         Put("ToolTipBorderBrush", line);
         foreach (var key in new[] { "SliderTrackValueFill", "SliderTrackValueFillPointerOver", "SliderTrackValueFillPressed", "SliderThumbBackground", "SliderThumbBackgroundPointerOver", "SliderThumbBackgroundPressed" }) Put(key, sliderFill);

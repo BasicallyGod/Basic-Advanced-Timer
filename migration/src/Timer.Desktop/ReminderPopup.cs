@@ -73,8 +73,8 @@ public sealed class ReminderPopup : Border
 
         var footer = Ui.Grid("*,Auto,Auto"); footer.ColumnSpacing = 8; footer.Margin = new Thickness(0, 0, 0, 0);
         Ui.Put(footer, summary);
-        Ui.Put(footer, Ui.Ctl("ReminderRemove", "Remove", null, "Take the reminder away", () => answer(null), small: true), 1);
-        var set = Ui.Ctl("ReminderSet", "Set", null, "Set the reminder", () => answer(Chosen), small: true); set.Classes.Add("primary"); Ui.Put(footer, set, 2);
+        Ui.Put(footer, Ui.Ctl("ReminderRemove", "Remove", null, "Remove", () => answer(null), small: true), 1);
+        var set = Ui.Ctl("ReminderSet", "Set", null, "Set", () => answer(Chosen), small: true); set.Classes.Add("primary"); Ui.Put(footer, set, 2);
         var rule = Ui.Rule(); rule.Margin = new Thickness(0, 2, 0, 0); column.Children.Add(rule); column.Children.Add(footer);
         Child = column;
 

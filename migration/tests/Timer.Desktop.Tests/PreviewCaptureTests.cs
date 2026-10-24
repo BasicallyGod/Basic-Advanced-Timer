@@ -44,6 +44,9 @@ public sealed class PreviewCaptureTests
                 void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-" + name + ".png")); }
                 void Press(string name) { window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
                 Press("TimelineTab"); Shot("timeline");
+                model.Tell("Merged · 00:05 gap added"); Shot("toast"); model.Refuse("End: try 10:30"); Shot("toast-refused"); model.Tell("Undone");
+                var firstBlock = model.Engine.Sessions.First(); model.SelectBlock(new[] { firstBlock }, false); Dispatcher.UIThread.RunJobs();
+                var copyButton = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CopySelected"); ToolTip.SetIsOpen(copyButton, true); Shot("tooltip"); ToolTip.SetIsOpen(copyButton, false); model.ClearSelection();
                 Press("Notifications"); Shot("bell"); Press("Notifications"); Press("DatePick"); Shot("datepick"); Press("DatePick");
                 Press("WeekOverviewTab"); Shot("week"); Press("WeekTable"); Shot("weektable"); Press("WeekChart"); Press("NotesTab"); Shot("notes"); Press("TimelineTab");
                 window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Shot("settings");
