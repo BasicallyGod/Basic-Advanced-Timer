@@ -12,8 +12,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 body{margin:0}
-.root{--bg1:#F4F4F1;--bg2:#ECECE8;--card:#FFFFFF;--card2:#F7F7F5;--line:#E2E2DD;--ink:#18233A;--muted:#5A6070;--accent:#3558C8;--accentInk:#FFFFFF;--soft:#E8EEFF;--grid:#EAEAE6;--shadow:0 1px 2px rgba(30,30,20,.06);--rail1:#FFFFFF;--rail2:#F6F6F4;--railLine:#E2E2DD;--railIcon:#858994;--railHover:#EDEDEA;--railDivider:#E2E2DD;--clock:#18233A;--clockSec:#5A6070;--amber:#E07A10;--amberSoft:#FFF1D6;--flag:#C93A3A;--lateInk:#B3363F;--lateBg:#FDECEC;--liveTint:#F1FBF7;--barNeutral:#6E727C;--track:#EAEAE6;--hatchA:#F1F1EE;--hatchB:#E3E3DF;--meetBg:#F7F7F5;--meetLine:#8FA2D6;--scroll:#C9C9C4}
-.root.dark{--bg1:#0F1420;--bg2:#131A2A;--card:#1A2234;--card2:#212B42;--line:#2D3853;--ink:#EEF2FB;--muted:#A7B2CA;--accent:#7C9BFF;--accentInk:#0E1530;--soft:#25335A;--grid:#252F48;--shadow:0 1px 2px rgba(0,0,0,.25);--rail1:#1C2334;--rail2:#121826;--railLine:#2E3852;--railIcon:#C8D1E6;--railHover:rgba(255,255,255,.10);--railDivider:#2E3852;--clock:#F3F6FF;--clockSec:#A9B5CF;--amber:#FF9A3C;--amberSoft:#3A2E14;--flag:#FF9A9A;--lateInk:#FF9A9A;--lateBg:#3A2226;--liveTint:#183029;--barNeutral:#8793B0;--track:#252F48;--hatchA:#222B42;--hatchB:#2B3652;--meetBg:#1F2940;--meetLine:#5E72A4;--scroll:#46526F}
+.root{--bg1:#F4F4F1;--bg2:#ECECE8;--card:#FFFFFF;--card2:#F7F7F5;--line:#E2E2DD;--ink:#18233A;--muted:#5A6070;--accent:#3558C8;--accentInk:#FFFFFF;--soft:#E8EEFF;--grid:#EAEAE6;--shadow:0 1px 2px rgba(30,30,20,.06);--rail1:#FFFFFF;--rail2:#F6F6F4;--railLine:#E2E2DD;--railIcon:#858994;--railOn:#D3DDF0;--railOnInk:#5A6070;--railHover:#EDEDEA;--railDivider:#E2E2DD;--clock:#18233A;--clockSec:#5A6070;--amber:#E07A10;--amberSoft:#FFF1D6;--flag:#C93A3A;--lateInk:#B3363F;--lateBg:#FDECEC;--liveTint:#F1FBF7;--barNeutral:#6E727C;--track:#EAEAE6;--hatchA:#F1F1EE;--hatchB:#E3E3DF;--meetBg:#F7F7F5;--meetLine:#8FA2D6;--scroll:#C9C9C4}
+.root.dark{--bg1:#0F1420;--bg2:#131A2A;--card:#1A2234;--card2:#212B42;--line:#2D3853;--ink:#EEF2FB;--muted:#A7B2CA;--accent:#7C9BFF;--accentInk:#0E1530;--soft:#25335A;--grid:#252F48;--shadow:0 1px 2px rgba(0,0,0,.25);--rail1:#1C2334;--rail2:#121826;--railLine:#2E3852;--railIcon:#C8D1E6;--railOn:#25335A;--railOnInk:#EEF2FB;--railHover:rgba(255,255,255,.10);--railDivider:#2E3852;--clock:#F3F6FF;--clockSec:#A9B5CF;--amber:#FF9A3C;--amberSoft:#3A2E14;--flag:#FF9A9A;--lateInk:#FF9A9A;--lateBg:#3A2226;--liveTint:#183029;--barNeutral:#8793B0;--track:#252F48;--hatchA:#222B42;--hatchB:#2B3652;--meetBg:#1F2940;--meetLine:#5E72A4;--scroll:#46526F}
 .root{color-scheme:light}.root.dark{color-scheme:dark}
 :where(.root) button{font:inherit;color:inherit;cursor:pointer}
 .root button:focus-visible,.root input:focus-visible,.root a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -22,7 +22,7 @@ body{margin:0}
 .nav{width:40px;height:40px;border-radius:13px;border:0;background:transparent;color:var(--railIcon);display:flex;align-items:center;justify-content:center;padding:0}
 a.nav{text-decoration:none}
 .nav:hover{background:var(--railHover);color:var(--ink)}
-.nav.on{background:linear-gradient(135deg,#5E80FB,#3558C8);color:#fff}
+.nav.on{background:var(--railOn);color:var(--railOnInk)}
 .play{width:44px;height:44px;border-radius:14px;border:0;padding:0;color:#10281F;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 1px 2px rgba(20,30,60,.18);display:flex;align-items:center;justify-content:center}
 .brk{width:44px;height:44px;border-radius:14px;border:0;background:transparent;color:var(--amber);display:flex;align-items:center;justify-content:center;padding:0}
 .brk:hover{background:var(--amberSoft)}
@@ -81,8 +81,8 @@ svg.ri{display:block;fill:currentColor}
 @keyframes wigB{0%,100%{transform:translateX(0)}35%{transform:translateX(-1.6px)}75%{transform:translateX(1.4px)}}
 @keyframes wigC{0%,100%{transform:translateX(0)}25%{transform:translateX(1.4px)}65%{transform:translateX(-1.7px)}}
 @keyframes spring{0%{transform:scaleY(1)}10%{transform:scaleY(1.34)}22%{transform:scaleY(.94)}32%{transform:scaleY(1.08)}42%,100%{transform:scaleY(1)}}
-@keyframes tkCycle{0%,22%{opacity:1;stroke-dashoffset:0}30%{opacity:0;stroke-dashoffset:0}78%{opacity:0;stroke-dashoffset:10}90%,100%{opacity:1;stroke-dashoffset:0}}
-@keyframes xCycle{0%,30%{opacity:0;stroke-dashoffset:10}40%,70%{opacity:1;stroke-dashoffset:0}78%{opacity:0;stroke-dashoffset:0}100%{opacity:0;stroke-dashoffset:10}}
+@keyframes tkCycle{0%,3%{opacity:1;stroke-dashoffset:0}11%{opacity:0;stroke-dashoffset:0}56%{opacity:0;stroke-dashoffset:10}68%,100%{opacity:1;stroke-dashoffset:0}}
+@keyframes xCycle{0%,10%{opacity:0;stroke-dashoffset:10}20%,48%{opacity:1;stroke-dashoffset:0}56%{opacity:0;stroke-dashoffset:0}100%{opacity:0;stroke-dashoffset:10}}
 @media (prefers-reduced-motion:no-preference){
 .nav:hover .b1{animation:wigA 2.2s ease-in-out infinite}
 .nav:hover .b2{animation:wigB 2.7s ease-in-out infinite}
@@ -127,7 +127,7 @@ svg.ri{display:block;fill:currentColor}
       <sc-for list="{{rows}}" as="a" hint-placeholder-count="5">
         <button class="acctRow" onClick="{{a.pick}}" style="{{a.rowStyle}}" aria-pressed="{{a.running}}">
           <span style="flex-grow: 1; min-width: 0; display: block">
-            <span style="display: flex; justify-content: space-between; gap: 6px; align-items: center"><span style="display: flex; align-items: center; gap: 7px; min-width: 0"><span style="{{a.dot}}"></span><span style="font-size: 13.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{a.name}}</span></span><span style="font-size: 13.5px; font-weight: 600">{{a.time}}</span></span>
+            <span style="display: flex; justify-content: space-between; gap: 6px; align-items: center"><span style="display: flex; align-items: center; gap: 7px; min-width: 0"><span style="{{a.dot}}"></span><span style="font-size: 13.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{a.name}}</span></span><span style="font-size: 13.5px; font-weight: 700">{{a.time}}</span></span>
             <span style="display: block; font-size: 11.5px; margin-top: 2px; {{a.subStyle}}">{{a.sub}}</span>
             <sc-if value="{{a.hasBar}}" hint-placeholder-val="{{ true }}"><span style="display: block; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; margin-top: 5px"><span style="{{a.bar}}"></span></span></sc-if>
           </span>
