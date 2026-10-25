@@ -186,4 +186,19 @@ public sealed class SetupTests
         try { Settle(window); Assert.False(window.SetupShowing); Assert.True(demo.SetupDone); }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheSetupCardWearsTheApplicationIconNotTheOldAccentCapsule()
+    {
+        var model = NewModel(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var icon = Find<Avalonia.Controls.Viewbox>(window, "SetupPillIcon");
+            var parts = icon.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>().ToList();
+            Assert.Equal(6, parts.Count); // The outline, two lights, and the hours, minutes and seconds bars.
+            Assert.Single(parts, r => r.StrokeThickness > 0); // Only the outline is a line; the rest are filled.
+            Assert.All(parts, r => Assert.True((r.StrokeThickness > 0 ? r.Stroke : r.Fill) is not null)); // One colour, the text colour, nothing in the accent or the status colours.
+        }
+        finally { window.Close(); }
+    }
 }
