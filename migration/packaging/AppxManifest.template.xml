@@ -21,7 +21,7 @@
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png" />
       <Extensions>
-        <!-- Disabled by default. Users opt in from the app's Start with Windows menu item or from Windows Settings > Apps > Startup. -->
+        <!-- Disabled by default. Users opt in from Settings, Behaviour, Start with Windows, or from Windows Settings > Apps > Startup. -->
         <desktop:Extension Category="windows.startupTask" Executable="BasicsAdvancedTimer.exe" EntryPoint="Windows.FullTrustApplication">
           <desktop:StartupTask TaskId="BasicsAdvancedTimerStartup" Enabled="false" DisplayName="Basic's Advanced Timer" />
         </desktop:Extension>
