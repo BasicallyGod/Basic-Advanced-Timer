@@ -101,7 +101,7 @@ public sealed partial class App : Application
             var windows = new WindowCoordinator(model, () => { if (!lifetimeEnded) desktop.Shutdown(); });
             desktop.MainWindow = windows.Pill;
             // A new database opens on the dashboard, where the getting started setup is waiting. After that the pill is the usual start.
-            if (!model.SetupDone && !smokeMode) windows.Pill.Opened += (_, _) => windows.ShowDashboard();
+            if (!model.SetupDone && !smokeMode) windows.OpenDashboardOnFirstShow();
             if (!smokeMode)
             {
                 // The tray icon keeps the timer reachable when its windows are hidden, and closing a window hides it there.
