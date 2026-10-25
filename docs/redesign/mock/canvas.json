@@ -125,6 +125,13 @@
       "w": 1180,
       "x": 3000,
       "y": 3800
+    },
+    "Store.dc.html": {
+      "h": 5340,
+      "title": "Microsoft Store listing (draft)",
+      "w": 1180,
+      "x": 0,
+      "y": 8300
     }
   },
   "createdOnFiles": {
@@ -235,10 +242,16 @@
       "y": 2240
     },
     "n17": {
-      "text": "Midnight and Hawthorn are as first shown and liked. Slate (now a mid-tone dark), Sage (green with a plum accent) and Mono (mid-grey, NeXT-style, with bevels) are redrawn after feedback. Each theme has its own account colours. Nothing here is built yet.",
+      "text": "Midnight and Hawthorn are as first shown and liked. Slate (now a mid-tone dark), Sage (green with a plum accent) and Mono (mid-grey, graphite, with the app's normal soft shapes) are redrawn after feedback. Each theme has its own account colours. Paused: nothing here is built yet.",
       "w": 520,
       "x": 2400,
       "y": 3840
+    },
+    "n18": {
+      "text": "Everything Partner Center will ask for, written out and ready to paste, with five draft screenshots and art tiles. Nothing is submitted. The box at the top lists what I need from you.",
+      "w": 520,
+      "x": -600,
+      "y": 8340
     }
   },
   "order": [
@@ -257,7 +270,8 @@
     "Refine.dc.html",
     "PillSoft.dc.html",
     "Round7.dc.html",
-    "Themes.dc.html"
+    "Themes.dc.html",
+    "Store.dc.html"
   ],
   "pages": [],
   "title": "Vertical pill and dashboard mock"
