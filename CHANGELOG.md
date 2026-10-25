@@ -10,7 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
-| Docs: the user guide and Store notes match the build | [pending](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/feature/docs-premain) | The user guide no longer mentions the change on last week, lists the rail as Timeline, Notes, Week overview, and describes the solid rail icons. The Store manifest comment and packaging guide say Start with Windows is in Settings, Behaviour, not on the right-click menu. |
+| Docs: the user guide and Store notes match the build | [6c1197e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/6c1197e4265d60eea9be6f72f2bc8081e708bacc) | The user guide no longer mentions the change on last week, lists the rail as Timeline, Notes, Week overview, and describes the solid rail icons. The Store manifest comment and packaging guide say Start with Windows is in Settings, Behaviour, not on the right-click menu. |
 | Redesign round 9: pop-up shadows and two numbers | [660217f](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/660217f5b33a84aa9730547628e63f4371021dfb) | The bell's card and the date's calendar have room for their whole shadow, so it is no longer cut off at the edge of the pop-up. The meeting and task counts under the week chart sit on their icon's centre line, and the bell's number is centred in its dot. |
 
 ## 24 October 2026
