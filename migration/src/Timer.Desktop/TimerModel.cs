@@ -14,54 +14,50 @@ public sealed record TimerAccount(string Name, string Colour, TimeSpan? Budget, 
 
 public sealed class TimerModel : INotifyPropertyChanged
 {
-    public double TimelinePixelsPerHour { get; private set; } = 160;
+    /// <summary>How many pixels an hour takes along the timeline: about ten working hours fit the dashboard at this scale.</summary>
+    public double TimelinePixelsPerHour { get; private set; } = 90;
+    /// <summary>How far the timeline is scrolled along its width, or nothing to open on the first block of the day.</summary>
     public double? TimelineOffset { get; set; }
-    public void ZoomTimeline(double wheel, double pointerY, double offset)
+    // The hours start a gutter in from the left of the timeline's content, so the time under a point is found from there.
+    private static double OffsetKeeping(double offset, double pointerX, double previous, double target)
+        => Math.Max(0, ReviewViews.TimelineGutter + (offset + pointerX - ReviewViews.TimelineGutter) / previous * target - pointerX);
+    public void ZoomTimeline(double wheel, double pointerX, double offset)
     {
         if (wheel == 0) return;
         var previous = TimelinePixelsPerHour;
         TimelinePixelsPerHour = Math.Clamp(previous * Math.Pow(1.2, wheel), 60, 640);
-        TimelineOffset = Math.Max(0, (offset + pointerY) / previous * TimelinePixelsPerHour - pointerY);
+        TimelineOffset = OffsetKeeping(offset, pointerX, previous, TimelinePixelsPerHour);
         Notify();
     }
     public const double MinTimelineScale = 60, MaxTimelineScale = 640;
-    /// <summary>Sets the zoom to an exact scale (as the slider does), keeping the time at the pointer's height where it was.</summary>
-    public void SetTimelineScale(double pixelsPerHour, double pointerY, double offset)
+    /// <summary>Sets the zoom to an exact scale (as the slider does), keeping the time under the pointer where it was.</summary>
+    public void SetTimelineScale(double pixelsPerHour, double pointerX, double offset)
     {
         var previous = TimelinePixelsPerHour; var target = Math.Clamp(pixelsPerHour, MinTimelineScale, MaxTimelineScale);
         if (Math.Abs(target - previous) < .01) return;
         TimelinePixelsPerHour = target;
-        TimelineOffset = Math.Max(0, (offset + pointerY) / previous * target - pointerY);
-        Notify();
-    }
-    /// <summary>Where the current zoom sits from 0 (most zoomed out) to 1, on the logarithmic scale a zoom slider should use.</summary>
-    public double TimelineZoomFraction => Math.Log(TimelinePixelsPerHour / MinTimelineScale) / Math.Log(MaxTimelineScale / MinTimelineScale);
-    public static double ScaleAt(double fraction) => MinTimelineScale * Math.Pow(MaxTimelineScale / MinTimelineScale, Math.Clamp(fraction, 0, 1));
-    /// <summary>Zooms and scrolls so the day's recorded time, with a little room either side, fills the height given.</summary>
-    public void FitTimeline(double viewportHeight)
-    {
-        var day = SelectedDate.Date;
-        var spans = Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero).Select(s => (s.From, s.To)).ToList();
-        if (Engine.Active is { } active && active.Start < day.AddDays(1) && Engine.Now > day) spans.Add((active.Start < day ? day : active.Start, Engine.Now < day.AddDays(1) ? Engine.Now : day.AddDays(1)));
-        double start, end;
-        if (spans.Count > 0) { start = (spans.Min(s => s.From) - day).TotalHours; end = (spans.Max(s => s.To) - day).TotalHours; }
-        else { var plan = Engine.Plan(day); start = plan.Working ? (plan.Start - day).TotalHours : 9; end = plan.Working ? (plan.End - day).TotalHours : 17; }
-        var padding = 0.25; start = Math.Max(0, start - padding); end = Math.Min(24, end + padding);
-        var hours = Math.Max(end - start, 1.0);
-        TimelinePixelsPerHour = Math.Clamp((viewportHeight > 0 ? viewportHeight : 400) / hours, 60, 640);
-        TimelineOffset = start * TimelinePixelsPerHour;
+        TimelineOffset = OffsetKeeping(offset, pointerX, previous, target);
         Notify();
     }
     public TrackingEngine Engine { get; }
     public LedgerEditor Editor { get; }
-    public string? EditError { get; private set; }
-    public event Action<SessionRow?, DateTime, DateTime>? EntryRequested;
-    public event Action<string>? GroupRequested;
-    public event Action? TidyRequested;
+    /// <summary>Notes and meetings (see <see cref="NotesModel"/>), kept beside this model so the two stay apart.</summary>
+    public NotesModel Notes { get; }
+    private string? editError;
+    /// <summary>The refusal being shown. The shared packages word theirs as sentences, so those are put into the app's few words here.</summary>
+    public string? EditError { get => editError; private set => editError = value is null ? null : Plain(value); }
+    private static string Plain(string message)
+        => message.Contains("overlaps recorded or running time", StringComparison.OrdinalIgnoreCase) ? "Overlaps another block"
+         : message.Contains("moved into recorded or running time", StringComparison.OrdinalIgnoreCase) || message.Contains("moved into running time", StringComparison.OrdinalIgnoreCase) ? "Can’t move into other time"
+         : message.Contains("intervening time cannot be merged", StringComparison.OrdinalIgnoreCase) ? "Time in between: can’t merge"
+         : message.Contains("legacy note key", StringComparison.OrdinalIgnoreCase) ? "Edit these together"
+         : message.Contains("start at the same time", StringComparison.OrdinalIgnoreCase) ? "Same start: can’t move to one account"
+         : message;
+    /// <summary>Asks for the Add time dialog, with the start and end it opens on.</summary>
+    public event Action<DateTime, DateTime>? EntryRequested;
     public event Action? AccountsRequested;
     /// <summary>Asks for the accounts and budgets dialog. The dashboard shows it, and comes up first if only the pill is showing.</summary>
     public void OpenAccounts() => AccountsRequested?.Invoke();
-    public void OpenTidy() => TidyRequested?.Invoke();
     public string? ExportPath { get; private set; }
     private readonly HashSet<SessionRow> selectedRows = new(ReferenceEqualityComparer.Instance);
     public IReadOnlyCollection<SessionRow> SelectedRows => selectedRows;
@@ -70,27 +66,18 @@ public sealed class TimerModel : INotifyPropertyChanged
         .Count(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains));
     public bool CanMergeSelection => SelectedBlockCount >= 2 && selectedRows.Select(s => s.Day).Distinct().Count() == 1
         && selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() == 1 && Editor.CanCombine(selectedRows.ToArray());
-    /// <summary>The full rule for merging, for the Merge button's tooltip and a refused merge.</summary>
-    public string MergeHint => SelectedBlockCount < 2 ? "Select two or more blocks to merge them." : CanMergeSelection
-        ? (Editor.MergeGapMinutes(selectedRows.ToArray()) is var gapMinutes and > 0 ? $"Press Merge to join them into one block. This adds {Format(TimeSpan.FromMinutes((double)gapMinutes))} of gap time." : "Press Merge to join them into one block.")
-        : "To merge, blocks must share an account and day, with only gaps between.";
-    /// <summary>How many blocks are selected, for the selection strip. Null with no selection.</summary>
-    public string? SelectionCountText => SelectedBlockCount is var count and > 0 ? $"{count} {(count == 1 ? "block" : "blocks")} selected" : null;
-    /// <summary>One short sentence under the count: what is needed, or what Merge will do. It names the specific problem when blocks cannot be merged.</summary>
-    public string? SelectionNote
+    /// <summary>Why a merge can or cannot work, in a few words: the Merge menu item's tooltip, and the toast when Merge is pressed and refused.</summary>
+    public string MergeHint
     {
         get
         {
-            var count = SelectedBlockCount; if (count == 0) return null;
-            if (count < 2) return "Select another block to merge.";
+            var count = SelectedBlockCount;
+            if (count < 2) return "Pick a second block";
             if (CanMergeSelection)
-            {
-                var gap = Editor.MergeGapMinutes(selectedRows.ToArray());
-                return gap > 0 ? $"Merge joins them and adds {Format(TimeSpan.FromMinutes((double)gap))} of gap time." : "Merge joins them into one block.";
-            }
-            if (selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() > 1) return "Choose blocks from the same account to merge.";
-            if (selectedRows.Select(s => s.Day).Distinct().Count() > 1) return "Choose blocks from the same day to merge.";
-            return "Other time sits between these blocks, so they cannot be merged.";
+                return Editor.MergeGapMinutes(selectedRows.ToArray()) is var gapMinutes and > 0 ? $"Joins them · adds {Format(TimeSpan.FromMinutes((double)gapMinutes))} gap" : "Joins them";
+            if (selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() > 1) return "Same account only";
+            if (selectedRows.Select(s => s.Day).Distinct().Count() > 1) return "Same day only";
+            return "Time in between: can’t merge";
         }
     }
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
@@ -98,18 +85,43 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
         var remove = IsSelected(rows);
         foreach (var row in rows) { if (remove) selectedRows.Remove(row); else selectedRows.Add(row); }
-        EditError = null; Notify();
+        EditError = null; Notice = null; Notify();
     }
-    // Clicking a block selects it, and the Edit button (or Enter) opens the one that is selected, so there is no double-click to tell apart from two clicks.
-    private ReviewEntry? SelectedEntry => SelectedBlockCount == 1
-        ? Editor.Entries(WeekStart(SelectedDate), WeekStart(SelectedDate).AddDays(7)).FirstOrDefault(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains)) : null;
-    public bool CanEditSelection => SelectedEntry is not null;
-    /// <summary>The button's word, which is Inspect for a group of entries.</summary>
-    public string EditText => SelectedEntry?.GroupId is not null ? "Inspect" : "Edit";
-    public void EditSelection()
+    /// <summary>
+    /// A click on a block. A plain click selects just that block, and clicking the only selected block again clears the selection; with Shift
+    /// (<paramref name="additive"/>) the block is added to the selection or taken out of it, which is how two blocks are picked to merge.
+    /// </summary>
+    public void SelectBlock(IReadOnlyList<SessionRow> rows, bool additive)
     {
-        if (SelectedEntry is not { } entry) return;
-        if (entry.GroupId is { } group) OpenGroup(group); else OpenEntry(entry.Sources[0]);
+        if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
+        if (additive) { ToggleSelection(rows); return; }
+        var onlyThis = SelectedBlockCount == 1 && IsSelected(rows);
+        selectedRows.Clear();
+        if (!onlyThis) foreach (var row in rows) selectedRows.Add(row);
+        EditError = null; Notice = null; Notify();
+    }
+    /// <summary>A block as the Selected block card shows it: one entry, or a merged group of entries from its first start to its last end.</summary>
+    public sealed record SelectedBlock(string Account, DateTime Start, DateTime End, decimal Minutes, string Note, SessionRow? Row, ReviewEntry? Group)
+    {
+        public bool IsGroup => Group is not null;
+        public IReadOnlyList<SessionRow> Rows => Group?.Sources ?? new[] { Row! };
+    }
+    /// <summary>The selected blocks in time order. Entries of a merged group count as the one block.</summary>
+    public IReadOnlyList<SelectedBlock> SelectedBlocks
+    {
+        get
+        {
+            if (selectedRows.Count == 0) return Array.Empty<SelectedBlock>();
+            var week = WeekStart(SelectedDate);
+            var blocks = new List<SelectedBlock>();
+            foreach (var entry in Editor.Entries(week, week.AddDays(7)).Where(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains)))
+            {
+                var timed = entry.Sources.Where(r => r.Duration > TimeSpan.Zero).ToArray(); if (timed.Length == 0) continue;
+                blocks.Add(entry.GroupId is null ? new(entry.Account, timed[0].From, timed[0].To, entry.Minutes, entry.Note, entry.Sources[0], null)
+                    : new(entry.Account, timed.Min(r => r.From), timed.Max(r => r.To), entry.Minutes, entry.Note, null, entry));
+            }
+            return blocks.OrderBy(b => b.Start).ToArray();
+        }
     }
     public void ClearSelection() { if (selectedRows.Count == 0) return; selectedRows.Clear(); Notify(); }
     // After a quick slip from one account to another and back, the earlier block can be picked up again. Blocks in a group are left alone, since
@@ -122,17 +134,19 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool CanContinuePrevious => ContinuableNow() is not null;
     /// <summary>What the option says, such as the account and the time its earlier block began, or null when it is not on offer.</summary>
-    public string? ContinuePreviousText => ContinuableNow() is { } blocks ? $"Continue {Label(blocks.Earlier.Account)} from {blocks.Earlier.From:HH:mm}" : null;
+    public string? ContinuePreviousText => ContinuableNow() is { } blocks ? $"Continue {Label(blocks.Earlier.Account)}" : null;
+    /// <summary>What the offer says beside its button: the slip, as the account it was and its length.</summary>
+    public string? ContinuePreviousNote => ContinuableNow() is { } blocks ? $"Switched · {FormatShort(blocks.Between.Duration)} on {Label(blocks.Between.Account)}" : null;
     /// <summary>Takes back a switch made by mistake. The short block between is dropped and the earlier block carries on as one, including the time of the slip.</summary>
     public bool ContinuePrevious()
     {
-        if (ContinuableNow() is null) { EditError = "Nothing recent to take back."; Notify(); return false; }
+        if (ContinuableNow() is null) { EditError = "Nothing to take back"; Notify(); return false; }
         if (!Save()) { EditError = LastError; Notify(); return false; }
         var removed = Engine.ContinuePrevious();
         if (removed is { } blocks) Editor.DropNotes(new[] { (blocks.Between.Account, blocks.Between.Date, blocks.Between.Start) });
         selectedRows.Clear();
         var saved = Save();
-        Notice = removed is { } done ? $"Carrying on with {Label(done.Earlier.Account)} from {done.Earlier.From:HH:mm}." : null;
+        Notice = removed is { } done ? $"Carrying on {Label(done.Earlier.Account)} from {done.Earlier.From:HH:mm}" : null;
         Notify(); return saved;
     }
     // Copied blocks stay inside the app, not on the system clipboard, so they can carry their credited minutes and notes exactly.
@@ -145,20 +159,20 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         var chosen = Engine.Sessions.Where(s => rows.Any(r => ReferenceEquals(r, s)) && s.Duration > TimeSpan.Zero).OrderBy(s => s.From).ToList();
         if (chosen.Count == 0) return false;
-        if (chosen.Select(s => s.Day).Distinct().Count() > 1) { EditError = "Copy blocks from one day at a time."; Notify(); return false; }
+        if (chosen.Select(s => s.Day).Distinct().Count() > 1) { EditError = "One day at a time"; Notify(); return false; }
         var first = chosen[0].From;
         copied = chosen.Select(s => new LedgerEditor.ClipBlock(s.Account, s.From - first, s.Minutes, Editor.Note(s))).ToList();
-        EditError = null; Notice = copied.Count == 1 ? "Copied 1 block." : $"Copied {copied.Count} blocks.";
+        EditError = null; Notice = copied.Count == 1 ? "1 block copied" : $"{copied.Count} blocks copied";
         Notify(); return true;
     }
     public bool CopySelection() => CopyBlocks(Engine.Sessions.Where(selectedRows.Contains).ToList());
     /// <summary>Pastes the copied blocks with the first at this time on the day shown. One undo step, and the time is credited like Add time.</summary>
     public bool PasteBlocks(DateTime at)
     {
-        if (!CanPaste) { EditError = "Copy some blocks first."; Notify(); return false; }
+        if (!CanPaste) { EditError = "Copy blocks first"; Notify(); return false; }
         var count = copied.Count;
         var done = ChangeLog(() => { foreach (var block in copied) ValidateAccount(block.Account); Editor.Paste(copied, at); });
-        if (done) { Notice = count == 1 ? "Pasted 1 block." : $"Pasted {count} blocks."; Notify(); }
+        if (done) { Notice = count == 1 ? "1 block pasted" : $"{count} blocks pasted"; Notify(); }
         return done;
     }
     /// <summary>The time Ctrl+V uses on the day shown, which is the pointer's place on the timeline, or straight after the day's last block.</summary>
@@ -172,7 +186,10 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (!CanMergeSelection) { EditError = MergeHint; Notify(); return false; }
         var rows = Engine.Sessions.Where(selectedRows.Contains).ToArray();
-        return ChangeLog(() => { Editor.Group(rows); selectedRows.Clear(); });
+        var gap = Editor.MergeGapMinutes(rows);
+        var done = ChangeLog(() => { Editor.Group(rows); selectedRows.Clear(); });
+        if (done) SayDone(gap > 0 ? $"Merged · {Format(TimeSpan.FromMinutes((double)gap))} gap added" : "Merged");
+        return done;
     }
     private StoreSettings preferences;
     private readonly TimerStore? store;
@@ -183,12 +200,14 @@ public sealed class TimerModel : INotifyPropertyChanged
         this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, ThemeLibrary.Default, DayOfWeek.Monday);
         this.store = store;
         Editor = store?.Editor ?? new LedgerEditor(Engine);
+        Notes = new NotesModel(store, () => Engine.Now, () => ReviewAccounts.Select(a => a.Name).ToList());
+        Notes.Changed += Notify;
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
         SelectedDate = Engine.Now.Date; lastToday = SelectedDate;
-        // The user's own themes need their colours registered too. The built-in ones were registered when the app started.
-        if (Application.Current is { } current && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && this.preferences.Themes is { Count: > 0 } own) ThemeEngine.Register(current, own);
+        // Only Light and Dark are offered now, so a saved choice of a retired theme or one of the user's own becomes Light or Dark (the theme stays in the file).
+        this.preferences = this.preferences with { Theme = AppThemes.Resolve(this.preferences.Theme, this.preferences.Themes) };
         ApplyTheme(); Ui.ApplyTooltips(this.preferences.Tooltips);
         // When the computer switches between light and dark, System follows it.
         if (Application.Current?.PlatformSettings is { } platform)
@@ -226,9 +245,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     public IReadOnlyList<TimerAccount> Accounts => Catalogue().Where(a => !preferences.Accounts.Any(p => p.Name == a.Name && p.Hidden)).ToArray();
     public string? SelectedAccount { get; private set; }
     public string? ActiveAccount => Engine.Active?.Account;
-    public string AccountLabel => IsOnBreak ? "On break" : ActiveAccount ?? (Engine.Finished ? "Day finished" : "Ready when you are");
+    public string AccountLabel => IsOnBreak ? "On break" : ActiveAccount ?? (Engine.Finished ? "Day finished" : "Ready to track");
     public string Label(string account) => BreakAccount.Display(account);
-    public string Status => IsOnBreak ? "On break" : IsTracking ? "Tracking" : "Not tracking";
+    public string Status => IsOnBreak ? "On break" : IsTracking ? "Tracking" : Engine.Finished ? "Day finished" : "Ready to track";
     public bool IsTracking => Engine.Active is not null;
     public bool IsOvertime => Engine.Totals(Engine.Now).Overtime > TimeSpan.Zero;
     public bool DayStarted => Engine.DayRunning;
@@ -237,14 +256,25 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string Theme => preferences.Theme;
     public string? LastError { get; private set; }
     /// <summary>A one-off message for the footer, such as the note that old timesheet files are not used.</summary>
-    public string? Notice { get; set; }
+    private string? notice;
+    public string? Notice { get => notice; set { notice = value; NoticeHasUndo = false; } }
+    /// <summary>Whether the note on show is for an edit that Undo takes back, so the message offers an Undo button.</summary>
+    public bool NoticeHasUndo { get; private set; }
+    /// <summary>Says that something was done, with an Undo beside the words.</summary>
+    private void SayDone(string text) { Notice = text; NoticeHasUndo = true; Notify(); }
     public bool IsDemo { get; private set; }
     public bool Persistent => store is not null;
     public TimeSpan Elapsed => Engine.Totals(Engine.Now).Elapsed;
-    public TimeSpan AccountElapsed => Engine.ActiveElapsed;
     public string ClockText => $"{(int)Elapsed.TotalHours:00}:{Elapsed.Minutes:00}:{Elapsed.Seconds:00}";
     public TimeSpan Allocated => Engine.Totals(Engine.Now).Allocated;
     public TimeSpan Unallocated => Engine.Totals(Engine.Now).Unallocated;
+    /// <summary>The time on breaks on a day, kept apart from working time, including a break that is running now.</summary>
+    public TimeSpan BreakTimeOn(DateTime day)
+    {
+        day = day.Date;
+        var saved = Engine.Sessions.Where(s => s.Day == day && BreakAccount.Is(s.Account)).Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
+        return saved + Engine.ActiveElapsedOn(day, includeBreak: true) - Engine.ActiveElapsedOn(day);
+    }
     public event PropertyChangedEventHandler? PropertyChanged;
     public void ToggleAccount(string name)
     {
@@ -255,10 +285,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     // Tells the user when pressing play carried on a block that was already there, since no new block appears.
     private void NoteContinuedBlock()
     {
-        if (Engine.ContinuedBlock is { } block) { selectedRows.Clear(); Notice = $"Carrying on with the {Label(block.Account)} block from {block.From:HH:mm}."; }
+        if (Engine.ContinuedBlock is { } block) { selectedRows.Clear(); Notice = $"Carrying on {Label(block.Account)} from {block.From:HH:mm}"; }
     }
     // The block being recorded has no ledger row yet, so it cannot be dragged or edited until tracking stops.
-    public void ExplainRunning() { EditError = "Still recording. Stop tracking to edit."; Notify(); }
+    /// <summary>Says that something was done, in the message bar, with no Undo (notes are outside the undo history).</summary>
+    public void Tell(string text) { Notice = text; Notify(); }
+    /// <summary>Shows a refused edit in the message bar, such as a time that was typed wrongly in the Selected block card.</summary>
+    public void Refuse(string message) { EditError = message; Notice = null; Notify(); }
+    public void ExplainRunning() { EditError = "Still recording · stop to edit"; Notify(); }
     public void TogglePause()
     {
         // On a break, resume ends the break and goes back to the account that was running before it.
@@ -327,6 +361,7 @@ public sealed class TimerModel : INotifyPropertyChanged
             if (store is not null && deleted.Any(d => AccountHistory(d).Entries > 0)) { store.Save(Engine, preferences); store.Backup("before-delete"); }
             foreach (var name in deleted) Editor.DeleteAccount(name);
         }
+        if (renamed.Count > 0 || deleted.Count > 0) Notes.Relink(preferences.Accounts.Select(a => a.Name), renames, deleted);
         if (renamed.Count > 0)
         {
             // Save first so the backup holds the latest entries, then rewrite everything in one go.
@@ -352,7 +387,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     public DateTime WeekStart(DateTime date) => date.Date.AddDays(-((7 + (int)date.DayOfWeek - (int)preferences.WeekStart) % 7));
     public TimeSpan Today(TimerAccount a) => Engine.Credited(a.Name, Engine.Now.Date, Engine.Now.Date.AddDays(1));
     public TimeSpan OnDay(TimerAccount a, DateTime day) => Engine.Credited(a.Name, day, day.AddDays(1));
-    public TimeSpan Week(TimerAccount a) { var start = WeekStart(SelectedDate); return Engine.Credited(a.Name, start, start.AddDays(7)); }
     /// <summary>The span a budget covers right now, from the account's own period (today, this week, month or quarter).</summary>
     private (DateTime Start, DateTime End) BudgetWindow(TimerAccount a) => BudgetWindowAt(a, Engine.Now);
     /// <summary>The span the budget covers around a reference moment: the day, week, month or quarter that holds it.</summary>
@@ -406,26 +440,12 @@ public sealed class TimerModel : INotifyPropertyChanged
         var (start, end) = BudgetWindow(a);
         return Math.Clamp((Engine.Now - start).TotalSeconds / (end - start).TotalSeconds, 0, 1);
     }
-    public string Format(TimeSpan value)
-    {
-        if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) + "h";
-        var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
-    }
+    public string Format(TimeSpan value) => DecimalHours ? value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) + "h" : Hhmm(value);
     /// <summary>Every duration reads as HH:MM (07:00), or in decimal hours (7.00) when that is chosen. The three formats differ only in how decimal hours are written.</summary>
-    public string FormatShort(TimeSpan value)
-    {
-        if (DecimalHours) return value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB"));
-        var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
-    }
+    public string FormatShort(TimeSpan value) => DecimalHours ? value.TotalHours.ToString("0.00", CultureInfo.GetCultureInfo("en-GB")) : Hhmm(value);
     /// <summary>For tight rows. HH:MM like the rest, or 10.58h in decimal hours.</summary>
-    public string FormatCompact(TimeSpan value)
-    {
-        if (DecimalHours) return value.TotalHours.ToString("0.##", CultureInfo.GetCultureInfo("en-GB")) + "h";
-        var sign = value < TimeSpan.Zero ? "-" : ""; value = value.Duration();
-        return $"{sign}{(int)value.TotalHours:00}:{value.Minutes:00}";
-    }
+    public string FormatCompact(TimeSpan value) => DecimalHours ? value.TotalHours.ToString("0.##", CultureInfo.GetCultureInfo("en-GB")) + "h" : Hhmm(value);
+    private static string Hhmm(TimeSpan value) => $"{(value < TimeSpan.Zero ? "-" : "")}{(int)value.Duration().TotalHours:00}:{value.Duration().Minutes:00}";
     /// <summary>The budget for an account row, such as "10h35 / 20h monthly". The period is always said, since it matters when comparing accounts.</summary>
     public string BudgetLine(TimerAccount a) => a.Budget is { } target
         ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)} {(a.Period switch { "day" => "daily", "month" => "monthly", "quarter" => "quarterly", _ => "weekly" })}" : "No budget";
@@ -438,7 +458,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (BudgetRatio(a) is not { } ratio) return "No budget";
         var period = a.Period is "day" or "month" or "quarter" ? (a.Period == "day" ? "working day" : a.Period) : "week";
-        return $"{Math.Round(ratio * 100)}% used{(ratio >= 1 ? ", over budget" : "")}. The line is how far through the {period} you are.";
+        return $"{Math.Round(ratio * 100)}% used{(ratio >= 1 ? " · over budget" : "")}\nLine: how far through the {period}";
     }
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
@@ -457,6 +477,13 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (following) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = today; }
         Notify();
     }
+    /// <summary>Shows any day, for the date picker in the header. On the week views it will not go past the current week, as the arrows will not.</summary>
+    public void GoToDate(DateTime day, bool weeks = false)
+    {
+        day = day.Date; if (day == SelectedDate.Date) return;
+        if (weeks && WeekStart(day) > WeekStart(Engine.Now)) return;
+        selectedRows.Clear(); TimelineOffset = null; SelectedDate = day; Notify();
+    }
     public void ChangeDate(int days) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
     /// <summary>Steps the Week tab by whole weeks. It never goes past the current week, since there is nothing to review there.</summary>
     public void ChangeWeek(int weeks)
@@ -465,64 +492,17 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (target > WeekStart(Engine.Now)) return;
         selectedRows.Clear(); TimelineOffset = null; SelectedDate = target; Notify();
     }
-    /// <summary>Which part of the Week tab is showing: overview, hours or entries.</summary>
-    public string WeekSection { get; private set; } = "overview";
-    public void SetWeekSection(string section)
-    {
-        if (section is not ("overview" or "hours" or "entries") || section == WeekSection) return;
-        WeekSection = section; Notify();
-    }
+    /// <summary>Whether the Week overview shows its table in place of the chart. Kept for the session only.</summary>
+    public bool WeekAsTable { get; private set; }
+    public void SetWeekAsTable(bool table) { if (WeekAsTable == table) return; WeekAsTable = table; Notify(); }
+    /// <summary>Asked for by a day in the week chart: the dashboard shows that day on the Timeline page.</summary>
+    public event Action<DateTime>? OpenDayRequested;
+    public void OpenDayInTimeline(DateTime day) { GoToDate(day); OpenDayRequested?.Invoke(day.Date); }
     public bool CanStepForwardAWeek => WeekStart(SelectedDate) < WeekStart(Engine.Now);
     /// <summary>Adds or removes minutes on an account for a day, as one undoable edit.</summary>
     /// <summary>Moves entries to another account as one undoable edit. Every selected block moves when the one clicked is selected.</summary>
     public bool MoveEntries(IReadOnlyList<SessionRow> rows, string account)
-        => ChangeLog(() => { ValidateAccount(account); Editor.Reassign(rows, account); });
-    /// <summary>Shows a theme as it is being edited, without saving it. <see cref="EndThemePreview"/> puts the saved look back.</summary>
-    public void PreviewTheme(ThemeDefinition theme)
-    {
-        if (Application.Current is not { } app || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;
-        ThemeEngine.RegisterPreview(app, theme); app.RequestedThemeVariant = ThemeEngine.VariantFor(theme); appliedVariant = null; previewedTheme = theme.Name;
-    }
-    // Only the theme that was being edited needs its saved colours put back, not every theme there is.
-    private string? previewedTheme;
-    public void EndThemePreview()
-    {
-        if (previewedTheme is { } name && Application.Current is { } app && Avalonia.Threading.Dispatcher.UIThread.CheckAccess() && Themes.FirstOrDefault(t => t.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } saved)
-            ThemeEngine.Register(app, new[] { saved });
-        previewedTheme = null; appliedVariant = null; ApplyTheme(); Notify();
-    }
-    /// <summary>Saves one of the user's own themes. <paramref name="replacing"/> is its earlier name, so a rename replaces it, and the theme stays selected if it was.</summary>
-    public void SaveTheme(ThemeDefinition theme, string? replacing = null)
-    {
-        if (!ThemeStorage.IsUsableName(theme.Name)) throw new ArgumentException("Choose a name of up to 40 characters for the theme. System is reserved.");
-        if (ThemeLibrary.BuiltIn.Any(t => t.Name.Equals(theme.Name, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException($"\"{theme.Name}\" is a built-in theme. Choose another name.");
-        var own = (preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
-        if (own.Any(t => t.Name.Equals(theme.Name, StringComparison.OrdinalIgnoreCase) && !t.Name.Equals(replacing, StringComparison.OrdinalIgnoreCase))) throw new ArgumentException($"There is already a theme called \"{theme.Name}\".");
-        if (ThemeTokens.Names.Any(n => !ThemeTokens.IsValid(n, theme.Colours.GetValueOrDefault(n)))) throw new ArgumentException("Every colour must be a valid hex colour.");
-        var index = own.FindIndex(t => t.Name.Equals(replacing ?? theme.Name, StringComparison.OrdinalIgnoreCase));
-        var saved = theme with { BuiltIn = false };
-        if (index >= 0) own[index] = saved; else own.Add(saved);
-        preferences = preferences with { Themes = own, Theme = Theme.Equals(replacing, StringComparison.OrdinalIgnoreCase) ? saved.Name : Theme };
-        if (Application.Current is { } app && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) ThemeEngine.Register(app, new[] { saved });
-        appliedVariant = null; ApplyTheme(); Save(); Notify();
-    }
-    /// <summary>Copies a theme under a new name, so a built-in one can be made your own. Returns the new name, and selects it.</summary>
-    public string DuplicateTheme(string name)
-    {
-        var source = Themes.First(t => t.Name == name);
-        var copy = source.Name + " copy"; var number = 2;
-        while (Themes.Any(t => t.Name.Equals(copy, StringComparison.OrdinalIgnoreCase))) copy = source.Name + " copy " + number++;
-        SaveTheme(source with { Name = copy, BuiltIn = false }); SetTheme(copy); return copy;
-    }
-    public void DeleteTheme(string name)
-    {
-        var own = (preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
-        if (own.RemoveAll(t => t.Name == name) == 0) throw new ArgumentException("Only your own themes can be deleted.");
-        preferences = preferences with { Themes = own, Theme = Theme == name ? ThemeLibrary.System : Theme };
-        appliedVariant = null; ApplyTheme(); Save(); Notify();
-    }
-    /// <summary>The colour to draw an account's blocks, dots and bars in: very dark colours lifted so they show, then softened if the theme asks for it.</summary>
-    public string BlockColour(string accountColour) => BlockLook(accountColour).Fill;
+        => ChangeLog(() => KeepingSelection(rows, () => { ValidateAccount(account); Editor.Reassign(rows, account); }));
     /// <summary>The colour for an account's slice in a chart or its legend dot. A dark theme tints its blocks down into the surface, which makes thin slices vanish, so charts there use the account's own colour (the block's edge).</summary>
     public string ChartColour(string accountColour) { var look = BlockLook(accountColour); return CurrentTheme.Dark ? look.Edge : look.Fill; }
     /// <summary>The fill, left edge and text colour of a timeline block for an account colour, by the selected theme's block rules.</summary>
@@ -578,7 +558,9 @@ public sealed class TimerModel : INotifyPropertyChanged
             foreach (var (account, minutes) in earlier) { engine.AddSession(account, at, at.AddMinutes(minutes)); at = at.AddMinutes(minutes + 5); }
         }
         if (store is not null) store.Save(engine, prefs);
-        return new TimerModel(engine, prefs, store) { IsDemo = true };
+        var demo = new TimerModel(engine, prefs, store) { IsDemo = true };
+        demo.Notes.SeedDemo(anchor.Date, prefs.Accounts.Select(x => x.Name).ToList());
+        return demo;
     }
     // Overtime for testing: the demo's shift is cut short so the day is already past its end. It is only for the demo, and can be
     // switched off again, which puts back whatever shift was set for the day before.
@@ -615,7 +597,6 @@ public sealed class TimerModel : INotifyPropertyChanged
         foreach (var day in Engine.DayStarts.Where(p => p.Key >= Engine.Now.Date && Engine.Schedule.Scheduled(p.Key) is { Working: true } plan && p.Value >= plan.Start).Select(p => p.Key).ToList()) Engine.DayStarts.Remove(day);
         Save(); Notify();
     }
-    public void OpenEntry(SessionRow row) => EntryRequested?.Invoke(row, row.From, row.To);
     public void OpenGap(DateTime? at = null)
     {
         var day = SelectedDate;
@@ -632,14 +613,22 @@ public sealed class TimerModel : INotifyPropertyChanged
         }
         var next = occupied.Where(s => s.Start > start).Select(s => s.Start).DefaultIfEmpty(limit).Min();
         var end = new[] { start.AddMinutes(30), next, limit, day.AddDays(1) }.Min();
-        if (end <= start) { EditError = "There is no free recorded-time gap here."; Notify(); return; }
-        EditError = null; EntryRequested?.Invoke(null, start, end);
+        if (end <= start) { EditError = "No gap here"; Notify(); return; }
+        EditError = null; EntryRequested?.Invoke(start, end);
     }
-    public bool EditEntry(SessionRow? row, string account, DateTime start, DateTime end, string note, bool allowOverlap = false)
-        => ChangeLog(() => { ValidateAccount(account); if (row is null) Editor.Add(account, start, end, note); else Editor.Edit(row, account, start, end, note, allowOverlap); });
-    /// <summary>What lengthening a block to a later end would move, or an explanation when it cannot be done. Nothing is changed.</summary>
-    public IReadOnlyList<TimelineChange> PlanExtend(SessionRow row, DateTime end) => Editor.PlanExtend(row, end);
-    public bool ExtendEntry(SessionRow row, DateTime end, string note) => ChangeLog(() => Editor.ExtendEnd(row, end, note));
+    public bool AddEntry(string account, DateTime start, DateTime end, string note)
+        => ChangeLog(() => { ValidateAccount(account); Editor.Add(account, start, end, note); });
+    /// <summary>Changes a block's account, times or note in place. Blocks may overlap (they stack on the timeline), so only the block being recorded can refuse it.</summary>
+    public bool EditEntry(SessionRow row, string account, DateTime start, DateTime end, string note)
+        => ChangeLog(() => KeepingSelection(new[] { row }, () => { ValidateAccount(account); Editor.Edit(row, account, start, end, note, allowOverlap: true); }));
+    // An edit replaces a block's row with a new one in the same place, so the selection is moved over to it: editing a selected block leaves it selected.
+    private void KeepingSelection(IReadOnlyList<SessionRow> rows, Action change)
+    {
+        var places = rows.Where(selectedRows.Contains).Select(r => Engine.Sessions.IndexOf(r)).Where(i => i >= 0).ToList();
+        change();
+        foreach (var row in rows) selectedRows.Remove(row);
+        foreach (var place in places) if (place < Engine.Sessions.Count) selectedRows.Add(Engine.Sessions[place]);
+    }
     public bool DragEntry(SessionRow row, DateTime start, DateTime end, bool insert)
         => ChangeLog(() => Editor.EditTimeline(row, start, end, insert));
     /// <summary>Moves an account to a new place among the accounts (hidden ones keep their own places).</summary>
@@ -659,21 +648,19 @@ public sealed class TimerModel : INotifyPropertyChanged
         preferences = preferences with { Accounts = list };
         Save(); Notify();
     }
-    public bool DeleteEntry(SessionRow row) => ChangeLog(() => Editor.Delete(row));
     /// <summary>Deletes the selected blocks as one undoable edit. Selection that cannot be deleted is left alone with an explanation.</summary>
     public bool DeleteSelection()
     {
         var rows = Engine.Sessions.Where(selectedRows.Contains).ToArray();
         if (rows.Length == 0) return false;
-        return ChangeLog(() => { Editor.Delete(rows); selectedRows.Clear(); });
+        var done = ChangeLog(() => { Editor.Delete(rows); selectedRows.Clear(); });
+        if (done) SayDone(rows.Length > 1 ? $"{rows.Length} blocks deleted" : "Deleted");
+        return done;
     }
     /// <summary>Deletes the given entries as one undoable edit.</summary>
     public bool DeleteEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Delete(rows));
-    public bool UndoEdit() => ChangeLog(Editor.Undo);
-    public void OpenGroup(string id) => GroupRequested?.Invoke(id);
-    public bool GroupEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Group(rows));
-    public bool UngroupEntries(string id) => ChangeLog(() => Editor.Ungroup(id));
-    public bool TidyDay(IReadOnlyList<GapChoice> choices, int limit) => ChangeLog(() => Editor.Tidy(choices, limit));
+    public bool UndoEdit() { var done = ChangeLog(Editor.Undo); if (done) { Notice = "Undone"; Notify(); } return done; }
+    public bool UngroupEntries(string id) { var done = ChangeLog(() => Editor.Ungroup(id)); if (done) SayDone("Unmerged"); return done; }
     /// <summary>Exports the week or the whole month that the given day falls in, or the one being viewed when none is given.</summary>
     public bool ExportWeek(bool wholeMonth = false, DateTime? day = null)
     {
@@ -716,7 +703,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string ThemeState => IsOnBreak ? "Break" : IsOvertime ? "Overtime" : IsTracking ? "Recording" : "Normal";
     private ThemeVariant? appliedVariant;
     /// <summary>Every theme on offer: the built-in ones, then the user's own.</summary>
-    public IReadOnlyList<ThemeDefinition> Themes => ThemeLibrary.BuiltIn.Concat(preferences.Themes ?? System.Array.Empty<ThemeDefinition>()).ToList();
+    public IReadOnlyList<ThemeDefinition> Themes => AppThemes.BuiltIn;
     /// <summary>The theme actually in use. System is Light or Dark, whichever the computer is using.</summary>
     public ThemeDefinition CurrentTheme
     {
@@ -724,7 +711,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         {
             if (Theme != ThemeLibrary.System && Themes.FirstOrDefault(t => t.Name == Theme) is { } chosen) return chosen;
             var dark = Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant == Avalonia.Platform.PlatformThemeVariant.Dark;
-            return dark ? ThemeLibrary.Dark : ThemeLibrary.Light;
+            return dark ? AppThemes.Dark : AppThemes.Light;
         }
     }
     /// <summary>The theme the pill wears by itself: tinted amber on a break, red in overtime, otherwise null so it follows the rest of the app.</summary>
@@ -741,8 +728,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool IsOnBreak => BreakAccount.Is(ActiveAccount);
     /// <summary>Whether hovering a control shows its tooltip. Switched off, the words are still the accessible names.</summary>
     /// <summary>Whether a longer entry that runs into later blocks moves them without asking first. Chosen by a tick box in the entry window, and in settings.</summary>
-    public bool MoveLaterAlways => preferences.MoveLaterAlways;
-    public void SetMoveLaterAlways(bool on) { preferences = preferences with { MoveLaterAlways = on }; Save(); Notify(); }
     /// <summary>The pill size chosen by hand, as a percentage of its design size, or null for the automatic size that follows the screen.</summary>
     /// <summary>Whether the pill and the dashboard stay in front of other windows. Either can be let go, so the dashboard can drop back behind other work.</summary>
     public bool PillOnTop => preferences.PillOnTop;
@@ -750,7 +735,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void SetPillOnTop(bool on) { preferences = preferences with { PillOnTop = on }; Save(); Notify(); }
     public void SetDashboardOnTop(bool on) { preferences = preferences with { DashboardOnTop = on }; Save(); Notify(); }
     public int? PillScalePercent => preferences.PillScale;
-    public static readonly int[] PillScaleChoices = { 50, 60, 70, 80, 90, 100, 110, 120 };
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
     public bool Tooltips => preferences.Tooltips;
     public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
@@ -776,7 +760,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (!TrayAvailable && !on) return;
         preferences = preferences with { TaskbarButton = on };
-        if (!on) Notice = "The timer now runs from the notification area. Click its icon to bring the timer back.";
+        if (!on) Notice = "Running from the tray · click its icon to open";
         Save(); Notify();
     }
     /// <summary>How far through the working day it is, from 0 to 1, or null on a day off.</summary>
@@ -794,6 +778,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (closed) return;
         ticks++;
         FollowToday();
+        Notes.MakeSeriesNotes(); // A repeating meeting's next days are made as time goes on.
+        if (ticks % 60 == 0) Notes.RetryUnsaved();
         if (ticks % 15 == 0) { Save(); Notify(); }
         else PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Elapsed)));
     }
@@ -804,7 +790,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         try { store?.Save(Engine, preferences); LastError = null; return true; }
         // A restart or shutdown can close the database under a save that is already queued. That must be reported, never allowed to crash the app.
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or ObjectDisposedException || error.GetType().Namespace == "Microsoft.Data.Sqlite")
-        { LastError = "Could not save. Time remains in memory; retrying. " + error.Message; return false; }
+        { LastError = "Not saved · kept on screen, retrying · " + error.Message; return false; }
     }
     private bool closed;
     /// <summary>Called as the app exits, before the database is closed, so the clock's tick stops saving.</summary>
@@ -815,7 +801,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         try { AutoStart?.Set(enabled); LastError = null; }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException or PlatformNotSupportedException)
-        { LastError = "Could not change starting with Windows. " + error.Message; }
+        { LastError = "Couldn’t change Start with Windows · " + error.Message; }
         Notify();
     }
     public event Action? HideRequested;
@@ -854,5 +840,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         messageTimer?.Stop(); messageTimer = null;
         Notice = null; EditError = null; messageSeen = (null, null); Notify();
     }
+    /// <summary>True while a reminder is due (its time has passed and it is not ticked off), which lights the blue light on the pill and the rail.</summary>
+    public bool ReminderDue => Notes.AttentionCount > 0;
     private void Notify() { ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
 }

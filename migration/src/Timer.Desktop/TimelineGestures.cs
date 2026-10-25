@@ -9,43 +9,47 @@ namespace Timer.Desktop;
 public static class TimelineGestures
 {
 
-    public static void Attach(Border card, Canvas canvas, TimerModel model, SessionRow row, double pixelsPerHour)
+    /// <summary>
+    /// A selected block also gets a grab handle on each edge that reaches a little outside it, where its ring is. The ring is not part of the block, so a press there would
+    /// otherwise land on a neighbour (or the empty canvas) and start dragging that one, which made resizing a selected block fail now and then.
+    /// </summary>
+    public static void Attach(Border card, Canvas canvas, TimerModel model, SessionRow row, double pixelsPerHour, bool selected = false)
     {
         Point? origin = null;
         var edge = 0;
         var delta = TimeSpan.Zero;
-        var oldTop = Canvas.GetTop(card); var oldHeight = card.Height;
+        var oldLeft = Canvas.GetLeft(card); var oldWidth = card.Width;
         var dragging = false;
         var nudging = false;
-        var previews = new Dictionary<Border, (double Top, double Height)>();
+        var previews = new Dictionary<Border, (double Left, double Width)>();
         void RestoreNeighbours()
-        { foreach (var p in previews) { Canvas.SetTop(p.Key, p.Value.Top); p.Key.Height = p.Value.Height; p.Key.Opacity = 1; } previews.Clear(); }
-        card.PointerPressed += (_, e) =>
+        { foreach (var p in previews) { Canvas.SetLeft(p.Key, p.Value.Left); p.Key.Width = p.Value.Width; p.Key.Opacity = 1; } previews.Clear(); }
+        void Press(Control source, PointerPressedEventArgs e, int? forced)
         {
-            if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
+            if (!e.GetCurrentPoint(source).Properties.IsLeftButtonPressed) return;
             origin = e.GetPosition(canvas); delta = TimeSpan.Zero; dragging = false;
-            oldTop = Canvas.GetTop(card); oldHeight = card.Height;
-            var y = e.GetPosition(card).Y;
-            edge = EdgeAt(y, oldHeight);
-            e.Handled = true; e.Pointer.Capture(card);
-        };
-        card.PointerMoved += (_, e) =>
+            oldLeft = Canvas.GetLeft(card); oldWidth = card.Width;
+            edge = forced ?? EdgeAt(e.GetPosition(card).X, oldWidth);
+            e.Handled = true; e.Pointer.Capture(source);
+        }
+        card.PointerPressed += (_, e) => Press(card, e, null);
+        void Move(PointerEventArgs e)
         {
             if (origin is not { } start)
             {
                 // Show the resize cursor over an edge handle so short blocks are discoverable.
-                card.Cursor = new Cursor(EdgeAt(e.GetPosition(card).Y, card.Height) == 0 ? StandardCursorType.SizeAll : StandardCursorType.SizeNorthSouth);
+                card.Cursor = new Cursor(EdgeAt(e.GetPosition(card).X, card.Width) == 0 ? StandardCursorType.SizeAll : StandardCursorType.SizeWestEast);
                 return;
             }
             var moved = e.GetPosition(canvas) - start;
-            if (!dragging && Math.Abs(moved.Y) < 5) return;
+            if (!dragging && Math.Abs(moved.X) < 5) return;
             dragging = true;
-            delta = SnapDelta(model, row, edge, TimeSpan.FromHours(moved.Y / pixelsPerHour), pixelsPerHour, out nudging);
+            delta = SnapDelta(model, row, edge, TimeSpan.FromHours(moved.X / pixelsPerHour), pixelsPerHour, out nudging);
             RestoreNeighbours();
             var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero);
             var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
-            Canvas.SetTop(card, oldTop + (edge <= 0 ? delta.TotalHours * pixelsPerHour : 0));
-            card.Height = Math.Max(ReviewViews.MinimumBlockHeight, (until - from).TotalHours * pixelsPerHour - 4);
+            Canvas.SetLeft(card, oldLeft + (edge <= 0 ? delta.TotalHours * pixelsPerHour : 0));
+            card.Width = Math.Max(ReviewViews.MinimumBlockWidth, (until - from).TotalHours * pixelsPerHour - ReviewViews.BlockGap);
             card.Opacity = .75;
             if (nudging)
             {
@@ -55,47 +59,62 @@ public static class TimelineGestures
                     {
                         foreach (var neighbour in canvas.Children.OfType<Border>().Where(b => ReferenceEquals(b.Tag, change.Source)))
                         {
-                            previews[neighbour] = (Canvas.GetTop(neighbour), neighbour.Height);
-                            Canvas.SetTop(neighbour, (change.Updated.From - row.Day).TotalHours * pixelsPerHour + 2); neighbour.Opacity = .75;
+                            previews[neighbour] = (Canvas.GetLeft(neighbour), neighbour.Width);
+                            Canvas.SetLeft(neighbour, ReviewViews.TimelineGutter + (change.Updated.From - row.Day).TotalHours * pixelsPerHour + ReviewViews.BlockInset); neighbour.Opacity = .75;
                         }
                     }
                 }
                 catch (ArgumentException) { } // Final validation reports a blocked insertion without changing the ledger.
             }
             e.Handled = true;
-        };
-        card.PointerReleased += (_, e) =>
+        }
+        card.PointerMoved += (_, e) => Move(e);
+        void Release(PointerReleasedEventArgs e)
         {
             if (origin is null) return;
             var commit = dragging && delta != TimeSpan.Zero;
-            var change = delta; var mode = edge; var push = nudging; var select = !dragging;
+            var change = delta; var mode = edge; var push = nudging; var select = !dragging; var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
             RestoreNeighbours();
             origin = null; dragging = false; e.Pointer.Capture(null); card.Opacity = 1;
-            Canvas.SetTop(card, oldTop); card.Height = oldHeight;
+            Canvas.SetLeft(card, oldLeft); card.Width = oldWidth;
             if (commit) model.DragEntry(row, row.From + (mode <= 0 ? change : TimeSpan.Zero),
                 row.To + (mode >= 0 ? change : TimeSpan.Zero), push);
-            else if (select) model.ToggleSelection(new[] { row });
+            else if (select) model.SelectBlock(new[] { row }, shift);
             e.Handled = true;
-        };
-        card.PointerCaptureLost += (_, _) =>
+        }
+        card.PointerReleased += (_, e) => Release(e);
+        void Lost()
         {
             // Context menus can release capture without a left-button gesture.
             if (origin is null) return;
             RestoreNeighbours();
             origin = null; dragging = false; card.Opacity = 1;
-            Canvas.SetTop(card, oldTop); card.Height = oldHeight;
-        };
+            Canvas.SetLeft(card, oldLeft); card.Width = oldWidth;
+        }
+        card.PointerCaptureLost += (_, _) => Lost();
         card.Cursor = new Cursor(StandardCursorType.SizeAll);
+        if (!selected) return;
+        foreach (var side in new[] { -1, 1 })
+        {
+            var reach = Math.Min(12, Math.Max(5, card.Width / 2 + 4));
+            var handle = new Border { Name = side < 0 ? "TimelineHandleStart" : "TimelineHandleEnd", Width = reach, Height = card.Height, Background = Avalonia.Media.Brushes.Transparent, ZIndex = 6, Cursor = new Cursor(StandardCursorType.SizeWestEast) };
+            Canvas.SetLeft(handle, side < 0 ? Canvas.GetLeft(card) - 4 : Canvas.GetLeft(card) + card.Width - reach + 4); Canvas.SetTop(handle, Canvas.GetTop(card));
+            handle.PointerPressed += (_, e) => Press(handle, e, side);
+            handle.PointerMoved += (_, e) => { if (origin is not null) Move(e); };
+            handle.PointerReleased += (_, e) => Release(e);
+            handle.PointerCaptureLost += (_, _) => Lost();
+            canvas.Children.Add(handle);
+        }
     }
-    /// <summary>Which edge a press at <paramref name="y"/> grabs, -1 top, 1 bottom, 0 for moving the whole block.</summary>
-    public static int EdgeAt(double y, double height)
+    /// <summary>Which edge a press at <paramref name="x"/> grabs, -1 the start (left), 1 the end (right), 0 for moving the whole block.</summary>
+    public static int EdgeAt(double x, double width)
     {
-        // Tall cards keep 8px handles. Shorter ones share the height in thirds so the middle still
-        // moves the block, and the very shortest are split in halves because resizing matters more
+        // Wide blocks keep 8px handles. Narrower ones share the width in thirds so the middle still
+        // moves the block, and the very narrowest are split in halves because resizing matters more
         // than moving there (zooming in gives a block back its middle).
-        var zone = height >= 24 ? 8 : height >= 10 ? height / 3 : height / 2;
-        if (y < zone) return -1;
-        if (y > height - zone) return 1;
+        var zone = width >= 24 ? 8 : width >= 10 ? width / 3 : width / 2;
+        if (x < zone) return -1;
+        if (x > width - zone) return 1;
         return 0;
     }
     /// <summary>Keeps a drag inside its day and above the minimum length, so the preview and the saved value always agree.</summary>

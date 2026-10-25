@@ -7,25 +7,10 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
-using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
 
 namespace Timer.Desktop.Tests;
-
-// Makes the database refuse new entries, to stand in for a full disk or a locked file.
-internal static class StorageFaults
-{
-    public static void Block(TimerStore store) => store.Database.Execute("CREATE TRIGGER block_entries BEFORE INSERT ON entries BEGIN SELECT RAISE(ABORT, 'disk full'); END");
-    public static void Unblock(TimerStore store) => store.Database.Execute("DROP TRIGGER block_entries");
-    public static List<SessionRow> Saved(TimerStore store)
-    {
-        var engine = new TrackingEngine();
-        engine.Sessions.AddRange(store.Database.Query("SELECT day, start_at, seconds FROM entries ORDER BY id",
-            r => new SessionRow(r.GetString(0), "x", r.GetString(1)[11..], "y", (r.GetDouble(2) / 60).ToString(System.Globalization.CultureInfo.InvariantCulture))));
-        return engine.Sessions;
-    }
-}
 
 public sealed class EditingTests
 {
@@ -114,7 +99,7 @@ public sealed class EditingTests
     {
         var engine = Engine(); engine.Sessions.Add(Row());
         engine.Sessions.Add(Row("11:00:00", "12:00:00") with { Account = "Account two" });
-        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+        var model = new TimerModel(engine); model.SetTimelineScale(160, 0, 0); model.TimelineOffset = null; var window = new DashboardWindow(model); window.Show(); // 160 pixels an hour.
         try
         {
             void Layout() { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var settled = window.CaptureRenderedFrame(); }
@@ -122,8 +107,8 @@ public sealed class EditingTests
             {
                 Layout();
                 var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry0");
-                var point = card.TranslatePoint(new Point(80, card.Height * fraction), window)!.Value;
-                window.MouseDown(point, MouseButton.Left); window.MouseMove(point + new Vector(0, pixels)); window.MouseUp(point + new Vector(0, pixels), MouseButton.Left);
+                var point = card.TranslatePoint(new Point(card.Width * fraction, card.Height / 2), window)!.Value;
+                window.MouseDown(point, MouseButton.Left); window.MouseMove(point + new Vector(pixels, 0)); window.MouseUp(point + new Vector(pixels, 0), MouseButton.Left);
             }
             Drag(.5, 80); Assert.Equal(9, engine.Sessions[0].From.Hour); Assert.Equal(30, engine.Sessions[0].From.Minute);
             Assert.Equal(TimeSpan.FromHours(1), engine.Sessions[0].Duration); Assert.True(model.UndoEdit());
@@ -136,34 +121,27 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void NoteOnlyDialogPreservesFractionalCreditAndEditingTheSelectionRequestsAnEditor()
+    public void ANoteOnlyEditKeepsFractionalCreditAndClicksSelectWhileDoubleClickAddsTime()
     {
         var engine = Engine(); var row = Row(end: "09:01:01", minutes: "1.01") with { Account = "ACCOUNT ONE" }; engine.Sessions.Add(row);
         var model = new TimerModel(engine);
-        var editor = new EntryDialog(model, row, row.From, row.To).Open(model);
-        try
-        {
-            editor.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryNote").Text = "Short entry note";
-            editor.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Same(row, engine.Sessions.Single()); Assert.Equal("1.01", engine.Sessions.Single().Minutes);
-        }
-        finally { editor.Close(); }
-        var requests = 0; DateTime? gap = null;
-        model.EntryRequested += (entry, from, _) => { if (entry is not null) requests++; else gap = from; };
+        Assert.True(model.EditEntry(row, row.Account, row.From, row.To, "Short entry note"));
+        Assert.Same(row, engine.Sessions.Single()); Assert.Equal("1.01", engine.Sessions.Single().Minutes); Assert.Equal("Short entry note", model.Editor.Note(row));
+        DateTime? gap = null;
+        model.EntryRequested += (from, _) => gap = from;
         var window = new Window { Width = 600, Height = 500, Content = ReviewViews.Timeline(model) }; window.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var settled = window.CaptureRenderedFrame();
             var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry0");
-            var point = card.TranslatePoint(new Point(80, 1), window)!.Value;
+            var point = card.TranslatePoint(new Point(card.Width / 2, card.Height / 2), window)!.Value;
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
-            Assert.Equal(0, requests); Assert.Empty(model.SelectedRows); // Two clicks select and deselect. There is no double-click edit any more.
+            Assert.Empty(model.SelectedRows); Assert.Null(gap); // Two clicks select and deselect. There is no double-click edit.
             window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
-            Assert.True(model.CanEditSelection); model.EditSelection();
-            Assert.Equal(1, requests); model.ClearSelection(); Dispatcher.UIThread.RunJobs();
-            var nine = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
-            var empty = nine.TranslatePoint(new Point(200, 60), window)!.Value; // The label sits five pixels above its hour's tick.
+            Assert.Same(row, Assert.Single(model.SelectedRows)); model.ClearSelection(); Dispatcher.UIThread.RunJobs();
+            var canvas = window.GetVisualDescendants().OfType<Canvas>().Single(c => c.Name == "TimelineCanvas");
+            var empty = canvas.TranslatePoint(new Point(ReviewViews.TimelineGutter + 9 * model.TimelinePixelsPerHour + 30, 150), window)!.Value; // Past 09:00 in the blank band: 09:20.
             window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
             Assert.Null(gap); // One click adds nothing.
             window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
@@ -183,7 +161,7 @@ public sealed class EditingTests
             var model = new TimerModel(engine, prefs, store); Assert.True(model.Save());
             StorageFaults.Block(store);
             var row = engine.Sessions.Single();
-            var dialog = new EntryDialog(model, null, row.To, row.To.AddMinutes(30)).Open(model);
+            var dialog = new EntryDialog(model, row.To, row.To.AddMinutes(30)).Open(model);
             try
             {
                 var button = dialog.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry");
@@ -199,26 +177,22 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void EntryDialogSavesNotesAndGapTimeAndWeekShowsTheEditedEntry()
+    public void EditingSavesNotesAndAddTimeAddsGapTime()
     {
         var engine = Engine(); engine.Sessions.Add(Row());
         var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
         try
         {
-            var row = engine.Sessions[0]; var editor = new EntryDialog(model, row, row.From, row.To).Open(window);
-            var end = editor.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryEnd"); end.Text = "10:15";
-            editor.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "EntryNote").Text = "Drafting\nClient review";
-            editor.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.False(editor.IsVisible); Assert.Equal(TimeSpan.FromMinutes(75), engine.Sessions[0].Duration);
+            var row = engine.Sessions[0];
+            Assert.True(model.EditEntry(row, row.Account, row.From, row.From.AddMinutes(75), "Drafting\nClient review"));
+            Assert.Equal(TimeSpan.FromMinutes(75), engine.Sessions[0].Duration);
             Assert.Equal("Drafting\nClient review", model.Editor.Note(engine.Sessions[0]));
-            window.SelectTab(true); model.SetWeekSection("entries"); Dispatcher.UIThread.RunJobs(); using var week = window.CaptureRenderedFrame();
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Drafting\nClient review");
+            Dispatcher.UIThread.RunJobs();
             var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath(); Directory.CreateDirectory(output);
-            using var settled = window.CaptureRenderedFrame(); settled?.Save(Path.Combine(output, "week-editable-entries.png"));
-            var add = new EntryDialog(model, null, row.To.AddMinutes(30), row.To.AddMinutes(45)).Open(window);
+            var add = new EntryDialog(model, row.To.AddMinutes(30), row.To.AddMinutes(45)).Open(window);
             Dispatcher.UIThread.RunJobs(); using var addFrame = add.CaptureRenderedFrame(); addFrame?.Save(Path.Combine(output, "entry-editor.png"));
             add.Close();
-            Assert.True(model.EditEntry(null, "Account two", row.To.AddMinutes(30), row.To.AddMinutes(45), "Gap note"));
+            Assert.True(model.AddEntry("Account two", row.To.AddMinutes(30), row.To.AddMinutes(45), "Gap note"));
             Assert.Equal(2, engine.Sessions.Count); Assert.True(model.UndoEdit()); Assert.Single(engine.Sessions);
         }
         finally { window.Close(); }
@@ -267,9 +241,9 @@ public sealed class EditingTests
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
-            var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(b => Canvas.GetTop(b)).ToList();
-            Assert.NotEqual(Avalonia.Media.Color.Parse("#102030"), ((Avalonia.Media.ISolidColorBrush)cards[0].Background!).Color); // A very dark colour is lifted a little so it shows.
-            Assert.True(cards[0].Height >= ReviewViews.MinimumBlockHeight); // One minute is only a few pixels at this zoom, but it can be clicked.
+            var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(b => Canvas.GetLeft(b)).ToList();
+            Assert.NotEqual(Avalonia.Media.Color.Parse("#102030"), ((Avalonia.Media.LinearGradientBrush)cards[0].Background!).GradientStops[0].Color); // A very dark colour is lifted a little so it shows.
+            Assert.True(cards[0].Width >= ReviewViews.MinimumBlockWidth); // One minute is only a few pixels at this zoom, but it can be clicked.
             model.ToggleSelection(new[] { engine.Sessions[1] }); Dispatcher.UIThread.RunJobs(); using var again = window.CaptureRenderedFrame();
             var selected = window.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is SessionRow row && ReferenceEquals(row, engine.Sessions[1]));
             var lines = selected.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
@@ -298,9 +272,9 @@ public sealed class EditingTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsVisible), t => t.Text is not null && (t.Text.Contains("Sample data") || t.Text.Contains("saved locally") || t.Text.Contains("Test session")));
-            var settings = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings"); var back = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BackToPill");
-            Assert.IsType<IconGlyph>(settings.Content); Assert.IsType<IconGlyph>(back.Content); // A gear and a minimise bar, not words.
-            Assert.Equal(IconKind.Gear, ((IconGlyph)settings.Content!).Kind); Assert.Equal(IconKind.Minimise, ((IconGlyph)back.Content!).Kind);
+            var settings = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings");
+            Assert.IsType<IconGlyph>(settings.Content); Assert.Equal(IconKind.Gear, ((IconGlyph)settings.Content!).Kind); // A gear, not words.
+            Assert.Empty(window.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "BackToPill")); // The clock on the rail is the way back to the pill.
         }
         finally { window.Close(); }
     }
@@ -311,7 +285,7 @@ public sealed class EditingTests
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
+            dashboard.ShowAccountsPanel(); Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("account")).ToList();
             Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(70, r.Bounds.Height, 0.5)); // Tall enough for the name, the budget line and its bar.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
@@ -321,7 +295,7 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void ZoomAndFitSitInABarUnderTheTimelineTheHintLineIsGoneAndADisabledButtonStaysOutlined()
+    public void ZoomSitsInABarUnderTheTimelineTheHintLineIsGoneAndADisabledButtonStaysOutlined()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
@@ -329,7 +303,7 @@ public sealed class EditingTests
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "ReviewTools"); // The Tools menu is gone.
             var undoButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "UndoEdit");
-            var zoom = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
+            var zoom = dashboard.GetVisualDescendants().OfType<StackPanel>().Single(b => b.Name == "TimelineControls");
             var scrollAbove = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(x => x.Name == "TimelineScroll");
             // One bar under the timeline: Undo (and Add time) on the left, the zoom controls on the right, on the same line.
             Assert.True(undoButton.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y >= scrollAbove.TranslatePoint(new Point(0, scrollAbove.Bounds.Height - 1), dashboard)!.Value.Y);
@@ -338,30 +312,27 @@ public sealed class EditingTests
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsVisible), t => t.Text is not null && t.Text.Contains("Click blocks to select"));
             var undo = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "UndoEdit");
             Assert.False(undo.IsEnabled); Assert.True(undo.Opacity < 1); // Dimmed by the style, keeping its outline, not a solid grey fill.
-            model.SetWeekSection("overview"); dashboard.SelectTab(true); Dispatcher.UIThread.RunJobs();
-            Assert.False(zoom.IsVisible); // Zoom belongs to the timeline only.
-            Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "ExportWeek"); // Export lives only on the Overview tab.
-            model.SetWeekSection("hours"); Dispatcher.UIThread.RunJobs();
-            var export = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ExportWeek"); var copy = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CopyHours");
-            Assert.Equal(IconKind.Export, ((IconGlyph)export.Content!).Kind); Assert.Equal(IconKind.Copy, ((IconGlyph)copy.Content!).Kind); Assert.Equal("Export hours…", ToolTip.GetTip(export));
-            Assert.InRange(Math.Abs(export.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y - copy.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y), 0, 2); // Same line.
+            dashboard.SelectTab(true); Dispatcher.UIThread.RunJobs();
+            Assert.False(zoom.IsEffectivelyVisible); // Zoom belongs to the timeline only.
+            // Export and Copy hours table live in Settings, and the Hours table and Entries views are gone.
+            Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name is "ExportWeek" or "WeekHoursTab" or "WeekEntriesTab");
             Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekOverviewTab" && ToolTip.GetTip(b) as string == "Week overview");
-            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekHoursTab" && ToolTip.GetTip(b) as string == "Hours table");
         }
         finally { dashboard.Close(); }
     }
 
     [AvaloniaFact]
-    public void TidyDayIsOfferedWhenYouRightClickEmptyTimelineSpace()
+    public void RightClickingEmptyTimelineSpaceOffersAddTimeAndPasteAndNoTidyDay()
     {
-        var model = TimerModel.CreateDemo(); var raised = 0; model.TidyRequested += () => raised++;
+        var model = TimerModel.CreateDemo();
         var window = new Window { Width = 700, Height = 600, Content = ReviewViews.Timeline(model) }; window.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             var canvas = window.GetVisualDescendants().OfType<Canvas>().First(c => c.ContextMenu is not null);
-            var tidy = canvas.ContextMenu!.Items.OfType<MenuItem>().Single(i => i.Name == "TidyDayMenu");
-            tidy.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent)); Assert.Equal(1, raised);
+            var items = canvas.ContextMenu!.Items.OfType<MenuItem>().ToList();
+            Assert.Contains(items, i => i.Name == "PasteHereMenu"); Assert.Contains(items, i => i.Header as string == "Add time…");
+            Assert.DoesNotContain(items, i => i.Name == "TidyDayMenu");
         }
         finally { window.Close(); }
     }
@@ -375,17 +346,18 @@ public sealed class EditingTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             var day = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay"); var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
-            var flag = day.GetVisualDescendants().OfType<IconGlyph>().Single(); var label = day.GetVisualDescendants().OfType<TextBlock>().Single(); var breakLabel = breakButton.GetVisualDescendants().OfType<TextBlock>().Single();
-            Assert.Equal(breakLabel.FontSize, label.FontSize); Assert.Equal(breakLabel.FontWeight, label.FontWeight); Assert.Equal(breakLabel.FontFamily, label.FontFamily); // The same type on both buttons.
-            void Check() { var started = model.DayStarted; Assert.Equal(started, day.Classes.Contains("finishDay")); Assert.Equal(!started, day.Classes.Contains("startDay")); } // Red once running, green before.
+            var flag = day.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Kind == IconKind.Flag); var sun = day.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Kind == IconKind.Sunrise);
+            Assert.Equal(2, day.GetVisualDescendants().OfType<IconGlyph>().Count()); // A flag to finish the day and a sunrise to start it; one shows at a time.
+            void Check() { var started = model.DayStarted; Assert.Equal(started, day.Classes.Contains("finishDay")); Assert.Equal(!started, day.Classes.Contains("startDay")); Assert.Equal(started, flag.IsVisible); Assert.Equal(!started, sun.IsVisible); Assert.Equal("Finish", flag.TintKey); Assert.Equal("Start", sun.TintKey); } // A red flag once running, a green sunrise before.
             Check(); model.ToggleDay(); Dispatcher.UIThread.RunJobs(); Check(); model.ToggleDay(); Dispatcher.UIThread.RunJobs(); Check();
+            Assert.False(dashboard.FinishQuestionOpen); // Starting the day does not ask anything.
             // The flag waves while the pointer is over the button, and the cup steams. (Headless tests do not run animation timers, so
             // this checks the switches, not the frames.)
             var over = day.TranslatePoint(new Point(day.Bounds.Width / 2, day.Bounds.Height / 2), dashboard)!.Value;
-            dashboard.MouseMove(over); Assert.True(flag.Waving);
+            dashboard.MouseMoveUntil(over, () => flag.Waving); Assert.True(flag.Waving);
             dashboard.MouseMove(new Point(5, 5)); Assert.False(flag.Waving);
             var cup = breakButton.GetVisualDescendants().OfType<BreakGlyph>().Single(); var cupSpot = breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, breakButton.Bounds.Height / 2), dashboard)!.Value;
-            var wasSteaming = cup.Steaming; dashboard.MouseMove(cupSpot); Assert.True(cup.Steaming);
+            var wasSteaming = cup.Steaming; dashboard.MouseMoveUntil(cupSpot, () => cup.Steaming); Assert.True(cup.Steaming);
             model.SetPillScale(null); Dispatcher.UIThread.RunJobs(); Assert.True(cup.Steaming); // A model update while the pointer is over it does not stop the steam, as on the pill.
             dashboard.MouseMove(new Point(5, 5)); Assert.Equal(wasSteaming, cup.Steaming);
         }
@@ -393,54 +365,51 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void MessagesAppearUnderTheReviewOnlyAndNeverChangeTheLeftColumnHeight()
+    public void MessagesAppearInTheWorkspaceOnlyAndNeverChangeTheTimelineHeight()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
-            var scroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "AccountScroll"); var before = scroll.Bounds.Height;
+            var scroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll"); var before = scroll.Bounds.Height;
             model.Notice = "A message for the footer"; model.ToggleFormat(); model.ToggleFormat(); Dispatcher.UIThread.RunJobs(); using var again = dashboard.CaptureRenderedFrame();
             var message = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "A message for the footer" && t.IsVisible);
-            Assert.True(message.TranslatePoint(new Point(0, 0), dashboard)!.Value.X > 300); // In the right column, under the tabs' content.
+            Assert.True(message.TranslatePoint(new Point(0, 0), dashboard)!.Value.X > DashboardWindow.RailWidth); // In the workspace, beside the rail.
             Assert.Equal(before, scroll.Bounds.Height, 0.5);
         }
         finally { dashboard.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheDashboardClockFollowsBreakAndOvertimeTheBreakButtonsSitSideBySideWithAnOutlineAndTheTopDragsTheWindow()
+    public void TheRailsLightFollowsBreakAndOvertimeTheFootStacksBreakAboveDayAndTheRailAndHeaderDragTheWindow()
     {
         var now = new DateTime(2026, 10, 9, 12, 0, 0);
         var model = TimerModel.CreateDemo(() => now); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
-            var clock = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 46 && t.Classes.Contains("clock"));
+            var lights = dashboard.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "RailLights");
             void Settle() { Dispatcher.UIThread.RunJobs(); using var f = dashboard.CaptureRenderedFrame(); }
-            // The clock is amber on a break, with the status line amber too, and red in overtime.
+            // The light is amber on a break and red in overtime, and a break outranks overtime.
             if (model.IsOnBreak) model.ToggleBreak();
-            model.ToggleBreak(); Settle(); Assert.Contains("break", clock.Classes); Assert.DoesNotContain("live", clock.Classes);
-            var status = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "On break"); Assert.Contains("break", status.Classes);
-            model.ToggleBreak(); Settle(); Assert.DoesNotContain("break", clock.Classes);
-            model.SetOvertimeTest(true); Settle(); Assert.True(model.IsOvertime); Assert.Contains("overtime", clock.Classes); Assert.DoesNotContain("clockIdle", clock.Classes);
-            model.ToggleBreak(); Settle(); Assert.Contains("break", clock.Classes); Assert.DoesNotContain("overtime", clock.Classes); // A break outranks overtime.
+            model.ToggleBreak(); Settle(); Assert.Equal("On break", ToolTip.GetTip(lights));
+            model.ToggleBreak(); Settle(); Assert.NotEqual("On break", ToolTip.GetTip(lights));
+            model.SetOvertimeTest(true); Settle(); Assert.True(model.IsOvertime); Assert.Equal("Overtime", ToolTip.GetTip(lights));
+            model.ToggleBreak(); Settle(); Assert.Equal("On break", ToolTip.GetTip(lights));
             model.ToggleBreak(); model.SetOvertimeTest(false); Settle();
-            // Break and day buttons share a row and rest with an outline.
+            // Break and day sit one above the other at the foot of the rail.
             var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak"); var day = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay");
-            Assert.InRange(Math.Abs(breakButton.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y - day.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y), 0, 1);
-            Assert.True(day.TranslatePoint(new Point(0, 0), dashboard)!.Value.X > breakButton.TranslatePoint(new Point(breakButton.Bounds.Width - 1, 0), dashboard)!.Value.X - 1);
-            Assert.NotEqual(Avalonia.Media.Brushes.Transparent, breakButton.BorderBrush); Assert.True(breakButton.BorderThickness.Left > 0);
-            // The window can be picked up by the identity block, the accounts heading, and the tab and action rows, but not by a button or the timeline.
+            Assert.InRange(Math.Abs(breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, 0), dashboard)!.Value.X - day.TranslatePoint(new Point(day.Bounds.Width / 2, 0), dashboard)!.Value.X), 0, 1); // The same centre line.
+            Assert.True(day.TranslatePoint(default, dashboard)!.Value.Y > breakButton.TranslatePoint(default, dashboard)!.Value.Y);
+            // The window can be picked up by the rail and the header row, but not by a button or the timeline.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
             var tabAt = tab.TranslatePoint(new Point(tab.Bounds.Width / 2, tab.Bounds.Height / 2), dashboard)!.Value;
-            Assert.True(dashboard.InDragZone(new Point(tabAt.X + 200, tabAt.Y))); // Empty space beside the tabs.
-            Assert.True(dashboard.InDragZone(clock.TranslatePoint(new Point(10, 10), dashboard)!.Value));
+            Assert.True(dashboard.InDragZone(new Point(tabAt.X, tabAt.Y + 40))); // Empty rail beside and between the buttons.
+            var title = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Timeline" && t.Classes.Contains("clock"));
+            Assert.True(dashboard.InDragZone(title.TranslatePoint(new Point(10, 10), dashboard)!.Value));
             var timelineScroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
             Assert.False(dashboard.InDragZone(timelineScroll.TranslatePoint(new Point(100, 100), dashboard)!.Value));
-            var accountRow = dashboard.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("account"));
-            Assert.False(dashboard.InDragZone(accountRow.TranslatePoint(new Point(50, 10), dashboard)!.Value));
-            Assert.False(Ui.IsPlainSurface(tab)); Assert.True(Ui.IsPlainSurface(clock));
+            Assert.False(Ui.IsPlainSurface(tab)); Assert.True(Ui.IsPlainSurface(title));
         }
         finally { dashboard.Close(); }
     }
@@ -455,11 +424,11 @@ public sealed class EditingTests
             model.SetOvertimeTest(true); model.ToggleAccount("Account three"); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
             Assert.True(model.IsOvertime); Assert.True(model.IsTracking);
             // The whole capsule is the overtime colour while recording, and its line says how much overtime there is.
-            Assert.Equal("Overtime", model.ThemeState); Assert.Equal(ThemeEngine.StateVariant(model.CurrentTheme, ThemeDerivation.Overtime), pill.RequestedThemeVariant);
-            Assert.Contains(pill.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is not null && t.Text.Contains("· OT "));
-            Assert.Equal("Start break", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak").GetVisualDescendants().OfType<TextBlock>().Single().Text);
+            Assert.Equal("Overtime", model.ThemeState);
+            Assert.Equal("Overtime", ToolTip.GetTip(pill.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "PillLights")));
+            Assert.Equal("Start break", ToolTip.GetTip(dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak")));
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs();
-            Assert.Equal("Finish break", dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak").GetVisualDescendants().OfType<TextBlock>().Single().Text);
+            Assert.StartsWith("End break", ToolTip.GetTip(dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak"))?.ToString());
         }
         finally { dashboard.Close(); pill.Close(); model.SetOvertimeTest(false); }
     }

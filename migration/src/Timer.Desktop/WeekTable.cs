@@ -6,8 +6,8 @@ namespace Timer.Desktop;
 
 // Cells and Total are the short forms shown on screen (7:00, with a dash for nothing). CopyCells and CopyTotal keep the full wording for pasting.
 public sealed record WeekTableRow(string Label, string[] Cells, string Total, string Style, string[] CopyCells, string CopyTotal);
-/// <summary>One budgeted account in a week view. Period names the budget period the Used figure belongs to, and ThisWeek is the time worked in the week on show, which is not the same thing.</summary>
-public sealed record BudgetTableRow(string Account, string Budget, string Used, string Remaining, double Fraction, string Period = "", string ThisWeek = "");
+/// <summary>One budgeted account in a week view. Period names the budget period the Used figure belongs to.</summary>
+public sealed record BudgetTableRow(string Account, string Budget, string Used, string Remaining, double Fraction, string Period = "");
 
 // The hours table in the Week tab as plain data, so the screen and "Copy hours table" always show the same figures.
 public sealed class WeekTable
@@ -67,7 +67,7 @@ public sealed class WeekTable
             var name = model.BudgetPeriodNameAt(account, reference);
             table.Budgets.Add(new(account.Display, model.FormatShort(target), model.FormatShort(used),
                 model.FormatShort(used >= target ? TimeSpan.Zero : target - used), used.TotalSeconds / target.TotalSeconds,
-                char.ToUpper(name[0]) + name[1..], model.FormatShort(model.Engine.Credited(account.Name, weekStart, weekStart.AddDays(7)))));
+                char.ToUpper(name[0]) + name[1..]));
         }
         return table;
     }

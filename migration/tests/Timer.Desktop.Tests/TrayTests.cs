@@ -1,7 +1,6 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Timer.Core;
-using Timer.Desktop;
 using Xunit;
 
 namespace Timer.Desktop.Tests;
@@ -43,15 +42,16 @@ public sealed class TrayTests
     {
         var now = Day.AddHours(6);
         var engine = new TrackingEngine(clock: () => now); var model = new TimerModel(engine);
-        Assert.Contains("Ready when you are", TrayController.Tooltip(model));
+        Assert.Contains("Ready to track", TrayController.Tooltip(model));
         Assert.Equal("Start day", TrayController.DayLabel(model));
         now = Day.AddHours(10); model.ToggleAccount("Account one"); now = now.AddMinutes(75);
         var text = TrayController.Tooltip(model);
         Assert.Contains("Tracking Account one", text); Assert.True(text.Length <= 127, text);
         Assert.Equal("Pause tracking", TrayController.PauseLabel(model)); Assert.Equal("Finish day", TrayController.DayLabel(model));
         model.TogglePause();
-        Assert.Equal("Resume Account one", TrayController.PauseLabel(model)); Assert.Contains("Not tracking", TrayController.Tooltip(model));
+        Assert.Equal("Resume Account one", TrayController.PauseLabel(model)); Assert.Contains("Ready to track", TrayController.Tooltip(model));
         Assert.NotNull(TrayController.Draw(true)); Assert.NotNull(TrayController.Draw(false));
+        foreach (var recording in new[] { false, true }) foreach (var due in new[] { false, true }) foreach (var dark in new[] { false, true }) Assert.NotNull(TrayController.Draw(recording, due, dark)); // The pill's two lights and both taskbar themes.
         var windows = new WindowCoordinator(model, () => { });
         using var tray = new TrayController(model, windows); tray.RefreshMenu();
     }
@@ -65,7 +65,7 @@ public sealed class TrayTests
         Assert.True(model.TaskbarButton); Assert.True(windows.Pill.ShowInTaskbar);
         model.TrayAvailable = true; windows.HideToTray = true;
         model.SetTaskbarButton(false);
-        Assert.False(model.TaskbarButton); Assert.False(windows.Pill.ShowInTaskbar); Assert.False(windows.Dashboard.ShowInTaskbar); Assert.Contains("notification area", model.Notice);
+        Assert.False(model.TaskbarButton); Assert.False(windows.Pill.ShowInTaskbar); Assert.False(windows.Dashboard.ShowInTaskbar); Assert.Contains("tray", model.Notice);
         model.SetTaskbarButton(true);
         Assert.True(windows.Pill.ShowInTaskbar); Assert.True(windows.Dashboard.ShowInTaskbar);
         windows.Quit();
@@ -83,11 +83,11 @@ public sealed class TrayTests
             Dispatcher.UIThread.RunJobs();
             Assert.NotNull(windows.Pill.Icon); Assert.NotNull(windows.Dashboard.Icon); Assert.NotNull(dialog.Icon);
             var dark = WindowChrome.Colours(dialog)!.Value;
-            Assert.True(dark.Dark); Assert.Equal(Timer.Core.ThemeLibrary.Dark.Colour("Surface").ToUpperInvariant(), dark.Caption.ToUpperInvariant());
-            Assert.Equal(Timer.Core.ThemeLibrary.Dark.Colour("Ink").ToUpperInvariant(), dark.Text.ToUpperInvariant());
+            Assert.True(dark.Dark); Assert.Equal(AppThemes.Dark.Colour("Surface").ToUpperInvariant(), dark.Caption.ToUpperInvariant());
+            Assert.Equal(AppThemes.Dark.Colour("Ink").ToUpperInvariant(), dark.Text.ToUpperInvariant());
             model.SetTheme("Light"); Dispatcher.UIThread.RunJobs();
             var light = WindowChrome.Colours(dialog)!.Value;
-            Assert.False(light.Dark); Assert.Equal(Timer.Core.ThemeLibrary.Light.Colour("Surface").ToUpperInvariant(), light.Caption.ToUpperInvariant());
+            Assert.False(light.Dark); Assert.Equal(AppThemes.Light.Colour("Surface").ToUpperInvariant(), light.Caption.ToUpperInvariant());
         }
         finally { windows.Quit(); }
     }

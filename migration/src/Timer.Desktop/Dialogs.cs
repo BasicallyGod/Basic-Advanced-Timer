@@ -1,8 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Layout;
-using Avalonia.Media;
 
 namespace Timer.Desktop;
 
@@ -81,7 +79,7 @@ public sealed class DialogHost : Grid
     // A card is never taller or wider than the window it sits in, so a long dialog scrolls inside itself.
     private void FitCards()
     {
-        foreach (var (dialog, card) in open)
+        foreach (var (_, card) in open)
         {
             card.MaxHeight = Math.Max(200, Bounds.Height - 48); card.MaxWidth = Math.Max(240, Bounds.Width - 48);
         }

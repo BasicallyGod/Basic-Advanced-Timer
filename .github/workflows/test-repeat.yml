@@ -1,0 +1,58 @@
+name: Repeat the tests (manual)
+
+# Runs the whole test suite many times on one build, to find tests that fail now and then, says which tests failed in which runs, and prints the
+# first lines of each failure. Nothing is published. Start it by hand (Run workflow), which GitHub offers once this file is on main. Until then a pull
+# request that changes this file runs it too, with the default number of runs (so a small edit to this file is the way to repeat the tests of a branch).
+on:
+  workflow_dispatch:
+    inputs:
+      times:
+        description: How many times to run the whole suite
+        default: '8'
+  pull_request:
+    paths:
+      - '.github/workflows/test-repeat.yml'
+
+permissions:
+  contents: read
+
+# Reads the shared Timer.Core and Timer.Storage packages from GitHub Packages (see migration/NuGet.config).
+env:
+  PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+
+jobs:
+  repeat:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build the tests once
+        run: dotnet build migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release
+      - name: Run the suite again and again
+        shell: pwsh
+        run: |
+          $times = [int]('${{ inputs.times }}' -replace '[^0-9]', '')
+          if ($times -lt 1) { $times = 8 }
+          $seen = @{}
+          for ($i = 1; $i -le $times; $i++) {
+            $out = dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release --no-build --verbosity minimal 2>&1 | Out-String -Stream
+            $failed = @($out | Select-String -Pattern '^\s*Failed\s+(\S+)\s+\[' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique)
+            $total = ($out | Select-String -Pattern 'Total:\s+(\d+)' | Select-Object -Last 1).Matches[0].Groups[1].Value
+            Write-Host "Run $i of ${times}: $($failed.Count) failed of $total"
+            foreach ($name in $failed) {
+              if (-not $seen.ContainsKey($name)) { $seen[$name] = @() }
+              $seen[$name] += $i
+              Write-Host "::group::Run $i, $name"
+              $out | Select-String -Pattern ('Failed\s+' + [regex]::Escape($name)) -Context 0,8 | Select-Object -First 1 | ForEach-Object { $_.Context.PostContext | ForEach-Object { Write-Host $_ } }
+              Write-Host '::endgroup::'
+            }
+          }
+          $summary = "## Test repeat: $times runs`n"
+          if ($seen.Count -eq 0) { $summary += "`nEvery run passed.`n" }
+          else { foreach ($name in $seen.Keys | Sort-Object) { $summary += "`n- ``$name`` failed in run(s) $($seen[$name] -join ', ') of $times" } }
+          Write-Host $summary
+          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($seen.Count -gt 0) { exit 1 }

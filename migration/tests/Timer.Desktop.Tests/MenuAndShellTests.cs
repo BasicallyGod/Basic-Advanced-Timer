@@ -1,14 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
-using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
-using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
 
@@ -29,7 +26,7 @@ public sealed class MenuAndShellTests
         {
             var items = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).ToList();
             var headers = items.Select(i => i is MenuItem m ? (string?)m.Header : "|").ToList();
-            Assert.Equal(new[] { "Continue earlier block", "Test overtime", "|", BuildInfo.Current, "|", "Collapse to tray" }, headers);
+            Assert.Equal(new[] { "Test overtime", "|", BuildInfo.Current, "|", "Collapse to tray" }, headers);
         }
         finally { window.Close(); }
     }
@@ -93,22 +90,25 @@ public sealed class MenuAndShellTests
     }
 
     [AvaloniaFact]
-    public void ReorderableAccountRowsShowAGripAndThePillListDoesNot()
+    public void AccountRowsHaveNoGrabHandlesAndWasteNoRoomAtTheRight()
     {
         var model = new TimerModel(Engine());
-        var dashboard = new DashboardWindow(model); dashboard.Show(); var pill = new PillWindow(model); pill.Show(); pill.ToggleExpansion();
+        var dashboard = new DashboardWindow(model); dashboard.Show(); var pill = new PillWindow(model); pill.Show(); pill.ShowPanel(); dashboard.ShowAccountsPanel();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(); using var pillFrame = pill.CaptureRenderedFrame();
-            var grips = dashboard.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip).ToList();
-            Assert.Equal(model.Accounts.Count - 1, grips.Count); // One for each account row, none for the break.
-            Assert.All(grips, g => Assert.Equal("Drag to change the order", ToolTip.GetTip(g)));
-            Assert.Empty(pill.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip)); // The pill list cannot be reordered.
+            Assert.Empty(dashboard.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip)); // No grab handles; rows still drag.
+            Assert.Empty(pill.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip));
+            // No dead space at the right of a row: its play circle sits close to the row's edge, and the row fills the drawer's inner width.
+            var first = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account0"); var drawer = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "AccountsDrawer");
+            var circle = first.GetVisualDescendants().OfType<AccountIndicator>().Single();
+            Assert.True(first.Bounds.Width - (circle.TranslatePoint(new Point(circle.Bounds.Width, 0), first)!.Value.X) <= 12, $"gap {first.Bounds.Width - (circle.TranslatePoint(new Point(circle.Bounds.Width, 0), first)!.Value.X)} row {first.Bounds.Width} circle {circle.Bounds}");
+            Assert.Equal(drawer.Bounds.Width - 28, first.Bounds.Width, 1.0);
             // The rest of the row keeps its shape: the account name and today's time are still both visible inside it.
             var row = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account0");
             Assert.All(row.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is { Length: > 0 }), t => Assert.True(t.TranslatePoint(default, row)!.Value.X >= 0 && t.TranslatePoint(new Point(t.Bounds.Width, 0), row)!.Value.X <= row.Bounds.Width + 1));
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
-            if (folder is not null) { Directory.CreateDirectory(folder); frame?.Save(Path.Combine(folder, "account-grips.png")); }
+            if (folder is not null) { Directory.CreateDirectory(folder); frame?.Save(Path.Combine(folder, "account-rows.png")); }
         }
         finally { pill.Close(); dashboard.Close(); }
     }

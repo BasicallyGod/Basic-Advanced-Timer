@@ -14,7 +14,7 @@ public sealed partial class App : Application
     {
         AvaloniaXamlLoader.Load(this);
         // Colours are registered before any window exists, so every control finds them the first time it looks.
-        ThemeEngine.Register(this, ThemeLibrary.BuiltIn);
+        ThemeEngine.Register(this, AppThemes.BuiltIn);
         // The clock typeface is bundled as three instances of Bricolage Grotesque (display, figures and light), each its own family. The assembly name
         // differs between the portable and Store builds, so the address is built from it.
         var assets = new Uri("avares://" + typeof(App).Assembly.GetName().Name + "/");
@@ -60,8 +60,8 @@ public sealed partial class App : Application
                 var preferences = store.Load(engine);
                 model = new TimerModel(engine, preferences, store);
                 if (store.AdjustmentsRemoved > 0)
-                    model.Notice = $"{store.AdjustmentsRemoved} time adjustment{(store.AdjustmentsRemoved == 1 ? " was" : "s were")} removed. A copy of your database is in Backups.";
-                else if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files were left alone. This version starts empty.";
+                    model.Notice = $"{store.AdjustmentsRemoved} time adjustment{(store.AdjustmentsRemoved == 1 ? "" : "s")} removed · a copy is in Backups";
+                else if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files left alone · starting empty";
                 if (!model.Save()) throw new IOException(model.LastError);
                 // Only an explicit data folder is remembered; the default one sits beside the program and needs no argument.
                 // A test build started by the updater is offered the setting only when the updater says where to find itself, so the

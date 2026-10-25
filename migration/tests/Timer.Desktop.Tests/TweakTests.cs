@@ -1,13 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Microsoft.Data.Sqlite;
 using Timer.Core;
 using Timer.Storage;
-using Timer.Desktop;
 using Xunit;
 
 namespace Timer.Desktop.Tests;
@@ -23,13 +21,13 @@ public sealed class TweakTests
     {
         Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(2560)); // Even a big screen gets a smaller pill than the design size.
         Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(1920));
-        Assert.InRange(PillWindow.ScaleFor(1366), 0.75, 0.77); // A common laptop screen.
+        Assert.InRange(PillWindow.ScaleFor(1366), 0.79, 0.81); // A common laptop screen gets the smallest.
         Assert.Equal(PillWindow.SmallestScale, PillWindow.ScaleFor(800));
         // A 2560 by 1600 display at 125 per cent Windows scale keeps the largest pill, and a 1080p one at 100 per cent gets the smallest.
         Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(2560 / 1.25, 1.25));
         Assert.Equal(PillWindow.SmallestScale, PillWindow.ScaleFor(1920, 1.0));
-        Assert.InRange(PillWindow.ScaleFor(1920 / 1.1, 1.1), 0.75, 0.78); // In between at 110 per cent.
-        Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(1706, 1.5)); // More scaling than 125 per cent never makes it smaller.
+        Assert.InRange(PillWindow.ScaleFor(1920 / 1.1, 1.1), 0.85, 0.87); // In between at 110 per cent.
+        Assert.Equal(PillWindow.LargestScale, PillWindow.ScaleFor(1800, 1.5)); // More scaling than 125 per cent never makes it smaller.
     }
 
     [AvaloniaFact]
@@ -38,7 +36,7 @@ public sealed class TweakTests
         var pill = new PillWindow(TimerModel.CreateDemo()); pill.Show(); Settle(pill);
         Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5); // The window keeps the pill's proportions at whatever size it is drawn.
         var before = pill.Scale; pill.FitToScreen(null); Assert.Equal(before, pill.Scale); // No screen to measure (a hidden pill) leaves the size as it is.
-        Assert.Equal(pill.CollapsedWindowHeightNow, pill.Height, 0.5);
+        Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5);
         pill.Close();
     }
 
@@ -51,18 +49,6 @@ public sealed class TweakTests
         Assert.NotNull(model.EditError);
         model.ExpireMessages();
         Assert.Null(model.EditError); Assert.Null(model.Notice);
-    }
-
-    [AvaloniaFact]
-    public void MergeAndTheZoomBarHaveRoomBetweenThem()
-    {
-        var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
-        var merge = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "MergeSelected");
-        var zoom = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineControls");
-        var mergeRight = merge.TranslatePoint(new Point(merge.Bounds.Width, 0), dashboard)!.Value.X;
-        var zoomLeft = zoom.TranslatePoint(new Point(0, 0), dashboard)!.Value.X;
-        Assert.True(zoomLeft - mergeRight >= 24, $"Only {zoomLeft - mergeRight} px between Merge and the zoom bar.");
-        dashboard.Close();
     }
 
     [Fact]
@@ -87,27 +73,42 @@ public sealed class TweakTests
     }
 
     [AvaloniaFact]
-    public void TheExportDialogOffersAWeekAndAMonthEachWithAListAndWritesTheOneChosen()
+    public void TheExportSectionOffersAWeekAndAMonthEachWithAListAndWritesTheOneChosen()
     {
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));
-        var window = new ExportDialog(model).Open(model);
-        T Get<T>(string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
-        var week = Get<RadioButton>("ExportWeekChoice"); var month = Get<RadioButton>("ExportMonthChoice");
-        var weekPick = Get<ComboBox>("ExportWeekPick"); var monthPick = Get<ComboBox>("ExportMonthPick");
-        Assert.True(week.IsChecked); Assert.False(month.IsChecked);
-        // The lists start on the week and month being viewed, and reach back over the recorded days.
-        Assert.Equal("5 Oct to 11 Oct 2026", weekPick.SelectedItem); Assert.Equal("October 2026", monthPick.SelectedItem);
-        Assert.True(weekPick.ItemCount >= 12 && monthPick.ItemCount >= 12);
-        // Choosing from the month list picks the month, and exports that month, not the one being viewed.
-        monthPick.SelectedIndex = 2; Assert.True(month.IsChecked); Assert.False(week.IsChecked);
-        Get<Button>("ExportCsv").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        Assert.NotNull(model.ExportPath); Assert.Contains("Month-202608", model.ExportPath);
-        Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Detail.csv")) && File.Exists(Path.Combine(model.ExportPath!, "Summary.csv")));
-        // Choosing from the week list goes back to a week.
-        weekPick.SelectedIndex = 3; Assert.True(week.IsChecked);
-        Get<Button>("ExportCsv").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-        Assert.Contains("Week-20260914", model.ExportPath); // Three weeks before the week of 5 October.
-        window.Close();
+        var view = new SettingsView(model); var window = new Window { Width = 900, Height = 600, Content = view }; window.Show(); view.ShowSection("export");
+        T Get<T>(string name) where T : Control => view.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+        void Click(string name) => Get<Button>(name).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        try
+        {
+            var pick = Get<ComboBox>("ExportPeriodPick");
+            // The list starts on the week being viewed, and reaches back over the recorded days.
+            Assert.Equal("5 Oct to 11 Oct 2026", pick.SelectedItem); Assert.True(pick.ItemCount >= 12);
+            Click("ExportMonthChoice"); Assert.Equal("October 2026", pick.SelectedItem); Assert.True(pick.ItemCount >= 12);
+            // The month chosen is the one exported, not the one being viewed.
+            pick.SelectedIndex = 2; Click("ExportCsv");
+            Assert.NotNull(model.ExportPath); Assert.Contains("Month-202608", model.ExportPath);
+            Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Detail.csv")) && File.Exists(Path.Combine(model.ExportPath!, "Summary.csv")));
+            Assert.StartsWith("Both files saved", Get<TextBlock>("ExportResult").Text); Assert.False(Get<Button>("CopyHours").IsEnabled); // There is no table to copy for a month.
+            Click("ExportWeekChoice"); pick.SelectedIndex = 3; Click("ExportCsv");
+            Assert.Contains("Week-20260914", model.ExportPath); // Three weeks before the week of 5 October.
+            Assert.True(Get<Button>("CopyHours").IsEnabled);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void CopyHoursTableCopiesTheChosenWeeksTableReadyForATimesheet()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0));
+        var view = new SettingsView(model); var window = new Window { Width = 900, Height = 600, Content = view }; window.Show(); view.ShowSection("export");
+        try
+        {
+            view.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CopyHours").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.NotNull(view.CopiedText); Assert.Contains("\t", view.CopiedText); Assert.Contains("Account one", view.CopiedText);
+            var (table, _) = ReviewViews.WeekTableFor(model, model.WeekStart(model.SelectedDate)); Assert.Equal(table.ToTsv(), view.CopiedText);
+        }
+        finally { window.Close(); }
     }
 
     [Fact]
@@ -143,7 +144,7 @@ public sealed class TweakTests
             using (var raw = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Path.Combine(folder, TimerDatabase.FileName), Pooling = false }.ToString()))
             {
                 raw.Open();
-                foreach (var sql in new[] { "PRAGMA foreign_keys = OFF", "BEGIN", TimerDatabase.AccountsTable("accounts_old", false),
+                foreach (var sql in new[] { "DROP TABLE day_notes", "DROP TABLE note_series", "PRAGMA foreign_keys = OFF", "BEGIN", TimerDatabase.AccountsTable("accounts_old", false),
                     "INSERT INTO accounts_old SELECT id, name, colour, position, hidden, budget_seconds, budget_period FROM accounts", "DROP TABLE accounts",
                     "ALTER TABLE accounts_old RENAME TO accounts", "COMMIT", "PRAGMA user_version = 1" })
                 { using var command = raw.CreateCommand(); command.CommandText = sql; command.ExecuteNonQuery(); }
@@ -159,7 +160,7 @@ public sealed class TweakTests
             Assert.Empty(upgraded.Query("PRAGMA foreign_key_check", r => 1));
             upgraded.Execute("UPDATE accounts SET budget_period = 'day' WHERE id = 7"); // Now allowed.
             Assert.Equal("day", upgraded.Scalar("SELECT budget_period FROM accounts WHERE id = 7"));
-            Assert.Single(Directory.GetFiles(Path.Combine(folder, "Backups"), "timer-before-format-2-*.db"));
+            Assert.Single(Directory.GetFiles(Path.Combine(folder, "Backups"), $"timer-before-format-{TimerDatabase.SchemaVersion}-*.db"));
         }
         finally { SqliteConnection.ClearAllPools(); try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
@@ -206,7 +207,7 @@ public sealed class TweakTests
     {
         var model = CopyModel(out var engine);
         engine.Sessions.Add(new("2026-10-13", "Account one", "09:00:00", "recorded", "60.00"));
-        Assert.False(model.CopyBlocks(engine.Sessions.ToList())); Assert.False(model.CanPaste); Assert.Contains("one day", model.EditError);
+        Assert.False(model.CopyBlocks(engine.Sessions.ToList())); Assert.False(model.CanPaste); Assert.Contains("One day", model.EditError);
         Assert.False(model.PasteBlocks(new DateTime(2026, 10, 14, 13, 0, 0)));
         Assert.Equal(3, engine.Sessions.Count);
     }
@@ -260,14 +261,15 @@ public sealed class TweakTests
     }
 
     [AvaloniaFact]
-    public void TheSettingsPageHasAPillSizeChoiceThatSetsAndShowsTheSize()
+    public void TheSettingsPageHasAPillSizeSliderWithAnAutomaticTickThatSetsAndShowsTheSize()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
-        var box = dashboard.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "PillSize");
-        Assert.Equal("Automatic", box.SelectedItem); Assert.Contains("120%", (IEnumerable<string>)box.ItemsSource!);
-        box.SelectedItem = "80%"; Assert.Equal(80, model.PillScalePercent);
-        box.SelectedItem = "Automatic"; Assert.Null(model.PillScalePercent);
+        var slider = dashboard.GetVisualDescendants().OfType<Slider>().Single(c => c.Name == "PillSize"); var automatic = dashboard.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Name == "PillSizeAutomatic");
+        Assert.True(automatic.IsChecked); Assert.False(slider.IsEnabled); Assert.Null(model.PillScalePercent); // Automatic to begin with, so the slider waits.
+        automatic.IsChecked = false; automatic.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.True(slider.IsEnabled); Assert.Equal(100, model.PillScalePercent);
+        slider.Value = 80; Assert.Equal(80, model.PillScalePercent);
+        automatic.IsChecked = true; automatic.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.Null(model.PillScalePercent); Assert.False(slider.IsEnabled);
         dashboard.Close();
     }
 
@@ -291,10 +293,10 @@ public sealed class TweakTests
         var pill = new PillWindow(TimerModel.CreateDemo());
         pill.FitToScreen(FakeScreen(1920, 1080, 1.0)); Assert.Equal(PillWindow.SmallestScale, pill.Scale, 3);
         pill.Show(); Settle(pill);
-        Assert.Equal(pill.CollapsedWindowHeightNow, pill.Height, 0.5); Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5);
+        Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5); Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5);
         Assert.Equal(pill.Height, pill.ClientSize.Height, 1.5); // The real window, not only the request.
         var card = pill.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PillSurface");
-        Assert.Equal(PillWindow.CollapsedHeight * pill.Scale, card.Bounds.Height * pill.Scale, 2.0); // No white card below the capsule.
+        Assert.Equal(PillWindow.PillHeight * pill.Scale, card.Bounds.Height * pill.Scale, 2.0); // No white card below the capsule.
         pill.Close();
     }
 
@@ -303,11 +305,11 @@ public sealed class TweakTests
     {
         var pill = new PillWindow(TimerModel.CreateDemo()); pill.Show(); Settle(pill);
         pill.Height = pill.Height + 60; Settle(pill); // Something left the window taller than the pill.
-        Assert.Equal(pill.CollapsedWindowHeightNow, pill.Height, 0.5);
+        Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5);
         pill.Width = pill.Width - 80; Settle(pill); // And narrower, so the account box would be cut off.
         Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5);
-        pill.ToggleExpansion(); Settle(pill); Assert.True(pill.Height > pill.CollapsedWindowHeightNow + 40); // An open pill still gets its taller size.
-        pill.ToggleExpansion(); Settle(pill); Assert.Equal(pill.CollapsedWindowHeightNow, pill.Height, 0.5);
+        pill.ShowPanel(); Settle(pill); Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5); // The account list is a pop-up, so the window keeps its size.
+        pill.CloseFlyouts(); Settle(pill); Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5);
         pill.Close();
     }
 
@@ -316,11 +318,11 @@ public sealed class TweakTests
     {
         var pill = new PillWindow(TimerModel.CreateDemo()); pill.Show(); Settle(pill);
         pill.FitToScreen(FakeScreen(2560, 1600, 1.25)); Settle(pill);
-        Assert.Equal(PillWindow.LargestScale, pill.Scale, 3); Assert.Equal(pill.CollapsedWindowHeightNow, pill.Height, 0.5);
+        Assert.Equal(PillWindow.LargestScale, pill.Scale, 3); Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5);
         Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5);
         pill.Hide(); pill.FitToScreen(FakeScreen(1920, 1080, 1.0)); // Changed while hidden, as when the dashboard was up.
         pill.Show(); Settle(pill);
-        Assert.Equal(pill.CollapsedWindowHeightNow, pill.Height, 0.5); Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5);
+        Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5); Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.Width, 0.5);
         Assert.Equal(pill.Width, pill.ClientSize.Width, 1.5);
         pill.Close();
     }

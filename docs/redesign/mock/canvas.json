@@ -1,0 +1,278 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Accounts.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Account drawer",
+      "w": 1100,
+      "x": 0,
+      "y": 1800
+    },
+    "AccountsDialog.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Accounts and budgets",
+      "w": 1100,
+      "x": 1180,
+      "y": 1800
+    },
+    "EntryDialog.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Add time",
+      "w": 1100,
+      "x": 0,
+      "y": 3700
+    },
+    "Icon.dc.html": {
+      "h": 1010,
+      "title": "Application icon",
+      "w": 1100,
+      "x": 1180,
+      "y": 2700
+    },
+    "Lights.dc.html": {
+      "h": 1080,
+      "title": "Status lights",
+      "w": 1180,
+      "x": 1180,
+      "y": 5490
+    },
+    "Main.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Dashboard, timeline view",
+      "w": 1100,
+      "x": 0,
+      "y": 0
+    },
+    "Messages.dc.html": {
+      "h": 1530,
+      "title": "Messages and errors",
+      "w": 1100,
+      "x": 1180,
+      "y": 3840
+    },
+    "Notes.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Notes page",
+      "w": 1100,
+      "x": 0,
+      "y": 4600
+    },
+    "Pill.dc.html": {
+      "h": 780,
+      "is_interactive": true,
+      "title": "Pill states (round 3, superseded)",
+      "w": 1178,
+      "x": 1180,
+      "y": 31
+    },
+    "PillSoft.dc.html": {
+      "h": 2120,
+      "is_interactive": true,
+      "title": "Pill states (as built)",
+      "w": 1180,
+      "x": 3000,
+      "y": 0
+    },
+    "Refine.dc.html": {
+      "h": 2230,
+      "is_interactive": true,
+      "title": "Round 2: options (decided)",
+      "w": 1180,
+      "x": 0,
+      "y": 5800
+    },
+    "Settings.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Settings",
+      "w": 1100,
+      "x": 1180,
+      "y": 900
+    },
+    "Setup.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Getting started",
+      "w": 1100,
+      "x": 0,
+      "y": 2700
+    },
+    "Week.dc.html": {
+      "h": 720,
+      "is_interactive": true,
+      "title": "Week overview",
+      "w": 1100,
+      "x": 0,
+      "y": 900
+    },
+    "Round7.dc.html": {
+      "h": 1420,
+      "title": "Round 7: tooltips and rail icons (proposals)",
+      "w": 1180,
+      "x": 3000,
+      "y": 2200,
+      "is_interactive": true
+    },
+    "Themes.dc.html": {
+      "h": 6420,
+      "title": "New themes: Midnight and Hawthorn, with Slate, Sage and Mono redrawn (proposals)",
+      "w": 1180,
+      "x": 3000,
+      "y": 3800
+    },
+    "Store.dc.html": {
+      "h": 5360,
+      "title": "Microsoft Store listing (draft)",
+      "w": 1180,
+      "x": 0,
+      "y": 8300
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-10-23T12:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "n1": {
+      "text": "Mock at the real window size (1100 by 720). Tweaks: Light or Dark, the recording state and the day (running, day off, finished). Click a block to select it, and shift-click to add more (the short call over the client review shows how overlapping blocks stack, and an End that runs into the next block stacks too), then shift-click a second Account one block to try Merge. A merged block can be unmerged. Add a note, or add a meeting: click a time in the dashed row above the blocks, or use Add meeting in the Notes card. Finish day on the rail asks first, and Start day takes its place when the day is not running. The totals under the timeline are the day's Working time. The date button opens a calendar (dots show days with time; the mock draws the same blocks for every day). Messages float over the lowest part of the workspace. Settings is the gear at the top right. Click the time to collapse. The bell's card hangs from a point under it, with Done and Reschedule as icons. A day with no meetings gives its blocks the whole height. The bell sits next to the gear, and pressing it again closes its card.",
+      "w": 520,
+      "x": -587,
+      "y": 354
+    },
+    "n10": {
+      "text": "How messages and errors look and read, now in the tooltips' few words and the same card. No red: red means overtime or a spent budget. The table at the foot lists every message with its proposed wording. Try a bad time in the Selected block card on the dashboard to see them live.",
+      "w": 520,
+      "x": 2358,
+      "y": 4160
+    },
+    "n11": {
+      "text": "The Notes page, second on the rail, under Timeline. Add a note or a meeting with the bell for its reminder, pick a view or an account on the left and search above. Click a note or meeting to change it in the same box, where Save, Delete and Cancel appear. Reminders start at 12:00 and the day comes from the month. A meeting is half an hour by default.",
+      "w": 520,
+      "x": -600,
+      "y": 4839
+    },
+    "n13": {
+      "text": "The status light options. Row three is chosen and now used on the pill and the rail.",
+      "w": 520,
+      "x": 1180,
+      "y": 6650
+    },
+    "n14": {
+      "text": "Round 2: the options we chose between, kept for the record. The decisions are built and drawn on the Pill and Account drawer boards, with two later changes: rounded squares instead of circles, and the theme's orange for the break.",
+      "w": 520,
+      "x": 1260,
+      "y": 6770
+    },
+    "n15": {
+      "text": "The pill and the rail as built: timer, primary control, break, then accounts at the foot, every control a soft tint of its colour with a solid fill only for the break while it is on, and every control's states including keyboard focus, in Light and Dark. The rail's top is the same column, and its foot keeps Finish day and Close timer. The three controls are the same 44 pixel rounded square on the pill and the rail, and the pill is 316 tall. In the account drawer, Manage accounts is a single sliders icon at the top right. The account list slides out from behind the pill, which keeps its shape, ring and glow. The reminder light is always there: grey until a reminder is due, then blue and pulsing.",
+      "w": 520,
+      "x": 3000,
+      "y": -240
+    },
+    "n2": {
+      "text": "The round 3 pill, kept for the record: it has the break at the foot and the accounts under the circle. The current pill is the Pill states (as built) board to the right. There the Accounts button is at the foot, under the break.",
+      "w": 520,
+      "x": 2418,
+      "y": 330
+    },
+    "n3": {
+      "text": "Week overview. Working time against the scheduled week, a schedule line (its words sit in a gutter at the right) and overtime caps on the chart, meetings and open tasks under each day, a Chart or Table switch, and each account's week with its budget bar. Use the arrows or the calendar to change week, and click a day to open it in the timeline.",
+      "w": 520,
+      "x": -635,
+      "y": 1183
+    },
+    "n4": {
+      "text": "Settings in the new look, with Export here. Click a section on the left, and a theme to try it.",
+      "w": 520,
+      "x": 2360,
+      "y": 1203
+    },
+    "n5": {
+      "text": "The account drawer, opened from the three-bar button under the break. It unfolds from the rail's edge at full height over a dimmed page. Click a row to record to it, and the button, Esc or the dimmed page closes it. The sliders icon at the top right opens Accounts and budgets.",
+      "w": 520,
+      "x": -600,
+      "y": 2076
+    },
+    "n6": {
+      "text": "Accounts and budgets as a dialog over the dashboard. Click a colour to change it, tick In tracker, mark a delete with the bin and press Save.",
+      "w": 520,
+      "x": 2335,
+      "y": 2015
+    },
+    "n7": {
+      "text": "Getting started, on the new card style. Next, Back and Skip setup work. The current step dot is the accent.",
+      "w": 520,
+      "x": -600,
+      "y": 3030
+    },
+    "n8": {
+      "text": "The application icon, in one colour: the pill as a line outline with its two lights and a stack of bars for the time, near black on a white tile. A dark tile with a white line is the version for dark surfaces, and the tray draws the line alone in the colour of the taskbar. Hover the large one to see the lights take their colours.",
+      "w": 520,
+      "x": 2335,
+      "y": 3030
+    },
+    "n9": {
+      "text": "Add time, opened from the button under the timeline. Time over other blocks is allowed: they stack in lanes. Try a Start that lands inside an earlier block.",
+      "w": 520,
+      "x": -600,
+      "y": 3964
+    },
+    "title": {
+      "kind": "title1",
+      "maxW": 2360,
+      "text": "Vertical pill and dashboard",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    },
+    "n16": {
+      "text": "Two proposals, now both agreed and built: the tooltips in the app's own card (a button with words needs none), and the rail icons, in the order Timeline, Notes, Week overview. Hover a rail icon to see it move. Switch Light or Dark in the Tweaks.",
+      "w": 520,
+      "x": 2400,
+      "y": 2240
+    },
+    "n17": {
+      "text": "Midnight and Hawthorn are as first shown and liked. Slate (now a mid-tone dark), Sage (green with a plum accent) and Mono (mid-grey, graphite, with the app's normal soft shapes) are redrawn after feedback. Each theme has its own account colours. Paused: nothing here is built yet.",
+      "w": 520,
+      "x": 2400,
+      "y": 3840
+    },
+    "n18": {
+      "text": "Everything Partner Center will ask for, written out and ready to paste, with your five screenshots composed at 1920 by 1080, a hero image and art tiles. Nothing is submitted. The box at the top lists what I need from you.",
+      "w": 520,
+      "x": -600,
+      "y": 8340
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Pill.dc.html",
+    "Week.dc.html",
+    "Settings.dc.html",
+    "Accounts.dc.html",
+    "AccountsDialog.dc.html",
+    "Setup.dc.html",
+    "Icon.dc.html",
+    "EntryDialog.dc.html",
+    "Messages.dc.html",
+    "Notes.dc.html",
+    "Lights.dc.html",
+    "Refine.dc.html",
+    "PillSoft.dc.html",
+    "Round7.dc.html",
+    "Themes.dc.html",
+    "Store.dc.html"
+  ],
+  "pages": [],
+  "title": "Vertical pill and dashboard mock"
+}

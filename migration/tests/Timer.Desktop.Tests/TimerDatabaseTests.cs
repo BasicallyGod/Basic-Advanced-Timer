@@ -23,7 +23,7 @@ public sealed class TimerDatabaseTests : IDisposable
         using var db = Open();
         Assert.Equal(TimerDatabase.SchemaVersion, db.Version); Assert.Equal((long)TimerDatabase.SchemaVersion, db.Scalar("PRAGMA user_version"));
         var tables = db.Query("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name", r => r.GetString(0));
-        Assert.Equal(new[] { "accounts", "away", "day_starts", "edit_changes", "edits", "entries", "groups", "meta", "running" }, tables);
+        Assert.Equal(new[] { "accounts", "away", "day_notes", "day_starts", "edit_changes", "edits", "entries", "groups", "meta", "note_series", "running" }, tables);
         Assert.Equal("wal", db.Scalar("PRAGMA journal_mode")); Assert.Equal(1L, db.Scalar("PRAGMA foreign_keys"));
         Assert.True(File.Exists(Path.Combine(folder, TimerDatabase.FileName)));
     }

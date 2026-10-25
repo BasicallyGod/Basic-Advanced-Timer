@@ -1,11 +1,8 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
-using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
 
@@ -52,7 +49,7 @@ public sealed class SwitchingAndBlockTests
         model.ToggleAccount("Account one"); advance(TimeSpan.FromMinutes(30));
         model.ToggleAccount("Account two"); advance(TimeSpan.FromSeconds(20)); // A slip of the finger.
         model.ToggleAccount("Account one"); advance(TimeSpan.FromSeconds(10));
-        Assert.True(model.CanContinuePrevious); Assert.Contains("09:00", model.ContinuePreviousText);
+        Assert.True(model.CanContinuePrevious); Assert.StartsWith("Continue ", model.ContinuePreviousText); Assert.Contains("Switched", model.ContinuePreviousNote);
         Assert.Equal(2, engine.Sessions.Count);
         Assert.True(model.ContinuePrevious());
         Assert.Empty(engine.Sessions); // The slip and the earlier block are both gone, the account is running from the start of the earlier block.
@@ -99,9 +96,8 @@ public sealed class SwitchingAndBlockTests
         model.ToggleAccount("Account one"); advance(TimeSpan.FromMinutes(30)); model.ToggleAccount("Account two"); advance(TimeSpan.FromSeconds(15)); model.ToggleAccount("Account one"); Settle(dashboard);
         var button = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ContinuePrevious");
         Assert.True(button.IsVisible); Assert.Contains("Account one", (string)button.Content!);
-        Assert.True(pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillContinue").IsVisible);
         button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(dashboard);
-        Assert.False(button.IsVisible); Assert.False(pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillContinue").IsVisible);
+        Assert.False(button.IsVisible);
         dashboard.Close(); pill.Close();
     }
 
@@ -112,15 +108,15 @@ public sealed class SwitchingAndBlockTests
         engine.Sessions.Add(new("2026-10-14", "Account one", "09:00:00", "recorded", "0.50")); // Half a minute: a tiny block.
         engine.Sessions.Add(new("2026-10-14", "Account two", "10:00:00", "recorded", "90.00"));
         var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
-        foreach (var zoom in new[] { 0.0, 0.5, 1.0 })
+        foreach (var scale in new[] { 60.0, 160.0, 640.0 })
         {
-            model.SetTimelineScale(TimerModel.ScaleAt(zoom), 300, 0); Settle(dashboard);
+            model.SetTimelineScale(scale, 300, 0); Settle(dashboard);
             var cards = dashboard.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("TimelineEntry") == true).ToList();
             Assert.Equal(2, cards.Count);
-            foreach (var card in cards) Assert.Equal(Math.Min(ReviewViews.BlockRadius, card.Height / 2), card.CornerRadius.TopLeft, 3);
+            foreach (var card in cards) Assert.Equal(ReviewViews.CornerFor(1, card.Width, card.Height), card.CornerRadius.TopLeft, 3); // The larger corner, less only for a block too narrow to hold it.
         }
         var today = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "GoToToday");
-        Assert.True(today.Classes.Contains("toolButton") && today.Classes.Contains("quiet"));
+        Assert.Contains("ctl", today.Classes); // The same outlined card look as the other buttons in the header.
         dashboard.Close();
     }
 
@@ -132,8 +128,9 @@ public sealed class SwitchingAndBlockTests
         engine.Sessions.Add(new("2026-10-14", "Account two", "09:30:00", "recorded", "10.00"));
         var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         var cards = dashboard.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("TimelineEntry") == true).ToList();
-        Assert.Equal(2, cards.Count); Assert.Equal(cards[0].Width, cards[1].Width, 1);
-        Assert.Equal(Canvas.GetLeft(cards[0]), Canvas.GetLeft(cards[1]), 1); // Same lane.
+        Assert.Equal(2, cards.Count); Assert.Equal(cards[0].Height, cards[1].Height, 1); // Both keep the whole band,
+        Assert.Equal(Canvas.GetTop(cards[0]), Canvas.GetTop(cards[1]), 1); // in the same lane, one after the other.
+        Assert.True(Canvas.GetLeft(cards[1]) > Canvas.GetLeft(cards[0]));
         dashboard.Close();
     }
 
@@ -186,7 +183,7 @@ public sealed class SwitchingAndBlockTests
     public void ABlockInAGroupIsNotTakenOutOfItToBeCarriedOn()
     {
         var (model, engine, _) = AtTenThirty(new SessionRow("2026-10-14", "Account one", "10:00:00", "added", "20.00"), new SessionRow("2026-10-14", "Account one", "10:20:00", "added", "40.00"));
-        Assert.True(model.GroupEntries(engine.Sessions.ToList()));
+        model.ToggleSelection(engine.Sessions.ToList()); Assert.True(model.MergeSelection());
         model.ToggleAccount("Account one");
         Assert.Equal(2, engine.Sessions.Count); Assert.Null(engine.ContinuedBlock);
     }

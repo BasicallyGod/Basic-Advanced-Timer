@@ -1,12 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
-using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
 
@@ -62,21 +60,22 @@ public sealed class BreakTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             model.ToggleAccount("Account one"); now = now.AddMinutes(10); Dispatcher.UIThread.RunJobs();
+            dashboard.ShowAccountsPanel(); Dispatcher.UIThread.RunJobs(); using var panelFrame = dashboard.CaptureRenderedFrame(); // The accounts open beside the rail.
             var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.StartsWith("Account") == true && char.IsDigit(b.Name[^1])).ToList();
             Assert.Equal(model.Accounts.Count - 1, rows.Count);
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Break");
             var dashboardBreak = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
             var pillBreak = pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillBreak");
-            Assert.Contains("breakButton", dashboardBreak.Classes); Assert.DoesNotContain("onBreak", dashboardBreak.Classes);
-            Assert.Contains(dashboardBreak.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Start break");
+            dashboard.CloseFlyouts(); Assert.DoesNotContain("onBreak", dashboardBreak.Classes);
+            Assert.Equal("Start break", ToolTip.GetTip(dashboardBreak));
             // A slow runner may still be settling the layout, so it is finished before the button's position is read.
             Dispatcher.UIThread.RunJobs(); dashboard.UpdateLayout();
             var point = dashboardBreak.TranslatePoint(new Point(dashboardBreak.Bounds.Width / 2, dashboardBreak.Bounds.Height / 2), dashboard)!.Value;
             dashboard.MouseDown(point, MouseButton.Left); dashboard.MouseUp(point, MouseButton.Left); Dispatcher.UIThread.RunJobs();
             now = now.AddMinutes(30); model.ChangeDate(0); Dispatcher.UIThread.RunJobs();
-            Assert.True(model.IsOnBreak); Assert.Contains("onBreak", dashboardBreak.Classes); Assert.Equal("Break", model.ThemeState); Assert.Equal(ThemeEngine.StateVariant(model.CurrentTheme, ThemeDerivation.Break), pill.RequestedThemeVariant);
-            Assert.Contains(dashboardBreak.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Finish break");
-            Assert.Contains(pill.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "On break");
+            Assert.True(model.IsOnBreak); Assert.Contains("onBreak", dashboardBreak.Classes); Assert.Equal("Break", model.ThemeState);
+            Assert.StartsWith("End break", ToolTip.GetTip(dashboardBreak)?.ToString());
+            Assert.Equal("On break", ToolTip.GetTip(pill.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "PillLights")));
             Assert.True(pill.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming); // The steam moves while the break is on.
             Assert.True(dashboard.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming);
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
@@ -86,8 +85,8 @@ public sealed class BreakTests
                 using var dashboardFrame = dashboard.CaptureRenderedFrame(); dashboardFrame?.Save(Path.Combine(folder, "break-dashboard.png"));
                 using var pillFrame = pill.CaptureRenderedFrame(); pillFrame?.Save(Path.Combine(folder, "break-pill.png"));
             }
-            var timeline = dashboard.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is "Break" or "● Break").ToList(); // A short recording block puts its dot in front of the name.
-            Assert.NotEmpty(timeline); // The running break block is labelled Break.
+            var running = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineRecording"); // A block that has only just begun is too narrow to write on,
+            Assert.Contains("Break", ToolTip.GetTip(running)!.ToString()); // so the running break block says what it is in its tooltip.
             pillBreak.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             Assert.False(model.IsOnBreak); Assert.Equal("Account one", model.ActiveAccount); Assert.DoesNotContain("onBreak", pillBreak.Classes);
             Assert.False(pill.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming); // And it is still when the break ends.
@@ -96,11 +95,11 @@ public sealed class BreakTests
     }
 
     [AvaloniaFact]
-    public void TheEntryEditorOffersBreakAndSavesItAsTheBreakAccount()
+    public void AddTimeOffersBreakAndSavesItAsTheBreakAccount()
     {
-        var engine = new TrackingEngine(clock: () => Day.AddHours(14)); var row = new SessionRow("2026-10-09", "Account one", "09:00:00", "added", "30"); engine.Sessions.Add(row);
+        var engine = new TrackingEngine(clock: () => Day.AddHours(14));
         var model = new TimerModel(engine);
-        var editor = new EntryDialog(model, row, row.From, row.To).Open(model);
+        var editor = new EntryDialog(model, Day.AddHours(9), Day.AddHours(9.5)).Open(model);
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = editor.CaptureRenderedFrame();

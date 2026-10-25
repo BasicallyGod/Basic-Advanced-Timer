@@ -27,11 +27,11 @@ public sealed class AccountsDialog : Dialog
         {
             var row = Ui.Grid("*,50,80,85,110,44");
             var name = new TextBox { Text = account.Name, Margin = new Thickness(0, 0, 8, 0) };
-            ToolTip.SetTip(name, "Edit the name to rename this account"); Ui.Put(row, name);
+            Ui.Put(row, name);
             // A new account starts on the first palette colour nobody here is using, as the model would give it.
             var chosen = account.Colour ?? TimerModel.Palette.FirstOrDefault(c => !entries.Any(e => e.Colour().Equals(c, StringComparison.OrdinalIgnoreCase))) ?? TimerModel.Palette[0];
             Ui.Put(row, ColourButton(() => chosen, value => chosen = value, account.Name), 1);
-            var visible = new CheckBox { IsChecked = !account.Hidden }; ToolTip.SetTip(visible, "Show this account in the tracker list");
+            var visible = new CheckBox { IsChecked = !account.Hidden }; ToolTip.SetTip(visible, "In tracker");
             Ui.Put(row, visible, 2);
             var budget = new TextBox { Text = account.BudgetHours?.ToString("0.###", CultureInfo.InvariantCulture) ?? "", Margin = new Thickness(0, 0, 8, 0) };
             Ui.Put(row, budget, 3);
@@ -39,14 +39,14 @@ public sealed class AccountsDialog : Dialog
             Ui.Put(row, period, 4);
             var entry = new AccountRow { Original = existing ? account.Name : null, Name = name, Visible = visible, Budget = budget, Period = period, Colour = () => chosen, Grid = row };
             // The bin removes a new row at once. For an existing account it marks the row for deleting, dimmed, and a second press takes the mark off.
-            var bin = Ui.IconButton(IconKind.Trash, existing ? "Delete account and its time" : "Remove this row", "DeleteAccount" + entries.Count, () =>
+            var bin = Ui.IconButton(IconKind.Trash, existing ? "Delete account" : "Remove row", "DeleteAccount" + entries.Count, () =>
             {
                 if (entry.Original is null) { list.Children.Remove(entry.Grid); entries.Remove(entry); return; }
                 entry.Deleting = !entry.Deleting;
                 // The row dims, apart from the bin, so it is clear what will go and the same button can take the mark off again.
                 foreach (var child in entry.Grid.Children.Where(c => !ReferenceEquals(c, entry.Bin))) { child.Opacity = entry.Deleting ? .4 : 1; child.IsEnabled = !entry.Deleting; }
                 ((IconGlyph)entry.Bin!.Content!).TintKey = entry.Deleting ? "Overtime" : null; ((IconGlyph)entry.Bin.Content).InvalidateVisual();
-                ToolTip.SetTip(entry.Bin, entry.Deleting ? "Keep this account after all" : "Delete this account and everything recorded against it");
+                ToolTip.SetTip(entry.Bin, entry.Deleting ? "Keep account" : "Delete account");
                 confirm.IsVisible = false;
             });
             entry.Bin = bin; Ui.Put(row, bin, 5);
@@ -113,7 +113,7 @@ public sealed class AccountsDialog : Dialog
     {
         var swatch = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Background = Avalonia.Media.Brush.Parse(get()), BorderThickness = new Thickness(1), BorderBrush = Avalonia.Media.Brushes.Gray };
         var button = new Button { Content = swatch, Name = "AccountColour", Padding = new Thickness(4), Background = Avalonia.Media.Brushes.Transparent, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
-        ToolTip.SetTip(button, "Choose the colour for " + accountName);
+        ToolTip.SetTip(button, "Colour");
         void Choose(string colour) { set(colour); swatch.Background = Avalonia.Media.Brush.Parse(colour); }
         var panel = new StackPanel { Spacing = 8, Margin = new Thickness(4) };
         var grid = new UniformGrid { Columns = 8, Width = 8 * 34 }; // Two even rows of eight.

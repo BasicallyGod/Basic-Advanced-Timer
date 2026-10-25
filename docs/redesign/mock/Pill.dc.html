@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pill states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.pg{--bg1:#F4F4F1;--bg2:#ECECE8;--ink:#18233A;--muted:#5A6070;--line:#E2E2DD;--card:#FFFFFF;--card2:#F7F7F5;--accent:#3558C8;--accentInk:#FFFFFF;--soft:#E8EEFF;--pill1:#FFFFFF;--pill2:#F3F3F0;--pillLine:#DDDDD8;--clock:#18233A;--clockSec:#5A6070;--hover:#EDEDEA;--brk:#E07A10;--brkInk:#FFFFFF;--quietDot:#C9C9C4;--idleDot:#7A849C;--shadowBase:0 3px 10px rgba(30,30,20,.12);--track:#EAEAE6;--liveTint:#F1FBF7;--barNeutral:#6E727C}
+.pg.dark{--bg1:#0F1420;--bg2:#131A2A;--ink:#EEF2FB;--muted:#A7B2CA;--line:#2D3853;--card:#1A2234;--card2:#212B42;--accent:#7C9BFF;--accentInk:#0E1530;--soft:#25335A;--pill1:#1C2334;--pill2:#121826;--pillLine:#2E3852;--clock:#F3F6FF;--clockSec:#A9B5CF;--hover:rgba(255,255,255,.10);--brk:#FF9A3C;--brkInk:#2A1A05;--quietDot:#2D3750;--idleDot:#4A5570;--shadowBase:0 3px 10px rgba(0,0,0,.35);--track:#252F48;--liveTint:#183029;--barNeutral:#8793B0}
+.pg{color-scheme:light}.pg.dark{color-scheme:dark}
+:where(.pg) button{font:inherit;color:inherit;cursor:pointer}
+.pg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pill{width:72px;box-sizing:border-box;padding:14px 0 0;display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0}
+.pillBox{height:300px;border-radius:36px;background:linear-gradient(180deg,var(--pill1),var(--pill2));border:1px solid var(--pillLine)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(96,150,255,.75)}70%{box-shadow:0 0 0 7px rgba(96,150,255,0)}100%{box-shadow:0 0 0 0 rgba(96,150,255,0)}}
+.cap{width:6px;height:14px;border-radius:3px;display:block;flex-shrink:0}
+.cap.pulse{animation:pulse 1.8s ease-out infinite}
+@media (prefers-reduced-motion:reduce){.cap.pulse{animation:none}}
+.clockCol{display:flex;flex-direction:column;align-items:center;font-family:'Bricolage Grotesque',system-ui,sans-serif;color:var(--clock);line-height:1;margin-top:4px}
+.sq{width:46px;height:46px;border-radius:14px;border:0;padding:0;display:flex;align-items:center;justify-content:center;color:#10281F;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 1px 2px rgba(20,30,60,.18);font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:700;font-size:17px;transition:filter .15s ease}
+.sq:hover{filter:brightness(.93) saturate(1.05)}
+.acc{width:46px;height:32px;border-radius:12px;border:0;background:transparent;display:flex;align-items:center;justify-content:center;padding:0}
+.acc:hover{background:var(--hover)}
+.acc.on{background:var(--soft)}
+.bars{display:flex;flex-direction:column;gap:3px}
+.bars i{display:block;width:20px;height:5px;border-radius:3px}
+.brkSq{width:40px;height:40px;border-radius:13px;border:0;padding:0;display:flex;align-items:center;justify-content:center;color:var(--brkInk);background:var(--brk);transition:filter .15s ease}
+.brkSq:hover{filter:brightness(1.08)}
+.brkSq.on{box-shadow:0 0 0 3px rgba(224,122,16,.4)}
+.brkSq.on .steam,.brkSq:hover .steam{animation:steam 1.4s ease-in-out infinite}
+@keyframes steam{0%,100%{transform:translateY(0);opacity:.95}50%{transform:translateY(-1.6px);opacity:.45}}
+@media (prefers-reduced-motion:reduce){.brkSq:hover .steam,.brkSq.on .steam{animation:none}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px}
+.drawer{box-sizing:border-box;display:flex;flex-direction:column;gap:6px;padding:14px 14px 12px;border-left:1px solid var(--pillLine)}
+.dRow{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:12px;border:0;background:transparent;width:100%;text-align:left}
+.dRow:hover{background:var(--hover)}
+.playSq{width:36px;height:36px;border-radius:11px;border:2px solid var(--line);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--ink);box-sizing:border-box}
+.playSq.run{background:var(--accent);border-color:var(--accent);color:var(--accentInk)}
+.dRow:hover .playSq{background:var(--accent);border-color:var(--accent);color:var(--accentInk)}
+</style>
+</helmet>
+<div class="pg {{modeClass}}" style="width: 1180px; height: 780px; box-sizing: border-box; padding: 40px 24px 28px; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink); display: flex; flex-direction: column; gap: 22px">
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 700">The pill</h1>
+    <p style="margin: 0; font-size: 14px; color: var(--muted); max-width: 1020px; line-height: 1.45">About 72 wide by 300 tall at 100 per cent. One vertical capsule shows the recording state, and a second blue one appears beside it only while a reminder is due. The rounded square shows the running account's initials, and pause or resume when the pointer is over it. The three bars open the accounts, and the orange square at the foot starts a break. A soft ring and halo show the state without pulling the eye. There is no Finish day button: clicking the time opens the dashboard.</p>
+  </div>
+  <div style="display: flex; align-items: flex-start; gap: 0">
+    <sc-for list="{{pills}}" as="p" hint-placeholder-count="5">
+      <div style="width: 118px; flex-shrink: 0">
+        <div style="font-size: 14px; font-weight: 600">{{p.label}}</div>
+        <div style="font-size: 12px; color: var(--muted); line-height: 1.35; margin-bottom: 8px; min-height: 52px; padding-right: 10px">{{p.sub}}</div>
+        <div class="pill pillBox" style="{{p.glow}}">
+          <div style="display: flex; gap: 6px; align-items: center; height: 14px">
+            <span class="cap" role="img" aria-label="{{p.dotLabel}}" style="{{p.dotStyle}}"></span>
+            <sc-if value="{{p.due}}" hint-placeholder-val="{{ false }}"><span class="cap pulse" role="img" aria-label="A reminder is due" style="background:#6096FF"></span></sc-if>
+          </div>
+          <div class="clockCol">
+            <span style="font-size: 30px; font-weight: 700">{{p.h}}</span>
+            <span style="font-size: 30px; font-weight: 700; margin-top: 2px">{{p.m}}</span>
+            <span style="font-size: 15px; font-weight: 600; margin-top: 4px; color: var(--clockSec)">{{p.s}}</span>
+          </div>
+          <button class="sq" aria-label="{{p.faceLabel}}" style="{{p.circle}}; margin-top: 6px">
+            <sc-if value="{{p.faceIni}}" hint-placeholder-val="{{ true }}"><span>A1</span></sc-if>
+            <sc-if value="{{p.facePlay}}" hint-placeholder-val="{{ false }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg></sc-if>
+          </button>
+          <button class="acc" aria-label="Accounts" title="Accounts"><span class="bars" aria-hidden="true"><i style="background: linear-gradient(135deg,#A8D4FF,#7F98F7)"></i><i style="background: linear-gradient(135deg,#B2EFD6,#5FD6AE)"></i><i style="background: linear-gradient(135deg,#FFD9B8,#FF9F84)"></i></span></button>
+          <button class="brkSq {{p.brkCls}}" aria-label="{{p.brkLabel}}" title="{{p.brkLabel}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path class="steam" d="M8 3v2M12 3v2"/></svg></button>
+        </div>
+      </div>
+    </sc-for>
+
+    <div style="width: 360px; flex-shrink: 0; margin-left: 14px">
+      <div style="font-size: 14px; font-weight: 600">Accounts open (try it)</div>
+      <div style="font-size: 12px; color: var(--muted); line-height: 1.35; margin-bottom: 8px; min-height: 52px">One capsule: the pill, a hairline, then the list. Choosing an account leaves it open, so a wrong choice can be put right. The Accounts button, Escape or a click elsewhere folds it away.</div>
+      <div style="display: flex; border-radius: 36px 28px 28px 36px; background: linear-gradient(180deg,var(--pill1),var(--pill2)); border: 1px solid var(--pillLine); width: fit-content; overflow: hidden; box-shadow: {{openGlow}}">
+        <div class="pill" style="height: 298px; padding-top: 13px">
+          <div style="display: flex; gap: 6px; align-items: center; height: 14px"><span class="cap" role="img" aria-label="Recording" style="background: #34D399"></span></div>
+          <div class="clockCol"><span style="font-size: 30px; font-weight: 700">04</span><span style="font-size: 30px; font-weight: 700; margin-top: 2px">47</span><span style="font-size: 15px; font-weight: 600; margin-top: 4px; color: var(--clockSec)">35</span></div>
+          <button class="sq" aria-label="{{runLabel}}" style="background: linear-gradient(135deg, #9DF2D2, #34D399); margin-top: 6px"><span>{{runIni}}</span></button>
+          <button class="acc {{openCls}}" aria-label="Accounts" aria-expanded="{{open}}" title="{{openTip}}" onClick="{{toggle}}"><span class="bars" aria-hidden="true"><i style="background: linear-gradient(135deg,#A8D4FF,#7F98F7)"></i><i style="background: linear-gradient(135deg,#B2EFD6,#5FD6AE)"></i><i style="background: linear-gradient(135deg,#FFD9B8,#FF9F84)"></i></span></button>
+          <button class="brkSq" aria-label="Start break" title="Start break"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path class="steam" d="M8 3v2M12 3v2"/></svg></button>
+        </div>
+        <sc-if value="{{open}}" hint-placeholder-val="{{ true }}">
+          <div class="drawer" style="width: 262px; height: 298px">
+            <div style="font-size: 14px; font-weight: 600; padding: 0 8px; height: 22px">Accounts</div>
+            <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; flex-grow: 1">
+              <sc-for list="{{rows}}" as="a" hint-placeholder-count="4">
+                <button class="dRow" onClick="{{a.pick}}" style="{{a.rowStyle}}" aria-pressed="{{a.running}}">
+                  <span style="flex-grow: 1; min-width: 0; display: block">
+                    <span style="display: flex; justify-content: space-between; gap: 6px; align-items: center"><span style="display: flex; align-items: center; gap: 6px; min-width: 0"><span style="{{a.dot}}"></span><span style="font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{a.name}}</span></span><span style="font-size: 12.5px; font-weight: 700">{{a.time}}</span></span>
+                    <span style="display: block; height: 5px; border-radius: 3px; background: var(--track); overflow: hidden; margin-top: 7px"><span style="{{a.bar}}"></span></span>
+                  </span>
+                  <span class="playSq {{a.sqCls}}" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="{{a.sqIcon}}"/></svg></span>
+                </button>
+              </sc-for>
+            </div>
+            <button class="dRow" style="justify-content: center; border: 1px solid var(--line); height: 34px; font-size: 12.5px; font-weight: 500; background: var(--card2)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Manage accounts</button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 16px; margin-top: auto">
+    <div class="card" style="flex: 1; padding: 14px 16px; display: flex; gap: 14px; align-items: center">
+      <div style="width: 52px; height: 52px; flex-shrink: 0; border-radius: 16px; background: linear-gradient(180deg,var(--pill1),var(--pill2)); border: 1px solid var(--pillLine); display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-weight: 700; font-size: 15px; line-height: 1.05; color: var(--clock)"><span>04</span><span>47</span></div>
+      <div style="min-width: 0">
+        <div style="font-size: 14px; font-weight: 600">Open and collapse: click the time</div>
+        <div style="font-size: 12.5px; color: var(--muted); line-height: 1.4; margin-top: 3px">The same click opens the dashboard from the pill and collapses it from the rail. The pill and the rail's top are drawn at the same size and place, so nothing jumps.</div>
+      </div>
+    </div>
+    <div class="card" style="flex: 1; padding: 14px 16px">
+      <div style="font-size: 14px; font-weight: 600">Accounts</div>
+      <div style="font-size: 12.5px; color: var(--muted); line-height: 1.4; margin-top: 3px">The three-bar button unfolds the list sideways, with each account's time, budget bar and play button, and Manage accounts. Nothing opens on hover. The pill never changes width, and the capsule flips left near a screen edge.</div>
+    </div>
+    <div class="card" style="flex: 1; padding: 14px 16px">
+      <div style="font-size: 14px; font-weight: 600">Right-click</div>
+      <div style="margin-top: 8px; display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card2); font-size: 13px; font-weight: 500"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8l8 8 8-8"/><path d="M5 20h14"/></svg>Collapse to tray</div>
+      <div style="font-size: 12.5px; color: var(--muted); line-height: 1.4; margin-top: 8px">One item. The orange square starts a break, and starting a recording right after a quick slip carries the earlier block on by itself.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:780}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { open: true, run: 0 };
+  }
+  renderVals() {
+    const mode = this.props.mode ?? 'light';
+    const dark = mode === 'dark';
+    const base = 'box-shadow: var(--shadowBase)';
+    // A thin ring and a soft halo: enough to say the state without pulling the eye.
+    const glow = (c) => 'box-shadow: 0 0 0 1.5px rgba(' + c + ',.8), 0 0 12px rgba(' + c + ',' + (dark ? .26 : .18) + ')';
+    const green = 'background: linear-gradient(135deg, #9DF2D2, #34D399)';
+    const amber = 'background: linear-gradient(135deg, #FFD08A, #F5A524)';
+    const red = 'background: linear-gradient(135deg, #FFC2C2, #FF8585)';
+    const off = 'background:var(--idleDot)';
+    const mk = (o) => Object.assign({
+      label: '', sub: '', h: '04', m: '47', s: '35',
+      glow: base, dotStyle: 'background:#34D399', dotLabel: 'Recording', due: false,
+      circle: green, faceIni: true, facePlay: false, faceLabel: 'Pause. Tracking Account one', brkCls: '', brkLabel: 'Start break'
+    }, o);
+    const pills = [
+      mk({ label: 'Idle', sub: 'Ready to track', glow: base, dotStyle: off, dotLabel: 'Not recording', faceIni: false, facePlay: true, faceLabel: 'Start Account one' }),
+      mk({ label: 'Running', sub: 'Initials. Pause under the pointer', glow: glow('52,211,153') }),
+      mk({ label: 'Break', sub: 'The square turns orange. The cup is lit', h: '00', m: '23', s: '14', glow: glow('245,165,36'), dotStyle: 'background:#F5A524', dotLabel: 'On break', circle: amber, brkCls: 'on', brkLabel: 'End break and resume Account one', faceLabel: 'End break and resume Account one' }),
+      mk({ label: 'Overtime', sub: 'Red until the day ends', h: '08', m: '12', s: '14', glow: glow('248,113,113'), dotStyle: 'background:#F87171', dotLabel: 'Overtime', circle: red }),
+      mk({ label: 'Reminder due', sub: 'A blue capsule pulses beside it', glow: glow('52,211,153'), due: true })
+    ];
+    const a = [
+      { n: 'Account one', t: '01:45', p: 88, c: ['#A8D4FF', '#7F98F7'] },
+      { n: 'Account two', t: '01:00', p: 60, c: ['#B2EFD6', '#5FD6AE'] },
+      { n: 'Account three', t: '00:40', p: 100, c: ['#FFD9B8', '#FF9F84'] },
+      { n: 'Account four', t: '00:35', p: 54, c: ['#E8D0FF', '#C197F8'] },
+      { n: 'Account five', t: '00:30', p: 20, c: ['#EEF6B0', '#B9DF82'] }
+    ];
+    const PLAY = 'M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z';
+    const PAUSE = 'M7 5h3.6v14H7zM13.4 5H17v14h-3.6z';
+    const rows = a.map((x, i) => {
+      const run = i === this.state.run;
+      return {
+        name: x.n, time: x.t, running: run, sqCls: run ? 'run' : '', sqIcon: run ? PAUSE : PLAY,
+        dot: 'width:10px;height:10px;border-radius:50%;flex-shrink:0;background:' + x.c[1],
+        rowStyle: run ? 'background:' + (dark ? '#183029' : '#F1FBF7') : '',
+        bar: 'display:block;height:100%;width:' + x.p + '%;background:' + (x.p >= 100 ? '#D64545' : x.p >= 80 ? '#E39A12' : (dark ? '#8793B0' : '#6E727C')),
+        pick: () => this.setState({ run: i })
+      };
+    });
+    const open = this.state.open;
+    return {
+      modeClass: dark ? 'dark' : '', pills: pills, rows: rows,
+      open: open, openCls: open ? 'on' : '', openTip: open ? 'Close the accounts' : 'Accounts',
+      toggle: () => this.setState({ open: !this.state.open }),
+      runIni: 'A' + (this.state.run + 1), runLabel: 'Pause. Tracking ' + a[this.state.run].n,
+      openGlow: '0 0 0 1.5px rgba(52,211,153,.8), 0 0 12px rgba(52,211,153,' + (dark ? .26 : .18) + ')'
+    };
+  }
+}
+</script>
+</body>
+</html>

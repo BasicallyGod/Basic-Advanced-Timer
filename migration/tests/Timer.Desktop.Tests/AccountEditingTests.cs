@@ -1,12 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
-using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
 
@@ -108,6 +106,7 @@ public sealed class AccountEditingTests
         var window = new DashboardWindow(model); window.Show();
         try
         {
+            window.ShowAccountsPanel();
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             Button Row(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
             var first = Row("Account0"); var height = first.Bounds.Height;
@@ -135,9 +134,9 @@ public sealed class AccountEditingTests
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs();
             var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineRecording");
             Assert.Contains("recording", card.Classes);
-            Assert.Contains(card.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "● Recording now");
-            var point = card.TranslatePoint(new Point(80, 30), window)!.Value;
-            window.MouseDown(point, MouseButton.Left); window.MouseMove(point + new Vector(0, 40)); window.MouseUp(point + new Vector(0, 40), MouseButton.Left);
+            Assert.Contains(card.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.StartsWith("● ")); // The dot in front of the account's name says it is recording.
+            var point = card.TranslatePoint(new Point(card.Width / 2, card.Height / 2), window)!.Value;
+            window.MouseDown(point, MouseButton.Left); window.MouseMove(point + new Vector(40, 0)); window.MouseUp(point + new Vector(40, 0), MouseButton.Left);
             Assert.Contains("Still recording", model.EditError);
             Assert.Equal(TimeSpan.FromMinutes(45), engine.Active is { } a ? now - a.Start : TimeSpan.Zero); // Nothing moved.
         }
@@ -151,6 +150,7 @@ public sealed class AccountEditingTests
         var window = new DashboardWindow(model); window.Show();
         try
         {
+            window.ShowAccountsPanel();
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             Button Row(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
             var first = Row("Account0"); var height = first.Bounds.Height; var second = Row("Account1");
