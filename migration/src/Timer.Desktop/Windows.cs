@@ -49,7 +49,9 @@ public sealed class WindowCoordinator
         {
             Dashboard.CloseFlyouts(); Pill.CloseFlyouts();
             PlaceByCard(Pill, Dashboard, Pill.WindowWidthNow, Pill.WindowHeightNow, Pill.Scale);
-            Pill.Show(); Dashboard.Hide(); Pill.Activate();
+            Pill.WindowState = WindowState.Normal;
+            Pill.Show(); Dashboard.Hide(); BringToFront(Pill);
+            Avalonia.Threading.DispatcherTimer.RunOnce(KeepPillReachable, TimeSpan.FromMilliseconds(400));
         };
         Pill.Closed += (_, _) => exit();
         Dashboard.Closed += (_, _) => exit();
@@ -62,6 +64,13 @@ public sealed class WindowCoordinator
             else foreach (var window in new Window[] { Pill, Dashboard }) if (window.IsVisible) window.WindowState = WindowState.Minimized;
         };
         KeepInFront();
+    }
+    // Collapsing the dashboard must always leave the pill somewhere you can see it. If it came back off every screen, or something hid both windows
+    // in the meantime, it is brought back to the main screen instead of leaving the timer reachable only from the tray.
+    private void KeepPillReachable()
+    {
+        if (!IsShown) { ShowTimer(); return; }
+        if (Pill.IsVisible && Pill.Screens.ScreenFromWindow(Pill) is null && Pill.Screens.Primary is not null) ResetPosition();
     }
     // Snapping another window over the timer, or a window that is itself on top, can leave the pill or dashboard behind it. So whenever one loses focus
     // it is put back at the front of the topmost windows, and a slow check does the same for one that was covered without a focus change.

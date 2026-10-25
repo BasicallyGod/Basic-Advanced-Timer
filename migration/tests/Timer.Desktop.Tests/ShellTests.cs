@@ -102,6 +102,26 @@ public sealed class ShellTests
     }
 
     [AvaloniaFact]
+    public void CollapsingTheDashboardLeavesThePillShownAtItsOwnSize()
+    {
+        var model = Fixture();
+        var coordinator = new WindowCoordinator(model, () => { });
+        coordinator.HideToTray = true;
+        coordinator.Pill.Show();
+        try
+        {
+            coordinator.Pill.OpenDashboard!();
+            coordinator.Dashboard.OpenPill!();
+            Assert.True(coordinator.Pill.IsVisible);
+            Assert.Equal(WindowState.Normal, coordinator.Pill.WindowState);
+            Assert.InRange(coordinator.Pill.Width, 1, coordinator.Pill.WindowWidthNow + 2);
+            Assert.InRange(coordinator.Pill.Height, 1, coordinator.Pill.WindowHeightNow + 2);
+            Assert.True(coordinator.IsShown);
+        }
+        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ViewSwitchesPreserveTheActiveTimer()
     {
         var model = Fixture();
