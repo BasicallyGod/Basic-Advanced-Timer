@@ -17,8 +17,15 @@ namespace Timer.Desktop;
 public static class HangingCard
 {
     private const double PointWidth = 20, PointHeight = 10.5, Seat = 9.5;
-    /// <summary>The room round the card for its shadow, above it (the point sits in it) and at its sides.</summary>
-    public static readonly Thickness Room = new(8, 9, 8, 12);
+    /// <summary>
+    /// The room round the card for its shadow, above it (the point sits in it) and at its sides. A pop-up's window clips what is drawn outside it, so the
+    /// room has to hold the whole shadow (<see cref="Shadow"/>: 18 pixels of blur dropped 6, so 18 at the sides, 12 above and 24 below).
+    /// </summary>
+    public static readonly Thickness Room = new(20, 14, 20, 28);
+    /// <summary>The card's shadow, the same soft one as the toast.</summary>
+    public static readonly BoxShadows Shadow = BoxShadows.Parse("0 6 18 0 #29141E46");
+    /// <summary>The vertical offset that puts the card's top edge 11 pixels under its button, whatever the room above it.</summary>
+    public static double TopOffset => 2 + 9 - Room.Top;
 
     /// <summary>
     /// The card with a point on its top edge. The point is the card's own fill over the edge with only its two slanted sides drawn in the line colour, ending
@@ -32,9 +39,10 @@ public static class HangingCard
         fill.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, fill.GetResourceObservable("Panel"));
         var edges = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse($"M0,{Seat} L10,0.9 L20,{Seat}"), StrokeThickness = 1.1, StrokeJoin = PenLineJoin.Round, StrokeLineCap = PenLineCap.Flat };
         edges.Bind(Avalonia.Controls.Shapes.Shape.StrokeProperty, edges.GetResourceObservable("Line"));
-        var point = new Canvas { Name = "NotificationsPoint", Width = PointWidth, Height = PointHeight, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, Children = { fill, edges } };
+        // The point's base sits on the card's top edge, which is Room.Top down from the top of the grid.
+        var point = new Canvas { Name = "NotificationsPoint", Width = PointWidth, Height = PointHeight, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, Children = { fill, edges }, Margin = new Thickness(0, Room.Top - Seat, 0, 0) };
         if (fromRight < 0) point.HorizontalAlignment = HorizontalAlignment.Center;
-        else { point.HorizontalAlignment = HorizontalAlignment.Right; point.Margin = new Thickness(0, 0, Room.Right + fromRight - PointWidth / 2, 0); }
+        else { point.HorizontalAlignment = HorizontalAlignment.Right; point.Margin = new Thickness(0, Room.Top - Seat, Room.Right + fromRight - PointWidth / 2, 0); }
         return new Grid { Children = { card, point } };
     }
 

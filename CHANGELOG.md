@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 25 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Redesign round 9: pop-up shadows and two numbers | [pending](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/feature/round9) | The bell's card and the date's calendar have room for their whole shadow, so it is no longer cut off at the edge of the pop-up. The meeting and task counts under the week chart sit on their icon's centre line, and the bell's number is centred in its dot. |
+
 ## 24 October 2026
 
 | Change | Commit | Details |

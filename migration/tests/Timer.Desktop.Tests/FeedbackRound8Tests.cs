@@ -168,4 +168,14 @@ public sealed class FeedbackRound8Tests
         }
         finally { window.Close(); }
     }
+
+    [Fact]
+    public void TheHangingCardsRoomHoldsItsWholeShadowSoAPopUpDoesNotClipIt()
+    {
+        var shadow = HangingCard.Shadow[0]; var room = HangingCard.Room;
+        Assert.True(room.Left >= shadow.Blur && room.Right >= shadow.Blur, "Room at the sides for the blur.");
+        Assert.True(room.Bottom >= shadow.Blur + shadow.OffsetY, "Room below for the blur and the drop.");
+        Assert.True(room.Top >= shadow.Blur - shadow.OffsetY, "Room above for what spreads up past the drop.");
+        Assert.Equal(11, HangingCard.TopOffset + room.Top, 6); // The card's edge stays 11 pixels under its button.
+    }
 }

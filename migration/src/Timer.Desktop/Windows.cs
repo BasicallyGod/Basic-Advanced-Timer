@@ -257,8 +257,8 @@ public sealed class DashboardWindow : Window
         datePick = Ui.Ctl("DatePick", null, null, "Pick a day", () => dateCalendar.IsOpen = !dateCalendar.IsOpen);
         datePick.Width = double.NaN; datePick.Padding = new Thickness(12, 0); datePick.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), date);
         // The calendar hangs from the date button by a point, like the bell's card, and the same button closes it again.
-        var datePicker = new SoftDatePicker { Name = "DateCalendar", BoxShadow = Avalonia.Media.BoxShadows.Parse("0 10 28 0 #29141E46") }; datePicker.Classes.Add("flyoutCard");
-        dateCalendar = new Popup { Placement = Avalonia.Controls.PlacementMode.Bottom, Name = "DateCalendarPopup", PlacementTarget = datePick, Child = HangingCard.Hang(datePicker, -1), VerticalOffset = 2 };
+        var datePicker = new SoftDatePicker { Name = "DateCalendar", BoxShadow = HangingCard.Shadow }; datePicker.Classes.Add("flyoutCard");
+        dateCalendar = new Popup { Placement = Avalonia.Controls.PlacementMode.Bottom, Name = "DateCalendarPopup", PlacementTarget = datePick, Child = HangingCard.Hang(datePicker, -1), VerticalOffset = HangingCard.TopOffset };
         HangingCard.CloseOnOutsidePress(dateCalendar, datePick);
         dateCalendar.Opened += (_, _) => { datePicker.View(model.SelectedDate, model.SelectedDate); datePick.Classes.Set("on", true); };
         dateCalendar.Closed += (_, _) => { if (((Avalonia.LogicalTree.ILogical)datePick).IsAttachedToLogicalTree) datePick.Classes.Set("on", false); };
@@ -269,7 +269,8 @@ public sealed class DashboardWindow : Window
         todayWords = (TextBlock)((StackPanel)todayButton.Content!).Children[1];
         // The bell opens what is waiting (the reminders that have passed, and the ones coming up), with a count of the ones that need attention. In Notes the header also holds the search box.
         bell = Ui.Ctl("Notifications", null, IconKind.Bell, "Notifications", ToggleBell); bell.Width = 42;
-        bellBadgeText = new TextBlock { FontSize = 11, FontWeight = Avalonia.Media.FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        // A margin of 1 on the left and top moves the digit half a pixel right and down: a 1 is weighted to its left, and the digits sit a little high in their line box, so the number looked off the dot's centre.
+        bellBadgeText = new TextBlock { FontSize = 11, FontWeight = Avalonia.Media.FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1, 1, 0, 0) };
         bellBadgeText.Bind(TextBlock.ForegroundProperty, bellBadgeText.GetResourceObservable("Panel"));
         bellBadge = new Border { Name = "NotificationsBadge", MinWidth = 18, Height = 18, CornerRadius = new CornerRadius(9), Padding = new Thickness(4, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, -6, -6, 0), IsHitTestVisible = false, IsVisible = false, Child = bellBadgeText }; bellBadge.Classes.Add("badge");
@@ -573,7 +574,7 @@ public sealed class DashboardWindow : Window
         // The card hangs from a point under the bell, so it reads as coming from it: a small triangle of the card's own fill over its top edge, with only its two slanted
         // sides drawn in the line colour, so the card's border runs into it. The room round the card is for its shadow.
         var flyout = new NotificationsFlyout(model);
-        bellPopup.Child = HangingCard.Hang(flyout, Math.Max(38, bell.Bounds.Width) / 2); bellPopup.HorizontalOffset = 8; bellPopup.VerticalOffset = 2; bellPopup.IsOpen = true;
+        bellPopup.Child = HangingCard.Hang(flyout, Math.Max(38, bell.Bounds.Width) / 2); bellPopup.HorizontalOffset = HangingCard.Room.Right; bellPopup.VerticalOffset = HangingCard.TopOffset; bellPopup.IsOpen = true;
     }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     // "19 – 25 Oct", or "28 Sep – 4 Oct" when the week crosses a month.
