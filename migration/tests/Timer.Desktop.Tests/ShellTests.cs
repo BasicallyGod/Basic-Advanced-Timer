@@ -122,6 +122,24 @@ public sealed class ShellTests
     }
 
     [AvaloniaFact]
+    public void CollapsingWhileSetupIsPendingDoesNotSendYouBackToTheDashboard()
+    {
+        var model = Fixture();
+        var coordinator = new WindowCoordinator(model, () => { });
+        coordinator.OpenDashboardOnFirstShow();
+        coordinator.Pill.Show();
+        try
+        {
+            Assert.True(coordinator.Dashboard.IsVisible);
+            Assert.False(coordinator.Pill.IsVisible);
+            coordinator.Dashboard.OpenPill!();
+            Assert.True(coordinator.Pill.IsVisible);
+            Assert.False(coordinator.Dashboard.IsVisible);
+        }
+        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ViewSwitchesPreserveTheActiveTimer()
     {
         var model = Fixture();
