@@ -65,6 +65,16 @@ public sealed class WindowCoordinator
         };
         KeepInFront();
     }
+    /// <summary>
+    /// Opens the dashboard the first time the pill is shown, which is where the getting started setup waits. It must happen once only: the pill raises
+    /// Opened every time it is shown, so staying subscribed sent you straight back to the dashboard whenever you collapsed it while setup was pending,
+    /// which is how every fresh data folder (a new Store install, say) starts.
+    /// </summary>
+    public void OpenDashboardOnFirstShow()
+    {
+        void First(object? sender, EventArgs e) { Pill.Opened -= First; ShowDashboard(); }
+        Pill.Opened += First;
+    }
     // Collapsing the dashboard must always leave the pill somewhere you can see it. If it came back off every screen, or something hid both windows
     // in the meantime, it is brought back to the main screen instead of leaving the timer reachable only from the tray.
     private void KeepPillReachable()
