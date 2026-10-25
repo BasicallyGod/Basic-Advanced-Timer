@@ -277,17 +277,22 @@ public sealed class OnboardingView : Grid
         return panel;
     }
 
-    // The pill's outline in the accent colour: a tall capsule with its light on top and a tile below, as the small icon beside the step.
+    // The application icon beside the step: the pill as a line outline with its two lights and bars for the hours, minutes and seconds, in the text colour
+    // alone (the same drawing as Assets/AppIcon and docs/redesign/mock/Icon.dc.html, on its 256 unit grid, without the tile).
     private static Control PillIcon()
     {
-        var capsule = new Border { Width = 28, Height = 44, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1.8), VerticalAlignment = VerticalAlignment.Center, Name = "SetupPillIcon" };
-        capsule.Bind(Border.BorderBrushProperty, capsule.GetResourceObservable("Accent"));
-        var inside = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Spacing = 5 };
-        var light = new Border { Width = 3, Height = 7, CornerRadius = new CornerRadius(1.5), HorizontalAlignment = HorizontalAlignment.Center }; light.Bind(Border.BackgroundProperty, light.GetResourceObservable("Live"));
-        var tile = new Border { Width = 13, Height = 13, CornerRadius = new CornerRadius(4), HorizontalAlignment = HorizontalAlignment.Center, Opacity = .35 }; tile.Bind(Border.BackgroundProperty, tile.GetResourceObservable("Accent"));
-        var tile2 = new Border { Width = 13, Height = 13, CornerRadius = new CornerRadius(4), HorizontalAlignment = HorizontalAlignment.Center, Opacity = .35 }; tile2.Bind(Border.BackgroundProperty, tile2.GetResourceObservable("Break"));
-        inside.Children.Add(light); inside.Children.Add(tile); inside.Children.Add(tile2); capsule.Child = inside;
-        return capsule;
+        var canvas = new Canvas { Width = 256, Height = 256 };
+        Avalonia.Controls.Shapes.Rectangle Part(double x, double y, double w, double h, double r, double opacity = 1, double? line = null)
+        {
+            var shape = new Avalonia.Controls.Shapes.Rectangle { Width = w, Height = h, RadiusX = r, RadiusY = r, Opacity = opacity };
+            if (line is { } thickness) { shape.StrokeThickness = thickness; shape.Bind(Avalonia.Controls.Shapes.Shape.StrokeProperty, shape.GetResourceObservable("Ink")); }
+            else shape.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, shape.GetResourceObservable("Ink"));
+            Canvas.SetLeft(shape, x); Canvas.SetTop(shape, y); canvas.Children.Add(shape); return shape;
+        }
+        Part(77, 31, 102, 194, 51, line: 14);
+        Part(112, 64, 14, 28, 7); Part(130, 64, 14, 28, 7);
+        Part(100, 118, 56, 18, 9, .9); Part(100, 146, 56, 18, 9, .9); Part(114, 176, 28, 12, 6, .6);
+        return new Viewbox { Width = 48, Height = 48, Child = canvas, VerticalAlignment = VerticalAlignment.Center, Name = "SetupPillIcon" };
     }
 
     // The pill itself, drawn for show: the same lights, clock and three tiles as the real one, with nothing that can be pressed.
