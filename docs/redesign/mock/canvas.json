@@ -118,6 +118,13 @@
       "x": 3000,
       "y": 2200,
       "is_interactive": true
+    },
+    "Themes.dc.html": {
+      "h": 6360,
+      "title": "New themes: Slate, Midnight, Sage, Mono, Hawthorn (proposals)",
+      "w": 1180,
+      "x": 3000,
+      "y": 3800
     }
   },
   "createdOnFiles": {
@@ -226,6 +233,12 @@
       "w": 520,
       "x": 2400,
       "y": 2240
+    },
+    "n17": {
+      "text": "Five theme proposals, each on the real Timeline and Week layouts and on the pill in every state, with the account drawer. Each has its own account colours. Nothing here is built yet: tell me which to take forward.",
+      "w": 520,
+      "x": 2400,
+      "y": 3840
     }
   },
   "order": [
@@ -243,7 +256,8 @@
     "Lights.dc.html",
     "Refine.dc.html",
     "PillSoft.dc.html",
-    "Round7.dc.html"
+    "Round7.dc.html",
+    "Themes.dc.html"
   ],
   "pages": [],
   "title": "Vertical pill and dashboard mock"
