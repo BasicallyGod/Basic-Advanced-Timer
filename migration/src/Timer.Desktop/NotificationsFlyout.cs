@@ -22,7 +22,7 @@ public sealed class NotificationsFlyout : Border
     {
         this.model = model; Name = "NotificationsFlyout";
         Width = 372; Padding = new Thickness(14); CornerRadius = new CornerRadius(18); BorderThickness = new Thickness(1);
-        Classes.Add("surface"); Classes.Add("flyoutCard"); BoxShadow = BoxShadows.Parse("0 10 28 0 #29141E46");
+        Classes.Add("surface"); Classes.Add("flyoutCard"); BoxShadow = HangingCard.Shadow;
         var host = new Grid(); host.Children.Add(column); host.Children.Add(rescheduling); Child = host;
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Sync(true); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;

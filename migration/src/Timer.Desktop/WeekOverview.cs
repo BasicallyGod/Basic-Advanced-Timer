@@ -208,7 +208,9 @@ public static class WeekOverview
             var pair = Ui.Grid("Auto,Auto"); pair.ColumnSpacing = 4; pair.Name = name; pair.VerticalAlignment = VerticalAlignment.Center;
             pair.SetValue(Avalonia.Controls.Documents.TextElement.ForegroundProperty, Brush(model, "Muted"));
             Ui.Put(pair, new IconGlyph(icon) { Width = 13, Height = 13, VerticalAlignment = VerticalAlignment.Center });
-            var number = Ui.Text(n.ToString(), 11.5, "muted"); number.VerticalAlignment = VerticalAlignment.Center; number.FontWeight = FontWeight.Medium; Ui.Put(pair, number, 1);
+            var number = Ui.Text(n.ToString(), 11.5, "muted"); number.VerticalAlignment = VerticalAlignment.Center; number.FontWeight = FontWeight.Medium;
+            // The digits sit above the middle of their line box, so the number looked raised beside its icon. A top margin of 3 moves it down by half that, 1.5 pixels, to the icon's centre line.
+            number.Margin = new Thickness(0, 3, 0, 0); Ui.Put(pair, number, 1);
             return pair;
         }
         if (d.Meetings > 0) counts.Children.Add(Count("WeekDayMeetings", IconKind.Today, d.Meetings));
