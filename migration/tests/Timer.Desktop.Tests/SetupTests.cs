@@ -62,7 +62,7 @@ public sealed class SetupTests
     }
 
     [AvaloniaFact]
-    public void TheSetupSitsOverABlurredDashboardThatCannotBeClickedAndWalksThroughFourSteps()
+    public void TheSetupSitsOverABlurredDashboardThatCannotBeClickedAndWalksThroughFiveSteps()
     {
         var model = NewModel(); var window = new DashboardWindow(model); window.Show();
         try
@@ -71,7 +71,7 @@ public sealed class SetupTests
             Assert.True(window.SetupShowing);
             var body = window.GetVisualDescendants().OfType<Grid>().First(g => g.Children.Contains(Find<Border>(window, "SetupCard").Parent!) is false && g.ColumnDefinitions.Count == 2);
             Assert.IsType<Avalonia.Media.BlurEffect>(body.Effect); Assert.False(body.IsHitTestVisible);
-            Assert.Equal("Step 1 of 4", window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text is { } x && x.StartsWith("Step ")).Text);
+            Assert.Equal("Step 1 of 5", window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text is { } x && x.StartsWith("Step ")).Text);
             // Step 1: rename two examples, add a budget, add a new client.
             Find<TextBox>(window, "SetupName0").Text = "Acme Ltd"; Find<TextBox>(window, "SetupBudget0").Text = "7.5";
             Find<TextBox>(window, "SetupName1").Text = "Brightside";
@@ -90,8 +90,15 @@ public sealed class SetupTests
             Press(window, "SetupDecimal"); Find<ComboBox>(window, "SetupWeekStart").SelectedItem = "Sunday";
             Press(window, "SetupNext");
             Assert.True(model.DecimalHours); Assert.Equal(DayOfWeek.Sunday, model.WeekStartsOn);
-            // Step 4 finishes it.
+            // Step 4: the pill's shape, which applies as it is chosen. Vertical is the default and marked.
+            Settle(window);
+            Assert.False(model.PillHorizontal); Assert.Contains("selected", Find<Button>(window, "SetupVertical").Classes);
+            Press(window, "SetupHorizontal"); Assert.True(model.PillHorizontal); Settle(window);
+            Assert.Contains("selected", Find<Button>(window, "SetupHorizontal").Classes); Assert.DoesNotContain("selected", Find<Button>(window, "SetupVertical").Classes);
+            Press(window, "SetupNext");
+            // Step 5 finishes it, with the pill drawn in the shape chosen.
             Settle(window); Assert.Equal("Start tracking", Find<Button>(window, "SetupNext").Content);
+            Assert.Equal(PillWindow.HorizontalWidth, Find<Border>(window, "SetupPill").Width);
             Assert.False(model.SetupDone);
             Press(window, "SetupNext");
             Assert.True(model.SetupDone); Assert.False(window.SetupShowing); Assert.True(body.IsHitTestVisible); Assert.Null(body.Effect);
@@ -130,8 +137,8 @@ public sealed class SetupTests
         {
             Settle(window);
             var accounts = model.AccountSettings.ToList(); var days = model.Engine.Schedule.Days.ToList();
-            for (var i = 0; i < 4; i++) { Press(window, "SetupNext"); Settle(window); }
-            Assert.True(model.SetupDone);
+            for (var i = 0; i < 5; i++) { Press(window, "SetupNext"); Settle(window); }
+            Assert.True(model.SetupDone); Assert.False(model.PillHorizontal); // The pill stays vertical unless the other shape is chosen.
             Assert.Equal(accounts, model.AccountSettings); Assert.Equal(days.OrderBy(d => (int)d), model.Engine.Schedule.Days.OrderBy(d => (int)d));
             Assert.False(model.DecimalHours); Assert.Equal(DayOfWeek.Monday, model.WeekStartsOn);
         }
@@ -146,7 +153,7 @@ public sealed class SetupTests
         {
             Settle(window);
             Find<TextBox>(window, "SetupBudget0").Text = "lots"; Press(window, "SetupNext"); Settle(window);
-            Assert.Equal("Step 1 of 4", window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text is { } x && x.StartsWith("Step ")).Text);
+            Assert.Equal("Step 1 of 5", window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text is { } x && x.StartsWith("Step ")).Text);
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsVisible && t.Text is { } x && x.StartsWith("Use positive budget hours"));
             Find<TextBox>(window, "SetupBudget0").Text = ""; Find<TextBox>(window, "SetupName0").Text = "Internal"; Press(window, "SetupNext"); // A name already used.
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsVisible && t.Text is { } x && x.Contains("unique"));

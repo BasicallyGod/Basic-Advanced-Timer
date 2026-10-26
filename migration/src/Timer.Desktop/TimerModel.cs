@@ -740,6 +740,17 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool DashboardOnTop => preferences.DashboardOnTop;
     public void SetPillOnTop(bool on) { preferences = preferences with { PillOnTop = on }; Save(); Notify(); }
     public void SetDashboardOnTop(bool on) { preferences = preferences with { DashboardOnTop = on }; Save(); Notify(); }
+    /// <summary>Whether the pill is the horizontal one (the day clock, then the play tile and the account's name, then the break) rather than the vertical one. Saved as the appearance line pillshape=horizontal; no line means vertical.</summary>
+    public bool PillHorizontal => preferences.Extras?.AppearanceLines.Contains(PillShapeLine + "horizontal") == true;
+    private const string PillShapeLine = "pillshape=";
+    public void SetPillHorizontal(bool horizontal)
+    {
+        if (PillHorizontal == horizontal) return;
+        var extras = preferences.Extras ?? SettingsExtras.Empty;
+        var lines = extras.AppearanceLines.Where(l => !l.StartsWith(PillShapeLine, StringComparison.Ordinal)).ToList();
+        if (horizontal) lines.Add(PillShapeLine + "horizontal");
+        preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
+    }
     public int? PillScalePercent => preferences.PillScale;
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
     public bool Tooltips => preferences.Tooltips;

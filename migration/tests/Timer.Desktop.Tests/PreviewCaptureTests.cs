@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
@@ -61,6 +62,52 @@ public sealed class PreviewCaptureTests
                 if (same.Length == 2) { model.SelectBlock(same, false); Shot("merge-ready"); model.SelectBlock(Array.Empty<Timer.Core.SessionRow>(), false); }
                 Press("AddMeeting"); Shot("form-meeting");
                 Press("NotesTab"); Shot("form-page");
+            }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
+    public void WriteHorizontalPill()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme); model.SetPillHorizontal(true);
+            var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = pill.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = pill.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-hpill-" + name + ".png")); }
+                Shot("idle");
+                model.ToggleAccount(model.Accounts.First().Name); Shot("running");
+                // The list is a pop-up, drawn outside the small pill window, so its card is drawn on its own.
+                var card = pill.MakeDropdownCard(); var host = new Window { Width = 360, Height = 480, Content = new Border { Padding = new Thickness(0), Child = card } }; host.RequestedThemeVariant = pill.ActualThemeVariant; host.Show(); Dispatcher.UIThread.RunJobs();
+                using (var f = host.CaptureRenderedFrame()) { Dispatcher.UIThread.RunJobs(); using var g = host.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-hpill-list.png")); }
+                host.Close(); pill.ShowPanel(); Dispatcher.UIThread.RunJobs(); Shot("open");
+                pill.CloseFlyouts(); model.ToggleBreak(); Shot("break");
+            }
+            finally { pill.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
+    public void WritePillShapeChoice()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var fresh = new TimerModel(new Timer.Core.TrackingEngine(clock: () => new DateTime(2026, 10, 9, 10, 0, 0)), new Timer.Storage.StoreSettings(new() { new("Account one"), new("Account two") }, false, theme, DayOfWeek.Monday, SetupDone: false));
+            var window = new DashboardWindow(fresh); window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Press(string name) { window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+                void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-" + name + ".png")); }
+                for (var i = 0; i < 3; i++) Press("SetupNext");
+                Shot("setup-shape-vertical"); Press("SetupHorizontal"); Shot("setup-shape-horizontal");
+                Press("SetupNext"); Shot("setup-ready-horizontal");
+                Press("SetupSkip"); Press("Settings"); Shot("settings-shape");
             }
             finally { window.Close(); }
         }

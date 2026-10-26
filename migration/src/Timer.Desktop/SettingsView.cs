@@ -97,6 +97,11 @@ public sealed class SettingsView : Grid
         syncs.Add(SyncThemes); SyncThemes();
         stack.Children.Add(tiles);
 
+        // The pill is vertical or horizontal, as chosen in Getting started. Choosing here turns it into the other shape where it stands.
+        stack.Children.Add(Label("Pill shape"));
+        var (shapeTiles, syncShape) = PillShapeChoice.Build(model, "PillShape", compact: true); shapeTiles.Margin = new Thickness(0, 6, 0, 16);
+        syncs.Add(syncShape); stack.Children.Add(shapeTiles);
+
         // The pill is sized for the screen it is on. This overrides that with a size of your own, from 50 to 120 per cent.
         var sizeNote = Ui.Text("", 12, "muted"); sizeNote.TextWrapping = TextWrapping.Wrap; sizeNote.Name = "PillSizeNote";
         var slider = new Slider { Name = "PillSize", Minimum = 50, Maximum = 120, TickFrequency = 10, IsSnapToTickEnabled = true, Width = 220, VerticalAlignment = VerticalAlignment.Center, Value = model.PillScalePercent ?? 100 };
