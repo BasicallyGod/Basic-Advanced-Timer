@@ -9,3 +9,5 @@ Themes holds five theme proposals (Slate, Midnight, Sage, Mono and a Hawthorn-in
 Store holds a draft Microsoft Store listing: every Partner Center field written out, five draft 1920 by 1080 screenshots (real renders with demo data, to be retaken on Windows) and the art tiles in `store/`.
 
 AccountsAlongside draws three ways to keep the account list and the pages in view together (a docked panel, a slim strip that opens into it, and a recording chip in the header that hangs the list beneath it) and a table of how Timeline, Notes and Week react to the room they have. A proposal, nothing built.
+
+AccountsDock is option A from that board, chosen, drawn as a live prototype of the docked account panel opening and closing (one eased progress value drives the panel, the rail's wash and each page's reflow), with frames of the opening, what moves in what order, and the timings. A proposal, nothing built.

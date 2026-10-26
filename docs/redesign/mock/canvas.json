@@ -164,6 +164,14 @@
       "w": 1230,
       "x": 1280,
       "y": 15100
+    },
+    "AccountsDock.dc.html": {
+      "h": 3600,
+      "is_interactive": true,
+      "title": "Docked accounts: opening and closing (option A)",
+      "w": 1230,
+      "x": 1280,
+      "y": 19600
     }
   },
   "createdOnFiles": {
@@ -304,10 +312,16 @@
       "y": 13110
     },
     "n22": {
-      "text": "Today the account list covers the whole page behind a dim cover, so a note or the timeline is lost while you choose. Three ways to keep both in view: A the same panel docked beside the rail, so the page reflows into what is left; B a slim always-visible strip of the accounts that opens into A; C a recording chip in the header that hangs the list beneath it. The last section says how Timeline, Notes and Week react to the room they have. Drawings only, nothing built. Switch Light or Dark in the Tweaks.",
+      "text": "Today the account list covers the whole page behind a dim cover, so a note or the timeline is lost while you choose. Three ways to keep both in view: A the same panel docked beside the rail, so the page reflows into what is left; B a slim always-visible strip of the accounts that opens into A; C a recording chip in the header that hangs the list beneath it. The last section says how Timeline, Notes and Week react to the room they have. Option A was chosen: the next board draws its opening and closing. Drawings only, nothing built. Switch Light or Dark in the Tweaks.",
       "w": 520,
       "x": 1280,
       "y": 14910
+    },
+    "n23": {
+      "text": "Option A, drawn so the move between closed and docked is smooth and reversible. Try the prototype: the Accounts button opens and closes the panel, the pin lets it float instead, and the rail switches page. One eased progress value drives the panel, the rail's wash and every page's reflow, so it runs the same path both ways and can be turned round half way. Tweaks has Speed (slow it down to watch each part) and Light or Dark. Below: six frames of the opening, what moves in what order, and the timings. Drawings only, nothing built.",
+      "w": 520,
+      "x": 1280,
+      "y": 19410
     }
   },
   "order": [
@@ -331,7 +345,8 @@
     "PillMerge.dc.html",
     "PillHorizontal.dc.html",
     "PillHorizontalA.dc.html",
-    "AccountsAlongside.dc.html"
+    "AccountsAlongside.dc.html",
+    "AccountsDock.dc.html"
   ],
   "pages": [],
   "title": "Vertical pill and dashboard mock"
