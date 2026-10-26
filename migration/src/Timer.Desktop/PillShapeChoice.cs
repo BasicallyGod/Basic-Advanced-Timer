@@ -25,7 +25,7 @@ public static class PillShapeChoice
             var tile = new Button { Name = prefix + words, Width = compact ? 200 : 250, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(10) };
             tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile");
             var inner = new StackPanel { Spacing = 0 };
-            inner.Children.Add(Picture(horizontal, 92));
+            inner.Children.Add(Picture(horizontal, PictureHeight));
             inner.Children.Add(new TextBlock { Text = words, FontSize = 14, FontWeight = FontWeight.SemiBold, Margin = new Thickness(2, compact ? 8 : 10, 0, 0) });
             if (!compact) { var detail = new TextBlock { Text = about, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 2, 0, 0) }; detail.Classes.Add("muted"); inner.Children.Add(detail); }
             tile.Content = inner; tile.Click += (_, _) => model.SetPillHorizontal(horizontal);
@@ -36,6 +36,9 @@ public static class PillShapeChoice
         Sync();
         return (row, Sync);
     }
+
+    /// <summary>The pictures' height. The vertical pill is a tall capsule, so its picture needs this much room for its parts to sit on the straight sides, clear of the rounded ends.</summary>
+    public const double PictureHeight = 108;
 
     // A small picture of the pill in its shape: the card, the lights, the clock as bars, the play tile and the account on one well, and the break.
     private static Control Picture(bool horizontal, double height)
@@ -57,7 +60,7 @@ public static class PillShapeChoice
         }
         else
         {
-            var col = new StackPanel { Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 7, 0, 0) };
+            var col = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 12, 0, 0) };
             var lights = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center };
             lights.Children.Add(Part(3, 7, 1.5, "#7A849C", .8)); lights.Children.Add(Part(3, 7, 1.5, "#7A849C", .35));
             var well = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(2), Background = new SolidColorBrush(Color.Parse("#7A849C"), .18), HorizontalAlignment = HorizontalAlignment.Center };
@@ -66,7 +69,7 @@ public static class PillShapeChoice
             foreach (var c in new[] { "#7F98F7", "#5FD6AE", "#FF9F84" }) bars.Children.Add(Part(10, 2.5, 1.25, c, 1));
             var wellGrid = new Grid { Children = { parts } }; bars.Margin = new Thickness(0, 15, 0, 0); bars.VerticalAlignment = VerticalAlignment.Top; wellGrid.Children.Add(bars); well.Child = wellGrid;
             col.Children.Add(lights); col.Children.Add(Part(14, 4, 2, "#7A849C", .75)); col.Children.Add(Part(14, 4, 2, "#7A849C", .75)); col.Children.Add(well); col.Children.Add(Part(20, 13, 5, "#F59A1B", .4));
-            inside = new Border { Width = 40, Height = height - 8, CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Child = col, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            inside = new Border { Width = 46, Height = height - 8, CornerRadius = new CornerRadius(23), BorderThickness = new Thickness(1), Child = col, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         }
         var card = (Border)inside; card.Bind(Border.BorderBrushProperty, card.GetResourceObservable("Line")); card.Bind(Border.BackgroundProperty, card.GetResourceObservable("PillBody"));
         var frame = new Border { Height = height, CornerRadius = new CornerRadius(10), ClipToBounds = true, BorderThickness = new Thickness(1), Child = inside };

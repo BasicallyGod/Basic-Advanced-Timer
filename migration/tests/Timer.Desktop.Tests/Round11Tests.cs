@@ -32,7 +32,7 @@ public sealed class Round11Tests
             {
                 foreach (var tile in tiles.GetVisualDescendants().OfType<Button>())
                 {
-                    var frame = tile.GetVisualDescendants().OfType<Border>().First(b => b.Height == 92);
+                    var frame = tile.GetVisualDescendants().OfType<Border>().First(b => b.Height == PillShapeChoice.PictureHeight);
                     var box = frame.TranslatePoint(default, window)!.Value; var size = frame.Bounds.Size;
                     foreach (var part in frame.GetVisualDescendants().OfType<Border>())
                     {
@@ -44,6 +44,37 @@ public sealed class Round11Tests
             }
             finally { window.Close(); }
         }
+    }
+
+    // Fitting the frame is not enough: the vertical pill is a capsule, and a part that sits in its rounded end pokes out past the curve at its corners.
+    [AvaloniaFact]
+    public void EveryPartOfEachPicturedPillLiesInsideThePillsOwnOutlineWithRoomToSpare()
+    {
+        var (tiles, _) = PillShapeChoice.Build(Model(), "Shape", compact: true);
+        var window = new Window { Width = 700, Height = 400, Content = tiles }; window.Show(); Settle(window);
+        try
+        {
+            foreach (var tile in tiles.GetVisualDescendants().OfType<Button>())
+            {
+                var pill = tile.GetVisualDescendants().OfType<Border>().First(b => b.CornerRadius.TopLeft >= 15 && b.Height < PillShapeChoice.PictureHeight && b.BorderThickness.Left > 0);
+                var box = pill.Bounds.Size; var radius = pill.CornerRadius.TopLeft; var margin = 4.0; // The outline is a pixel wide and the parts should not touch it.
+                bool Inside(Point p)
+                {
+                    if (p.X < margin || p.X > box.Width - margin || p.Y < margin || p.Y > box.Height - margin) return false;
+                    var vertical = box.Height >= box.Width; var along = vertical ? p.Y : p.X; var across = vertical ? p.X : p.Y; var length = vertical ? box.Height : box.Width; var width = vertical ? box.Width : box.Height;
+                    var end = Math.Min(along, length - along); if (end >= radius) return true;
+                    var half = Math.Sqrt(radius * radius - (radius - end) * (radius - end)); // How far from the middle line the curve allows at this distance from the end.
+                    return Math.Abs(across - width / 2) <= half - margin;
+                }
+                foreach (var part in pill.GetVisualDescendants().OfType<Border>())
+                {
+                    var at = part.TranslatePoint(default, pill)!.Value; var size = part.Bounds.Size;
+                    foreach (var corner in new[] { at, at + new Point(size.Width, 0), at + new Point(0, size.Height), at + new Point(size.Width, size.Height) })
+                        Assert.True(Inside(corner), $"{tile.Name}: a part at {at} {size} pokes out of the {box} outline at {corner}");
+                }
+            }
+        }
+        finally { window.Close(); }
     }
 
     [AvaloniaFact]
