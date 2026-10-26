@@ -236,7 +236,7 @@ public sealed class NotesPage : Grid
         return button;
     }
     /// <summary>The track that holds a switch's choices, 36 tall like the boxes beside it.</summary>
-    internal static Border Switch(params Button[] choices)
+    internal static Border Switch(params Control[] choices)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 }; foreach (var c in choices) row.Children.Add(c);
         var track = new Border { Child = row, Height = 36, VerticalAlignment = VerticalAlignment.Center }; track.Classes.Add("segTrack"); return track;

@@ -31,6 +31,16 @@ public sealed class SelectedBlockCard : Border
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Sync();
 
+    /// <summary>
+    /// Takes off the card's own chrome (its fill, edge and padding) so it can stand inside another card, as the Selected block tab of the Notes card does while the
+    /// account panel is docked; put back when it returns to its place under the timeline.
+    /// </summary>
+    public void SetDocked(bool inTab)
+    {
+        Classes.Set("dayCard", !inTab);
+        BorderThickness = inTab ? default : new Thickness(1); Padding = inTab ? default : new Thickness(18, 14, 18, 16); CornerRadius = inTab ? default : new CornerRadius(20);
+    }
+
     private string Signature(IReadOnlyList<TimerModel.SelectedBlock> blocks)
         => string.Join("|", blocks.Select(b => $"{b.Account};{b.Start.Ticks};{b.End.Ticks};{b.Minutes};{b.Note};{b.Group?.Sources.Count}"))
             + $"#{model.EditError}#{model.CanMergeSelection}#{model.SelectedDate:yyyyMMdd}#{model.ReviewAccounts.Count}";

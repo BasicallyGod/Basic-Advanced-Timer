@@ -205,7 +205,8 @@ public sealed class DashboardWindow : Window
     public Action? OpenPill { get; set; }
     private readonly TimerModel model;
     private readonly TextBlock workspaceTitle = new() { FontSize = 26, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Center };
-    private Button todayButton = null!; private TextBlock todayWords = null!;
+    private Button todayButton = null!; private TextBlock todayWords = null!; private Reserve selectedHost = null!; private bool selectedInTab; private const double SelectedCardWidth = 430;
+    private Fold todayFold = null!, unallocatedFold = null!, breaksFold = null!;
     private Control? totalsStrip, railBorder; private Button zoomOut = null!, zoomIn = null!;
     private readonly IconGlyph dayFlag = new(IconKind.Flag), daySun = new(IconKind.Sunrise);
     private StatusFace face = null!;
@@ -330,7 +331,10 @@ public sealed class DashboardWindow : Window
         var searchGrid = new Grid { Width = 240 }; searchGrid.Children.Add(searchBox); searchGrid.Children.Add(new IconGlyph(IconKind.Search) { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(11, 0, 0, 0), IsHitTestVisible = false, Opacity = .7 });
         searchHost = searchGrid;
         var dateHost = new Grid { Children = { datePick, dateCalendar } };
-        var steps = Ui.Horizontal(searchHost, previous, dateHost, next, todayButton, bellHost); steps.Spacing = 8;
+        // The gaps are margins, not the stack's spacing, so the Today button's can fold away with it (see Fold) while the account panel is docked.
+        todayFold = new Fold(todayButton, 8) { Name = "TodayFold" };
+        searchHost.Margin = new Thickness(0, 0, 8, 0); dateHost.Margin = new Thickness(8, 0, 0, 0); next.Margin = new Thickness(8, 0, 0, 0); bellHost.Margin = new Thickness(8, 0, 0, 0);
+        var steps = Ui.Horizontal(searchHost, previous, dateHost, next, todayFold, bellHost); steps.Spacing = 0;
         Ui.Put(nav, steps, 1);
         // Settings is a gear at the top right, which also closes it again.
         settingsRail = Ui.Ctl("Settings", null, IconKind.Gear, "Settings", ShowSettings); settingsRail.Margin = new Thickness(8, 0, 0, 0);
@@ -355,10 +359,12 @@ public sealed class DashboardWindow : Window
         var cardGrid = Ui.Grid("*", "Auto,Auto"); Ui.Put(cardGrid, timelineHost); Ui.Put(cardGrid, tools, 0, 1);
         timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Padding = new Thickness(0, 14, 0, 12), VerticalAlignment = VerticalAlignment.Top };
         timelineCard.Classes.Add("dayCard");
-        selectedCard = new SelectedBlockCard(model) { Margin = new Thickness(0, 14, 7, 0) };
+        // The Selected block card is laid out at its own width (Reserve) so it can be narrowed to nothing, clipped, while the account panel is docked.
+        selectedCard = new SelectedBlockCard(model);
+        selectedHost = new Reserve(selectedCard, SelectedCardWidth) { Name = "SelectedBlockHost", Margin = new Thickness(0, 14, 7, 0) };
         notesCard = new NotesCard(model) { Margin = new Thickness(7, 14, 0, 0) };
         timelinePage = Ui.Grid("1.15*,*", "Auto,*"); timelinePage.Margin = new Thickness(0, 14, 0, 0); timelinePage.Name = "TimelinePage";
-        Ui.Put(timelinePage, timelineCard); Grid.SetColumnSpan(timelineCard, 2); Ui.Put(timelinePage, selectedCard, 0, 1); Ui.Put(timelinePage, notesCard, 1, 1);
+        Ui.Put(timelinePage, timelineCard); Grid.SetColumnSpan(timelineCard, 2); Ui.Put(timelinePage, selectedHost, 0, 1); Ui.Put(timelinePage, notesCard, 1, 1);
         Ui.Put(review, timelinePage, row: 1);
         // The title row's empty middle still drags the window.
         var rightColumn = Ui.Grid("*", "*");
@@ -487,9 +493,31 @@ public sealed class DashboardWindow : Window
         var shadow = (byte)Math.Round(0x29 * (1 - pin));
         accountsDrawer.BoxShadow = shadow == 0 ? default : new Avalonia.Media.BoxShadows(new Avalonia.Media.BoxShadow { OffsetX = 8, Blur = 28, Color = Avalonia.Media.Color.FromArgb(shadow, 0x14, 0x1E, 0x46) });
         accountsPanel.Reveal(p);
+        ReflowPage(dock.Room);
         accountsPanel.SetPinned(dock.WantsPinned);
         face?.SetAccountsAmount(p);
         if (dock.Moving) StartDockTimer();
+    }
+    // The page gives way to the docked panel in order, each part over its own stretch of the room taken (r, 0 to 1), as the board draws it: the Today button and the
+    // day's Unallocated and Breaks figures fold away first (0 to .5), the Selected block card narrows to nothing (.12 to .55) with its contents fading out ahead of it
+    // and the Notes card takes its room and grows a Selected block tab in its place (.45 to .85). The timeline itself keeps its zoom and position, so nothing in it moves.
+    private void ReflowPage(double r)
+    {
+        var fold = DockMotion.Window(r, 0, .5);
+        todayFold.Amount = fold; unallocatedFold.Amount = fold; breaksFold.Amount = fold;
+        var narrow = DockMotion.Window(r, .12, .55);
+        timelinePage.ColumnDefinitions[0].Width = new GridLength(1.15 * (1 - narrow), GridUnitType.Star);
+        selectedHost.Margin = new Thickness(0, 14, 7 * (1 - narrow), 0); notesCard.Margin = new Thickness(7 * (1 - narrow), 14, 0, 0);
+        selectedHost.Opacity = 1 - DockMotion.Window(r, .08, .40); selectedHost.IsVisible = narrow < 1; selectedHost.IsHitTestVisible = narrow < .5;
+        // Once the card has folded to nothing it moves into the Notes card's tab, where a picked block is edited; it comes out again before it unfolds.
+        var inTab = narrow >= 1;
+        if (inTab != selectedInTab)
+        {
+            selectedInTab = inTab;
+            if (inTab) { selectedHost.Child = null; selectedCard.SetDocked(true); notesCard.HostSelected(selectedCard); }
+            else { notesCard.HostSelected(null); selectedCard.SetDocked(false); selectedHost.Child = selectedCard; }
+        }
+        notesCard.SetTab(DockMotion.Window(r, .45, .85));
     }
     private void StartDockTimer()
     {
@@ -567,15 +595,17 @@ public sealed class DashboardWindow : Window
             if (head is StackPanel headRow) headRow.Spacing = 5;
             var column = new StackPanel { Name = name, Spacing = 0 }; column.Children.Add(head); column.Children.Add(value); return column;
         }
-        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, Name = "DayTotals", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0, Name = "DayTotals", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         workingValue.Name = "TotalsWorkingValue";
         strip.Children.Add(Stat("Working time", workingValue, "TotalsWorking"));
+        // The gaps are margins so the figures that fold away (Unallocated and Breaks, while the account panel is docked) take theirs with them.
+        dayBar.Margin = new Thickness(16, 0, 0, 0);
         strip.Children.Add(dayBar);
-        strip.Children.Add(Stat("Allocated", allocatedValue, "TotalsAllocated"));
-        strip.Children.Add(Stat("Unallocated", unallocatedValue, "TotalsUnallocated"));
+        var allocated = Stat("Allocated", allocatedValue, "TotalsAllocated"); allocated.Margin = new Thickness(16, 0, 0, 0); strip.Children.Add(allocated);
+        unallocatedFold = new Fold(Stat("Unallocated", unallocatedValue, "TotalsUnallocated"), 16) { Name = "TotalsUnallocatedFold" }; strip.Children.Add(unallocatedFold);
         var amber = new Avalonia.Controls.Shapes.Ellipse { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center }; amber.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, amber.GetResourceObservable("Break"));
-        strip.Children.Add(Stat("Breaks", breaksValue, "TotalsBreaks", amber));
-        overtimeStat = Stat("Overtime", overtimeValue, "TotalsOvertime"); strip.Children.Add(overtimeStat);
+        breaksFold = new Fold(Stat("Breaks", breaksValue, "TotalsBreaks", amber), 16) { Name = "TotalsBreaksFold" }; strip.Children.Add(breaksFold);
+        overtimeStat = Stat("Overtime", overtimeValue, "TotalsOvertime"); overtimeStat.Margin = new Thickness(16, 0, 0, 0); strip.Children.Add(overtimeStat);
         overtimeValue.Classes.Add("overtimeText");
         return strip;
     }

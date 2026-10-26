@@ -500,7 +500,15 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void SetWeekAsTable(bool table) { if (WeekAsTable == table) return; WeekAsTable = table; Notify(); }
     /// <summary>Whether the timeline's Notes card lists the day's meetings instead of its notes. Kept for the session, as the week's Chart and Table are.</summary>
     public bool NotesCardShowsMeetings { get; private set; }
-    public void SetNotesCardShowsMeetings(bool meetings) { if (NotesCardShowsMeetings == meetings) return; NotesCardShowsMeetings = meetings; Notify(); }
+    public void SetNotesCardShowsMeetings(bool meetings)
+    {
+        // Choosing Notes or Meetings leaves the Selected block tab.
+        if (NotesCardShowsMeetings == meetings && !NotesCardShowsSelected) return;
+        NotesCardShowsMeetings = meetings; NotesCardShowsSelected = false; Notify();
+    }
+    /// <summary>Whether the Notes card shows the Selected block in its first tab, which it has only while the account panel is docked and has taken the Selected block card's room. Kept for the session.</summary>
+    public bool NotesCardShowsSelected { get; private set; }
+    public void SetNotesCardShowsSelected(bool on) { if (NotesCardShowsSelected == on) return; NotesCardShowsSelected = on; Notify(); }
     /// <summary>Asked for by a day in the week chart: the dashboard shows that day on the Timeline page.</summary>
     public event Action<DateTime>? OpenDayRequested;
     public void OpenDayInTimeline(DateTime day) { GoToDate(day); OpenDayRequested?.Invoke(day.Date); }
