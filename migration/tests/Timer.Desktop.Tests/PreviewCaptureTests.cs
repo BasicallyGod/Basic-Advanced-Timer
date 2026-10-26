@@ -46,6 +46,33 @@ public sealed class PreviewCaptureTests
     }
 
     [AvaloniaFact]
+    public void WriteDockPages()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme);
+            var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-dock-" + name + ".png")); }
+                void Press(string name) { window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+                foreach (var (page, tab) in new[] { ("timeline", "TimelineTab"), ("notes", "NotesTab"), ("week", "WeekOverviewTab") })
+                {
+                    Press(tab);
+                    foreach (var (label, p) in new[] { ("0", 0.0), ("5", .5), ("10", 1.0) }) { window.Dock.Jump(p, 1); Shot(page + "-" + label); }
+                    window.Dock.Jump(0, 1);
+                }
+                Press("TimelineTab"); window.Dock.Jump(1, 1);
+                var first = model.Engine.Sessions.Take(1).ToArray(); model.SelectBlock(first, false); Shot("timeline-selected");
+                window.Dock.Jump(1, 0); Shot("timeline-floating");
+            }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
     public void WriteNotesForms()
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;

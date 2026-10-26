@@ -518,6 +518,9 @@ public sealed class DashboardWindow : Window
             else { notesCard.HostSelected(null); selectedCard.SetDocked(false); selectedHost.Child = selectedCard; }
         }
         notesCard.SetTab(DockMotion.Window(r, .45, .85));
+        dockedRoom = r; notesPage?.SetDock(r);
+        // The search box in the Notes header gives up a little width with the rest.
+        var search = 240 - 40 * fold; searchHost.Width = search; searchBox.Width = search;
     }
     private void StartDockTimer()
     {
@@ -723,7 +726,8 @@ public sealed class DashboardWindow : Window
     }
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
     // The Notes page is built once and kept: it listens to the model itself, so coming back to it finds the search and the form as they were.
-    private NotesPage NotesPageInstance() { if (notesPage is null) { notesPage = new NotesPage(model) { Query = searchBox.Text ?? "" }; } return notesPage; }
+    private double dockedRoom;
+    private NotesPage NotesPageInstance() { if (notesPage is null) { notesPage = new NotesPage(model) { Query = searchBox.Text ?? "" }; notesPage.SetDock(dockedRoom); } return notesPage; }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
     private void Refresh(bool refreshWorkspace)
     {

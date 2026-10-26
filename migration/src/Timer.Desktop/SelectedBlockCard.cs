@@ -37,9 +37,13 @@ public sealed class SelectedBlockCard : Border
     /// </summary>
     public void SetDocked(bool inTab)
     {
+        if (this.inTab == inTab) return;
+        this.inTab = inTab; shown = null; // The tab names it already, so the title is left out and the card is drawn again.
         Classes.Set("dayCard", !inTab);
         BorderThickness = inTab ? default : new Thickness(1); Padding = inTab ? default : new Thickness(18, 14, 18, 16); CornerRadius = inTab ? default : new CornerRadius(20);
+        Sync();
     }
+    private bool inTab;
 
     private string Signature(IReadOnlyList<TimerModel.SelectedBlock> blocks)
         => string.Join("|", blocks.Select(b => $"{b.Account};{b.Start.Ticks};{b.End.Ticks};{b.Minutes};{b.Note};{b.Group?.Sources.Count}"))
@@ -78,7 +82,7 @@ public sealed class SelectedBlockCard : Border
     {
         // A fixed height, so the title stays put whether or not there are buttons beside it (one block selected, none, or several).
         var header = Ui.Grid("Auto,*,Auto"); header.RowDefinitions = new RowDefinitions("*"); header.Height = 30;
-        var words = Ui.Horizontal(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Name = "SelectedTitle" });
+        var words = Ui.Horizontal(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Name = "SelectedTitle", IsVisible = !(inTab && title == "Selected block") });
         words.VerticalAlignment = VerticalAlignment.Center;
         foreach (var chip in chips) words.Children.Add(chip);
         Ui.Put(header, words);

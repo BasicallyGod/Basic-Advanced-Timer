@@ -13,8 +13,10 @@ public sealed class DockMotion
     public const int OpenMilliseconds = 280, CloseMilliseconds = 220, PinMilliseconds = 260;
     /// <summary>The panel's width when fully out, and the width its contents are laid out at (clipped while it is narrower, so nothing in it reflows).</summary>
     public const double PanelWidth = 272;
-    /// <summary>Off in tests, where no timer ticks and the end state is wanted at once, like <see cref="PillWindow.SlideEnabled"/>.</summary>
+    /// <summary>Off in tests, where no timer ticks and the end state is wanted at once, like <see cref="PillWindow.SlideEnabled"/>. Each motion starts with this, and a test of the motion itself turns <see cref="Animated"/> back on for its own.</summary>
     public static bool Enabled { get; set; } = true;
+    /// <summary>Whether this motion eases, or jumps to where it is asked to go.</summary>
+    public bool Animated { get; set; } = Enabled;
 
     private static readonly Bezier OpenCurve = new(.22, .8, .24, 1), CloseCurve = new(.4, 0, .2, 1), PinCurve = new(.25, .1, .25, 1);
     private readonly Channel open = new(), pin = new();
@@ -40,7 +42,7 @@ public sealed class DockMotion
     {
         var target = on ? 1.0 : 0.0;
         if (open.To == target) return;
-        if (!Enabled || Motion.Reduced) open.Snap(target);
+        if (!Animated || Motion.Reduced) open.Snap(target);
         else open.Start(target, on ? OpenMilliseconds : CloseMilliseconds, on ? OpenCurve : CloseCurve);
         Changed?.Invoke();
     }
@@ -50,7 +52,7 @@ public sealed class DockMotion
     {
         var target = on ? 1.0 : 0.0;
         if (pin.To == target) return;
-        if (!Enabled || Motion.Reduced) pin.Snap(target);
+        if (!Animated || Motion.Reduced) pin.Snap(target);
         else pin.Start(target, PinMilliseconds, PinCurve);
         Changed?.Invoke();
     }
@@ -61,6 +63,12 @@ public sealed class DockMotion
         var moved = open.Advance(elapsed.TotalMilliseconds) | pin.Advance(elapsed.TotalMilliseconds);
         if (moved) Changed?.Invoke();
         return moved;
+    }
+
+    /// <summary>Puts the channels at given values at once, for a preview or a test that wants a frame part way through.</summary>
+    public void Jump(double open, double pin)
+    {
+        this.open.Snap(Math.Clamp(open, 0, 1)); this.pin.Snap(Math.Clamp(pin, 0, 1)); Changed?.Invoke();
     }
 
     /// <summary>Jumps both to where they are heading (the window being hidden, less motion asked for, tests).</summary>
