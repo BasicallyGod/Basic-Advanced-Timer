@@ -248,8 +248,10 @@ public static class ReviewViews
             }
             if (recording)
             {
-                // The block that is recording now. A green outline and the stop menu make it clear why it can't be dragged.
+                // The block that is recording now. A green ring and the stop menu make it clear why it can't be dragged. The ring is the same 3 pixels all round and
+                // outside the block as the selection ring (a border left the left side bare and ate into the block), so it is drawn the same way, in green.
                 card.Classes.Add("recording"); card.Name = "TimelineRecording"; card.Cursor = new Cursor(StandardCursorType.Arrow);
+                card.BoxShadow = new BoxShadows(new BoxShadow { Spread = 3, Color = Color.Parse(model.CurrentTheme.Colour("Live")) }); card.ZIndex = 3;
                 if (text.GetLogicalDescendants().OfType<TextBlock>().FirstOrDefault(t => t.Name == "BlockName") is { } liveName) liveName.Text = "● " + liveName.Text;
                 var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };

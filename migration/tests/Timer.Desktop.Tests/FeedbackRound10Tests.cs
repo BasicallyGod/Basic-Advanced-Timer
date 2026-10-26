@@ -169,4 +169,27 @@ public sealed class FeedbackRound10Tests
         }
         finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheRecordingBlocksGreenRingIsTheSameWidthAllRoundAndOutsideTheBlockLikeTheSelectionRing()
+    {
+        var model = Model(out _); model.ToggleAccount("Account one"); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineRecording");
+            Assert.Equal(new Thickness(0), card.BorderThickness); // Not a border, which left the left side bare.
+            Assert.Equal(1, card.BoxShadow.Count); var ring = card.BoxShadow[0]; Assert.Equal(3, ring.Spread); Assert.Equal(0, ring.Blur);
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void BreakTimeIsNeverNegativeWhenTheClockMovesBetweenTheTwoReadingsOfTheRunningBlock()
+    {
+        var ticks = 0;
+        var engine = new TrackingEngine(clock: () => Day.AddHours(10).AddMilliseconds(ticks++ * 3)); // Every reading is a little later than the last.
+        var model = new TimerModel(engine, new StoreSettings(new() { new("Account one") }, false, "Light", DayOfWeek.Monday)); model.CompleteSetup();
+        model.ToggleAccount("Account one");
+        for (var i = 0; i < 20; i++) { var breaks = model.BreakTimeOn(Day); Assert.True(breaks >= TimeSpan.Zero); Assert.Equal("00:00", model.Format(breaks)); }
+    }
 }

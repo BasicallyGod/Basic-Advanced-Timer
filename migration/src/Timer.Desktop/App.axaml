@@ -171,10 +171,6 @@
     <Style Selector="Ellipse.nowDot"><Setter Property="Fill" Value="{DynamicResource Accent}" /><Setter Property="Stroke" Value="{DynamicResource Surface}" /><Setter Property="StrokeThickness" Value="2" /></Style>
     <Style Selector="Border.nowChip"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="TextBlock.nowChipText"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
-    <Style Selector="Border.recording">
-      <Setter Property="BorderThickness" Value="0,3,3,3" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
-    </Style>
     <Style Selector="Button.mergeSelected">
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>

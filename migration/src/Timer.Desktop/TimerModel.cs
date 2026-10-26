@@ -273,7 +273,10 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         day = day.Date;
         var saved = Engine.Sessions.Where(s => s.Day == day && BreakAccount.Is(s.Account)).Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
-        return saved + Engine.ActiveElapsedOn(day, includeBreak: true) - Engine.ActiveElapsedOn(day);
+        // The two readings of the running block are taken a moment apart, so with no break running they can differ by a few milliseconds the wrong way,
+        // which showed as -00:00. Time on a break is never below nothing.
+        var running = Engine.ActiveElapsedOn(day, includeBreak: true) - Engine.ActiveElapsedOn(day);
+        return saved + (running > TimeSpan.Zero ? running : TimeSpan.Zero);
     }
     public event PropertyChangedEventHandler? PropertyChanged;
     public void ToggleAccount(string name)
