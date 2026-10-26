@@ -968,7 +968,7 @@ public sealed class AccountsGlyph : Control
     }
 }
 
-public enum IconKind { NotesList, Check, Clock, Search, Bell, Repeat, Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
+public enum IconKind { NotesList, Check, Clock, Search, Bell, Repeat, Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Redo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1107,7 +1107,7 @@ public sealed class IconGlyph : Control
         var pen = new Pen(brush, StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         var hover = Math.Clamp(Hover, 0, 1);
         // Every icon keeps its hit target and layout still. Only a small part of the drawing moves.
-        var angle = Kind == IconKind.Gear ? hover * Math.PI / 9 : Kind == IconKind.Undo ? -hover * Math.PI / 15 : 0;
+        var angle = Kind == IconKind.Gear ? hover * Math.PI / 9 : Kind == IconKind.Undo ? -hover * Math.PI / 15 : Kind == IconKind.Redo ? hover * Math.PI / 15 : 0;
         using var turn = context.PushTransform(Matrix.CreateTranslation(-9, -9) * Matrix.CreateRotation(angle) * Matrix.CreateTranslation(9, 9));
         using var grow = IsRail(Kind) ? context.PushTransform(Matrix.CreateScale(Bounds.Width / 18.0, Bounds.Height / 18.0)) : default;
         switch (Kind)
@@ -1173,6 +1173,11 @@ public sealed class IconGlyph : Control
                 // A hook of an arrow curling back to the left.
                 context.DrawGeometry(null, pen, Geometry.Parse("M 7,4.5 L 3.5,8 L 7,11.5"));
                 context.DrawGeometry(null, pen, Geometry.Parse("M 3.8,8 L 10.5,8 Q 14.5,8 14.5,11.2 Q 14.5,14.2 10.5,14.2 L 8.5,14.2"));
+                break;
+            case IconKind.Redo:
+                // Undo's hook turned the other way, curling back to the right.
+                context.DrawGeometry(null, pen, Geometry.Parse("M 11,4.5 L 14.5,8 L 11,11.5"));
+                context.DrawGeometry(null, pen, Geometry.Parse("M 14.2,8 L 7.5,8 Q 3.5,8 3.5,11.2 Q 3.5,14.2 7.5,14.2 L 9.5,14.2"));
                 break;
             case IconKind.Merge:
                 // Two links of a chain: blocks joined into one.

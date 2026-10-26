@@ -352,7 +352,8 @@ svg.ri{display:block;fill:currentColor}
       </div>
       <div style="display: flex; align-items: center; gap: 8px; margin: 6px 14px 0">
         <a class="ctl" href="EntryDialog.dc.html" style="color: var(--accent); border-color: var(--accent)" title="Add time to this day"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add time</a>
-        <button class="ctl" onClick="{{onUndo}}" disabled="{{undoOff}}" title="Undo the last change"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 8H4V3"/><path d="M4.5 8A8 8 0 1 1 4 13"/></svg>Undo</button>
+        <button class="ctl" onClick="{{onUndo}}" disabled="{{undoOff}}" title="Undo (Ctrl Z)" aria-label="Undo" style="width:38px;padding:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 8H4V3"/><path d="M4.5 8A8 8 0 1 1 4 13"/></svg></button>
+        <button class="ctl" onClick="{{onRedo}}" disabled="{{redoOff}}" title="Redo (Ctrl Y)" aria-label="Redo" style="width:38px;padding:0"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 8h5V3"/><path d="M19.5 8A8 8 0 1 0 20 13"/></svg></button>
         <div style="flex-grow: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 16px" role="group" aria-label="Day totals">
           <div style="display: flex; flex-direction: column"><span class="statL">{{day.label}}</span><span class="statV" style="{{day.workStyle}}">{{day.work}}</span></div>
           <sc-if value="{{day.hasBar}}" hint-placeholder-val="{{ true }}"><div class="dayBar" role="img" aria-label="{{day.barAria}}" title="{{day.barTip}}"><span style="{{day.allocStyle}}"></span><span style="{{day.unStyle}}"></span><span style="{{day.brkStyle}}"></span><span style="{{day.otStyle}}"></span></div></sc-if>
@@ -1051,7 +1052,9 @@ class Component extends DCLogic {
       confirmFinish: () => setDay('finished'),
       finishText: finishText,
       undoOff: !this.state.undo,
-      onUndo: () => { if (this.state.undo) this.setState({ blks: this.state.undo, undo: null, selIds: [], editMsg: '', cardNote: 'Undone', copied: false }); },
+      redoOff: !this.state.redo,
+      onUndo: () => { if (this.state.undo) this.setState({ blks: this.state.undo, undo: null, redo: this.state.blks, selIds: [], editMsg: '', cardNote: 'Undone', copied: false }); },
+      onRedo: () => { if (this.state.redo) this.setState({ blks: this.state.redo, redo: null, undo: this.state.blks, selIds: [], editMsg: '', cardNote: 'Redone', copied: false }); },
       noSel: selUnits.length === 0,
       isSingle: !!cur,
       isMulti: multi,

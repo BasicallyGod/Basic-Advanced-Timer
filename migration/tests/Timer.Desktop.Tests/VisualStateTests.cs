@@ -98,7 +98,8 @@ public sealed class VisualStateTests
         {
             model.Editor.Edit(model.Engine.Sessions[0], "Account one", Day.AddHours(9), Day.AddHours(9.25), "note"); model.ChangeDate(0); Dispatcher.UIThread.RunJobs();
             var undo = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "UndoEdit");
-            Assert.Equal("Undo", undo.GetVisualDescendants().OfType<TextBlock>().Single().Text); Assert.Contains("ctl", undo.Classes); var tip = Assert.IsType<StackPanel>(ToolTip.GetTip(undo)); Assert.Contains("Undo ", tip.GetVisualDescendants().OfType<TextBlock>().First().Text); Assert.Equal("Ctrl Z", tip.GetVisualDescendants().OfType<TextBlock>().Last().Text); // Words on the button, so its tip says what would be undone, with the key beside it.
+            Assert.Empty(undo.GetVisualDescendants().OfType<TextBlock>()); Assert.Contains("ctl", undo.Classes); Assert.IsType<IconGlyph>(undo.Content); // Only the icon, so the tooltip and the accessible name carry the words.
+            var tip = Assert.IsType<StackPanel>(ToolTip.GetTip(undo)); Assert.Contains("Undo ", tip.GetVisualDescendants().OfType<TextBlock>().First().Text); Assert.Equal("Ctrl Z", tip.GetVisualDescendants().OfType<TextBlock>().Last().Text);
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { Length: 8 } x && x[2] == ':' && x[5] == ':' && x != dashboard.GetVisualDescendants().OfType<TextBlock>().First(c => c.FontSize == 46 && c.Classes.Contains("clock")).Text);
         }
         finally { dashboard.Close(); }

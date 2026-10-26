@@ -226,7 +226,7 @@ public sealed class DashboardWindow : Window
     private readonly Button day;
     private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, notesTab = null!, addTime = null!, bell = null!;
     private Border bellBadge = null!; private Control bellHostPanel = null!; private TextBlock bellBadgeText = null!; private TextBox searchBox = null!; private Control searchHost = null!; private Popup bellPopup = null!; private NotesPage? notesPage;
-    private readonly Button undo;
+    private readonly Button undo, redo;
     private EntryDialog? entryEditor;
     private bool weekMode, settingsMode, notesMode, renderedSettings, renderedNotes;
     private Button settingsRail = null!; private Control? headerRow;
@@ -334,7 +334,8 @@ public sealed class DashboardWindow : Window
         Ui.Put(review, nav);
         // The bar under the timeline, as in the mock: Add time and Undo on the left, the day's figures in the middle and the zoom buttons on the right.
         addTime = Ui.Ctl("AddTime", "Add time", IconKind.Plus, "Add time to this day", () => model.OpenGap(), tint: "Accent"); addTime.Classes.Add("accentOutline");
-        undo = Ui.Ctl("UndoEdit", "Undo", IconKind.Undo, "Undo the last change", () => model.UndoEdit(), key: "Ctrl Z");
+        undo = Ui.Ctl("UndoEdit", null, IconKind.Undo, "Undo", () => model.UndoEdit(), key: "Ctrl Z");
+        redo = Ui.Ctl("RedoEdit", null, IconKind.Redo, "Redo", () => model.RedoEdit(), key: "Ctrl Y");
         // Zoom steps by a fifth each press, about the middle of what is showing. Hold Ctrl and use the wheel to zoom about the pointer.
         ScrollViewer? TimelineScroll() => timelineHost.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
         zoomOut = Ui.Ctl("TimelineZoomOut", null, IconKind.Minus, "Zoom out", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Width / 2, s.Offset.X); }, key: "Ctrl scroll");
@@ -342,7 +343,7 @@ public sealed class DashboardWindow : Window
         var zoom = Ui.Horizontal(zoomOut, zoomIn); zoom.Spacing = 6; zoom.Name = "TimelineControls";
         totalsStrip = BuildTotals();
         var tools = Ui.Grid("Auto,*,Auto"); tools.Margin = new Thickness(14, 6, 14, 0);
-        Ui.Put(tools, Ui.Horizontal(addTime, undo)); Ui.Put(tools, totalsStrip, 1); Ui.Put(tools, zoom, 2);
+        Ui.Put(tools, Ui.Horizontal(addTime, undo, redo)); Ui.Put(tools, totalsStrip, 1); Ui.Put(tools, zoom, 2);
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
         Ui.Put(review, workspace, row: 1);
         // The timeline is a card (the day across the top, its bar of buttons and figures under it) over the Selected block card. The week and the settings
@@ -408,6 +409,11 @@ public sealed class DashboardWindow : Window
             else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key == Avalonia.Input.Key.Z && !settingsMode && !weekMode && !notesMode && !Dialogs.Any
                 && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox))
             { if (model.Editor.CanUndo) model.UndoEdit(); e.Handled = true; }
+            // Ctrl+Y (or Ctrl+Shift+Z) puts back what Ctrl+Z took back, under the same rules.
+            else if ((e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key == Avalonia.Input.Key.Y
+                    || e.KeyModifiers == (Avalonia.Input.KeyModifiers.Control | Avalonia.Input.KeyModifiers.Shift) && e.Key == Avalonia.Input.Key.Z)
+                && !settingsMode && !weekMode && !notesMode && !Dialogs.Any && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox))
+            { if (model.Editor.CanRedo) model.RedoEdit(); e.Handled = true; }
             // + and - lengthen or shorten the selected block by a minute (Shift is allowed, since + needs it on most keyboards), never while typing.
             else if (e.KeyModifiers is Avalonia.Input.KeyModifiers.None or Avalonia.Input.KeyModifiers.Shift && !settingsMode && !weekMode && !notesMode && !Dialogs.Any
                 && e.Key is Avalonia.Input.Key.OemPlus or Avalonia.Input.Key.Add or Avalonia.Input.Key.OemMinus or Avalonia.Input.Key.Subtract
@@ -662,8 +668,9 @@ public sealed class DashboardWindow : Window
         zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         breakButton.Refresh(); breakButton.Classes.Set("onBreak", onBreak);
         if (RailScaleSource is { } source) SetRailScale(source());
-        undo.IsEnabled = model.Editor.CanUndo;
+        undo.IsEnabled = model.Editor.CanUndo; redo.IsEnabled = model.Editor.CanRedo;
         ToolTip.SetTip(undo, Ui.Tip(model.Editor.UndoLabel is { } label ? $"Undo {label.ToLowerInvariant()}" : "Undo", "Ctrl Z"));
+        ToolTip.SetTip(redo, Ui.Tip(model.Editor.RedoLabel is { } again ? $"Redo {again.ToLowerInvariant()}" : "Redo", "Ctrl Y"));
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); var glyph = button.Content as IconGlyph ?? (button.Content as Grid)?.Children.OfType<IconGlyph>().FirstOrDefault(); if (glyph is not null) glyph.TintKey = selected ? "RailIconOn" : "RailIcon"; }
         Rail(timelineRail, !weekMode && !settingsMode && !notesMode);
         Rail(overviewTab, !settingsMode && weekMode);

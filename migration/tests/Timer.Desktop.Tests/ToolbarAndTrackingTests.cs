@@ -99,11 +99,14 @@ public sealed class ToolbarAndTrackingTests
         try
         {
             Settle(window);
-            foreach (var name in new[] { "AddTime", "UndoEdit" })
+            foreach (var name in new[] { "AddTime", "UndoEdit", "RedoEdit" })
             {
                 var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
                 Assert.Contains("ctl", button.Classes); Assert.Equal(new Thickness(1), button.BorderThickness); Assert.Equal(38, button.Height);
-                Assert.Single(button.GetVisualDescendants().OfType<IconGlyph>()); Assert.NotEmpty(button.GetVisualDescendants().OfType<TextBlock>().Single().Text!);
+                Assert.Single(button.GetVisualDescendants().OfType<IconGlyph>());
+                // Add time has words; Undo and Redo are icons alone, square, with their words in the tooltip.
+                if (name == "AddTime") Assert.NotEmpty(button.GetVisualDescendants().OfType<TextBlock>().Single().Text!);
+                else { Assert.Empty(button.GetVisualDescendants().OfType<TextBlock>()); Assert.Equal(38, button.Width); }
             }
             var title = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Timeline" && t.Classes.Contains("clock"));
             var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");

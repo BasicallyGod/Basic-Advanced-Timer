@@ -679,6 +679,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         return EditEntry(block.Row, block.Row.Account, block.Start, end, block.Note);
     }
     public bool UndoEdit() { var done = ChangeLog(Editor.Undo); if (done) { Notice = "Undone"; Notify(); } return done; }
+    public bool RedoEdit() { var done = ChangeLog(Editor.Redo); if (done) { Notice = "Redone"; Notify(); } return done; }
     public bool UngroupEntries(string id) { var done = ChangeLog(() => Editor.Ungroup(id)); if (done) SayDone("Unmerged"); return done; }
     /// <summary>Exports the week or the whole month that the given day falls in, or the one being viewed when none is given.</summary>
     public bool ExportWeek(bool wholeMonth = false, DateTime? day = null)
