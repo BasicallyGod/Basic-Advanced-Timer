@@ -25,7 +25,7 @@ public static class PillShapeChoice
             var tile = new Button { Name = prefix + words, Width = compact ? 200 : 250, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(10) };
             tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile");
             var inner = new StackPanel { Spacing = 0 };
-            inner.Children.Add(Picture(horizontal, compact ? 62 : 92));
+            inner.Children.Add(Picture(horizontal, 92));
             inner.Children.Add(new TextBlock { Text = words, FontSize = 14, FontWeight = FontWeight.SemiBold, Margin = new Thickness(2, compact ? 8 : 10, 0, 0) });
             if (!compact) { var detail = new TextBlock { Text = about, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(2, 2, 0, 0) }; detail.Classes.Add("muted"); inner.Children.Add(detail); }
             tile.Content = inner; tile.Click += (_, _) => model.SetPillHorizontal(horizontal);
@@ -44,16 +44,16 @@ public static class PillShapeChoice
         Control inside;
         if (horizontal)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 8, 0) };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 8, 0) };
             var lights = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
             lights.Children.Add(Part(3, 8, 1.5, "#7A849C", .8)); lights.Children.Add(Part(3, 8, 1.5, "#7A849C", .35));
             var well = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(2), Background = new SolidColorBrush(Color.Parse("#7A849C"), .18), VerticalAlignment = VerticalAlignment.Center };
             var parts = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
-            var selector = new Border { Width = 54, Height = 20, CornerRadius = new CornerRadius(6), Child = Part(32, 5, 2.5, "#7A849C", .75) };
+            var selector = new Border { Width = 40, Height = 20, CornerRadius = new CornerRadius(6), Child = Part(22, 5, 2.5, "#7A849C", .75) };
             ((Border)selector.Child!).HorizontalAlignment = HorizontalAlignment.Left; ((Border)selector.Child!).VerticalAlignment = VerticalAlignment.Center; ((Border)selector.Child!).Margin = new Thickness(8, 0, 0, 0);
             parts.Children.Add(Part(20, 20, 6, "#34D399", .45)); parts.Children.Add(selector); well.Child = parts;
-            row.Children.Add(lights); row.Children.Add(Part(40, 9, 3, "#7A849C", .75)); row.Children.Add(well); row.Children.Add(Part(20, 20, 6, "#F59A1B", .4));
-            inside = new Border { Width = 200, Height = 38, CornerRadius = new CornerRadius(19), BorderThickness = new Thickness(1), Child = row, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            row.Children.Add(lights); row.Children.Add(Part(24, 9, 3, "#7A849C", .75)); row.Children.Add(well); row.Children.Add(Part(20, 20, 6, "#F59A1B", .4));
+            inside = new Border { Width = 164, Height = 38, CornerRadius = new CornerRadius(19), BorderThickness = new Thickness(1), Child = row, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         }
         else
         {

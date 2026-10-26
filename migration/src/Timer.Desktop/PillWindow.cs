@@ -148,7 +148,7 @@ public sealed class PillWindow : Window
         if (box.X != Position.X || box.Y != Position.Y) Position = new PixelPoint(box.X, box.Y);
     }
     /// <summary>The horizontal pill's account list, a card that hangs below the account's box. It is as wide as the vertical pill's drawer plus a little, and scrolls inside.</summary>
-    public const double DropdownWidth = 300, DropdownMaxHeight = 380, DropdownGap = 8;
+    public const double DropdownWidth = 300, DropdownMaxHeight = 380, DropdownGap = 11;
     /// <summary>The list's card, built apart from the pop-up so it can also be drawn on its own.</summary>
     public Border MakeDropdownCard()
     {
@@ -161,13 +161,16 @@ public sealed class PillWindow : Window
         card.PointerExited += (_, _) => overDrawer = false;
         return card;
     }
+    private Grid? dropdownHung; private const string DropdownPoint = "PillDropdownPoint";
     private void BuildDropdown()
     {
         var card = MakeDropdownCard();
         drawer = card;
         panel.PlacementTarget = surface; panel.Placement = PlacementMode.BottomEdgeAlignedLeft;
         panel.PlacementConstraintAdjustment = PopupPositionerConstraintAdjustment.FlipY | PopupPositionerConstraintAdjustment.SlideX;
-        panel.IsLightDismissEnabled = true; panel.Child = new LayoutTransformControl { LayoutTransform = pillScale, Child = card };
+        // A point under the account's box joins the card to it, as the bell's card hangs from the bell. It sits on the pill's lower edge, and is moved under the box each time the list opens.
+        dropdownHung = HangingCard.Hang(card, -1, DropdownPoint, "PillBody");
+        panel.IsLightDismissEnabled = true; panel.Child = new LayoutTransformControl { LayoutTransform = pillScale, Child = dropdownHung };
         panel.Closed += (_, _) => { overDrawer = false; if (!closingByCode) dismissedAt = Environment.TickCount64; SetOpenLook(false); };
         rootGrid.Children.Add(panel);
     }
@@ -305,6 +308,8 @@ public sealed class PillWindow : Window
             // The list hangs below the pill with its left edge under the well's, so it reads as the account's own drop-down.
             var wellLeft = face.Well.TranslatePoint(default, surface)?.X ?? 0;
             panel.HorizontalOffset = (wellLeft - HangingCard.Room.Left) * Scale; panel.VerticalOffset = (DropdownGap - HangingCard.Room.Top) * Scale;
+            if (dropdownHung is not null && face.AccountsButton.TranslatePoint(new Point(face.AccountsButton.Bounds.Width / 2, 0), surface) is { } centre)
+                HangingCard.MovePoint(dropdownHung, DropdownPoint, HangingCard.ClampFromRight(DropdownWidth - (centre.X - wellLeft), DropdownWidth, 24));
         }
         else { panel.HorizontalOffset = -Behind * Scale; SlideOut(); }
         panel.IsOpen = true;

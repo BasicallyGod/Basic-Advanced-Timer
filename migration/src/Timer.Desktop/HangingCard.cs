@@ -32,19 +32,34 @@ public static class HangingCard
     /// square on the middle of the card's one pixel edge, so the border runs into it without a notch. <paramref name="fromRight"/> is how far the point's centre
     /// is from the card's right edge, or negative to centre it.
     /// </summary>
-    public static Grid Hang(Control card, double fromRight)
+    public static Grid Hang(Control card, double fromRight, string name = "NotificationsPoint", string fillKey = "Panel")
     {
         card.Margin = Room;
         var fill = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse($"M0,{Seat} L10,0.9 L20,{Seat} L20,{PointHeight} L0,{PointHeight} Z") };
-        fill.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, fill.GetResourceObservable("Panel"));
+        fill.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, fill.GetResourceObservable(fillKey));
         var edges = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse($"M0,{Seat} L10,0.9 L20,{Seat}"), StrokeThickness = 1.1, StrokeJoin = PenLineJoin.Round, StrokeLineCap = PenLineCap.Flat };
         edges.Bind(Avalonia.Controls.Shapes.Shape.StrokeProperty, edges.GetResourceObservable("Line"));
         // The point's base sits on the card's top edge, which is Room.Top down from the top of the grid.
-        var point = new Canvas { Name = "NotificationsPoint", Width = PointWidth, Height = PointHeight, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, Children = { fill, edges }, Margin = new Thickness(0, Room.Top - Seat, 0, 0) };
+        var point = new Canvas { Name = name, Width = PointWidth, Height = PointHeight, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, Children = { fill, edges }, Margin = new Thickness(0, Room.Top - Seat, 0, 0) };
         if (fromRight < 0) point.HorizontalAlignment = HorizontalAlignment.Center;
         else { point.HorizontalAlignment = HorizontalAlignment.Right; point.Margin = new Thickness(0, Room.Top - Seat, Room.Right + fromRight - PointWidth / 2, 0); }
         return new Grid { Children = { card, point } };
     }
+
+    /// <summary>Moves the point of a card made by <see cref="Hang"/> to be <paramref name="fromRight"/> from the card's right edge, once the button it points at has been measured.</summary>
+    public static void MovePoint(Grid hung, string name, double fromRight)
+    {
+        if (hung.Children.OfType<Canvas>().FirstOrDefault(c => c.Name == name) is not { } point) return;
+        point.HorizontalAlignment = HorizontalAlignment.Right; point.Margin = new Thickness(0, Room.Top - Seat, Room.Right + fromRight - PointWidth / 2, 0);
+    }
+    /// <summary>
+    /// How far a card has to sit past its button, towards the right, for the point to keep clear of the card's rounded corner. The point's base is 20 wide and lies
+    /// on the straight part of the top edge only when its centre is at least the corner's radius plus half of that from the card's edge; nearer than that,
+    /// the base runs out over the curve and shows as a notch.
+    /// </summary>
+    public static double ShiftForCorner(double halfButton, double radius) => Math.Max(0, radius + PointWidth / 2 + 3 - halfButton);
+    /// <summary>The point's centre, held at least a corner's radius and half the point's base from each end of a card <paramref name="width"/> wide.</summary>
+    public static double ClampFromRight(double fromRight, double width, double radius) { var edge = radius + PointWidth / 2 + 3; return Math.Clamp(fromRight, edge, width - edge); }
 
     /// <summary>
     /// Makes the pop-up close on a press outside it, on Escape and when the window loses the focus, and leaves a press on <paramref name="owner"/> alone.

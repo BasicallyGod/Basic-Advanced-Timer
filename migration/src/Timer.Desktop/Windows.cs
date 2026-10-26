@@ -633,7 +633,8 @@ public sealed class DashboardWindow : Window
         // The card hangs from a point under the bell, so it reads as coming from it: a small triangle of the card's own fill over its top edge, with only its two slanted
         // sides drawn in the line colour, so the card's border runs into it. The room round the card is for its shadow.
         var flyout = new NotificationsFlyout(model);
-        bellPopup.Child = HangingCard.Hang(flyout, Math.Max(38, bell.Bounds.Width) / 2); bellPopup.HorizontalOffset = HangingCard.Room.Right; bellPopup.VerticalOffset = HangingCard.TopOffset; bellPopup.IsOpen = true;
+        var half = Math.Max(38, bell.Bounds.Width) / 2; var shift = HangingCard.ShiftForCorner(half, 18); // The bell is near the card's end, so the card sits a little past it to keep the point off the rounded corner.
+        bellPopup.Child = HangingCard.Hang(flyout, half + shift); bellPopup.HorizontalOffset = HangingCard.Room.Right + shift; bellPopup.VerticalOffset = HangingCard.TopOffset; bellPopup.IsOpen = true;
     }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     // "19 – 25 Oct", or "28 Sep – 4 Oct" when the week crosses a month.
