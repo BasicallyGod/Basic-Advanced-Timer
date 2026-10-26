@@ -233,6 +233,96 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
+    public void CtrlZUndoesTheLastEditAndTheTooltipsNameTheKey()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "added", "30"), Row("10:00:00", "added", "30") });
+        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            model.ToggleSelection(new[] { engine.Sessions[0] }); Assert.True(model.DeleteSelection()); Assert.Single(engine.Sessions);
+            window.KeyPressQwerty(PhysicalKey.Z, RawInputModifiers.Control);
+            Assert.Equal(2, engine.Sessions.Count);
+            window.KeyPressQwerty(PhysicalKey.Z, RawInputModifiers.Control); // Nothing left to undo is not an error.
+            Assert.Equal(2, engine.Sessions.Count);
+            var undo = window.GetVisualDescendants().OfType<Button>().First(b => b.Name == "UndoEdit");
+            Assert.Contains("Ctrl Z", AllText(ToolTip.GetTip(undo)));
+        }
+        finally { window.Close(); }
+        static string AllText(object? tip) => tip is Control c ? string.Join(" ", c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)) : tip?.ToString() ?? "";
+    }
+
+    [AvaloniaFact]
+    public void CtrlYAndCtrlShiftZPutBackWhatCtrlZTookBackAndANewEditEndsIt()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "added", "30"), Row("10:00:00", "added", "30"), Row("11:00:00", "added", "30") });
+        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            model.ToggleSelection(new[] { engine.Sessions[0] }); Assert.True(model.DeleteSelection());
+            model.ToggleSelection(new[] { engine.Sessions[0] }); Assert.True(model.DeleteSelection()); Assert.Single(engine.Sessions);
+            window.KeyPressQwerty(PhysicalKey.Y, RawInputModifiers.Control); Assert.Single(engine.Sessions); // Nothing taken back yet.
+            window.KeyPressQwerty(PhysicalKey.Z, RawInputModifiers.Control); window.KeyPressQwerty(PhysicalKey.Z, RawInputModifiers.Control); Assert.Equal(3, engine.Sessions.Count);
+            window.KeyPressQwerty(PhysicalKey.Y, RawInputModifiers.Control); Assert.Equal(2, engine.Sessions.Count);
+            window.KeyPressQwerty(PhysicalKey.Z, RawInputModifiers.Control | RawInputModifiers.Shift); Assert.Single(engine.Sessions);
+            window.KeyPressQwerty(PhysicalKey.Z, RawInputModifiers.Control); Assert.Equal(2, engine.Sessions.Count);
+            Assert.True(model.AddEntry("Account two", engine.Sessions[^1].To.AddMinutes(30), engine.Sessions[^1].To.AddMinutes(45), "")); Assert.False(model.Editor.CanRedo);
+            window.KeyPressQwerty(PhysicalKey.Y, RawInputModifiers.Control); Assert.Equal(3, engine.Sessions.Count); // A new edit ended it.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void UndoAndRedoAreIconButtonsWithTheirKeysInTheirTooltips()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "added", "30"), Row("10:00:00", "added", "30") });
+        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Button Find(string name) => window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name);
+            static string Tip(Button b) => ToolTip.GetTip(b) is StackPanel p ? string.Join(" ", p.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)) : "";
+            Assert.False(Find("UndoEdit").IsEnabled); Assert.False(Find("RedoEdit").IsEnabled);
+            model.ToggleSelection(new[] { engine.Sessions[0] }); model.DeleteSelection();
+            Assert.True(Find("UndoEdit").IsEnabled); Assert.False(Find("RedoEdit").IsEnabled); Assert.Equal("Undo delete entry Ctrl Z", Tip(Find("UndoEdit")));
+            model.UndoEdit();
+            Assert.False(Find("UndoEdit").IsEnabled); Assert.True(Find("RedoEdit").IsEnabled); Assert.Equal("Redo delete entry Ctrl Y", Tip(Find("RedoEdit")));
+            Assert.IsType<IconGlyph>(Find("RedoEdit").Content); Assert.Equal("Redo", Avalonia.Automation.AutomationProperties.GetName(Find("RedoEdit")));
+            model.RedoEdit(); Assert.Single(engine.Sessions); Assert.True(Find("UndoEdit").IsEnabled); Assert.False(Find("RedoEdit").IsEnabled);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void PlusAndMinusLengthenAndShortenTheSelectedBlockByAMinuteAsOneUndoStepEach()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "added", "30"), Row("10:00:00", "added", "30") });
+        var model = new TimerModel(engine); var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            window.KeyPressQwerty(PhysicalKey.Equal, RawInputModifiers.Shift); // Nothing selected does nothing.
+            Assert.Equal(30, engine.Sessions[0].Duration.TotalMinutes);
+            model.ToggleSelection(new[] { engine.Sessions[0] });
+            window.KeyPressQwerty(PhysicalKey.Equal, RawInputModifiers.Shift);
+            Assert.Equal(31, model.SelectedBlocks[0].End.Subtract(model.SelectedBlocks[0].Start).TotalMinutes);
+            window.KeyPressQwerty(PhysicalKey.Minus, RawInputModifiers.None); window.KeyPressQwerty(PhysicalKey.Minus, RawInputModifiers.None);
+            Assert.Equal(29, model.SelectedBlocks[0].End.Subtract(model.SelectedBlocks[0].Start).TotalMinutes);
+            Assert.Equal("10:00:00", engine.Sessions[1].Start); // The neighbour stays where it is.
+            Assert.True(model.UndoEdit()); Assert.Equal(30, engine.Sessions[0].Duration.TotalMinutes);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void PlusAndMinusExplainWhenTheyCannotResizeAndNeverTakeABlockToNothing()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "09:01:00", "1"), Row("10:00:00", "added", "30") });
+        var model = new TimerModel(engine);
+        model.ToggleSelection(new[] { engine.Sessions[0] });
+        Assert.False(model.NudgeSelection(-1)); Assert.Equal("Block can’t be shorter", model.EditError); Assert.Equal(1, engine.Sessions[0].Duration.TotalMinutes);
+        model.ToggleSelection(new[] { engine.Sessions[1] });
+        Assert.False(model.NudgeSelection(1)); Assert.Equal("Select one block", model.EditError);
+    }
+
+    [AvaloniaFact]
     public void VeryShortBlocksAreStillBigEnoughToSeeAndSelectAndSelectedBlocksAddNothingToTheirText()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "09:01:00", "1"), Row("10:00:00", "10:20:00", "20") });

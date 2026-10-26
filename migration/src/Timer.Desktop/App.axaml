@@ -171,10 +171,6 @@
     <Style Selector="Ellipse.nowDot"><Setter Property="Fill" Value="{DynamicResource Accent}" /><Setter Property="Stroke" Value="{DynamicResource Surface}" /><Setter Property="StrokeThickness" Value="2" /></Style>
     <Style Selector="Border.nowChip"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="TextBlock.nowChipText"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
-    <Style Selector="Border.recording">
-      <Setter Property="BorderThickness" Value="0,3,3,3" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Live}" />
-    </Style>
     <Style Selector="Button.mergeSelected">
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
@@ -403,6 +399,8 @@
     <Style Selector="Button.ctl.accentOutline"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Button.ctl.accentOutline:pointerover /template/ ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Button.ctl.primary"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <!-- The global TextBlock style gives every text the Ink colour, which beats what the button hands down, so a primary button's words are set here: white on the Light accent, where Ink was a dark grey on blue. -->
+    <Style Selector="Button.ctl.primary TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
     <Style Selector="Button.ctl.primary /template/ ContentPresenter, Button.ctl.primary:pressed /template/ ContentPresenter, Button.ctl.primary:disabled /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Button.ctl.primary:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="Opacity" Value="0.92" /></Style>
     <Style Selector="Button.ctl.on"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>

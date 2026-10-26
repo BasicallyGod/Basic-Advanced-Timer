@@ -80,7 +80,7 @@ public sealed class WindowCoordinator
     private void KeepPillReachable()
     {
         if (!IsShown) { ShowTimer(); return; }
-        if (Pill.IsVisible && Pill.Screens.ScreenFromWindow(Pill) is null && Pill.Screens.Primary is not null) ResetPosition();
+        if (Pill.IsVisible) RescueOffScreen();
     }
     // Snapping another window over the timer, or a window that is itself on top, can leave the pill or dashboard behind it. So whenever one loses focus
     // it is put back at the front of the topmost windows, and a slow check does the same for one that was covered without a focus change.
@@ -94,8 +94,10 @@ public sealed class WindowCoordinator
             self.Deactivated += (_, _) => Avalonia.Threading.DispatcherTimer.RunOnce(() => Reassert(self), TimeSpan.FromMilliseconds(250));
         }
         var check = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        check.Tick += (_, _) => { Reassert(Pill); Reassert(Dashboard); };
+        check.Tick += (_, _) => { Reassert(Pill); Reassert(Dashboard); RescueOffScreen(); };
         check.Start();
+        // A monitor being plugged or unplugged is dealt with at once, and once more when Windows has settled.
+        Pill.Screens.Changed += (_, _) => { Avalonia.Threading.Dispatcher.UIThread.Post(RescueOffScreen); Avalonia.Threading.DispatcherTimer.RunOnce(RescueOffScreen, TimeSpan.FromMilliseconds(1500)); };
     }
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
@@ -114,11 +116,13 @@ public sealed class WindowCoordinator
     {
         if (IsShown) { (Dashboard.IsVisible ? (Window)Dashboard : Pill).Activate(); return; }
         if (dashboardWasShown) ShowDashboard(); else { Pill.Show(); BringToFront(Pill); }
+        RescueOffScreen();
     }
     public void ShowDashboard()
     {
         if (!Dashboard.IsVisible) { model.ShowToday(); if (!Pill.IsVisible) Pill.FitToScreen(Pill.Screens.ScreenFromWindow(Pill) ?? Pill.Screens.Primary); Dashboard.SetRailScale(Pill.Scale); PlaceByCard(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin, 1); Dashboard.Show(); }
         Pill.CloseFlyouts(); Pill.Hide(); BringToFront(Dashboard);
+        RescueOffScreen();
     }
     // The tray icon's left click shows the timer, or hides it when it is already in front.
     public void ToggleFromTray()
@@ -133,14 +137,35 @@ public sealed class WindowCoordinator
     public void ResetPosition()
     {
         // Back to the top right of the main screen, which also recovers a window dragged off a disconnected monitor.
-        var screen = Pill.Screens.Primary;
-        if (screen is not null)
+        Dashboard.Hide();
+        if (Pill.Screens.Primary is { } screen) Pill.FitToScreen(screen);
+        Pill.Show(); PlacePillAtTopRight(); BringToFront(Pill);
+    }
+    // Windows is asked where the main monitor is, not Avalonia, whose list of screens and position setter did not bring the pill back after a monitor was
+    // unplugged. The pill is placed once it is showing, so nothing puts it back where it was. Avalonia's own figures are the fallback.
+    private void PlacePillAtTopRight()
+    {
+        if (ScreenGuard.TryPrimaryWorkArea(out var area, out var scale)
+            && ScreenGuard.Place(Pill, ScreenGuard.TopRight(area, (int)Math.Round(Pill.WindowWidthNow * scale), (int)Math.Round(Pill.WindowHeightNow * scale), 24))) return;
+        if (Pill.Screens.Primary is not { } screen) return;
+        var work = screen.WorkingArea;
+        Pill.Position = new PixelPoint(work.Right - (int)(Pill.Width * screen.Scaling) - 24, work.Y + 24);
+    }
+    /// <summary>
+    /// Brings a window that is on no monitor back to the main one: the pill to its top right corner, the dashboard to the top left of the work area. It is run
+    /// when the screens change, every few seconds, and whenever the timer is brought back from the tray, because a window left on an unplugged screen
+    /// cannot be reached, and Windows does not always move one that was hidden when the screen went.
+    /// </summary>
+    public void RescueOffScreen()
+    {
+        try
         {
-            var area = screen.WorkingArea;
-            Pill.FitToScreen(screen);
-            Pill.Position = new PixelPoint(area.Right - (int)(Pill.Width * screen.Scaling) - 24, area.Y + 24);
+            if (Pill.IsVisible && Pill.WindowState != WindowState.Minimized && !ScreenGuard.IsOnAnyMonitor(Pill)) PlacePillAtTopRight();
+            if (Dashboard.IsVisible && Dashboard.WindowState != WindowState.Minimized && !ScreenGuard.IsOnAnyMonitor(Dashboard)
+                && ScreenGuard.TryPrimaryWorkArea(out var area, out _) && ScreenGuard.TryBoundsOf(Dashboard, out var now))
+                ScreenGuard.Place(Dashboard, ScreenGuard.SlideInside(area, now with { X = area.X, Y = area.Y }));
         }
-        Dashboard.Hide(); Pill.Show(); BringToFront(Pill);
+        catch (Exception) { /* Never let a failed rescue take the timer down. */ }
     }
     public void Quit()
     {
@@ -201,7 +226,7 @@ public sealed class DashboardWindow : Window
     private readonly Button day;
     private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, notesTab = null!, addTime = null!, bell = null!;
     private Border bellBadge = null!; private Control bellHostPanel = null!; private TextBlock bellBadgeText = null!; private TextBox searchBox = null!; private Control searchHost = null!; private Popup bellPopup = null!; private NotesPage? notesPage;
-    private readonly Button undo;
+    private readonly Button undo, redo;
     private EntryDialog? entryEditor;
     private bool weekMode, settingsMode, notesMode, renderedSettings, renderedNotes;
     private Button settingsRail = null!; private Control? headerRow;
@@ -309,7 +334,8 @@ public sealed class DashboardWindow : Window
         Ui.Put(review, nav);
         // The bar under the timeline, as in the mock: Add time and Undo on the left, the day's figures in the middle and the zoom buttons on the right.
         addTime = Ui.Ctl("AddTime", "Add time", IconKind.Plus, "Add time to this day", () => model.OpenGap(), tint: "Accent"); addTime.Classes.Add("accentOutline");
-        undo = Ui.Ctl("UndoEdit", "Undo", IconKind.Undo, "Undo the last change", () => model.UndoEdit());
+        undo = Ui.Ctl("UndoEdit", null, IconKind.Undo, "Undo", () => model.UndoEdit(), key: "Ctrl Z");
+        redo = Ui.Ctl("RedoEdit", null, IconKind.Redo, "Redo", () => model.RedoEdit(), key: "Ctrl Y");
         // Zoom steps by a fifth each press, about the middle of what is showing. Hold Ctrl and use the wheel to zoom about the pointer.
         ScrollViewer? TimelineScroll() => timelineHost.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
         zoomOut = Ui.Ctl("TimelineZoomOut", null, IconKind.Minus, "Zoom out", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Width / 2, s.Offset.X); }, key: "Ctrl scroll");
@@ -317,7 +343,7 @@ public sealed class DashboardWindow : Window
         var zoom = Ui.Horizontal(zoomOut, zoomIn); zoom.Spacing = 6; zoom.Name = "TimelineControls";
         totalsStrip = BuildTotals();
         var tools = Ui.Grid("Auto,*,Auto"); tools.Margin = new Thickness(14, 6, 14, 0);
-        Ui.Put(tools, Ui.Horizontal(addTime, undo)); Ui.Put(tools, totalsStrip, 1); Ui.Put(tools, zoom, 2);
+        Ui.Put(tools, Ui.Horizontal(addTime, undo, redo)); Ui.Put(tools, totalsStrip, 1); Ui.Put(tools, zoom, 2);
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
         Ui.Put(review, workspace, row: 1);
         // The timeline is a card (the day across the top, its bar of buttons and figures under it) over the Selected block card. The week and the settings
@@ -379,6 +405,20 @@ public sealed class DashboardWindow : Window
                 if (e.Key == Avalonia.Input.Key.C) model.CopySelection(); else if (!weekMode) model.PasteBlocks(model.DefaultPasteTime());
                 e.Handled = true;
             }
+            // Ctrl+Z undoes the last edit on the Timeline page, but never while typing in a box (which keeps its own undo) or behind a dialog.
+            else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key == Avalonia.Input.Key.Z && !settingsMode && !weekMode && !notesMode && !Dialogs.Any
+                && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox))
+            { if (model.Editor.CanUndo) model.UndoEdit(); e.Handled = true; }
+            // Ctrl+Y (or Ctrl+Shift+Z) puts back what Ctrl+Z took back, under the same rules.
+            else if ((e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key == Avalonia.Input.Key.Y
+                    || e.KeyModifiers == (Avalonia.Input.KeyModifiers.Control | Avalonia.Input.KeyModifiers.Shift) && e.Key == Avalonia.Input.Key.Z)
+                && !settingsMode && !weekMode && !notesMode && !Dialogs.Any && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox))
+            { if (model.Editor.CanRedo) model.RedoEdit(); e.Handled = true; }
+            // + and - lengthen or shorten the selected block by a minute (Shift is allowed, since + needs it on most keyboards), never while typing.
+            else if (e.KeyModifiers is Avalonia.Input.KeyModifiers.None or Avalonia.Input.KeyModifiers.Shift && !settingsMode && !weekMode && !notesMode && !Dialogs.Any
+                && e.Key is Avalonia.Input.Key.OemPlus or Avalonia.Input.Key.Add or Avalonia.Input.Key.OemMinus or Avalonia.Input.Key.Subtract
+                && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox))
+            { if (model.SelectedRows.Count > 0) { model.NudgeSelection(e.Key is Avalonia.Input.Key.OemPlus or Avalonia.Input.Key.Add ? 1 : -1); e.Handled = true; } }
             // Backspace and Delete remove the selected blocks, but never while typing in a text box.
             else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete && FocusManager?.GetFocusedElement() is not TextBox)
             { if (model.SelectedRows.Count > 0) { model.DeleteSelection(); e.Handled = true; } }
@@ -628,8 +668,9 @@ public sealed class DashboardWindow : Window
         zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         breakButton.Refresh(); breakButton.Classes.Set("onBreak", onBreak);
         if (RailScaleSource is { } source) SetRailScale(source());
-        undo.IsEnabled = model.Editor.CanUndo;
-        ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo {label.ToLowerInvariant()}" : null);
+        undo.IsEnabled = model.Editor.CanUndo; redo.IsEnabled = model.Editor.CanRedo;
+        ToolTip.SetTip(undo, Ui.Tip(model.Editor.UndoLabel is { } label ? $"Undo {label.ToLowerInvariant()}" : "Undo", "Ctrl Z"));
+        ToolTip.SetTip(redo, Ui.Tip(model.Editor.RedoLabel is { } again ? $"Redo {again.ToLowerInvariant()}" : "Redo", "Ctrl Y"));
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); var glyph = button.Content as IconGlyph ?? (button.Content as Grid)?.Children.OfType<IconGlyph>().FirstOrDefault(); if (glyph is not null) glyph.TintKey = selected ? "RailIconOn" : "RailIcon"; }
         Rail(timelineRail, !weekMode && !settingsMode && !notesMode);
         Rail(overviewTab, !settingsMode && weekMode);

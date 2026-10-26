@@ -132,6 +132,30 @@
       "w": 1180,
       "x": 0,
       "y": 8300
+    },
+    "PillMerge.dc.html": {
+      "h": 1910,
+      "is_interactive": true,
+      "title": "Pill: playing and switching together (proposals)",
+      "w": 1180,
+      "x": 1280,
+      "y": 8400
+    },
+    "PillHorizontal.dc.html": {
+      "h": 2640,
+      "is_interactive": true,
+      "title": "A horizontal pill (proposals)",
+      "w": 1180,
+      "x": 1280,
+      "y": 10500
+    },
+    "PillHorizontalA.dc.html": {
+      "h": 1670,
+      "is_interactive": true,
+      "title": "The horizontal pill, as agreed",
+      "w": 1180,
+      "x": 1280,
+      "y": 13300
     }
   },
   "createdOnFiles": {
@@ -252,6 +276,24 @@
       "w": 520,
       "x": -600,
       "y": 8340
+    },
+    "n19": {
+      "text": "Exploring the play or pause tile and the Accounts button as one background, so changing account is not a trip somewhere else. Three ways, each in every state with a close-up: A one soft well, B one surface in the state colour split by a hairline, C a well that also holds your last three accounts as dots for one-click switching. In each the break moves to the foot. Drawings only, nothing built. Switch Light and Dark in the tweaks.",
+      "w": 520,
+      "x": 1280,
+      "y": 8190
+    },
+    "n20": {
+      "text": "What a horizontal pill could look like, with the account's state dot, full name and a chevron that drops the list from it, as the earlier horizontal pill did. Three arrangements: A the play tile and the account selector on one well, B the clock then a drop-down field, C a compact two-line one. Each in every state and with the list open, in Light and Dark. The cost: it would not match the rail, so opening the dashboard would change shape. Drawings only, nothing built.",
+      "w": 520,
+      "x": 1280,
+      "y": 10290
+    },
+    "n21": {
+      "text": "Option A, with the changes asked for: the day clock first on the left, then the play tile and the account on one well, then the break 14 pixels from the pill's end. The account's box is a fixed width and a long name slides on hover. Below, how the choice is offered: a step in Getting started, and Settings, Appearance. This is what is being built.",
+      "w": 520,
+      "x": 1280,
+      "y": 13110
     }
   },
   "order": [
@@ -271,7 +313,10 @@
     "PillSoft.dc.html",
     "Round7.dc.html",
     "Themes.dc.html",
-    "Store.dc.html"
+    "Store.dc.html",
+    "PillMerge.dc.html",
+    "PillHorizontal.dc.html",
+    "PillHorizontalA.dc.html"
   ],
   "pages": [],
   "title": "Vertical pill and dashboard mock"

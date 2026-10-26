@@ -273,7 +273,10 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         day = day.Date;
         var saved = Engine.Sessions.Where(s => s.Day == day && BreakAccount.Is(s.Account)).Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
-        return saved + Engine.ActiveElapsedOn(day, includeBreak: true) - Engine.ActiveElapsedOn(day);
+        // The two readings of the running block are taken a moment apart, so with no break running they can differ by a few milliseconds the wrong way,
+        // which showed as -00:00. Time on a break is never below nothing.
+        var running = Engine.ActiveElapsedOn(day, includeBreak: true) - Engine.ActiveElapsedOn(day);
+        return saved + (running > TimeSpan.Zero ? running : TimeSpan.Zero);
     }
     public event PropertyChangedEventHandler? PropertyChanged;
     public void ToggleAccount(string name)
@@ -495,6 +498,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Whether the Week overview shows its table in place of the chart. Kept for the session only.</summary>
     public bool WeekAsTable { get; private set; }
     public void SetWeekAsTable(bool table) { if (WeekAsTable == table) return; WeekAsTable = table; Notify(); }
+    /// <summary>Whether the timeline's Notes card lists the day's meetings instead of its notes. Kept for the session, as the week's Chart and Table are.</summary>
+    public bool NotesCardShowsMeetings { get; private set; }
+    public void SetNotesCardShowsMeetings(bool meetings) { if (NotesCardShowsMeetings == meetings) return; NotesCardShowsMeetings = meetings; Notify(); }
     /// <summary>Asked for by a day in the week chart: the dashboard shows that day on the Timeline page.</summary>
     public event Action<DateTime>? OpenDayRequested;
     public void OpenDayInTimeline(DateTime day) { GoToDate(day); OpenDayRequested?.Invoke(day.Date); }
@@ -659,7 +665,21 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>Deletes the given entries as one undoable edit.</summary>
     public bool DeleteEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Delete(rows));
+    /// <summary>Moves the end of the one selected block by whole minutes (the + and - keys), keeping its start, as the Length box does. Anything else selected is explained in the toast, and nothing selected does nothing.</summary>
+    public bool NudgeSelection(int minutes)
+    {
+        var blocks = SelectedBlocks;
+        if (blocks.Count == 0) return false;
+        if (blocks.Count > 1) { Refuse("Select one block"); return false; }
+        var block = blocks[0];
+        if (block.IsGroup || block.Row is null) { Refuse("Unmerge to resize"); return false; }
+        var end = block.End.AddMinutes(minutes);
+        if (end <= block.Start) { Refuse("Block can’t be shorter"); return false; }
+        if (end > block.Start.Date.AddDays(1)) { Refuse("Can’t pass midnight"); return false; }
+        return EditEntry(block.Row, block.Row.Account, block.Start, end, block.Note);
+    }
     public bool UndoEdit() { var done = ChangeLog(Editor.Undo); if (done) { Notice = "Undone"; Notify(); } return done; }
+    public bool RedoEdit() { var done = ChangeLog(Editor.Redo); if (done) { Notice = "Redone"; Notify(); } return done; }
     public bool UngroupEntries(string id) { var done = ChangeLog(() => Editor.Ungroup(id)); if (done) SayDone("Unmerged"); return done; }
     /// <summary>Exports the week or the whole month that the given day falls in, or the one being viewed when none is given.</summary>
     public bool ExportWeek(bool wholeMonth = false, DateTime? day = null)
@@ -734,6 +754,17 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool DashboardOnTop => preferences.DashboardOnTop;
     public void SetPillOnTop(bool on) { preferences = preferences with { PillOnTop = on }; Save(); Notify(); }
     public void SetDashboardOnTop(bool on) { preferences = preferences with { DashboardOnTop = on }; Save(); Notify(); }
+    /// <summary>Whether the pill is the horizontal one (the day clock, then the play tile and the account's name, then the break) rather than the vertical one. Saved as the appearance line pillshape=horizontal; no line means vertical.</summary>
+    public bool PillHorizontal => preferences.Extras?.AppearanceLines.Contains(PillShapeLine + "horizontal") == true;
+    private const string PillShapeLine = "pillshape=";
+    public void SetPillHorizontal(bool horizontal)
+    {
+        if (PillHorizontal == horizontal) return;
+        var extras = preferences.Extras ?? SettingsExtras.Empty;
+        var lines = extras.AppearanceLines.Where(l => !l.StartsWith(PillShapeLine, StringComparison.Ordinal)).ToList();
+        if (horizontal) lines.Add(PillShapeLine + "horizontal");
+        preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
+    }
     public int? PillScalePercent => preferences.PillScale;
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
     public bool Tooltips => preferences.Tooltips;

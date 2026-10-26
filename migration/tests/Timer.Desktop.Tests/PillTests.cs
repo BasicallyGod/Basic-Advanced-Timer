@@ -92,7 +92,7 @@ public sealed class PillTests
             var over = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), pill)!.Value;
             pill.MouseMoveUntil(over, () => ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A > rest.A);
             Assert.True(((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A > rest.A); // A stronger tint under the pointer.
-            Assert.Equal(StatusFace.TileSize, tile.Bounds.Width, 0.5); // And no change of size.
+            Assert.Equal(StatusFace.WellTileWidth, tile.Bounds.Width, 0.5); // And no change of size.
             pill.MouseMove(new Point(2, 2)); Assert.Equal(rest, ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color);
         }
         finally { pill.Close(); }
@@ -260,7 +260,7 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void ThePillHoldsTheThreeSquareControlsWithTheBreakUnderThePrimaryControlAndTheAccountsButtonAtTheFoot()
+    public void ThePrimaryControlAndTheAccountsButtonShareOneWellWithTheBreakApartBelowItAtTheFoot()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
         try
@@ -268,22 +268,31 @@ public sealed class PillTests
             Assert.Equal(316, PillWindow.PillHeight); Assert.Equal(PillWindow.PillHeight, Find<Border>(pill, "PillSurface").Height);
             double Y(Control c) => c.TranslatePoint(default, pill)!.Value.Y;
             var primary = Find<Button>(pill, "PillPause"); var brk = Find<Button>(pill, "PillBreak");
-            Assert.True(Y(primary) < Y(brk)); Assert.True(Y(brk) < Y(pill.AccountsButton)); // Timer, primary control, break, accounts.
+            Assert.True(Y(primary) < Y(pill.AccountsButton)); Assert.True(Y(pill.AccountsButton) < Y(brk)); // Timer, primary control, accounts, then the break at the foot.
             var surface = Find<Border>(pill, "PillSurface"); var bottom = surface.TranslatePoint(new Point(0, surface.Bounds.Height), pill)!.Value.Y;
-            Assert.True(Y(pill.AccountsButton) + pill.AccountsButton.Bounds.Height * pill.Scale <= bottom + 0.5, $"accounts bottom {Y(pill.AccountsButton) + pill.AccountsButton.Bounds.Height * pill.Scale} card bottom {bottom} scale {pill.Scale}"); // Everything fits inside the card.
-            // The three controls are one size and shape, with the same room on both sides and a gap between them, so none crowds the card's edge.
-            Border Tile(Control c) => c.GetVisualDescendants().OfType<Border>().First(x => x.Width == StatusFace.TileSize);
-            var tiles = new[] { Tile(primary), Tile(brk), Tile(pill.AccountsButton) };
-            foreach (var t in tiles)
+            Assert.True(Y(brk) + brk.Bounds.Height * pill.Scale <= bottom + 0.5, $"break bottom {Y(brk) + brk.Bounds.Height * pill.Scale} card bottom {bottom} scale {pill.Scale}"); // Everything fits inside the card.
+            // The two share one well, 54 by 98: the tiles 46 by 44 inside it, 4 from its edge and 2 apart, so it holds what the two tiles and their gap held before.
+            var well = Find<Border>(pill, "PillWell");
+            Assert.Equal(StatusFace.WellWidth, well.Bounds.Width, 0.5); Assert.Equal(2 * StatusFace.WellPadding + 2 * StatusFace.TileSize + StatusFace.WellGap, well.Bounds.Height, 0.5);
+            Assert.Equal(StatusFace.WellRadius, well.CornerRadius.TopLeft); Assert.InRange(((Avalonia.Media.ISolidColorBrush)well.Background!).Color.A, 8, 24); // A soft background, not a fill.
+            Border TileIn(Control c, double width) => c.GetVisualDescendants().OfType<Border>().First(x => x.Width == width);
+            var primaryTile = Find<Border>(pill, "PillPrimaryTile"); var accountsTile = TileIn(pill.AccountsButton, StatusFace.WellTileWidth); var breakTile = TileIn(brk, StatusFace.TileSize);
+            foreach (var t in new[] { primaryTile, accountsTile })
             {
-                Assert.Equal(StatusFace.TileSize, t.Bounds.Width); Assert.Equal(StatusFace.TileSize, t.Bounds.Height); Assert.Equal(StatusFace.TileRadius, t.CornerRadius.TopLeft);
-                var left = t.TranslatePoint(default, surface)!.Value.X; var right = surface.Bounds.Width - (left + t.Bounds.Width);
-                Assert.InRange(left, 12, 16); Assert.True(Math.Abs(right - left) <= 0.5, $"left {left} right {right}"); // Room for the focus ring, centred.
+                Assert.Equal(StatusFace.WellTileWidth, t.Bounds.Width); Assert.Equal(StatusFace.TileSize, t.Bounds.Height); Assert.Equal(StatusFace.TileRadius, t.CornerRadius.TopLeft);
+                Assert.Equal(StatusFace.WellPadding, t.TranslatePoint(default, well)!.Value.X, 0.5);
             }
+            Assert.Equal(StatusFace.WellPadding, primaryTile.TranslatePoint(default, well)!.Value.Y, 0.5);
+            Assert.Equal(StatusFace.WellPadding + StatusFace.TileSize + StatusFace.WellGap, accountsTile.TranslatePoint(default, well)!.Value.Y, 0.5);
+            // The break is its own 44 pixel tile, with the same room either side as before, and a gap under the well.
+            Assert.Equal(StatusFace.TileSize, breakTile.Bounds.Width); Assert.Equal(StatusFace.TileRadius, breakTile.CornerRadius.TopLeft);
+            var left = breakTile.TranslatePoint(default, surface)!.Value.X; var right = surface.Bounds.Width - (left + breakTile.Bounds.Width);
+            Assert.True(Math.Abs(right - left) <= 0.5, $"left {left} right {right}");
+            var wellLeft = well.TranslatePoint(default, surface)!.Value.X; Assert.True(Math.Abs((surface.Bounds.Width - (wellLeft + well.Bounds.Width)) - wellLeft) <= 0.5); // The well is centred too.
             double Top(Control c) => c.TranslatePoint(default, surface)!.Value.Y;
-            Assert.InRange(Top(tiles[1]) - (Top(tiles[0]) + StatusFace.TileSize), 8, 14); Assert.InRange(Top(tiles[2]) - (Top(tiles[1]) + StatusFace.TileSize), 8, 14);
-            var room = surface.Bounds.Height - (Top(tiles[2]) + StatusFace.TileSize);
-            Assert.True(room >= 12, $"room under the accounts button {room}");
+            Assert.InRange(Top(breakTile) - (Top(well) + well.Bounds.Height), 8, 14);
+            var room = surface.Bounds.Height - (Top(breakTile) + StatusFace.TileSize);
+            Assert.True(room >= 12, $"room under the break {room}");
         }
         finally { pill.Close(); }
     }
@@ -314,14 +323,15 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void TheRailsBreakIsThePillsBreakUnderThePrimaryControlWithTheAccountsButtonBelowIt()
+    public void TheRailsBreakIsThePillsBreakAtTheFootOfTheWellOfThePrimaryControlAndTheAccountsButton()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
         try
         {
             double Y(Control c) => c.TranslatePoint(default, window)!.Value.Y;
             var brk = Find<Button>(window, "DashboardBreak"); var accounts = Find<Button>(window, "RailAccounts");
-            Assert.True(Y(Find<Button>(window, "RailPause")) < Y(brk)); Assert.True(Y(brk) < Y(accounts)); Assert.True(Y(accounts) < Y(Find<Button>(window, "TimelineTab"))); // As on the pill.
+            Assert.True(Y(Find<Button>(window, "RailPause")) < Y(accounts)); Assert.True(Y(accounts) < Y(brk)); Assert.True(Y(brk) < Y(Find<Button>(window, "TimelineTab"))); // As on the pill.
+            Assert.NotNull(Find<Border>(window, "RailWell")); // The same well.
             Assert.True(Y(brk) < Y(Find<Button>(window, "DashboardDay"))); // And no longer at the foot with the flag.
             var tile = brk.GetVisualDescendants().OfType<Border>().Single(b => b.Width == StatusFace.TileSize); Assert.InRange(((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A, 30, 60);
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.Equal(255, ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A);

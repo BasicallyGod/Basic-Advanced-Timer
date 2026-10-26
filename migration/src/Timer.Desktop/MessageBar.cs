@@ -28,7 +28,7 @@ public sealed class MessageBar : Border
         // A failed save stays until a save works, so the cross hides it only until it changes.
         offer = Ui.Ctl("ContinuePrevious", "", null, "Continue earlier block", () => model.ContinuePrevious(), small: true);
         offer.Classes.Add("accentOutline"); offer.Padding = new Thickness(12, 0);
-        undo = Ui.Ctl("UndoMessage", "Undo", null, "Undo the last change", () => model.UndoEdit(), small: true); undo.Classes.Add("accentOutline"); undo.Padding = new Thickness(12, 0);
+        undo = Ui.Ctl("UndoMessage", "Undo", null, "Undo the last change", () => model.UndoEdit(), small: true, key: "Ctrl Z"); undo.Classes.Add("accentOutline"); undo.Padding = new Thickness(12, 0);
         var close = Ui.IconButton(IconKind.Close, "Dismiss", "DismissMessage", () => { dismissedError = model.LastError; dismissedOffer = model.ContinuePreviousText; model.ExpireMessages(); Sync(); });
         var glyphs = new Grid { Width = 28, Height = 28 }; glyphs.Children.Add(tick); glyphs.Children.Add(mark); icon.Child = new Viewbox { Child = glyphs };
         detail.Classes.Add("muted");

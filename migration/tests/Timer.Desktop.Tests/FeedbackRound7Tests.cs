@@ -74,7 +74,7 @@ public sealed class FeedbackRound7Tests
         var model = Model(); model.Notes.AddNote("Tidy the shared drive", null, null); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Assert.Equal("Notes", Find<TextBlock>(window, "NotesTitle").Text);
+            Assert.Equal("Notes", Find<Button>(window, "CardKindNotes").Content); // The title is the switch between notes and meetings, with no count.
             var note = model.Notes.All.Single(); var tick = Find<Button>(window, "NoteDone_" + note.Id); var text = Find<TextBlock>(window, "NoteText_" + note.Id); var remove = Find<Button>(window, "NoteRemove_" + note.Id);
             double MidY(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
             Assert.InRange(Math.Abs(MidY(text) - MidY(tick)), 0, 1.5); Assert.InRange(Math.Abs(MidY(remove) - MidY(tick)), 0, 1.5);
