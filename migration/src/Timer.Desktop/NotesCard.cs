@@ -21,7 +21,8 @@ public sealed class NotesCard : Border
     private enum Form { None, Note, Meeting }
     private readonly TimerModel model;
     private NotesModel Notes => model.Notes;
-    private readonly TextBlock title = new() { Text = "Notes", FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Name = "NotesTitle" };
+    // The card's title is a switch between the day's notes and its meetings, rebuilt when the choice changes.
+    private readonly ContentControl title = new() { Name = "NotesTitle", VerticalAlignment = VerticalAlignment.Center };
     private readonly Button addNote, addMeeting;
     private readonly ContentControl formHost = new() { Name = "NotesForm" };
     private readonly StackPanel list = new() { Spacing = 8, Name = "NotesList" };
@@ -40,7 +41,8 @@ public sealed class NotesCard : Border
         Classes.Add("dayCard");
         addNote = Ui.Ctl("AddNote", "Add note", IconKind.Plus, "Add note", () => Open(Form.Note), small: true);
         addMeeting = Ui.Ctl("AddMeeting", "Add meeting", IconKind.Plus, "Add meeting", () => Open(Form.Meeting), small: true);
-        var header = Ui.Grid("*,Auto"); Ui.Put(header, title);
+        DrawTitle();
+        var header = Ui.Grid("*,Auto"); title.HorizontalAlignment = HorizontalAlignment.Left; Ui.Put(header, title);
         var buttons = Ui.Horizontal(addNote, addMeeting); buttons.Spacing = 6; Ui.Put(header, buttons, 1);
         var scroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, Name = "NotesScroll" };
         var body = Ui.Grid("*", "Auto,Auto,*"); body.RowSpacing = 10;
@@ -55,7 +57,7 @@ public sealed class NotesCard : Border
     // ---- The list ----
 
     private string Signature() => string.Join("|", Notes.ForDay(model.SelectedDate).Select(n => $"{n.Id};{n.Day:yyyyMMdd};{n.At};{n.End};{n.Text};{n.Done};{n.SeriesId};{n.HasDate}"))
-        + $"#{model.SelectedDate:yyyyMMdd}#{(Notes.All.Any(n => Notes.IsLate(n)) ? model.Engine.Now.ToString("HHmm") : "")}#{model.ReviewAccounts.Count}";
+        + $"#{model.NotesCardShowsMeetings}#{model.SelectedDate:yyyyMMdd}#{(Notes.All.Any(n => Notes.IsLate(n)) ? model.Engine.Now.ToString("HHmm") : "")}#{model.ReviewAccounts.Count}";
 
     /// <summary>Redraws the list if what it shows has changed.</summary>
     public void Sync()
@@ -63,14 +65,26 @@ public sealed class NotesCard : Border
         var signature = Signature();
         if (signature == shown) return;
         shown = signature;
-        var items = Notes.ForDay(model.SelectedDate);
-        
+        DrawTitle();
+        var meetings = model.NotesCardShowsMeetings;
+        var items = Notes.ForDay(model.SelectedDate).Where(n => NotesModel.IsMeeting(n) == meetings).ToList();
         list.Children.Clear();
         if (items.Count == 0)
         {
-            var empty = new TextBlock { Text = "Nothing for this day. Add a note or a meeting.", FontSize = 13, TextWrapping = TextWrapping.Wrap, Name = "NotesEmpty" }; empty.Classes.Add("muted"); list.Children.Add(empty);
+            var empty = new TextBlock { Text = meetings ? "No meetings this day. Add one." : "No notes for this day. Add one.", FontSize = 13, TextWrapping = TextWrapping.Wrap, Name = "NotesEmpty" }; empty.Classes.Add("muted"); list.Children.Add(empty);
         }
         foreach (var note in items) list.Children.Add(Row(note));
+    }
+
+    /// <summary>The card's title: Notes and Meetings as one switch, the same as the Notes page's, with the shown one filled.</summary>
+    private void DrawTitle()
+    {
+        var meetings = model.NotesCardShowsMeetings;
+        var notesChoice = NotesPage.Seg("CardKindNotes", "Notes", !meetings, () => model.SetNotesCardShowsMeetings(false));
+        var meetingsChoice = NotesPage.Seg("CardKindMeetings", "Meetings", meetings, () => model.SetNotesCardShowsMeetings(true));
+        // A little under the page's switch, to sit level with the small buttons beside it.
+        notesChoice.Height = meetingsChoice.Height = 26; notesChoice.FontSize = meetingsChoice.FontSize = 13;
+        var track = NotesPage.Switch(notesChoice, meetingsChoice); track.Height = 32; title.Content = track;
     }
 
     private Control Row(DayNote note)
@@ -140,6 +154,7 @@ public sealed class NotesCard : Border
     private void OnEditMeeting(long id)
     {
         if (Notes.Find(id) is not { } meeting || !NotesModel.IsMeeting(meeting)) return;
+        model.SetNotesCardShowsMeetings(true);
         form = Form.Meeting; editing = id; formDay = meeting.Day.Date;
         var account = Notes.AccountOf(meeting);
         draft = Notes.Text(meeting); draftAccount = account; draftReminder = null; startText = meeting.At!.Value.ToString(@"hh\:mm"); endText = meeting.End!.Value.ToString(@"hh\:mm");
@@ -150,6 +165,8 @@ public sealed class NotesCard : Border
     {
         // Pressing the button of the form that is open closes it; any other press opens that form, empty.
         if (form == kind && editing is null && !fresh) { Close(); return; }
+        // The list shows what was added, so opening a form turns the switch to its kind.
+        model.SetNotesCardShowsMeetings(kind == Form.Meeting);
         form = kind; editing = null; formDay = model.SelectedDate.Date; scope = null; CloseReminder(); DrawOverlay();
         draft = ""; draftAccount = null; draftReminder = null; startText = "12:00"; endText = "12:30"; draftRepeat = RepeatChoice.None;
         DrawForm();

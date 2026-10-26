@@ -77,6 +77,10 @@ a.nav{text-decoration:none}
 .nav.open{background:var(--soft)}
 
 .small{height:30px;border-radius:10px;font-size:13px;padding:0 11px}
+.cardSeg{display:flex;gap:2px;border:1px solid var(--line);border-radius:999px;height:32px;box-sizing:border-box;padding:3px;background:var(--card2);flex-shrink:0}
+.cardSegB{border:0;border-radius:999px;background:transparent;font:500 13px 'Inter',system-ui,sans-serif;color:var(--muted);padding:0 14px;cursor:pointer}
+.cardSegB:hover{background:rgba(110,120,150,.14);color:var(--ink)}
+.cardSegB.on,.cardSegB.on:hover{background:var(--accent);color:var(--accentInk)}
 .ctl.primary{background:var(--accent);border-color:var(--accent);color:var(--accentInk)}
 .ctl.primary:hover{background:var(--accent);filter:brightness(1.06)}
 a.ctl{text-decoration:none}
@@ -417,7 +421,7 @@ svg.ri{display:block;fill:currentColor}
 
       <section aria-label="Notes for the day" style="position: relative; flex: 1 1 0; min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 10px">
         <div style="display: flex; align-items: center; justify-content: space-between">
-          <div style="font-size: 15px; font-weight: 600">Notes</div>
+          <div class="cardSeg" role="group" aria-label="Show notes or meetings"><button type="button" class="{{cardNotesCls}}" onClick="{{showNotesView}}" aria-pressed="{{cardNotesOn}}">Notes</button><button type="button" class="{{cardMeetingsCls}}" onClick="{{showMeetingsView}}" aria-pressed="{{cardMeetingsOn}}">Meetings</button></div>
 <div style="display: flex; gap: 6px">
             <button class="ctl small" onClick="{{openNote}}" aria-expanded="{{noteOpen}}" style="{{noteBtnStyle}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add note</button>
             <button class="ctl small" onClick="{{openMeetingForm}}" aria-expanded="{{meetOpen}}" style="{{meetBtnStyle}}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add meeting</button>
@@ -564,6 +568,7 @@ class Component extends DCLogic {
       draftAcct: -1,
       draftRem: null,
       kind: 'note',
+      cardView: 'notes',
       editId: null,
       mS: '12:00',
       mE: '12:30',
@@ -860,13 +865,13 @@ class Component extends DCLogic {
     const openMeeting = (id) => {
       const n = this.state.notes.find((q) => q.id === id);
       if (!n || !n.meet) return;
-      this.setState({ composerOpen: true, kind: 'meeting', editId: id, draft: n.text, draftAcct: n.acct, draftRem: n.rem, mS: hm(n.meet.s), mE: hm(n.meet.e), mRepeat: n.repeat, popOpen: false, repDd: false, info: '', infoBad: false, scopeOpen: false });
+      this.setState({ cardView: 'meetings', composerOpen: true, kind: 'meeting', editId: id, draft: n.text, draftAcct: n.acct, draftRem: n.rem, mS: hm(n.meet.s), mE: hm(n.meet.e), mRepeat: n.repeat, popOpen: false, repDd: false, info: '', infoBad: false, scopeOpen: false });
     };
     const openComposer = (kind) => {
       const st = this.state;
       if (st.composerOpen && st.kind === kind && !st.editId) { this.setState({ composerOpen: false, popOpen: false, repDd: false, info: '', scopeOpen: false }); return; }
       const fresh = !st.composerOpen || !!st.editId;
-      this.setState({ composerOpen: true, kind: kind, editId: null, popOpen: false, repDd: false, info: '', infoBad: false, scopeOpen: false, ...(fresh ? { draft: '', draftAcct: -1, draftRem: null, mS: '12:00', mE: '12:30', mRepeat: 'none' } : {}) });
+      this.setState({ cardView: kind === 'meeting' ? 'meetings' : 'notes', composerOpen: true, kind: kind, editId: null, popOpen: false, repDd: false, info: '', infoBad: false, scopeOpen: false, ...(fresh ? { draft: '', draftAcct: -1, draftRem: null, mS: '12:00', mE: '12:30', mRepeat: 'none' } : {}) });
     };
     const applyMeeting = (scope) => {
       const st = this.state;
@@ -877,7 +882,8 @@ class Component extends DCLogic {
         info: scope === 'one' ? 'Changed for this day only. The series carries on as before.' : 'Meeting saved.', infoBad: false
       });
     };
-    const notes = visible.map((n) => ({
+    const showMeetings = this.state.cardView === 'meetings';
+    const notes = visible.filter((n) => !!n.meet === showMeetings).map((n) => ({
       id: n.id,
       text: n.text,
       isMeet: !!n.meet,
@@ -1098,6 +1104,8 @@ class Component extends DCLogic {
       onNote: (e) => { if (cur.isGroup) this.setState({ gnotes: { ...this.state.gnotes, [cur.grp]: e.target.value }, cardNote: '' }); else patch((b) => ({ ...b, note: e.target.value })); },
       notes: notes,
       noteCount: visible.length,
+      cardNotesCls: 'cardSegB' + (showMeetings ? '' : ' on'), cardMeetingsCls: 'cardSegB' + (showMeetings ? ' on' : ''), cardNotesOn: !showMeetings, cardMeetingsOn: showMeetings,
+      showNotesView: () => this.setState({ cardView: 'notes' }), showMeetingsView: () => this.setState({ cardView: 'meetings' }),
       composerOpen: this.state.composerOpen,
       hasDraftRemind: !!this.state.draftRem,
       draftRemind: remText(this.state.draftRem),

@@ -97,4 +97,39 @@ public sealed class FeedbackRound10Tests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheNotesCardSwitchesBetweenTheDaysNotesAndItsMeetingsAndOpeningAFormFollowsIt()
+    {
+        var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            model.Notes.AddNote("Tidy the shared drive", null, null); model.Notes.AddMeeting(model.SelectedDate, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Team sync", null, RepeatChoice.None); Settle(window);
+            bool Has(string prefix) => window.GetVisualDescendants().OfType<Button>().Any(b => b.Name?.StartsWith(prefix) == true);
+            Assert.False(model.NotesCardShowsMeetings);
+            Assert.True(Has("NoteDone_")); Assert.False(Has("NoteEdit_")); // Notes first: the note, not the meeting.
+            Click(window, "CardKindMeetings");
+            Assert.True(model.NotesCardShowsMeetings); Assert.True(Has("NoteEdit_")); Assert.False(Has("NoteDone_"));
+            Click(window, "CardKindNotes");
+            Assert.True(Has("NoteDone_")); Assert.False(Has("NoteEdit_"));
+            Click(window, "AddMeeting"); // Adding a meeting turns the switch to meetings, so what is added shows.
+            Assert.True(model.NotesCardShowsMeetings);
+            Click(window, "AddNote");
+            Assert.False(model.NotesCardShowsMeetings);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void AnEmptyDayTellsYouWhichKindIsMissing()
+    {
+        var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            Assert.Equal("No notes for this day. Add one.", Find<TextBlock>(window, "NotesEmpty").Text);
+            Click(window, "CardKindMeetings");
+            Assert.Equal("No meetings this day. Add one.", Find<TextBlock>(window, "NotesEmpty").Text);
+        }
+        finally { window.Close(); }
+    }
 }

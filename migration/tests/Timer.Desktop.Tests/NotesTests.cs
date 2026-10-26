@@ -221,7 +221,7 @@ public sealed class NotesTests
         try
         {
             model.Notes.AddMeeting(Day, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Stand-up", null, RepeatChoice.Day); Settle(window);
-            var today = model.Notes.MeetingsOn(Day).Single();
+            var today = model.Notes.MeetingsOn(Day).Single(); Click(window, "CardKindMeetings"); // Meetings are on the card's other side.
             Click(window, "NoteRemove_" + today.Id); Assert.NotNull(Find<Border>(window, "ScopeQuestion")); Click(window, "ScopeAll");
             Assert.Empty(model.Notes.All); Assert.Equal(0, Listed(window));
         }
