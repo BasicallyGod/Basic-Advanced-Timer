@@ -156,6 +156,14 @@
       "w": 1180,
       "x": 1280,
       "y": 13300
+    },
+    "AccountsAlongside.dc.html": {
+      "h": 4335,
+      "is_interactive": true,
+      "title": "Accounts beside the pages (proposals)",
+      "w": 1230,
+      "x": 1280,
+      "y": 15100
     }
   },
   "createdOnFiles": {
@@ -294,6 +302,12 @@
       "w": 520,
       "x": 1280,
       "y": 13110
+    },
+    "n22": {
+      "text": "Today the account list covers the whole page behind a dim cover, so a note or the timeline is lost while you choose. Three ways to keep both in view: A the same panel docked beside the rail, so the page reflows into what is left; B a slim always-visible strip of the accounts that opens into A; C a recording chip in the header that hangs the list beneath it. The last section says how Timeline, Notes and Week react to the room they have. Drawings only, nothing built. Switch Light or Dark in the Tweaks.",
+      "w": 520,
+      "x": 1280,
+      "y": 14910
     }
   },
   "order": [
@@ -316,7 +330,8 @@
     "Store.dc.html",
     "PillMerge.dc.html",
     "PillHorizontal.dc.html",
-    "PillHorizontalA.dc.html"
+    "PillHorizontalA.dc.html",
+    "AccountsAlongside.dc.html"
   ],
   "pages": [],
   "title": "Vertical pill and dashboard mock"

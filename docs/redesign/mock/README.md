@@ -7,3 +7,5 @@ Main is the Timeline page, Pill the pill states, Week the Week overview, Setting
 Themes holds five theme proposals (Slate, Midnight, Sage, Mono and a Hawthorn-inspired one), each with its own account colours, drawn on the Timeline and Week layouts and on the pill in every state. They are not built yet.
 
 Store holds a draft Microsoft Store listing: every Partner Center field written out, five draft 1920 by 1080 screenshots (real renders with demo data, to be retaken on Windows) and the art tiles in `store/`.
+
+AccountsAlongside draws three ways to keep the account list and the pages in view together (a docked panel, a slim strip that opens into it, and a recording chip in the header that hangs the list beneath it) and a table of how Timeline, Notes and Week react to the room they have. A proposal, nothing built.
