@@ -123,7 +123,7 @@ public sealed class StatusFace : StackPanel
     public Button AccountsButton { get; }
     public BreakButton Break { get; }
     private readonly Border accountsTile = new() { Width = StatusFace.WellTileWidth, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius), Background = Brushes.Transparent, Child = new AccountsGlyph { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
-    private bool accountsOpen, hoverAccounts;
+    private bool accountsOpen, hoverAccounts; private double accountsAmount;
     private readonly Border well = new() { Width = StatusFace.WellWidth, CornerRadius = new CornerRadius(StatusFace.WellRadius), Padding = new Thickness(StatusFace.WellPadding), Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
     /// <summary>The soft background the primary control and the Accounts button share.</summary>
     public Border Well => well;
@@ -198,15 +198,17 @@ public sealed class StatusFace : StackPanel
     }
 
     /// <summary>Marks the accounts button as pressed while the list is open, and words its tooltip for what pressing it will do.</summary>
-    public void SetAccountsOpen(bool open)
+    public void SetAccountsOpen(bool open, bool wash = true)
     {
-        accountsOpen = open; PaintAccountsTile();
+        accountsOpen = open; if (wash) accountsAmount = open ? 1 : 0; PaintAccountsTile();
         var tip = open ? "Close the accounts" : "Accounts";
         ToolTip.SetTip(AccountsButton, tip);
         // The horizontal pill's button also says which account it shows, since its name can be cut short.
         Avalonia.Automation.AutomationProperties.SetName(AccountsButton, Horizontal && selectorWords.Length > 0 ? tip + ", " + selectorWords : tip);
         if (Horizontal) { selectorChevron.Expanded = open; selectorChevron.InvalidateVisual(); }
     }
+    /// <summary>How much of the blue wash the accounts button wears, 0 to 1, while the dashboard's panel eases out or away, so the button and the panel move as one.</summary>
+    public void SetAccountsAmount(double amount) { accountsAmount = Math.Clamp(amount, 0, 1); PaintAccountsTile(); }
     // Bare on the well at rest, the theme's hover under the pointer, and a blue wash while the list is open.
     private void PaintAccountsTile()
     {
@@ -215,7 +217,7 @@ public sealed class StatusFace : StackPanel
         well.Background = new SolidColorBrush(SoftTint.WithAlpha(ink, dark ? .07 : .055));
         IBrush rest = Brushes.Transparent;
         var tile = Horizontal ? selectorTile : accountsTile;
-        tile.Background = accountsOpen ? new SolidColorBrush(SoftTint.WithAlpha(accent, dark ? .22 : .14))
+        tile.Background = accountsAmount > 0 ? new SolidColorBrush(SoftTint.WithAlpha(accent, (dark ? .22 : .14) * accountsAmount))
             : hoverAccounts ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var hover) && hover is IBrush hoverBrush ? hoverBrush : rest) : rest;
         tile.BoxShadow = accountsFocus ? SoftTint.FocusRing(tile) : default;
     }

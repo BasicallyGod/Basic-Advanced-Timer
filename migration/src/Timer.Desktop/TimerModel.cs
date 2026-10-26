@@ -765,6 +765,20 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (horizontal) lines.Add(PillShapeLine + "horizontal");
         preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
     }
+    /// <summary>Whether the dashboard's account panel was left open, and whether it was docked beside the page rather than floating over it. Saved as the appearance lines accountsdock=open and accountspin=off; no line means shut and docked.</summary>
+    public bool AccountsDockOpen => preferences.Extras?.AppearanceLines.Contains(AccountsDockLine + "open") == true;
+    public bool AccountsDocked => preferences.Extras?.AppearanceLines.Contains(AccountsPinLine + "off") != true;
+    private const string AccountsDockLine = "accountsdock=", AccountsPinLine = "accountspin=";
+    public void SetAccountsDockOpen(bool open) => SetAppearanceFlag(AccountsDockLine, open ? "open" : null, AccountsDockOpen != open);
+    public void SetAccountsDocked(bool docked) => SetAppearanceFlag(AccountsPinLine, docked ? null : "off", AccountsDocked != docked);
+    private void SetAppearanceFlag(string prefix, string? value, bool changed)
+    {
+        if (!changed) return;
+        var extras = preferences.Extras ?? SettingsExtras.Empty;
+        var lines = extras.AppearanceLines.Where(l => !l.StartsWith(prefix, StringComparison.Ordinal)).ToList();
+        if (value is not null) lines.Add(prefix + value);
+        preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save();
+    }
     public int? PillScalePercent => preferences.PillScale;
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
     public bool Tooltips => preferences.Tooltips;

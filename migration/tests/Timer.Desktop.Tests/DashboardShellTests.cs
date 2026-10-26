@@ -68,33 +68,37 @@ public sealed class DashboardShellTests
     }
 
     [AvaloniaFact]
-    public void TheAccountsButtonTogglesTheListAndChoosingAnAccountPutsItAway()
+    public void TheAccountsButtonTogglesTheListAndChoosingAnAccountPutsAFloatingOneAway()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             Assert.False(window.AccountsOpen);
-            Click(Find<Button>(window, "RailAccounts")); Assert.True(window.AccountsOpen);
+            Click(Find<Button>(window, "RailAccounts")); Assert.True(window.AccountsOpen); Assert.True(window.AccountsDockedNow); // Docked by default.
             Click(Find<Button>(window, "RailAccounts")); Assert.False(window.AccountsOpen);
-            Click(Find<Button>(window, "RailAccounts")); Assert.True(window.AccountsOpen);
-            Settle(window);
-            Click(Find<Button>(window, "Account1")); Settle(window); // Choosing an account records to it and puts the list away.
-            Assert.Equal("Account two", model.ActiveAccount); Assert.False(window.AccountsOpen);
+            Click(Find<Button>(window, "RailAccounts")); Settle(window);
+            Click(Find<Button>(window, "Account1")); Settle(window);
+            Assert.Equal("Account two", model.ActiveAccount); Assert.True(window.AccountsOpen); // Docked, so it stays for the next choice.
+            Click(Find<Button>(window, "RailPinAccounts")); Settle(window); // Float it over the page.
+            Assert.False(window.AccountsDockedNow); Assert.True(window.AccountsOpen);
+            Click(Find<Button>(window, "Account0")); Settle(window); // A floating list is put away by choosing an account.
+            Assert.Equal("Account one", model.ActiveAccount); Assert.False(window.AccountsOpen);
+            Assert.False(window.AccountsDockedNow); // And it is remembered that it floats.
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void ManageAccountsOpensTheAccountsDialogAndPutsTheListAway()
+    public void ManageAccountsOpensTheAccountsDialogAndPutsAFloatingListAway()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            window.ShowAccountsPanel(); Settle(window);
+            window.ShowAccountsPanel(); Settle(window); Click(Find<Button>(window, "RailPinAccounts")); Settle(window); // Floating, so the dialog takes its place.
             var manage = Find<Button>(window, "RailManageAccounts"); var drawer = Find<Border>(window, "AccountsDrawer");
             Assert.Equal(IconKind.Sliders, ((IconGlyph)manage.Content!).Kind); Assert.Equal("Manage accounts", ToolTip.GetTip(manage)?.ToString()); // One icon, no words.
             var at = manage.TranslatePoint(default, drawer)!.Value;
-            Assert.True(at.Y < 40, $"icon top {at.Y}"); Assert.InRange(drawer.Bounds.Width - (at.X + manage.Bounds.Width), 10, 18); // Top right of the drawer.
+            Assert.True(at.Y < 40, $"icon top {at.Y}"); Assert.InRange(drawer.Bounds.Width - (at.X + manage.Bounds.Width), 10, 18); // Top right of the drawer, with the pin beside it.
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "Manage accounts");
             Click(Find<Button>(window, "RailManageAccounts")); Settle(window);
             Assert.False(window.AccountsOpen); Assert.True(window.Dialogs.Dialogs.OfType<AccountsDialog>().Any());
@@ -174,6 +178,8 @@ public sealed class DashboardShellTests
             Assert.False(layer.IsVisible);
             Click(Find<Button>(window, "RailAccounts")); Settle(window);
             Assert.True(layer.IsVisible); Assert.True(window.AccountsOpen);
+            window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape }); Assert.True(window.AccountsOpen); // Docked, Escape leaves it.
+            Click(Find<Button>(window, "RailPinAccounts")); Settle(window); Assert.False(window.AccountsDockedNow);
             Assert.Equal(surface.Bounds.Height, drawer.Bounds.Height, 0.5); // Full height.
             Assert.Equal(rail.TranslatePoint(new Point(rail.Bounds.Width, 0), window)!.Value.X, drawer.TranslatePoint(default, window)!.Value.X, 0.5); // It starts at the rail's edge.
             Assert.Equal(DashboardWindow.RailWidth, rail.Bounds.Width, 0.5); // The rail itself does not move.
