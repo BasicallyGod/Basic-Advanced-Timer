@@ -132,6 +132,14 @@
       "w": 1180,
       "x": 0,
       "y": 8300
+    },
+    "PillMerge.dc.html": {
+      "h": 1910,
+      "is_interactive": true,
+      "title": "Pill: playing and switching together (proposals)",
+      "w": 1180,
+      "x": 1280,
+      "y": 8400
     }
   },
   "createdOnFiles": {
@@ -252,6 +260,12 @@
       "w": 520,
       "x": -600,
       "y": 8340
+    },
+    "n19": {
+      "text": "Exploring the play or pause tile and the Accounts button as one background, so changing account is not a trip somewhere else. Three ways, each in every state with a close-up: A one soft well, B one surface in the state colour split by a hairline, C a well that also holds your last three accounts as dots for one-click switching. In each the break moves to the foot. Drawings only, nothing built. Switch Light and Dark in the tweaks.",
+      "w": 520,
+      "x": 1280,
+      "y": 8190
     }
   },
   "order": [
@@ -271,7 +285,8 @@
     "PillSoft.dc.html",
     "Round7.dc.html",
     "Themes.dc.html",
-    "Store.dc.html"
+    "Store.dc.html",
+    "PillMerge.dc.html"
   ],
   "pages": [],
   "title": "Vertical pill and dashboard mock"
