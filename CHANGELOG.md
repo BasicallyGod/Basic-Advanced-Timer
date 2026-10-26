@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 26 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Round 10: note dot, meeting times and Tab for accounts | [d060d38](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/d060d38936c51193e3a70fa0b570691b285108b1) | From using the Store build. The note dot on a block narrower than 48 pixels sits in the middle of its top edge instead of beside the right edge. Changing a meeting's start moves its end by the same amount (12:00 to 12:30 becomes 16:00 to 16:30), when the box is left or Enter is pressed, stopping at 23:59. Typing # and part of an account in the Notes card's box and pressing Tab (or Enter) takes the top match, as the Notes page already did. |
+
 ## 25 October 2026
 
 | Change | Commit | Details |
