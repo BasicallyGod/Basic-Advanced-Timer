@@ -132,4 +132,41 @@ public sealed class FeedbackRound10Tests
         }
         finally { window.Close(); }
     }
+
+    [Fact]
+    public void TheResetPositionSumsPutThePillAtTheTopRightAndSlideAWindowBackInsideTheWorkArea()
+    {
+        var area = new ScreenGuard.Box(0, 0, 1920, 1040); // A laptop screen less its taskbar.
+        Assert.Equal(new ScreenGuard.Box(1920 - 100 - 24, 24, 100, 300), ScreenGuard.TopRight(area, 100, 300, 24));
+        // On a second monitor to the left, the area starts at a negative x, and the pill goes by that area's own edges.
+        var left = new ScreenGuard.Box(-1920, 0, 1920, 1080);
+        Assert.Equal(new ScreenGuard.Box(-124, 24, 100, 300), ScreenGuard.TopRight(left, 100, 300, 24));
+        // A window left on a screen that is gone slides in without changing its size.
+        Assert.Equal(new ScreenGuard.Box(820, 320, 1100, 720), ScreenGuard.SlideInside(area, new ScreenGuard.Box(2500, 1800, 1100, 720)));
+        Assert.Equal(new ScreenGuard.Box(0, 0, 400, 300), ScreenGuard.SlideInside(area, new ScreenGuard.Box(-3000, -900, 400, 300)));
+        // One bigger than the area keeps to its top left corner.
+        Assert.Equal(new ScreenGuard.Box(0, 0, 2400, 1200), ScreenGuard.SlideInside(area, new ScreenGuard.Box(500, 500, 2400, 1200)));
+        // A window already inside stays where it is.
+        Assert.Equal(new ScreenGuard.Box(300, 200, 400, 300), ScreenGuard.SlideInside(area, new ScreenGuard.Box(300, 200, 400, 300)));
+    }
+
+    [AvaloniaFact]
+    public void ResetPositionAndTheOffScreenRescueLeaveThePillShownAndAreHarmlessWhereThereIsNoMonitorToAskAbout()
+    {
+        var model = Model(out _);
+        var coordinator = new WindowCoordinator(model, () => { });
+        coordinator.Pill.Show();
+        try
+        {
+            Assert.True(ScreenGuard.IsOnAnyMonitor(coordinator.Pill)); // Headless there is no handle to ask about, so it counts as reachable.
+            coordinator.RescueOffScreen();
+            coordinator.Pill.OpenDashboard!();
+            coordinator.RescueOffScreen();
+            coordinator.ResetPosition();
+            Assert.True(coordinator.Pill.IsVisible); Assert.False(coordinator.Dashboard.IsVisible);
+            coordinator.Hide(); coordinator.ShowTimer();
+            Assert.True(coordinator.IsShown);
+        }
+        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
+    }
 }

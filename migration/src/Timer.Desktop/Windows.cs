@@ -80,7 +80,7 @@ public sealed class WindowCoordinator
     private void KeepPillReachable()
     {
         if (!IsShown) { ShowTimer(); return; }
-        if (Pill.IsVisible && Pill.Screens.ScreenFromWindow(Pill) is null && Pill.Screens.Primary is not null) ResetPosition();
+        if (Pill.IsVisible) RescueOffScreen();
     }
     // Snapping another window over the timer, or a window that is itself on top, can leave the pill or dashboard behind it. So whenever one loses focus
     // it is put back at the front of the topmost windows, and a slow check does the same for one that was covered without a focus change.
@@ -94,8 +94,10 @@ public sealed class WindowCoordinator
             self.Deactivated += (_, _) => Avalonia.Threading.DispatcherTimer.RunOnce(() => Reassert(self), TimeSpan.FromMilliseconds(250));
         }
         var check = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        check.Tick += (_, _) => { Reassert(Pill); Reassert(Dashboard); };
+        check.Tick += (_, _) => { Reassert(Pill); Reassert(Dashboard); RescueOffScreen(); };
         check.Start();
+        // A monitor being plugged or unplugged is dealt with at once, and once more when Windows has settled.
+        Pill.Screens.Changed += (_, _) => { Avalonia.Threading.Dispatcher.UIThread.Post(RescueOffScreen); Avalonia.Threading.DispatcherTimer.RunOnce(RescueOffScreen, TimeSpan.FromMilliseconds(1500)); };
     }
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
@@ -114,11 +116,13 @@ public sealed class WindowCoordinator
     {
         if (IsShown) { (Dashboard.IsVisible ? (Window)Dashboard : Pill).Activate(); return; }
         if (dashboardWasShown) ShowDashboard(); else { Pill.Show(); BringToFront(Pill); }
+        RescueOffScreen();
     }
     public void ShowDashboard()
     {
         if (!Dashboard.IsVisible) { model.ShowToday(); if (!Pill.IsVisible) Pill.FitToScreen(Pill.Screens.ScreenFromWindow(Pill) ?? Pill.Screens.Primary); Dashboard.SetRailScale(Pill.Scale); PlaceByCard(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin, 1); Dashboard.Show(); }
         Pill.CloseFlyouts(); Pill.Hide(); BringToFront(Dashboard);
+        RescueOffScreen();
     }
     // The tray icon's left click shows the timer, or hides it when it is already in front.
     public void ToggleFromTray()
@@ -133,14 +137,35 @@ public sealed class WindowCoordinator
     public void ResetPosition()
     {
         // Back to the top right of the main screen, which also recovers a window dragged off a disconnected monitor.
-        var screen = Pill.Screens.Primary;
-        if (screen is not null)
+        Dashboard.Hide();
+        if (Pill.Screens.Primary is { } screen) Pill.FitToScreen(screen);
+        Pill.Show(); PlacePillAtTopRight(); BringToFront(Pill);
+    }
+    // Windows is asked where the main monitor is, not Avalonia, whose list of screens and position setter did not bring the pill back after a monitor was
+    // unplugged. The pill is placed once it is showing, so nothing puts it back where it was. Avalonia's own figures are the fallback.
+    private void PlacePillAtTopRight()
+    {
+        if (ScreenGuard.TryPrimaryWorkArea(out var area, out var scale)
+            && ScreenGuard.Place(Pill, ScreenGuard.TopRight(area, (int)Math.Round(Pill.WindowWidthNow * scale), (int)Math.Round(Pill.WindowHeightNow * scale), 24))) return;
+        if (Pill.Screens.Primary is not { } screen) return;
+        var work = screen.WorkingArea;
+        Pill.Position = new PixelPoint(work.Right - (int)(Pill.Width * screen.Scaling) - 24, work.Y + 24);
+    }
+    /// <summary>
+    /// Brings a window that is on no monitor back to the main one: the pill to its top right corner, the dashboard to the top left of the work area. It is run
+    /// when the screens change, every few seconds, and whenever the timer is brought back from the tray, because a window left on an unplugged screen
+    /// cannot be reached, and Windows does not always move one that was hidden when the screen went.
+    /// </summary>
+    public void RescueOffScreen()
+    {
+        try
         {
-            var area = screen.WorkingArea;
-            Pill.FitToScreen(screen);
-            Pill.Position = new PixelPoint(area.Right - (int)(Pill.Width * screen.Scaling) - 24, area.Y + 24);
+            if (Pill.IsVisible && Pill.WindowState != WindowState.Minimized && !ScreenGuard.IsOnAnyMonitor(Pill)) PlacePillAtTopRight();
+            if (Dashboard.IsVisible && Dashboard.WindowState != WindowState.Minimized && !ScreenGuard.IsOnAnyMonitor(Dashboard)
+                && ScreenGuard.TryPrimaryWorkArea(out var area, out _) && ScreenGuard.TryBoundsOf(Dashboard, out var now))
+                ScreenGuard.Place(Dashboard, ScreenGuard.SlideInside(area, now with { X = area.X, Y = area.Y }));
         }
-        Dashboard.Hide(); Pill.Show(); BringToFront(Pill);
+        catch (Exception) { /* Never let a failed rescue take the timer down. */ }
     }
     public void Quit()
     {
