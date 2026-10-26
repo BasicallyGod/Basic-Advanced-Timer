@@ -1096,9 +1096,14 @@ public sealed class IconGlyph : Control
         }
         return shape;
     }
+    /// <summary>
+    /// The theme colour the icon is drawn in: its own tint, else the accent's text colour inside a primary button (white on the Light accent), else the ink.
+    /// A global style keeps a button's words in the ink, so a primary button's icon has to ask for the accent's colour itself.
+    /// </summary>
+    public string ColourKey => TintKey ?? (this.FindAncestorOfType<Button>() is { } host && host.Classes.Contains("primary") ? "AccentInk" : "Ink");
     public override void Render(DrawingContext context)
     {
-        IBrush brush = this.TryFindResource(TintKey ?? "Ink", ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;
+        IBrush brush = this.TryFindResource(ColourKey, ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;
         var pen = new Pen(brush, StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         var hover = Math.Clamp(Hover, 0, 1);
         // Every icon keeps its hit target and layout still. Only a small part of the drawing moves.

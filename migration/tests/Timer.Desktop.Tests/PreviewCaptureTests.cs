@@ -57,6 +57,8 @@ public sealed class PreviewCaptureTests
             {
                 void Press(string name) { window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
                 void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-" + name + ".png")); }
+                var same = model.Engine.Sessions.Where(x => x.Account == model.Engine.Sessions[0].Account).Take(2).ToArray();
+                if (same.Length == 2) { model.SelectBlock(same, false); Shot("merge-ready"); model.SelectBlock(Array.Empty<Timer.Core.SessionRow>(), false); }
                 Press("AddMeeting"); Shot("form-meeting");
                 Press("NotesTab"); Shot("form-page");
             }
