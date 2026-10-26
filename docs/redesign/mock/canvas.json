@@ -140,6 +140,14 @@
       "w": 1180,
       "x": 1280,
       "y": 8400
+    },
+    "PillHorizontal.dc.html": {
+      "h": 2640,
+      "is_interactive": true,
+      "title": "A horizontal pill (proposals)",
+      "w": 1180,
+      "x": 1280,
+      "y": 10500
     }
   },
   "createdOnFiles": {
@@ -266,6 +274,12 @@
       "w": 520,
       "x": 1280,
       "y": 8190
+    },
+    "n20": {
+      "text": "What a horizontal pill could look like, with the account's state dot, full name and a chevron that drops the list from it, as the earlier horizontal pill did. Three arrangements: A the play tile and the account selector on one well, B the clock then a drop-down field, C a compact two-line one. Each in every state and with the list open, in Light and Dark. The cost: it would not match the rail, so opening the dashboard would change shape. Drawings only, nothing built.",
+      "w": 520,
+      "x": 1280,
+      "y": 10290
     }
   },
   "order": [
@@ -286,7 +300,8 @@
     "Round7.dc.html",
     "Themes.dc.html",
     "Store.dc.html",
-    "PillMerge.dc.html"
+    "PillMerge.dc.html",
+    "PillHorizontal.dc.html"
   ],
   "pages": [],
   "title": "Vertical pill and dashboard mock"
