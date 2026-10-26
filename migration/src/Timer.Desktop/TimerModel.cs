@@ -665,6 +665,19 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>Deletes the given entries as one undoable edit.</summary>
     public bool DeleteEntries(IReadOnlyList<SessionRow> rows) => ChangeLog(() => Editor.Delete(rows));
+    /// <summary>Moves the end of the one selected block by whole minutes (the + and - keys), keeping its start, as the Length box does. Anything else selected is explained in the toast, and nothing selected does nothing.</summary>
+    public bool NudgeSelection(int minutes)
+    {
+        var blocks = SelectedBlocks;
+        if (blocks.Count == 0) return false;
+        if (blocks.Count > 1) { Refuse("Select one block"); return false; }
+        var block = blocks[0];
+        if (block.IsGroup || block.Row is null) { Refuse("Unmerge to resize"); return false; }
+        var end = block.End.AddMinutes(minutes);
+        if (end <= block.Start) { Refuse("Block can’t be shorter"); return false; }
+        if (end > block.Start.Date.AddDays(1)) { Refuse("Can’t pass midnight"); return false; }
+        return EditEntry(block.Row, block.Row.Account, block.Start, end, block.Note);
+    }
     public bool UndoEdit() { var done = ChangeLog(Editor.Undo); if (done) { Notice = "Undone"; Notify(); } return done; }
     public bool UngroupEntries(string id) { var done = ChangeLog(() => Editor.Ungroup(id)); if (done) SayDone("Unmerged"); return done; }
     /// <summary>Exports the week or the whole month that the given day falls in, or the one being viewed when none is given.</summary>

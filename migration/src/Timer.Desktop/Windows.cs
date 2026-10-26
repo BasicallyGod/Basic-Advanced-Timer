@@ -334,7 +334,7 @@ public sealed class DashboardWindow : Window
         Ui.Put(review, nav);
         // The bar under the timeline, as in the mock: Add time and Undo on the left, the day's figures in the middle and the zoom buttons on the right.
         addTime = Ui.Ctl("AddTime", "Add time", IconKind.Plus, "Add time to this day", () => model.OpenGap(), tint: "Accent"); addTime.Classes.Add("accentOutline");
-        undo = Ui.Ctl("UndoEdit", "Undo", IconKind.Undo, "Undo the last change", () => model.UndoEdit());
+        undo = Ui.Ctl("UndoEdit", "Undo", IconKind.Undo, "Undo the last change", () => model.UndoEdit(), key: "Ctrl Z");
         // Zoom steps by a fifth each press, about the middle of what is showing. Hold Ctrl and use the wheel to zoom about the pointer.
         ScrollViewer? TimelineScroll() => timelineHost.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
         zoomOut = Ui.Ctl("TimelineZoomOut", null, IconKind.Minus, "Zoom out", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Width / 2, s.Offset.X); }, key: "Ctrl scroll");
@@ -404,6 +404,15 @@ public sealed class DashboardWindow : Window
                 if (e.Key == Avalonia.Input.Key.C) model.CopySelection(); else if (!weekMode) model.PasteBlocks(model.DefaultPasteTime());
                 e.Handled = true;
             }
+            // Ctrl+Z undoes the last edit on the Timeline page, but never while typing in a box (which keeps its own undo) or behind a dialog.
+            else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key == Avalonia.Input.Key.Z && !settingsMode && !weekMode && !notesMode && !Dialogs.Any
+                && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox))
+            { if (model.Editor.CanUndo) model.UndoEdit(); e.Handled = true; }
+            // + and - lengthen or shorten the selected block by a minute (Shift is allowed, since + needs it on most keyboards), never while typing.
+            else if (e.KeyModifiers is Avalonia.Input.KeyModifiers.None or Avalonia.Input.KeyModifiers.Shift && !settingsMode && !weekMode && !notesMode && !Dialogs.Any
+                && e.Key is Avalonia.Input.Key.OemPlus or Avalonia.Input.Key.Add or Avalonia.Input.Key.OemMinus or Avalonia.Input.Key.Subtract
+                && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox))
+            { if (model.SelectedRows.Count > 0) { model.NudgeSelection(e.Key is Avalonia.Input.Key.OemPlus or Avalonia.Input.Key.Add ? 1 : -1); e.Handled = true; } }
             // Backspace and Delete remove the selected blocks, but never while typing in a text box.
             else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete && FocusManager?.GetFocusedElement() is not TextBox)
             { if (model.SelectedRows.Count > 0) { model.DeleteSelection(); e.Handled = true; } }
@@ -654,7 +663,7 @@ public sealed class DashboardWindow : Window
         breakButton.Refresh(); breakButton.Classes.Set("onBreak", onBreak);
         if (RailScaleSource is { } source) SetRailScale(source());
         undo.IsEnabled = model.Editor.CanUndo;
-        ToolTip.SetTip(undo, model.Editor.UndoLabel is { } label ? $"Undo {label.ToLowerInvariant()}" : null);
+        ToolTip.SetTip(undo, Ui.Tip(model.Editor.UndoLabel is { } label ? $"Undo {label.ToLowerInvariant()}" : "Undo", "Ctrl Z"));
         void Rail(Button button, bool selected) { button.Classes.Set("selected", selected); var glyph = button.Content as IconGlyph ?? (button.Content as Grid)?.Children.OfType<IconGlyph>().FirstOrDefault(); if (glyph is not null) glyph.TintKey = selected ? "RailIconOn" : "RailIcon"; }
         Rail(timelineRail, !weekMode && !settingsMode && !notesMode);
         Rail(overviewTab, !settingsMode && weekMode);
