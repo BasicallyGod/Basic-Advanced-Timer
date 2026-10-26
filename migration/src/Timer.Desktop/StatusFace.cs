@@ -80,7 +80,7 @@ public sealed class StatusFace : StackPanel
 {
     private readonly TimerModel model;
     private readonly IClockText clock;
-    private readonly Border stateLight, reminderLight;
+    private readonly Border stateLight, reminderLight, reminderRing;
     private readonly TextBlock initials = new() { FontSize = 17, Classes = { "clock" }, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly PauseGlyph glyph = new();
     /// <summary>The primary control, the break and the Accounts button are all this square, so they read as one set with the same room either side in the pill.</summary>
@@ -137,7 +137,10 @@ public sealed class StatusFace : StackPanel
         stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
         reminderLight = new Border { Name = prefix + "ReminderLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
         Lights = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Height = 14, HorizontalAlignment = HorizontalAlignment.Center, Name = prefix + "Lights" };
-        Lights.Children.Add(stateLight); Lights.Children.Add(reminderLight);
+        // The pulse ring lives behind the reminder light in a cell the light's own size, so it can grow past the cell (nothing clips it) without moving anything.
+        reminderRing = new Border { Name = prefix + "ReminderRing", Width = 6, Height = 14, CornerRadius = new CornerRadius(3), Opacity = 0, IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var reminderCell = new Grid { Width = 6, Height = 14, Children = { reminderRing, reminderLight } };
+        Lights.Children.Add(stateLight); Lights.Children.Add(reminderCell);
         // The clock moves between the pill and the dashboard.
         clockTile = new Border { Name = prefix + "ClockTile", CornerRadius = new CornerRadius(14), Padding = horizontal ? new Thickness(2, 0) : new Thickness(8, 4), Background = Brushes.Transparent, Child = (Control)clock };
         ClockButton = Ui.Button("", clockClick, prefix + "Dashboard");
@@ -236,7 +239,7 @@ public sealed class StatusFace : StackPanel
         // The reminder light is always there: blue and pulsing while a reminder is due, and a quiet grey when nothing is waiting. It only notifies.
         var grey = ThemeColourOr("Idle", "#8A8F98");
         reminderLight.Background = new SolidColorBrush(model.ReminderDue ? ThemeColourOr("Accent", "#3558C8") : Color.FromArgb(150, grey.R, grey.G, grey.B));
-        Ui.PulseRing(reminderLight, model.ReminderDue, ThemeColourOr("Accent", "#3558C8"));
+        Ui.PulseRing(reminderLight, reminderRing, model.ReminderDue, ThemeColourOr("Accent", "#3558C8"));
         var reminderWords = model.ReminderDue ? "A reminder is due" : "No reminders waiting";
         ToolTip.SetTip(reminderLight, reminderWords); Avalonia.Automation.AutomationProperties.SetName(reminderLight, reminderWords);
         clock.Text = model.ClockText;

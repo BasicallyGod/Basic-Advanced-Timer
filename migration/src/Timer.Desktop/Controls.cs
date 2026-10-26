@@ -131,29 +131,33 @@ public static class Ui
     /// The reminder light's pulse, as the mock draws it: a ring in <paramref name="colour"/> that starts at the light's edge and swells to seven pixels while it fades out,
     /// every 1.8 seconds. The light itself stays steady.
     /// </summary>
-    public static void PulseRing(Border light, bool on, Color colour)
+    public static void PulseRing(Border light, Border ring, bool on, Color colour)
     {
-        if (Motion.Reduced) { if (pulses.TryGetValue(light, out var still)) { still.Source.Cancel(); pulses.Remove(light); } light.BoxShadow = default; return; }
+        // The ring is a shape of its own, behind the light and centred on it, that grows and fades. It used to be a box shadow on the light itself, whose corners stay as tight as
+        // the light's (a radius of 3), so the glow came out as a flat-topped box that looked cut off; here the radius grows with the ring, so it is round, as the mock draws it.
+        void Rest() { ring.Opacity = 0; ring.Width = light.Width; ring.Height = light.Height; ring.CornerRadius = light.CornerRadius; }
+        if (Motion.Reduced) { if (pulses.TryGetValue(light, out var still)) { still.Source.Cancel(); pulses.Remove(light); } Rest(); return; }
         if (pulses.TryGetValue(light, out var running))
         {
-            if (on && running.Run.Alive) return;
-            running.Source.Cancel(); pulses.Remove(light); light.BoxShadow = default;
+            if (on && running.Run.Alive) { ring.Background = new SolidColorBrush(colour); return; }
+            running.Source.Cancel(); pulses.Remove(light); Rest();
             if (!on) return;
         }
-        if (!on) return;
-        string Ring(double spread, double alpha) => FormattableString.Invariant($"0 0 0 {spread} #{(byte)Math.Round(alpha * 255):X2}{colour.R:X2}{colour.G:X2}{colour.B:X2}");
+        if (!on) { Rest(); return; }
+        ring.Background = new SolidColorBrush(colour);
+        double w = light.Width, h = light.Height; var r = light.CornerRadius.TopLeft;
+        Avalonia.Animation.KeyFrame Frame(double cue, double spread, double alpha) => new()
+        {
+            Cue = new Avalonia.Animation.Cue(cue),
+            Setters = { new Setter(Layoutable.WidthProperty, w + 2 * spread), new Setter(Layoutable.HeightProperty, h + 2 * spread), new Setter(Border.CornerRadiusProperty, new CornerRadius(r + spread)), new Setter(Visual.OpacityProperty, alpha) }
+        };
         var source = new CancellationTokenSource();
         var animation = new Avalonia.Animation.Animation
         {
             Duration = TimeSpan.FromSeconds(1.8), IterationCount = Avalonia.Animation.IterationCount.Infinite, Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
-            Children =
-            {
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0), Setters = { new Setter(Border.BoxShadowProperty, BoxShadows.Parse(Ring(0, .75))) } },
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(.7), Setters = { new Setter(Border.BoxShadowProperty, BoxShadows.Parse(Ring(7, 0))) } },
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1), Setters = { new Setter(Border.BoxShadowProperty, BoxShadows.Parse(Ring(0, 0))) } },
-            }
+            Children = { Frame(0, 0, .75), Frame(.7, 7, 0), Frame(1, 0, 0) }
         };
-        pulses.Add(light, new PulseRun(source, new RunningAnimation(animation.RunAsync(light, source.Token))));
+        pulses.Add(light, new PulseRun(source, new RunningAnimation(animation.RunAsync(ring, source.Token))));
     }
     public static bool IsPulsing(Control control) => pulses.TryGetValue(control, out var run) && run.Run.Alive;
     /// <summary>A heading in the app's display face, the same as the dashboard's workspace title, so every page and pop-up names itself alike.</summary>

@@ -91,6 +91,32 @@ public sealed class PreviewCaptureTests
         }
     }
 
+    // A running animation holds these values at its own priority, and nothing ticks here, so the swollen ring is set at that priority too.
+    public static void SetSwollen(Border ring, double opacity)
+    {
+        ring.SetValue(Avalonia.Layout.Layoutable.WidthProperty, 20.0, Avalonia.Data.BindingPriority.Animation); ring.SetValue(Avalonia.Layout.Layoutable.HeightProperty, 28.0, Avalonia.Data.BindingPriority.Animation);
+        ring.SetValue(Border.CornerRadiusProperty, new CornerRadius(10), Avalonia.Data.BindingPriority.Animation); ring.SetValue(Visual.OpacityProperty, opacity, Avalonia.Data.BindingPriority.Animation);
+    }
+
+    [AvaloniaFact]
+    public void WritePillLights()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var horizontal in new[] { false, true })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme("Light"); model.SetPillHorizontal(horizontal);
+            var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                // Animations do not tick here, so the ring is set part way through its swell by hand.
+                var ring = pill.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PillReminderRing"); SetSwollen(ring, .55);
+                using var f = pill.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = pill.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, (horizontal ? "h" : "v") + "-pill-lights.png"));
+            }
+            finally { pill.Close(); }
+        }
+    }
+
     [AvaloniaFact]
     public void WriteHangingCards()
     {
