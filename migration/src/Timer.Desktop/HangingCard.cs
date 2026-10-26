@@ -16,7 +16,7 @@ namespace Timer.Desktop;
 /// </summary>
 public static class HangingCard
 {
-    private const double PointWidth = 20, PointHeight = 10.5, Seat = 9.5;
+    private const double PointWidth = 20, PointHeight = 10.5, Seat = 9.5, Overlap = 3;
     /// <summary>
     /// The room round the card for its shadow, above it (the point sits in it) and at its sides. A pop-up's window clips what is drawn outside it, so the
     /// room has to hold the whole shadow (<see cref="Shadow"/>: 18 pixels of blur dropped 6, so 18 at the sides, 12 above and 24 below).
@@ -35,7 +35,9 @@ public static class HangingCard
     public static Grid Hang(Control card, double fromRight, string name = "NotificationsPoint", string fillKey = "Panel")
     {
         card.Margin = Room;
-        var fill = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse($"M0,{Seat} L10,0.9 L20,{Seat} L20,{PointHeight} L0,{PointHeight} Z") };
+        // The fill runs well down into the card, not only to the card's edge: layout rounding can put the point half a pixel higher than it is drawn here, and a fill that ends on the edge
+        // then leaves the card's one pixel border showing through under the point as a faint line, which breaks the card and its point into two shapes.
+        var fill = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse($"M0,{Seat} L10,0.9 L20,{Seat} L20,{PointHeight + Overlap} L0,{PointHeight + Overlap} Z") };
         fill.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, fill.GetResourceObservable(fillKey));
         var edges = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse($"M0,{Seat} L10,0.9 L20,{Seat}"), StrokeThickness = 1.1, StrokeJoin = PenLineJoin.Round, StrokeLineCap = PenLineCap.Flat };
         edges.Bind(Avalonia.Controls.Shapes.Shape.StrokeProperty, edges.GetResourceObservable("Line"));

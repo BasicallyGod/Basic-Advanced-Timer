@@ -91,4 +91,29 @@ public sealed class Round11Tests
         }
         finally { window.Close(); }
     }
+
+    // The card and its point are one shape: under the point there is no line where the card's edge would run, in either theme and whatever half pixel the point lands on.
+    [AvaloniaFact]
+    public void NoLineRunsAcrossTheBaseOfACardsPoint()
+    {
+        foreach (var theme in new[] { "Light", "Dark" })
+            foreach (var nudge in new[] { 0.0, 0.5 })
+            {
+                var model = Model(); model.SetTheme(theme);
+                var hung = HangingCard.Hang(new NotificationsFlyout(model), -1);
+                var window = new Window { Width = 412, Height = 300, RequestedThemeVariant = theme == "Dark" ? Avalonia.Styling.ThemeVariant.Dark : Avalonia.Styling.ThemeVariant.Light, Content = new Border { Margin = new Thickness(0, nudge, 0, 0), Child = hung } };
+                window.Show(); Settle(window);
+                try
+                {
+                    using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var shot = window.CaptureRenderedFrame();
+                    using var pixels = shot!.Lock(); var data = new byte[pixels.RowBytes * pixels.Size.Height]; System.Runtime.InteropServices.Marshal.Copy(pixels.Address, data, 0, data.Length);
+                    int[] At(int x, int y) { var o = y * pixels.RowBytes + x * 4; return new[] { (int)data[o], data[o + 1], data[o + 2] }; }
+                    bool Same(int[] a, int[] b) => a.Zip(b).All(c => Math.Abs(c.First - c.Second) <= 2);
+                    var inside = At(206, 60); var top = (int)HangingCard.Room.Top;
+                    foreach (var row in new[] { top, top + 1 }) Assert.True(Same(At(206, row), inside), $"{theme}, nudge {nudge}: row {row} under the point {string.Join(",", At(206, row))} is not the card's {string.Join(",", inside)}");
+                    Assert.True(Enumerable.Range(top - 1, 3).Any(row => !Same(At(120, row), inside)), "the edge beside the point should still be drawn"); // So the check can tell.
+                }
+                finally { window.Close(); }
+            }
+    }
 }
