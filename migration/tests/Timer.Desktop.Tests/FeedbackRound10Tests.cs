@@ -192,4 +192,19 @@ public sealed class FeedbackRound10Tests
         model.ToggleAccount("Account one");
         for (var i = 0; i < 20; i++) { var breaks = model.BreakTimeOn(Day); Assert.True(breaks >= TimeSpan.Zero); Assert.Equal("00:00", model.Format(breaks)); }
     }
+
+    [AvaloniaFact]
+    public void ThePrimaryButtonsOnTheNotesFormsHaveTheAccentsInkNotTheGlobalTextColour()
+    {
+        var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var ink = Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("AccentInk")); Assert.Equal(Avalonia.Media.Colors.White, ink); // On the Light accent it is white.
+            Avalonia.Media.Color WordsOf(Button b) => ((Avalonia.Media.ISolidColorBrush)b.GetVisualDescendants().OfType<TextBlock>().First().Foreground!).Color;
+            Click(window, "AddNote"); Assert.Equal(ink, WordsOf(Find<Button>(window, "SubmitNote")));
+            Click(window, "AddMeeting"); Assert.Equal(ink, WordsOf(Find<Button>(window, "SubmitNote")));
+            Click(window, "NotesTab"); Assert.Equal(ink, WordsOf(Find<Button>(window, "PageSubmit")));
+        }
+        finally { window.Close(); }
+    }
 }
