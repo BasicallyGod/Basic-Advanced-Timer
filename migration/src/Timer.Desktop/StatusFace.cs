@@ -63,19 +63,25 @@ public sealed class StatusFace : StackPanel
     /// <summary>The primary control, the break and the Accounts button are all this square, so they read as one set with the same room either side in the pill.</summary>
     public const double TileSize = 44, TileRadius = 14;
     /// <summary>
+    /// The primary control and the Accounts button sit together on one soft well (they are about what you are tracking: one pauses it, the other changes it), so each is a
+    /// little wider than the break's tile, 46 by 44, with 4 pixels of well round them and 2 between them. The well is 54 wide and 98 tall, the same height as the two tiles
+    /// and the gap they took before, so the pill and the rail keep their size.
+    /// </summary>
+    public const double WellTileWidth = 46, WellWidth = 54, WellPadding = 4, WellGap = 2, WellRadius = 20;
+    /// <summary>
     /// Each tile's button is this much larger on every side and pulled back by the same amount, so the ring that marks keyboard focus or a break is drawn
     /// inside the button (a button clips what falls outside it) without moving the tile or its neighbours.
     /// </summary>
     public const double RingRoom = 4;
-    public static void MakeRoomForRing(Button button, double top = 0)
+    public static void MakeRoomForRing(Button button, double top = 0, double width = TileSize)
     {
-        button.Width = button.Height = TileSize + 2 * RingRoom; button.Padding = new Thickness(RingRoom);
+        button.Width = width + 2 * RingRoom; button.Height = TileSize + 2 * RingRoom; button.Padding = new Thickness(RingRoom);
         button.Margin = new Thickness(-RingRoom, top - RingRoom, -RingRoom, -RingRoom);
         button.HorizontalContentAlignment = HorizontalAlignment.Center; button.VerticalContentAlignment = VerticalAlignment.Center;
     }
     private readonly Border clockTile;
     // The primary control is a rounded square, to match the accounts icon beside it.
-    private readonly Border primaryTile = new() { Width = StatusFace.TileSize, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius) };
+    private readonly Border primaryTile = new() { Width = StatusFace.WellTileWidth, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius) };
     private readonly Viewbox glyphBox = new() { Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly string clockTip;
     private bool hoverCircle, circleFocus, accountsFocus;
@@ -84,8 +90,11 @@ public sealed class StatusFace : StackPanel
     public Button Circle { get; }
     public Button AccountsButton { get; }
     public BreakButton Break { get; }
-    private readonly Border accountsTile = new() { Width = StatusFace.TileSize, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius), Background = Brushes.Transparent, Child = new AccountsGlyph { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+    private readonly Border accountsTile = new() { Width = StatusFace.WellTileWidth, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius), Background = Brushes.Transparent, Child = new AccountsGlyph { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
     private bool accountsOpen, hoverAccounts;
+    private readonly Border well = new() { Width = StatusFace.WellWidth, CornerRadius = new CornerRadius(StatusFace.WellRadius), Padding = new Thickness(StatusFace.WellPadding), Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
+    /// <summary>The soft background the primary control and the Accounts button share.</summary>
+    public Border Well => well;
 
     public StatusFace(TimerModel model, string prefix, string breakName, string clockTip, Action clockClick, Action circleClick, Action accountsClick)
     {
@@ -108,7 +117,7 @@ public sealed class StatusFace : StackPanel
         primaryTile.Name = prefix + "PrimaryTile";
         var host = new Grid(); host.Children.Add(initials); host.Children.Add(glyphBox); primaryTile.Child = host;
         Circle = Ui.Button("", circleClick, prefix + "Pause");
-        Circle.Classes.Add("pillBare"); Circle.Content = primaryTile; MakeRoomForRing(Circle, 6); Circle.HorizontalAlignment = HorizontalAlignment.Center;
+        Circle.Classes.Add("pillBare"); Circle.Content = primaryTile; MakeRoomForRing(Circle, 0, WellTileWidth); Circle.HorizontalAlignment = HorizontalAlignment.Center;
         // Under the pointer the tint deepens instead of the button growing, which its edges would clip.
         Circle.PointerEntered += (_, _) => { hoverCircle = true; Refresh(); };
         Circle.PointerExited += (_, _) => { hoverCircle = false; Refresh(); };
@@ -116,13 +125,15 @@ public sealed class StatusFace : StackPanel
         Break = new BreakButton(model, breakName);
         // The accounts button is the same on the pill and the rail: it opens the account list beside the window, and closes it again.
         AccountsButton = Ui.Button("", accountsClick, prefix + "Accounts");
-        AccountsButton.Classes.Add("pillBare"); AccountsButton.Content = accountsTile; MakeRoomForRing(AccountsButton); AccountsButton.HorizontalAlignment = HorizontalAlignment.Center;
+        AccountsButton.Classes.Add("pillBare"); AccountsButton.Content = accountsTile; MakeRoomForRing(AccountsButton, 0, WellTileWidth); AccountsButton.HorizontalAlignment = HorizontalAlignment.Center;
         AccountsButton.PointerEntered += (_, _) => { hoverAccounts = true; PaintAccountsTile(); };
         AccountsButton.PointerExited += (_, _) => { hoverAccounts = false; PaintAccountsTile(); };
         SoftTint.WatchKeyboardFocus(AccountsButton, f => { accountsFocus = f; PaintAccountsTile(); });
         SetAccountsOpen(false);
         Children.Add(Lights); ClockButton.Margin = new Thickness(0, 4, 0, 0); Children.Add(ClockButton);
-        Children.Add(Circle); Children.Add(Break); Children.Add(AccountsButton);
+        // The primary control and the Accounts button share one well, and the break stands apart below it, at the foot.
+        well.Name = prefix + "Well"; well.Child = new StackPanel { Spacing = WellGap, Children = { Circle, AccountsButton } };
+        Children.Add(well); Children.Add(Break);
         ActualThemeVariantChanged += (_, _) => Refresh();
         Refresh();
     }
@@ -134,13 +145,15 @@ public sealed class StatusFace : StackPanel
         var tip = open ? "Close the accounts" : "Accounts";
         ToolTip.SetTip(AccountsButton, tip); Avalonia.Automation.AutomationProperties.SetName(AccountsButton, tip);
     }
-    // A faint wash at rest, a blue tint under the pointer and a stronger one while the list is open.
+    // Bare on the well at rest, the theme's hover under the pointer, and a blue wash while the list is open.
     private void PaintAccountsTile()
     {
         var dark = SoftTint.IsDark(this);
         var accent = ThemeColourOr("Accent", "#3558C8"); var ink = ThemeColourOr("Ink", "#18233A");
-        var tint = accountsOpen ? SoftTint.WithAlpha(accent, dark ? .30 : .22) : hoverAccounts ? SoftTint.WithAlpha(accent, dark ? .18 : .12) : SoftTint.WithAlpha(ink, .05);
-        accountsTile.Background = new SolidColorBrush(tint);
+        well.Background = new SolidColorBrush(SoftTint.WithAlpha(ink, dark ? .07 : .055));
+        IBrush rest = Brushes.Transparent;
+        accountsTile.Background = accountsOpen ? new SolidColorBrush(SoftTint.WithAlpha(accent, dark ? .22 : .14))
+            : hoverAccounts ? (accountsTile.TryFindResource("Hover", accountsTile.ActualThemeVariant, out var hover) && hover is IBrush hoverBrush ? hoverBrush : rest) : rest;
         accountsTile.BoxShadow = accountsFocus ? SoftTint.FocusRing(accountsTile) : default;
     }
     private static void SetTileHover(Border tile, bool on) => tile.Background = on ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var brush) && brush is IBrush hover ? hover : Brushes.Transparent) : Brushes.Transparent;
