@@ -232,3 +232,37 @@ public sealed class DockTests
         finally { window.Close(); }
     }
 }
+
+public sealed class DockLayoutAuditTests
+{
+    private static void Settle(Avalonia.Controls.Window w) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); using var f = w.CaptureRenderedFrame(); }
+    private static void Click(Avalonia.Controls.Window w, string name) { w.GetVisualDescendants().OfType<Avalonia.Controls.Button>().Single(b => b.Name == name).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent)); Settle(w); }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void NothingRunsPastItsCardIsSqueezedOrOverlapsAtNoneHalfOrAllOfTheRoomTaken()
+    {
+        var faults = new List<string>();
+        foreach (var theme in new[] { "Light", "Dark" })
+            foreach (var (room, railScale) in new[] { (0.0, 1.0), (.5, 1.0), (1.0, 1.0), (1.0, 1.2) }) // The last is the widest rail, a pill drawn at 120 per cent.
+            {
+                var model = TimerModel.CreateDemo(); model.SetTheme(theme); model.ForceOvertime(); // Overtime adds a figure to the day's bar, the widest it gets.
+                var window = new DashboardWindow(model); window.Show(); Settle(window);
+                try
+                {
+                    window.SetRailScale(railScale); window.Dock.Jump(room, 1); Settle(window);
+                    void Audit(string label) { foreach (var f in LayoutAudit.Run(window)) faults.Add($"{theme} room={room} rail x{railScale} [{label}] {f}"); }
+                    Click(window, "TimelineTab"); Audit("timeline");
+                    model.SelectBlock(model.Engine.Sessions.Take(1).ToArray(), false); Settle(window); Audit("timeline, one block selected");
+                    model.SelectBlock(model.Engine.Sessions.Take(3).ToArray(), false); Settle(window); Audit("timeline, three blocks selected");
+                    model.SelectBlock(Array.Empty<Timer.Core.SessionRow>(), false);
+                    Click(window, "AddMeeting"); Audit("timeline, meeting form"); Click(window, "AddNote"); Audit("timeline, note form");
+                    Click(window, "NotesTab"); Audit("notes"); Click(window, "PageKindMeeting"); Audit("notes, meeting form");
+                    Click(window, "WeekOverviewTab"); Audit("week chart"); Click(window, "WeekTable"); Audit("week table");
+                    Click(window, "Settings");
+                    foreach (var section in new[] { "Appearance", "Behaviour", "Hours", "Accounts", "Export", "About" }) { Click(window, "Settings" + section); Audit("settings " + section); }
+                }
+                finally { window.Close(); }
+            }
+        Assert.True(faults.Count == 0, string.Join("\n", faults.Distinct().Take(25)));
+    }
+}

@@ -73,6 +73,34 @@ public sealed class PreviewCaptureTests
     }
 
     [AvaloniaFact]
+    public void WriteDockEdgeCases()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme); model.ForceOvertime();
+            var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-edge-" + name + ".png")); }
+                void Press(string name) { window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+                window.Dock.Jump(1, 1);
+                Press("TimelineTab"); Shot("timeline-overtime");
+                var rows = model.Engine.Sessions.Take(3).ToArray();
+                model.SelectBlock(rows, false); Shot("timeline-several");
+                model.SelectBlock(Array.Empty<Timer.Core.SessionRow>(), false);
+                Press("AddMeeting"); Shot("timeline-meeting-form");
+                Press("AddNote"); Shot("timeline-note-form");
+                Press("NotesTab"); Press("PageKindMeeting"); Shot("notes-meeting-form");
+                Press("WeekOverviewTab"); Press("WeekTable"); Shot("week-table");
+                Press("Settings"); Shot("settings");
+            }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
     public void WriteNotesForms()
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
