@@ -22,6 +22,8 @@ public static class ReviewViews
     public const double TimelineGutter = 34;
     /// <summary>The room a block keeps clear each side, so the selection ring (3 pixels) round one block never lies over its neighbour: blocks are drawn this far in from their times.</summary>
     public const double BlockInset = 3, BlockGap = 2 * BlockInset;
+    /// <summary>A block narrower than this keeps its note dot in the middle of its top edge, since beside the edge it looks off-centre on a sliver of colour.</summary>
+    public const double NarrowDotWidth = 48;
     // The axis sits under the hour labels, with a clear gap before the row for planned meetings, and the blocks sit under that row. A day with no meetings has no row, so its
     // blocks take the height of both. They always end at BandBottom, where the chip that names the time hangs under them.
     private const double LabelRow = 22, AxisY = LabelRow + 6, MeetGap = 14, MeetingTop = AxisY + MeetGap, MeetingHeight = 48, BandTopWithMeetings = MeetingTop + MeetingHeight + MeetGap, BandTopFree = 46, BandBottom = 176, LaneGap = 4, TimelineHeight = 210, LabelWidth = 44;
@@ -227,7 +229,7 @@ public static class ReviewViews
                 content.Children.Add(new IconGlyph(IconKind.Note) { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 8, 7), IsHitTestVisible = false, Opacity = .75, Name = "NoteMark" });
             // A block too small for the page mark still shows that it has a note, with a small dot at its top right, well inside the block so the selection ring never meets it.
             if (!content.Children.OfType<IconGlyph>().Any(g => g.Name == "NoteMark") && width >= 16 && !recording && !string.IsNullOrWhiteSpace(note) && (interval.Row is not null || interval.Group is not null))
-                content.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Name = "NoteDot", Width = 7, Height = 7, Fill = Brush.Parse(ink), Opacity = .8, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Margin = new Thickness(0, 8, 8, 0), IsHitTestVisible = false });
+                content.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Name = "NoteDot", Width = 7, Height = 7, Fill = Brush.Parse(ink), Opacity = .8, HorizontalAlignment = width < NarrowDotWidth ? Avalonia.Layout.HorizontalAlignment.Center : Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Margin = width < NarrowDotWidth ? new Thickness(0, 8, 0, 0) : new Thickness(0, 8, 8, 0), IsHitTestVisible = false });
             card.Child = content;
             var addedEarly = false;
             var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());

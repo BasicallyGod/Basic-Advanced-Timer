@@ -186,13 +186,37 @@ public sealed class NotesCard : Border
         field.PropertyChanged += (_, e) =>
         {
             if (e.Property != TextBox.TextProperty) return;
-            draft = field.Text ?? ""; ShowSuggestions(suggestions);
+            draft = field.Text ?? ""; firstSuggestion = ShowSuggestions(suggestions);
         };
+        // Tab (or Enter) takes the top match, the same as on the Notes page, so #Acc then Tab fills the account in.
+        field.AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (firstSuggestion is { } offer && suggestions.IsVisible && e.Key is Key.Tab or Key.Enter) { draftAccount = offer.Account; draft = offer.Words; DrawForm(); e.Handled = true; }
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         field.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Submit(); e.Handled = true; } else if (e.Key == Key.Escape) { Close(); e.Handled = true; } };
         if (meeting)
         {
             var times = Ui.Grid("Auto,Auto,Auto,Auto,*,Auto"); times.ColumnSpacing = 8;
             var start = TimeBox("MeetingStart", startText, v => startText = v); var end = TimeBox("MeetingEnd", endText, v => endText = v);
+            // Moving the start moves the end with it, so the meeting keeps its length (12:00 to 12:30 becomes 16:00 to 16:30). It is applied when the box is
+            // left or Enter is pressed, not on every key, because a half-typed time such as 1 or 16: would drag the end about.
+            var committedStart = startText;
+            void MoveEndWithStart()
+            {
+                var now = startText;
+                if (now == committedStart) return;
+                if (TimeText.TryParseClock(committedStart, formDay, false, out var before) && TimeText.TryParseClock(now, formDay, false, out var after) && TimeText.TryParseClock(endText, formDay, true, out var until))
+                {
+                    var moved = until + (after - before);
+                    // A meeting stays inside its day: carried past midnight, the end stops at 23:59.
+                    if (moved >= formDay.Date.AddDays(1)) moved = formDay.Date.AddDays(1).AddMinutes(-1);
+                    if (moved < formDay.Date) moved = formDay.Date;
+                    endText = moved.ToString("HH:mm"); end.Text = endText;
+                }
+                committedStart = now;
+            }
+            start.LostFocus += (_, _) => MoveEndWithStart();
+            start.KeyDown += (_, e) => { if (e.Key == Key.Enter) MoveEndWithStart(); };
             // The day, by a small calendar, so a meeting can go on any day and not only the one showing.
             var dayWords = new TextBlock { Text = NoteDates.Day(formDay, model.Engine.Now), VerticalAlignment = VerticalAlignment.Center };
             var dayButton = Ui.Ctl("MeetingDay", null, null, "Pick day", () => { }, small: true); dayButton.Width = double.NaN; dayButton.Padding = new Thickness(10, 0);
@@ -222,7 +246,8 @@ public sealed class NotesCard : Border
     }
 
     // A word that starts with # offers the accounts that match it. Choosing one puts its chip in the box and takes the word out.
-    private void ShowSuggestions(StackPanel host)
+    private (string Account, string Words)? firstSuggestion;
+    private (string Account, string Words)? ShowSuggestions(StackPanel host)
         => NoteParts.ShowSuggestions(model, draft, host, "Suggest_", (name, rest) => { draftAccount = name; draft = rest; DrawForm(); });
 
     private void Submit()
