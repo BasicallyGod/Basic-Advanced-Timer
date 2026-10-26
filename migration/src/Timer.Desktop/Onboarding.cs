@@ -262,7 +262,7 @@ public sealed class OnboardingView : Grid
         }
         points.Children.Add(Point("Click the time.", "On the pill it opens the dashboard. In the dashboard it collapses back to the pill."));
         points.Children.Add(Point("The green square.", "It shows the account you are on and pauses or resumes it. With no account chosen it opens the list."));
-        points.Children.Add(Point("Breaks.", "The cup under it starts a break, and the green square resumes your account."));
+        points.Children.Add(Point("Breaks.", "The cup at the foot starts a break, and the green square resumes your account."));
         points.Children.Add(Point("Accounts.", "The three bars at the foot open the account list beside the pill. Choosing an account starts it."));
         points.Children.Add(Point("Settings.", "The gear at the top right of the dashboard holds the theme, hours, export and Run setup again."));
         points.Children.Add(Point("The tray.", "Closing a window hides the timer to the notification area and tracking carries on. The cross at the foot of the dashboard closes it for good."));
