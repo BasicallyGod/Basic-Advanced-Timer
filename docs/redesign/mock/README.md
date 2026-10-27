@@ -11,3 +11,5 @@ Store holds a draft Microsoft Store listing: every Partner Center field written 
 AccountsAlongside draws three ways to keep the account list and the pages in view together (a docked panel, a slim strip that opens into it, and a recording chip in the header that hangs the list beneath it) and a table of how Timeline, Notes and Week react to the room they have. A proposal, nothing built.
 
 AccountsDock is option A from that board, chosen, drawn as a live prototype of the docked account panel opening and closing (one eased progress value drives the panel, the rail's wash and each page's reflow), with frames of the opening, what moves in what order, and the timings. A proposal, nothing built.
+
+ReminderTimes draws four ways to lay out the reminder picker's four quick times (09:00, 12:00, 15:00, 17:00), which sit in a 2 by 2 grid wider than the hour and minute boxes: the same grid in narrower chips (A), one row under the month (B), one column the width of the steppers (C, recommended) and a Quick menu (D). Drawings only, nothing built yet.
