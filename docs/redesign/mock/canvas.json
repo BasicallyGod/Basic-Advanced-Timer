@@ -172,6 +172,13 @@
       "w": 1230,
       "x": 1280,
       "y": 19600
+    },
+    "ReminderTimes.dc.html": {
+      "h": 2000,
+      "title": "Reminder picker: quick times (proposals)",
+      "w": 1180,
+      "x": 1280,
+      "y": 23400
     }
   },
   "createdOnFiles": {
@@ -322,6 +329,12 @@
       "w": 520,
       "x": 1280,
       "y": 19410
+    },
+    "n24": {
+      "text": "The reminder picker's four quick times sit in a 2 by 2 grid wider than the hour and minute boxes, which widens the whole picker. Four ways to lay them out at the real size: A the same grid in narrower chips, B one row under the month, C one column under the steppers (recommended), D a Quick menu. Drawings only, nothing built yet. Switch Light or Dark in the Tweaks.",
+      "w": 520,
+      "x": 1280,
+      "y": 23200
     }
   },
   "order": [
@@ -346,7 +359,8 @@
     "PillHorizontal.dc.html",
     "PillHorizontalA.dc.html",
     "AccountsAlongside.dc.html",
-    "AccountsDock.dc.html"
+    "AccountsDock.dc.html",
+    "ReminderTimes.dc.html"
   ],
   "pages": [],
   "title": "Vertical pill and dashboard mock"
