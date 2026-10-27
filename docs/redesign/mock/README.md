@@ -13,3 +13,5 @@ AccountsAlongside draws three ways to keep the account list and the pages in vie
 AccountsDock is option A from that board, chosen, drawn as a live prototype of the docked account panel opening and closing (one eased progress value drives the panel, the rail's wash and each page's reflow), with frames of the opening, what moves in what order, and the timings. A proposal, nothing built.
 
 ReminderTimes draws four ways to lay out the reminder picker's four quick times (09:00, 12:00, 15:00, 17:00), which sit in a 2 by 2 grid wider than the hour and minute boxes: the same grid in narrower chips (A), one row under the month (B), one column the width of the steppers (C, recommended) and a Quick menu (D). Drawings only, nothing built yet.
+
+WeekExtras draws five other ways to show a day's meetings and open notes under its name on the Week overview chart (two quiet chips, words, a dot for each, a small agenda, and a mark with the detail on hover), beside the current icons with a number. Drawings only, nothing built yet.
