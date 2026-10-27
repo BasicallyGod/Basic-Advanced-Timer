@@ -179,6 +179,13 @@
       "w": 1180,
       "x": 1280,
       "y": 23400
+    },
+    "WeekExtras.dc.html": {
+      "h": 3220,
+      "title": "Week overview: meetings and notes under each day (proposals)",
+      "w": 1180,
+      "x": 1280,
+      "y": 25600
     }
   },
   "createdOnFiles": {
@@ -335,6 +342,12 @@
       "w": 520,
       "x": 1280,
       "y": 23200
+    },
+    "n25": {
+      "text": "Under each day on the Week overview chart, the counts of meetings and open notes are a small calendar icon and note icon with a number, floating with no frame, and look lost. Five other ways to show the same, on the real chart: A two quiet chips (recommended), B words, C a dot for each, D a small agenda, E a mark with the detail on hover. Drawings only, nothing built. Switch Light or Dark in the Tweaks.",
+      "w": 520,
+      "x": 1280,
+      "y": 25400
     }
   },
   "order": [
@@ -360,7 +373,8 @@
     "PillHorizontalA.dc.html",
     "AccountsAlongside.dc.html",
     "AccountsDock.dc.html",
-    "ReminderTimes.dc.html"
+    "ReminderTimes.dc.html",
+    "WeekExtras.dc.html"
   ],
   "pages": [],
   "title": "Vertical pill and dashboard mock"
