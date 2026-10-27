@@ -172,6 +172,20 @@ public sealed class PreviewCaptureTests
     }
 
     [AvaloniaFact]
+    public void WriteWeekChips()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme);
+            var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); Dispatcher.UIThread.RunJobs();
+            try { using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-week-chips.png")); }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
     public void WriteRailLights()
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;

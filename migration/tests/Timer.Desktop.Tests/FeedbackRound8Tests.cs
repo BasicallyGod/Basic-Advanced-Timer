@@ -44,6 +44,25 @@ public sealed class FeedbackRound8Tests
             // The meeting count is an icon and a number on one centre line.
             var pair = Find<Grid>(window, "WeekDayMeetings"); var icon = pair.GetVisualDescendants().OfType<IconGlyph>().Single(); var number = pair.GetVisualDescendants().OfType<TextBlock>().Single();
             Assert.True(Math.Abs(Centre(window, icon).Y - Centre(window, number).Y) <= 1.5, "The icon and its number share a centre line.");
+            // What is drawn matters, not the boxes: the icon's own box once sat centred while its drawing (on a fixed 18 unit grid) sat low in it. So the rows of pixels that differ
+            // from the chip's fill are measured, for the icon and for the digit, and each must be centred in the chip.
+            var chip = Find<Border>(window, "WeekDayMeetingsChip");
+            using (var frame = window.CaptureRenderedFrame()) { Dispatcher.UIThread.RunJobs(); }
+            using var shot = window.CaptureRenderedFrame();
+            using var pixels = shot!.Lock(); var data = new byte[pixels.RowBytes * pixels.Size.Height]; System.Runtime.InteropServices.Marshal.Copy(pixels.Address, data, 0, data.Length);
+            int[] At(int x, int y) { var o = y * pixels.RowBytes + x * 4; return new[] { (int)data[o], data[o + 1], data[o + 2] }; }
+            var topLeft = chip.TranslatePoint(new Point(0, 0), window)!.Value; var middleOfChip = topLeft.Y + chip.Bounds.Height / 2;
+            var fill = At((int)(topLeft.X + chip.Bounds.Width / 2), (int)topLeft.Y + 3);
+            double InkMiddle(Control part)
+            {
+                var from = part.TranslatePoint(new Point(0, 0), window)!.Value; int first = -1, last = -1;
+                for (var y = (int)topLeft.Y + 2; y < (int)(topLeft.Y + chip.Bounds.Height) - 2; y++)
+                    for (var x = (int)from.X; x < (int)(from.X + part.Bounds.Width); x++)
+                        if (At(x, y).Zip(fill).Sum(c => Math.Abs(c.First - c.Second)) > 60) { if (first < 0) first = y; last = y; break; }
+                Assert.True(first >= 0, "something is drawn"); return (first + last + 1) / 2.0;
+            }
+            Assert.True(Math.Abs(InkMiddle(icon) - middleOfChip) <= 1.5, "The drawn icon is centred in its chip.");
+            Assert.True(Math.Abs(InkMiddle(number) - middleOfChip) <= 1.5, "The drawn number is centred in its chip.");
             // The total over the column is in the ordinary typeface, and the chart carries no hint line.
             Assert.All(window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name == "WeekDayTotal"), t => Assert.DoesNotContain("figures", t.Classes));
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => (t.Text ?? "").StartsWith("Hover a day"));

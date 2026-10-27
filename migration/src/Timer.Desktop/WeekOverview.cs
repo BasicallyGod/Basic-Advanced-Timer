@@ -207,7 +207,8 @@ public static class WeekOverview
         Control Count(string name, IconKind icon, int n, bool accent)
         {
             var pair = Ui.Grid("Auto,Auto"); pair.ColumnSpacing = 4; pair.Name = name; pair.VerticalAlignment = VerticalAlignment.Center;
-            Ui.Put(pair, new IconGlyph(icon) { Width = 13, Height = 13, VerticalAlignment = VerticalAlignment.Center, TintKey = accent ? "AccentText" : null });
+            // A Viewbox scales the icon: it draws on its own 18 unit grid from the top left, so a smaller Width and Height only moved it off its centre and cut its edge.
+            Ui.Put(pair, new Viewbox { Width = 14, Height = 14, VerticalAlignment = VerticalAlignment.Center, Child = new IconGlyph(icon) { TintKey = accent ? "AccentText" : null } });
             var number = Ui.Text(n.ToString(), 11.5, accent ? "accent" : null); number.VerticalAlignment = VerticalAlignment.Center; number.FontWeight = FontWeight.SemiBold;
             // The digits sit above the middle of their line box, so the number looked raised beside its icon. A top margin of 3 moves it down by half that, 1.5 pixels, to the icon's centre line.
             number.Margin = new Thickness(0, 3, 0, 0); Ui.Put(pair, number, 1);
