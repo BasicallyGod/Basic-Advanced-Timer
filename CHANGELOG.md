@@ -6,6 +6,13 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 27 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| The rail's reminder pulse is no longer cut off | [23bdaf2](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/23bdaf218bd6a0aea1c6e68832176cce8982db96) | In the dashboard the ring that swells from the blue reminder light was cut flat at the top: the rail draws its top through a layout transform control, which clips to its own bounds. It no longer clips, and a test checks that nothing above the ring does. |
+| A meeting's day is chosen in the reminder's card | [23bdaf2](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/23bdaf218bd6a0aea1c6e68832176cce8982db96) | The day button on the meeting form in the Notes card opened a plain grey calendar. It now opens the same card as the reminder pop-up (month, the day in words, Set, the cross), without the time column and Remove, hung under the button. |
+
 ## 26 October 2026
 
 | Change | Commit | Details |
