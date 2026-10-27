@@ -218,7 +218,14 @@ public sealed class NotesCard : Border
         // The words, with the account chip and the reminder chip inside the same box.
         var box = Ui.Grid("Auto,*,Auto"); box.ColumnSpacing = 6;
         var frame = new Border { Child = box, Height = 36, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(10, 0, 6, 0) }; frame.Classes.Add("composer");
-        if (draftAccount is { } account) { var chip = NoteParts.Chip("#" + account.Replace(" ", ""), "plain", null, NoteParts.Dot(model, account)); chip.VerticalAlignment = VerticalAlignment.Center; Ui.Put(box, chip); }
+        // The account chip takes the account off again when pressed (its cross says so), or with Backspace in an empty box.
+        if (draftAccount is { } account)
+        {
+            var chip = Ui.Button("", () => { draftAccount = null; DrawForm(); }, "FormAccountChip"); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0); chip.VerticalAlignment = VerticalAlignment.Center;
+            chip.Content = NoteParts.Chip("#" + account.Replace(" ", ""), "plain", null, NoteParts.Dot(model, account), IconKind.Close); ToolTip.SetTip(chip, "Remove account");
+            Avalonia.Automation.AutomationProperties.SetName(chip, "Remove account " + account);
+            Ui.Put(box, chip);
+        }
         field = new TextBox { Name = "NoteField", Text = draft, Watermark = meeting ? "Meeting name, # for an account" : "Write a note, # for an account", BorderThickness = new Thickness(0), Background = Brushes.Transparent, Height = 30, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0) };
         field.Classes.Add("bareField");
         Ui.Put(box, field, 1);
@@ -243,6 +250,7 @@ public sealed class NotesCard : Border
         field.AddHandler(KeyDownEvent, (_, e) =>
         {
             if (firstSuggestion is { } offer && suggestions.IsVisible && e.Key is Key.Tab or Key.Enter) { draftAccount = offer.Account; draft = offer.Words; DrawForm(); e.Handled = true; }
+            else if (e.Key == Key.Back && draftAccount is not null && string.IsNullOrEmpty(field.Text)) { draftAccount = null; DrawForm(); e.Handled = true; } // Backspace in an empty box takes the chip off.
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         field.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Submit(); e.Handled = true; } else if (e.Key == Key.Escape) { Close(); e.Handled = true; } };
         if (meeting)
