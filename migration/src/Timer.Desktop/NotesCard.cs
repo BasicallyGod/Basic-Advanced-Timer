@@ -356,7 +356,7 @@ public sealed class NotesCard : Border
             if (popupTarget is { } target) Notes.SetReminder(target, answered); else { draftReminder = answered; DrawForm(); }
             CloseReminder();
         }, CloseReminder);
-        reminderHost.Child = content; reminderHost.IsOpen = true;
+        reminderHost.Child = ReminderPopup.Roomy(content, reminderHost); reminderHost.IsOpen = true;
     }
     private void CloseReminder() { reminderHost.IsOpen = false; reminderHost.Child = null; reminderHost.PlacementTarget = title; }
     // A meeting's day is chosen in the same card as a reminder's (month, summary, Set, the cross), without the time, which has its boxes beside the button; it hangs under the button.
@@ -369,7 +369,7 @@ public sealed class NotesCard : Border
             if (answered is { } day) formDay = day.Date;
             CloseReminder(); DrawForm();
         }, CloseReminder, "Meeting day", dayOnly: true);
-        reminderHost.PlacementTarget = button; reminderHost.Child = content; reminderHost.IsOpen = true;
+        reminderHost.PlacementTarget = button; reminderHost.Child = ReminderPopup.Roomy(content, reminderHost); reminderHost.IsOpen = true;
     }
 
     private void DrawOverlay()

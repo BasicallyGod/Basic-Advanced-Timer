@@ -298,10 +298,10 @@ public sealed class NotesPage : Grid
     private void OpenWhen()
     {
         whenHost.PlacementTarget = formHost;
-        whenHost.Child = new ReminderPopup(() => model.Engine.Now, string.IsNullOrWhiteSpace(draft) ? meeting ? "New meeting" : "New note" : draft, when, answered =>
+        whenHost.Child = ReminderPopup.Roomy(new ReminderPopup(() => model.Engine.Now, string.IsNullOrWhiteSpace(draft) ? meeting ? "New meeting" : "New note" : draft, when, answered =>
         {
             when = answered; whenHost.IsOpen = false; whenHost.Child = null; DrawForm();
-        }, () => { whenHost.IsOpen = false; whenHost.Child = null; }, meeting ? "When" : "Reminder");
+        }, () => { whenHost.IsOpen = false; whenHost.Child = null; }, meeting ? "When" : "Reminder"), whenHost);
         whenHost.IsOpen = true;
     }
 

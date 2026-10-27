@@ -24,7 +24,7 @@ public static class NoteParts
         if (lead is not null) row.Children.Add(lead);
         if (icon is { } kind) row.Children.Add(new IconGlyph(kind) { TintKey = token == "Ink" ? null : token });
         row.Children.Add(Ink(text, token));
-        if (trailing is { } end) row.Children.Add(new IconGlyph(end) { TintKey = token == "Ink" ? "Muted" : token, Width = 11, Height = 11, VerticalAlignment = VerticalAlignment.Center });
+        if (trailing is { } end) row.Children.Add(new Viewbox { Width = 12, Height = 12, VerticalAlignment = VerticalAlignment.Center, Child = new IconGlyph(end) { TintKey = token == "Ink" ? "Muted" : token } }); // A Viewbox scales the icon: it draws on its own 18 unit grid, and a smaller size would only cut it off.
         var chip = new Border { Child = row, CornerRadius = new CornerRadius(999), Padding = new Thickness(8, 2), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center };
         chip.Classes.Add("chip"); chip.Classes.Add(tone == "accent" ? "accentChip" : tone == "late" ? "lateChip" : "plainChip");
         return chip;

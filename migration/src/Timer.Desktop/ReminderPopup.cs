@@ -84,6 +84,17 @@ public sealed class ReminderPopup : Border
         Redraw(true);
     }
 
+    /// <summary>
+    /// Sets the card in a pop-up with room round it for its whole shadow, and lifts the pop-up by that room so the card still sits where it did. A pop-up's window
+    /// clips anything drawn past its edge, so a shadow with no room showed as flat grey corners beyond the card's rounded ones.
+    /// </summary>
+    public static ReminderPopup Roomy(ReminderPopup card, Avalonia.Controls.Primitives.Popup host)
+    {
+        card.Margin = HangingCard.Room; card.BoxShadow = HangingCard.Shadow;
+        host.VerticalOffset = -HangingCard.Room.Top; host.HorizontalOffset = 0;
+        return card;
+    }
+
     /// <summary>The day and time as chosen now.</summary>
     public DateTime Chosen => chosen.Date.AddHours(hour).AddMinutes(minute);
 
