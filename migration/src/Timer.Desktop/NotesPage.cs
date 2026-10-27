@@ -35,11 +35,17 @@ public sealed class NotesPage : Grid
         ColumnDefinitions = new ColumnDefinitions("196,14,*"); ClipToBounds = false;
         var aside = new Border { Name = "NotesViews", CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Padding = new Thickness(12) }; aside.Classes.Add("dayCard");
         aside.Child = new ScrollViewer { Content = views, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        Children.Add(aside);
+        // Laid out at its own width and clipped, so it can fold away to the left, with the gap beside it, while the account panel is docked (see SetDock).
+        asideHost = new Reserve(aside, AsideWidth) { Name = "NotesViewsHost" };
+        Children.Add(asideHost);
         var card = new Border { Name = "NotesListCard", CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), ClipToBounds = true }; card.Classes.Add("dayCard");
-        var inner = Ui.Grid("*", "Auto,*");
+        var inner = Ui.Grid("*", "Auto,Auto,*");
+        // The same views as chips, in a row that opens above the form while the views column is folded away.
+        chipsHost = new Border { Name = "NotesChips", Height = 0, ClipToBounds = true, IsVisible = false, Opacity = 0, Child = new ScrollViewer { Content = chips, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled } };
+        chips.Orientation = Orientation.Horizontal; chips.Spacing = 6; chips.Margin = new Thickness(14, 0, 14, 0); chips.VerticalAlignment = VerticalAlignment.Center;
+        Ui.Put(inner, chipsHost);
         var formBox = new Border { Child = formHost, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(14, 14, 14, 12) }; formBox.Classes.Add("ruleBelow");
-        Ui.Put(inner, formBox); Ui.Put(inner, new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }, 0, 1);
+        Ui.Put(inner, formBox, 0, 1); Ui.Put(inner, new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }, 0, 2);
         inner.Children.Add(whenHost); card.Child = inner; SetColumn(card, 2); Children.Add(card);
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Sync(); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
@@ -50,6 +56,24 @@ public sealed class NotesPage : Grid
     /// <summary>The words in the header's search box. The list and the counts follow them.</summary>
     public string Query { get => query; set { query = value ?? ""; shown = null; Sync(); } }
     public NoteView View => view;
+
+    // ---- Making room for the account panel ----
+
+    private const double AsideWidth = 196, AsideGap = 14, ChipsHeight = 50;
+    private readonly Reserve asideHost; private readonly Border chipsHost; private readonly StackPanel chips = new() { Name = "NotesChipRow" };
+    private double room;
+    /// <summary>
+    /// Follows the room the docked account panel has taken from the page (0 to 1): the views and accounts column folds away to the left over the first half, and a row of the
+    /// same views as chips (with an Accounts filter) opens above the form from .3 to .8, pushing the list down, so nothing it offers is lost.
+    /// </summary>
+    public void SetDock(double r)
+    {
+        room = r;
+        var fold = DockMotion.Window(r, 0, .5); var open = DockMotion.Window(r, .3, .8);
+        ColumnDefinitions[0].Width = new GridLength(AsideWidth * (1 - fold)); ColumnDefinitions[1].Width = new GridLength(AsideGap * (1 - fold));
+        asideHost.Opacity = 1 - fold; asideHost.IsVisible = fold < 1; asideHost.IsHitTestVisible = fold < .5;
+        chipsHost.Height = ChipsHeight * open; chipsHost.Opacity = open; chipsHost.IsVisible = open > 0; chipsHost.IsHitTestVisible = open > .5;
+    }
 
     // ---- The views, the accounts and the list ----
 
@@ -66,6 +90,15 @@ public sealed class NotesPage : Grid
             var count = matches.Count(n => Notes.InView(n, kind));
             views.Children.Add(Item(kind == NoteView.All ? "All" : kind.ToString(), count, view == kind, () => { view = kind; scope = null; shown = null; Sync(); DrawForm(); }, "NotesView_" + kind));
         }
+        // The chips: each view with its count, then the account filter.
+        chips.Children.Clear();
+        foreach (var kind in Enum.GetValues<NoteView>())
+        {
+            var count = matches.Count(n => Notes.InView(n, kind)); var name = kind == NoteView.All ? "All" : kind.ToString();
+            var chip = Ui.Ctl("NotesChip_" + kind, $"{name}  {count}", null, name, () => { view = kind; scope = null; shown = null; Sync(); DrawForm(); }, small: true);
+            chip.Classes.Set("on", view == kind); chips.Children.Add(chip);
+        }
+        chips.Children.Add(AccountsChip());
         views.Children.Add(Ui.Rule()); ((Control)views.Children[^1]).Margin = new Thickness(4, 8);
         var heading = new TextBlock { Text = "ACCOUNTS", FontSize = 11.5, FontWeight = FontWeight.SemiBold, LetterSpacing = .5, Margin = new Thickness(10, 0, 0, 4) }; heading.Classes.Add("muted"); views.Children.Add(heading);
         foreach (var a in model.Accounts.Where(x => !BreakAccount.Is(x.Name)))
@@ -92,6 +125,26 @@ public sealed class NotesPage : Grid
             var empty = new TextBlock { Name = "NotesPageEmpty", FontSize = 13.5, TextAlignment = TextAlignment.Center, Margin = new Thickness(6, 24), Text = query.Trim().Length > 0 ? "Nothing matches that search." : view == NoteView.Overdue ? "Nothing is overdue." : "Nothing here yet." };
             empty.Classes.Add("muted"); listColumn.Children.Add(empty);
         }
+    }
+
+    // The Accounts chip opens a short menu of the accounts to filter by, with the chosen one marked, and one to clear the filter.
+    private Button AccountsChip()
+    {
+        var chosen = model.Accounts.FirstOrDefault(a => string.Equals(a.Name, accountFilter, StringComparison.OrdinalIgnoreCase));
+        var chip = Ui.Ctl("NotesChipAccounts", chosen is null ? "Accounts" : chosen.Display, IconKind.Accounts, "Filter by account", () => { }, small: true);
+        chip.Classes.Set("on", chosen is not null);
+        var items = new List<Control>();
+        MenuItem Pick(string words, string? name)
+        {
+            var current = string.Equals(accountFilter, name, StringComparison.OrdinalIgnoreCase);
+            var item = new MenuItem { Header = (current ? "✓  " : "     ") + words, Name = "NotesChipAccount_" + (name ?? "All").Replace(" ", "") };
+            item.Click += (_, _) => { accountFilter = name; shown = null; Sync(); }; return item;
+        }
+        items.Add(Pick("All accounts", null));
+        foreach (var a in model.Accounts.Where(x => !BreakAccount.Is(x.Name))) items.Add(Pick(a.Display, a.Name));
+        var menu = new ContextMenu { ItemsSource = items };
+        chip.ContextMenu = menu; chip.Click += (_, _) => menu.Open(chip);
+        return chip;
     }
 
     private static Button Item(string name, int count, bool on, Action click, string id, Control? lead = null)
@@ -236,7 +289,7 @@ public sealed class NotesPage : Grid
         return button;
     }
     /// <summary>The track that holds a switch's choices, 36 tall like the boxes beside it.</summary>
-    internal static Border Switch(params Button[] choices)
+    internal static Border Switch(params Control[] choices)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 }; foreach (var c in choices) row.Children.Add(c);
         var track = new Border { Child = row, Height = 36, VerticalAlignment = VerticalAlignment.Center }; track.Classes.Add("segTrack"); return track;

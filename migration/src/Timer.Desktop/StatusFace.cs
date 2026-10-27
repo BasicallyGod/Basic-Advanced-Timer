@@ -80,7 +80,7 @@ public sealed class StatusFace : StackPanel
 {
     private readonly TimerModel model;
     private readonly IClockText clock;
-    private readonly Border stateLight, reminderLight;
+    private readonly Border stateLight, reminderLight, reminderRing;
     private readonly TextBlock initials = new() { FontSize = 17, Classes = { "clock" }, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly PauseGlyph glyph = new();
     /// <summary>The primary control, the break and the Accounts button are all this square, so they read as one set with the same room either side in the pill.</summary>
@@ -123,7 +123,7 @@ public sealed class StatusFace : StackPanel
     public Button AccountsButton { get; }
     public BreakButton Break { get; }
     private readonly Border accountsTile = new() { Width = StatusFace.WellTileWidth, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius), Background = Brushes.Transparent, Child = new AccountsGlyph { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
-    private bool accountsOpen, hoverAccounts;
+    private bool accountsOpen, hoverAccounts; private double accountsAmount;
     private readonly Border well = new() { Width = StatusFace.WellWidth, CornerRadius = new CornerRadius(StatusFace.WellRadius), Padding = new Thickness(StatusFace.WellPadding), Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
     /// <summary>The soft background the primary control and the Accounts button share.</summary>
     public Border Well => well;
@@ -137,7 +137,10 @@ public sealed class StatusFace : StackPanel
         stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
         reminderLight = new Border { Name = prefix + "ReminderLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
         Lights = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Height = 14, HorizontalAlignment = HorizontalAlignment.Center, Name = prefix + "Lights" };
-        Lights.Children.Add(stateLight); Lights.Children.Add(reminderLight);
+        // The pulse ring lives behind the reminder light in a cell the light's own size, so it can grow past the cell (nothing clips it) without moving anything.
+        reminderRing = new Border { Name = prefix + "ReminderRing", Width = 6, Height = 14, CornerRadius = new CornerRadius(3), Opacity = 0, IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var reminderCell = new Grid { Width = 6, Height = 14, Children = { reminderRing, reminderLight } };
+        Lights.Children.Add(stateLight); Lights.Children.Add(reminderCell);
         // The clock moves between the pill and the dashboard.
         clockTile = new Border { Name = prefix + "ClockTile", CornerRadius = new CornerRadius(14), Padding = horizontal ? new Thickness(2, 0) : new Thickness(8, 4), Background = Brushes.Transparent, Child = (Control)clock };
         ClockButton = Ui.Button("", clockClick, prefix + "Dashboard");
@@ -195,15 +198,17 @@ public sealed class StatusFace : StackPanel
     }
 
     /// <summary>Marks the accounts button as pressed while the list is open, and words its tooltip for what pressing it will do.</summary>
-    public void SetAccountsOpen(bool open)
+    public void SetAccountsOpen(bool open, bool wash = true)
     {
-        accountsOpen = open; PaintAccountsTile();
+        accountsOpen = open; if (wash) accountsAmount = open ? 1 : 0; PaintAccountsTile();
         var tip = open ? "Close the accounts" : "Accounts";
         ToolTip.SetTip(AccountsButton, tip);
         // The horizontal pill's button also says which account it shows, since its name can be cut short.
         Avalonia.Automation.AutomationProperties.SetName(AccountsButton, Horizontal && selectorWords.Length > 0 ? tip + ", " + selectorWords : tip);
         if (Horizontal) { selectorChevron.Expanded = open; selectorChevron.InvalidateVisual(); }
     }
+    /// <summary>How much of the blue wash the accounts button wears, 0 to 1, while the dashboard's panel eases out or away, so the button and the panel move as one.</summary>
+    public void SetAccountsAmount(double amount) { accountsAmount = Math.Clamp(amount, 0, 1); PaintAccountsTile(); }
     // Bare on the well at rest, the theme's hover under the pointer, and a blue wash while the list is open.
     private void PaintAccountsTile()
     {
@@ -212,7 +217,7 @@ public sealed class StatusFace : StackPanel
         well.Background = new SolidColorBrush(SoftTint.WithAlpha(ink, dark ? .07 : .055));
         IBrush rest = Brushes.Transparent;
         var tile = Horizontal ? selectorTile : accountsTile;
-        tile.Background = accountsOpen ? new SolidColorBrush(SoftTint.WithAlpha(accent, dark ? .22 : .14))
+        tile.Background = accountsAmount > 0 ? new SolidColorBrush(SoftTint.WithAlpha(accent, (dark ? .22 : .14) * accountsAmount))
             : hoverAccounts ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var hover) && hover is IBrush hoverBrush ? hoverBrush : rest) : rest;
         tile.BoxShadow = accountsFocus ? SoftTint.FocusRing(tile) : default;
     }
@@ -236,7 +241,7 @@ public sealed class StatusFace : StackPanel
         // The reminder light is always there: blue and pulsing while a reminder is due, and a quiet grey when nothing is waiting. It only notifies.
         var grey = ThemeColourOr("Idle", "#8A8F98");
         reminderLight.Background = new SolidColorBrush(model.ReminderDue ? ThemeColourOr("Accent", "#3558C8") : Color.FromArgb(150, grey.R, grey.G, grey.B));
-        Ui.PulseRing(reminderLight, model.ReminderDue, ThemeColourOr("Accent", "#3558C8"));
+        Ui.PulseRing(reminderLight, reminderRing, model.ReminderDue, ThemeColourOr("Accent", "#3558C8"));
         var reminderWords = model.ReminderDue ? "A reminder is due" : "No reminders waiting";
         ToolTip.SetTip(reminderLight, reminderWords); Avalonia.Automation.AutomationProperties.SetName(reminderLight, reminderWords);
         clock.Text = model.ClockText;

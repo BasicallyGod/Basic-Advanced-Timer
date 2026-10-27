@@ -46,6 +46,61 @@ public sealed class PreviewCaptureTests
     }
 
     [AvaloniaFact]
+    public void WriteDockPages()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme);
+            var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-dock-" + name + ".png")); }
+                void Press(string name) { window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+                foreach (var (page, tab) in new[] { ("timeline", "TimelineTab"), ("notes", "NotesTab"), ("week", "WeekOverviewTab") })
+                {
+                    Press(tab);
+                    foreach (var (label, p) in new[] { ("0", 0.0), ("5", .5), ("10", 1.0) }) { window.Dock.Jump(p, 1); Shot(page + "-" + label); }
+                    window.Dock.Jump(0, 1);
+                }
+                Press("TimelineTab"); window.Dock.Jump(1, 1);
+                var first = model.Engine.Sessions.Take(1).ToArray(); model.SelectBlock(first, false); Shot("timeline-selected");
+                window.Dock.Jump(1, 0); Shot("timeline-floating");
+            }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
+    public void WriteDockEdgeCases()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme); model.ForceOvertime();
+            var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-edge-" + name + ".png")); }
+                void Press(string name) { window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+                window.Dock.Jump(1, 1);
+                Press("TimelineTab"); Shot("timeline-overtime");
+                var rows = model.Engine.Sessions.Take(3).ToArray();
+                model.SelectBlock(rows, false); Shot("timeline-several");
+                model.SelectBlock(Array.Empty<Timer.Core.SessionRow>(), false);
+                Press("AddMeeting"); Shot("timeline-meeting-form");
+                Press("AddNote"); Shot("timeline-note-form");
+                Press("NotesTab"); Press("PageKindMeeting"); Shot("notes-meeting-form");
+                Press("WeekOverviewTab"); Press("WeekTable"); Shot("week-table");
+                Press("Settings"); Shot("settings");
+            }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
     public void WriteNotesForms()
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
@@ -86,6 +141,59 @@ public sealed class PreviewCaptureTests
                 using (var f = host.CaptureRenderedFrame()) { Dispatcher.UIThread.RunJobs(); using var g = host.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-hpill-list.png")); }
                 host.Close(); pill.ShowPanel(); Dispatcher.UIThread.RunJobs(); Shot("open");
                 pill.CloseFlyouts(); model.ToggleBreak(); Shot("break");
+            }
+            finally { pill.Close(); }
+        }
+    }
+
+    // A running animation holds these values at its own priority, and nothing ticks here, so the swollen ring is set at that priority too.
+    public static void SetSwollen(Border ring, double opacity)
+    {
+        ring.SetValue(Avalonia.Layout.Layoutable.WidthProperty, 20.0, Avalonia.Data.BindingPriority.Animation); ring.SetValue(Avalonia.Layout.Layoutable.HeightProperty, 28.0, Avalonia.Data.BindingPriority.Animation);
+        ring.SetValue(Border.CornerRadiusProperty, new CornerRadius(10), Avalonia.Data.BindingPriority.Animation); ring.SetValue(Visual.OpacityProperty, opacity, Avalonia.Data.BindingPriority.Animation);
+    }
+
+    [AvaloniaFact]
+    public void WritePillLights()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var horizontal in new[] { false, true })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme("Light"); model.SetPillHorizontal(horizontal);
+            var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                // Animations do not tick here, so the ring is set part way through its swell by hand.
+                var ring = pill.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PillReminderRing"); SetSwollen(ring, .55);
+                using var f = pill.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = pill.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, (horizontal ? "h" : "v") + "-pill-lights.png"));
+            }
+            finally { pill.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
+    public void WriteHangingCards()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme); model.SetPillHorizontal(true);
+            var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Save(Window host, string name) { host.Show(); Dispatcher.UIThread.RunJobs(); using var f = host.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = host.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-" + name + ".png")); host.Close(); }
+                // The list, hung with its point under the account's box, under a strip drawn like the pill's lower edge.
+                var hung = HangingCard.Hang(pill.MakeDropdownCard(), 300 - 139, "PillDropdownPoint", "PillBody");
+                var strip = new Border { Height = 40, Width = 470, CornerRadius = new CornerRadius(0, 0, 36, 36), BorderThickness = new Thickness(1.5), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, -HangingCard.Room.Top + 2) };
+                strip.Bind(Border.BorderBrushProperty, strip.GetResourceObservable("Line")); strip.Bind(Border.BackgroundProperty, strip.GetResourceObservable("PillBody"));
+                var stack = new StackPanel { Children = { strip, new Border { Margin = new Thickness(40 - HangingCard.Room.Left, 11 - HangingCard.Room.Top + 14, 0, 0), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, Child = hung } } };
+                Save(new Window { Width = 520, Height = 520, RequestedThemeVariant = pill.ActualThemeVariant, Content = stack }, "hung-dropdown");
+                // The bell's card, with the point set past the corner as the dashboard places it.
+                var shift = HangingCard.ShiftForCorner(19, 18);
+                var bell = HangingCard.Hang(new NotificationsFlyout(model), 19 + shift);
+                Save(new Window { Width = 440, Height = 400, RequestedThemeVariant = pill.ActualThemeVariant, Content = new Border { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, Child = bell } }, "hung-bell");
             }
             finally { pill.Close(); }
         }

@@ -131,29 +131,33 @@ public static class Ui
     /// The reminder light's pulse, as the mock draws it: a ring in <paramref name="colour"/> that starts at the light's edge and swells to seven pixels while it fades out,
     /// every 1.8 seconds. The light itself stays steady.
     /// </summary>
-    public static void PulseRing(Border light, bool on, Color colour)
+    public static void PulseRing(Border light, Border ring, bool on, Color colour)
     {
-        if (Motion.Reduced) { if (pulses.TryGetValue(light, out var still)) { still.Source.Cancel(); pulses.Remove(light); } light.BoxShadow = default; return; }
+        // The ring is a shape of its own, behind the light and centred on it, that grows and fades. It used to be a box shadow on the light itself, whose corners stay as tight as
+        // the light's (a radius of 3), so the glow came out as a flat-topped box that looked cut off; here the radius grows with the ring, so it is round, as the mock draws it.
+        void Rest() { ring.Opacity = 0; ring.Width = light.Width; ring.Height = light.Height; ring.CornerRadius = light.CornerRadius; }
+        if (Motion.Reduced) { if (pulses.TryGetValue(light, out var still)) { still.Source.Cancel(); pulses.Remove(light); } Rest(); return; }
         if (pulses.TryGetValue(light, out var running))
         {
-            if (on && running.Run.Alive) return;
-            running.Source.Cancel(); pulses.Remove(light); light.BoxShadow = default;
+            if (on && running.Run.Alive) { ring.Background = new SolidColorBrush(colour); return; }
+            running.Source.Cancel(); pulses.Remove(light); Rest();
             if (!on) return;
         }
-        if (!on) return;
-        string Ring(double spread, double alpha) => FormattableString.Invariant($"0 0 0 {spread} #{(byte)Math.Round(alpha * 255):X2}{colour.R:X2}{colour.G:X2}{colour.B:X2}");
+        if (!on) { Rest(); return; }
+        ring.Background = new SolidColorBrush(colour);
+        double w = light.Width, h = light.Height; var r = light.CornerRadius.TopLeft;
+        Avalonia.Animation.KeyFrame Frame(double cue, double spread, double alpha) => new()
+        {
+            Cue = new Avalonia.Animation.Cue(cue),
+            Setters = { new Setter(Layoutable.WidthProperty, w + 2 * spread), new Setter(Layoutable.HeightProperty, h + 2 * spread), new Setter(Border.CornerRadiusProperty, new CornerRadius(r + spread)), new Setter(Visual.OpacityProperty, alpha) }
+        };
         var source = new CancellationTokenSource();
         var animation = new Avalonia.Animation.Animation
         {
             Duration = TimeSpan.FromSeconds(1.8), IterationCount = Avalonia.Animation.IterationCount.Infinite, Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
-            Children =
-            {
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0), Setters = { new Setter(Border.BoxShadowProperty, BoxShadows.Parse(Ring(0, .75))) } },
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(.7), Setters = { new Setter(Border.BoxShadowProperty, BoxShadows.Parse(Ring(7, 0))) } },
-                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1), Setters = { new Setter(Border.BoxShadowProperty, BoxShadows.Parse(Ring(0, 0))) } },
-            }
+            Children = { Frame(0, 0, .75), Frame(.7, 7, 0), Frame(1, 0, 0) }
         };
-        pulses.Add(light, new PulseRun(source, new RunningAnimation(animation.RunAsync(light, source.Token))));
+        pulses.Add(light, new PulseRun(source, new RunningAnimation(animation.RunAsync(ring, source.Token))));
     }
     public static bool IsPulsing(Control control) => pulses.TryGetValue(control, out var run) && run.Run.Alive;
     /// <summary>A heading in the app's display face, the same as the dashboard's workspace title, so every page and pop-up names itself alike.</summary>
@@ -658,6 +662,7 @@ public sealed class AccountList : StackPanel
             rows.Add((account, row, today, budget, icon, dot, bar, percent));
         }
         Refresh();
+        if (reveal < 1 || revealApplied) Reveal(reveal);
         if (pendingGlide is { } glide)
         {
             pendingGlide = null;
@@ -683,6 +688,25 @@ public sealed class AccountList : StackPanel
     private static Avalonia.Media.Transformation.TransformOperations Shift(double y)
         => Avalonia.Media.Transformation.TransformOperations.Parse($"translateY({y.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px)");
     private (string Name, double Offset)? pendingGlide;
+    private double reveal = 1; private bool revealApplied;
+    /// <summary>
+    /// Fades the rows in one after another and slides each 12 pixels in from the left while the dashboard's account panel opens (the panel's progress, 0 to 1): the first row
+    /// starts at .14 and each next one 45 thousandths later, all done by .90. At 1 the rows are left alone, so dragging to reorder has the transform to itself.
+    /// </summary>
+    public void Reveal(double progress)
+    {
+        reveal = progress;
+        if (progress >= 1 && !revealApplied) return;
+        revealApplied = progress < 1;
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var start = Math.Min(.14 + .045 * i, .55);
+            var e = progress >= 1 ? 1 : DockMotion.Window(progress, start, start + .35);
+            e = 1 - (1 - e) * (1 - e); // Eased out, so each row settles rather than stops.
+            var row = rows[i].Row;
+            row.Opacity = e; row.RenderTransform = e >= 1 ? null : new Avalonia.Media.TranslateTransform(-12 * (1 - e), 0);
+        }
+    }
     private void AttachReorder(Button row, string name)
     {
         Point? press = null; var dragging = false; var target = 0; var dragOffset = 0.0;
@@ -968,7 +992,7 @@ public sealed class AccountsGlyph : Control
     }
 }
 
-public enum IconKind { NotesList, Check, Clock, Search, Bell, Repeat, Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Redo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders }
+public enum IconKind { NotesList, Check, Clock, Search, Bell, Repeat, Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Redo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders, Dock }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1210,6 +1234,11 @@ public sealed class IconGlyph : Control
                 context.DrawEllipse(null, pen, new Point(12, 5.3), 1.5, 1.5);
                 context.DrawLine(pen, new Point(3, 12.7), new Point(4.5, 12.7)); context.DrawLine(pen, new Point(7.5, 12.7), new Point(15, 12.7));
                 context.DrawEllipse(null, pen, new Point(6, 12.7), 1.5, 1.5);
+                break;
+            case IconKind.Dock:
+                // A window with its left side set apart: the account panel kept beside the page.
+                context.DrawGeometry(null, pen, Geometry.Parse("M 4.5,3.5 L 13.5,3.5 Q 15.5,3.5 15.5,5.5 L 15.5,12.5 Q 15.5,14.5 13.5,14.5 L 4.5,14.5 Q 2.5,14.5 2.5,12.5 L 2.5,5.5 Q 2.5,3.5 4.5,3.5 Z"));
+                context.DrawLine(pen, new Point(7.2, 3.8), new Point(7.2, 14.2));
                 break;
             case IconKind.Sunrise:
                 // A half sun on the horizon with short rays: the day beginning.

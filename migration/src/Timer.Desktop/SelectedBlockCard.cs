@@ -17,6 +17,9 @@ public sealed class SelectedBlockCard : Border
 {
     private readonly TimerModel model;
     private string? shown;
+    // The one selected block as the card last saw it, and its boxes. An edit made here replaces the block's row, and the card is then brought up to date in place (see
+    // Refresh) rather than rebuilt, so a box that has the focus, or that is about to get it, is still the live one and every commit reads the block as it is now.
+    private TimerModel.SelectedBlock? current; private TextBox? startBox, endBox, lengthBox, noteBox; private ComboBox? accountBox; private int builtAccounts; private bool settingAccount;
     public SelectedBlockCard(TimerModel model)
     {
         this.model = model; Name = "SelectedBlockCard";
@@ -28,6 +31,20 @@ public sealed class SelectedBlockCard : Border
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Sync();
 
+    /// <summary>
+    /// Takes off the card's own chrome (its fill, edge and padding) so it can stand inside another card, as the Selected block tab of the Notes card does while the
+    /// account panel is docked; put back when it returns to its place under the timeline.
+    /// </summary>
+    public void SetDocked(bool inTab)
+    {
+        if (this.inTab == inTab) return;
+        this.inTab = inTab; shown = null; // The tab names it already, so the title is left out and the card is drawn again.
+        Classes.Set("dayCard", !inTab);
+        BorderThickness = inTab ? default : new Thickness(1); Padding = inTab ? default : new Thickness(18, 14, 18, 16); CornerRadius = inTab ? default : new CornerRadius(20);
+        Sync();
+    }
+    private bool inTab;
+
     private string Signature(IReadOnlyList<TimerModel.SelectedBlock> blocks)
         => string.Join("|", blocks.Select(b => $"{b.Account};{b.Start.Ticks};{b.End.Ticks};{b.Minutes};{b.Note};{b.Group?.Sources.Count}"))
             + $"#{model.EditError}#{model.CanMergeSelection}#{model.SelectedDate:yyyyMMdd}#{model.ReviewAccounts.Count}";
@@ -38,7 +55,8 @@ public sealed class SelectedBlockCard : Border
         var blocks = model.SelectedBlocks;
         var signature = Signature(blocks);
         if (signature == shown) return;
-        shown = signature;
+        if (Refresh(blocks)) { shown = signature; return; }
+        shown = signature; current = null;
         Child = blocks.Count == 0 ? Empty() : blocks.Count == 1 ? Single(blocks[0]) : Several(blocks);
     }
 
@@ -64,7 +82,7 @@ public sealed class SelectedBlockCard : Border
     {
         // A fixed height, so the title stays put whether or not there are buttons beside it (one block selected, none, or several).
         var header = Ui.Grid("Auto,*,Auto"); header.RowDefinitions = new RowDefinitions("*"); header.Height = 30;
-        var words = Ui.Horizontal(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Name = "SelectedTitle" });
+        var words = Ui.Horizontal(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Name = "SelectedTitle", IsVisible = !(inTab && title == "Selected block") });
         words.VerticalAlignment = VerticalAlignment.Center;
         foreach (var chip in chips) words.Children.Add(chip);
         Ui.Put(header, words);
@@ -93,7 +111,7 @@ public sealed class SelectedBlockCard : Border
 
     private Control Single(TimerModel.SelectedBlock block)
     {
-        var group = block.IsGroup;
+        var group = block.IsGroup; current = group ? null : block; builtAccounts = model.ReviewAccounts.Count;
         var (header, actions) = Header(group ? "Merged block" : "Selected block", group ? new[] { (Control)Chip($"Merged, {block.Group!.Sources.Count(r => r.Duration > TimeSpan.Zero)} blocks", true) } : Array.Empty<Control>());
         if (group) actions.Children.Add(Ui.Ctl("UnmergeSelected", "Unmerge", IconKind.Merge, "Unmerge", () => model.UngroupEntries(block.Group!.GroupId!), small: true));
         actions.Children.Add(Ui.Ctl("CopySelected", "Copy", IconKind.Copy, "Copy", () => model.CopySelection(), small: true, key: "Ctrl C"));
@@ -110,8 +128,8 @@ public sealed class SelectedBlockCard : Border
         if (!group)
             account.SelectionChanged += (_, _) =>
             {
-                if (account.SelectedItem is not string chosen || chosen.Equals(BreakAccount.Display(block.Account), StringComparison.OrdinalIgnoreCase)) return;
-                model.MoveEntries(block.Rows, BreakAccount.Stored(chosen));
+                if (settingAccount || current is not { } now || account.SelectedItem is not string chosen || chosen.Equals(BreakAccount.Display(now.Account), StringComparison.OrdinalIgnoreCase)) return;
+                model.MoveEntries(now.Rows, BreakAccount.Stored(chosen));
             };
         var start = Box("SelectedStart", TimeText.ShowClock(block.Start, day), !group); var end = Box("SelectedEnd", TimeText.ShowClock(block.End, day), !group);
         var length = Box("SelectedLength", TimeText.ShowLength(block.End - block.Start), !group);
@@ -121,6 +139,9 @@ public sealed class SelectedBlockCard : Border
         {
             void Commit(string which)
             {
+                // The block as it is now: an earlier edit from this card has replaced its row, so the one this box was built with may be gone.
+                if (current is not { Row: not null } block) return;
+                var day = block.Start.Date;
                 if (!TimeText.TryParseClock(start.Text, day, false, out var newStart)) { model.Refuse("Start: try 09:30"); return; }
                 DateTime newEnd;
                 if (which == "length")
@@ -131,7 +152,7 @@ public sealed class SelectedBlockCard : Border
                 else if (!TimeText.TryParseClock(end.Text, day, true, out newEnd)) { model.Refuse("End: try 10:30"); return; }
                 if (newEnd <= newStart) { model.Refuse("End must be after start"); return; }
                 if (newEnd > day.AddDays(1)) { model.Refuse("Can’t pass midnight"); return; }
-                if (newStart == block.Start && newEnd == block.End) { shown = null; Sync(); return; }
+                if (newStart == block.Start && newEnd == block.End) { ShowBoxes(block, true); return; } // Nothing changed, so the boxes are only tidied (09:5 becomes 09:05).
                 model.EditEntry(block.Row!, block.Row!.Account, newStart, newEnd, block.Note);
             }
             Committing(start, () => Commit("start")); Committing(end, () => Commit("end")); Committing(length, () => Commit("length"));
@@ -146,7 +167,8 @@ public sealed class SelectedBlockCard : Border
         }
         var note = new TextBox { Name = "SelectedNote", Text = block.Note, Height = 38, Watermark = group ? "" : "Add a note", IsEnabled = !group, HorizontalAlignment = HorizontalAlignment.Stretch };
         var noteField = new StackPanel { Spacing = 5 }; noteField.Children.Add(Label("Entry note")); noteField.Children.Add(note); body.Children.Add(noteField);
-        if (!group) Committing(note, () => { if ((note.Text ?? "").Trim() != block.Note.Trim()) model.EditEntry(block.Row!, block.Row!.Account, block.Start, block.End, note.Text ?? ""); });
+        if (!group) Committing(note, () => { if (current is { Row: not null } now && (note.Text ?? "").Trim() != now.Note.Trim()) model.EditEntry(now.Row, now.Row.Account, now.Start, now.End, note.Text ?? ""); });
+        if (!group) { startBox = start; endBox = end; lengthBox = length; noteBox = note; accountBox = account; }
         return Page(header, body);
     }
 
@@ -179,12 +201,40 @@ public sealed class SelectedBlockCard : Border
         return Page(header, body);
     }
 
+    /// <summary>
+    /// Brings a card that already shows one block up to date with that block's new row, times and note, without rebuilding it. A box that has the focus keeps what is being
+    /// typed in it, unless the edit was refused, when every box goes back to the saved values. Returns false when the card has to be rebuilt (another kind of card, a different
+    /// list of accounts, or a different day).
+    /// </summary>
+    private bool Refresh(IReadOnlyList<TimerModel.SelectedBlock> blocks)
+    {
+        if (blocks.Count != 1 || blocks[0].IsGroup || current is not { } old || startBox is null || endBox is null || lengthBox is null || noteBox is null || accountBox is null
+            ) return false;
+        var block = blocks[0];
+        if (block.Start.Date != old.Start.Date || model.ReviewAccounts.Count != builtAccounts) return false;
+        if (accountBox.ItemsSource is not IEnumerable<string> names || !names.Any(n => n.Equals(BreakAccount.Display(block.Account), StringComparison.OrdinalIgnoreCase))) return false;
+        current = block;
+        ShowBoxes(block, model.EditError is not null);
+        settingAccount = true;
+        try { accountBox.SelectedItem = names.First(n => n.Equals(BreakAccount.Display(block.Account), StringComparison.OrdinalIgnoreCase)); }
+        finally { settingAccount = false; }
+        return true;
+    }
+
+    // Writes the block's values into the boxes. A box that has the focus is left alone (its owner is typing in it) unless every box is to go back to the saved values.
+    private void ShowBoxes(TimerModel.SelectedBlock block, bool all)
+    {
+        void Set(TextBox? box, string text) { if (box is not null && (all || !box.IsFocused) && box.Text != text) box.Text = text; }
+        Set(startBox, TimeText.ShowClock(block.Start, block.Start.Date)); Set(endBox, TimeText.ShowClock(block.End, block.Start.Date));
+        Set(lengthBox, TimeText.ShowLength(block.End - block.Start)); Set(noteBox, block.Note);
+    }
+
     private static TextBox Box(string name, string text, bool enabled) => new() { Name = name, Text = text, Height = 38, IsEnabled = enabled, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center };
     private static void Field(Grid grid, int column, string label, Control control)
     {
         var stack = new StackPanel { Spacing = 5 }; stack.Children.Add(Label(label)); stack.Children.Add(control); Ui.Put(grid, stack, column);
     }
-    /// <summary>Applies a box when Enter is pressed in it or when it loses the focus.</summary>
+    /// <summary>Applies a box when Enter is pressed in it or when it loses the focus (once for the two together, until it is typed in again).</summary>
     private static void Committing(TextBox box, Action commit)
     {
         var done = false;
@@ -192,5 +242,7 @@ public sealed class SelectedBlockCard : Border
         box.LostFocus += (_, _) => Once();
         box.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Once(); e.Handled = true; } };
         box.GotFocus += (_, _) => done = false;
+        // The same box serves one edit after another now, so typing in it again is a new edit even though it never lost the focus.
+        box.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) done = false; };
     }
 }

@@ -80,11 +80,12 @@ public sealed class SettingsView : Grid
         var stack = new StackPanel { Spacing = 0 };
         stack.Children.Add(Label("Theme"));
         // System follows the computer's light or dark setting. Each tile is a small picture of the dashboard in that theme.
-        var tiles = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Margin = new Thickness(0, 6, 0, 16), HorizontalAlignment = HorizontalAlignment.Left };
+        // Three equal tiles that share the card's width up to their own 172, so with the account panel docked and the card narrower they narrow too, side by side, instead of running past the card's edge.
+        var tiles = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1, Columns = 3, Margin = new Thickness(0, 6, 0, 16), HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 3 * 172 + 24 };
         var buttons = new Dictionary<string, Button>();
         foreach (var (choice, words) in new[] { (ThemeLibrary.System, "System"), (AppThemes.Light.Name, "Light"), (AppThemes.Dark.Name, "Dark") })
         {
-            var tile = new Button { Name = "Theme" + words, Width = 172, HorizontalContentAlignment = HorizontalAlignment.Stretch }; tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile"); tile.Padding = new Thickness(8);
+            var tile = new Button { Name = "Theme" + words, MaxWidth = 172, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 12, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch }; tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile"); tile.Padding = new Thickness(8);
             var caption = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(2, 8, 0, 0) };
             caption.Children.Add(Ui.Text(words, 14)); ((TextBlock)caption.Children[0]).FontWeight = FontWeight.SemiBold;
             var picture = ThemePicture(words);
@@ -117,7 +118,9 @@ public sealed class SettingsView : Grid
         slider.PropertyChanged += (_, e) => { if (e.Property == Avalonia.Controls.Primitives.RangeBase.ValueProperty && slider.IsEnabled) { var chosen = (int)Math.Round(slider.Value / 10) * 10; if (chosen != model.PillScalePercent) model.SetPillScale(chosen); } };
         automatic.Click += (_, _) => { model.SetPillScale(automatic.IsChecked == true ? null : (int)Math.Round(slider.Value / 10) * 10); SyncSize(); };
         syncs.Add(SyncSize); SyncSize();
-        stack.Children.Add(Rows(Row("Pill size", null, Ui.Horizontal(slider, automatic), sizeNote),
+        // The note sits under the whole row, not in the label's column, which is narrow beside the slider and wrapped to five lines.
+        sizeNote.Margin = new Thickness(0, 0, 0, 10);
+        stack.Children.Add(Rows(new StackPanel { Children = { Row("Pill size", null, Ui.Horizontal(slider, automatic)), sizeNote } },
             Toggle("Window shadows", "Soft shadows under the pill and the dashboard.", "WindowShadows", () => model.Shadows, v => model.SetShadows(v)),
             Toggle("Show tooltips", "With tooltips off, budget percentages are still in Week overview.", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v))));
         return stack;

@@ -205,12 +205,15 @@ public sealed class DashboardWindow : Window
     public Action? OpenPill { get; set; }
     private readonly TimerModel model;
     private readonly TextBlock workspaceTitle = new() { FontSize = 26, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Center };
-    private Button todayButton = null!; private TextBlock todayWords = null!;
+    private Button todayButton = null!; private TextBlock todayWords = null!; private Reserve selectedHost = null!; private bool selectedInTab; private const double SelectedCardWidth = 430;
+    private Fold todayFold = null!, unallocatedFold = null!, breaksFold = null!;
     private Control? totalsStrip, railBorder; private Button zoomOut = null!, zoomIn = null!;
     private readonly IconGlyph dayFlag = new(IconKind.Flag), daySun = new(IconKind.Sunrise);
     private StatusFace face = null!;
     private Popup finishPopup = null!;
-    private Grid accountsLayer = null!; private Border accountsScrim = null!, accountsDrawer = null!;
+    private Grid accountsLayer = null!; private Border accountsScrim = null!, accountsDrawer = null!, accountsInner = null!, dockRoom = null!;
+    private AccountsPanel accountsPanel = null!; private DockMotion dock = null!;
+    private Avalonia.Threading.DispatcherTimer? dockTimer; private long dockClock;
     private BreakButton breakButton = null!;
     private readonly Avalonia.Media.ScaleTransform railScale = new(1, 1); private double currentRailScale = 1; private StackPanel railTopStack = null!;
     /// <summary>Where the rail finds out the size the pill is drawn at, so its top matches the pill's exactly and nothing jumps when one becomes the other.</summary>
@@ -249,7 +252,7 @@ public sealed class DashboardWindow : Window
         Background = Avalonia.Media.Brushes.Transparent;
         // The rail is the pill opened out: it runs the full height, with the same lights, clock and circle at its top, the views below them, and the
         // break, day and close controls at its foot. The workspace beside it has a header with the date and the gear.
-        var root = Ui.Grid("Auto,*", "*");
+        var root = Ui.Grid("Auto,Auto,*", "*");
         var rail = new Border { Width = RailWidth, BorderThickness = new Thickness(0, 0, 1, 0), Name = "DashboardRail" }; rail.Classes.Add("panel");
         rail.Bind(Border.BorderBrushProperty, rail.GetResourceObservable("Line")); railBorder = rail;
         var railGrid = Ui.Grid("*", "*,Auto");
@@ -287,6 +290,8 @@ public sealed class DashboardWindow : Window
         Ui.Put(railGrid, railFoot, row: 1);
         BuildRailPopups(railGrid);
         rail.Child = railGrid; Ui.Put(root, rail);
+        // The room the docked account panel takes from the page: nothing while it is shut, and as wide as the panel is out when it is docked.
+        dockRoom = new Border { Name = "DockRoom", Width = 0, IsHitTestVisible = false }; Ui.Put(root, dockRoom, 1);
         Ui.DragHeader(railTop, this, "RailDragHeader");
         var body = Ui.Grid("*", "*");
         var review = Ui.Grid("*", "Auto,*");
@@ -326,7 +331,10 @@ public sealed class DashboardWindow : Window
         var searchGrid = new Grid { Width = 240 }; searchGrid.Children.Add(searchBox); searchGrid.Children.Add(new IconGlyph(IconKind.Search) { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(11, 0, 0, 0), IsHitTestVisible = false, Opacity = .7 });
         searchHost = searchGrid;
         var dateHost = new Grid { Children = { datePick, dateCalendar } };
-        var steps = Ui.Horizontal(searchHost, previous, dateHost, next, todayButton, bellHost); steps.Spacing = 8;
+        // The gaps are margins, not the stack's spacing, so the Today button's can fold away with it (see Fold) while the account panel is docked.
+        todayFold = new Fold(todayButton, 8) { Name = "TodayFold" };
+        searchHost.Margin = new Thickness(0, 0, 8, 0); dateHost.Margin = new Thickness(8, 0, 0, 0); next.Margin = new Thickness(8, 0, 0, 0); bellHost.Margin = new Thickness(8, 0, 0, 0);
+        var steps = Ui.Horizontal(searchHost, previous, dateHost, next, todayFold, bellHost); steps.Spacing = 0;
         Ui.Put(nav, steps, 1);
         // Settings is a gear at the top right, which also closes it again.
         settingsRail = Ui.Ctl("Settings", null, IconKind.Gear, "Settings", ShowSettings); settingsRail.Margin = new Thickness(8, 0, 0, 0);
@@ -351,16 +359,18 @@ public sealed class DashboardWindow : Window
         var cardGrid = Ui.Grid("*", "Auto,Auto"); Ui.Put(cardGrid, timelineHost); Ui.Put(cardGrid, tools, 0, 1);
         timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Padding = new Thickness(0, 14, 0, 12), VerticalAlignment = VerticalAlignment.Top };
         timelineCard.Classes.Add("dayCard");
-        selectedCard = new SelectedBlockCard(model) { Margin = new Thickness(0, 14, 7, 0) };
+        // The Selected block card is laid out at its own width (Reserve) so it can be narrowed to nothing, clipped, while the account panel is docked.
+        selectedCard = new SelectedBlockCard(model);
+        selectedHost = new Reserve(selectedCard, SelectedCardWidth) { Name = "SelectedBlockHost", Margin = new Thickness(0, 14, 7, 0) };
         notesCard = new NotesCard(model) { Margin = new Thickness(7, 14, 0, 0) };
         timelinePage = Ui.Grid("1.15*,*", "Auto,*"); timelinePage.Margin = new Thickness(0, 14, 0, 0); timelinePage.Name = "TimelinePage";
-        Ui.Put(timelinePage, timelineCard); Grid.SetColumnSpan(timelineCard, 2); Ui.Put(timelinePage, selectedCard, 0, 1); Ui.Put(timelinePage, notesCard, 1, 1);
+        Ui.Put(timelinePage, timelineCard); Grid.SetColumnSpan(timelineCard, 2); Ui.Put(timelinePage, selectedHost, 0, 1); Ui.Put(timelinePage, notesCard, 1, 1);
         Ui.Put(review, timelinePage, row: 1);
         // The title row's empty middle still drags the window.
         var rightColumn = Ui.Grid("*", "*");
         Ui.Put(rightColumn, review); Ui.DragHeader(nav, this);
         Ui.Put(body, rightColumn);
-        Ui.Put(root, body, 1);
+        Ui.Put(root, body, 2);
         // Notes, refused edits and failed saves float over the lowest part of the workspace, so they never push anything up.
         messageBar = new MessageBar(model); Ui.Put(review, messageBar, row: 1);
         // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
@@ -398,7 +408,7 @@ public sealed class DashboardWindow : Window
         KeyDown += (_, e) =>
         {
             // Escape takes the top dialog away first, and only then clears the selection.
-            if (e.Key == Avalonia.Input.Key.Escape) { if (Dialogs.CloseTop()) { } else if (accountsLayer.IsVisible) CloseAccounts(); else model.ClearSelection(); e.Handled = true; }
+            if (e.Key == Avalonia.Input.Key.Escape) { if (Dialogs.CloseTop()) { } else if (dock.WantsOpen && !dock.WantsPinned) CloseAccounts(); else model.ClearSelection(); e.Handled = true; }
             // Ctrl+C copies the selected blocks and Ctrl+V pastes them on the timeline, but never while typing in a text box.
             else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key is Avalonia.Input.Key.C or Avalonia.Input.Key.V && !settingsMode && FocusManager?.GetFocusedElement() is not TextBox)
             {
@@ -447,39 +457,108 @@ public sealed class DashboardWindow : Window
             PlacementConstraintAdjustment = Avalonia.Controls.Primitives.PopupPositioning.PopupPositionerConstraintAdjustment.FlipX | Avalonia.Controls.Primitives.PopupPositioning.PopupPositionerConstraintAdjustment.SlideY };
         host.Children.Add(finishPopup);
     }
-    // The account list unfolds from the rail's right edge, full height and in the rail's own colours, with the page behind it dimmed. It is a layer
-    // over the workspace rather than a pop-up, so it sits on the page's grid and the rail stays where it is. The accounts button, Escape or a click
-    // on the dimmed page folds it away.
+    // The account panel unfolds from the rail's right edge, full height and in the rail's own colours. Docked, the page gives up the room the panel takes
+    // (the spacer column beside the rail) so both can be used at once; floating, it lies over the page, which is dimmed, until it is put away. One eased
+    // progress (DockMotion) drives the panel's width, the page's room, the dimming, the shadow and the rows, so every part of it moves together and a
+    // turn round half way carries on from where it is. The panel's contents are laid out at their full width and clipped, so nothing in them reflows.
     private void BuildAccountsLayer()
     {
-        var content = new AccountsPanel(model, "Rail", compact: false, reorderable: true, () => { CloseAccounts(); model.OpenAccounts(); });
+        dock = new DockMotion(model.AccountsDockOpen, model.AccountsDocked);
+        accountsPanel = new AccountsPanel(model, "Rail", compact: false, reorderable: true, () => { CloseFloating(); model.OpenAccounts(); }, pin: () => SetDocked(!dock.WantsPinned));
+        var content = accountsPanel;
         railAccountScroll = content.Scroll;
-        accountsDrawer = new Border { Name = "AccountsDrawer", Width = 300, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(14, 20, 14, 20), BorderThickness = new Thickness(0, 0, 1, 0),
-            BoxShadow = Avalonia.Media.BoxShadows.Parse("8 0 28 0 #29141E46"), Child = content };
+        accountsInner = new Border { Name = "AccountsDrawerInner", Width = DockMotion.PanelWidth, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(12, 18, 12, 14), Child = content };
+        accountsDrawer = new Border { Name = "AccountsDrawer", Width = DockMotion.PanelWidth, HorizontalAlignment = HorizontalAlignment.Left, BorderThickness = new Thickness(0, 0, 1, 0), ClipToBounds = true, Child = accountsInner };
         accountsDrawer.Classes.Add("panel"); accountsDrawer.Bind(Border.BorderBrushProperty, accountsDrawer.GetResourceObservable("Line"));
         accountsScrim = new Border { Name = "AccountsScrim", Background = Avalonia.Media.Brushes.Transparent };
         accountsScrim.PointerPressed += (_, e) => { CloseAccounts(); e.Handled = true; };
         accountsLayer = new Grid { Name = "AccountsLayer", IsVisible = false, Margin = new Thickness(RailWidth, 0, 0, 0) };
         accountsLayer.Children.Add(accountsScrim); accountsLayer.Children.Add(accountsDrawer);
+        dock.Changed += OnDockChanged;
+        OnDockChanged();
+    }
+    // Everything that follows the progress, in one place, so one change repaints all of it together.
+    private void OnDockChanged()
+    {
+        var p = dock.P; var pin = dock.Pin;
+        dockRoom.Width = DockMotion.PanelWidth * dock.Room;
+        accountsDrawer.Width = DockMotion.PanelWidth * p;
+        accountsLayer.IsVisible = p > 0;
+        // The page is dimmed only while the panel floats over it, and a click on the dimmed page puts the panel away.
+        var dark = ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark;
+        var dim = p * (1 - pin);
+        accountsScrim.Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromArgb((byte)Math.Round((dark ? 0x57 : 0x29) * dim), 0, 0, 0));
+        accountsScrim.IsHitTestVisible = pin < .5 && p > 0;
+        // The shadow goes as the panel is docked.
+        var shadow = (byte)Math.Round(0x29 * (1 - pin));
+        accountsDrawer.BoxShadow = shadow == 0 ? default : new Avalonia.Media.BoxShadows(new Avalonia.Media.BoxShadow { OffsetX = 8, Blur = 28, Color = Avalonia.Media.Color.FromArgb(shadow, 0x14, 0x1E, 0x46) });
+        accountsPanel.Reveal(p);
+        ReflowPage(dock.Room);
+        accountsPanel.SetPinned(dock.WantsPinned);
+        face?.SetAccountsAmount(p);
+        if (dock.Moving) StartDockTimer();
+    }
+    // The page gives way to the docked panel in order, each part over its own stretch of the room taken (r, 0 to 1), as the board draws it: the Today button and the
+    // day's Unallocated and Breaks figures fold away first (0 to .5), the Selected block card narrows to nothing (.12 to .55) with its contents fading out ahead of it
+    // and the Notes card takes its room and grows a Selected block tab in its place (.45 to .85). The timeline itself keeps its zoom and position, so nothing in it moves.
+    private void ReflowPage(double r)
+    {
+        var fold = DockMotion.Window(r, 0, .5);
+        todayFold.Amount = fold; unallocatedFold.Amount = fold; breaksFold.Amount = fold;
+        var narrow = DockMotion.Window(r, .12, .55);
+        timelinePage.ColumnDefinitions[0].Width = new GridLength(1.15 * (1 - narrow), GridUnitType.Star);
+        selectedHost.Margin = new Thickness(0, 14, 7 * (1 - narrow), 0); notesCard.Margin = new Thickness(7 * (1 - narrow), 14, 0, 0);
+        selectedHost.Opacity = 1 - DockMotion.Window(r, .08, .40); selectedHost.IsVisible = narrow < 1; selectedHost.IsHitTestVisible = narrow < .5;
+        // Once the card has folded to nothing it moves into the Notes card's tab, where a picked block is edited; it comes out again before it unfolds.
+        var inTab = narrow >= 1;
+        if (inTab != selectedInTab)
+        {
+            selectedInTab = inTab;
+            if (inTab) { selectedHost.Child = null; selectedCard.SetDocked(true); notesCard.HostSelected(selectedCard); }
+            else { notesCard.HostSelected(null); selectedCard.SetDocked(false); selectedHost.Child = selectedCard; }
+        }
+        notesCard.SetTab(DockMotion.Window(r, .45, .85));
+        dockedRoom = r; notesPage?.SetDock(r);
+        // The search box in the Notes header gives up a little width with the rest.
+        var search = 240 - 40 * fold; searchHost.Width = search; searchBox.Width = search;
+    }
+    private void StartDockTimer()
+    {
+        if (dockTimer is { IsEnabled: true }) return;
+        dockClock = System.Diagnostics.Stopwatch.GetTimestamp();
+        dockTimer ??= new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(16), Avalonia.Threading.DispatcherPriority.Render, (_, _) =>
+        {
+            var now = System.Diagnostics.Stopwatch.GetTimestamp();
+            var step = System.Diagnostics.Stopwatch.GetElapsedTime(dockClock, now); dockClock = now;
+            if (!IsVisible) dock.Finish(); else dock.Advance(step);
+            if (!dock.Moving) dockTimer?.Stop();
+        });
+        dockTimer.Start();
     }
     private ScrollViewer? railAccountScroll;
     /// <summary>Whether the account drawer beside the rail, or the Finish day question, is open.</summary>
-    public bool AccountsOpen => accountsLayer.IsVisible;
+    public bool AccountsOpen => dock.WantsOpen;
+    /// <summary>Whether the account panel is docked beside the page (the page makes room for it) rather than floating over it.</summary>
+    public bool AccountsDockedNow => dock.WantsPinned;
+    /// <summary>How far out the account panel is, 0 to 1, and how docked, 0 to 1 (for tests).</summary>
+    public DockMotion Dock => dock;
     public bool FinishQuestionOpen => finishPopup.IsOpen;
     /// <summary>The account list's scroll box, so tests can read its limit.</summary>
     public ScrollViewer? AccountScroll => railAccountScroll;
-    /// <summary>Opens the accounts beside the rail. Choosing one starts or switches to it and folds the list away.</summary>
+    /// <summary>Opens the accounts beside the rail. Docked they stay open for as long as they are wanted; floating, choosing an account puts them away.</summary>
     public void ShowAccountsPanel()
     {
         finishPopup.IsOpen = false;
-        accountsScrim.Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromArgb(ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark ? (byte)0x57 : (byte)0x29, 0, 0, 0));
-        accountsActive = model.ActiveAccount; accountsLayer.IsVisible = true; face.SetAccountsOpen(true);
+        accountsActive = model.ActiveAccount; dock.SetOpen(true); face.SetAccountsOpen(true, wash: false); model.SetAccountsDockOpen(true);
     }
-    private void CloseAccounts() { accountsLayer.IsVisible = false; face.SetAccountsOpen(false); }
-    private void ToggleAccountsPanel() { if (accountsLayer.IsVisible) CloseAccounts(); else ShowAccountsPanel(); }
+    private void CloseAccounts() { dock.SetOpen(false); face.SetAccountsOpen(false, wash: false); model.SetAccountsDockOpen(false); }
+    /// <summary>Puts the account panel away only if it floats over the page. A docked one is part of the page and stays until the button is pressed again.</summary>
+    private void CloseFloating() { if (dock.WantsOpen && !dock.WantsPinned) CloseAccounts(); }
+    private void ToggleAccountsPanel() { if (dock.WantsOpen) CloseAccounts(); else ShowAccountsPanel(); }
+    private void SetDocked(bool docked) { dock.SetPinned(docked); model.SetAccountsDocked(docked); }
     private string? accountsActive;
-    /// <summary>Puts the account drawer and the Finish day question away, so the dashboard is plain again when it comes back.</summary>
-    public void CloseFlyouts() { CloseAccounts(); finishPopup.IsOpen = false; }
+    /// <summary>Puts a floating account panel and the Finish day question away, so the dashboard is plain again when it comes back. A docked panel is left as it is.</summary>
+    public void CloseFlyouts() { CloseFloating(); finishPopup.IsOpen = false; }
     /// <summary>Draws the rail's top at the size the pill is drawn, and narrows the rail to the pill's width at that size.</summary>
     public void SetRailScale(double scale)
     {
@@ -501,7 +580,7 @@ public sealed class DashboardWindow : Window
     private void OnDayButton()
     {
         if (!model.DayStarted) { model.ToggleDay(); return; }
-        CloseAccounts();
+        CloseFloating();
         // Just the working time: what stops is plain from the button, and the card stays small.
         finishSummary.Text = "Working time " + model.Format(model.Engine.Totals(model.Engine.Now).Working) + ".";
         finishPopup.IsOpen = true;
@@ -519,15 +598,17 @@ public sealed class DashboardWindow : Window
             if (head is StackPanel headRow) headRow.Spacing = 5;
             var column = new StackPanel { Name = name, Spacing = 0 }; column.Children.Add(head); column.Children.Add(value); return column;
         }
-        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, Name = "DayTotals", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0, Name = "DayTotals", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         workingValue.Name = "TotalsWorkingValue";
         strip.Children.Add(Stat("Working time", workingValue, "TotalsWorking"));
+        // The gaps are margins so the figures that fold away (Unallocated and Breaks, while the account panel is docked) take theirs with them.
+        dayBar.Margin = new Thickness(16, 0, 0, 0);
         strip.Children.Add(dayBar);
-        strip.Children.Add(Stat("Allocated", allocatedValue, "TotalsAllocated"));
-        strip.Children.Add(Stat("Unallocated", unallocatedValue, "TotalsUnallocated"));
+        var allocated = Stat("Allocated", allocatedValue, "TotalsAllocated"); allocated.Margin = new Thickness(16, 0, 0, 0); strip.Children.Add(allocated);
+        unallocatedFold = new Fold(Stat("Unallocated", unallocatedValue, "TotalsUnallocated"), 16) { Name = "TotalsUnallocatedFold" }; strip.Children.Add(unallocatedFold);
         var amber = new Avalonia.Controls.Shapes.Ellipse { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center }; amber.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, amber.GetResourceObservable("Break"));
-        strip.Children.Add(Stat("Breaks", breaksValue, "TotalsBreaks", amber));
-        overtimeStat = Stat("Overtime", overtimeValue, "TotalsOvertime"); strip.Children.Add(overtimeStat);
+        breaksFold = new Fold(Stat("Breaks", breaksValue, "TotalsBreaks", amber), 16) { Name = "TotalsBreaksFold" }; strip.Children.Add(breaksFold);
+        overtimeStat = Stat("Overtime", overtimeValue, "TotalsOvertime"); overtimeStat.Margin = new Thickness(16, 0, 0, 0); strip.Children.Add(overtimeStat);
         overtimeValue.Classes.Add("overtimeText");
         return strip;
     }
@@ -633,7 +714,8 @@ public sealed class DashboardWindow : Window
         // The card hangs from a point under the bell, so it reads as coming from it: a small triangle of the card's own fill over its top edge, with only its two slanted
         // sides drawn in the line colour, so the card's border runs into it. The room round the card is for its shadow.
         var flyout = new NotificationsFlyout(model);
-        bellPopup.Child = HangingCard.Hang(flyout, Math.Max(38, bell.Bounds.Width) / 2); bellPopup.HorizontalOffset = HangingCard.Room.Right; bellPopup.VerticalOffset = HangingCard.TopOffset; bellPopup.IsOpen = true;
+        var half = Math.Max(38, bell.Bounds.Width) / 2; var shift = HangingCard.ShiftForCorner(half, 18); // The bell is near the card's end, so the card sits a little past it to keep the point off the rounded corner.
+        bellPopup.Child = HangingCard.Hang(flyout, half + shift); bellPopup.HorizontalOffset = HangingCard.Room.Right + shift; bellPopup.VerticalOffset = HangingCard.TopOffset; bellPopup.IsOpen = true;
     }
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     // "19 – 25 Oct", or "28 Sep – 4 Oct" when the week crosses a month.
@@ -644,7 +726,8 @@ public sealed class DashboardWindow : Window
     }
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
     // The Notes page is built once and kept: it listens to the model itself, so coming back to it finds the search and the form as they were.
-    private NotesPage NotesPageInstance() { if (notesPage is null) { notesPage = new NotesPage(model) { Query = searchBox.Text ?? "" }; } return notesPage; }
+    private double dockedRoom;
+    private NotesPage NotesPageInstance() { if (notesPage is null) { notesPage = new NotesPage(model) { Query = searchBox.Text ?? "" }; notesPage.SetDock(dockedRoom); } return notesPage; }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
     private void Refresh(bool refreshWorkspace)
     {
@@ -663,7 +746,7 @@ public sealed class DashboardWindow : Window
         var dayTip = model.DayStarted ? "Finish day" : model.Engine.Finished ? "Start day again" : "Start day";
         ToolTip.SetTip(day, dayTip); Avalonia.Automation.AutomationProperties.SetName(day, dayTip);
         if (finishPopup.IsOpen && !model.DayStarted) finishPopup.IsOpen = false;
-        if (accountsLayer.IsVisible && model.ActiveAccount != accountsActive) CloseAccounts(); // Choosing an account puts the list away.
+        if (dock.WantsOpen && !dock.WantsPinned && model.ActiveAccount != accountsActive) CloseAccounts(); // Choosing an account puts a floating list away.
         // The bar under the timeline belongs to the Timeline page alone, and zoom stops at its ends.
         zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         breakButton.Refresh(); breakButton.Classes.Set("onBreak", onBreak);

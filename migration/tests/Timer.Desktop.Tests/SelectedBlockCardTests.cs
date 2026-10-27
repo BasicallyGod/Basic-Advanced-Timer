@@ -28,6 +28,49 @@ public sealed class SelectedBlockCardTests
     private static void Enter(Control box) => box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
     private static void Click(Control root, string name) { Find<Button>(root, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
 
+    // Quick edits: the box the user moves to is the one that was on screen before the first edit's row replaced the block's, so it must still be live, and every box
+    // reads the block as it is now. Before, the card was rebuilt after each edit, and a box already clicked into committed against the old row ("This entry changed").
+    [AvaloniaFact]
+    public void QuickSuccessiveEditsToStartEndAndLengthAllApplyWithoutReselecting()
+    {
+        var model = Model(out var engine); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            model.SelectBlock(new[] { engine.Sessions[2] }, false); Settle(window);
+            var start = Find<TextBox>(window, "SelectedStart"); var end = Find<TextBox>(window, "SelectedEnd"); var length = Find<TextBox>(window, "SelectedLength");
+            start.Text = "10:45"; Enter(start); // The boxes are the ones that were there before this edit.
+            end.Text = "11:15"; Enter(end);
+            Assert.Null(model.EditError); Assert.Equal("10:45:00", engine.Sessions[2].Start); Assert.Equal("0:30", length.Text);
+            length.Text = "1:00"; Enter(length);
+            Assert.Null(model.EditError); Assert.Equal(60, engine.Sessions[2].Duration.TotalMinutes); Assert.Equal("11:45:00", end.Text);
+            for (var i = 0; i < 5; i++) { end.Text = $"11:{50 + i}"; Enter(end); start.Text = $"10:{40 + i}"; Enter(start); Assert.Null(model.EditError); }
+            Assert.Same(start, Find<TextBox>(window, "SelectedStart")); // The same boxes all along, so a click or Tab into one is never lost.
+            Assert.Equal("10:44:00", engine.Sessions[2].Start); Assert.Equal("11:54:00", TimeText.ShowClock(engine.Sessions[2].To, Day));
+            // Each was its own undo step, and the card still shows the block.
+            Assert.Same(engine.Sessions[2], Assert.Single(model.SelectedRows)); Assert.True(model.UndoEdit());
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void AnEditTypedInABoxIsNotOverwrittenByARefreshButARefusedOneRestoresEveryBox()
+    {
+        var model = Model(out var engine); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            model.SelectBlock(new[] { engine.Sessions[2] }, false); Settle(window);
+            var start = Find<TextBox>(window, "SelectedStart"); var end = Find<TextBox>(window, "SelectedEnd"); var length = Find<TextBox>(window, "SelectedLength");
+            end.Focus(); Dispatcher.UIThread.RunJobs(); Assert.True(end.IsFocused);
+            end.Text = "11:3"; // Half typed in the box that has the focus,
+            Assert.True(model.NudgeSelection(1)); // while the block changes under it.
+            Assert.Equal("11:3", end.Text); Assert.Equal("0:31", length.Text); Assert.Equal("11:00:00", start.Text);
+            end.Text = "10:00"; Enter(end); // Before the start: refused, so every box goes back to what is saved.
+            Assert.Equal("11:31:00", end.Text); Assert.Equal("11:00:00", start.Text);
+            end.Text = "11:40"; Enter(end); Assert.Equal("0:40", length.Text); // And the same box takes the next edit.
+        }
+        finally { window.Close(); }
+    }
+
     [AvaloniaFact]
     public void ChangingTheStartKeepsTheEndAndTheBlockStaysSelected()
     {

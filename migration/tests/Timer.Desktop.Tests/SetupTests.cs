@@ -69,7 +69,7 @@ public sealed class SetupTests
         {
             Settle(window);
             Assert.True(window.SetupShowing);
-            var body = window.GetVisualDescendants().OfType<Grid>().First(g => g.Children.Contains(Find<Border>(window, "SetupCard").Parent!) is false && g.ColumnDefinitions.Count == 2);
+            var body = window.GetVisualDescendants().OfType<Grid>().First(g => g.Children.Contains(Find<Border>(window, "SetupCard").Parent!) is false && g.ColumnDefinitions.Count == 3);
             Assert.IsType<Avalonia.Media.BlurEffect>(body.Effect); Assert.False(body.IsHitTestVisible);
             Assert.Equal("Step 1 of 5", window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text is { } x && x.StartsWith("Step ")).Text);
             // Step 1: rename two examples, add a budget, add a new client.
