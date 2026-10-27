@@ -6,6 +6,15 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 27 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| The rail's reminder pulse is no longer cut off | [23bdaf2](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/23bdaf218bd6a0aea1c6e68832176cce8982db96) | In the dashboard the ring that swells from the blue reminder light was cut flat at the top: the rail draws its top through a layout transform control, which clips to its own bounds. It no longer clips, and a test checks that nothing above the ring does. |
+| Links in notes and meetings | [1dafda1](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/1dafda18458c3c7ee363ebf326912085a1e95252) | Select some words in a note or meeting and paste a web address over them: the words become a link, as in Slack. An address pasted on its own, or typed, is a link too. Links show in the accent and open in the browser (or mail program) when pressed, in the Notes card and the Notes page; everywhere else (tooltips, the bell, the timeline's meeting cards) shows just the words. A link is stored inside the note's words as [words](address), so it is saved and searched like any text, and opening the note to edit shows it written that way. |
+| An account can be taken off a note again | [a959d94](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/a959d9489836511b0bf7b884c728f4276d1f9c99) | Once a # account was put in the form's box in the Notes card there was no way to remove it. The chip now has a cross and takes the account off when pressed, and Backspace in an empty box does the same; the words are kept. |
+| A meeting's day is chosen in the reminder's card | [23bdaf2](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/23bdaf218bd6a0aea1c6e68832176cce8982db96) | The day button on the meeting form in the Notes card opened a plain grey calendar. It now opens the same card as the reminder pop-up (month, the day in words, Set, the cross), without the time column and Remove, hung under the button. |
+
 ## 26 October 2026
 
 | Change | Commit | Details |

@@ -174,4 +174,18 @@ public sealed class Round11Tests
         }
         static int Distance(int[] a, int[] b) => a.Zip(b).Sum(c => Math.Abs(c.First - c.Second));
     }
+
+    [AvaloniaFact]
+    public void TheRailsReminderRingIsNotClippedByAnythingAboveIt()
+    {
+        // The ring swells 7 pixels past the light, above the top of the face, so nothing between it and the rail may clip to its own bounds (a layout transform control does by default).
+        var window = new DashboardWindow(Model()); window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var ring = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "RailReminderRing"); var rail = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DashboardRail");
+            foreach (var up in ring.GetVisualAncestors().TakeWhile(a => a != rail).OfType<Control>().Where(a => a.ClipToBounds))
+                Assert.Fail($"{up.GetType().Name} {up.Name} clips the ring");
+        }
+        finally { window.Close(); }
+    }
 }

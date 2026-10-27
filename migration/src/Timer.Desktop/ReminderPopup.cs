@@ -19,7 +19,8 @@ public static class NoteDates
 /// <summary>
 /// The small pop-up that sets a reminder's day and time (brief items 33 and 42): a month with past days off, hour and
 /// minute boxes with steppers in five-minute steps, four preset times, a summary line, and Remove and Set. It decides
-/// nothing itself: Set and Remove hand the answer back, and the cross closes it.
+/// nothing itself: Set and Remove hand the answer back, and the cross closes it. With <c>dayOnly</c> it picks a day and nothing else (a meeting's day, whose
+/// times are in boxes beside it): the same card, month and footer, without the time column or Remove.
 /// </summary>
 public sealed class ReminderPopup : Border
 {
@@ -34,14 +35,14 @@ public sealed class ReminderPopup : Border
     private readonly Avalonia.Controls.Primitives.UniformGrid presetRow = new() { Columns = 2 };
     private bool syncing;
     // A reminder cannot be set for a day that has gone, but a meeting can be put on one (to note what happened), so only the reminder greys them.
-    private readonly bool allowPast;
+    private readonly bool allowPast, dayOnly;
 
-    public ReminderPopup(Func<DateTime> now, string forText, DateTime? current, Action<DateTime?> answer, Action close, string heading = "Reminder")
+    public ReminderPopup(Func<DateTime> now, string forText, DateTime? current, Action<DateTime?> answer, Action close, string heading = "Reminder", bool dayOnly = false)
     {
-        this.now = now; Name = "ReminderPopup";
+        this.now = now; this.dayOnly = dayOnly; Name = "ReminderPopup";
         var start = current ?? now().Date.AddHours(12); allowPast = heading != "Reminder";
         chosen = start.Date; hour = start.Hour; minute = start.Minute / 5 * 5; month = new DateTime(chosen.Year, chosen.Month, 1);
-        CornerRadius = new CornerRadius(16); BorderThickness = new Thickness(1); Padding = new Thickness(12); Width = 376;
+        CornerRadius = new CornerRadius(16); BorderThickness = new Thickness(1); Padding = new Thickness(12); Width = dayOnly ? 244 : 376;
         Classes.Add("surface"); Classes.Add("flyoutCard");
         BoxShadow = BoxShadows.Parse("0 10 28 0 #29141E46");
         var column = new StackPanel { Spacing = 10 };
@@ -65,15 +66,15 @@ public sealed class ReminderPopup : Border
         Ui.Put(main, calendar);
 
         var right = new StackPanel { Spacing = 6 };
-        right.Children.Add(Label("Time"));
+        if (!dayOnly) right.Children.Add(Label("Time"));
         var time = Ui.Horizontal(Stepper(hourBox, 1, "hour"), new TextBlock { Text = ":", FontSize = 14, FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center, Classes = { "muted" } }, Stepper(minuteBox, 5, "minutes"));
         time.Spacing = 4; right.Children.Add(time); right.Children.Add(presetRow);
-        Ui.Put(main, right, 1);
+        if (dayOnly) main.ColumnDefinitions = new ColumnDefinitions("196"); else Ui.Put(main, right, 1);
         column.Children.Add(main);
 
         var footer = Ui.Grid("*,Auto,Auto"); footer.ColumnSpacing = 8; footer.Margin = new Thickness(0, 0, 0, 0);
         Ui.Put(footer, summary);
-        Ui.Put(footer, Ui.Ctl("ReminderRemove", "Remove", null, "Remove", () => answer(null), small: true), 1);
+        if (!dayOnly) Ui.Put(footer, Ui.Ctl("ReminderRemove", "Remove", null, "Remove", () => answer(null), small: true), 1);
         var set = Ui.Ctl("ReminderSet", "Set", null, "Set", () => answer(Chosen), small: true); set.Classes.Add("primary"); Ui.Put(footer, set, 2);
         var rule = Ui.Rule(); rule.Margin = new Thickness(0, 2, 0, 0); column.Children.Add(rule); column.Children.Add(footer);
         Child = column;
@@ -123,7 +124,7 @@ public sealed class ReminderPopup : Border
             var button = Option(text, hour == preset && minute == 0, () => { hour = preset; minute = 0; Redraw(true); }); button.Name = "ReminderTime" + preset;
             button.Margin = new Thickness(0, 0, 4, 5); button.Padding = new Thickness(4, 0); button.HorizontalAlignment = HorizontalAlignment.Stretch; presetRow.Children.Add(button);
         }
-        summary.Text = NoteDates.When(Chosen, today);
+        summary.Text = dayOnly ? NoteDates.Day(chosen, today) : NoteDates.When(Chosen, today);
     }
 
     private static Button Option(string text, bool on, Action click)

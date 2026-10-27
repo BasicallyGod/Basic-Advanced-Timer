@@ -17,13 +17,14 @@ public static class NoteParts
     }
 
     /// <summary>A small pill: tone is plain, accent (a reminder), late (a reminder that has passed) or quiet (a repeat).</summary>
-    public static Border Chip(string text, string tone, IconKind? icon = null, Control? lead = null)
+    public static Border Chip(string text, string tone, IconKind? icon = null, Control? lead = null, IconKind? trailing = null)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
         var token = tone switch { "accent" => "Accent", "late" => "Overtime", "quiet" => "Muted", _ => "Ink" };
         if (lead is not null) row.Children.Add(lead);
         if (icon is { } kind) row.Children.Add(new IconGlyph(kind) { TintKey = token == "Ink" ? null : token });
         row.Children.Add(Ink(text, token));
+        if (trailing is { } end) row.Children.Add(new IconGlyph(end) { TintKey = token == "Ink" ? "Muted" : token, Width = 11, Height = 11, VerticalAlignment = VerticalAlignment.Center });
         var chip = new Border { Child = row, CornerRadius = new CornerRadius(999), Padding = new Thickness(8, 2), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center };
         chip.Classes.Add("chip"); chip.Classes.Add(tone == "accent" ? "accentChip" : tone == "late" ? "lateChip" : "plainChip");
         return chip;

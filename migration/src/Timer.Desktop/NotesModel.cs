@@ -64,7 +64,9 @@ public sealed class NotesModel
     }
 
     /// <summary>The words shown for a note: without a deadline marker and without the #Tag that has its own chip.</summary>
-    public string Text(DayNote note) => NoteShorthand.Display(note, Names);
+    public string Text(DayNote note) => NoteLinks.Flatten(Words(note));
+    /// <summary>The same words as they are written, with any links still in their <c>[words](address)</c> form: what a row draws as links and what the form is given to edit.</summary>
+    public string Words(DayNote note) => NoteShorthand.Display(note, Names);
     /// <summary>The account a note is tagged with, or null.</summary>
     public string? AccountOf(DayNote note) => NoteShorthand.AccountOf(note.Text, Names);
     /// <summary>When a note's reminder is, or null for a note with none.</summary>

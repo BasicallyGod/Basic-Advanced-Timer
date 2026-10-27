@@ -123,7 +123,7 @@ public sealed class NotesCard : Border
 
     private Control Row(DayNote note)
     {
-        var meeting = NotesModel.IsMeeting(note); var words = Notes.Text(note); var account = Notes.AccountOf(note);
+        var meeting = NotesModel.IsMeeting(note); var words = Notes.Words(note); var account = Notes.AccountOf(note);
         var line = Ui.Grid("Auto,*,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
         // A note has a round tick; a meeting has a calendar mark instead, and is opened by its name.
         Control lead = meeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
@@ -131,12 +131,14 @@ public sealed class NotesCard : Border
         var column = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         if (meeting)
         {
-            var name = Ui.Button(words, () => Notes.RequestEditMeeting(note.Id), "NoteEdit_" + note.Id); name.Classes.Add("flat"); name.Padding = new Thickness(0); name.FontWeight = FontWeight.SemiBold; name.FontSize = 14; name.Bind(TemplatedControl.ForegroundProperty, name.GetResourceObservable("Ink"));
+            var name = Ui.Button(NoteLinks.Flatten(words), () => Notes.RequestEditMeeting(note.Id), "NoteEdit_" + note.Id); name.Classes.Add("flat"); name.Padding = new Thickness(0); name.FontWeight = FontWeight.SemiBold; name.FontSize = 14; name.Bind(TemplatedControl.ForegroundProperty, name.GetResourceObservable("Ink"));
             name.HorizontalAlignment = HorizontalAlignment.Left; ToolTip.SetTip(name, "Edit"); column.Children.Add(name);
+            // A link in the name is pressable in its own right; pressing the rest of the name still opens the meeting.
+            if (NoteLinks.HasLinks(words)) { var block = new TextBlock { TextWrapping = TextWrapping.Wrap }; NoteLinks.Fill(block, words); name.Content = block; }
         }
         else
         {
-            var text = new TextBlock { Text = words, FontSize = 14, TextWrapping = TextWrapping.Wrap, Name = "NoteText_" + note.Id };
+            var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, Name = "NoteText_" + note.Id }; NoteLinks.Fill(text, words);
             if (note.Done) { text.TextDecorations = TextDecorations.Strikethrough; text.Classes.Add("muted"); }
             column.Children.Add(text);
         }
@@ -191,7 +193,7 @@ public sealed class NotesCard : Border
         model.SetNotesCardShowsMeetings(true);
         form = Form.Meeting; editing = id; formDay = meeting.Day.Date;
         var account = Notes.AccountOf(meeting);
-        draft = Notes.Text(meeting); draftAccount = account; draftReminder = null; startText = meeting.At!.Value.ToString(@"hh\:mm"); endText = meeting.End!.Value.ToString(@"hh\:mm");
+        draft = Notes.Words(meeting); draftAccount = account; draftReminder = null; startText = meeting.At!.Value.ToString(@"hh\:mm"); endText = meeting.End!.Value.ToString(@"hh\:mm");
         draftRepeat = Notes.RepeatOf(meeting); scope = null; DrawOverlay(); DrawForm();
     }
 
@@ -218,9 +220,16 @@ public sealed class NotesCard : Border
         // The words, with the account chip and the reminder chip inside the same box.
         var box = Ui.Grid("Auto,*,Auto"); box.ColumnSpacing = 6;
         var frame = new Border { Child = box, Height = 36, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(10, 0, 6, 0) }; frame.Classes.Add("composer");
-        if (draftAccount is { } account) { var chip = NoteParts.Chip("#" + account.Replace(" ", ""), "plain", null, NoteParts.Dot(model, account)); chip.VerticalAlignment = VerticalAlignment.Center; Ui.Put(box, chip); }
+        // The account chip takes the account off again when pressed (its cross says so), or with Backspace in an empty box.
+        if (draftAccount is { } account)
+        {
+            var chip = Ui.Button("", () => { draftAccount = null; DrawForm(); }, "FormAccountChip"); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0); chip.VerticalAlignment = VerticalAlignment.Center;
+            chip.Content = NoteParts.Chip("#" + account.Replace(" ", ""), "plain", null, NoteParts.Dot(model, account), IconKind.Close); ToolTip.SetTip(chip, "Remove account");
+            Avalonia.Automation.AutomationProperties.SetName(chip, "Remove account " + account);
+            Ui.Put(box, chip);
+        }
         field = new TextBox { Name = "NoteField", Text = draft, Watermark = meeting ? "Meeting name, # for an account" : "Write a note, # for an account", BorderThickness = new Thickness(0), Background = Brushes.Transparent, Height = 30, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0) };
-        field.Classes.Add("bareField");
+        field.Classes.Add("bareField"); NoteLinks.AttachPaste(field);
         Ui.Put(box, field, 1);
         if (!meeting && draftReminder is { } reminder)
         {
@@ -243,6 +252,7 @@ public sealed class NotesCard : Border
         field.AddHandler(KeyDownEvent, (_, e) =>
         {
             if (firstSuggestion is { } offer && suggestions.IsVisible && e.Key is Key.Tab or Key.Enter) { draftAccount = offer.Account; draft = offer.Words; DrawForm(); e.Handled = true; }
+            else if (e.Key == Key.Back && draftAccount is not null && string.IsNullOrEmpty(field.Text)) { draftAccount = null; DrawForm(); e.Handled = true; } // Backspace in an empty box takes the chip off.
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         field.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Submit(); e.Handled = true; } else if (e.Key == Key.Escape) { Close(); e.Handled = true; } };
         if (meeting)
@@ -270,12 +280,10 @@ public sealed class NotesCard : Border
             start.KeyDown += (_, e) => { if (e.Key == Key.Enter) MoveEndWithStart(); };
             // The day, by a small calendar, so a meeting can go on any day and not only the one showing.
             var dayWords = new TextBlock { Text = NoteDates.Day(formDay, model.Engine.Now), VerticalAlignment = VerticalAlignment.Center };
-            var dayButton = Ui.Ctl("MeetingDay", null, null, "Pick day", () => { }, small: true); dayButton.Width = double.NaN; dayButton.Padding = new Thickness(10, 0);
+            Button? dayButton = null;
+            dayButton = Ui.Ctl("MeetingDay", null, null, "Pick day", () => OpenMeetingDay(dayButton!), small: true); dayButton.Width = double.NaN; dayButton.Padding = new Thickness(10, 0);
             dayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), dayWords);
-            var picker = new SoftDatePicker { Name = "MeetingCalendar" }; var dayFlyout = new Flyout { Content = picker, Placement = PlacementMode.Bottom };
-            dayFlyout.Opening += (_, _) => picker.View(formDay, formDay);
-            picker.DayPicked += picked => { formDay = picked.Date; dayFlyout.Hide(); DrawForm(); };
-            dayButton.Flyout = dayFlyout; Ui.Put(times, dayButton);
+            Ui.Put(times, dayButton);
             Ui.Put(times, start, 1); Ui.Put(times, new TextBlock { Text = "–", VerticalAlignment = VerticalAlignment.Center, Classes = { "muted" } }, 2); Ui.Put(times, end, 3);
             var repeat = new ComboBox { Name = "MeetingRepeat", ItemsSource = Enum.GetValues<RepeatChoice>().Select(NotesModel.Label).ToList(), HorizontalAlignment = HorizontalAlignment.Stretch, Height = 30, MinHeight = 30, FontSize = 13 };
             repeat.SelectedItem = NotesModel.Label(draftRepeat);
@@ -350,7 +358,19 @@ public sealed class NotesCard : Border
         }, CloseReminder);
         reminderHost.Child = content; reminderHost.IsOpen = true;
     }
-    private void CloseReminder() { reminderHost.IsOpen = false; reminderHost.Child = null; }
+    private void CloseReminder() { reminderHost.IsOpen = false; reminderHost.Child = null; reminderHost.PlacementTarget = title; }
+    // A meeting's day is chosen in the same card as a reminder's (month, summary, Set, the cross), without the time, which has its boxes beside the button; it hangs under the button.
+    private void OpenMeetingDay(Control button)
+    {
+        popupTarget = null; scope = null;
+        var label = string.IsNullOrWhiteSpace(draft) ? "New meeting" : draft;
+        var content = new ReminderPopup(() => model.Engine.Now, label, formDay, answered =>
+        {
+            if (answered is { } day) formDay = day.Date;
+            CloseReminder(); DrawForm();
+        }, CloseReminder, "Meeting day", dayOnly: true);
+        reminderHost.PlacementTarget = button; reminderHost.Child = content; reminderHost.IsOpen = true;
+    }
 
     private void DrawOverlay()
     {

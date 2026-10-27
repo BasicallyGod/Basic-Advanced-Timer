@@ -357,6 +357,9 @@
     <!-- A plain text button, for quiet actions such as Skip setup. -->
     <!-- The pill's buttons draw their own faces (a circle, a tile), so the button itself has no background, border or hover of its own. -->
     <Style Selector="Button.pillBare"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Padding" Value="0" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="FocusAdorner" Value="{x:Null}" /></Style>
+    <!-- A link in a note: the accent, underlined under the pointer. The words are set on the text itself, since the global text style would beat the button's colour. -->
+    <Style Selector="Button.noteLink TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
+    <Style Selector="Button.noteLink:pointerover TextBlock"><Setter Property="TextDecorations" Value="Underline" /></Style>
     <Style Selector="Button.pillBare:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
     <Style Selector="Button.pillBare:pressed /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
     <Style Selector="Button.peekAll"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Foreground" Value="{DynamicResource Accent}" /><Setter Property="Padding" Value="8,6" /><Setter Property="FontSize" Value="13" /></Style>

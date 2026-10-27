@@ -137,6 +137,28 @@ public sealed class NotesTests
     }
 
     [AvaloniaFact]
+    public void AnAccountChipInTheCardsFormCanBeTakenOffByItsCrossOrByBackspaceInAnEmptyBox()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            Click(window, "AddNote"); Type(window, "NoteField", "Draft the plan #Accountt");
+            Find<Button>(window, "Suggest_Accounttwo").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            Assert.Equal("Remove account", ToolTip.GetTip(Find<Button>(window, "FormAccountChip")));
+            Click(window, "FormAccountChip");
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "FormAccountChip"); Assert.Equal("Draft the plan", Find<TextBox>(window, "NoteField").Text); // The words stay.
+            Click(window, "SubmitNote"); Assert.Null(model.Notes.AccountOf(model.Notes.All.Single())); // And it is saved with no account.
+            // Backspace in an empty box does the same.
+            Click(window, "AddNote"); Type(window, "NoteField", "#Accountt");
+            Find<Button>(window, "Suggest_Accounttwo").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            var box = Find<TextBox>(window, "NoteField"); box.Text = ""; box.Focus(); Settle(window);
+            box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Back }); Settle(window);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "FormAccountChip");
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ABlankNoteIsRefusedInTheToastAndTheFormStaysOpen()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);

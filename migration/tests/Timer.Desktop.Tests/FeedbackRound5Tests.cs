@@ -104,9 +104,14 @@ public sealed class FeedbackRound5Tests
         {
             Click(window, "AddMeeting");
             Assert.Equal("12:00", Find<TextBox>(window, "MeetingStart").Text); Assert.Equal("12:30", Find<TextBox>(window, "MeetingEnd").Text); // Midday, half an hour.
-            var day = Find<Button>(window, "MeetingDay"); var flyout = Assert.IsType<Flyout>(day.Flyout); var picker = Assert.IsType<SoftDatePicker>(flyout.Content);
+            var day = Find<Button>(window, "MeetingDay");
             Assert.Contains(day.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Today");
-            picker.SelectedDate = Day.AddDays(3); Settle(window);
+            // The day is chosen in the reminder's own card, without its time or Remove: a month, the day in words, and Set.
+            Click(window, "MeetingDay"); Settle(window);
+            var popup = Find<ReminderPopup>(window, "ReminderPopup");
+            Assert.Equal(244, popup.Width); Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "ReminderHour" or "ReminderRemove"); Assert.Equal("Today", Find<TextBlock>(window, "ReminderSummary").Text);
+            Click(window, "ReminderCell_" + Day.AddDays(3).ToString("yyyyMMdd")); Assert.Equal("Mon 12 Oct", Find<TextBlock>(window, "ReminderSummary").Text);
+            Click(window, "ReminderSet"); Settle(window);
             Assert.Contains(Find<Button>(window, "MeetingDay").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Mon 12 Oct");
             Find<TextBox>(window, "NoteField").Text = "Planning"; Dispatcher.UIThread.RunJobs(); Click(window, "SubmitNote");
             Assert.Equal(Day.AddDays(3), model.Notes.All.Single().Day.Date);
