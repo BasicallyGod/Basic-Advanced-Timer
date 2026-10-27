@@ -11,6 +11,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 | Change | Commit | Details |
 |---|---|---|
 | The rail's reminder pulse is no longer cut off | [23bdaf2](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/23bdaf218bd6a0aea1c6e68832176cce8982db96) | In the dashboard the ring that swells from the blue reminder light was cut flat at the top: the rail draws its top through a layout transform control, which clips to its own bounds. It no longer clips, and a test checks that nothing above the ring does. |
+| An account can be taken off a note again | [a959d94](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/a959d9489836511b0bf7b884c728f4276d1f9c99) | Once a # account was put in the form's box in the Notes card there was no way to remove it. The chip now has a cross and takes the account off when pressed, and Backspace in an empty box does the same; the words are kept. |
 | A meeting's day is chosen in the reminder's card | [23bdaf2](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/23bdaf218bd6a0aea1c6e68832176cce8982db96) | The day button on the meeting form in the Notes card opened a plain grey calendar. It now opens the same card as the reminder pop-up (month, the day in words, Set, the cross), without the time column and Remove, hung under the button. |
 
 ## 26 October 2026
