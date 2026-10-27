@@ -83,7 +83,7 @@ public sealed class FeedbackRound6Tests
     }
 
     [AvaloniaFact]
-    public void TheReminderPopupsPresetTimesAreATwoByTwoGrid()
+    public void TheReminderPopupsPresetTimesAreOneColumnAsWideAsTheHourAndMinuteBoxes()
     {
         var model = Model(false); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
@@ -91,7 +91,12 @@ public sealed class FeedbackRound6Tests
             Click(window, "AddNote"); Click(window, "FormBell");
             var a = Find<Button>(window, "ReminderTime9"); var b = Find<Button>(window, "ReminderTime12"); var c = Find<Button>(window, "ReminderTime15"); var d = Find<Button>(window, "ReminderTime17");
             Point At(Control x) => x.TranslatePoint(default, window)!.Value;
-            Assert.Equal(At(a).Y, At(b).Y, 1); Assert.Equal(At(c).Y, At(d).Y, 1); Assert.True(At(c).Y > At(a).Y); Assert.Equal(At(a).X, At(c).X, 1); Assert.True(At(b).X > At(a).X);
+            // One column, top to bottom, all the same width as the hour : minute boxes above them, so the time side is one even column and the picker is no wider than it needs.
+            Assert.Equal(At(a).X, At(b).X, 1); Assert.Equal(At(a).X, At(c).X, 1); Assert.Equal(At(a).X, At(d).X, 1); Assert.True(At(a).Y < At(b).Y && At(b).Y < At(c).Y && At(c).Y < At(d).Y);
+            Assert.All(new[] { a, b, c, d }, x => Assert.Equal(ReminderPopup.TimeColumnWidth, x.Bounds.Width, 1));
+            var hour = Find<TextBox>(window, "ReminderHour"); var minute = Find<TextBox>(window, "ReminderMinute");
+            Assert.Equal(ReminderPopup.TimeColumnWidth, At(minute).X + minute.Bounds.Width - At(hour).X, 1.5); // The boxes and the colon span the same width.
+            Assert.Equal(ReminderPopup.Wide, Find<ReminderPopup>(window, "ReminderPopup").Width);
         }
         finally { window.Close(); }
     }
