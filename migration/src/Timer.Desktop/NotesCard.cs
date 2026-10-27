@@ -123,7 +123,7 @@ public sealed class NotesCard : Border
 
     private Control Row(DayNote note)
     {
-        var meeting = NotesModel.IsMeeting(note); var words = Notes.Text(note); var account = Notes.AccountOf(note);
+        var meeting = NotesModel.IsMeeting(note); var words = Notes.Words(note); var account = Notes.AccountOf(note);
         var line = Ui.Grid("Auto,*,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
         // A note has a round tick; a meeting has a calendar mark instead, and is opened by its name.
         Control lead = meeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
@@ -131,12 +131,14 @@ public sealed class NotesCard : Border
         var column = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         if (meeting)
         {
-            var name = Ui.Button(words, () => Notes.RequestEditMeeting(note.Id), "NoteEdit_" + note.Id); name.Classes.Add("flat"); name.Padding = new Thickness(0); name.FontWeight = FontWeight.SemiBold; name.FontSize = 14; name.Bind(TemplatedControl.ForegroundProperty, name.GetResourceObservable("Ink"));
+            var name = Ui.Button(NoteLinks.Flatten(words), () => Notes.RequestEditMeeting(note.Id), "NoteEdit_" + note.Id); name.Classes.Add("flat"); name.Padding = new Thickness(0); name.FontWeight = FontWeight.SemiBold; name.FontSize = 14; name.Bind(TemplatedControl.ForegroundProperty, name.GetResourceObservable("Ink"));
             name.HorizontalAlignment = HorizontalAlignment.Left; ToolTip.SetTip(name, "Edit"); column.Children.Add(name);
+            // A link in the name is pressable in its own right; pressing the rest of the name still opens the meeting.
+            if (NoteLinks.HasLinks(words)) { var block = new TextBlock { TextWrapping = TextWrapping.Wrap }; NoteLinks.Fill(block, words); name.Content = block; }
         }
         else
         {
-            var text = new TextBlock { Text = words, FontSize = 14, TextWrapping = TextWrapping.Wrap, Name = "NoteText_" + note.Id };
+            var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, Name = "NoteText_" + note.Id }; NoteLinks.Fill(text, words);
             if (note.Done) { text.TextDecorations = TextDecorations.Strikethrough; text.Classes.Add("muted"); }
             column.Children.Add(text);
         }
@@ -191,7 +193,7 @@ public sealed class NotesCard : Border
         model.SetNotesCardShowsMeetings(true);
         form = Form.Meeting; editing = id; formDay = meeting.Day.Date;
         var account = Notes.AccountOf(meeting);
-        draft = Notes.Text(meeting); draftAccount = account; draftReminder = null; startText = meeting.At!.Value.ToString(@"hh\:mm"); endText = meeting.End!.Value.ToString(@"hh\:mm");
+        draft = Notes.Words(meeting); draftAccount = account; draftReminder = null; startText = meeting.At!.Value.ToString(@"hh\:mm"); endText = meeting.End!.Value.ToString(@"hh\:mm");
         draftRepeat = Notes.RepeatOf(meeting); scope = null; DrawOverlay(); DrawForm();
     }
 
@@ -227,7 +229,7 @@ public sealed class NotesCard : Border
             Ui.Put(box, chip);
         }
         field = new TextBox { Name = "NoteField", Text = draft, Watermark = meeting ? "Meeting name, # for an account" : "Write a note, # for an account", BorderThickness = new Thickness(0), Background = Brushes.Transparent, Height = 30, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0) };
-        field.Classes.Add("bareField");
+        field.Classes.Add("bareField"); NoteLinks.AttachPaste(field);
         Ui.Put(box, field, 1);
         if (!meeting && draftReminder is { } reminder)
         {

@@ -160,11 +160,11 @@ public sealed class NotesPage : Grid
 
     private Control Row(DayNote note)
     {
-        var isMeeting = NotesModel.IsMeeting(note); var words = Notes.Text(note); var acct = Notes.AccountOf(note);
+        var isMeeting = NotesModel.IsMeeting(note); var words = Notes.Words(note); var plain = NoteLinks.Flatten(words); var acct = Notes.AccountOf(note);
         var line = Ui.Grid("Auto,*,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
         Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
         Ui.Put(line, lead);
-        var text = new TextBlock { Text = words, FontSize = 14, TextWrapping = TextWrapping.Wrap, FontWeight = isMeeting ? FontWeight.SemiBold : FontWeight.Normal, Name = "PageNoteText_" + note.Id };
+        var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, FontWeight = isMeeting ? FontWeight.SemiBold : FontWeight.Normal, Name = "PageNoteText_" + note.Id }; NoteLinks.Fill(text, words);
         if (note.Done) { text.TextDecorations = TextDecorations.Strikethrough; text.Classes.Add("muted"); }
         var chips = new WrapPanel { Orientation = Orientation.Horizontal };
         void Add(Control chip) { chip.Margin = new Thickness(0, 0, 6, 0); chips.Children.Add(chip); }
@@ -174,7 +174,7 @@ public sealed class NotesPage : Grid
         if (isMeeting && Notes.SeriesOf(note) is { } series) Add(NoteParts.Chip(Notes.RepeatOf(note) == RepeatChoice.None ? series.Rule.Words() : NotesModel.Label(Notes.RepeatOf(note)), "quiet", IconKind.Repeat));
         var stack = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center }; stack.Children.Add(text); if (chips.Children.Count > 0) stack.Children.Add(chips);
         var main = Ui.Button("", () => Edit(note), "PageNoteOpen_" + note.Id); main.Classes.Add("pillBare"); main.Content = stack; main.Padding = new Thickness(0); main.HorizontalContentAlignment = HorizontalAlignment.Left; main.HorizontalAlignment = HorizontalAlignment.Stretch;
-        Avalonia.Automation.AutomationProperties.SetName(main, (isMeeting ? "Edit meeting: " : "Edit note: ") + words);
+        Avalonia.Automation.AutomationProperties.SetName(main, (isMeeting ? "Edit meeting: " : "Edit note: ") + plain);
         Ui.Put(line, main, 1);
         var remove = Ui.IconButton(IconKind.Close, isMeeting ? "Remove meeting" : "Remove note", "PageNoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, remove, 2);
         var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9), Name = "PageRow_" + note.Id }; card.Classes.Add("noteRow");
@@ -192,7 +192,7 @@ public sealed class NotesPage : Grid
 
     private void Edit(DayNote note)
     {
-        meeting = NotesModel.IsMeeting(note); editing = note.Id; draft = Notes.Text(note); account = Notes.AccountOf(note); error = null; scope = null; whenHost.IsOpen = false;
+        meeting = NotesModel.IsMeeting(note); editing = note.Id; draft = Notes.Words(note); account = Notes.AccountOf(note); error = null; scope = null; whenHost.IsOpen = false;
         archived = meeting && Notes.IsArchivedRepeat(note);
         if (meeting) { when = note.Day.Date + note.At!.Value; lengthText = TimeText.ShowLength(note.End!.Value - note.At.Value); repeat = Notes.RepeatOf(note); }
         else { when = NotesModel.ReminderOf(note); repeat = RepeatChoice.None; lengthText = "00:30"; }
@@ -211,7 +211,7 @@ public sealed class NotesPage : Grid
         var top = Ui.Grid("*,Auto"); top.ColumnSpacing = 8;
         var field = new TextBox { Name = "PageNoteField", Text = draft, Height = 36, MinHeight = 36, VerticalContentAlignment = VerticalAlignment.Center, IsEnabled = !archived,
             Watermark = meeting ? "Meeting name" : "Write a note", HorizontalAlignment = HorizontalAlignment.Stretch };
-        field.Classes.Add("accentField");
+        field.Classes.Add("accentField"); NoteLinks.AttachPaste(field);
         field.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) draft = field.Text ?? ""; };
         field.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Submit(); e.Handled = true; } };
         Ui.Put(top, field);
