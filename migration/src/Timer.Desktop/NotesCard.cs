@@ -270,12 +270,10 @@ public sealed class NotesCard : Border
             start.KeyDown += (_, e) => { if (e.Key == Key.Enter) MoveEndWithStart(); };
             // The day, by a small calendar, so a meeting can go on any day and not only the one showing.
             var dayWords = new TextBlock { Text = NoteDates.Day(formDay, model.Engine.Now), VerticalAlignment = VerticalAlignment.Center };
-            var dayButton = Ui.Ctl("MeetingDay", null, null, "Pick day", () => { }, small: true); dayButton.Width = double.NaN; dayButton.Padding = new Thickness(10, 0);
+            Button? dayButton = null;
+            dayButton = Ui.Ctl("MeetingDay", null, null, "Pick day", () => OpenMeetingDay(dayButton!), small: true); dayButton.Width = double.NaN; dayButton.Padding = new Thickness(10, 0);
             dayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), dayWords);
-            var picker = new SoftDatePicker { Name = "MeetingCalendar" }; var dayFlyout = new Flyout { Content = picker, Placement = PlacementMode.Bottom };
-            dayFlyout.Opening += (_, _) => picker.View(formDay, formDay);
-            picker.DayPicked += picked => { formDay = picked.Date; dayFlyout.Hide(); DrawForm(); };
-            dayButton.Flyout = dayFlyout; Ui.Put(times, dayButton);
+            Ui.Put(times, dayButton);
             Ui.Put(times, start, 1); Ui.Put(times, new TextBlock { Text = "–", VerticalAlignment = VerticalAlignment.Center, Classes = { "muted" } }, 2); Ui.Put(times, end, 3);
             var repeat = new ComboBox { Name = "MeetingRepeat", ItemsSource = Enum.GetValues<RepeatChoice>().Select(NotesModel.Label).ToList(), HorizontalAlignment = HorizontalAlignment.Stretch, Height = 30, MinHeight = 30, FontSize = 13 };
             repeat.SelectedItem = NotesModel.Label(draftRepeat);
@@ -350,7 +348,19 @@ public sealed class NotesCard : Border
         }, CloseReminder);
         reminderHost.Child = content; reminderHost.IsOpen = true;
     }
-    private void CloseReminder() { reminderHost.IsOpen = false; reminderHost.Child = null; }
+    private void CloseReminder() { reminderHost.IsOpen = false; reminderHost.Child = null; reminderHost.PlacementTarget = title; }
+    // A meeting's day is chosen in the same card as a reminder's (month, summary, Set, the cross), without the time, which has its boxes beside the button; it hangs under the button.
+    private void OpenMeetingDay(Control button)
+    {
+        popupTarget = null; scope = null;
+        var label = string.IsNullOrWhiteSpace(draft) ? "New meeting" : draft;
+        var content = new ReminderPopup(() => model.Engine.Now, label, formDay, answered =>
+        {
+            if (answered is { } day) formDay = day.Date;
+            CloseReminder(); DrawForm();
+        }, CloseReminder, "Meeting day", dayOnly: true);
+        reminderHost.PlacementTarget = button; reminderHost.Child = content; reminderHost.IsOpen = true;
+    }
 
     private void DrawOverlay()
     {

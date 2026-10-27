@@ -265,7 +265,8 @@ public sealed class DashboardWindow : Window
         // The clock goes back to the pill, and the circle pauses or resumes, as on the pill. With no account to run, it opens the accounts.
         face = new StatusFace(model, "Rail", "DashboardBreak", "Collapse to pill", () => OpenPill?.Invoke(), OnRailCircle, ToggleAccountsPanel);
         // The top is drawn at the pill's own size, so the clock, circle and accounts button stay put and the same size when one becomes the other.
-        railTop.Children.Add(new LayoutTransformControl { LayoutTransform = railScale, Child = face, HorizontalAlignment = HorizontalAlignment.Center });
+        // Not clipped: the reminder light's ring swells past the top of the face, and a layout transform control clips to its own bounds unless told not to.
+        railTop.Children.Add(new LayoutTransformControl { LayoutTransform = railScale, Child = face, HorizontalAlignment = HorizontalAlignment.Center, ClipToBounds = false });
         timelineRail = RailButton(IconKind.Timeline, "Timeline", "TimelineTab", () => SelectTab(false));
         overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectTab(true));
         model.OpenDayRequested += _ => SelectTab(false);

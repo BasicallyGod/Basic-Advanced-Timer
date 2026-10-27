@@ -154,6 +154,42 @@ public sealed class PreviewCaptureTests
     }
 
     [AvaloniaFact]
+    public void WriteDayPopup()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme);
+            var row = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 20, Margin = new Thickness(20) };
+            row.Children.Add(new ReminderPopup(() => model.Engine.Now, "New meeting", null, _ => { }, () => { }, "Meeting day", dayOnly: true));
+            row.Children.Add(new ReminderPopup(() => model.Engine.Now, "New note", null, _ => { }, () => { }));
+            var host = new Window { Width = 720, Height = 340, RequestedThemeVariant = theme == "Dark" ? Avalonia.Styling.ThemeVariant.Dark : Avalonia.Styling.ThemeVariant.Light, Content = new Border { Child = row } };
+            host.Show(); Dispatcher.UIThread.RunJobs();
+            try { using var f = host.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = host.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-day-popup.png")); }
+            finally { host.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
+    public void WriteRailLights()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var scale in new[] { 1.0, .8 })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme("Light");
+            var window = new DashboardWindow(model); window.Show(); window.SetRailScale(scale); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                var ring = window.GetVisualDescendants().OfType<Border>().First(b => b.Name == "RailReminderRing"); SetSwollen(ring, .55);
+                using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"rail-lights-{scale}.png"));
+            }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
     public void WritePillLights()
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
