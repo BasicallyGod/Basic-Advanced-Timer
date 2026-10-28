@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 28 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Mock: boards in a grid, and an icon sheet | [752ec22](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/752ec22203d60ffb12cc7ca0458b55b09aba2f4d) | The Design canvas boards are laid out in four columns under four section titles, each board with its note above it, instead of two scattered columns. A new board, Every icon in the app, draws every icon from the app's drawing code with its size, centring and where it is used, charts the set's sizes and lists the consistency points found (Close is two units smaller than Plus and Minus, Bell and Week sit low, five icons are never drawn, three tick marks at three weights). A preview test, `WriteIconSheet`, renders the real icons for comparison. Drawings only, no app change. |
+
 ## 27 October 2026
 
 | Change | Commit | Details |
