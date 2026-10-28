@@ -223,11 +223,11 @@ public sealed class StatusFace : StackPanel
     }
     private static void SetTileHover(Border tile, bool on) => tile.Background = on ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var brush) && brush is IBrush hover ? hover : Brushes.Transparent) : Brushes.Transparent;
     private Color ThemeColourOr(string key, string fallback) => Ui.ThemeColour(this, key, Color.Parse(fallback));
-    /// <summary>The state's key (Break outranks Overtime outranks Live, else Idle) and its words, shared with the owner's ring and glow.</summary>
+    /// <summary>The state's key (Break outranks Live, else Idle) and its words, shared with the owner's ring and glow.</summary>
     public static (string Key, string Name) State(TimerModel model)
     {
-        var onBreak = model.IsOnBreak; var late = model.IsOvertime && !onBreak; var live = model.IsTracking && !onBreak && !late;
-        return (onBreak ? "Break" : late ? "Overtime" : live ? "Live" : "Idle", onBreak ? "On break" : late ? "Overtime" : live ? "Recording" : "Not recording");
+        var onBreak = model.IsOnBreak; var live = model.IsTracking && !onBreak;
+        return (onBreak ? "Break" : live ? "Live" : "Idle", onBreak ? "On break" : live ? "Recording" : "Not recording");
     }
     public void Refresh()
     {
@@ -248,10 +248,9 @@ public sealed class StatusFace : StackPanel
 
         var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);
         var who = onBreak ? model.ResumeAccount : model.ActiveAccount ?? selected?.Name;
-        // The primary control is a soft green (soft red in overtime) with its symbol in the same colour. On a break it stays green and keeps the
+        // The primary control is a soft green with its symbol in the same colour. On a break it stays green and keeps the
         // account's initials, since the break itself is lit beside it.
-        var late = key == "Overtime";
-        var tone = ThemeColourOr(late ? "Overtime" : "Live", "#34D399");
+        var tone = ThemeColourOr("Live", "#34D399");
         primaryTile.Background = new SolidColorBrush(SoftTint.WithAlpha(tone, hoverCircle ? (dark ? .30 : .32) : (dark ? .18 : .20)));
         primaryTile.BoxShadow = circleFocus ? SoftTint.FocusRing(primaryTile) : default;
         initials.Foreground = new SolidColorBrush(tone); glyph.Fixed = new SolidColorBrush(tone);

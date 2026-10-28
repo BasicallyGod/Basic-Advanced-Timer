@@ -57,6 +57,30 @@ public sealed class SettingsPageTests
     }
 
     [AvaloniaFact]
+    public void TheWorkingHoursSectionHasTheDailyBreakAndSavesItWithTheHours()
+    {
+        var model = new TimerModel(new Timer.Core.TrackingEngine(clock: () => new DateTime(2026, 10, 9, 10, 0, 0))); model.CompleteSetup();
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            OpenSettings(window); window.GetVisualDescendants().OfType<SettingsView>().Single().ShowSection("hours");
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            var box = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "BreakAllowance");
+            Assert.Equal("00:00", box.Text); // Nothing is taken off until one is chosen.
+            box.Text = "00:30"; window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveShifts").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(TimeSpan.FromMinutes(30), model.BreakAllowance);
+            box.Text = "later"; window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SaveShifts").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(TimeSpan.FromMinutes(30), model.BreakAllowance); // A box that is not HH:mm changes nothing.
+            // The day bar under the timeline measures against the hours less the break.
+            var plan = model.Engine.Plan(model.SelectedDate);
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Contains("less 00:30 break", ToolTip.GetTip(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DayBar"))!.ToString());
+            Assert.Equal(plan.End - plan.Start - TimeSpan.FromMinutes(30), model.ScheduledOn(model.SelectedDate));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void TheSettingsPageIsNotRebuiltWhileTheModelTicksOver()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();

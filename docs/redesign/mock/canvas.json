@@ -205,13 +205,13 @@
   },
   "notes": {
     "n1": {
-      "text": "Mock at the real window size (1100 by 720). Tweaks: Light or Dark, the recording state and the day (running, day off, finished). Click a block to select it, and shift-click to add more (the short call over the client review shows how overlapping blocks stack, and an End that runs into the next block stacks too), then shift-click a second Account one block to try Merge. A merged block can be unmerged. Add a note, or add a meeting: click a time in the dashed row above the blocks, or use Add meeting in the Notes card. Finish day on the rail asks first, and Start day takes its place when the day is not running. The totals under the timeline are the day's Working time. The date button opens a calendar (dots show days with time; the mock draws the same blocks for every day). Messages float over the lowest part of the workspace. Settings is the gear at the top right. Click the time to collapse. The bell's card hangs from a point under it, with Done and Reschedule as icons. A day with no meetings gives its blocks the whole height. The bell sits next to the gear, and pressing it again closes its card.",
+      "text": "Mock at the real window size (1100 by 720). Tweaks: Light or Dark, the recording state and the day (running, day off, finished). Click a block to select it, and shift-click to add more (the short call over the client review shows how overlapping blocks stack, and an End that runs into the next block stacks too), then shift-click a second Account one block to try Merge. A merged block can be unmerged. Add a note, or add a meeting: click a time in the dashed row above the blocks, or use Add meeting in the Notes card. Finish day on the rail asks first, and Start day takes its place when the day is not running. The totals under the timeline are the day's Working time, against a schedule that is the hours less the daily break. The date button opens a calendar (dots show days with time; the mock draws the same blocks for every day). Messages float over the lowest part of the workspace. Settings is the gear at the top right. Click the time to collapse. The bell's card hangs from a point under it, with Done and Reschedule as icons. A day with no meetings gives its blocks the whole height. The bell sits next to the gear, and pressing it again closes its card.",
       "w": 600,
       "x": 0,
       "y": 630
     },
     "n10": {
-      "text": "How messages and errors look and read, now in the tooltips' few words and the same card. No red: red means overtime or a spent budget. The table at the foot lists every message with its proposed wording. Try a bad time in the Selected block card on the dashboard to see them live.",
+      "text": "How messages and errors look and read, now in the tooltips' few words and the same card. No red: red means a spent budget or an overdue reminder. The table at the foot lists every message with its proposed wording. Try a bad time in the Selected block card on the dashboard to see them live.",
       "w": 600,
       "x": 2620,
       "y": 3446
@@ -247,13 +247,13 @@
       "y": 9982
     },
     "n3": {
-      "text": "Week overview. Working time against the scheduled week, a schedule line (its words sit in a gutter at the right) and overtime caps on the chart, meetings and open tasks under each day, a Chart or Table switch, and each account's week with its budget bar. Use the arrows or the calendar to change week, and click a day to open it in the timeline.",
+      "text": "Week overview. Working time against the scheduled week, a schedule line (its words sit in a gutter at the right) its columns drawn as working time against the schedule (the hours less the daily break), meetings and open tasks under each day, a Chart or Table switch, and each account's week with its budget bar. Use the arrows or the calendar to change week, and click a day to open it in the timeline.",
       "w": 600,
       "x": 1310,
       "y": 630
     },
     "n4": {
-      "text": "Settings in the new look, with Export here. Click a section on the left, and a theme to try it.",
+      "text": "Settings in the new look, with Export here. Click a section on the left, and a theme to try it. Working hours has the daily break.",
       "w": 600,
       "x": 3930,
       "y": 630
@@ -271,7 +271,7 @@
       "y": 1964
     },
     "n7": {
-      "text": "Getting started, on the new card style. Next, Back and Skip setup work. The current step dot is the accent.",
+      "text": "Getting started, on the new card style. Next, Back and Skip setup work. The current step dot is the accent. The hours step asks for the break each day, which is taken off the schedule.",
       "w": 600,
       "x": 3930,
       "y": 1964

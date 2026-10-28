@@ -45,9 +45,8 @@ public sealed class TrayController : IDisposable
     public static string Tooltip(TimerModel model)
     {
         // Windows shows at most 127 characters, so keep it short.
-        var overtime = model.IsOvertime ? ", overtime " + model.Format(model.Engine.Totals(model.Engine.Now).Overtime) : "";
         var text = !model.DayStarted && !model.IsTracking ? model.Status
-            : (model.ActiveAccount is { } name ? (BreakAccount.Is(name) ? "On break" : "Tracking " + name) : model.Status) + ", day " + model.Format(model.Elapsed) + overtime;
+            : (model.ActiveAccount is { } name ? (BreakAccount.Is(name) ? "On break" : "Tracking " + name) : model.Status) + ", day " + model.Format(model.Elapsed);
         return "Basic’s Advanced Timer\n" + text;
     }
     public static string PauseLabel(TimerModel model) => model.IsOnBreak ? (model.ResumeAccount is { } back ? "End break and resume " + back : "End break")

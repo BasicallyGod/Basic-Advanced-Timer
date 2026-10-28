@@ -46,8 +46,7 @@ public sealed class WeekTable
         TimeSpan AllocatedOn(int i) => accounts.Aggregate(TimeSpan.Zero, (sum, a) => sum + model.OnDay(a, weekStart.AddDays(i)));
         TimeSpan UnallocatedOn(int i)
         {
-            var totals = model.Engine.Totals(weekStart.AddDays(i));
-            var left = totals.Working + totals.Overtime - AllocatedOn(i);
+            var left = model.WorkingOn(weekStart.AddDays(i)) - AllocatedOn(i);
             return left > TimeSpan.Zero ? left : TimeSpan.Zero;
         }
         // Whole hundredths of an hour, so the decimal rows still add up down and across.

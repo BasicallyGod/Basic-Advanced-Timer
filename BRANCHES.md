@@ -25,7 +25,7 @@ The Store workflow is deliberately restricted to `main`. Pull requests to `main`
 
 ## Version labels and developer tools
 
-Stable builds show a normal version and retain the release MSIX identity. Experimental and Alpha builds show their channel beside the version and include the sample-data demo and overtime testing controls. The Store build hides demo controls and rejects the `--demo` argument; all builds retain normal version visibility.
+Stable builds show a normal version and retain the release MSIX identity. Experimental and Alpha builds show their channel beside the version and include the sample-data demo. The Store build hides demo controls and rejects the `--demo` argument; all builds retain normal version visibility.
 
 ## Safety
 

@@ -30,7 +30,7 @@ public sealed class OnboardingView : Grid
     // What each step keeps between visits, so going back shows what was typed.
     private readonly List<(string? Original, string? Colour, TextBox Name, TextBox Budget, ComboBox Period, CheckBox Show)> accountRows = new();
     private StackPanel? accountList;
-    private TextBox startBox = new(), endBox = new();
+    private TextBox startBox = new(), endBox = new(), breakBox = new();
     private readonly List<(DayOfWeek Day, CheckBox Box)> dayBoxes = new();
     private bool customHours, decimalChoice;
     private ComboBox weekStartBox = new();
@@ -106,7 +106,7 @@ public sealed class OnboardingView : Grid
         (title.Text, subtitle.Text, body.Content) = index switch
         {
             0 => ("Your client accounts", "These are the clients you track time against. Rename the examples or add your own. Budgets are optional: leave them blank for no limit.", AccountsStep()),
-            1 => ("Your working hours", "The day clock starts at your start time and overtime begins after your end time. Overnight shifts are not supported yet.", HoursStep()),
+            1 => ("Your working hours", "The day clock starts at your start time, and the schedule is what the week overview measures your time against. Overnight shifts are not supported yet.", HoursStep()),
             2 => ("How you count time", "This changes every total and the exports. You can switch any time from the right-click menu.", FormatStep()),
             3 => ("Your pill", "The timer lives in a small pill that stays on top of your other windows. Choose its shape. You can change it later in Settings.", ShapeStep()),
             _ => ("You are all set", "A few things worth knowing before you start.", ReadyStep())
@@ -186,6 +186,8 @@ public sealed class OnboardingView : Grid
             var first = schedule.Days.OrderBy(d => ((int)d + 6) % 7).FirstOrDefault(DayOfWeek.Monday);
             var shift = schedule.Shifts.GetValueOrDefault(first) ?? schedule.Default;
             startBox = new TextBox { Text = shift.Start.ToString(@"hh\:mm"), Width = 90, Name = "SetupStart" }; endBox = new TextBox { Text = shift.End.ToString(@"hh\:mm"), Width = 90, Name = "SetupEnd" };
+            // A timer that has never had a break chosen is offered half an hour, the usual lunch; one that has keeps what it has, even if that is nothing.
+            breakBox = new TextBox { Text = (model.BreakAllowanceChosen ? model.BreakAllowance : TimeSpan.FromMinutes(30)).ToString(@"hh\:mm"), Width = 90, Name = "SetupBreak", HorizontalAlignment = HorizontalAlignment.Left };
             foreach (var day in new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday })
                 dayBoxes.Add((day, new CheckBox { Content = day.ToString()[..3], IsChecked = schedule.Days.Contains(day), Name = "SetupDay" + day.ToString()[..3] }));
         }
@@ -194,9 +196,10 @@ public sealed class OnboardingView : Grid
         panel.Children.Add(Ui.Text("Working days", 12, "muted")); panel.Children.Add(days);
         panel.Children.Add(Ui.Text("Usual hours (24 hour clock)", 12, "muted"));
         panel.Children.Add(Ui.Horizontal(Detach(startBox), Ui.Dash(), Detach(endBox)));
+        panel.Children.Add(Ui.Text("Break each day (taken off the hours, so the schedule is the time you are to work)", 12, "muted")); panel.Children.Add(Detach(breakBox));
         var different = Ui.DialogButton("Different hours on some days…", () =>
         {
-            if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) { customHours = true; dashboard.Dialogs.Show(new ShiftDialog(model)); }
+            if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) { customHours = true; dashboard.Dialogs.Show(new ShiftDialog(model, withBreaks: false)); }
         }, "SetupDifferentHours", main: false);
         different.HorizontalAlignment = HorizontalAlignment.Left;
         panel.Children.Add(different);
@@ -204,6 +207,8 @@ public sealed class OnboardingView : Grid
     }
     private bool ApplyHours()
     {
+        if (!TimeSpan.TryParseExact((breakBox.Text ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture, TimeSpanStyles.None, out var allowance) || allowance > TimeSpan.FromHours(4)) { Fail("Break each day: HH:mm, up to 04:00."); return false; }
+        model.SetBreakAllowance(allowance);
         // Hours set one day at a time in their own dialog are kept as they are, rather than flattened to one shift.
         if (customHours) return true;
         var start = TimeSpan.ParseExact((startBox.Text ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture, TimeSpanStyles.None);

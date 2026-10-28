@@ -7,7 +7,7 @@ using Timer.Core;
 namespace Timer.Desktop;
 
 /// <summary>
-/// Turns theme definitions into what Avalonia uses: a theme variant for each theme, plus a break and an overtime variant of it for the pill,
+/// Turns theme definitions into what Avalonia uses: a theme variant for each theme, plus a break variant of it for the pill,
 /// each with its colour resources. The built-in Light and Dark are the standard variants. Every other theme sits on a Light or Dark base,
 /// so the standard controls know which way to draw. Registering again replaces the colours, so an edited theme changes at once.
 /// </summary>
@@ -23,7 +23,7 @@ public static class ThemeEngine
         if (!normal.TryGetValue(theme.Name, out var variant)) normal[theme.Name] = variant = new ThemeVariant("Theme " + theme.Name, theme.Dark ? ThemeVariant.Dark : ThemeVariant.Light);
         return variant;
     }
-    /// <summary>The variant the pill wears for a break or for overtime, tinted from the theme.</summary>
+    /// <summary>The variant the pill wears for a break, tinted from the theme.</summary>
     public static ThemeVariant StateVariant(ThemeDefinition theme, string state)
     {
         if (!states.TryGetValue((theme.Name, state), out var variant))
@@ -160,7 +160,6 @@ public static class ThemeEngine
             Write(app, VariantFor(theme), theme.Colours);
             Write(app, StateVariant(theme, ThemeDerivation.Recording), ThemeDerivation.Variant(theme, ThemeDerivation.Recording));
             Write(app, StateVariant(theme, ThemeDerivation.Break), ThemeDerivation.Variant(theme, ThemeDerivation.Break));
-            Write(app, StateVariant(theme, ThemeDerivation.Overtime), ThemeDerivation.Variant(theme, ThemeDerivation.Overtime));
         }
         Applied?.Invoke();
     }

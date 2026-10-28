@@ -8,16 +8,17 @@ using Timer.Core;
 namespace Timer.Desktop;
 
 /// <summary>One day of the week overview as plain figures, so the screen, its tooltips and the tests read the same numbers.</summary>
-public sealed record WeekDay(DateTime Date, bool IsToday, bool Off, bool HasTime, TimeSpan Working, TimeSpan Overtime, TimeSpan Unallocated, TimeSpan Scheduled,
+public sealed record WeekDay(DateTime Date, bool IsToday, bool Off, bool HasTime, TimeSpan Working, TimeSpan Breaks, TimeSpan Unallocated, TimeSpan Scheduled,
     IReadOnlyList<(TimerAccount Account, TimeSpan Time)> Accounts, int Meetings, int Tasks, bool Overlaps)
 {
+
     /// <summary>A quiet dot marks a day with half an hour or more on no account, or with blocks laid over each other.</summary>
     public bool Marked => Unallocated >= TimeSpan.FromMinutes(30) || Overlaps;
 }
 
 /// <summary>The week for the totals strip and the chart.</summary>
 public sealed record WeekFigures(DateTime Start, IReadOnlyList<WeekDay> Days, TimeSpan Working, TimeSpan Allocated, TimeSpan Unallocated, TimeSpan Breaks,
-    TimeSpan Overtime, TimeSpan Scheduled, bool Current);
+    TimeSpan Scheduled, bool Current);
 
 /// <summary>The Week overview page, as the mock draws it: a totals strip, the day chart or table, and the accounts with their budgets and pace.</summary>
 public static class WeekOverview
@@ -29,7 +30,6 @@ public static class WeekOverview
     public static WeekFigures Figures(TimerModel model, DateTime weekStart)
     {
         var engine = model.Engine; var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList(); var today = engine.Now.Date;
-        TimeSpan WorkingOn(DateTime day) { var t = engine.Totals(day); return t.Working + t.Overtime; }
         var shown = Enumerable.Range(0, 7).Where(i => engine.Schedule.Days.Contains(weekStart.AddDays(i).DayOfWeek)
             || engine.Sessions.Any(s => s.Day == weekStart.AddDays(i)) || (engine.Active is not null && weekStart.AddDays(i) == today)).ToArray();
         if (shown.Length == 0) shown = Enumerable.Range(0, 5).ToArray();
@@ -39,26 +39,25 @@ public static class WeekOverview
             var date = weekStart.AddDays(i); var totals = engine.Totals(date); var plan = engine.Plan(date);
             var per = accounts.Select(a => (a, model.OnDay(a, date))).Where(p => p.Item2 > TimeSpan.Zero).ToList();
             var allocated = per.Aggregate(TimeSpan.Zero, (sum, p) => sum + p.Item2);
-            var working = totals.Working + totals.Overtime; var left = working - allocated;
+            var working = model.WorkingOn(date); var left = working - allocated; var dayBreaks = model.BreakTimeOn(date);
             var blocks = engine.Sessions.Where(s => s.Day == date && s.Duration > TimeSpan.Zero && !BreakAccount.Is(s.Account)).OrderBy(s => s.From).ToList();
             var overlaps = false; var reach = DateTime.MinValue;
             foreach (var block in blocks) { if (block.From.AddSeconds(2) < reach) overlaps = true; if (block.To > reach) reach = block.To; }
             var meetings = model.Notes.MeetingsOn(date).Count;
             var tasks = model.Notes.All.Count(n => n.HasDate && n.Day.Date == date && !n.Done && !NotesModel.IsMeeting(n));
             var hasTime = working > TimeSpan.Zero || allocated > TimeSpan.Zero;
-            days.Add(new WeekDay(date, date == today, date < today && !hasTime && !plan.Working, hasTime, working, totals.Overtime, left > TimeSpan.Zero ? left : TimeSpan.Zero,
-                plan.Working ? plan.End - plan.Start : TimeSpan.Zero, per.Select(p => (p.a, p.Item2)).ToList(), meetings, tasks, overlaps));
+            days.Add(new WeekDay(date, date == today, date < today && !hasTime && !plan.Working, hasTime, working, dayBreaks, left > TimeSpan.Zero ? left : TimeSpan.Zero,
+                model.ScheduledOn(date), per.Select(p => (p.a, p.Item2)).ToList(), meetings, tasks, overlaps));
         }
         // Saturday and Sunday are drawn only when they hold time; a quiet weekend is not a column of nothing.
         days = days.Where(d => d.HasTime || d.Scheduled > TimeSpan.Zero || d.Off || d.IsToday || (d.Date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))).ToList();
         var week = Enumerable.Range(0, 7).Select(i => weekStart.AddDays(i)).ToList();
-        var working7 = week.Aggregate(TimeSpan.Zero, (sum, d) => sum + WorkingOn(d));
-        var overtime = week.Aggregate(TimeSpan.Zero, (sum, d) => sum + engine.Totals(d).Overtime);
+        var working7 = week.Aggregate(TimeSpan.Zero, (sum, d) => sum + model.WorkingOn(d));
         var allocatedWeek = week.Aggregate(TimeSpan.Zero, (sum, d) => sum + accounts.Aggregate(TimeSpan.Zero, (s, a) => s + model.OnDay(a, d)));
         var unallocated = working7 - allocatedWeek; if (unallocated < TimeSpan.Zero) unallocated = TimeSpan.Zero;
         var breaks = week.Aggregate(TimeSpan.Zero, (sum, d) => sum + model.BreakTimeOn(d));
-        var scheduled = week.Aggregate(TimeSpan.Zero, (sum, d) => engine.Plan(d) is { Working: true } p ? sum + (p.End - p.Start) : sum);
-        return new WeekFigures(weekStart, days, working7, allocatedWeek, unallocated, breaks, overtime, scheduled, today >= weekStart && today < weekStart.AddDays(7));
+        var scheduled = week.Aggregate(TimeSpan.Zero, (sum, d) => sum + model.ScheduledOn(d));
+        return new WeekFigures(weekStart, days, working7, allocatedWeek, unallocated, breaks, scheduled, today >= weekStart && today < weekStart.AddDays(7));
     }
 
     public static Control Build(TimerModel model)
@@ -93,10 +92,10 @@ public static class WeekOverview
     // ---- The totals strip ----
     private static Control Totals(TimerModel model, WeekFigures w)
     {
-        var overtime = w.Overtime > TimeSpan.Zero;
-        var big = Ui.Text(model.Format(w.Working), 34, overtime ? "overtime" : null); big.Classes.Add("clock"); big.Name = "WeekWorking";
+        var big = Ui.Text(model.Format(w.Working), 34); big.Classes.Add("clock"); big.Name = "WeekWorking";
         var left = new StackPanel { MinWidth = 128, VerticalAlignment = VerticalAlignment.Center }; left.Children.Add(Ui.Text("Working time", 11, "muted")); left.Children.Add(big);
 
+        // The schedule is the hours less the break allowance, which is working time, so what is left is measured from the working time.
         var gap = w.Scheduled - w.Working;
         var rightWords = w.Current ? model.FormatShort(gap > TimeSpan.Zero ? gap : TimeSpan.Zero) + " to go"
             : gap >= TimeSpan.Zero ? model.FormatShort(gap) + " under the schedule" : model.FormatShort(-gap) + " over the schedule";
@@ -104,24 +103,22 @@ public static class WeekOverview
         var togo = Ui.Text(rightWords, 11, "muted"); togo.Name = "WeekToGo"; Ui.Put(words, scheduled); Ui.Put(words, togo, 1);
         var bar = new Border { Name = "WeekBar", Height = 12, CornerRadius = new CornerRadius(6), ClipToBounds = true, Background = Brush(model, "Line") };
         var whole = Math.Max(Math.Max(w.Working.TotalSeconds, w.Scheduled.TotalSeconds), 1);
-        // Allocated time solid, working time on no account hatched, overtime in red at the end of the bar, as the mock draws it.
-        var parts = new Grid { ColumnDefinitions = new ColumnDefinitions($"{w.Allocated.TotalSeconds:0.###}*,{w.Unallocated.TotalSeconds:0.###}*,{Math.Max(0, whole - w.Allocated.TotalSeconds - w.Unallocated.TotalSeconds):0.###}*") };
+        // Allocated time solid, working time on no account hatched, as the day bar under the timeline draws them. Time past the schedule runs on past its end.
+        var allocatedPart = Math.Min(w.Allocated.TotalSeconds, w.Working.TotalSeconds); var unallocatedPart = Math.Max(0, w.Working.TotalSeconds - allocatedPart);
+        var parts = new Grid { ColumnDefinitions = new ColumnDefinitions($"{allocatedPart:0.###}*,{unallocatedPart:0.###}*,{Math.Max(0, whole - allocatedPart - unallocatedPart):0.###}*") };
         parts.Children.Add(new Border { Name = "WeekBarAllocated", Background = Brush(model, "Muted") });
         parts.Children.Add(new Border { Name = "WeekBarUnallocated", Background = ReviewViews.Stripes(model), Opacity = .7, [Grid.ColumnProperty] = 1 });
-        var overlay = new Grid { ColumnDefinitions = new ColumnDefinitions($"{Math.Max(0, whole - w.Overtime.TotalSeconds):0.###}*,{w.Overtime.TotalSeconds:0.###}*") };
-        overlay.Children.Add(new Border { Name = "WeekBarOvertime", Background = Brush(model, "Overtime"), [Grid.ColumnProperty] = 1, IsVisible = overtime });
-        var layers = new Grid(); layers.Children.Add(parts); layers.Children.Add(overlay); bar.Child = layers;
-        ToolTip.SetTip(bar, $"Allocated {model.FormatShort(w.Allocated)} · Unallocated {model.FormatShort(w.Unallocated)}" + (overtime ? $"\nOvertime {model.FormatShort(w.Overtime)}" : ""));
+        bar.Child = parts;
+        ToolTip.SetTip(bar, $"Allocated {model.FormatShort(w.Allocated)} · Unallocated {model.FormatShort(w.Unallocated)} · Breaks {model.FormatShort(w.Breaks)}");
         Avalonia.Automation.AutomationProperties.SetName(bar, $"Working time {model.FormatShort(w.Working)} of {model.FormatShort(w.Scheduled)} scheduled");
         var middle = new StackPanel { Spacing = 7, VerticalAlignment = VerticalAlignment.Center }; middle.Children.Add(words); middle.Children.Add(bar);
 
-        var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto,Auto") };
+        var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto") };
         void At(Control c, int column) { Grid.SetColumn(c, column); strip.Children.Add(c); c.Margin = new Thickness(column == 1 ? 22 : column > 1 ? 22 : 0, 0, 0, 0); }
         At(left, 0); At(middle, 1);
         At(Stat(model, "WeekAllocated", "Allocated", model.FormatShort(w.Allocated), "Time given to accounts"), 2);
         At(Stat(model, "WeekUnallocated", "Unallocated", model.FormatShort(w.Unallocated), "Working time with nothing recorded on an account"), 3);
         At(Stat(model, "WeekBreaks", "Breaks", model.FormatShort(w.Breaks), "Kept apart from working time", null, "Break"), 4);
-        if (overtime) At(Stat(model, "WeekOvertime", "Overtime", model.FormatShort(w.Overtime), null, "overtime"), 5);
         var tile = Tile(strip, new Thickness(18, 12)); tile.Name = "WeekTotals"; return tile;
     }
 
@@ -175,23 +172,25 @@ public static class WeekOverview
 
     private static Control Column(TimerModel model, WeekDay d, double perHour, bool flip, CultureInfo british)
     {
-        var overtime = d.Overtime > TimeSpan.Zero;
         var stack = new StackPanel { Width = 46, HorizontalAlignment = HorizontalAlignment.Center };
         var segments = new StackPanel { ClipToBounds = true };
-        // Account slices fill from the bottom, with the time on no account as a hatched slice on top, so the column is the day's whole working time.
+        // Account slices fill from the bottom, with the time on no account as a hatched slice on top, so the column is the day's working time, which is what the schedule line
+        // (the hours less the break allowance) measures. Time given to accounts can add up to more than the working time (blocks laid over a break, or time before the
+        // day's start); the slices are then squeezed to fit it, so the column is never taller than the working time it stands for.
         var list = new List<Control>();
+        var given = d.Accounts.Aggregate(TimeSpan.Zero, (sum, a) => sum + a.Time);
+        var squeeze = given > d.Working && d.Working > TimeSpan.Zero ? d.Working.TotalSeconds / given.TotalSeconds : 1;
         foreach (var (account, time) in d.Accounts)
-            list.Add(new Border { Height = Math.Max(1.5, time.TotalHours * perHour), Background = Brush(model, "Muted"), Tag = account });
+            list.Add(new Border { Height = Math.Max(1.5, time.TotalHours * squeeze * perHour), Background = Brush(model, "Muted"), Tag = account });
         foreach (var slice in list) ((Border)slice).Background = new SolidColorBrush(Color.Parse(model.ChartColour(((TimerAccount)((Border)slice).Tag!).Colour)));
         if (d.Unallocated > TimeSpan.FromSeconds(30)) list.Add(new Border { Name = "WeekUnallocatedSlice", Height = Math.Max(1.5, d.Unallocated.TotalHours * perHour), Background = ReviewViews.Hatch(model) });
         list.Reverse(); foreach (var c in list) segments.Children.Add(c);
         var body = new Border { CornerRadius = new CornerRadius(10), ClipToBounds = true, Child = segments, HorizontalAlignment = HorizontalAlignment.Center, Width = 46 };
         if (d.Off) body = new Border { Name = "WeekOff", Width = 46, Height = 28, CornerRadius = new CornerRadius(10), Background = ReviewViews.Hatch(model), Opacity = .7, HorizontalAlignment = HorizontalAlignment.Center };
 
-        var total = Ui.Text(d.Off ? "Off" : d.HasTime ? model.FormatShort(d.Working) : "–", d.Off || !d.HasTime ? 12 : 12.5, overtime ? "overtime" : d.HasTime ? null : "muted");
+        var total = Ui.Text(d.Off ? "Off" : d.HasTime ? model.FormatShort(d.Working) : "–", d.Off || !d.HasTime ? 12 : 12.5, d.HasTime ? null : "muted");
         // The ordinary typeface, semibold: the display face was too heavy over the columns.
         total.FontWeight = d.HasTime ? FontWeight.SemiBold : FontWeight.Normal; total.HorizontalAlignment = HorizontalAlignment.Center; total.Margin = new Thickness(0, 0, 0, 4); total.Name = "WeekDayTotal";
-        var cap = new Border { Name = "WeekOvertimeCap", Height = 3, Width = 46, CornerRadius = new CornerRadius(2), Background = Brush(model, "Overtime"), IsVisible = overtime, HorizontalAlignment = HorizontalAlignment.Center };
 
         var label = Ui.Horizontal(); label.HorizontalAlignment = HorizontalAlignment.Center; label.Spacing = 5; label.VerticalAlignment = VerticalAlignment.Top;
         var name = Ui.Text(d.Date.ToString("ddd d", british), 12, d.IsToday ? "accent" : "muted"); if (d.IsToday) name.FontWeight = FontWeight.Bold;
@@ -227,7 +226,7 @@ public static class WeekOverview
 
         var bottom = new Grid { RowDefinitions = new RowDefinitions("*,Auto,Auto,Auto,Auto,Auto") };
         void Row(Control c, int r) { Grid.SetRow(c, r); bottom.Children.Add(c); }
-        Row(total, 1); Row(cap, 2); Row(body, 3); Row(label, 4); Row(counts, 5);
+        Row(total, 1); Row(body, 3); Row(label, 4); Row(counts, 5);
         // The label and the counts always take the same room, so the columns stand on one line whatever they carry.
         label.MinHeight = 22; counts.MinHeight = 24;
         var button = new Button { Name = "WeekDay_" + d.Date.ToString("yyyyMMdd"), Content = bottom, Padding = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Bottom };
@@ -254,8 +253,8 @@ public static class WeekOverview
         Control Dot(IBrush fill) => new Border { Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = fill, VerticalAlignment = VerticalAlignment.Center };
         foreach (var (account, time) in d.Accounts) Line(Dot(new SolidColorBrush(Color.Parse(model.ChartColour(account.Colour)))), account.Display, time);
         if (d.HasTime && d.Unallocated > TimeSpan.FromSeconds(30)) Line(Dot(ReviewViews.Hatch(model)), "Unallocated", d.Unallocated, quiet: true);
+        if (d.Breaks > TimeSpan.FromSeconds(30)) Line(Dot(Brush(model, "Break")), "Breaks", d.Breaks, quiet: true);
         void Note(string text) { var line = Ui.Text(text, 12, "muted"); line.Margin = new Thickness(0, 2, 0, 0); tip.Children.Add(line); }
-        if (d.Overtime > TimeSpan.Zero) Note("Overtime " + model.FormatShort(d.Overtime));
         if (d.Overlaps) Note("Some blocks overlap");
         if (d.Meetings > 0 || d.Tasks > 0) Note($"{d.Meetings} meeting{(d.Meetings == 1 ? "" : "s")} · {d.Tasks} open task{(d.Tasks == 1 ? "" : "s")}");
         return tip;

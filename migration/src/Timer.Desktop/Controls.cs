@@ -74,7 +74,6 @@ public static class Ui
             {
                 case "Live": return Color.FromRgb(52, 211, 153);
                 case "Break": return Color.FromRgb(245, 165, 36);
-                case "Overtime": return Color.FromRgb(248, 113, 113);
             }
         return ThemeColour(host, state, Colors.Gray);
     }
@@ -315,30 +314,24 @@ public static class Ui
         System.Diagnostics.Process.Start(start);
     }
     /// <summary>
-    /// The right-click menu is kept short on purpose: the hours format, which build this is, the overtime tester (demo only) and Close timer.
+    /// The right-click menu is kept short on purpose: which build this is (once developer features are unlocked) and Collapse to tray.
     /// Everything else lives on the settings page.
     /// </summary>
     public static ContextMenu SettingsMenu(TimerModel model)
     {
-        // Inside the demo you can switch overtime on and off to see how it looks. Like the version, it shows only once developer features are unlocked.
-        var overtimeTest = new MenuItem { Header = "Test overtime", ToggleType = MenuItemToggleType.CheckBox, IsVisible = false, Name = "TestOvertime" };
-        overtimeTest.Click += (_, _) => model.SetOvertimeTest(!model.OvertimeTest);
         // Which build this is, greyed out because it is information, not an action.
         var version = new MenuItem { Header = BuildInfo.Current, IsEnabled = false, IsVisible = false, Name = "BuildVersion" };
         // Tucks the timer away without stopping it. Closing it for good is the cross at the foot of the dashboard's rail.
         var collapse = new MenuItem { Header = "Collapse to tray", Name = "CollapseToTray" };
         collapse.Click += (_, _) => model.RequestHide();
-        var versionRule = new Separator { IsVisible = false };
         var collapseRule = new Separator { IsVisible = false };
-        var menu = new ContextMenu { ItemsSource = new Control[] { overtimeTest, versionRule, version, collapseRule, collapse } };
+        var menu = new ContextMenu { ItemsSource = new Control[] { version, collapseRule, collapse } };
         void Sync()
         {
             var developer = model.DeveloperUnlocked;
-            overtimeTest.IsChecked = model.OvertimeTest;
-            overtimeTest.IsVisible = developer && model.IsDemo; version.IsVisible = developer;
+            version.IsVisible = developer;
             // A divider only goes between two things that are showing, so it never sits at the top of the menu or above the only item.
-            versionRule.IsVisible = overtimeTest.IsVisible && version.IsVisible;
-            collapseRule.IsVisible = overtimeTest.IsVisible || version.IsVisible;
+            collapseRule.IsVisible = version.IsVisible;
         }
         menu.Opened += (_, _) => Sync(); Sync();
         return menu;
@@ -800,7 +793,6 @@ public sealed class AccountList : StackPanel
 public sealed class TrackingLabels : StackPanel
 {
     private readonly TextBlock status = Ui.Text("", 12);
-    private readonly TextBlock overtime = Ui.Text("Overtime", 12, "overtime");
     private readonly Avalonia.Controls.Shapes.Ellipse dot = new() { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center };
     public TrackingLabels(TimerModel model)
     {
@@ -810,8 +802,6 @@ public sealed class TrackingLabels : StackPanel
         var dotBox = new Border { Width = 10, Child = dot, VerticalAlignment = VerticalAlignment.Center };
         var line = Ui.Horizontal(dotBox, status); line.Spacing = 8;
         Children.Add(line);
-        Children.Add(overtime);
-        overtime.Margin = new Thickness(18, 0, 0, 0); // Lined up under the status words.
         void Refresh()
         {
             status.Text = model.Status;
@@ -822,8 +812,6 @@ public sealed class TrackingLabels : StackPanel
                 control.Classes.Set("live", model.IsTracking && !model.IsOnBreak);
                 control.Classes.Set("idle", !model.IsTracking);
             }
-            overtime.IsVisible = model.IsOvertime;
-            overtime.Text = "Overtime +" + model.Format(model.Engine.Totals(model.Engine.Now).Overtime);
         }
         void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh();
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Refresh(); };
@@ -835,7 +823,7 @@ public sealed class Chevron : Control
 {
     public bool Expanded { get; set; }
     public Chevron() { Width = 14; Height = 14; }
-    // Drawn in the theme's text colour, which changes when the pill turns to a recording, break or overtime look, so it must be drawn again then.
+    // Drawn in the theme's text colour, which changes when the pill turns to a recording or break look, so it must be drawn again then.
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -865,7 +853,7 @@ public sealed class PauseGlyph : Control
         Width = Height = 14;
         Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = GlowProperty, Duration = IconGlyph.HoverDuration } };
     }
-    // Drawn in the theme's text colour, which changes when the pill turns to a recording, break or overtime look, so it must be drawn again then.
+    // Drawn in the theme's text colour, which changes when the pill turns to a recording or break look, so it must be drawn again then.
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -950,7 +938,7 @@ public sealed class BreakGlyph : Control
         };
         steamRun = new RunningAnimation(animation.RunAsync(this, steaming.Token));
     }
-    // Drawn in the theme's text colour, which changes when the pill turns to a recording, break or overtime look, so it must be drawn again then.
+    // Drawn in the theme's text colour, which changes when the pill turns to a recording or break look, so it must be drawn again then.
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);

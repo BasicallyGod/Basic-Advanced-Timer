@@ -163,15 +163,13 @@
     <!-- A selected block is shown by its left strip, in the accent colour, and not by an outline. The class stays on the block so it can be found. -->
     <Style Selector="Border.selectedEdge"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Border#DayProgressFill"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
-    <!-- On a break or in overtime the whole pill is that colour, so the bar is drawn in the pill's text colour. -->
-    <Style Selector="Border#DayProgressFill.progressOvertime"><Setter Property="Background" Value="{DynamicResource Ink}" /></Style>
+    <!-- On a break the whole pill is that colour, so the bar is drawn in the pill's text colour. -->
     <Style Selector="Border#DayProgressFill.progressBreak"><Setter Property="Background" Value="{DynamicResource Ink}" /></Style>
     <!-- The now marker on today's timeline is drawn in the accent colour, with its chip's text in the accent's own text colour. -->
-    <!-- The bar of the scheduled day under the timeline: time on accounts in a neutral, overtime in red, on a quiet track. -->
+    <!-- The bar of the scheduled day under the timeline: time on accounts in a neutral, breaks in amber, on a quiet track. -->
     <Style Selector="Border.track"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
     <Style Selector="Border.barAllocated"><Setter Property="Background" Value="{DynamicResource Muted}" /></Style>
     <Style Selector="Border.barBreaks"><Setter Property="Background" Value="{DynamicResource Break}" /></Style>
-    <Style Selector="Border.barOvertime"><Setter Property="Background" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.nowLine"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Ellipse.nowDot"><Setter Property="Fill" Value="{DynamicResource Accent}" /><Setter Property="Stroke" Value="{DynamicResource Surface}" /><Setter Property="StrokeThickness" Value="2" /></Style>
     <Style Selector="Border.nowChip"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
@@ -240,7 +238,6 @@
     <Style Selector="Border.okIcon"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
     <Style Selector="Border.warnIcon"><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /><Setter Property="BorderThickness" Value="1.6" /></Style>
     <!-- The Day elapsed card is a raised tile with a bar of the accent colour along its top edge. -->
-    <Style Selector="TextBlock.overtimeText"><Setter Property="Foreground" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector=":is(Border).dayCard">
       <Setter Property="Background" Value="{DynamicResource Panel}" />
       <Setter Property="BorderBrush" Value="{DynamicResource Line}" />

@@ -161,7 +161,7 @@ body{margin:0}
     </div>
     <div class="card" style="flex: 1; padding: 14px 16px">
       <div style="font-size: 14px; font-weight: 600">State, without shouting</div>
-      <div style="font-size: 12.5px; color: var(--muted); line-height: 1.4; margin-top: 3px">The light, a thin ring and a soft halo carry the state. On a break the primary control keeps the account's initials, and the break turns solid orange with the cup lit and steaming. Overtime tints the primary control red.</div>
+      <div style="font-size: 12.5px; color: var(--muted); line-height: 1.4; margin-top: 3px">The light, a thin ring and a soft halo carry the state. On a break the primary control keeps the account's initials, and the break turns solid orange with the cup lit and steaming.</div>
     </div>
     <div class="card" style="flex: 1; padding: 14px 16px">
       <div style="font-size: 14px; font-weight: 600">Right-click</div>
@@ -189,7 +189,7 @@ class Component extends DCLogic {
     ];
     const open = this.state.open;
     const build = (dark) => {
-      // One soft tint per meaning: green for the primary control, orange for the break, blue for accounts, red for overtime.
+      // One soft tint per meaning: green for the primary control, orange for the break and blue for accounts.
       const C = {
         green: dark ? '#3EE0A0' : '#12935F', greenSoft: 'rgba(52,211,153,' + (dark ? .18 : .20) + ')', greenHover: 'rgba(52,211,153,' + (dark ? .30 : .32) + ')',
         red: dark ? '#FF9A9A' : '#C93A3A', redSoft: 'rgba(248,113,113,' + (dark ? .20 : .18) + ')',
@@ -216,7 +216,6 @@ class Component extends DCLogic {
         mk({ label: 'Hover (pause)', sub: 'Shows the pause symbol', isIni: false, isPause: true, prim: prim('hover') }),
         mk({ label: 'Break: hover', sub: 'Hover to start a break', isIni: false, isPause: true, brk: brk('hover') }),
         mk({ label: 'Break: on', sub: 'Initials stay, the cup is lit', h: '00', m: '23', s: '14', glow: glow('245,165,36'), dotStyle: 'background:#F5A524', dotLabel: 'On break', brk: brk('active'), brkCls: 'steamOn', brkLabel: 'End break and resume Account one' }),
-        mk({ label: 'Overtime', sub: 'Red until the day ends', h: '08', m: '12', s: '14', glow: glow('248,113,113'), dotStyle: 'background:#F87171', dotLabel: 'Overtime', prim: prim('red') }),
         mk({ label: 'Reminder due', sub: 'The grey light turns blue and pulses', due: true }),
         mk({ label: 'Accounts: hover', sub: 'Hover tints the button', acc: acc('hover') })
       ];

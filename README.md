@@ -15,7 +15,7 @@ Run `Start-Demo.cmd` to try the app with sample accounts and history, without to
 ## What it does
 
 - Start, stop and switch between client accounts, with Break and Lunch, from the pill or the dashboard.
-- Set working hours by weekday, days off and one-off starts. Start day and Finish day work throughout the day, and time beyond the usual finish is shown as overtime.
+- Set working hours by weekday, days off and one-off starts. Start day and Finish day work throughout the day, and the week overview measures your time against the schedule.
 - Track budgets by week, month or quarter, with a ring on each account.
 - Review each day on a scrollable, zoomable timeline. Drag blocks to move or resize them, add, merge and delete time, and keep notes and planned meetings with reminders. Every time edit can be undone, and the history survives a restart.
 - Review the week as a chart or table of time by day, with each account's budget and pace. Export a summary and detailed CSV with decimal hours that add up exactly.

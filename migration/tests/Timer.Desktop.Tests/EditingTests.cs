@@ -480,13 +480,10 @@ public sealed class EditingTests
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             var lights = dashboard.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "RailLights");
             void Settle() { Dispatcher.UIThread.RunJobs(); using var f = dashboard.CaptureRenderedFrame(); }
-            // The light is amber on a break and red in overtime, and a break outranks overtime.
+            // The light is amber on a break.
             if (model.IsOnBreak) model.ToggleBreak();
             model.ToggleBreak(); Settle(); Assert.Equal("On break", ToolTip.GetTip(lights));
             model.ToggleBreak(); Settle(); Assert.NotEqual("On break", ToolTip.GetTip(lights));
-            model.SetOvertimeTest(true); Settle(); Assert.True(model.IsOvertime); Assert.Equal("Overtime", ToolTip.GetTip(lights));
-            model.ToggleBreak(); Settle(); Assert.Equal("On break", ToolTip.GetTip(lights));
-            model.ToggleBreak(); model.SetOvertimeTest(false); Settle();
             // Break and day sit one above the other at the foot of the rail.
             var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak"); var day = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay");
             Assert.InRange(Math.Abs(breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, 0), dashboard)!.Value.X - day.TranslatePoint(new Point(day.Bounds.Width / 2, 0), dashboard)!.Value.X), 0, 1); // The same centre line.
@@ -505,21 +502,19 @@ public sealed class EditingTests
     }
 
     [AvaloniaFact]
-    public void TheDashboardStaysOnTopAndThePillStaysTheOvertimeColourEvenWhileRecording()
+    public void TheDashboardStaysOnTopAndTheBreakButtonSaysWhatItWillDoWhileRecording()
     {
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); var pill = new PillWindow(model); dashboard.Show(); pill.Show();
         try
         {
             Assert.True(dashboard.Topmost); Assert.True(pill.Topmost);
-            model.SetOvertimeTest(true); model.ToggleAccount("Account three"); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
-            Assert.True(model.IsOvertime); Assert.True(model.IsTracking);
-            // The whole capsule is the overtime colour while recording, and its line says how much overtime there is.
-            Assert.Equal("Overtime", model.ThemeState);
-            Assert.Equal("Overtime", ToolTip.GetTip(pill.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "PillLights")));
+            model.ToggleAccount("Account three"); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+            Assert.True(model.IsTracking); Assert.Equal("Recording", model.ThemeState); // However late in the day it is, there is no overtime state.
+            Assert.Equal("Recording", ToolTip.GetTip(pill.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "PillLights")));
             Assert.Equal("Start break", ToolTip.GetTip(dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak")));
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs();
             Assert.StartsWith("End break", ToolTip.GetTip(dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak"))?.ToString());
         }
-        finally { dashboard.Close(); pill.Close(); model.SetOvertimeTest(false); }
+        finally { dashboard.Close(); pill.Close(); }
     }
 }

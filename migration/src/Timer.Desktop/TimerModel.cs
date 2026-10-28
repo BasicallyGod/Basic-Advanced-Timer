@@ -249,7 +249,11 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string Label(string account) => BreakAccount.Display(account);
     public string Status => IsOnBreak ? "On break" : IsTracking ? "Tracking" : Engine.Finished ? "Day finished" : "Ready to track";
     public bool IsTracking => Engine.Active is not null;
-    public bool IsOvertime => Engine.Totals(Engine.Now).Overtime > TimeSpan.Zero;
+    /// <summary>
+    /// The time worked on a day: the engine counts what falls inside the scheduled hours and what runs past them apart, but the app has no overtime, so a day's
+    /// working time is the two together (breaks, lunch and away left out, as always).
+    /// </summary>
+    public TimeSpan WorkingOn(DateTime day) { var totals = Engine.Totals(day); return totals.Working + totals.Overtime; }
     public bool DayStarted => Engine.DayRunning;
     public bool DecimalHours => preferences.DecimalHours;
     public DateTime SelectedDate { get; private set; }
@@ -576,29 +580,6 @@ public sealed class TimerModel : INotifyPropertyChanged
         demo.Notes.SeedDemo(anchor.Date, prefs.Accounts.Select(x => x.Name).ToList());
         return demo;
     }
-    // Overtime for testing: the demo's shift is cut short so the day is already past its end. It is only for the demo, and can be
-    // switched off again, which puts back whatever shift was set for the day before.
-    private (DateTime Day, DayOverride? Previous)? overtimeTest;
-    public bool OvertimeTest => overtimeTest is not null;
-    public void SetOvertimeTest(bool on)
-    {
-        if (!IsDemo) throw new InvalidOperationException("Overtime testing is available only in the demo.");
-        if (on == OvertimeTest) return;
-        if (on)
-        {
-            var day = Engine.Now.Date;
-            overtimeTest = (day, Engine.Schedule.Overrides.TryGetValue(day, out var previous) ? previous : null);
-            Engine.Schedule.Overrides[day] = new(false, new(TimeSpan.FromHours(9), TimeSpan.FromHours(13)));
-        }
-        else
-        {
-            var (day, previous) = overtimeTest!.Value;
-            if (previous is null) Engine.Schedule.Overrides.Remove(day); else Engine.Schedule.Overrides[day] = previous;
-            overtimeTest = null;
-        }
-        Notify();
-    }
-    public void ForceOvertime() => SetOvertimeTest(true);
     public void SetShifts(Dictionary<DayOfWeek, Shift> shifts, bool resetToday = false)
     {
         if (shifts.Count == 0 || shifts.Values.Any(s => s.Start < TimeSpan.Zero || s.End >= TimeSpan.FromDays(1) || s.End <= s.Start))
@@ -724,11 +705,10 @@ public sealed class TimerModel : INotifyPropertyChanged
         catch (Exception error) when (error is ArgumentException or InvalidOperationException or IOException)
         { EditError = error.Message; Notify(); return false; }
     }
-    // Break and overtime themes are variants of Light and Dark that override colours. A break outranks overtime, because it is
-    // the state you chose just now, and overtime outranks normal. Not tracking has no tint of its own: it keeps the ordinary
-    // theme. Only the pill is coloured by state (see PillVariant): dark while recording, and a break or overtime colours the whole capsule.
+    // The break theme is a variant of Light and Dark that overrides colours. Not tracking has no tint of its own: it keeps the ordinary
+    // theme. Only the pill is coloured by state (see PillVariant): dark while recording, and a break colours the whole capsule.
     // The dashboard stays calm, and its own Break button and clock change colour to show those states.
-    public string ThemeState => IsOnBreak ? "Break" : IsOvertime ? "Overtime" : IsTracking ? "Recording" : "Normal";
+    public string ThemeState => IsOnBreak ? "Break" : IsTracking ? "Recording" : "Normal";
     private ThemeVariant? appliedVariant;
     /// <summary>Every theme on offer: the built-in ones, then the user's own.</summary>
     public IReadOnlyList<ThemeDefinition> Themes => AppThemes.BuiltIn;
@@ -742,7 +722,7 @@ public sealed class TimerModel : INotifyPropertyChanged
             return dark ? AppThemes.Dark : AppThemes.Light;
         }
     }
-    /// <summary>The theme the pill wears by itself: tinted amber on a break, red in overtime, otherwise null so it follows the rest of the app.</summary>
+    /// <summary>The theme the pill wears by itself: tinted amber on a break, otherwise null so it follows the rest of the app.</summary>
     public ThemeVariant? PillVariant => ThemeState != "Normal" && Application.Current is not null && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()
         ? ThemeEngine.StateVariant(CurrentTheme, ThemeState) : null;
     private void ApplyTheme()
@@ -787,11 +767,38 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (value is not null) lines.Add(prefix + value);
         preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save();
     }
+    /// <summary>
+    /// The break taken out of every working day's hours, so the schedule is working time and not the clock span the breaks sit inside. Saved as the appearance line
+    /// breakallowance=<minutes>; with no line it is nothing, so a timer set up before this existed measures against its full hours until one is chosen.
+    /// </summary>
+    public TimeSpan BreakAllowance
+    {
+        get
+        {
+            var line = preferences.Extras?.AppearanceLines.FirstOrDefault(l => l.StartsWith(BreakAllowanceLine, StringComparison.Ordinal));
+            return line is not null && int.TryParse(line[BreakAllowanceLine.Length..], out var minutes) ? TimeSpan.FromMinutes(Math.Clamp(minutes, 0, 240)) : TimeSpan.Zero;
+        }
+    }
+    /// <summary>Whether a break allowance was ever chosen, even one of nothing, so setup can suggest one only to a timer that has none.</summary>
+    public bool BreakAllowanceChosen => preferences.Extras?.AppearanceLines.Any(l => l.StartsWith(BreakAllowanceLine, StringComparison.Ordinal)) == true;
+    private const string BreakAllowanceLine = "breakallowance=";
+    public void SetBreakAllowance(TimeSpan allowance)
+    {
+        var minutes = (int)Math.Clamp(Math.Round(allowance.TotalMinutes), 0, 240);
+        if (BreakAllowanceChosen && BreakAllowance == TimeSpan.FromMinutes(minutes)) return;
+        SetAppearanceFlag(BreakAllowanceLine, minutes.ToString(CultureInfo.InvariantCulture), true); Notify();
+    }
+    /// <summary>The working time a day is scheduled for: its hours less the break allowance, or nothing on a day off (and never below nothing).</summary>
+    public TimeSpan ScheduledOn(DateTime day)
+    {
+        var plan = Engine.Plan(day); if (!plan.Working) return TimeSpan.Zero;
+        var net = plan.End - plan.Start - BreakAllowance; return net > TimeSpan.Zero ? net : TimeSpan.Zero;
+    }
     public int? PillScalePercent => preferences.PillScale;
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
     public bool Tooltips => preferences.Tooltips;
     public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
-    /// <summary>Whether the developer features are switched on: the sample-data demo, the overtime tester and the version on the right-click menu. Off until unlocked from the About section.</summary>
+    /// <summary>Whether the developer features are switched on: the sample-data demo and the version on the right-click menu. Off until unlocked from the About section.</summary>
     public bool DeveloperUnlocked => (preferences.Developer || IsDemo) && BuildInfo.DeveloperFeatures; // The demo is itself a developer tool, so it always shows them.
     public void SetDeveloper(bool on) { if (on && !BuildInfo.DeveloperFeatures) return; preferences = preferences with { Developer = on }; Save(); Notify(); }
     /// <summary>Whether the getting started setup is finished or skipped. A brand new database starts without it, and it can be run again from settings.</summary>

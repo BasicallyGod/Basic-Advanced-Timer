@@ -139,7 +139,7 @@ public sealed class DashboardShellTests
             Assert.True(gear.TranslatePoint(default, window)!.Value.X > rail.Bounds.Width + 600); Assert.True(gear.TranslatePoint(default, window)!.Value.Y < Ui.ShadowMargin + 80);
             var totals = Find<StackPanel>(window, "DayTotals"); var timeline = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
             Assert.True(totals.TranslatePoint(default, window)!.Value.Y >= timeline.TranslatePoint(new Point(0, timeline.Bounds.Height), window)!.Value.Y - 1);
-            Assert.True(totals.IsVisible); Assert.False(Find<StackPanel>(window, "TotalsOvertime").IsVisible); // Overtime shows only when there is some.
+            Assert.True(totals.IsVisible); Assert.DoesNotContain(window.GetVisualDescendants().OfType<StackPanel>(), c => c.Name == "TotalsOvertime"); // There is no overtime figure.
             window.SelectTab(true); Settle(window); Assert.False(totals.IsEffectivelyVisible); // The week has its own figures.
         }
         finally { window.Close(); }
