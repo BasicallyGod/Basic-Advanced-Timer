@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -283,6 +284,37 @@ public sealed class NotesTests
         Assert.Equal(new[] { "Middle", "Late", "Early", "Someday" }, Order()); // Done last, in the order they had.
         notes.Toggle(notes.All.Single(n => notes.Text(n) == "Early").Id);
         Assert.Equal(new[] { "Early", "Middle", "Late", "Someday" }, Order().Take(3).Concat(new[] { "Someday" }).ToArray()); // Ticking back lifts it to its place.
+    }
+
+    [Fact]
+    public void TheSuggestionLightMovesRoundTheOffersAndGoesBackToTheFirstWhenTheWordsChange()
+    {
+        var nav = new NoteParts.SuggestionState(); Assert.False(nav.Move(1)); // Nothing on offer: the key is left alone.
+        var offered = typeof(NoteParts.SuggestionState).GetMethod("Offered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!; offered.Invoke(nav, new object[] { 3 });
+        Assert.True(nav.Move(1)); Assert.Equal(1, nav.Index); nav.Move(1); nav.Move(1); Assert.Equal(0, nav.Index); // Down past the last comes round to the first.
+        nav.Move(-1); Assert.Equal(2, nav.Index); // And Up past the first to the last.
+        offered.Invoke(nav, new object[] { 2 }); Assert.Equal(0, nav.Index); // Fewer offers than the light's place: back to the first.
+    }
+
+    [AvaloniaFact]
+    public void TheArrowKeysChooseWhichOfTheOfferedAccountsEnterTakes()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            Click(window, "AddNote"); Type(window, "NoteField", "call #Acc"); Settle(window);
+            Assert.Contains("suggestOn", Find<Button>(window, "Suggest_Accountone").Classes); Assert.DoesNotContain("suggestOn", Find<Button>(window, "Suggest_Accounttwo").Classes);
+            Find<TextBox>(window, "NoteField").Focus(); Settle(window);
+            window.KeyPress(Key.Down, RawInputModifiers.None, PhysicalKey.ArrowDown, null); Settle(window);
+            Assert.Contains("suggestOn", Find<Button>(window, "Suggest_Accounttwo").Classes); Assert.DoesNotContain("suggestOn", Find<Button>(window, "Suggest_Accountone").Classes);
+            window.KeyPress(Key.Up, RawInputModifiers.None, PhysicalKey.ArrowUp, null); Settle(window);
+            Assert.Contains("suggestOn", Find<Button>(window, "Suggest_Accountone").Classes);
+            window.KeyPress(Key.Down, RawInputModifiers.None, PhysicalKey.ArrowDown, null); Settle(window);
+            window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null); Settle(window); // Takes the lit one, the second.
+            Type(window, "NoteField", "call"); Click(window, "SubmitNote");
+            var note = model.Notes.All.Single(); Assert.Equal("Account two", model.Notes.AccountOf(note));
+        }
+        finally { window.Close(); }
     }
 
     [AvaloniaFact]

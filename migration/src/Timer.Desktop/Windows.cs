@@ -467,7 +467,7 @@ public sealed class DashboardWindow : Window
         accountsPanel = new AccountsPanel(model, "Rail", compact: false, reorderable: true, () => { CloseFloating(); model.OpenAccounts(); }, pin: () => SetDocked(!dock.WantsPinned));
         var content = accountsPanel;
         railAccountScroll = content.Scroll;
-        accountsInner = new Border { Name = "AccountsDrawerInner", Width = DockMotion.PanelWidth, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(12, 18, 12, 14), Child = content };
+        accountsInner = new Border { Name = "AccountsDrawerInner", Width = DockMotion.PanelWidth, HorizontalAlignment = HorizontalAlignment.Left, Padding = new Thickness(6, 18, 6, 14), Child = content };
         accountsDrawer = new Border { Name = "AccountsDrawer", Width = DockMotion.PanelWidth, HorizontalAlignment = HorizontalAlignment.Left, BorderThickness = new Thickness(0, 0, 1, 0), ClipToBounds = true, Child = accountsInner };
         accountsDrawer.Classes.Add("panel"); accountsDrawer.Bind(Border.BorderBrushProperty, accountsDrawer.GetResourceObservable("Line"));
         accountsScrim = new Border { Name = "AccountsScrim", Background = Avalonia.Media.Brushes.Transparent };

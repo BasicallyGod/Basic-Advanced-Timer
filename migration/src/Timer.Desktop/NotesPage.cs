@@ -218,9 +218,14 @@ public sealed class NotesPage : Grid
         // A word starting with # offers the accounts that match it, as in the Notes card: choosing one sets the account and takes the word out of the note.
         var suggestions = new StackPanel { Name = "PageSuggestions", IsVisible = false }; suggestions.Classes.Add("suggestions");
         void Choose(string name, string rest) { account = name; draft = rest; DrawForm(); Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (formHost.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(t => t.Name == "PageNoteField") is { } again) { again.Focus(); again.CaretIndex = again.Text?.Length ?? 0; } }); }
-        (string Account, string Words)? first = null;
-        field.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) first = NoteParts.ShowSuggestions(model, field.Text ?? "", suggestions, "PageSuggest_", Choose); };
-        field.AddHandler(KeyDownEvent, (_, e) => { if (first is { } offer && suggestions.IsVisible && e.Key is Key.Tab or Key.Enter) { Choose(offer.Account, offer.Words); e.Handled = true; } }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        (string Account, string Words)? first = null; var nav = new NoteParts.SuggestionState();
+        field.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) { nav.Index = 0; first = NoteParts.ShowSuggestions(model, field.Text ?? "", suggestions, "PageSuggest_", Choose, nav); } };
+        // The arrow keys move the light through the offers, and Tab or Enter take the lit one.
+        field.AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (suggestions.IsVisible && e.Key is Key.Down or Key.Up && nav.Move(e.Key == Key.Down ? 1 : -1)) { first = NoteParts.ShowSuggestions(model, field.Text ?? "", suggestions, "PageSuggest_", Choose, nav); e.Handled = true; }
+            else if (first is { } offer && suggestions.IsVisible && e.Key is Key.Tab or Key.Enter) { Choose(offer.Account, offer.Words); e.Handled = true; }
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         if (!archived) { var submit = Ui.Ctl("PageSubmit", editing is not null ? "Save" : "Add", null, editing is not null ? "Save" : "Add", Submit, small: true); submit.Classes.Add("primary"); submit.Height = 36; submit.Padding = new Thickness(16, 0); Ui.Put(top, submit, 1); }
         column.Children.Add(top); column.Children.Add(suggestions);
 
@@ -254,16 +259,16 @@ public sealed class NotesPage : Grid
             repeats.SelectionChanged += (_, _) => { if (repeats.SelectedItem is string label) repeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };
             Add(repeats);
         }
-        column.Children.Add(options);
-
         if (editing is { } id)
         {
-            var row = Ui.Grid("*,Auto,Auto"); row.ColumnSpacing = 8;
-            if (archived) { var note = new TextBlock { Text = "A repeating note from an earlier version. It stays as it is.", FontSize = 12.5, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Name = "PageArchivedNote" }; note.Classes.Add("muted"); Ui.Put(row, note); }
-            Ui.Put(row, Ui.Ctl("PageDelete", "Delete", IconKind.Trash, "Delete", () => { if (Notes.Find(id) is { } found) AskRemove(found); }, small: true), 1);
-            Ui.Put(row, Ui.Ctl("PageCancel", "Cancel", null, "Cancel", () => { ResetForm(); shown = null; Sync(); }, small: true), 2);
-            column.Children.Add(row);
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 0, 0) };
+            buttons.Children.Add(Ui.Ctl("PageDelete", "Delete", IconKind.Trash, "Delete", () => { if (Notes.Find(id) is { } found) AskRemove(found); }, small: true));
+            buttons.Children.Add(Ui.Ctl("PageCancel", "Cancel", null, "Cancel", () => { ResetForm(); shown = null; Sync(); }, small: true));
+            // Delete and Cancel sit at the right end of the options' own line, so a form being edited has no line of its own for them and no dead space beside them.
+            var line = Ui.Grid("*,Auto"); line.ColumnSpacing = 8; Ui.Put(line, options); Ui.Put(line, buttons, 1); column.Children.Add(line);
+            if (archived) { var note = new TextBlock { Text = "A repeating note from an earlier version. It stays as it is.", FontSize = 12.5, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Name = "PageArchivedNote" }; note.Classes.Add("muted"); column.Children.Add(note); }
         }
+        else column.Children.Add(options);
         if (scope is { } asked)
         {
             var q = Ui.Grid("*,Auto,Auto,Auto"); q.ColumnSpacing = 8;

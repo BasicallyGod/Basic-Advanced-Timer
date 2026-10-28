@@ -22,8 +22,8 @@ public sealed class PillWindow : Window
     private readonly TimerModel model;
     /// <summary>The pill's own size before it is scaled for the screen, and the room kept around it for its shadow or glow.</summary>
     public const double PillWidth = 72, PillHeight = 316, PillRadius = 36;
-    /// <summary>The horizontal pill's own size: 470 wide and 72 tall, a capsule of the same 36 pixel radius. Its contents start 22 pixels from the left and end 14 from the right.</summary>
-    public const double HorizontalWidth = 470, HorizontalHeight = 72, HorizontalInsetLeft = 22, HorizontalInsetRight = 14;
+    /// <summary>The horizontal pill's own size: 336 wide and 72 tall, a capsule of the same 36 pixel radius. Its contents start 20 pixels from the left and end 14 from the right.</summary>
+    public const double HorizontalWidth = 336, HorizontalHeight = 72, HorizontalInsetLeft = 20, HorizontalInsetRight = 14;
     /// <summary>Which shape the pill is now, from the setting. It is rebuilt in place when the setting changes.</summary>
     public bool Horizontal => horizontal;
     private bool horizontal;
@@ -147,8 +147,8 @@ public sealed class PillWindow : Window
         var area = screen.WorkingArea; var box = ScreenGuard.SlideInside(new ScreenGuard.Box(area.X, area.Y, area.Width, area.Height), new ScreenGuard.Box(Position.X, Position.Y, (int)Math.Round(WindowWidthNow * screen.Scaling), (int)Math.Round(WindowHeightNow * screen.Scaling)));
         if (box.X != Position.X || box.Y != Position.Y) Position = new PixelPoint(box.X, box.Y);
     }
-    /// <summary>The horizontal pill's account list, a card that hangs below the account's box. It is as wide as the vertical pill's drawer plus a little, and scrolls inside.</summary>
-    public const double DropdownWidth = 300, DropdownMaxHeight = 380, DropdownGap = 11;
+    /// <summary>The horizontal pill's account list, a card that hangs below the account's box. It is as wide as the vertical pill's drawer, and scrolls inside.</summary>
+    public const double DropdownWidth = 208, DropdownMaxHeight = 380, DropdownGap = 11;
     /// <summary>The list's card, built apart from the pop-up so it can also be drawn on its own.</summary>
     public Border MakeDropdownCard()
     {
@@ -244,7 +244,7 @@ public sealed class PillWindow : Window
         rootGrid.Children.Add(panel);
     }
     /// <summary>The drawer's width, beside the pill's own 72.</summary>
-    public const double DrawerWidth = 251;
+    public const double DrawerWidth = 211;
     /// <summary>How far the drawer reaches under the pill's right edge. It is the room the pill keeps clear either side of its controls, so nothing of the pill is under the drawer's window.</summary>
     public const double Behind = 3;
     // The drawer's own area less the pill's capsule, which is where the pill shows through. Drawn a hair inside the pill's edge, so no sliver of desktop shows between.
@@ -305,8 +305,8 @@ public sealed class PillWindow : Window
         SetOpenLook(true);
         if (horizontal)
         {
-            // The list hangs below the pill with its left edge under the well's, so it reads as the account's own drop-down.
-            var wellLeft = face.Well.TranslatePoint(default, surface)?.X ?? 0;
+            // The list hangs below the pill with its right edge level with the pill's, since the card is nearly as wide as the pill and the account's box is near that end.
+            var wellLeft = Math.Max(0, HorizontalWidth - DropdownWidth);
             panel.HorizontalOffset = (wellLeft - HangingCard.Room.Left) * Scale; panel.VerticalOffset = (DropdownGap - HangingCard.Room.Top) * Scale;
             if (dropdownHung is not null && face.AccountsButton.TranslatePoint(new Point(face.AccountsButton.Bounds.Width / 2, 0), surface) is { } centre)
                 HangingCard.MovePoint(dropdownHung, DropdownPoint, HangingCard.ClampFromRight(DropdownWidth - (centre.X - wellLeft), DropdownWidth, 24));

@@ -175,6 +175,26 @@ public sealed class NotesPageTests
     }
 
     [AvaloniaFact]
+    public void DeleteAndCancelSitOnTheOptionsLineAtItsRightEndWithNoLineOfTheirOwn()
+    {
+        var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            Click(window, "NotesTab");
+            foreach (var text in new[] { "Tidy the drive", "Client call" })
+            {
+                Click(window, "PageNoteOpen_" + IdOf(model, text));
+                var account = Find<ComboBox>(window, "PageAccount"); var delete = Find<Button>(window, "PageDelete"); var cancel = Find<Button>(window, "PageCancel");
+                var accountMid = account.TranslatePoint(new Point(0, account.Bounds.Height / 2), window)!.Value.Y; var deleteMid = delete.TranslatePoint(new Point(0, delete.Bounds.Height / 2), window)!.Value.Y;
+                Assert.Equal(accountMid, deleteMid, 4); // The same line, not a row below with nothing beside it.
+                var field = Find<TextBox>(window, "PageNoteField"); var fieldRight = field.TranslatePoint(new Point(field.Bounds.Width, 0), window)!.Value.X;
+                Assert.True(cancel.TranslatePoint(new Point(cancel.Bounds.Width, 0), window)!.Value.X <= fieldRight + 80 && cancel.TranslatePoint(default, window)!.Value.X > delete.TranslatePoint(default, window)!.Value.X);
+            }
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ARowOpensInTheFormAsEditingWithTheAccentEdgeAndSaveChangesItAndCancelPutsTheFormBack()
     {
         var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);

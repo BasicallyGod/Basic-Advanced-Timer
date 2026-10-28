@@ -151,7 +151,7 @@ public sealed class DockTests
             Assert.False(host.IsVisible); Assert.True(notes.HasSelectedTab); Assert.True(Find<Button>(window, "CardKindSelected").IsEffectivelyVisible);
             var strip = Find<StackPanel>(window, "DayTotals"); var tools = strip.Parent!; // The figures, the zoom buttons and Add time all fit inside the card.
             var card = Find<Border>(window, "TimelineCard");
-            Assert.True(card.Bounds.Width < widthShut - 200, $"{card.Bounds.Width} vs {widthShut}");
+            Assert.True(card.Bounds.Width < widthShut - (DockMotion.PanelWidth - 20), $"{card.Bounds.Width} vs {widthShut}");
             foreach (var name in new[] { "AddTime", "TimelineZoomOut", "TimelineZoomIn", "RedoEdit" })
             {
                 var button = Find<Button>(window, name); var right = button.TranslatePoint(new Point(button.Bounds.Width, 0), card)!.Value.X;

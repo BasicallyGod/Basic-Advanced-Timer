@@ -82,7 +82,7 @@ public sealed class ShellTests
                 window.MouseUp(point, MouseButton.Left);
                 Assert.True(model.Accounts[i].Name == model.ActiveAccount,
                     $"Row {i}: bounds {row.Bounds}, point {point}, hit {window.GetVisualAt(point)?.GetType().Name}, active {model.ActiveAccount ?? "none"}");
-                Assert.InRange(row.Bounds.Width, 240, 320);
+                Assert.InRange(row.Bounds.Width, 150, 200);
             }
             model.TogglePause(); // Nothing recording, so the scrolled click below starts an account.
             Open(); var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "RailAccountScroll");
@@ -191,7 +191,8 @@ public sealed class ShellTests
             Assert.Contains(strip.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "4.50h");
             dashboard.ShowAccountsPanel(); Dispatcher.UIThread.RunJobs(); using var accountsFrame = dashboard.CaptureRenderedFrame();
             texts = dashboard.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
-            Assert.Contains(texts, t => t is not null && t.Contains("9h / 15h")); dashboard.CloseFlyouts();
+            // The budget words are in the row's tooltip now, so the narrow panel keeps the room for the name and the time.
+            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")), b => ToolTip.GetTip(b)?.ToString() is { } tip && tip.Contains("9h / 15h")); dashboard.CloseFlyouts();
             model.ToggleAccount("Account three");
             pill.ShowPanel();
             Save(pill, Path.Combine(output, "pill-expanded-Dark.png"));

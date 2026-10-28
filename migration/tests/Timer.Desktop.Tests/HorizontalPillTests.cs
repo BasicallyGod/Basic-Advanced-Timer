@@ -56,18 +56,18 @@ public sealed class HorizontalPillTests
     }
 
     [AvaloniaFact]
-    public void TheAccountsBoxShowsTheNameInFullWithTheStateDotAndALongNameIsCutAndSlides()
+    public void TheAccountsBoxIsADotAndAChevronAndTheNameIsItsTooltip()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
         {
             model.ToggleAccount("Account two"); Settle(pill);
-            var tile = Find<Border>(pill, "PillAccountSelector"); var name = tile.GetVisualDescendants().OfType<MarqueeText>().Single();
-            Assert.Equal("Account two", name.Label.Text); Assert.Equal(StatusFace.SelectorWidth, tile.Bounds.Width, 0.5);
-            Assert.Equal("Accounts", ToolTip.GetTip(pill.AccountsButton)?.ToString());
+            // The account's box is only the state dot and a chevron: the name is its tooltip and the list, so the pill stays narrow whatever the name.
+            var tile = Find<Border>(pill, "PillAccountSelector");
+            Assert.Empty(tile.GetVisualDescendants().OfType<TextBlock>()); Assert.Equal(StatusFace.SelectorWidth, tile.Bounds.Width, 0.5);
+            Assert.Equal("Account two", ToolTip.GetTip(pill.AccountsButton)?.ToString());
             model.ToggleAccount(LongName); Settle(pill);
-            Assert.Equal(LongName, name.Label.Text); // The whole name is there, and the box never grows past its room.
-            Assert.True(name.Bounds.Width < StatusFace.SelectorWidth - 20, $"name box {name.Bounds.Width}");
+            Assert.Equal(LongName, ToolTip.GetTip(pill.AccountsButton)?.ToString());
             Assert.Equal(StatusFace.SelectorWidth, tile.Bounds.Width, 0.5); Assert.Equal(PillWindow.HorizontalWidth, Find<Border>(pill, "PillSurface").Bounds.Width, 0.5); // The pill keeps its size.
             Assert.Contains(LongName, Avalonia.Automation.AutomationProperties.GetName(pill.AccountsButton)); // And says the full name to a screen reader.
         }

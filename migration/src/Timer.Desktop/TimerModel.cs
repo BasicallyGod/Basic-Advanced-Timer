@@ -467,6 +467,9 @@ public sealed class TimerModel : INotifyPropertyChanged
         var period = a.Period is "day" or "month" or "quarter" ? (a.Period == "day" ? "working day" : a.Period) : "week";
         return $"{Math.Round(ratio * 100)}% used{(ratio >= 1 ? " · over budget" : "")}\nLine: how far through the {period}";
     }
+    /// <summary>What the narrow account row says on hover: today's time is on the row, so this is the budget used against its target and the period, then how it is going.</summary>
+    public string BudgetRowTip(TimerAccount a)
+        => a.Budget is null ? a.Display + "\nNo budget" : $"{a.Display}\n{BudgetUsage(a)} · {BudgetPeriodLabel(a).ToLowerInvariant()}\n{BudgetDetail(a)}";
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
     /// <summary>Puts the timeline and week views back on the current day. The dashboard does this whenever it is opened, so it never comes up on a day left over from earlier.</summary>

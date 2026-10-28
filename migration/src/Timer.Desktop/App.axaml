@@ -199,7 +199,7 @@
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
     <!-- The dashboard's account rows are soft rounded cards. The recording account's card takes a gentle tint of the tracking colour. -->
-    <Style Selector="Button.accountCard"><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="10,6" /></Style>
+    <Style Selector="Button.accountCard"><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="4,4" /></Style>
     <Style Selector="Button.accountCard:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
     <Style Selector="Button.accountCard.active"><Setter Property="Background" Value="{DynamicResource LiveTint}" /></Style>
     <Style Selector="Button.accountCard.active /template/ ContentPresenter#PART_ContentPresenter, Button.accountCard.active:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource LiveTint}" /></Style>
@@ -367,6 +367,8 @@
     <Style Selector="Button.peekAll"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Foreground" Value="{DynamicResource Accent}" /><Setter Property="Padding" Value="8,6" /><Setter Property="FontSize" Value="13" /></Style>
     <Style Selector="Button.peekAll:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
     <Style Selector="Button.flat"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /><Setter Property="Padding" Value="8,4" /></Style>
+    <!-- The offered account the arrow keys have reached, as the hovered one looks, so keyboard and pointer read alike. -->
+    <Style Selector="Button.flat.suggestOn /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="Button.flat:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <!-- The two big choices in the getting started setup. The chosen one has an accent border and the selection tint. -->
     <Style Selector="Button.choiceTile">

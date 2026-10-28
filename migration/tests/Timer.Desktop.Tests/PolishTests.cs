@@ -92,8 +92,9 @@ public sealed class PolishTests
         {
             window.ShowAccountsPanel();
             Settle(window);
-            var lines = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Where(t => t is not null).ToList();
-            Assert.Contains(lines, t => t!.EndsWith(" / 20:00")); Assert.Contains("This month", lines); Assert.Contains("This week", lines); Assert.Contains("This quarter", lines); // The period sits beside the usage, not tacked on its end.
+            // The usage and its period are in each row's tooltip, so the narrow panel keeps its room for the name and the time.
+            var tips = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")).Select(b => ToolTip.GetTip(b)?.ToString() ?? "").ToList();
+            Assert.Contains(tips, t => t.Contains(" / 20:00")); Assert.Contains(tips, t => t.Contains("· this month")); Assert.Contains(tips, t => t.Contains("· this week")); Assert.Contains(tips, t => t.Contains("· this quarter"));
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.Contains(" of ") && x.Contains("h ") && t.Classes.Contains("muted") && x.Contains("m") && x.Length > 0 && x.Contains("00m"));
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Today" && t.Name == "TodayHeading"); // No Today heading over the accounts.
             Assert.Equal("10:35", model.FormatCompact(TimeSpan.FromMinutes(635))); Assert.Equal("20:00", model.FormatCompact(TimeSpan.FromHours(20)));
