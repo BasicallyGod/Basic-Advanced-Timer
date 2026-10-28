@@ -29,7 +29,6 @@ public sealed class StoreBuildTests
             saved.SetDeveloper(true); Assert.False(saved.DeveloperUnlocked);
             var demo = TimerModel.CreateDemo();
             Assert.False(demo.DeveloperUnlocked); // Not even the demo model.
-            Assert.Throws<InvalidOperationException>(() => new TimerModel(new TrackingEngine()).SetOvertimeTest(true));
         }
         finally { BuildInfo.DeveloperFeaturesOverride = null; }
     }
@@ -45,7 +44,7 @@ public sealed class StoreBuildTests
         {
             window.ContextMenu!.Open(); Dispatcher.UIThread.RunJobs();
             var menu = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
-            Assert.False(menu.Single(m => m.Name == "BuildVersion").IsVisible); Assert.False(menu.Single(m => m.Name == "TestOvertime").IsVisible);
+            Assert.False(menu.Single(m => m.Name == "BuildVersion").IsVisible);
             Assert.True(menu.Single(m => (string?)m.Header == "Collapse to tray").IsVisible);
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window);
             Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);

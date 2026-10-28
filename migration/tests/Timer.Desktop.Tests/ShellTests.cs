@@ -41,7 +41,7 @@ public sealed class ShellTests
     }
 
     [AvaloniaFact]
-    public void IdleAndOvertimeUseIndependentThemeResources()
+    public void TheIdleStatusFollowsTheThemeAndPastTheEndOfTheDayThereIsNoOvertimeLine()
     {
         var model = Fixture();
         model.Engine.Schedule.Default = new Shift(TimeSpan.FromHours(9), TimeSpan.FromHours(13));
@@ -54,15 +54,12 @@ public sealed class ShellTests
             using var initialFrame = window.CaptureRenderedFrame();
             var labels = window.GetVisualDescendants().OfType<TextBlock>().ToArray();
             var idle = labels.Single(x => x.Text == "Ready to track");
-            var overtime = labels.Single(x => x.Text is not null && x.Text.StartsWith("Overtime"));
-            Assert.NotEqual(idle.Foreground, overtime.Foreground);
-            var overtimeColour = ((ISolidColorBrush)overtime.Foreground!).Color;
-            Assert.True(overtimeColour.R > overtimeColour.G + 30);
-            Assert.True(overtime.IsVisible);
+            Assert.NotNull(idle.Foreground);
+            Assert.DoesNotContain(labels, x => x.Text is not null && x.Text.StartsWith("Overtime")); // The day's hours are over (the shift ends at 13:00), and nothing says so in red.
             Assert.Equal(theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark, Application.Current!.ActualThemeVariant);
         }
         model.SetTheme("System");
-        Assert.Equal(ThemeEngine.VariantFor(model.CurrentTheme), Application.Current!.RequestedThemeVariant); // System is Time Deck, by the computer's light or dark.
+        Assert.Equal(ThemeEngine.VariantFor(model.CurrentTheme), Application.Current!.RequestedThemeVariant); // System is Light or Dark, by the computer's light or dark.
         Assert.Contains(model.CurrentTheme.Name, new[] { "Light", "Dark" });
     }
 
@@ -336,8 +333,7 @@ public sealed class ShellTests
             model.ToggleAccount("Account one");
             Save(coordinator.Dashboard, Path.Combine(output, "demo-tracking.png"));
             Assert.Equal("Recording", ToolTip.GetTip(coordinator.Dashboard.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "RailLights")));
-            model.ForceOvertime(); Assert.True(model.IsOvertime);
-            Save(coordinator.Dashboard, Path.Combine(output, "demo-overtime.png"));
+            Save(coordinator.Dashboard, Path.Combine(output, "demo-late.png"));
             coordinator.Dashboard.OpenPill!(); coordinator.Pill.ShowPanel();
             Save(coordinator.Pill, Path.Combine(output, "demo-pill-overtime.png"));
         }
@@ -356,7 +352,7 @@ public sealed class ShellTests
                 var engine = new TrackingEngine(clock: () => now);
                 var model = new TimerModel(engine, store.Load(engine), store);
                 model.SetShifts(new() { [DayOfWeek.Friday] = new(TimeSpan.FromHours(10), TimeSpan.FromHours(11)) });
-                Assert.Equal(TimeSpan.FromHours(2), model.Elapsed); Assert.True(model.IsOvertime);
+                Assert.Equal(TimeSpan.FromHours(2), model.Elapsed); Assert.Equal(TimeSpan.FromHours(2), model.WorkingOn(now)); // The hour past the end counts as time worked.
             }
             using (var store = new TimerStore(folder))
             {

@@ -45,7 +45,6 @@ public sealed class ThemePreviewTests
         {
             Shot("idle");
             model.ToggleAccount("Account three"); Shot("recording");
-            model.SetOvertimeTest(true); Shot("overtime"); model.SetOvertimeTest(false);
             model.ToggleBreak(); Shot("break"); model.ToggleBreak();
             pill.ShowPanel(); Shot("expanded");
         }
@@ -67,7 +66,7 @@ public sealed class ThemePreviewTests
         }
         try
         {
-            model.SetOvertimeTest(true); model.ToggleAccount("Account one"); Shot("dash-overtime"); model.SetOvertimeTest(false);
+            model.ToggleAccount("Account one"); Shot("dash-recording");
             model.ToggleBreak(); Shot("dash-break"); model.ToggleBreak();
             window.SelectTab(true); Shot("week");
             Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.Button>().Single(b => b.Name == "Settings").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));

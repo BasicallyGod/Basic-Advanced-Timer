@@ -245,7 +245,7 @@ public sealed class DockLayoutAuditTests
         foreach (var theme in new[] { "Light", "Dark" })
             foreach (var (room, railScale) in new[] { (0.0, 1.0), (.5, 1.0), (1.0, 1.0), (1.0, 1.2) }) // The last is the widest rail, a pill drawn at 120 per cent.
             {
-                var model = TimerModel.CreateDemo(); model.SetTheme(theme); model.ForceOvertime(); // Overtime adds a figure to the day's bar, the widest it gets.
+                var model = TimerModel.CreateDemo(); model.SetTheme(theme);
                 var window = new DashboardWindow(model); window.Show(); Settle(window);
                 try
                 {

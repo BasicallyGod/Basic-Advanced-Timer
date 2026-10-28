@@ -26,7 +26,7 @@ public sealed class PolishTests
         {
             var menu = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
             window.ContextMenu!.Open(); Dispatcher.UIThread.RunJobs();
-            Assert.False(menu.Single(m => m.Name == "BuildVersion").IsVisible); Assert.False(menu.Single(m => m.Name == "TestOvertime").IsVisible);
+            Assert.False(menu.Single(m => m.Name == "BuildVersion").IsVisible);
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); Settle(window);
             Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible); // No sample-data demo yet.
             window.GetVisualDescendants().OfType<SettingsView>().Single().ShowSection("about"); Settle(window); // About is its own section.
@@ -38,7 +38,7 @@ public sealed class PolishTests
             Assert.True(model.DeveloperUnlocked);
             Assert.True(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);
             window.ContextMenu!.Close(); window.ContextMenu!.Open(); Dispatcher.UIThread.RunJobs();
-            Assert.True(menu.Single(m => m.Name == "BuildVersion").IsVisible); Assert.False(menu.Single(m => m.Name == "TestOvertime").IsVisible); // The tester is for the demo only.
+            Assert.True(menu.Single(m => m.Name == "BuildVersion").IsVisible);
             // The switch in the Development section hides them again.
             model.SetDeveloper(false); Dispatcher.UIThread.RunJobs();
             Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);
@@ -54,7 +54,7 @@ public sealed class PolishTests
         {
             window.ContextMenu!.Open(); Dispatcher.UIThread.RunJobs();
             var menu = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
-            Assert.True(menu.Single(m => m.Name == "TestOvertime").IsVisible); Assert.True(menu.Single(m => m.Name == "BuildVersion").IsVisible);
+            Assert.True(menu.Single(m => m.Name == "BuildVersion").IsVisible);
             // The settings page shows the Development section already open, with its switch fixed on and no button to open a demo from inside one.
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window);
             Assert.True(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);

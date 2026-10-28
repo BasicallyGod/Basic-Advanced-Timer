@@ -72,10 +72,6 @@ public sealed class PillTests
             Assert.Equal("On break", Tip(lights)); Assert.StartsWith("End break", Tip(mug)); Assert.True(pill.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming);
         }
         finally { pill.Close(); }
-        // Overtime can only be forced in the demo.
-        var demo = TimerModel.CreateDemo(); var late = new PillWindow(demo); late.Show();
-        try { demo.SetOvertimeTest(true); demo.ToggleAccount("Account three"); Dispatcher.UIThread.RunJobs(); Assert.Equal("Overtime", Tip(Find<StackPanel>(late, "PillLights"))); }
-        finally { late.Close(); }
     }
 
     [AvaloniaFact]
@@ -194,7 +190,7 @@ public sealed class PillTests
             var idle = Snapshot();
             demo.ToggleAccount("Account one"); Assert.Equal(idle, Snapshot()); // Recording.
             demo.ToggleBreak(); Assert.Equal(idle, Snapshot()); // A break.
-            demo.ToggleBreak(); demo.SetOvertimeTest(true); demo.ToggleAccount("Account three"); Assert.Equal(idle, Snapshot()); // Overtime.
+            demo.ToggleBreak(); demo.ToggleAccount("Account three"); Assert.Equal(idle, Snapshot()); // Recording again, late in the day.
         }
         finally { pill.Close(); }
     }

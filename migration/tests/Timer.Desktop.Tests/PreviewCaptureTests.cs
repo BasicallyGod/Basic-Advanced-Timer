@@ -79,7 +79,7 @@ public sealed class PreviewCaptureTests
         Directory.CreateDirectory(folder);
         foreach (var theme in new[] { "Light", "Dark" })
         {
-            var model = TimerModel.CreateDemo(); model.SetTheme(theme); model.ForceOvertime();
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme);
             var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
             try
             {

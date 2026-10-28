@@ -106,7 +106,7 @@ public sealed class OnboardingView : Grid
         (title.Text, subtitle.Text, body.Content) = index switch
         {
             0 => ("Your client accounts", "These are the clients you track time against. Rename the examples or add your own. Budgets are optional: leave them blank for no limit.", AccountsStep()),
-            1 => ("Your working hours", "The day clock starts at your start time and overtime begins after your end time. Overnight shifts are not supported yet.", HoursStep()),
+            1 => ("Your working hours", "The day clock starts at your start time, and the schedule is what the week overview measures your time against. Overnight shifts are not supported yet.", HoursStep()),
             2 => ("How you count time", "This changes every total and the exports. You can switch any time from the right-click menu.", FormatStep()),
             3 => ("Your pill", "The timer lives in a small pill that stays on top of your other windows. Choose its shape. You can change it later in Settings.", ShapeStep()),
             _ => ("You are all set", "A few things worth knowing before you start.", ReadyStep())

@@ -63,7 +63,7 @@ public sealed class WeekOverviewTests
             var w = WeekOverview.Figures(model, new DateTime(2026, 10, 5));
             Assert.Equal(model.Format(w.Working), Find<TextBlock>(window, "WeekWorking").Text); Assert.Equal(model.FormatShort(w.Allocated), Find<TextBlock>(window, "WeekAllocated").Text);
             Assert.Equal("Scheduled " + model.FormatShort(w.Scheduled), Find<TextBlock>(window, "WeekScheduled").Text); Assert.EndsWith("to go", Find<TextBlock>(window, "WeekToGo").Text);
-            Assert.NotNull(Find<Border>(window, "WeekBar")); Assert.False(Find<Border>(window, "WeekBarOvertime").IsVisible);
+            Assert.NotNull(Find<Border>(window, "WeekBar")); Assert.NotNull(Find<Border>(window, "WeekBarBreaks"));
             Assert.NotNull(Find<Border>(window, "WeekScheduleLine")); Assert.StartsWith("Schedule", Find<TextBlock>(window, "WeekScheduleLabel").Text); Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "WeekChange");
             var friday = Find<Button>(window, "WeekDay_20261009");
             Assert.Contains("working time", Avalonia.Automation.AutomationProperties.GetName(friday)); Assert.NotNull(ToolTip.GetTip(friday));
@@ -72,17 +72,50 @@ public sealed class WeekOverviewTests
         finally { window.Close(); }
     }
 
-    [AvaloniaFact]
-    public void OvertimeTurnsTheTotalAndTheColumnRedAndAddsAnOvertimeFigure()
+    // A day on the clock: its working time and its breaks together are what the schedule's hours are measured against, so a day whose accounts add up to a little more than
+    // the schedule is not drawn as short of it only because its breaks are left out of the column.
+    private static TimerModel DayWithBreaks(out WeekDay day, out TimeSpan scheduled)
     {
-        var model = Model(e => e.Sessions.AddRange(new[] { Row("10:00:00", "30"), Row("08:00:00", "60", date: "2026-10-06") }));
-        model.SetShifts(new() { [DayOfWeek.Friday] = new(TimeSpan.FromHours(10), TimeSpan.FromHours(11)) }); // Five hours past the end of the day at 16:00.
+        var tuesday = new DateTime(2026, 10, 6); var span = TimeSpan.Zero; var from = TimeSpan.Zero;
+        var probe = Model(); var plan = probe.Engine.Plan(tuesday); span = plan.End - plan.Start; from = plan.Start.TimeOfDay;
+        string At(TimeSpan t) => $"{(int)t.TotalHours:00}:{t.Minutes:00}:00";
+        // Accounts all the way through the schedule and five minutes past it, with forty minutes of breaks laid over the middle of it.
+        var model = Model(e => e.Sessions.AddRange(new[] { Row(At(from), ((int)(span.TotalMinutes + 5)).ToString(), "Account one", "2026-10-06"), Row(At(from + span / 2), "40", "Break", "2026-10-06") }));
+        day = WeekOverview.Figures(model, new DateTime(2026, 10, 5)).Days.Single(d => d.Date == tuesday); scheduled = span; return model;
+    }
+
+    [Fact]
+    public void ADaysWorkingTimeAndBreaksTogetherAreWhatTheScheduleIsMeasuredAgainst()
+    {
+        var model = DayWithBreaks(out var day, out var scheduled);
+        Assert.Equal(scheduled + TimeSpan.FromMinutes(5), day.Covered); // Working time and the breaks: the clock the day covered.
+        Assert.Equal(TimeSpan.FromMinutes(40), day.Breaks); Assert.True(day.Working < scheduled); // Left out, the day looks short of the schedule.
+        Assert.True(day.Covered > day.Scheduled);
+        var week = WeekOverview.Figures(model, new DateTime(2026, 10, 5));
+        Assert.Equal(week.Working + week.Breaks, week.Covered); Assert.False(typeof(WeekFigures).GetProperties().Any(p => p.Name == "Overtime")); // There is no overtime figure.
+    }
+
+    [AvaloniaFact]
+    public void TheChartDrawsBreaksOnTopOfTheColumnAndTheStripCountsThemAgainstTheSchedule()
+    {
+        var model = DayWithBreaks(out var day, out var scheduled);
         var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); Settle(window);
         try
         {
-            Assert.True(WeekOverview.Figures(model, new DateTime(2026, 10, 5)).Overtime > TimeSpan.Zero);
-            Assert.True(Find<Border>(window, "WeekBarOvertime").IsVisible); Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekOvertimeCap" && b.IsVisible);
-            Assert.NotNull(Find<TextBlock>(window, "WeekOvertime")); Assert.Contains("overtime", Find<TextBlock>(window, "WeekWorking").Classes);
+            var column = Find<Button>(window, "WeekDay_20261006");
+            var slice = column.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "WeekBreaksSlice");
+            var perHour = slice.Height / TimeSpan.FromMinutes(40).TotalHours;
+            var stack = (StackPanel)slice.Parent!; var height = stack.Children.OfType<Border>().Sum(b => b.Height);
+            Assert.Equal(day.Covered.TotalHours * perHour, height, 1); // The whole column is the clock time covered, taller than the schedule's own span.
+            Assert.True(height > scheduled.TotalHours * perHour);
+            Assert.Equal(day.Working.TotalHours * perHour, height - slice.Height, 1); // The accounts' slices are squeezed to the working time, so they sit under the breaks.
+            Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekBarBreaks");
+            var week = WeekOverview.Figures(model, new DateTime(2026, 10, 5));
+            var left = week.Scheduled - week.Covered; var words = Find<TextBlock>(window, "WeekToGo").Text!;
+            Assert.Equal(model.FormatShort(left > TimeSpan.Zero ? left : TimeSpan.Zero) + " to go", words);
+            // Nothing is called overtime any more, and nothing is red for being late.
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "WeekOvertime" or "WeekOvertimeCap" or "WeekBarOvertime");
+            Assert.DoesNotContain("overtime", Find<TextBlock>(window, "WeekWorking").Classes); Assert.DoesNotContain("overtime", Find<TextBlock>(column, "WeekDayTotal").Classes);
         }
         finally { window.Close(); }
     }

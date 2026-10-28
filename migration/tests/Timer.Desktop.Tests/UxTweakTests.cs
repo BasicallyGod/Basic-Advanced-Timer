@@ -109,7 +109,7 @@ public sealed class UxTweakTests
             Assert.Equal(0, Dividers()); // Only Collapse to tray is showing, so there is nothing to divide it from.
             menu.Close(); model.SetDeveloper(true); menu.Open(target); Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, Dividers()); // The version, then a divider, then Collapse to tray. Nothing above the version.
-            Assert.False(menu.ItemsSource!.OfType<Separator>().First().IsVisible);
+            Assert.IsNotType<Separator>(menu.ItemsSource!.Cast<object>().First()); // Nothing above the version.
         }
         finally { window.Close(); }
     }
@@ -136,7 +136,7 @@ public sealed class UxTweakTests
         foreach (var theme in AppThemes.BuiltIn)
         {
             ThemeEngine.Register(Application.Current!, new[] { theme });
-            foreach (var variant in new[] { ThemeEngine.VariantFor(theme), ThemeEngine.StateVariant(theme, ThemeDerivation.Recording), ThemeEngine.StateVariant(theme, ThemeDerivation.Break), ThemeEngine.StateVariant(theme, ThemeDerivation.Overtime) })
+            foreach (var variant in new[] { ThemeEngine.VariantFor(theme), ThemeEngine.StateVariant(theme, ThemeDerivation.Recording), ThemeEngine.StateVariant(theme, ThemeDerivation.Break) })
             {
                 var dictionary = (ResourceDictionary)Application.Current!.Resources.ThemeDictionaries[variant];
                 var back = ((ISolidColorBrush)dictionary["ToolTipBackground"]!).Color; var text = ((ISolidColorBrush)dictionary["ToolTipForeground"]!).Color;

@@ -250,7 +250,7 @@ public sealed class SettingsView : Grid
         developer.Children.Add(openDemo);
         var inDemo = Ui.Text("You are in the sample-data demo, so the developer features are on. Nothing here is saved.", 13, "muted"); inDemo.Name = "InDemoNote"; inDemo.TextWrapping = TextWrapping.Wrap; inDemo.IsVisible = model.IsDemo;
         developer.Children.Add(inDemo);
-        var developerToggle = Toggle("Developer features", "The overtime tester and the version on the right-click menu.", "DeveloperFeatures", () => model.DeveloperUnlocked, v => model.SetDeveloper(v), out var developerBox);
+        var developerToggle = Toggle("Developer features", "The version on the right-click menu.", "DeveloperFeatures", () => model.DeveloperUnlocked, v => model.SetDeveloper(v), out var developerBox);
         developerBox.IsEnabled = !model.IsDemo;
         developer.Children.Add(developerToggle);
         var developerSection = new Border { Name = "DevelopmentSection", Child = developer, IsVisible = model.DeveloperUnlocked, Padding = new Thickness(0, 4) };

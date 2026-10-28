@@ -220,8 +220,7 @@ public sealed class DashboardWindow : Window
     public Func<double>? RailScaleSource { get; set; }
     private readonly TextBlock finishSummary = Ui.Text("", 13, "muted");
     private readonly Border dayTile = new() { Name = "DayTile", Width = 40, Height = 40, CornerRadius = new CornerRadius(13), Background = Avalonia.Media.Brushes.Transparent };
-    private readonly TextBlock workingValue = Value(), allocatedValue = Value(), unallocatedValue = Value(), overtimeValue = Value();
-    private Control overtimeStat = null!;
+    private readonly TextBlock workingValue = Value(), allocatedValue = Value(), unallocatedValue = Value();
     private static TextBlock Value() => new() { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock date = Ui.Text("", 14); private Button datePick = null!;
     private readonly ContentControl workspace = new(), timelineHost = new() { Name = "TimelineHost" };
@@ -587,8 +586,7 @@ public sealed class DashboardWindow : Window
         finishPopup.IsOpen = true;
     }
     private static void HoverTile(Border tile, bool on) => tile.Background = on ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var brush) && brush is Avalonia.Media.IBrush hover ? hover : Avalonia.Media.Brushes.Transparent) : Avalonia.Media.Brushes.Transparent;
-    // The day's figures in one line under the timeline: the working time (the clock), what is on accounts and what is not, and any overtime.
-    // The day's figures under the timeline: Working time (red once over the schedule), a bar of the scheduled day, then Allocated, Unallocated, Breaks and Overtime.
+    // The day's figures under the timeline: Working time, a bar of the scheduled day, then Allocated, Unallocated and Breaks.
     private readonly TextBlock breaksValue = Value(); private readonly Border dayBar = new() { Name = "DayBar", Width = 150, Height = 10, CornerRadius = new CornerRadius(5), ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
     private Control BuildTotals()
     {
@@ -609,20 +607,16 @@ public sealed class DashboardWindow : Window
         unallocatedFold = new Fold(Stat("Unallocated", unallocatedValue, "TotalsUnallocated"), 16) { Name = "TotalsUnallocatedFold" }; strip.Children.Add(unallocatedFold);
         var amber = new Avalonia.Controls.Shapes.Ellipse { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center }; amber.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, amber.GetResourceObservable("Break"));
         breaksFold = new Fold(Stat("Breaks", breaksValue, "TotalsBreaks", amber), 16) { Name = "TotalsBreaksFold" }; strip.Children.Add(breaksFold);
-        overtimeStat = Stat("Overtime", overtimeValue, "TotalsOvertime"); overtimeStat.Margin = new Thickness(16, 0, 0, 0); strip.Children.Add(overtimeStat);
-        overtimeValue.Classes.Add("overtimeText");
         return strip;
     }
-    // The bar is the scheduled day: time on accounts solid, working time with nothing on an account hatched, overtime in red at the end. A day off has no bar.
+    // The bar is the scheduled day: time on accounts solid, working time with nothing on an account hatched, then the breaks, which the schedule's clock hours include. A day off has no bar.
     private void UpdateTotals()
     {
         var shown = model.SelectedDate.Date;
         var totals = model.Engine.Totals(shown); var plan = model.Engine.Plan(shown);
-        var working = totals.Working + totals.Overtime;
+        var working = model.WorkingOn(shown);
         workingValue.Text = model.Format(working); allocatedValue.Text = model.Format(totals.Allocated); unallocatedValue.Text = model.Format(totals.Unallocated);
         breaksValue.Text = model.Format(model.BreakTimeOn(shown));
-        overtimeValue.Text = model.Format(totals.Overtime); overtimeStat.IsVisible = totals.Overtime > TimeSpan.Zero;
-        workingValue.Classes.Set("overtimeText", totals.Overtime > TimeSpan.Zero);
         var scheduled = plan.Working ? plan.End - plan.Start : TimeSpan.Zero;
         // The bar is always there and always the same width, so the figures beside it never move from one day to the next. A day with nothing scheduled and no time
         // shows an empty track; a day with time but no schedule (a weekend) shows the time on it, all of it as working time.
@@ -634,23 +628,21 @@ public sealed class DashboardWindow : Window
         }
         else
         {
-            // The bar is as long as the longer of the schedule and the time worked, so overtime has room at the end.
+            // The bar is as long as the longer of the schedule and the time worked with its breaks, so time past the schedule has room at the end.
             var whole = Math.Max(scheduled.TotalSeconds, working.TotalSeconds + breaks.TotalSeconds);
-            var reach = scheduled > TimeSpan.Zero ? scheduled.TotalSeconds : working.TotalSeconds;
-            var allocatedPart = Math.Min(totals.Allocated.TotalSeconds, Math.Min(working.TotalSeconds, reach));
-            var unallocatedPart = Math.Max(0, Math.Min(reach, working.TotalSeconds) - allocatedPart);
-            var overtimePart = totals.Overtime.TotalSeconds;
+            var allocatedPart = Math.Min(totals.Allocated.TotalSeconds, working.TotalSeconds);
+            var unallocatedPart = Math.Max(0, working.TotalSeconds - allocatedPart);
             var breaksPart = breaks.TotalSeconds;
-            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{allocatedPart:0.###}*,{unallocatedPart:0.###}*,{breaksPart:0.###}*,{overtimePart:0.###}*,{Math.Max(0, whole - allocatedPart - unallocatedPart - breaksPart - overtimePart):0.###}*") };
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{allocatedPart:0.###}*,{unallocatedPart:0.###}*,{breaksPart:0.###}*,{Math.Max(0, whole - allocatedPart - unallocatedPart - breaksPart):0.###}*") };
             Border Part(string key, int column, bool hatched = false)
             {
                 var part = new Border { Name = "DayBar" + key, [Grid.ColumnProperty] = column };
                 if (hatched) { part.Background = ReviewViews.Stripes(model); part.Opacity = .7; } else part.Classes.Add("bar" + key);
                 return part;
             }
-            grid.Children.Add(Part("Allocated", 0)); grid.Children.Add(Part("Unallocated", 1, true)); grid.Children.Add(Part("Breaks", 2)); grid.Children.Add(Part("Overtime", 3));
+            grid.Children.Add(Part("Allocated", 0)); grid.Children.Add(Part("Unallocated", 1, true)); grid.Children.Add(Part("Breaks", 2));
             dayBar.Child = grid; dayBar.Classes.Add("track");
-            ToolTip.SetTip(dayBar, (scheduled > TimeSpan.Zero ? $"Scheduled {plan.Start:HH:mm}–{plan.End:HH:mm}" : "No schedule") + $"\nAllocated {model.Format(totals.Allocated)} · Unallocated {model.Format(totals.Unallocated)} · Breaks {model.Format(breaks)}" + (totals.Overtime > TimeSpan.Zero ? $"\nOvertime {model.Format(totals.Overtime)}" : ""));
+            ToolTip.SetTip(dayBar, (scheduled > TimeSpan.Zero ? $"Scheduled {plan.Start:HH:mm}–{plan.End:HH:mm}" : "No schedule") + $"\nAllocated {model.Format(totals.Allocated)} · Unallocated {model.Format(totals.Unallocated)} · Breaks {model.Format(breaks)}");
             Avalonia.Automation.AutomationProperties.SetName(dayBar, $"The scheduled day, {model.Format(working)} worked");
         }
     }
