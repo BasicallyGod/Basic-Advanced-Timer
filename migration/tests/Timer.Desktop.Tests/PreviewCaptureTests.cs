@@ -172,6 +172,21 @@ public sealed class PreviewCaptureTests
     }
 
     [AvaloniaFact]
+    public void WriteIconSheet()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        var model = TimerModel.CreateDemo(); model.SetTheme("Light");
+        var wrap = new WrapPanel { Margin = new Thickness(10) };
+        foreach (var kind in Enum.GetValues<IconKind>())
+            wrap.Children.Add(new StackPanel { Margin = new Thickness(6), Children = { new Viewbox { Width = 108, Height = 108, Child = new IconGlyph(kind) }, new TextBlock { Text = kind.ToString(), FontSize = 11, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center } } });
+        var host = new Window { Width = 1000, Height = 620, RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light, Content = wrap };
+        host.Show(); Dispatcher.UIThread.RunJobs();
+        try { using var f = host.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = host.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, "icon-sheet.png")); }
+        finally { host.Close(); }
+    }
+
+    [AvaloniaFact]
     public void WriteWeekChips()
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
