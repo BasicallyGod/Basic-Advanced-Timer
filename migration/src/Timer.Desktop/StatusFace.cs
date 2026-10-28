@@ -115,7 +115,8 @@ public sealed class StatusFace : StackPanel
     private string selectorWords = "";
     // The vertical pill's account chip: the account's own colour as a dot over a quiet chevron, under the play tile. Two marks and no letters, so it is not mistaken for the play tile or crowded.
     private readonly Ellipse chipDot = new() { Width = 12, Height = 12, HorizontalAlignment = HorizontalAlignment.Center };
-    private readonly Chevron chipChevron = new() { HorizontalAlignment = HorizontalAlignment.Center, Opacity = .6 };
+    // It points right while the list is shut and left while it is open, because the vertical pill's list and the rail's panel open to the side.
+    private readonly Chevron chipChevron = new() { HorizontalAlignment = HorizontalAlignment.Center, Opacity = .6, Sideways = true };
     // The primary control is a rounded square, to match the accounts icon beside it.
     private readonly Border primaryTile = new() { Width = StatusFace.WellTileWidth, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius) };
     private readonly Viewbox glyphBox = new() { Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };

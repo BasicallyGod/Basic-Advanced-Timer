@@ -60,6 +60,23 @@ public sealed class Round14Tests
     }
 
     [AvaloniaFact]
+    public void TheChevronPointsTheWayTheListOpensSideToSideOnTheVerticalPillAndDownOnTheHorizontalOne()
+    {
+        foreach (var horizontal in new[] { false, true })
+        {
+            var model = Model(); model.SetPillHorizontal(horizontal); var pill = new PillWindow(model); pill.Show(); Settle(pill);
+            try
+            {
+                var chevron = Find<Button>(pill, "PillAccounts").GetVisualDescendants().OfType<Chevron>().Single();
+                Assert.Equal(!horizontal, chevron.Sideways); // The vertical pill's list slides out to the side, the horizontal pill's hangs below.
+                Assert.False(chevron.Expanded); pill.ShowPanel(); Settle(pill); Assert.True(chevron.Expanded); // Right turns to left, down turns to up, while it is open.
+                pill.CloseFlyouts(); Settle(pill); Assert.False(chevron.Expanded);
+            }
+            finally { pill.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
     public void TheHorizontalPillIsNarrowAndKeepsItsPartsInside()
     {
         Assert.Equal(336, PillWindow.HorizontalWidth);
