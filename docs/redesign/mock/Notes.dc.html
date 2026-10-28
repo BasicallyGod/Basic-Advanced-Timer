@@ -344,7 +344,7 @@ class Component extends DCLogic {
     const dayLabel = (ts) => (ts === todayTs ? 'Today' : ts === addDays(todayTs, 1) ? 'Tomorrow' : ts === addDays(todayTs, -1) ? 'Yesterday' : dateText(ts));
     const monthOffset = (ts) => { const d = new Date(ts); return (d.getFullYear() - 2026) * 12 + d.getMonth() - 9; };
     const dot = (i, big) => 'width:' + (big ? 14 : 10) + 'px;height:' + (big ? 14 : 10) + 'px;border-radius:50%;flex-shrink:0;' + (i >= 0 ? 'background:linear-gradient(135deg,' + accts[i].c[0] + ',' + accts[i].c[1] + ')' : 'background:var(--line)');
-    const repOptions = [['none', 'Does not repeat'], ['day', 'Every day'], ['weekday', 'Every weekday'], ['week', 'Every week'], ['month', 'Every month']];
+    const repOptions = [['none', 'Does not repeat'], ['day', 'Daily'], ['week', 'Weekly'], ['biweek', 'Bi-weekly'], ['month', 'Monthly']];
     const repText = (k) => (repOptions.find((o) => o[0] === k) || repOptions[0])[1];
     const okT = (v) => /^([01]?\d|2[0-3]):[0-5]\d$/.test(String(v).trim());
     const fixT = (v) => { const t = String(v).trim(); return t.length === 4 ? '0' + t : t; };

@@ -249,7 +249,7 @@ public sealed class NotesPage : Grid
             length.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) lengthText = length.Text ?? ""; };
             Avalonia.Automation.AutomationProperties.SetName(length, "Length, H:MM");
             var lengthLabel = Ui.Horizontal(NoteParts.Ink("Length", "Muted", 12.5), length); lengthLabel.Spacing = 6; Add(lengthLabel);
-            var repeats = new ComboBox { Name = "PageRepeat", ItemsSource = Enum.GetValues<RepeatChoice>().Select(NotesModel.Label).ToList(), Width = 150, Height = 36, MinHeight = 36, FontSize = 13.5, IsEnabled = !archived };
+            var repeats = new ComboBox { Name = "PageRepeat", ItemsSource = NotesModel.Offered(repeat), Width = 150, Height = 36, MinHeight = 36, FontSize = 13.5, IsEnabled = !archived };
             repeats.SelectedItem = NotesModel.Label(repeat);
             repeats.SelectionChanged += (_, _) => { if (repeats.SelectedItem is string label) repeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };
             Add(repeats);

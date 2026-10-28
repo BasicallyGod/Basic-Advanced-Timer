@@ -67,6 +67,29 @@ public sealed class NotesTests
     }
 
     [Fact]
+    public void TheRepeatListIsDailyWeeklyBiWeeklyAndMonthlyAndAnEveryWeekdaySeriesKeepsItsOwnWords()
+    {
+        Assert.Equal(new[] { "Does not repeat", "Daily", "Weekly", "Bi-weekly", "Monthly" }, NotesModel.Offered(RepeatChoice.None));
+        Assert.Equal(new[] { "Does not repeat", "Daily", "Weekly", "Bi-weekly", "Monthly", "Every weekday" }, NotesModel.Offered(RepeatChoice.Weekday)); // Made while it was a choice.
+        foreach (var choice in new[] { RepeatChoice.Day, RepeatChoice.Weekday, RepeatChoice.Week, RepeatChoice.BiWeek, RepeatChoice.Month }) Assert.Equal(choice, NotesModel.ChoiceOf(NotesModel.RuleOf(choice)));
+        Assert.Equal(RepeatChoice.None, NotesModel.ChoiceOf(new Recurrence(3, 0))); Assert.Equal(RepeatChoice.None, NotesModel.ChoiceOf(new Recurrence(1, 0, null, 2))); // Still shown, not editable.
+    }
+
+    [Fact]
+    public void ABiWeeklyMeetingFallsOnEverySecondWeekAndAMonthlyOneOnTheSameDateEachMonth()
+    {
+        var model = Model(); var notes = model.Notes; var monday = new DateTime(2026, 10, 5);
+        Assert.Null(notes.AddMeeting(monday, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Planning", null, RepeatChoice.BiWeek));
+        var days = notes.All.Where(n => n.SeriesId is not null).Select(n => n.Day.Date).OrderBy(d => d).ToList();
+        Assert.True(days.Count >= 3); Assert.Equal(monday, days[0]); Assert.All(days.Zip(days.Skip(1)), p => Assert.Equal(14, (p.Second - p.First).Days));
+        Assert.Equal(RepeatChoice.BiWeek, notes.RepeatOf(notes.MeetingsOn(monday).Single())); Assert.Equal("Bi-weekly", NotesModel.Label(RepeatChoice.BiWeek));
+        var monthly = new DateTime(2026, 10, 15);
+        Assert.Null(notes.AddMeeting(monthly, TimeSpan.FromHours(14), TimeSpan.FromHours(15), "Review", null, RepeatChoice.Month));
+        var months = notes.All.Where(n => n.Text.StartsWith("Review")).Select(n => n.Day.Date).OrderBy(d => d).ToList();
+        Assert.Equal(new[] { monthly, new DateTime(2026, 11, 15) }, months); // Notes are made eight weeks ahead, so December waits. Assert.Equal("repeats monthly", "repeats " + NotesModel.RepeatWords(RepeatChoice.Month));
+    }
+
+    [Fact]
     public void RemovingOneDayKeepsTheSeriesAndRemovingAllLaterEndsItAndItIsNotRemadeOnTheNextDay()
     {
         var now = Day.AddHours(8); var model = Model(() => now); var notes = model.Notes;
@@ -178,7 +201,7 @@ public sealed class NotesTests
         try
         {
             Click(window, "AddMeeting"); Type(window, "NoteField", "Team sync"); Type(window, "MeetingStart", "09:15"); Type(window, "MeetingEnd", "10:00");
-            Find<ComboBox>(window, "MeetingRepeat").SelectedItem = "Every week"; Dispatcher.UIThread.RunJobs();
+            Find<ComboBox>(window, "MeetingRepeat").SelectedItem = "Weekly"; Dispatcher.UIThread.RunJobs();
             Click(window, "SubmitNote");
             var meeting = model.Notes.MeetingsOn(Day).Single(); Assert.Equal(TimeSpan.FromHours(9.25), meeting.At); Assert.Equal(RepeatChoice.Week, model.Notes.RepeatOf(meeting));
             Assert.Contains("repeats weekly", model.Notice);

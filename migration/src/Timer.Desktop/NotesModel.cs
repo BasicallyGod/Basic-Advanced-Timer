@@ -5,7 +5,7 @@ using Timer.Storage;
 namespace Timer.Desktop;
 
 /// <summary>How often a meeting repeats. The shared packages hold repeats by weeks and days, so these are the ones they can write.</summary>
-public enum RepeatChoice { None, Day, Weekday, Week }
+public enum RepeatChoice { None, Day, Weekday, Week, BiWeek, Month }
 
 /// <summary>The views down the left of the Notes page.</summary>
 public enum NoteView { All, Today, Overdue, Upcoming, Meetings, Done }
@@ -77,24 +77,33 @@ public sealed class NotesModel
     public static RepeatChoice ChoiceOf(Recurrence? rule) => rule switch
     {
         null => RepeatChoice.None,
+        { EveryMonths: 1 } => RepeatChoice.Month,
+        { EveryMonths: > 1 } => RepeatChoice.None,
         { EveryWeeks: 1, DaysMask: Recurrence.AllDays } => RepeatChoice.Day,
         { EveryWeeks: 1, DaysMask: Recurrence.Weekdays } => RepeatChoice.Weekday,
         { EveryWeeks: 1, DaysMask: 0 } => RepeatChoice.Week,
+        { EveryWeeks: 2, DaysMask: 0 } => RepeatChoice.BiWeek,
         _ => RepeatChoice.None
     };
     public static Recurrence? RuleOf(RepeatChoice choice) => choice switch
     {
-        RepeatChoice.Day => new Recurrence(1, Recurrence.AllDays), RepeatChoice.Weekday => new Recurrence(1, Recurrence.Weekdays), RepeatChoice.Week => new Recurrence(1, 0), _ => null
+        RepeatChoice.Day => new Recurrence(1, Recurrence.AllDays), RepeatChoice.Weekday => new Recurrence(1, Recurrence.Weekdays), RepeatChoice.Week => new Recurrence(1, 0), RepeatChoice.BiWeek => new Recurrence(2, 0), RepeatChoice.Month => new Recurrence(1, 0, null, 1), _ => null
     };
     public RepeatChoice RepeatOf(DayNote note) => ChoiceOf(SeriesOf(note)?.Rule);
-    /// <summary>A repeat the Notes card cannot change (one made by an older build: every other week, or on chosen days). It is shown and can be removed.</summary>
+    /// <summary>A repeat the Notes card cannot change (one made by an older build: on chosen days, every third week, every other month). It is shown and can be removed.</summary>
     public bool IsArchivedRepeat(DayNote note) => SeriesOf(note) is { } s && ChoiceOf(s.Rule) == RepeatChoice.None;
-    /// <summary>How a repeat reads at the end of a message: "daily", "on weekdays", "weekly".</summary>
-    public static string RepeatWords(RepeatChoice choice) => choice switch { RepeatChoice.Day => "daily", RepeatChoice.Weekday => "on weekdays", RepeatChoice.Week => "weekly", _ => "" };
+    /// <summary>How a repeat reads at the end of a message: "daily", "weekly", "every other week", "monthly".</summary>
+    public static string RepeatWords(RepeatChoice choice) => choice switch { RepeatChoice.Day => "daily", RepeatChoice.Weekday => "on weekdays", RepeatChoice.Week => "weekly", RepeatChoice.BiWeek => "every other week", RepeatChoice.Month => "monthly", _ => "" };
     public static string Label(RepeatChoice choice) => choice switch
     {
-        RepeatChoice.Day => "Every day", RepeatChoice.Weekday => "Every weekday", RepeatChoice.Week => "Every week", _ => "Does not repeat"
+        RepeatChoice.Day => "Daily", RepeatChoice.Weekday => "Every weekday", RepeatChoice.Week => "Weekly", RepeatChoice.BiWeek => "Bi-weekly", RepeatChoice.Month => "Monthly", _ => "Does not repeat"
     };
+    /// <summary>
+    /// The choices the repeat lists offer: Does not repeat, Daily, Weekly, Bi-weekly and Monthly. Every weekday is no longer offered, but a series made with it
+    /// while it was still a choice keeps it in its own list, so what it says is not lost.
+    /// </summary>
+    public static List<string> Offered(RepeatChoice current) =>
+        new[] { RepeatChoice.None, RepeatChoice.Day, RepeatChoice.Week, RepeatChoice.BiWeek, RepeatChoice.Month }.Concat(current == RepeatChoice.Weekday ? new[] { RepeatChoice.Weekday } : Array.Empty<RepeatChoice>()).Select(Label).ToList();
 
     // ---- What is waiting: the bell, the reminder light and the Notes page ----
 

@@ -285,7 +285,7 @@ public sealed class NotesCard : Border
             dayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), dayWords);
             Ui.Put(times, dayButton);
             Ui.Put(times, start, 1); Ui.Put(times, new TextBlock { Text = "–", VerticalAlignment = VerticalAlignment.Center, Classes = { "muted" } }, 2); Ui.Put(times, end, 3);
-            var repeat = new ComboBox { Name = "MeetingRepeat", ItemsSource = Enum.GetValues<RepeatChoice>().Select(NotesModel.Label).ToList(), HorizontalAlignment = HorizontalAlignment.Stretch, Height = 30, MinHeight = 30, FontSize = 13 };
+            var repeat = new ComboBox { Name = "MeetingRepeat", ItemsSource = NotesModel.Offered(draftRepeat), HorizontalAlignment = HorizontalAlignment.Stretch, Height = 30, MinHeight = 30, FontSize = 13 };
             repeat.SelectedItem = NotesModel.Label(draftRepeat);
             repeat.SelectionChanged += (_, _) => { if (repeat.SelectedItem is string label) draftRepeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };
             Ui.Put(times, repeat, 4);

@@ -825,7 +825,7 @@ class Component extends DCLogic {
     const finishText = 'Working time ' + pdur(workMin) + '.';
     const setDay = (v, extra) => this.setState({ dayOv: v, dayOvFor: propDay, finishOpen: false, ...(extra || {}) });
 
-    const repOptions = [['none', 'Does not repeat'], ['day', 'Every day'], ['weekday', 'Every weekday'], ['week', 'Every week'], ['month', 'Every month']];
+    const repOptions = [['none', 'Does not repeat'], ['day', 'Daily'], ['week', 'Weekly'], ['biweek', 'Bi-weekly'], ['month', 'Monthly']];
     const repText = (k) => (repOptions.find((o) => o[0] === k) || repOptions[0])[1];
     const meetings = this.state.notes.filter((n) => n.meet && !n.skip).map((n) => ({
       title: n.text,
