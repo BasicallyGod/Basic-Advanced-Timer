@@ -113,10 +113,9 @@ public sealed class StatusFace : StackPanel
     private readonly Chevron selectorChevron = new() { VerticalAlignment = VerticalAlignment.Center };
     private Border selectorTile = null!;
     private string selectorWords = "";
-    // The vertical pill's account chip: the account's colour dot and its initials over a chevron, under the play tile.
-    private readonly Ellipse chipDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock chipInitials = new() { FontSize = 12.5, FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center };
-    private readonly Chevron chipChevron = new() { HorizontalAlignment = HorizontalAlignment.Center };
+    // The vertical pill's account chip: the account's own colour as a dot over a quiet chevron, under the play tile. Two marks and no letters, so it is not mistaken for the play tile or crowded.
+    private readonly Ellipse chipDot = new() { Width = 12, Height = 12, HorizontalAlignment = HorizontalAlignment.Center };
+    private readonly Chevron chipChevron = new() { HorizontalAlignment = HorizontalAlignment.Center, Opacity = .6 };
     // The primary control is a rounded square, to match the accounts icon beside it.
     private readonly Border primaryTile = new() { Width = StatusFace.WellTileWidth, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius) };
     private readonly Viewbox glyphBox = new() { Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -177,11 +176,10 @@ public sealed class StatusFace : StackPanel
         }
         else
         {
-            // The vertical pill's account chip: a button of its own under the play tile, so choosing an account is not mistaken for part of playing. It names the
-            // account by its colour and initials, and a chevron says there is a list.
+            // The vertical pill's account chip: a button of its own under the play tile, so choosing an account is not mistaken for part of playing. It shows the
+            // account by its colour, and a chevron says there is a list. The name is its tooltip.
             accountsTile.Name = prefix + "AccountChip";
-            var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, Children = { chipDot, chipInitials } };
-            accountsTile.Child = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = { top, chipChevron } };
+            accountsTile.Child = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { chipDot, chipChevron } };
             AccountsButton.Content = accountsTile; MakeRoomForRing(AccountsButton, 0, WellTileWidth);
         }
         AccountsButton.HorizontalAlignment = HorizontalAlignment.Center;
@@ -279,7 +277,6 @@ public sealed class StatusFace : StackPanel
         else
         {
             chipDot.Fill = shownAccount is null ? new SolidColorBrush(ThemeColourOr("Idle", "#8A8F98")) : Brush.Parse(Ui.Visible(shownAccount.Colour));
-            chipInitials.Text = shown is null ? "" : PillWindow.Initials(shown); chipInitials.IsVisible = shown is not null;
         }
         // On the horizontal pill the tile carries the initials while an account runs, and gives way to the symbol at rest, under the pointer, or with no account to name.
         // On the vertical pill the chip names the account, so the tile only plays or pauses.
