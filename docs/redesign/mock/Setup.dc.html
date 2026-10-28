@@ -105,6 +105,7 @@ body{margin:0}
             <input class="field" type="text" value="{{d.end}}" onChange="{{d.setEnd}}" disabled="{{d.off}}" aria-label="{{d.endLabel}}">
           </sc-for>
         </div>
+        <div style="display: grid; grid-template-columns: 1fr 96px; gap: 8px 12px; align-items: center; max-width: 470px; margin-top: 14px"><label for="setupBreak" style="font-size: 14px; font-weight: 500">Break each day</label><input id="setupBreak" class="field" type="text" value="{{brk}}" onChange="{{setBrk}}" aria-label="Break each day"></div>
         <div style="margin-top: 14px; font-size: 13.5px; color: var(--muted)">{{weekTotal}}</div>
       </sc-if>
 
@@ -168,6 +169,7 @@ class Component extends DCLogic {
       status: '',
       format: 'hhmm',
       weekStart: 'Mon',
+      brk: '00:30',
       nextId: 4,
       accounts: [
         { id: 1, name: 'Account one', ci: 0, budget: '10:00', per: 'W' },
@@ -194,7 +196,7 @@ class Component extends DCLogic {
     ];
     const heads = [
       ['Your accounts', 'Time is tracked against accounts, such as clients or projects. Add the ones you use. A budget is optional.'],
-      ['Working hours', 'Your days and shifts give the day its progress, and the time after them counts as overtime.'],
+      ['Working hours', 'Your days and shifts give the day its progress. A break is taken off your hours, so the schedule is the time you are to work.'],
       ['Hours and week', 'Choose how hours are written and which day your week starts on.'],
       ['A few things to know', 'The timer lives in a small pill that stays on top of your other windows.']
     ];
@@ -231,9 +233,9 @@ class Component extends DCLogic {
       setStart: (e) => { const v = e.target.value.trim(); if (okT(v)) updD(i, { s: v.padStart(5, '0') }); else this.setState({ status: 'Times look like 09:00.' }); },
       setEnd: (e) => { const v = e.target.value.trim(); if (okT(v)) updD(i, { e: v.padStart(5, '0') }); else this.setState({ status: 'Times look like 17:30.' }); }
     }));
-    const mins = this.state.days.filter((d) => d.on && toMin(d.e) > toMin(d.s)).reduce((t, d) => t + toMin(d.e) - toMin(d.s), 0);
+    const mins = this.state.days.filter((d) => d.on && toMin(d.e) > toMin(d.s)).reduce((t, d) => t + Math.max(0, toMin(d.e) - toMin(d.s) - toMin(this.state.brk)), 0);
     const dec = this.state.format === 'dec';
-    const weekTotal = 'That is ' + (dec ? (mins / 60).toFixed(2) + 'h' : String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0')) + ' scheduled each week.';
+    const weekTotal = 'That is ' + (dec ? (mins / 60).toFixed(2) + 'h' : String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0')) + ' of working time scheduled each week, with the break taken off.';
     const ws = ['Mon', 'Sun', 'Sat'];
     return {
       modeClass: mode === 'dark' ? 'dark' : '',
@@ -249,7 +251,8 @@ class Component extends DCLogic {
         this.setState({ nextId: id + 1, status: '', accounts: [...this.state.accounts, { id: id, name: 'New account', ci: this.state.accounts.length, budget: '', per: 'W' }] });
       },
       days: days,
-      weekTotal: weekTotal,
+      weekTotal: weekTotal, brk: this.state.brk,
+      setBrk: (e) => { const v = e.target.value.trim(); if (okT(v)) this.setState({ brk: v.padStart(5, '0'), status: '' }); else this.setState({ status: 'The break looks like 00:30.' }); },
       hhCls: dec ? 'choice' : 'choice on', decCls: dec ? 'choice on' : 'choice',
       hhOn: !dec, decOn: dec,
       pickHH: () => this.setState({ format: 'hhmm' }),

@@ -9,7 +9,7 @@
 <x-dc>
 <helmet>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
 <style>
 body{margin:0}
 .pg{--bg1:#F4F4F1;--bg2:#ECECE8;--ink:#18233A;--muted:#5A6070;--line:#E2E2DD;--card:#FFFFFF;--card2:#F7F7F5;--accent:#3558C8;--soft:#E8EEFF;--pill1:#FFFFFF;--pill2:#F3F3F0;--pillLine:#DDDDD8;--clock:#18233A;--clockSec:#5A6070;--quietDot:#C9C9C4;--idleDot:#7A849C}
@@ -22,20 +22,20 @@ body{margin:0}
 .cap{width:6px;height:14px;border-radius:3px;display:block}
 .bar{width:3px;height:16px;border-radius:2px;display:block}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:0 1px 2px rgba(30,30,20,.06)}
-.grid{display:grid;grid-template-columns:210px repeat(5, 1fr);gap:10px 8px;align-items:center}
+.grid{display:grid;grid-template-columns:210px repeat(4, 1fr);gap:10px 8px;align-items:center}
 .head{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;text-align:center}
 </style>
 </helmet>
 <div class="pg {{modeClass}}" style="width: 1180px; height: 1080px; box-sizing: border-box; padding: 36px 32px 28px; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink); display: flex; flex-direction: column; gap: 18px">
   <div style="display: flex; flex-direction: column; gap: 4px">
     <h1 style="margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 700">Status lights</h1>
-    <p style="margin: 0; font-size: 14px; color: var(--muted); max-width: 980px; line-height: 1.45">The two lights at the top of the pill and the rail look too much like window buttons. Here are six shapes, each over the five states. The first row is today. The state is also in the circle's colour and glow, so the light never carries it alone.</p>
+    <p style="margin: 0; font-size: 14px; color: var(--muted); max-width: 980px; line-height: 1.45">The two lights at the top of the pill and the rail look too much like window buttons. Here are six shapes, each over the four states. The first row is today. The state is also in the circle's colour and glow, so the light never carries it alone.</p>
   </div>
 
   <div class="panel" style="padding: 20px 24px 22px">
     <div class="grid">
       <span></span>
-      <span class="head">Idle</span><span class="head">Recording</span><span class="head">Break</span><span class="head">Overtime</span><span class="head">Reminder due</span>
+      <span class="head">Idle</span><span class="head">Recording</span><span class="head">Break</span><span class="head">Reminder due</span>
       <sc-for list="{{items}}" as="c" hint-placeholder-count="12">
         <sc-if value="{{c.isLabel}}" hint-placeholder-val="{{ false }}">
           <div><div style="font-size: 14px; font-weight: 600">{{c.label}}</div><div style="font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px">{{c.sub}}</div></div>
@@ -84,7 +84,6 @@ class Component extends DCLogic {
       { name: 'Idle', col: 'var(--idleDot)', glow: base, due: false, h: '00', m: '00' },
       { name: 'Recording', col: '#34D399', glow: glow('52,211,153', .5), due: false, h: '04', m: '47' },
       { name: 'Break', col: '#F5A524', glow: glow('245,165,36', .5), due: false, h: '00', m: '23' },
-      { name: 'Overtime', col: '#F87171', glow: glow('248,113,113', .5), due: false, h: '08', m: '12' },
       { name: 'Reminder due', col: '#34D399', glow: glow('52,211,153', .5), due: true, h: '04', m: '47' }
     ];
     const opts = [
