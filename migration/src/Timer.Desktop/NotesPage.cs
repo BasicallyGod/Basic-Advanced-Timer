@@ -253,7 +253,8 @@ public sealed class NotesPage : Grid
             var length = new TextBox { Name = "PageLength", Text = lengthText, Width = 58, Height = 36, MinHeight = 36, TextAlignment = TextAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, IsEnabled = !archived };
             length.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) lengthText = length.Text ?? ""; };
             Avalonia.Automation.AutomationProperties.SetName(length, "Length, H:MM");
-            var lengthLabel = Ui.Horizontal(NoteParts.Ink("Length", "Muted", 12.5), length); lengthLabel.Spacing = 6; Add(lengthLabel);
+            // No word beside the box: its tooltip says what it is, so the line keeps its room for the repeat list.
+            ToolTip.SetTip(length, "Length, H:MM"); Add(length);
             var repeats = new ComboBox { Name = "PageRepeat", ItemsSource = NotesModel.Offered(repeat), Width = 150, Height = 36, MinHeight = 36, FontSize = 13.5, IsEnabled = !archived };
             repeats.SelectedItem = NotesModel.Label(repeat);
             repeats.SelectionChanged += (_, _) => { if (repeats.SelectedItem is string label) repeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };
@@ -262,9 +263,9 @@ public sealed class NotesPage : Grid
         if (editing is { } id)
         {
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 0, 0) };
-            buttons.Children.Add(Ui.Ctl("PageDelete", "Delete", IconKind.Trash, "Delete", () => { if (Notes.Find(id) is { } found) AskRemove(found); }, small: true));
-            buttons.Children.Add(Ui.Ctl("PageCancel", "Cancel", null, "Cancel", () => { ResetForm(); shown = null; Sync(); }, small: true));
-            // Delete and Cancel sit at the right end of the options' own line, so a form being edited has no line of its own for them and no dead space beside them.
+            buttons.Children.Add(Ui.Ctl("PageDelete", null, IconKind.Trash, "Delete", () => { if (Notes.Find(id) is { } found) AskRemove(found); }, small: true));
+            buttons.Children.Add(Ui.Ctl("PageCancel", null, IconKind.Close, "Cancel", () => { ResetForm(); shown = null; Sync(); }, small: true));
+            // Delete and Cancel are a bin and a cross, at the right end of the options' own line, so a form being edited has no line of its own for them and no dead space beside them.
             var line = Ui.Grid("*,Auto"); line.ColumnSpacing = 8; Ui.Put(line, options); Ui.Put(line, buttons, 1); column.Children.Add(line);
             if (archived) { var note = new TextBlock { Text = "A repeating note from an earlier version. It stays as it is.", FontSize = 12.5, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Name = "PageArchivedNote" }; note.Classes.Add("muted"); column.Children.Add(note); }
         }

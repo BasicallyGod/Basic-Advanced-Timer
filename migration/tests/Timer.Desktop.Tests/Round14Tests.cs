@@ -22,15 +22,19 @@ public sealed class Round14Tests
     private static T Find<T>(Visual root, string name) where T : Control => root.GetVisualDescendants().OfType<T>().First(c => c.Name == name);
 
     [AvaloniaFact]
-    public void TheVerticalPillsTilePlaysAndPausesAndTheChipUnderItNamesTheAccount()
+    public void TheVerticalPillsTilePlaysAndPausesAndTheChipUnderItShowsTheAccountsColour()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
         {
             var chip = Find<Border>(pill, "PillAccountChip"); var tile = Find<Border>(pill, "PillPrimaryTile");
-            Assert.Equal("AO", chip.GetVisualDescendants().OfType<TextBlock>().Single().Text); // Initials of the account it would start.
+            // Two marks and no letters: the colour of the account it would start (or is recording) over a chevron.
+            Assert.Empty(chip.GetVisualDescendants().OfType<TextBlock>());
+            var dot = chip.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Single(); var chevron = chip.GetVisualDescendants().OfType<Chevron>().Single();
+            Assert.True(dot.TranslatePoint(default, chip)!.Value.Y < chevron.TranslatePoint(default, chip)!.Value.Y);
+            Assert.Equal(Avalonia.Media.Color.Parse(Ui.Visible(model.Accounts[0].Colour)), ((Avalonia.Media.ISolidColorBrush)dot.Fill!).Color);
             model.ToggleAccount("Account two"); Settle(pill);
-            Assert.Equal("AT", chip.GetVisualDescendants().OfType<TextBlock>().Single().Text);
+            Assert.Equal(Avalonia.Media.Color.Parse(Ui.Visible(model.Accounts[1].Colour)), ((Avalonia.Media.ISolidColorBrush)dot.Fill!).Color);
             // While an account runs the tile carries the pause symbol, not the initials: the chip does that.
             Assert.All(tile.GetVisualDescendants().OfType<TextBlock>(), t => Assert.False(t.IsVisible));
             Assert.Contains(tile.GetVisualDescendants().OfType<Viewbox>(), v => v.IsVisible);

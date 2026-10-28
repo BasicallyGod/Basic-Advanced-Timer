@@ -195,6 +195,30 @@ public sealed class NotesPageTests
     }
 
     [AvaloniaFact]
+    public void EditingAMeetingKeepsTheRepeatListOnTheOptionsLineWithIconsForDeleteAndCancelAndNoLengthWord()
+    {
+        var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            Click(window, "NotesTab"); Click(window, "PageNoteOpen_" + IdOf(model, "Client call"));
+            foreach (var docked in new[] { false, true })
+            {
+                window.Dock.Jump(docked ? 1 : 0, 1); Settle(window); // With the account panel beside the page there is less room, and the line still holds.
+                var account = Find<ComboBox>(window, "PageAccount"); var repeat = Find<ComboBox>(window, "PageRepeat"); var length = Find<TextBox>(window, "PageLength");
+                double Mid(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
+                Assert.Equal(Mid(account), Mid(repeat), 4); Assert.Equal(Mid(account), Mid(length), 4);
+                var delete = Find<Button>(window, "PageDelete"); var cancel = Find<Button>(window, "PageCancel");
+                Assert.IsType<IconGlyph>(delete.Content); Assert.IsType<IconGlyph>(cancel.Content); Assert.Equal(IconKind.Trash, ((IconGlyph)delete.Content!).Kind); Assert.Equal(IconKind.Close, ((IconGlyph)cancel.Content!).Kind);
+                Assert.Contains("Delete", ToolTip.GetTip(delete)?.ToString()); Assert.Contains("Cancel", ToolTip.GetTip(cancel)?.ToString());
+                Assert.Equal("Delete", Avalonia.Automation.AutomationProperties.GetName(delete)); Assert.Equal("Cancel", Avalonia.Automation.AutomationProperties.GetName(cancel));
+                Assert.DoesNotContain(Find<ContentControl>(window, "PageForm").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Length"); // The box's tooltip says what it is.
+                Assert.Equal("Length, H:MM", ToolTip.GetTip(length)?.ToString());
+            }
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ARowOpensInTheFormAsEditingWithTheAccentEdgeAndSaveChangesItAndCancelPutsTheFormBack()
     {
         var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);
