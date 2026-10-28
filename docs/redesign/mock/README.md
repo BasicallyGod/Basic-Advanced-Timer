@@ -20,4 +20,4 @@ Icons draws every icon the app has, taken from the drawing code (`IconGlyph` and
 
 Round14 drew three proposals at real size; the options marked B, 196 and the account chip were chosen and built (brief items 105 to 107): a narrower horizontal pill (four options, about 300 to 430 wide against 470), a narrower account panel (224, 196 or a 76 wide strip against 272) and four other ways to reach the accounts (split button, account chip, press and hold, the account as the big tile).
 
-Round14b draws four quieter versions of the account button under the play tile (dot and chevron, the account's own tile, a bare chevron, and a colour dot over a chevron); the last was chosen and built (brief item 108).
+Round14b draws four quieter versions of the account button under the play tile (dot and chevron, the account's own tile, a bare chevron, and a colour dot over a chevron); the last was chosen and built (brief item 108), redrawn with the chevron pointing right while the list is shut and left while it is open, as built.
