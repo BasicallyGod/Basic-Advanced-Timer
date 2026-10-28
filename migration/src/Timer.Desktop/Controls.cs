@@ -402,10 +402,15 @@ public sealed class AccountIndicator : Control
     }
     // Drawn on a 42 unit canvas and scaled down, so the ring, bars and play triangle stay in proportion at the smaller size.
     public const double Size = 36;
+    /// <summary>The account rows' play tile is smaller than the old circle, 26 square, so a narrow panel leaves the name and time their room.</summary>
+    public const double RowSize = 26;
+    /// <summary>Redraws at <paramref name="side"/> square, the whole drawing scaled with it.</summary>
+    public AccountIndicator Sized(double side) { Width = Height = side; Scale = side / Size; return this; }
+    private double Scale = 1;
     public override void Render(DrawingContext context)
     {
         base.Render(context);
-        using var scaled = context.PushTransform(Matrix.CreateScale(Size / 42, Size / 42));
+        using var scaled = context.PushTransform(Matrix.CreateScale(Size * Scale / 42, Size * Scale / 42));
         var centre = new Point(21, 21);
         var ink = Resource("Ink");
         var running = model.ActiveAccount == Account.Name;
@@ -579,6 +584,8 @@ public sealed class AccountList : StackPanel
     private readonly TimerModel model;
     private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Period)> rows = new();
     private readonly bool reorderable, bars, compact;
+    /// <summary>A row of the bar kind: the name and time on one line with the budget bar under it, and the play tile beside them.</summary>
+    public const double RowHeight = 46;
     /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
     /// <param name="compact">With bars, a shorter row for the pill's narrow drawer: the name and time, the bar and the play button, without the budget words.</param>
     public AccountList(TimerModel model, bool reorderable = false, bool bars = false, bool compact = false)
@@ -602,7 +609,7 @@ public sealed class AccountList : StackPanel
             var grid = Ui.Grid(bars ? "*,Auto" : "38,*,Auto");
             var icon = new AccountIndicator(account, model) { Ring = !bars };
             var dot = Ui.Text("●", 10, "live"); dot.IsVisible = false;
-            var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(bars ? 8 : 10, 0, 10, 0) };
+            var labels = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = bars ? new Thickness(2, 0, 0, 0) : new Thickness(10, 0, 10, 0) };
             var budget = Ui.Text(bars ? model.BudgetLine(account) : model.BudgetSummary(account), 12, "muted");
             budget.TextTrimming = TextTrimming.CharacterEllipsis;
             MarqueeText? marquee = null;
@@ -612,26 +619,27 @@ public sealed class AccountList : StackPanel
             {
                 // The account's own colour leads the name, with today's time at the end of that line. Under it the budget used and the period it covers, then
                 // the bar. The play circle takes the right-hand side, and the percentage is left to the hover detail.
-                var swatch = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0),
+                var swatch = new Avalonia.Controls.Shapes.Ellipse { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0),
                     Fill = Avalonia.Media.Brush.Parse(Ui.Visible(account.Colour)) };
-                labels.Spacing = 3;
+                labels.Spacing = 5; icon.Sized(AccountIndicator.RowSize);
                 // The percentage sits at the end of the name line, which leaves the whole line under it for the budget in words.
                 var nameLine = Ui.Grid("*,Auto"); var nameStack = new NameRow { Spacing = 0 }; // The live dot follows the name closely instead of sitting out by today's time.
-                marquee = new MarqueeText(account.Display, 15) { Name = "AccountName" }; var nameText = marquee; dot.Margin = new Thickness(8, 0, 0, 0);
+                marquee = new MarqueeText(account.Display, 13) { Name = "AccountName" }; var nameText = marquee; dot.Margin = new Thickness(8, 0, 0, 0);
                 nameStack.Children.Add(swatch); nameStack.Children.Add(nameText); nameStack.Children.Add(dot);
-                today = Ui.Text(model.Format(model.Today(account)), 15); today.FontWeight = Avalonia.Media.FontWeight.Bold; today.VerticalAlignment = VerticalAlignment.Center; today.TextAlignment = Avalonia.Media.TextAlignment.Right;
+                today = Ui.Text(model.Format(model.Today(account)), 13); nameStack.Margin = new Thickness(0, 0, 4, 0); today.FontWeight = Avalonia.Media.FontWeight.Bold; today.VerticalAlignment = VerticalAlignment.Center; today.TextAlignment = Avalonia.Media.TextAlignment.Right;
                 Ui.Put(nameLine, nameStack); Ui.Put(nameLine, today, 1);
                 // The budget used is in the text colour (red once spent) and the period it covers is quiet and lines up with today's time above it.
                 budget.Classes.Remove("muted"); budget.FontSize = 13;
                 var period = Ui.Text("", 12, "muted"); period.TextAlignment = Avalonia.Media.TextAlignment.Right; period.VerticalAlignment = VerticalAlignment.Center;
-                var budgetLine = Ui.Grid("*,Auto"); Ui.Put(budgetLine, budget); Ui.Put(budgetLine, period, 1); period.Name = "BudgetPeriod";
-                percent = period; // The row's second quiet text, kept under the old name in the row list.
-                labels.Children.Add(nameLine); if (!compact) labels.Children.Add(budgetLine);
+                // The budget used and its period are not drawn: they are in the row's tooltip, so the name and time keep the line and the panel can be narrow. The two
+                // texts are still kept (off the screen) for the tooltip to be worded from.
+                percent = period;
+                labels.Children.Add(nameLine);
                 if (account.Budget is not null) { bar = new BudgetBar(); labels.Children.Add(bar); }
-                icon.Margin = new Thickness(8, 0, 0, 0);
+                icon.Margin = new Thickness(4, 0, 0, 0);
                 Ui.Put(grid, labels, shift); Ui.Put(grid, icon, 1 + shift);
-                // A rounded card inset from the edges, so the recording account's soft highlight has room to show.
-                row.Classes.Add("accountCard"); row.Margin = new Thickness(0); row.Height = compact ? 54 : 70;
+                // A rounded card inset from the edges, so the recording account's soft highlight has room to show. The same one line row on the dashboard and the pill.
+                row.Classes.Add("accountCard"); row.Margin = new Thickness(0); row.Height = RowHeight;
             }
             else
             {
@@ -772,7 +780,7 @@ public sealed class AccountList : StackPanel
             row.Row.Classes.Set("active", model.ActiveAccount == row.Account.Name);
             row.Today.Text = model.Format(model.Today(row.Account));
             row.Budget.Text = bars ? model.BudgetUsage(row.Account) : model.BudgetSummary(row.Account);
-            if (bars) row.Period.Text = model.BudgetPeriodLabel(row.Account);
+            if (bars) { row.Period.Text = model.BudgetPeriodLabel(row.Account); ToolTip.SetTip(row.Row, model.BudgetRowTip(row.Account)); }
             if (row.Bar is { } bar && model.BudgetRatio(row.Account) is { } ratio)
             {
                 bar.Set(ratio, model.BudgetPace(row.Account));
@@ -960,22 +968,6 @@ public sealed class BreakGlyph : Control
             var rise = phase * 3.5 * flow; var alpha = 1.0 + (Math.Sin(phase * Math.PI) - 1.0) * flow;
             using (context.PushOpacity(Math.Clamp(alpha, 0.0, 1.0)))
                 context.DrawLine(pen, new Point(x, 4 - rise), new Point(x, 1.5 - rise));
-        }
-    }
-}
-
-/// <summary>The accounts icon: three short bars, each in a different account-like colour, the one coloured icon on the pill and the rail.</summary>
-public sealed class AccountsGlyph : Control
-{
-    private static readonly (string From, string To)[] Colours = { ("#A8D4FF", "#7F98F7"), ("#B2EFD6", "#5FD6AE"), ("#FFD9B8", "#FF9F84") };
-    public AccountsGlyph() { Width = 20; Height = 19; }
-    public override void Render(DrawingContext context)
-    {
-        for (var i = 0; i < 3; i++)
-        {
-            var brush = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
-                GradientStops = { new GradientStop(Color.Parse(Colours[i].From), 0), new GradientStop(Color.Parse(Colours[i].To), 1) } };
-            context.DrawRectangle(brush, null, new Rect(0, i * 7, 20, 5), 2.5, 2.5);
         }
     }
 }

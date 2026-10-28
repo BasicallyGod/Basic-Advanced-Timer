@@ -12,7 +12,7 @@ public sealed class DockMotion
 {
     public const int OpenMilliseconds = 280, CloseMilliseconds = 220, PinMilliseconds = 260;
     /// <summary>The panel's width when fully out, and the width its contents are laid out at (clipped while it is narrower, so nothing in it reflows).</summary>
-    public const double PanelWidth = 272;
+    public const double PanelWidth = 196;
     /// <summary>Off in tests, where no timer ticks and the end state is wanted at once, like <see cref="PillWindow.SlideEnabled"/>. Each motion starts with this, and a test of the motion itself turns <see cref="Animated"/> back on for its own.</summary>
     public static bool Enabled { get; set; } = true;
     /// <summary>Whether this motion eases, or jumps to where it is asked to go.</summary>

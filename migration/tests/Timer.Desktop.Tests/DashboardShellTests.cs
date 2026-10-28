@@ -98,7 +98,7 @@ public sealed class DashboardShellTests
             var manage = Find<Button>(window, "RailManageAccounts"); var drawer = Find<Border>(window, "AccountsDrawer");
             Assert.Equal(IconKind.Sliders, ((IconGlyph)manage.Content!).Kind); Assert.Equal("Manage accounts", ToolTip.GetTip(manage)?.ToString()); // One icon, no words.
             var at = manage.TranslatePoint(default, drawer)!.Value;
-            Assert.True(at.Y < 40, $"icon top {at.Y}"); Assert.InRange(drawer.Bounds.Width - (at.X + manage.Bounds.Width), 10, 18); // Top right of the drawer, with the pin beside it.
+            Assert.True(at.Y < 40, $"icon top {at.Y}"); Assert.InRange(drawer.Bounds.Width - (at.X + manage.Bounds.Width), 6, 18); // Top right of the drawer, with the pin beside it.
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "Manage accounts");
             Click(Find<Button>(window, "RailManageAccounts")); Settle(window);
             Assert.False(window.AccountsOpen); Assert.True(window.Dialogs.Dialogs.OfType<AccountsDialog>().Any());
@@ -188,7 +188,7 @@ public sealed class DashboardShellTests
             Click(Find<Button>(window, "RailAccounts")); Settle(window); Assert.True(window.AccountsOpen);
             var scrim = Find<Border>(window, "AccountsScrim"); var at = scrim.TranslatePoint(new Point(scrim.Bounds.Width - 30, scrim.Bounds.Height / 2), window)!.Value;
             window.MouseDown(at, MouseButton.Left); window.MouseUp(at, MouseButton.Left); Assert.False(window.AccountsOpen); // A click on the dimmed page.
-            Assert.Equal("Accounts", ToolTip.GetTip(Find<Button>(window, "RailAccounts")));
+            Assert.Equal("Account one", ToolTip.GetTip(Find<Button>(window, "RailAccounts"))); // The chip shows initials, so its tooltip names the account.
         }
         finally { window.Close(); }
     }

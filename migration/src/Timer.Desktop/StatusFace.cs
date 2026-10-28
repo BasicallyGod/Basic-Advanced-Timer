@@ -103,15 +103,20 @@ public sealed class StatusFace : StackPanel
         button.HorizontalContentAlignment = HorizontalAlignment.Center; button.VerticalContentAlignment = VerticalAlignment.Center;
     }
     private readonly Border clockTile;
-    /// <summary>Whether this is the horizontal pill's face: the clock on one line, then the play tile and the account's name on one well, then the break.</summary>
+    /// <summary>Whether this is the horizontal pill's face: the clock on one line, then the play tile and the account's dot and chevron on one well, then the break.</summary>
     public bool Horizontal { get; }
-    /// <summary>The horizontal pill's account box and the day clock's box are these widths, so the pill keeps one size whatever the name or the time.</summary>
-    public const double SelectorWidth = 174, ClockWidth = 106;
+    /// <summary>The horizontal pill's account box (only a dot and a chevron: the name is its tooltip and the list) and the day clock's box are these widths, so the pill keeps one size whatever the time.</summary>
+    public const double SelectorWidth = 48, ClockWidth = 106;
+    /// <summary>The vertical pill's account chip fills the well's width and the tile's height, so the well keeps the height it had with the Accounts button.</summary>
+    public const double ChipHeight = 44;
     private readonly Ellipse selectorDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
     private readonly Chevron selectorChevron = new() { VerticalAlignment = VerticalAlignment.Center };
-    private MarqueeText selectorName = null!;
     private Border selectorTile = null!;
     private string selectorWords = "";
+    // The vertical pill's account chip: the account's colour dot and its initials over a chevron, under the play tile.
+    private readonly Ellipse chipDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock chipInitials = new() { FontSize = 12.5, FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center };
+    private readonly Chevron chipChevron = new() { HorizontalAlignment = HorizontalAlignment.Center };
     // The primary control is a rounded square, to match the accounts icon beside it.
     private readonly Border primaryTile = new() { Width = StatusFace.WellTileWidth, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius) };
     private readonly Viewbox glyphBox = new() { Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -122,7 +127,7 @@ public sealed class StatusFace : StackPanel
     public Button Circle { get; }
     public Button AccountsButton { get; }
     public BreakButton Break { get; }
-    private readonly Border accountsTile = new() { Width = StatusFace.WellTileWidth, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius), Background = Brushes.Transparent, Child = new AccountsGlyph { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+    private readonly Border accountsTile = new() { Width = StatusFace.WellTileWidth, Height = StatusFace.ChipHeight, CornerRadius = new CornerRadius(StatusFace.TileRadius), Background = Brushes.Transparent };
     private bool accountsOpen, hoverAccounts; private double accountsAmount;
     private readonly Border well = new() { Width = StatusFace.WellWidth, CornerRadius = new CornerRadius(StatusFace.WellRadius), Padding = new Thickness(StatusFace.WellPadding), Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Center };
     /// <summary>The soft background the primary control and the Accounts button share.</summary>
@@ -133,7 +138,7 @@ public sealed class StatusFace : StackPanel
         this.model = model; this.clockTip = clockTip; Horizontal = horizontal;
         clock = horizontal ? new LineClock { Text = "00:00:00" } : new StackedClock { Text = "00:00:00" };
         // As wide as the pill inside its edge, so the tiles sit centred on whole pixels (the clock tile alone is an odd width).
-        Spacing = horizontal ? 12 : 10; HorizontalAlignment = HorizontalAlignment.Center; if (!horizontal) Width = PillWindow.PillWidth - 2; else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
+        Spacing = 10; HorizontalAlignment = HorizontalAlignment.Center; if (!horizontal) Width = PillWindow.PillWidth - 2; else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
         stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
         reminderLight = new Border { Name = prefix + "ReminderLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
         Lights = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Height = 14, HorizontalAlignment = HorizontalAlignment.Center, Name = prefix + "Lights" };
@@ -164,14 +169,21 @@ public sealed class StatusFace : StackPanel
         AccountsButton.Classes.Add("pillBare");
         if (horizontal)
         {
-            // The horizontal pill's account box: the state dot, the account's name in full (it slides when cut short) and a chevron, in one tile on the well.
-            selectorName = new MarqueeText("", 15) { VerticalAlignment = VerticalAlignment.Center }; selectorName.Label.FontWeight = FontWeight.SemiBold;
-            var line = Ui.Grid("Auto,*,Auto"); line.ColumnSpacing = 9; line.VerticalAlignment = VerticalAlignment.Center;
-            Ui.Put(line, selectorDot); Ui.Put(line, selectorName, 1); Ui.Put(line, selectorChevron, 2);
-            selectorTile = new Border { Name = prefix + "AccountSelector", Width = SelectorWidth, Height = TileSize, CornerRadius = new CornerRadius(TileRadius), Padding = new Thickness(12, 0, 10, 0), Background = Brushes.Transparent, Child = line };
+            // The horizontal pill's account box: the state dot and a chevron in one tile on the well. The account's name is its tooltip and the list it opens, since
+            // the tile beside it already carries the initials while one runs.
+            var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = { selectorDot, selectorChevron } };
+            selectorTile = new Border { Name = prefix + "AccountSelector", Width = SelectorWidth, Height = TileSize, CornerRadius = new CornerRadius(TileRadius), Background = Brushes.Transparent, Child = line };
             AccountsButton.Content = selectorTile; MakeRoomForRing(AccountsButton, 0, SelectorWidth);
         }
-        else { AccountsButton.Content = accountsTile; MakeRoomForRing(AccountsButton, 0, WellTileWidth); }
+        else
+        {
+            // The vertical pill's account chip: a button of its own under the play tile, so choosing an account is not mistaken for part of playing. It names the
+            // account by its colour and initials, and a chevron says there is a list.
+            accountsTile.Name = prefix + "AccountChip";
+            var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, Children = { chipDot, chipInitials } };
+            accountsTile.Child = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = { top, chipChevron } };
+            AccountsButton.Content = accountsTile; MakeRoomForRing(AccountsButton, 0, WellTileWidth);
+        }
         AccountsButton.HorizontalAlignment = HorizontalAlignment.Center;
         AccountsButton.PointerEntered += (_, _) => { hoverAccounts = true; PaintAccountsTile(); };
         AccountsButton.PointerExited += (_, _) => { hoverAccounts = false; PaintAccountsTile(); };
@@ -203,9 +215,11 @@ public sealed class StatusFace : StackPanel
         accountsOpen = open; if (wash) accountsAmount = open ? 1 : 0; PaintAccountsTile();
         var tip = open ? "Close the accounts" : "Accounts";
         ToolTip.SetTip(AccountsButton, tip);
-        // The horizontal pill's button also says which account it shows, since its name can be cut short.
-        Avalonia.Automation.AutomationProperties.SetName(AccountsButton, Horizontal && selectorWords.Length > 0 ? tip + ", " + selectorWords : tip);
-        if (Horizontal) { selectorChevron.Expanded = open; selectorChevron.InvalidateVisual(); }
+        // The button also says which account it shows, since the pill has no room for the name.
+        if (!open && selectorWords.Length > 0) tip = selectorWords;
+        ToolTip.SetTip(AccountsButton, tip);
+        Avalonia.Automation.AutomationProperties.SetName(AccountsButton, selectorWords.Length > 0 ? (open ? "Close the accounts" : "Accounts") + ", " + selectorWords : tip);
+        var chevron = Horizontal ? selectorChevron : chipChevron; chevron.Expanded = open; chevron.InvalidateVisual();
     }
     /// <summary>How much of the blue wash the accounts button wears, 0 to 1, while the dashboard's panel eases out or away, so the button and the panel move as one.</summary>
     public void SetAccountsAmount(double amount) { accountsAmount = Math.Clamp(amount, 0, 1); PaintAccountsTile(); }
@@ -217,6 +231,8 @@ public sealed class StatusFace : StackPanel
         well.Background = new SolidColorBrush(SoftTint.WithAlpha(ink, dark ? .07 : .055));
         IBrush rest = Brushes.Transparent;
         var tile = Horizontal ? selectorTile : accountsTile;
+        // The vertical chip is a visible chip at rest (a shade over the well), so it reads as its own control; the horizontal selector is bare until the pointer is over it.
+        if (!Horizontal) rest = new SolidColorBrush(SoftTint.WithAlpha(ink, dark ? .08 : .06));
         tile.Background = accountsAmount > 0 ? new SolidColorBrush(SoftTint.WithAlpha(accent, (dark ? .22 : .14) * accountsAmount))
             : hoverAccounts ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var hover) && hover is IBrush hoverBrush ? hoverBrush : rest) : rest;
         tile.BoxShadow = accountsFocus ? SoftTint.FocusRing(tile) : default;
@@ -255,15 +271,19 @@ public sealed class StatusFace : StackPanel
         primaryTile.BoxShadow = circleFocus ? SoftTint.FocusRing(primaryTile) : default;
         initials.Foreground = new SolidColorBrush(tone); glyph.Fixed = new SolidColorBrush(tone);
         initials.Text = who is null ? "" : PillWindow.Initials(who);
-        if (Horizontal)
+        // The account the pill is on (or would start). With nothing chosen the button says so.
+        var shown = who ?? selected?.Name; var shownAccount = shown is null ? null : model.Accounts.FirstOrDefault(a => a.Name == shown);
+        var display = shown is null ? "Choose an account" : shownAccount?.Display ?? shown;
+        if (selectorWords != display) { selectorWords = display; SetAccountsOpen(accountsOpen, wash: false); }
+        if (Horizontal) selectorDot.Fill = new SolidColorBrush(stateColour); // The horizontal dot is the state, the vertical chip's is the account's own colour.
+        else
         {
-            // The account the pill is on (or would start), its dot in the state's colour. With nothing chosen it says so.
-            var shown = who ?? selected?.Name; var display = shown is null ? "Choose an account" : model.Accounts.FirstOrDefault(a => a.Name == shown)?.Display ?? shown;
-            if (selectorWords != display) { selectorWords = display; selectorName.Label.Text = display; selectorName.InvalidateMeasure(); SetAccountsOpen(accountsOpen); }
-            selectorDot.Fill = new SolidColorBrush(stateColour);
+            chipDot.Fill = shownAccount is null ? new SolidColorBrush(ThemeColourOr("Idle", "#8A8F98")) : Brush.Parse(Ui.Visible(shownAccount.Colour));
+            chipInitials.Text = shown is null ? "" : PillWindow.Initials(shown); chipInitials.IsVisible = shown is not null;
         }
-        // Initials while an account runs, and the symbol at rest, under the pointer, or when there is no account to name.
-        var showGlyph = hoverCircle || (!model.IsTracking && !onBreak) || initials.Text.Length == 0;
+        // On the horizontal pill the tile carries the initials while an account runs, and gives way to the symbol at rest, under the pointer, or with no account to name.
+        // On the vertical pill the chip names the account, so the tile only plays or pauses.
+        var showGlyph = !Horizontal || hoverCircle || (!model.IsTracking && !onBreak) || initials.Text.Length == 0;
         initials.IsVisible = !showGlyph; glyphBox.IsVisible = showGlyph;
         glyph.Playing = model.IsTracking && !onBreak; glyph.InvalidateVisual();
         var circleTip = onBreak ? "End break" + (model.ResumeAccount is { } back ? " and resume " + back : "")

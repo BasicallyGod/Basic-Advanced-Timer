@@ -88,10 +88,10 @@ public sealed class Round11Tests
             var point = pill.GetVisualDescendants().OfType<Canvas>().Single(c => c.Name == "PillDropdownPoint");
             var fromRight = point.Margin.Right - HangingCard.Room.Right + point.Width / 2;
             var fromLeft = PillWindow.DropdownWidth - fromRight;
-            var well = pill.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PillWell").TranslatePoint(default, pill)!.Value.X;
-            var button = pill.AccountsButton.TranslatePoint(default, pill)!.Value.X;
-            // The point's centre, measured from the card's left edge (which is under the well's), lies within the box.
-            Assert.InRange(fromLeft, button - well, button - well + pill.AccountsButton.Bounds.Width);
+            // The card's right edge is level with the pill's, so its left edge is a card's width in from there, and the point's centre lies under the middle of the box.
+            var surface = pill.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PillSurface");
+            var middle = pill.AccountsButton.TranslatePoint(new Point(pill.AccountsButton.Bounds.Width / 2, 0), surface)!.Value.X - (PillWindow.HorizontalWidth - PillWindow.DropdownWidth);
+            Assert.InRange(fromLeft, middle - 1, middle + 1);
             Assert.Equal(11, PillWindow.DropdownGap); // The card's top edge is 11 under the pill, the point's tip about 2 under it.
         }
         finally { pill.Close(); }

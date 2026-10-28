@@ -162,7 +162,7 @@ public sealed class PillTests
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            Assert.False(pill.PanelOpen); Assert.Equal("Accounts", ToolTip.GetTip(pill.AccountsButton));
+            Assert.False(pill.PanelOpen); Assert.Equal("Account one", ToolTip.GetTip(pill.AccountsButton)); // The chip shows initials, so its tooltip names the account.
             Click(pill.AccountsButton); Assert.True(pill.PanelOpen); Assert.Equal("Close the accounts", ToolTip.GetTip(pill.AccountsButton));
             Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5); // The pill never grows for it.
             Assert.Equal(new CornerRadius(PillWindow.PillRadius), Find<Border>(pill, "PillSurface").CornerRadius); // The pill keeps its shape; the drawer slides out from behind it.
