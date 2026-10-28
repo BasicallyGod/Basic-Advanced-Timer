@@ -115,7 +115,7 @@ public sealed class WeekOverviewTests
             Assert.DoesNotContain(column.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekBreaksSlice"); // Breaks are no part of the column.
             // The column is the working time (the accounts' slices squeezed to it), drawn at the same scale as the schedule line stands at.
             var top = Math.Max(Math.Max(week.Days.Max(d => d.Scheduled.TotalHours), week.Days.Max(d => d.Working.TotalHours)), 8);
-            var perHour = Math.Min(17, (232 - 62 - 22) / top);
+            var perHour = Math.Min(17, (232 - 72 - 22) / top);
             var slices = column.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is TimerAccount).Sum(b => b.Height);
             Assert.Equal(day.Working.TotalHours * perHour, slices, 1);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekBarBreaks");

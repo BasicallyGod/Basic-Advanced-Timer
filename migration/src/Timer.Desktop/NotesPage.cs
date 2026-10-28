@@ -218,9 +218,14 @@ public sealed class NotesPage : Grid
         // A word starting with # offers the accounts that match it, as in the Notes card: choosing one sets the account and takes the word out of the note.
         var suggestions = new StackPanel { Name = "PageSuggestions", IsVisible = false }; suggestions.Classes.Add("suggestions");
         void Choose(string name, string rest) { account = name; draft = rest; DrawForm(); Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (formHost.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(t => t.Name == "PageNoteField") is { } again) { again.Focus(); again.CaretIndex = again.Text?.Length ?? 0; } }); }
-        (string Account, string Words)? first = null;
-        field.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) first = NoteParts.ShowSuggestions(model, field.Text ?? "", suggestions, "PageSuggest_", Choose); };
-        field.AddHandler(KeyDownEvent, (_, e) => { if (first is { } offer && suggestions.IsVisible && e.Key is Key.Tab or Key.Enter) { Choose(offer.Account, offer.Words); e.Handled = true; } }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        (string Account, string Words)? first = null; var nav = new NoteParts.SuggestionState();
+        field.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) { nav.Index = 0; first = NoteParts.ShowSuggestions(model, field.Text ?? "", suggestions, "PageSuggest_", Choose, nav); } };
+        // The arrow keys move the light through the offers, and Tab or Enter take the lit one.
+        field.AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (suggestions.IsVisible && e.Key is Key.Down or Key.Up && nav.Move(e.Key == Key.Down ? 1 : -1)) { first = NoteParts.ShowSuggestions(model, field.Text ?? "", suggestions, "PageSuggest_", Choose, nav); e.Handled = true; }
+            else if (first is { } offer && suggestions.IsVisible && e.Key is Key.Tab or Key.Enter) { Choose(offer.Account, offer.Words); e.Handled = true; }
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         if (!archived) { var submit = Ui.Ctl("PageSubmit", editing is not null ? "Save" : "Add", null, editing is not null ? "Save" : "Add", Submit, small: true); submit.Classes.Add("primary"); submit.Height = 36; submit.Padding = new Thickness(16, 0); Ui.Put(top, submit, 1); }
         column.Children.Add(top); column.Children.Add(suggestions);
 

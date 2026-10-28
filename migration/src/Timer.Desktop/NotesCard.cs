@@ -252,12 +252,14 @@ public sealed class NotesCard : Border
         field.PropertyChanged += (_, e) =>
         {
             if (e.Property != TextBox.TextProperty) return;
-            draft = field.Text ?? ""; firstSuggestion = ShowSuggestions(suggestions);
+            draft = field.Text ?? ""; suggestNav.Index = 0; firstSuggestion = ShowSuggestions(suggestions);
         };
-        // Tab (or Enter) takes the top match, the same as on the Notes page, so #Acc then Tab fills the account in.
+        // Tab (or Enter) takes the lit match (the top one until the arrow keys move the light), the same as on the Notes page, so #Acc then Tab fills the account in and
+        // #Acc, Down, Enter takes the second.
         field.AddHandler(KeyDownEvent, (_, e) =>
         {
-            if (firstSuggestion is { } offer && suggestions.IsVisible && e.Key is Key.Tab or Key.Enter) { draftAccount = offer.Account; draft = offer.Words; DrawForm(); e.Handled = true; }
+            if (suggestions.IsVisible && e.Key is Key.Down or Key.Up && suggestNav.Move(e.Key == Key.Down ? 1 : -1)) { firstSuggestion = ShowSuggestions(suggestions); e.Handled = true; }
+            else if (firstSuggestion is { } offer && suggestions.IsVisible && e.Key is Key.Tab or Key.Enter) { draftAccount = offer.Account; draft = offer.Words; DrawForm(); e.Handled = true; }
             else if (e.Key == Key.Back && draftAccount is not null && string.IsNullOrEmpty(field.Text)) { draftAccount = null; DrawForm(); e.Handled = true; } // Backspace in an empty box takes the chip off.
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         field.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Submit(); e.Handled = true; } else if (e.Key == Key.Escape) { Close(); e.Handled = true; } };
@@ -311,9 +313,9 @@ public sealed class NotesCard : Border
     }
 
     // A word that starts with # offers the accounts that match it. Choosing one puts its chip in the box and takes the word out.
-    private (string Account, string Words)? firstSuggestion;
+    private (string Account, string Words)? firstSuggestion; private readonly NoteParts.SuggestionState suggestNav = new();
     private (string Account, string Words)? ShowSuggestions(StackPanel host)
-        => NoteParts.ShowSuggestions(model, draft, host, "Suggest_", (name, rest) => { draftAccount = name; draft = rest; DrawForm(); });
+        => NoteParts.ShowSuggestions(model, draft, host, "Suggest_", (name, rest) => { draftAccount = name; draft = rest; DrawForm(); }, suggestNav);
 
     private void Submit()
     {

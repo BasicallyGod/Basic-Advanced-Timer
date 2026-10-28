@@ -136,7 +136,7 @@ public static class WeekOverview
     }
 
     // BelowBars is the room under the columns for the day name and the meeting and task counts, which are never cut off; the schedule line has a gutter of its own at the right so its words never meet a day's total.
-    private const double ChartHeight = 232, BelowBars = 62, Gutter = 44, RightGutter = 58;
+    private const double ChartHeight = 232, BelowBars = 72, Gutter = 44, RightGutter = 58;
     private static Control Chart(TimerModel model, WeekFigures w)
     {
         var british = CultureInfo.GetCultureInfo("en-GB");
@@ -200,8 +200,8 @@ public static class WeekOverview
         if (d.Marked) label.Children.Add(new Border { Name = "WeekDayMarker", Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Brush(model, "Ink"), VerticalAlignment = VerticalAlignment.Center });
         label.Margin = new Thickness(0, 6, 0, 0);
 
-        var counts = Ui.Horizontal(); counts.Spacing = 6; counts.HorizontalAlignment = HorizontalAlignment.Center; counts.Margin = new Thickness(0, 2, 0, 8);
-        // Each count is a small rounded chip, an icon and its number on one centre line: the meetings in the accent, the open notes neutral, so each is a shape the eye can find
+        var counts = Ui.Horizontal(); counts.Spacing = 6; counts.HorizontalAlignment = HorizontalAlignment.Center; counts.Margin = new Thickness(0, 10, 0, 8);
+        // Each count is a small rounded chip, an icon and its number on one centre line: both neutral, told apart by their icons, so each is a shape the eye can find
         // (the first design left them as bare icons, which looked lost beside the day's name).
         Control Count(string name, IconKind icon, int n, bool accent)
         {
@@ -221,7 +221,7 @@ public static class WeekOverview
             }
             return chip;
         }
-        if (d.Meetings > 0) counts.Children.Add(Count("WeekDayMeetings", IconKind.Today, d.Meetings, accent: true));
+        if (d.Meetings > 0) counts.Children.Add(Count("WeekDayMeetings", IconKind.Today, d.Meetings, accent: false));
         if (d.Tasks > 0) counts.Children.Add(Count("WeekDayTasks", IconKind.Note, d.Tasks, accent: false));
 
         var bottom = new Grid { RowDefinitions = new RowDefinitions("*,Auto,Auto,Auto,Auto,Auto") };
