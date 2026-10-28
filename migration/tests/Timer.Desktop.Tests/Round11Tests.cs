@@ -188,4 +188,34 @@ public sealed class Round11Tests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheReminderCardIsGivenRoomForItsWholeShadowInItsPopup()
+    {
+        // A pop-up's window clips what is drawn past its edge, so a shadow with no room showed as flat grey corners beyond the card's rounded ones.
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "AddNote").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "FormBell").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            var card = window.GetVisualDescendants().OfType<ReminderPopup>().Single(); var host = window.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Popup>().Single(p => p.Name == "ReminderHost");
+            Assert.Equal(HangingCard.Room, card.Margin); Assert.Equal(HangingCard.Shadow, card.BoxShadow); Assert.Equal(-HangingCard.Room.Top, host.VerticalOffset); // And the card still lands where it did.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ScrollBarThumbsAreAThinLineAtRestInTheMiddleOfTheirTrack()
+    {
+        // The track is 10 pixels and the thumb 4 at rest (8 under the pointer), so a scroll bar is felt rather than seen; it was a heavy 8 pixel bar before.
+        var demo = TimerModel.CreateDemo(); demo.CompleteSetup(); var window = new DashboardWindow(demo); window.Show(); Dispatcher.UIThread.RunJobs(); // The demo has a week long enough to scroll.
+        try
+        {
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekOverviewTab").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            using var frame = window.CaptureRenderedFrame();
+            var thumbs = window.GetVisualDescendants().OfType<Border>().Where(b => b.Name == "ThumbFill" && b.Bounds.Height > b.Bounds.Width).ToList();
+            Assert.NotEmpty(thumbs); Assert.All(thumbs, t => Assert.InRange(t.Bounds.Width, 3.5, 4.5));
+        }
+        finally { window.Close(); }
+    }
 }

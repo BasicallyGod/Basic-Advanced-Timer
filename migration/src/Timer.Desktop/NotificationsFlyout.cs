@@ -89,10 +89,10 @@ public sealed class NotificationsFlyout : Border
     {
         if (model.Notes.Find(id) is not { } note) return;
         rescheduling.PlacementTarget = anchor;
-        rescheduling.Child = new ReminderPopup(() => model.Engine.Now, model.Notes.Text(note), NotesModel.ReminderOf(note), answered =>
+        rescheduling.Child = ReminderPopup.Roomy(new ReminderPopup(() => model.Engine.Now, model.Notes.Text(note), NotesModel.ReminderOf(note), answered =>
         {
             model.Notes.SetReminder(id, answered); rescheduling.IsOpen = false; rescheduling.Child = null;
-        }, () => { rescheduling.IsOpen = false; rescheduling.Child = null; });
+        }, () => { rescheduling.IsOpen = false; rescheduling.Child = null; }), rescheduling);
         rescheduling.IsOpen = true;
     }
 }

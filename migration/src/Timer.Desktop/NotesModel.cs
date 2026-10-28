@@ -5,7 +5,7 @@ using Timer.Storage;
 namespace Timer.Desktop;
 
 /// <summary>How often a meeting repeats. The shared packages hold repeats by weeks and days, so these are the ones they can write.</summary>
-public enum RepeatChoice { None, Day, Weekday, Week }
+public enum RepeatChoice { None, Day, Weekday, Week, BiWeek, Month }
 
 /// <summary>The views down the left of the Notes page.</summary>
 public enum NoteView { All, Today, Overdue, Upcoming, Meetings, Done }
@@ -43,6 +43,8 @@ public sealed class NotesModel
     public event Action<long>? EditMeetingRequested;
     public void RequestNewMeeting(DateTime start) => NewMeetingRequested?.Invoke(start);
     public void RequestEditMeeting(long id) => EditMeetingRequested?.Invoke(id);
+    /// <summary>A meeting's times were changed by dragging it on the timeline, so a form open on it can show the new times.</summary>
+    public event Action<long>? MeetingMoved;
     /// <summary>The last thing the database refused, or null once everything is written.</summary>
     public string? Fault { get; private set; }
 
@@ -54,13 +56,16 @@ public sealed class NotesModel
     /// <summary>The meetings on a day, in time order. A ticked meeting is one that was taken off the timeline.</summary>
     public IReadOnlyList<DayNote> MeetingsOn(DateTime day) => notes.Where(n => n.HasDate && n.Day.Date == day.Date && !n.Done && IsMeeting(n)).OrderBy(n => n.At).ThenBy(n => n.Id).ToList();
 
-    /// <summary>What the Notes card lists for a day: the day's meetings, then notes with a reminder that day, then notes with no date.</summary>
+    /// <summary>
+    /// What the Notes card lists for a day: the day's meetings, then notes with a reminder that day, then notes with no date, and whatever is done last of all (kept in
+    /// the order it had), whatever its own time, so the list reads as what is still to do and then what is finished.
+    /// </summary>
     public IReadOnlyList<DayNote> ForDay(DateTime day)
     {
         var meetings = notes.Where(n => n.HasDate && n.Day.Date == day.Date && IsMeeting(n)).OrderBy(n => n.At).ThenBy(n => n.Id);
         var dated = notes.Where(n => n.HasDate && n.Day.Date == day.Date && !IsMeeting(n)).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id);
         var undated = notes.Where(n => !n.HasDate).OrderBy(n => n.Id);
-        return meetings.Concat(dated).Concat(undated).ToList();
+        return meetings.Concat(dated).Concat(undated).OrderBy(n => n.Done).ToList();
     }
 
     /// <summary>The words shown for a note: without a deadline marker and without the #Tag that has its own chip.</summary>
@@ -77,24 +82,33 @@ public sealed class NotesModel
     public static RepeatChoice ChoiceOf(Recurrence? rule) => rule switch
     {
         null => RepeatChoice.None,
+        { EveryMonths: 1 } => RepeatChoice.Month,
+        { EveryMonths: > 1 } => RepeatChoice.None,
         { EveryWeeks: 1, DaysMask: Recurrence.AllDays } => RepeatChoice.Day,
         { EveryWeeks: 1, DaysMask: Recurrence.Weekdays } => RepeatChoice.Weekday,
         { EveryWeeks: 1, DaysMask: 0 } => RepeatChoice.Week,
+        { EveryWeeks: 2, DaysMask: 0 } => RepeatChoice.BiWeek,
         _ => RepeatChoice.None
     };
     public static Recurrence? RuleOf(RepeatChoice choice) => choice switch
     {
-        RepeatChoice.Day => new Recurrence(1, Recurrence.AllDays), RepeatChoice.Weekday => new Recurrence(1, Recurrence.Weekdays), RepeatChoice.Week => new Recurrence(1, 0), _ => null
+        RepeatChoice.Day => new Recurrence(1, Recurrence.AllDays), RepeatChoice.Weekday => new Recurrence(1, Recurrence.Weekdays), RepeatChoice.Week => new Recurrence(1, 0), RepeatChoice.BiWeek => new Recurrence(2, 0), RepeatChoice.Month => new Recurrence(1, 0, null, 1), _ => null
     };
     public RepeatChoice RepeatOf(DayNote note) => ChoiceOf(SeriesOf(note)?.Rule);
-    /// <summary>A repeat the Notes card cannot change (one made by an older build: every other week, or on chosen days). It is shown and can be removed.</summary>
+    /// <summary>A repeat the Notes card cannot change (one made by an older build: on chosen days, every third week, every other month). It is shown and can be removed.</summary>
     public bool IsArchivedRepeat(DayNote note) => SeriesOf(note) is { } s && ChoiceOf(s.Rule) == RepeatChoice.None;
-    /// <summary>How a repeat reads at the end of a message: "daily", "on weekdays", "weekly".</summary>
-    public static string RepeatWords(RepeatChoice choice) => choice switch { RepeatChoice.Day => "daily", RepeatChoice.Weekday => "on weekdays", RepeatChoice.Week => "weekly", _ => "" };
+    /// <summary>How a repeat reads at the end of a message: "daily", "weekly", "every other week", "monthly".</summary>
+    public static string RepeatWords(RepeatChoice choice) => choice switch { RepeatChoice.Day => "daily", RepeatChoice.Weekday => "on weekdays", RepeatChoice.Week => "weekly", RepeatChoice.BiWeek => "every other week", RepeatChoice.Month => "monthly", _ => "" };
     public static string Label(RepeatChoice choice) => choice switch
     {
-        RepeatChoice.Day => "Every day", RepeatChoice.Weekday => "Every weekday", RepeatChoice.Week => "Every week", _ => "Does not repeat"
+        RepeatChoice.Day => "Daily", RepeatChoice.Weekday => "Every weekday", RepeatChoice.Week => "Weekly", RepeatChoice.BiWeek => "Bi-weekly", RepeatChoice.Month => "Monthly", _ => "Does not repeat"
     };
+    /// <summary>
+    /// The choices the repeat lists offer: Does not repeat, Daily, Weekly, Bi-weekly and Monthly. Every weekday is no longer offered, but a series made with it
+    /// while it was still a choice keeps it in its own list, so what it says is not lost.
+    /// </summary>
+    public static List<string> Offered(RepeatChoice current) =>
+        new[] { RepeatChoice.None, RepeatChoice.Day, RepeatChoice.Week, RepeatChoice.BiWeek, RepeatChoice.Month }.Concat(current == RepeatChoice.Weekday ? new[] { RepeatChoice.Weekday } : Array.Empty<RepeatChoice>()).Select(Label).ToList();
 
     // ---- What is waiting: the bell, the reminder light and the Notes page ----
 
@@ -197,6 +211,18 @@ public sealed class NotesModel
 
     private static string? MeetingTimeProblem(TimeSpan start, TimeSpan end)
         => start < TimeSpan.Zero || end >= TimeSpan.FromDays(1) ? "A meeting has to fall within one day." : end <= start ? "The end has to be after the start." : null;
+
+    /// <summary>
+    /// Gives a meeting new times on its own day, as when it is dragged or resized on the timeline. A meeting in a series changes for this day only. Returns what is
+    /// wrong, or null.
+    /// </summary>
+    public string? MoveMeeting(long id, TimeSpan start, TimeSpan end)
+    {
+        if (Find(id) is not { } meeting || !IsMeeting(meeting)) return "That meeting is no longer there.";
+        if (MeetingTimeProblem(start, end) is { } problem) return problem;
+        Change(id, n => n with { At = start, End = end });
+        MeetingMoved?.Invoke(id); Changed?.Invoke(); return null;
+    }
 
     /// <summary>Changes a note's words, account and reminder (a null reminder makes it undated again).</summary>
     public string? EditNote(long id, string words, string? account, DateTime? reminder)

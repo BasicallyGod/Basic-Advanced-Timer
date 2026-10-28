@@ -53,8 +53,8 @@ public sealed class NotesCard : Border
         Ui.Put(body, header); Ui.Put(body, formHost, 0, 1); Ui.Put(body, scroll, 0, 2);
         Ui.Put(body, selectedSlot, 0, 1); Grid.SetRowSpan(selectedSlot, 2); this.scroll = scroll;
         overlay.Children.Add(body); overlay.Children.Add(reminderHost); reminderHost.PlacementTarget = title; Child = overlay;
-        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditMeetingRequested += OnEditMeeting; Sync(); };
-        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditMeetingRequested -= OnEditMeeting; };
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditMeetingRequested += OnEditMeeting; Notes.MeetingMoved += OnMeetingMoved; Sync(); };
+        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditMeetingRequested -= OnEditMeeting; Notes.MeetingMoved -= OnMeetingMoved; };
         Sync();
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -187,6 +187,12 @@ public sealed class NotesCard : Border
         var end = snapped + TimeSpan.FromMinutes(30); if (end >= TimeSpan.FromDays(1)) end = new TimeSpan(23, 59, 0);
         startText = snapped.ToString(@"hh\:mm"); endText = end.ToString(@"hh\:mm"); DrawForm();
     }
+    // A meeting dragged on the timeline while its form is open: the form's start and end follow it, so saving does not put the old times back.
+    private void OnMeetingMoved(long id)
+    {
+        if (form != Form.Meeting || editing != id || Notes.Find(id) is not { } meeting) return;
+        startText = meeting.At!.Value.ToString(@"hh\:mm"); endText = meeting.End!.Value.ToString(@"hh\:mm"); DrawForm();
+    }
     private void OnEditMeeting(long id)
     {
         if (Notes.Find(id) is not { } meeting || !NotesModel.IsMeeting(meeting)) return;
@@ -285,7 +291,7 @@ public sealed class NotesCard : Border
             dayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), dayWords);
             Ui.Put(times, dayButton);
             Ui.Put(times, start, 1); Ui.Put(times, new TextBlock { Text = "–", VerticalAlignment = VerticalAlignment.Center, Classes = { "muted" } }, 2); Ui.Put(times, end, 3);
-            var repeat = new ComboBox { Name = "MeetingRepeat", ItemsSource = Enum.GetValues<RepeatChoice>().Select(NotesModel.Label).ToList(), HorizontalAlignment = HorizontalAlignment.Stretch, Height = 30, MinHeight = 30, FontSize = 13 };
+            var repeat = new ComboBox { Name = "MeetingRepeat", ItemsSource = NotesModel.Offered(draftRepeat), HorizontalAlignment = HorizontalAlignment.Stretch, Height = 30, MinHeight = 30, FontSize = 13 };
             repeat.SelectedItem = NotesModel.Label(draftRepeat);
             repeat.SelectionChanged += (_, _) => { if (repeat.SelectedItem is string label) draftRepeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };
             Ui.Put(times, repeat, 4);
@@ -356,7 +362,7 @@ public sealed class NotesCard : Border
             if (popupTarget is { } target) Notes.SetReminder(target, answered); else { draftReminder = answered; DrawForm(); }
             CloseReminder();
         }, CloseReminder);
-        reminderHost.Child = content; reminderHost.IsOpen = true;
+        reminderHost.Child = ReminderPopup.Roomy(content, reminderHost); reminderHost.IsOpen = true;
     }
     private void CloseReminder() { reminderHost.IsOpen = false; reminderHost.Child = null; reminderHost.PlacementTarget = title; }
     // A meeting's day is chosen in the same card as a reminder's (month, summary, Set, the cross), without the time, which has its boxes beside the button; it hangs under the button.
@@ -369,7 +375,7 @@ public sealed class NotesCard : Border
             if (answered is { } day) formDay = day.Date;
             CloseReminder(); DrawForm();
         }, CloseReminder, "Meeting day", dayOnly: true);
-        reminderHost.PlacementTarget = button; reminderHost.Child = content; reminderHost.IsOpen = true;
+        reminderHost.PlacementTarget = button; reminderHost.Child = ReminderPopup.Roomy(content, reminderHost); reminderHost.IsOpen = true;
     }
 
     private void DrawOverlay()

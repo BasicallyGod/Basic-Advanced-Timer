@@ -18,7 +18,7 @@ public static class NoteDates
 
 /// <summary>
 /// The small pop-up that sets a reminder's day and time (brief items 33 and 42): a month with past days off, hour and
-/// minute boxes with steppers in five-minute steps, four preset times, a summary line, and Remove and Set. It decides
+/// minute boxes with steppers in five-minute steps, four preset times in one column as wide as the boxes, a summary line, and Remove and Set. It decides
 /// nothing itself: Set and Remove hand the answer back, and the cross closes it. With <c>dayOnly</c> it picks a day and nothing else (a meeting's day, whose
 /// times are in boxes beside it): the same card, month and footer, without the time column or Remove.
 /// </summary>
@@ -32,7 +32,10 @@ public sealed class ReminderPopup : Border
     private readonly TextBlock monthTitle = new() { FontSize = 13, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox hourBox = new() { Name = "ReminderHour", MaxLength = 2 }, minuteBox = new() { Name = "ReminderMinute", MaxLength = 2 };
     private readonly TextBlock summary = new() { Name = "ReminderSummary", FontSize = 12.5, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-    private readonly Avalonia.Controls.Primitives.UniformGrid presetRow = new() { Columns = 2 };
+    /// <summary>The width of the hour and minute boxes with the colon between them, which the four quick times share, one above the other, so the time side is one even column.</summary>
+    public const double TimeColumnWidth = 44 + 4 + 6 + 4 + 44;
+    public const double Wide = 336, DayOnlyWide = 244;
+    private readonly StackPanel presetRow = new() { Spacing = 4, Width = TimeColumnWidth, HorizontalAlignment = HorizontalAlignment.Left };
     private bool syncing;
     // A reminder cannot be set for a day that has gone, but a meeting can be put on one (to note what happened), so only the reminder greys them.
     private readonly bool allowPast, dayOnly;
@@ -42,7 +45,7 @@ public sealed class ReminderPopup : Border
         this.now = now; this.dayOnly = dayOnly; Name = "ReminderPopup";
         var start = current ?? now().Date.AddHours(12); allowPast = heading != "Reminder";
         chosen = start.Date; hour = start.Hour; minute = start.Minute / 5 * 5; month = new DateTime(chosen.Year, chosen.Month, 1);
-        CornerRadius = new CornerRadius(16); BorderThickness = new Thickness(1); Padding = new Thickness(12); Width = dayOnly ? 244 : 376;
+        CornerRadius = new CornerRadius(16); BorderThickness = new Thickness(1); Padding = new Thickness(12); Width = dayOnly ? DayOnlyWide : Wide;
         Classes.Add("surface"); Classes.Add("flyoutCard");
         BoxShadow = BoxShadows.Parse("0 10 28 0 #29141E46");
         var column = new StackPanel { Spacing = 10 };
@@ -84,6 +87,17 @@ public sealed class ReminderPopup : Border
         Redraw(true);
     }
 
+    /// <summary>
+    /// Sets the card in a pop-up with room round it for its whole shadow, and lifts the pop-up by that room so the card still sits where it did. A pop-up's window
+    /// clips anything drawn past its edge, so a shadow with no room showed as flat grey corners beyond the card's rounded ones.
+    /// </summary>
+    public static ReminderPopup Roomy(ReminderPopup card, Avalonia.Controls.Primitives.Popup host)
+    {
+        card.Margin = HangingCard.Room; card.BoxShadow = HangingCard.Shadow;
+        host.VerticalOffset = -HangingCard.Room.Top; host.HorizontalOffset = 0;
+        return card;
+    }
+
     /// <summary>The day and time as chosen now.</summary>
     public DateTime Chosen => chosen.Date.AddHours(hour).AddMinutes(minute);
 
@@ -122,7 +136,7 @@ public sealed class ReminderPopup : Border
         {
             var text = preset.ToString("00", CultureInfo.InvariantCulture) + ":00";
             var button = Option(text, hour == preset && minute == 0, () => { hour = preset; minute = 0; Redraw(true); }); button.Name = "ReminderTime" + preset;
-            button.Margin = new Thickness(0, 0, 4, 5); button.Padding = new Thickness(4, 0); button.HorizontalAlignment = HorizontalAlignment.Stretch; presetRow.Children.Add(button);
+            button.Height = 26; button.Padding = new Thickness(4, 0); button.HorizontalAlignment = HorizontalAlignment.Stretch; presetRow.Children.Add(button);
         }
         summary.Text = dayOnly ? NoteDates.Day(chosen, today) : NoteDates.When(Chosen, today);
     }
