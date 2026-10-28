@@ -113,10 +113,10 @@ public sealed class StatusFace : StackPanel
     private readonly Chevron selectorChevron = new() { VerticalAlignment = VerticalAlignment.Center };
     private Border selectorTile = null!;
     private string selectorWords = "";
-    // The vertical pill's account chip: the account's own colour as a dot over a quiet chevron, under the play tile. Two marks and no letters, so it is not mistaken for the play tile or crowded.
-    private readonly Ellipse chipDot = new() { Width = 12, Height = 12, HorizontalAlignment = HorizontalAlignment.Center };
+    // The vertical pill's account chip: the account's own colour as a dot beside a quiet chevron on one line, under the play tile, as the horizontal pill's selector is. Two marks and no letters, so it is not mistaken for the play tile or crowded.
+    private readonly Ellipse chipDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
     // It points right while the list is shut and left while it is open, because the vertical pill's list and the rail's panel open to the side.
-    private readonly Chevron chipChevron = new() { HorizontalAlignment = HorizontalAlignment.Center, Opacity = .6, Sideways = true };
+    private readonly Chevron chipChevron = new() { VerticalAlignment = VerticalAlignment.Center, Opacity = .6, Sideways = true };
     // The primary control is a rounded square, to match the accounts icon beside it.
     private readonly Border primaryTile = new() { Width = StatusFace.WellTileWidth, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius) };
     private readonly Viewbox glyphBox = new() { Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -180,7 +180,7 @@ public sealed class StatusFace : StackPanel
             // The vertical pill's account chip: a button of its own under the play tile, so choosing an account is not mistaken for part of playing. It shows the
             // account by its colour, and a chevron says there is a list. The name is its tooltip.
             accountsTile.Name = prefix + "AccountChip";
-            accountsTile.Child = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { chipDot, chipChevron } };
+            accountsTile.Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Children = { chipDot, chipChevron } };
             AccountsButton.Content = accountsTile; MakeRoomForRing(AccountsButton, 0, WellTileWidth);
         }
         AccountsButton.HorizontalAlignment = HorizontalAlignment.Center;
