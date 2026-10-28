@@ -259,16 +259,16 @@ public sealed class NotesPage : Grid
             repeats.SelectionChanged += (_, _) => { if (repeats.SelectedItem is string label) repeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };
             Add(repeats);
         }
-        column.Children.Add(options);
-
         if (editing is { } id)
         {
-            var row = Ui.Grid("*,Auto,Auto"); row.ColumnSpacing = 8;
-            if (archived) { var note = new TextBlock { Text = "A repeating note from an earlier version. It stays as it is.", FontSize = 12.5, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Name = "PageArchivedNote" }; note.Classes.Add("muted"); Ui.Put(row, note); }
-            Ui.Put(row, Ui.Ctl("PageDelete", "Delete", IconKind.Trash, "Delete", () => { if (Notes.Find(id) is { } found) AskRemove(found); }, small: true), 1);
-            Ui.Put(row, Ui.Ctl("PageCancel", "Cancel", null, "Cancel", () => { ResetForm(); shown = null; Sync(); }, small: true), 2);
-            column.Children.Add(row);
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 0, 0) };
+            buttons.Children.Add(Ui.Ctl("PageDelete", "Delete", IconKind.Trash, "Delete", () => { if (Notes.Find(id) is { } found) AskRemove(found); }, small: true));
+            buttons.Children.Add(Ui.Ctl("PageCancel", "Cancel", null, "Cancel", () => { ResetForm(); shown = null; Sync(); }, small: true));
+            // Delete and Cancel sit at the right end of the options' own line, so a form being edited has no line of its own for them and no dead space beside them.
+            var line = Ui.Grid("*,Auto"); line.ColumnSpacing = 8; Ui.Put(line, options); Ui.Put(line, buttons, 1); column.Children.Add(line);
+            if (archived) { var note = new TextBlock { Text = "A repeating note from an earlier version. It stays as it is.", FontSize = 12.5, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Name = "PageArchivedNote" }; note.Classes.Add("muted"); column.Children.Add(note); }
         }
+        else column.Children.Add(options);
         if (scope is { } asked)
         {
             var q = Ui.Grid("*,Auto,Auto,Auto"); q.ColumnSpacing = 8;
