@@ -81,8 +81,11 @@ public sealed class SetupTests
             Assert.Equal(7.5, model.AccountSettings[0].BudgetHours); Assert.Null(model.AccountSettings[1].BudgetHours); // Budgets are optional.
             // Step 2: 08:30 to 16:30, Monday to Thursday.
             Settle(window);
+            Assert.Equal("00:30", Find<TextBox>(window, "SetupBreak").Text); Assert.Equal(TimeSpan.Zero, model.BreakAllowance); // Half an hour is suggested, but nothing is set until Next.
             Find<TextBox>(window, "SetupStart").Text = "08:30"; Find<TextBox>(window, "SetupEnd").Text = "16:30"; Find<CheckBox>(window, "SetupDayFri").IsChecked = false;
+            Find<TextBox>(window, "SetupBreak").Text = "00:45";
             Press(window, "SetupNext");
+            Assert.Equal(TimeSpan.FromMinutes(45), model.BreakAllowance); Assert.Equal(TimeSpan.FromHours(8) - TimeSpan.FromMinutes(45), model.ScheduledOn(new DateTime(2026, 10, 5))); // 08:30 to 16:30 less 45 minutes.
             Assert.Equal(new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday }, model.Engine.Schedule.Days.OrderBy(d => (int)d));
             Assert.Equal(TimeSpan.FromHours(8.5), model.Engine.Schedule.Shifts[DayOfWeek.Monday].Start);
             // Step 3: decimal hours and a week that starts on Sunday.
@@ -158,6 +161,8 @@ public sealed class SetupTests
             Find<TextBox>(window, "SetupBudget0").Text = ""; Find<TextBox>(window, "SetupName0").Text = "Internal"; Press(window, "SetupNext"); // A name already used.
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsVisible && t.Text is { } x && x.Contains("unique"));
             Find<TextBox>(window, "SetupName0").Text = "Account one"; Press(window, "SetupNext"); Settle(window);
+            Find<TextBox>(window, "SetupBreak").Text = "soon"; Press(window, "SetupNext"); Assert.True(window.SetupShowing); // A break that is not HH:mm stops it.
+            Find<TextBox>(window, "SetupBreak").Text = "00:30";
             Find<TextBox>(window, "SetupStart").Text = "25:99"; Press(window, "SetupNext");
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsVisible && t.Text is { Length: > 0 } x && t.Classes.Contains("overtime") && x.Length > 5);
             Assert.False(model.SetupDone); Assert.Equal(TimeSpan.FromHours(9), model.Engine.Schedule.Default.Start); // Nothing was applied.

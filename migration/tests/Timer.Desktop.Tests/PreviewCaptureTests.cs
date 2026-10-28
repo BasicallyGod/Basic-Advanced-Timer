@@ -187,6 +187,24 @@ public sealed class PreviewCaptureTests
     }
 
     [AvaloniaFact]
+    public void WriteHoursScreens()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        var fresh = new TimerModel(new Timer.Core.TrackingEngine(clock: () => new DateTime(2026, 10, 9, 10, 0, 0)), new Timer.Storage.StoreSettings(new() { new("Account one"), new("Account two") }, false, "Light", DayOfWeek.Monday, SetupDone: false));
+        var setup = new DashboardWindow(fresh); setup.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            setup.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SetupNext").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            using var f = setup.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = setup.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, "setup-hours.png"));
+        }
+        finally { setup.Close(); }
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show(); window.OpenSettings(); window.GetVisualDescendants().OfType<SettingsView>().Single().ShowSection("hours"); Dispatcher.UIThread.RunJobs();
+        try { using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, "settings-hours.png")); }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void WriteWeekChips()
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;

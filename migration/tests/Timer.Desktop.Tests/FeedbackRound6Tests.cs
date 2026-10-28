@@ -71,13 +71,14 @@ public sealed class FeedbackRound6Tests
     }
 
     [AvaloniaFact]
-    public void TheDayBarHasABreaksSegmentInTheBreakColour()
+    public void TheDayBarIsTheScheduleLessTheBreakAllowanceAndHasNoBreaksSegment()
     {
         var model = Model(false); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var bar = Find<Border>(window, "DayBar"); var breaks = bar.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DayBarBreaks");
-            Assert.Contains("barBreaks", breaks.Classes); Assert.True(breaks.Bounds.Width > 0);
+            // Breaks are a figure of their own; the bar is working time against the hours less the break allowance, so a break takes no part of it.
+            var bar = Find<Border>(window, "DayBar"); Assert.DoesNotContain(bar.GetVisualDescendants().OfType<Border>(), b => b.Name == "DayBarBreaks");
+            Assert.Contains(bar.GetVisualDescendants().OfType<Border>(), b => b.Name == "DayBarAllocated");
         }
         finally { window.Close(); }
     }

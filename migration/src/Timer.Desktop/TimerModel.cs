@@ -767,6 +767,33 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (value is not null) lines.Add(prefix + value);
         preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save();
     }
+    /// <summary>
+    /// The break taken out of every working day's hours, so the schedule is working time and not the clock span the breaks sit inside. Saved as the appearance line
+    /// breakallowance=<minutes>; with no line it is nothing, so a timer set up before this existed measures against its full hours until one is chosen.
+    /// </summary>
+    public TimeSpan BreakAllowance
+    {
+        get
+        {
+            var line = preferences.Extras?.AppearanceLines.FirstOrDefault(l => l.StartsWith(BreakAllowanceLine, StringComparison.Ordinal));
+            return line is not null && int.TryParse(line[BreakAllowanceLine.Length..], out var minutes) ? TimeSpan.FromMinutes(Math.Clamp(minutes, 0, 240)) : TimeSpan.Zero;
+        }
+    }
+    /// <summary>Whether a break allowance was ever chosen, even one of nothing, so setup can suggest one only to a timer that has none.</summary>
+    public bool BreakAllowanceChosen => preferences.Extras?.AppearanceLines.Any(l => l.StartsWith(BreakAllowanceLine, StringComparison.Ordinal)) == true;
+    private const string BreakAllowanceLine = "breakallowance=";
+    public void SetBreakAllowance(TimeSpan allowance)
+    {
+        var minutes = (int)Math.Clamp(Math.Round(allowance.TotalMinutes), 0, 240);
+        if (BreakAllowanceChosen && BreakAllowance == TimeSpan.FromMinutes(minutes)) return;
+        SetAppearanceFlag(BreakAllowanceLine, minutes.ToString(CultureInfo.InvariantCulture), true); Notify();
+    }
+    /// <summary>The working time a day is scheduled for: its hours less the break allowance, or nothing on a day off (and never below nothing).</summary>
+    public TimeSpan ScheduledOn(DateTime day)
+    {
+        var plan = Engine.Plan(day); if (!plan.Working) return TimeSpan.Zero;
+        var net = plan.End - plan.Start - BreakAllowance; return net > TimeSpan.Zero ? net : TimeSpan.Zero;
+    }
     public int? PillScalePercent => preferences.PillScale;
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
     public bool Tooltips => preferences.Tooltips;

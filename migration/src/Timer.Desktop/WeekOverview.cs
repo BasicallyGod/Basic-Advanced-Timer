@@ -11,22 +11,14 @@ namespace Timer.Desktop;
 public sealed record WeekDay(DateTime Date, bool IsToday, bool Off, bool HasTime, TimeSpan Working, TimeSpan Breaks, TimeSpan Unallocated, TimeSpan Scheduled,
     IReadOnlyList<(TimerAccount Account, TimeSpan Time)> Accounts, int Meetings, int Tasks, bool Overlaps)
 {
-    /// <summary>
-    /// The clock time the day covers: what was worked plus the breaks taken in it. The schedule is a span of clock time with the breaks inside it, so this, not
-    /// the working time alone, is what is measured against it.
-    /// </summary>
-    public TimeSpan Covered => Working + Breaks;
+
     /// <summary>A quiet dot marks a day with half an hour or more on no account, or with blocks laid over each other.</summary>
     public bool Marked => Unallocated >= TimeSpan.FromMinutes(30) || Overlaps;
 }
 
 /// <summary>The week for the totals strip and the chart.</summary>
 public sealed record WeekFigures(DateTime Start, IReadOnlyList<WeekDay> Days, TimeSpan Working, TimeSpan Allocated, TimeSpan Unallocated, TimeSpan Breaks,
-    TimeSpan Scheduled, bool Current)
-{
-    /// <summary>The clock time the week covers: the working time and the breaks inside it, which is what the schedule's hours are measured against.</summary>
-    public TimeSpan Covered => Working + Breaks;
-}
+    TimeSpan Scheduled, bool Current);
 
 /// <summary>The Week overview page, as the mock draws it: a totals strip, the day chart or table, and the accounts with their budgets and pace.</summary>
 public static class WeekOverview
@@ -55,7 +47,7 @@ public static class WeekOverview
             var tasks = model.Notes.All.Count(n => n.HasDate && n.Day.Date == date && !n.Done && !NotesModel.IsMeeting(n));
             var hasTime = working > TimeSpan.Zero || allocated > TimeSpan.Zero;
             days.Add(new WeekDay(date, date == today, date < today && !hasTime && !plan.Working, hasTime, working, dayBreaks, left > TimeSpan.Zero ? left : TimeSpan.Zero,
-                plan.Working ? plan.End - plan.Start : TimeSpan.Zero, per.Select(p => (p.a, p.Item2)).ToList(), meetings, tasks, overlaps));
+                model.ScheduledOn(date), per.Select(p => (p.a, p.Item2)).ToList(), meetings, tasks, overlaps));
         }
         // Saturday and Sunday are drawn only when they hold time; a quiet weekend is not a column of nothing.
         days = days.Where(d => d.HasTime || d.Scheduled > TimeSpan.Zero || d.Off || d.IsToday || (d.Date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))).ToList();
@@ -64,7 +56,7 @@ public static class WeekOverview
         var allocatedWeek = week.Aggregate(TimeSpan.Zero, (sum, d) => sum + accounts.Aggregate(TimeSpan.Zero, (s, a) => s + model.OnDay(a, d)));
         var unallocated = working7 - allocatedWeek; if (unallocated < TimeSpan.Zero) unallocated = TimeSpan.Zero;
         var breaks = week.Aggregate(TimeSpan.Zero, (sum, d) => sum + model.BreakTimeOn(d));
-        var scheduled = week.Aggregate(TimeSpan.Zero, (sum, d) => engine.Plan(d) is { Working: true } p ? sum + (p.End - p.Start) : sum);
+        var scheduled = week.Aggregate(TimeSpan.Zero, (sum, d) => sum + model.ScheduledOn(d));
         return new WeekFigures(weekStart, days, working7, allocatedWeek, unallocated, breaks, scheduled, today >= weekStart && today < weekStart.AddDays(7));
     }
 
@@ -103,20 +95,19 @@ public static class WeekOverview
         var big = Ui.Text(model.Format(w.Working), 34); big.Classes.Add("clock"); big.Name = "WeekWorking";
         var left = new StackPanel { MinWidth = 128, VerticalAlignment = VerticalAlignment.Center }; left.Children.Add(Ui.Text("Working time", 11, "muted")); left.Children.Add(big);
 
-        // The schedule is clock time with the breaks inside it, so what is left is measured from the working time and the breaks together.
-        var gap = w.Scheduled - w.Covered;
+        // The schedule is the hours less the break allowance, which is working time, so what is left is measured from the working time.
+        var gap = w.Scheduled - w.Working;
         var rightWords = w.Current ? model.FormatShort(gap > TimeSpan.Zero ? gap : TimeSpan.Zero) + " to go"
             : gap >= TimeSpan.Zero ? model.FormatShort(gap) + " under the schedule" : model.FormatShort(-gap) + " over the schedule";
         var words = Ui.Grid("*,Auto"); var scheduled = Ui.Text("Scheduled " + model.FormatShort(w.Scheduled), 11, "muted"); scheduled.Name = "WeekScheduled";
         var togo = Ui.Text(rightWords, 11, "muted"); togo.Name = "WeekToGo"; Ui.Put(words, scheduled); Ui.Put(words, togo, 1);
         var bar = new Border { Name = "WeekBar", Height = 12, CornerRadius = new CornerRadius(6), ClipToBounds = true, Background = Brush(model, "Line") };
-        var whole = Math.Max(Math.Max(w.Covered.TotalSeconds, w.Scheduled.TotalSeconds), 1);
-        // Allocated time solid, working time on no account hatched, then the breaks in amber, as the day bar under the timeline draws them. Time past the schedule runs on past its end.
+        var whole = Math.Max(Math.Max(w.Working.TotalSeconds, w.Scheduled.TotalSeconds), 1);
+        // Allocated time solid, working time on no account hatched, as the day bar under the timeline draws them. Time past the schedule runs on past its end.
         var allocatedPart = Math.Min(w.Allocated.TotalSeconds, w.Working.TotalSeconds); var unallocatedPart = Math.Max(0, w.Working.TotalSeconds - allocatedPart);
-        var parts = new Grid { ColumnDefinitions = new ColumnDefinitions($"{allocatedPart:0.###}*,{unallocatedPart:0.###}*,{w.Breaks.TotalSeconds:0.###}*,{Math.Max(0, whole - allocatedPart - unallocatedPart - w.Breaks.TotalSeconds):0.###}*") };
+        var parts = new Grid { ColumnDefinitions = new ColumnDefinitions($"{allocatedPart:0.###}*,{unallocatedPart:0.###}*,{Math.Max(0, whole - allocatedPart - unallocatedPart):0.###}*") };
         parts.Children.Add(new Border { Name = "WeekBarAllocated", Background = Brush(model, "Muted") });
         parts.Children.Add(new Border { Name = "WeekBarUnallocated", Background = ReviewViews.Stripes(model), Opacity = .7, [Grid.ColumnProperty] = 1 });
-        parts.Children.Add(new Border { Name = "WeekBarBreaks", Background = Brush(model, "Break"), [Grid.ColumnProperty] = 2 });
         bar.Child = parts;
         ToolTip.SetTip(bar, $"Allocated {model.FormatShort(w.Allocated)} · Unallocated {model.FormatShort(w.Unallocated)} · Breaks {model.FormatShort(w.Breaks)}");
         Avalonia.Automation.AutomationProperties.SetName(bar, $"Working time {model.FormatShort(w.Working)} of {model.FormatShort(w.Scheduled)} scheduled");
@@ -150,7 +141,7 @@ public static class WeekOverview
     {
         var british = CultureInfo.GetCultureInfo("en-GB");
         var schedule = w.Days.Select(d => d.Scheduled).DefaultIfEmpty().Max();
-        var topHours = Math.Max(Math.Max(schedule.TotalHours, w.Days.Select(d => d.Covered.TotalHours).DefaultIfEmpty().Max()), 8);
+        var topHours = Math.Max(Math.Max(schedule.TotalHours, w.Days.Select(d => d.Working.TotalHours).DefaultIfEmpty().Max()), 8);
         var perHour = Math.Min(17, (ChartHeight - BelowBars - 22) / topHours);
         var chart = new Grid { Name = "WeekChart_", Height = ChartHeight, Margin = new Thickness(0) };
         // The faint hour lines and their labels sit behind the columns, then the dashed line of the scheduled day.
@@ -183,9 +174,9 @@ public static class WeekOverview
     {
         var stack = new StackPanel { Width = 46, HorizontalAlignment = HorizontalAlignment.Center };
         var segments = new StackPanel { ClipToBounds = true };
-        // Account slices fill from the bottom, with the time on no account as a hatched slice, then the breaks in amber on top, so the column is the clock time the day
-        // covers: the working time and the breaks inside it, which is what the schedule line measures. Time given to accounts can add up to more than the working time (blocks
-        // laid over a break, or time before the day's start); the slices are then squeezed to fit it, so the column is never taller than the clock time it stands for.
+        // Account slices fill from the bottom, with the time on no account as a hatched slice on top, so the column is the day's working time, which is what the schedule line
+        // (the hours less the break allowance) measures. Time given to accounts can add up to more than the working time (blocks laid over a break, or time before the
+        // day's start); the slices are then squeezed to fit it, so the column is never taller than the working time it stands for.
         var list = new List<Control>();
         var given = d.Accounts.Aggregate(TimeSpan.Zero, (sum, a) => sum + a.Time);
         var squeeze = given > d.Working && d.Working > TimeSpan.Zero ? d.Working.TotalSeconds / given.TotalSeconds : 1;
@@ -193,7 +184,6 @@ public static class WeekOverview
             list.Add(new Border { Height = Math.Max(1.5, time.TotalHours * squeeze * perHour), Background = Brush(model, "Muted"), Tag = account });
         foreach (var slice in list) ((Border)slice).Background = new SolidColorBrush(Color.Parse(model.ChartColour(((TimerAccount)((Border)slice).Tag!).Colour)));
         if (d.Unallocated > TimeSpan.FromSeconds(30)) list.Add(new Border { Name = "WeekUnallocatedSlice", Height = Math.Max(1.5, d.Unallocated.TotalHours * perHour), Background = ReviewViews.Hatch(model) });
-        if (d.Breaks > TimeSpan.FromSeconds(30)) list.Add(new Border { Name = "WeekBreaksSlice", Height = Math.Max(1.5, d.Breaks.TotalHours * perHour), Background = Brush(model, "Break") });
         list.Reverse(); foreach (var c in list) segments.Children.Add(c);
         var body = new Border { CornerRadius = new CornerRadius(10), ClipToBounds = true, Child = segments, HorizontalAlignment = HorizontalAlignment.Center, Width = 46 };
         if (d.Off) body = new Border { Name = "WeekOff", Width = 46, Height = 28, CornerRadius = new CornerRadius(10), Background = ReviewViews.Hatch(model), Opacity = .7, HorizontalAlignment = HorizontalAlignment.Center };

@@ -609,7 +609,7 @@ public sealed class DashboardWindow : Window
         breaksFold = new Fold(Stat("Breaks", breaksValue, "TotalsBreaks", amber), 16) { Name = "TotalsBreaksFold" }; strip.Children.Add(breaksFold);
         return strip;
     }
-    // The bar is the scheduled day: time on accounts solid, working time with nothing on an account hatched, then the breaks, which the schedule's clock hours include. A day off has no bar.
+    // The bar is the scheduled day, its hours less the break allowance: time on accounts solid, working time with nothing on an account hatched. A day off has no bar.
     private void UpdateTotals()
     {
         var shown = model.SelectedDate.Date;
@@ -617,32 +617,31 @@ public sealed class DashboardWindow : Window
         var working = model.WorkingOn(shown);
         workingValue.Text = model.Format(working); allocatedValue.Text = model.Format(totals.Allocated); unallocatedValue.Text = model.Format(totals.Unallocated);
         breaksValue.Text = model.Format(model.BreakTimeOn(shown));
-        var scheduled = plan.Working ? plan.End - plan.Start : TimeSpan.Zero;
+        var scheduled = model.ScheduledOn(shown);
         // The bar is always there and always the same width, so the figures beside it never move from one day to the next. A day with nothing scheduled and no time
         // shows an empty track; a day with time but no schedule (a weekend) shows the time on it, all of it as working time.
         var breaks = model.BreakTimeOn(shown);
-        if (scheduled <= TimeSpan.Zero && working + breaks <= TimeSpan.Zero)
+        if (scheduled <= TimeSpan.Zero && working <= TimeSpan.Zero)
         {
             dayBar.Child = null; dayBar.Classes.Add("track");
             ToolTip.SetTip(dayBar, "No schedule"); Avalonia.Automation.AutomationProperties.SetName(dayBar, "Nothing is scheduled or recorded");
         }
         else
         {
-            // The bar is as long as the longer of the schedule and the time worked with its breaks, so time past the schedule has room at the end.
-            var whole = Math.Max(scheduled.TotalSeconds, working.TotalSeconds + breaks.TotalSeconds);
+            // The bar is as long as the longer of the schedule (its hours less the break allowance) and the time worked, so time past the schedule has room at the end.
+            var whole = Math.Max(scheduled.TotalSeconds, working.TotalSeconds);
             var allocatedPart = Math.Min(totals.Allocated.TotalSeconds, working.TotalSeconds);
             var unallocatedPart = Math.Max(0, working.TotalSeconds - allocatedPart);
-            var breaksPart = breaks.TotalSeconds;
-            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{allocatedPart:0.###}*,{unallocatedPart:0.###}*,{breaksPart:0.###}*,{Math.Max(0, whole - allocatedPart - unallocatedPart - breaksPart):0.###}*") };
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{allocatedPart:0.###}*,{unallocatedPart:0.###}*,{Math.Max(0, whole - allocatedPart - unallocatedPart):0.###}*") };
             Border Part(string key, int column, bool hatched = false)
             {
                 var part = new Border { Name = "DayBar" + key, [Grid.ColumnProperty] = column };
                 if (hatched) { part.Background = ReviewViews.Stripes(model); part.Opacity = .7; } else part.Classes.Add("bar" + key);
                 return part;
             }
-            grid.Children.Add(Part("Allocated", 0)); grid.Children.Add(Part("Unallocated", 1, true)); grid.Children.Add(Part("Breaks", 2));
+            grid.Children.Add(Part("Allocated", 0)); grid.Children.Add(Part("Unallocated", 1, true));
             dayBar.Child = grid; dayBar.Classes.Add("track");
-            ToolTip.SetTip(dayBar, (scheduled > TimeSpan.Zero ? $"Scheduled {plan.Start:HH:mm}–{plan.End:HH:mm}" : "No schedule") + $"\nAllocated {model.Format(totals.Allocated)} · Unallocated {model.Format(totals.Unallocated)} · Breaks {model.Format(breaks)}");
+            ToolTip.SetTip(dayBar, (scheduled > TimeSpan.Zero ? $"Scheduled {model.Format(scheduled)} ({plan.Start:HH:mm}–{plan.End:HH:mm}" + (model.BreakAllowance > TimeSpan.Zero ? $" less {model.Format(model.BreakAllowance)} break" : "") + ")" : "No schedule") + $"\nAllocated {model.Format(totals.Allocated)} · Unallocated {model.Format(totals.Unallocated)} · Breaks {model.Format(breaks)}");
             Avalonia.Automation.AutomationProperties.SetName(dayBar, $"The scheduled day, {model.Format(working)} worked");
         }
     }
