@@ -53,8 +53,8 @@ public sealed class NotesCard : Border
         Ui.Put(body, header); Ui.Put(body, formHost, 0, 1); Ui.Put(body, scroll, 0, 2);
         Ui.Put(body, selectedSlot, 0, 1); Grid.SetRowSpan(selectedSlot, 2); this.scroll = scroll;
         overlay.Children.Add(body); overlay.Children.Add(reminderHost); reminderHost.PlacementTarget = title; Child = overlay;
-        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditMeetingRequested += OnEditMeeting; Sync(); };
-        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditMeetingRequested -= OnEditMeeting; };
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditMeetingRequested += OnEditMeeting; Notes.MeetingMoved += OnMeetingMoved; Sync(); };
+        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditMeetingRequested -= OnEditMeeting; Notes.MeetingMoved -= OnMeetingMoved; };
         Sync();
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -186,6 +186,12 @@ public sealed class NotesCard : Border
         var snapped = new TimeSpan(Math.Clamp((int)Math.Round(start.TimeOfDay.TotalMinutes / 15) * 15, 0, 23 * 60 + 45) * TimeSpan.TicksPerMinute);
         var end = snapped + TimeSpan.FromMinutes(30); if (end >= TimeSpan.FromDays(1)) end = new TimeSpan(23, 59, 0);
         startText = snapped.ToString(@"hh\:mm"); endText = end.ToString(@"hh\:mm"); DrawForm();
+    }
+    // A meeting dragged on the timeline while its form is open: the form's start and end follow it, so saving does not put the old times back.
+    private void OnMeetingMoved(long id)
+    {
+        if (form != Form.Meeting || editing != id || Notes.Find(id) is not { } meeting) return;
+        startText = meeting.At!.Value.ToString(@"hh\:mm"); endText = meeting.End!.Value.ToString(@"hh\:mm"); DrawForm();
     }
     private void OnEditMeeting(long id)
     {

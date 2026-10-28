@@ -214,6 +214,77 @@ public sealed class NotesTests
         finally { window.Close(); }
     }
 
+    [Fact]
+    public void ADraggedMeetingLandsOnTheFiveMinuteGridAndStaysInsideTheDay()
+    {
+        var nine = TimeSpan.FromHours(9); var ten = TimeSpan.FromHours(10);
+        Assert.Equal((new TimeSpan(9, 30, 0), new TimeSpan(10, 30, 0)), MeetingGestures.Resolve(nine, ten, 0, 31)); // The middle moves it, length kept.
+        Assert.Equal((nine, ten), MeetingGestures.Resolve(nine, ten, 0, 2)); // Less than half a step changes nothing.
+        Assert.Equal((new TimeSpan(9, 30, 0), ten), MeetingGestures.Resolve(nine, ten, -1, 28)); // The start edge.
+        Assert.Equal((nine, new TimeSpan(11, 0, 0)), MeetingGestures.Resolve(nine, ten, 1, 58)); // The end edge.
+        Assert.Equal((new TimeSpan(9, 55, 0), ten), MeetingGestures.Resolve(nine, ten, -1, 500)); // Never shorter than five minutes.
+        Assert.Equal((nine, new TimeSpan(9, 5, 0)), MeetingGestures.Resolve(nine, ten, 1, -500));
+        Assert.Equal((TimeSpan.Zero, TimeSpan.FromHours(1)), MeetingGestures.Resolve(nine, ten, 0, -900)); // Not before midnight.
+        Assert.Equal((new TimeSpan(22, 59, 0), new TimeSpan(23, 59, 0)), MeetingGestures.Resolve(nine, ten, 0, 900)); // Nor after 23:59.
+        Assert.Equal((new TimeSpan(9, 5, 0), new TimeSpan(10, 0, 0)), MeetingGestures.Resolve(new TimeSpan(9, 7, 0), ten, -1, -4)); // An off-grid start lands on the grid once really moved.
+    }
+
+    [AvaloniaFact]
+    public void DraggingAMeetingOnTheTimelineMovesAndResizesItEverywhere()
+    {
+        var model = Model(); Assert.Null(model.Notes.AddMeeting(Day, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Planning", null, RepeatChoice.None));
+        var id = model.Notes.MeetingsOn(Day).Single().Id; var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            Point Where(Control c, double x, double y) => c.TranslatePoint(new Point(x, y), window)!.Value;
+            var card = Find<Grid>(window, "TimelineMeeting" + id); var pph = model.TimelinePixelsPerHour;
+            // Drag the middle half an hour later.
+            var from = Where(card, card.Width / 2, card.Height / 2); var to = from + new Vector(pph / 2, 0);
+            window.MouseDown(from, MouseButton.Left); window.MouseMove(from + new Vector(pph / 4, 0)); window.MouseMove(to); window.MouseUp(to, MouseButton.Left); Settle(window);
+            var moved = model.Notes.Find(id)!; Assert.Equal(TimeSpan.FromHours(9.5), moved.At); Assert.Equal(TimeSpan.FromHours(10.5), moved.End);
+            Assert.Contains("Meeting moved", model.Notice); Assert.Contains("09:30–10:30", model.Notice);
+            // The card, the Notes card's row and its form all follow.
+            card = Find<Grid>(window, "TimelineMeeting" + id); Assert.Contains("09:30–10:30", ToolTip.GetTip(card)!.ToString());
+            // Drag the end edge half an hour later.
+            var edge = Where(card, card.Width - 3, card.Height / 2); var edgeTo = edge + new Vector(pph / 2, 0);
+            window.MouseDown(edge, MouseButton.Left); window.MouseMove(edge + new Vector(pph / 4, 0)); window.MouseMove(edgeTo); window.MouseUp(edgeTo, MouseButton.Left); Settle(window);
+            moved = model.Notes.Find(id)!; Assert.Equal(TimeSpan.FromHours(9.5), moved.At); Assert.Equal(TimeSpan.FromHours(11), moved.End);
+            // A press that goes nowhere still opens the meeting for editing, with the new times in its form.
+            card = Find<Grid>(window, "TimelineMeeting" + id); var middle = Where(card, card.Width / 2, card.Height / 2);
+            window.MouseDown(middle, MouseButton.Left); window.MouseUp(middle, MouseButton.Left); Settle(window);
+            Assert.Equal("09:30", Find<TextBox>(window, "MeetingStart").Text); Assert.Equal("11:00", Find<TextBox>(window, "MeetingEnd").Text);
+            // Moved while the form is open, the form's boxes follow, so saving does not put the old times back.
+            card = Find<Grid>(window, "TimelineMeeting" + id); from = Where(card, card.Width / 2, card.Height / 2); to = from - new Vector(pph / 2, 0);
+            window.MouseDown(from, MouseButton.Left); window.MouseMove(from - new Vector(pph / 4, 0)); window.MouseMove(to); window.MouseUp(to, MouseButton.Left); Settle(window);
+            Assert.Equal("09:00", Find<TextBox>(window, "MeetingStart").Text); Assert.Equal("10:30", Find<TextBox>(window, "MeetingEnd").Text);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ADraggedMeetingInASeriesMovesForThatDayOnly()
+    {
+        var model = Model(); Assert.Null(model.Notes.AddMeeting(Day, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Stand-up", null, RepeatChoice.Day));
+        var first = model.Notes.MeetingsOn(Day).Single(); var next = model.Notes.MeetingsOn(Day.AddDays(1)).Single();
+        Assert.Null(model.Notes.MoveMeeting(first.Id, TimeSpan.FromHours(9.5), TimeSpan.FromHours(10.5)));
+        Assert.Equal(TimeSpan.FromHours(9.5), model.Notes.Find(first.Id)!.At); Assert.Equal(TimeSpan.FromHours(9), model.Notes.Find(next.Id)!.At);
+        Assert.Equal("The end has to be after the start.", model.Notes.MoveMeeting(first.Id, TimeSpan.FromHours(10), TimeSpan.FromHours(9)));
+    }
+
+    [Fact]
+    public void DoneNotesDropToTheBottomOfTheCardsListWhateverTheirTime()
+    {
+        var model = Model(); var notes = model.Notes;
+        Assert.Null(notes.AddNote("Early", null, Day.AddHours(9))); Assert.Null(notes.AddNote("Middle", null, Day.AddHours(11))); Assert.Null(notes.AddNote("Late", null, Day.AddHours(15)));
+        Assert.Null(notes.AddNote("Someday", null, null));
+        string[] Order() => notes.ForDay(Day).Select(n => notes.Text(n)).ToArray();
+        Assert.Equal(new[] { "Early", "Middle", "Late", "Someday" }, Order());
+        notes.Toggle(notes.All.Single(n => notes.Text(n) == "Early").Id); notes.Toggle(notes.All.Single(n => notes.Text(n) == "Someday").Id);
+        Assert.Equal(new[] { "Middle", "Late", "Early", "Someday" }, Order()); // Done last, in the order they had.
+        notes.Toggle(notes.All.Single(n => notes.Text(n) == "Early").Id);
+        Assert.Equal(new[] { "Early", "Middle", "Late", "Someday" }, Order().Take(3).Concat(new[] { "Someday" }).ToArray()); // Ticking back lifts it to its place.
+    }
+
     [AvaloniaFact]
     public void ABadMeetingTimeIsRefusedWithAShortLine()
     {

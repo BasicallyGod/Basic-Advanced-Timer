@@ -43,6 +43,8 @@ public sealed class NotesModel
     public event Action<long>? EditMeetingRequested;
     public void RequestNewMeeting(DateTime start) => NewMeetingRequested?.Invoke(start);
     public void RequestEditMeeting(long id) => EditMeetingRequested?.Invoke(id);
+    /// <summary>A meeting's times were changed by dragging it on the timeline, so a form open on it can show the new times.</summary>
+    public event Action<long>? MeetingMoved;
     /// <summary>The last thing the database refused, or null once everything is written.</summary>
     public string? Fault { get; private set; }
 
@@ -54,13 +56,16 @@ public sealed class NotesModel
     /// <summary>The meetings on a day, in time order. A ticked meeting is one that was taken off the timeline.</summary>
     public IReadOnlyList<DayNote> MeetingsOn(DateTime day) => notes.Where(n => n.HasDate && n.Day.Date == day.Date && !n.Done && IsMeeting(n)).OrderBy(n => n.At).ThenBy(n => n.Id).ToList();
 
-    /// <summary>What the Notes card lists for a day: the day's meetings, then notes with a reminder that day, then notes with no date.</summary>
+    /// <summary>
+    /// What the Notes card lists for a day: the day's meetings, then notes with a reminder that day, then notes with no date, and whatever is done last of all (kept in
+    /// the order it had), whatever its own time, so the list reads as what is still to do and then what is finished.
+    /// </summary>
     public IReadOnlyList<DayNote> ForDay(DateTime day)
     {
         var meetings = notes.Where(n => n.HasDate && n.Day.Date == day.Date && IsMeeting(n)).OrderBy(n => n.At).ThenBy(n => n.Id);
         var dated = notes.Where(n => n.HasDate && n.Day.Date == day.Date && !IsMeeting(n)).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id);
         var undated = notes.Where(n => !n.HasDate).OrderBy(n => n.Id);
-        return meetings.Concat(dated).Concat(undated).ToList();
+        return meetings.Concat(dated).Concat(undated).OrderBy(n => n.Done).ToList();
     }
 
     /// <summary>The words shown for a note: without a deadline marker and without the #Tag that has its own chip.</summary>
@@ -206,6 +211,18 @@ public sealed class NotesModel
 
     private static string? MeetingTimeProblem(TimeSpan start, TimeSpan end)
         => start < TimeSpan.Zero || end >= TimeSpan.FromDays(1) ? "A meeting has to fall within one day." : end <= start ? "The end has to be after the start." : null;
+
+    /// <summary>
+    /// Gives a meeting new times on its own day, as when it is dragged or resized on the timeline. A meeting in a series changes for this day only. Returns what is
+    /// wrong, or null.
+    /// </summary>
+    public string? MoveMeeting(long id, TimeSpan start, TimeSpan end)
+    {
+        if (Find(id) is not { } meeting || !IsMeeting(meeting)) return "That meeting is no longer there.";
+        if (MeetingTimeProblem(start, end) is { } problem) return problem;
+        Change(id, n => n with { At = start, End = end });
+        MeetingMoved?.Invoke(id); Changed?.Invoke(); return null;
+    }
 
     /// <summary>Changes a note's words, account and reminder (a null reminder makes it undated again).</summary>
     public string? EditNote(long id, string words, string? account, DateTime? reminder)
