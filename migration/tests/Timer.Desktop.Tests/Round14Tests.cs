@@ -28,10 +28,13 @@ public sealed class Round14Tests
         try
         {
             var chip = Find<Border>(pill, "PillAccountChip"); var tile = Find<Border>(pill, "PillPrimaryTile");
-            // Two marks and no letters: the colour of the account it would start (or is recording) over a chevron.
+            // Two marks and no letters: the colour of the account it would start (or is recording) beside a chevron.
             Assert.Empty(chip.GetVisualDescendants().OfType<TextBlock>());
             var dot = chip.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Single(); var chevron = chip.GetVisualDescendants().OfType<Chevron>().Single();
-            Assert.True(dot.TranslatePoint(default, chip)!.Value.Y < chevron.TranslatePoint(default, chip)!.Value.Y);
+            // Side by side on one line, the dot first, and the pair centred in the chip.
+            var dotBox = dot.TranslatePoint(default, chip)!.Value; var chevronBox = chevron.TranslatePoint(default, chip)!.Value;
+            Assert.True(dotBox.X < chevronBox.X); Assert.Equal(dotBox.Y + dot.Bounds.Height / 2, chevronBox.Y + chevron.Bounds.Height / 2, 1);
+            Assert.Equal(chip.Bounds.Width / 2, (dotBox.X + chevronBox.X + chevron.Bounds.Width) / 2, 1.5);
             Assert.Equal(Avalonia.Media.Color.Parse(Ui.Visible(model.Accounts[0].Colour)), ((Avalonia.Media.ISolidColorBrush)dot.Fill!).Color);
             model.ToggleAccount("Account two"); Settle(pill);
             Assert.Equal(Avalonia.Media.Color.Parse(Ui.Visible(model.Accounts[1].Colour)), ((Avalonia.Media.ISolidColorBrush)dot.Fill!).Color);
