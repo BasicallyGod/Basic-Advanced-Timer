@@ -107,7 +107,7 @@ public static class ThemeEngine
         foreach (var key in new[] { "TextControlBorderBrushFocused", "ComboBoxBackgroundBorderBrushFocused", "ComboBoxBorderBrushPointerOver" }) Put(key, accent);
         foreach (var key in new[] { "TextControlForeground", "ComboBoxForeground", "ComboBoxForegroundFocused", "ComboBoxForegroundFocusedPressed", "ComboBoxItemForeground", "ComboBoxItemForegroundPointerOver", "ComboBoxItemForegroundPressed", "ComboBoxItemForegroundSelected", "ComboBoxItemForegroundSelectedPointerOver", "ComboBoxItemForegroundSelectedPressed" }) Put(key, ink0);
         foreach (var key in new[] { "TextControlPlaceholderForeground", "TextControlPlaceholderForegroundPointerOver", "TextControlPlaceholderForegroundFocused", "ComboBoxPlaceHolderForeground", "ComboBoxDropDownGlyphForeground", "ComboBoxDropDownGlyphForegroundFocused", "ComboBoxDropDownGlyphForegroundFocusedPressed" }) Put(key, Color.Parse(colours["Muted"]));
-        Put("MeetBg", field); Put("MeetLine", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["Accent"], .55)));
+        Put("MeetBg", Color.Parse(colours["Hover"])); Put("MeetLine", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["Accent"], .55)));
         Put("ComboBoxDropDownBackground", Color.Parse(colours["Panel"])); Put("ComboBoxDropDownBorderBrush", line);
         foreach (var key in new[] { "ComboBoxItemBackgroundPointerOver", "ComboBoxItemBackgroundPressed" }) Put(key, Color.Parse(colours["Hover"]));
         foreach (var key in new[] { "ComboBoxItemBackgroundSelected", "ComboBoxItemBackgroundSelectedPointerOver", "ComboBoxItemBackgroundSelectedPressed" }) Put(key, Color.Parse(colours["Selected"]));

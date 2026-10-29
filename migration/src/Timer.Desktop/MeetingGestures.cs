@@ -34,7 +34,7 @@ public static class MeetingGestures
 
     private static string Hm(TimeSpan t) => t.ToString(@"hh\:mm");
 
-    public static void Attach(Grid card, Canvas canvas, TimerModel model, DayNote meeting, double pixelsPerHour, TextBlock? span)
+    public static void Attach(Border card, Canvas canvas, TimerModel model, DayNote meeting, double pixelsPerHour, TextBlock? span)
     {
         Point? origin = null; var edge = 0; var dragging = false;
         var start = meeting.At!.Value; var end = meeting.End!.Value;

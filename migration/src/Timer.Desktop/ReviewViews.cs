@@ -319,13 +319,14 @@ public static class ReviewViews
                 body.Children.Add(head);
                 TextBlock? span = null;
                 if (rows == 1) { span = new TextBlock { Text = Hm(meeting.At) + "–" + Hm(meeting.End), FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis }; span.Classes.Add("muted"); body.Children.Add(span); }
-                var frame = new Avalonia.Controls.Shapes.Rectangle { RadiusX = 12, RadiusY = 12, StrokeThickness = 1.5, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 4, 3 } };
-                frame.Classes.Add("meetingFrame");
-                var card = new Grid { Width = width, Height = height, ClipToBounds = true, Name = "TimelineMeeting" + meeting.Id, Tag = meeting, Cursor = new Cursor(StandardCursorType.Hand) };
-                card.Children.Add(frame); card.Children.Add(body);
+                // A meeting is a quiet block of its own, a light grey with no outline, so it reads as a plan beside the coloured time that was tracked; the pointer over it turns it to
+                // the selected tint.
+                // The card itself is not clipped, so the guide's ring (the card's own shadow) shows; its content is.
+                var card = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(12), Child = new Border { ClipToBounds = true, CornerRadius = new CornerRadius(12), Child = body }, Name = "TimelineMeeting" + meeting.Id, Tag = meeting, Cursor = new Cursor(StandardCursorType.Hand) };
+                card.Classes.Add("meetingCard");
                 ToolTip.SetTip(card, model.Notes.Text(meeting) + "\n" + Hm(meeting.At) + "–" + Hm(meeting.End) + " · planned");
                 Avalonia.Automation.AutomationProperties.SetName(card, "Meeting " + model.Notes.Text(meeting) + ", " + Hm(meeting.At) + " to " + Hm(meeting.End));
-                card.PointerEntered += (_, _) => { frame.Classes.Add("over"); title.Hover(true); }; card.PointerExited += (_, _) => { frame.Classes.Remove("over"); title.Hover(false); };
+                card.PointerEntered += (_, _) => { card.Classes.Add("over"); title.Hover(true); }; card.PointerExited += (_, _) => { card.Classes.Remove("over"); title.Hover(false); };
                 // A press drags it (the middle moves it, an edge resizes it); a click that goes nowhere opens it for editing.
                 MeetingGestures.Attach(card, canvas, model, meeting, pixelsPerHour, span);
                 Canvas.SetLeft(card, X(day + meeting.At.Value) + 1); Canvas.SetTop(card, meetingTop + row * (height + LaneGap)); canvas.Children.Add(card);
@@ -351,7 +352,7 @@ public static class ReviewViews
             canvas.AttachedToVisualTree += (_, _) => { nowTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) }; nowTimer.Tick += (_, _) => PlaceNow(); nowTimer.Start(); };
             canvas.DetachedFromVisualTree += (_, _) => { nowTimer?.Stop(); nowTimer = null; };
         }
-        TimelineGuide.Attach(canvas, model, day, pixelsPerHour, TimelineGutter, AxisY, BandBottom, pinned);
+        TimelineGuide.Attach(canvas, model, day, pixelsPerHour, TimelineGutter, AxisY, BandBottom, planned.Count > 0 ? meetingTop : bandTop, pinned);
         DateTime clicked = day.AddHours(9);
         DateTime At(double x) => day.AddMinutes(Math.Clamp(Math.Floor((x - TimelineGutter) / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);

@@ -206,7 +206,7 @@ public sealed class NotesTests
             Click(window, "SubmitNote");
             var meeting = model.Notes.MeetingsOn(Day).Single(); Assert.Equal(TimeSpan.FromHours(9.25), meeting.At); Assert.Equal(RepeatChoice.Week, model.Notes.RepeatOf(meeting));
             Assert.Contains("repeats weekly", model.Notice);
-            var card = Find<Grid>(window, "TimelineMeeting" + meeting.Id);
+            var card = Find<Border>(window, "TimelineMeeting" + meeting.Id);
             Assert.True(Canvas.GetTop(card) < 92); // In the meeting row above the blocks.
             Assert.Equal(0.75 * model.TimelinePixelsPerHour - 2, card.Width, 1);
             Assert.Empty(model.Engine.Sessions); // Planned, never tracked.
@@ -238,24 +238,24 @@ public sealed class NotesTests
         try
         {
             Point Where(Control c, double x, double y) => c.TranslatePoint(new Point(x, y), window)!.Value;
-            var card = Find<Grid>(window, "TimelineMeeting" + id); var pph = model.TimelinePixelsPerHour;
+            var card = Find<Border>(window, "TimelineMeeting" + id); var pph = model.TimelinePixelsPerHour;
             // Drag the middle half an hour later.
             var from = Where(card, card.Width / 2, card.Height / 2); var to = from + new Vector(pph / 2, 0);
             window.MouseDown(from, MouseButton.Left); window.MouseMove(from + new Vector(pph / 4, 0)); window.MouseMove(to); window.MouseUp(to, MouseButton.Left); Settle(window);
             var moved = model.Notes.Find(id)!; Assert.Equal(TimeSpan.FromHours(9.5), moved.At); Assert.Equal(TimeSpan.FromHours(10.5), moved.End);
             Assert.Contains("Meeting moved", model.Notice); Assert.Contains("09:30–10:30", model.Notice);
             // The card, the Notes card's row and its form all follow.
-            card = Find<Grid>(window, "TimelineMeeting" + id); Assert.Contains("09:30–10:30", ToolTip.GetTip(card)!.ToString());
+            card = Find<Border>(window, "TimelineMeeting" + id); Assert.Contains("09:30–10:30", ToolTip.GetTip(card)!.ToString());
             // Drag the end edge half an hour later.
             var edge = Where(card, card.Width - 3, card.Height / 2); var edgeTo = edge + new Vector(pph / 2, 0);
             window.MouseDown(edge, MouseButton.Left); window.MouseMove(edge + new Vector(pph / 4, 0)); window.MouseMove(edgeTo); window.MouseUp(edgeTo, MouseButton.Left); Settle(window);
             moved = model.Notes.Find(id)!; Assert.Equal(TimeSpan.FromHours(9.5), moved.At); Assert.Equal(TimeSpan.FromHours(11), moved.End);
             // A press that goes nowhere still opens the meeting for editing, with the new times in its form.
-            card = Find<Grid>(window, "TimelineMeeting" + id); var middle = Where(card, card.Width / 2, card.Height / 2);
+            card = Find<Border>(window, "TimelineMeeting" + id); var middle = Where(card, card.Width / 2, card.Height / 2);
             window.MouseDown(middle, MouseButton.Left); window.MouseUp(middle, MouseButton.Left); Settle(window);
             Assert.Equal("09:30", Find<TextBox>(window, "MeetingStart").Text); Assert.Equal("11:00", Find<TextBox>(window, "MeetingEnd").Text);
             // Moved while the form is open, the form's boxes follow, so saving does not put the old times back.
-            card = Find<Grid>(window, "TimelineMeeting" + id); from = Where(card, card.Width / 2, card.Height / 2); to = from - new Vector(pph / 2, 0);
+            card = Find<Border>(window, "TimelineMeeting" + id); from = Where(card, card.Width / 2, card.Height / 2); to = from - new Vector(pph / 2, 0);
             window.MouseDown(from, MouseButton.Left); window.MouseMove(from - new Vector(pph / 4, 0)); window.MouseMove(to); window.MouseUp(to, MouseButton.Left); Settle(window);
             Assert.Equal("09:00", Find<TextBox>(window, "MeetingStart").Text); Assert.Equal("10:30", Find<TextBox>(window, "MeetingEnd").Text);
         }

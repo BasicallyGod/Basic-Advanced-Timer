@@ -90,8 +90,6 @@ public sealed class Round18Tests
             // The line is where the pointer is.
             var canvas = Find<Canvas>(window, "TimelineCanvas");
             Assert.Equal(ReviewViews.TimelineGutter + 12.6667 * model.TimelinePixelsPerHour, Canvas.GetLeft(line) + 1, 1.5);
-            // Over a block, a ring goes round it.
-            var rings = canvas.Children.OfType<Border>().Where(b => Equals(b.Tag, "GuideRing")).ToList(); Assert.All(rings, r => Assert.False(r.IsVisible && r.Width <= 0));
             window.MouseMove(new Point(2, 2)); Settle(window); // Off the timeline: it goes.
             Assert.False(line.IsVisible); Assert.False(chip.IsVisible);
             // A press (dragging a block) has the pointer's attention, so the guide steps aside.
@@ -103,26 +101,7 @@ public sealed class Round18Tests
     }
 
     [AvaloniaFact]
-    public void HoveringBlocksRingsThemWithoutDisturbingTheCanvasChildrenItIsWalking()
-    {
-        // The rings are added to the canvas the first time they are needed, so the walk over its children must not be the live list.
-        var model = Model(false);
-        Assert.True(model.AddEntry("Account one", Day.AddHours(7), Day.AddHours(8), "")); model.Notes.AddMeeting(Day, TimeSpan.FromHours(7.5), TimeSpan.FromHours(8.5), "Stand-up", null, RepeatChoice.None);
-        var window = new DashboardWindow(model); window.Show(); Settle(window);
-        try
-        {
-            var canvas = Find<Canvas>(window, "TimelineCanvas");
-            window.MouseMove(At(window, model, 7.75)); Settle(window); // Under the block and the meeting.
-            var rings = canvas.Children.OfType<Border>().Where(b => Equals(b.Tag, "GuideRing") && b.IsVisible).ToList();
-            Assert.Equal(2, rings.Count);
-            window.MouseMove(At(window, model, 7.25)); Settle(window); // Under the block alone: the meeting's ring goes.
-            Assert.Single(canvas.Children.OfType<Border>().Where(b => Equals(b.Tag, "GuideRing") && b.IsVisible));
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void NearAPinTheGuideSnapsToItTheNoteAppearsBesideTheLineAndPressingItOpensTheNote()
+    public void NearAPinOnTheRulerTheGuideSnapsToItTheNoteAppearsBesideTheLineAndPressingItEditsTheNote()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
@@ -130,22 +109,22 @@ public sealed class Round18Tests
             var lateId = IdOf(model, "Send the revised budget"); var late = Find<Canvas>(window, "TimelinePin_" + lateId);
             var line = Find<Avalonia.Controls.Shapes.Line>(window, "TimelineGuideLine"); var chip = Find<Border>(window, "TimelineGuideChip"); var card = Find<Border>(window, "TimelineGuideNote");
             // A few pixels off the pin: the guide snaps to it.
-            window.MouseMove(At(window, model, 8.0) + new Vector(4, 0)); Settle(window);
+            window.MouseMove(At(window, model, 8.0, 40) + new Vector(4, 0)); Settle(window);
             Assert.Equal("08:00", ((TextBlock)chip.Child!).Text); Assert.Equal(Canvas.GetLeft(late) + 10, Canvas.GetLeft(line) + 1, .5);
             Assert.True(card.IsVisible); var words = string.Join(" ", card.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
             Assert.Contains("Send the revised budget", words); Assert.Contains("Today, 08:00", words); Assert.Contains("2h 00m late", words);
             Assert.Equal(TimelineGuide.ActiveDot, late.Children.OfType<Avalonia.Controls.Shapes.Ellipse>().Last().Width); // The pin swells while the guide is on it.
             // Further away it lets go of the pin.
-            window.MouseMove(At(window, model, 8.0) + new Vector(24, 0)); Settle(window);
+            window.MouseMove(At(window, model, 8.0, 40) + new Vector(24, 0)); Settle(window);
             Assert.False(card.IsVisible); Assert.Equal(TimelineGuide.RestDot, late.Children.OfType<Avalonia.Controls.Shapes.Ellipse>().Last().Width);
             // With tooltips switched off the words stay in the Notes card, not beside the line.
             model.SetTooltips(false); Settle(window); // The timeline is drawn again, so its parts are found again.
-            window.MouseMove(At(window, model, 8.0) + new Vector(2, 0)); Settle(window); Assert.False(Find<Border>(window, "TimelineGuideNote").IsVisible); Assert.True(Find<Border>(window, "TimelineGuideChip").IsVisible);
+            window.MouseMove(At(window, model, 8.0, 40) + new Vector(2, 0)); Settle(window); Assert.False(Find<Border>(window, "TimelineGuideNote").IsVisible); Assert.True(Find<Border>(window, "TimelineGuideChip").IsVisible);
             model.SetTooltips(true); Settle(window); late = Find<Canvas>(window, "TimelinePin_" + lateId); At(window, model, 8.0);
-            // Pressing the pin opens the note in the Notes page.
+            // Pressing the pin opens the note for editing in the Notes card, on the timeline.
             var onPin = late.TranslatePoint(new Point(10, 14), window)!.Value; window.MouseDown(onPin, MouseButton.Left); window.MouseUp(onPin, MouseButton.Left); Settle(window);
-            Assert.Equal("Send the revised budget", Find<TextBox>(window, "PageNoteField").Text);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Editing a note");
+            Assert.Equal("Send the revised budget", Find<TextBox>(window, "NoteField").Text);
+            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "SubmitNote" && b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Save"));
         }
         finally { window.Close(); }
     }
@@ -164,7 +143,7 @@ public sealed class Round18Tests
                 using (var rest = window.CaptureRenderedFrame()) rest?.Save(Path.Combine(folder, $"r18-pins-{theme}.png"));
                 window.MouseMove(At(window, model, 12.67)); Settle(window);
                 using (var free = window.CaptureRenderedFrame()) free?.Save(Path.Combine(folder, $"r18-guide-free-{theme}.png"));
-                window.MouseMove(At(window, model, 8.0) + new Vector(3, 0)); Settle(window);
+                window.MouseMove(At(window, model, 8.0, 40) + new Vector(3, 0)); Settle(window);
                 using (var snapped = window.CaptureRenderedFrame()) snapped?.Save(Path.Combine(folder, $"r18-guide-pin-{theme}.png"));
             }
             finally { window.Close(); }

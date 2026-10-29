@@ -982,7 +982,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { NotesList, Check, Clock, Search, Bell, Repeat, Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Redo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders, Dock }
+public enum IconKind { NotesList, Check, Clock, Search, Bell, Repeat, Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Redo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders, Dock, Star, StarFilled }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1159,6 +1159,15 @@ public sealed class IconGlyph : Control
                 // A tick: this is done.
                 context.DrawGeometry(null, pen, Geometry.Parse("M 3.75,9.5 L 7.5,13.25 L 14.25,5"));
                 break;
+            case IconKind.Star:
+            case IconKind.StarFilled:
+            {
+                // A five point star: this note is important. Outlined to offer it, solid once it is.
+                var points = new Point[10];
+                for (var i = 0; i < 10; i++) { var a = -Math.PI / 2 + i * Math.PI / 5; var r = i % 2 == 0 ? 6.6 : 2.9; points[i] = new Point(9 + r * Math.Cos(a), 9.6 + r * Math.Sin(a)); }
+                context.DrawGeometry(Kind == IconKind.StarFilled ? brush : null, pen, new PolylineGeometry(points, true));
+                break;
+            }
             case IconKind.Clock:
                 // A clock face: move this to another time.
                 context.DrawEllipse(null, pen, new Point(9, 9), 6.25, 6.25);

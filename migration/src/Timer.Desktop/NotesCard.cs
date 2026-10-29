@@ -53,8 +53,8 @@ public sealed class NotesCard : Border
         Ui.Put(body, header); Ui.Put(body, formHost, 0, 1); Ui.Put(body, scroll, 0, 2);
         Ui.Put(body, selectedSlot, 0, 1); Grid.SetRowSpan(selectedSlot, 2); this.scroll = scroll;
         overlay.Children.Add(body); overlay.Children.Add(reminderHost); reminderHost.PlacementTarget = title; Child = overlay;
-        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditMeetingRequested += OnEditMeeting; Notes.MeetingMoved += OnMeetingMoved; Sync(); };
-        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditMeetingRequested -= OnEditMeeting; Notes.MeetingMoved -= OnMeetingMoved; };
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditMeetingRequested += OnEditMeeting; Notes.EditNoteRequested += OnEditNote; Notes.MeetingMoved += OnMeetingMoved; Sync(); };
+        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditMeetingRequested -= OnEditMeeting; Notes.EditNoteRequested -= OnEditNote; Notes.MeetingMoved -= OnMeetingMoved; };
         Sync();
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -124,7 +124,7 @@ public sealed class NotesCard : Border
     private Control Row(DayNote note)
     {
         var meeting = NotesModel.IsMeeting(note); var words = Notes.Words(note); var account = Notes.AccountOf(note);
-        var line = Ui.Grid("Auto,*,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
+        var line = Ui.Grid("Auto,*,Auto,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
         // A note has a round tick; a meeting has a calendar mark instead, and is opened by its name.
         Control lead = meeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
         Ui.Put(line, lead);
@@ -138,9 +138,13 @@ public sealed class NotesCard : Border
         }
         else
         {
-            var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, Name = "NoteText_" + note.Id }; NoteLinks.Fill(text, words);
+            var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, Name = "NoteText_" + note.Id, FontWeight = NotesModel.IsImportant(note) ? FontWeight.SemiBold : FontWeight.Normal }; NoteLinks.Fill(text, Notes.Shown(note));
             if (note.Done) { text.TextDecorations = TextDecorations.Strikethrough; text.Classes.Add("muted"); }
-            column.Children.Add(text);
+            // Pressing the words opens the note for editing, as a meeting's name does; a link in them is pressable in its own right.
+            var edit = Ui.Button("", () => OnEditNote(note.Id), "NoteEdit_" + note.Id); edit.Classes.Add("pillBare"); edit.Padding = new Thickness(0); edit.Content = text;
+            edit.HorizontalAlignment = HorizontalAlignment.Left; edit.HorizontalContentAlignment = HorizontalAlignment.Left; ToolTip.SetTip(edit, "Edit");
+            Avalonia.Automation.AutomationProperties.SetName(edit, "Edit note: " + Notes.Text(note));
+            column.Children.Add(edit);
         }
         var chips = new WrapPanel { Orientation = Orientation.Horizontal };
         void Add(Control chip) { chip.Margin = new Thickness(0, 0, 6, 4); chips.Children.Add(chip); }
@@ -158,12 +162,19 @@ public sealed class NotesCard : Border
         // With no chips the words stand alone, so they are centred on the tick and the buttons rather than lifted by the gap above an empty row.
         if (chips.Children.Count > 0) column.Children.Add(chips);
         Ui.Put(line, column, 1);
+        if (!meeting)
+        {
+            // The star marks a note important (solid) or not (an outline); an important note comes first in the list.
+            var important = NotesModel.IsImportant(note);
+            var star = Ui.IconButton(important ? IconKind.StarFilled : IconKind.Star, important ? "Not important" : "Mark important", "NoteImportant_" + note.Id, () => Notes.SetImportant(note.Id, !important));
+            star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, star, 2);
+        }
         if (!meeting && NotesModel.ReminderOf(note) is null)
         {
-            var bell = Ui.IconButton(IconKind.Bell, "Add reminder", "NoteAddReminder_" + note.Id, () => OpenReminder(note.Id)); bell.Width = 28; bell.Height = 28; bell.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, bell, 2);
+            var bell = Ui.IconButton(IconKind.Bell, "Add reminder", "NoteAddReminder_" + note.Id, () => OpenReminder(note.Id)); bell.Width = 28; bell.Height = 28; bell.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, bell, 3);
         }
         var remove = Ui.IconButton(IconKind.Close, meeting ? "Remove meeting" : "Remove note", "NoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center;
-        Ui.Put(line, remove, 3);
+        Ui.Put(line, remove, 4);
         var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9) }; card.Classes.Add("noteRow");
         return card;
     }
@@ -201,6 +212,16 @@ public sealed class NotesCard : Border
         var account = Notes.AccountOf(meeting);
         draft = Notes.Words(meeting); draftAccount = account; draftReminder = null; startText = meeting.At!.Value.ToString(@"hh\:mm"); endText = meeting.End!.Value.ToString(@"hh\:mm");
         draftRepeat = Notes.RepeatOf(meeting); scope = null; DrawOverlay(); DrawForm();
+    }
+
+    /// <summary>Opens a note for editing in the form, as pressing its words does (and as pressing its pin on the timeline does).</summary>
+    private void OnEditNote(long id)
+    {
+        if (Notes.Find(id) is not { } note || NotesModel.IsMeeting(note)) return;
+        model.SetNotesCardShowsMeetings(false);
+        form = Form.Note; editing = id; formDay = model.SelectedDate.Date;
+        draft = Notes.Words(note); draftAccount = Notes.AccountOf(note); draftReminder = NotesModel.ReminderOf(note); startText = "12:00"; endText = "12:30"; draftRepeat = RepeatChoice.None;
+        scope = null; CloseReminder(); DrawOverlay(); DrawForm();
     }
 
     private void Open(Form kind, bool fresh = false)
@@ -242,10 +263,16 @@ public sealed class NotesCard : Border
             var chip = Ui.Button("", () => OpenReminder(null), "FormReminder"); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0);
             chip.Content = NoteParts.Chip(NoteDates.When(reminder, model.Engine.Now), model.Engine.Now > reminder ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change reminder"); Ui.Put(box, chip, 2);
         }
-        var row = Ui.Grid("*,Auto,Auto"); row.ColumnSpacing = 6;
+        var row = Ui.Grid(meeting ? "*,Auto,Auto" : "*,Auto,Auto,Auto"); row.ColumnSpacing = 6;
         Ui.Put(row, frame);
-        if (!meeting) { var bell = Ui.Ctl("FormBell", null, IconKind.Bell, "Set reminder", () => OpenReminder(null), small: true); Ui.Put(row, bell, 1); }
-        var submit = Ui.Ctl("SubmitNote", editing is not null ? "Save" : meeting ? "Add meeting" : "Add note", null, "Save", Submit, small: true); submit.Classes.Add("primary"); Ui.Put(row, submit, 2);
+        if (!meeting)
+        {
+            // The star puts the important mark (!!) at the start of the words, or takes it off; typing !! does the same.
+            var marked = NotesModel.IsMarked(draft);
+            var star = Ui.Ctl("FormImportant", null, marked ? IconKind.StarFilled : IconKind.Star, marked ? "Not important" : "Mark important", () => { draft = NotesModel.WithMark(draft, !NotesModel.IsMarked(draft)); DrawForm(); }, small: true); Ui.Put(row, star, 1);
+            var bell = Ui.Ctl("FormBell", null, IconKind.Bell, "Set reminder", () => OpenReminder(null), small: true); Ui.Put(row, bell, 2);
+        }
+        var submit = Ui.Ctl("SubmitNote", editing is not null ? "Save" : meeting ? "Add meeting" : "Add note", null, "Save", Submit, small: true); submit.Classes.Add("primary"); Ui.Put(row, submit, meeting ? 2 : 3);
         column.Children.Add(row);
         var suggestions = new StackPanel { Name = "AccountSuggestions", IsVisible = false }; suggestions.Classes.Add("suggestions");
         column.Children.Add(suggestions);
