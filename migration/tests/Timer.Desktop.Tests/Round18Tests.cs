@@ -103,6 +103,25 @@ public sealed class Round18Tests
     }
 
     [AvaloniaFact]
+    public void HoveringBlocksRingsThemWithoutDisturbingTheCanvasChildrenItIsWalking()
+    {
+        // The rings are added to the canvas the first time they are needed, so the walk over its children must not be the live list.
+        var model = Model(false);
+        Assert.True(model.AddEntry("Account one", Day.AddHours(7), Day.AddHours(8), "")); model.Notes.AddMeeting(Day, TimeSpan.FromHours(7.5), TimeSpan.FromHours(8.5), "Stand-up", null, RepeatChoice.None);
+        var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var canvas = Find<Canvas>(window, "TimelineCanvas");
+            window.MouseMove(At(window, model, 7.75)); Settle(window); // Under the block and the meeting.
+            var rings = canvas.Children.OfType<Border>().Where(b => Equals(b.Tag, "GuideRing") && b.IsVisible).ToList();
+            Assert.Equal(2, rings.Count);
+            window.MouseMove(At(window, model, 7.25)); Settle(window); // Under the block alone: the meeting's ring goes.
+            Assert.Single(canvas.Children.OfType<Border>().Where(b => Equals(b.Tag, "GuideRing") && b.IsVisible));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void NearAPinTheGuideSnapsToItTheNoteAppearsBesideTheLineAndPressingItOpensTheNote()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);

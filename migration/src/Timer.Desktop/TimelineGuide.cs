@@ -124,7 +124,8 @@ public static class TimelineGuide
             else { Paint(chip, Border.BackgroundProperty, "Selected"); Paint(chip, Border.BorderBrushProperty, "Accent"); }
             // A soft ring round whatever lies under the line.
             var count = 0;
-            foreach (var child in canvas.Children.OfType<Control>())
+            // Rings join the canvas's children as they are first needed, so walk a copy of the list.
+            foreach (var child in canvas.Children.OfType<Control>().ToList())
             {
                 var isBlock = Names(child, "TimelineEntry") || Names(child, "TimelineGroup") || Names(child, "TimelineRecording") || Names(child, "TimelineMeeting");
                 if (!isBlock || child.Bounds.Width <= 0) continue;
