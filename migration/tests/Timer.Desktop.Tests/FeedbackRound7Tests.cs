@@ -39,7 +39,8 @@ public sealed class FeedbackRound7Tests
         try
         {
             Avalonia.Media.Color Of(Border b) => ((Avalonia.Media.ISolidColorBrush)b.Background!).Color;
-            Assert.Equal(Of(Find<Border>(dash, "DashboardRail")), Of(Find<Border>(pill, "PillSurface")));
+            Assert.True(dash.TryFindResource("Panel", dash.ActualThemeVariant, out var panel)); Assert.Equal(((Avalonia.Media.ISolidColorBrush)panel!).Color, Of(Find<Border>(pill, "PillSurface"))); // The sidebar is on the panel colour the pill wears.
+            Assert.Contains("panel", Find<Border>(dash, "Sidebar").Classes);
             Assert.True(PillWindow.SlideMilliseconds >= 350);
         }
         finally { pill.Close(); dash.Close(); }
@@ -175,13 +176,13 @@ public sealed class FeedbackRound7Tests
     }
 
     [AvaloniaFact]
-    public void TheRailListsTimelineThenNotesThenTheWeekOverview()
+    public void TheHeaderTabsListTimelineThenNotesThenTheWeekOverviewLeftToRight()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            double Y(string name) => Find<Button>(window, name).TranslatePoint(default, window)!.Value.Y;
-            Assert.True(Y("TimelineTab") < Y("NotesTab") && Y("NotesTab") < Y("WeekOverviewTab"));
+            double X(string name) => Find<Button>(window, name).TranslatePoint(default, window)!.Value.X;
+            Assert.True(X("TimelineTab") < X("NotesTab") && X("NotesTab") < X("WeekOverviewTab"));
         }
         finally { window.Close(); }
     }

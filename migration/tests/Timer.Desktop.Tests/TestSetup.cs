@@ -6,5 +6,5 @@ internal static class TestSetup
 {
     // Nothing ticks in the headless tests, so the pill's drawer must not wait on its slide to reach its place.
     [ModuleInitializer]
-    internal static void Init() { PillWindow.SlideEnabled = false; DockMotion.Enabled = false; }
+    internal static void Init() { PillWindow.SlideEnabled = false; }
 }

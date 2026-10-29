@@ -182,7 +182,7 @@ public sealed class Round11Tests
         var window = new DashboardWindow(Model()); window.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            var ring = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "RailReminderRing"); var rail = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DashboardRail");
+            var ring = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "SidebarReminderRing"); var rail = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Sidebar");
             foreach (var up in ring.GetVisualAncestors().TakeWhile(a => a != rail).OfType<Control>().Where(a => a.ClipToBounds))
                 Assert.Fail($"{up.GetType().Name} {up.Name} clips the ring");
         }

@@ -663,7 +663,6 @@ public sealed class AccountList : StackPanel
             rows.Add((account, row, today, budget, icon, dot, bar, percent));
         }
         Refresh();
-        if (reveal < 1 || revealApplied) Reveal(reveal);
         if (pendingGlide is { } glide)
         {
             pendingGlide = null;
@@ -689,25 +688,6 @@ public sealed class AccountList : StackPanel
     private static Avalonia.Media.Transformation.TransformOperations Shift(double y)
         => Avalonia.Media.Transformation.TransformOperations.Parse($"translateY({y.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}px)");
     private (string Name, double Offset)? pendingGlide;
-    private double reveal = 1; private bool revealApplied;
-    /// <summary>
-    /// Fades the rows in one after another and slides each 12 pixels in from the left while the dashboard's account panel opens (the panel's progress, 0 to 1): the first row
-    /// starts at .14 and each next one 45 thousandths later, all done by .90. At 1 the rows are left alone, so dragging to reorder has the transform to itself.
-    /// </summary>
-    public void Reveal(double progress)
-    {
-        reveal = progress;
-        if (progress >= 1 && !revealApplied) return;
-        revealApplied = progress < 1;
-        for (var i = 0; i < rows.Count; i++)
-        {
-            var start = Math.Min(.14 + .045 * i, .55);
-            var e = progress >= 1 ? 1 : DockMotion.Window(progress, start, start + .35);
-            e = 1 - (1 - e) * (1 - e); // Eased out, so each row settles rather than stops.
-            var row = rows[i].Row;
-            row.Opacity = e; row.RenderTransform = e >= 1 ? null : new Avalonia.Media.TranslateTransform(-12 * (1 - e), 0);
-        }
-    }
     private void AttachReorder(Button row, string name)
     {
         Point? press = null; var dragging = false; var target = 0; var dragOffset = 0.0;

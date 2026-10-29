@@ -90,7 +90,7 @@ public sealed class PolishTests
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model); window.Show();
         try
         {
-            window.ShowAccountsPanel();
+
             Settle(window);
             // The usage and its period are in each row's tooltip, so the narrow panel keeps its room for the name and the time.
             var tips = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")).Select(b => ToolTip.GetTip(b)?.ToString() ?? "").ToList();
@@ -108,7 +108,7 @@ public sealed class PolishTests
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
         try
         {
-            window.ShowAccountsPanel();
+
             Settle(window);
             var xs = window.GetVisualDescendants().OfType<AccountIndicator>().Select(i => Math.Round(i.TranslatePoint(default, window)!.Value.X, 1)).Distinct().ToList();
             Assert.Single(xs); // A long name or a wide percentage never pushes a row's button aside.
@@ -157,7 +157,7 @@ public sealed class PolishTests
     public void EveryAccountRowNameCanSlide()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
-        try { window.ShowAccountsPanel(); Settle(window); Assert.True(window.GetVisualDescendants().OfType<MarqueeText>().Count(m => m.Name == "AccountName") >= 7); }
+        try {Settle(window); Assert.True(window.GetVisualDescendants().OfType<MarqueeText>().Count(m => m.Name == "AccountName") >= 7); }
         finally { window.Close(); }
     }
 }

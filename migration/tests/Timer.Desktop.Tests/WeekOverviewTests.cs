@@ -134,7 +134,7 @@ public sealed class WeekOverviewTests
         try
         {
             Click(window, "WeekDay_20261006");
-            Assert.Equal(new DateTime(2026, 10, 6), model.SelectedDate); Assert.Equal("Timeline", window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Classes.Contains("clock") && t.Text is "Timeline" or "Week overview").Text);
+            Assert.Equal(new DateTime(2026, 10, 6), model.SelectedDate); Assert.Contains("selected", Find<Button>(window, "TimelineTab").Classes); // The Timeline tab is the chosen one.
             Assert.True(Find<Border>(window, "TimelineCard").IsEffectivelyVisible);
         }
         finally { window.Close(); }

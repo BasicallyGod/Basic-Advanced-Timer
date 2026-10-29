@@ -509,13 +509,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool NotesCardShowsMeetings { get; private set; }
     public void SetNotesCardShowsMeetings(bool meetings)
     {
-        // Choosing Notes or Meetings leaves the Selected block tab.
-        if (NotesCardShowsMeetings == meetings && !NotesCardShowsSelected) return;
-        NotesCardShowsMeetings = meetings; NotesCardShowsSelected = false; Notify();
+        if (NotesCardShowsMeetings == meetings) return;
+        NotesCardShowsMeetings = meetings; Notify();
     }
-    /// <summary>Whether the Notes card shows the Selected block in its first tab, which it has only while the account panel is docked and has taken the Selected block card's room. Kept for the session.</summary>
-    public bool NotesCardShowsSelected { get; private set; }
-    public void SetNotesCardShowsSelected(bool on) { if (NotesCardShowsSelected == on) return; NotesCardShowsSelected = on; Notify(); }
     /// <summary>Asked for by a day in the week chart: the dashboard shows that day on the Timeline page.</summary>
     public event Action<DateTime>? OpenDayRequested;
     public void OpenDayInTimeline(DateTime day) { GoToDate(day); OpenDayRequested?.Invoke(day.Date); }
@@ -756,12 +752,6 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (horizontal) lines.Add(PillShapeLine + "horizontal");
         preferences = preferences with { Extras = extras with { AppearanceLines = lines } }; Save(); Notify();
     }
-    /// <summary>Whether the dashboard's account panel was left open, and whether it was docked beside the page rather than floating over it. Saved as the appearance lines accountsdock=open and accountspin=off; no line means shut and docked.</summary>
-    public bool AccountsDockOpen => preferences.Extras?.AppearanceLines.Contains(AccountsDockLine + "open") == true;
-    public bool AccountsDocked => preferences.Extras?.AppearanceLines.Contains(AccountsPinLine + "off") != true;
-    private const string AccountsDockLine = "accountsdock=", AccountsPinLine = "accountspin=";
-    public void SetAccountsDockOpen(bool open) => SetAppearanceFlag(AccountsDockLine, open ? "open" : null, AccountsDockOpen != open);
-    public void SetAccountsDocked(bool docked) => SetAppearanceFlag(AccountsPinLine, docked ? null : "off", AccountsDocked != docked);
     private void SetAppearanceFlag(string prefix, string? value, bool changed)
     {
         if (!changed) return;

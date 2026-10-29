@@ -375,11 +375,11 @@ public sealed class EditingTests
         var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            dashboard.ShowAccountsPanel(); Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
+Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("account")).ToList();
             Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(AccountList.RowHeight, r.Bounds.Height, 0.5)); // Tall enough for the name and time on one line with the bar under it.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
-            Assert.Contains("rail", tab.Classes); Assert.Contains("selected", tab.Classes);
+            Assert.Contains("viewTab", tab.Classes); Assert.Contains("selected", tab.Classes);
         }
         finally { dashboard.Close(); }
     }
@@ -406,7 +406,7 @@ public sealed class EditingTests
             Assert.False(zoom.IsEffectivelyVisible); // Zoom belongs to the timeline only.
             // Export and Copy hours table live in Settings, and the Hours table and Entries views are gone.
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name is "ExportWeek" or "WeekHoursTab" or "WeekEntriesTab");
-            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekOverviewTab" && ToolTip.GetTip(b) as string == "Week overview");
+            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "WeekOverviewTab" && Avalonia.Automation.AutomationProperties.GetName(b) == "Week overview");
         }
         finally { dashboard.Close(); }
     }
@@ -438,7 +438,7 @@ public sealed class EditingTests
             var day = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay"); var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
             var flag = day.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Kind == IconKind.Flag); var sun = day.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Kind == IconKind.Sunrise);
             Assert.Equal(2, day.GetVisualDescendants().OfType<IconGlyph>().Count()); // A flag to finish the day and a sunrise to start it; one shows at a time.
-            void Check() { var started = model.DayStarted; Assert.Equal(started, day.Classes.Contains("finishDay")); Assert.Equal(!started, day.Classes.Contains("startDay")); Assert.Equal(started, flag.IsVisible); Assert.Equal(!started, sun.IsVisible); Assert.Equal("Finish", flag.TintKey); Assert.Equal("Start", sun.TintKey); } // A red flag once running, a green sunrise before.
+            void Check() { var started = model.DayStarted; Assert.Equal(started, flag.IsVisible); Assert.Equal(!started, sun.IsVisible); Assert.Equal("Finish", flag.TintKey); Assert.Equal("Start", sun.TintKey); } // A red flag once running, a green sunrise before.
             Check(); model.ToggleDay(); Dispatcher.UIThread.RunJobs(); Check(); model.ToggleDay(); Dispatcher.UIThread.RunJobs(); Check();
             Assert.False(dashboard.FinishQuestionOpen); // Starting the day does not ask anything.
             // The flag waves while the pointer is over the button, and the cup steams. (Headless tests do not run animation timers, so
@@ -464,39 +464,39 @@ public sealed class EditingTests
             var scroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll"); var before = scroll.Bounds.Height;
             model.Notice = "A message for the footer"; model.ToggleFormat(); model.ToggleFormat(); Dispatcher.UIThread.RunJobs(); using var again = dashboard.CaptureRenderedFrame();
             var message = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "A message for the footer" && t.IsVisible);
-            Assert.True(message.TranslatePoint(new Point(0, 0), dashboard)!.Value.X > DashboardWindow.RailWidth); // In the workspace, beside the rail.
+            Assert.True(message.TranslatePoint(new Point(0, 0), dashboard)!.Value.X > Sidebar.Width); // In the workspace, beside the sidebar.
             Assert.Equal(before, scroll.Bounds.Height, 0.5);
         }
         finally { dashboard.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheRailsLightFollowsBreakAndOvertimeTheFootStacksBreakAboveDayAndTheRailAndHeaderDragTheWindow()
+    public void TheSidebarsLightFollowsBreakAndTheSidebarAndHeaderDragTheWindow()
     {
         var now = new DateTime(2026, 10, 9, 12, 0, 0);
         var model = TimerModel.CreateDemo(() => now); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
-            var lights = dashboard.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "RailLights");
+            var lights = dashboard.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "SidebarLights");
             void Settle() { Dispatcher.UIThread.RunJobs(); using var f = dashboard.CaptureRenderedFrame(); }
             // The light is amber on a break.
             if (model.IsOnBreak) model.ToggleBreak();
             model.ToggleBreak(); Settle(); Assert.Equal("On break", ToolTip.GetTip(lights));
             model.ToggleBreak(); Settle(); Assert.NotEqual("On break", ToolTip.GetTip(lights));
-            // Break and day sit one above the other at the foot of the rail.
-            var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak"); var day = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay");
-            Assert.InRange(Math.Abs(breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, 0), dashboard)!.Value.X - day.TranslatePoint(new Point(day.Bounds.Width / 2, 0), dashboard)!.Value.X), 0, 1); // The same centre line.
-            Assert.True(day.TranslatePoint(default, dashboard)!.Value.Y > breakButton.TranslatePoint(default, dashboard)!.Value.Y);
-            // The window can be picked up by the rail and the header row, but not by a button or the timeline.
+            // The break is at the right end of the tracking card, level with the play tile.
+            var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak"); var play = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SidebarPause");
+            Assert.InRange(Math.Abs(breakButton.TranslatePoint(new Point(0, breakButton.Bounds.Height / 2), dashboard)!.Value.Y - play.TranslatePoint(new Point(0, play.Bounds.Height / 2), dashboard)!.Value.Y), 0, 1);
+            Assert.True(breakButton.TranslatePoint(default, dashboard)!.Value.X > play.TranslatePoint(default, dashboard)!.Value.X + play.Bounds.Width);
+            // The window can be picked up by the sidebar and the header row, but not by a button or the timeline.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
             var tabAt = tab.TranslatePoint(new Point(tab.Bounds.Width / 2, tab.Bounds.Height / 2), dashboard)!.Value;
-            Assert.True(dashboard.InDragZone(new Point(tabAt.X, tabAt.Y + 40))); // Empty rail beside and between the buttons.
-            var title = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Timeline" && t.Classes.Contains("clock"));
-            Assert.True(dashboard.InDragZone(title.TranslatePoint(new Point(10, 10), dashboard)!.Value));
+            var sidebar = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Sidebar"); var empty = sidebar.TranslatePoint(new Point(sidebar.Bounds.Width / 2, sidebar.Bounds.Height - 90), dashboard)!.Value;
+            Assert.True(dashboard.InDragZone(empty)); // Empty sidebar between the accounts and the foot.
+            var header = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "ViewTabs"); Assert.True(dashboard.InDragZone(new Point(header.TranslatePoint(new Point(header.Bounds.Width + 60, 10), dashboard)!.Value.X, tabAt.Y)));
             var timelineScroll = dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
             Assert.False(dashboard.InDragZone(timelineScroll.TranslatePoint(new Point(100, 100), dashboard)!.Value));
-            Assert.False(Ui.IsPlainSurface(tab)); Assert.True(Ui.IsPlainSurface(title));
+            Assert.False(Ui.IsPlainSurface(tab));
         }
         finally { dashboard.Close(); }
     }

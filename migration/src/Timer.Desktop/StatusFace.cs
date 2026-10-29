@@ -30,6 +30,27 @@ public sealed class LineClock : StackPanel, IClockText
     }
 }
 
+/// <summary>
+/// The sidebar's clock: hours and minutes large with the seconds smaller beside them on the same baseline, the pair centred together. It is the pill's stacked clock laid
+/// out on one line, since the sidebar is wide enough to hold it.
+/// </summary>
+public sealed class SidebarClock : StackPanel, IClockText
+{
+    private readonly TextBlock main, seconds;
+    public SidebarClock()
+    {
+        Orientation = Orientation.Horizontal; Spacing = 7; HorizontalAlignment = HorizontalAlignment.Center; VerticalAlignment = VerticalAlignment.Center;
+        main = new TextBlock { FontSize = 50, LineHeight = 52, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Center };
+        seconds = new TextBlock { FontSize = 20, LineHeight = 20, Classes = { "clockLight", "muted" }, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 8) };
+        Children.Add(main); Children.Add(seconds);
+    }
+    public string Text
+    {
+        get => main.Text + ":" + seconds.Text;
+        set { var cut = value.LastIndexOf(':'); main.Text = cut > 0 ? value[..cut] : value; seconds.Text = cut > 0 ? value[(cut + 1)..] : ""; }
+    }
+}
+
 /// <summary>The clock stacked as hours, minutes and seconds, the seconds smaller and quieter, for the narrow vertical pill.</summary>
 public sealed class StackedClock : StackPanel, IClockText
 {
@@ -105,6 +126,11 @@ public sealed class StatusFace : StackPanel
     private readonly Border clockTile;
     /// <summary>Whether this is the horizontal pill's face: the clock on one line, then the play tile and the account's dot and chevron on one well, then the break.</summary>
     public bool Horizontal { get; }
+    /// <summary>Whether this is the dashboard's sidebar face: the lights and the clock centred, then one tracking card (play or pause, the account and how long it has run, the break).</summary>
+    public bool Sidebar { get; }
+    private readonly TextBlock whoName = new() { FontSize = 13.5, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock whoStatus = new() { FontSize = 11.5, Classes = { "muted" }, TextTrimming = TextTrimming.CharacterEllipsis };
+    private readonly Ellipse whoDot = new() { Width = 9, Height = 9, VerticalAlignment = VerticalAlignment.Center };
     /// <summary>The horizontal pill's account box (only a dot and a chevron: the name is its tooltip and the list) and the day clock's box are these widths, so the pill keeps one size whatever the time.</summary>
     public const double SelectorWidth = 48, ClockWidth = 106;
     /// <summary>The vertical pill's account chip fills the well's width and the tile's height, so the well keeps the height it had with the Accounts button.</summary>
@@ -133,12 +159,12 @@ public sealed class StatusFace : StackPanel
     /// <summary>The soft background the primary control and the Accounts button share.</summary>
     public Border Well => well;
 
-    public StatusFace(TimerModel model, string prefix, string breakName, string clockTip, Action clockClick, Action circleClick, Action accountsClick, bool horizontal = false)
+    public StatusFace(TimerModel model, string prefix, string breakName, string clockTip, Action clockClick, Action circleClick, Action accountsClick, bool horizontal = false, bool sidebar = false)
     {
-        this.model = model; this.clockTip = clockTip; Horizontal = horizontal;
-        clock = horizontal ? new LineClock { Text = "00:00:00" } : new StackedClock { Text = "00:00:00" };
+        this.model = model; this.clockTip = clockTip; Horizontal = horizontal; Sidebar = sidebar;
+        clock = sidebar ? new SidebarClock { Text = "00:00:00" } : horizontal ? new LineClock { Text = "00:00:00" } : new StackedClock { Text = "00:00:00" };
         // As wide as the pill inside its edge, so the tiles sit centred on whole pixels (the clock tile alone is an odd width).
-        Spacing = 10; HorizontalAlignment = HorizontalAlignment.Center; if (!horizontal) Width = PillWindow.PillWidth - 2; else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
+        Spacing = 10; HorizontalAlignment = HorizontalAlignment.Center; if (sidebar) { Spacing = 6; HorizontalAlignment = HorizontalAlignment.Stretch; } else if (!horizontal) Width = PillWindow.PillWidth - 2; else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
         stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
         reminderLight = new Border { Name = prefix + "ReminderLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
         Lights = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Height = 14, HorizontalAlignment = HorizontalAlignment.Center, Name = prefix + "Lights" };
@@ -147,7 +173,7 @@ public sealed class StatusFace : StackPanel
         var reminderCell = new Grid { Width = 6, Height = 14, Children = { reminderRing, reminderLight } };
         Lights.Children.Add(stateLight); Lights.Children.Add(reminderCell);
         // The clock moves between the pill and the dashboard.
-        clockTile = new Border { Name = prefix + "ClockTile", CornerRadius = new CornerRadius(14), Padding = horizontal ? new Thickness(2, 0) : new Thickness(8, 4), Background = Brushes.Transparent, Child = (Control)clock };
+        clockTile = new Border { Name = prefix + "ClockTile", CornerRadius = new CornerRadius(14), Padding = sidebar ? new Thickness(4, 2) : horizontal ? new Thickness(2, 0) : new Thickness(8, 4), Background = Brushes.Transparent, Child = (Control)clock };
         ClockButton = Ui.Button("", clockClick, prefix + "Dashboard");
         ClockButton.Classes.Add("pillBare"); ClockButton.Padding = new Thickness(0); ClockButton.Content = clockTile; ClockButton.HorizontalAlignment = HorizontalAlignment.Center;
         ClockButton.PointerEntered += (_, _) => SetTileHover(clockTile, true);
@@ -198,14 +224,39 @@ public sealed class StatusFace : StackPanel
             well.Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = WellGap, Children = { Circle, AccountsButton } };
             Lights.VerticalAlignment = VerticalAlignment.Center; Break.VerticalAlignment = VerticalAlignment.Center;
         }
+        else if (sidebar)
+        {
+            // One tracking card: pause or play at its left end, the break at its right, and between them the account's colour and name with how long it has run.
+            well.Width = double.NaN; well.Height = double.NaN; well.Margin = new Thickness(0, 6, 0, 4); well.Padding = new Thickness(6); well.HorizontalAlignment = HorizontalAlignment.Stretch;
+            var who = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 0) };
+            var nameLine = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, HorizontalAlignment = HorizontalAlignment.Center, Children = { whoDot, whoName } };
+            whoStatus.HorizontalAlignment = HorizontalAlignment.Center; whoStatus.TextAlignment = TextAlignment.Center;
+            who.Children.Add(nameLine); who.Children.Add(whoStatus); whoName.Name = prefix + "WhoName"; whoStatus.Name = prefix + "WhoStatus";
+            var card = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 4 };
+            Grid.SetColumn(who, 1); Grid.SetColumn(Break, 2);
+            card.Children.Add(Circle); card.Children.Add(who); card.Children.Add(Break);
+            well.Child = card; Lights.Margin = new Thickness(0, 4, 0, 0);
+        }
         else
         {
             ClockButton.Margin = new Thickness(0, 4, 0, 0);
             well.Child = new StackPanel { Spacing = WellGap, Children = { Circle, AccountsButton } };
         }
-        Children.Add(Lights); Children.Add(ClockButton); Children.Add(well); Children.Add(Break);
+        Children.Add(Lights); Children.Add(ClockButton); Children.Add(well); if (!sidebar) Children.Add(Break);
         ActualThemeVariantChanged += (_, _) => Refresh();
         Refresh();
+    }
+
+    // The sidebar's tracking card: the account being tracked (or the one a press would start) by its colour and name, and what it is doing.
+    private void RefreshWho(bool onBreak, TimerAccount? selected, string? who, Color stateColour)
+    {
+        var account = model.Accounts.FirstOrDefault(a => a.Name == who);
+        var name = onBreak ? "Break" : who is null ? "Choose an account" : account?.Display ?? who;
+        whoName.Text = name;
+        whoDot.Fill = onBreak ? new SolidColorBrush(ThemeColourOr("Break", "#F5A524")) : account is null ? new SolidColorBrush(ThemeColourOr("Idle", "#8A8F98")) : Brush.Parse(Ui.Visible(account.Colour));
+        var elapsed = model.Engine.Active is { } active ? model.Engine.Now - active.Start : TimeSpan.Zero;
+        whoStatus.Text = onBreak ? "On break" + (model.ResumeAccount is { } back ? " · back to " + (model.Accounts.FirstOrDefault(a => a.Name == back)?.Display ?? back) : "")
+            : model.IsTracking ? "Tracking · " + model.FormatShort(elapsed) : who is null ? "Pick one below" : "Ready to track";
     }
 
     /// <summary>Marks the accounts button as pressed while the list is open, and words its tooltip for what pressing it will do.</summary>
@@ -281,7 +332,8 @@ public sealed class StatusFace : StackPanel
         }
         // On the horizontal pill the tile carries the initials while an account runs, and gives way to the symbol at rest, under the pointer, or with no account to name.
         // On the vertical pill the chip names the account, so the tile only plays or pauses.
-        var showGlyph = !Horizontal || hoverCircle || (!model.IsTracking && !onBreak) || initials.Text.Length == 0;
+        if (Sidebar) RefreshWho(onBreak, selected, who, stateColour);
+        var showGlyph = Sidebar || !Horizontal || hoverCircle || (!model.IsTracking && !onBreak) || initials.Text.Length == 0;
         initials.IsVisible = !showGlyph; glyphBox.IsVisible = showGlyph;
         glyph.Playing = model.IsTracking && !onBreak; glyph.InvalidateVisual();
         var circleTip = onBreak ? "End break" + (model.ResumeAccount is { } back ? " and resume " + back : "")

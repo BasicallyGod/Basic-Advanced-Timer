@@ -81,17 +81,17 @@ public sealed class MenuAndShellTests
     public void AccountRowsHaveNoGrabHandlesAndWasteNoRoomAtTheRight()
     {
         var model = new TimerModel(Engine());
-        var dashboard = new DashboardWindow(model); dashboard.Show(); var pill = new PillWindow(model); pill.Show(); pill.ShowPanel(); dashboard.ShowAccountsPanel();
+        var dashboard = new DashboardWindow(model); dashboard.Show(); var pill = new PillWindow(model); pill.Show(); pill.ShowPanel();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(); using var pillFrame = pill.CaptureRenderedFrame();
             Assert.Empty(dashboard.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip)); // No grab handles; rows still drag.
             Assert.Empty(pill.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip));
             // No dead space at the right of a row: its play circle sits close to the row's edge, and the row fills the drawer's inner width.
-            var first = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account0"); var drawer = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "AccountsDrawer");
+            var first = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account0"); var drawer = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Sidebar");
             var circle = first.GetVisualDescendants().OfType<AccountIndicator>().Single();
             Assert.True(first.Bounds.Width - (circle.TranslatePoint(new Point(circle.Bounds.Width, 0), first)!.Value.X) <= 12, $"gap {first.Bounds.Width - (circle.TranslatePoint(new Point(circle.Bounds.Width, 0), first)!.Value.X)} row {first.Bounds.Width} circle {circle.Bounds}");
-            Assert.Equal(drawer.Bounds.Width - 12, first.Bounds.Width, 1.0);
+            Assert.Equal(drawer.Bounds.Width - 24, first.Bounds.Width, 1.0);
             // The rest of the row keeps its shape: the account name and today's time are still both visible inside it.
             var row = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account0");
             Assert.All(row.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is { Length: > 0 }), t => Assert.True(t.TranslatePoint(default, row)!.Value.X >= 0 && t.TranslatePoint(new Point(t.Bounds.Width, 0), row)!.Value.X <= row.Bounds.Width + 1));
@@ -124,16 +124,16 @@ public sealed class MenuAndShellTests
     }
 
     [AvaloniaFact]
-    public void TheChosenRailIconKeepsItsTileUnderThePointer()
+    public void TheChosenViewTabKeepsItsCardUnderThePointer()
     {
         var model = TimerModel.CreateDemo(); model.SetTheme("Light");
         var window = new DashboardWindow(model); window.Show();
         try
         {
             Dispatcher.UIThread.RunJobs();
-            var tab = window.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("rail") && b.Classes.Contains("selected"));
+            var tab = window.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("viewTab") && b.Classes.Contains("selected"));
             var presenter = tab.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First(p => p.Name == "PART_ContentPresenter");
-            var tile = Color.Parse(model.CurrentTheme.Colour("Selected"));
+            var tile = Color.Parse(model.CurrentTheme.Colour("Panel")); // The chosen tab is on a card of its own.
             Assert.Equal(tile, ((ISolidColorBrush)presenter.Background!).Color);
             ((IPseudoClasses)tab.Classes).Set(":pointerover", true); Dispatcher.UIThread.RunJobs();
             Assert.Equal(tile, ((ISolidColorBrush)presenter.Background!).Color);

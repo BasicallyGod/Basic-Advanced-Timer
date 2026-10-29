@@ -169,10 +169,13 @@ public sealed class NotesModel
     }
 
     /// <summary>The listed notes that match what was typed in the search box (its words or its account) and the account chosen, if any.</summary>
-    public IReadOnlyList<DayNote> Matching(string search, string? account)
+    public IReadOnlyList<DayNote> Matching(string search, string? account) => MatchingAny(search, account is null ? null : new[] { account });
+
+    /// <summary>The same, for any number of accounts chosen at once (a note tagged with any of them matches); none chosen means every account.</summary>
+    public IReadOnlyList<DayNote> MatchingAny(string search, IReadOnlyCollection<string>? accounts)
     {
         var words = search.Trim();
-        return Listed().Where(n => (account is null || string.Equals(AccountOf(n), account, StringComparison.OrdinalIgnoreCase))
+        return Listed().Where(n => (accounts is not { Count: > 0 } || accounts.Any(a => string.Equals(AccountOf(n), a, StringComparison.OrdinalIgnoreCase)))
             && (words.Length == 0 || Text(n).Contains(words, StringComparison.OrdinalIgnoreCase) || (AccountOf(n)?.Contains(words, StringComparison.OrdinalIgnoreCase) ?? false))).ToList();
     }
 
