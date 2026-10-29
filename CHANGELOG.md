@@ -10,8 +10,8 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
-| Timeline: pins for timed notes and a dashed guide line | pending | A note with a reminder on the day shown, and not ticked off, hangs a pin from the ruler at its time (red once late, the accent while coming), and a dashed guide line follows the pointer along the day: a time chip on the ruler, a soft ring on the block and meeting under it, and near a pin a snap to it with the note's words beside the line. Pressing a pin opens the note in the Notes page. A day with pins has 10 pixels more under the ruler, so its blocks are that much shorter. |
-| Test: account rows click | pending | `RealAccountRowsRespondAtTheirDrawnPositions` moves the pointer onto each row before it presses, as a real pointer does. Without it the second row's press missed when the test ran alone or after some other tests, on Linux. |
+| Timeline: pins for timed notes and a dashed guide line | [46ecf2e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/46ecf2e8cb987981bb59577ff96f3ad3cf4f6139) | A note with a reminder on the day shown, and not ticked off, hangs a pin from the ruler at its time (red once late, the accent while coming), and a dashed guide line follows the pointer along the day: a time chip on the ruler, a soft ring on the block and meeting under it, and near a pin a snap to it with the note's words beside the line. Pressing a pin opens the note in the Notes page. A day with pins has 10 pixels more under the ruler, so its blocks are that much shorter. |
+| Test: account rows click | [46ecf2e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/46ecf2e8cb987981bb59577ff96f3ad3cf4f6139) | `RealAccountRowsRespondAtTheirDrawnPositions` moves the pointer onto each row before it presses, as a real pointer does. Without it the second row's press missed when the test ran alone or after some other tests, on Linux. |
 
 ## 28 October 2026
 
