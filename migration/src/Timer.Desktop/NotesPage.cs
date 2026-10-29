@@ -190,6 +190,9 @@ public sealed class NotesPage : Grid
         DrawForm();
     }
 
+    /// <summary>Opens a note (or meeting) for editing, as a press on its row does. A pin on the timeline asks for this.</summary>
+    public void OpenNote(long id) { if (Notes.Find(id) is { } note) Edit(note); }
+
     private void Edit(DayNote note)
     {
         meeting = NotesModel.IsMeeting(note); editing = note.Id; draft = Notes.Words(note); account = Notes.AccountOf(note); error = null; scope = null; whenHost.IsOpen = false;

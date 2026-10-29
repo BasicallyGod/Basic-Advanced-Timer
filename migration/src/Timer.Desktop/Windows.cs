@@ -269,6 +269,8 @@ public sealed class DashboardWindow : Window
         timelineRail = RailButton(IconKind.Timeline, "Timeline", "TimelineTab", () => SelectTab(false));
         overviewTab = RailButton(IconKind.Week, "Week overview", "WeekOverviewTab", () => SelectTab(true));
         model.OpenDayRequested += _ => SelectTab(false);
+        // A pin on the timeline opens its note in the Notes page.
+        model.Notes.OpenNoteRequested += id => { ShowNotes(); NotesPageInstance().OpenNote(id); };
         var viewsRule = Ui.Rule(); viewsRule.Margin = new Thickness(10, 4); railTop.Children.Add(viewsRule);
         notesTab = RailButton(IconKind.NotesList, "Notes", "NotesTab", ShowNotes);
         // Timeline, then Notes, then the Week overview.

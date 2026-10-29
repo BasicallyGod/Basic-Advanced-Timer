@@ -43,6 +43,9 @@ public sealed class NotesModel
     public event Action<long>? EditMeetingRequested;
     public void RequestNewMeeting(DateTime start) => NewMeetingRequested?.Invoke(start);
     public void RequestEditMeeting(long id) => EditMeetingRequested?.Invoke(id);
+    /// <summary>A pin on the timeline was pressed: the dashboard shows the Notes page with that note open for editing.</summary>
+    public event Action<long>? OpenNoteRequested;
+    public void RequestOpenNote(long id) => OpenNoteRequested?.Invoke(id);
     /// <summary>A meeting's times were changed by dragging it on the timeline, so a form open on it can show the new times.</summary>
     public event Action<long>? MeetingMoved;
     /// <summary>The last thing the database refused, or null once everything is written.</summary>
@@ -55,6 +58,9 @@ public sealed class NotesModel
 
     /// <summary>The meetings on a day, in time order. A ticked meeting is one that was taken off the timeline.</summary>
     public IReadOnlyList<DayNote> MeetingsOn(DateTime day) => notes.Where(n => n.HasDate && n.Day.Date == day.Date && !n.Done && IsMeeting(n)).OrderBy(n => n.At).ThenBy(n => n.Id).ToList();
+
+    /// <summary>The notes with a reminder on a day that are not ticked off, in time order: the ones the timeline hangs a pin for.</summary>
+    public IReadOnlyList<DayNote> PinnedOn(DateTime day) => notes.Where(n => !n.Done && ReminderOf(n) is { } due && due.Date == day.Date).OrderBy(n => ReminderOf(n)).ThenBy(n => n.Id).ToList();
 
     /// <summary>
     /// What the Notes card lists for a day: the day's meetings, then notes with a reminder that day, then notes with no date, and whatever is done last of all (kept in
