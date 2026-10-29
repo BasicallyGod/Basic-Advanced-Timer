@@ -135,8 +135,8 @@ public static class WeekOverview
         var tile = Tile(body, new Thickness(18, 12, 18, 10)); tile.Name = "WeekByDay"; return tile;
     }
 
-    // BelowBars is the room under the columns for the day name and the meeting and task counts, which are never cut off; the schedule line has a gutter of its own at the right so its words never meet a day's total.
-    private const double ChartHeight = 232, BelowBars = 72, Gutter = 44, RightGutter = 58;
+    // BelowBars is the room under the columns for the day name, which is never cut off; the schedule line has a gutter of its own at the right so its words never meet a day's total.
+    private const double ChartHeight = 200, BelowBars = 34, Gutter = 44, RightGutter = 58;
     private static Control Chart(TimerModel model, WeekFigures w)
     {
         var british = CultureInfo.GetCultureInfo("en-GB");
@@ -200,35 +200,11 @@ public static class WeekOverview
         if (d.Marked) label.Children.Add(new Border { Name = "WeekDayMarker", Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Brush(model, "Ink"), VerticalAlignment = VerticalAlignment.Center });
         label.Margin = new Thickness(0, 6, 0, 0);
 
-        var counts = Ui.Horizontal(); counts.Spacing = 6; counts.HorizontalAlignment = HorizontalAlignment.Center; counts.Margin = new Thickness(0, 10, 0, 8);
-        // Each count is a small rounded chip, an icon and its number on one centre line: both neutral, told apart by their icons, so each is a shape the eye can find
-        // (the first design left them as bare icons, which looked lost beside the day's name).
-        Control Count(string name, IconKind icon, int n, bool accent)
-        {
-            var pair = Ui.Grid("Auto,Auto"); pair.ColumnSpacing = 4; pair.Name = name; pair.VerticalAlignment = VerticalAlignment.Center;
-            // A Viewbox scales the icon: it draws on its own 18 unit grid from the top left, so a smaller Width and Height only moved it off its centre and cut its edge.
-            Ui.Put(pair, new Viewbox { Width = 14, Height = 14, VerticalAlignment = VerticalAlignment.Center, Child = new IconGlyph(icon) { TintKey = accent ? "AccentText" : null } });
-            var number = Ui.Text(n.ToString(), 11.5, accent ? "accent" : null); number.VerticalAlignment = VerticalAlignment.Center; number.FontWeight = FontWeight.SemiBold;
-            // The digits sit above the middle of their line box, so the number looked raised beside its icon. A top margin of 3 moves it down by half that, 1.5 pixels, to the icon's centre line.
-            number.Margin = new Thickness(0, 3, 0, 0); Ui.Put(pair, number, 1);
-            var chip = new Border { Child = pair, CornerRadius = new CornerRadius(999), Padding = new Thickness(7, 2, 9, 2), BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Name = name + "Chip" };
-            chip.Classes.Add("chip"); chip.Classes.Add(accent ? "accentChip" : "plainChip");
-            // The meetings chip is the theme's selection tint with the accent's own text (set here, since the shared chip style would put its plain panel and hairline over the tint).
-            if (accent)
-            {
-                chip.Bind(Border.BackgroundProperty, chip.GetResourceObservable("Selected")); chip.Bind(Border.BorderBrushProperty, chip.GetResourceObservable("Selected"));
-                number.Bind(TextBlock.ForegroundProperty, number.GetResourceObservable("AccentText"));
-            }
-            return chip;
-        }
-        if (d.Meetings > 0) counts.Children.Add(Count("WeekDayMeetings", IconKind.Today, d.Meetings, accent: false));
-        if (d.Tasks > 0) counts.Children.Add(Count("WeekDayTasks", IconKind.Note, d.Tasks, accent: false));
-
-        var bottom = new Grid { RowDefinitions = new RowDefinitions("*,Auto,Auto,Auto,Auto,Auto") };
+        var bottom = new Grid { RowDefinitions = new RowDefinitions("*,Auto,Auto,Auto,Auto") };
         void Row(Control c, int r) { Grid.SetRow(c, r); bottom.Children.Add(c); }
-        Row(total, 1); Row(body, 3); Row(label, 4); Row(counts, 5);
-        // The label and the counts always take the same room, so the columns stand on one line whatever they carry.
-        label.MinHeight = 22; counts.MinHeight = 24;
+        Row(total, 1); Row(body, 3); Row(label, 4);
+        // The label always takes the same room, so the columns stand on one line whatever they carry.
+        label.MinHeight = 22;
         var button = new Button { Name = "WeekDay_" + d.Date.ToString("yyyyMMdd"), Content = bottom, Padding = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Bottom };
         button.Classes.Add("weekDay");
         button.Click += (_, _) => model.OpenDayInTimeline(d.Date);
@@ -256,7 +232,6 @@ public static class WeekOverview
         if (d.Breaks > TimeSpan.FromSeconds(30)) Line(Dot(Brush(model, "Break")), "Breaks", d.Breaks, quiet: true);
         void Note(string text) { var line = Ui.Text(text, 12, "muted"); line.Margin = new Thickness(0, 2, 0, 0); tip.Children.Add(line); }
         if (d.Overlaps) Note("Some blocks overlap");
-        if (d.Meetings > 0 || d.Tasks > 0) Note($"{d.Meetings} meeting{(d.Meetings == 1 ? "" : "s")} · {d.Tasks} open task{(d.Tasks == 1 ? "" : "s")}");
         return tip;
     }
 

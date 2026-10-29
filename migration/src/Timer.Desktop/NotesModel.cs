@@ -8,7 +8,7 @@ namespace Timer.Desktop;
 public enum RepeatChoice { None, Day, Weekday, Week, BiWeek, Month }
 
 /// <summary>The views down the left of the Notes page.</summary>
-public enum NoteView { All, Today, Overdue, Upcoming, Meetings, Done }
+public enum NoteView { All, Important, Today, Overdue, Upcoming, Meetings, Done }
 
 /// <summary>A heading and the notes under it on the Notes page.</summary>
 public sealed record NoteGroup(string Label, bool Bad, IReadOnlyList<DayNote> Notes);
@@ -46,6 +46,9 @@ public sealed class NotesModel
     /// <summary>A pin on the timeline was pressed: the dashboard shows the Notes page with that note open for editing.</summary>
     public event Action<long>? OpenNoteRequested;
     public void RequestOpenNote(long id) => OpenNoteRequested?.Invoke(id);
+    /// <summary>A pin on the timeline was pressed: the Notes card opens that note for editing, so the timeline stays where it is.</summary>
+    public event Action<long>? EditNoteRequested;
+    public void RequestEditNote(long id) => EditNoteRequested?.Invoke(id);
     /// <summary>A meeting's times were changed by dragging it on the timeline, so a form open on it can show the new times.</summary>
     public event Action<long>? MeetingMoved;
     /// <summary>The last thing the database refused, or null once everything is written.</summary>
@@ -71,13 +74,32 @@ public sealed class NotesModel
         var meetings = notes.Where(n => n.HasDate && n.Day.Date == day.Date && IsMeeting(n)).OrderBy(n => n.At).ThenBy(n => n.Id);
         var dated = notes.Where(n => n.HasDate && n.Day.Date == day.Date && !IsMeeting(n)).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id);
         var undated = notes.Where(n => !n.HasDate).OrderBy(n => n.Id);
-        return meetings.Concat(dated).Concat(undated).OrderBy(n => n.Done).ToList();
+        // What matters comes first among the notes (the sort keeps time order within each kind), and what is done goes last.
+        return meetings.Concat(dated.Concat(undated).OrderByDescending(IsImportant)).OrderBy(n => n.Done).ToList();
     }
 
-    /// <summary>The words shown for a note: without a deadline marker and without the #Tag that has its own chip.</summary>
-    public string Text(DayNote note) => NoteLinks.Flatten(Words(note));
-    /// <summary>The same words as they are written, with any links still in their <c>[words](address)</c> form: what a row draws as links and what the form is given to edit.</summary>
+    /// <summary>The words shown for a note: without a deadline marker, without the important mark and without the #Tag that has its own chip.</summary>
+    public string Text(DayNote note) => NoteLinks.Flatten(Shown(note));
+    /// <summary>The same words as they are written, with any links still in their <c>[words](address)</c> form and the important mark if it has one: what the form is given to edit.</summary>
     public string Words(DayNote note) => NoteShorthand.Display(note, Names);
+    /// <summary>The words as a row draws them: as written, but without the important mark, which a row shows as its star.</summary>
+    public string Shown(DayNote note) => IsMeeting(note) ? Words(note) : WithoutMark(Words(note));
+
+    // An important note starts with !!, which is how it is kept (the shared package has no field for it, and a note written with !! at the start is important the same way as
+    // one starred in a row). Meetings are plans, not tasks, so they are never important.
+    /// <summary>Whether some words (as typed in a form, or as stored) start with the important mark.</summary>
+    public static bool IsMarked(string text) => text.StartsWith("!!", StringComparison.Ordinal) && (text.Length == 2 || char.IsWhiteSpace(text[2]));
+    private static string WithoutMark(string text) => IsMarked(text) ? text[2..].TrimStart() : text;
+    /// <summary>The words with the important mark put at the start, or taken off: what a form's star does to the box.</summary>
+    public static string WithMark(string text, bool important) => important ? (IsMarked(text) ? text : ("!! " + text).TrimEnd()) : WithoutMark(text);
+    /// <summary>Whether a note is marked important.</summary>
+    public static bool IsImportant(DayNote note) => !IsMeeting(note) && IsMarked(note.Text);
+    /// <summary>Marks a note important or takes the mark off, keeping everything else.</summary>
+    public void SetImportant(long id, bool important)
+    {
+        if (Find(id) is not { } note || IsMeeting(note) || IsImportant(note) == important) return;
+        Change(id, n => n with { Text = WithMark(n.Text, important) }); Changed?.Invoke();
+    }
     /// <summary>The account a note is tagged with, or null.</summary>
     public string? AccountOf(DayNote note) => NoteShorthand.AccountOf(note.Text, Names);
     /// <summary>When a note's reminder is, or null for a note with none.</summary>
@@ -159,6 +181,7 @@ public sealed class NotesModel
         var today = now().Date;
         return view switch
         {
+            NoteView.Important => IsImportant(n) && !n.Done,
             NoteView.Today => n.HasDate && n.Day.Date == today,
             NoteView.Overdue => IsLate(n),
             NoteView.Upcoming => n.HasDate && n.Day.Date > today && !n.Done,
@@ -178,9 +201,9 @@ public sealed class NotesModel
         foreach (var day in open.Where(n => n.HasDate).Select(n => n.Day.Date).Distinct().OrderBy(d => d))
         {
             var label = NoteDates.Day(day, today) + (day == today || day == today.AddDays(1) ? " · " + day.ToString("d MMM", CultureInfo.GetCultureInfo("en-GB")) : "");
-            groups.Add(new(label, false, open.Where(n => n.HasDate && n.Day.Date == day).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList()));
+            groups.Add(new(label, false, open.Where(n => n.HasDate && n.Day.Date == day).OrderByDescending(IsImportant).ThenBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList()));
         }
-        var undated = open.Where(n => !n.HasDate).OrderBy(n => n.Id).ToList();
+        var undated = open.Where(n => !n.HasDate).OrderByDescending(IsImportant).ThenBy(n => n.Id).ToList();
         if (undated.Count > 0) groups.Add(new("No date", false, undated));
         var done = shown.Where(n => n.Done).OrderByDescending(n => n.Day).ThenByDescending(n => n.Id).ToList();
         if (done.Count > 0) groups.Add(new("Done", false, done));

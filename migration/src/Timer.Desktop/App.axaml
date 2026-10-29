@@ -148,8 +148,8 @@
     <Style Selector="TextBox.bareField, TextBox.bareField:pointerover, TextBox.bareField:focus"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <Style Selector="TextBox.bareField /template/ Border#PART_BorderElement, TextBox.bareField:pointerover /template/ Border#PART_BorderElement, TextBox.bareField:focus /template/ Border#PART_BorderElement"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /></Style>
     <!-- Planned meetings on the timeline: dashed cards (the frame is a dashed rectangle, since a border cannot be dashed), and the row they sit in. -->
-    <Style Selector="Rectangle.meetingFrame"><Setter Property="Stroke" Value="{DynamicResource MeetLine}" /><Setter Property="Fill" Value="{DynamicResource MeetBg}" /></Style>
-    <Style Selector="Rectangle.meetingFrame.over"><Setter Property="Fill" Value="{DynamicResource Selected}" /></Style>
+    <Style Selector="Border.meetingCard"><Setter Property="Background" Value="{DynamicResource MeetBg}" /></Style>
+    <Style Selector="Border.meetingCard.over"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
     <Style Selector="Border.meetingLane.over"><Setter Property="Background" Value="{DynamicResource MeetBg}" /></Style>
     <Style Selector="Border.plainChip"><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
     <Style Selector="Border.selectedRow"><Setter Property="Background" Value="{DynamicResource Surface}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>

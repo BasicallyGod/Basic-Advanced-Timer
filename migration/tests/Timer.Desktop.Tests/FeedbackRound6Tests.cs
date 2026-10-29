@@ -34,7 +34,7 @@ public sealed class FeedbackRound6Tests
         var model = Model(true); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var axis = Find<Border>(window, "TimelineAxis"); var meeting = Find<Grid>(window, "TimelineMeeting" + model.Notes.All.Single().Id); var block = Find<Border>(window, "TimelineEntry0");
+            var axis = Find<Border>(window, "TimelineAxis"); var meeting = Find<Border>(window, "TimelineMeeting" + model.Notes.All.Single().Id); var block = Find<Border>(window, "TimelineEntry0");
             Assert.True(Top(meeting) - Top(axis) >= 12); // Room between the hours and the meetings,
             Assert.True(Top(block) - (Top(meeting) + meeting.Height) >= 8); // and between the meetings and the blocks.
             Assert.Equal(Top(axis), Top(Find<Border>(window, "NowMarker"))); // The now line starts at the axis.

@@ -160,11 +160,11 @@ public sealed class NotesPage : Grid
 
     private Control Row(DayNote note)
     {
-        var isMeeting = NotesModel.IsMeeting(note); var words = Notes.Words(note); var plain = NoteLinks.Flatten(words); var acct = Notes.AccountOf(note);
-        var line = Ui.Grid("Auto,*,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
+        var isMeeting = NotesModel.IsMeeting(note); var plain = Notes.Text(note); var acct = Notes.AccountOf(note);
+        var line = Ui.Grid(isMeeting ? "Auto,*,Auto" : "Auto,*,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
         Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
         Ui.Put(line, lead);
-        var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, FontWeight = isMeeting ? FontWeight.SemiBold : FontWeight.Normal, Name = "PageNoteText_" + note.Id }; NoteLinks.Fill(text, words);
+        var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, FontWeight = isMeeting || NotesModel.IsImportant(note) ? FontWeight.SemiBold : FontWeight.Normal, Name = "PageNoteText_" + note.Id }; NoteLinks.Fill(text, Notes.Shown(note));
         if (note.Done) { text.TextDecorations = TextDecorations.Strikethrough; text.Classes.Add("muted"); }
         var chips = new WrapPanel { Orientation = Orientation.Horizontal };
         void Add(Control chip) { chip.Margin = new Thickness(0, 0, 6, 0); chips.Children.Add(chip); }
@@ -176,7 +176,12 @@ public sealed class NotesPage : Grid
         var main = Ui.Button("", () => Edit(note), "PageNoteOpen_" + note.Id); main.Classes.Add("pillBare"); main.Content = stack; main.Padding = new Thickness(0); main.HorizontalContentAlignment = HorizontalAlignment.Left; main.HorizontalAlignment = HorizontalAlignment.Stretch;
         Avalonia.Automation.AutomationProperties.SetName(main, (isMeeting ? "Edit meeting: " : "Edit note: ") + plain);
         Ui.Put(line, main, 1);
-        var remove = Ui.IconButton(IconKind.Close, isMeeting ? "Remove meeting" : "Remove note", "PageNoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, remove, 2);
+        if (!isMeeting)
+        {
+            var important = NotesModel.IsImportant(note);
+            var star = Ui.IconButton(important ? IconKind.StarFilled : IconKind.Star, important ? "Not important" : "Mark important", "PageNoteImportant_" + note.Id, () => Notes.SetImportant(note.Id, !important)); star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, star, 2);
+        }
+        var remove = Ui.IconButton(IconKind.Close, isMeeting ? "Remove meeting" : "Remove note", "PageNoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, remove, isMeeting ? 2 : 3);
         var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9), Name = "PageRow_" + note.Id }; card.Classes.Add("noteRow");
         if (editing == note.Id) card.Classes.Add("rowSelected"); // The row being changed has the accent edge.
         return card;
@@ -251,6 +256,12 @@ public sealed class NotesPage : Grid
         var whenText = when is { } w ? (meeting ? NoteDates.When(w, model.Engine.Now) : NoteDates.When(w, model.Engine.Now)) : meeting ? "Pick a time" : "Reminder";
         var whenButton = Ui.Button("", OpenWhen, "PageWhen"); whenButton.Classes.Add("ctl"); whenButton.Height = 36; whenButton.Padding = new Thickness(12, 0); whenButton.IsEnabled = !archived;
         whenButton.Content = Ui.Horizontal(new IconGlyph(meeting ? IconKind.Today : IconKind.Bell), new TextBlock { Text = whenText, FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center }); Add(whenButton);
+        if (!meeting)
+        {
+            // The star puts the important mark (!!) at the start of the words, or takes it off; typing !! does the same.
+            var marked = NotesModel.IsMarked(draft);
+            var star = Ui.Ctl("PageImportant", null, marked ? IconKind.StarFilled : IconKind.Star, marked ? "Not important" : "Mark important", () => { draft = NotesModel.WithMark(draft, !NotesModel.IsMarked(draft)); DrawForm(); }); star.Height = 36; star.Width = 36; star.IsEnabled = !archived; Add(star);
+        }
         if (meeting)
         {
             var length = new TextBox { Name = "PageLength", Text = lengthText, Width = 58, Height = 36, MinHeight = 36, TextAlignment = TextAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, IsEnabled = !archived };
