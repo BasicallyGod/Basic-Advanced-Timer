@@ -45,6 +45,9 @@ public sealed class PillWindow : Window
     public double Scale => pillScale.ScaleX;
     /// <summary>The window height at the size the pill is drawn on this screen.</summary>
     public double WindowHeightNow => (ShapeHeight + 2 * Ui.ShadowMargin) * Scale;
+    /// <summary>The card's own size as drawn (the window less the room round it), and its corner radius, for the dashboard to grow from.</summary>
+    public Size CardSizeNow => new(ShapeWidth * Scale, ShapeHeight * Scale);
+    public double CardRadiusNow => PillRadius * Scale;
     /// <summary>The window width at the size the pill is drawn on this screen.</summary>
     public double WindowWidthNow => (ShapeWidth + 2 * Ui.ShadowMargin) * Scale;
 

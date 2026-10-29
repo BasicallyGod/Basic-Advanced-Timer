@@ -33,23 +33,32 @@ public sealed class WindowCoordinator
         // A taskbar button by default, so the timer can be pinned and launched like any app. It can be switched off to run from the tray alone.
         ApplyTaskbar();
         model.PropertyChanged += (_, _) => ApplyTaskbar();
+        // The dashboard grows out of the pill's card (see WindowMorph) and shrinks back into a pill at the sidebar's top left.
         Pill.OpenDashboard = () =>
         {
             model.ShowToday();
-            PlaceByCard(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin, 1);
-            Dashboard.Show();
             Pill.CloseFlyouts(); // So it is a capsule again when you come back.
+            var picture = WindowMorph.Capture(Pill);
+            PlaceByCard(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin, 1, -WindowMorph.PillInset);
+            var (card, radius, at) = PillInDashboard();
+            Dashboard.GrowFrom(card, radius, picture, at);
             Pill.Hide();
             Dashboard.Activate();
         };
         Dashboard.Reveal = ShowDashboard;
         Dashboard.OpenPill = () =>
         {
+            if (Dashboard.Morphing) return;
             Dashboard.CloseFlyouts(); Pill.CloseFlyouts();
-            PlaceByCard(Pill, Dashboard, Pill.WindowWidthNow, Pill.WindowHeightNow, Pill.Scale);
+            PlaceByCard(Pill, Dashboard, Pill.WindowWidthNow, Pill.WindowHeightNow, Pill.Scale, WindowMorph.PillInset);
             Pill.WindowState = WindowState.Normal;
-            Pill.Show(); Dashboard.Hide(); BringToFront(Pill);
-            Avalonia.Threading.DispatcherTimer.RunOnce(KeepPillReachable, TimeSpan.FromMilliseconds(400));
+            var (card, radius, at) = PillInDashboard();
+            var picture = WindowMorph.Capture(Pill);
+            Dashboard.ShrinkTo(card, radius, picture, at, () =>
+            {
+                Pill.Show(); Dashboard.Hide(); BringToFront(Pill);
+                Avalonia.Threading.DispatcherTimer.RunOnce(KeepPillReachable, TimeSpan.FromMilliseconds(400));
+            });
         };
         Pill.Closed += (_, _) => exit();
         Dashboard.Closed += (_, _) => exit();
@@ -178,7 +187,19 @@ public sealed class WindowCoordinator
     /// </summary>
     /// <summary>How far, in device pixels, one window must sit from the other for their cards to line up: the room round a card shrinks with the pill's scale.</summary>
     public static int CardShift(double sourceScale, double targetScale, double screenScaling) => (int)Math.Round(Ui.ShadowMargin * (sourceScale - targetScale) * screenScaling);
-    private static void PlaceByCard(Window target, Window source, double width, double height, double targetScale)
+    /// <summary>
+    /// Where the pill's card is inside the dashboard's card (in device independent pixels, the dashboard's own coordinates), the pill's corner radius, and where the pill's
+    /// whole window sits there (for its picture). Both windows have been placed, so this is read from their positions.
+    /// </summary>
+    private (Rect Card, double Radius, Rect Window) PillInDashboard()
+    {
+        var scaling = Pill.Screens.ScreenFromWindow(Pill)?.Scaling ?? Dashboard.Screens.ScreenFromWindow(Dashboard)?.Scaling ?? 1.0;
+        var dashCard = new Point(Dashboard.Position.X + Ui.ShadowMargin * scaling, Dashboard.Position.Y + Ui.ShadowMargin * scaling);
+        var window = new Rect((Pill.Position.X - dashCard.X) / scaling, (Pill.Position.Y - dashCard.Y) / scaling, Pill.WindowWidthNow, Pill.WindowHeightNow);
+        var card = new Rect(window.X + Ui.ShadowMargin * Pill.Scale, window.Y + Ui.ShadowMargin * Pill.Scale, Pill.CardSizeNow.Width, Pill.CardSizeNow.Height);
+        return (card, Pill.CardRadiusNow, window);
+    }
+    private static void PlaceByCard(Window target, Window source, double width, double height, double targetScale, double insetDips = 0)
     {
         var screen = source.Screens.ScreenFromWindow(source) ?? target.Screens.ScreenFromWindow(target);
         if (screen is null) return;
@@ -187,7 +208,7 @@ public sealed class WindowCoordinator
         target.Width = Math.Min(width, area.Width / scale);
         target.Height = Math.Min(height, area.Height / scale);
         // The card sits one margin in from its window, and the margin shrinks with the pill's scale.
-        var shift = CardShift(sourceScale, targetScale, scale);
+        var shift = CardShift(sourceScale, targetScale, scale) + (int)Math.Round(insetDips * scale);
         target.Position = new PixelPoint(
             Math.Clamp(source.Position.X + shift, area.X, Math.Max(area.X, area.Right - (int)(target.Width * scale))),
             Math.Clamp(source.Position.Y + shift, area.Y, Math.Max(area.Y, area.Bottom - (int)(target.Height * scale))));
@@ -338,15 +359,12 @@ public sealed class DashboardWindow : Window
         // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
         layers.Children.Add(root); dashboardBody = root;
         layers.Children.Add(Dialogs); Dialogs.OpenChanged += UpdateBackdrop; // Last, so a dialog is above the setup too.
-        var surface = new Border { Name = "DashboardSurface", Child = layers, ClipToBounds = true };
+        surface = new Border { Name = "DashboardSurface", Child = layers, ClipToBounds = true };
         surface.Classes.Add("surface");
-        var host = Ui.Shadowed(surface, 20); Content = host;
-        (bool, Avalonia.Styling.ThemeVariant)? lastShadow = null;
-        void UpdateShadow()
-        {
-            var state = (model.Shadows, ActualThemeVariant);
-            if (lastShadow != state) { lastShadow = state; Ui.SetShadow(host, model.Shadows, null); }
-        }
+        // The picture of the pill that the dashboard grows from (and shrinks to) sits over everything inside the card; it only shows while the window is moving.
+        morphOverlay = new Avalonia.Controls.Image { Name = "MorphPill", Stretch = Avalonia.Media.Stretch.Fill, IsHitTestVisible = false, IsVisible = false, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+        layers.Children.Add(morphOverlay);
+        shadowHost = Ui.Shadowed(surface, 20); Content = shadowHost;
         model.PropertyChanged += (_, _) => UpdateShadow();
         ActualThemeVariantChanged += (_, _) => UpdateShadow();
         UpdateShadow();
@@ -402,6 +420,77 @@ public sealed class DashboardWindow : Window
         Refresh(true);
         UpdateOnboarding();
     }
+    // ---- the shadow, and the grow and shrink between the pill and the dashboard
+    private Border surface = null!, shadowHost = null!; private Avalonia.Controls.Image morphOverlay = null!;
+    private (bool, Avalonia.Styling.ThemeVariant)? lastShadow;
+    private void UpdateShadow()
+    {
+        var state = (model.Shadows, ActualThemeVariant);
+        if (lastShadow != state) { lastShadow = state; if (morph >= 1) Ui.SetShadow(shadowHost, model.Shadows, null); }
+    }
+    private double morph = 1, morphRadius = WindowMorph.DashboardRadius; private Rect morphFrom;
+    private Avalonia.Threading.DispatcherTimer? morphTimer;
+    /// <summary>How far the dashboard has grown from the pill, 0 (the pill's card) to 1 (the whole window).</summary>
+    public double MorphProgress => morph;
+    /// <summary>Whether the window is in the middle of growing or shrinking, when nothing in it can be pressed.</summary>
+    public bool Morphing => morph < 1;
+    /// <summary>How much of the dashboard shows, and whether it takes presses (for tests).</summary>
+    public double ContentOpacity => dashboardBody!.Opacity; public bool ContentTakesPresses => layers.IsHitTestVisible;
+    /// <summary>
+    /// Sets how far the dashboard has grown from the pill's card (<paramref name="from"/>, in the card's own coordinates), 0 to 1: the content is clipped to a rounded rectangle
+    /// between the two, the pill's picture fades out as the dashboard fades in, and at 1 everything is back to normal.
+    /// </summary>
+    public void SetMorph(double m)
+    {
+        morph = Math.Clamp(m, 0, 1);
+        var full = new Rect(0, 0, DashboardWidth, DashboardHeight);
+        if (morph >= 1)
+        {
+            surface.Clip = null; dashboardBody!.Opacity = 1; layers.IsHitTestVisible = true; morphOverlay.IsVisible = false;
+            lastShadow = null; UpdateShadow();
+            return;
+        }
+        surface.Clip = WindowMorph.RoundedRect(WindowMorph.Lerp(morphFrom, full, morph), morphRadius + (WindowMorph.DashboardRadius - morphRadius) * morph);
+        dashboardBody!.Opacity = WindowMorph.DashboardOpacity(morph);
+        morphOverlay.Opacity = WindowMorph.PillOpacity(morph); morphOverlay.IsVisible = morphOverlay.Source is not null && morphOverlay.Opacity > 0;
+        layers.IsHitTestVisible = false; shadowHost.BoxShadow = default; // The card's shadow comes back when it has all grown.
+    }
+    private void StartMorph(double from, double to, bool closing, Action? done)
+    {
+        morphTimer?.Stop(); morphTimer = null;
+        if (!WindowMorph.Enabled || Motion.Reduced) { SetMorph(to); done?.Invoke(); return; }
+        SetMorph(from);
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        morphTimer = new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(16), Avalonia.Threading.DispatcherPriority.Render, (_, _) =>
+        {
+            var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            var length = closing ? WindowMorph.CloseMilliseconds : WindowMorph.OpenMilliseconds;
+            var e = WindowMorph.Ease(elapsed, closing);
+            // Opening runs m from 0 up to 1; closing runs it back from 1 down to 0 along the same ease.
+            SetMorph(closing ? 1 - e : e);
+            if (elapsed >= length) { morphTimer?.Stop(); morphTimer = null; SetMorph(to); done?.Invoke(); }
+        });
+        morphTimer.Start();
+    }
+    private void SetPillPicture(Avalonia.Media.Imaging.Bitmap? picture, Rect where)
+    {
+        morphOverlay.Source = picture; morphOverlay.Margin = new Thickness(where.X, where.Y, 0, 0); morphOverlay.Width = where.Width; morphOverlay.Height = where.Height;
+    }
+    /// <summary>Shows the window grown from the pill's card: it starts as the pill and eases out to the whole dashboard.</summary>
+    /// <param name="card">The pill's card in this window's card coordinates.</param><param name="radius">The pill's corner radius.</param>
+    /// <param name="picture">A picture of the pill window, drawn at <paramref name="pictureAt"/> (its window's top left and size in the same coordinates).</param>
+    public void GrowFrom(Rect card, double radius, Avalonia.Media.Imaging.Bitmap? picture, Rect pictureAt)
+    {
+        morphFrom = card; morphRadius = radius; SetPillPicture(picture, pictureAt); SetMorph(0);
+        Show(); StartMorph(0, 1, false, null);
+    }
+    /// <summary>Shrinks the window back to the pill's card and then calls <paramref name="done"/>, when the real pill takes over and this window is hidden.</summary>
+    public void ShrinkTo(Rect card, double radius, Avalonia.Media.Imaging.Bitmap? picture, Rect pictureAt, Action done)
+    {
+        morphFrom = card; morphRadius = radius; SetPillPicture(picture, pictureAt);
+        StartMorph(1, 0, true, () => { done(); SetMorph(1); });
+    }
+
     // ---- the Finish day question
     private void BuildFinishPopup(Panel host)
     {

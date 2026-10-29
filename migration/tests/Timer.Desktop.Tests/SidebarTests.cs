@@ -96,4 +96,63 @@ public sealed class SidebarTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheMorphEasesOutQuicklyOpeningAndEndsExactlyAndThePillFadesBeforeTheDashboardIsFullyIn()
+    {
+        Assert.Equal(0, WindowMorph.Ease(0, false), 3); Assert.Equal(1, WindowMorph.Ease(WindowMorph.OpenMilliseconds, false), 3); Assert.Equal(1, WindowMorph.Ease(WindowMorph.CloseMilliseconds, true), 3);
+        Assert.True(WindowMorph.Ease(100, false) > .6); // Most of the growth lands in the first 100 ms.
+        for (var t = 0; t < WindowMorph.OpenMilliseconds; t += 20) Assert.True(WindowMorph.Ease(t + 20, false) >= WindowMorph.Ease(t, false) - 1e-9); // Never goes back, never overshoots.
+        Assert.All(new[] { 0, 50, 100, 200, 340 }, t => Assert.InRange(WindowMorph.Ease(t, false), 0, 1));
+        Assert.Equal(1, WindowMorph.PillOpacity(0)); Assert.Equal(0, WindowMorph.PillOpacity(.4)); Assert.Equal(0, WindowMorph.DashboardOpacity(.18)); Assert.Equal(1, WindowMorph.DashboardOpacity(.6));
+        var rect = WindowMorph.Lerp(new Rect(12, 12, 72, 316), new Rect(0, 0, 1272, 720), .5); Assert.Equal(new Rect(6, 6, 672, 518), rect);
+        Assert.Equal(new Rect(12, 12, 72, 316), WindowMorph.RoundedRect(new Rect(12, 12, 72, 316), 36).Bounds);
+    }
+
+    [AvaloniaFact]
+    public void TheDashboardIsClippedToTheGrowingCardWhileItMovesAndIsPlainAgainAtTheEnd()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var surface = Find<Border>(window, "DashboardSurface"); var pill = new Rect(12, 12, 72, 316);
+            Assert.Equal(1, window.MorphProgress); Assert.Null(surface.Clip); Assert.False(window.Morphing);
+            window.GrowFrom(pill, 34, null, new Rect(-18, -18, 108, 352)); // Not animated in the tests, so it arrives at once.
+            Assert.Equal(1, window.MorphProgress); Assert.Null(surface.Clip);
+            window.SetMorph(0); Settle(window);
+            Assert.True(window.Morphing); Assert.Equal(pill, surface.Clip!.Bounds); Assert.Equal(0, window.ContentOpacity, 3); // The pill's size, and the dashboard is not showing.
+            window.SetMorph(.5); Settle(window);
+            var half = surface.Clip!.Bounds; Assert.True(half.Width > 72 && half.Width < DashboardWindow.DashboardWidth && half.Height > 316 && half.Height < DashboardWindow.DashboardHeight);
+            window.SetMorph(1); Settle(window); Assert.Null(surface.Clip); Assert.False(window.Morphing);
+            // Nothing in the window can be pressed while it moves.
+            window.SetMorph(.4); Assert.False(window.ContentTakesPresses); window.SetMorph(1); Assert.True(window.ContentTakesPresses); Assert.Equal(1, window.ContentOpacity, 3);
+        }
+        finally { window.Close(); }
+    }
+
+    // Pictures for looking at the move: TIMER_PREVIEW_DIR names the folder.
+    [AvaloniaFact]
+    public void WriteTransitionPictures()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme); model.ToggleAccount("Account one");
+            var pill = new PillWindow(model); pill.Show(); Settle(pill);
+            var picture = WindowMorph.Capture(pill); Assert.NotNull(picture);
+            var window = new DashboardWindow(model); window.Show(); Settle(window);
+            try
+            {
+                var card = new Rect(12, 12, pill.CardSizeNow.Width, pill.CardSizeNow.Height); var at = new Rect(12 - Ui.ShadowMargin * pill.Scale, 12 - Ui.ShadowMargin * pill.Scale, pill.WindowWidthNow, pill.WindowHeightNow);
+                window.GrowFrom(card, pill.CardRadiusNow, picture, at);
+                foreach (var (m, label) in new[] { (0.0, "0"), (.15, "15"), (.3, "30"), (.5, "50"), (.8, "80") })
+                {
+                    window.SetMorph(m); Settle(window); using var frame = window.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, $"morph-{theme}-{label}.png"));
+                }
+                window.SetMorph(1);
+            }
+            finally { window.Close(); pill.Close(); }
+        }
+    }
 }
