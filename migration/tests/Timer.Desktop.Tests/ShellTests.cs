@@ -78,6 +78,7 @@ public sealed class ShellTests
             {
                 Open(); var row = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account" + i);
                 var point = row.TranslatePoint(new Point(row.Bounds.Width - 8, row.Bounds.Height / 2), window)!.Value;
+                window.MouseMove(point); // The pointer arrives over the row before it presses, as a real one does.
                 window.MouseDown(point, MouseButton.Left);
                 window.MouseUp(point, MouseButton.Left);
                 Assert.True(model.Accounts[i].Name == model.ActiveAccount,

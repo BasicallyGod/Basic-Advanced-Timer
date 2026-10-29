@@ -106,7 +106,10 @@ public static class ReviewViews
     {
         var day = model.SelectedDate;
         var pixelsPerHour = model.TimelinePixelsPerHour;
-        var planned = model.Notes.MeetingsOn(day); var bandTop = planned.Count > 0 ? BandTopWithMeetings : BandTopFree; var bandHeight = BandBottom - bandTop;
+        var planned = model.Notes.MeetingsOn(day);
+        // A day with a timed note has its pins hung under the ruler, so the meeting row and the blocks sit a little lower to make room, and the blocks are that much shorter.
+        var pinned = model.Notes.PinnedOn(day); var pinRoom = pinned.Count > 0 ? TimelineGuide.PinRoom : 0; var meetingTop = MeetingTop + pinRoom;
+        var bandTop = (planned.Count > 0 ? BandTopWithMeetings : BandTopFree) + pinRoom; var bandHeight = BandBottom - bandTop;
         double X(DateTime time) => TimelineGutter + (time - day).TotalHours * pixelsPerHour;
         // A little room before the first hour and after the last lets the end labels sit fully in view.
         var canvas = new Canvas { Name = "TimelineCanvas", Width = 24 * pixelsPerHour + 2 * TimelineGutter, Height = TimelineHeight, Background = Brushes.Transparent };
@@ -297,7 +300,7 @@ public static class ReviewViews
                     model.Notes.RequestNewMeeting(day.AddHours((e.GetPosition(canvas).X - TimelineGutter) / pixelsPerHour));
                 pressed = null; e.Handled = true;
             };
-            Canvas.SetLeft(lane, TimelineGutter); Canvas.SetTop(lane, MeetingTop); canvas.Children.Add(lane);
+            Canvas.SetLeft(lane, TimelineGutter); Canvas.SetTop(lane, meetingTop); canvas.Children.Add(lane);
             // With no meetings the row is under the blocks, which take its height; a free place in it still starts a meeting.
             if (planned.Count == 0) lane.ZIndex = -1;
             var places = PlaceLanes(planned.Select(m => (m, day + m.At!.Value, day + m.End!.Value)));
@@ -325,7 +328,7 @@ public static class ReviewViews
                 card.PointerEntered += (_, _) => { frame.Classes.Add("over"); title.Hover(true); }; card.PointerExited += (_, _) => { frame.Classes.Remove("over"); title.Hover(false); };
                 // A press drags it (the middle moves it, an edge resizes it); a click that goes nowhere opens it for editing.
                 MeetingGestures.Attach(card, canvas, model, meeting, pixelsPerHour, span);
-                Canvas.SetLeft(card, X(day + meeting.At.Value) + 1); Canvas.SetTop(card, MeetingTop + row * (height + LaneGap)); canvas.Children.Add(card);
+                Canvas.SetLeft(card, X(day + meeting.At.Value) + 1); Canvas.SetTop(card, meetingTop + row * (height + LaneGap)); canvas.Children.Add(card);
             }
         }
         // For today, a line down through the band at the current time, a dot at the top and a chip under it saying what it is. It moves on every half minute while on screen.
@@ -348,6 +351,7 @@ public static class ReviewViews
             canvas.AttachedToVisualTree += (_, _) => { nowTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) }; nowTimer.Tick += (_, _) => PlaceNow(); nowTimer.Start(); };
             canvas.DetachedFromVisualTree += (_, _) => { nowTimer?.Stop(); nowTimer = null; };
         }
+        TimelineGuide.Attach(canvas, model, day, pixelsPerHour, TimelineGutter, AxisY, BandBottom, pinned);
         DateTime clicked = day.AddHours(9);
         DateTime At(double x) => day.AddMinutes(Math.Clamp(Math.Floor((x - TimelineGutter) / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);
