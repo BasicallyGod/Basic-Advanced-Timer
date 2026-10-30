@@ -30,8 +30,10 @@ public sealed class Round21Tests
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var canvas = Find<Canvas>(window, "TimelineCanvas");
-            var at = canvas.TranslatePoint(new Point(400, 100), window)!.Value;
+            var canvas = Find<Canvas>(window, "TimelineCanvas"); var scroll = Find<ScrollViewer>(window, "TimelineScroll");
+            var x = ReviewViews.TimelineGutter + 10 * model.TimelinePixelsPerHour; // Ten o'clock, scrolled into view.
+            scroll.Offset = new Vector(Math.Max(0, x - scroll.Viewport.Width / 2), 0); Settle(window);
+            var at = canvas.TranslatePoint(new Point(x, 100), window)!.Value;
             HeadlessWindowExtensions.MouseMove(window, at); Settle(window);
             Assert.True(Find<Avalonia.Controls.Shapes.Line>(window, "TimelineGuideLine").IsVisible);
             model.SetNotesCardShowsMeetings(true); Settle(window); // What a click in the meeting row does: the page is drawn again.

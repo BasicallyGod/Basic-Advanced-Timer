@@ -81,7 +81,7 @@ public sealed class PreviewCaptureTests
                 void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"r20-{theme}-{name}.png")); }
                 void Press(string name) { window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
                 var due = model.Engine.Now.Date.AddHours(14);
-                model.Notes.AddNote("Follow up on the new brief", "Account two", due); model.Notes.AddNote("Follow up on the new brief", "Account two", due); Dispatcher.UIThread.RunJobs();
+                model.Notes.AddNote("Follow up on the new brief", "Account two", due); model.Notes.AddNote("!! What if we put a really long reminder in here that ends up breaking the limit on characters", "Account four", due); Dispatcher.UIThread.RunJobs();
                 Press("TimelineTab"); Shot("timeline");
                 var pin = window.GetVisualDescendants().OfType<Border>().First(b => b.Name?.StartsWith("TimelinePinMark_") == true);
                 var at = pin.TranslatePoint(new Point(pin.Bounds.Width / 2, pin.Bounds.Height / 2), window)!.Value;
