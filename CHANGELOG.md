@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Finish day: time logged after the flag still counts | [2e27032](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/2e27032327cb8cd1d61158821c7b55b474800eb5) | A day finished early no longer drops time added or pasted after the flag: it counts as working time, Unallocated is worked out from it, and the gap between the flag and the late block counts for nothing. The timeline marks the press with a white flag on a red badge hung from the ruler; the guide snaps to it and says the time. |
 | Settings: a Sunset theme, Light by day and Dark by night | [63a4ac8](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/63a4ac8e2c7205d808a209174121fe807a372ee5) | A fourth tile in Appearance. The theme follows the sunrise and sunset of a city from a bundled list (guessed from the computer's time zone until one is chosen) or two times typed in, which also cover a day with no sunrise or sunset. Nothing needs the network or a location service. |
 
 ## 29 October 2026

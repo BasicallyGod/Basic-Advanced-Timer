@@ -253,7 +253,30 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// The time worked on a day: the engine counts what falls inside the scheduled hours and what runs past them apart, but the app has no overtime, so a day's
     /// working time is the two together (breaks, lunch and away left out, as always).
     /// </summary>
-    public TimeSpan WorkingOn(DateTime day) { var totals = Engine.Totals(day); return totals.Working + totals.Overtime; }
+    public TimeSpan WorkingOn(DateTime day) { var totals = Engine.Totals(day); return totals.Working + totals.Overtime + LoggedAfterFinishOn(day); }
+    /// <summary>
+    /// Time on accounts that was logged inside a stretch the day was finished for (Finish day pressed, and the day not started again yet), such as a block added
+    /// afterwards. The engine leaves that stretch out of the day's clock, but a day finished early is not a reason to drop time worked: it is working time like any other,
+    /// the flag stays where it was pressed and the quiet time between the flag and the late block counts for nothing.
+    /// </summary>
+    public TimeSpan LoggedAfterFinishOn(DateTime day)
+    {
+        day = day.Date; var end = day.AddDays(1); var total = TimeSpan.Zero;
+        foreach (var away in Engine.Away)
+        {
+            var from = away.Start > day ? away.Start : day; var until = (away.End ?? end) < end ? (away.End ?? end) : end;
+            if (until <= from) continue;
+            foreach (var session in Engine.Sessions)
+            {
+                if (session.Day != day || BreakAccount.Is(session.Account) || session.Duration <= TimeSpan.Zero) continue;
+                var a = session.From > from ? session.From : from; var b = session.To < until ? session.To : until;
+                if (b > a) total += b - a;
+            }
+        }
+        return total;
+    }
+    /// <summary>Working time with nothing recorded on an account on a day: the working time less what is on accounts, never below nothing.</summary>
+    public TimeSpan UnallocatedOn(DateTime day) { var left = WorkingOn(day) - Engine.Totals(day).Allocated; return left < TimeSpan.Zero ? TimeSpan.Zero : left; }
     public bool DayStarted => Engine.DayRunning;
     public bool DecimalHours => preferences.DecimalHours;
     public DateTime SelectedDate { get; private set; }
@@ -271,7 +294,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public TimeSpan Elapsed => Engine.Totals(Engine.Now).Elapsed;
     public string ClockText => $"{(int)Elapsed.TotalHours:00}:{Elapsed.Minutes:00}:{Elapsed.Seconds:00}";
     public TimeSpan Allocated => Engine.Totals(Engine.Now).Allocated;
-    public TimeSpan Unallocated => Engine.Totals(Engine.Now).Unallocated;
+    public TimeSpan Unallocated => UnallocatedOn(Engine.Now);
     /// <summary>The time on breaks on a day, kept apart from working time, including a break that is running now.</summary>
     public TimeSpan BreakTimeOn(DateTime day)
     {
