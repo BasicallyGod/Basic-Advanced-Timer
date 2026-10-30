@@ -53,11 +53,46 @@ public sealed class SelectedBlockCard : Border
     public void Sync()
     {
         var blocks = model.SelectedBlocks;
-        var signature = Signature(blocks);
+        // The blocks that overlap the selected one (three or more deep), which the card lists so any of them is a press away, folded into the timeline's +N chip or not.
+        var overlaps = blocks.Count == 1 ? ReviewViews.OverlapsOfSelection(model) : Array.Empty<ReviewViews.OverlapItem>();
+        var signature = Signature(blocks) + "#" + string.Join("|", overlaps.Select(o => $"{o.Account};{o.Duration.Ticks};{o.Selected};{o.Folded};{o.Sources.Count}"));
         if (signature == shown) return;
-        if (Refresh(blocks)) { shown = signature; return; }
-        shown = signature; current = null;
+        if (Refresh(blocks)) { shown = signature; ShowOverlaps(overlaps); return; }
+        shown = signature; current = null; overlapHost = null;
         Child = blocks.Count == 0 ? Empty() : blocks.Count == 1 ? Single(blocks[0]) : Several(blocks);
+        ShowOverlaps(overlaps);
+    }
+
+    // The row of overlapping blocks, which sits first in a single block's card. It is filled in place, so a box being typed in is not rebuilt under the cursor.
+    private StackPanel? overlapHost;
+    private void ShowOverlaps(IReadOnlyList<ReviewViews.OverlapItem> items)
+    {
+        if (overlapHost is null) return;
+        overlapHost.Children.Clear(); overlapHost.IsVisible = items.Count > 0;
+        if (items.Count == 0) return;
+        var folded = items.Count(i => i.Folded);
+        var heading = Ui.Grid("*,Auto"); heading.Children.Add(new TextBlock { Text = items.Count + " overlapping blocks", FontSize = 11.5, Classes = { "muted" } });
+        if (folded > 0) { var note = new TextBlock { Text = $"Dashed: folded into +{folded}", FontSize = 11.5, Classes = { "muted" } }; Ui.Put(heading, note, 1); }
+        overlapHost.Children.Add(heading);
+        var row = new WrapPanel { Orientation = Orientation.Horizontal, Name = "OverlapRow" };
+        var ink = model.CurrentTheme.Colour("Ink"); var muted = Color.Parse(model.CurrentTheme.Colour("Muted"));
+        var index = 0;
+        foreach (var item in items)
+        {
+            var content = new Grid();
+            // A block folded into the chip has a dashed edge, so the row says which ones the timeline is not drawing a lane for.
+            if (item.Folded) content.Children.Add(new Avalonia.Controls.Shapes.Rectangle { RadiusX = 9, RadiusY = 9, StrokeThickness = 1, Stroke = new SolidColorBrush(muted), StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 3, 2 },
+                Margin = new Thickness(-6, 0, -10, 0), IsHitTestVisible = false });
+            var line = Ui.Horizontal(ReviewViews.InitialsChip(model.Label(item.Account), ink), new TextBlock { Text = model.Format(item.Duration), FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center }); line.Spacing = 7;
+            content.Children.Add(line);
+            var button = new Button { Name = "Overlap_" + index++, Content = content, Margin = new Thickness(0, 6, 6, 0) };
+            button.Classes.Add("overlapSeg"); button.Classes.Set("on", item.Selected);
+            Avalonia.Automation.AutomationProperties.SetName(button, $"{model.Label(item.Account)}, {model.Format(item.Duration)}" + (item.Folded ? ", folded" : ""));
+            ToolTip.SetTip(button, model.Label(item.Account));
+            var sources = item.Sources; button.Click += (_, _) => model.SelectBlock(sources, false);
+            row.Children.Add(button);
+        }
+        overlapHost.Children.Add(row);
     }
 
     private static TextBlock Label(string text)
@@ -118,6 +153,7 @@ public sealed class SelectedBlockCard : Border
         actions.Children.Add(Ui.Ctl("DeleteSelected", "Delete", IconKind.Trash, "Delete", () => model.DeleteSelection(), small: true, key: "Del"));
         var day = block.Start.Date;
         var body = new StackPanel { Spacing = 12 };
+        overlapHost = new StackPanel { Name = "OverlapHost", IsVisible = false }; body.Children.Add(overlapHost);
         var fields = Ui.Grid("1.7*,*,*,*"); fields.ColumnSpacing = 10;
         // Account: one of the accounts, shown with its colour. A merged block's account and times are read-only.
         var names = model.ReviewAccounts.Select(a => a.Name).Append(block.Account).Distinct(StringComparer.OrdinalIgnoreCase).Select(BreakAccount.Display).ToList();

@@ -86,28 +86,75 @@ public sealed class Round24Tests
         window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Assert.Equal(4, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name == "BlockInitials"));
-            Assert.Empty(window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name == "BlockDuration")); // Initials alone with four.
+            // Four deep: three lanes keep their blocks and the fourth folds into a +1 chip.
+            Assert.Equal(3, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name == "BlockInitials"));
+            Assert.Equal(3, window.GetVisualDescendants().OfType<Border>().Count(b => b.Name is { } n && n.StartsWith("TimelineEntry")));
+            Assert.Contains("+1", window.GetVisualDescendants().OfType<Button>().Single(b => b.Name?.StartsWith("TimelineBlocksMore") == true).GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+        }
+        finally { window.Close(); }
+    }
+
+    private static TimerModel FiveDeep()
+    {
+        var model = Model();
+        model.Engine.AddSession("Account one", At(9), At(10)); model.Engine.AddSession("Account two", At(9.1), At(10.1)); model.Engine.AddSession("Internal", At(9.2), At(10.2));
+        model.Engine.AddSession("Account one", At(9.3), At(10.3)); model.Engine.AddSession("Account two", At(9.4), At(10.4));
+        return model;
+    }
+    private static Button Chip(Window w) => w.GetVisualDescendants().OfType<Button>().Single(b => b.Name?.StartsWith("TimelineBlocksMore") == true);
+
+    [AvaloniaFact]
+    public void FiveDeepKeepsThreeLanesAndAPlusTwoThatListsTheRestAndChoosingOneSelectsIt()
+    {
+        var model = FiveDeep();
+        model.Notes.AddMeeting(Day, TimeSpan.FromHours(14), TimeSpan.FromHours(15), "Review", null, RepeatChoice.None); // A day with meetings has the shorter band.
+        var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            Assert.Equal(3, window.GetVisualDescendants().OfType<Border>().Count(b => b.Name is { } n && n.StartsWith("TimelineEntry")));
+            var chip = Chip(window); Assert.Contains("+2", chip.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)); Assert.StartsWith("2 more blocks", ToolTip.GetTip(chip)?.ToString());
+            Assert.All(window.GetVisualDescendants().OfType<Border>().Where(b => b.Name is { } n && n.StartsWith("TimelineEntry")), b => Assert.True(b.Bounds.Height >= 15)); // No lane too short for its words.
+            chip.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            var popup = window.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Popup>().Single(p => p.Name == "TimelineBlocksMorePopup"); Assert.True(popup.IsOpen);
+            var rows = popup.Child!.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.StartsWith("MoreBlock") == true).ToList(); Assert.Equal(2, rows.Count);
+            // Choosing a row selects the block, lights the chip and keeps a solid outline on its time.
+            rows[0].RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            Assert.Equal(1, model.SelectedBlockCount); Assert.False(popup.IsOpen);
+            Assert.Contains("sel", Chip(window).Classes); Assert.Single(window.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>(), r => r.Name == "TimelineFoldedSelected");
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void WithAMeetingRowTheBandIsShortSoFourLanesKeepInitialsAndFiveOrMoreShowOnlyColour()
+    public void TheCardListsTheOverlappingBlocksWithTheFoldedOnesMarkedAndAPressSwitchesTheSelection()
     {
-        var model = Model();
-        model.Notes.AddMeeting(Day, TimeSpan.FromHours(14), TimeSpan.FromHours(15), "Review", null, RepeatChoice.None); // A day with meetings has the shorter band, and one with a pin shorter still (the picture test draws that).
-        for (var i = 0; i < 4; i++) model.Engine.AddSession(i % 2 == 0 ? "Account one" : "Account two", At(9 + i * 0.1), At(10 + i * 0.1));
-        var window = new DashboardWindow(model); window.Show(); Settle(window);
-        try { Assert.Equal(4, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name == "BlockInitials")); } finally { window.Close(); }
-        model.Engine.AddSession("Internal", At(9.5), At(10.5));
-        window = new DashboardWindow(model); window.Show(); Settle(window);
+        var model = FiveDeep(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            // Five lanes of about 11 pixels: no words that would be cut off, and the colour and tooltip remain.
-            Assert.Empty(window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name is "BlockInitials" or "BlockDuration"));
-            Assert.Equal(5, window.GetVisualDescendants().OfType<Border>().Count(b => b.Name is { } n && n.StartsWith("TimelineEntry")));
+            var first = model.Engine.Sessions[0]; model.SelectBlock(new[] { first }, false); Settle(window);
+            var row = window.GetVisualDescendants().OfType<WrapPanel>().Single(p => p.Name == "OverlapRow"); var buttons = row.Children.OfType<Button>().ToList();
+            Assert.Equal(5, buttons.Count); Assert.Contains("on", buttons[0].Classes);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "5 overlapping blocks"); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Dashed: folded into +2");
+            Assert.Contains("folded", Avalonia.Automation.AutomationProperties.GetName(buttons[4])); Assert.DoesNotContain("folded", Avalonia.Automation.AutomationProperties.GetName(buttons[0]));
+            buttons[4].RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            Assert.Equal(model.Engine.Sessions[4].From, model.SelectedBlocks.Single().Start);
+            Assert.Contains("on", window.GetVisualDescendants().OfType<WrapPanel>().Single(p => p.Name == "OverlapRow").Children.OfType<Button>().ToList()[4].Classes); // The row follows.
         }
+        finally { window.Close(); }
+        // Two overlapping blocks: no row.
+        var plain = Model(); plain.Engine.AddSession("Account one", At(9), At(10)); plain.Engine.AddSession("Account two", At(9.5), At(10.5)); plain.SelectBlock(new[] { plain.Engine.Sessions[0] }, false);
+        var other = new DashboardWindow(plain); other.Show(); Settle(other);
+        try { Assert.Empty(other.GetVisualDescendants().OfType<WrapPanel>().Where(p => p.Name == "OverlapRow")); } finally { other.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheBlockRecordingNowIsNeverFoldedAway()
+    {
+        var model = Model();
+        for (var i = 0; i < 4; i++) model.Engine.AddSession(i % 2 == 0 ? "Account one" : "Account two", At(19.5 + i * 0.01), At(20.6));
+        model.ToggleAccount("Internal"); // Recording from 20:00, over four others: it would be the fifth lane.
+        var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try { Assert.Single(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "TimelineRecording"); }
         finally { window.Close(); }
     }
 
@@ -131,15 +178,24 @@ public sealed class Round24Tests
             }
             finally { window.Close(); }
         }
-        // The lanes four deep and five deep, drawn from the start (the demo's three plus one or two more over the same minutes).
-        foreach (var extra in new[] { 1, 2 })
+        // Five deep (the demo's three plus two more over the same minutes): the +2 chip, its list, and a folded block chosen from it with the card's row of overlapping blocks.
         {
             var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 14, 14, 15, 0)); model.SetTheme("Dark"); model.CompleteSetup();
             model.Engine.AddSession("Account four", new DateTime(2026, 10, 14, 11, 27, 0), new DateTime(2026, 10, 14, 11, 52, 0));
-            if (extra == 2) model.Engine.AddSession("Account six", new DateTime(2026, 10, 14, 11, 30, 0), new DateTime(2026, 10, 14, 11, 45, 0));
+            model.Engine.AddSession("Account six", new DateTime(2026, 10, 14, 11, 29, 0), new DateTime(2026, 10, 14, 11, 44, 0));
             model.ZoomTimeline(6, 0, 0); model.TimelineOffset = 34 + 10.4 * model.TimelinePixelsPerHour;
             var window = new DashboardWindow(model); window.Show(); Settle(window);
-            try { using var shot = window.CaptureRenderedFrame(); shot?.Save(Path.Combine(folder, $"busy-Dark-{3 + extra}-deep.png")); } finally { window.Close(); }
+            try
+            {
+                using (var shot = window.CaptureRenderedFrame()) shot?.Save(Path.Combine(folder, "busy-Dark-5-deep.png"));
+                var chip = window.GetVisualDescendants().OfType<Button>().First(b => b.Name?.StartsWith("TimelineBlocksMore") == true);
+                chip.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+                using (var shot = window.CaptureRenderedFrame()) shot?.Save(Path.Combine(folder, "busy-Dark-5-deep-list.png"));
+                var row = window.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Popup>().First(p => p.Name == "TimelineBlocksMorePopup").Child!.GetVisualDescendants().OfType<Button>().First(b => b.Name?.StartsWith("MoreBlock") == true);
+                row.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+                using (var shot = window.CaptureRenderedFrame()) shot?.Save(Path.Combine(folder, "busy-Dark-5-deep-picked.png"));
+            }
+            finally { window.Close(); }
         }
     }
 }
