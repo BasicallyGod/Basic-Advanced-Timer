@@ -15,7 +15,6 @@ public sealed class TrayController : IDisposable
     private readonly NativeMenuItem show = new() { Header = "Show timer" };
     private readonly NativeMenuItem dashboard = new() { Header = "Dashboard" };
     private readonly NativeMenuItem pause = new();
-    private readonly NativeMenuItem day = new();
     private readonly NativeMenuItem reset = new() { Header = "Reset position" };
     private readonly NativeMenuItem close = new() { Header = "Close timer" };
     private readonly Dictionary<(bool, bool, bool), WindowIcon> icons = new();
@@ -27,11 +26,10 @@ public sealed class TrayController : IDisposable
         show.Click += (_, _) => windows.ShowTimer();
         dashboard.Click += (_, _) => windows.ShowDashboard();
         pause.Click += (_, _) => model.TogglePause();
-        day.Click += (_, _) => model.ToggleDay();
         reset.Click += (_, _) => windows.ResetPosition();
         close.Click += (_, _) => windows.Quit();
         var menu = new NativeMenu();
-        foreach (var item in new NativeMenuItemBase[] { show, dashboard, new NativeMenuItemSeparator(), pause, day, new NativeMenuItemSeparator(), reset, close })
+        foreach (var item in new NativeMenuItemBase[] { show, dashboard, new NativeMenuItemSeparator(), pause, new NativeMenuItemSeparator(), reset, close })
             menu.Items.Add(item);
         menu.Opening += (_, _) => RefreshMenu();
         icon = new TrayIcon { Menu = menu, IsVisible = true };
@@ -45,19 +43,17 @@ public sealed class TrayController : IDisposable
     public static string Tooltip(TimerModel model)
     {
         // Windows shows at most 127 characters, so keep it short.
-        var text = !model.DayStarted && !model.IsTracking ? model.Status
+        var text = model.Elapsed == TimeSpan.Zero && !model.IsTracking ? model.Status
             : (model.ActiveAccount is { } name ? (BreakAccount.Is(name) ? "On break" : "Tracking " + name) : model.Status) + ", day " + model.Format(model.Elapsed);
         return "Basic’s Advanced Timer\n" + text;
     }
     public static string PauseLabel(TimerModel model) => model.IsOnBreak ? (model.ResumeAccount is { } back ? "End break and resume " + back : "End break")
         : model.IsTracking ? "Pause tracking"
         : model.SelectedAccount is { } name && model.Accounts.Any(a => a.Name == name) ? "Resume " + name : "Start tracking";
-    public static string DayLabel(TimerModel model) => model.DayStarted ? "Finish day" : "Start day";
     public void RefreshMenu()
     {
         pause.Header = PauseLabel(model);
         pause.IsEnabled = model.IsTracking || model.SelectedAccount is not null;
-        day.Header = DayLabel(model);
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { RefreshMenu(); Refresh(); }
     private void Refresh()

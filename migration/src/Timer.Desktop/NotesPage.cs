@@ -143,7 +143,7 @@ public sealed class NotesPage : Grid
         var line = Ui.Grid(isMeeting ? "Auto,*,Auto" : "Auto,*,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
         Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
         Ui.Put(line, lead);
-        var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, FontWeight = isMeeting || NotesModel.IsImportant(note) ? FontWeight.SemiBold : FontWeight.Normal, Name = "PageNoteText_" + note.Id }; NoteLinks.Fill(text, Notes.Shown(note));
+        var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, FontWeight = isMeeting ? FontWeight.SemiBold : FontWeight.Normal, Name = "PageNoteText_" + note.Id }; NoteLinks.Fill(text, Notes.Shown(note));
         if (note.Done) { text.TextDecorations = TextDecorations.Strikethrough; text.Classes.Add("muted"); }
         var chips = new WrapPanel { Orientation = Orientation.Horizontal };
         void Add(Control chip) { chip.Margin = new Thickness(0, 0, 6, 0); chips.Children.Add(chip); }
@@ -159,9 +159,10 @@ public sealed class NotesPage : Grid
         {
             var important = NotesModel.IsImportant(note);
             var star = Ui.IconButton(important ? IconKind.StarFilled : IconKind.Star, important ? "Not important" : "Mark important", "PageNoteImportant_" + note.Id, () => Notes.SetImportant(note.Id, !important)); star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, star, 2);
+            if (important && star.Content is IconGlyph solid) solid.TintKey = "Accent";
         }
         var remove = Ui.IconButton(IconKind.Close, isMeeting ? "Remove meeting" : "Remove note", "PageNoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, remove, isMeeting ? 2 : 3);
-        var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9), Name = "PageRow_" + note.Id }; card.Classes.Add("noteRow");
+        var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9), Name = "PageRow_" + note.Id }; card.Classes.Add("noteRow"); if (!isMeeting && NotesModel.IsImportant(note)) card.Classes.Add("importantRow");
         if (editing == note.Id) card.Classes.Add("rowSelected"); // The row being changed has the accent edge.
         return card;
     }

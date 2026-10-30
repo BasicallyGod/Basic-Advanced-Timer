@@ -108,8 +108,8 @@ public static class ReviewViews
         var pixelsPerHour = model.TimelinePixelsPerHour;
         var planned = model.Notes.MeetingsOn(day);
         // A day with a timed note has its pins hung under the ruler, so the meeting row and the blocks sit a little lower to make room, and the blocks are that much shorter.
-        var pinned = model.Notes.PinnedOn(day); var finished = model.Engine.Away.Where(a => a.Start.Date == day).Select(a => (DateTime?)a.Start).LastOrDefault();
-        var pinRoom = pinned.Count > 0 || finished is not null ? TimelineGuide.PinRoom : 0; var meetingTop = MeetingTop + pinRoom;
+        var pinned = model.Notes.PinnedOn(day);
+        var pinRoom = pinned.Count > 0 ? TimelineGuide.PinRoom : 0; var meetingTop = MeetingTop + pinRoom;
         var bandTop = (planned.Count > 0 ? BandTopWithMeetings : BandTopFree) + pinRoom; var bandHeight = BandBottom - bandTop;
         double X(DateTime time) => TimelineGutter + (time - day).TotalHours * pixelsPerHour;
         // A little room before the first hour and after the last lets the end labels sit fully in view.
@@ -353,7 +353,7 @@ public static class ReviewViews
             canvas.AttachedToVisualTree += (_, _) => { nowTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) }; nowTimer.Tick += (_, _) => PlaceNow(); nowTimer.Start(); };
             canvas.DetachedFromVisualTree += (_, _) => { nowTimer?.Stop(); nowTimer = null; };
         }
-        TimelineGuide.Attach(canvas, model, day, pixelsPerHour, TimelineGutter, AxisY, BandBottom, planned.Count > 0 ? meetingTop : bandTop, pinned, finished);
+        TimelineGuide.Attach(canvas, model, day, pixelsPerHour, TimelineGutter, AxisY, BandBottom, planned.Count > 0 ? meetingTop : bandTop, pinned);
         DateTime clicked = day.AddHours(9);
         DateTime At(double x) => day.AddMinutes(Math.Clamp(Math.Floor((x - TimelineGutter) / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);

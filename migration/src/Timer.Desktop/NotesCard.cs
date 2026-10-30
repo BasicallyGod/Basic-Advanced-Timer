@@ -108,7 +108,7 @@ public sealed class NotesCard : Border
         }
         else
         {
-            var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, Name = "NoteText_" + note.Id, FontWeight = NotesModel.IsImportant(note) ? FontWeight.SemiBold : FontWeight.Normal }; NoteLinks.Fill(text, Notes.Shown(note));
+            var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, Name = "NoteText_" + note.Id }; NoteLinks.Fill(text, Notes.Shown(note));
             if (note.Done) { text.TextDecorations = TextDecorations.Strikethrough; text.Classes.Add("muted"); }
             // Pressing the words opens the note for editing, as a meeting's name does; a link in them is pressable in its own right.
             var edit = Ui.Button("", () => OnEditNote(note.Id), "NoteEdit_" + note.Id); edit.Classes.Add("pillBare"); edit.Padding = new Thickness(0); edit.Content = text;
@@ -138,6 +138,7 @@ public sealed class NotesCard : Border
             var important = NotesModel.IsImportant(note);
             var star = Ui.IconButton(important ? IconKind.StarFilled : IconKind.Star, important ? "Not important" : "Mark important", "NoteImportant_" + note.Id, () => Notes.SetImportant(note.Id, !important));
             star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, star, 2);
+            if (important && star.Content is IconGlyph solid) solid.TintKey = "Accent"; // The mark is the accent's, so an important note is picked out without its words changing weight.
         }
         if (!meeting && NotesModel.ReminderOf(note) is null)
         {
@@ -145,7 +146,7 @@ public sealed class NotesCard : Border
         }
         var remove = Ui.IconButton(IconKind.Close, meeting ? "Remove meeting" : "Remove note", "NoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center;
         Ui.Put(line, remove, 4);
-        var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9) }; card.Classes.Add("noteRow");
+        var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9) }; card.Classes.Add("noteRow"); if (!meeting && NotesModel.IsImportant(note)) card.Classes.Add("importantRow");
         return card;
     }
 
@@ -214,13 +215,13 @@ public sealed class NotesCard : Border
         if (form == Form.None) { formHost.Content = null; return; }
         var meeting = form == Form.Meeting;
         var column = new StackPanel { Spacing = 8 };
-        // The words, with the account chip and the reminder chip inside the same box. With one chip they share the line with the words; with both there is not room
-        // for the words as well, so the chips take a line of their own above them and the box grows.
-        var stacked = draftAccount is not null && !meeting && draftReminder is not null;
-        var box = Ui.Grid(stacked ? "*" : "Auto,*,Auto", stacked ? "Auto,Auto" : "Auto"); box.ColumnSpacing = 6; box.RowSpacing = 2;
-        var frame = new Border { Child = box, MinHeight = 36, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = stacked ? new Thickness(10, 5, 6, 3) : new Thickness(10, 0, 6, 0) }; frame.Classes.Add("composer");
-        var chips = stacked ? new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 } : null;
-        void PutChip(Control chip, int column) { if (chips is not null) chips.Children.Add(chip); else Ui.Put(box, chip, column); }
+        // The words, with the account chip and the reminder chip inside the same box. A lone account chip shares the line with the words. The reminder chip is wide, so with
+        // one the words keep their own line and the chips sit quietly under them, in one row, the way the note will look in the list once it is added.
+        var stacked = !meeting && draftReminder is not null;
+        var box = Ui.Grid(stacked ? "*" : "Auto,*,Auto", stacked ? "Auto,Auto" : "Auto"); box.ColumnSpacing = 6;
+        var frame = new Border { Child = box, MinHeight = 36, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = stacked ? new Thickness(10, 2, 6, 0) : new Thickness(10, 0, 6, 0) }; frame.Classes.Add("composer");
+        var chips = stacked ? new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 7) } : null;
+        void PutChip(Control chip, int column) { if (chips is not null) { chip.Margin = new Thickness(0, 0, 6, 0); chips.Children.Add(chip); } else Ui.Put(box, chip, column); }
         // The account chip takes the account off again when pressed (its cross says so), or with Backspace in an empty box.
         if (draftAccount is { } account)
         {
@@ -231,13 +232,13 @@ public sealed class NotesCard : Border
         }
         field = new TextBox { Name = "NoteField", Text = draft, Watermark = meeting ? "Meeting name, # for an account" : "Write a note, # for an account", BorderThickness = new Thickness(0), Background = Brushes.Transparent, Height = 30, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0) };
         field.Classes.Add("bareField"); NoteLinks.AttachPaste(field);
-        if (stacked) Ui.Put(box, field, 0, 1); else Ui.Put(box, field, 1);
+        if (stacked) Ui.Put(box, field, 0, 0); else Ui.Put(box, field, 1);
         if (!meeting && draftReminder is { } reminder)
         {
             var chip = Ui.Button("", () => OpenReminder(null), "FormReminder"); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0);
             chip.Content = NoteParts.Chip(NoteDates.When(reminder, model.Engine.Now), model.Engine.Now > reminder ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change reminder"); PutChip(chip, 2);
         }
-        if (chips is not null) Ui.Put(box, chips);
+        if (chips is not null) Ui.Put(box, chips, 0, 1);
         var row = Ui.Grid(meeting ? "*,Auto,Auto" : "*,Auto,Auto,Auto"); row.ColumnSpacing = 6;
         Ui.Put(row, frame);
         if (!meeting)
@@ -246,6 +247,7 @@ public sealed class NotesCard : Border
             var marked = NotesModel.IsMarked(draft);
             var star = Ui.Ctl("FormImportant", null, marked ? IconKind.StarFilled : IconKind.Star, marked ? "Not important" : "Mark important", () => { draft = NotesModel.WithMark(draft, !NotesModel.IsMarked(draft)); DrawForm(); }, small: true); Ui.Put(row, star, 1);
             var bell = Ui.Ctl("FormBell", null, IconKind.Bell, "Set reminder", () => OpenReminder(null), small: true); Ui.Put(row, bell, 2);
+            bell.IsVisible = draftReminder is null; // Once a reminder is set its chip changes it, so the bell steps aside and the box gets the room.
         }
         var submit = Ui.Ctl("SubmitNote", editing is not null ? "Save" : meeting ? "Add meeting" : "Add note", null, "Save", Submit, small: true); submit.Classes.Add("primary"); Ui.Put(row, submit, meeting ? 2 : 3);
         // Beside a box that has grown to two lines the buttons stay level with its first line.

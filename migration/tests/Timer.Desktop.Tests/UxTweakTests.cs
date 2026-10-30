@@ -154,7 +154,7 @@ public sealed class UxTweakTests
             Settle(window);
             double Top(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Point(0, 0), window)!.Value.Y; }
             Assert.True(Top("SidebarDashboard") < Top("SidebarPause")); Assert.True(Top("SidebarPause") < Top("Account0")); // The clock, then the tracking card, then the accounts.
-            Assert.Equal(Top("SidebarPause"), Top("DashboardBreak"), 1.0); Assert.True(Top("Account0") < Top("DashboardDay")); Assert.Equal(Top("DashboardDay"), Top("QuitTimer"), 0.5); // Finish day and Close timer side by side at the foot.
+            Assert.Equal(Top("SidebarPause"), Top("DashboardBreak"), 1.0); Assert.True(Top("Account0") < Top("QuitTimer")); // Close timer is at the foot.
             Assert.Equal("Collapse to pill", ToolTip.GetTip(window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SidebarDashboard")));
             window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SidebarDashboard").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.Equal(1, back);
             var quits = 0; model.QuitRequested += () => quits++;
@@ -242,7 +242,7 @@ public sealed class UxTweakTests
         try
         {
             var items = tray.Icons[0].Menu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).ToList();
-            Assert.Equal(6, items.Count);
+            Assert.Equal(5, items.Count);
             Assert.All(items, item => Assert.False(string.IsNullOrWhiteSpace(item.Header), "A menu item has no words."));
         }
         finally { tray.Dispose(); }

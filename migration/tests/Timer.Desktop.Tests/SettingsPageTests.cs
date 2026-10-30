@@ -109,7 +109,7 @@ public sealed class SettingsPageTests
             // The sidebar stays in view, and the page runs out to the window's right edge.
             Assert.True(page.TranslatePoint(new Avalonia.Point(0, 0), window)!.Value.X > Sidebar.Width); // Beside the sidebar.
             Assert.True(page.TranslatePoint(new Avalonia.Point(page.Bounds.Width, 0), window)!.Value.X > window.Bounds.Width - 2 * Ui.ShadowMargin - 40);
-            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "DashboardDay" && b.IsVisible);
+            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "QuitTimer" && b.IsVisible);
             // The same button closes it again and the timeline returns.
             OpenSettings(window); using var closed = window.CaptureRenderedFrame();
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<SettingsView>(), s => s.Name == "SettingsPage");
@@ -129,10 +129,9 @@ public sealed class SettingsPageTests
             double Centre(string name) { var c = window.GetVisualDescendants().OfType<Control>().Single(x => x.Name == name); return c.TranslatePoint(new Avalonia.Point(c.Bounds.Width / 2, 0), window)!.Value.X; }
             // The lights, the clock and the tracking card are all centred on the column.
             Assert.Equal(middle, Centre("SidebarLights"), 1.0); Assert.Equal(middle, Centre("SidebarDashboard"), 1.5); Assert.Equal(middle, Centre("SidebarWell"), 1.5);
-            // Finish day and Close timer sit side by side at the foot, one each side of the middle, and level.
-            var day = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "DashboardDay"); var quit = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "QuitTimer");
-            double Left(Control c) => c.TranslatePoint(default, window)!.Value.X; double Top(Control c) => c.TranslatePoint(default, window)!.Value.Y;
-            Assert.True(Left(day) < middle && Left(quit) > middle - 1); Assert.Equal(Top(day), Top(quit), 0.5); Assert.Equal(day.Bounds.Width, quit.Bounds.Width, 1.5);
+            // Close timer is at the foot on its own, centred on the column and the width of its foot.
+            var quit = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "QuitTimer");
+            Assert.Equal(middle, Centre("QuitTimer"), 1.5); Assert.True(quit.Bounds.Width > sidebar.Bounds.Width - 40);
         }
         finally { window.Close(); }
     }

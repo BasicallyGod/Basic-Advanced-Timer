@@ -428,24 +428,15 @@ Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(
     }
 
     [AvaloniaFact]
-    public void TheDayButtonIsGreenToStartAndRedToFinishWithMatchingTypeAndAWavingFlag()
+    public void TheBreakCupSteamsUnderThePointerAndStaysSteamingThroughAModelUpdate()
     {
-        var now = new DateTime(2026, 10, 9, 7, 0, 0); // Before the usual start, so the day has not begun.
+        var now = new DateTime(2026, 10, 9, 7, 0, 0);
         var model = TimerModel.CreateDemo(() => now); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
-            var day = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay"); var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
-            var flag = day.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Kind == IconKind.Flag); var sun = day.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Kind == IconKind.Sunrise);
-            Assert.Equal(2, day.GetVisualDescendants().OfType<IconGlyph>().Count()); // A flag to finish the day and a sunrise to start it; one shows at a time.
-            void Check() { var started = model.DayStarted; Assert.Equal(started, flag.IsVisible); Assert.Equal(!started, sun.IsVisible); Assert.Equal("Finish", flag.TintKey); Assert.Equal("Start", sun.TintKey); } // A red flag once running, a green sunrise before.
-            Check(); model.ToggleDay(); Dispatcher.UIThread.RunJobs(); Check(); model.ToggleDay(); Dispatcher.UIThread.RunJobs(); Check();
-            Assert.False(dashboard.FinishQuestionOpen); // Starting the day does not ask anything.
-            // The flag waves while the pointer is over the button, and the cup steams. (Headless tests do not run animation timers, so
-            // this checks the switches, not the frames.)
-            var over = day.TranslatePoint(new Point(day.Bounds.Width / 2, day.Bounds.Height / 2), dashboard)!.Value;
-            dashboard.MouseMoveUntil(over, () => flag.Waving); Assert.True(flag.Waving);
-            dashboard.MouseMove(new Point(5, 5)); Assert.False(flag.Waving);
+            var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
+            // The cup steams while the pointer is over the button. (Headless tests do not run animation timers, so this checks the switches, not the frames.)
             var cup = breakButton.GetVisualDescendants().OfType<BreakGlyph>().Single(); var cupSpot = breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, breakButton.Bounds.Height / 2), dashboard)!.Value;
             var wasSteaming = cup.Steaming; dashboard.MouseMoveUntil(cupSpot, () => cup.Steaming); Assert.True(cup.Steaming);
             model.SetPillScale(null); Dispatcher.UIThread.RunJobs(); Assert.True(cup.Steaming); // A model update while the pointer is over it does not stop the steam, as on the pill.
