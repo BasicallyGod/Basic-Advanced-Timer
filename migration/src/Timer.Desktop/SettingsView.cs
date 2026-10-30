@@ -190,11 +190,14 @@ public sealed class SettingsView : Grid
         if (inside is Grid system)
         {
             Grid.SetColumn(dark, 1);
-            // Sunset is the same two halves with a small sun over the light one and a moon over the dark one.
+            // Sunset is the same two halves with a small sun over the light one and a moon over the dark one. Each half and its mark share one cell of their own grid, so
+            // the mark sits over the picture on purpose and is not a neighbour the layout audit would count as an overlap.
             if (words == "Sunset")
             {
-                system.Children.Add(new Ellipse { Width = 12, Height = 12, Fill = new SolidColorBrush(Color.Parse("#F2B134")), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 6, 5) });
-                var moon = new Ellipse { Width = 12, Height = 12, Fill = new SolidColorBrush(Color.Parse("#C9D2F0")), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 6, 5) }; Grid.SetColumn(moon, 1); system.Children.Add(moon);
+                Ellipse Mark(string colour) => new() { Width = 12, Height = 12, Fill = new SolidColorBrush(Color.Parse(colour)), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 6, 5), IsHitTestVisible = false };
+                system.Children.Clear(); Grid.SetColumn(dark, 0);
+                var day = new Grid { Children = { light, Mark("#F2B134") } }; var night = new Grid { Children = { dark, Mark("#C9D2F0") } };
+                Grid.SetColumn(night, 1); system.Children.Add(day); system.Children.Add(night);
             }
         }
         var frame = new Border { Height = 72, CornerRadius = new CornerRadius(10), ClipToBounds = true, BorderThickness = new Thickness(1), Child = inside };
