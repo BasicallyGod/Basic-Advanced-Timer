@@ -103,24 +103,14 @@ public sealed class DashboardShellTests
     }
 
     [AvaloniaFact]
-    public void FinishDayAsksFirstAndStartDayDoesNot()
+    public void ThereIsNoStartDayOrFinishDayAndCloseTimerHasTheFoot()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            model.ToggleAccount("Account one"); Settle(window);
-            Assert.True(model.DayStarted);
-            var day = Find<Button>(window, "DashboardDay"); Assert.Equal("Finish day", Avalonia.Automation.AutomationProperties.GetName(day)); Assert.Contains(day.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Finish day");
-            Click(day); Settle(window);
-            Assert.True(window.FinishQuestionOpen); Assert.True(model.DayStarted); // Nothing has happened yet.
-            var summary = window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "FinishDaySummary").Text!;
-            Assert.Matches(@"^Working time \d\d:\d\d\.$", summary); // Just the working time: the card is small.
-            Click(Find<Button>(window, "FinishDayCancel")); Assert.False(window.FinishQuestionOpen); Assert.True(model.DayStarted);
-            Click(day); Settle(window); Click(Find<Button>(window, "FinishDayConfirm")); Settle(window);
-            Assert.False(window.FinishQuestionOpen); Assert.False(model.DayStarted); Assert.False(model.IsTracking);
-            Assert.Equal("Start day again", Avalonia.Automation.AutomationProperties.GetName(day));
-            Click(day); Settle(window); // Starting asks nothing.
-            Assert.False(window.FinishQuestionOpen); Assert.True(model.DayStarted);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "DashboardDay"); // The day begins with its first block.
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "FinishDayCard" or "FinishDayConfirm" or "FinishDayCancel");
+            var quit = Find<Button>(window, "QuitTimer"); Assert.True(quit.Bounds.Width > 150); // On its own it takes the foot's width.
         }
         finally { window.Close(); }
     }

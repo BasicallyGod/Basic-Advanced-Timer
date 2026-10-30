@@ -355,7 +355,5 @@ public sealed class PillTests
         model.ToggleAccount(model.Accounts.First(a => !BreakAccount.Is(a.Name)).Name); Assert.Equal("Tracking", model.Status);
         model.TogglePause(); Assert.Equal("Ready to track", model.Status); Assert.Contains(model.Status, TrayController.Tooltip(model));
         model.ToggleBreak(); Assert.Equal("On break", model.Status); Assert.Contains(model.Status, TrayController.Tooltip(model));
-        model.ToggleBreak(); model.ToggleDay();
-        Assert.Equal("Day finished", model.Status); Assert.Contains(model.Status, TrayController.Tooltip(model));
     }
 }

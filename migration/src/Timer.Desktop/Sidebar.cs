@@ -16,14 +16,11 @@ public sealed class Sidebar : Border
     /// <summary>The sidebar's width, which the dashboard window grows by.</summary>
     public const double Width = 248;
     public StatusFace Face { get; }
-    public Button DayButton { get; }
     public Button QuitButton { get; }
     public Button ManageButton { get; }
     public ScrollViewer AccountScroll { get; }
-    private readonly IconGlyph dayFlag = new(IconKind.Flag), daySun = new(IconKind.Sunrise);
-    private readonly TextBlock dayWords = new() { VerticalAlignment = VerticalAlignment.Center };
 
-    public Sidebar(TimerModel model, Action clockClick, Action circleClick, Action manage, Action dayClick, Action quit)
+    public Sidebar(TimerModel model, Action clockClick, Action circleClick, Action manage, Action quit)
     {
         Name = "Sidebar"; base.Width = Width; BorderThickness = new Thickness(0, 0, 1, 0); Padding = new Thickness(12, 14, 12, 14);
         Classes.Add("panel"); this.Bind(BorderBrushProperty, this.GetResourceObservable("Line"));
@@ -43,18 +40,13 @@ public sealed class Sidebar : Border
         AccountScroll = new ScrollViewer { Name = "SidebarAccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Ui.Put(grid, Ui.WithMoreBelow(AccountScroll), 0, 2);
-        // The foot: two buttons side by side. Finish day finishes (or starts) the day, and asks first; Close timer closes it for good and goes red under the pointer.
-        dayFlag.TintKey = "Finish"; daySun.TintKey = "Start";
-        DayButton = new Button { Name = "DashboardDay", Content = Ui.Horizontal(new Grid { Children = { dayFlag, daySun } }, dayWords) }; ((StackPanel)DayButton.Content).Spacing = 7;
-        DayButton.Classes.Add("ctl"); DayButton.Height = 38; DayButton.Padding = new Thickness(4, 0); DayButton.FontSize = 13; DayButton.HorizontalAlignment = HorizontalAlignment.Stretch; DayButton.Click += (_, _) => dayClick();
-        DayButton.PointerEntered += (_, _) => dayFlag.Waving = true; DayButton.PointerExited += (_, _) => dayFlag.Waving = false; // The flag waves under the pointer.
+        // The foot: Close timer closes it for good and goes red under the pointer. There is no Start day or Finish day: the day begins with its first block.
         var quitGlyph = new IconGlyph(IconKind.Close);
         QuitButton = new Button { Name = "QuitTimer", Content = Ui.Horizontal(quitGlyph, new TextBlock { Text = "Close timer", VerticalAlignment = VerticalAlignment.Center }) }; ((StackPanel)QuitButton.Content).Spacing = 7;
         QuitButton.Classes.Add("ctl"); QuitButton.Classes.Add("quit"); QuitButton.Height = 38; QuitButton.Padding = new Thickness(4, 0); QuitButton.FontSize = 13; QuitButton.HorizontalAlignment = HorizontalAlignment.Stretch; QuitButton.Click += (_, _) => quit();
         QuitButton.PointerEntered += (_, _) => quitGlyph.TintKey = "Finish"; QuitButton.PointerExited += (_, _) => quitGlyph.TintKey = null;
         Avalonia.Automation.AutomationProperties.SetName(QuitButton, "Close timer");
-        var foot = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 8, Margin = new Thickness(0, 8, 0, 0) };
-        Grid.SetColumn(QuitButton, 1); foot.Children.Add(DayButton); foot.Children.Add(QuitButton);
+        var foot = new Grid { Margin = new Thickness(0, 8, 0, 0) }; foot.Children.Add(QuitButton);
         var rule = Ui.Rule(); rule.Margin = new Thickness(4, 6, 4, 0);
         var footColumn = new StackPanel { Children = { rule, foot } };
         Ui.Put(grid, footColumn, 0, 3);
@@ -62,14 +54,5 @@ public sealed class Sidebar : Border
         Refresh(model);
     }
 
-    /// <summary>Words the day button for what it does: Finish day (the flag) while the day is on, Start day (a sunrise) otherwise.</summary>
-    public void Refresh(TimerModel model)
-    {
-        Face.Refresh();
-        dayFlag.IsVisible = model.DayStarted; daySun.IsVisible = !model.DayStarted;
-        var words = model.DayStarted ? "Finish day" : model.Engine.Finished ? "Start again" : "Start day";
-        dayWords.Text = words;
-        var tip = model.DayStarted ? "Finish day" : model.Engine.Finished ? "Start day again" : "Start day";
-        ToolTip.SetTip(DayButton, null); Avalonia.Automation.AutomationProperties.SetName(DayButton, tip);
-    }
+    public void Refresh(TimerModel model) => Face.Refresh();
 }

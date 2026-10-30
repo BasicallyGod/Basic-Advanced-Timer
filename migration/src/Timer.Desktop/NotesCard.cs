@@ -108,7 +108,7 @@ public sealed class NotesCard : Border
         }
         else
         {
-            var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, Name = "NoteText_" + note.Id, FontWeight = NotesModel.IsImportant(note) ? FontWeight.SemiBold : FontWeight.Normal }; NoteLinks.Fill(text, Notes.Shown(note));
+            var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, Name = "NoteText_" + note.Id }; NoteLinks.Fill(text, Notes.Shown(note));
             if (note.Done) { text.TextDecorations = TextDecorations.Strikethrough; text.Classes.Add("muted"); }
             // Pressing the words opens the note for editing, as a meeting's name does; a link in them is pressable in its own right.
             var edit = Ui.Button("", () => OnEditNote(note.Id), "NoteEdit_" + note.Id); edit.Classes.Add("pillBare"); edit.Padding = new Thickness(0); edit.Content = text;
@@ -138,6 +138,7 @@ public sealed class NotesCard : Border
             var important = NotesModel.IsImportant(note);
             var star = Ui.IconButton(important ? IconKind.StarFilled : IconKind.Star, important ? "Not important" : "Mark important", "NoteImportant_" + note.Id, () => Notes.SetImportant(note.Id, !important));
             star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, star, 2);
+            if (important && star.Content is IconGlyph solid) solid.TintKey = "Accent"; // The mark is the accent's, so an important note is picked out without its words changing weight.
         }
         if (!meeting && NotesModel.ReminderOf(note) is null)
         {
@@ -145,7 +146,7 @@ public sealed class NotesCard : Border
         }
         var remove = Ui.IconButton(IconKind.Close, meeting ? "Remove meeting" : "Remove note", "NoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center;
         Ui.Put(line, remove, 4);
-        var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9) }; card.Classes.Add("noteRow");
+        var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9) }; card.Classes.Add("noteRow"); if (!meeting && NotesModel.IsImportant(note)) card.Classes.Add("importantRow");
         return card;
     }
 
@@ -214,13 +215,13 @@ public sealed class NotesCard : Border
         if (form == Form.None) { formHost.Content = null; return; }
         var meeting = form == Form.Meeting;
         var column = new StackPanel { Spacing = 8 };
-        // The words, with the account chip and the reminder chip inside the same box. With one chip they share the line with the words; with both there is not room
-        // for the words as well, so the chips take a line of their own above them and the box grows.
-        var stacked = draftAccount is not null && !meeting && draftReminder is not null;
+        // The words, with the account chip and the reminder chip inside the same box. A lone account chip shares the line with the words; the reminder chip is wide, so
+        // with one the chips take a line of their own above the words (wrapping to more lines if need be) and the box grows.
+        var stacked = !meeting && draftReminder is not null;
         var box = Ui.Grid(stacked ? "*" : "Auto,*,Auto", stacked ? "Auto,Auto" : "Auto"); box.ColumnSpacing = 6; box.RowSpacing = 2;
         var frame = new Border { Child = box, MinHeight = 36, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = stacked ? new Thickness(10, 5, 6, 3) : new Thickness(10, 0, 6, 0) }; frame.Classes.Add("composer");
-        var chips = stacked ? new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 } : null;
-        void PutChip(Control chip, int column) { if (chips is not null) chips.Children.Add(chip); else Ui.Put(box, chip, column); }
+        var chips = stacked ? new WrapPanel { Orientation = Orientation.Horizontal } : null;
+        void PutChip(Control chip, int column) { if (chips is not null) { chip.Margin = new Thickness(0, 0, 6, 2); chips.Children.Add(chip); } else Ui.Put(box, chip, column); }
         // The account chip takes the account off again when pressed (its cross says so), or with Backspace in an empty box.
         if (draftAccount is { } account)
         {

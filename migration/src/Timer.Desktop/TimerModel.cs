@@ -245,40 +245,58 @@ public sealed class TimerModel : INotifyPropertyChanged
     public IReadOnlyList<TimerAccount> Accounts => Catalogue().Where(a => !preferences.Accounts.Any(p => p.Name == a.Name && p.Hidden)).ToArray();
     public string? SelectedAccount { get; private set; }
     public string? ActiveAccount => Engine.Active?.Account;
-    public string AccountLabel => IsOnBreak ? "On break" : ActiveAccount ?? (Engine.Finished ? "Day finished" : "Ready to track");
+    public string AccountLabel => IsOnBreak ? "On break" : ActiveAccount ?? "Ready to track";
     public string Label(string account) => BreakAccount.Display(account);
-    public string Status => IsOnBreak ? "On break" : IsTracking ? "Tracking" : Engine.Finished ? "Day finished" : "Ready to track";
+    public string Status => IsOnBreak ? "On break" : IsTracking ? "Tracking" : "Ready to track";
     public bool IsTracking => Engine.Active is not null;
     /// <summary>
-    /// The time worked on a day: the engine counts what falls inside the scheduled hours and what runs past them apart, but the app has no overtime, so a day's
-    /// working time is the two together (breaks, lunch and away left out, as always).
+    /// The span of clock time a day's working time covers, or null when nothing was tracked on it. It starts at the first block of the day, recorded or added,
+    /// and not at the scheduled start, so a day begins when work does and there is no Start day to press. It runs to now while now is inside the working day
+    /// (the scheduled hours, or the last recorded activity if that is later), and to the end of that stretch once it has passed, the way the engine treats a past
+    /// day. An older timer's finished day (Finish day is gone, but the engine still holds the stretches it made) ends where it was finished, or at its last block.
     /// </summary>
-    public TimeSpan WorkingOn(DateTime day) { var totals = Engine.Totals(day); return totals.Working + totals.Overtime + LoggedAfterFinishOn(day); }
-    /// <summary>
-    /// Time on accounts that was logged inside a stretch the day was finished for (Finish day pressed, and the day not started again yet), such as a block added
-    /// afterwards. The engine leaves that stretch out of the day's clock, but a day finished early is not a reason to drop time worked: it is working time like any other,
-    /// the flag stays where it was pressed and the quiet time between the flag and the late block counts for nothing.
-    /// </summary>
-    public TimeSpan LoggedAfterFinishOn(DateTime day)
+    public (DateTime From, DateTime Until)? DaySpan(DateTime day)
     {
-        day = day.Date; var end = day.AddDays(1); var total = TimeSpan.Zero;
-        foreach (var away in Engine.Away)
+        day = day.Date; var next = day.AddDays(1); var now = Engine.Now;
+        var blocks = Engine.Sessions.Where(s => s.Day == day && !BreakAccount.Is(s.Account) && s.Duration > TimeSpan.Zero).ToList();
+        DateTime? first = blocks.Count > 0 ? blocks.Min(s => s.From) : null; DateTime? last = blocks.Count > 0 ? blocks.Max(s => s.To) : null;
+        if (Engine.Active is { } active && !BreakAccount.Is(active.Account) && now > day && active.Start < next)
         {
-            var from = away.Start > day ? away.Start : day; var until = (away.End ?? end) < end ? (away.End ?? end) : end;
-            if (until <= from) continue;
-            foreach (var session in Engine.Sessions)
-            {
-                if (session.Day != day || BreakAccount.Is(session.Account) || session.Duration <= TimeSpan.Zero) continue;
-                var a = session.From > from ? session.From : from; var b = session.To < until ? session.To : until;
-                if (b > a) total += b - a;
-            }
+            var from = active.Start > day ? active.Start : day; var until = now < next ? now : next;
+            first = first is { } f && f < from ? f : from; last = last is { } l && l > until ? l : until;
         }
-        return total;
+        if (first is null || last is null) return null;
+        var plan = Engine.Plan(day); var limit = plan.Working && plan.End > last.Value ? plan.End : last.Value;
+        var finished = Engine.Away.Where(a => a.Start.Date == day).Select(a => (DateTime?)a.Start).Max();
+        if (finished is { } stopped) limit = stopped > last.Value ? stopped : last.Value;
+        var cap = new[] { now, limit, next }.Min();
+        return cap > first.Value ? (first.Value, cap) : null;
+    }
+    /// <summary>
+    /// The time worked on a day: the clock time of <see cref="DaySpan"/> less the breaks in it. The app has no overtime and no scheduled start or end of its own to
+    /// measure against, so time past the day's hours is simply working time and the schedule is only what the day is compared with.
+    /// </summary>
+    public TimeSpan WorkingOn(DateTime day)
+    {
+        if (DaySpan(day) is not { } span) return TimeSpan.Zero;
+        var now = Engine.Now; var breaks = Engine.Sessions.Where(s => s.Day == day.Date && BreakAccount.Is(s.Account) && s.Duration > TimeSpan.Zero).Select(s => (s.From, s.To)).ToList();
+        if (Engine.Active is { } running && BreakAccount.Is(running.Account)) breaks.Add((running.Start, now));
+        // Overlapping breaks are joined first, so one is never taken off twice.
+        var gone = TimeSpan.Zero; var end = span.From;
+        foreach (var (from, to) in breaks.Select(b => (From: b.From < span.From ? span.From : b.From, To: b.To > span.Until ? span.Until : b.To)).Where(b => b.To > b.From).OrderBy(b => b.From))
+        {
+            var start = from < end ? end : from;
+            if (to > start) gone += to - start;
+            if (to > end) end = to;
+        }
+        var worked = span.Until - span.From - gone;
+        return worked < TimeSpan.Zero ? TimeSpan.Zero : worked;
     }
     /// <summary>Working time with nothing recorded on an account on a day: the working time less what is on accounts, never below nothing.</summary>
     public TimeSpan UnallocatedOn(DateTime day) { var left = WorkingOn(day) - Engine.Totals(day).Allocated; return left < TimeSpan.Zero ? TimeSpan.Zero : left; }
-    public bool DayStarted => Engine.DayRunning;
     public bool DecimalHours => preferences.DecimalHours;
+    /// <summary>Where the pointer last was on the timeline's canvas, so the guide line can be put back when the timeline is drawn again under a pointer that has not moved.</summary>
+    public Avalonia.Point? GuidePointer { get; set; }
     public DateTime SelectedDate { get; private set; }
     public string Theme => preferences.Theme;
     public string? LastError { get; private set; }
@@ -291,7 +309,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     private void SayDone(string text) { Notice = text; NoticeHasUndo = true; Notify(); }
     public bool IsDemo { get; private set; }
     public bool Persistent => store is not null;
-    public TimeSpan Elapsed => Engine.Totals(Engine.Now).Elapsed;
+    /// <summary>The day clock: working time so far today, counting up from the first block of the day.</summary>
+    public TimeSpan Elapsed => WorkingOn(Engine.Now);
     public string ClockText => $"{(int)Elapsed.TotalHours:00}:{Elapsed.Minutes:00}:{Elapsed.Seconds:00}";
     public TimeSpan Allocated => Engine.Totals(Engine.Now).Allocated;
     public TimeSpan Unallocated => UnallocatedOn(Engine.Now);
@@ -408,11 +427,6 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         var rows = Engine.Sessions.Where(s => s.Account.Equals(account, StringComparison.OrdinalIgnoreCase)).ToList();
         return (rows.Count, rows.Aggregate(TimeSpan.Zero, (sum, row) => sum + row.Duration));
-    }
-    public void ToggleDay()
-    {
-        if (Engine.DayRunning) Engine.FinishDay(); else Engine.StartDay();
-        Save(); Notify();
     }
     public DateTime WeekStart(DateTime date) => date.Date.AddDays(-((7 + (int)date.DayOfWeek - (int)preferences.WeekStart) % 7));
     public TimeSpan Today(TimerAccount a) => Engine.Credited(a.Name, Engine.Now.Date, Engine.Now.Date.AddDays(1));

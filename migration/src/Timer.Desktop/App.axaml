@@ -143,6 +143,8 @@
     <Style Selector="Border.accentChip"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <Style Selector="Border.lateChip"><Setter Property="Background" Value="{DynamicResource LateTint}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <Style Selector="Border.noteRow"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
+    <!-- An important note: a faint accent wash and edge on its row, and its star solid in the accent; the words keep their weight. -->
+    <Style Selector="Border.noteRow.importantRow"><Setter Property="Background" Value="{DynamicResource ImportantTint}" /><Setter Property="BorderBrush" Value="{DynamicResource ImportantEdge}" /></Style>
     <Style Selector="Border.tick"><Setter Property="BorderBrush" Value="{DynamicResource Muted}" /></Style>
     <Style Selector="Border.tick.tickDone"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Border.composer"><Setter Property="Background" Value="{DynamicResource TextControlBackground}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>

@@ -25,7 +25,7 @@ public static class TestAppBuilder
 public sealed class ShellTests
 {
     [AvaloniaFact]
-    public void SwitchingAccountsPreservesElapsedAndFinishStopsRecording()
+    public void SwitchingAccountsKeepsEachAccountsTime()
     {
         var now = new DateTime(2026, 10, 9, 9, 0, 0);
         var model = new TimerModel(new TrackingEngine(clock: () => now));
@@ -34,9 +34,8 @@ public sealed class ShellTests
         model.ToggleAccount("Account two");
         Assert.Equal(TimeSpan.FromMinutes(2), model.Today(model.Accounts[0]));
         now += TimeSpan.FromMinutes(3);
-        model.ToggleDay();
+        model.TogglePause();
         Assert.False(model.IsTracking);
-        Assert.False(model.DayStarted);
         Assert.Equal(TimeSpan.FromMinutes(3), model.Today(model.Accounts[1]));
     }
 

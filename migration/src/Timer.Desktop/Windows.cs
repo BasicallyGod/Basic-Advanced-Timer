@@ -225,8 +225,6 @@ public sealed class DashboardWindow : Window
     private Button todayButton = null!; private TextBlock todayWords = null!;
     private Control? totalsStrip; private Button zoomOut = null!, zoomIn = null!;
     private Sidebar sidebar = null!; private StatusFace face = null!;
-    private Popup finishPopup = null!;
-    private readonly TextBlock finishSummary = Ui.Text("", 13, "muted");
     private readonly TextBlock workingValue = Value(), allocatedValue = Value(), unallocatedValue = Value();
     private static TextBlock Value() => new() { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock date = Ui.Text("", 14); private Button datePick = null!;
@@ -256,16 +254,15 @@ public sealed class DashboardWindow : Window
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
         // The sidebar is the pill drawn out with its accounts shown: it runs the full height with the lights, the day clock and the tracking card at its top, the accounts
-        // below them, and Finish day and Close timer side by side at its foot. The workspace beside it has a header with the three views as tabs, the date and the gear.
+        // below them, and Close timer at its foot. The workspace beside it has a header with the three views as tabs, the date and the gear.
         var root = Ui.Grid("Auto,*", "*");
         // The clock goes back to the pill, and the play tile pauses or resumes, as on the pill.
-        sidebar = new Sidebar(model, () => OpenPill?.Invoke(), OnPlay, () => model.OpenAccounts(), OnDayButton, () => model.RequestQuit());
+        sidebar = new Sidebar(model, () => OpenPill?.Invoke(), OnPlay, () => model.OpenAccounts(), () => model.RequestQuit());
         face = sidebar.Face;
         Ui.Put(root, sidebar);
         model.OpenDayRequested += _ => SelectTab(false);
         // A pin on the timeline opens its note for editing in the Notes card; the Notes page's own open request shows that page.
         model.Notes.OpenNoteRequested += id => { ShowNotes(); NotesPageInstance().OpenNote(id); };
-        BuildFinishPopup(root);
         var body = Ui.Grid("*", "*");
         var review = Ui.Grid("*", "Auto,*");
         review.Margin = new Thickness(22, 16, 22, 18);
@@ -491,42 +488,17 @@ public sealed class DashboardWindow : Window
         StartMorph(1, 0, true, () => { done(); SetMorph(1); });
     }
 
-    // ---- the Finish day question
-    private void BuildFinishPopup(Panel host)
-    {
-        // Finishing the day asks first, in a small card above the button, since it stops the clock and the running account.
-        var title = Ui.Text("Finish day?", 15); title.FontWeight = Avalonia.Media.FontWeight.SemiBold;
-        finishSummary.Name = "FinishDaySummary"; finishSummary.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
-        var cancel = Ui.DialogButton("Cancel", () => finishPopup.IsOpen = false, "FinishDayCancel", false);
-        var confirm = Ui.DialogButton("Finish day", () => { finishPopup.IsOpen = false; model.ToggleDay(); }, "FinishDayConfirm", true);
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right }; buttons.Children.Add(cancel); buttons.Children.Add(confirm);
-        var card = new Border { Name = "FinishDayCard", Width = 224, Padding = new Thickness(16), CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1) };
-        card.Classes.Add("surface"); card.Classes.Add("flyoutCard");
-        var stack = new StackPanel { Spacing = 10 }; stack.Children.Add(title); stack.Children.Add(finishSummary); stack.Children.Add(buttons); card.Child = stack;
-        finishPopup = new Popup { PlacementTarget = sidebar.DayButton, Placement = PlacementMode.Top, VerticalOffset = -8, IsLightDismissEnabled = true, Child = card,
-            PlacementConstraintAdjustment = Avalonia.Controls.Primitives.PopupPositioning.PopupPositionerConstraintAdjustment.SlideX | Avalonia.Controls.Primitives.PopupPositioning.PopupPositionerConstraintAdjustment.FlipY };
-        host.Children.Add(finishPopup);
-    }
-    public bool FinishQuestionOpen => finishPopup.IsOpen;
     /// <summary>The account list's scroll box, so tests can read its limit.</summary>
     public ScrollViewer? AccountScroll => sidebar.AccountScroll;
     /// <summary>The sidebar, for tests.</summary>
     public Sidebar SidebarPanel => sidebar;
-    /// <summary>Puts the Finish day question away, so the dashboard is plain again when it comes back.</summary>
-    public void CloseFlyouts() { finishPopup.IsOpen = false; }
+    /// <summary>Nothing on the dashboard hangs open any more; kept so the coordinator can still put every window's flyouts away together.</summary>
+    public void CloseFlyouts() { }
     private void OnPlay()
     {
         var chosen = model.Accounts.Any(a => a.Name == model.SelectedAccount);
         // With nothing to run or resume, the accounts are already there to pick from, so it says so.
         if (model.IsTracking || chosen) model.TogglePause(); else model.Refuse("Choose an account");
-    }
-    // Starting the day just does it. Finishing it asks first, and says what will stop.
-    private void OnDayButton()
-    {
-        if (!model.DayStarted) { model.ToggleDay(); return; }
-        // Just the working time: what stops is plain from the button, and the card stays small.
-        finishSummary.Text = "Working time " + model.Format(model.Engine.Totals(model.Engine.Now).Working) + ".";
-        finishPopup.IsOpen = true;
     }
     // The day's figures under the timeline: Working time, a bar of the scheduled day, then Allocated, Unallocated and Breaks.
     private readonly TextBlock breaksValue = Value(); private readonly Border dayBar = new() { Name = "DayBar", Width = 150, Height = 10, CornerRadius = new CornerRadius(5), ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
@@ -670,7 +642,6 @@ public sealed class DashboardWindow : Window
         next.IsEnabled = !weekMode || model.CanStepForwardAWeek;
         ToolTip.SetTip(previous, weekMode ? "Previous week" : "Previous day"); ToolTip.SetTip(next, weekMode ? "Next week" : "Next day");
         UpdateTotals();
-        if (finishPopup.IsOpen && !model.DayStarted) finishPopup.IsOpen = false;
         // The bar under the timeline belongs to the Timeline page alone, and zoom stops at its ends.
         zoomOut.IsEnabled = model.TimelinePixelsPerHour > 60.5; zoomIn.IsEnabled = model.TimelinePixelsPerHour < 639.5;
         face.Break.Classes.Set("onBreak", model.IsOnBreak);

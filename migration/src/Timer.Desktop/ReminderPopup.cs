@@ -44,7 +44,7 @@ public sealed class ReminderPopup : Border
     {
         this.now = now; this.dayOnly = dayOnly; Name = "ReminderPopup";
         var start = current ?? now().Date.AddHours(12); allowPast = heading != "Reminder";
-        chosen = start.Date; hour = start.Hour; minute = start.Minute / 5 * 5; month = new DateTime(chosen.Year, chosen.Month, 1);
+        chosen = start.Date; hour = start.Hour; minute = start.Minute; // The reminder's own minute, not the nearest five. month = new DateTime(chosen.Year, chosen.Month, 1);
         CornerRadius = new CornerRadius(16); BorderThickness = new Thickness(1); Padding = new Thickness(12); Width = dayOnly ? DayOnlyWide : Wide;
         Classes.Add("surface"); Classes.Add("flyoutCard");
         BoxShadow = BoxShadows.Parse("0 10 28 0 #29141E46");
@@ -122,7 +122,11 @@ public sealed class ReminderPopup : Border
     private void Step(int delta, string what)
     {
         if (what == "hour") hour = (hour + delta + 24) % 24;
-        else { minute = (minute / 5 * 5 + delta + 60) % 60; }
+        else
+        {
+            // Steps of five land on the multiples of five: from 14:31 up is 35 and down is 30, so a reminder set to an odd minute is never changed just by opening it.
+            minute = delta > 0 ? (minute / 5 * 5 + 5) % 60 : minute % 5 == 0 ? (minute - 5 + 60) % 60 : minute / 5 * 5;
+        }
         Redraw(true);
     }
 
