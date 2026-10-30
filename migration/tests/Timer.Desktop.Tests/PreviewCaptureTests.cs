@@ -120,6 +120,26 @@ public sealed class PreviewCaptureTests
         }
     }
 
+    [AvaloniaFact]
+    public void WriteFinishFlag()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var day = new DateTime(2026, 10, 9); var now = day.AddHours(15);
+            var engine = new Timer.Core.TrackingEngine(clock: () => now);
+            var model = new TimerModel(engine, new Timer.Storage.StoreSettings(new() { new("Account one"), new("Account two"), new("Account three") }, false, theme, DayOfWeek.Monday)); model.CompleteSetup();
+            model.SetShifts(new() { [DayOfWeek.Friday] = new(TimeSpan.FromHours(9), TimeSpan.FromHours(17.5)) });
+            engine.AddSession("Account one", day.AddHours(9), day.AddHours(10.5)); engine.AddSession("Account two", day.AddHours(10.5), day.AddHours(12));
+            engine.AddSession(Timer.Core.BreakAccount.Name, day.AddHours(12), day.AddHours(12.5)); engine.AddSession("Account one", day.AddHours(12.5), day.AddHours(15));
+            engine.FinishDay(); now = day.AddHours(16.75); engine.AddSession("Account three", day.AddHours(15 + 1.0 / 3), day.AddHours(16.5));
+            var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+            try { using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"finish-{theme}.png")); }
+            finally { window.Close(); }
+        }
+    }
+
     public static void SetSwollen(Border ring, double opacity)
     {
         ring.SetValue(Avalonia.Layout.Layoutable.WidthProperty, 20.0, Avalonia.Data.BindingPriority.Animation); ring.SetValue(Avalonia.Layout.Layoutable.HeightProperty, 28.0, Avalonia.Data.BindingPriority.Animation);

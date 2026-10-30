@@ -171,6 +171,8 @@
     <Style Selector="Border.track"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
     <Style Selector="Border.barAllocated"><Setter Property="Background" Value="{DynamicResource Muted}" /></Style>
     <Style Selector="Border.barBreaks"><Setter Property="Background" Value="{DynamicResource Break}" /></Style>
+    <Style Selector="Border.finishLine"><Setter Property="Background" Value="{DynamicResource Finish}" /><Setter Property="Opacity" Value=".7" /></Style>
+    <Style Selector="Border.finishChip"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Border.nowLine"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Ellipse.nowDot"><Setter Property="Fill" Value="{DynamicResource Accent}" /><Setter Property="Stroke" Value="{DynamicResource Surface}" /><Setter Property="StrokeThickness" Value="2" /></Style>
     <Style Selector="Border.nowChip"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>

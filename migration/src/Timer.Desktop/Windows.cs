@@ -556,7 +556,7 @@ public sealed class DashboardWindow : Window
         var shown = model.SelectedDate.Date;
         var totals = model.Engine.Totals(shown); var plan = model.Engine.Plan(shown);
         var working = model.WorkingOn(shown);
-        workingValue.Text = model.Format(working); allocatedValue.Text = model.Format(totals.Allocated); unallocatedValue.Text = model.Format(totals.Unallocated);
+        workingValue.Text = model.Format(working); allocatedValue.Text = model.Format(totals.Allocated); unallocatedValue.Text = model.Format(model.UnallocatedOn(shown));
         breaksValue.Text = model.Format(model.BreakTimeOn(shown));
         var scheduled = model.ScheduledOn(shown);
         // The bar is always there and always the same width, so the figures beside it never move from one day to the next. A day with nothing scheduled and no time
@@ -582,7 +582,7 @@ public sealed class DashboardWindow : Window
             }
             grid.Children.Add(Part("Allocated", 0)); grid.Children.Add(Part("Unallocated", 1, true));
             dayBar.Child = grid; dayBar.Classes.Add("track");
-            ToolTip.SetTip(dayBar, (scheduled > TimeSpan.Zero ? $"Scheduled {model.Format(scheduled)} ({plan.Start:HH:mm}–{plan.End:HH:mm}" + (model.BreakAllowance > TimeSpan.Zero ? $" less {model.Format(model.BreakAllowance)} break" : "") + ")" : "No schedule") + $"\nAllocated {model.Format(totals.Allocated)} · Unallocated {model.Format(totals.Unallocated)} · Breaks {model.Format(breaks)}");
+            ToolTip.SetTip(dayBar, (scheduled > TimeSpan.Zero ? $"Scheduled {model.Format(scheduled)} ({plan.Start:HH:mm}–{plan.End:HH:mm}" + (model.BreakAllowance > TimeSpan.Zero ? $" less {model.Format(model.BreakAllowance)} break" : "") + ")" : "No schedule") + $"\nAllocated {model.Format(totals.Allocated)} · Unallocated {model.Format(model.UnallocatedOn(shown))} · Breaks {model.Format(breaks)}");
             Avalonia.Automation.AutomationProperties.SetName(dayBar, $"The scheduled day, {model.Format(working)} worked");
         }
     }
