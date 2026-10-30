@@ -124,6 +124,7 @@ public sealed class PreviewCaptureTests
     {
         ring.SetValue(Avalonia.Layout.Layoutable.WidthProperty, 20.0, Avalonia.Data.BindingPriority.Animation); ring.SetValue(Avalonia.Layout.Layoutable.HeightProperty, 28.0, Avalonia.Data.BindingPriority.Animation);
         ring.SetValue(Border.CornerRadiusProperty, new CornerRadius(10), Avalonia.Data.BindingPriority.Animation); ring.SetValue(Visual.OpacityProperty, opacity, Avalonia.Data.BindingPriority.Animation);
+        ring.SetValue(Visual.RenderTransformProperty, Avalonia.Media.Transformation.TransformOperations.Parse("scale(1, 1)"), Avalonia.Data.BindingPriority.Animation); // The swell is a scale now; this is it fully grown.
     }
 
     [AvaloniaFact]
