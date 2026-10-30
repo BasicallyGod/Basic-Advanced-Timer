@@ -135,7 +135,14 @@ public sealed class PreviewCaptureTests
             engine.AddSession(Timer.Core.BreakAccount.Name, day.AddHours(12), day.AddHours(12.5)); engine.AddSession("Account one", day.AddHours(12.5), day.AddHours(15));
             engine.FinishDay(); now = day.AddHours(16.75); engine.AddSession("Account three", day.AddHours(15 + 1.0 / 3), day.AddHours(16.5));
             var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
-            try { using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"finish-{theme}.png")); }
+            try
+            {
+                using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"finish-{theme}.png"));
+                var flag = window.GetVisualDescendants().OfType<Canvas>().Single(c => c.Name == "TimelineFinishFlag");
+                var at = flag.TranslatePoint(new Point(13, 14), window)!.Value;
+                Avalonia.Headless.HeadlessWindowExtensions.MouseMove(window, at); Dispatcher.UIThread.RunJobs();
+                using var h = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var i = window.CaptureRenderedFrame(); i?.Save(Path.Combine(folder, $"finish-{theme}-hover.png"));
+            }
             finally { window.Close(); }
         }
     }

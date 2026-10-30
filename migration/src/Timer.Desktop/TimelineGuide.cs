@@ -45,7 +45,7 @@ public static class TimelineGuide
     /// Hangs the pins and the guide on the timeline's canvas. <paramref name="pinned"/> are the day's notes with a reminder, in time order. <paramref name="lanesTop"/> is where
     /// the meeting row or the blocks begin: above it the pointer is on the ruler and the pins, below it on the day's own blocks.
     /// </summary>
-    public static void Attach(Canvas canvas, TimerModel model, DateTime day, double pixelsPerHour, double gutter, double axisY, double bandBottom, double lanesTop, IReadOnlyList<DayNote> pinned)
+    public static void Attach(Canvas canvas, TimerModel model, DateTime day, double pixelsPerHour, double gutter, double axisY, double bandBottom, double lanesTop, IReadOnlyList<DayNote> pinned, DateTime? finished = null)
     {
         double X(DateTime time) => gutter + (time - day).TotalHours * pixelsPerHour;
         var pins = new List<Pin>();
@@ -86,6 +86,25 @@ public static class TimelineGuide
             visual.PointerPressed += (_, e) => { if (e.GetCurrentPoint(visual).Properties.IsLeftButtonPressed) { model.Notes.RequestEditNote(id); e.Handled = true; } };
             canvas.Children.Add(visual);
             pins.Add(new Pin(group, x, visual, dot, halo, stem, badge, rest, grown));
+        }
+        // Where Finish day was pressed: a red flag hung from the ruler like a pin, white flag on a red round badge, and no more. The guide snaps to it as it does to a pin.
+        Canvas? flagVisual = null; Border? flagBadge = null; const double FlagDot = 18, FlagActive = 21;
+        var flagX = finished is { } at ? X(at) : double.NaN;
+        void SizeFlag(double size) { if (flagBadge is null) return; flagBadge.Width = flagBadge.Height = size; flagBadge.CornerRadius = new CornerRadius(size / 2); Canvas.SetLeft(flagBadge, 10 - size / 2); Canvas.SetTop(flagBadge, 11.5 - size / 2); }
+        if (finished is { } finishedAt)
+        {
+            flagVisual = new Canvas { Name = "TimelineFinishFlag", Width = 20, Height = 28, Background = Brushes.Transparent, IsHitTestVisible = false, ZIndex = 5 };
+            var flagStem = new Border { Width = 1.5, Height = 10, Opacity = .7 }; Canvas.SetLeft(flagStem, 9.25); Paint(flagStem, Border.BackgroundProperty, "Finish");
+            var glyph = new IconGlyph(IconKind.Flag) { Width = 18, Height = 18 };
+            Avalonia.Controls.Documents.TextElement.SetForeground(glyph, Brushes.White);
+            flagBadge = new Border { Child = new Viewbox { Width = 11, Height = 11, Child = glyph }, BorderThickness = new Thickness(2.5) };
+            Paint(flagBadge, Border.BackgroundProperty, "Finish"); Paint(flagBadge, Border.BorderBrushProperty, "Panel");
+            flagBadge.Padding = new Thickness(0); flagBadge.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left; flagBadge.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
+            ((Viewbox)flagBadge.Child).HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center; ((Viewbox)flagBadge.Child).VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+            flagVisual.Children.Add(flagStem); flagVisual.Children.Add(flagBadge); SizeFlag(FlagDot);
+            Canvas.SetLeft(flagVisual, flagX - 10); Canvas.SetTop(flagVisual, axisY);
+            Avalonia.Automation.AutomationProperties.SetName(flagVisual, "Day finished at " + finishedAt.ToString("HH:mm"));
+            canvas.Children.Add(flagVisual);
         }
         void Recolour(Pin pin)
         {
@@ -129,7 +148,7 @@ public static class TimelineGuide
         void Hide()
         {
             line.IsVisible = guideDot.IsVisible = chip.IsVisible = noteCard.IsVisible = false;
-            Unring(); Activate(null);
+            Unring(); Activate(null); SizeFlag(FlagDot);
         }
         void Activate(Pin? pin)
         {
@@ -151,19 +170,22 @@ public static class TimelineGuide
             // On the ruler and the pins the guide snaps and speaks for the notes; among the blocks it rings them and keeps quiet, so the block's own tooltip is the only card.
             var onRuler = pointerY < lanesTop;
             var near = onRuler ? pins.OrderBy(p => Math.Abs(p.X - pointerX)).FirstOrDefault(p => Math.Abs(p.X - pointerX) <= SnapPixels) : null;
-            var x = near?.X ?? pointerX;
-            var time = near is not null ? NotesModel.ReminderOf(near.First)!.Value : day.AddMinutes(Math.Round((x - gutter) / pixelsPerHour * 60));
-            Activate(near);
+            // The finish flag is snapped to the same way; when a pin and the flag are both in reach the nearer one wins.
+            var onFlag = onRuler && flagVisual is not null && Math.Abs(flagX - pointerX) <= SnapPixels && (near is null || Math.Abs(flagX - pointerX) < Math.Abs(near.X - pointerX));
+            if (onFlag) near = null;
+            var x = onFlag ? flagX : near?.X ?? pointerX;
+            var time = onFlag ? finished!.Value : near is not null ? NotesModel.ReminderOf(near.First)!.Value : day.AddMinutes(Math.Round((x - gutter) / pixelsPerHour * 60));
+            Activate(near); SizeFlag(onFlag ? FlagActive : FlagDot);
             line.IsVisible = guideDot.IsVisible = chip.IsVisible = true;
-            // Snapped to a pin, the line starts under the pin so it does not run through the dot or the count in it.
-            var skip = near is null ? 0 : 11.5 + near.Active / 2 + 4;
+            // Snapped to a pin or the flag, the line starts under it so it does not run through the dot or the count in it.
+            var skip = onFlag ? 11.5 + FlagActive / 2 + 4 : near is null ? 0 : 11.5 + near.Active / 2 + 4;
             line.EndPoint = new Point(1, bandBottom + 8 - axisY - skip);
             Canvas.SetLeft(line, x - 1); Canvas.SetTop(line, axisY + skip);
             Canvas.SetLeft(guideDot, x - 4.5); Canvas.SetTop(guideDot, axisY - 5);
             chipText.Text = time.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
             Canvas.SetLeft(chip, x - chip.Width / 2); Canvas.SetTop(chip, 1);
             // Quiet while free, the accent wash while it is on a note.
-            if (near is null) { Paint(chip, Border.BackgroundProperty, "Panel"); Paint(chip, Border.BorderBrushProperty, "Line"); }
+            if (near is null && !onFlag) { Paint(chip, Border.BackgroundProperty, "Panel"); Paint(chip, Border.BorderBrushProperty, "Line"); }
             else { Paint(chip, Border.BackgroundProperty, "Selected"); Paint(chip, Border.BorderBrushProperty, "Accent"); }
             var under = new List<Control>();
             if (!onRuler)
@@ -180,8 +202,19 @@ public static class TimelineGuide
                 ringed[card] = (b.BoxShadow, b.ZIndex); b.BoxShadow = new BoxShadows(new BoxShadow { Spread = 2, Color = ringColour }); b.ZIndex = 3; b.Classes.Add("guideOver");
             }
             // The notes' words beside the line, when it is on a pin (and tooltips are on).
-            noteCard.IsVisible = near is not null && model.Tooltips;
-            if (near is not null) ShowNote(near, x);
+            noteCard.IsVisible = (near is not null || onFlag) && model.Tooltips;
+            if (near is not null) ShowNote(near, x); else if (onFlag) ShowFinish(x);
+        }
+        // The flag's own words: what it is, and that time after it still counts, in the same small card the pins use.
+        void ShowFinish(double x)
+        {
+            var rows = new StackPanel { Spacing = 3 };
+            var head = new TextBlock { Text = "Day finished " + finished!.Value.ToString("HH:mm"), FontSize = 12.5, FontWeight = FontWeight.SemiBold };
+            var detail = new TextBlock { Text = "Later time still counts as working time", FontSize = 11.5 }; detail.Classes.Add("muted");
+            rows.Children.Add(head); rows.Children.Add(detail); noteCard.Child = rows;
+            noteCard.Measure(Size.Infinity); var width = noteCard.DesiredSize.Width;
+            var left = x + 14; if (left + width > canvas.Width) left = x - 14 - width;
+            Canvas.SetLeft(noteCard, Math.Max(0, left)); Canvas.SetTop(noteCard, axisY + 34 + PinRoom);
         }
         void ShowNote(Pin pin, double x)
         {

@@ -108,7 +108,8 @@ public static class ReviewViews
         var pixelsPerHour = model.TimelinePixelsPerHour;
         var planned = model.Notes.MeetingsOn(day);
         // A day with a timed note has its pins hung under the ruler, so the meeting row and the blocks sit a little lower to make room, and the blocks are that much shorter.
-        var pinned = model.Notes.PinnedOn(day); var pinRoom = pinned.Count > 0 ? TimelineGuide.PinRoom : 0; var meetingTop = MeetingTop + pinRoom;
+        var pinned = model.Notes.PinnedOn(day); var finished = model.Engine.Away.Where(a => a.Start.Date == day).Select(a => (DateTime?)a.Start).LastOrDefault();
+        var pinRoom = pinned.Count > 0 || finished is not null ? TimelineGuide.PinRoom : 0; var meetingTop = MeetingTop + pinRoom;
         var bandTop = (planned.Count > 0 ? BandTopWithMeetings : BandTopFree) + pinRoom; var bandHeight = BandBottom - bandTop;
         double X(DateTime time) => TimelineGutter + (time - day).TotalHours * pixelsPerHour;
         // A little room before the first hour and after the last lets the end labels sit fully in view.
@@ -352,23 +353,7 @@ public static class ReviewViews
             canvas.AttachedToVisualTree += (_, _) => { nowTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) }; nowTimer.Tick += (_, _) => PlaceNow(); nowTimer.Start(); };
             canvas.DetachedFromVisualTree += (_, _) => { nowTimer?.Stop(); nowTimer = null; };
         }
-        // Where Finish day was pressed on this day: a quiet red line with a small flag chip under the band. Time logged after it is ordinary working time, so nothing else marks it.
-        if (model.Engine.Away.Where(a => a.Start.Date == day).Select(a => (DateTime?)a.Start).LastOrDefault() is { } finished)
-        {
-            var finishX = X(finished);
-            var finishLine = new Border { Name = "FinishMarker", Width = 1.5, Height = BandBottom + 8 - AxisY, IsHitTestVisible = false, ZIndex = 9 }; finishLine.Classes.Add("finishLine");
-            var flag = new IconGlyph(IconKind.Flag) { TintKey = "Finish", Width = 12, Height = 12, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-            var words = new TextBlock { Text = "Finished " + finished.ToString("HH:mm"), FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-            var finishChip = new Border { Name = "FinishChip", Child = Ui.Horizontal(flag, words), CornerRadius = new CornerRadius(7), Height = 20, Padding = new Thickness(7, 0), BorderThickness = new Thickness(1), IsHitTestVisible = false, ZIndex = 9 }; ((StackPanel)finishChip.Child).Spacing = 5; finishChip.Classes.Add("finishChip");
-            finishChip.Measure(Size.Infinity);
-            // The chip is centred on its line, and tucked to the left of it when the now chip is close, so the two never lie over each other.
-            var chipLeft = finishX - finishChip.DesiredSize.Width / 2;
-            if (day == model.Engine.Now.Date && Math.Abs(chipLeft + finishChip.DesiredSize.Width / 2 - X(model.Engine.Now)) < finishChip.DesiredSize.Width / 2 + 30 && finishX <= X(model.Engine.Now)) chipLeft = Math.Min(chipLeft, X(model.Engine.Now) - 30 - finishChip.DesiredSize.Width);
-            Canvas.SetLeft(finishLine, finishX - .75); Canvas.SetTop(finishLine, AxisY); Canvas.SetLeft(finishChip, chipLeft); Canvas.SetTop(finishChip, BandBottom + 10);
-            canvas.Children.Add(finishLine); canvas.Children.Add(finishChip);
-            ToolTip.SetTip(finishChip, "Finish day pressed · later time still counts as working time");
-        }
-        TimelineGuide.Attach(canvas, model, day, pixelsPerHour, TimelineGutter, AxisY, BandBottom, planned.Count > 0 ? meetingTop : bandTop, pinned);
+        TimelineGuide.Attach(canvas, model, day, pixelsPerHour, TimelineGutter, AxisY, BandBottom, planned.Count > 0 ? meetingTop : bandTop, pinned, finished);
         DateTime clicked = day.AddHours(9);
         DateTime At(double x) => day.AddMinutes(Math.Clamp(Math.Floor((x - TimelineGutter) / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);
