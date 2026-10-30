@@ -11,25 +11,17 @@ using Timer.Core;
 namespace Timer.Desktop;
 
 /// <summary>
-/// The pill: a small vertical card that stays on top. It shows what the timer is doing with one capsule (and a second, blue one only while a
-/// reminder is due), the day clock, a circle that carries the account's initials and pauses or resumes, the Accounts button, and the amber circle that
-/// starts a break. Clicking the time opens the dashboard. The Accounts button unfolds the list sideways from the pill as one capsule with it; it stays open
-/// while accounts are chosen, so a wrong choice can be put right at once, and the button, Escape or a click elsewhere folds it away.
+/// The pill: a small card that stays on top. It shows what the timer is doing with a state light (and a second, blue one only while a reminder is due), the
+/// day clock, a tile that carries the account's initials and pauses or resumes, the account's box and the amber tile that starts a break. Clicking the time
+/// opens the dashboard. The account's box hangs a list of accounts below the pill; it stays open while accounts are chosen, so a wrong choice can be put right
+/// at once, and the box, Escape or a click elsewhere folds it away.
 /// </summary>
 public sealed class PillWindow : Window
 {
     public Action? OpenDashboard { get; set; }
     private readonly TimerModel model;
-    /// <summary>The pill's own size before it is scaled for the screen, and the room kept around it for its shadow or glow.</summary>
-    public const double PillWidth = 72, PillHeight = 316, PillRadius = 36;
-    /// <summary>The horizontal pill's own size: 336 wide and 72 tall, a capsule of the same 36 pixel radius. Its contents start 20 pixels from the left and end 14 from the right.</summary>
-    public const double HorizontalWidth = 336, HorizontalHeight = 72, HorizontalInsetLeft = 20, HorizontalInsetRight = 14;
-    /// <summary>Which shape the pill is now, from the setting. It is rebuilt in place when the setting changes.</summary>
-    public bool Horizontal => horizontal;
-    private bool horizontal;
-    private double ShapeWidth => horizontal ? HorizontalWidth : PillWidth;
-    private double ShapeHeight => horizontal ? HorizontalHeight : PillHeight;
-    public static double BaseWindowHeight => PillHeight + 2 * Ui.ShadowMargin;
+    /// <summary>The pill's own size before it is scaled for the screen: 336 wide and 72 tall, a capsule with a 36 pixel radius. Its contents start 20 pixels from the left and end 14 from the right.</summary>
+    public const double PillWidth = 336, PillHeight = 72, PillRadius = 36, InsetLeft = 20, InsetRight = 14;
     // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
     // A narrow screen (its width in device independent pixels over 1800, never above 95 per cent or below 80 per cent), and a screen with a low
     // Windows scale, because it has fewer pixels to the inch, so the same pill looks bigger on it. Windows scale 125 per cent or more gives the
@@ -44,27 +36,26 @@ public sealed class PillWindow : Window
     private readonly ScaleTransform pillScale = new(1, 1);
     public double Scale => pillScale.ScaleX;
     /// <summary>The window height at the size the pill is drawn on this screen.</summary>
-    public double WindowHeightNow => (ShapeHeight + 2 * Ui.ShadowMargin) * Scale;
+    public double WindowHeightNow => (PillHeight + 2 * Ui.ShadowMargin) * Scale;
     /// <summary>The card's own size as drawn (the window less the room round it), and its corner radius, for the dashboard to grow from.</summary>
-    public Size CardSizeNow => new(ShapeWidth * Scale, ShapeHeight * Scale);
+    public Size CardSizeNow => new(PillWidth * Scale, PillHeight * Scale);
     public double CardRadiusNow => PillRadius * Scale;
     /// <summary>The window width at the size the pill is drawn on this screen.</summary>
-    public double WindowWidthNow => (ShapeWidth + 2 * Ui.ShadowMargin) * Scale;
+    public double WindowWidthNow => (PillWidth + 2 * Ui.ShadowMargin) * Scale;
 
     private StatusFace face = null!;
     private Border surface = null!, shadowHost = null!;
-    private Border? drawerFiller, drawer;
     private Popup panel = new();
     private Grid rootGrid = new();
     private ScrollViewer accountScroll = null!;
-    private bool overDrawer, closedWindow, ensuring, closingByCode;
+    private bool overList, closedWindow, ensuring, closingByCode;
     private long dismissedAt;
     private DispatcherTimer? settleTimer;
     private int? appliedChoice;
     private (PixelRect Bounds, double Scaling)? lastScreen;
     private (bool, string, ThemeVariant)? lastShadow;
 
-    /// <summary>Whether the account drawer is open beside the pill.</summary>
+    /// <summary>Whether the account list is open below the pill.</summary>
     public bool PanelOpen => panel.IsOpen;
     /// <summary>The account list's scroll box, so tests can read its limit.</summary>
     public ScrollViewer AccountScroll => accountScroll;
@@ -83,7 +74,7 @@ public sealed class PillWindow : Window
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Brushes.Transparent;
 
-        BuildShape();
+        Build();
         Width = WindowWidthNow; Height = WindowHeightNow;
         Opened += (_, _) => FitToScreen(Screens.ScreenFromWindow(this));
         PositionChanged += (_, _) => { FitIfScreenChanged(); SettleSoon(); };
@@ -92,7 +83,7 @@ public sealed class PillWindow : Window
         // Whenever the real size is not the wanted one, say after a drag or a change made while hidden, it is put right.
         SizeChanged += (_, _) => { if (IsVisible && !ensuring && !closedWindow && (Math.Abs(ClientSize.Width - WindowWidthNow) > 1.5 || Math.Abs(ClientSize.Height - WindowHeightNow) > 1.5)) EnsureSize(); };
         Activated += (_, _) => EnsureSize();
-        Deactivated += (_, _) => { if (!overDrawer) CloseFlyouts(); };
+        Deactivated += (_, _) => { if (!overList) CloseFlyouts(); };
         KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Escape && PanelOpen) { CloseFlyouts(); e.Handled = true; } };
         model.PropertyChanged += Changed;
         ActualThemeVariantChanged += (_, _) => { lastShadow = null; Refresh(); };
@@ -100,57 +91,26 @@ public sealed class PillWindow : Window
         Refresh();
     }
 
-    // ---- the shape: vertical or horizontal
-    /// <summary>
-    /// Builds the pill's card for the shape the setting calls for, and its account list (the drawer that slides out beside the vertical pill, or the list that hangs
-    /// below the horizontal one). It is built again when the setting changes, so the pill turns into the other shape where it stands.
-    /// </summary>
-    private void BuildShape()
+    // ---- the card
+    /// <summary>Builds the pill's card and the account list that hangs below it.</summary>
+    private void Build()
     {
-        if (panel.IsOpen) { closingByCode = true; try { panel.IsOpen = false; } finally { closingByCode = false; } }
-        horizontal = model.PillHorizontal;
-        // The top of the pill is shared with the dashboard's rail.
-        face = new StatusFace(model, "Pill", "PillBreak", "Open dashboard", () => OpenDashboard?.Invoke(), OnCircle, ToggleAccounts, horizontal);
+        // The top of the pill is shared with the dashboard's sidebar.
+        face = new StatusFace(model, "Pill", "PillBreak", "Open dashboard", () => OpenDashboard?.Invoke(), OnCircle, ToggleAccounts);
         var root = rootGrid = new Grid { Background = Brushes.Transparent };
-        if (horizontal)
-        {
-            // Along the card, centred on its height, with the room kept clear at each end (the card's edge is part of it).
-            face.Margin = new Thickness(HorizontalInsetLeft - EdgeThickness, 0, HorizontalInsetRight - EdgeThickness, 0); face.HorizontalAlignment = HorizontalAlignment.Left; face.VerticalAlignment = VerticalAlignment.Center;
-            root.Children.Add(face);
-        }
-        else
-        {
-            // From the top, so the rail's top can start at the same distance from its own edge and nothing moves when one becomes the other.
-            var column = new StackPanel { Spacing = 10, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, TopInset - EdgeThickness, 0, 0) };
-            column.Children.Add(face); root.Children.Add(column);
-        }
+        // Along the card, centred on its height, with the room kept clear at each end (the card's edge is part of it).
+        face.Margin = new Thickness(InsetLeft - EdgeThickness, 0, InsetRight - EdgeThickness, 0); face.HorizontalAlignment = HorizontalAlignment.Left; face.VerticalAlignment = VerticalAlignment.Center;
+        root.Children.Add(face);
         Ui.PillGestures(root, this);
-        surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true, Width = ShapeWidth, Height = ShapeHeight, BorderThickness = new Thickness(EdgeThickness) };
+        surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true, Width = PillWidth, Height = PillHeight, BorderThickness = new Thickness(EdgeThickness) };
         surface.Classes.Add("pillBody");
         shadowHost = Ui.Shadowed(surface, PillRadius);
-        drawerFiller = null; drawer = null;
-        if (!horizontal)
-        {
-            // While the drawer is open, a square of the drawer's own surface sits behind the pill's right half, so the corners the capsule cuts away show the drawer
-            // tucked behind them. It lives in the pill's window, not the drawer's, so the drawer's window never lies over the pill's controls.
-            drawerFiller = new Border { Name = "PillDrawerFiller", Width = PillRadius, Height = PillHeight, HorizontalAlignment = HorizontalAlignment.Right, IsVisible = false, IsHitTestVisible = false };
-            drawerFiller.Classes.Add("pillBody");
-            shadowHost.Child = null; shadowHost.Child = new Grid { Children = { drawerFiller, surface } };
-        }
         Content = new LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
         panel = new Popup();
-        if (horizontal) BuildDropdown(); else BuildDrawer();
+        BuildDropdown();
         lastShadow = null;
     }
-    /// <summary>Turns the pill into the other shape when the setting has changed, keeping its top left corner, and brings it back inside the screen if it now runs off it.</summary>
-    private void SwitchShape()
-    {
-        BuildShape(); EnsureSize(); Refresh();
-        if (!IsVisible || Screens.ScreenFromWindow(this) is not { } screen) return;
-        var area = screen.WorkingArea; var box = ScreenGuard.SlideInside(new ScreenGuard.Box(area.X, area.Y, area.Width, area.Height), new ScreenGuard.Box(Position.X, Position.Y, (int)Math.Round(WindowWidthNow * screen.Scaling), (int)Math.Round(WindowHeightNow * screen.Scaling)));
-        if (box.X != Position.X || box.Y != Position.Y) Position = new PixelPoint(box.X, box.Y);
-    }
-    /// <summary>The horizontal pill's account list, a card that hangs below the account's box. It is as wide as the vertical pill's drawer, and scrolls inside.</summary>
+    /// <summary>The account list, a card that hangs below the account's box and scrolls inside.</summary>
     public const double DropdownWidth = 208, DropdownMaxHeight = 380, DropdownGap = 11;
     /// <summary>The list's card, built apart from the pop-up so it can also be drawn on its own.</summary>
     public Border MakeDropdownCard()
@@ -160,8 +120,8 @@ public sealed class PillWindow : Window
         // The pop-up's window clips what is drawn outside it, so the card has room round it for its whole shadow.
         var card = new Border { Name = "PillDropdown", Width = DropdownWidth, MaxHeight = DropdownMaxHeight, Padding = new Thickness(12, 12, 12, 10), CornerRadius = new CornerRadius(24), BorderThickness = new Thickness(1), Child = content, BoxShadow = HangingCard.Shadow, Margin = HangingCard.Room };
         card.Classes.Add("pillBody"); card.Bind(Border.BorderBrushProperty, card.GetResourceObservable("Line"));
-        card.PointerEntered += (_, _) => overDrawer = true;
-        card.PointerExited += (_, _) => overDrawer = false;
+        card.PointerEntered += (_, _) => overList = true;
+        card.PointerExited += (_, _) => overList = false;
         // A list long enough to scroll keeps a 10 pixel track on its right, which with the card's own padding left a wide empty strip beside the play buttons. The track
         // takes that padding's place while it shows; a short list has no track and keeps the even padding.
         void FitTrack() => card.Padding = content.Scroll.Extent.Height > content.Scroll.Viewport.Height + .5 ? new Thickness(12, 12, 2, 10) : new Thickness(12, 12, 12, 10);
@@ -172,13 +132,12 @@ public sealed class PillWindow : Window
     private void BuildDropdown()
     {
         var card = MakeDropdownCard();
-        drawer = card;
         panel.PlacementTarget = surface; panel.Placement = PlacementMode.BottomEdgeAlignedLeft;
         panel.PlacementConstraintAdjustment = PopupPositionerConstraintAdjustment.FlipY | PopupPositionerConstraintAdjustment.SlideX;
         // A point under the account's box joins the card to it, as the bell's card hangs from the bell. It sits on the pill's lower edge, and is moved under the box each time the list opens.
         dropdownHung = HangingCard.Hang(card, -1, DropdownPoint, "PillBody");
         panel.IsLightDismissEnabled = true; panel.Child = new LayoutTransformControl { LayoutTransform = pillScale, Child = dropdownHung };
-        panel.Closed += (_, _) => { overDrawer = false; if (!closingByCode) dismissedAt = Environment.TickCount64; SetOpenLook(false); };
+        panel.Closed += (_, _) => { overList = false; if (!closingByCode) dismissedAt = Environment.TickCount64; SetOpenLook(false); };
         rootGrid.Children.Add(panel);
     }
 
@@ -230,98 +189,23 @@ public sealed class PillWindow : Window
         }, DispatcherPriority.Background);
     }
 
-    // ---- the account drawer
-    private void BuildDrawer()
-    {
-        // The list slides out from behind the pill, which keeps its own shape, ring and glow: the drawer starts Behind pixels under the pill's right edge and is
-        // cut away where the pill's capsule is, so what shows is the part beside it, with its own rounded corners tucked behind the pill's.
-        var content = new AccountsPanel(model, "Pill", compact: true, reorderable: false, () => { CloseFlyouts(); model.OpenAccounts(); });
-        accountScroll = content.Scroll;
-        drawer = new Border { Name = "PillDrawer", Width = DrawerWidth, Height = PillHeight, Padding = new Thickness(Behind + 14, 14, 14, 12), CornerRadius = new CornerRadius(0, PillRadius, PillRadius, 0), Child = content, RenderTransform = drawerSlide };
-        drawer.Classes.Add("pillBody");
-        drawer.PointerEntered += (_, _) => overDrawer = true;
-        drawer.PointerExited += (_, _) => overDrawer = false;
-        // The cut-out stays put while the drawer slides, so the pill is never covered on the way.
-        var holder = new Grid { Name = "PillDrawerHolder", Width = DrawerWidth, Height = PillHeight, Clip = BehindPill() }; holder.Children.Add(drawer);
-        panel.PlacementTarget = surface; panel.Placement = PlacementMode.Right; panel.HorizontalOffset = -Behind * Scale; panel.VerticalOffset = 0;
-        panel.PlacementConstraintAdjustment = PopupPositionerConstraintAdjustment.FlipX | PopupPositionerConstraintAdjustment.SlideY;
-        panel.IsLightDismissEnabled = true; panel.Child = new LayoutTransformControl { LayoutTransform = pillScale, Child = holder };
-        panel.Closed += (_, _) => { overDrawer = false; if (!closingByCode) dismissedAt = Environment.TickCount64; SetOpenLook(false); };
-        // The popup belongs to the pill's tree, so it inherits its theme.
-        rootGrid.Children.Add(panel);
-    }
-    /// <summary>The drawer's width, beside the pill's own 72.</summary>
-    public const double DrawerWidth = 211;
-    /// <summary>How far the drawer reaches under the pill's right edge. It is the room the pill keeps clear either side of its controls, so nothing of the pill is under the drawer's window.</summary>
-    public const double Behind = 3;
-    // The drawer's own area less the pill's capsule, which is where the pill shows through. Drawn a hair inside the pill's edge, so no sliver of desktop shows between.
-    public static Geometry BehindPill()
-    {
-        const double inset = .5; var left = Behind - PillWidth + inset; var right = Behind - inset; var top = inset; var bottom = PillHeight - inset; var r = PillRadius - inset;
-        var capsule = new StreamGeometry();
-        using (var c = capsule.Open())
-        {
-            c.BeginFigure(new Point(left + r, top), true);
-            c.LineTo(new Point(right - r, top)); c.ArcTo(new Point(right, top + r), new Size(r, r), 0, false, SweepDirection.Clockwise);
-            c.LineTo(new Point(right, bottom - r)); c.ArcTo(new Point(right - r, bottom), new Size(r, r), 0, false, SweepDirection.Clockwise);
-            c.LineTo(new Point(left + r, bottom)); c.ArcTo(new Point(left, bottom - r), new Size(r, r), 0, false, SweepDirection.Clockwise);
-            c.LineTo(new Point(left, top + r)); c.ArcTo(new Point(left + r, top), new Size(r, r), 0, false, SweepDirection.Clockwise);
-            c.EndFigure(true);
-        }
-        return new CombinedGeometry(GeometryCombineMode.Exclude, new RectangleGeometry(new Rect(0, 0, DrawerWidth, PillHeight)), capsule);
-    }
-    private readonly TranslateTransform drawerSlide = new();
-    private DispatcherTimer? slideTimer;
-    // Slides the drawer out from behind the pill, easing out over SlideMilliseconds. The first step is taken on a tick, so where nothing ticks (headless) it simply stands at its place.
-    /// <summary>Whether the drawer eases out. The tests switch it off: nothing ticks there, so the drawer would stay where it starts.</summary>
-    public static bool SlideEnabled { get; set; } = true;
-    /// <summary>How long the drawer takes to ease out; a fifth of a second read as a snap.</summary>
-    public const double SlideMilliseconds = 420;
-    private void SlideOut()
-    {
-        slideTimer?.Stop(); var from = -(DrawerWidth - 24); var started = Environment.TickCount64;
-        // It starts hidden behind the pill, before it is first drawn, or its first frame would show it fully open.
-        if (!SlideEnabled || Motion.Reduced) { drawerSlide.X = 0; return; }
-        drawerSlide.X = from;
-        slideTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(8) };
-        slideTimer.Tick += (_, _) =>
-        {
-            var t = Math.Min(1, (Environment.TickCount64 - started) / SlideMilliseconds); var eased = 1 - Math.Pow(1 - t, 3);
-            drawerSlide.X = from * (1 - eased); if (t >= 1) slideTimer?.Stop();
-        };
-        slideTimer.Start();
-    }
-    /// <summary>How far the lights sit below the card's top edge, on the pill and on the rail.</summary>
-    public const double TopInset = 14;
-    /// <summary>The card's edge is this thick in every state, so the contents never move when a ring comes and goes; the column starts under it so the lights sit TopInset from the edge.</summary>
+    // ---- the account list
+        /// <summary>The card's edge is this thick in every state, so the contents never move when a ring comes and goes; the face starts inside it.</summary>
     public const double EdgeThickness = 1.5;
-    // While the drawer is open the Accounts button shows pressed; the pill itself keeps its shape and glow.
-    private void SetOpenLook(bool open) { face.SetAccountsOpen(open); if (drawerFiller is not null) drawerFiller.IsVisible = open; SyncDrawerRing(); }
-    private void SyncDrawerRing()
-    {
-        if (horizontal || drawer is null || drawerFiller is null) return; // The horizontal pill's list has its own hairline.
-        var thickness = surface.BorderThickness.Left;
-        // No ring on the drawer's pill side: there it is square and meets the pill (and the square behind it), so the top and bottom rings run on from them.
-        drawer.BorderThickness = new Thickness(0, thickness, thickness, thickness);
-        drawer.BorderBrush = surface.BorderBrush;
-        drawerFiller.BorderThickness = new Thickness(0, thickness, 0, thickness); drawerFiller.BorderBrush = surface.BorderBrush;
-    }
-    /// <summary>Opens the account drawer beside the pill. It closes when an account is chosen, with Escape, or by pressing the button again.</summary>
+    // While the list is open the Accounts button shows pressed; the pill itself keeps its shape and glow.
+    private void SetOpenLook(bool open) => face.SetAccountsOpen(open);
+    /// <summary>Opens the account list below the pill. It closes with Escape, a click elsewhere, or by pressing the button again.</summary>
     public void ShowPanel()
     {
         SetOpenLook(true);
-        if (horizontal)
-        {
-            // The list hangs below the pill with its right edge level with the pill's, since the card is nearly as wide as the pill and the account's box is near that end.
-            var wellLeft = Math.Max(0, HorizontalWidth - DropdownWidth);
-            panel.HorizontalOffset = (wellLeft - HangingCard.Room.Left) * Scale; panel.VerticalOffset = (DropdownGap - HangingCard.Room.Top) * Scale;
-            if (dropdownHung is not null && face.AccountsButton.TranslatePoint(new Point(face.AccountsButton.Bounds.Width / 2, 0), surface) is { } centre)
-                HangingCard.MovePoint(dropdownHung, DropdownPoint, HangingCard.ClampFromRight(DropdownWidth - (centre.X - wellLeft), DropdownWidth, 24));
-        }
-        else { panel.HorizontalOffset = -Behind * Scale; SlideOut(); }
+        // The list hangs below the pill with its right edge level with the pill's, since the card is nearly as wide as the pill and the account's box is near that end.
+        var wellLeft = Math.Max(0, PillWidth - DropdownWidth);
+        panel.HorizontalOffset = (wellLeft - HangingCard.Room.Left) * Scale; panel.VerticalOffset = (DropdownGap - HangingCard.Room.Top) * Scale;
+        if (dropdownHung is not null && face.AccountsButton.TranslatePoint(new Point(face.AccountsButton.Bounds.Width / 2, 0), surface) is { } centre)
+            HangingCard.MovePoint(dropdownHung, DropdownPoint, HangingCard.ClampFromRight(DropdownWidth - (centre.X - wellLeft), DropdownWidth, 24));
         panel.IsOpen = true;
     }
-    // Pressing the button while the drawer is open closes it. Light dismiss has already closed it by the time the click arrives, so a close that
+    // Pressing the button while the list is open closes it. Light dismiss has already closed it by the time the click arrives, so a close that
     // just happened from the same press is not undone by opening it again.
     private void ToggleAccounts()
     {
@@ -329,8 +213,8 @@ public sealed class PillWindow : Window
         if (Environment.TickCount64 - dismissedAt < 300) return;
         ShowPanel();
     }
-    /// <summary>Puts the account drawer away, so the pill is a plain capsule again when it comes back from the dashboard.</summary>
-    public void CloseFlyouts() { closingByCode = true; try { panel.IsOpen = false; } finally { closingByCode = false; } overDrawer = false; SetOpenLook(false); }
+    /// <summary>Puts the account list away, so the pill is a plain capsule again when it comes back from the dashboard.</summary>
+    public void CloseFlyouts() { closingByCode = true; try { panel.IsOpen = false; } finally { closingByCode = false; } overList = false; SetOpenLook(false); }
 
     // ---- behaviour
     private void OnCircle()
@@ -341,8 +225,6 @@ public sealed class PillWindow : Window
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        // The shape chosen in settings takes effect straight away too, where the pill stands.
-        if (!closedWindow && model.PillHorizontal != horizontal) { SwitchShape(); return; }
         // A new pill size from settings takes effect straight away, even while the pill is hidden behind the dashboard.
         if (model.PillScalePercent != appliedChoice) FitToScreen(Screens.ScreenFromWindow(this));
         Refresh();
@@ -365,7 +247,6 @@ public sealed class PillWindow : Window
         // The same thickness in every state: a thicker edge only while something is happening moved the contents by half a pixel, which showed as a jump.
         surface.BorderThickness = new Thickness(EdgeThickness);
         surface.BorderBrush = key == "Idle" ? (this.TryFindResource("Line", ActualThemeVariant, out var line) && line is IBrush lineBrush ? lineBrush : Brushes.Gray) : new SolidColorBrush(Color.FromArgb(179, stateColour.R, stateColour.G, stateColour.B));
-        if (drawer is not null) SyncDrawerRing();
         var shadow = (model.Shadows, key, ActualThemeVariant);
         if (lastShadow != shadow) { lastShadow = shadow; Ui.SetPillShadow(shadowHost, model.Shadows, key == "Idle" ? null : key); }
     }

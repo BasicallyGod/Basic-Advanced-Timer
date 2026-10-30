@@ -17,7 +17,7 @@ namespace Timer.Desktop;
 /// </summary>
 public sealed class OnboardingView : Grid
 {
-    public const int StepCount = 5;
+    public const int StepCount = 4;
     private readonly TimerModel model;
     private int step;
     private readonly TextBlock stepLabel = Ui.Text("", 12, "muted");
@@ -80,8 +80,7 @@ public sealed class OnboardingView : Grid
                 case 0: if (!ApplyAccounts()) return; break;
                 case 1: if (!ApplyHours()) return; break;
                 case 2: ApplyFormat(); break;
-                case 3: break; // The pill's shape is applied as it is chosen.
-                case 4: model.CompleteSetup(); Finished?.Invoke(); return;
+                case 3: model.CompleteSetup(); Finished?.Invoke(); return;
             }
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException or OverflowException or InvalidDataException or IOException)
@@ -108,7 +107,6 @@ public sealed class OnboardingView : Grid
             0 => ("Your client accounts", "These are the clients you track time against. Rename the examples or add your own. Budgets are optional: leave them blank for no limit.", AccountsStep()),
             1 => ("Your working hours", "The day clock starts at your start time, and the schedule is what the week overview measures your time against. Overnight shifts are not supported yet.", HoursStep()),
             2 => ("How you count time", "This changes every total and the exports. You can switch any time from the right-click menu.", FormatStep()),
-            3 => ("Your pill", "The timer lives in a small pill that stays on top of your other windows. Choose its shape. You can change it later in Settings.", ShapeStep()),
             _ => ("You are all set", "A few things worth knowing before you start.", ReadyStep())
         };
     }
@@ -254,25 +252,12 @@ public sealed class OnboardingView : Grid
 
     // ---- step 4: ready -----------------------------------------------------------------------------------------------------------------
 
-    // ---- step 4: the pill's shape -----------------------------------------------------------------------------------------------------
-
-    private Control ShapeStep()
-    {
-        var (tiles, _) = PillShapeChoice.Build(model, "Setup");
-        // The tiles keep their own mark in step with the setting, which is also changed from Settings.
-        void Mark(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { foreach (var tile in ((Panel)tiles).Children.OfType<Button>()) tile.Classes.Set("selected", tile.Name == "Setup" + (model.PillHorizontal ? "Horizontal" : "Vertical")); }
-        model.PropertyChanged += Mark; tiles.DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Mark; Mark(null, null!);
-        tiles.Margin = new Thickness(0, 14, 0, 0);
-        return tiles;
-    }
-
     private Control ReadyStep()
     {
-        var horizontal = model.PillHorizontal;
-        // The pill as it will look, drawn from the same parts as the real one: beside the notes when it is tall, above them when it is wide.
-        var panel = new Grid { ColumnDefinitions = new ColumnDefinitions(horizontal ? "*" : "Auto,*"), RowDefinitions = new RowDefinitions(horizontal ? "Auto,*" : "*") };
-        panel.Children.Add(new Border { Child = DrawnPill(), Margin = horizontal ? new Thickness(2, 2, 0, 16) : new Thickness(6, 4, 28, 0), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left });
-        var points = new StackPanel { Spacing = horizontal ? 8 : 11 }; if (horizontal) Grid.SetRow(points, 1); else Grid.SetColumn(points, 1);
+        // The pill as it will look, drawn from the same parts as the real one, above the notes.
+        var panel = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+        panel.Children.Add(new Border { Child = DrawnPill(), Margin = new Thickness(2, 2, 0, 16), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left });
+        var points = new StackPanel { Spacing = 8 }; Grid.SetRow(points, 1);
         StackPanel Point(string heading, string text)
         {
             var block = new StackPanel { Spacing = 2 };
@@ -282,10 +267,10 @@ public sealed class OnboardingView : Grid
         }
         points.Children.Add(Point("Click the time.", "On the pill it opens the dashboard. In the dashboard it collapses back to the pill."));
         points.Children.Add(Point("The green square.", "It shows the account you are on and pauses or resumes it. With no account chosen it opens the list."));
-        points.Children.Add(horizontal ? Point("Breaks.", "The cup at the end starts a break, and the green square resumes your account.") : Point("Breaks.", "The cup at the foot starts a break, and the green square resumes your account."));
-        points.Children.Add(horizontal ? Point("Accounts.", "The account's name opens the account list below the pill. Choosing an account starts it.") : Point("Accounts.", "The three bars at the foot open the account list beside the pill. Choosing an account starts it."));
+        points.Children.Add(Point("Breaks.", "The cup at the end starts a break, and the green square resumes your account."));
+        points.Children.Add(Point("Accounts.", "The dot and arrow beside the green square open the account list below the pill. Choosing an account starts it."));
         points.Children.Add(Point("Settings.", "The gear at the top right of the dashboard holds the theme, hours, export and Run setup again."));
-        points.Children.Add(Point("The tray.", "Closing a window hides the timer to the notification area and tracking carries on. The cross at the foot of the dashboard closes it for good."));
+        points.Children.Add(Point("The tray.", "Closing a window hides the timer to the notification area and tracking carries on. Quit timer, at the foot of the dashboard, closes it for good."));
         points.Children.Add(Point("Your data.", model.DataFolder is { } folder ? $"Stays on this computer in {folder}, with a backup each day." : "Stays on this computer, with a backup each day."));
         if (model.AutoStart?.Available == true)
         {
@@ -318,13 +303,10 @@ public sealed class OnboardingView : Grid
     // The pill itself, drawn for show: the same lights, clock and three tiles as the real one, with nothing that can be pressed.
     private Control DrawnPill()
     {
-        var horizontal = model.PillHorizontal;
-        var face = new StatusFace(model, "Setup", "SetupBreak", "", () => { }, () => { }, () => { }, horizontal);
+        var face = new StatusFace(model, "Setup", "SetupBreak", "", () => { }, () => { }, () => { });
         face.Refresh();
-        Control inside;
-        if (horizontal) { face.Margin = new Thickness(PillWindow.HorizontalInsetLeft - PillWindow.EdgeThickness, 0, PillWindow.HorizontalInsetRight - PillWindow.EdgeThickness, 0); face.HorizontalAlignment = HorizontalAlignment.Left; inside = face; }
-        else inside = new StackPanel { Margin = new Thickness(0, PillWindow.TopInset - PillWindow.EdgeThickness, 0, 0), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Children = { face } };
-        var card = new Border { Name = "SetupPill", Width = horizontal ? PillWindow.HorizontalWidth : PillWindow.PillWidth, Height = horizontal ? PillWindow.HorizontalHeight : PillWindow.PillHeight, CornerRadius = new CornerRadius(PillWindow.PillRadius), BorderThickness = new Thickness(PillWindow.EdgeThickness), Child = inside, IsHitTestVisible = false, Focusable = false };
+        face.Margin = new Thickness(PillWindow.InsetLeft - PillWindow.EdgeThickness, 0, PillWindow.InsetRight - PillWindow.EdgeThickness, 0); face.HorizontalAlignment = HorizontalAlignment.Left;
+        var card = new Border { Name = "SetupPill", Width = PillWindow.PillWidth, Height = PillWindow.PillHeight, CornerRadius = new CornerRadius(PillWindow.PillRadius), BorderThickness = new Thickness(PillWindow.EdgeThickness), Child = face, IsHitTestVisible = false, Focusable = false };
         card.Classes.Add("surface");
         Avalonia.Automation.AutomationProperties.SetAccessibilityView(card, Avalonia.Automation.AccessibilityView.Raw);
         card.AttachedToVisualTree += (_, _) => { foreach (var button in face.GetVisualDescendants().OfType<Button>()) { button.IsTabStop = false; button.Focusable = false; } };

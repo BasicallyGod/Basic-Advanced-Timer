@@ -823,8 +823,6 @@ public sealed class TrackingLabels : StackPanel
 public sealed class Chevron : Control
 {
     public bool Expanded { get; set; }
-    /// <summary>For a list that opens to the side: points right while it is shut and left while it is open, where the usual chevron points down and up.</summary>
-    public bool Sideways { get; init; }
     public Chevron() { Width = 14; Height = 14; }
     // Drawn in the theme's text colour, which changes when the pill turns to a recording or break look, so it must be drawn again then.
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -836,14 +834,6 @@ public sealed class Chevron : Control
     {
         var brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
         var pen = new Pen(brush, IconGlyph.StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
-        if (Sideways)
-        {
-            // The same shape turned on its side: the point is on the right while shut and on the left while open.
-            var x = Expanded ? 9 : 5;
-            context.DrawLine(pen, new Point(x, 2), new Point(Expanded ? 4 : 10, 7));
-            context.DrawLine(pen, new Point(Expanded ? 4 : 10, 7), new Point(x, 12));
-            return;
-        }
         var y = Expanded ? 9 : 5;
         context.DrawLine(pen, new Point(2, y), new Point(7, Expanded ? 4 : 10));
         context.DrawLine(pen, new Point(7, Expanded ? 4 : 10), new Point(12, y));

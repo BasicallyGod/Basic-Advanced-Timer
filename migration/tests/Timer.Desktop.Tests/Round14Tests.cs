@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Timer.Desktop.Tests;
 
-// Round 14: the account chip under the play tile, the horizontal pill without a name, and the narrow account panel with its one line rows.
+// Round 14: the account box on the pill, the pill without a name, and the narrow account panel with its one line rows.
 public sealed class Round14Tests
 {
     private static DateTime Day => new(2026, 10, 14);
@@ -22,81 +22,43 @@ public sealed class Round14Tests
     private static T Find<T>(Visual root, string name) where T : Control => root.GetVisualDescendants().OfType<T>().First(c => c.Name == name);
 
     [AvaloniaFact]
-    public void TheVerticalPillsTilePlaysAndPausesAndTheChipUnderItShowsTheAccountsColour()
+    public void TheAccountsBoxShowsTheStateDotAndItsChevronPointsDownAndUp()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
         {
-            var chip = Find<Border>(pill, "PillAccountChip"); var tile = Find<Border>(pill, "PillPrimaryTile");
-            // Two marks and no letters: the colour of the account it would start (or is recording) beside a chevron.
-            Assert.Empty(chip.GetVisualDescendants().OfType<TextBlock>());
-            var dot = chip.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Single(); var chevron = chip.GetVisualDescendants().OfType<Chevron>().Single();
-            // Side by side on one line, the dot first, and the pair centred in the chip.
-            var dotBox = dot.TranslatePoint(default, chip)!.Value; var chevronBox = chevron.TranslatePoint(default, chip)!.Value;
+            var box = Find<Border>(pill, "PillAccountSelector");
+            // Two marks and no letters: the state's dot beside a chevron, side by side and centred in the box.
+            Assert.Empty(box.GetVisualDescendants().OfType<TextBlock>());
+            var dot = box.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Single(); var chevron = box.GetVisualDescendants().OfType<Chevron>().Single();
+            var dotBox = dot.TranslatePoint(default, box)!.Value; var chevronBox = chevron.TranslatePoint(default, box)!.Value;
             Assert.True(dotBox.X < chevronBox.X); Assert.Equal(dotBox.Y + dot.Bounds.Height / 2, chevronBox.Y + chevron.Bounds.Height / 2, 1);
-            Assert.Equal(chip.Bounds.Width / 2, (dotBox.X + chevronBox.X + chevron.Bounds.Width) / 2, 1.5);
-            Assert.Equal(Avalonia.Media.Color.Parse(Ui.Visible(model.Accounts[0].Colour)), ((Avalonia.Media.ISolidColorBrush)dot.Fill!).Color);
-            model.ToggleAccount("Account two"); Settle(pill);
-            Assert.Equal(Avalonia.Media.Color.Parse(Ui.Visible(model.Accounts[1].Colour)), ((Avalonia.Media.ISolidColorBrush)dot.Fill!).Color);
-            // While an account runs the tile carries the pause symbol, not the initials: the chip does that.
-            Assert.All(tile.GetVisualDescendants().OfType<TextBlock>(), t => Assert.False(t.IsVisible));
-            Assert.Contains(tile.GetVisualDescendants().OfType<Viewbox>(), v => v.IsVisible);
-            // The chip sits under the tile, inside the same well, and the well keeps its height.
-            var well = Find<Border>(pill, "PillWell"); var tilePoint = tile.TranslatePoint(default, well)!.Value; var chipPoint = chip.TranslatePoint(default, well)!.Value;
-            Assert.True(chipPoint.Y >= tilePoint.Y + tile.Bounds.Height - 0.5);
-            Assert.Equal(StatusFace.TileSize + StatusFace.ChipHeight + StatusFace.WellGap + 2 * StatusFace.WellPadding, well.Bounds.Height, 0.5);
-        }
-        finally { pill.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void TheChipOpensTheListAndShowsTheAccountsOwnColour()
-    {
-        var model = Model(); var pill = new PillWindow(model); pill.Show(); Settle(pill);
-        try
-        {
-            var dot = Find<Border>(pill, "PillAccountChip").GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Single();
-            Assert.Equal(Avalonia.Media.Color.Parse(Ui.Visible(model.Accounts[0].Colour)), ((Avalonia.Media.ISolidColorBrush)dot.Fill!).Color);
+            Assert.Equal(box.Bounds.Width / 2, (dotBox.X + chevronBox.X + chevron.Bounds.Width) / 2, 1.5);
             Assert.False(pill.PanelOpen); pill.AccountsButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.True(pill.PanelOpen);
+            Assert.True(chevron.Expanded); // Down turns to up while the list is open.
+            pill.CloseFlyouts(); Settle(pill); Assert.False(chevron.Expanded);
         }
         finally { pill.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheChevronPointsTheWayTheListOpensSideToSideOnTheVerticalPillAndDownOnTheHorizontalOne()
+    public void ThePillKeepsItsPartsInside()
     {
-        foreach (var horizontal in new[] { false, true })
-        {
-            var model = Model(); model.SetPillHorizontal(horizontal); var pill = new PillWindow(model); pill.Show(); Settle(pill);
-            try
-            {
-                var chevron = Find<Button>(pill, "PillAccounts").GetVisualDescendants().OfType<Chevron>().Single();
-                Assert.Equal(!horizontal, chevron.Sideways); // The vertical pill's list slides out to the side, the horizontal pill's hangs below.
-                Assert.False(chevron.Expanded); pill.ShowPanel(); Settle(pill); Assert.True(chevron.Expanded); // Right turns to left, down turns to up, while it is open.
-                pill.CloseFlyouts(); Settle(pill); Assert.False(chevron.Expanded);
-            }
-            finally { pill.Close(); }
-        }
-    }
-
-    [AvaloniaFact]
-    public void TheHorizontalPillIsNarrowAndKeepsItsPartsInside()
-    {
-        Assert.Equal(336, PillWindow.HorizontalWidth);
-        var model = Model(); model.SetPillHorizontal(true);
+        Assert.Equal(336, PillWindow.PillWidth);
+        var model = Model();
         var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
         {
-            var surface = Find<Border>(pill, "PillSurface"); Assert.Equal(PillWindow.HorizontalWidth, surface.Bounds.Width, 0.5);
+            var surface = Find<Border>(pill, "PillSurface"); Assert.Equal(PillWindow.PillWidth, surface.Bounds.Width, 0.5);
             // Every control lies inside the card with the room asked for at each end.
             var left = surface.Bounds.Left; var right = surface.Bounds.Right;
             foreach (var name in new[] { "PillStateLight", "PillDashboard", "PillPause", "PillAccounts", "PillBreak" })
             {
                 var c = Find<Control>(pill, name); var box = c.TranslatePoint(default, surface)!.Value;
-                Assert.True(box.X >= 0 && box.X + c.Bounds.Width <= PillWindow.HorizontalWidth, $"{name} {box.X}+{c.Bounds.Width}");
+                Assert.True(box.X >= 0 && box.X + c.Bounds.Width <= PillWindow.PillWidth, $"{name} {box.X}+{c.Bounds.Width}");
             }
             var brk = Find<Control>(pill, "PillBreak"); var edge = brk.TranslatePoint(new Point(brk.Bounds.Width, 0), surface)!.Value.X;
-            Assert.InRange(PillWindow.HorizontalWidth - edge, PillWindow.HorizontalInsetRight - 5, PillWindow.HorizontalInsetRight + 1); // A ring's room is part of its button.
+            Assert.InRange(PillWindow.PillWidth - edge, PillWindow.InsetRight - 5, PillWindow.InsetRight + 1); // A ring's room is part of its button.
         }
         finally { pill.Close(); }
     }
@@ -104,7 +66,7 @@ public sealed class Round14Tests
     [AvaloniaFact]
     public void TheAccountRowsAreOneLineWithItsBarUnder()
     {
-        Assert.True(PillWindow.DrawerWidth < 220);
+        Assert.True(PillWindow.DropdownWidth < 220);
         var model = Model(); var window = new DashboardWindow(model); window.Show();Settle(window);
         try
         {
@@ -128,15 +90,14 @@ public sealed class Round14Tests
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
         Directory.CreateDirectory(folder);
         foreach (var theme in new[] { "Light", "Dark" })
-            foreach (var horizontal in new[] { false, true })
             {
-                var model = Model(); model.SetTheme(theme); model.SetPillHorizontal(horizontal); model.ToggleAccount("Account two");
+                var model = Model(); model.SetTheme(theme); model.ToggleAccount("Account two");
                 var pill = new PillWindow(model); pill.Show(); Settle(pill);
                 try
                 {
-                    using (var shut = pill.CaptureRenderedFrame()) shut?.Save(Path.Combine(folder, $"r14-pill-{(horizontal ? "h" : "v")}-{theme}.png"));
+                    using (var shut = pill.CaptureRenderedFrame()) shut?.Save(Path.Combine(folder, $"r14-pill-{theme}.png"));
                     pill.ShowPanel(); Settle(pill);
-                    using var open = pill.CaptureRenderedFrame(); open?.Save(Path.Combine(folder, $"r14-pill-{(horizontal ? "h" : "v")}-open-{theme}.png"));
+                    using var open = pill.CaptureRenderedFrame(); open?.Save(Path.Combine(folder, $"r14-pill-open-{theme}.png"));
                 }
                 finally { pill.Close(); }
             }
