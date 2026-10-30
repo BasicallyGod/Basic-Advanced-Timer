@@ -526,7 +526,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public ThemeDerivation.BlockLook BlockLook(string accountColour) => ThemeDerivation.Block(CurrentTheme, Ui.Visible(accountColour));
     public void SetTheme(string theme)
     {
-        if (theme != ThemeLibrary.System && Themes.All(t => t.Name != theme)) throw new ArgumentException("Unknown theme", nameof(theme));
+        if (theme != ThemeLibrary.System && theme != AppThemes.Sun && Themes.All(t => t.Name != theme)) throw new ArgumentException("Unknown theme", nameof(theme));
         preferences = preferences with { Theme = theme }; ApplyTheme(); Save(); Notify();
     }
     /// <summary>
@@ -716,6 +716,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         get
         {
+            if (Theme == AppThemes.Sun) return SunIsDark ? AppThemes.Dark : AppThemes.Light;
             if (Theme != ThemeLibrary.System && Themes.FirstOrDefault(t => t.Name == Theme) is { } chosen) return chosen;
             var dark = Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant == Avalonia.Platform.PlatformThemeVariant.Dark;
             return dark ? AppThemes.Dark : AppThemes.Light;
@@ -732,6 +733,38 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (ReferenceEquals(variant, appliedVariant)) return;
         appliedVariant = variant; app.RequestedThemeVariant = variant;
     }
+    // ---- Sunset to sunrise: Light by day and Dark by night. The clock tick saves and repaints every fifteen seconds, which is when the theme follows the sun. Saved as the appearance lines suncity=<city or hand> and sunhand=<dark from>-<light from>.
+    private const string SunCityLine = "suncity=", SunHandLine = "sunhand=";
+    public static readonly TimeSpan DefaultDarkFrom = new(19, 0, 0), DefaultLightFrom = new(7, 0, 0);
+    private string? AppearanceValue(string prefix) => preferences.Extras?.AppearanceLines.FirstOrDefault(l => l.StartsWith(prefix, StringComparison.Ordinal)) is { } line ? line[prefix.Length..] : null;
+    /// <summary>The place chosen for the sun's times: a city's name, or <see cref="SunTimes.ByHand"/> for times typed in. With none chosen it is a guess from the computer's time zone.</summary>
+    public string SunPlace => AppearanceValue(SunCityLine) is { Length: > 0 } saved && (saved == SunTimes.ByHand || SunTimes.Find(saved) is not null) ? saved : SunTimes.Guess(SunZone).Name;
+    /// <summary>The time zone the sun's times are shown in. The computer's own; replaced in tests.</summary>
+    public TimeZoneInfo SunZone { get; set; } = TimeZoneInfo.Local;
+    /// <summary>The two times used when set by hand: dark from the first, light from the second.</summary>
+    public (TimeSpan DarkFrom, TimeSpan LightFrom) SunHandTimes
+    {
+        get
+        {
+            var parts = AppearanceValue(SunHandLine)?.Split('-');
+            return parts is { Length: 2 } && TimeSpan.TryParse(parts[0], CultureInfo.InvariantCulture, out var dark) && TimeSpan.TryParse(parts[1], CultureInfo.InvariantCulture, out var light) && dark < TimeSpan.FromDays(1) && light < TimeSpan.FromDays(1)
+                ? (dark, light) : (DefaultDarkFrom, DefaultLightFrom);
+        }
+    }
+    public void SetSunPlace(string place) { SetAppearanceFlag(SunCityLine, place, true); Notify(); }
+    public void SetSunHandTimes(TimeSpan darkFrom, TimeSpan lightFrom)
+    {
+        SetAppearanceFlag(SunHandLine, darkFrom.ToString(@"hh\:mm", CultureInfo.InvariantCulture) + "-" + lightFrom.ToString(@"hh\:mm", CultureInfo.InvariantCulture), true); Notify();
+    }
+    /// <summary>When it turns light and when it turns dark on a day, in this computer's time: the sun's, or the hand-set times; a place where the sun does not rise or set that day falls back to the hand-set times.</summary>
+    public (TimeSpan LightFrom, TimeSpan DarkFrom) SunDay(DateTime day)
+    {
+        var hand = SunHandTimes;
+        if (SunPlace != SunTimes.ByHand && SunTimes.Find(SunPlace) is { } city && SunTimes.On(day, city, SunZone) is { Rise: { } rise, Set: { } set }) return (rise.TimeOfDay, set.TimeOfDay);
+        return (hand.LightFrom, hand.DarkFrom);
+    }
+    /// <summary>Whether it is night by the sun's times now: before this morning's light or from this evening's dark.</summary>
+    public bool SunIsDark { get { var (light, dark) = SunDay(Engine.Now); var now = Engine.Now.TimeOfDay; return light <= dark ? now < light || now >= dark : now >= dark && now < light; } }
     public bool IsOnBreak => BreakAccount.Is(ActiveAccount);
     /// <summary>Whether hovering a control shows its tooltip. Switched off, the words are still the accessible names.</summary>
     /// <summary>Whether a longer entry that runs into later blocks moves them without asking first. Chosen by a tick box in the entry window, and in settings.</summary>

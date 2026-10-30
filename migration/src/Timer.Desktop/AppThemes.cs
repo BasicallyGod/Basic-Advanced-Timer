@@ -18,6 +18,8 @@ public static class AppThemes
         }
     };
     public static ThemeDefinition Dark => ThemeLibrary.Dark;
+    /// <summary>The choice that is Light by day and Dark by night, switching at sunset and sunrise (or at times set by hand). It is a choice, not a theme of its own: <see cref="TimerModel.CurrentTheme"/> is Light or Dark.</summary>
+    public const string Sun = "Sun";
     public static readonly IReadOnlyList<ThemeDefinition> BuiltIn = new[] { Light, ThemeLibrary.Dark };
     /// <summary>
     /// The theme choice to use for a saved one: System, Light or Dark as they are, and a retired built-in or a user's own theme by its base, so a saved
@@ -26,7 +28,7 @@ public static class AppThemes
     public static string Resolve(string? saved, IEnumerable<ThemeDefinition>? own)
     {
         if (string.IsNullOrWhiteSpace(saved)) return ThemeLibrary.System;
-        foreach (var current in new[] { ThemeLibrary.System, Light.Name, Dark.Name }) if (current.Equals(saved, StringComparison.OrdinalIgnoreCase)) return current;
+        foreach (var current in new[] { ThemeLibrary.System, Sun, Light.Name, Dark.Name }) if (current.Equals(saved, StringComparison.OrdinalIgnoreCase)) return current;
         var known = (own ?? System.Array.Empty<ThemeDefinition>()).Concat(ThemeLibrary.BuiltIn).FirstOrDefault(t => t.Name.Equals(saved, StringComparison.OrdinalIgnoreCase));
         if (known is not null) return known.Dark ? Dark.Name : Light.Name;
         var renamed = ThemeLibrary.Renamed(saved);

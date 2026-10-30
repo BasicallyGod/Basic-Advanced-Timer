@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 30 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Settings: a Sunset theme, Light by day and Dark by night | [63a4ac8](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/63a4ac8e2c7205d808a209174121fe807a372ee5) | A fourth tile in Appearance. The theme follows the sunrise and sunset of a city from a bundled list (guessed from the computer's time zone until one is chosen) or two times typed in, which also cover a day with no sunrise or sunset. Nothing needs the network or a location service. |
+
 ## 29 October 2026
 
 | Change | Commit | Details |
