@@ -162,6 +162,10 @@ public sealed class PillWindow : Window
         card.Classes.Add("pillBody"); card.Bind(Border.BorderBrushProperty, card.GetResourceObservable("Line"));
         card.PointerEntered += (_, _) => overDrawer = true;
         card.PointerExited += (_, _) => overDrawer = false;
+        // A list long enough to scroll keeps a 10 pixel track on its right, which with the card's own padding left a wide empty strip beside the play buttons. The track
+        // takes that padding's place while it shows; a short list has no track and keeps the even padding.
+        void FitTrack() => card.Padding = content.Scroll.Extent.Height > content.Scroll.Viewport.Height + .5 ? new Thickness(12, 12, 2, 10) : new Thickness(12, 12, 12, 10);
+        content.Scroll.PropertyChanged += (_, e) => { if (e.Property == ScrollViewer.ExtentProperty || e.Property == ScrollViewer.ViewportProperty) FitTrack(); };
         return card;
     }
     private Grid? dropdownHung; private const string DropdownPoint = "PillDropdownPoint";

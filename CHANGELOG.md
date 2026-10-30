@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Horizontal pill: no wasted strip in the account list | PENDING2 | A list long enough to scroll lets the scroll bar's track take the card's right padding, so the strip beside the play buttons is no wider than the left. |
 | Settings button stays put | PENDING | The header row now has a fixed height. Without the tabs, the settings page's row shrank and the gear moved up two pixels. |
 | Notes: important is gold | PENDING | An important note's star, wash and edge are gold (not the accent, which read as the row being selected). |
 | Notes: the star keeps its place | PENDING | In the Notes card a row now reads bell, star, cross, so the bell can come and go without moving the star. |

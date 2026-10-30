@@ -115,4 +115,23 @@ public sealed class Round22Tests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void ALongHorizontalDropdownGivesTheScrollTrackThePaddingInsteadOfAddingToIt()
+    {
+        var names = Enumerable.Range(1, 14).Select(i => "Account " + i).ToArray();
+        var model = Model(names); model.SetPillHorizontal(true);
+        var pill = new PillWindow(model); pill.Show(); Settle(pill);
+        try
+        {
+            var card = pill.MakeDropdownCard(); var host = new Window { Width = 320, Height = 600, Content = card }; host.Show(); Settle(host);
+            Assert.Equal(12, card.Padding.Left); Assert.Equal(2, card.Padding.Right); // Long enough to scroll: the track sits where the padding was.
+            var short1 = Model("Account one", "Account two"); short1.SetPillHorizontal(true);
+            var other = new PillWindow(short1); other.Show(); Settle(other);
+            var shortCard = other.MakeDropdownCard(); var host2 = new Window { Width = 320, Height = 600, Content = shortCard }; host2.Show(); Settle(host2);
+            Assert.Equal(12, shortCard.Padding.Right); // A short list has no track and keeps the even padding.
+            host2.Close(); other.Close(); host.Close();
+        }
+        finally { pill.Close(); }
+    }
 }
