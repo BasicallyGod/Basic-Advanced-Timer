@@ -106,29 +106,33 @@ public sealed class SettingsPageTests
             Assert.True(page.Bounds.Height > 400);
             // The chosen section sits in a scroll area, so a long one scrolls inside its card.
             Assert.NotEmpty(page.GetVisualDescendants().OfType<ScrollViewer>());
-            // The rail stays in view, and the page runs out to the window's right edge.
-            Assert.True(page.TranslatePoint(new Avalonia.Point(0, 0), window)!.Value.X > DashboardWindow.RailWidth); // Beside the rail.
+            // The sidebar stays in view, and the page runs out to the window's right edge.
+            Assert.True(page.TranslatePoint(new Avalonia.Point(0, 0), window)!.Value.X > Sidebar.Width); // Beside the sidebar.
             Assert.True(page.TranslatePoint(new Avalonia.Point(page.Bounds.Width, 0), window)!.Value.X > window.Bounds.Width - 2 * Ui.ShadowMargin - 40);
             Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "DashboardDay" && b.IsVisible);
             // The same button closes it again and the timeline returns.
             OpenSettings(window); using var closed = window.CaptureRenderedFrame();
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<SettingsView>(), s => s.Name == "SettingsPage");
             Assert.Contains(window.GetVisualDescendants().OfType<ScrollViewer>(), s => s.Name == "TimelineScroll");
-            Assert.True(window.GetVisualDescendants().OfType<Control>().First(c => c.Name == "RailDragHeader").Bounds.Width > 40);
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheRailButtonsShareACentreLine()
+    public void TheSidebarsTimerBlockIsCentredOnItsColumnAndTheFootButtonsShareTheEdges()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
-            double Centre(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Avalonia.Point(b.Bounds.Width / 2, 0), window)!.Value.X; }
-            Assert.Equal(Centre("RailAccounts"), Centre("TimelineTab"), 1.0); Assert.Equal(Centre("RailAccounts"), Centre("QuitTimer"), 1.0);
-            Assert.Equal(Centre("RailAccounts"), Centre("DashboardDay"), 1.0); Assert.Equal(Centre("RailAccounts"), Centre("DashboardBreak"), 1.0); Assert.Equal(Centre("RailAccounts"), Centre("RailPause"), 1.0); Assert.Equal(Centre("RailAccounts"), Centre("RailDashboard"), 1.0);
+            var sidebar = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Sidebar"); var middle = sidebar.TranslatePoint(new Avalonia.Point(sidebar.Bounds.Width / 2, 0), window)!.Value.X;
+            double Centre(string name) { var c = window.GetVisualDescendants().OfType<Control>().Single(x => x.Name == name); return c.TranslatePoint(new Avalonia.Point(c.Bounds.Width / 2, 0), window)!.Value.X; }
+            // The lights, the clock and the tracking card are all centred on the column.
+            Assert.Equal(middle, Centre("SidebarLights"), 1.0); Assert.Equal(middle, Centre("SidebarDashboard"), 1.5); Assert.Equal(middle, Centre("SidebarWell"), 1.5);
+            // Finish day and Close timer sit side by side at the foot, one each side of the middle, and level.
+            var day = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "DashboardDay"); var quit = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "QuitTimer");
+            double Left(Control c) => c.TranslatePoint(default, window)!.Value.X; double Top(Control c) => c.TranslatePoint(default, window)!.Value.Y;
+            Assert.True(Left(day) < middle && Left(quit) > middle - 1); Assert.Equal(Top(day), Top(quit), 0.5); Assert.Equal(day.Bounds.Width, quit.Bounds.Width, 1.5);
         }
         finally { window.Close(); }
     }

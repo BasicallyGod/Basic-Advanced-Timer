@@ -53,9 +53,9 @@ internal static class LayoutAudit
 
     private static bool Shown(Control c, Window window) => c.IsVisible && c.IsEffectivelyVisible && c.Opacity > .01;
     private static Rect? BoundsIn(Control c, Visual to) { var p = c.TranslatePoint(default, to); return p is null ? null : new Rect(p.Value, c.Bounds.Size); }
-    // Things that are meant to run on: the timeline's long canvas inside its own scroll, a row of chips that scrolls sideways, a clipped Reserve or Fold.
+    // Things that are meant to run on: the timeline's long canvas inside its own scroll, a row of chips that scrolls sideways.
     private static bool InsideSideways(Control c, Window w) => c.GetVisualAncestors().Any(a => a is ScrollViewer s && s.HorizontalScrollBarVisibility != Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled)
-        || c is Popup || c.GetVisualAncestors().Any(a => a is Reserve or Fold or ComboBox || a is Popup) // (a combo box's drop-down glyph is measured at the popup's size)
+        || c is Popup || c.GetVisualAncestors().Any(a => a is ComboBox || a is Popup) // (a combo box's drop-down glyph is measured at the popup's size)
         || c.GetVisualAncestors().Any(a => a.GetType().Name is "ContextMenu" or "ToolTip");
     private static string Describe(Visual v) => v is Control c ? $"{c.GetType().Name}{(string.IsNullOrEmpty(c.Name) ? "" : " " + c.Name)}" : v.GetType().Name;
 }

@@ -115,7 +115,7 @@ public sealed class NotesPageTests
         var model = Model(notes => notes.AddNote("Send the budget", null, Day.AddHours(8))); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var light = Find<Border>(window, "RailReminderLight"); Assert.Equal("A reminder is due", Avalonia.Automation.AutomationProperties.GetName(light));
+            var light = Find<Border>(window, "SidebarReminderLight"); Assert.Equal("A reminder is due", Avalonia.Automation.AutomationProperties.GetName(light));
             model.Notes.Toggle(model.Notes.All.Single().Id); Settle(window); Assert.Equal("No reminders waiting", Avalonia.Automation.AutomationProperties.GetName(light));
         }
         finally { window.Close(); }
@@ -130,7 +130,7 @@ public sealed class NotesPageTests
         try
         {
             Click(window, "NotesTab");
-            Assert.NotNull(Find<NotesPage>(window, "NotesPage")); Assert.Equal("Notes", window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Classes.Contains("clock") && t.Text == "Notes").Text);
+            Assert.NotNull(Find<NotesPage>(window, "NotesPage"));
             Assert.True(Find<TextBox>(window, "NotesSearch").IsEffectivelyVisible); Assert.False(Find<Button>(window, "PreviousPeriod").IsEffectivelyVisible);
             Assert.Contains("selected", Find<Button>(window, "NotesTab").Classes); Assert.DoesNotContain("selected", Find<Button>(window, "TimelineTab").Classes);
             Assert.False(Find<Border>(window, "TimelineCard").IsEffectivelyVisible);
@@ -201,9 +201,7 @@ public sealed class NotesPageTests
         try
         {
             Click(window, "NotesTab"); Click(window, "PageNoteOpen_" + IdOf(model, "Client call"));
-            foreach (var docked in new[] { false, true })
             {
-                window.Dock.Jump(docked ? 1 : 0, 1); Settle(window); // With the account panel beside the page there is less room, and the line still holds.
                 var account = Find<ComboBox>(window, "PageAccount"); var repeat = Find<ComboBox>(window, "PageRepeat"); var length = Find<TextBox>(window, "PageLength");
                 double Mid(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
                 Assert.Equal(Mid(account), Mid(repeat), 4); Assert.Equal(Mid(account), Mid(length), 4);

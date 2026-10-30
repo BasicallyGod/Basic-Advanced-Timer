@@ -27,10 +27,7 @@ public sealed class NotesCard : Border
     private readonly ContentControl formHost = new() { Name = "NotesForm" };
     private readonly StackPanel list = new() { Spacing = 8, Name = "NotesList" };
     private readonly Grid overlay = new();
-    // The Selected block tab: the card is lent the Selected block card while the account panel is docked and has folded its own place away.
-    private readonly ContentControl selectedSlot = new() { Name = "SelectedBlockSlot", IsVisible = false };
     private readonly StackPanel buttons; private readonly ScrollViewer scroll;
-    private Fold tabFold = null!; private double tab; private int lastSelection;
     private string? shown;
     // The form's state.
     private Form form = Form.None; private long? editing;
@@ -51,39 +48,18 @@ public sealed class NotesCard : Border
         var scroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, Name = "NotesScroll" };
         var body = Ui.Grid("*", "Auto,Auto,*"); body.RowSpacing = 10;
         Ui.Put(body, header); Ui.Put(body, formHost, 0, 1); Ui.Put(body, scroll, 0, 2);
-        Ui.Put(body, selectedSlot, 0, 1); Grid.SetRowSpan(selectedSlot, 2); this.scroll = scroll;
+        this.scroll = scroll;
         overlay.Children.Add(body); overlay.Children.Add(reminderHost); reminderHost.PlacementTarget = title; Child = overlay;
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditMeetingRequested += OnEditMeeting; Notes.EditNoteRequested += OnEditNote; Notes.MeetingMoved += OnMeetingMoved; Sync(); };
         DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditMeetingRequested -= OnEditMeeting; Notes.EditNoteRequested -= OnEditNote; Notes.MeetingMoved -= OnMeetingMoved; };
         Sync();
     }
-    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        // With the tab there, picking a block takes the card to it, and clearing the selection brings the notes back.
-        var count = model.SelectedBlocks.Count;
-        if (tab >= .5 && count != lastSelection && (count == 0) != (lastSelection == 0)) model.SetNotesCardShowsSelected(count > 0);
-        lastSelection = count;
-        Sync();
-    }
-
-    // ---- The Selected block tab ----
-
-    /// <summary>Whether the tab is available: the Selected block card has folded away and its place in this card is open.</summary>
-    public bool HasSelectedTab => tab >= .5;
-    /// <summary>Lends the Selected block card to the tab, or takes it back (null).</summary>
-    public void HostSelected(Control? card) { selectedSlot.Content = card; Sync(); }
-    /// <summary>How far the tab has opened, 0 to 1, as the account panel takes the Selected block card's room.</summary>
-    public void SetTab(double amount)
-    {
-        tab = Math.Clamp(amount, 0, 1); tabFold.Amount = 1 - tab;
-        if (tab < .5 && model.NotesCardShowsSelected) model.SetNotesCardShowsSelected(false);
-        Sync();
-    }
+    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Sync();
 
     // ---- The list ----
 
     private string Signature() => string.Join("|", Notes.ForDay(model.SelectedDate).Select(n => $"{n.Id};{n.Day:yyyyMMdd};{n.At};{n.End};{n.Text};{n.Done};{n.SeriesId};{n.HasDate}"))
-        + $"#{model.NotesCardShowsMeetings}#{model.NotesCardShowsSelected && HasSelectedTab}#{model.SelectedDate:yyyyMMdd}#{(Notes.All.Any(n => Notes.IsLate(n)) ? model.Engine.Now.ToString("HHmm") : "")}#{model.ReviewAccounts.Count}";
+        + $"#{model.NotesCardShowsMeetings}#{model.SelectedDate:yyyyMMdd}#{(Notes.All.Any(n => Notes.IsLate(n)) ? model.Engine.Now.ToString("HHmm") : "")}#{model.ReviewAccounts.Count}";
 
     /// <summary>Redraws the list if what it shows has changed.</summary>
     public void Sync()
@@ -92,8 +68,6 @@ public sealed class NotesCard : Border
         if (signature == shown) return;
         shown = signature;
         DrawTitle();
-        var onSelected = model.NotesCardShowsSelected && HasSelectedTab;
-        selectedSlot.IsVisible = onSelected && selectedSlot.Content is not null; buttons.IsVisible = !onSelected; formHost.IsVisible = !onSelected; scroll.IsVisible = !onSelected;
         var meetings = model.NotesCardShowsMeetings;
         var items = Notes.ForDay(model.SelectedDate).Where(n => NotesModel.IsMeeting(n) == meetings).ToList();
         list.Children.Clear();
@@ -107,16 +81,12 @@ public sealed class NotesCard : Border
     /// <summary>The card's title: Notes and Meetings as one switch, the same as the Notes page's, with the shown one filled.</summary>
     private void DrawTitle()
     {
-        var onSelected = model.NotesCardShowsSelected && HasSelectedTab;
         var meetings = model.NotesCardShowsMeetings;
-        var selectedChoice = NotesPage.Seg("CardKindSelected", "Selected block", onSelected, () => model.SetNotesCardShowsSelected(true));
-        var notesChoice = NotesPage.Seg("CardKindNotes", "Notes", !onSelected && !meetings, () => model.SetNotesCardShowsMeetings(false));
-        var meetingsChoice = NotesPage.Seg("CardKindMeetings", "Meetings", !onSelected && meetings, () => model.SetNotesCardShowsMeetings(true));
+        var notesChoice = NotesPage.Seg("CardKindNotes", "Notes", !meetings, () => model.SetNotesCardShowsMeetings(false));
+        var meetingsChoice = NotesPage.Seg("CardKindMeetings", "Meetings", meetings, () => model.SetNotesCardShowsMeetings(true));
         // A little under the page's switch, to sit level with the small buttons beside it.
-        selectedChoice.Height = notesChoice.Height = meetingsChoice.Height = 26; selectedChoice.FontSize = notesChoice.FontSize = meetingsChoice.FontSize = 13;
-        // The Selected block tab opens at the left (and folds away again) as the account panel comes and goes; its 2 pixel gap folds with it.
-        tabFold = new Fold(selectedChoice, 2, trailing: true) { Name = "CardKindSelectedFold", Amount = 1 - tab };
-        var track = NotesPage.Switch(tabFold, notesChoice, meetingsChoice); track.Height = 32;
+        notesChoice.Height = meetingsChoice.Height = 26; notesChoice.FontSize = meetingsChoice.FontSize = 13;
+        var track = NotesPage.Switch(notesChoice, meetingsChoice); track.Height = 32;
         ((StackPanel)track.Child!).Spacing = 0; notesChoice.Margin = new Thickness(0, 0, 2, 0);
         title.Content = track;
     }
@@ -244,25 +214,30 @@ public sealed class NotesCard : Border
         if (form == Form.None) { formHost.Content = null; return; }
         var meeting = form == Form.Meeting;
         var column = new StackPanel { Spacing = 8 };
-        // The words, with the account chip and the reminder chip inside the same box.
-        var box = Ui.Grid("Auto,*,Auto"); box.ColumnSpacing = 6;
-        var frame = new Border { Child = box, Height = 36, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(10, 0, 6, 0) }; frame.Classes.Add("composer");
+        // The words, with the account chip and the reminder chip inside the same box. With one chip they share the line with the words; with both there is not room
+        // for the words as well, so the chips take a line of their own above them and the box grows.
+        var stacked = draftAccount is not null && !meeting && draftReminder is not null;
+        var box = Ui.Grid(stacked ? "*" : "Auto,*,Auto", stacked ? "Auto,Auto" : "Auto"); box.ColumnSpacing = 6; box.RowSpacing = 2;
+        var frame = new Border { Child = box, MinHeight = 36, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = stacked ? new Thickness(10, 5, 6, 3) : new Thickness(10, 0, 6, 0) }; frame.Classes.Add("composer");
+        var chips = stacked ? new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 } : null;
+        void PutChip(Control chip, int column) { if (chips is not null) chips.Children.Add(chip); else Ui.Put(box, chip, column); }
         // The account chip takes the account off again when pressed (its cross says so), or with Backspace in an empty box.
         if (draftAccount is { } account)
         {
             var chip = Ui.Button("", () => { draftAccount = null; DrawForm(); }, "FormAccountChip"); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0); chip.VerticalAlignment = VerticalAlignment.Center;
             chip.Content = NoteParts.Chip("#" + account.Replace(" ", ""), "plain", null, NoteParts.Dot(model, account), IconKind.Close); ToolTip.SetTip(chip, "Remove account");
             Avalonia.Automation.AutomationProperties.SetName(chip, "Remove account " + account);
-            Ui.Put(box, chip);
+            PutChip(chip, 0);
         }
         field = new TextBox { Name = "NoteField", Text = draft, Watermark = meeting ? "Meeting name, # for an account" : "Write a note, # for an account", BorderThickness = new Thickness(0), Background = Brushes.Transparent, Height = 30, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0) };
         field.Classes.Add("bareField"); NoteLinks.AttachPaste(field);
-        Ui.Put(box, field, 1);
+        if (stacked) Ui.Put(box, field, 0, 1); else Ui.Put(box, field, 1);
         if (!meeting && draftReminder is { } reminder)
         {
             var chip = Ui.Button("", () => OpenReminder(null), "FormReminder"); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0);
-            chip.Content = NoteParts.Chip(NoteDates.When(reminder, model.Engine.Now), model.Engine.Now > reminder ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change reminder"); Ui.Put(box, chip, 2);
+            chip.Content = NoteParts.Chip(NoteDates.When(reminder, model.Engine.Now), model.Engine.Now > reminder ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change reminder"); PutChip(chip, 2);
         }
+        if (chips is not null) Ui.Put(box, chips);
         var row = Ui.Grid(meeting ? "*,Auto,Auto" : "*,Auto,Auto,Auto"); row.ColumnSpacing = 6;
         Ui.Put(row, frame);
         if (!meeting)
@@ -273,6 +248,8 @@ public sealed class NotesCard : Border
             var bell = Ui.Ctl("FormBell", null, IconKind.Bell, "Set reminder", () => OpenReminder(null), small: true); Ui.Put(row, bell, 2);
         }
         var submit = Ui.Ctl("SubmitNote", editing is not null ? "Save" : meeting ? "Add meeting" : "Add note", null, "Save", Submit, small: true); submit.Classes.Add("primary"); Ui.Put(row, submit, meeting ? 2 : 3);
+        // Beside a box that has grown to two lines the buttons stay level with its first line.
+        if (stacked) foreach (var side in row.Children.Skip(1)) { side.VerticalAlignment = VerticalAlignment.Top; side.Margin = new Thickness(0, 3, 0, 0); }
         column.Children.Add(row);
         var suggestions = new StackPanel { Name = "AccountSuggestions", IsVisible = false }; suggestions.Classes.Add("suggestions");
         column.Children.Add(suggestions);

@@ -70,8 +70,8 @@ public sealed class ToolbarAndTrackingTests
             model.ToggleAccount("Account one"); Settle(dash);
             Assert.True(model.IsTracking); Assert.Equal("Recording", model.ThemeState);
             var green = Color.Parse(model.CurrentTheme.Colour("Live")); Assert.True(green.G > green.R + 20, "The theme's tracking colour is green.");
-            var light = dash.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "RailStateLight");
-            var tile = dash.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "RailPrimaryTile");
+            var light = dash.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "SidebarStateLight");
+            var tile = dash.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "SidebarPrimaryTile");
             Assert.Equal(green, ((ISolidColorBrush)light.Background!).Color); Assert.Equal(green.G, ((ISolidColorBrush)tile.Background!).Color.G); // The light, and a soft tint of the same green.
             // On a break the light takes the break colour, and the primary control stays green with the account's initials.
             model.ToggleBreak(); Settle(dash);
@@ -108,10 +108,10 @@ public sealed class ToolbarAndTrackingTests
                 if (name == "AddTime") Assert.NotEmpty(button.GetVisualDescendants().OfType<TextBlock>().Single().Text!);
                 else { Assert.Empty(button.GetVisualDescendants().OfType<TextBlock>()); Assert.Equal(38, button.Width); }
             }
-            var title = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Timeline" && t.Classes.Contains("clock"));
+            var title = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "ViewTabs");
             var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll");
             var gap = scroll.TranslatePoint(new Point(0, 0), window)!.Value.Y - (title.TranslatePoint(new Point(0, title.Bounds.Height), window)!.Value.Y);
-            Assert.True(gap >= 14, $"only {gap:0}px between the title and the timeline");
+            Assert.True(gap >= 14, $"only {gap:0}px between the tabs and the timeline");
         }
         finally { window.Close(); }
     }

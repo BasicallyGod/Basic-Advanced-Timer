@@ -319,16 +319,16 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void TheRailsBreakIsThePillsBreakAtTheFootOfTheWellOfThePrimaryControlAndTheAccountsButton()
+    public void TheSidebarsBreakIsThePillsBreakAtTheEndOfTheTrackingCardBesideThePlayTile()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
         try
         {
             double Y(Control c) => c.TranslatePoint(default, window)!.Value.Y;
-            var brk = Find<Button>(window, "DashboardBreak"); var accounts = Find<Button>(window, "RailAccounts");
-            Assert.True(Y(Find<Button>(window, "RailPause")) < Y(accounts)); Assert.True(Y(accounts) < Y(brk)); Assert.True(Y(brk) < Y(Find<Button>(window, "TimelineTab"))); // As on the pill.
-            Assert.NotNull(Find<Border>(window, "RailWell")); // The same well.
-            Assert.True(Y(brk) < Y(Find<Button>(window, "DashboardDay"))); // And no longer at the foot with the flag.
+            var brk = Find<Button>(window, "DashboardBreak");
+            Assert.Equal(Y(Find<Button>(window, "SidebarPause")), Y(brk), 1.0); // Level with the play tile, at the card's far end.
+            Assert.NotNull(Find<Border>(window, "SidebarWell")); // The card is the pill's well.
+            Assert.True(Y(brk) < Y(Find<Button>(window, "DashboardDay"))); // And not at the foot with Finish day.
             var tile = brk.GetVisualDescendants().OfType<Border>().Single(b => b.Width == StatusFace.TileSize); Assert.InRange(((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A, 30, 60);
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.Equal(255, ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A);
         }

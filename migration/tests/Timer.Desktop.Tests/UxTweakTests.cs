@@ -146,17 +146,17 @@ public sealed class UxTweakTests
     }
 
     [AvaloniaFact]
-    public void TheClockIsFirstOnTheRailAndGoesBackToThePillAndCloseTimerIsAtTheFoot()
+    public void TheClockIsFirstInTheSidebarAndGoesBackToThePillAndCloseTimerIsAtTheFoot()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show(); var back = 0; window.OpenPill = () => back++;
         try
         {
             Settle(window);
             double Top(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Point(0, 0), window)!.Value.Y; }
-            Assert.True(Top("RailDashboard") < Top("RailPause")); Assert.True(Top("RailPause") < Top("RailAccounts")); Assert.True(Top("RailAccounts") < Top("TimelineTab"));
-            Assert.True(Top("DashboardBreak") < Top("DashboardDay")); Assert.True(Top("DashboardDay") < Top("QuitTimer")); Assert.True(Top("QuitTimer") > Top("WeekOverviewTab"));
-            Assert.Equal("Collapse to pill", ToolTip.GetTip(window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "RailDashboard")));
-            window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "RailDashboard").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.Equal(1, back);
+            Assert.True(Top("SidebarDashboard") < Top("SidebarPause")); Assert.True(Top("SidebarPause") < Top("Account0")); // The clock, then the tracking card, then the accounts.
+            Assert.Equal(Top("SidebarPause"), Top("DashboardBreak"), 1.0); Assert.True(Top("Account0") < Top("DashboardDay")); Assert.Equal(Top("DashboardDay"), Top("QuitTimer"), 0.5); // Finish day and Close timer side by side at the foot.
+            Assert.Equal("Collapse to pill", ToolTip.GetTip(window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SidebarDashboard")));
+            window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SidebarDashboard").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.Equal(1, back);
             var quits = 0; model.QuitRequested += () => quits++;
             window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "QuitTimer").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(1, quits);
@@ -385,7 +385,7 @@ public sealed class UxTweakTests
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model); window.Show();
         try
         {
-            window.ShowAccountsPanel(); Settle(window);
+Settle(window);
             var rows = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")).ToList();
             Assert.NotEmpty(rows);
             Assert.All(rows, row => Assert.DoesNotContain(row.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.EndsWith('%'))); // No percentage on the row itself.

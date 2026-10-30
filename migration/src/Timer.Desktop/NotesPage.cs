@@ -22,8 +22,9 @@ public sealed class NotesPage : Grid
     private NotesModel Notes => model.Notes;
     private readonly StackPanel views = new() { Spacing = 4 }, listColumn = new() { Spacing = 6, Margin = new Thickness(14, 10, 14, 14) };
     private readonly ContentControl formHost = new() { Name = "PageForm" };
+    private readonly WrapPanel filterRow = new() { Orientation = Orientation.Horizontal, Name = "NotesAccountPills" };
     private readonly Popup whenHost = new() { Placement = PlacementMode.Bottom, IsLightDismissEnabled = true, Name = "PageWhenHost" };
-    private NoteView view = NoteView.All; private string? accountFilter; private string query = "";
+    private NoteView view = NoteView.All; private readonly List<string> accountFilters = new(); private string query = "";
     private string? shown;
     // The form.
     private bool meeting; private long? editing; private string draft = "", lengthText = "00:30"; private string? account; private DateTime? when; private RepeatChoice repeat;
@@ -35,17 +36,13 @@ public sealed class NotesPage : Grid
         ColumnDefinitions = new ColumnDefinitions("196,14,*"); ClipToBounds = false;
         var aside = new Border { Name = "NotesViews", CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Padding = new Thickness(12) }; aside.Classes.Add("dayCard");
         aside.Child = new ScrollViewer { Content = views, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        // Laid out at its own width and clipped, so it can fold away to the left, with the gap beside it, while the account panel is docked (see SetDock).
-        asideHost = new Reserve(aside, AsideWidth) { Name = "NotesViewsHost" };
-        Children.Add(asideHost);
+        Children.Add(aside);
         var card = new Border { Name = "NotesListCard", CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), ClipToBounds = true }; card.Classes.Add("dayCard");
         var inner = Ui.Grid("*", "Auto,Auto,*");
-        // The same views as chips, in a row that opens above the form while the views column is folded away.
-        chipsHost = new Border { Name = "NotesChips", Height = 0, ClipToBounds = true, IsVisible = false, Opacity = 0, Child = new ScrollViewer { Content = chips, HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled } };
-        chips.Orientation = Orientation.Horizontal; chips.Spacing = 6; chips.Margin = new Thickness(14, 0, 14, 0); chips.VerticalAlignment = VerticalAlignment.Center;
-        Ui.Put(inner, chipsHost);
+        // The form, then the row of accounts to filter by, then the list.
         var formBox = new Border { Child = formHost, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(14, 14, 14, 12) }; formBox.Classes.Add("ruleBelow");
-        Ui.Put(inner, formBox, 0, 1); Ui.Put(inner, new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }, 0, 2);
+        var filterBox = new Border { Child = filterRow, Padding = new Thickness(14, 10, 14, 2), Name = "NotesAccountFilter" };
+        Ui.Put(inner, formBox); Ui.Put(inner, filterBox, 0, 1); Ui.Put(inner, new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }, 0, 2);
         inner.Children.Add(whenHost); card.Child = inner; SetColumn(card, 2); Children.Add(card);
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Sync(); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
@@ -57,56 +54,22 @@ public sealed class NotesPage : Grid
     public string Query { get => query; set { query = value ?? ""; shown = null; Sync(); } }
     public NoteView View => view;
 
-    // ---- Making room for the account panel ----
-
-    private const double AsideWidth = 196, AsideGap = 14, ChipsHeight = 50;
-    private readonly Reserve asideHost; private readonly Border chipsHost; private readonly StackPanel chips = new() { Name = "NotesChipRow" };
-    private double room;
-    /// <summary>
-    /// Follows the room the docked account panel has taken from the page (0 to 1): the views and accounts column folds away to the left over the first half, and a row of the
-    /// same views as chips (with an Accounts filter) opens above the form from .3 to .8, pushing the list down, so nothing it offers is lost.
-    /// </summary>
-    public void SetDock(double r)
-    {
-        room = r;
-        var fold = DockMotion.Window(r, 0, .5); var open = DockMotion.Window(r, .3, .8);
-        ColumnDefinitions[0].Width = new GridLength(AsideWidth * (1 - fold)); ColumnDefinitions[1].Width = new GridLength(AsideGap * (1 - fold));
-        asideHost.Opacity = 1 - fold; asideHost.IsVisible = fold < 1; asideHost.IsHitTestVisible = fold < .5;
-        chipsHost.Height = ChipsHeight * open; chipsHost.Opacity = open; chipsHost.IsVisible = open > 0; chipsHost.IsHitTestVisible = open > .5;
-    }
-
     // ---- The views, the accounts and the list ----
 
     private string Signature() => string.Join("|", Notes.All.Select(n => $"{n.Id};{n.Day:yyyyMMdd};{n.At};{n.End};{n.Text};{n.Done};{n.SeriesId}"))
-        + $"#{view}#{accountFilter}#{query}#{editing}#{model.Engine.Now:yyyyMMddHHmm}#{model.ReviewAccounts.Count}";
+        + $"#{view}#{string.Join(",", accountFilters)}#{query}#{editing}#{model.Engine.Now:yyyyMMddHHmm}#{model.ReviewAccounts.Count}";
 
     public void Sync()
     {
         var signature = Signature(); if (signature == shown) return; shown = signature;
-        var matches = Notes.Matching(query, accountFilter);
+        var matches = Notes.MatchingAny(query, accountFilters);
         views.Children.Clear();
         foreach (var kind in Enum.GetValues<NoteView>())
         {
             var count = matches.Count(n => Notes.InView(n, kind));
             views.Children.Add(Item(kind == NoteView.All ? "All" : kind.ToString(), count, view == kind, () => { view = kind; scope = null; shown = null; Sync(); DrawForm(); }, "NotesView_" + kind));
         }
-        // The chips: each view with its count, then the account filter.
-        chips.Children.Clear();
-        foreach (var kind in Enum.GetValues<NoteView>())
-        {
-            var count = matches.Count(n => Notes.InView(n, kind)); var name = kind == NoteView.All ? "All" : kind.ToString();
-            var chip = Ui.Ctl("NotesChip_" + kind, $"{name}  {count}", null, name, () => { view = kind; scope = null; shown = null; Sync(); DrawForm(); }, small: true);
-            chip.Classes.Set("on", view == kind); chips.Children.Add(chip);
-        }
-        chips.Children.Add(AccountsChip());
-        views.Children.Add(Ui.Rule()); ((Control)views.Children[^1]).Margin = new Thickness(4, 8);
-        var heading = new TextBlock { Text = "ACCOUNTS", FontSize = 11.5, FontWeight = FontWeight.SemiBold, LetterSpacing = .5, Margin = new Thickness(10, 0, 0, 4) }; heading.Classes.Add("muted"); views.Children.Add(heading);
-        foreach (var a in model.Accounts.Where(x => !BreakAccount.Is(x.Name)))
-        {
-            var count = Notes.Listed().Count(n => string.Equals(Notes.AccountOf(n), a.Name, StringComparison.OrdinalIgnoreCase));
-            var chosen = string.Equals(accountFilter, a.Name, StringComparison.OrdinalIgnoreCase);
-            views.Children.Add(Item(a.Display, count, chosen, () => { accountFilter = chosen ? null : a.Name; shown = null; Sync(); }, "NotesAccount_" + a.Name.Replace(" ", ""), NoteParts.Dot(model, a.Name)));
-        }
+        DrawAccountFilter();
         // The list.
         var inView = matches.Where(n => Notes.InView(n, view)).ToList();
         listColumn.Children.Clear();
@@ -127,24 +90,40 @@ public sealed class NotesPage : Grid
         }
     }
 
-    // The Accounts chip opens a short menu of the accounts to filter by, with the chosen one marked, and one to clear the filter.
-    private Button AccountsChip()
+    // The accounts as a row of tag pills, #Account with the number of notes under it, between the form and the list. They are drawn as the tags a note carries, so they cannot be
+    // taken for the sidebar's account rows (which start timers). Pressing one filters by it, pressing it again takes it off, several can be on at once, and Clear drops them all.
+    private void DrawAccountFilter()
     {
-        var chosen = model.Accounts.FirstOrDefault(a => string.Equals(a.Name, accountFilter, StringComparison.OrdinalIgnoreCase));
-        var chip = Ui.Ctl("NotesChipAccounts", chosen is null ? "Accounts" : chosen.Display, IconKind.Accounts, "Filter by account", () => { }, small: true);
-        chip.Classes.Set("on", chosen is not null);
-        var items = new List<Control>();
-        MenuItem Pick(string words, string? name)
+        filterRow.Children.Clear();
+        var label = new TextBlock { Text = "ACCOUNT", FontSize = 11.5, FontWeight = FontWeight.SemiBold, LetterSpacing = .5, VerticalAlignment = VerticalAlignment.Center }; label.Classes.Add("muted");
+        filterRow.Children.Add(new Border { Child = label, Margin = new Thickness(2, 0, 10, 8), Height = 30 }); // The margin is on the box, not the words, so the words are never measured short.
+        var listed = Notes.Listed();
+        foreach (var a in model.Accounts.Where(x => !BreakAccount.Is(x.Name)))
         {
-            var current = string.Equals(accountFilter, name, StringComparison.OrdinalIgnoreCase);
-            var item = new MenuItem { Header = (current ? "✓  " : "     ") + words, Name = "NotesChipAccount_" + (name ?? "All").Replace(" ", "") };
-            item.Click += (_, _) => { accountFilter = name; shown = null; Sync(); }; return item;
+            var count = listed.Count(n => string.Equals(Notes.AccountOf(n), a.Name, StringComparison.OrdinalIgnoreCase));
+            var on = accountFilters.Any(f => string.Equals(f, a.Name, StringComparison.OrdinalIgnoreCase));
+            var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center };
+            line.Children.Add(NoteParts.Dot(model, a.Name));
+            line.Children.Add(new TextBlock { Text = "#" + a.Display.Replace(" ", ""), VerticalAlignment = VerticalAlignment.Center });
+            line.Children.Add(NoteParts.Ink(count.ToString(CultureInfo.InvariantCulture), on ? "AccentText" : "Muted", 12));
+            if (on) line.Children.Add(new IconGlyph(IconKind.Close) { Width = 12, Height = 12, VerticalAlignment = VerticalAlignment.Center, TintKey = "AccentText" });
+            var pill = Ui.Button("", () => ToggleAccount(a.Name), "NotesAccount_" + a.Name.Replace(" ", "")); pill.Classes.Add("accountPill"); pill.Classes.Set("on", on); pill.Content = line;
+            pill.Margin = new Thickness(0, 0, 8, 8);
+            Avalonia.Automation.AutomationProperties.SetName(pill, (on ? "Stop filtering by " : "Filter by ") + a.Display + ", " + count + (count == 1 ? " note" : " notes"));
+            filterRow.Children.Add(pill);
         }
-        items.Add(Pick("All accounts", null));
-        foreach (var a in model.Accounts.Where(x => !BreakAccount.Is(x.Name))) items.Add(Pick(a.Display, a.Name));
-        var menu = new ContextMenu { ItemsSource = items };
-        chip.ContextMenu = menu; chip.Click += (_, _) => menu.Open(chip);
-        return chip;
+        if (accountFilters.Count > 0)
+        {
+            var clear = Ui.Button("Clear", () => { accountFilters.Clear(); shown = null; Sync(); }, "NotesAccountClear"); clear.Classes.Add("flat"); clear.Margin = new Thickness(2, 0, 0, 8); clear.Padding = new Thickness(6, 0);
+            clear.FontSize = 12.5; clear.FontWeight = FontWeight.SemiBold; ToolTip.SetTip(clear, "Show every account");
+            filterRow.Children.Add(clear);
+        }
+    }
+    private void ToggleAccount(string name)
+    {
+        var at = accountFilters.FindIndex(f => string.Equals(f, name, StringComparison.OrdinalIgnoreCase));
+        if (at >= 0) accountFilters.RemoveAt(at); else accountFilters.Add(name);
+        shown = null; Sync();
     }
 
     private static Button Item(string name, int count, bool on, Action click, string id, Control? lead = null)
@@ -249,7 +228,12 @@ public sealed class NotesPage : Grid
         }
         var names = new List<string> { "No account" }; names.AddRange(model.Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name));
         var accounts = new ComboBox { Name = "PageAccount", ItemsSource = names, Width = 150, Height = 36, MinHeight = 36, IsEnabled = !archived, FontSize = 13.5,
-            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<string>((name, _) => Ui.Horizontal(name == "No account" ? NoteParts.Dot(model, null) : NoteParts.Dot(model, name), new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center })) };
+            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<string>((name, _) =>
+            {
+                // The words' ink sits a little above the middle of their line, so the dot is lifted a pixel to read as level with them.
+                var dot = name == "No account" ? NoteParts.Dot(model, null) : NoteParts.Dot(model, name); dot.Margin = new Thickness(0, 0, 0, 2);
+                return Ui.Horizontal(dot, new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
+            }) };
         accounts.SelectedItem = account is null ? "No account" : names.FirstOrDefault(n => n.Equals(account, StringComparison.OrdinalIgnoreCase)) ?? "No account";
         accounts.SelectionChanged += (_, _) => account = accounts.SelectedItem is string chosen && chosen != "No account" ? chosen : null;
         Add(accounts);

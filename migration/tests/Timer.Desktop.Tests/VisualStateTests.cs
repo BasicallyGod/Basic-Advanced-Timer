@@ -80,9 +80,8 @@ public sealed class VisualStateTests
             var dashDay = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardDay");
             Assert.Equal("Start", dashDay.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Kind == IconKind.Sunrise).TintKey); Assert.Equal("Finish", dashDay.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Kind == IconKind.Flag).TintKey);
             foreach (var theme in AppThemes.BuiltIn) { var (r, g, b) = Timer.Core.ThemeColours.Rgb(theme.Colour("Start")); Assert.True(g > r + 20 && g > b + 20, theme.Name + " Start day is green"); }
-            Assert.DoesNotContain("finishDay", dashDay.Classes);
             now = Day.AddHours(10); model.ChangeDate(0); Dispatcher.UIThread.RunJobs(); // The scheduled start has passed, so the day is running.
-            Assert.Contains("finishDay", dashDay.Classes);
+            Assert.Equal("Finish day", Avalonia.Automation.AutomationProperties.GetName(dashDay));
             Assert.Equal(Brush(dashboard, "Finish"), Color.Parse(model.CurrentTheme.Colour("Finish"))); // The colour is the theme's Finish entry, not hard-coded.
         }
         finally { dashboard.Close(); }

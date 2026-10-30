@@ -60,7 +60,7 @@ public sealed class BreakTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             model.ToggleAccount("Account one"); now = now.AddMinutes(10); Dispatcher.UIThread.RunJobs();
-            dashboard.ShowAccountsPanel(); Dispatcher.UIThread.RunJobs(); using var panelFrame = dashboard.CaptureRenderedFrame(); // The accounts open beside the rail.
+Dispatcher.UIThread.RunJobs(); using var panelFrame = dashboard.CaptureRenderedFrame(); // The accounts open beside the rail.
             var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.StartsWith("Account") == true && char.IsDigit(b.Name[^1])).ToList();
             Assert.Equal(model.Accounts.Count - 1, rows.Count);
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Break");

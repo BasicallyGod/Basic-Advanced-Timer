@@ -73,7 +73,7 @@ public sealed class ShellTests
         {
             Dispatcher.UIThread.RunJobs();
             window.UpdateLayout(); // Windows CI can reach the clicks before the first layout pass, leaving every row at 0, 0.
-            void Open() { if (!window.AccountsOpen) window.ShowAccountsPanel(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); using var opened = window.CaptureRenderedFrame(); } // Choosing an account puts the list away.
+            void Open() { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); using var opened = window.CaptureRenderedFrame(); }
             for (var i = 0; i < model.Accounts.Count - 1; i++) // The break has its own button, not a row.
             {
                 Open(); var row = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account" + i);
@@ -83,10 +83,10 @@ public sealed class ShellTests
                 window.MouseUp(point, MouseButton.Left);
                 Assert.True(model.Accounts[i].Name == model.ActiveAccount,
                     $"Row {i}: bounds {row.Bounds}, point {point}, hit {window.GetVisualAt(point)?.GetType().Name}, active {model.ActiveAccount ?? "none"}");
-                Assert.InRange(row.Bounds.Width, 150, 200);
+                Assert.InRange(row.Bounds.Width, 200, 230);
             }
             model.TogglePause(); // Nothing recording, so the scrolled click below starts an account.
-            Open(); var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "RailAccountScroll");
+            Open(); var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "SidebarAccountScroll");
             scroll.Offset = new Vector(0, 2000);
             Dispatcher.UIThread.RunJobs();
             using var scrolledFrame = window.CaptureRenderedFrame();
@@ -190,7 +190,7 @@ public sealed class ShellTests
             // The day's figures sit in one strip under the timeline, and the budgets read in the accounts beside the rail.
             var strip = dashboard.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "DayTotals");
             Assert.Contains(strip.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "4.50h");
-            dashboard.ShowAccountsPanel(); Dispatcher.UIThread.RunJobs(); using var accountsFrame = dashboard.CaptureRenderedFrame();
+Dispatcher.UIThread.RunJobs(); using var accountsFrame = dashboard.CaptureRenderedFrame();
             texts = dashboard.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
             // The budget words are in the row's tooltip now, so the narrow panel keeps the room for the name and the time.
             Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")), b => ToolTip.GetTip(b)?.ToString() is { } tip && tip.Contains("9h / 15h")); dashboard.CloseFlyouts();
@@ -296,9 +296,9 @@ public sealed class ShellTests
             {
                 window.Show(); Dispatcher.UIThread.RunJobs();
                 using var frame = window.CaptureRenderedFrame();
-                // The pill has one header. The dashboard has two drag areas: the top of the rail and the empty middle of the header row.
+                // The pill has one header. The dashboard has one: the empty middle of the header row (the sidebar is dragged by its bare parts).
                 var headers = window.GetVisualDescendants().OfType<Panel>().Where(g => g.Name is "DragHeader" or "RailDragHeader").ToList();
-                Assert.Equal(window is DashboardWindow ? 2 : 1, headers.Count);
+                Assert.Single(headers);
                 foreach (var header in headers)
                 {
                     Assert.NotNull(header.Background); Assert.True(Ui.IsPlainSurface(header));
@@ -334,7 +334,7 @@ public sealed class ShellTests
             Assert.InRange(nine.TranslatePoint(default, coordinator.Dashboard)!.Value.Y, 100, 400);
             model.ToggleAccount("Account one");
             Save(coordinator.Dashboard, Path.Combine(output, "demo-tracking.png"));
-            Assert.Equal("Recording", ToolTip.GetTip(coordinator.Dashboard.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "RailLights")));
+            Assert.Equal("Recording", ToolTip.GetTip(coordinator.Dashboard.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "SidebarLights")));
             Save(coordinator.Dashboard, Path.Combine(output, "demo-late.png"));
             coordinator.Dashboard.OpenPill!(); coordinator.Pill.ShowPanel();
             Save(coordinator.Pill, Path.Combine(output, "demo-pill-overtime.png"));
@@ -387,7 +387,7 @@ public sealed class ShellTests
                     Assert.DoesNotContain(model.Accounts, a => a.Name == "Account one");
                     Assert.Contains(model.ReviewAccounts, a => a.Name == "Account one");
                     Assert.Equal(TimeSpan.FromMinutes(5), engine.Credited("Account one", now.Date, now.Date.AddDays(1)));
-                    window.ShowAccountsPanel(); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
                     Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "New client"); window.CloseFlyouts();
                     var editor = new AccountsDialog(model).Open((DashboardWindow)window);
                     var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();

@@ -160,8 +160,8 @@ public sealed class FeedbackRound8Tests
             Assert.True(Ratio(icon, Resource("Surface")) >= 3, "Readable on the page.");
             Assert.True(Ratio(icon, Resource("Surface")) < Ratio(muted, Resource("Surface")), "Lighter than the quiet text colour.");
             Assert.True(Ratio(Resource("RailIconOn"), Resource("Selected")) >= 3, "The chosen icon reads on its tint.");
-            Assert.Equal("RailIconOn", Find<Button>(window, "TimelineTab").GetVisualDescendants().OfType<IconGlyph>().Single().TintKey);
-            Assert.Equal("RailIcon", Find<Button>(window, "NotesTab").GetVisualDescendants().OfType<IconGlyph>().Single().TintKey);
+            Assert.Equal("Ink", Find<Button>(window, "TimelineTab").GetVisualDescendants().OfType<IconGlyph>().Single().TintKey);
+            Assert.Equal("Muted", Find<Button>(window, "NotesTab").GetVisualDescendants().OfType<IconGlyph>().Single().TintKey);
         }
         finally { window.Close(); }
     }

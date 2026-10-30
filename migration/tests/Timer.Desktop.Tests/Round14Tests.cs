@@ -102,14 +102,14 @@ public sealed class Round14Tests
     }
 
     [AvaloniaFact]
-    public void TheAccountPanelsAreNarrowAndEachRowIsOneLineWithItsBarUnder()
+    public void TheAccountRowsAreOneLineWithItsBarUnder()
     {
-        Assert.Equal(196, DockMotion.PanelWidth); Assert.True(PillWindow.DrawerWidth < 220);
-        var model = Model(); var window = new DashboardWindow(model); window.Show(); window.ShowAccountsPanel(); Settle(window);
+        Assert.True(PillWindow.DrawerWidth < 220);
+        var model = Model(); var window = new DashboardWindow(model); window.Show();Settle(window);
         try
         {
             var rows = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")).ToList();
-            Assert.Equal(2, rows.Count); Assert.All(rows, r => Assert.Equal(AccountList.RowHeight, r.Bounds.Height, 0.5));
+            Assert.Equal(2, rows.Count); Assert.True(rows.Count == 2 && rows[0].Bounds.Width <= Sidebar.Width - 24 + 1); Assert.All(rows, r => Assert.Equal(AccountList.RowHeight, r.Bounds.Height, 0.5));
             var first = rows[0];
             // Name and today's time share a line, and nothing else in the row is words: the budget is in the tooltip.
             var words = first.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsVisible && !string.IsNullOrEmpty(t.Text)).ToList();
@@ -140,7 +140,7 @@ public sealed class Round14Tests
                 }
                 finally { pill.Close(); }
             }
-        var demo = TimerModel.CreateDemo(); var window = new DashboardWindow(demo); window.Show(); window.ShowAccountsPanel(); Settle(window);
+        var demo = TimerModel.CreateDemo(); var window = new DashboardWindow(demo); window.Show();Settle(window);
         try { using var frame = window.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, "r14-dashboard.png")); } finally { window.Close(); }
     }
 }
