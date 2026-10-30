@@ -79,7 +79,7 @@ public sealed class VisualStateTests
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name == "DashboardDay"); // The day begins with its first block: no Start day or Finish day.
             foreach (var theme in AppThemes.BuiltIn) { var (r, g, b) = Timer.Core.ThemeColours.Rgb(theme.Colour("Start")); Assert.True(g > r + 20 && g > b + 20, theme.Name + " Start is green"); }
-            Assert.Equal(Brush(dashboard, "Finish"), Color.Parse(model.CurrentTheme.Colour("Finish"))); // Close timer goes to the theme's Finish red under the pointer.
+            Assert.Equal(Brush(dashboard, "Finish"), Color.Parse(model.CurrentTheme.Colour("Finish"))); // Quit timer goes to the theme's Finish red under the pointer.
         }
         finally { dashboard.Close(); }
     }

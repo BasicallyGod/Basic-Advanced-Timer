@@ -33,7 +33,7 @@ public sealed class FeedbackRound7Tests
     private static void Press(Window window, Point at) { window.MouseDown(at, MouseButton.Left); window.MouseUp(at, MouseButton.Left); Settle(window); }
 
     [AvaloniaFact]
-    public void ThePillAndItsDrawerWearTheRailsColourOnDarkAndTheDrawerTakesLongerToSlide()
+    public void ThePillWearsTheSidebarsColourOnDark()
     {
         var model = Model("Dark"); var pill = new PillWindow(model); pill.Show(); var dash = new DashboardWindow(model); dash.Show(); Dispatcher.UIThread.RunJobs();
         try
@@ -41,7 +41,6 @@ public sealed class FeedbackRound7Tests
             Avalonia.Media.Color Of(Border b) => ((Avalonia.Media.ISolidColorBrush)b.Background!).Color;
             Assert.True(dash.TryFindResource("Panel", dash.ActualThemeVariant, out var panel)); Assert.Equal(((Avalonia.Media.ISolidColorBrush)panel!).Color, Of(Find<Border>(pill, "PillSurface"))); // The sidebar is on the panel colour the pill wears.
             Assert.Contains("panel", Find<Border>(dash, "Sidebar").Classes);
-            Assert.True(PillWindow.SlideMilliseconds >= 350);
         }
         finally { pill.Close(); dash.Close(); }
     }

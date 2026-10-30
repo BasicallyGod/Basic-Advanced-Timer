@@ -150,15 +150,14 @@ public sealed class PreviewCaptureTests
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
         Directory.CreateDirectory(folder);
-        foreach (var horizontal in new[] { false, true })
         {
-            var model = TimerModel.CreateDemo(); model.SetTheme("Light"); model.SetPillHorizontal(horizontal);
+            var model = TimerModel.CreateDemo(); model.SetTheme("Light");
             var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
             try
             {
                 // Animations do not tick here, so the ring is set part way through its swell by hand.
                 var ring = pill.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PillReminderRing"); SetSwollen(ring, .55);
-                using var f = pill.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = pill.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, (horizontal ? "h" : "v") + "-pill-lights.png"));
+                using var f = pill.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = pill.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, "h-pill-lights.png"));
             }
             finally { pill.Close(); }
         }
@@ -171,7 +170,7 @@ public sealed class PreviewCaptureTests
         Directory.CreateDirectory(folder);
         foreach (var theme in new[] { "Light", "Dark" })
         {
-            var model = TimerModel.CreateDemo(); model.SetTheme(theme); model.SetPillHorizontal(true);
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme);
             var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
             try
             {
@@ -192,7 +191,7 @@ public sealed class PreviewCaptureTests
     }
 
     [AvaloniaFact]
-    public void WritePillShapeChoice()
+    public void WriteSetupAndSettings()
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
         Directory.CreateDirectory(folder);
@@ -205,9 +204,8 @@ public sealed class PreviewCaptureTests
                 void Press(string name) { window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
                 void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-" + name + ".png")); }
                 for (var i = 0; i < 3; i++) Press("SetupNext");
-                Shot("setup-shape-vertical"); Press("SetupHorizontal"); Shot("setup-shape-horizontal");
-                Press("SetupNext"); Shot("setup-ready-horizontal");
-                Press("SetupSkip"); Press("Settings"); Shot("settings-shape");
+                Shot("setup-ready");
+                Press("SetupSkip"); Press("Settings"); Shot("settings-appearance");
             }
             finally { window.Close(); }
         }

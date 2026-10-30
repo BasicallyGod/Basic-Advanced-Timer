@@ -22,65 +22,9 @@ public sealed class Round11Tests
     private static void Settle(Window w) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = w.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
 
     [AvaloniaFact]
-    public void EveryPartOfEachShapePictureLiesInsideItsFrameInSettingsAndInTheSetup()
-    {
-        foreach (var compact in new[] { true, false })
-        {
-            var (tiles, _) = PillShapeChoice.Build(Model(), "Test", compact);
-            var window = new Window { Width = 700, Height = 400, Content = tiles }; window.Show(); Settle(window);
-            try
-            {
-                foreach (var tile in tiles.GetVisualDescendants().OfType<Button>())
-                {
-                    var frame = tile.GetVisualDescendants().OfType<Border>().First(b => b.Height == PillShapeChoice.PictureHeight);
-                    var box = frame.TranslatePoint(default, window)!.Value; var size = frame.Bounds.Size;
-                    foreach (var part in frame.GetVisualDescendants().OfType<Border>())
-                    {
-                        var at = part.TranslatePoint(default, window)!.Value;
-                        Assert.True(at.X >= box.X - 0.5 && at.Y >= box.Y - 0.5 && at.X + part.Bounds.Width <= box.X + size.Width + 0.5 && at.Y + part.Bounds.Height <= box.Y + size.Height + 0.5,
-                            $"{tile.Name} (compact {compact}): a part at {at} {part.Bounds.Size} runs past its frame at {box} {size}");
-                    }
-                }
-            }
-            finally { window.Close(); }
-        }
-    }
-
-    // Fitting the frame is not enough: the vertical pill is a capsule, and a part that sits in its rounded end pokes out past the curve at its corners.
-    [AvaloniaFact]
-    public void EveryPartOfEachPicturedPillLiesInsideThePillsOwnOutlineWithRoomToSpare()
-    {
-        var (tiles, _) = PillShapeChoice.Build(Model(), "Shape", compact: true);
-        var window = new Window { Width = 700, Height = 400, Content = tiles }; window.Show(); Settle(window);
-        try
-        {
-            foreach (var tile in tiles.GetVisualDescendants().OfType<Button>())
-            {
-                var pill = tile.GetVisualDescendants().OfType<Border>().First(b => b.CornerRadius.TopLeft >= 15 && b.Height < PillShapeChoice.PictureHeight && b.BorderThickness.Left > 0);
-                var box = pill.Bounds.Size; var radius = pill.CornerRadius.TopLeft; var margin = 4.0; // The outline is a pixel wide and the parts should not touch it.
-                bool Inside(Point p)
-                {
-                    if (p.X < margin || p.X > box.Width - margin || p.Y < margin || p.Y > box.Height - margin) return false;
-                    var vertical = box.Height >= box.Width; var along = vertical ? p.Y : p.X; var across = vertical ? p.X : p.Y; var length = vertical ? box.Height : box.Width; var width = vertical ? box.Width : box.Height;
-                    var end = Math.Min(along, length - along); if (end >= radius) return true;
-                    var half = Math.Sqrt(radius * radius - (radius - end) * (radius - end)); // How far from the middle line the curve allows at this distance from the end.
-                    return Math.Abs(across - width / 2) <= half - margin;
-                }
-                foreach (var part in pill.GetVisualDescendants().OfType<Border>())
-                {
-                    var at = part.TranslatePoint(default, pill)!.Value; var size = part.Bounds.Size;
-                    foreach (var corner in new[] { at, at + new Point(size.Width, 0), at + new Point(0, size.Height), at + new Point(size.Width, size.Height) })
-                        Assert.True(Inside(corner), $"{tile.Name}: a part at {at} {size} pokes out of the {box} outline at {corner}");
-                }
-            }
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
     public void TheHorizontalPillsListHangsFromAPointUnderTheAccountsBox()
     {
-        var model = Model(); model.SetPillHorizontal(true);
+        var model = Model();
         var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
         {
@@ -90,7 +34,7 @@ public sealed class Round11Tests
             var fromLeft = PillWindow.DropdownWidth - fromRight;
             // The card's right edge is level with the pill's, so its left edge is a card's width in from there, and the point's centre lies under the middle of the box.
             var surface = pill.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PillSurface");
-            var middle = pill.AccountsButton.TranslatePoint(new Point(pill.AccountsButton.Bounds.Width / 2, 0), surface)!.Value.X - (PillWindow.HorizontalWidth - PillWindow.DropdownWidth);
+            var middle = pill.AccountsButton.TranslatePoint(new Point(pill.AccountsButton.Bounds.Width / 2, 0), surface)!.Value.X - (PillWindow.PillWidth - PillWindow.DropdownWidth);
             Assert.InRange(fromLeft, middle - 1, middle + 1);
             Assert.Equal(11, PillWindow.DropdownGap); // The card's top edge is 11 under the pill, the point's tip about 2 under it.
         }
@@ -161,7 +105,7 @@ public sealed class Round11Tests
             Assert.True(Ui.IsPulsing(light)); Assert.Equal(default, light.BoxShadow); Assert.False(ring.IsHitTestVisible);
             Assert.Same(ring.Parent, light.Parent); Assert.Equal(new Size(6, 14), ((Control)light.Parent!).Bounds.Size); // The cell stays the light's size, so nothing moves as the ring swells.
             PreviewCaptureTests.SetSwollen(ring, 1); ring.Background = Avalonia.Media.Brushes.Red; Settle(pill);
-            var corner = ring.TranslatePoint(new Point(1.5, 1.5), pill)!.Value; var middle = ring.TranslatePoint(new Point(10, 4), pill)!.Value; var body = new Point(middle.X, middle.Y + 60);
+            var corner = ring.TranslatePoint(new Point(1.5, 1.5), pill)!.Value; var middle = ring.TranslatePoint(new Point(10, 4), pill)!.Value; var body = new Point(middle.X, middle.Y + 26);
             using var frame = pill.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var shot = pill.CaptureRenderedFrame();
             var card = Pixel(shot!, body); var atCorner = Pixel(shot!, corner); var atTop = Pixel(shot!, middle);
             Assert.True(Distance(atCorner, card) < 12, "the ring's corner should be round, so its very corner shows the card"); Assert.True(Distance(atTop, card) > 150, "the ring's top edge should be filled");

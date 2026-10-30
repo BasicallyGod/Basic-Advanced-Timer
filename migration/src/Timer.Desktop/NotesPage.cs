@@ -159,7 +159,7 @@ public sealed class NotesPage : Grid
         {
             var important = NotesModel.IsImportant(note);
             var star = Ui.IconButton(important ? IconKind.StarFilled : IconKind.Star, important ? "Not important" : "Mark important", "PageNoteImportant_" + note.Id, () => Notes.SetImportant(note.Id, !important)); star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, star, 2);
-            if (important && star.Content is IconGlyph solid) solid.TintKey = "Accent";
+            if (important && star.Content is IconGlyph solid) solid.TintKey = "ImportantStar";
         }
         var remove = Ui.IconButton(IconKind.Close, isMeeting ? "Remove meeting" : "Remove note", "PageNoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, remove, isMeeting ? 2 : 3);
         var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9), Name = "PageRow_" + note.Id }; card.Classes.Add("noteRow"); if (!isMeeting && NotesModel.IsImportant(note)) card.Classes.Add("importantRow");

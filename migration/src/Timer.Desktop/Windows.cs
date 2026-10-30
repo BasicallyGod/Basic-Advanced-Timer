@@ -254,7 +254,7 @@ public sealed class DashboardWindow : Window
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Avalonia.Media.Brushes.Transparent;
         // The sidebar is the pill drawn out with its accounts shown: it runs the full height with the lights, the day clock and the tracking card at its top, the accounts
-        // below them, and Close timer at its foot. The workspace beside it has a header with the three views as tabs, the date and the gear.
+        // below them, and Quit timer at its foot. The workspace beside it has a header with the three views as tabs, the date and the gear.
         var root = Ui.Grid("Auto,*", "*");
         // The clock goes back to the pill, and the play tile pauses or resumes, as on the pill.
         sidebar = new Sidebar(model, () => OpenPill?.Invoke(), OnPlay, () => model.OpenAccounts(), () => model.RequestQuit());
@@ -269,7 +269,9 @@ public sealed class DashboardWindow : Window
         // The workspace's name on the left; on the right the date to step through and a button back to today.
         // In Week views the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
         // The date has a fixed width, so the arrows stay put whatever its text says.
-        var nav = Ui.Grid("*,Auto,Auto"); nav.VerticalAlignment = VerticalAlignment.Center;
+        var nav = Ui.Grid("*,Auto,Auto", "*"); nav.VerticalAlignment = VerticalAlignment.Center;
+        // The tabs (36 tall on a 3 pixel track) set the header's height; the settings page has no tabs, so without a fixed height the row shrank and the gear moved.
+        nav.Height = 42;
         // The three views are tabs where the page's name was: Timeline, Notes, Week overview. The settings page has its name there instead.
         Button ViewTab(IconKind kind, string name, string tip, Action click)
         {
@@ -361,7 +363,7 @@ public sealed class DashboardWindow : Window
         // The picture of the pill that the dashboard grows from (and shrinks to) sits over everything inside the card; it only shows while the window is moving.
         morphOverlay = new Avalonia.Controls.Image { Name = "MorphPill", Stretch = Avalonia.Media.Stretch.Fill, IsHitTestVisible = false, IsVisible = false, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
         layers.Children.Add(morphOverlay);
-        shadowHost = Ui.Shadowed(surface, 20); Content = shadowHost;
+        shadowHost = Ui.Shadowed(surface, 20); shadowFade = shadowHost.Transitions; Content = shadowHost;
         model.PropertyChanged += (_, _) => UpdateShadow();
         ActualThemeVariantChanged += (_, _) => UpdateShadow();
         UpdateShadow();
@@ -425,6 +427,7 @@ public sealed class DashboardWindow : Window
         var state = (model.Shadows, ActualThemeVariant);
         if (lastShadow != state) { lastShadow = state; if (morph >= 1) Ui.SetShadow(shadowHost, model.Shadows, null); }
     }
+    private Avalonia.Animation.Transitions? shadowFade;
     private double morph = 1, morphRadius = WindowMorph.DashboardRadius; private Rect morphFrom;
     private Avalonia.Threading.DispatcherTimer? morphTimer;
     /// <summary>How far the dashboard has grown from the pill, 0 (the pill's card) to 1 (the whole window).</summary>
@@ -444,13 +447,17 @@ public sealed class DashboardWindow : Window
         if (morph >= 1)
         {
             surface.Clip = null; dashboardBody!.Opacity = 1; layers.IsHitTestVisible = true; morphOverlay.IsVisible = false;
-            lastShadow = null; UpdateShadow();
+            shadowHost.Transitions = shadowFade; lastShadow = null; UpdateShadow();
             return;
         }
         surface.Clip = WindowMorph.RoundedRect(WindowMorph.Lerp(morphFrom, full, morph), morphRadius + (WindowMorph.DashboardRadius - morphRadius) * morph);
         dashboardBody!.Opacity = WindowMorph.DashboardOpacity(morph);
         morphOverlay.Opacity = WindowMorph.PillOpacity(morph); morphOverlay.IsVisible = morphOverlay.Source is not null && morphOverlay.Opacity > 0;
-        layers.IsHitTestVisible = false; shadowHost.BoxShadow = default; // The card's shadow comes back when it has all grown.
+        layers.IsHitTestVisible = false;
+        // The card's shadow comes back when it has all grown. Its fade is switched off while it moves, or a shadow left from before the window was shown faded out over
+        // the first 350 ms, and the window wore a shadow round a card that was still small.
+        if (shadowHost.Transitions is not null) shadowHost.Transitions = null;
+        shadowHost.BoxShadow = default;
     }
     private void StartMorph(double from, double to, bool closing, Action? done)
     {

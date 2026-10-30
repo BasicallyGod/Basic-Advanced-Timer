@@ -16,6 +16,7 @@ public sealed class PillTests
     private static DateTime Day => new(2026, 10, 14);
     private static TimerModel Model() { var m = new TimerModel(new TrackingEngine(clock: () => Day.AddHours(10))); m.CompleteSetup(); return m; }
     private static T Find<T>(Window w, string name) where T : Control => w.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+    private static void Settle(Window w) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = w.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
     private static void Click(Control c) => c.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     private static string? Tip(Control c) => ToolTip.GetTip(c)?.ToString();
     private static void ClickAt(Window w, Control c)
@@ -34,24 +35,14 @@ public sealed class PillTests
     public void InitialsAreTheFirstLettersOfUpToTwoWords(string name, string expected) => Assert.Equal(expected, PillWindow.Initials(name));
 
     [AvaloniaFact]
-    public void TheClockIsStackedAsHoursMinutesAndSeconds()
-    {
-        var clock = new StackedClock { Text = "01:30:45" };
-        Assert.Equal("01:30:45", clock.Text);
-        var lines = clock.Children.OfType<TextBlock>().Select(t => t.Text).ToArray();
-        Assert.Equal(new[] { "01", "30", "45" }, lines);
-        Assert.True(clock.Children.OfType<TextBlock>().Last().FontSize < clock.Children.OfType<TextBlock>().First().FontSize); // The seconds are smaller.
-    }
-
-    [AvaloniaFact]
-    public void ThePillIsASmallVerticalCardWithItsWindowAtTheScaledSize()
+    public void ThePillIsASmallWideCardWithItsWindowAtTheScaledSize()
     {
         var pill = new PillWindow(Model()); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
             var surface = Find<Border>(pill, "PillSurface");
             Assert.Equal(PillWindow.PillWidth, surface.Width); Assert.Equal(PillWindow.PillHeight, surface.Height);
-            Assert.True(surface.Height > 3 * surface.Width);
+            Assert.True(surface.Width > 4 * surface.Height);
             Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5); Assert.Equal(pill.WindowWidthNow, pill.Width, 0.5);
         }
         finally { pill.Close(); }
@@ -102,7 +93,7 @@ public sealed class PillTests
         {
             foreach (var (button, tileName) in new[] { (Find<Button>(pill, "PillPause"), "PillPrimaryTile"), (Find<Button>(pill, "PillBreak"), (string?)null), (pill.AccountsButton, (string?)null) })
             {
-                var tile = tileName is not null ? Find<Border>(pill, tileName) : button.GetVisualDescendants().OfType<Border>().First(b => b.Name != "PillSurface" && b.Child is not null && b.Width is >= 40 and <= 46);
+                var tile = tileName is not null ? Find<Border>(pill, tileName) : button.GetVisualDescendants().OfType<Border>().First(b => b.Name != "PillSurface" && b.Child is not null && b.Width is >= 40 and <= 48);
                 Assert.Equal(0, tile.BoxShadow.Count);
                 button.RaiseEvent(new GotFocusEventArgs { RoutedEvent = InputElement.GotFocusEvent, NavigationMethod = NavigationMethod.Pointer });
                 Assert.Equal(0, tile.BoxShadow.Count); // Focus left by a click is not shown.
@@ -157,19 +148,19 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void TheAccountsButtonUnfoldsTheDrawerAndFoldsItAgainAndChoosingAnAccountLeavesItOpen()
+    public void TheAccountsButtonOpensTheListAndFoldsItAgainAndChoosingAnAccountLeavesItOpen()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            Assert.False(pill.PanelOpen); Assert.Equal("Account one", ToolTip.GetTip(pill.AccountsButton)); // The chip shows initials, so its tooltip names the account.
+            Assert.False(pill.PanelOpen); Assert.Equal("Account one", ToolTip.GetTip(pill.AccountsButton)); // The box shows a dot, so its tooltip names the account.
             Click(pill.AccountsButton); Assert.True(pill.PanelOpen); Assert.Equal("Close the accounts", ToolTip.GetTip(pill.AccountsButton));
             Assert.Equal(pill.WindowHeightNow, pill.Height, 0.5); // The pill never grows for it.
-            Assert.Equal(new CornerRadius(PillWindow.PillRadius), Find<Border>(pill, "PillSurface").CornerRadius); // The pill keeps its shape; the drawer slides out from behind it.
+            Assert.Equal(new CornerRadius(PillWindow.PillRadius), Find<Border>(pill, "PillSurface").CornerRadius); // The pill keeps its shape; the list hangs below it.
             Click(pill.AccountsButton); Assert.False(pill.PanelOpen); Assert.Equal(new CornerRadius(PillWindow.PillRadius), Find<Border>(pill, "PillSurface").CornerRadius);
             Click(pill.AccountsButton); Dispatcher.UIThread.RunJobs();
             model.ToggleAccount("Account two"); Dispatcher.UIThread.RunJobs();
-            Assert.True(pill.PanelOpen); // Choosing an account leaves the drawer open, so a wrong choice can be put right at once.
+            Assert.True(pill.PanelOpen); // Choosing an account leaves the list open, so a wrong choice can be put right at once.
             model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs(); Assert.True(pill.PanelOpen); Assert.Equal("Account one", model.ActiveAccount);
             pill.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
             Assert.False(pill.PanelOpen); // Escape folds it away, as the button does.
@@ -196,99 +187,71 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void TheDrawerSlidesOutFromBehindThePillWhichKeepsItsShapeAndItsGlow()
+    public void ManageAccountsIsOneIconAtTheTopRightOfTheListAndOpensTheAccountsDialog()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            var card = Find<Border>(pill, "PillSurface"); var host = Find<Border>(pill, "ShadowHost");
-            pill.ShowPanel(); Dispatcher.UIThread.RunJobs();
-            var popup = pill.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Popup>().Single();
-            Assert.Equal(-PillWindow.Behind * pill.Scale, popup.HorizontalOffset, 0.01); // It starts under the pill's edge,
-            Assert.Equal(new CornerRadius(PillWindow.PillRadius), card.CornerRadius); // while the pill keeps all four round corners,
-            Assert.Null(host.Clip); // and its glow, which is not cut off at the seam.
-            var holder = Find<Grid>(pill, "PillDrawerHolder");
-            Assert.IsType<Avalonia.Media.CombinedGeometry>(holder.Clip); // The drawer is cut away where the pill's capsule is.
-            Assert.Equal(Avalonia.Media.GeometryCombineMode.Exclude, ((Avalonia.Media.CombinedGeometry)holder.Clip!).GeometryCombineMode);
-            Assert.Equal(PillWindow.DrawerWidth, Find<Border>(pill, "PillDrawer").Bounds.Width, 0.5);
-            pill.CloseFlyouts(); Assert.Equal(new CornerRadius(PillWindow.PillRadius), card.CornerRadius);
-        }
-        finally { pill.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void ManageAccountsIsOneIconAtTheTopRightOfTheDrawerAndOpensTheAccountsDialog()
-    {
-        var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
-        try
-        {
-            pill.ShowPanel(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
-            var manage = Find<Button>(pill, "PillManageAccounts"); var drawer = Find<Border>(pill, "PillDrawer");
+            // The pop-up has no window of its own in a headless run, so the list's card is laid out in one made for it.
+            var card = pill.MakeDropdownCard(); var host = new Window { Width = 320, Height = 600, Content = card }; host.Show(); Settle(host);
+            var manage = Find<Button>(host, "PillManageAccounts");
             Assert.IsType<IconGlyph>(manage.Content); Assert.Equal(IconKind.Sliders, ((IconGlyph)manage.Content!).Kind); // An icon, with no words on it.
             Assert.Equal("Manage accounts", Tip(manage)); Assert.Equal("Manage accounts", Avalonia.Automation.AutomationProperties.GetName(manage));
-            var at = manage.TranslatePoint(default, drawer)!.Value;
+            var at = manage.TranslatePoint(default, card)!.Value;
             Assert.True(at.Y < 30, $"icon top {at.Y}"); // In the heading row,
-            Assert.InRange(drawer.Bounds.Width - (at.X + manage.Bounds.Width), 10, 18); // against the right padding.
-            Assert.DoesNotContain(pill.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "Manage accounts"); // The button at the foot is gone.
-            var scroll = pill.AccountScroll; Assert.True(scroll.TranslatePoint(new Point(0, scroll.Bounds.Height), drawer)!.Value.Y >= drawer.Bounds.Height - 18); // The list runs to the foot.
+            Assert.InRange(card.Bounds.Width - (at.X + manage.Bounds.Width), 10, 18); // against the right padding.
+            Assert.DoesNotContain(host.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "Manage accounts"); // There is no button at the foot.
+            var scroll = pill.AccountScroll; Assert.True(scroll.TranslatePoint(new Point(0, scroll.Bounds.Height), card)!.Value.Y >= card.Bounds.Height - 18); // The list runs to the foot.
         }
         finally { pill.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheDrawerIsAsTallAsThePillAndItsListScrollsInsideIt()
+    public void TheListHasAMostHeightAndScrollsInsideIt()
     {
         var model = new TimerModel(new TrackingEngine(), new StoreSettings(Enumerable.Range(1, 25).Select(i => new AccountSettings("Client " + i)).ToList(), false, "System", DayOfWeek.Monday));
         var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            pill.ShowPanel(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
-            var drawer = Find<Border>(pill, "PillDrawer");
-            Assert.Equal(PillWindow.PillHeight, drawer.Bounds.Height, 0.5); Assert.Equal(PillWindow.DrawerWidth, drawer.Bounds.Width, 0.5);
+            var card = pill.MakeDropdownCard(); var host = new Window { Width = 320, Height = 700, Content = card }; host.Show(); Settle(host);
+            Assert.Equal(PillWindow.DropdownMaxHeight, card.Bounds.Height, 0.5); Assert.Equal(PillWindow.DropdownWidth, card.Bounds.Width, 0.5);
             var scroll = pill.AccountScroll;
             Assert.True(scroll.Extent.Height > scroll.Viewport.Height + 1); // Twenty-five accounts do not fit, so it scrolls.
             Assert.True(scroll.Viewport.Height >= 3 * 54 - 1); // At least three of the short rows show.
-            Assert.Empty(pill.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip)); // The pill's list is not reordered.
-            Assert.NotEmpty(pill.GetVisualDescendants().OfType<AccountIndicator>()); // Each row keeps its play button, as on the dashboard.
-            Assert.DoesNotContain(pill.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "Today"); // And there is no Today heading.
+            Assert.Empty(host.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip)); // The pill's list is not reordered.
+            Assert.NotEmpty(host.GetVisualDescendants().OfType<AccountIndicator>()); // Each row keeps its play button, as on the dashboard.
+            Assert.DoesNotContain(host.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "Today"); // And there is no Today heading.
         }
         finally { pill.Close(); }
     }
 
     [AvaloniaFact]
-    public void ThePrimaryControlAndTheAccountsButtonShareOneWellWithTheBreakApartBelowItAtTheFoot()
+    public void ThePrimaryControlAndTheAccountsButtonShareOneWellWithTheBreakApartAtTheEnd()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
         try
         {
-            Assert.Equal(316, PillWindow.PillHeight); Assert.Equal(PillWindow.PillHeight, Find<Border>(pill, "PillSurface").Height);
-            double Y(Control c) => c.TranslatePoint(default, pill)!.Value.Y;
-            var primary = Find<Button>(pill, "PillPause"); var brk = Find<Button>(pill, "PillBreak");
-            Assert.True(Y(primary) < Y(pill.AccountsButton)); Assert.True(Y(pill.AccountsButton) < Y(brk)); // Timer, primary control, accounts, then the break at the foot.
-            var surface = Find<Border>(pill, "PillSurface"); var bottom = surface.TranslatePoint(new Point(0, surface.Bounds.Height), pill)!.Value.Y;
-            Assert.True(Y(brk) + brk.Bounds.Height * pill.Scale <= bottom + 0.5, $"break bottom {Y(brk) + brk.Bounds.Height * pill.Scale} card bottom {bottom} scale {pill.Scale}"); // Everything fits inside the card.
-            // The two share one well, 54 by 98: the tiles 46 by 44 inside it, 4 from its edge and 2 apart, so it holds what the two tiles and their gap held before.
+            double X(Control c) => c.TranslatePoint(default, pill)!.Value.X;
+            var primary = Find<Button>(pill, "PillPause"); var brk = Find<Button>(pill, "PillBreak"); var clock = Find<Button>(pill, "PillDashboard");
+            Assert.True(X(clock) < X(primary)); Assert.True(X(primary) < X(pill.AccountsButton)); Assert.True(X(pill.AccountsButton) < X(brk)); // Time, primary control, accounts, then the break at the end.
+            var surface = Find<Border>(pill, "PillSurface");
+            // The two share one well: the tiles 46 and 48 wide inside it, 4 from its edge and 2 apart, as high as the break's tile with the well's padding.
             var well = Find<Border>(pill, "PillWell");
-            Assert.Equal(StatusFace.WellWidth, well.Bounds.Width, 0.5); Assert.Equal(2 * StatusFace.WellPadding + 2 * StatusFace.TileSize + StatusFace.WellGap, well.Bounds.Height, 0.5);
+            Assert.Equal(StatusFace.TileSize + 2 * StatusFace.WellPadding, well.Bounds.Height, 0.5);
             Assert.Equal(StatusFace.WellRadius, well.CornerRadius.TopLeft); Assert.InRange(((Avalonia.Media.ISolidColorBrush)well.Background!).Color.A, 8, 24); // A soft background, not a fill.
             Border TileIn(Control c, double width) => c.GetVisualDescendants().OfType<Border>().First(x => x.Width == width);
-            var primaryTile = Find<Border>(pill, "PillPrimaryTile"); var accountsTile = TileIn(pill.AccountsButton, StatusFace.WellTileWidth); var breakTile = TileIn(brk, StatusFace.TileSize);
+            var primaryTile = Find<Border>(pill, "PillPrimaryTile"); var accountsTile = TileIn(pill.AccountsButton, StatusFace.SelectorWidth); var breakTile = TileIn(brk, StatusFace.TileSize);
             foreach (var t in new[] { primaryTile, accountsTile })
             {
-                Assert.Equal(StatusFace.WellTileWidth, t.Bounds.Width); Assert.Equal(StatusFace.TileSize, t.Bounds.Height); Assert.Equal(StatusFace.TileRadius, t.CornerRadius.TopLeft);
-                Assert.Equal(StatusFace.WellPadding, t.TranslatePoint(default, well)!.Value.X, 0.5);
+                Assert.Equal(StatusFace.TileSize, t.Bounds.Height); Assert.Equal(StatusFace.TileRadius, t.CornerRadius.TopLeft);
+                Assert.Equal(StatusFace.WellPadding, t.TranslatePoint(default, well)!.Value.Y, 0.5);
             }
-            Assert.Equal(StatusFace.WellPadding, primaryTile.TranslatePoint(default, well)!.Value.Y, 0.5);
-            Assert.Equal(StatusFace.WellPadding + StatusFace.TileSize + StatusFace.WellGap, accountsTile.TranslatePoint(default, well)!.Value.Y, 0.5);
-            // The break is its own 44 pixel tile, with the same room either side as before, and a gap under the well.
+            Assert.Equal(StatusFace.WellPadding, primaryTile.TranslatePoint(default, well)!.Value.X, 0.5);
+            Assert.Equal(StatusFace.WellPadding + StatusFace.WellTileWidth + StatusFace.WellGap, accountsTile.TranslatePoint(default, well)!.Value.X, 0.5);
+            // The break is its own 44 pixel tile, centred on the card's height.
             Assert.Equal(StatusFace.TileSize, breakTile.Bounds.Width); Assert.Equal(StatusFace.TileRadius, breakTile.CornerRadius.TopLeft);
-            var left = breakTile.TranslatePoint(default, surface)!.Value.X; var right = surface.Bounds.Width - (left + breakTile.Bounds.Width);
-            Assert.True(Math.Abs(right - left) <= 0.5, $"left {left} right {right}");
-            var wellLeft = well.TranslatePoint(default, surface)!.Value.X; Assert.True(Math.Abs((surface.Bounds.Width - (wellLeft + well.Bounds.Width)) - wellLeft) <= 0.5); // The well is centred too.
-            double Top(Control c) => c.TranslatePoint(default, surface)!.Value.Y;
-            Assert.InRange(Top(breakTile) - (Top(well) + well.Bounds.Height), 8, 14);
-            var room = surface.Bounds.Height - (Top(breakTile) + StatusFace.TileSize);
-            Assert.True(room >= 12, $"room under the break {room}");
+            var top = breakTile.TranslatePoint(default, surface)!.Value.Y; var bottom = surface.Bounds.Height - (top + breakTile.Bounds.Height);
+            Assert.True(Math.Abs(bottom - top) <= 1, $"top {top} bottom {bottom}");
         }
         finally { pill.Close(); }
     }
@@ -328,7 +291,7 @@ public sealed class PillTests
             var brk = Find<Button>(window, "DashboardBreak");
             Assert.Equal(Y(Find<Button>(window, "SidebarPause")), Y(brk), 1.0); // Level with the play tile, at the card's far end.
             Assert.NotNull(Find<Border>(window, "SidebarWell")); // The card is the pill's well.
-            Assert.True(Y(brk) < Y(Find<Button>(window, "QuitTimer"))); // And not at the foot with Close timer.
+            Assert.True(Y(brk) < Y(Find<Button>(window, "QuitTimer"))); // And not at the foot with Quit timer.
             var tile = brk.GetVisualDescendants().OfType<Border>().Single(b => b.Width == StatusFace.TileSize); Assert.InRange(((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A, 30, 60);
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.Equal(255, ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A);
         }
