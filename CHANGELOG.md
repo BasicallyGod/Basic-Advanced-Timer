@@ -10,7 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
-| The pill is one shape | PENDING3 | The vertical pill is gone: the horizontal pill is the only one, with no shape step in the setup (now four steps) and no Pill shape choice in Settings. An old `pillshape=` line is left alone in the settings file. The account drawer, the stacked clock and the account chip went with it. |
+| The pill is one shape | [f42bb96](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/f42bb96ae93a53ecf254002307b11a83fbca3ebd) | The vertical pill is gone: the horizontal pill is the only one, with no shape step in the setup (now four steps) and no Pill shape choice in Settings. An old `pillshape=` line is left alone in the settings file. The account drawer, the stacked clock and the account chip went with it. |
 | Horizontal pill: no wasted strip in the account list | [98bb65e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/98bb65e9901f5b890adfeecd74c5b284ea9df31b) | A list long enough to scroll lets the scroll bar's track take the card's right padding, so the strip beside the play buttons is no wider than the left. |
 | Settings button stays put | [39f890e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/39f890e4769c3b9c1b5c83a17a4c48a2ed7e2828) | The header row now has a fixed height. Without the tabs, the settings page's row shrank and the gear moved up two pixels. |
 | Notes: important is gold | [39f890e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/39f890e4769c3b9c1b5c83a17a4c48a2ed7e2828) | An important note's star, wash and edge are gold (not the accent, which read as the row being selected). |
