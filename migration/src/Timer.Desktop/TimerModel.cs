@@ -760,11 +760,13 @@ public sealed class TimerModel : INotifyPropertyChanged
         }
     }
     /// <summary>The theme the pill wears by itself: tinted amber on a break, otherwise null so it follows the rest of the app.</summary>
-    public ThemeVariant? PillVariant => ThemeState != "Normal" && Application.Current is not null && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()
+    public ThemeVariant? PillVariant => ThemeState != "Normal" && Application.Current is { } current && current.CheckAccess()
         ? ThemeEngine.StateVariant(CurrentTheme, ThemeState) : null;
     private void ApplyTheme()
     {
-        if (Application.Current is not { } app || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;
+        // The check is on the application's own dispatcher, which is what setting its theme verifies. The shared UI dispatcher is not always the same one (tests that build a
+        // model off the UI thread while another headless session's application is current), and asking it let a call from the wrong thread through.
+        if (Application.Current is not { } app || !app.CheckAccess()) return;
         // System is Light or Dark by the computer's own setting, so the variant is chosen here and re-chosen when that setting changes.
         var variant = ThemeEngine.VariantFor(CurrentTheme);
         if (ReferenceEquals(variant, appliedVariant)) return;
