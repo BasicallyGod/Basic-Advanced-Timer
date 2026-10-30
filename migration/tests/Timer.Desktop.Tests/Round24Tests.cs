@@ -91,4 +91,23 @@ public sealed class Round24Tests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void WithAMeetingRowTheBandIsShortSoFourLanesKeepInitialsAndFiveOrMoreShowOnlyColour()
+    {
+        var model = Model();
+        model.Notes.AddMeeting(Day, TimeSpan.FromHours(14), TimeSpan.FromHours(15), "Review", null, RepeatChoice.None); // A day with meetings has the shorter band.
+        for (var i = 0; i < 4; i++) model.Engine.AddSession(i % 2 == 0 ? "Account one" : "Account two", At(9 + i * 0.1), At(10 + i * 0.1));
+        var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try { Assert.Equal(4, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name == "BlockInitials")); } finally { window.Close(); }
+        model.Engine.AddSession("Internal", At(9.5), At(10.5));
+        window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            // Five lanes of about 11 pixels: no words that would be cut off, and the colour and tooltip remain.
+            Assert.Empty(window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name is "BlockInitials" or "BlockDuration"));
+            Assert.Equal(5, window.GetVisualDescendants().OfType<Border>().Count(b => b.Name is { } n && n.StartsWith("TimelineEntry")));
+        }
+        finally { window.Close(); }
+    }
 }

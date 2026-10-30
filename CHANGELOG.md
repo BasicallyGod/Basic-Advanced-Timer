@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Busy timeline: no cut-off words in thin lanes | PENDING6 | A lane too short for its words steps down: under 15 pixels shows only initials, under 13 only its colour, so with a meeting row four lanes keep their initials and five or more are colour alone. |
 | Busy timeline: meetings fold into a +N | [94ab4c6](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/94ab4c6aaa4e479ac8235b48b2141c8bde8f13c2) | A day's meeting row keeps its 48 pixels and at most two lanes of 22, so labels are never clipped; a third or later overlapping meeting folds into a +N chip that opens a list. |
 | Busy timeline: initials on overlapped blocks | [94ab4c6](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/94ab4c6aaa4e479ac8235b48b2141c8bde8f13c2) | Blocks three deep show the account's initials in a small chip and the duration; four or more deep show the initials alone, so an account is told by more than its colour. |
 | Window shadows start off | [37406f4](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/37406f42ede617e6aaa22b830169b7da8a36c98a) | A new timer starts with window shadows off; the option is still in Settings, and a timer that already existed keeps its choice. |

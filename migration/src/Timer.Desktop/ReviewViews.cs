@@ -31,7 +31,7 @@ public static class ReviewViews
     /// <summary>The corner a block has when the band holds this many lanes: the larger for one, the smaller for more.</summary>
     public static double CornerFor(int lanes, double width, double height) => Math.Min(lanes <= 1 ? BlockRadius : LaneRadius, Math.Min(width, height) / 2);
     /// <summary>How much of a block to show. One lane has the full block, two a line of duration and account, three the account's initials in a small chip and the duration, and four or more the initials alone (the tooltip has the rest).</summary>
-    public enum BlockDetail { Full, Inline, Tiny, Bare }
+    public enum BlockDetail { Full, Inline, Tiny, Bare, None }
     /// <summary>The deeper end of a block's gradient: up to 30 per cent towards its edge colour, less where that would lose the block's text.</summary>
     public static string DeeperEnd(ThemeDerivation.BlockLook look)
     {
@@ -221,7 +221,7 @@ public static class ReviewViews
         foreach (var interval in intervals.OrderBy(i => i.Start))
         {
             var (lane, laneCount) = placement[interval];
-            var detail = DetailFor(laneCount);
+            var detail = DetailFor(laneCount); // not read-only: a lane too short for its words steps down below
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
             var look = model.BlockLook(colour);
             var isBreak = BreakAccount.Is(interval.Account);
@@ -244,6 +244,9 @@ public static class ReviewViews
             }
             var recording = interval.Row is null && interval.Group is null;
             var note = interval.Group is { } groupNote ? groupNote.Note : recording ? "Recording now" : interval.Row is { } noteRow ? model.Editor.Note(noteRow) : "";
+            // A lane too short for its words (the band is divided between more lanes) steps down one level, and below that shows only its colour and the tooltip, so no text is cut off.
+            if (detail == BlockDetail.Tiny && height < 15) detail = BlockDetail.Bare;
+            if (detail == BlockDetail.Bare && height < 13) detail = BlockDetail.None;
             switch (detail)
             {
                 case BlockDetail.Full when width >= 56:
