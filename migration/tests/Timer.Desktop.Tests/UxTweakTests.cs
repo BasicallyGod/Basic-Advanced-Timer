@@ -154,7 +154,7 @@ public sealed class UxTweakTests
             Settle(window);
             double Top(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Point(0, 0), window)!.Value.Y; }
             Assert.True(Top("SidebarDashboard") < Top("SidebarPause")); Assert.True(Top("SidebarPause") < Top("Account0")); // The clock, then the tracking card, then the accounts.
-            Assert.Equal(Top("SidebarPause"), Top("DashboardBreak"), 1.0); Assert.True(Top("Account0") < Top("QuitTimer")); // Close timer is at the foot.
+            Assert.Equal(Top("SidebarPause"), Top("DashboardBreak"), 1.0); Assert.True(Top("Account0") < Top("QuitTimer")); // Quit timer is at the foot.
             Assert.Equal("Collapse to pill", ToolTip.GetTip(window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SidebarDashboard")));
             window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SidebarDashboard").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.Equal(1, back);
             var quits = 0; model.QuitRequested += () => quits++;
@@ -171,7 +171,7 @@ public sealed class UxTweakTests
     {
         var model = new TimerModel(new TrackingEngine()); var hides = 0; var quits = 0; model.HideRequested += () => hides++; model.QuitRequested += () => quits++;
         var menu = Ui.SettingsMenu(model); var items = ((IEnumerable<Control>)menu.ItemsSource!).OfType<MenuItem>().ToList();
-        Assert.DoesNotContain(items, m => (string?)m.Header == "Decimal hours"); Assert.DoesNotContain(items, m => (string?)m.Header == "Close timer");
+        Assert.DoesNotContain(items, m => (string?)m.Header == "Decimal hours"); Assert.DoesNotContain(items, m => (string?)m.Header == "Quit timer");
         items.Single(m => (string?)m.Header == "Collapse to tray").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
         Assert.Equal(1, hides); Assert.Equal(0, quits);
     }

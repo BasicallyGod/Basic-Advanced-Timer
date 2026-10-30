@@ -62,7 +62,7 @@ public sealed class Round21Tests
     }
 
     [AvaloniaFact]
-    public void AnImportantNoteHasNoBoldWordsButASolidAccentStarAndATintedRow()
+    public void AnImportantNoteHasNoBoldWordsButASolidGoldStarAndATintedRow()
     {
         var model = Model(); model.Notes.AddNote("!! Ring the client", null, null); model.Notes.AddNote("Tidy the drive", null, null);
         var window = new DashboardWindow(model); window.Show(); Settle(window);
@@ -70,7 +70,7 @@ public sealed class Round21Tests
         {
             var important = model.Notes.All.Single(n => NotesModel.IsImportant(n)); var plain = model.Notes.All.Single(n => !NotesModel.IsImportant(n));
             var words = Find<TextBlock>(window, "NoteText_" + important.Id); Assert.Equal(FontWeight.Normal, words.FontWeight);
-            var star = Find<Button>(window, "NoteImportant_" + important.Id); Assert.Equal("Accent", star.GetVisualDescendants().OfType<IconGlyph>().Single().TintKey);
+            var star = Find<Button>(window, "NoteImportant_" + important.Id); Assert.Equal("ImportantStar", star.GetVisualDescendants().OfType<IconGlyph>().Single().TintKey);
             Assert.True(words.GetVisualAncestors().OfType<Border>().Any(b => b.Classes.Contains("importantRow")));
             Assert.False(Find<TextBlock>(window, "NoteText_" + plain.Id).GetVisualAncestors().OfType<Border>().Any(b => b.Classes.Contains("importantRow")));
             Click(window, "NotesTab");

@@ -9,7 +9,7 @@ namespace Timer.Desktop;
 /// <summary>
 /// The dashboard's sidebar, the pill drawn out with its accounts shown: one centred column with the two lights, the day clock (the way back to the pill) and a tracking
 /// card (pause or play, the account and how long it has run, the break), then the accounts as one line rows with their budget bars (pressing one starts it), and at the foot
-/// Finish day and Close timer as two buttons side by side. It is 248 wide, and the dashboard grows by that much so the page keeps all the room it had.
+/// Finish day and Quit timer as two buttons side by side. It is 248 wide, and the dashboard grows by that much so the page keeps all the room it had.
 /// </summary>
 public sealed class Sidebar : Border
 {
@@ -40,12 +40,12 @@ public sealed class Sidebar : Border
         AccountScroll = new ScrollViewer { Name = "SidebarAccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Ui.Put(grid, Ui.WithMoreBelow(AccountScroll), 0, 2);
-        // The foot: Close timer closes it for good and goes red under the pointer. There is no Start day or Finish day: the day begins with its first block.
+        // The foot: Quit timer closes it for good and goes red under the pointer. There is no Start day or Finish day: the day begins with its first block.
         var quitGlyph = new IconGlyph(IconKind.Close);
-        QuitButton = new Button { Name = "QuitTimer", Content = Ui.Horizontal(quitGlyph, new TextBlock { Text = "Close timer", VerticalAlignment = VerticalAlignment.Center }) }; ((StackPanel)QuitButton.Content).Spacing = 7;
+        QuitButton = new Button { Name = "QuitTimer", Content = Ui.Horizontal(quitGlyph, new TextBlock { Text = "Quit timer", VerticalAlignment = VerticalAlignment.Center }) }; ((StackPanel)QuitButton.Content).Spacing = 7;
         QuitButton.Classes.Add("ctl"); QuitButton.Classes.Add("quit"); QuitButton.Height = 38; QuitButton.Padding = new Thickness(4, 0); QuitButton.FontSize = 13; QuitButton.HorizontalAlignment = HorizontalAlignment.Stretch; QuitButton.Click += (_, _) => quit();
         QuitButton.PointerEntered += (_, _) => quitGlyph.TintKey = "Finish"; QuitButton.PointerExited += (_, _) => quitGlyph.TintKey = null;
-        Avalonia.Automation.AutomationProperties.SetName(QuitButton, "Close timer");
+        Avalonia.Automation.AutomationProperties.SetName(QuitButton, "Quit timer");
         var foot = new Grid { Margin = new Thickness(0, 8, 0, 0) }; foot.Children.Add(QuitButton);
         var rule = Ui.Rule(); rule.Margin = new Thickness(4, 6, 4, 0);
         var footColumn = new StackPanel { Children = { rule, foot } };

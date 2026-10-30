@@ -228,9 +228,13 @@ public sealed class StatusFace : StackPanel
         {
             // One tracking card: pause or play at its left end, the break at its right, and between them the account's colour and name with how long it has run.
             well.Width = double.NaN; well.Height = double.NaN; well.Margin = new Thickness(0, 6, 0, 4); well.Padding = new Thickness(6); well.HorizontalAlignment = HorizontalAlignment.Stretch;
-            var who = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 0) };
-            var nameLine = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, HorizontalAlignment = HorizontalAlignment.Center, Children = { whoDot, whoName } };
-            whoStatus.HorizontalAlignment = HorizontalAlignment.Center; whoStatus.TextAlignment = TextAlignment.Center;
+            // The words are left aligned in the room between the two tiles, so the dot stays at one left edge whatever the name's length (centred, it moved with every
+            // name, which read as a bounce when the account changed). The name is in a grid so a long one is cut with an ellipsis instead of widening the card.
+            var who = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(8, 0, 0, 0) };
+            var nameLine = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 7 };
+            whoName.HorizontalAlignment = HorizontalAlignment.Left; Grid.SetColumn(whoName, 1); nameLine.Children.Add(whoDot); nameLine.Children.Add(whoName);
+            // The status sits under the name, not the dot.
+            whoStatus.HorizontalAlignment = HorizontalAlignment.Left; whoStatus.TextAlignment = TextAlignment.Left; whoStatus.Margin = new Thickness(16, 0, 0, 0); whoStatus.TextTrimming = TextTrimming.CharacterEllipsis;
             who.Children.Add(nameLine); who.Children.Add(whoStatus); whoName.Name = prefix + "WhoName"; whoStatus.Name = prefix + "WhoStatus";
             var card = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 4 };
             Grid.SetColumn(who, 1); Grid.SetColumn(Break, 2);

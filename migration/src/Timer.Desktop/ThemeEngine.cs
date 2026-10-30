@@ -79,8 +79,13 @@ public static class ThemeEngine
         // A gentle wash of the tracking colour over the surface, for the card of the account that is recording.
         Put("LiveTint", Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Live"], ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000") ? .11 : .14)));
         // The scroll bar thumb is a quiet grey a little darker than the lines, and darker again under the pointer.
-        Put("ImportantTint", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["Accent"], .07)));
-        Put("ImportantEdge", Color.Parse(ThemeColours.Mix(colours["Line"], colours["Accent"], .45)));
+        // An important note is gold, not the accent: a blue wash read as the row being selected. The gold is the same on every theme (a deeper one on Light, so the star holds
+        // 3 to 1 on the card), apart from the break's amber and the overdue red, and the row takes a faint wash of it and an edge.
+        var lightGround = ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000");
+        var gold = lightGround ? "#B86E00" : "#F5B63A";
+        Put("ImportantStar", Color.Parse(gold));
+        Put("ImportantTint", Color.Parse(ThemeColours.Mix(colours["Panel"], gold, lightGround ? .09 : .12)));
+        Put("ImportantEdge", Color.Parse(ThemeColours.Mix(colours["Line"], gold, lightGround ? .5 : .55)));
         Put("LateTint", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["Overtime"], .14)));
         // Amber and the accent are right for bars and rings but too pale to read as small text on the light themes, so their words use a shade of each taken towards the text colour until it holds 4.5 to 1 on every ground it sits on.
         Put("BudgetWarningText", Color.Parse(TextShade(colours["BudgetWarning"], colours["Ink"], new[] { colours["Panel"], colours["Surface"], colours["Hover"] })));

@@ -10,6 +10,12 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Settings button stays put | PENDING | The header row now has a fixed height. Without the tabs, the settings page's row shrank and the gear moved up two pixels. |
+| Notes: important is gold | PENDING | An important note's star, wash and edge are gold (not the accent, which read as the row being selected). |
+| Notes: the star keeps its place | PENDING | In the Notes card a row now reads bell, star, cross, so the bell can come and go without moving the star. |
+| Quit timer | PENDING | The sidebar's foot button and the tray item say Quit timer. |
+| Dashboard grow: no early shadow | PENDING | The card's shadow fade is held off while the window grows, so no shadow shows round the small card. |
+| Sidebar: the live dot keeps its place | PENDING | The tracking card's account is left aligned, so the dot keeps one left edge whatever the name. |
 | Notes: the form's chips sit under the words | [c430b4f](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/c430b4f4d0bd34957ba4e1bc7024e63a97f41bc0) | With a reminder, the account and reminder chips are one quiet row under the words, as the note will look in the list, instead of above them. The bell steps aside once a reminder is set, since its chip changes it, which gives the chips the room to stay on one line. |
 | Reminder light: a smoother pulse | [c430b4f](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/c430b4f4d0bd34957ba4e1bc7024e63a97f41bc0) | The ring was animated by its width and height, which snapped to whole pixels (a step every 180 milliseconds) and made the pill lay itself out each frame. It is now one full-size ring scaled about its centre on the display's own animation frames, so it moves between pixels and asks for no layout. |
 | No Start day or Finish day | [c012f0a](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/c012f0a71014d3d28f52154a4f06758099109839) | The day begins with its first block, recorded or added, and its clock counts up from there through quiet time as well as recording, ending at the later of the scheduled end and the last block. Time between blocks is Unallocated and breaks come out. The Finish day button, its question, the timeline flag and the tray's day item are gone, and Close timer takes the foot of the sidebar. An older timer's finished days still end where they were finished. |

@@ -129,7 +129,7 @@ public sealed class SettingsPageTests
             double Centre(string name) { var c = window.GetVisualDescendants().OfType<Control>().Single(x => x.Name == name); return c.TranslatePoint(new Avalonia.Point(c.Bounds.Width / 2, 0), window)!.Value.X; }
             // The lights, the clock and the tracking card are all centred on the column.
             Assert.Equal(middle, Centre("SidebarLights"), 1.0); Assert.Equal(middle, Centre("SidebarDashboard"), 1.5); Assert.Equal(middle, Centre("SidebarWell"), 1.5);
-            // Close timer is at the foot on its own, centred on the column and the width of its foot.
+            // Quit timer is at the foot on its own, centred on the column and the width of its foot.
             var quit = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "QuitTimer");
             Assert.Equal(middle, Centre("QuitTimer"), 1.5); Assert.True(quit.Bounds.Width > sidebar.Bounds.Width - 40);
         }

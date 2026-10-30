@@ -137,12 +137,12 @@ public sealed class NotesCard : Border
             // The star marks a note important (solid) or not (an outline); an important note comes first in the list.
             var important = NotesModel.IsImportant(note);
             var star = Ui.IconButton(important ? IconKind.StarFilled : IconKind.Star, important ? "Not important" : "Mark important", "NoteImportant_" + note.Id, () => Notes.SetImportant(note.Id, !important));
-            star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, star, 2);
-            if (important && star.Content is IconGlyph solid) solid.TintKey = "Accent"; // The mark is the accent's, so an important note is picked out without its words changing weight.
+            star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, star, 3);
+            if (important && star.Content is IconGlyph solid) solid.TintKey = "ImportantStar"; // The mark is gold, so an important note is picked out without its words changing weight.
         }
         if (!meeting && NotesModel.ReminderOf(note) is null)
         {
-            var bell = Ui.IconButton(IconKind.Bell, "Add reminder", "NoteAddReminder_" + note.Id, () => OpenReminder(note.Id)); bell.Width = 28; bell.Height = 28; bell.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, bell, 3);
+            var bell = Ui.IconButton(IconKind.Bell, "Add reminder", "NoteAddReminder_" + note.Id, () => OpenReminder(note.Id)); bell.Width = 28; bell.Height = 28; bell.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, bell, 2);
         }
         var remove = Ui.IconButton(IconKind.Close, meeting ? "Remove meeting" : "Remove note", "NoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center;
         Ui.Put(line, remove, 4);

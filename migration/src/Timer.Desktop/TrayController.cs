@@ -16,7 +16,7 @@ public sealed class TrayController : IDisposable
     private readonly NativeMenuItem dashboard = new() { Header = "Dashboard" };
     private readonly NativeMenuItem pause = new();
     private readonly NativeMenuItem reset = new() { Header = "Reset position" };
-    private readonly NativeMenuItem close = new() { Header = "Close timer" };
+    private readonly NativeMenuItem close = new() { Header = "Quit timer" };
     private readonly Dictionary<(bool, bool, bool), WindowIcon> icons = new();
     private (bool Recording, bool Reminder, bool Dark)? shown;
 
