@@ -1,6 +1,7 @@
 using Avalonia.LogicalTree;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 using Timer.Core;
 using Timer.Storage;
@@ -29,7 +30,7 @@ public static class ReviewViews
     private const double LabelRow = 22, AxisY = LabelRow + 6, MeetGap = 14, MeetingTop = AxisY + MeetGap, MeetingHeight = 48, BandTopWithMeetings = MeetingTop + MeetingHeight + MeetGap, BandTopFree = 46, BandBottom = 176, LaneGap = 4, TimelineHeight = 210, LabelWidth = 44;
     /// <summary>The corner a block has when the band holds this many lanes: the larger for one, the smaller for more.</summary>
     public static double CornerFor(int lanes, double width, double height) => Math.Min(lanes <= 1 ? BlockRadius : LaneRadius, Math.Min(width, height) / 2);
-    /// <summary>How much of a block to show. One lane has the full block, two a line of duration and account, three the duration alone, and four or more the colour with the tooltip.</summary>
+    /// <summary>How much of a block to show. One lane has the full block, two a line of duration and account, three the account's initials in a small chip and the duration, and four or more the initials alone (the tooltip has the rest).</summary>
     public enum BlockDetail { Full, Inline, Tiny, Bare }
     /// <summary>The deeper end of a block's gradient: up to 30 per cent towards its edge colour, less where that would lose the block's text.</summary>
     public static string DeeperEnd(ThemeDerivation.BlockLook look)
@@ -40,6 +41,173 @@ public static class ReviewViews
             if (ThemeColours.Contrast(look.Text, end) >= 4.5) return end;
         }
         return look.Fill;
+    }
+    /// <summary>The account's initials in a small rounded chip a little off the block's own fill, for a block with only a lane or two of room.</summary>
+    internal static Border InitialsChip(string display, string ink)
+    {
+        var colour = Color.Parse(ink);
+        var letters = Ui.Text(PillWindow.Initials(display), 10.5); letters.FontWeight = FontWeight.Bold; letters.Name = "BlockInitials";
+        return new Border { Background = new SolidColorBrush(Color.FromArgb(48, colour.R, colour.G, colour.B)), CornerRadius = new CornerRadius(6), Padding = new Thickness(5, 1), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Child = letters };
+    }
+    /// <summary>How many lanes the meeting row shows; any more fold into a +N chip.</summary>
+    public const int MeetingLanes = 2;
+    /// <summary>How many lanes the band of blocks shows; any more fold into a +N chip.</summary>
+    public const int BlockLanes = 3;
+    // A chip for each run of folded meetings, to the right of the cluster they belong to (or, with no room there, over the end of the top lane), and a list of them that opens from it.
+    private static void MoreChips(Canvas canvas, TimerModel model, DateTime day, IReadOnlyList<DayNote> planned, Dictionary<DayNote, (int Lane, int Count)> places,
+        List<DayNote> folded, List<(int Row, double Left, double Right)> drawn, double meetingTop, Func<DateTime, double> X)
+    {
+        if (folded.Count == 0) return;
+        DateTime Start(DayNote m) => day + m.At!.Value; DateTime End(DayNote m) => day + m.End!.Value;
+        var runs = new List<List<DayNote>>();
+        foreach (var meeting in folded.OrderBy(Start))
+        {
+            if (runs.Count > 0 && Start(meeting) < runs[^1].Max(End)) runs[^1].Add(meeting); else runs.Add(new() { meeting });
+        }
+        var laneHeight = (MeetingHeight - LaneGap * (MeetingLanes - 1)) / MeetingLanes;
+        foreach (var run in runs)
+        {
+            var runStart = run.Min(Start); var runEnd = run.Max(End);
+            // The cluster the run belongs to ends with the last meeting that overlaps it.
+            var reachEnd = planned.Where(m => Start(m) < runEnd && End(m) > runStart).Max(End);
+            const double Chip = 46;
+            var left = X(reachEnd) + 4; var top = meetingTop;
+            foreach (var row in Enumerable.Range(0, MeetingLanes))
+                if (!drawn.Any(d => d.Row == row && d.Left < left + Chip && d.Right > left)) { top = meetingTop + row * (laneHeight + LaneGap); goto place; }
+            left = Math.Max(drawn.Count > 0 ? drawn.Min(d => d.Left) : left, X(reachEnd) - Chip - 2);
+            place:
+            var count = run.Count; var words = count == 1 ? "1 more meeting" : count + " more meetings";
+            var chip = new Button { Name = "TimelineMeetingMore" + run[0].Id, Height = laneHeight, MinWidth = Chip, Content = Ui.Horizontal(new IconGlyph(IconKind.Today) { Width = 12, Height = 12, TintKey = "AccentText" }, new TextBlock { Text = "+" + count, FontSize = 12, FontWeight = FontWeight.Bold, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }) };
+            ((StackPanel)chip.Content).Spacing = 4; chip.Classes.Add("moreChip");
+            ToolTip.SetTip(chip, words); Avalonia.Automation.AutomationProperties.SetName(chip, words);
+            var list = new StackPanel { Spacing = 2 };
+            list.Children.Add(new TextBlock { Text = words[0].ToString().ToUpperInvariant() + words[1..], FontSize = 11.5, FontWeight = FontWeight.SemiBold, Margin = new Thickness(8, 2, 8, 4), Classes = { "muted" } });
+            var card = new Border { Child = list, MinWidth = 240, Padding = new Thickness(8), CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), BoxShadow = HangingCard.Shadow, Name = "TimelineMeetingMoreCard" };
+            card.Classes.Add("flyoutCard");
+            var popup = new Popup { Placement = PlacementMode.Bottom, PlacementTarget = chip, VerticalOffset = HangingCard.TopOffset, Child = HangingCard.Hang(card, -1), Name = "TimelineMeetingMorePopup" };
+            HangingCard.CloseOnOutsidePress(popup, chip);
+            foreach (var meeting in run.OrderBy(Start))
+            {
+                var name = new TextBlock { Text = model.Notes.Text(meeting), FontSize = 12.5, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+                var time = new TextBlock { Text = Hm(meeting.At) + "–" + Hm(meeting.End), FontSize = 11.5, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Classes = { "muted" } };
+                var content = Ui.Grid("Auto,*,Auto"); content.ColumnSpacing = 8; Ui.Put(content, new IconGlyph(IconKind.Today)); Ui.Put(content, name, 1); Ui.Put(content, time, 2);
+                var entry = new Button { Name = "MoreMeeting_" + meeting.Id, Content = content, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch, HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
+                entry.Classes.Add("moreRow");
+                Avalonia.Automation.AutomationProperties.SetName(entry, "Meeting " + model.Notes.Text(meeting) + ", " + Hm(meeting.At) + " to " + Hm(meeting.End));
+                var id = meeting.Id; entry.Click += (_, _) => { popup.IsOpen = false; model.Notes.RequestEditMeeting(id); };
+                list.Children.Add(entry);
+            }
+            chip.Click += (_, _) => popup.IsOpen = !popup.IsOpen;
+            var host = new Grid { Children = { chip, popup } };
+            Canvas.SetLeft(host, left); Canvas.SetTop(host, top); host.ZIndex = 4; canvas.Children.Add(host);
+        }
+    }
+    /// <summary>One of the blocks that overlap the selected one, for the row in the Selected block card.</summary>
+    public sealed record OverlapItem(string Account, string Initials, TimeSpan Duration, IReadOnlyList<SessionRow> Sources, bool Selected, bool Folded);
+    private static IReadOnlyList<SessionRow> SourcesOf(Interval i) => i.Group?.Sources ?? (i.Row is { } row ? new[] { row } : Array.Empty<SessionRow>());
+    private static TimeSpan DurationOf(Interval i) => i.Group is { } g ? TimeSpan.FromMinutes((double)g.Minutes) : i.End - i.Start;
+    /// <summary>
+    /// The blocks that overlap in a chain with the selected one, when that is three or more (the point at which blocks show only initials), for the card's row of them. The one
+    /// recording now has nothing to select and is left out. Empty when nothing, or more than one block, is selected.
+    /// </summary>
+    public static IReadOnlyList<OverlapItem> OverlapsOfSelection(TimerModel model)
+    {
+        var blocks = model.SelectedBlocks; if (blocks.Count != 1) return Array.Empty<OverlapItem>();
+        var intervals = IntervalsOn(model, blocks[0].Start.Date);
+        var mine = intervals.FirstOrDefault(i => SourcesOf(i).Count > 0 && model.IsSelected(SourcesOf(i))); if (mine is null) return Array.Empty<OverlapItem>();
+        var placement = PlaceLanes(intervals.Select(i => (i, i.Start, i.End)));
+        if (placement[mine].Count < BlockLanes) return Array.Empty<OverlapItem>();
+        var cluster = new List<Interval>(); var reach = DateTime.MinValue; List<Interval>? chosen = null;
+        foreach (var b in intervals.OrderBy(i => i.Start).ThenBy(i => i.End))
+        {
+            if (cluster.Count > 0 && b.Start < reach.AddSeconds(-2)) { cluster.Add(b); if (b.End > reach) reach = b.End; }
+            else { if (cluster.Contains(mine)) { chosen = cluster; break; } cluster = new() { b }; reach = b.End; }
+        }
+        chosen ??= cluster.Contains(mine) ? cluster : null;
+        if (chosen is null) return Array.Empty<OverlapItem>();
+        return chosen.Where(i => SourcesOf(i).Count > 0)
+            .Select(i => new OverlapItem(i.Account, PillWindow.Initials(model.Label(i.Account)), DurationOf(i), SourcesOf(i), model.IsSelected(SourcesOf(i)), placement[i].Lane >= BlockLanes)).ToList();
+    }
+
+    // Where blocks have been drawn, by lane, so a chip can find room: a block with its lane count of one fills the band, so it takes every lane.
+    private static void MarkDrawn(List<(int Lane, double Left, double Right)> drawn, int lane, int laneCount, double left, double width)
+    {
+        if (laneCount <= 1) { for (var l = 0; l < BlockLanes; l++) drawn.Add((l, left, left + width)); }
+        else drawn.Add((lane, left, left + width));
+    }
+
+    // A +N chip for each run of folded blocks, to the right of the cluster they belong to (or over the end of the top lane when that is not free), and a list of them that opens from it.
+    // Pointing at a row outlines that block's time on the band; a folded block that is selected keeps a solid outline and lights the chip. The tracked time of a folded block still
+    // counts everywhere: only its drawing is folded.
+    private static void BlockChips(Canvas canvas, TimerModel model, List<Interval> intervals, Dictionary<Interval, (int Lane, int Count)> placement, List<Interval> folded,
+        List<(int Lane, double Left, double Right)> drawn, double bandTop, double bandHeight, double pixelsPerHour, Func<DateTime, double> X)
+    {
+        if (folded.Count == 0) return;
+        var accent = Color.Parse(model.CurrentTheme.Colour("Accent")); var ink = model.CurrentTheme.Colour("Ink");
+        var laneHeight = (bandHeight - LaneGap * (BlockLanes - 1)) / BlockLanes;
+        Avalonia.Controls.Shapes.Rectangle Ghost(Interval i, bool solid)
+        {
+            var width = Math.Max(MinimumBlockWidth, (i.End - i.Start).TotalHours * pixelsPerHour - BlockGap);
+            var ghost = new Avalonia.Controls.Shapes.Rectangle { Name = solid ? "TimelineFoldedSelected" : "TimelineFoldedGhost", Width = width + 6, Height = bandHeight + 8, RadiusX = 12, RadiusY = 12, IsHitTestVisible = false, ZIndex = -1,
+                Stroke = new SolidColorBrush(accent), StrokeThickness = 1.5, Fill = new SolidColorBrush(Color.FromArgb((byte)(solid ? 41 : 26), accent.R, accent.G, accent.B)) };
+            if (!solid) ghost.StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 3, 2 };
+            Canvas.SetLeft(ghost, X(i.Start) + BlockInset - 3); Canvas.SetTop(ghost, bandTop - 4); return ghost;
+        }
+        var runs = new List<List<Interval>>();
+        foreach (var block in folded.OrderBy(b => b.Start))
+        {
+            if (runs.Count > 0 && block.Start < runs[^1].Max(b => b.End)) runs[^1].Add(block); else runs.Add(new() { block });
+        }
+        foreach (var run in runs)
+        {
+            var runStart = run.Min(b => b.Start); var runEnd = run.Max(b => b.End);
+            var reachEnd = intervals.Where(b => b.Start < runEnd && b.End > runStart).Max(b => b.End);
+            const double Chip = 46;
+            // Room for the chip: first just after the cluster, then in a lane's free stretch inside it, nearest the cluster's end first; with none, over the end of the top lane.
+            var after = X(reachEnd) + 4; var left = after; var top = bandTop; var free = false;
+            var candidates = new List<double> { after };
+            candidates.AddRange(drawn.Where(d => d.Right + 4 >= X(runStart) && d.Right + 4 <= after).Select(d => d.Right + 4).Distinct().OrderByDescending(x => x));
+            foreach (var x in candidates)
+            {
+                for (var lane = 0; lane < BlockLanes && !free; lane++)
+                    if (!drawn.Any(d => d.Lane == lane && d.Left < x + Chip + 2 && d.Right > x - 2)) { left = x; top = bandTop + lane * (laneHeight + LaneGap); free = true; }
+                if (free) break;
+            }
+            if (!free) left = Math.Max(drawn.Count > 0 ? drawn.Min(d => d.Left) : left, after - Chip - 6);
+            var count = run.Count; var words = count == 1 ? "1 more block" : count + " more blocks";
+            var total = run.Aggregate(TimeSpan.Zero, (sum, b) => sum + DurationOf(b));
+            var chip = new Button { Name = "TimelineBlocksMore" + run[0].Start.ToString("HHmmss"), Height = laneHeight, MinWidth = Chip, Content = new TextBlock { Text = "+" + count, FontSize = 12, FontWeight = FontWeight.Bold, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center } };
+            chip.Classes.Add("moreChip");
+            ToolTip.SetTip(chip, words + " · " + model.Format(total)); Avalonia.Automation.AutomationProperties.SetName(chip, words);
+            var list = new StackPanel { Spacing = 2 };
+            list.Children.Add(new TextBlock { Text = words[0].ToString().ToUpperInvariant() + words[1..], FontSize = 11.5, FontWeight = FontWeight.SemiBold, Margin = new Thickness(8, 2, 8, 4), Classes = { "muted" } });
+            var card = new Border { Child = list, MinWidth = 270, Padding = new Thickness(8), CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), BoxShadow = HangingCard.Shadow, Name = "TimelineBlocksMoreCard" };
+            card.Classes.Add("flyoutCard");
+            var popup = new Popup { Placement = PlacementMode.Bottom, PlacementTarget = chip, VerticalOffset = HangingCard.TopOffset, Child = HangingCard.Hang(card, -1), Name = "TimelineBlocksMorePopup" };
+            HangingCard.CloseOnOutsidePress(popup, chip);
+            Avalonia.Controls.Shapes.Rectangle? hover = null;
+            foreach (var (b, index) in run.OrderBy(b => b.Start).Select((b, index) => (b, index)))
+            {
+                var display = model.Label(b.Account); var sources = SourcesOf(b);
+                var letters = InitialsChip(display, ink);
+                var name = new TextBlock { Text = display, FontSize = 12.5, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+                var span = new TextBlock { Text = $"{b.Start:HH:mm}–{b.End:HH:mm}", FontSize = 11.5, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Classes = { "muted" } };
+                var length = new TextBlock { Text = model.Format(DurationOf(b)), FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, TextAlignment = TextAlignment.Right };
+                var content = Ui.Grid("Auto,*,Auto,Auto"); content.ColumnSpacing = 9; Ui.Put(content, letters); Ui.Put(content, name, 1); Ui.Put(content, span, 2); Ui.Put(content, length, 3);
+                var entry = new Button { Name = "MoreBlock" + b.Start.ToString("HHmmss") + "_" + index, Content = content, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch, HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
+                entry.Classes.Add("moreRow");
+                Avalonia.Automation.AutomationProperties.SetName(entry, $"{display}, {b.Start:HH:mm} to {b.End:HH:mm}, {model.Format(DurationOf(b))}");
+                var interval = b;
+                entry.PointerEntered += (_, _) => { if (hover is null) { hover = Ghost(interval, false); canvas.Children.Add(hover); } };
+                entry.PointerExited += (_, _) => { if (hover is not null) { canvas.Children.Remove(hover); hover = null; } };
+                entry.Click += (_, _) => { if (hover is not null) { canvas.Children.Remove(hover); hover = null; } popup.IsOpen = false; model.SelectBlock(sources, false); };
+                list.Children.Add(entry);
+                if (model.IsSelected(sources)) { chip.Classes.Add("sel"); canvas.Children.Add(Ghost(interval, true)); }
+            }
+            chip.Click += (_, _) => popup.IsOpen = !popup.IsOpen;
+            var host = new Grid { Children = { chip, popup } };
+            Canvas.SetLeft(host, left); Canvas.SetTop(host, top); host.ZIndex = 4; canvas.Children.Add(host);
+        }
     }
     public static BlockDetail DetailFor(int lanes) => lanes <= 1 ? BlockDetail.Full : lanes == 2 ? BlockDetail.Inline : lanes == 3 ? BlockDetail.Tiny : BlockDetail.Bare;
 
@@ -102,6 +270,25 @@ public static class ReviewViews
 
     private static string Hm(TimeSpan? time) => time is { } t ? t.ToString(@"hh\:mm") : "";
 
+    // The day's blocks as the timeline draws them: each entry that is not in a merged block, the one recording now, and each merged block as one from its first entry to its last.
+    private static List<Interval> IntervalsOn(TimerModel model, DateTime day)
+    {
+        var groups = model.Editor.Entries(day, day.AddDays(1)).Where(e => e.GroupId is not null && e.Sources.Any(s => s.Duration > TimeSpan.Zero)).ToArray();
+        var grouped = groups.SelectMany(e => e.Sources).ToHashSet();
+        var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero && !grouped.Contains(s))
+            .Select(s => new Interval(s.Account, s.From, s.To, s, null)).ToList();
+        if (model.Engine.Active is { } active && active.Start < day.AddDays(1) && model.Engine.Now > day)
+            intervals.Add(new(active.Account, active.Start < day ? day : active.Start, model.Engine.Now < day.AddDays(1) ? model.Engine.Now : day.AddDays(1), null, null));
+        // A merged block is one block from its first entry to its last, with the gaps between its entries drawn lighter.
+        foreach (var group in groups)
+        {
+            var members = group.Sources.Where(s => s.Duration > TimeSpan.Zero).ToList();
+            var display = group with { Start = members.Min(s => s.From), End = members.Max(s => s.To), Minutes = members.Sum(s => decimal.Parse(s.Minutes, System.Globalization.CultureInfo.InvariantCulture)) };
+            intervals.Add(new(group.Account, display.Start!.Value, display.End!.Value, null, display));
+        }
+        return intervals;
+    }
+
     public static Control Timeline(TimerModel model)
     {
         var day = model.SelectedDate;
@@ -144,24 +331,18 @@ public static class ReviewViews
                 var half = new Border { Width = 1, Height = TimelineHeight - LabelRow - 12, Opacity = .22, Tag = "HalfGuide", IsHitTestVisible = false }; half.Classes.Add("rule");
                 Canvas.SetLeft(half, TimelineGutter + (hour + .5) * pixelsPerHour - .5); Canvas.SetTop(half, LabelRow + 8); canvas.Children.Add(half);
             }
-        var groups = model.Editor.Entries(day, day.AddDays(1)).Where(e => e.GroupId is not null && e.Sources.Any(s => s.Duration > TimeSpan.Zero)).ToArray();
-        var grouped = groups.SelectMany(e => e.Sources).ToHashSet();
-        var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero && !grouped.Contains(s))
-            .Select(s => new Interval(s.Account, s.From, s.To, s, null)).ToList();
-        if (model.Engine.Active is { } active && active.Start < day.AddDays(1) && model.Engine.Now > day)
-            intervals.Add(new(active.Account, active.Start < day ? day : active.Start, model.Engine.Now < day.AddDays(1) ? model.Engine.Now : day.AddDays(1), null, null));
-        // A merged block is one block from its first entry to its last, with the gaps between its entries drawn lighter.
-        foreach (var group in groups)
-        {
-            var members = group.Sources.Where(s => s.Duration > TimeSpan.Zero).ToList();
-            var display = group with { Start = members.Min(s => s.From), End = members.Max(s => s.To), Minutes = members.Sum(s => decimal.Parse(s.Minutes, System.Globalization.CultureInfo.InvariantCulture)) };
-            intervals.Add(new(group.Account, display.Start!.Value, display.End!.Value, null, display));
-        }
+        var intervals = IntervalsOn(model, day);
         var placement = PlaceLanes(intervals.Select(i => (i, i.Start, i.End)));
         var accent = Color.Parse(model.CurrentTheme.Colour("Accent"));
+        var folded = new List<Interval>(); var drawnBlocks = new List<(int Lane, double Left, double Right)>();
         foreach (var interval in intervals.OrderBy(i => i.Start))
         {
             var (lane, laneCount) = placement[interval];
+            // The band shows at most BlockLanes lanes. A block that would need another folds into a +N chip with the rest, unless it is the one recording now, which is never hidden: it
+            // takes the last lane, over whatever is there.
+            var recordingNow = interval.Row is null && interval.Group is null;
+            if (lane >= BlockLanes) { if (recordingNow) lane = BlockLanes - 1; else { folded.Add(interval); continue; } }
+            laneCount = Math.Min(laneCount, BlockLanes);
             var detail = DetailFor(laneCount);
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
             var look = model.BlockLook(colour);
@@ -196,7 +377,11 @@ public static class ReviewViews
                     var inline = Ui.Horizontal(Duration(13), Name(12.5, width < 120)); inline.Spacing = 8; text.Children.Add(inline);
                     break;
                 case BlockDetail.Tiny when width >= 50:
-                    text.Children.Add(Duration(11));
+                    // Initials in a small chip, then the duration: with three lanes the account is still told by more than its colour.
+                    var tiny = Ui.Horizontal(InitialsChip(display, ink), Duration(11.5)); tiny.Spacing = 6; text.Children.Add(tiny);
+                    break;
+                case BlockDetail.Bare when width >= 24:
+                    var bare = Ui.Text(PillWindow.Initials(display), 10); bare.LineHeight = 11; bare.FontWeight = FontWeight.SemiBold; bare.Name = "BlockInitials"; text.Children.Add(bare);
                     break;
             }
             foreach (var child in text.GetLogicalDescendants().OfType<TextBlock>()) child.Foreground = Brush.Parse(ink);
@@ -247,7 +432,7 @@ public static class ReviewViews
             {
                 card.Tag = row; card.Name = "TimelineEntry" + model.Engine.Sessions.IndexOf(row);
                 card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { MoveMenu(model, new[] { row }), CopyMenu(model, new[] { row }), MergeMenu(model), new Separator(), DeleteMenu(model, new[] { row }) } };
-                Canvas.SetLeft(card, X(interval.Start) + BlockInset); Canvas.SetTop(card, bandTop + lane * (height + LaneGap)); canvas.Children.Add(card); addedEarly = true;
+                Canvas.SetLeft(card, X(interval.Start) + BlockInset); Canvas.SetTop(card, bandTop + lane * (height + LaneGap)); canvas.Children.Add(card); addedEarly = true; MarkDrawn(drawnBlocks, lane, laneCount, X(interval.Start) + BlockInset, width);
                 TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour, model.IsSelected(selectionSources));
             }
             if (recording)
@@ -282,8 +467,9 @@ public static class ReviewViews
                 card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { ungroup, CopyMenu(model, group.Sources), MergeMenu(model) } };
                 ToolTip.SetTip(card, $"{model.Label(group.Account)} · {model.Format(duration)}\nMerged, {group.Sources.Count} blocks");
             }
-            if (!addedEarly) { Canvas.SetLeft(card, X(interval.Start) + BlockInset); Canvas.SetTop(card, bandTop + lane * (height + LaneGap)); canvas.Children.Add(card); }
+            if (!addedEarly) { Canvas.SetLeft(card, X(interval.Start) + BlockInset); Canvas.SetTop(card, bandTop + lane * (height + LaneGap)); canvas.Children.Add(card); MarkDrawn(drawnBlocks, lane, laneCount, X(interval.Start) + BlockInset, width); }
         }
+        BlockChips(canvas, model, intervals, placement, folded, drawnBlocks, bandTop, bandHeight, pixelsPerHour, X);
         // Planned meetings sit in the row above the blocks as dashed cards, and a click on a free place in that row starts a new one. A meeting is planned time:
         // it is never counted as tracked time, and a block under it is not affected.
         {
@@ -305,9 +491,13 @@ public static class ReviewViews
             // With no meetings the row is under the blocks, which take its height; a free place in it still starts a meeting.
             if (planned.Count == 0) lane.ZIndex = -1;
             var places = PlaceLanes(planned.Select(m => (m, day + m.At!.Value, day + m.End!.Value)));
+            // The row keeps its height with at most two lanes. A meeting that would need a third folds into a +N chip, which opens a short list of them.
+            var foldedMeetings = new List<DayNote>(); var drawn = new List<(int Row, double Left, double Right)>();
             foreach (var meeting in planned)
             {
                 var (row, rows) = places[meeting];
+                if (row >= MeetingLanes) { foldedMeetings.Add(meeting); continue; }
+                rows = Math.Min(rows, MeetingLanes);
                 var width = Math.Max(24, (meeting.End!.Value - meeting.At!.Value).TotalHours * pixelsPerHour - 2);
                 var height = rows == 1 ? MeetingHeight : (MeetingHeight - LaneGap * (rows - 1)) / rows;
                 // A name cut short slides past on hover so all of it can be read, like a block's name.
@@ -331,7 +521,9 @@ public static class ReviewViews
                 // A press drags it (the middle moves it, an edge resizes it); a click that goes nowhere opens it for editing.
                 MeetingGestures.Attach(card, canvas, model, meeting, pixelsPerHour, span);
                 Canvas.SetLeft(card, X(day + meeting.At.Value) + 1); Canvas.SetTop(card, meetingTop + row * (height + LaneGap)); canvas.Children.Add(card);
+                drawn.Add((row, X(day + meeting.At.Value) + 1, X(day + meeting.At.Value) + 1 + width));
             }
+            MoreChips(canvas, model, day, planned, places, foldedMeetings, drawn, meetingTop, X);
         }
         // For today, a line down through the band at the current time, a dot at the top and a chip under it saying what it is. It moves on every half minute while on screen.
         if (day == model.Engine.Now.Date)
