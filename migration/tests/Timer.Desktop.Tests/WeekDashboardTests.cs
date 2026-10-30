@@ -211,13 +211,13 @@ public sealed class WeekDashboardTests
     }
 
     [AvaloniaFact]
-    public void DemoHasSevenAccountsWithSensibleBudgetsAndOverviewLinesUpWithEachAccount()
+    public void DemoHasEightTrackedAccountsWithSensibleBudgetsAndOverviewLinesUpWithEachAccount()
     {
         var model = TimerModel.CreateDemo(() => Day.AddHours(12)); // A Friday, so the week holds Monday to Thursday history.
         var accounts = model.Accounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
-        Assert.Equal(7, accounts.Count);
-        Assert.Equal(5, accounts.Count(a => a.Budget is not null));
-        Assert.Equal(new[] { "week", "week", "week", "month", "quarter" }, accounts.Where(a => a.Budget is not null).Select(a => a.Period));
+        Assert.Equal(8, accounts.Count); // Archive is hidden from the tracker.
+        Assert.Equal(6, accounts.Count(a => a.Budget is not null));
+        Assert.Equal(new[] { "week", "week", "week", "month", "quarter", "day" }, accounts.Where(a => a.Budget is not null).Select(a => a.Period));
         var fractions = accounts.Where(a => a.Budget is not null).Select(a => model.BudgetUsed(a).TotalSeconds / a.Budget!.Value.TotalSeconds).ToList();
         Assert.All(fractions, f => Assert.True(f > .05)); // Every budget has something used, so no meter is empty.
         Assert.Contains(fractions, f => f is >= .8 and < 1); Assert.Contains(fractions, f => f >= 1); Assert.Contains(fractions, f => f < .8); // Comfortable, nearly used and over.
@@ -226,7 +226,7 @@ public sealed class WeekDashboardTests
         {
             window.SelectTab(true); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs();
             var lines = window.GetVisualDescendants().OfType<Grid>().Where(g => g.Name?.StartsWith("WeekAccount_") == true).ToList();
-            Assert.Equal(7, lines.Count);
+            Assert.Equal(9, lines.Count); // The hidden account is still in the week's reports.
             double Centre(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
             foreach (var line in lines)
             {
