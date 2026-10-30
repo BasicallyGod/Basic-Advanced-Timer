@@ -442,15 +442,63 @@ public sealed class NotesModel
         if (!Unsaved) { Fault = null; Changed?.Invoke(); }
     }
 
-    /// <summary>Notes for the sample-data demo: meetings (one repeating), a note with a reminder that is late, one due later and one with no date.</summary>
+    /// <summary>
+    /// Notes and meetings for the sample-data demo, enough to try every part of them: meetings that repeat (daily, weekly, every other week, monthly) and overlap on one day and
+    /// run long on another, notes that are late (one by days), coming up, at the same minute (a cluster on the timeline), important with and without a reminder, with links,
+    /// with an account, long, done, and with no date at all.
+    /// </summary>
     public void SeedDemo(DateTime today, IReadOnlyList<string> accounts)
     {
+        string? Account(int n) => n < accounts.Count ? accounts[n] : null;
+        DayNote Last() => notes[^1];
+        // The first six keep their order: a meeting that repeats, a call, a review, two notes with a reminder and one with no date.
         AddMeeting(today, TimeSpan.FromHours(9.25), TimeSpan.FromHours(10), "Team sync", null, RepeatChoice.Week);
-        AddMeeting(today, TimeSpan.FromHours(11), TimeSpan.FromHours(12), "Client call", accounts.Count > 1 ? accounts[1] : null, RepeatChoice.None);
+        AddMeeting(today, TimeSpan.FromHours(11), TimeSpan.FromHours(12), "Client call", Account(1), RepeatChoice.None);
         AddMeeting(today, TimeSpan.FromHours(15), TimeSpan.FromHours(16), "Plan review", null, RepeatChoice.None);
-        AddNote("Send the revised budget", accounts.Count > 0 ? accounts[0] : null, today.AddHours(14));
-        AddNote("Follow up on the new brief", accounts.Count > 1 ? accounts[1] : null, today.AddHours(15.5));
+        AddNote("Send the revised budget", Account(0), today.AddHours(14));
+        AddNote("Follow up on the new brief", Account(1), today.AddHours(15.5));
         AddNote("Tidy the shared drive", null, null);
+
+        // More meetings today: a daily one beside the weekly one, two that overlap the call, one that overlaps the review, a monthly one and a late one.
+        AddMeeting(today, TimeSpan.FromHours(9), TimeSpan.FromHours(9.25), "Stand-up", null, RepeatChoice.Day);
+        AddMeeting(today, TimeSpan.FromHours(11.5), TimeSpan.FromHours(12.25), "Design review", Account(2), RepeatChoice.None);
+        AddMeeting(today, TimeSpan.FromHours(11.75), TimeSpan.FromHours(12.5), "Supplier check-in", Account(4), RepeatChoice.None);
+        AddMeeting(today, TimeSpan.FromHours(13.5), TimeSpan.FromHours(14), "Vendor demo", Account(4), RepeatChoice.None);
+        AddMeeting(today, TimeSpan.FromHours(14.5), TimeSpan.FromHours(15), "Finance close", Account(3), RepeatChoice.Month);
+        AddMeeting(today, TimeSpan.FromHours(15.5), TimeSpan.FromHours(16.5), "1:1", Account(0), RepeatChoice.BiWeek);
+        AddMeeting(today, TimeSpan.FromHours(16.5), TimeSpan.FromHours(17), "Wrap-up", null, RepeatChoice.None);
+        // Other days: yesterday, tomorrow, a long one, one further on and one in the past.
+        AddMeeting(today.AddDays(-1), TimeSpan.FromHours(16), TimeSpan.FromHours(17), "Retro", null, RepeatChoice.None);
+        AddMeeting(today.AddDays(-3), TimeSpan.FromHours(13), TimeSpan.FromHours(14.5), "Training", Account(5), RepeatChoice.None);
+        AddMeeting(today.AddDays(1), TimeSpan.FromHours(10), TimeSpan.FromHours(12), "Workshop", Account(3), RepeatChoice.None);
+        AddMeeting(today.AddDays(1), TimeSpan.FromHours(14), TimeSpan.FromHours(15), "Budget check-in", Account(0), RepeatChoice.Week);
+        AddMeeting(today.AddDays(3), TimeSpan.FromHours(9), TimeSpan.FromHours(17), "Offsite", null, RepeatChoice.None);
+        AddMeeting(today.AddDays(7), TimeSpan.FromHours(9), TimeSpan.FromHours(10.5), "Planning", Account(1), RepeatChoice.None);
+
+        // Notes that are late: one a few minutes ago, one a day old, one days old, and important ones.
+        AddNote("!! Call the client back about the contract", Account(1), today.AddHours(13.75));
+        AddNote("Chase the invoice", Account(4), today.AddDays(-1).AddHours(16));
+        AddNote("Renew the software licence", null, today.AddDays(-3).AddHours(10));
+        AddNote("!! Reply to the auditor", Account(3), today.AddDays(-2).AddHours(9.5));
+        // Notes coming up: three at nearly the same minute (one pin on the timeline), then later today, tomorrow and further on.
+        AddNote("Book the meeting room", null, today.AddHours(15.5));
+        AddNote("!! Print the agenda", Account(2), today.AddHours(15.5).AddMinutes(5));
+        AddNote("Submit the timesheet", Account(6), today.AddHours(16.75));
+        AddNote("!! Send the invoice batch", Account(3), today.AddHours(17));
+        AddNote("!! Confirm the catering", null, today.AddDays(1).AddHours(8.5));
+        AddNote("Prepare the workshop slides", Account(3), today.AddDays(1).AddHours(9));
+        AddNote("Review the [contract draft](https://example.com/contract) before the call", Account(1), today.AddDays(2).AddHours(11));
+        AddNote("Quarterly report due: see [the template](https://example.com/report) and [last quarter](https://example.com/report-q3)", Account(4), today.AddDays(8).AddHours(12));
+        // Notes with no date: one important, one with a link, one with an account, a long one that wraps, and a few more for the lists.
+        AddNote("!! Back up the laptop", null, null);
+        AddNote("Look at [other time-tracking tools](https://example.com/research) for ideas", null, null);
+        AddNote("Write up the retro", Account(6), null);
+        AddNote("Ask finance about the Q4 budget", Account(4), null);
+        AddNote("Draft the long summary of the client's feedback, covering pricing, timelines, the staffing plan and the risks they raised on the call, then share it with the team for comments before Friday", Account(1), null);
+        AddNote("Sort out the expenses", null, null);
+        // Done: one with a reminder, one without.
+        AddNote("Update the project plan", Account(0), today.AddDays(-1).AddHours(11)); Toggle(Last().Id);
+        AddNote("Order stationery", null, null); Toggle(Last().Id);
     }
 }
 

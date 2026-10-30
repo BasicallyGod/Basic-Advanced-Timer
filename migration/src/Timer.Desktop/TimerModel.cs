@@ -197,13 +197,19 @@ public sealed class TimerModel : INotifyPropertyChanged
     public TimerModel(TrackingEngine? engine = null, StoreSettings? preferences = null, TimerStore? store = null)
     {
         Engine = engine ?? new();
-        this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, ThemeLibrary.Default, DayOfWeek.Monday);
+        this.preferences = preferences ?? new(new() { new("Account one"), new("Account two"), new("Internal") }, false, ThemeLibrary.Default, DayOfWeek.Monday, Shadows: false);
         this.store = store;
         Editor = store?.Editor ?? new LedgerEditor(Engine);
         Notes = new NotesModel(store, () => Engine.Now, () => ReviewAccounts.Select(a => a.Name).ToList());
         Notes.Changed += Notify;
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
+        // A new timer starts with window shadows off (the choice stays in Settings). The shared package defaults them on, so the first run turns them off once and marks it,
+        // which leaves an existing timer, and a choice made since, alone.
+        if (store is not null && !this.preferences.SetupDone && this.preferences.Extras?.AppearanceLines.Contains(ShadowsDefaultLine) != true)
+        {
+            this.preferences = this.preferences with { Shadows = false }; SetAppearanceFlag("shadowsdefault=", "applied", true); Save();
+        }
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
         SelectedDate = Engine.Now.Date; lastToday = SelectedDate;
         // Only Light and Dark are offered now, so a saved choice of a retired theme or one of the user's own becomes Light or Dark (the theme stays in the file).
@@ -583,8 +589,10 @@ public sealed class TimerModel : INotifyPropertyChanged
         var prefs = new StoreSettings(new()
         {
             new("Account one", 15), new("Account two", 4.5), new("Account three", 2.5), new("Account four", 20, "month"),
-            new("Account five", 40, "quarter"), new("Account six"), new("Internal")
-        }, false, ThemeLibrary.Default, DayOfWeek.Monday);
+            new("Account five", 40, "quarter"), new("Account six"), new("Internal"),
+            // A budget per day, and an account hidden from the tracker whose time still shows in every report.
+            new("Account seven", 3, "day"), new("Archive", null, "week", Hidden: true)
+        }, false, ThemeLibrary.Default, DayOfWeek.Monday, Shadows: false);
         var start = anchor.Date.AddHours(9);
         // Today runs from 09:00 to the demo's 14:15, with a break in the middle and no gaps worth tidying except a few minutes.
         var today = new (string Account, int Minutes)[]
@@ -611,9 +619,61 @@ public sealed class TimerModel : INotifyPropertyChanged
             var at = day.AddHours(9);
             foreach (var (account, minutes) in earlier) { engine.AddSession(account, at, at.AddMinutes(minutes)); at = at.AddMinutes(minutes + 5); }
         }
+        // Yesterday ends with two blocks on one account with five quiet minutes between them, which are merged into one below.
+        var day0 = anchor.Date; var yesterday = day0.AddDays(-1);
+        engine.AddSession("Account six", yesterday.AddHours(16).AddMinutes(20), yesterday.AddHours(16).AddMinutes(50));
+        engine.AddSession("Account six", yesterday.AddHours(16).AddMinutes(55), yesterday.AddHours(17).AddMinutes(15));
+        // Today also holds time that overlaps (a cluster of three that cuts the day into lanes), a block planned for later, and a few short ones.
+        engine.AddSession("Account seven", day0.AddHours(11), day0.AddHours(11).AddMinutes(40));
+        engine.AddSession("Internal", day0.AddHours(11).AddMinutes(20), day0.AddHours(11).AddMinutes(55));
+        engine.AddSession("Account one", day0.AddHours(14).AddMinutes(30), day0.AddHours(15).AddMinutes(15));
+        engine.AddSession("Account six", day0.AddHours(15).AddMinutes(30), day0.AddHours(15).AddMinutes(34));
+        // Ten more weeks behind, so month and quarter budgets, the week overview and the earlier weeks all have something to show: four patterns of day in rotation, with
+        // different starts, gaps with nothing on an account, a few overlaps, the odd weekend session, a day off and a short day.
+        var patterns = new (string Account, int Minutes)[][]
+        {
+            new[] { ("Account one", 120), ("Account two", 50), ("Account six", 40), (BreakAccount.Name, 30), ("Account three", 60), ("Internal", 45) },
+            new[] { ("Account four", 150), ("Account one", 60), (BreakAccount.Name, 45), ("Account five", 90), ("Account six", 20) },
+            new[] { ("Account two", 75), ("Account seven", 100), ("Account three", 35), (BreakAccount.Name, 30), ("Account one", 80), ("Internal", 25) },
+            new[] { ("Account one", 45), ("Account five", 60), ("Account four", 60), (BreakAccount.Name, 30), ("Account two", 90), ("Account six", 30), ("Archive", 40) }
+        };
+        var dayOff = day0.AddDays(-9); var shortDay = day0.AddDays(-10);
+        engine.Schedule.Overrides[dayOff] = new DayOverride(true, null);
+        engine.Schedule.Overrides[shortDay] = new DayOverride(false, new Shift(TimeSpan.FromHours(9), TimeSpan.FromHours(13)));
+        for (var back = 7; back <= 70; back++)
+        {
+            var day = day0.AddDays(-back);
+            var weekend = day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+            if (day == dayOff || (weekend && back % 21 != 0)) continue;
+            var template = weekend ? new (string Account, int Minutes)[] { ("Account two", 90), ("Internal", 30) } : patterns[(back * 7 / 3) % patterns.Length];
+            if (day == shortDay) template = template.Take(3).ToArray();
+            var at = day.AddHours(8.5 + back % 3 * 0.5);
+            for (var i = 0; i < template.Length; i++)
+            {
+                engine.AddSession(template[i].Account, at, at.AddMinutes(template[i].Minutes));
+                // Nothing recorded between most blocks, a longer quiet stretch some days, so Unallocated has something to show.
+                at = at.AddMinutes(template[i].Minutes + (back % 5 == 0 && i == 1 ? 40 : (i * back) % 3 * 5));
+            }
+            // Every ninth day an extra block lies over the middle of the day.
+            if (back % 9 == 0 && !weekend) engine.AddSession("Account seven", day.AddHours(10), day.AddHours(10).AddMinutes(50));
+        }
         if (store is not null) store.Save(engine, prefs);
         var demo = new TimerModel(engine, prefs, store) { IsDemo = true };
-        demo.Notes.SeedDemo(anchor.Date, prefs.Accounts.Select(x => x.Name).ToList());
+        // Notes written on a few blocks, then yesterday's last two Account six blocks merged into one, so the note mark, the merged block and Unmerge can all be tried. (These are edits, so the demo starts with something to undo.)
+        void Note(Func<SessionRow, bool> pick, string note)
+        {
+            var row = engine.Sessions.FirstOrDefault(pick); if (row is null) return;
+            demo.ChangeLog(() => demo.Editor.Edit(row, row.Account, row.From, row.To, note, allowOverlap: true));
+        }
+        bool Today(SessionRow r, string account, int hour) => r.Day == day0 && r.Account == account && r.From.Hour == hour;
+        Note(r => Today(r, "Account one", 9), "Kick-off prep and agenda for the week");
+        Note(r => Today(r, "Account two", 10), "Client workshop: notes in the shared folder");
+        Note(r => Today(r, "Account seven", 11), "Pairing session, then the review");
+        Note(r => r.Day == day0.AddDays(-1) && r.Account == "Account four", "Reviewed the monthly figures");
+        Note(r => r.Day == day0.AddDays(-2) && r.Account == "Account five", "Quarterly planning notes");
+        var morning = engine.Sessions.Where(r => r.Day == day0.AddDays(-1) && r.Account == "Account six" && r.From.Hour >= 16).OrderBy(r => r.From).Take(2).ToArray();
+        if (morning.Length == 2) demo.ChangeLog(() => demo.Editor.Group(morning));
+        demo.Notes.SeedDemo(day0, prefs.Accounts.Select(x => x.Name).ToList());
         return demo;
     }
     public void SetShifts(Dictionary<DayOfWeek, Shift> shifts, bool resetToday = false)
@@ -813,6 +873,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool DashboardOnTop => preferences.DashboardOnTop;
     public void SetPillOnTop(bool on) { preferences = preferences with { PillOnTop = on }; Save(); Notify(); }
     public void SetDashboardOnTop(bool on) { preferences = preferences with { DashboardOnTop = on }; Save(); Notify(); }
+    private const string ShadowsDefaultLine = "shadowsdefault=applied";
     private void SetAppearanceFlag(string prefix, string? value, bool changed)
     {
         if (!changed) return;

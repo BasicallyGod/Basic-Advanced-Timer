@@ -387,7 +387,8 @@ Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(
     [AvaloniaFact]
     public void ZoomSitsInABarUnderTheTimelineTheHintLineIsGoneAndADisabledButtonStaysOutlined()
     {
-        var model = TimerModel.CreateDemo(); var dashboard = new DashboardWindow(model); dashboard.Show();
+        var model = TimerModel.CreateDemo(); while (model.Editor.CanUndo) model.UndoEdit(); // The demo starts with a few edits to undo; this is about the button with nothing to undo.
+        var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();

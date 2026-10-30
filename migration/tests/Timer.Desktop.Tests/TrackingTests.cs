@@ -172,7 +172,7 @@ public sealed class TrackingTests
         using (var store = new TimerStore(folder.Path))
         {
             var engine = new TrackingEngine(); var prefs = store.Load(engine);
-            Assert.Equal(count, engine.Sessions.Count); Assert.Equal(7, prefs.Accounts.Count);
+            Assert.Equal(count, engine.Sessions.Count); Assert.Equal(9, prefs.Accounts.Count);
         }
     }
 
