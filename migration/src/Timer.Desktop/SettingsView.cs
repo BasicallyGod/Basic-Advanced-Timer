@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Timer.Core;
@@ -81,9 +83,9 @@ public sealed class SettingsView : Grid
         stack.Children.Add(Label("Theme"));
         // System follows the computer's light or dark setting. Each tile is a small picture of the dashboard in that theme.
         // Three equal tiles that share the card's width up to their own 172, so with the account panel docked and the card narrower they narrow too, side by side, instead of running past the card's edge.
-        var tiles = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1, Columns = 3, Margin = new Thickness(0, 6, 0, 16), HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 3 * 172 + 24 };
+        var tiles = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1, Columns = 4, Margin = new Thickness(0, 6, 0, 10), HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 4 * 172 + 36 };
         var buttons = new Dictionary<string, Button>();
-        foreach (var (choice, words) in new[] { (ThemeLibrary.System, "System"), (AppThemes.Light.Name, "Light"), (AppThemes.Dark.Name, "Dark") })
+        foreach (var (choice, words) in new[] { (ThemeLibrary.System, "System"), (AppThemes.Light.Name, "Light"), (AppThemes.Dark.Name, "Dark"), (AppThemes.Sun, "Sunset") })
         {
             var tile = new Button { Name = "Theme" + words, MaxWidth = 172, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 12, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch }; tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile"); tile.Padding = new Thickness(8);
             var caption = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(2, 8, 0, 0) };
@@ -97,6 +99,7 @@ public sealed class SettingsView : Grid
         void SyncThemes() { foreach (var (choice, tile) in buttons) tile.Classes.Set("selected", choice == model.Theme); }
         syncs.Add(SyncThemes); SyncThemes();
         stack.Children.Add(tiles);
+        stack.Children.Add(BuildSunOptions());
 
         // The pill is vertical or horizontal, as chosen in Getting started. Choosing here turns it into the other shape where it stands.
         stack.Children.Add(Label("Pill shape"));
@@ -126,6 +129,48 @@ public sealed class SettingsView : Grid
         return stack;
     }
 
+    // Under the tiles while Sunset is chosen: the place whose sun sets the times, or two times typed in, and what they come to today.
+    private Control BuildSunOptions()
+    {
+        var places = new List<string>(SunTimes.Cities.Select(c => c.Name)) { "Set times by hand" };
+        var place = new ComboBox { Name = "SunPlace", ItemsSource = places, Width = 190, Height = 36, MinHeight = 36, FontSize = 13.5 };
+        Avalonia.Automation.AutomationProperties.SetName(place, "Place for sunrise and sunset");
+        TextBox Time(string name, string words)
+        {
+            var box = new TextBox { Name = name, Width = 74, Height = 36, MinHeight = 36, TextAlignment = TextAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, MaxLength = 5 };
+            Avalonia.Automation.AutomationProperties.SetName(box, words); return box;
+        }
+        var dark = Time("SunDarkFrom", "Dark from"); var light = Time("SunLightFrom", "Light from");
+        var summary = Ui.Text("", 12, "muted"); summary.Name = "SunSummary"; summary.TextWrapping = TextWrapping.Wrap; summary.Margin = new Thickness(0, 4, 0, 0);
+        var hand = Ui.Horizontal(Ui.Text("Dark from", 13), dark, Ui.Text("Light from", 13), light); hand.Name = "SunHandTimes";
+        var host = new StackPanel { Name = "SunOptions", Margin = new Thickness(0, 0, 0, 16), Spacing = 8 };
+        host.Children.Add(Ui.Horizontal(Ui.Text("Place", 13), place)); host.Children.Add(hand); host.Children.Add(summary);
+        var syncing = false;
+        void Sync()
+        {
+            host.IsVisible = model.Theme == AppThemes.Sun; if (!host.IsVisible) return;
+            syncing = true;
+            var chosen = model.SunPlace == SunTimes.ByHand ? "Set times by hand" : model.SunPlace;
+            if (!Equals(place.SelectedItem, chosen)) place.SelectedItem = chosen;
+            var byHand = model.SunPlace == SunTimes.ByHand; hand.IsVisible = byHand;
+            var times = model.SunHandTimes; if (!dark.IsFocused) dark.Text = times.DarkFrom.ToString(@"hh\:mm"); if (!light.IsFocused) light.Text = times.LightFrom.ToString(@"hh\:mm");
+            var (lightFrom, darkFrom) = model.SunDay(model.Engine.Now);
+            summary.IsVisible = !byHand;
+            summary.Text = $"Today in {model.SunPlace}: light from {lightFrom:hh\\:mm}, dark from {darkFrom:hh\\:mm}. Follows the sun through the year.";
+            syncing = false;
+        }
+        place.SelectionChanged += (_, _) => { if (!syncing && place.SelectedItem is string picked) model.SetSunPlace(picked == "Set times by hand" ? SunTimes.ByHand : picked); };
+        void Commit()
+        {
+            if (syncing) return;
+            if (TimeText.TryParseClock(dark.Text, model.Engine.Now.Date, false, out var d) && TimeText.TryParseClock(light.Text, model.Engine.Now.Date, false, out var l)) model.SetSunHandTimes(d.TimeOfDay, l.TimeOfDay);
+            else { model.Refuse("Time, like 19:00"); Sync(); }
+        }
+        foreach (var box in new[] { dark, light }) { box.LostFocus += (_, _) => Commit(); box.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Commit(); e.Handled = true; } }; }
+        syncs.Add(Sync); Sync();
+        return host;
+    }
+
     // A small picture of the dashboard in a theme: the page, the rail, a bar for the title and three blocks. System shows Light and Dark side by side.
     private static Control ThemePicture(string words)
     {
@@ -142,7 +187,16 @@ public sealed class SettingsView : Grid
         }
         var light = Half("#D9D9D3", "#FFFFFF", "#9A9DA6"); var dark = Half("#080C14", "#2C3858", "#7684AB");
         Control inside = words switch { "Light" => light, "Dark" => dark, _ => new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), Children = { light, dark } } };
-        if (inside is Grid system) Grid.SetColumn(dark, 1);
+        if (inside is Grid system)
+        {
+            Grid.SetColumn(dark, 1);
+            // Sunset is the same two halves with a small sun over the light one and a moon over the dark one.
+            if (words == "Sunset")
+            {
+                system.Children.Add(new Ellipse { Width = 12, Height = 12, Fill = new SolidColorBrush(Color.Parse("#F2B134")), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 6, 5) });
+                var moon = new Ellipse { Width = 12, Height = 12, Fill = new SolidColorBrush(Color.Parse("#C9D2F0")), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 6, 5) }; Grid.SetColumn(moon, 1); system.Children.Add(moon);
+            }
+        }
         var frame = new Border { Height = 72, CornerRadius = new CornerRadius(10), ClipToBounds = true, BorderThickness = new Thickness(1), Child = inside };
         frame.Bind(Border.BorderBrushProperty, frame.GetResourceObservable("Line"));
         return frame;

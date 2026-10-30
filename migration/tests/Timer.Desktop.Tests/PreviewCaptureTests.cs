@@ -100,6 +100,26 @@ public sealed class PreviewCaptureTests
         }
     }
 
+    [AvaloniaFact]
+    public void WriteSunsetSettings()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme);
+            var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"sun-{theme}-{name}.png")); }
+                void Press(string name) { window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+                Press("Settings"); Press("ThemeSunset"); model.SetSunPlace("London"); Shot("city");
+                model.SetSunPlace(SunTimes.ByHand); Shot("hand");
+            }
+            finally { window.Close(); }
+        }
+    }
+
     public static void SetSwollen(Border ring, double opacity)
     {
         ring.SetValue(Avalonia.Layout.Layoutable.WidthProperty, 20.0, Avalonia.Data.BindingPriority.Animation); ring.SetValue(Avalonia.Layout.Layoutable.HeightProperty, 28.0, Avalonia.Data.BindingPriority.Animation);
