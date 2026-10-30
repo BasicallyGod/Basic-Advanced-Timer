@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Overlapped blocks: which account is which</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.pg{--bg1:#0F1420;--bg2:#131A2A;--ink:#EEF2FB;--muted:#A7B2CA;--line:#2D3853;--card:#1A2234;--card2:#212B42;--accent:#7C9BFF;color-scheme:dark;background:linear-gradient(135deg,var(--bg1),var(--bg2));color:var(--ink);font-family:'Inter',system-ui,sans-serif;box-sizing:border-box}
+.pg h1{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:28px;font-weight:700}
+.pg .lead{margin:6px 0 0;font-size:13.5px;line-height:1.5;color:var(--muted)}
+.pg .rowh{margin:0;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pg .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:20px;row-gap:12px}
+.pg .cell{display:flex;flex-direction:column;gap:10px;margin:0}
+.pg .cap{display:flex;flex-direction:column;gap:3px;min-height:56px}
+.pg .cap h2{margin:0;font-size:15px;font-weight:600}
+.pg .cap p{margin:0;font-size:12.5px;line-height:1.45;color:var(--muted)}
+.pg .tag{display:inline-block;min-width:22px;text-align:center;margin-right:8px;padding:1px 6px;border-radius:7px;background:rgba(124,155,255,.18);color:#B9C9FF;font-size:12px;font-weight:700}
+.pg .tag.now{background:rgba(255,255,255,.10);color:var(--muted)}
+.strip{position:relative;width:400px;height:132px;box-sizing:border-box;border-radius:18px;background:var(--card);border:1px solid var(--line);overflow:hidden}
+.hr{position:absolute;top:7px;transform:translateX(-50%);font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.ax{position:absolute;left:0;right:0;top:28px;height:1px;background:var(--line)}
+.gd{position:absolute;top:29px;bottom:0;width:1px;background:rgba(255,255,255,.06)}
+.gd.half{background:rgba(255,255,255,.03)}
+.pl{position:absolute;box-sizing:border-box;display:flex;align-items:center;gap:6px;padding:0 8px;border-radius:8px;color:var(--ink);font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden}
+.pl.s{border-radius:6px;padding:0 6px;font-size:10.5px;gap:5px}
+.pl .du{font-weight:700}
+.pl .nm{font-weight:500;opacity:.85}
+.pl .in{background:rgba(10,15,30,.38);border-radius:6px;padding:1px 5px;font-size:10.5px;font-weight:700;line-height:14px}
+.pl.s .in{background:transparent;padding:0;font-size:10.5px}
+</style>
+</helmet>
+<div class="pg" style="width: 1300px; height: 640px; padding: 34px 30px 30px; display: flex; flex-direction: column; gap: 22px; border-radius: 20px">
+  <div>
+    <h1>Overlapped blocks: which account is which</h1>
+    <p class="lead">The same cluster of overlapping blocks, three lanes deep and then four, at the app's zoom (280px to the hour). The band is 78px tall, so the lanes are 24px and 17px.</p>
+  </div>
+
+  <h3 class="rowh">Three lanes</h3>
+  <div class="grid">
+
+    <figure class="cell">
+      <div class="cap"><h2><span class="tag now">Now</span>Duration only</h2><p>The account is in the tooltip.</p></div>
+      <div class="strip">
+        <span class="hr" style="left: 59px">11:00</span><span class="hr" style="left: 339px">12:00</span>
+        <div class="ax"></div><div class="gd" style="left: 59px"></div><div class="gd half" style="left: 199px"></div><div class="gd" style="left: 339px"></div>
+        <div class="pl" style="left: 48px; top: 40px; width: 148px; height: 24px; background: color-mix(in srgb, #94BF9B 45%, #1A2234)"><span class="du">00:33</span></div>
+        <div class="pl" style="left: 104px; top: 67px; width: 181px; height: 24px; background: color-mix(in srgb, #C4A38F 45%, #1A2234)"><span class="du">00:40</span></div>
+        <div class="pl" style="left: 178px; top: 94px; width: 157px; height: 24px; background: color-mix(in srgb, #D79BB5 45%, #1A2234)"><span class="du">00:35</span></div>
+      </div>
+    </figure>
+
+    <figure class="cell">
+      <div class="cap"><h2><span class="tag">A</span>Name while it fits</h2><p>Duration and the account's name on one line.</p></div>
+      <div class="strip">
+        <span class="hr" style="left: 59px">11:00</span><span class="hr" style="left: 339px">12:00</span>
+        <div class="ax"></div><div class="gd" style="left: 59px"></div><div class="gd half" style="left: 199px"></div><div class="gd" style="left: 339px"></div>
+        <div class="pl" style="left: 48px; top: 40px; width: 148px; height: 24px; background: color-mix(in srgb, #94BF9B 45%, #1A2234)"><span class="du">00:33</span><span class="nm">Account two</span></div>
+        <div class="pl" style="left: 104px; top: 67px; width: 181px; height: 24px; background: color-mix(in srgb, #C4A38F 45%, #1A2234)"><span class="du">00:40</span><span class="nm">Account seven</span></div>
+        <div class="pl" style="left: 178px; top: 94px; width: 157px; height: 24px; background: color-mix(in srgb, #D79BB5 45%, #1A2234)"><span class="du">00:35</span><span class="nm">Internal</span></div>
+      </div>
+    </figure>
+
+    <figure class="cell">
+      <div class="cap"><h2><span class="tag">B</span>Initials always</h2><p>A small initials chip, then the duration.</p></div>
+      <div class="strip">
+        <span class="hr" style="left: 59px">11:00</span><span class="hr" style="left: 339px">12:00</span>
+        <div class="ax"></div><div class="gd" style="left: 59px"></div><div class="gd half" style="left: 199px"></div><div class="gd" style="left: 339px"></div>
+        <div class="pl" style="left: 48px; top: 40px; width: 148px; height: 24px; background: color-mix(in srgb, #94BF9B 45%, #1A2234)"><span class="in">AT</span><span class="du">00:33</span></div>
+        <div class="pl" style="left: 104px; top: 67px; width: 181px; height: 24px; background: color-mix(in srgb, #C4A38F 45%, #1A2234)"><span class="in">AS</span><span class="du">00:40</span></div>
+        <div class="pl" style="left: 178px; top: 94px; width: 157px; height: 24px; background: color-mix(in srgb, #D79BB5 45%, #1A2234)"><span class="in">I</span><span class="du">00:35</span></div>
+      </div>
+    </figure>
+
+  </div>
+
+  <h3 class="rowh">Four lanes</h3>
+  <div class="grid">
+
+    <figure class="cell">
+      <div class="cap"><h2><span class="tag now">Now</span>Colour only</h2><p>The account and time are in the tooltip.</p></div>
+      <div class="strip">
+        <span class="hr" style="left: 59px">11:00</span><span class="hr" style="left: 339px">12:00</span>
+        <div class="ax"></div><div class="gd" style="left: 59px"></div><div class="gd half" style="left: 199px"></div><div class="gd" style="left: 339px"></div>
+        <div class="pl s" style="left: 48px; top: 40px; width: 148px; height: 17px; background: color-mix(in srgb, #94BF9B 45%, #1A2234)"></div>
+        <div class="pl s" style="left: 104px; top: 60px; width: 181px; height: 17px; background: color-mix(in srgb, #C4A38F 45%, #1A2234)"></div>
+        <div class="pl s" style="left: 178px; top: 80px; width: 157px; height: 17px; background: color-mix(in srgb, #D79BB5 45%, #1A2234)"></div>
+        <div class="pl s" style="left: 187px; top: 100px; width: 111px; height: 17px; background: color-mix(in srgb, #BAA4CE 45%, #1A2234)"></div>
+      </div>
+    </figure>
+
+    <figure class="cell">
+      <div class="cap"><h2><span class="tag">A</span>Initials below three lanes</h2><p>Initials and the duration, in 10.5px.</p></div>
+      <div class="strip">
+        <span class="hr" style="left: 59px">11:00</span><span class="hr" style="left: 339px">12:00</span>
+        <div class="ax"></div><div class="gd" style="left: 59px"></div><div class="gd half" style="left: 199px"></div><div class="gd" style="left: 339px"></div>
+        <div class="pl s" style="left: 48px; top: 40px; width: 148px; height: 17px; background: color-mix(in srgb, #94BF9B 45%, #1A2234)"><span class="in">AT</span><span class="du">00:33</span></div>
+        <div class="pl s" style="left: 104px; top: 60px; width: 181px; height: 17px; background: color-mix(in srgb, #C4A38F 45%, #1A2234)"><span class="in">AS</span><span class="du">00:40</span></div>
+        <div class="pl s" style="left: 178px; top: 80px; width: 157px; height: 17px; background: color-mix(in srgb, #D79BB5 45%, #1A2234)"><span class="in">I</span><span class="du">00:35</span></div>
+        <div class="pl s" style="left: 187px; top: 100px; width: 111px; height: 17px; background: color-mix(in srgb, #BAA4CE 45%, #1A2234)"><span class="in">AF</span><span class="du">00:25</span></div>
+      </div>
+    </figure>
+
+    <figure class="cell">
+      <div class="cap"><h2><span class="tag">B</span>Initials only</h2><p>Initials alone, so the shortest pills stay readable.</p></div>
+      <div class="strip">
+        <span class="hr" style="left: 59px">11:00</span><span class="hr" style="left: 339px">12:00</span>
+        <div class="ax"></div><div class="gd" style="left: 59px"></div><div class="gd half" style="left: 199px"></div><div class="gd" style="left: 339px"></div>
+        <div class="pl s" style="left: 48px; top: 40px; width: 148px; height: 17px; background: color-mix(in srgb, #94BF9B 45%, #1A2234)"><span class="in">AT</span></div>
+        <div class="pl s" style="left: 104px; top: 60px; width: 181px; height: 17px; background: color-mix(in srgb, #C4A38F 45%, #1A2234)"><span class="in">AS</span></div>
+        <div class="pl s" style="left: 178px; top: 80px; width: 157px; height: 17px; background: color-mix(in srgb, #D79BB5 45%, #1A2234)"><span class="in">I</span></div>
+        <div class="pl s" style="left: 187px; top: 100px; width: 111px; height: 17px; background: color-mix(in srgb, #BAA4CE 45%, #1A2234)"><span class="in">AF</span></div>
+      </div>
+    </figure>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1300,"height":640}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
