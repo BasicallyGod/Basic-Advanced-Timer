@@ -228,7 +228,12 @@ public sealed class NotesPage : Grid
         }
         var names = new List<string> { "No account" }; names.AddRange(model.Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name));
         var accounts = new ComboBox { Name = "PageAccount", ItemsSource = names, Width = 150, Height = 36, MinHeight = 36, IsEnabled = !archived, FontSize = 13.5,
-            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<string>((name, _) => Ui.Horizontal(name == "No account" ? NoteParts.Dot(model, null) : NoteParts.Dot(model, name), new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center })) };
+            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<string>((name, _) =>
+            {
+                // The words' ink sits a little above the middle of their line, so the dot is lifted a pixel to read as level with them.
+                var dot = name == "No account" ? NoteParts.Dot(model, null) : NoteParts.Dot(model, name); dot.Margin = new Thickness(0, 0, 0, 2);
+                return Ui.Horizontal(dot, new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
+            }) };
         accounts.SelectedItem = account is null ? "No account" : names.FirstOrDefault(n => n.Equals(account, StringComparison.OrdinalIgnoreCase)) ?? "No account";
         accounts.SelectionChanged += (_, _) => account = accounts.SelectedItem is string chosen && chosen != "No account" ? chosen : null;
         Add(accounts);

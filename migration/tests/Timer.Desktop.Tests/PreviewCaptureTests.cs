@@ -67,6 +67,39 @@ public sealed class PreviewCaptureTests
         }
     }
 
+    [AvaloniaFact]
+    public void WriteRound20Pages()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme); model.ToggleAccount(model.Accounts.First().Name);
+            var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"r20-{theme}-{name}.png")); }
+                void Press(string name) { window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+                var due = model.Engine.Now.Date.AddHours(14);
+                model.Notes.AddNote("Follow up on the new brief", "Account two", due); model.Notes.AddNote("Follow up on the new brief", "Account two", due); Dispatcher.UIThread.RunJobs();
+                Press("TimelineTab"); Shot("timeline");
+                var pin = window.GetVisualDescendants().OfType<Border>().First(b => b.Name?.StartsWith("TimelinePinMark_") == true);
+                var at = pin.TranslatePoint(new Point(pin.Bounds.Width / 2, pin.Bounds.Height / 2), window)!.Value;
+                Avalonia.Headless.HeadlessWindowExtensions.MouseMove(window, at); Dispatcher.UIThread.RunJobs(); Shot("pin-hover");
+                Avalonia.Headless.HeadlessWindowExtensions.MouseMove(window, new Point(5, 5)); Dispatcher.UIThread.RunJobs();
+                Press("AddNote");
+                window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Follow #Accountt"; Dispatcher.UIThread.RunJobs();
+                Press("Suggest_Accounttwo");
+                window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Follow up on the new brief"; Dispatcher.UIThread.RunJobs();
+                Press("FormBell"); Press("ReminderSet"); Shot("note-form");
+                Press("AddMeeting"); Shot("meeting-form");
+                Press("NotesTab"); Shot("notes"); Press("PageKindMeeting"); Shot("notes-meeting");
+                Press("WeekOverviewTab"); Shot("week");
+            }
+            finally { window.Close(); }
+        }
+    }
+
     public static void SetSwollen(Border ring, double opacity)
     {
         ring.SetValue(Avalonia.Layout.Layoutable.WidthProperty, 20.0, Avalonia.Data.BindingPriority.Animation); ring.SetValue(Avalonia.Layout.Layoutable.HeightProperty, 28.0, Avalonia.Data.BindingPriority.Animation);

@@ -122,7 +122,8 @@
     <Style Selector="ContextMenu MenuItem"><Setter Property="CornerRadius" Value="8" /><Setter Property="Padding" Value="10,7" /><Setter Property="FontSize" Value="13" /></Style>
     <!-- Fields: rounded, as the mock draws them (ThemeEngine writes their fill, hairline and focus colours). -->
     <Style Selector="TextBox"><Setter Property="CornerRadius" Value="11" /></Style>
-    <Style Selector="ComboBox"><Setter Property="CornerRadius" Value="12" /></Style>
+    <!-- The Fluent padding is 12,5,0,7, which sits the text above the middle of the box; an even one centres it. -->
+    <Style Selector="ComboBox"><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="12,0,0,0" /><Setter Property="VerticalContentAlignment" Value="Center" /></Style>
     <Style Selector="Button.softDay:disabled"><Setter Property="Opacity" Value="0.35" /></Style>
     <!-- Notes: the chips (an accent one for a reminder, a red one once it is late), the rows, the round tick and the form's box. -->
     <Style Selector="Border.lateRow"><Setter Property="Background" Value="{DynamicResource LateTint}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>

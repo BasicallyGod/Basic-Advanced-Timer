@@ -66,7 +66,7 @@ public static class TimelineGuide
             var rest = mark is null ? RestDot : BadgeDot; var grown = mark is null ? ActiveDot : BadgeActiveDot; var haloSize = rest + 7;
             var visual = new Canvas { Name = "TimelinePin_" + first.Id, Width = 20, Height = 28, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), ZIndex = 4 };
             var stem = new Border { Width = 1.5, Height = 10, Opacity = .7, IsHitTestVisible = false }; Canvas.SetLeft(stem, 9.25);
-            var halo = new Ellipse { Width = haloSize, Height = haloSize, StrokeThickness = 3, Opacity = 0, IsHitTestVisible = false }; Canvas.SetLeft(halo, 10 - haloSize / 2); Canvas.SetTop(halo, 13 - haloSize / 2);
+            var halo = new Ellipse { Width = haloSize, Height = haloSize, StrokeThickness = 3, Opacity = 0, IsHitTestVisible = false }; Canvas.SetLeft(halo, 10 - haloSize / 2); Canvas.SetTop(halo, 11.5 - haloSize / 2);
             // The stroke (the colour of the card) is inside the size, so the dot's colour is 10 across and a ring of the card's colour keeps it clear of the lines behind.
             var dot = new Ellipse { Width = rest, Height = rest, StrokeThickness = 2.5, IsHitTestVisible = false }; Canvas.SetLeft(dot, 10 - rest / 2); Canvas.SetTop(dot, 11.5 - rest / 2);
             Paint(dot, Shape.StrokeProperty, "Panel");
@@ -74,7 +74,7 @@ public static class TimelineGuide
             Border? badge = null;
             if (mark is not null)
             {
-                badge = new Border { Name = "TimelinePinMark_" + first.Id, Width = rest, Height = rest, IsHitTestVisible = false, Child = new TextBlock { Text = mark, FontSize = 10.5, FontWeight = FontWeight.Bold, Foreground = Brushes.White, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center } };
+                badge = new Border { Name = "TimelinePinMark_" + first.Id, Width = rest, Height = rest, IsHitTestVisible = false, Child = new TextBlock { Text = mark, FontSize = 10.5, FontWeight = FontWeight.Bold, Foreground = Brushes.White, TextAlignment = TextAlignment.Center, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center } };
                 Canvas.SetLeft(badge, 10 - rest / 2); Canvas.SetTop(badge, 11.5 - rest / 2); visual.Children.Add(badge);
             }
             Canvas.SetLeft(visual, x - 10); Canvas.SetTop(visual, axisY);
@@ -155,7 +155,10 @@ public static class TimelineGuide
             var time = near is not null ? NotesModel.ReminderOf(near.First)!.Value : day.AddMinutes(Math.Round((x - gutter) / pixelsPerHour * 60));
             Activate(near);
             line.IsVisible = guideDot.IsVisible = chip.IsVisible = true;
-            Canvas.SetLeft(line, x - 1); Canvas.SetTop(line, axisY);
+            // Snapped to a pin, the line starts under the pin so it does not run through the dot or the count in it.
+            var skip = near is null ? 0 : 11.5 + near.Active / 2 + 4;
+            line.EndPoint = new Point(1, bandBottom + 8 - axisY - skip);
+            Canvas.SetLeft(line, x - 1); Canvas.SetTop(line, axisY + skip);
             Canvas.SetLeft(guideDot, x - 4.5); Canvas.SetTop(guideDot, axisY - 5);
             chipText.Text = time.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
             Canvas.SetLeft(chip, x - chip.Width / 2); Canvas.SetTop(chip, 1);

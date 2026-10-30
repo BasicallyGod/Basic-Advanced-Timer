@@ -64,12 +64,12 @@ public static class WeekOverview
     {
         var start = model.WeekStart(model.SelectedDate);
         var figures = Figures(model, start); var (grid, _) = ReviewViews.WeekTableFor(model, start);
-        var root = new StackPanel { Spacing = 14, Margin = new Thickness(0, 0, 14, 4) };
-        root.Children.Add(Totals(model, figures));
-        root.Children.Add(ByDay(model, figures, grid));
-        root.Children.Add(ByAccount(model, figures, grid));
-        var scroll = new ScrollViewer { Content = root, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
-        return Ui.WithMoreBelow(scroll);
+        // The totals and the chart keep their place; only the By account list scrolls, inside its own tile, when there are more accounts than the window has room for.
+        var root = Ui.Grid("*", "Auto,Auto,*"); root.Margin = new Thickness(0, 0, 14, 4);
+        var totals = Totals(model, figures); var byDay = ByDay(model, figures, grid); byDay.Margin = new Thickness(0, 14, 0, 0);
+        var byAccount = ByAccount(model, figures, grid); byAccount.Margin = new Thickness(0, 14, 0, 0);
+        Ui.Put(root, totals); Ui.Put(root, byDay, 0, 1); Ui.Put(root, byAccount, 0, 2);
+        return root;
     }
 
     private static Border Tile(Control child, Thickness padding)
@@ -268,7 +268,7 @@ public static class WeekOverview
     private static Control ByAccount(TimerModel model, WeekFigures w, WeekTable grid)
     {
         var tile = new StackPanel { Name = "WeekByAccount", Spacing = 2 };
-        var title = Ui.Text("By account", 15); title.FontWeight = FontWeight.SemiBold; title.Margin = new Thickness(0, 0, 0, 6); tile.Children.Add(title);
+        var title = Ui.Text("By account", 15); title.FontWeight = FontWeight.SemiBold; title.Margin = new Thickness(0, 0, 0, 6);
         const string columns = "26,1.2*,64,18,2*,200";
         var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
         var weekEnd = w.Start.AddDays(7);
@@ -276,7 +276,8 @@ public static class WeekOverview
         {
             var week = Enumerable.Range(0, 7).Aggregate(TimeSpan.Zero, (sum, i) => sum + model.OnDay(account, w.Start.AddDays(i)));
             var line = Ui.Grid(columns); line.Height = 34; line.Name = "WeekAccount_" + account.Name.Replace(" ", "");
-            var row = new Border { BorderThickness = new Thickness(0, 1, 0, 0), BorderBrush = Brush(model, "Hover"), Child = line };
+            // No line above the first account: under the heading it only made the list look squeezed.
+            var row = new Border { BorderThickness = new Thickness(0, tile.Children.Count == 0 ? 0 : 1, 0, 0), BorderBrush = Brush(model, "Hover"), Child = line };
             Ui.Put(line, new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = new SolidColorBrush(Color.Parse(model.ChartColour(account.Colour))), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center });
             var name = Ui.Text(account.Display, 14); name.FontWeight = FontWeight.Medium; name.TextTrimming = TextTrimming.CharacterEllipsis; name.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, name, 1);
             var total = Ui.Text(model.FormatShort(week), 14); total.FontWeight = FontWeight.SemiBold; total.HorizontalAlignment = HorizontalAlignment.Right; total.VerticalAlignment = VerticalAlignment.Center; total.Name = "WeekAccountTotal"; Ui.Put(line, total, 2);
@@ -306,7 +307,9 @@ public static class WeekOverview
             else { var none = Ui.Text("No budget", 12.5, "muted"); none.VerticalAlignment = VerticalAlignment.Center; none.Name = "WeekNoBudget"; Ui.Put(line, none, 4).SetValue(Grid.ColumnSpanProperty, 2); if (pct.Length > 0) ToolTip.SetTip(row, pct); }
             tile.Children.Add(row);
         }
-        return Tile(tile, new Thickness(18, 12, 18, 10));
+        var scroll = new ScrollViewer { Content = tile, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 8, 0) };
+        var inside = Ui.Grid("*", "Auto,*"); Ui.Put(inside, title); Ui.Put(inside, Ui.WithMoreBelow(scroll), 0, 1);
+        return Tile(inside, new Thickness(18, 12, 10, 10));
     }
     private static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
 }
