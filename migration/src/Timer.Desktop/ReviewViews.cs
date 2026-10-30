@@ -246,7 +246,7 @@ public static class ReviewViews
             var note = interval.Group is { } groupNote ? groupNote.Note : recording ? "Recording now" : interval.Row is { } noteRow ? model.Editor.Note(noteRow) : "";
             // A lane too short for its words (the band is divided between more lanes) steps down one level, and below that shows only its colour and the tooltip, so no text is cut off.
             if (detail == BlockDetail.Tiny && height < 15) detail = BlockDetail.Bare;
-            if (detail == BlockDetail.Bare && height < 13) detail = BlockDetail.None;
+            if (detail == BlockDetail.Bare && height < 12) detail = BlockDetail.None;
             switch (detail)
             {
                 case BlockDetail.Full when width >= 56:
@@ -262,7 +262,7 @@ public static class ReviewViews
                     var tiny = Ui.Horizontal(InitialsChip(display, ink), Duration(11.5)); tiny.Spacing = 6; text.Children.Add(tiny);
                     break;
                 case BlockDetail.Bare when width >= 24:
-                    var bare = Ui.Text(PillWindow.Initials(display), 10.5); bare.FontWeight = FontWeight.SemiBold; bare.Name = "BlockInitials"; text.Children.Add(bare);
+                    var bare = Ui.Text(PillWindow.Initials(display), 10); bare.LineHeight = 11; bare.FontWeight = FontWeight.SemiBold; bare.Name = "BlockInitials"; text.Children.Add(bare);
                     break;
             }
             foreach (var child in text.GetLogicalDescendants().OfType<TextBlock>()) child.Foreground = Brush.Parse(ink);

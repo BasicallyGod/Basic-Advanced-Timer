@@ -96,7 +96,7 @@ public sealed class Round24Tests
     public void WithAMeetingRowTheBandIsShortSoFourLanesKeepInitialsAndFiveOrMoreShowOnlyColour()
     {
         var model = Model();
-        model.Notes.AddMeeting(Day, TimeSpan.FromHours(14), TimeSpan.FromHours(15), "Review", null, RepeatChoice.None); // A day with meetings has the shorter band.
+        model.Notes.AddMeeting(Day, TimeSpan.FromHours(14), TimeSpan.FromHours(15), "Review", null, RepeatChoice.None); // A day with meetings has the shorter band, and one with a pin shorter still (the picture test draws that).
         for (var i = 0; i < 4; i++) model.Engine.AddSession(i % 2 == 0 ? "Account one" : "Account two", At(9 + i * 0.1), At(10 + i * 0.1));
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try { Assert.Equal(4, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name == "BlockInitials")); } finally { window.Close(); }
@@ -109,5 +109,37 @@ public sealed class Round24Tests
             Assert.Equal(5, window.GetVisualDescendants().OfType<Border>().Count(b => b.Name is { } n && n.StartsWith("TimelineEntry")));
         }
         finally { window.Close(); }
+    }
+
+    // Pictures of the busy day for looking at it: TIMER_PREVIEW_DIR names the folder. The demo's 11:00 to 12:00 holds three stacked meetings and blocks three deep.
+    [AvaloniaFact]
+    public void WriteBusyTimelinePictures()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Dark", "Light" })
+        {
+            var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 14, 14, 15, 0)); model.SetTheme(theme); model.CompleteSetup();
+            model.ZoomTimeline(6, 0, 0); model.TimelineOffset = 34 + 10.4 * model.TimelinePixelsPerHour;
+            var window = new DashboardWindow(model); window.Show(); Settle(window);
+            try
+            {
+                using (var shot = window.CaptureRenderedFrame()) shot?.Save(Path.Combine(folder, $"busy-{theme}.png"));
+                // The +N list open.
+                var chip = window.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Name?.StartsWith("TimelineMeetingMore") == true);
+                if (chip is not null) { chip.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window); using var shot = window.CaptureRenderedFrame(); shot?.Save(Path.Combine(folder, $"busy-{theme}-list.png")); }
+            }
+            finally { window.Close(); }
+        }
+        // The lanes four deep and five deep, drawn from the start (the demo's three plus one or two more over the same minutes).
+        foreach (var extra in new[] { 1, 2 })
+        {
+            var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 14, 14, 15, 0)); model.SetTheme("Dark"); model.CompleteSetup();
+            model.Engine.AddSession("Account four", new DateTime(2026, 10, 14, 11, 27, 0), new DateTime(2026, 10, 14, 11, 52, 0));
+            if (extra == 2) model.Engine.AddSession("Account six", new DateTime(2026, 10, 14, 11, 30, 0), new DateTime(2026, 10, 14, 11, 45, 0));
+            model.ZoomTimeline(6, 0, 0); model.TimelineOffset = 34 + 10.4 * model.TimelinePixelsPerHour;
+            var window = new DashboardWindow(model); window.Show(); Settle(window);
+            try { using var shot = window.CaptureRenderedFrame(); shot?.Save(Path.Combine(folder, $"busy-Dark-{3 + extra}-deep.png")); } finally { window.Close(); }
+        }
     }
 }
