@@ -342,7 +342,7 @@ Dispatcher.UIThread.RunJobs(); using var accountsFrame = dashboard.CaptureRender
     }
 
     [AvaloniaFact]
-    public void EditedShiftsSurviveRestartAndControlDayClockAndOvertime()
+    public void EditedShiftsSurviveRestartAndSetHowFarTheDayClockRuns()
     {
         var folder = Path.Combine(Path.GetTempPath(), "timer-shifts-" + Guid.NewGuid());
         var now = new DateTime(2026, 10, 9, 12, 0, 0);
@@ -353,14 +353,18 @@ Dispatcher.UIThread.RunJobs(); using var accountsFrame = dashboard.CaptureRender
                 var engine = new TrackingEngine(clock: () => now);
                 var model = new TimerModel(engine, store.Load(engine), store);
                 model.SetShifts(new() { [DayOfWeek.Friday] = new(TimeSpan.FromHours(10), TimeSpan.FromHours(11)) });
-                Assert.Equal(TimeSpan.FromHours(2), model.Elapsed); Assert.Equal(TimeSpan.FromHours(2), model.WorkingOn(now)); // The hour past the end counts as time worked.
+                Assert.Equal(TimeSpan.Zero, model.Elapsed); // Nothing is recorded, so the day has not begun, whatever its hours.
+                engine.AddSession("Account one", now.Date.AddHours(10), now.Date.AddHours(10.5));
+                Assert.Equal(TimeSpan.FromHours(1), model.Elapsed); Assert.Equal(TimeSpan.FromHours(1), model.WorkingOn(now)); // From the first block to the end of the hours: the clock stops there, at eleven, though it is noon.
+                engine.AddSession("Account one", now.Date.AddHours(11.5), now.Date.AddHours(12));
+                Assert.Equal(TimeSpan.FromHours(2), model.WorkingOn(now)); // Work past the hours is simply working time.
             }
             using (var store = new TimerStore(folder))
             {
                 var engine = new TrackingEngine(clock: () => now); store.Load(engine);
                 Assert.Equal(TimeSpan.FromHours(10), engine.Plan(now).Start.TimeOfDay);
                 Assert.Equal(TimeSpan.FromHours(11), engine.Plan(now).End.TimeOfDay);
-                Assert.Single(engine.Schedule.Days); Assert.Equal(TimeSpan.FromHours(1), engine.Totals(now).Overtime);
+                Assert.Single(engine.Schedule.Days);
             }
         }
         finally { Directory.Delete(folder, true); }

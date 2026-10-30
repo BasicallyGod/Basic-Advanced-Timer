@@ -55,7 +55,7 @@ public sealed class DayClockTests
     public void ABlockAddedLaterInTheDayExtendsTheClockAndTheGapBeforeItIsUnallocated()
     {
         var (model, engine, set) = Setup(Friday.AddHours(16.5)); // Half past four: the late block has just ended.
-        engine.AddSession("Account one", Friday.AddHours(9), Friday.AddHours(10.5)); engine.AddSession(BreakAccount.Name, Friday.AddHours(12), Friday.AddHours(12.5));
+        engine.AddSession("Account one", Friday.AddHours(9), Friday.AddHours(10.5)); engine.AddSession("Account two", Friday.AddHours(10.5), Friday.AddHours(12)); engine.AddSession(BreakAccount.Name, Friday.AddHours(12), Friday.AddHours(12.5));
         engine.AddSession("Account one", Friday.AddHours(12.5), Friday.AddHours(15)); engine.AddSession("Account two", Friday.AddHours(15 + 1.0 / 3), Friday.AddHours(16.5));
         Assert.Equal(new TimeSpan(7, 0, 0), model.WorkingOn(Friday)); // Nine to half past four, less the half hour break.
         Assert.Equal(new TimeSpan(6, 40, 0), engine.Totals(Friday).Allocated); Assert.Equal(new TimeSpan(0, 20, 0), model.UnallocatedOn(Friday));

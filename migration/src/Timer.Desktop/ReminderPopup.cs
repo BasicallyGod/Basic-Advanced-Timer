@@ -44,7 +44,7 @@ public sealed class ReminderPopup : Border
     {
         this.now = now; this.dayOnly = dayOnly; Name = "ReminderPopup";
         var start = current ?? now().Date.AddHours(12); allowPast = heading != "Reminder";
-        chosen = start.Date; hour = start.Hour; minute = start.Minute; // The reminder's own minute, not the nearest five. month = new DateTime(chosen.Year, chosen.Month, 1);
+        chosen = start.Date; hour = start.Hour; minute = start.Minute; month = new DateTime(chosen.Year, chosen.Month, 1); // The reminder's own minute, not the nearest five.
         CornerRadius = new CornerRadius(16); BorderThickness = new Thickness(1); Padding = new Thickness(12); Width = dayOnly ? DayOnlyWide : Wide;
         Classes.Add("surface"); Classes.Add("flyoutCard");
         BoxShadow = BoxShadows.Parse("0 10 28 0 #29141E46");

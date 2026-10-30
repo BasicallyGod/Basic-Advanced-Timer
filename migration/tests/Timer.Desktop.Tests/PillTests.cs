@@ -328,7 +328,7 @@ public sealed class PillTests
             var brk = Find<Button>(window, "DashboardBreak");
             Assert.Equal(Y(Find<Button>(window, "SidebarPause")), Y(brk), 1.0); // Level with the play tile, at the card's far end.
             Assert.NotNull(Find<Border>(window, "SidebarWell")); // The card is the pill's well.
-            Assert.True(Y(brk) < Y(Find<Button>(window, "DashboardDay"))); // And not at the foot with Finish day.
+            Assert.True(Y(brk) < Y(Find<Button>(window, "QuitTimer"))); // And not at the foot with Close timer.
             var tile = brk.GetVisualDescendants().OfType<Border>().Single(b => b.Width == StatusFace.TileSize); Assert.InRange(((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A, 30, 60);
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.Equal(255, ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A);
         }
