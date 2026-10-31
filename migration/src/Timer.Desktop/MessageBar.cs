@@ -32,9 +32,11 @@ public sealed class MessageBar : Border
     private readonly Avalonia.Controls.Shapes.Path tick = new() { Data = Geometry.Parse("M 8,14.5 L 12.5,19 L 20,9.5"), StrokeThickness = 2.4, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round };
     private readonly Avalonia.Controls.Shapes.Path mark = new() { Data = Geometry.Parse("M 14,9 L 14,15 M 14,19 L 14,19.01"), StrokeThickness = 2.4, StrokeLineCap = PenLineCap.Round };
     private string? dismissedError, dismissedOffer;
-    public MessageBar(TimerModel model)
+    // On the pill the bar says only that a save failed: notes, refusals and the continue offer belong to the dashboard, which the pill does not sit over.
+    private readonly bool failuresOnly;
+    public MessageBar(TimerModel model, bool failuresOnly = false)
     {
-        this.model = model; Name = "MessageBar";
+        this.model = model; this.failuresOnly = failuresOnly; Name = failuresOnly ? "PillMessageBar" : "MessageBar";
         // A failed save stays until a save works, so the cross hides it only until it changes.
         offer = Ui.Ctl("ContinuePrevious", "", null, "Continue earlier block", () => model.ContinuePrevious(), small: true);
         offer.Padding = new Thickness(12, 0);
@@ -57,10 +59,10 @@ public sealed class MessageBar : Border
         Sync();
     }
     /// <summary>The line to show, or null when there is nothing to say.</summary>
-    public string? Text => model.LastError is { } failed && failed != dismissedError ? failed : model.EditError ?? model.Notice ?? (OfferShowing ? model.ContinuePreviousNote : null);
+    public string? Text => model.LastError is { } failed && failed != dismissedError ? failed : failuresOnly ? null : model.EditError ?? model.Notice ?? (OfferShowing ? model.ContinuePreviousNote : null);
     private bool OfferShowing => model.ContinuePreviousText is { } offered && offered != dismissedOffer;
     /// <summary>Whether the line is a refusal or a failure, not a note that something was done.</summary>
-    public bool IsWarning => model.LastError is { } failed && failed != dismissedError || model.EditError is not null;
+    public bool IsWarning => model.LastError is { } failed && failed != dismissedError || !failuresOnly && model.EditError is not null;
     private void Sync()
     {
         if (model.LastError is null) dismissedError = null;
@@ -84,9 +86,9 @@ public sealed class MessageBar : Border
         UpdateCountdown();
         // The cross puts the offer away as well, until there is a different one (a new slip to take back).
         var continueText = model.ContinuePreviousText; if (continueText is null) dismissedOffer = null;
-        if (continueText is not null && continueText == dismissedOffer) continueText = null;
+        if (continueText is not null && continueText == dismissedOffer || failuresOnly) continueText = null;
         offer.IsVisible = continueText is not null; if (continueText is not null) offer.Content = continueText;
-        undo.IsVisible = line is not null && !warning && model.NoticeHasUndo && model.Editor.CanUndo;
+        undo.IsVisible = !failuresOnly && line is not null && !warning && model.NoticeHasUndo && model.Editor.CanUndo;
         IsVisible = line is not null || continueText is not null;
     }
     private bool wasHeld;
