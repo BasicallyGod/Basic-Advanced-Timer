@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 namespace Timer.Desktop;
 
@@ -21,10 +22,12 @@ public sealed class MessageBar : Border
     private readonly Button offer, undo;
     private readonly Border icon = new() { Width = 24, Height = 24, CornerRadius = new CornerRadius(12), VerticalAlignment = VerticalAlignment.Center, Name = "MessageIcon" };
     // The line along the foot: its filled part (the column "left") shrinks as the message's 15 seconds run out; a failed save, which stays, keeps it full.
-    private readonly ColumnDefinition left = new(1, GridUnitType.Star), right = new(0, GridUnitType.Star);
-    private readonly Border countdownFill = new() { CornerRadius = new CornerRadius(1), Name = "MessageCountdown" };
+    // It runs down by scaling the filled part from its left end, which is drawn by the renderer and not laid out again each step, so it moves smoothly.
+    private readonly CountdownFill countdownFill = new() { CornerRadius = new CornerRadius(1), Name = "MessageCountdown", RenderTransformOrigin = new RelativePoint(0, .5, RelativeUnit.Relative) };
     private readonly Grid countdown = new() { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(2, 0, 2, -9), IsHitTestVisible = false, Name = "MessageCountdownTrack" };
-    private readonly Avalonia.Threading.DispatcherTimer countdownTick = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    // With less motion asked for it steps once a second instead.
+    private readonly Avalonia.Threading.DispatcherTimer countdownTick = new() { Interval = TimeSpan.FromSeconds(1) };
+    private System.Threading.CancellationTokenSource? running;
     private string? shownLine; private DateTime shownAt;
     private readonly Avalonia.Controls.Shapes.Path tick = new() { Data = Geometry.Parse("M 8,14.5 L 12.5,19 L 20,9.5"), StrokeThickness = 2.4, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round };
     private readonly Avalonia.Controls.Shapes.Path mark = new() { Data = Geometry.Parse("M 14,9 L 14,15 M 14,19 L 14,19.01"), StrokeThickness = 2.4, StrokeLineCap = PenLineCap.Round };
@@ -44,8 +47,7 @@ public sealed class MessageBar : Border
         tick.Bind(Shape.StrokeProperty, tick.GetResourceObservable("Ink")); mark.Bind(Shape.StrokeProperty, mark.GetResourceObservable("Ink"));
         var words = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center }; words.Children.Add(text); words.Children.Add(detail);
         var row = Ui.Horizontal(icon, words, offer, undo, close); row.Spacing = 11;
-        countdown.ColumnDefinitions.Add(left); countdown.ColumnDefinitions.Add(right); Grid.SetColumn(countdownFill, 0); countdown.Children.Add(countdownFill);
-        countdown.Background = null; countdownFill.Background = Brushes.Gray;
+        countdown.Children.Add(countdownFill); countdownFill.Background = Brushes.Gray;
         var holder = new Grid(); holder.Children.Add(row); holder.Children.Add(countdown);
         Child = holder; CornerRadius = new CornerRadius(14); Padding = new Thickness(12, 10, 10, 15);
         countdownTick.Tick += (_, _) => UpdateCountdown();
@@ -74,9 +76,11 @@ public sealed class MessageBar : Border
         icon.Background = state; countdownFill.Background = state;
         // A failed save stays, so its edge takes the red as well.
         BorderBrush = held ? state : null; BorderThickness = held ? new Thickness(1.5) : new Thickness(0);
+        var changed = line != shownLine || held != wasHeld;
         if (line != shownLine) { shownLine = line; shownAt = DateTime.UtcNow; }
-        countdown.IsVisible = line is not null;
-        if (line is not null && !held) countdownTick.Start(); else countdownTick.Stop();
+        wasHeld = held; countdown.IsVisible = line is not null;
+        if (changed || !(line is not null && !held)) { running?.Cancel(); running = null; countdownTick.Stop(); SetScale(1); }
+        if (line is not null && !held && changed) RunCountdown();
         UpdateCountdown();
         // The cross puts the offer away as well, until there is a different one (a new slip to take back).
         var continueText = model.ContinuePreviousText; if (continueText is null) dismissedOffer = null;
@@ -85,11 +89,41 @@ public sealed class MessageBar : Border
         undo.IsVisible = line is not null && !warning && model.NoticeHasUndo && model.Editor.CanUndo;
         IsVisible = line is not null || continueText is not null;
     }
-    /// <summary>Sets how much of the line along the foot is left: all of it for a failed save, else what is left of <see cref="TimerModel.MessageLifetime"/>.</summary>
+    private bool wasHeld;
+    private void SetScale(double x) => countdownFill.Fraction = x;
+    // The line runs down in one animation over what is left of the message's time (the renderer moves it), or in one-second steps when less motion is asked for.
+    private void RunCountdown()
+    {
+        var left = TimeSpan.FromSeconds(Math.Max(.2, TimerModel.MessageLifetime.TotalSeconds - (DateTime.UtcNow - shownAt).TotalSeconds));
+        if (Motion.Reduced) { countdownTick.Start(); return; }
+        running = new System.Threading.CancellationTokenSource();
+        var animation = new Avalonia.Animation.Animation
+        {
+            Duration = left, FillMode = Avalonia.Animation.FillMode.Forward, Easing = new Avalonia.Animation.Easings.LinearEasing(),
+            Children =
+            {
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(0), Setters = { new Setter(CountdownFill.FractionProperty, countdownFill.Fraction) } },
+                new Avalonia.Animation.KeyFrame { Cue = new Avalonia.Animation.Cue(1), Setters = { new Setter(CountdownFill.FractionProperty, 0.0) } },
+            }
+        };
+        _ = animation.RunAsync(countdownFill, running.Token);
+    }
+    /// <summary>The line's filled part is whole for a failed save and runs down for anything else. Only the stepped version (less motion) sets it here; the animation does the rest.</summary>
     public void UpdateCountdown()
     {
         var kept = model.LastError is { } failed && failed != dismissedError;
-        var fraction = kept || shownLine is null ? 1 : Math.Clamp(1 - (DateTime.UtcNow - shownAt).TotalSeconds / TimerModel.MessageLifetime.TotalSeconds, 0, 1);
-        left.Width = new GridLength(fraction, GridUnitType.Star); right.Width = new GridLength(1 - fraction, GridUnitType.Star);
+        if (kept || shownLine is null) { SetScale(1); return; }
+        if (running is null) SetScale(Math.Clamp(1 - (DateTime.UtcNow - shownAt).TotalSeconds / TimerModel.MessageLifetime.TotalSeconds, 0, 1));
     }
+}
+
+/// <summary>
+/// The filled part of the toast's line. Its <see cref="Fraction"/> is what is left, drawn by scaling from the left end, which moves the picture and lays nothing out again, so an
+/// animation of it is smooth.
+/// </summary>
+public sealed class CountdownFill : Border
+{
+    public static readonly StyledProperty<double> FractionProperty = AvaloniaProperty.Register<CountdownFill, double>(nameof(Fraction), 1);
+    static CountdownFill() => FractionProperty.Changed.AddClassHandler<CountdownFill>((fill, e) => fill.RenderTransform = new ScaleTransform(Math.Clamp((double)e.NewValue!, 0, 1), 1));
+    public double Fraction { get => GetValue(FractionProperty); set => SetValue(FractionProperty, value); }
 }

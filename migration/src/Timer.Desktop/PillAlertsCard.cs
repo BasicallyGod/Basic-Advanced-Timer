@@ -32,7 +32,7 @@ public sealed class PillAlertsCard : Border
     public PillAlertsCard(TimerModel model, Action fold, Action openDashboard)
     {
         this.model = model; this.fold = fold; this.openDashboard = openDashboard; Name = "PillAlertsCard";
-        Width = CardWidth; Padding = new Thickness(14, 12, 14, 12); CornerRadius = new CornerRadius(18); BorderThickness = new Thickness(1); MaxHeight = 420;
+        Width = CardWidth; Padding = new Thickness(14, 12, 14, 12); CornerRadius = new CornerRadius(PillWindow.PillRadius); BorderThickness = new Thickness(1); MaxHeight = 420;
         Classes.Add("pillBody"); this.Bind(BorderBrushProperty, this.GetResourceObservable("Line"));
         // Left and Right step through what is waiting and Escape folds, wherever the keyboard focus is inside the card.
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Sync(true); keyHost = TopLevel.GetTopLevel(this); keyHost?.AddHandler(KeyDownEvent, OnKey, Avalonia.Interactivity.RoutingStrategies.Bubble, true); };
@@ -235,6 +235,7 @@ public sealed class PillAlertsCard : Border
         // The head and the way on to the dashboard stay put; only the rows between them scroll, so neither is ever pushed out of reach.
         var body = new StackPanel(); column.Children.Remove(head); body.Children.Add(column);
         var scroll = new ScrollViewer { Name = "AlertListScroll", Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        Ui.LeaveRoomForTrack(scroll, body);
         var open = SeeAll("Open Notes in the dashboard", "AlertOpenDashboard", OpenNotes); open.HorizontalAlignment = HorizontalAlignment.Left; open.Margin = new Thickness(0, 8, 0, 0);
         var frame = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") }; Grid.SetRow(scroll, 1); Grid.SetRow(open, 2); frame.Children.Add(head); frame.Children.Add(scroll); frame.Children.Add(open);
         return frame;

@@ -27,6 +27,7 @@ public sealed class NotificationsFlyout : Border
         var host = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
         var title = new TextBlock { Text = "Notifications", FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 10) };
         var scroll = new ScrollViewer { Name = "NotificationsScroll", Content = column, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+        Ui.LeaveRoomForTrack(scroll, column);
         Grid.SetRow(scroll, 1); host.Children.Add(title); host.Children.Add(scroll); host.Children.Add(rescheduling); Child = host;
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Sync(true); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
@@ -41,7 +42,7 @@ public sealed class NotificationsFlyout : Border
     public static double MaxHeightFor(double buttonBottom, double windowBottom) => Math.Max(160, windowBottom - buttonBottom - 11 - 14);
     public void LimitHeight(double max) => MaxHeight = max;
 
-    private string Signature() => string.Join("|", model.Notes.Overdue.Concat(model.Notes.ComingUp()).Select(n => $"{n.Id};{n.Day:yyyyMMdd};{n.At};{n.Text};{n.Done}"));
+    private string Signature() => string.Join("|", model.Notes.Overdue.Concat(model.Notes.ComingUp()).Select(n => $"{n.Id};{n.Day:yyyyMMdd};{n.At};{n.Text};{n.Done}")) + "#" + string.Join("|", model.Alerts.Select(a => a.Key + ";" + a.Detail + ";" + a.Caption));
 
     /// <summary>Redraws when what is waiting has changed (or when asked to, as the flyout opens).</summary>
     public void Sync(bool force)
@@ -49,18 +50,24 @@ public sealed class NotificationsFlyout : Border
         var signature = Signature();
         if (!force && signature == shown) return;
         shown = signature; column.Children.Clear();
-        var overdue = model.Notes.Overdue; var soon = model.Notes.ComingUp();
-        if (overdue.Count > 0)
+        // What needs attention is the same list the pill shows (reminders that have passed, budgets at 80 per cent or spent, a break running long), so the count on the bell and
+        // on the pill always agree.
+        var alerts = model.Alerts; var soon = model.Notes.ComingUp();
+        if (alerts.Count > 0)
         {
             column.Children.Add(Label("Needs attention", "Overtime"));
-            foreach (var note in overdue) column.Children.Add(Row(note, late: true));
+            foreach (var item in alerts)
+            {
+                if (item.Kind == AlertKind.Reminder && item.NoteId is { } id && model.Notes.Find(id) is { } note) column.Children.Add(Row(note, late: true));
+                else column.Children.Add(AlertRow(item));
+            }
         }
         if (soon.Count > 0)
         {
             column.Children.Add(Label("Coming up", "Muted"));
             foreach (var note in soon) column.Children.Add(Row(note, late: false));
         }
-        if (overdue.Count == 0 && soon.Count == 0)
+        if (alerts.Count == 0 && soon.Count == 0)
         {
             var none = new TextBlock { Text = "Nothing is waiting.", FontSize = 13, Name = "NothingWaiting", Margin = new Thickness(2, 8) }; none.Classes.Add("muted"); column.Children.Add(none);
         }
@@ -90,6 +97,30 @@ public sealed class NotificationsFlyout : Border
         Ui.Put(grid, buttons, 2);
         var card = new Border { Child = grid, CornerRadius = new CornerRadius(14), Padding = new Thickness(10), BorderThickness = new Thickness(1), Name = "Notification_" + note.Id };
         card.Classes.Add(late ? "lateRow" : "noteRow");
+        return card;
+    }
+
+    // A budget or a break that needs attention: the words, what it comes to, and OK (or Resume and Stay on break) at the right of the row.
+    private Control AlertRow(AlertItem item)
+    {
+        var grid = Ui.Grid("Auto,*,Auto"); grid.ColumnSpacing = 10;
+        var dot = new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 0, 0) };
+        dot.Bind(Border.BackgroundProperty, dot.GetResourceObservable(item.LightToken)); Ui.Put(grid, dot);
+        var text = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+        var words = item.Kind == AlertKind.Break ? item.Words : $"{item.Account}: {item.Detail.ToLowerInvariant()}";
+        text.Children.Add(new TextBlock { Text = words, FontSize = 13.5, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap });
+        text.Children.Add(NoteParts.Ink(item.Kind == AlertKind.Break ? item.Detail + " · " + item.Caption : item.Caption, item.Kind == AlertKind.BudgetSpent ? "Overtime" : "BudgetWarningText", 12));
+        Ui.Put(grid, text, 1);
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+        if (item.Kind == AlertKind.Break)
+        {
+            var resume = Ui.Ctl("NotificationResume", null, IconKind.Check, "Resume", () => model.ToggleBreak(), small: true); resume.Classes.Add("primary"); buttons.Children.Add(resume);
+            buttons.Children.Add(Ui.Ctl("NotificationStay", null, IconKind.Clock, "Stay on break", () => model.SnoozeAlert(item.Key, TimeSpan.FromMinutes(15)), small: true));
+        }
+        else buttons.Children.Add(Ui.Ctl("NotificationOk_" + item.Key, null, IconKind.Check, "OK", () => model.DismissAlert(item.Key), small: true));
+        Ui.Put(grid, buttons, 2);
+        var card = new Border { Child = grid, CornerRadius = new CornerRadius(14), Padding = new Thickness(10), BorderThickness = new Thickness(1), Name = "NotificationAlert_" + item.Key };
+        card.Classes.Add(item.Kind == AlertKind.BudgetSpent ? "lateRow" : "noteRow");
         return card;
     }
 
