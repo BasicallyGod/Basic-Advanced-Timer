@@ -978,9 +978,11 @@ public sealed class TimerModel : INotifyPropertyChanged
             return Math.Clamp((Engine.Now - plan.Start).TotalSeconds / (plan.End - plan.Start).TotalSeconds, 0.0, 1.0);
         }
     }
+    /// <summary>Developer switch: skip the one-second refresh, so a page can be watched with nothing redrawing on the tick. Never saved; the clock stops moving while it is on.</summary>
+    public static bool TickPaused { get; set; }
     public void Tick()
     {
-        if (closed) return;
+        if (closed || TickPaused) return;
         ticks++;
         FollowToday();
         Notes.MakeSeriesNotes(); // A repeating meeting's next days are made as time goes on.

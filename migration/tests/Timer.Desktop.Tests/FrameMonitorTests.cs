@@ -44,4 +44,19 @@ public sealed class FrameMonitorTests
         }
         finally { FrameMonitor.Instance.Stop(); window.Close(); }
     }
+
+    [Fact]
+    public void TheReportSaysHowTheFramesSpreadAndWhichSwitchesWereOn()
+    {
+        var monitor = new FrameMonitor();
+        foreach (var gap in new[] { 16.6, 16.7, 19.0, 22.0, 30.0, 40.0 }) monitor.Record(gap);
+        var plain = monitor.Report();
+        Assert.Contains("6 frames: 2 up to 17.5 ms, 1 to 20, 1 to 25, 1 to 33, 1 over 33", plain); Assert.DoesNotContain("flat", plain); Assert.DoesNotContain("paused", plain);
+        try
+        {
+            ThemeEngine.FlatShadows = true; TimerModel.TickPaused = true;
+            var marked = monitor.Report(); Assert.Contains("[flat", marked); Assert.Contains("[1 s refresh paused]", marked);
+        }
+        finally { ThemeEngine.FlatShadows = false; TimerModel.TickPaused = false; }
+    }
 }

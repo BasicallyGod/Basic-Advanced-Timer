@@ -325,6 +325,12 @@ public sealed class SettingsView : Grid
         {
             if (TopLevel.GetTopLevel(frameSwitch)?.Clipboard is { } clipboard) await clipboard.SetTextAsync(FrameMonitor.Instance.Report());
         }, "FrameTimingCopy");
+        // Two switches for finding what costs frames: one draws every raised and sunk shadow empty, the other stops the one-second refresh. Neither is saved.
+        var flat = Ui.DialogButton(ThemeEngine.FlatShadows ? "Shadows back on" : "Draw flat (no shadows)", () => { }, "FrameFlatToggle");
+        flat.Click += (_, _) => { ThemeEngine.FlatShadows = !ThemeEngine.FlatShadows; if (Avalonia.Application.Current is { } app) ThemeEngine.Register(app, AppThemes.BuiltIn); flat.Content = ThemeEngine.FlatShadows ? "Shadows back on" : "Draw flat (no shadows)"; };
+        var pauseTick = Ui.DialogButton(TimerModel.TickPaused ? "Resume the 1 s refresh" : "Pause the 1 s refresh", () => { }, "FrameTickToggle");
+        pauseTick.Click += (_, _) => { TimerModel.TickPaused = !TimerModel.TickPaused; pauseTick.Content = TimerModel.TickPaused ? "Resume the 1 s refresh" : "Pause the 1 s refresh"; };
+        developer.Children.Add(Row("Find the cost", "Draw flat takes every raised and sunk shadow away; pausing the refresh stops the clock redrawing each second (and its saving). Try each on the Timeline for 15 seconds, then copy the report.", Ui.Horizontal(flat, pauseTick)));
         developer.Children.Add(Row("Frame timing", "How long the dashboard's frames take, for judging smoothness. Switch it on, use the page you want to test for a few seconds, then copy the report.", Ui.Horizontal(frameSwitch, frameCopy), frames));
         var developerSection = new Border { Name = "DevelopmentSection", Child = developer, IsVisible = model.DeveloperUnlocked, Padding = new Thickness(0, 4) };
         syncs.Add(() => developerSection.IsVisible = model.DeveloperUnlocked);
