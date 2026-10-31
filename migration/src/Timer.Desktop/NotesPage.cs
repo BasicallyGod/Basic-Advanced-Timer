@@ -35,14 +35,16 @@ public sealed class NotesPage : Grid
         this.model = model; Name = "NotesPage";
         ColumnDefinitions = new ColumnDefinitions("196,14,*"); ClipToBounds = false;
         var aside = new Border { Name = "NotesViews", CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(12) }; aside.Classes.Add("dayCard");
-        aside.Child = new ScrollViewer { Content = views, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var viewsScroll = new ScrollViewer { Content = views, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }; Ui.LeaveRoomForTrack(viewsScroll, views);
+        aside.Child = viewsScroll;
         Children.Add(aside);
         var card = new Border { Name = "NotesListCard", CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), ClipToBounds = true }; card.Classes.Add("dayCard");
         var inner = Ui.Grid("*", "Auto,Auto,*");
         // The form, then the row of accounts to filter by, then the list.
         var formBox = new Border { Child = formHost, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(14, 14, 14, 12) }; formBox.Classes.Add("ruleBelow");
         var filterBox = new Border { Child = filterRow, Padding = new Thickness(14, 10, 14, 2), Name = "NotesAccountFilter" };
-        Ui.Put(inner, formBox); Ui.Put(inner, filterBox, 0, 1); Ui.Put(inner, new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }, 0, 2);
+        Ui.Put(inner, formBox); Ui.Put(inner, filterBox, 0, 1); var pageScroll = new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }; Ui.LeaveRoomForTrack(pageScroll, listColumn);
+        Ui.Put(inner, pageScroll, 0, 2);
         inner.Children.Add(whenHost); card.Child = inner; SetColumn(card, 2); Children.Add(card);
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Sync(); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;

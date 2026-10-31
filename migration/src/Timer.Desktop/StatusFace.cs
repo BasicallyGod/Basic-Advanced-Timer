@@ -283,8 +283,10 @@ public sealed class StatusFace : StackPanel
         // account's initials, since the break itself is lit beside it.
         var tone = ThemeColourOr(dark ? "Live" : "LiveText", "#34D399");
         // A raised key (a step lighter under the pointer) with the symbol in the tracking colour, which is what the key does.
-        primaryTile.Background = primaryTile.TryFindResource(hoverCircle ? "KeyHover" : "Panel", primaryTile.ActualThemeVariant, out var keyFace) && keyFace is IBrush kf ? kf : Brushes.Transparent;
-        primaryTile.BoxShadow = circleFocus ? SoftTint.FocusRing(primaryTile) : Res(primaryTile, hoverCircle ? "ShadowKeyHover" : "ShadowKey");
+        // While it is recording the key is on, so it sits sunk with the symbol in green, as the mock draws it.
+        var recording = model.IsTracking && !onBreak;
+        primaryTile.Background = primaryTile.TryFindResource(recording ? "Well" : hoverCircle ? "KeyHover" : "Panel", primaryTile.ActualThemeVariant, out var keyFace) && keyFace is IBrush kf ? kf : Brushes.Transparent;
+        primaryTile.BoxShadow = circleFocus ? SoftTint.FocusRing(primaryTile) : Res(primaryTile, recording ? "ShadowSunk" : hoverCircle ? "ShadowKeyHover" : "ShadowKey");
         initials.Foreground = new SolidColorBrush(tone); glyph.Fixed = new SolidColorBrush(tone);
         initials.Text = who is null ? "" : PillWindow.Initials(who);
         // The account the pill is on (or would start). With nothing chosen the button says so.
@@ -335,13 +337,12 @@ public sealed class BreakButton : Button
     {
         var onBreak = model.IsOnBreak;
         var orange = Ui.ThemeColour(this, "Break", Color.Parse("#F5A524"));
-        var hex = $"#{orange.R:X2}{orange.G:X2}{orange.B:X2}";
         cup.Filled = false;
         if (onBreak)
         {
-            // Pressed in and lit: solid orange, sunk into its place.
-            tile.Background = new SolidColorBrush(orange);
-            cup.Fixed = ThemeColours.Contrast(hex, "#FFFFFF") >= 2.9 ? Brushes.White : new SolidColorBrush(Color.Parse("#2A1A05"));
+            // Pressed in and lit, as the mock draws a key that is on: sunk into its place, the cup in the break colour.
+            tile.Background = tile.TryFindResource("Well", tile.ActualThemeVariant, out var well) && well is IBrush wellBrush ? wellBrush : Brushes.Transparent;
+            cup.Fixed = null; // The theme's break orange.
             tile.BoxShadow = StatusFace.Res(tile, "ShadowSunk");
         }
         else
