@@ -101,7 +101,7 @@ public sealed class PillWindow : Window
             else if (e.Key == Avalonia.Input.Key.Escape && PanelOpen) { CloseFlyouts(); e.Handled = true; }
         };
         peeked.UnionWith(model.Alerts.Select(a => a.Key)); // What was already waiting when the pill came up is not shown again by itself.
-        model.PropertyChanged += Changed;
+        model.PropertyChanged += Changed; PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) ShowToast(); };
         ActualThemeVariantChanged += (_, _) => { lastShadow = null; Refresh(); };
         Closed += (_, _) => model.PropertyChanged -= Changed;
         Refresh();
@@ -125,6 +125,7 @@ public sealed class PillWindow : Window
         panel = new Popup();
         BuildDropdown();
         BuildAlerts();
+        BuildToast();
         lastShadow = null;
     }
     /// <summary>The account list, a card that hangs below the account's box and scrolls inside.</summary>
@@ -157,6 +158,32 @@ public sealed class PillWindow : Window
         panel.Closed += (_, _) => { overList = false; if (!closingByCode) dismissedAt = Environment.TickCount64; SetOpenLook(false); };
         rootGrid.Children.Add(panel);
     }
+
+    // ---- a failed save
+    private Popup toastPanel = new(); private MessageBar? toast;
+    /// <summary>The pill has no page to show a message on, so a save that failed (an account started or paused here that could not be written) is shown by the same toast the dashboard
+    /// uses, hung above the pill (below it when there is no room above). It stays until a save works or the cross is pressed, and says nothing else.</summary>
+    private void BuildToast()
+    {
+        toast = new MessageBar(model, failuresOnly: true);
+        toastPanel = new Popup { PlacementTarget = surface, Placement = PlacementMode.TopEdgeAlignedLeft, IsLightDismissEnabled = false, Name = "PillToastPopup" };
+        toastPanel.PlacementConstraintAdjustment = PopupPositionerConstraintAdjustment.FlipY | PopupPositionerConstraintAdjustment.SlideX;
+        toastPanel.Child = new LayoutTransformControl { LayoutTransform = pillScale, Child = new Border { Padding = new Thickness(18), Child = toast } };
+        rootGrid.Children.Add(toastPanel);
+        toast.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) ShowToast(); };
+        ShowToast();
+    }
+    /// <summary>Opens the toast while a failure is showing and the pill is, and puts it away otherwise.</summary>
+    public void ShowToast()
+    {
+        if (toast is null) return;
+        var show = toast.IsVisible && IsVisible && !closedWindow;
+        if (show) toastPanel.VerticalOffset = -DropdownGap * Scale;
+        if (toastPanel.IsOpen != show) toastPanel.IsOpen = show;
+    }
+    /// <summary>Whether the pill's toast is open (for tests, which have no pop-up window).</summary>
+    public bool ToastOpen => toastPanel.IsOpen;
+    public MessageBar? PillToast => toast;
 
     // ---- alerts: what is waiting
     /// <summary>The alerts card's width and the gap under the pill match the account list's, so the two hang the same way.</summary>

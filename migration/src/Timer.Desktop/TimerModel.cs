@@ -987,7 +987,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         // Once the app is closing, or its database has been closed, there is nothing left to save and a late tick must not try.
         if (closed || store is { IsDisposed: true }) return true;
-        try { store?.Save(Engine, preferences); LastError = null; return true; }
+        try { store?.Save(Engine, preferences); if (LastError is not null) { LastError = null; Notify(); } return true; } // A failure that has cleared is shown as gone at once, not at the next change.
         // A restart or shutdown can close the database under a save that is already queued. That must be reported, never allowed to crash the app.
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or ObjectDisposedException || error.GetType().Namespace == "Microsoft.Data.Sqlite")
         { LastError = "Not saved · kept on screen, retrying · " + error.Message; return false; }
