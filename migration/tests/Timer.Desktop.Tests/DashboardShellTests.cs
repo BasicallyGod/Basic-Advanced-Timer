@@ -20,7 +20,7 @@ public sealed class DashboardShellTests
     [AvaloniaFact]
     public void TheDashboardIsTwelveHundredAndSeventyTwoByTheSevenHundredAndTwentyWithTheSidebarFullHeightAtItsLeft()
     {
-        Assert.Equal(1272, DashboardWindow.DashboardWidth); Assert.Equal(720, DashboardWindow.DashboardHeight); Assert.Equal(248, Sidebar.Width);
+        Assert.Equal(1272, DashboardWindow.DashboardWidth); Assert.Equal(760, DashboardWindow.DashboardHeight); Assert.Equal(248, Sidebar.Width);
         Assert.Equal(1100 - 76, DashboardWindow.DashboardWidth - Sidebar.Width); // The page keeps the room it had beside the old rail.
         var window = new DashboardWindow(Model()); window.Show(); Settle(window);
         try

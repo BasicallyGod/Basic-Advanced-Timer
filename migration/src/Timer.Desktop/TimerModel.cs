@@ -83,7 +83,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
     {
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
-        var remove = IsSelected(rows);
+        var remove = IsSelected(rows); SelectedMeetingId = null;
         foreach (var row in rows) { if (remove) selectedRows.Remove(row); else selectedRows.Add(row); }
         EditError = null; Notice = null; Notify();
     }
@@ -96,7 +96,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
         if (additive) { ToggleSelection(rows); return; }
         var onlyThis = SelectedBlockCount == 1 && IsSelected(rows);
-        selectedRows.Clear();
+        DropSelection();
         if (!onlyThis) foreach (var row in rows) selectedRows.Add(row);
         EditError = null; Notice = null; Notify();
     }
@@ -123,7 +123,18 @@ public sealed class TimerModel : INotifyPropertyChanged
             return blocks.OrderBy(b => b.Start).ToArray();
         }
     }
-    public void ClearSelection() { if (selectedRows.Count == 0) return; selectedRows.Clear(); Notify(); }
+    public void ClearSelection() { if (selectedRows.Count == 0 && SelectedMeetingId is null) return; DropSelection(); Notify(); }
+    /// <summary>The meeting the Details card shows, when a meeting (and not a block) is selected. Selecting a block, another day or nothing lets it go.</summary>
+    public long? SelectedMeetingId { get; private set; }
+    private void DropSelection() { selectedRows.Clear(); SelectedMeetingId = null; }
+    /// <summary>A click on a meeting selects it (and a click on the only selected meeting clears it again, as for a block); the Notes card turns to Meetings so the list shows it too.</summary>
+    public void SelectMeeting(long id)
+    {
+        if (Notes.Find(id) is not { } meeting || !NotesModel.IsMeeting(meeting)) return;
+        var again = SelectedMeetingId == id;
+        DropSelection(); if (!again) { SelectedMeetingId = id; NotesCardShowsMeetings = true; }
+        EditError = null; Notice = null; Notify();
+    }
     // After a quick slip from one account to another and back, the earlier block can be picked up again. Blocks in a group are left alone, since
     // taking one out of a group would break the group.
     private bool InGroup(SessionRow row) => Editor.Entries(row.Day, row.Day.AddDays(1)).Any(e => e.GroupId is not null && e.Sources.Contains(row));
@@ -144,7 +155,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (!Save()) { EditError = LastError; Notify(); return false; }
         var removed = Engine.ContinuePrevious();
         if (removed is { } blocks) Editor.DropNotes(new[] { (blocks.Between.Account, blocks.Between.Date, blocks.Between.Start) });
-        selectedRows.Clear();
+        DropSelection();
         var saved = Save();
         Notice = removed is { } done ? $"Carrying on {Label(done.Earlier.Account)} from {done.Earlier.From:HH:mm}" : null;
         Notify(); return saved;
@@ -187,7 +198,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (!CanMergeSelection) { EditError = MergeHint; Notify(); return false; }
         var rows = Engine.Sessions.Where(selectedRows.Contains).ToArray();
         var gap = Editor.MergeGapMinutes(rows);
-        var done = ChangeLog(() => { Editor.Group(rows); selectedRows.Clear(); });
+        var done = ChangeLog(() => { Editor.Group(rows); DropSelection(); });
         if (done) SayDone(gap > 0 ? $"Merged · {Format(TimeSpan.FromMinutes((double)gap))} gap added" : "Merged");
         return done;
     }
@@ -340,7 +351,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     // Tells the user when pressing play carried on a block that was already there, since no new block appears.
     private void NoteContinuedBlock()
     {
-        if (Engine.ContinuedBlock is { } block) { selectedRows.Clear(); Notice = $"Carrying on {Label(block.Account)} from {block.From:HH:mm}"; }
+        if (Engine.ContinuedBlock is { } block) { DropSelection(); Notice = $"Carrying on {Label(block.Account)} from {block.From:HH:mm}"; }
     }
     // The block being recorded has no ledger row yet, so it cannot be dragged or edited until tracking stops.
     /// <summary>Says that something was done, in the message bar, with no Undo (notes are outside the undo history).</summary>
@@ -519,7 +530,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void ShowToday()
     {
         if (SelectedDate.Date == Engine.Now.Date) return;
-        selectedRows.Clear(); TimelineOffset = null; SelectedDate = Engine.Now.Date; Notify();
+        DropSelection(); TimelineOffset = null; SelectedDate = Engine.Now.Date; Notify();
     }
     // A timer left running past midnight carries on following the current day, if that is the day being shown. Someone reviewing an earlier day is left there.
     private DateTime lastToday;
@@ -527,7 +538,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         var today = Engine.Now.Date; if (today == lastToday) return;
         var following = SelectedDate.Date == lastToday; lastToday = today;
-        if (following) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = today; }
+        if (following) { DropSelection(); TimelineOffset = null; SelectedDate = today; }
         Notify();
     }
     /// <summary>Shows any day, for the date picker in the header. On the week views it will not go past the current week, as the arrows will not.</summary>
@@ -535,15 +546,15 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         day = day.Date; if (day == SelectedDate.Date) return;
         if (weeks && WeekStart(day) > WeekStart(Engine.Now)) return;
-        selectedRows.Clear(); TimelineOffset = null; SelectedDate = day; Notify();
+        DropSelection(); TimelineOffset = null; SelectedDate = day; Notify();
     }
-    public void ChangeDate(int days) { selectedRows.Clear(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
+    public void ChangeDate(int days) { DropSelection(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
     /// <summary>Steps the Week tab by whole weeks. It never goes past the current week, since there is nothing to review there.</summary>
     public void ChangeWeek(int weeks)
     {
         var target = WeekStart(SelectedDate).AddDays(7 * weeks);
         if (target > WeekStart(Engine.Now)) return;
-        selectedRows.Clear(); TimelineOffset = null; SelectedDate = target; Notify();
+        DropSelection(); TimelineOffset = null; SelectedDate = target; Notify();
     }
     /// <summary>Whether the Week overview shows its table in place of the chart. Kept for the session only.</summary>
     public bool WeekAsTable { get; private set; }
@@ -744,7 +755,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         var rows = Engine.Sessions.Where(selectedRows.Contains).ToArray();
         if (rows.Length == 0) return false;
-        var done = ChangeLog(() => { Editor.Delete(rows); selectedRows.Clear(); });
+        var done = ChangeLog(() => { Editor.Delete(rows); DropSelection(); });
         if (done) SayDone(rows.Length > 1 ? $"{rows.Length} blocks deleted" : "Deleted");
         return done;
     }
@@ -924,7 +935,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void RestartSetup() { if (!preferences.SetupDone) return; preferences = preferences with { SetupDone = false }; Save(); Notify(); }
     public void SetDecimalHours(bool on) { if (preferences.DecimalHours == on) return; preferences = preferences with { DecimalHours = on }; Save(); Notify(); }
     public DayOfWeek WeekStartsOn => preferences.WeekStart;
-    public void SetWeekStart(DayOfWeek day) { if (preferences.WeekStart == day) return; preferences = preferences with { WeekStart = day }; selectedRows.Clear(); TimelineOffset = null; Save(); Notify(); }
+    public void SetWeekStart(DayOfWeek day) { if (preferences.WeekStart == day) return; preferences = preferences with { WeekStart = day }; DropSelection(); TimelineOffset = null; Save(); Notify(); }
     public bool Shadows => preferences.Shadows;
     public void SetShadows(bool on) { preferences = preferences with { Shadows = on }; Save(); Notify(); }
     /// <summary>Whether the timer has a taskbar button. Turn it off to run from the notification area alone.</summary>

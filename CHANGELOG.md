@@ -6,6 +6,16 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 31 October 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Busy timeline: a stack is one tile | [93259d974cccd871c07132669ba3dae9263ba55b](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/93259d974cccd871c07132669ba3dae9263ba55b) | Three or more blocks (or meetings) at one moment are one tile for the whole stretch, at any zoom: '5 blocks · 03:34' with a thin line for each lane at its true time. One or two overlapping keep their lanes. The +N chips, their lists and the folded outline are gone. |
+| Recording over a stack | [93259d974cccd871c07132669ba3dae9263ba55b](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/93259d974cccd871c07132669ba3dae9263ba55b) | The block being recorded keeps a lane of its own above the slimmer tile, with its green ring clear of the tile's. |
+| Details | [93259d974cccd871c07132669ba3dae9263ba55b](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/93259d974cccd871c07132669ba3dae9263ba55b) | The Selected block card is now Details, with a chip saying what it shows. A stack opens in it as a timeline of its own: press a bar to pick a block, drag the picked bar's ends to change it, and the boxes edit it. |
+| Meetings are edited in Details | [93259d974cccd871c07132669ba3dae9263ba55b](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/93259d974cccd871c07132669ba3dae9263ba55b) | Pressing a meeting (or its row in the Notes card) shows it in Details: name, account, day, start, end and repeat, with Delete, and a This one / This and all later switch for a repeating one. A stack of meetings is the same timeline, with handles that move or resize to five minutes. The Notes card only lists and adds them. |
+| A taller dashboard | [93259d974cccd871c07132669ba3dae9263ba55b](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/93259d974cccd871c07132669ba3dae9263ba55b) | The dashboard is 760 tall (was 720) and the timeline 10 taller, so the busy cases have room and nothing touches. A test checks that no two items on the timeline, or two parts of the Details card, overlap. |
+
 ## 30 October 2026
 
 | Change | Commit | Details |

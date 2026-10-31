@@ -8,12 +8,14 @@ using Timer.Core;
 namespace Timer.Desktop;
 
 /// <summary>
-/// The card under the timeline that says what is selected and changes it. One block shows its account, start, end, length and note, which are edited here
-/// (they follow each other: type a length and the end moves). A merged block shows what it joins and can be unmerged. Two or more blocks show a row each,
-/// what Merge would do, and Merge, Copy and Delete. Nothing selected says how to select. It is rebuilt only when what it shows changes, so what is
-/// being typed is not lost to the clock ticking.
+/// The Details card under the timeline: it says what is selected and changes it, with a chip beside the title naming what it is showing. One block shows its account, start,
+/// end, length and note, which are edited here (they follow each other: type a length and the end moves). A block in a stack (three or more at once) also shows the whole
+/// stack as a timeline of its own, where any block is a press away and the picked one's ends can be dragged. A merged block shows what it joins and can be unmerged. Two or
+/// more blocks show a row each, what Merge would do, and Merge, Copy and Delete. A meeting, or a stack of meetings, is edited here too (see SelectedBlockCard.Meeting.cs).
+/// Nothing selected says how to select. It is rebuilt only when what it shows changes, so what is being typed is not lost to the clock ticking. The class keeps the name it had
+/// as the Selected block card.
 /// </summary>
-public sealed class SelectedBlockCard : Border
+public sealed partial class SelectedBlockCard : Border
 {
     private readonly TimerModel model;
     private string? shown;
@@ -31,20 +33,6 @@ public sealed class SelectedBlockCard : Border
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Sync();
 
-    /// <summary>
-    /// Takes off the card's own chrome (its fill, edge and padding) so it can stand inside another card, as the Selected block tab of the Notes card does while the
-    /// account panel is docked; put back when it returns to its place under the timeline.
-    /// </summary>
-    public void SetDocked(bool inTab)
-    {
-        if (this.inTab == inTab) return;
-        this.inTab = inTab; shown = null; // The tab names it already, so the title is left out and the card is drawn again.
-        Classes.Set("dayCard", !inTab);
-        BorderThickness = inTab ? default : new Thickness(1); Padding = inTab ? default : new Thickness(18, 14, 18, 16); CornerRadius = inTab ? default : new CornerRadius(20);
-        Sync();
-    }
-    private bool inTab;
-
     private string Signature(IReadOnlyList<TimerModel.SelectedBlock> blocks)
         => string.Join("|", blocks.Select(b => $"{b.Account};{b.Start.Ticks};{b.End.Ticks};{b.Minutes};{b.Note};{b.Group?.Sources.Count}"))
             + $"#{model.EditError}#{model.CanMergeSelection}#{model.SelectedDate:yyyyMMdd}#{model.ReviewAccounts.Count}";
@@ -52,48 +40,49 @@ public sealed class SelectedBlockCard : Border
     /// <summary>Redraws the card if what it shows has changed since it was last drawn.</summary>
     public void Sync()
     {
+        if (model.SelectedMeetingId is { } meetingId && model.Notes.Find(meetingId) is { } meeting && NotesModel.IsMeeting(meeting)) { SyncMeeting(meeting); return; }
+        meetingFields = null;
         var blocks = model.SelectedBlocks;
-        // The blocks that overlap the selected one (three or more deep), which the card lists so any of them is a press away, folded into the timeline's +N chip or not.
-        var overlaps = blocks.Count == 1 ? ReviewViews.OverlapsOfSelection(model) : Array.Empty<ReviewViews.OverlapItem>();
-        var signature = Signature(blocks) + "#" + string.Join("|", overlaps.Select(o => $"{o.Account};{o.Duration.Ticks};{o.Selected};{o.Folded};{o.Sources.Count}"));
+        // The stack the one selected block belongs to (three or more at once), which the card draws as a timeline so any of them is a press away.
+        var items = blocks.Count == 1 ? ReviewViews.BlockStackOf(model, blocks[0].Rows) : null;
+        var signature = Signature(blocks) + "#" + (items is null ? "" : string.Join("|", items.Select(o => $"{o.Account};{o.Start.Ticks};{o.End.Ticks};{o.Duration.Ticks};{o.Recording};{!o.Recording && model.IsSelected(o.Sources)}")));
         if (signature == shown) return;
-        if (Refresh(blocks)) { shown = signature; ShowOverlaps(overlaps); return; }
-        shown = signature; current = null; overlapHost = null;
-        Child = blocks.Count == 0 ? Empty() : blocks.Count == 1 ? Single(blocks[0]) : Several(blocks);
-        ShowOverlaps(overlaps);
+        if (Refresh(blocks)) { shown = signature; ShowStack(items); return; }
+        shown = signature; current = null; stackHost = null;
+        Child = blocks.Count == 0 ? Empty() : blocks.Count == 1 ? Single(blocks[0], items) : Several(blocks);
+        ShowStack(items);
     }
 
-    // The row of overlapping blocks, which sits first in a single block's card. It is filled in place, so a box being typed in is not rebuilt under the cursor.
-    private StackPanel? overlapHost;
-    private void ShowOverlaps(IReadOnlyList<ReviewViews.OverlapItem> items)
+    // The timeline of the stack, which sits first in a single block's card. It is filled in place, so a box being typed in is not rebuilt under the cursor.
+    private Border? stackHost; private TextBlock? kindText;
+    private void ShowStack(IReadOnlyList<ReviewViews.StackItem>? items)
     {
-        if (overlapHost is null) return;
-        overlapHost.Children.Clear(); overlapHost.IsVisible = items.Count > 0;
-        if (items.Count == 0) return;
-        var folded = items.Count(i => i.Folded);
-        var heading = Ui.Grid("*,Auto"); heading.Children.Add(new TextBlock { Text = items.Count + " overlapping blocks", FontSize = 11.5, Classes = { "muted" } });
-        if (folded > 0) { var note = new TextBlock { Text = $"Dashed: folded into +{folded}", FontSize = 11.5, Classes = { "muted" } }; Ui.Put(heading, note, 1); }
-        overlapHost.Children.Add(heading);
-        var row = new WrapPanel { Orientation = Orientation.Horizontal, Name = "OverlapRow" };
-        var ink = model.CurrentTheme.Colour("Ink"); var muted = Color.Parse(model.CurrentTheme.Colour("Muted"));
-        var index = 0;
+        if (kindText is not null && current is not null) kindText.Text = items is null ? "Block" : StackKind(items);
+        if (stackHost is null) return;
+        stackHost.Child = null; stackHost.IsVisible = items is not null;
+        if (items is null) return;
+        var bars = new List<StackTimeline.Bar>();
         foreach (var item in items)
         {
-            var content = new Grid();
-            // A block folded into the chip has a dashed edge, so the row says which ones the timeline is not drawing a lane for.
-            if (item.Folded) content.Children.Add(new Avalonia.Controls.Shapes.Rectangle { RadiusX = 9, RadiusY = 9, StrokeThickness = 1, Stroke = new SolidColorBrush(muted), StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 3, 2 },
-                Margin = new Thickness(-6, 0, -10, 0), IsHitTestVisible = false });
-            var line = Ui.Horizontal(ReviewViews.InitialsChip(model.Label(item.Account), ink), new TextBlock { Text = model.Format(item.Duration), FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center }); line.Spacing = 7;
-            content.Children.Add(line);
-            var button = new Button { Name = "Overlap_" + index++, Content = content, Margin = new Thickness(0, 6, 6, 0) };
-            button.Classes.Add("overlapSeg"); button.Classes.Set("on", item.Selected);
-            Avalonia.Automation.AutomationProperties.SetName(button, $"{model.Label(item.Account)}, {model.Format(item.Duration)}" + (item.Folded ? ", folded" : ""));
-            ToolTip.SetTip(button, model.Label(item.Account));
-            var sources = item.Sources; button.Click += (_, _) => model.SelectBlock(sources, false);
-            row.Children.Add(button);
+            var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(item.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5"; var look = model.BlockLook(colour);
+            var isBreak = BreakAccount.Is(item.Account);
+            var fill = Color.Parse(isBreak ? model.CurrentTheme.Colour("Hover") : look.Fill); var ink = isBreak ? model.CurrentTheme.Colour("Muted") : look.Text;
+            var display = model.Label(item.Account); var picked = !item.Recording && model.IsSelected(item.Sources);
+            var editable = picked && item.Sources.Count == 1 && !model.SelectedBlocks[0].IsGroup;
+            bars.Add(new StackTimeline.Bar(item.Start.ToString("HHmmss") + "_" + bars.Count, "", model.Format(item.Duration), $"{display} · {item.Start:HH:mm}–{(item.Recording ? "now" : item.End.ToString("HH:mm"))} · {model.Format(item.Duration)}",
+                item.Start, item.End, fill, Color.Parse(ink), picked, item.Recording, editable, ReviewViews.InitialsChip(display, ink)));
         }
-        overlapHost.Children.Add(row);
+        var timeline = new StackTimeline(model, bars, 1);
+        timeline.PickedBar += bar => { var item = items[bars.IndexOf(bar)]; if (!bar.Picked) model.SelectBlock(item.Sources, false); };
+        timeline.Resized += (bar, start, end) =>
+        {
+            var item = items[bars.IndexOf(bar)]; if (item.Sources.Count != 1) return;
+            var row = item.Sources[0]; model.EditEntry(row, row.Account, start, end, model.Editor.Note(row));
+        };
+        // A long stack scrolls inside the card, so the boxes under it keep their place.
+        stackHost.Child = new ScrollViewer { Content = timeline, MaxHeight = 156, Name = "StackScroll", HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 10, 0) };
     }
+    private string StackKind(IReadOnlyList<ReviewViews.StackItem> items) => "Blocks · " + items.Count(i => !i.Recording) + (items.Any(i => i.Recording) ? " · 1 recording" : "");
 
     private static TextBlock Label(string text)
     {
@@ -113,13 +102,14 @@ public sealed class SelectedBlockCard : Border
                 GradientStops = { new GradientStop(Color.Parse(look.Fill), 0), new GradientStop(Color.Parse(ReviewViews.DeeperEnd(look)), 1) } };
         return new Border { Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), Background = fill, BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
     }
-    private (Grid Header, StackPanel Actions) Header(string title, params Control[] chips)
+    // The title is always Details; the chip beside it says what the card is showing (Block, Blocks · 5, Meeting, Meetings · 4 and so on), and is left out when nothing is.
+    private (Grid Header, StackPanel Actions) Header(string? kind)
     {
         // A fixed height, so the title stays put whether or not there are buttons beside it (one block selected, none, or several).
         var header = Ui.Grid("Auto,*,Auto"); header.RowDefinitions = new RowDefinitions("*"); header.Height = 30;
-        var words = Ui.Horizontal(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Name = "SelectedTitle", IsVisible = !(inTab && title == "Selected block") });
-        words.VerticalAlignment = VerticalAlignment.Center;
-        foreach (var chip in chips) words.Children.Add(chip);
+        var words = Ui.Horizontal(new TextBlock { Text = "Details", FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Name = "SelectedTitle" });
+        words.VerticalAlignment = VerticalAlignment.Center; words.Spacing = 10; words.Height = 30; kindText = null; // The header's own height, so the title's place never depends on the chip beside it.
+        if (kind is not null) { var chip = Chip(kind, true); chip.Name = "DetailsKind"; kindText = (TextBlock)chip.Child!; words.Children.Add(chip); }
         Ui.Put(header, words);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }; Ui.Put(header, actions, 2);
         return (header, actions);
@@ -137,23 +127,23 @@ public sealed class SelectedBlockCard : Border
         var day = model.SelectedDate.Date;
         var anything = model.Engine.Sessions.Any(s => s.Day == day && s.Duration > TimeSpan.Zero) || (model.Engine.Active is not null && day == model.Engine.Now.Date);
         var when = day == model.Engine.Now.Date ? "today" : "on this day";
-        var (header, _) = Header("Selected block");
+        var (header, _) = Header(null);
         var message = new TextBlock { Name = "SelectedEmpty", FontSize = 13, TextWrapping = TextWrapping.Wrap,
-            Text = anything ? "Nothing is selected. Click a block on the timeline." : $"Nothing is recorded yet {when}. Start the day, or press play on an account." };
+            Text = anything ? "Nothing is selected. Press a block, a meeting or a stack to see it here." : $"Nothing is recorded yet {when}. Start the day, or press play on an account." };
         message.Classes.Add("muted");
         return Page(header, message);
     }
 
-    private Control Single(TimerModel.SelectedBlock block)
+    private Control Single(TimerModel.SelectedBlock block, IReadOnlyList<ReviewViews.StackItem>? items)
     {
         var group = block.IsGroup; current = group ? null : block; builtAccounts = model.ReviewAccounts.Count;
-        var (header, actions) = Header(group ? "Merged block" : "Selected block", group ? new[] { (Control)Chip($"Merged, {block.Group!.Sources.Count(r => r.Duration > TimeSpan.Zero)} blocks", true) } : Array.Empty<Control>());
+        var (header, actions) = Header(group ? $"Merged · {block.Group!.Sources.Count(r => r.Duration > TimeSpan.Zero)} blocks" : items is not null ? StackKind(items) : "Block");
         if (group) actions.Children.Add(Ui.Ctl("UnmergeSelected", "Unmerge", IconKind.Merge, "Unmerge", () => model.UngroupEntries(block.Group!.GroupId!), small: true));
         actions.Children.Add(Ui.Ctl("CopySelected", "Copy", IconKind.Copy, "Copy", () => model.CopySelection(), small: true, key: "Ctrl C"));
         actions.Children.Add(Ui.Ctl("DeleteSelected", "Delete", IconKind.Trash, "Delete", () => model.DeleteSelection(), small: true, key: "Del"));
         var day = block.Start.Date;
         var body = new StackPanel { Spacing = 12 };
-        overlapHost = new StackPanel { Name = "OverlapHost", IsVisible = false }; body.Children.Add(overlapHost);
+        stackHost = new Border { Name = "StackHost", IsVisible = false }; body.Children.Add(stackHost);
         var fields = Ui.Grid("1.7*,*,*,*"); fields.ColumnSpacing = 10;
         // Account: one of the accounts, shown with its colour. A merged block's account and times are read-only.
         var names = model.ReviewAccounts.Select(a => a.Name).Append(block.Account).Distinct(StringComparer.OrdinalIgnoreCase).Select(BreakAccount.Display).ToList();

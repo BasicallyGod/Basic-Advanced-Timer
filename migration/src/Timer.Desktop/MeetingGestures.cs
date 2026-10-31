@@ -73,7 +73,7 @@ public static class MeetingGestures
                 if (problem is not null) model.Refuse(problem);
                 else model.Tell((model.Notes.SeriesOf(meeting) is not null ? "Moved for this day only" : "Meeting moved") + " · " + Hm(result.Start) + "–" + Hm(result.End));
             }
-            else if (plain && e.InitialPressMouseButton == MouseButton.Left) model.Notes.RequestEditMeeting(meeting.Id);
+            else if (plain && e.InitialPressMouseButton == MouseButton.Left) model.SelectMeeting(meeting.Id);
             e.Handled = true;
         };
         card.PointerCaptureLost += (_, _) => { if (origin is null) return; origin = null; dragging = false; Restore(); };

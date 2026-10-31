@@ -250,14 +250,15 @@ public sealed class NotesTests
             var edge = Where(card, card.Width - 3, card.Height / 2); var edgeTo = edge + new Vector(pph / 2, 0);
             window.MouseDown(edge, MouseButton.Left); window.MouseMove(edge + new Vector(pph / 4, 0)); window.MouseMove(edgeTo); window.MouseUp(edgeTo, MouseButton.Left); Settle(window);
             moved = model.Notes.Find(id)!; Assert.Equal(TimeSpan.FromHours(9.5), moved.At); Assert.Equal(TimeSpan.FromHours(11), moved.End);
-            // A press that goes nowhere still opens the meeting for editing, with the new times in its form.
+            // A press that goes nowhere shows the meeting in the Details card, with its new times in the boxes.
             card = Find<Border>(window, "TimelineMeeting" + id); var middle = Where(card, card.Width / 2, card.Height / 2);
             window.MouseDown(middle, MouseButton.Left); window.MouseUp(middle, MouseButton.Left); Settle(window);
-            Assert.Equal("09:30", Find<TextBox>(window, "MeetingStart").Text); Assert.Equal("11:00", Find<TextBox>(window, "MeetingEnd").Text);
-            // Moved while the form is open, the form's boxes follow, so saving does not put the old times back.
+            Assert.Equal(id, model.SelectedMeetingId);
+            Assert.Equal("09:30", Find<TextBox>(window, "DetailsMeetingStart").Text); Assert.Equal("11:00", Find<TextBox>(window, "DetailsMeetingEnd").Text);
+            // Moved again while Details shows it, the boxes follow, so nothing puts the old times back.
             card = Find<Border>(window, "TimelineMeeting" + id); from = Where(card, card.Width / 2, card.Height / 2); to = from - new Vector(pph / 2, 0);
             window.MouseDown(from, MouseButton.Left); window.MouseMove(from - new Vector(pph / 4, 0)); window.MouseMove(to); window.MouseUp(to, MouseButton.Left); Settle(window);
-            Assert.Equal("09:00", Find<TextBox>(window, "MeetingStart").Text); Assert.Equal("10:30", Find<TextBox>(window, "MeetingEnd").Text);
+            Assert.Equal("09:00", Find<TextBox>(window, "DetailsMeetingStart").Text); Assert.Equal("10:30", Find<TextBox>(window, "DetailsMeetingEnd").Text);
         }
         finally { window.Close(); }
     }
@@ -345,19 +346,23 @@ public sealed class NotesTests
     }
 
     [AvaloniaFact]
-    public void ChangingARepeatingMeetingAsksWhichOnesAndThisOneOnlyLeavesTheRestAlone()
+    public void ChangingARepeatingMeetingInDetailsAppliesToThisOneOrToAllLaterAsTheSwitchSays()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var monday = new DateTime(2026, 10, 5); model.Notes.AddMeeting(Day, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Stand-up", null, RepeatChoice.Day); Settle(window);
+            model.Notes.AddMeeting(Day, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Stand-up", null, RepeatChoice.Day); Settle(window);
             var today = model.Notes.MeetingsOn(Day).Single(); var tomorrow = model.Notes.MeetingsOn(Day.AddDays(1)).Single();
-            model.Notes.RequestEditMeeting(today.Id); Settle(window);
-            Type(window, "NoteField", "Stand-up (long)"); Type(window, "MeetingEnd", "10:30"); Click(window, "SubmitNote");
-            Assert.NotNull(Find<Border>(window, "ScopeQuestion")); Assert.Equal(TimeSpan.FromHours(10), model.Notes.Find(today.Id)!.End); // Nothing changed until answered.
-            Click(window, "ScopeOne");
+            model.SelectMeeting(today.Id); Settle(window);
+            Assert.Equal("Meeting", Find<Border>(window, "DetailsKind").GetVisualDescendants().OfType<TextBlock>().First().Text);
+            Assert.NotNull(Find<Border>(window, "DetailsScope")); // A repeating meeting says what a change applies to, so nothing has to be asked.
+            // This one only is chosen to begin with.
+            Type(window, "DetailsMeetingEnd", "10:30"); Find<TextBox>(window, "DetailsMeetingEnd").RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window);
             Assert.Equal(TimeSpan.FromHours(10.5), model.Notes.Find(today.Id)!.End); Assert.Equal(TimeSpan.FromHours(10), model.Notes.Find(tomorrow.Id)!.End);
             Assert.Contains("this day only", model.Notice);
+            Click(window, "DetailsScopeAll");
+            Type(window, "DetailsMeetingEnd", "11:00"); Find<TextBox>(window, "DetailsMeetingEnd").RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window);
+            Assert.Equal(TimeSpan.FromHours(11), model.Notes.Find(today.Id)!.End); Assert.Equal(TimeSpan.FromHours(11), model.Notes.MeetingsOn(Day.AddDays(1)).Single().End);
         }
         finally { window.Close(); }
     }
