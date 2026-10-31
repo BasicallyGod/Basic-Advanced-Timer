@@ -15,12 +15,9 @@ public sealed partial class App : Application
         AvaloniaXamlLoader.Load(this);
         // Colours are registered before any window exists, so every control finds them the first time it looks.
         ThemeEngine.Register(this, AppThemes.BuiltIn);
-        // The clock typeface is bundled as three instances of Bricolage Grotesque (display, figures and light), each its own family. The assembly name
-        // differs between the portable and Store builds, so the address is built from it.
-        var assets = new Uri("avares://" + typeof(App).Assembly.GetName().Name + "/");
-        Resources["ClockFont"] = new Avalonia.Media.FontFamily(assets, "/Assets/Fonts#Bricolage Display");
-        Resources["FiguresFont"] = new Avalonia.Media.FontFamily(assets, "/Assets/Fonts#Bricolage Figures");
-        Resources["ClockLightFont"] = new Avalonia.Media.FontFamily(assets, "/Assets/Fonts#Bricolage Light");
+        // Headings and big figures share the interface typeface (Inter), set heavier, so the window reads as one face. The three keys stay so the classes keep working.
+        var inter = new Avalonia.Media.FontFamily("fonts:Inter#Inter");
+        Resources["ClockFont"] = inter; Resources["FiguresFont"] = inter; Resources["ClockLightFont"] = inter;
     }
 
     public override void OnFrameworkInitializationCompleted()

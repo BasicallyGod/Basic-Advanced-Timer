@@ -18,13 +18,13 @@ public static class NoteDates
 
 /// <summary>
 /// The small pop-up that sets a reminder's day and time (brief items 33 and 42): a month with past days off, hour and
-/// minute boxes with steppers in five-minute steps, four preset times in one column as wide as the boxes, a summary line, and Remove and Set. It decides
+/// minute boxes with steppers in five-minute steps, three preset times in one column as wide as the boxes, a summary line, and Remove and Set. It decides
 /// nothing itself: Set and Remove hand the answer back, and the cross closes it. With <c>dayOnly</c> it picks a day and nothing else (a meeting's day, whose
 /// times are in boxes beside it): the same card, month and footer, without the time column or Remove.
 /// </summary>
 public sealed class ReminderPopup : Border
 {
-    private static readonly int[] Presets = { 9, 12, 15, 17 };
+    private static readonly int[] Presets = { 9, 12, 15 };
     private readonly Func<DateTime> now;
     private DateTime chosen, month;
     private int hour, minute;
@@ -34,7 +34,7 @@ public sealed class ReminderPopup : Border
     private readonly TextBlock summary = new() { Name = "ReminderSummary", FontSize = 12.5, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     /// <summary>The width of the hour and minute boxes with the colon between them, which the four quick times share, one above the other, so the time side is one even column.</summary>
     public const double TimeColumnWidth = 44 + 4 + 6 + 4 + 44;
-    public const double Wide = 336, DayOnlyWide = 244;
+    public const double Wide = 338, DayOnlyWide = 222;
     private readonly StackPanel presetRow = new() { Spacing = 4, Width = TimeColumnWidth, HorizontalAlignment = HorizontalAlignment.Left };
     private bool syncing;
     // A reminder cannot be set for a day that has gone, but a meeting can be put on one (to note what happened), so only the reminder greys them.
@@ -45,7 +45,7 @@ public sealed class ReminderPopup : Border
         this.now = now; this.dayOnly = dayOnly; Name = "ReminderPopup";
         var start = current ?? now().Date.AddHours(12); allowPast = heading != "Reminder";
         chosen = start.Date; hour = start.Hour; minute = start.Minute; month = new DateTime(chosen.Year, chosen.Month, 1); // The reminder's own minute, not the nearest five.
-        CornerRadius = new CornerRadius(16); BorderThickness = new Thickness(1); Padding = new Thickness(12); Width = dayOnly ? DayOnlyWide : Wide;
+        CornerRadius = new CornerRadius(18); BorderThickness = new Thickness(1); Padding = new Thickness(12); Width = dayOnly ? DayOnlyWide : Wide;
         Classes.Add("surface"); Classes.Add("flyoutCard");
         BoxShadow = BoxShadows.Parse("0 10 28 0 #29141E46");
         var column = new StackPanel { Spacing = 10 };
@@ -72,12 +72,13 @@ public sealed class ReminderPopup : Border
         if (!dayOnly) right.Children.Add(Label("Time"));
         var time = Ui.Horizontal(Stepper(hourBox, 1, "hour"), new TextBlock { Text = ":", FontSize = 14, FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center, Classes = { "muted" } }, Stepper(minuteBox, 5, "minutes"));
         time.Spacing = 4; right.Children.Add(time); right.Children.Add(presetRow);
-        if (dayOnly) main.ColumnDefinitions = new ColumnDefinitions("196"); else Ui.Put(main, right, 1);
+        if (dayOnly) { main.ColumnDefinitions = new ColumnDefinitions("196"); main.HorizontalAlignment = HorizontalAlignment.Center; } else Ui.Put(main, right, 1); // The day-only card is 222 wide so the month sits in the middle.
         column.Children.Add(main);
 
         var footer = Ui.Grid("*,Auto,Auto"); footer.ColumnSpacing = 8; footer.Margin = new Thickness(0, 0, 0, 0);
         Ui.Put(footer, summary);
-        if (!dayOnly) Ui.Put(footer, Ui.Ctl("ReminderRemove", "Remove", null, "Remove", () => answer(null), small: true), 1);
+        if (!dayOnly) Ui.Put(footer, Ui.Ctl("ReminderRemove", "Remove", null, "Remove", () => answer(null), small: true), 1); // Room either side of the word.
+        if (!dayOnly) footer.Children.OfType<Button>().First(b => b.Name == "ReminderRemove").Padding = new Thickness(20, 0);
         var set = Ui.Ctl("ReminderSet", "Set", null, "Set", () => answer(Chosen), small: true); set.Classes.Add("primary"); Ui.Put(footer, set, 2);
         var rule = Ui.Rule(); rule.Margin = new Thickness(0, 2, 0, 0); column.Children.Add(rule); column.Children.Add(footer);
         Child = column;
