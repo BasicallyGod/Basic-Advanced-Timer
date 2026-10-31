@@ -39,15 +39,16 @@ public sealed class SidebarClock : StackPanel, IClockText
     private readonly TextBlock main, seconds;
     public SidebarClock()
     {
-        Orientation = Orientation.Horizontal; Spacing = 7; HorizontalAlignment = HorizontalAlignment.Center; VerticalAlignment = VerticalAlignment.Center;
+        Orientation = Orientation.Horizontal; Spacing = 1; HorizontalAlignment = HorizontalAlignment.Center; VerticalAlignment = VerticalAlignment.Center;
         main = new TextBlock { FontSize = 50, LineHeight = 52, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Center };
         seconds = new TextBlock { FontSize = 20, LineHeight = 20, Classes = { "clockLight", "muted" }, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 8) };
         Children.Add(main); Children.Add(seconds);
     }
     public string Text
     {
-        get => main.Text + ":" + seconds.Text;
-        set { var cut = value.LastIndexOf(':'); main.Text = cut > 0 ? value[..cut] : value; seconds.Text = cut > 0 ? value[(cut + 1)..] : ""; }
+        // The colon stays with the seconds, as on the pill, so the seconds read as seconds and not as a second number.
+        get => main.Text + seconds.Text;
+        set { var cut = value.LastIndexOf(':'); main.Text = cut > 0 ? value[..cut] : value; seconds.Text = cut > 0 ? value[cut..] : ""; }
     }
 }
 

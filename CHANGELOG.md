@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Clock seconds | [dff678c957d1f989b1a1bf718b1aeca2676f47e5](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/dff678c957d1f989b1a1bf718b1aeca2676f47e5) | The dashboard's clock writes the seconds with a colon before them (04:56:10), as the pill's does. |
 | Pill corner | [f47d54d491b44096eb66b23975e4c305b02c947e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/f47d54d491b44096eb66b23975e4c305b02c947e) | The pill is a card with the dashboard's 20 pixel corner and not a capsule, and its account list and alerts cards take the same corner. |
 | One count for the bell and the pill | [f47d54d491b44096eb66b23975e4c305b02c947e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/f47d54d491b44096eb66b23975e4c305b02c947e) | The bell lists budgets at 80 per cent or spent and a break running long beside the reminders, each with OK (or Resume), so the number on the bell and the number on the pill are the same. |
 | Scroll bar and toast line | [f47d54d491b44096eb66b23975e4c305b02c947e](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/f47d54d491b44096eb66b23975e4c305b02c947e) | A list that scrolls (the bell, the pill's list) leaves room for the scroll bar so it no longer runs over the buttons. The toast's line runs down in one smooth animation and not in jumps. |
