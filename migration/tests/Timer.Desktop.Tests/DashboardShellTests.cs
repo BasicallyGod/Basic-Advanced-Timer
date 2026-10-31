@@ -40,10 +40,10 @@ public sealed class DashboardShellTests
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Assert.Equal("Not recording", ToolTip.GetTip(Find<StackPanel>(window, "SidebarLights")));
-            Assert.Equal("No reminders waiting", Avalonia.Automation.AutomationProperties.GetName(Find<Border>(window, "SidebarReminderLight"))); // Always there, grey, until one is due.
+            Assert.Equal("Not recording", ToolTip.GetTip(Find<Border>(window, "SidebarStateLight")));
+            Assert.Equal("Nothing waiting", Avalonia.Automation.AutomationProperties.GetName(Find<SegmentRun>(window, "SidebarAlertCount"))); // Always there, blank, until one is due.
             model.ToggleAccount("Account one"); Settle(window);
-            Assert.Equal("Recording", ToolTip.GetTip(Find<StackPanel>(window, "SidebarLights")));
+            Assert.Equal("Recording", ToolTip.GetTip(Find<Border>(window, "SidebarStateLight")));
             Assert.StartsWith("Pause", ToolTip.GetTip(Find<Button>(window, "SidebarPause"))?.ToString());
             Assert.Equal("Account one", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.False(Find<TextBlock>(window, "SidebarWhoStatus").IsVisible);
             Click(Find<Button>(window, "SidebarPause")); Assert.False(model.IsTracking);

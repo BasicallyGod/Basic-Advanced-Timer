@@ -120,13 +120,6 @@ public sealed class PreviewCaptureTests
         }
     }
 
-    public static void SetSwollen(Border ring, double opacity)
-    {
-        ring.SetValue(Avalonia.Layout.Layoutable.WidthProperty, 20.0, Avalonia.Data.BindingPriority.Animation); ring.SetValue(Avalonia.Layout.Layoutable.HeightProperty, 28.0, Avalonia.Data.BindingPriority.Animation);
-        ring.SetValue(Border.CornerRadiusProperty, new CornerRadius(10), Avalonia.Data.BindingPriority.Animation); ring.SetValue(Visual.OpacityProperty, opacity, Avalonia.Data.BindingPriority.Animation);
-        ring.SetValue(Visual.RenderTransformProperty, Avalonia.Media.Transformation.TransformOperations.Parse("scale(1, 1)"), Avalonia.Data.BindingPriority.Animation); // The swell is a scale now; this is it fully grown.
-    }
-
     [AvaloniaFact]
     public void WriteRailLights()
     {
@@ -138,8 +131,7 @@ public sealed class PreviewCaptureTests
             var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
             try
             {
-                var ring = window.GetVisualDescendants().OfType<Border>().First(b => b.Name == "SidebarReminderRing"); SetSwollen(ring, .55);
-                using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"rail-lights-{scale}.png"));
+                                using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"rail-lights-{scale}.png"));
             }
             finally { window.Close(); }
         }
@@ -156,8 +148,7 @@ public sealed class PreviewCaptureTests
             try
             {
                 // Animations do not tick here, so the ring is set part way through its swell by hand.
-                var ring = pill.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PillReminderRing"); SetSwollen(ring, .55);
-                using var f = pill.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = pill.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, "h-pill-lights.png"));
+                                using var f = pill.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = pill.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, "h-pill-lights.png"));
             }
             finally { pill.Close(); }
         }

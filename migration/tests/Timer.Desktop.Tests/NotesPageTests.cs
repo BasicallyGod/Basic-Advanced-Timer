@@ -115,8 +115,8 @@ public sealed class NotesPageTests
         var model = Model(notes => notes.AddNote("Send the budget", null, Day.AddHours(8))); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var light = Find<Border>(window, "SidebarReminderLight"); Assert.Equal("A reminder is due", Avalonia.Automation.AutomationProperties.GetName(light));
-            model.Notes.Toggle(model.Notes.All.Single().Id); Settle(window); Assert.Equal("No reminders waiting", Avalonia.Automation.AutomationProperties.GetName(light));
+            var light = Find<SegmentRun>(window, "SidebarAlertCount"); Assert.Equal("A reminder is due", Avalonia.Automation.AutomationProperties.GetName(light));
+            model.Notes.Toggle(model.Notes.All.Single().Id); Settle(window); Assert.Equal("Nothing waiting", Avalonia.Automation.AutomationProperties.GetName(light));
         }
         finally { window.Close(); }
     }

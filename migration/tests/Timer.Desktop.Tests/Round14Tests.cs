@@ -44,7 +44,7 @@ public sealed class Round14Tests
     [AvaloniaFact]
     public void ThePillKeepsItsPartsInside()
     {
-        Assert.Equal(336, PillWindow.PillWidth);
+        Assert.Equal(416, PillWindow.PillWidth); // The display, the well and the break, 12 apart, between the two insets.
         var model = Model();
         var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
@@ -52,7 +52,7 @@ public sealed class Round14Tests
             var surface = Find<Border>(pill, "PillSurface"); Assert.Equal(PillWindow.PillWidth, surface.Bounds.Width, 0.5);
             // Every control lies inside the card with the room asked for at each end.
             var left = surface.Bounds.Left; var right = surface.Bounds.Right;
-            foreach (var name in new[] { "PillStateLight", "PillDashboard", "PillPause", "PillAccounts", "PillBreak" })
+            foreach (var name in new[] { "PillDisplay", "PillStateLight", "PillDashboard", "PillPause", "PillAccounts", "PillBreak" })
             {
                 var c = Find<Control>(pill, name); var box = c.TranslatePoint(default, surface)!.Value;
                 Assert.True(box.X >= 0 && box.X + c.Bounds.Width <= PillWindow.PillWidth, $"{name} {box.X}+{c.Bounds.Width}");

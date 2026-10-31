@@ -11,46 +11,6 @@ namespace Timer.Desktop;
 /// <summary>A clock that can be set from one hours:minutes:seconds string, whichever way it is drawn.</summary>
 public interface IClockText { string Text { get; set; } }
 
-/// <summary>The clock on one line for the horizontal pill: hours and minutes large, the seconds smaller and quieter after them.</summary>
-public sealed class LineClock : StackPanel, IClockText
-{
-    private readonly TextBlock main, seconds;
-    public LineClock()
-    {
-        Orientation = Orientation.Horizontal; Spacing = 1; VerticalAlignment = VerticalAlignment.Center;
-        main = new TextBlock { FontSize = 28, LineHeight = 30, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Center };
-        // The seconds sit on the same baseline as the larger figures.
-        seconds = new TextBlock { FontSize = 15, LineHeight = 15, Classes = { "clockLight", "muted" }, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 5) };
-        Children.Add(main); Children.Add(seconds);
-    }
-    public string Text
-    {
-        get => main.Text + seconds.Text;
-        set { var cut = value.LastIndexOf(':'); main.Text = cut > 0 ? value[..cut] : value; seconds.Text = cut > 0 ? value[cut..] : ""; }
-    }
-}
-
-/// <summary>
-/// The sidebar's clock: hours and minutes large with the seconds smaller beside them on the same baseline, the pair centred together. It is the pill's stacked clock laid
-/// out on one line, since the sidebar is wide enough to hold it.
-/// </summary>
-public sealed class SidebarClock : StackPanel, IClockText
-{
-    private readonly TextBlock main, seconds;
-    public SidebarClock()
-    {
-        Orientation = Orientation.Horizontal; Spacing = 7; HorizontalAlignment = HorizontalAlignment.Center; VerticalAlignment = VerticalAlignment.Center;
-        main = new TextBlock { FontSize = 50, LineHeight = 52, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Center };
-        seconds = new TextBlock { FontSize = 20, LineHeight = 20, Classes = { "clockLight", "muted" }, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 8) };
-        Children.Add(main); Children.Add(seconds);
-    }
-    public string Text
-    {
-        get => main.Text + ":" + seconds.Text;
-        set { var cut = value.LastIndexOf(':'); main.Text = cut > 0 ? value[..cut] : value; seconds.Text = cut > 0 ? value[(cut + 1)..] : ""; }
-    }
-}
-
 /// <summary>Small helpers shared by the pill's controls, which draw soft tints of their colours and a ring for keyboard focus.</summary>
 public static class SoftTint
 {
@@ -80,7 +40,11 @@ public sealed class StatusFace : StackPanel
 {
     private readonly TimerModel model;
     private readonly IClockText clock;
-    private readonly Border stateLight, reminderLight, reminderRing;
+    private readonly Border stateLight;
+    private readonly SegmentRun alertCountRun = new() { DigitHeight = CountDigitHeight, Text = "  " };
+    private readonly IconGlyph bell = new(IconKind.Bell);
+    private readonly Border displayBox;
+    private int shownCount = -1;
     /// <summary>How many alerts are waiting (none while Pill alerts is off), as of the last refresh.</summary>
     public int AlertCount { get; private set; }
     private readonly TextBlock initials = new() { FontSize = 17, Classes = { "clock" }, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -104,14 +68,17 @@ public sealed class StatusFace : StackPanel
         button.Margin = new Thickness(-RingRoom, top - RingRoom, -RingRoom, -RingRoom);
         button.HorizontalContentAlignment = HorizontalAlignment.Center; button.VerticalContentAlignment = VerticalAlignment.Center;
     }
-    private readonly Border clockTile;
     /// <summary>Whether this is the dashboard's sidebar face: the lights and the clock centred, then one tracking card (play or pause, the account and how long it has run, the break).</summary>
     public bool Sidebar { get; }
     private readonly TextBlock whoName = new() { FontSize = 13.5, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock whoStatus = new() { FontSize = 11.5, Classes = { "muted" }, TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly Ellipse whoDot = new() { Width = 9, Height = 9, VerticalAlignment = VerticalAlignment.Center };
     /// <summary>The pill's account box (only a dot and a chevron: the name is its tooltip and the list) and the day clock's box are these widths, so the pill keeps one size whatever the time.</summary>
-    public const double SelectorWidth = 48, ClockWidth = 106;
+    public const double SelectorWidth = 48;
+    /// <summary>The display window is as tall as the well beside it, with its digits 28 tall and the count's 15; the count's column is 24 wide.</summary>
+    public const double DisplayHeight = 52, CountDigitHeight = 15, CountColumn = 24, DisplayPadding = 10, DividerGap = 9;
+    /// <summary>The window's width, which is one size whatever the time or the count: padding, the LED, a divider, the clock, a divider and the count's column.</summary>
+    public static double DisplayWidth => 2 * DisplayPadding + 6 + 2 * (2 * DividerGap + 1) + SegmentClock.Width + CountColumn;
     private readonly Ellipse selectorDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
     private readonly Chevron selectorChevron = new() { VerticalAlignment = VerticalAlignment.Center };
     private Border selectorTile = null!;
@@ -121,7 +88,12 @@ public sealed class StatusFace : StackPanel
     private readonly Viewbox glyphBox = new() { Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly string clockTip;
     private bool hoverCircle, circleFocus, accountsFocus;
-    public StackPanel Lights { get; }
+    /// <summary>The display window the state LED, the clock and the alert count sit in.</summary>
+    public Border Display => displayBox;
+    /// <summary>The state LED, a capsule in the window: lit in the state's colour, an empty groove when idle.</summary>
+    public Border StateLight => stateLight;
+    /// <summary>The alert count's two digits.</summary>
+    public SegmentRun AlertCountDigits => alertCountRun;
     public Button ClockButton { get; }
     /// <summary>The lights as a button that opens the pill's alerts; null on the sidebar.</summary>
     public Button? AlertsButton { get; }
@@ -136,22 +108,32 @@ public sealed class StatusFace : StackPanel
     public StatusFace(TimerModel model, string prefix, string breakName, string clockTip, Action clockClick, Action circleClick, Action accountsClick, bool sidebar = false, Action? alertsClick = null)
     {
         this.model = model; this.clockTip = clockTip; Sidebar = sidebar;
-        clock = sidebar ? new SidebarClock { Text = "00:00:00" } : new LineClock { Text = "00:00:00" };
-        Spacing = 10; HorizontalAlignment = HorizontalAlignment.Center; if (sidebar) { Spacing = 6; HorizontalAlignment = HorizontalAlignment.Stretch; } else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
-        stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
-        reminderLight = new Border { Name = prefix + "ReminderLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3) };
-        Lights = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Height = 14, HorizontalAlignment = HorizontalAlignment.Center, Name = prefix + "Lights" };
-        // The pulse ring lives behind the reminder light in a cell the light's own size, so it can grow past the cell (nothing clips it) without moving anything.
-        reminderRing = new Border { Name = prefix + "ReminderRing", Width = 6, Height = 14, CornerRadius = new CornerRadius(3), Opacity = 0, IsHitTestVisible = false, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var reminderCell = new Grid { Width = 6, Height = 14, Children = { reminderRing, reminderLight } };
-        Lights.Children.Add(stateLight); Lights.Children.Add(reminderCell);
-        // The clock moves between the pill and the dashboard.
-        clockTile = new Border { Name = prefix + "ClockTile", CornerRadius = new CornerRadius(14), Padding = sidebar ? new Thickness(4, 2) : new Thickness(2, 0), Background = Brushes.Transparent, Child = (Control)clock };
+        clock = new SegmentClock();
+        Spacing = 12; HorizontalAlignment = HorizontalAlignment.Center; if (sidebar) { Spacing = 6; HorizontalAlignment = HorizontalAlignment.Stretch; } else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
+        // The state LED is a capsule set into the display, like a segment: an empty groove when idle, inlaid in the state's colour when not.
+        stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3.5), VerticalAlignment = VerticalAlignment.Center };
+        // The clock opens the dashboard (and collapses it again), as it always has; it is one width whatever the time.
         ClockButton = Ui.Button("", clockClick, prefix + "Dashboard");
-        ClockButton.Classes.Add("pillBare"); ClockButton.Padding = new Thickness(0); ClockButton.Content = clockTile; ClockButton.HorizontalAlignment = HorizontalAlignment.Center;
-        ClockButton.PointerEntered += (_, _) => SetTileHover(clockTile, true);
-        ClockButton.PointerExited += (_, _) => SetTileHover(clockTile, false);
+        ClockButton.Classes.Add("pillBare"); ClockButton.Padding = new Thickness(0); ClockButton.Content = (Control)clock; ClockButton.HorizontalAlignment = HorizontalAlignment.Center; ClockButton.VerticalAlignment = VerticalAlignment.Center;
+        ClockButton.PointerEntered += (_, _) => ((Control)clock).Opacity = .8;
+        ClockButton.PointerExited += (_, _) => ((Control)clock).Opacity = 1;
         ToolTip.SetTip(ClockButton, clockTip); Avalonia.Automation.AutomationProperties.SetName(ClockButton, clockTip);
+        // The alert count: a small bell over two segment digits, in the colour of the most urgent thing waiting. Pressing it opens what is waiting (on the pill).
+        alertCountRun.Name = prefix + "AlertCount";
+        var countStack = new StackPanel { Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Width = CountColumn, Name = prefix + "AlertCountStack" };
+        countStack.Children.Add(new Viewbox { Width = 9, Height = 9, HorizontalAlignment = HorizontalAlignment.Center, Child = bell }); countStack.Children.Add(new Border { Child = alertCountRun, HorizontalAlignment = HorizontalAlignment.Center });
+        Control countHost;
+        if (alertsClick is not null)
+        {
+            AlertsButton = Ui.Button("", alertsClick, prefix + "AlertsButton"); AlertsButton.Classes.Add("pillBare"); AlertsButton.Padding = new Thickness(0, 6); AlertsButton.Margin = new Thickness(0, -6);
+            AlertsButton.Content = countStack; AlertsButton.VerticalAlignment = VerticalAlignment.Center; AlertsButton.HorizontalContentAlignment = HorizontalAlignment.Center; countHost = AlertsButton;
+        }
+        else countHost = countStack;
+        Border Divider() { var d = new Border { Width = 1, Height = 28, Margin = new Thickness(DividerGap, 0), VerticalAlignment = VerticalAlignment.Center }; d.Bind(Border.BackgroundProperty, d.GetResourceObservable("DisplayEdge")); return d; }
+        var inside = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Spacing = 0 };
+        inside.Children.Add(stateLight); inside.Children.Add(Divider()); inside.Children.Add(ClockButton); inside.Children.Add(Divider()); inside.Children.Add(countHost);
+        displayBox = new Border { Name = prefix + "Display", Height = DisplayHeight, CornerRadius = new CornerRadius(14), Padding = new Thickness(DisplayPadding, 0), Child = inside, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        displayBox.Bind(Border.BackgroundProperty, displayBox.GetResourceObservable("DisplayWell"));
         // The primary control carries the running account's initials, and pauses or resumes. The initials give way to the symbol under the pointer.
         glyphBox.Child = glyph; glyph.Fixed = Brushes.Black;
         primaryTile.Name = prefix + "PrimaryTile";
@@ -180,11 +162,10 @@ public sealed class StatusFace : StackPanel
         well.Name = prefix + "Well";
         if (!sidebar)
         {
-            // Along the pill: the lights, the day clock in a box of its own width, the well (the play tile, then the account), and the break at the end.
-            ClockButton.Width = ClockWidth; ClockButton.HorizontalContentAlignment = HorizontalAlignment.Left; ClockButton.VerticalAlignment = VerticalAlignment.Center; ClockButton.HorizontalAlignment = HorizontalAlignment.Left;
+            // Along the pill: the display (LED, clock and count), the well (the play tile, then the account), and the break at the end.
             well.Width = double.NaN; well.Height = TileSize + 2 * WellPadding; well.Margin = default; well.VerticalAlignment = VerticalAlignment.Center;
             well.Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = WellGap, Children = { Circle, AccountsButton } };
-            Lights.VerticalAlignment = VerticalAlignment.Center; Break.VerticalAlignment = VerticalAlignment.Center;
+            Break.VerticalAlignment = VerticalAlignment.Center;
         }
         else
         {
@@ -201,16 +182,9 @@ public sealed class StatusFace : StackPanel
             var card = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 4 };
             Grid.SetColumn(who, 1); Grid.SetColumn(Break, 2);
             card.Children.Add(Circle); card.Children.Add(who); card.Children.Add(Break);
-            well.Child = card; Lights.Margin = new Thickness(0, 4, 0, 0);
+            well.Child = card;
         }
-        // On the pill the lights are a button: pressing them opens what is waiting. It reaches past the lights with padding and takes it back in its margin, so nothing moves.
-        if (alertsClick is not null)
-        {
-            AlertsButton = Ui.Button("", alertsClick, prefix + "AlertsButton"); AlertsButton.Classes.Add("pillBare"); AlertsButton.Padding = new Thickness(8, 12); AlertsButton.Margin = new Thickness(-8, -12);
-            AlertsButton.Content = Lights; AlertsButton.VerticalAlignment = VerticalAlignment.Center; Children.Add(AlertsButton);
-        }
-        else Children.Add(Lights);
-        Children.Add(ClockButton); Children.Add(well); if (!sidebar) Children.Add(Break);
+        Children.Add(displayBox); Children.Add(well); if (!sidebar) Children.Add(Break);
         ActualThemeVariantChanged += (_, _) => Refresh();
         Refresh();
     }
@@ -255,13 +229,20 @@ public sealed class StatusFace : StackPanel
             : hoverAccounts ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var hover) && hover is IBrush hoverBrush ? hoverBrush : rest) : rest;
         tile.BoxShadow = accountsFocus ? SoftTint.FocusRing(tile) : default;
     }
-    private static void SetTileHover(Border tile, bool on) => tile.Background = on ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var brush) && brush is IBrush hover ? hover : Brushes.Transparent) : Brushes.Transparent;
     private Color ThemeColourOr(string key, string fallback) => Ui.ThemeColour(this, key, Color.Parse(fallback));
     /// <summary>The state's key (Break outranks Live, else Idle) and its words, shared with the owner's ring and glow.</summary>
     public static (string Key, string Name) State(TimerModel model)
     {
         var onBreak = model.IsOnBreak; var live = model.IsTracking && !onBreak;
         return (onBreak ? "Break" : live ? "Live" : "Idle", onBreak ? "On break" : live ? "Recording" : "Not recording");
+    }
+    // A new arrival makes the count flash twice, and nothing flashes when Windows animations are off.
+    private void FlashCount()
+    {
+        var host = (Control)alertCountRun; var steps = 0;
+        var timer = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(170) };
+        timer.Tick += (_, _) => { steps++; host.Opacity = steps % 2 == 1 ? .25 : 1; if (steps >= 4) { host.Opacity = 1; timer.Stop(); } };
+        timer.Start();
     }
     public void Refresh()
     {
@@ -271,18 +252,26 @@ public sealed class StatusFace : StackPanel
         // The light's colour is the state, and the ring and halo repeat it, so the light never carries it alone.
         var stateColour = ThemeColourOr(key, "#8A8F98");
         stateLight.Background = new SolidColorBrush(stateColour);
-        ToolTip.SetTip(Lights, stateName); Avalonia.Automation.AutomationProperties.SetName(stateLight, stateName);
-        // The reminder light is always there: blue and pulsing while a reminder is due, and a quiet grey when nothing is waiting. It only notifies.
-        var grey = ThemeColourOr("Idle", "#8A8F98");
-        // It takes the colour of the most urgent thing waiting: blue for a reminder, amber for a budget at 80 per cent or a long break, red for a spent budget.
+        // The state LED is a capsule set into the display: inlaid in the state's colour while recording or on a break, an empty groove when idle. The window's ring and halo
+        // repeat the state, so the LED never carries it alone.
+        var groove = ThemeColourOr("DisplayGroove", "#101317"); var shade = ThemeColourOr("DisplayShade", "#A0000000");
+        var idle = key == "Idle";
+        stateLight.Background = new SolidColorBrush(idle ? groove : stateColour);
+        stateLight.BoxShadow = new BoxShadows(new BoxShadow { IsInset = true, OffsetX = .6, OffsetY = 1, Blur = idle ? 1.6 : 1, Color = idle ? shade : SoftTint.WithAlpha(shade, .55) });
+        Avalonia.Automation.AutomationProperties.SetName(stateLight, stateName); ToolTip.SetTip(stateLight, stateName);
+        var well0 = ThemeColourOr("DisplayWell", "#101317"); var edge = ThemeColourOr("DisplayEdge", "#12FFFFFF");
+        displayBox.BoxShadow = new BoxShadows(new BoxShadow { IsInset = true, OffsetY = 2, Blur = 5, Color = shade }, new[] { new BoxShadow { OffsetY = 1, Color = edge } });
+        // The count takes the colour of the most urgent thing waiting: blue a reminder, amber a budget at 80 per cent or a long break, red a spent budget. It is two digits
+        // always (the leading one blank under ten, both blank with nothing waiting), so the display never changes width.
         var alerts = model.PillAlertsMode == "off" ? Array.Empty<AlertItem>() : model.Alerts; var waiting = alerts.Count > 0;
-        var lit = waiting ? ThemeColourOr(alerts[0].LightToken, "#3558C8") : ThemeColourOr("Accent", "#3558C8");
-        reminderLight.Background = new SolidColorBrush(waiting ? lit : Color.FromArgb(150, grey.R, grey.G, grey.B));
-        Ui.PulseRing(reminderLight, reminderRing, waiting, lit);
+        var lit = waiting ? ThemeColourOr(alerts[0].LightToken, "#3558C8") : ThemeColourOr("Muted", "#8A8F98");
+        var count = Math.Min(alerts.Count, 99);
+        alertCountRun.Text = waiting ? (count < 10 ? " " + count : count.ToString()) : "  ";
+        alertCountRun.Colour = lit; bell.TintKey = waiting ? alerts[0].LightToken : "Muted"; bell.Opacity = waiting ? 1 : .55;
         var reminderWords = !waiting ? "No reminders waiting" : alerts.All(a => a.Kind == AlertKind.Reminder) ? "A reminder is due" : $"{alerts.Count} waiting, most urgent first";
-        AlertCount = alerts.Count;
-        ToolTip.SetTip(reminderLight, reminderWords); Avalonia.Automation.AutomationProperties.SetName(reminderLight, reminderWords);
-        if (AlertsButton is not null) Avalonia.Automation.AutomationProperties.SetName(AlertsButton, waiting ? "What is waiting" : "Nothing waiting");
+        if (shownCount >= 0 && count > shownCount && !Motion.Reduced) FlashCount(); shownCount = count; AlertCount = alerts.Count;
+        var countTarget = (Control?)AlertsButton ?? (Control)alertCountRun;
+        ToolTip.SetTip(countTarget, reminderWords); Avalonia.Automation.AutomationProperties.SetName(countTarget, waiting ? (alerts.Count == 1 ? reminderWords : $"{alerts.Count} waiting") : "Nothing waiting");
         clock.Text = model.ClockText;
 
         var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);

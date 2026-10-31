@@ -38,7 +38,7 @@ public sealed class HorizontalPillTests
             Assert.Equal(PillWindow.PillWidth, surface.Width); Assert.Equal(PillWindow.PillHeight, surface.Height); Assert.Equal(PillWindow.PillRadius, surface.CornerRadius.TopLeft);
             Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.WindowWidthNow, 0.5); Assert.Equal((PillWindow.PillHeight + 2 * Ui.ShadowMargin) * pill.Scale, pill.WindowHeightNow, 0.5);
             double X(Control c) => c.TranslatePoint(default, surface)!.Value.X; double Y(Control c) => c.TranslatePoint(default, surface)!.Value.Y;
-            var lights = Find<StackPanel>(pill, "PillLights"); var clock = Find<Button>(pill, "PillDashboard"); var well = Find<Border>(pill, "PillWell");
+            var lights = Find<Border>(pill, "PillStateLight"); var clock = Find<Button>(pill, "PillDashboard"); var well = Find<Border>(pill, "PillWell");
             var primary = Find<Button>(pill, "PillPause"); var accounts = pill.AccountsButton; var brk = Find<Button>(pill, "PillBreak");
             Assert.True(X(lights) < X(clock)); Assert.True(X(clock) < X(primary)); Assert.True(X(primary) < X(accounts)); Assert.True(X(accounts) < X(brk)); // Left to right.
             // The primary control and the account share the well, 4 pixels in from its edge and 2 apart, the well as tall as the two tiles and their room.
@@ -49,7 +49,7 @@ public sealed class HorizontalPillTests
             var breakTile = brk.GetVisualDescendants().OfType<Border>().First(b => b.Width == StatusFace.TileSize);
             var end = surface.Bounds.Width - (X(breakTile) + breakTile.Bounds.Width);
             Assert.InRange(end, PillWindow.InsetRight - 1.5, PillWindow.InsetRight + 0.5);
-            Assert.InRange(X(lights) , PillWindow.InsetLeft - 3, PillWindow.InsetLeft + 1);
+            Assert.InRange(X(Find<Border>(pill, "PillDisplay")), PillWindow.InsetLeft - 3, PillWindow.InsetLeft + 1); Assert.InRange(X(lights), PillWindow.InsetLeft + StatusFace.DisplayPadding - 3, PillWindow.InsetLeft + StatusFace.DisplayPadding + 1); // The display starts at the inset, the LED a padding in.
             var gapBeforeBreak = X(breakTile) - (X(well) + well.Bounds.Width); Assert.InRange(gapBeforeBreak, 8, 16);
         }
         finally { pill.Close(); }

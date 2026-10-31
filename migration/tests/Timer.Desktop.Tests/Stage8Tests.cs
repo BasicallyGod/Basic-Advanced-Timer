@@ -88,7 +88,7 @@ public sealed class Stage8Tests
         {
             var missing = pill.GetVisualDescendants().OfType<Button>().Where(b => b.IsVisible && !HasName(b)).Select(b => b.Name ?? b.GetType().Name).ToList();
             Assert.True(missing.Count == 0, "Buttons with no words and no accessible name: " + string.Join("; ", missing));
-            foreach (var light in new[] { "PillStateLight", "PillReminderLight" }) Assert.False(string.IsNullOrWhiteSpace(AutomationProperties.GetName(pill.GetVisualDescendants().OfType<Border>().Single(b => b.Name == light))), light);
+            foreach (var light in new[] { "PillStateLight" }) Assert.False(string.IsNullOrWhiteSpace(AutomationProperties.GetName(pill.GetVisualDescendants().OfType<Border>().Single(b => b.Name == light))), light);
         }
         finally { pill.Close(); }
     }

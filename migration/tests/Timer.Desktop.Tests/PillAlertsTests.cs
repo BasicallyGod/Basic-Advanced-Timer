@@ -207,9 +207,9 @@ public sealed class PillAlertsTests
         try
         {
             var count = model.Alerts.Count; Assert.True(count > 1);
-            Assert.True(pill.AlertsBadge.IsVisible); Assert.Equal(count > 9 ? "9+" : count.ToString(), ((TextBlock)pill.AlertsBadge.Child!).Text);
-            var light = pill.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PillReminderLight");
-            Assert.True(light.Background is Avalonia.Media.ISolidColorBrush { Color.A: 255 }, "lit, not the quiet grey");
+            // The count sits in the display, always two digits (the leading one blank under ten), in the colour of the most urgent thing waiting.
+            var digits = pill.GetVisualDescendants().OfType<SegmentRun>().First(r => r.Name == "PillAlertCount");
+            Assert.Equal(count < 10 ? " " + count : count.ToString(), digits.Text); Assert.NotNull(digits.Colour);
             Assert.False(pill.AlertsOpen); pill.AlertsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(pill);
             Assert.True(pill.AlertsOpen); Assert.Equal("card", pill.AlertsCard!.View);
             pill.AlertsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(pill); Assert.False(pill.AlertsOpen); // Pressing the light again folds it.
@@ -235,7 +235,7 @@ public sealed class PillAlertsTests
             model.SetPillAlertsMode("light"); model.Notes.AddNote("Third", null, now.AddMinutes(-1)); pill.PeekAtNewAlerts(); Assert.False(pill.AlertsOpen);
             pill.AlertsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(pill); Assert.Equal("list", pill.AlertsCard!.View); // Light only opens the list when asked.
             pill.FoldAlerts(); model.SetPillAlertsMode("off"); Assert.Equal("off", model.PillAlertsMode);
-            Assert.False(pill.AlertsBadge.IsVisible); // Off keeps the pill quiet.
+            Assert.Equal("  ", pill.GetVisualDescendants().OfType<SegmentRun>().First(r => r.Name == "PillAlertCount").Text); // Off keeps the pill quiet.
             model.SetPillAlertsMode("peek"); Assert.Equal("peek", model.PillAlertsMode);
         }
         finally { pill.Close(); }

@@ -162,14 +162,15 @@ public sealed class FeedbackRound7Tests
     }
 
     [AvaloniaFact]
-    public void TheReminderLightPulsesARingWhileAReminderIsDueAndIsStillWhenNot()
+    public void TheAlertCountIsSteadyWhenAReminderIsDueAndFlashesOnlyForANewArrival()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            var light = Find<Border>(pill, "PillReminderLight"); Assert.False(Ui.IsPulsing(light));
-            model.Notes.AddNote("Send the budget", null, Day.AddHours(8)); Dispatcher.UIThread.RunJobs(); Assert.True(Ui.IsPulsing(light));
-            Assert.Equal(1.0, light.Opacity); // The light itself stays steady; the ring swells round it.
+            var count = Find<SegmentRun>(pill, "PillAlertCount"); Assert.Equal(1.0, count.Opacity);
+            model.Notes.AddNote("Send the budget", null, Day.AddHours(8)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(" 1", count.Text); // Timers do not tick headless, so the flash is not seen part way; it ends steady at full strength.
+            Assert.Empty(pill.GetVisualDescendants().OfType<Border>().Where(b => b.Name is "PillReminderRing" or "PillReminderLight")); // The old pulsing light is gone.
         }
         finally { pill.Close(); }
     }
