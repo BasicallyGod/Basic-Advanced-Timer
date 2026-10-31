@@ -626,6 +626,8 @@ public sealed class DashboardWindow : Window
         // The card hangs from a point under the bell, so it reads as coming from it: a small triangle of the card's own fill over its top edge, with only its two slanted
         // sides drawn in the line colour, so the card's border runs into it. The room round the card is for its shadow.
         var flyout = new NotificationsFlyout(model);
+        // No taller than the window below the bell, so a long list scrolls inside the card instead of running past the app.
+        flyout.LimitHeight(NotificationsFlyout.MaxHeightFor(bell.TranslatePoint(new Point(0, bell.Bounds.Height), this)?.Y ?? 60, Ui.ShadowMargin + DashboardHeight));
         var half = Math.Max(38, bell.Bounds.Width) / 2; var shift = HangingCard.ShiftForCorner(half, 18); // The bell is near the card's end, so the card sits a little past it to keep the point off the rounded corner.
         bellPopup.Child = HangingCard.Hang(flyout, half + shift); bellPopup.HorizontalOffset = HangingCard.Room.Right + shift; bellPopup.VerticalOffset = HangingCard.TopOffset; bellPopup.IsOpen = true;
     }

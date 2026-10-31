@@ -47,8 +47,8 @@ public static partial class ReviewViews
     {
         var colour = Color.Parse(ink);
         // The compact chip is for a bar only a little taller than itself (the Details card's stack), so it keeps clear air above and below.
-        var letters = Ui.Text(PillWindow.Initials(display), compact ? 10 : 10.5); letters.FontWeight = FontWeight.Bold; letters.Name = "BlockInitials"; if (compact) letters.LineHeight = 12;
-        return new Border { Background = new SolidColorBrush(Color.FromArgb(48, colour.R, colour.G, colour.B)), CornerRadius = new CornerRadius(6), Padding = compact ? new Thickness(5, 0) : new Thickness(5, 1), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Child = letters };
+        var letters = Ui.Text(PillWindow.Initials(display), compact ? 10 : 10.5); letters.FontWeight = FontWeight.Bold; letters.Name = "BlockInitials"; if (compact) { letters.LineHeight = 12; letters.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center; }
+        return new Border { Background = new SolidColorBrush(Color.FromArgb(48, colour.R, colour.G, colour.B)), CornerRadius = new CornerRadius(6), Padding = compact ? new Thickness(5, 0) : new Thickness(5, 1), Height = compact ? 13 : double.NaN, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Child = letters };
     }
     /// <summary>
     /// Blocks (or meetings) that reach this many deep at one moment are drawn as one tile, whatever the zoom, and opened in the Details card; one or two overlapping keep their lanes.

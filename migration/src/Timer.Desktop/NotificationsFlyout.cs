@@ -23,12 +23,23 @@ public sealed class NotificationsFlyout : Border
         this.model = model; Name = "NotificationsFlyout";
         Width = 372; Padding = new Thickness(14); CornerRadius = new CornerRadius(18); BorderThickness = new Thickness(1);
         Classes.Add("surface"); Classes.Add("flyoutCard"); BoxShadow = HangingCard.Shadow;
-        var host = new Grid(); host.Children.Add(column); host.Children.Add(rescheduling); Child = host;
+        // The title stays put and the list under it scrolls when the card is limited in height (see LimitHeight), so a long list never runs past the window.
+        var host = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+        var title = new TextBlock { Text = "Notifications", FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 10) };
+        var scroll = new ScrollViewer { Name = "NotificationsScroll", Content = column, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+        Grid.SetRow(scroll, 1); host.Children.Add(title); host.Children.Add(scroll); host.Children.Add(rescheduling); Child = host;
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Sync(true); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
         Sync(true);
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Sync(false);
+
+    /// <summary>
+    /// The tallest the card may be, for a card hung from a button whose foot is <paramref name="buttonBottom"/> inside a window card that ends at <paramref name="windowBottom"/>:
+    /// down to a small margin above the window card's foot (past the point and the gap under the button), so it stays inside the app's window and the list scrolls.
+    /// </summary>
+    public static double MaxHeightFor(double buttonBottom, double windowBottom) => Math.Max(160, windowBottom - buttonBottom - 11 - 14);
+    public void LimitHeight(double max) => MaxHeight = max;
 
     private string Signature() => string.Join("|", model.Notes.Overdue.Concat(model.Notes.ComingUp()).Select(n => $"{n.Id};{n.Day:yyyyMMdd};{n.At};{n.Text};{n.Done}"));
 
@@ -38,9 +49,6 @@ public sealed class NotificationsFlyout : Border
         var signature = Signature();
         if (!force && signature == shown) return;
         shown = signature; column.Children.Clear();
-        var head = Ui.Grid("*,Auto");
-        Ui.Put(head, new TextBlock { Text = "Notifications", FontSize = 15, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        column.Children.Add(head);
         var overdue = model.Notes.Overdue; var soon = model.Notes.ComingUp();
         if (overdue.Count > 0)
         {
