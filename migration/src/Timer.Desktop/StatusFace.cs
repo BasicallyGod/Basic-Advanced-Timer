@@ -179,12 +179,20 @@ public sealed class StatusFace : StackPanel
             // The status sits under the name, not the dot.
             whoStatus.HorizontalAlignment = HorizontalAlignment.Left; whoStatus.TextAlignment = TextAlignment.Left; whoStatus.Margin = new Thickness(16, 0, 0, 0); whoStatus.TextTrimming = TextTrimming.CharacterEllipsis;
             who.Children.Add(nameLine); who.Children.Add(whoStatus); whoName.Name = prefix + "WhoName"; whoStatus.Name = prefix + "WhoStatus";
-            var card = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 4 };
-            Grid.SetColumn(who, 1); Grid.SetColumn(Break, 2);
-            card.Children.Add(Circle); card.Children.Add(who); card.Children.Add(Break);
-            well.Child = card;
+            // The well holds the play key and the account's name; the break is its own round key outside it, as on the pill (the mock draws the dashboard the same way).
+            var card = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 4 };
+            Grid.SetColumn(who, 1);
+            card.Children.Add(Circle); card.Children.Add(who);
+            well.Child = card; well.CornerRadius = new CornerRadius(WellRadius); well.Padding = new Thickness(WellPadding, WellPadding, 14, WellPadding);
+            Break.VerticalAlignment = VerticalAlignment.Center;
         }
-        Children.Add(displayBox); Children.Add(well); if (!sidebar) Children.Add(Break);
+        Children.Add(displayBox);
+        if (sidebar)
+        {
+            var track = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Margin = well.Margin } /* 12 pixels clear of the well, as on the pill */; well.Margin = default;
+            Grid.SetColumn(Break, 1); track.Children.Add(well); track.Children.Add(Break); Children.Add(track);
+        }
+        else { Children.Add(well); Children.Add(Break); }
         ActualThemeVariantChanged += (_, _) => Refresh();
         Refresh();
     }

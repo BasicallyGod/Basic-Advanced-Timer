@@ -40,6 +40,18 @@ public static class Ui
         void Fit() => content.Margin = scroll.Extent.Height > scroll.Viewport.Height + .5 ? new Thickness(content.Margin.Left, content.Margin.Top, room, content.Margin.Bottom) : new Thickness(content.Margin.Left, content.Margin.Top, 0, content.Margin.Bottom);
         scroll.PropertyChanged += (_, e) => { if (e.Property == ScrollViewer.ExtentProperty || e.Property == ScrollViewer.ViewportProperty) Fit(); };
     }
+    /// <summary>
+    /// Two keys joined as one raised piece with a hairline between them (Undo and Redo, the zoom pair), as the mock draws them: one shadow for the pair, and each half
+    /// still its own button that lifts and sinks on its own.
+    /// </summary>
+    public static Border KeyPair(Button first, Button second, string? name = null)
+    {
+        first.Classes.Add("pairFirst"); second.Classes.Add("pairSecond");
+        var divider = new Border { Width = 1, Height = 22, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false }; divider.Classes.Add("pairDivider");
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { first, divider, second } };
+        var pair = new Border { Child = row, CornerRadius = new CornerRadius(11) }; pair.Classes.Add("keyPair"); if (name is not null) pair.Name = name;
+        return pair;
+    }
     public static Border Shadowed(Border card, double radius)
     {
         card.CornerRadius = new CornerRadius(radius);
@@ -387,19 +399,19 @@ public sealed class AccountIndicator : Control
     public override void Render(DrawingContext context)
     {
         base.Render(context);
+        var running = model.ActiveAccount == Account.Name;
+        // The row's play key is a small round key, as the mock draws it: raised off the row, a step lighter under the pointer, and sunk with the symbol in green while it records.
+        if (!Ring)
+        {
+            var glowNow = Math.Clamp(Glow, 0, 1);
+            var face = running ? Resource("Well") : glowNow > .5 ? Resource("KeyHover") : Resource("Panel");
+            var shadows = this.TryFindResource(running ? "ShadowSunk" : "ShadowThumb", ActualThemeVariant, out var found) && found is BoxShadows set ? set : default;
+            context.DrawRectangle(face, null, new RoundedRect(new Rect(0, 0, Width, Height), Width / 2), shadows);
+        }
         using var scaled = context.PushTransform(Matrix.CreateScale(Size * Scale / 42, Size * Scale / 42));
         var centre = new Point(21, 21);
         var ink = Resource("Ink");
-        var running = model.ActiveAccount == Account.Name;
-        // Without the ring the button is a rounded square, like the pill's circle and the accounts icon, not a circle.
-        // The play button is a soft green tile with a green symbol, deeper while it is running or under the pointer, like the pill's primary control.
-        var liveColour = Resource("Live") is SolidColorBrush liveBrush ? liveBrush.Color : Colors.SeaGreen;
-        if (!Ring)
-        {
-            var tint = running ? .30 : .14 + .16 * Math.Clamp(Glow, 0, 1);
-            context.DrawRectangle(new SolidColorBrush(Color.FromArgb((byte)(tint * 255), liveColour.R, liveColour.G, liveColour.B)), null, new Rect(2, 2, 38, 38), 12, 12);
-            ink = new SolidColorBrush(liveColour);
-        }
+        if (!Ring) ink = Resource("LiveText");
         if (Ring && Account.Budget is { } budget)
         {
             context.DrawEllipse(null, new Pen(Resource("Line"), 3), centre, 19, 19);
@@ -562,12 +574,13 @@ public sealed class AccountList : StackPanel
     private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Period)> rows = new();
     private readonly bool reorderable, bars, compact;
     /// <summary>A row of the bar kind: the name and time on one line with the budget bar under it, and the play tile beside them.</summary>
-    public const double RowHeight = 46;
+    public const double RowHeight = 46, RowGap = 8;
     /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
     /// <param name="compact">With bars, a shorter row for the pill's narrow drawer: the name and time, the bar and the play button, without the budget words.</param>
     public AccountList(TimerModel model, bool reorderable = false, bool bars = false, bool compact = false)
     {
         this.model = model; this.reorderable = reorderable; this.bars = bars; this.compact = compact;
+        if (bars) { Spacing = RowGap; Margin = new Thickness(3, 2, 9, 8); } // Each row is a raised card: its shadow needs a gap to fall into, and room at the sides so the scroll area does not clip it.
         Rebuild();
         // A list that sat hidden (in a pop-up) missed the changes made meanwhile, so it catches up when it is shown.
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Changed(null, new System.ComponentModel.PropertyChangedEventArgs(null)); };
