@@ -575,9 +575,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool MoveEntries(IReadOnlyList<SessionRow> rows, string account)
         => ChangeLog(() => KeepingSelection(rows, () => { ValidateAccount(account); Editor.Reassign(rows, account); }));
     /// <summary>The colour for an account's slice in a chart or its legend dot. A dark theme tints its blocks down into the surface, which makes thin slices vanish, so charts there use the account's own colour (the block's edge).</summary>
-    public string ChartColour(string accountColour) { var look = BlockLook(accountColour); return CurrentTheme.Dark ? look.Edge : look.Fill; }
+    public string ChartColour(string accountColour) => AccountTones.Chart(Ui.Visible(accountColour), CurrentTheme.Dark);
     /// <summary>The fill, left edge and text colour of a timeline block for an account colour, by the selected theme's block rules.</summary>
-    public ThemeDerivation.BlockLook BlockLook(string accountColour) => ThemeDerivation.Block(CurrentTheme, Ui.Visible(accountColour));
+    /// <summary>How a block of this account is drawn: a livelier, deeper shade of its colour that holds white words (or a bright one with dark words for a pale yellow), and a deeper edge.</summary>
+    public ThemeDerivation.BlockLook BlockLook(string accountColour)
+    {
+        var (fill, ink) = AccountTones.Vivid(Ui.Visible(accountColour));
+        return new ThemeDerivation.BlockLook(fill, ThemeColours.Mix(fill, "#000000", .2), ink);
+    }
     public void SetTheme(string theme)
     {
         if (theme != ThemeLibrary.System && theme != AppThemes.Sun && Themes.All(t => t.Name != theme)) throw new ArgumentException("Unknown theme", nameof(theme));

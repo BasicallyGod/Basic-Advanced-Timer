@@ -92,6 +92,29 @@ public static class ThemeEngine
         Put("DisplayGroove", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .02) : ThemeColours.Mix(colours["Panel"], "#000000", .55)));
         Put("DisplayShade", lightGround ? Color.FromArgb(62, 20, 30, 60) : Color.FromArgb(166, 0, 0, 0));
         Put("DisplayEdge", lightGround ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(18, 255, 255, 255));
+        // Depth: every raised thing (a key, a card, a menu) throws one soft shadow down and to the right with a pale edge up and to the left, and every sunk thing (a field,
+        // a track, a pressed key) is the same two turned inward, so the whole app reads as one room lit from the top left. In Dark the pale edge is a whisper and the
+        // shadow does the work. A raised thing is never given a shade of its own: the page is the card colour's ground, and a sunk thing is a shade under it.
+        Put("Well", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .03) : ThemeColours.Mix(colours["Surface"], "#000000", .2)));
+        Put("KeyHover", Color.Parse(lightGround ? ThemeColours.Mix(colours["Panel"], "#FFFFFF", .4) : ThemeColours.Mix(colours["Panel"], "#FFFFFF", .07)));
+        Put("Porcelain", Color.Parse(lightGround ? ThemeColours.Mix(colours["Panel"], "#FFFFFF", .3) : ThemeColours.Mix(colours["Panel"], "#FFFFFF", .06)));
+        {
+            var (hiAlpha, loAlpha) = lightGround ? (.85, .17) : (.025, .42);
+            var lo = lightGround ? (R: (byte)72, G: (byte)78, B: (byte)92) : (R: (byte)0, G: (byte)0, B: (byte)0);
+            Color Hi(double k) => Color.FromArgb((byte)Math.Round(255 * Math.Min(1, hiAlpha * k)), 255, 255, 255);
+            Color Lo(double k) => Color.FromArgb((byte)Math.Round(255 * Math.Min(1, loAlpha * k)), lo.R, lo.G, lo.B);
+            BoxShadow Drop(double x, double y, double blur, Color colour, bool inset = false) => new() { OffsetX = x, OffsetY = y, Blur = blur, Color = colour, IsInset = inset };
+            void PutShadow(string key, params BoxShadow[] shadows) => dictionary[key] = new BoxShadows(shadows[0], shadows.Skip(1).ToArray());
+            PutShadow("ShadowCard", Drop(0, 1, 0, Hi(.7), true), Drop(-7, -7, 16, Hi(.8)), Drop(9, 11, 26, Lo(.8)));
+            PutShadow("ShadowKey", Drop(-3, -3, 7, Hi(1)), Drop(3, 4, 9, Lo(1)));
+            PutShadow("ShadowKeyHover", Drop(-4, -4, 9, Hi(1.1)), Drop(4, 6, 13, Lo(1.2)));
+            PutShadow("ShadowSunk", Drop(2, 3, 6, Lo(1.2), true), Drop(-2, -2, 5, Hi(.9), true));
+            PutShadow("ShadowPopup", Drop(-6, -6, 14, Hi(.8)), Drop(8, 12, 26, Lo(1.1)));
+            PutShadow("ShadowThumb", Drop(-2, -2, 5, Hi(1)), Drop(2, 3, 7, Lo(1)));
+        }
+        // The deeper shade of the live and break colours that holds as words (the colour itself is for glyphs, bars and fills).
+        Put("LiveText", Color.Parse(TextShade(colours["Live"], colours["Ink"], new[] { colours["Panel"], colours["Surface"] })));
+        Put("BreakText", Color.Parse(TextShade(colours["Break"], colours["Ink"], new[] { colours["Panel"], colours["Surface"] })));
         Put("LateTint", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["Overtime"], .14)));
         Put("BudgetTint", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["BudgetWarning"], .16)));
         // Amber and the accent are right for bars and rings but too pale to read as small text on the light themes, so their words use a shade of each taken towards the text colour until it holds 4.5 to 1 on every ground it sits on.
