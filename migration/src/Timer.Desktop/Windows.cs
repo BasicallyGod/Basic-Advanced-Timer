@@ -662,8 +662,8 @@ public sealed class DashboardWindow : Window
         Tab(timelineRail, !weekMode && !settingsMode && !notesMode);
         Tab(overviewTab, !settingsMode && weekMode);
         Tab(notesTab, !settingsMode && notesMode);
-        // The bell shows how many reminders have passed without being done.
-        var waiting = model.Notes.AttentionCount; bellBadge.IsVisible = waiting > 0; bellBadgeText.Text = waiting > 99 ? "99+" : waiting.ToString();
+        // The bell shows how many things need attention: reminders that have passed, budgets at 80 per cent or spent, and a break running long, as the pill counts them.
+        var waiting = model.Alerts.Count; bellBadge.IsVisible = waiting > 0; bellBadgeText.Text = waiting > 99 ? "99+" : waiting.ToString();
         Avalonia.Automation.AutomationProperties.SetName(bell, waiting > 0 ? $"Notifications, {waiting} need attention" : "Notifications");
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
         foreach (var control in new Control[] { previous, datePick, next, todayButton }) control.IsVisible = !settingsMode && !notesMode;

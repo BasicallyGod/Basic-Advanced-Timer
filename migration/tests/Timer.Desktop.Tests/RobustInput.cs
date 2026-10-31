@@ -24,6 +24,15 @@ internal static class RobustInput
     { Settle(topLevel); HeadlessWindowExtensions.MouseMove(topLevel, point, modifiers); }
     public static void MouseUp(this TopLevel topLevel, Point point, MouseButton button, RawInputModifiers modifiers = RawInputModifiers.None)
     { Settle(topLevel); HeadlessWindowExtensions.MouseUp(topLevel, point, button, modifiers); }
+    // A double-click is two presses within the platform's double-click time, which the headless input measures in real time. Settling a frame before every press
+    // (above) can take longer than that on a slow runner, so the second press was a second single click and the test failed now and then. A pair that must be a double-click
+    // settles once, before the first press, and sends the rest straight after it, since nothing has changed the layout in between.
+    /// <summary>A click after one frame has been rendered for the layout.</summary>
+    public static void SettledClick(this TopLevel topLevel, Point point)
+    { Settle(topLevel); HeadlessWindowExtensions.MouseDown(topLevel, point, MouseButton.Left, RawInputModifiers.None); HeadlessWindowExtensions.MouseUp(topLevel, point, MouseButton.Left, RawInputModifiers.None); }
+    /// <summary>A click sent straight away, with no frame rendered first, for the second click of a double-click.</summary>
+    public static void QuickClick(this TopLevel topLevel, Point point)
+    { HeadlessWindowExtensions.MouseDown(topLevel, point, MouseButton.Left, RawInputModifiers.None); HeadlessWindowExtensions.MouseUp(topLevel, point, MouseButton.Left, RawInputModifiers.None); }
     /// <summary>
     /// Moves the pointer onto a point and, if the control there has not yet reacted (a slow runner can hit-test a frame older than the layout), nudges it by a pixel and
     /// tries again, up to a few times. For tests of what happens under the pointer, never of a move that is meant to be missed.

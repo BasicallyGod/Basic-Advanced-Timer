@@ -20,8 +20,8 @@ public sealed class PillWindow : Window
 {
     public Action? OpenDashboard { get; set; }
     private readonly TimerModel model;
-    /// <summary>The pill's own size before it is scaled for the screen: 336 wide and 72 tall, a capsule with a 36 pixel radius. Its contents start 20 pixels from the left and end 14 from the right.</summary>
-    public const double PillWidth = 336, PillHeight = 72, PillRadius = 36, InsetLeft = 20, InsetRight = 14;
+    /// <summary>The pill's own size before it is scaled for the screen: 336 wide and 72 tall, a card with the dashboard's 20 pixel corner. Its contents start 20 pixels from the left and end 14 from the right.</summary>
+    public const double PillWidth = 336, PillHeight = 72, PillRadius = 20, InsetLeft = 20, InsetRight = 14;
     // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
     // A narrow screen (its width in device independent pixels over 1800, never above 95 per cent or below 80 per cent), and a screen with a low
     // Windows scale, because it has fewer pixels to the inch, so the same pill looks bigger on it. Windows scale 125 per cent or more gives the
@@ -143,7 +143,7 @@ public sealed class PillWindow : Window
         var content = new AccountsPanel(model, "Pill", compact: true, reorderable: false, () => { CloseFlyouts(); model.OpenAccounts(); });
         accountScroll = content.Scroll;
         // The pop-up's window clips what is drawn outside it, so the card has room round it for its whole shadow.
-        var card = new Border { Name = "PillDropdown", Width = DropdownWidth, MaxHeight = DropdownMaxHeight, Padding = new Thickness(12, 12, 12, 10), CornerRadius = new CornerRadius(24), BorderThickness = new Thickness(1), Child = content, BoxShadow = HangingCard.Shadow, Margin = HangingCard.Room };
+        var card = new Border { Name = "PillDropdown", Width = DropdownWidth, MaxHeight = DropdownMaxHeight, Padding = new Thickness(12, 12, 12, 10), CornerRadius = new CornerRadius(PillRadius), BorderThickness = new Thickness(1), Child = content, BoxShadow = HangingCard.Shadow, Margin = HangingCard.Room };
         card.Classes.Add("pillBody"); card.Bind(Border.BorderBrushProperty, card.GetResourceObservable("Line"));
         card.PointerEntered += (_, _) => overList = true;
         card.PointerExited += (_, _) => overList = false;
@@ -191,7 +191,7 @@ public sealed class PillWindow : Window
         alertsCard.Open(list || model.Alerts.Count == 0);
         // The card lines up with the pill's left edge, under the lights, and its point sits under them.
         alertsPanel.HorizontalOffset = -HangingCard.Room.Left * Scale; alertsPanel.VerticalOffset = (DropdownGap - HangingCard.Room.Top) * Scale;
-        if (alertsHung is not null) HangingCard.MovePoint(alertsHung, AlertsPoint, HangingCard.ClampFromRight(PillAlertsCard.CardWidth - (InsetLeft + 9), PillAlertsCard.CardWidth, 24));
+        if (alertsHung is not null) HangingCard.MovePoint(alertsHung, AlertsPoint, HangingCard.ClampFromRight(PillAlertsCard.CardWidth - (InsetLeft + 9), PillAlertsCard.CardWidth, PillRadius));
         alertsPanel.IsOpen = true;
         if (!wasOpen) StartFoldTimer();
     }
@@ -290,7 +290,7 @@ public sealed class PillWindow : Window
         var wellLeft = Math.Max(0, PillWidth - DropdownWidth);
         panel.HorizontalOffset = (wellLeft - HangingCard.Room.Left) * Scale; panel.VerticalOffset = (DropdownGap - HangingCard.Room.Top) * Scale;
         if (dropdownHung is not null && face.AccountsButton.TranslatePoint(new Point(face.AccountsButton.Bounds.Width / 2, 0), surface) is { } centre)
-            HangingCard.MovePoint(dropdownHung, DropdownPoint, HangingCard.ClampFromRight(DropdownWidth - (centre.X - wellLeft), DropdownWidth, 24));
+            HangingCard.MovePoint(dropdownHung, DropdownPoint, HangingCard.ClampFromRight(DropdownWidth - (centre.X - wellLeft), DropdownWidth, PillRadius));
         panel.IsOpen = true;
     }
     // Pressing the button while the list is open closes it. Light dismiss has already closed it by the time the click arrives, so a close that

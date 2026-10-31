@@ -142,9 +142,9 @@ public sealed class EditingTests
             Assert.Same(row, Assert.Single(model.SelectedRows)); model.ClearSelection(); Dispatcher.UIThread.RunJobs();
             var canvas = window.GetVisualDescendants().OfType<Canvas>().Single(c => c.Name == "TimelineCanvas");
             var empty = canvas.TranslatePoint(new Point(ReviewViews.TimelineGutter + 9 * model.TimelinePixelsPerHour + 30, 150), window)!.Value; // Past 09:00 in the blank band: 09:20.
-            window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
+            window.SettledClick(empty);
             Assert.Null(gap); // One click adds nothing.
-            window.MouseDown(empty, MouseButton.Left); window.MouseUp(empty, MouseButton.Left);
+            window.QuickClick(empty); // Straight after, so it is the second click of a double-click however slow the runner is.
             Assert.Equal(row.Day.AddHours(9).AddMinutes(20), gap);
         }
         finally { window.Close(); }

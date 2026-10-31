@@ -31,6 +31,15 @@ public static class Ui
     // Room around a borderless window for its soft shadow or glow, which are drawn outside the card.
     public const double ShadowMargin = 30;
     /// <summary>Wraps a window's card so it can cast a shadow or glow. The card clips its own content, so the shadow lives on a parent.</summary>
+    /// <summary>
+    /// The slim scroll bar lies over the content, so while a list scrolls its rows are given room on the right for the 10 pixel track (and a gap), and when it fits they
+    /// use the whole width. Without this the bar ran over the buttons at the right end of each row.
+    /// </summary>
+    public static void LeaveRoomForTrack(ScrollViewer scroll, Control content, double room = 14)
+    {
+        void Fit() => content.Margin = scroll.Extent.Height > scroll.Viewport.Height + .5 ? new Thickness(content.Margin.Left, content.Margin.Top, room, content.Margin.Bottom) : new Thickness(content.Margin.Left, content.Margin.Top, 0, content.Margin.Bottom);
+        scroll.PropertyChanged += (_, e) => { if (e.Property == ScrollViewer.ExtentProperty || e.Property == ScrollViewer.ViewportProperty) Fit(); };
+    }
     public static Border Shadowed(Border card, double radius)
     {
         card.CornerRadius = new CornerRadius(radius);

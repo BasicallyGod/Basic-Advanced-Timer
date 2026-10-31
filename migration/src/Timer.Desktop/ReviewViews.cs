@@ -130,6 +130,19 @@ public static partial class ReviewViews
     /// Cuts the blocks into lanes: blocks that overlap (by more than a second or two, which older recordings can have) form a cluster, and a cluster is cut into as many
     /// equal lanes as it needs, first-fit by start time so the earlier block stays on top. A block with nothing over it keeps the whole band.
     /// </summary>
+    /// <summary>
+    /// A meeting card is at least 24 wide so its mark and its edge handles can be pressed, which at a low zoom is wider than a short meeting's own time. When another meeting in the
+    /// same lane starts straight after, the card stops short of it (by the gap blocks keep, 6 pixels) so two meetings that meet in time never meet on screen.
+    /// </summary>
+    public static double MeetingWidth(DayNote meeting, IEnumerable<DayNote> sameLane, DateTime day, double pixelsPerHour, Func<DateTime, double> X)
+    {
+        var width = Math.Max(24, (meeting.End!.Value - meeting.At!.Value).TotalHours * pixelsPerHour - 2);
+        var left = X(day + meeting.At.Value) + 1; var end = day + meeting.End.Value;
+        var next = sameLane.Where(m => m.Id != meeting.Id && day + m.At!.Value >= end.AddSeconds(-2) && day + m.At.Value >= day + meeting.At.Value).OrderBy(m => m.At).FirstOrDefault();
+        if (next is null) return width;
+        var room = X(day + next.At!.Value) + 1 - left - BlockGap;
+        return Math.Max(6, Math.Min(width, room));
+    }
     public static Dictionary<T, (int Lane, int Count)> PlaceLanes<T>(IEnumerable<(T Item, DateTime Start, DateTime End)> blocks) where T : notnull
     {
         var placed = new Dictionary<T, (int Lane, int Count)>();
@@ -413,7 +426,7 @@ public static partial class ReviewViews
             foreach (var meeting in singles)
             {
                 var (row, rows) = places[meeting];
-                var width = Math.Max(24, (meeting.End!.Value - meeting.At!.Value).TotalHours * pixelsPerHour - 2);
+                var width = MeetingWidth(meeting, singles.Where(m => places[m].Lane == row), day, pixelsPerHour, X);
                 var height = rows == 1 ? MeetingHeight : (MeetingHeight - LaneGap * (rows - 1)) / rows;
                 // A name cut short slides past on hover so all of it can be read, like a block's name.
                 var title = new MarqueeText(model.Notes.Text(meeting), 12) { VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }; title.Label.FontWeight = FontWeight.SemiBold;
