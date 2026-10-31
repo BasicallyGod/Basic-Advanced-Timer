@@ -282,22 +282,13 @@ public sealed class OnboardingView : Grid
         return panel;
     }
 
-    // The application icon beside the step: the pill as a line outline with its two lights and bars for the hours, minutes and seconds, in the text colour
-    // alone (the same drawing as Assets/AppIcon and docs/redesign/mock/Icon.dc.html, on its 256 unit grid, without the tile).
+    // The application icon beside the step: the same picture as the window and the Store, so the first screen wears the icon the app does.
     private static Control PillIcon()
     {
-        var canvas = new Canvas { Width = 256, Height = 256 };
-        Avalonia.Controls.Shapes.Rectangle Part(double x, double y, double w, double h, double r, double opacity = 1, double? line = null)
-        {
-            var shape = new Avalonia.Controls.Shapes.Rectangle { Width = w, Height = h, RadiusX = r, RadiusY = r, Opacity = opacity };
-            if (line is { } thickness) { shape.StrokeThickness = thickness; shape.Bind(Avalonia.Controls.Shapes.Shape.StrokeProperty, shape.GetResourceObservable("Ink")); }
-            else shape.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, shape.GetResourceObservable("Ink"));
-            Canvas.SetLeft(shape, x); Canvas.SetTop(shape, y); canvas.Children.Add(shape); return shape;
-        }
-        Part(77, 31, 102, 194, 51, line: 14);
-        Part(112, 64, 14, 28, 7); Part(130, 64, 14, 28, 7);
-        Part(100, 118, 56, 18, 9, .9); Part(100, 146, 56, 18, 9, .9); Part(114, 176, 28, 12, 6, .6);
-        return new Viewbox { Width = 48, Height = 48, Child = canvas, VerticalAlignment = VerticalAlignment.Center, Name = "SetupPillIcon" };
+        var image = new Image { Width = 48, Height = 48, VerticalAlignment = VerticalAlignment.Center, Name = "SetupPillIcon" };
+        using var stream = Avalonia.Platform.AssetLoader.Open(new Uri("avares://" + typeof(OnboardingView).Assembly.GetName().Name + "/Assets/AppIcon.png"));
+        image.Source = new Avalonia.Media.Imaging.Bitmap(stream);
+        return image;
     }
 
     // The pill itself, drawn for show: the same lights, clock and three tiles as the real one, with nothing that can be pressed.
