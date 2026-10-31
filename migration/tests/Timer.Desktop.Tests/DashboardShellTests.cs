@@ -45,7 +45,7 @@ public sealed class DashboardShellTests
             model.ToggleAccount("Account one"); Settle(window);
             Assert.Equal("Recording", ToolTip.GetTip(Find<StackPanel>(window, "SidebarLights")));
             Assert.StartsWith("Pause", ToolTip.GetTip(Find<Button>(window, "SidebarPause"))?.ToString());
-            Assert.Equal("Account one", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.StartsWith("Tracking · ", Find<TextBlock>(window, "SidebarWhoStatus").Text);
+            Assert.Equal("Account one", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.False(Find<TextBlock>(window, "SidebarWhoStatus").IsVisible);
             Click(Find<Button>(window, "SidebarPause")); Assert.False(model.IsTracking);
         }
         finally { window.Close(); }

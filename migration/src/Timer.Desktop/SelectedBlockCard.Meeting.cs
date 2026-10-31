@@ -39,7 +39,7 @@ public sealed partial class SelectedBlockCard
     {
         var notes = model.Notes; var series = IsSeries(meeting);
         var f = new MeetingFields { Id = meeting.Id, Series = series, Day = meeting.Day.Date }; meetingFields = f;
-        var (header, actions) = Header(stack is not null ? $"Meetings · {stack.Count}" : "Meeting");
+        var (header, actions) = Header(stack is not null ? "Meetings" : "Meeting");
         actions.Children.Add(Ui.Ctl("DeleteMeeting", "Delete", IconKind.Trash, "Delete", () => DeleteMeeting(f), small: true, key: "Del"));
         var body = new StackPanel { Spacing = 12 };
         stackHost = new Border { Name = "StackHost", IsVisible = false }; body.Children.Add(stackHost);
@@ -147,7 +147,7 @@ public sealed partial class SelectedBlockCard
     // The timeline of a stack of meetings, in place of the blocks' one; drag a picked meeting's ends and it moves by five minutes (a repeating meeting for this day only).
     private void ShowMeetingStack(DayNote meeting, IReadOnlyList<DayNote>? stack)
     {
-        if (kindText is not null) kindText.Text = stack is null ? "Meeting" : $"Meetings · {stack.Count}";
+        if (kindText is not null) kindText.Text = stack is null ? "Meeting" : "Meetings";
         if (stackHost is null) return;
         stackHost.Child = null; stackHost.IsVisible = stack is not null;
         if (stack is null) return;
@@ -163,6 +163,7 @@ public sealed partial class SelectedBlockCard
             if (problem is not null) model.Refuse(problem);
             else model.Tell((model.Notes.SeriesOf(target) is not null ? "Moved for this day only" : "Meeting moved") + " · " + start.ToString("HH:mm") + "–" + end.ToString("HH:mm"));
         };
-        stackHost.Child = new ScrollViewer { Content = timeline, MaxHeight = 156, Name = "StackScroll", HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 10, 0) };
+        timeline.Margin = new Thickness(3, 0, 3, 4);
+        stackHost.Child = new ScrollViewer { Content = timeline, MaxHeight = 160, Name = "StackScroll", HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 10, 0) };
     }
 }

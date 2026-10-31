@@ -15,7 +15,7 @@ public sealed class StackTimeline : Panel
     /// <summary>One bar: what it says, when it runs, how it is coloured, and whether it is the picked one, the one recording, and whether its ends can be dragged.</summary>
     public sealed record Bar(string Key, string Label, string Length, string Tip, DateTime Start, DateTime End, Color Fill, Color Ink, bool Picked, bool Live, bool Editable, Control? Mark);
 
-    public const double AxisHeight = 20, RowHeight = 16, RowGap = 4, HandleWidth = 6, MinimumBar = 8;
+    public const double AxisHeight = 18, RowHeight = 19, RowGap = 3, HandleWidth = 6, MinimumBar = 8;
     private readonly TimerModel model; private readonly IReadOnlyList<Bar> bars; private readonly int stepMinutes; private readonly DateTime windowStart, windowEnd;
     private readonly List<(Border Box, Bar Bar, Control Length, Control Times)> boxes = new(); private readonly List<(Border Handle, Bar Bar, bool Start)> handles = new();
     private readonly List<TextBlock> labels = new(); private readonly List<(Border Line, DateTime At)> guides = new();
@@ -67,7 +67,7 @@ public sealed class StackTimeline : Panel
     // A handle at one end of the picked bar. It is dragged to a new time, shown as it goes, and applied when it is let go.
     private void AddHandle(Bar bar, bool atStart)
     {
-        var handle = new Border { Name = atStart ? "StackHandleStart" : "StackHandleEnd", Width = HandleWidth, Height = RowHeight - 3, CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), ZIndex = 5, Cursor = new Cursor(StandardCursorType.SizeWestEast), Background = Brush.Parse(model.CurrentTheme.Colour("Ink")), BorderBrush = Brush.Parse(model.CurrentTheme.Colour("Accent")) };
+        var handle = new Border { Name = atStart ? "StackHandleStart" : "StackHandleEnd", Width = HandleWidth, Height = RowHeight - 3, CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), ZIndex = 5, Cursor = new Cursor(StandardCursorType.SizeWestEast), Background = Brush.Parse(model.CurrentTheme.Colour("Accent")), BorderBrush = Brush.Parse(model.CurrentTheme.Colour("Panel")) }; // The accent with a card-coloured edge: seen on both themes, where the text colour was near black on Light.
         ToolTip.SetTip(handle, atStart ? "Drag the start" : "Drag the end");
         var dragging = false;
         handle.PointerPressed += (_, e) => { if (e.GetCurrentPoint(handle).Properties.IsLeftButtonPressed) { dragging = true; e.Pointer.Capture(handle); preview = (bar, bar.Start, bar.End); e.Handled = true; } };

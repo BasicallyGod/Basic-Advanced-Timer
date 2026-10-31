@@ -211,9 +211,10 @@ public sealed class StatusFace : StackPanel
         var name = onBreak ? "Break" : who is null ? "Choose an account" : account?.Display ?? who;
         whoName.Text = name;
         whoDot.Fill = onBreak ? new SolidColorBrush(ThemeColourOr("Break", "#F5A524")) : account is null ? new SolidColorBrush(ThemeColourOr("Idle", "#8A8F98")) : Brush.Parse(Ui.Visible(account.Colour));
-        var elapsed = model.Engine.Active is { } active ? model.Engine.Now - active.Start : TimeSpan.Zero;
         whoStatus.Text = onBreak ? "On break" + (model.ResumeAccount is { } back ? " · back to " + (model.Accounts.FirstOrDefault(a => a.Name == back)?.Display ?? back) : "")
-            : model.IsTracking ? "Tracking · " + model.FormatShort(elapsed) : who is null ? "Pick one below" : "Ready to track";
+            : model.IsTracking ? "" : who is null ? "Pick one below" : "Ready to track";
+        // While tracking, the play or pause tile and the state light already say so, so the line is left out and the name stands alone, centred in the card.
+        whoStatus.IsVisible = whoStatus.Text.Length > 0;
     }
 
     /// <summary>Marks the accounts button as pressed while the list is open, and words its tooltip for what pressing it will do.</summary>
