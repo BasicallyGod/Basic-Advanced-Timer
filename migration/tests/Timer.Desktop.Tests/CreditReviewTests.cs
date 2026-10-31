@@ -63,6 +63,9 @@ public sealed class CreditReviewTests
         editor.Undo(); Assert.Equal(3, engine.Sessions.Count);
         engine.Sessions[1] = engine.Sessions[1] with { Account = "Break" }; Assert.Empty(editor.TidyCandidates(Day));
     }
+    // What the Details card says it is showing: the chip beside its title (nothing when nothing is selected).
+    private static string Kind(Window w) => w.GetVisualDescendants().OfType<Border>().FirstOrDefault(b => b.Name == "DetailsKind")?.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault()?.Text ?? "";
+
     [AvaloniaFact]
     public void MergedBlocksCanBeExportedAndTheWeekOverviewShowsThem()
     {
@@ -118,20 +121,20 @@ public sealed class CreditReviewTests
         var model = new TimerModel(engine); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            string Title() => Find<TextBlock>(dashboard, "SelectedTitle").Text!;
-            Assert.Equal("Selected block", Title()); Assert.Contains("Nothing is selected", Find<TextBlock>(dashboard, "SelectedEmpty").Text);
+            string Title() => Find<TextBlock>(dashboard, "SelectedTitle").Text + "|" + Kind(dashboard);
+            Assert.Equal("Details|", Title()); Assert.Contains("Nothing is selected", Find<TextBlock>(dashboard, "SelectedEmpty").Text);
             model.ToggleSelection(new[] { engine.Sessions[0] }); dashboard.UpdateLayout();
-            Assert.Equal("Selected block", Title()); Assert.Equal("09:00:00", Find<TextBox>(dashboard, "SelectedStart").Text);
+            Assert.Equal("Details|Block", Title()); Assert.Equal("09:00:00", Find<TextBox>(dashboard, "SelectedStart").Text);
             model.ToggleSelection(new[] { engine.Sessions[1] }); dashboard.UpdateLayout();
-            Assert.Equal("2 blocks selected", Title()); Assert.Contains("Joins them", model.MergeHint);
+            Assert.Equal("Details|2 blocks selected", Title()); Assert.Contains("Joins them", model.MergeHint);
             Assert.Contains("primary", Find<Button>(dashboard, "MergeSelected").Classes); Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "SelectedNote"); // No note under the card.
             model.ToggleSelection(new[] { engine.Sessions[2] }); dashboard.UpdateLayout();
-            Assert.Equal("3 blocks selected", Title()); Assert.Contains("Same account", model.MergeHint);
+            Assert.Equal("Details|3 blocks selected", Title()); Assert.Contains("Same account", model.MergeHint);
             // Merge can still be pressed: it says why not in the toast.
             Assert.DoesNotContain("primary", Find<Button>(dashboard, "MergeSelected").Classes); Assert.True(Find<Button>(dashboard, "MergeSelected").IsEnabled);
             Find<Button>(dashboard, "MergeSelected").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Contains("Same account", model.EditError);
             Find<Button>(dashboard, "ClearSelection").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); dashboard.UpdateLayout();
-            Assert.Empty(model.SelectedRows); Assert.Equal("Selected block", Title());
+            Assert.Empty(model.SelectedRows); Assert.Equal("Details|", Title());
         }
         finally { dashboard.Close(); }
     }
@@ -203,7 +206,7 @@ public sealed class CreditReviewTests
         var groupCard = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is ReviewEntry);
         var p = groupCard.TranslatePoint(new Point(groupCard.Width / 2, 35), dashboard)!.Value;
         dashboard.MouseDown(p, MouseButton.Left); dashboard.MouseUp(p, MouseButton.Left);
-        Assert.Equal("Merged block", Find<TextBlock>(dashboard, "SelectedTitle").Text);
+        Assert.Equal("Merged · 2 blocks", Kind(dashboard));
         Select(2, true); Assert.True(model.CanMergeSelection); Capture(dashboard, "merge-group-and-block");
         var last = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry2");
         var menu = last.ContextMenu!.ItemsSource!.OfType<MenuItem>().Single(i => i.Name == "MergeSelectedMenu");

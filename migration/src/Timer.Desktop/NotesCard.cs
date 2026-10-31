@@ -33,7 +33,7 @@ public sealed class NotesCard : Border
     private Form form = Form.None; private long? editing;
     private string draft = "", startText = "12:00", endText = "12:30"; private string? draftAccount; private DateTime? draftReminder; private RepeatChoice draftRepeat;
     private DateTime formDay;
-    private (long Id, bool Delete)? scope;
+    private (long Id, bool Delete)? scope; private HashSet<long> tinted = new();
 
     public NotesCard(TimerModel model)
     {
@@ -50,8 +50,8 @@ public sealed class NotesCard : Border
         Ui.Put(body, header); Ui.Put(body, formHost, 0, 1); Ui.Put(body, scroll, 0, 2);
         this.scroll = scroll;
         overlay.Children.Add(body); overlay.Children.Add(reminderHost); reminderHost.PlacementTarget = title; Child = overlay;
-        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditMeetingRequested += OnEditMeeting; Notes.EditNoteRequested += OnEditNote; Notes.MeetingMoved += OnMeetingMoved; Sync(); };
-        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditMeetingRequested -= OnEditMeeting; Notes.EditNoteRequested -= OnEditNote; Notes.MeetingMoved -= OnMeetingMoved; };
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditNoteRequested += OnEditNote; Sync(); };
+        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditNoteRequested -= OnEditNote; };
         Sync();
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Sync();
@@ -59,7 +59,7 @@ public sealed class NotesCard : Border
     // ---- The list ----
 
     private string Signature() => string.Join("|", Notes.ForDay(model.SelectedDate).Select(n => $"{n.Id};{n.Day:yyyyMMdd};{n.At};{n.End};{n.Text};{n.Done};{n.SeriesId};{n.HasDate}"))
-        + $"#{model.NotesCardShowsMeetings}#{model.SelectedDate:yyyyMMdd}#{(Notes.All.Any(n => Notes.IsLate(n)) ? model.Engine.Now.ToString("HHmm") : "")}#{model.ReviewAccounts.Count}";
+        + $"#{model.NotesCardShowsMeetings}#{model.SelectedMeetingId}#{model.SelectedDate:yyyyMMdd}#{(Notes.All.Any(n => Notes.IsLate(n)) ? model.Engine.Now.ToString("HHmm") : "")}#{model.ReviewAccounts.Count}";
 
     /// <summary>Redraws the list if what it shows has changed.</summary>
     public void Sync()
@@ -70,6 +70,8 @@ public sealed class NotesCard : Border
         DrawTitle();
         var meetings = model.NotesCardShowsMeetings;
         var items = Notes.ForDay(model.SelectedDate).Where(n => NotesModel.IsMeeting(n) == meetings).ToList();
+        // The meetings in the stack of the one shown in Details are tinted, so the list says which ones the timeline's tile stands for.
+        tinted = model.SelectedMeetingId is { } picked && Notes.Find(picked) is { } chosen ? (ReviewViews.MeetingStackOf(model, chosen) ?? new[] { chosen }).Select(m => m.Id).ToHashSet() : new HashSet<long>();
         list.Children.Clear();
         if (items.Count == 0)
         {
@@ -95,15 +97,15 @@ public sealed class NotesCard : Border
     {
         var meeting = NotesModel.IsMeeting(note); var words = Notes.Words(note); var account = Notes.AccountOf(note);
         var line = Ui.Grid("Auto,*,Auto,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
-        // A note has a round tick; a meeting has a calendar mark instead, and is opened by its name.
+        // A note has a round tick; a meeting has a calendar mark instead, and its name shows it in the Details card.
         Control lead = meeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
         Ui.Put(line, lead);
         var column = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         if (meeting)
         {
-            var name = Ui.Button(NoteLinks.Flatten(words), () => Notes.RequestEditMeeting(note.Id), "NoteEdit_" + note.Id); name.Classes.Add("flat"); name.Padding = new Thickness(0); name.FontWeight = FontWeight.SemiBold; name.FontSize = 14; name.Bind(TemplatedControl.ForegroundProperty, name.GetResourceObservable("Ink"));
-            name.HorizontalAlignment = HorizontalAlignment.Left; ToolTip.SetTip(name, "Edit"); column.Children.Add(name);
-            // A link in the name is pressable in its own right; pressing the rest of the name still opens the meeting.
+            var name = Ui.Button(NoteLinks.Flatten(words), () => model.SelectMeeting(note.Id), "NoteEdit_" + note.Id); name.Classes.Add("flat"); name.Padding = new Thickness(0); name.FontWeight = FontWeight.SemiBold; name.FontSize = 14; name.Bind(TemplatedControl.ForegroundProperty, name.GetResourceObservable("Ink"));
+            name.HorizontalAlignment = HorizontalAlignment.Left; ToolTip.SetTip(name, "Open in Details"); column.Children.Add(name);
+            // A link in the name is pressable in its own right; pressing the rest of the name still shows the meeting in Details.
             if (NoteLinks.HasLinks(words)) { var block = new TextBlock { TextWrapping = TextWrapping.Wrap }; NoteLinks.Fill(block, words); name.Content = block; }
         }
         else
@@ -146,7 +148,7 @@ public sealed class NotesCard : Border
         }
         var remove = Ui.IconButton(IconKind.Close, meeting ? "Remove meeting" : "Remove note", "NoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center;
         Ui.Put(line, remove, 4);
-        var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9) }; card.Classes.Add("noteRow"); if (!meeting && NotesModel.IsImportant(note)) card.Classes.Add("importantRow");
+        var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9) }; card.Classes.Add("noteRow"); if (meeting && tinted.Contains(note.Id)) card.Classes.Add("rowSelected"); if (!meeting && NotesModel.IsImportant(note)) card.Classes.Add("importantRow");
         return card;
     }
 
@@ -157,6 +159,7 @@ public sealed class NotesCard : Border
         if (Notes.SeriesOf(note) is not null && NotesModel.IsMeeting(note)) { scope = (note.Id, true); DrawOverlay(); return; }
         Notes.Remove(note.Id);
         if (editing == note.Id) Close();
+        if (model.SelectedMeetingId == note.Id) model.ClearSelection();
         model.Tell(NotesModel.IsMeeting(note) ? "Meeting removed" : "Note removed");
     }
 
@@ -169,22 +172,6 @@ public sealed class NotesCard : Border
         var end = snapped + TimeSpan.FromMinutes(30); if (end >= TimeSpan.FromDays(1)) end = new TimeSpan(23, 59, 0);
         startText = snapped.ToString(@"hh\:mm"); endText = end.ToString(@"hh\:mm"); DrawForm();
     }
-    // A meeting dragged on the timeline while its form is open: the form's start and end follow it, so saving does not put the old times back.
-    private void OnMeetingMoved(long id)
-    {
-        if (form != Form.Meeting || editing != id || Notes.Find(id) is not { } meeting) return;
-        startText = meeting.At!.Value.ToString(@"hh\:mm"); endText = meeting.End!.Value.ToString(@"hh\:mm"); DrawForm();
-    }
-    private void OnEditMeeting(long id)
-    {
-        if (Notes.Find(id) is not { } meeting || !NotesModel.IsMeeting(meeting)) return;
-        model.SetNotesCardShowsMeetings(true);
-        form = Form.Meeting; editing = id; formDay = meeting.Day.Date;
-        var account = Notes.AccountOf(meeting);
-        draft = Notes.Words(meeting); draftAccount = account; draftReminder = null; startText = meeting.At!.Value.ToString(@"hh\:mm"); endText = meeting.End!.Value.ToString(@"hh\:mm");
-        draftRepeat = Notes.RepeatOf(meeting); scope = null; DrawOverlay(); DrawForm();
-    }
-
     /// <summary>Opens a note for editing in the form, as pressing its words does (and as pressing its pin on the timeline does).</summary>
     private void OnEditNote(long id)
     {
@@ -271,7 +258,7 @@ public sealed class NotesCard : Border
         field.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Submit(); e.Handled = true; } else if (e.Key == Key.Escape) { Close(); e.Handled = true; } };
         if (meeting)
         {
-            var times = Ui.Grid("Auto,Auto,Auto,Auto,*,Auto"); times.ColumnSpacing = 8;
+            var times = Ui.Grid("Auto,Auto,Auto,Auto,*"); times.ColumnSpacing = 8;
             var start = TimeBox("MeetingStart", startText, v => startText = v); var end = TimeBox("MeetingEnd", endText, v => endText = v);
             // Moving the start moves the end with it, so the meeting keeps its length (12:00 to 12:30 becomes 16:00 to 16:30). It is applied when the box is
             // left or Enter is pressed, not on every key, because a half-typed time such as 1 or 16: would drag the end about.
@@ -303,7 +290,6 @@ public sealed class NotesCard : Border
             repeat.SelectedItem = NotesModel.Label(draftRepeat);
             repeat.SelectionChanged += (_, _) => { if (repeat.SelectedItem is string label) draftRepeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };
             Ui.Put(times, repeat, 4);
-            if (editing is { } id) Ui.Put(times, Ui.Ctl("MeetingDelete", "Delete", null, "Delete meeting", () => { if (Notes.Find(id) is { } found) AskRemove(found); }, small: true), 5);
             column.Children.Add(times);
         }
         formHost.Content = column;
@@ -336,23 +322,9 @@ public sealed class NotesCard : Border
         }
         if (!TimeText.TryParseClock(startText, formDay, false, out var start)) { model.Refuse("Start: try 09:30"); return; }
         if (!TimeText.TryParseClock(endText, formDay, false, out var end)) { model.Refuse("End: try 10:30"); return; }
-        if (editing is { } meetingId)
-        {
-            if (Notes.SeriesOf(Notes.Find(meetingId)!) is not null && !Notes.IsArchivedRepeat(Notes.Find(meetingId)!)) { scope = (meetingId, false); DrawOverlay(); return; }
-            ApplyMeeting(meetingId, false);
-            return;
-        }
         var problem = Notes.AddMeeting(formDay, start.TimeOfDay, end.TimeOfDay, words, draftAccount, draftRepeat);
         if (problem is not null) { model.Refuse(problem); return; }
         Close(); model.Tell(draftRepeat == RepeatChoice.None ? "Meeting added" : "Meeting added · repeats " + NotesModel.RepeatWords(draftRepeat));
-    }
-
-    private void ApplyMeeting(long id, bool allLater)
-    {
-        TimeText.TryParseClock(startText, formDay, false, out var start); TimeText.TryParseClock(endText, formDay, false, out var end);
-        var problem = Notes.EditMeeting(id, draft.Trim(), draftAccount, formDay, start.TimeOfDay, end.TimeOfDay, draftRepeat, allLater);
-        if (problem is not null) { model.Refuse(problem); scope = null; DrawOverlay(); return; }
-        Close(); model.Tell(allLater ? "Saved for this day and all later" : "Changed for this day only");
     }
 
     // ---- The pop-ups over the card: the reminder and the question about a repeating meeting ----
@@ -395,15 +367,14 @@ public sealed class NotesCard : Border
     private Control ScopeQuestion((long Id, bool Delete) asked)
     {
         var column = new StackPanel { Spacing = 8 };
-        column.Children.Add(new TextBlock { Text = asked.Delete ? "Remove this repeating meeting?" : "Save changes to this repeating meeting?", FontSize = 13, FontWeight = FontWeight.SemiBold });
+        column.Children.Add(new TextBlock { Text = "Remove this repeating meeting?", FontSize = 13, FontWeight = FontWeight.SemiBold });
         var line = new TextBlock { Text = "It repeats. Choose which meetings this applies to.", FontSize = 12.5, TextWrapping = TextWrapping.Wrap }; line.Classes.Add("muted"); column.Children.Add(line);
         Button Choice(string name, string text, bool later)
         {
             var button = Ui.Ctl(name, text, null, text, () =>
             {
                 scope = null; DrawOverlay();
-                if (asked.Delete) { Notes.Remove(asked.Id, later); if (editing == asked.Id) Close(); model.Tell(later ? "Removed from this day on" : "Removed for this day"); }
-                else ApplyMeeting(asked.Id, later);
+                Notes.Remove(asked.Id, later); if (model.SelectedMeetingId == asked.Id) model.ClearSelection(); model.Tell(later ? "Removed from this day on" : "Removed for this day");
             }, small: true);
             button.HorizontalContentAlignment = HorizontalAlignment.Left; button.HorizontalAlignment = HorizontalAlignment.Stretch; return button;
         }

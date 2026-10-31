@@ -53,7 +53,7 @@ public sealed class FeedbackRound6Tests
         {
             var block = Find<Border>(b, "TimelineEntry0"); tall = block.Height;
             Assert.True(tall > shortHeight + 40); Assert.True(Top(block) - Top(Find<Border>(b, "TimelineAxis")) >= 12);
-            Assert.Equal(Top(Find<Border>(a.GetType() == null ? b : b, "TimelineEntry0")) + tall, 176, 1); // They end where they always did, above the now chip.
+            Assert.Equal(Top(Find<Border>(a.GetType() == null ? b : b, "TimelineEntry0")) + tall, 186, 1); // They end where the band does, above the now chip.
         }
         finally { b.Close(); }
     }

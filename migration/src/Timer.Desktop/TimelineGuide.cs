@@ -170,7 +170,7 @@ public static class TimelineGuide
             if (!onRuler)
                 foreach (var child in canvas.Children.OfType<Control>().ToList())
                 {
-                    var isBlock = Names(child, "TimelineEntry") || Names(child, "TimelineGroup") || Names(child, "TimelineRecording") || Names(child, "TimelineMeeting");
+                    var isBlock = Names(child, "TimelineEntry") || Names(child, "TimelineStack") || Names(child, "TimelineGroup") || Names(child, "TimelineRecording") || Names(child, "TimelineMeeting");
                     if (!isBlock || child.Bounds.Width <= 0) continue;
                     var left = Canvas.GetLeft(child); if (x >= left && x <= left + child.Bounds.Width) under.Add(child);
                 }

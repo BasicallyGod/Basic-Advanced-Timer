@@ -30,6 +30,9 @@ public sealed class SelectedBlockCardTests
 
     // Quick edits: the box the user moves to is the one that was on screen before the first edit's row replaced the block's, so it must still be live, and every box
     // reads the block as it is now. Before, the card was rebuilt after each edit, and a box already clicked into committed against the old row ("This entry changed").
+    // What the Details card says it is showing: the chip beside its title.
+    private static string Kind(Window w) => w.GetVisualDescendants().OfType<Border>().First(b => b.Name == "DetailsKind").GetVisualDescendants().OfType<TextBlock>().First().Text!;
+
     [AvaloniaFact]
     public void QuickSuccessiveEditsToStartEndAndLengthAllApplyWithoutReselecting()
     {
@@ -142,7 +145,7 @@ public sealed class SelectedBlockCardTests
             Assert.Equal("Merged", Find<TextBlock>(window, "MessageText").Text);
             var group = model.Editor.Entries(Day, Day.AddDays(1)).Single(e => e.GroupId is not null);
             model.SelectBlock(group.Sources, false); Settle(window);
-            Assert.Equal("Merged block", Find<TextBlock>(window, "SelectedTitle").Text);
+            Assert.Equal("Details", Find<TextBlock>(window, "SelectedTitle").Text); Assert.Equal("Merged · 2 blocks", Kind(window));
             Assert.False(Find<TextBox>(window, "SelectedStart").IsEnabled); Assert.False(Find<ComboBox>(window, "SelectedAccount").IsEnabled);
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "09:00–09:30"); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "09:30–10:00");
             Click(window, "UnmergeSelected"); Settle(window);
@@ -158,7 +161,7 @@ public sealed class SelectedBlockCardTests
         try
         {
             model.ToggleSelection(engine.Sessions.ToArray()); Settle(window);
-            Assert.Equal("3 blocks selected", Find<TextBlock>(window, "SelectedTitle").Text);
+            Assert.Equal("Details", Find<TextBlock>(window, "SelectedTitle").Text); Assert.Equal("3 blocks selected", Kind(window));
             Assert.Equal(3, Find<ScrollViewer>(window, "SelectedRows").GetVisualDescendants().OfType<Border>().Count(b => b.Classes.Contains("selectedRow")));
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "SelectedHint"); // Nothing is written under the card.
             Click(window, "DeleteSelected"); Settle(window);
