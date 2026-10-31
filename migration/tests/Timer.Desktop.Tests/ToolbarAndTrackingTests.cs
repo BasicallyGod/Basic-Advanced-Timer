@@ -102,7 +102,7 @@ public sealed class ToolbarAndTrackingTests
             foreach (var name in new[] { "AddTime", "UndoEdit", "RedoEdit" })
             {
                 var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
-                Assert.Contains("ctl", button.Classes); Assert.Equal(new Thickness(1), button.BorderThickness); Assert.Equal(38, button.Height);
+                Assert.Contains("ctl", button.Classes); Assert.Equal(new Thickness(button.Classes.Contains("accentOutline") ? 1.5 : 1), button.BorderThickness); Assert.Equal(38, button.Height);
                 Assert.Single(button.GetVisualDescendants().OfType<IconGlyph>());
                 // Add time has words; Undo and Redo are icons alone, square, with their words in the tooltip.
                 if (name == "AddTime") Assert.NotEmpty(button.GetVisualDescendants().OfType<TextBlock>().Single().Text!);

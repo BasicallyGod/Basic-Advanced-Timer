@@ -242,12 +242,12 @@ public sealed class SelectedBlockCardTests
         try
         {
             model.SelectBlock(new[] { model.Engine.Sessions[0] }, false); Settle(window);
-            Assert.Equal(new CornerRadius(11), Find<TextBox>(window, "SelectedStart").CornerRadius); Assert.Equal(new CornerRadius(12), Find<ComboBox>(window, "SelectedAccount").CornerRadius);
+            Assert.Equal(new CornerRadius(12), Find<TextBox>(window, "SelectedStart").CornerRadius); Assert.Equal(new CornerRadius(12), Find<ComboBox>(window, "SelectedAccount").CornerRadius);
             foreach (var theme in new[] { AppThemes.Light, AppThemes.Dark })
             {
                 var dictionary = (ResourceDictionary)Avalonia.Application.Current!.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)]!;
                 Assert.Equal(Color.Parse(theme.Colour("Accent")), ((SolidColorBrush)dictionary["TextControlBorderBrushFocused"]!).Color);
-                Assert.Equal(Color.Parse(theme.Colour("Line")), ((SolidColorBrush)dictionary["TextControlBorderBrush"]!).Color);
+                Assert.Equal(((SolidColorBrush)dictionary["KeyEdge"]!).Color, ((SolidColorBrush)dictionary["TextControlBorderBrush"]!).Color); // Only a faint edge round a sunk field.
                 Assert.NotEqual(Color.Parse(theme.Colour("Panel")), ((SolidColorBrush)dictionary["TextControlBackground"]!).Color); // A shade off the card, as in the mock.
             }
         }
@@ -262,7 +262,7 @@ public sealed class SelectedBlockCardTests
         {
             foreach (var name in new[] { "PreviousPeriod", "DatePick", "NextPeriod", "GoToToday", "Settings" })
             {
-                var button = Find<Button>(window, name); Assert.Contains("ctl", button.Classes); Assert.Equal(38, button.Height); Assert.Equal(new CornerRadius(12), button.CornerRadius);
+                var button = Find<Button>(window, name); Assert.Contains("ctl", button.Classes); Assert.Equal(38, button.Height); Assert.Equal(new CornerRadius(11), button.CornerRadius);
             }
             Assert.NotEmpty(Find<Button>(window, "DatePick").GetVisualDescendants().OfType<IconGlyph>()); // The calendar icon beside the date.
             Assert.Equal(IconKind.Plus, Find<Button>(window, "AddTime").GetVisualDescendants().OfType<IconGlyph>().Single().Kind); // Add time keeps its plus.

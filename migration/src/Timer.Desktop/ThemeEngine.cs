@@ -96,6 +96,7 @@ public static class ThemeEngine
         // a track, a pressed key) is the same two turned inward, so the whole app reads as one room lit from the top left. In Dark the pale edge is a whisper and the
         // shadow does the work. A raised thing is never given a shade of its own: the page is the card colour's ground, and a sunk thing is a shade under it.
         Put("Well", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .03) : ThemeColours.Mix(colours["Surface"], "#000000", .2)));
+        Put("KeyEdge", lightGround ? Color.FromArgb(18, 72, 78, 92) : Color.FromArgb(22, 255, 255, 255));
         Put("KeyHover", Color.Parse(lightGround ? ThemeColours.Mix(colours["Panel"], "#FFFFFF", .4) : ThemeColours.Mix(colours["Panel"], "#FFFFFF", .07)));
         Put("Porcelain", Color.Parse(lightGround ? ThemeColours.Mix(colours["Panel"], "#FFFFFF", .3) : ThemeColours.Mix(colours["Panel"], "#FFFFFF", .06)));
         {
@@ -138,9 +139,11 @@ public static class ThemeEngine
         // The rail's view icons: on Light a softer grey than the quiet text colour (about 3.4 to 1 on the page), the chosen one in the quiet colour on its tint; on Dark the quiet colour and the ink as before.
         Put("RailIcon", Color.Parse(darkTheme ? colours["Muted"] : ThemeColours.Mix(colours["Muted"], colours["Surface"], .28)));
         Put("RailIconOn", Color.Parse(darkTheme ? colours["Ink"] : colours["Muted"]));
-        var field = Color.Parse(darkTheme ? ThemeColours.Mix(colours["Panel"], "#FFFFFF", .05) : ThemeColours.Mix(colours["Panel"], colours["Surface"], .5));
+        // Fields are sunk: the same well colour as a slider track, with the inset shadow from App.axaml and only a faint edge until they have the focus.
+        var field = Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .03) : ThemeColours.Mix(colours["Surface"], "#000000", .2));
+        var fieldEdge = lightGround ? Color.FromArgb(18, 72, 78, 92) : Color.FromArgb(22, 255, 255, 255);
         foreach (var key in new[] { "TextControlBackground", "TextControlBackgroundPointerOver", "TextControlBackgroundFocused", "ComboBoxBackground", "ComboBoxBackgroundPointerOver", "ComboBoxBackgroundPressed", "ComboBoxBackgroundUnfocused" }) Put(key, field);
-        foreach (var key in new[] { "TextControlBorderBrush", "TextControlBorderBrushPointerOver", "ComboBoxBorderBrush", "ComboBoxBorderBrushPressed" }) Put(key, line);
+        foreach (var key in new[] { "TextControlBorderBrush", "TextControlBorderBrushPointerOver", "ComboBoxBorderBrush", "ComboBoxBorderBrushPressed" }) Put(key, fieldEdge);
         foreach (var key in new[] { "TextControlBorderBrushFocused", "ComboBoxBackgroundBorderBrushFocused", "ComboBoxBorderBrushPointerOver" }) Put(key, accent);
         foreach (var key in new[] { "TextControlForeground", "ComboBoxForeground", "ComboBoxForegroundFocused", "ComboBoxForegroundFocusedPressed", "ComboBoxItemForeground", "ComboBoxItemForegroundPointerOver", "ComboBoxItemForegroundPressed", "ComboBoxItemForegroundSelected", "ComboBoxItemForegroundSelectedPointerOver", "ComboBoxItemForegroundSelectedPressed" }) Put(key, ink0);
         foreach (var key in new[] { "TextControlPlaceholderForeground", "TextControlPlaceholderForegroundPointerOver", "TextControlPlaceholderForegroundFocused", "ComboBoxPlaceHolderForeground", "ComboBoxDropDownGlyphForeground", "ComboBoxDropDownGlyphForegroundFocused", "ComboBoxDropDownGlyphForegroundFocusedPressed" }) Put(key, Color.Parse(colours["Muted"]));
