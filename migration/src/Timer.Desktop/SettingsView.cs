@@ -208,6 +208,12 @@ public sealed class SettingsView : Grid
             Toggle("Keep the pill on top", "The pill stays above other windows.", "PillOnTop", () => model.PillOnTop, v => model.SetPillOnTop(v)),
             Toggle("Keep the dashboard on top", "The dashboard stays above other windows.", "DashboardOnTop", () => model.DashboardOnTop, v => model.SetDashboardOnTop(v))
         };
+        // How loud the pill is about what is waiting: a card that opens by itself, the light and the list only, or nothing.
+        var choices = new[] { "Peek", "Light only", "Off" }; var modes = new[] { "peek", "light", "off" };
+        var alerts = new ComboBox { Name = "PillAlertsChoice", ItemsSource = choices, Width = 150, Height = 36, MinHeight = 36, FontSize = 13.5, SelectedIndex = Array.IndexOf(modes, model.PillAlertsMode) };
+        Avalonia.Automation.AutomationProperties.SetName(alerts, "Pill alerts");
+        alerts.SelectionChanged += (_, _) => { if (alerts.SelectedIndex >= 0) model.SetPillAlertsMode(modes[alerts.SelectedIndex]); };
+        rows.Add(Row("Pill alerts", "Peek opens a card under the pill for reminders, budgets and long breaks. Light only keeps the light and the list. Off keeps the pill quiet.", alerts));
         if (model.TrayAvailable) rows.Add(Toggle("Show in taskbar", "Off runs the timer from the tray alone.", "ShowInTaskbar", () => model.TaskbarButton, v => model.SetTaskbarButton(v)));
         if (model.AutoStart?.Available == true) rows.Add(Toggle("Start with Windows", "Opens the timer when you sign in.", "StartWithWindows", () => model.AutoStart?.IsEnabled == true, v => model.SetAutoStart(v)));
         return Rows(rows.ToArray());

@@ -922,6 +922,20 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public int? PillScalePercent => preferences.PillScale;
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
+    // ---- the pill's alerts: what is waiting, how loud it is allowed to be (Peek: a card opens by itself; Light only: the light and the list; Off), and what has been put away
+    private const string PillAlertsLine = "pillalerts=";
+    /// <summary>What is waiting for the pill, most urgent first (see <see cref="PillAlertItems"/>).</summary>
+    public IReadOnlyList<AlertItem> Alerts => PillAlertItems.Build(this);
+    public AlertState AlertState { get; } = new();
+    /// <summary>"peek" (the default), "light" or "off". Saved as the appearance line pillalerts=light or pillalerts=off; peek has no line.</summary>
+    public string PillAlertsMode => AppearanceValue(PillAlertsLine) is { } saved && (saved == "light" || saved == "off") ? saved : "peek";
+    public void SetPillAlertsMode(string mode) { var chosen = mode is "light" or "off" ? mode : "peek"; if (chosen == PillAlertsMode) return; SetAppearanceFlag(PillAlertsLine, chosen == "peek" ? null : chosen, true); Notify(); }
+    /// <summary>Puts an alert away (a budget the user pressed OK on): it stays away for the session.</summary>
+    public void DismissAlert(string key) { AlertState.Dismiss(key); Notify(); }
+    public void SnoozeAlert(string key, TimeSpan time) { AlertState.Snooze(key, Engine.Now + time); Notify(); }
+    /// <summary>Asks the dashboard to show a page ("notes" or "week"); the coordinator brings the dashboard up first when only the pill is showing.</summary>
+    public event Action<string>? PageRequested;
+    public void RequestPage(string page) => PageRequested?.Invoke(page);
     public bool Tooltips => preferences.Tooltips;
     public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
     /// <summary>Whether the developer features are switched on: the sample-data demo and the version on the right-click menu. Off until unlocked from the About section.</summary>

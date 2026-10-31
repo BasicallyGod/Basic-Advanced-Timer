@@ -46,6 +46,12 @@ public sealed class PillWindow : Window
     private StatusFace face = null!;
     private Border surface = null!, shadowHost = null!;
     private Popup panel = new();
+    private Popup alertsPanel = new();
+    private PillAlertsCard? alertsCard; private Grid? alertsHung;
+    private Border badge = null!; private readonly TextBlock badgeText = new() { Name = "PillAlertsBadgeText" };
+    private readonly HashSet<string> peeked = new();
+    private DispatcherTimer? foldTimer;
+    private long alertsDismissedAt;
     private Grid rootGrid = new();
     private ScrollViewer accountScroll = null!;
     private bool overList, closedWindow, ensuring, closingByCode;
@@ -57,6 +63,14 @@ public sealed class PillWindow : Window
 
     /// <summary>Whether the account list is open below the pill.</summary>
     public bool PanelOpen => panel.IsOpen;
+    /// <summary>Whether the alerts card (a card, the list or one opened from it) is hanging below the pill.</summary>
+    public bool AlertsOpen => alertsPanel.IsOpen;
+    /// <summary>The alerts card while it is open, so tests and the keyboard can reach it.</summary>
+    public PillAlertsCard? AlertsCard => alertsCard;
+    /// <summary>The light button that opens what is waiting.</summary>
+    public Button AlertsButton => face.AlertsButton!;
+    /// <summary>The count over the pill's corner, shown when more than one thing is waiting.</summary>
+    public Border AlertsBadge => badge;
     /// <summary>The account list's scroll box, so tests can read its limit.</summary>
     public ScrollViewer AccountScroll => accountScroll;
     /// <summary>The Accounts button on the pill's face.</summary>
@@ -84,7 +98,12 @@ public sealed class PillWindow : Window
         SizeChanged += (_, _) => { if (IsVisible && !ensuring && !closedWindow && (Math.Abs(ClientSize.Width - WindowWidthNow) > 1.5 || Math.Abs(ClientSize.Height - WindowHeightNow) > 1.5)) EnsureSize(); };
         Activated += (_, _) => EnsureSize();
         Deactivated += (_, _) => { if (!overList) CloseFlyouts(); };
-        KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Escape && PanelOpen) { CloseFlyouts(); e.Handled = true; } };
+        KeyDown += (_, e) =>
+        {
+            if (AlertsOpen && alertsCard is not null && alertsCard.HandleKey(e.Key)) e.Handled = true;
+            else if (e.Key == Avalonia.Input.Key.Escape && PanelOpen) { CloseFlyouts(); e.Handled = true; }
+        };
+        peeked.UnionWith(model.Alerts.Select(a => a.Key)); // What was already waiting when the pill came up is not shown again by itself.
         model.PropertyChanged += Changed;
         ActualThemeVariantChanged += (_, _) => { lastShadow = null; Refresh(); };
         Closed += (_, _) => model.PropertyChanged -= Changed;
@@ -96,7 +115,7 @@ public sealed class PillWindow : Window
     private void Build()
     {
         // The top of the pill is shared with the dashboard's sidebar.
-        face = new StatusFace(model, "Pill", "PillBreak", "Open dashboard", () => OpenDashboard?.Invoke(), OnCircle, ToggleAccounts);
+        face = new StatusFace(model, "Pill", "PillBreak", "Open dashboard", () => OpenDashboard?.Invoke(), OnCircle, ToggleAccounts, alertsClick: ToggleAlerts);
         var root = rootGrid = new Grid { Background = Brushes.Transparent };
         // Along the card, centred on its height, with the room kept clear at each end (the card's edge is part of it).
         face.Margin = new Thickness(InsetLeft - EdgeThickness, 0, InsetRight - EdgeThickness, 0); face.HorizontalAlignment = HorizontalAlignment.Left; face.VerticalAlignment = VerticalAlignment.Center;
@@ -105,9 +124,15 @@ public sealed class PillWindow : Window
         surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true, Width = PillWidth, Height = PillHeight, BorderThickness = new Thickness(EdgeThickness) };
         surface.Classes.Add("pillBody");
         shadowHost = Ui.Shadowed(surface, PillRadius);
-        Content = new LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
+        // The count of what is waiting rides on the pill's top left, over the card's edge, so it sits in the room round the card that the shadow has.
+        badge = new Border { Name = "PillAlertsBadge", MinWidth = 20, Height = 20, CornerRadius = new CornerRadius(10), Padding = new Thickness(6, 0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, IsVisible = false,
+            Margin = new Thickness(Ui.ShadowMargin + 14, Ui.ShadowMargin - 9, 0, 0), BorderThickness = new Thickness(2), Child = badgeText };
+        badge.Bind(Border.BackgroundProperty, badge.GetResourceObservable("Overtime")); badge.Bind(Border.BorderBrushProperty, badge.GetResourceObservable("PillBody"));
+        badgeText.Foreground = Brushes.White; badgeText.FontSize = 11.5; badgeText.FontWeight = FontWeight.Bold; badgeText.HorizontalAlignment = HorizontalAlignment.Center; badgeText.VerticalAlignment = VerticalAlignment.Center;
+        Content = new LayoutTransformControl { LayoutTransform = pillScale, Child = new Grid { Children = { shadowHost, badge } } };
         panel = new Popup();
         BuildDropdown();
+        BuildAlerts();
         lastShadow = null;
     }
     /// <summary>The account list, a card that hangs below the account's box and scrolls inside.</summary>
@@ -139,6 +164,69 @@ public sealed class PillWindow : Window
         panel.IsLightDismissEnabled = true; panel.Child = new LayoutTransformControl { LayoutTransform = pillScale, Child = dropdownHung };
         panel.Closed += (_, _) => { overList = false; if (!closingByCode) dismissedAt = Environment.TickCount64; SetOpenLook(false); };
         rootGrid.Children.Add(panel);
+    }
+
+    // ---- alerts: what is waiting
+    /// <summary>The alerts card's width and the gap under the pill match the account list's, so the two hang the same way.</summary>
+    private void BuildAlerts()
+    {
+        alertsPanel = new Popup { PlacementTarget = surface, Placement = PlacementMode.BottomEdgeAlignedLeft, IsLightDismissEnabled = true };
+        alertsPanel.PlacementConstraintAdjustment = PopupPositionerConstraintAdjustment.FlipY | PopupPositionerConstraintAdjustment.SlideX;
+        alertsPanel.Closed += (_, _) => { foldTimer?.Stop(); if (!closingByCode) alertsDismissedAt = Environment.TickCount64; overList = false; };
+        rootGrid.Children.Add(alertsPanel);
+    }
+    /// <summary>Opens the card under the pill: the most urgent alert, or the whole list (with <paramref name="list"/>, which is also what an empty pill shows).</summary>
+    public void ShowAlerts(bool list = false)
+    {
+        if (panel.IsOpen) { closingByCode = true; try { panel.IsOpen = false; } finally { closingByCode = false; } SetOpenLook(false); }
+        var wasOpen = alertsPanel.IsOpen;
+        if (alertsCard is null)
+        {
+            alertsCard = new PillAlertsCard(model, FoldAlerts, () => OpenDashboard?.Invoke());
+            alertsCard.PointerEntered += (_, _) => overList = true; alertsCard.PointerExited += (_, _) => overList = false;
+            alertsCard.Emptied += () => FoldAlerts();
+            alertsHung = HangingCard.Hang(alertsCard, -1, AlertsPoint, "PillBody");
+            alertsPanel.Child = new LayoutTransformControl { LayoutTransform = pillScale, Child = alertsHung };
+        }
+        alertsCard.Open(list || model.Alerts.Count == 0);
+        // The card lines up with the pill's left edge, under the lights, and its point sits under them.
+        alertsPanel.HorizontalOffset = -HangingCard.Room.Left * Scale; alertsPanel.VerticalOffset = (DropdownGap - HangingCard.Room.Top) * Scale;
+        if (alertsHung is not null) HangingCard.MovePoint(alertsHung, AlertsPoint, HangingCard.ClampFromRight(PillAlertsCard.CardWidth - (InsetLeft + 9), PillAlertsCard.CardWidth, 24));
+        alertsPanel.IsOpen = true;
+        if (!wasOpen) StartFoldTimer();
+    }
+    private const string AlertsPoint = "PillAlertsPoint";
+    /// <summary>Puts the alerts card away. The light keeps showing what is waiting.</summary>
+    public void FoldAlerts() { foldTimer?.Stop(); closingByCode = true; try { alertsPanel.IsOpen = false; } finally { closingByCode = false; } overList = false; }
+    private void ToggleAlerts()
+    {
+        if (alertsPanel.IsOpen) { FoldAlerts(); return; }
+        if (Environment.TickCount64 - alertsDismissedAt < 300) return;
+        // Pressing the light is asking: under Light only it opens the list at once, as it does when nothing is waiting.
+        peekOpened = false; ShowAlerts(model.PillAlertsMode != "peek");
+    }
+    // A card that opened by itself folds after twelve seconds, except a spent budget, which stays until it is dealt with.
+    public static readonly TimeSpan FoldAfter = TimeSpan.FromSeconds(12);
+    private void StartFoldTimer()
+    {
+        foldTimer ??= new DispatcherTimer { Interval = FoldAfter };
+        foldTimer.Stop(); foldTimer.Tick -= OnFold; foldTimer.Tick += OnFold;
+        if (!peekOpened) return; foldTimer.Start();
+    }
+    private bool peekOpened;
+    private void OnFold(object? sender, EventArgs e) { foldTimer?.Stop(); if (alertsCard is { View: "card" } card && card.Items.Any(i => i.Kind == AlertKind.BudgetSpent)) return; if (!overList) FoldAlerts(); else foldTimer?.Start(); }
+    /// <summary>
+    /// Opens the card by itself when something new is waiting (under Peek, with the pill showing and no other list open). What was already waiting, or came while the
+    /// dashboard was up, is not shown again; an alert that goes away and comes back (a break stayed on, then asked again) is new.
+    /// </summary>
+    public void PeekAtNewAlerts()
+    {
+        var current = model.Alerts; var keys = current.Select(a => a.Key).ToHashSet();
+        peeked.RemoveWhere(k => !keys.Contains(k));
+        var fresh = current.Where(a => !peeked.Contains(a.Key)).ToList();
+        foreach (var a in fresh) peeked.Add(a.Key);
+        if (fresh.Count == 0 || model.PillAlertsMode != "peek" || !IsVisible || closedWindow || alertsPanel.IsOpen || panel.IsOpen) return;
+        peekOpened = true; ShowAlerts(false);
     }
 
     // ---- size
@@ -197,7 +285,7 @@ public sealed class PillWindow : Window
     /// <summary>Opens the account list below the pill. It closes with Escape, a click elsewhere, or by pressing the button again.</summary>
     public void ShowPanel()
     {
-        SetOpenLook(true);
+        FoldAlerts(); SetOpenLook(true);
         // The list hangs below the pill with its right edge level with the pill's, since the card is nearly as wide as the pill and the account's box is near that end.
         var wellLeft = Math.Max(0, PillWidth - DropdownWidth);
         panel.HorizontalOffset = (wellLeft - HangingCard.Room.Left) * Scale; panel.VerticalOffset = (DropdownGap - HangingCard.Room.Top) * Scale;
@@ -214,7 +302,7 @@ public sealed class PillWindow : Window
         ShowPanel();
     }
     /// <summary>Puts the account list away, so the pill is a plain capsule again when it comes back from the dashboard.</summary>
-    public void CloseFlyouts() { closingByCode = true; try { panel.IsOpen = false; } finally { closingByCode = false; } overList = false; SetOpenLook(false); }
+    public void CloseFlyouts() { closingByCode = true; try { panel.IsOpen = false; } finally { closingByCode = false; } FoldAlerts(); overList = false; SetOpenLook(false); }
 
     // ---- behaviour
     private void OnCircle()
@@ -227,7 +315,7 @@ public sealed class PillWindow : Window
     {
         // A new pill size from settings takes effect straight away, even while the pill is hidden behind the dashboard.
         if (model.PillScalePercent != appliedChoice) FitToScreen(Screens.ScreenFromWindow(this));
-        Refresh();
+        Refresh(); PeekAtNewAlerts();
     }
     /// <summary>The first letters of up to two words, so Account three reads AT, Northwind Traders reads NT and Client 7 reads C7.</summary>
     public static string Initials(string name)
@@ -240,6 +328,7 @@ public sealed class PillWindow : Window
     private void Refresh()
     {
         face.Refresh();
+        var count = face.AlertCount; badge.IsVisible = count > 1; badgeText.Text = count > 9 ? "9+" : count.ToString();
         var (key, _) = StatusFace.State(model);
         var stateColour = key == "Idle" ? Colors.Gray : Ui.PillStateColour(this, key);
 

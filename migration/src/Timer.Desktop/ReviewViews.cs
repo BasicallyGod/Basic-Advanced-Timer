@@ -43,11 +43,21 @@ public static partial class ReviewViews
         return look.Fill;
     }
     /// <summary>The account's initials in a small rounded chip a little off the block's own fill, for a block with only a lane or two of room.</summary>
-    internal static Border InitialsChip(string display, string ink)
+    internal static Border InitialsChip(string display, string ink, bool compact = false, string? fill = null)
     {
         var colour = Color.Parse(ink);
-        var letters = Ui.Text(PillWindow.Initials(display), 10.5); letters.FontWeight = FontWeight.Bold; letters.Name = "BlockInitials";
-        return new Border { Background = new SolidColorBrush(Color.FromArgb(48, colour.R, colour.G, colour.B)), CornerRadius = new CornerRadius(6), Padding = new Thickness(5, 1), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Child = letters };
+        // In Details the initials are white, on a chip of the bar's own colour taken darker only as far as white needs to read (4.5 to 1).
+        if (compact && fill is not null) return WhiteChip(display, fill);
+        // The compact chip is for a bar only a little taller than itself (the Details card's stack), so it keeps clear air above and below.
+        var letters = Ui.Text(PillWindow.Initials(display), compact ? 10 : 10.5); letters.FontWeight = FontWeight.Bold; letters.Name = "BlockInitials"; if (compact) { letters.LineHeight = 12; letters.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center; }
+        return new Border { Background = new SolidColorBrush(Color.FromArgb(48, colour.R, colour.G, colour.B)), CornerRadius = new CornerRadius(6), Padding = compact ? new Thickness(5, 0) : new Thickness(5, 1), Height = compact ? 13 : double.NaN, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Child = letters };
+    }
+    private static Border WhiteChip(string display, string fill)
+    {
+        var shade = fill;
+        for (var amount = 0.0; amount <= 1 && ThemeColours.Contrast("#FFFFFF", shade) < 4.5; amount += .05) shade = ThemeColours.Mix(fill, "#000000", amount);
+        var letters = Ui.Text(PillWindow.Initials(display), 10); letters.FontWeight = FontWeight.Bold; letters.Name = "BlockInitials"; letters.LineHeight = 12; letters.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center; letters.Foreground = Brushes.White;
+        return new Border { Background = new SolidColorBrush(Color.Parse(shade)), CornerRadius = new CornerRadius(6), Padding = new Thickness(5, 0), Height = 13, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Child = letters };
     }
     /// <summary>
     /// Blocks (or meetings) that reach this many deep at one moment are drawn as one tile, whatever the zoom, and opened in the Details card; one or two overlapping keep their lanes.
@@ -275,7 +285,7 @@ public static partial class ReviewViews
                 case BlockDetail.Full when width >= 56:
                     text.Children.Add(Duration(15));
                     text.Children.Add(Name(13, width < 84));
-                    if (width >= 140 && !string.IsNullOrWhiteSpace(note) && !recording) { var line = Ui.Text("• " + note, 12); line.TextTrimming = TextTrimming.CharacterEllipsis; text.Children.Add(line); }
+                    if (width >= 140 && !string.IsNullOrWhiteSpace(note) && !recording) { var line = Ui.Text("• " + note, 12); line.TextTrimming = TextTrimming.CharacterEllipsis; if (interval.Row is not null) line.Margin = new Thickness(0, 0, 22, 0); /* clear of the page mark in the corner */ text.Children.Add(line); }
                     break;
                 case BlockDetail.Inline when width >= 56:
                     var inline = Ui.Horizontal(Duration(13), Name(12.5, width < 120)); inline.Spacing = 8; text.Children.Add(inline);

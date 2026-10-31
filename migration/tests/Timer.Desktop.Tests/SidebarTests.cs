@@ -83,7 +83,7 @@ public sealed class SidebarTests
         try
         {
             Assert.Equal("Account one", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.Equal("Ready to track", Find<TextBlock>(window, "SidebarWhoStatus").Text);
-            model.ToggleAccount("Account two"); Settle(window); Assert.Equal("Account two", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.StartsWith("Tracking · ", Find<TextBlock>(window, "SidebarWhoStatus").Text);
+            model.ToggleAccount("Account two"); Settle(window); Assert.Equal("Account two", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.False(Find<TextBlock>(window, "SidebarWhoStatus").IsVisible); // Tracking says itself, on the tile and the light.
             model.ToggleBreak(); Settle(window); Assert.Equal("Break", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.StartsWith("On break", Find<TextBlock>(window, "SidebarWhoStatus").Text);
             // The clock is hours and minutes with the seconds beside them on one line, the pair centred in the column.
             var clock = Find<Control>(window, "SidebarClockTile"); var sidebar = Find<Border>(window, "Sidebar");

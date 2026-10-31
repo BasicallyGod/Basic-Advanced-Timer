@@ -70,7 +70,7 @@ public sealed partial class SelectedBlockCard : Border
             var display = model.Label(item.Account); var picked = !item.Recording && model.IsSelected(item.Sources);
             var editable = picked && item.Sources.Count == 1 && !model.SelectedBlocks[0].IsGroup;
             bars.Add(new StackTimeline.Bar(item.Start.ToString("HHmmss") + "_" + bars.Count, "", model.Format(item.Duration), $"{display} · {item.Start:HH:mm}–{(item.Recording ? "now" : item.End.ToString("HH:mm"))} · {model.Format(item.Duration)}",
-                item.Start, item.End, fill, Color.Parse(ink), picked, item.Recording, editable, ReviewViews.InitialsChip(display, ink)));
+                item.Start, item.End, fill, Color.Parse(ink), picked, item.Recording, editable, ReviewViews.InitialsChip(display, ink, compact: true, fill: isBreak ? model.CurrentTheme.Colour("Hover") : look.Fill)));
         }
         var timeline = new StackTimeline(model, bars, 1);
         timeline.PickedBar += bar => { var item = items[bars.IndexOf(bar)]; if (!bar.Picked) model.SelectBlock(item.Sources, false); };
@@ -80,9 +80,10 @@ public sealed partial class SelectedBlockCard : Border
             var row = item.Sources[0]; model.EditEntry(row, row.Account, start, end, model.Editor.Note(row));
         };
         // A long stack scrolls inside the card, so the boxes under it keep their place.
-        stackHost.Child = new ScrollViewer { Content = timeline, MaxHeight = 156, Name = "StackScroll", HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 10, 0) };
+        timeline.Margin = new Thickness(3, 0, 3, 4); // Room for the rings, which reach 2 pixels past a bar and would be cut at the scroll area's edge.
+        stackHost.Child = new ScrollViewer { Content = timeline, MaxHeight = 160, Name = "StackScroll", HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 10, 0) };
     }
-    private string StackKind(IReadOnlyList<ReviewViews.StackItem> items) => "Blocks · " + items.Count(i => !i.Recording) + (items.Any(i => i.Recording) ? " · 1 recording" : "");
+    private static string StackKind(IReadOnlyList<ReviewViews.StackItem> items) => "Blocks"; // No counts or notes of what is recording: the timeline under it shows them.
 
     private static TextBlock Label(string text)
     {
@@ -191,7 +192,7 @@ public sealed partial class SelectedBlockCard : Border
             { var chip = Chip($"{row.From:HH:mm}–{row.To:HH:mm}", true); chip.Margin = new Thickness(0, 0, 6, 6); chips.Children.Add(chip); }
             joined.Children.Add(chips); body.Children.Add(joined);
         }
-        var note = new TextBox { Name = "SelectedNote", Text = block.Note, Height = 38, Watermark = group ? "" : "Add a note", IsEnabled = !group, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var note = new TextBox { Name = "SelectedNote", Text = block.Note, Height = 38, VerticalContentAlignment = VerticalAlignment.Center, Watermark = group ? "" : "Add a note", IsEnabled = !group, HorizontalAlignment = HorizontalAlignment.Stretch };
         var noteField = new StackPanel { Spacing = 5 }; noteField.Children.Add(Label("Entry note")); noteField.Children.Add(note); body.Children.Add(noteField);
         if (!group) Committing(note, () => { if (current is { Row: not null } now && (note.Text ?? "").Trim() != now.Note.Trim()) model.EditEntry(now.Row, now.Row.Account, now.Start, now.End, note.Text ?? ""); });
         if (!group) { startBox = start; endBox = end; lengthBox = length; noteBox = note; accountBox = account; }

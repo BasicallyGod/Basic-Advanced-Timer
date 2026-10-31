@@ -15,7 +15,7 @@ public sealed class StackTimeline : Panel
     /// <summary>One bar: what it says, when it runs, how it is coloured, and whether it is the picked one, the one recording, and whether its ends can be dragged.</summary>
     public sealed record Bar(string Key, string Label, string Length, string Tip, DateTime Start, DateTime End, Color Fill, Color Ink, bool Picked, bool Live, bool Editable, Control? Mark);
 
-    public const double AxisHeight = 20, RowHeight = 16, RowGap = 4, HandleWidth = 6, MinimumBar = 8;
+    public const double AxisHeight = 18, RowHeight = 19, RowGap = 3, HandleWidth = 6, MinimumBar = 8;
     private readonly TimerModel model; private readonly IReadOnlyList<Bar> bars; private readonly int stepMinutes; private readonly DateTime windowStart, windowEnd;
     private readonly List<(Border Box, Bar Bar, Control Length, Control Times)> boxes = new(); private readonly List<(Border Handle, Bar Bar, bool Start)> handles = new();
     private readonly List<TextBlock> labels = new(); private readonly List<(Border Line, DateTime At)> guides = new();
@@ -39,11 +39,12 @@ public sealed class StackTimeline : Panel
 
     private void AddBar(Bar bar)
     {
-        var length = new TextBlock { Text = bar.Length, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(bar.Ink), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Name = "StackLength" };
-        var times = new TextBlock { Text = $"{bar.Start:HH:mm}–{(bar.Live ? "now" : bar.End.ToString("HH:mm"))}", FontSize = 10.5, Opacity = .75, Foreground = new SolidColorBrush(bar.Ink), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var line = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 6, Margin = new Thickness(6, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+        var length = new TextBlock { Text = bar.Length, FontSize = 11, LineHeight = 13, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(bar.Ink), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Name = "StackLength" };
+        var times = new TextBlock { Text = $"{bar.Start:HH:mm}–{(bar.Live ? "now" : bar.End.ToString("HH:mm"))}", FontSize = 11, LineHeight = 13, Opacity = .75, Foreground = new SolidColorBrush(bar.Ink), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        // 15 tall in a bar 19 tall: two whole pixels above and below, and the 13 pixel chip and lines of text each one inside it, so everything shares the bar's centre line at any scale.
+        var line = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 6, Margin = new Thickness(6, 0), Height = 15, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
         if (bar.Mark is not null) line.Children.Add(bar.Mark);
-        var label = new TextBlock { Text = bar.Label, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(bar.Ink), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Name = "StackLabel" };
+        var label = new TextBlock { Text = bar.Label, FontSize = 11, LineHeight = 13, FontWeight = FontWeight.SemiBold, Foreground = new SolidColorBrush(bar.Ink), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Name = "StackLabel" };
         if (bar.Label.Length > 0) line.Children.Add(label);
         line.Children.Add(length); line.Children.Add(times);
         if (bar.Live) line.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brush.Parse(model.CurrentTheme.Colour("Live")), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Name = "StackRecordingDot" });
@@ -67,7 +68,7 @@ public sealed class StackTimeline : Panel
     // A handle at one end of the picked bar. It is dragged to a new time, shown as it goes, and applied when it is let go.
     private void AddHandle(Bar bar, bool atStart)
     {
-        var handle = new Border { Name = atStart ? "StackHandleStart" : "StackHandleEnd", Width = HandleWidth, Height = RowHeight - 3, CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), ZIndex = 5, Cursor = new Cursor(StandardCursorType.SizeWestEast), Background = Brush.Parse(model.CurrentTheme.Colour("Ink")), BorderBrush = Brush.Parse(model.CurrentTheme.Colour("Accent")) };
+        var handle = new Border { Name = atStart ? "StackHandleStart" : "StackHandleEnd", Width = HandleWidth, Height = RowHeight - 4, CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), ZIndex = 5, Cursor = new Cursor(StandardCursorType.SizeWestEast), Background = Brush.Parse(model.CurrentTheme.Colour("Accent")), BorderBrush = Brush.Parse(model.CurrentTheme.Colour("Panel")) }; // The accent with a card-coloured edge: seen on both themes, where the text colour was near black on Light.
         ToolTip.SetTip(handle, atStart ? "Drag the start" : "Drag the end");
         var dragging = false;
         handle.PointerPressed += (_, e) => { if (e.GetCurrentPoint(handle).Properties.IsLeftButtonPressed) { dragging = true; e.Pointer.Capture(handle); preview = (bar, bar.Start, bar.End); e.Handled = true; } };
@@ -129,7 +130,7 @@ public sealed class StackTimeline : Panel
         {
             var index = bars.ToList().IndexOf(bar); var (start, end) = preview is { } p && p.Bar == bar ? (p.Start, p.End) : (bar.Start, bar.End);
             var x = atStart ? X(start) : X(end);
-            handle.Arrange(new Rect(x - HandleWidth / 2, AxisHeight + index * (RowHeight + RowGap) + 1.5, HandleWidth, RowHeight - 3));
+            handle.Arrange(new Rect(x - HandleWidth / 2, AxisHeight + index * (RowHeight + RowGap) + 2, HandleWidth, RowHeight - 4)); // 2 above and 2 below: on the bar's centre line
         }
         return final;
     }

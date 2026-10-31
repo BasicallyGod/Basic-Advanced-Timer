@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
@@ -30,6 +31,8 @@ public sealed class Round25Tests
     private static void Press(Window window, Point p) { window.MouseDown(p, MouseButton.Left); window.MouseUp(p, MouseButton.Left); Settle(window); }
     private static string Kind(Window w) => w.GetVisualDescendants().OfType<Border>().First(b => b.Name == "DetailsKind").GetVisualDescendants().OfType<TextBlock>().First().Text!;
     private static Border Tile(Window w) => w.GetVisualDescendants().OfType<Border>().Single(b => b.Name?.StartsWith("TimelineStack") == true);
+    // Every piece of text in a tile's tooltip, for looking for words in it.
+    private static IEnumerable<string?> TipTexts(Control c) => ((Avalonia.LogicalTree.ILogical)ToolTip.GetTip(c)!).GetSelfAndLogicalDescendants().OfType<TextBlock>().Select(t => t.Text);
     private static double Top(Control c, Visual to) => c.TranslatePoint(default, to)!.Value.Y;
 
     private static DateTime T(int hour, int minute) => Day.AddHours(hour).AddMinutes(minute);
@@ -70,7 +73,7 @@ public sealed class Round25Tests
             Assert.Empty(Named(window, "TimelineMeeting").Where(c => c.Name![15..].All(char.IsDigit) && c.Name!.Length > 15)); // None of the three is drawn on its own.
             Assert.Equal(48, tile.Bounds.Height, 0.5);
             Assert.Contains("3 meetings", tile.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
-            Assert.Contains("Client call", ToolTip.GetTip(tile)!.ToString()); Assert.Contains("Supplier check-in", ToolTip.GetTip(tile)!.ToString());
+            Assert.Contains("Client call", TipTexts(tile)); Assert.Contains("Supplier check-in", TipTexts(tile)); Assert.Contains("11:45–12:30", TipTexts(tile));
             Assert.Empty(window.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.Contains("More") == true && b.Name.StartsWith("Timeline"))); // No +N chip any more.
         }
         finally { window.Close(); }
@@ -90,7 +93,8 @@ public sealed class Round25Tests
             Assert.Empty(Named(window, "TimelineEntry")); // None of the five is drawn alone, and nothing folds into a chip.
             Assert.Contains("5 blocks · 05:00", tile.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
             Assert.Equal(model.TimelinePixelsPerHour * (10.4 - 9) - ReviewViews.BlockGap, tile.Bounds.Width, 1); // From the first start to the last end.
-            Assert.Equal(model.Engine.Sessions.Count, ToolTip.GetTip(tile)!.ToString()!.Split('\n').Length - 1);
+            var tip = Assert.IsType<StackPanel>(ToolTip.GetTip(tile)); var grid = Assert.IsType<Grid>(tip.Children[1]); Assert.Equal(model.Engine.Sessions.Count, grid.RowDefinitions.Count); // A row each,
+            Assert.Equal(3, grid.Children.Select(Grid.GetColumn).Distinct().Count()); // in three columns, so the times and lengths line up.
         }
         finally { window.Close(); }
     }
@@ -112,7 +116,7 @@ public sealed class Round25Tests
             Assert.Equal("Details", Find<TextBlock>(window, "SelectedTitle").Text); Assert.Contains("Nothing is selected", Find<TextBlock>(window, "SelectedEmpty").Text);
             Press(window, Centre(window, Tile(window)));
             Assert.Single(model.SelectedBlocks); Assert.Equal(T(9, 0), model.SelectedBlocks[0].Start);
-            Assert.Equal("Blocks · 5", Kind(window));
+            Assert.Equal("Blocks", Kind(window));
             Assert.True(Tile(window).Classes.Contains("mergeSelected"));
             var bars = Named(window, "Stack_").OfType<Border>().ToList(); Assert.Equal(5, bars.Count);
             Assert.Equal(2, Named(window, "StackHandle").Count()); // Handles on the picked bar only.
@@ -159,7 +163,7 @@ public sealed class Round25Tests
             var plain = FiveDeepTileHeight(); Assert.True(tile.Bounds.Height < plain - ReviewViews.LiveLane); // The tile gave up room for the lane.
             Assert.Contains("4 blocks", tile.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).First(t => t!.StartsWith("4")));
             Press(window, Centre(window, tile));
-            Assert.Equal("Blocks · 4 · 1 recording", Kind(window));
+            Assert.Equal("Blocks", Kind(window));
             var bars = Named(window, "Stack_").OfType<Border>().ToList(); Assert.Equal(5, bars.Count);
             Assert.NotNull(bars[^1].BoxShadow); Assert.Contains(bars[^1].GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>(), e => e.Name == "StackRecordingDot");
             var before = model.SelectedBlocks.Single().Start; Press(window, Centre(window, bars[^1])); Assert.Equal(before, model.SelectedBlocks.Single().Start); // It can't be picked.
@@ -181,7 +185,7 @@ public sealed class Round25Tests
         {
             Press(window, Centre(window, Named(window, "TimelineMeetingStack").OfType<Border>().Single()));
             var first = model.Notes.MeetingsOn(Day).OrderBy(m => m.At).First();
-            Assert.Equal(first.Id, model.SelectedMeetingId); Assert.Equal("Meetings · 3", Kind(window)); Assert.Equal("Client call", Find<TextBox>(window, "DetailsMeetingName").Text);
+            Assert.Equal(first.Id, model.SelectedMeetingId); Assert.Equal("Meetings", Kind(window)); Assert.Equal("Client call", Find<TextBox>(window, "DetailsMeetingName").Text);
             var bars = Named(window, "Stack_").OfType<Border>().ToList(); Assert.Equal(3, bars.Count);
             Assert.Equal(3, window.GetVisualDescendants().OfType<Border>().Count(b => b.Classes.Contains("noteRow") && b.Classes.Contains("rowSelected")));
             Press(window, Centre(window, bars[1]));
