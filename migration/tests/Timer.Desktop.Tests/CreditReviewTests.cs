@@ -460,9 +460,9 @@ public sealed class CreditReviewTests
         var window = new DashboardWindow(model); window.Show(); Capture(window, "click-to-add-timeline");
         var canvas = window.GetVisualDescendants().OfType<Canvas>().Single(c => c.Name == "TimelineCanvas");
         var point = canvas.TranslatePoint(new Point(ReviewViews.TimelineGutter + 11 * model.TimelinePixelsPerHour, 150), window)!.Value; // 11:00, in the blank band
-        window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
+        window.SettledClick(point);
         Assert.Empty(window.Dialogs.Dialogs.OfType<EntryDialog>()); // A single click adds nothing.
-        window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
+        window.QuickClick(point); // Straight after, so it is the second click of a double-click however slow the runner is.
         var editor = Assert.Single(window.Dialogs.Dialogs.OfType<EntryDialog>()); Capture(editor, "click-to-add-editor");
         Assert.Equal("11:00:00", Find<TextBox>(editor, "EntryStart").Text); Assert.Equal("11:30:00", Find<TextBox>(editor, "EntryEnd").Text);
         Find<Button>(editor, "SaveEntry").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
