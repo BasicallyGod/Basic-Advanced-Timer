@@ -136,10 +136,11 @@ public sealed class PillAlertsCard : Border
     // ---- the actions
     private Control Actions(AlertItem item)
     {
-        var row = new WrapPanel { Orientation = Orientation.Horizontal };
+        // Spacing between the buttons, not a margin on each: a margin after the last one counted against the width and wrapped Reschedule onto a second line on Windows.
+        var row = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 6, LineSpacing = 6 };
         Button Act(string name, string words, IconKind? icon, Action click, bool main = false)
         {
-            var button = Ui.Ctl(name, words, icon, words, click, small: true); button.Margin = new Thickness(0, 0, 8, 0); button.FontSize = 12.5; button.Padding = new Thickness(11, 0);
+            var button = Ui.Ctl(name, words, icon, words, click, small: true); button.FontSize = 12.5; button.Padding = new Thickness(10, 0);
             if (main) button.Classes.Add("accentOutline"); return button;
         }
         switch (item.Kind)

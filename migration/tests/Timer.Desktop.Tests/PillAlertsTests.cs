@@ -49,6 +49,41 @@ public sealed class PillAlertsTests
     }
 
     [AvaloniaFact]
+    public void TheCardHasItsOwnFill_SoNothingBehindItShowsThrough()
+    {
+        // A style that names Border alone skips the card (a subclass), which left it see-through over whatever was under it.
+        var model = Demo(); var (window, card) = Host(model);
+        try
+        {
+            foreach (var view in new[] { "card", "list", "detail" })
+            {
+                if (view == "card") card.ShowCard(0); else if (view == "list") card.ShowList(); else card.ShowDetail(1);
+                Settle(window);
+                var fill = Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(card.Background);
+                Assert.True(fill.Color.A == 255, view + " is opaque");
+                Assert.True(card.TryFindResource("PillBody", card.ActualThemeVariant, out var body) && body is Avalonia.Media.ISolidColorBrush solid && solid.Color == fill.Color, view + " wears the pill's own colour");
+            }
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ThePrimaryActionsOfAReminderStayOnOneLineWithRoomToSpare()
+    {
+        // On Windows the type is a little wider than here, so the three buttons keep at least 12 pixels of the card's inner width in hand.
+        var model = Demo(); var (window, card) = Host(model);
+        try
+        {
+            card.ShowCard(0); Settle(window);
+            var buttons = new[] { "AlertDone", "AlertLater", "AlertReschedule" }.Select(n => Find(window, n)).ToList();
+            Assert.Single(buttons.Select(b => Math.Round(b.TranslatePoint(new Point(), card)!.Value.Y)).Distinct());
+            var last = buttons[^1]; var right = last.TranslatePoint(new Point(last.Bounds.Width, 0), card)!.Value.X;
+            Assert.True(right <= card.Bounds.Width - card.Padding.Right - 12, $"the last button ends at {right} in a card {card.Bounds.Width} wide");
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void TheCardSteps_WithArrowsDotsAndKeys_AndWrapsAround()
     {
         var model = Demo(); var (window, card) = Host(model);
