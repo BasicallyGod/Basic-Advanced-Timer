@@ -50,13 +50,13 @@ public sealed class StatusFace : StackPanel
     private readonly TextBlock initials = new() { FontSize = 17, Classes = { "clock" }, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly PauseGlyph glyph = new();
     /// <summary>The primary control, the break and the Accounts button are all this square, so they read as one set with the same room either side in the pill.</summary>
-    public const double TileSize = 44, TileRadius = 14;
+    public const double TileSize = 44, TileRadius = 22;
     /// <summary>
     /// The primary control and the Accounts button sit together on one soft well (they are about what you are tracking: one pauses it, the other changes it), so each is a
     /// little wider than the break's tile, 46 by 44, with 4 pixels of well round them and 2 between them. The well is 54 wide and 98 tall, the same height as the two tiles
     /// and the gap they took before, so the pill and the rail keep their size.
     /// </summary>
-    public const double WellTileWidth = 46, WellWidth = 54, WellPadding = 4, WellGap = 2, WellRadius = 20;
+    public const double WellTileWidth = 44, WellWidth = 54, WellPadding = 4, WellGap = 2, WellRadius = 26;
     /// <summary>
     /// Each tile's button is this much larger on every side and pulled back by the same amount, so the ring that marks keyboard focus or a break is drawn
     /// inside the button (a button clips what falls outside it) without moving the tile or its neighbours.
@@ -74,7 +74,7 @@ public sealed class StatusFace : StackPanel
     private readonly TextBlock whoStatus = new() { FontSize = 11.5, Classes = { "muted" }, TextTrimming = TextTrimming.CharacterEllipsis };
     private readonly Ellipse whoDot = new() { Width = 9, Height = 9, VerticalAlignment = VerticalAlignment.Center };
     /// <summary>The pill's account box (only a dot and a chevron: the name is its tooltip and the list) and the day clock's box are these widths, so the pill keeps one size whatever the time.</summary>
-    public const double SelectorWidth = 48;
+    public const double SelectorWidth = 50;
     /// <summary>The display window is as tall as the well beside it, with its digits 28 tall and the count's 15; the count's column is 24 wide.</summary>
     public const double DisplayHeight = 52, CountDigitHeight = 15, CountColumn = 24, DisplayPadding = 10, DividerGap = 9;
     /// <summary>The window's width, which is one size whatever the time or the count: padding, the LED, a divider, the clock, a divider and the count's column.</summary>
@@ -83,7 +83,7 @@ public sealed class StatusFace : StackPanel
     private readonly Chevron selectorChevron = new() { VerticalAlignment = VerticalAlignment.Center };
     private Border selectorTile = null!;
     private string selectorWords = "";
-    // The primary control is a rounded square, to match the accounts icon beside it.
+    // The primary control is a round key: raised on the well it sits in, the way the break is a round key outside it.
     private readonly Border primaryTile = new() { Width = StatusFace.WellTileWidth, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius) };
     private readonly Viewbox glyphBox = new() { Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly string clockTip;
@@ -221,7 +221,8 @@ public sealed class StatusFace : StackPanel
     {
         var dark = SoftTint.IsDark(this);
         var accent = ThemeColourOr("Accent", "#3558C8"); var ink = ThemeColourOr("Ink", "#18233A");
-        well.Background = new SolidColorBrush(SoftTint.WithAlpha(ink, dark ? .07 : .055));
+        well.Background = well.TryFindResource("Well", well.ActualThemeVariant, out var wellBrush) && wellBrush is IBrush wb ? wb : new SolidColorBrush(SoftTint.WithAlpha(ink, dark ? .07 : .055));
+        well.BoxShadow = Res(well, "ShadowSunk");
         // The selector is bare on the well until the pointer is over it.
         IBrush rest = Brushes.Transparent;
         var tile = selectorTile;
@@ -229,6 +230,8 @@ public sealed class StatusFace : StackPanel
             : hoverAccounts ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var hover) && hover is IBrush hoverBrush ? hoverBrush : rest) : rest;
         tile.BoxShadow = accountsFocus ? SoftTint.FocusRing(tile) : default;
     }
+    /// <summary>A shadow set the theme writes (raised, sunk and so on), or none before the window has a theme.</summary>
+    public static BoxShadows Res(Control control, string key) => control.TryFindResource(key, control.ActualThemeVariant, out var found) && found is BoxShadows shadows ? shadows : default;
     private Color ThemeColourOr(string key, string fallback) => Ui.ThemeColour(this, key, Color.Parse(fallback));
     /// <summary>The state's key (Break outranks Live, else Idle) and its words, shared with the owner's ring and glow.</summary>
     public static (string Key, string Name) State(TimerModel model)
@@ -278,9 +281,10 @@ public sealed class StatusFace : StackPanel
         var who = onBreak ? model.ResumeAccount : model.ActiveAccount ?? selected?.Name;
         // The primary control is a soft green with its symbol in the same colour. On a break it stays green and keeps the
         // account's initials, since the break itself is lit beside it.
-        var tone = ThemeColourOr("Live", "#34D399");
-        primaryTile.Background = new SolidColorBrush(SoftTint.WithAlpha(tone, hoverCircle ? (dark ? .30 : .32) : (dark ? .18 : .20)));
-        primaryTile.BoxShadow = circleFocus ? SoftTint.FocusRing(primaryTile) : default;
+        var tone = ThemeColourOr(dark ? "Live" : "LiveText", "#34D399");
+        // A raised key (a step lighter under the pointer) with the symbol in the tracking colour, which is what the key does.
+        primaryTile.Background = primaryTile.TryFindResource(hoverCircle ? "KeyHover" : "Panel", primaryTile.ActualThemeVariant, out var keyFace) && keyFace is IBrush kf ? kf : Brushes.Transparent;
+        primaryTile.BoxShadow = circleFocus ? SoftTint.FocusRing(primaryTile) : Res(primaryTile, hoverCircle ? "ShadowKeyHover" : "ShadowKey");
         initials.Foreground = new SolidColorBrush(tone); glyph.Fixed = new SolidColorBrush(tone);
         initials.Text = who is null ? "" : PillWindow.Initials(who);
         // The account the pill is on (or would start). With nothing chosen the button says so.
@@ -335,15 +339,17 @@ public sealed class BreakButton : Button
         cup.Filled = false;
         if (onBreak)
         {
+            // Pressed in and lit: solid orange, sunk into its place.
             tile.Background = new SolidColorBrush(orange);
             cup.Fixed = ThemeColours.Contrast(hex, "#FFFFFF") >= 2.9 ? Brushes.White : new SolidColorBrush(Color.Parse("#2A1A05"));
-            tile.BoxShadow = BoxShadows.Parse($"0 0 0 3 #52{orange.R:X2}{orange.G:X2}{orange.B:X2}");
+            tile.BoxShadow = StatusFace.Res(tile, "ShadowSunk");
         }
         else
         {
-            tile.Background = new SolidColorBrush(SoftTint.WithAlpha(orange, hover ? .28 : .16));
+            // A raised round key outside the well, with the cup in the break colour.
+            tile.Background = tile.TryFindResource(hover ? "KeyHover" : "Panel", tile.ActualThemeVariant, out var face) && face is IBrush faceBrush ? faceBrush : Brushes.Transparent;
             cup.Fixed = null; // The theme's break orange.
-            tile.BoxShadow = default;
+            tile.BoxShadow = StatusFace.Res(tile, hover ? "ShadowKeyHover" : "ShadowKey");
         }
         if (focus) tile.BoxShadow = SoftTint.FocusRing(tile);
         cup.SetSteaming(onBreak || hover); cup.InvalidateVisual();

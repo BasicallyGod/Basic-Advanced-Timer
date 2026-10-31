@@ -17,7 +17,6 @@ public sealed class Sidebar : Border
     public const double Width = 248;
     public StatusFace Face { get; }
     public Button QuitButton { get; }
-    public Button ManageButton { get; }
     public ScrollViewer AccountScroll { get; }
 
     public Sidebar(TimerModel model, Action clockClick, Action circleClick, Action manage, Action quit)
@@ -28,14 +27,10 @@ public sealed class Sidebar : Border
         Face = new StatusFace(model, "Sidebar", "DashboardBreak", "Collapse to pill", clockClick, circleClick, () => { }, sidebar: true);
         var grid = Ui.Grid("*", "Auto,Auto,*,Auto"); grid.RowSpacing = 4;
         Ui.Put(grid, Face);
-        // The heading is a small quiet label with Manage accounts at its right, as the account panel's was.
-        var heading = Ui.Grid("*,Auto"); heading.Margin = new Thickness(8, 6, 0, 2);
+        // The heading is a small quiet label; accounts are managed from Settings.
+        var heading = Ui.Grid("*"); heading.Margin = new Thickness(8, 6, 0, 2);
         var label = new TextBlock { Text = "ACCOUNTS", FontSize = 11.5, FontWeight = FontWeight.SemiBold, LetterSpacing = .5, VerticalAlignment = VerticalAlignment.Center, Name = "SidebarAccountsHeading" }; label.Classes.Add("muted");
         Ui.Put(heading, label);
-        ManageButton = Ui.Button("", manage, "SidebarManageAccounts"); ManageButton.Classes.Add("rail"); ManageButton.Content = new IconGlyph(IconKind.Sliders);
-        ManageButton.Width = ManageButton.Height = 30; ManageButton.CornerRadius = new CornerRadius(10);
-        ToolTip.SetTip(ManageButton, "Manage accounts"); Avalonia.Automation.AutomationProperties.SetName(ManageButton, "Manage accounts");
-        Ui.Put(heading, ManageButton, 1);
         Ui.Put(grid, heading, 0, 1);
         AccountScroll = new ScrollViewer { Name = "SidebarAccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };

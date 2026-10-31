@@ -68,18 +68,16 @@ public sealed class DashboardShellTests
     }
 
     [AvaloniaFact]
-    public void TheAccountsAreAlwaysInTheSidebarAndPressingOneStartsItAndManageAccountsOpensTheDialog()
+    public void TheAccountsAreAlwaysInTheSidebarAndPressingOneStartsItWithNoManageIcon()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             Click(Find<Button>(window, "Account1")); Settle(window); Assert.Equal("Account two", model.ActiveAccount);
             Click(Find<Button>(window, "Account0")); Settle(window); Assert.Equal("Account one", model.ActiveAccount);
-            var manage = Find<Button>(window, "SidebarManageAccounts"); var sidebar = Find<Border>(window, "Sidebar");
-            Assert.Equal(IconKind.Sliders, ((IconGlyph)manage.Content!).Kind); Assert.Equal("Manage accounts", ToolTip.GetTip(manage)?.ToString()); // One icon, no words.
-            var at = manage.TranslatePoint(default, sidebar)!.Value; Assert.InRange(sidebar.Bounds.Width - (at.X + manage.Bounds.Width), 6, 24); // At the right of the accounts heading.
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "SidebarManageAccounts");
             Assert.Equal("ACCOUNTS", Find<TextBlock>(window, "SidebarAccountsHeading").Text);
-            Click(manage); Settle(window); Assert.True(window.Dialogs.Dialogs.OfType<AccountsDialog>().Any());
+            model.OpenAccounts(); Settle(window); Assert.True(window.Dialogs.Dialogs.OfType<AccountsDialog>().Any()); // Still reachable (Settings, the pill's menu).
         }
         finally { window.Close(); }
     }
