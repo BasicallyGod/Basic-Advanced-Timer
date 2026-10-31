@@ -70,7 +70,7 @@ public sealed partial class SelectedBlockCard : Border
             var display = model.Label(item.Account); var picked = !item.Recording && model.IsSelected(item.Sources);
             var editable = picked && item.Sources.Count == 1 && !model.SelectedBlocks[0].IsGroup;
             bars.Add(new StackTimeline.Bar(item.Start.ToString("HHmmss") + "_" + bars.Count, "", model.Format(item.Duration), $"{display} · {item.Start:HH:mm}–{(item.Recording ? "now" : item.End.ToString("HH:mm"))} · {model.Format(item.Duration)}",
-                item.Start, item.End, fill, Color.Parse(ink), picked, item.Recording, editable, ReviewViews.InitialsChip(display, ink, compact: true)));
+                item.Start, item.End, fill, Color.Parse(ink), picked, item.Recording, editable, ReviewViews.InitialsChip(display, ink, compact: true, fill: isBreak ? model.CurrentTheme.Colour("Hover") : look.Fill)));
         }
         var timeline = new StackTimeline(model, bars, 1);
         timeline.PickedBar += bar => { var item = items[bars.IndexOf(bar)]; if (!bar.Picked) model.SelectBlock(item.Sources, false); };

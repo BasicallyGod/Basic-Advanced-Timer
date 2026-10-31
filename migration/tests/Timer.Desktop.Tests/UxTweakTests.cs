@@ -214,7 +214,9 @@ public sealed class UxTweakTests
             var bar = dashboard.GetVisualDescendants().OfType<MessageBar>().Single();
             Assert.True(bar.IsVisible);
             Assert.IsAssignableFrom<ISolidColorBrush>(bar.Background); // A style that names Border alone skips a subclass, which once left it see-through.
-            Assert.NotNull(bar.BorderBrush); Assert.True(bar.BorderThickness.Left >= 1); Assert.True(bar.BoxShadow.Count > 0); // The same card as a tooltip: a hairline and a soft shadow.
+            // Inverted: the card is the theme's ink (dark on Light, light on Dark), with a soft shadow, so nothing under it can look like it.
+            Assert.True(bar.TryFindResource("Ink", bar.ActualThemeVariant, out var ink) && ink is ISolidColorBrush inkBrush && ((ISolidColorBrush)bar.Background!).Color == inkBrush.Color);
+            Assert.True(bar.BoxShadow.Count > 0);
         }
         finally { dashboard.Close(); }
     }

@@ -6,17 +6,13 @@ namespace Timer.Desktop.Tests;
 public sealed class AppThemesTests
 {
     [Fact]
-    public void LightIsAQuietNeutralWithTheAccentAsItsOnlyBlue()
+    public void LightIsCoolAndCrispWithTheAccentTheOnlyStrongBlue()
     {
         var light = AppThemes.Light;
-        Assert.Equal("#F4F4F1", light.Colour("Surface")); Assert.Equal("#FFFFFF", light.Colour("Panel")); Assert.Equal("#E2E2DD", light.Colour("Line"));
-        // Ink, the accent and the selection tint are the package's, so only the surfaces moved.
-        Assert.Equal(ThemeLibrary.Light.Colour("Ink"), light.Colour("Ink")); Assert.Equal(ThemeLibrary.Light.Colour("Accent"), light.Colour("Accent")); Assert.Equal(ThemeLibrary.Light.Colour("Selected"), light.Colour("Selected"));
-        foreach (var token in new[] { "Surface", "Panel", "Line", "Hover" })
-        {
-            var (r, g, b) = ThemeColours.Rgb(light.Colour(token));
-            Assert.True(Math.Abs(r - b) <= 16, token + " is not blue-tinted: " + light.Colour(token)); // Warm or neutral, never the old blue-grey.
-        }
+        Assert.Equal("#EDF0F5", light.Colour("Surface")); Assert.Equal("#FFFFFF", light.Colour("Panel")); Assert.Equal("#D5DBE5", light.Colour("Line")); Assert.Equal("#E4E9F1", light.Colour("Hover"));
+        Assert.Equal("#131B2A", light.Colour("Ink")); Assert.Equal("#4E5A6C", light.Colour("Muted")); Assert.Equal("#2D5CCB", light.Colour("Accent")); Assert.Equal("#D6E2FA", light.Colour("Selected"));
+        // Blocks take most of their account's colour, so they stand clear of the grey tiles behind them.
+        Assert.Equal(0.78, light.BlockTint);
         Assert.Same(light, AppThemes.BuiltIn[0]); Assert.Same(ThemeLibrary.Dark, AppThemes.BuiltIn[1]);
         Assert.All(ThemeTokens.Names, token => Assert.True(ThemeTokens.IsValid(token, light.Colour(token)), token));
     }

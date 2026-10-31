@@ -258,17 +258,17 @@
     <Style Selector="Button.iconButton /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Transitions"><Transitions><BrushTransition Property="Background" Duration="0:0:0.2" /></Transitions></Setter>
     </Style>
-    <!-- The floating message is the tooltips' card, a little larger: the panel colour, a hairline and a soft shadow, so it is easy to see against any block. -->
+    <!-- The floating message is inverted, so nothing under it can look like it: the card takes the ink colour (dark on Light, light on Dark) and its words and buttons the page colour. -->
     <Style Selector=":is(Border).messageBar">
-      <Setter Property="Background" Value="{DynamicResource Panel}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
-      <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="BoxShadow" Value="0 6 18 0 #29141E46" />
+      <Setter Property="Background" Value="{DynamicResource Ink}" />
+      <Setter Property="BoxShadow" Value="0 16 38 0 #66000000" />
     </Style>
-    <!-- A failed save stays until a save works, so its edge is heavier. -->
-    <Style Selector=":is(Border).messageBar.hold"><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /><Setter Property="BorderThickness" Value="1.5" /></Style>
-    <Style Selector="Border.okIcon"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
-    <Style Selector="Border.warnIcon"><Setter Property="BorderBrush" Value="{DynamicResource Ink}" /><Setter Property="BorderThickness" Value="1.6" /></Style>
+    <Style Selector=":is(Border).messageBar TextBlock"><Setter Property="Foreground" Value="{DynamicResource Surface}" /></Style>
+    <Style Selector=":is(Border).messageBar TextBlock.muted"><Setter Property="Opacity" Value="0.72" /></Style>
+    <!-- Its buttons are the page colour on the card, so they read as buttons; their words take the ink. -->
+    <Style Selector=":is(Border).messageBar Button.ctl"><Setter Property="Background" Value="{DynamicResource Surface}" /><Setter Property="BorderBrush" Value="{DynamicResource Surface}" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+    <Style Selector=":is(Border).messageBar Button.ctl TextBlock"><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="Opacity" Value="1" /></Style>
+    <Style Selector=":is(Border).messageBar Button.iconButton:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
     <!-- The Day elapsed card is a raised tile with a bar of the accent colour along its top edge. -->
     <Style Selector=":is(Border).dayCard">
       <Setter Property="Background" Value="{DynamicResource Panel}" />

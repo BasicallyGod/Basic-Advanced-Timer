@@ -3,20 +3,29 @@ using Timer.Core;
 namespace Timer.Desktop;
 
 /// <summary>
-/// The themes the app offers. Light is the shared package's Light with a quiet warm neutral in place of its blue-grey surfaces, so the accent is the only
-/// blue on screen; the shared package is not changed for it, so the desk app keeps its own Light. Dark is the package's own. After Hours, Botanical, Hawthorn and the user's own themes are retired for now; a saved choice of one of them becomes Light or Dark by its base (<see cref="Resolve"/>).
+/// The themes the app offers. Light is the shared package's Light with cooler, crisper surfaces, darker text and lines and a stronger blue accent; the shared package is not changed for it, so the desk app keeps its own Light. Dark is the package's own. After Hours, Botanical, Hawthorn and the user's own themes are retired for now; a saved choice of one of them becomes Light or Dark by its base (<see cref="Resolve"/>).
 /// </summary>
 public static class AppThemes
 {
-    // Page #F4F4F1, cards white, lines #E2E2DD, hovers #EDEDEA, quiet text #5A6070. Ink, the accent and the selection tint are the package's.
+    // Round 28, option B (cool and crisp): page #EDF0F5, cards white, lines #D5DBE5, hovers #E4E9F1, text #131B2A, quiet text #4E5A6C, accent #2D5CCB,
+    // selection #D6E2FA, and blocks that take 78 per cent of their account's colour so they stand clear of the grey tiles. Each holds the contrast the tests ask.
     public static readonly ThemeDefinition Light = ThemeLibrary.Light with
     {
         Colours = new Dictionary<string, string>(ThemeLibrary.Light.Colours)
         {
-            ["Surface"] = "#F4F4F1", ["Panel"] = "#FFFFFF", ["Line"] = "#E2E2DD", ["Hover"] = "#EDEDEA", ["Muted"] = "#5A6070", ["Idle"] = "#5A6070",
-            ["PillSurface"] = ThemeLibrary.Light.Colour("Ink"), ["PillInk"] = "#F4F4F1"
-        }
+            ["Surface"] = "#EDF0F5", ["Panel"] = "#FFFFFF", ["Line"] = "#D5DBE5", ["Hover"] = "#E4E9F1", ["Muted"] = "#4E5A6C", ["Idle"] = "#4E5A6C",
+            ["Ink"] = "#131B2A", ["Clock"] = "#131B2A", ["Accent"] = "#2D5CCB", ["Selected"] = "#D6E2FA",
+            ["PillSurface"] = "#131B2A", ["PillInk"] = "#EDF0F5", ["Break"] = BreakOnTheCoolPage()
+        },
+        BlockTint = 0.78
     };
+    /// <summary>The package's break amber, taken a little darker only as far as it needs to hold 3 to 1 on the cooler page (it held it on the old warm one).</summary>
+    private static string BreakOnTheCoolPage()
+    {
+        var amber = ThemeLibrary.Light.Colour("Break");
+        for (var amount = 0.0; amount <= 1; amount += .02) { var shade = ThemeColours.Mix(amber, "#131B2A", amount); if (ThemeColours.Contrast(shade, "#EDF0F5") >= 3) return shade; }
+        return amber;
+    }
     public static ThemeDefinition Dark => ThemeLibrary.Dark;
     /// <summary>The choice that is Light by day and Dark by night, switching at sunset and sunrise (or at times set by hand). It is a choice, not a theme of its own: <see cref="TimerModel.CurrentTheme"/> is Light or Dark.</summary>
     public const string Sun = "Sun";
