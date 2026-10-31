@@ -105,7 +105,8 @@ public static class ThemeEngine
             Color Hi(double k) => Color.FromArgb((byte)Math.Round(255 * Math.Min(1, hiAlpha * k)), 255, 255, 255);
             Color Lo(double k) => Color.FromArgb((byte)Math.Round(255 * Math.Min(1, loAlpha * k)), lo.R, lo.G, lo.B);
             BoxShadow Drop(double x, double y, double blur, Color colour, bool inset = false) => new() { OffsetX = x, OffsetY = y, Blur = blur, Color = colour, IsInset = inset };
-            void PutShadow(string key, params BoxShadow[] shadows) => dictionary[key] = new BoxShadows(shadows[0], shadows.Skip(1).ToArray());
+            // With FlatShadows on (a developer switch for judging what the depth costs) every raised and sunk shadow is written empty.
+            void PutShadow(string key, params BoxShadow[] shadows) => dictionary[key] = FlatShadows ? default(BoxShadows) : new BoxShadows(shadows[0], shadows.Skip(1).ToArray());
             PutShadow("ShadowCard", Drop(0, 1, 0, Hi(.7), true), Drop(-7, -7, 16, Hi(.8)), Drop(9, 11, 26, Lo(.8)));
             PutShadow("ShadowKey", Drop(-3, -3, 7, Hi(1)), Drop(3, 4, 9, Lo(1)));
             PutShadow("ShadowKeyHover", Drop(-4, -4, 9, Hi(1.1)), Drop(4, 6, 13, Lo(1.2)));
@@ -192,6 +193,8 @@ public static class ThemeEngine
     public static (Color Fill, Color Track) DisabledSliderColours(IReadOnlyDictionary<string, string> colours)
         => (Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Ink"], .5)), Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Ink"], .28)));
     /// <summary>Raised after theme colours are written, so windows with their own chrome (title bars) can follow a change or a preview.</summary>
+    /// <summary>Developer switch: draw no raised or sunk shadows, to see how much of the frame time they take. Never saved.</summary>
+    public static bool FlatShadows { get; set; }
     public static event Action? Applied;
     /// <summary>Makes the themes available to the app.</summary>
     public static void Register(Application app, IEnumerable<ThemeDefinition> themes)

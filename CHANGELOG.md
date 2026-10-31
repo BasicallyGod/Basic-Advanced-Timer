@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Frame timing switches | [3d0bd973183e98a0b2099f2624a5846b195bc0c4](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/3d0bd973183e98a0b2099f2624a5846b195bc0c4) | Developer switches to draw flat (no raised or sunk shadows) and to pause the one-second refresh, a report that says how the frames spread, and the chip moved clear of Quit timer. |
 | Depth look: tokens | [fbe2b56e816de7e0b14659a0511da17b8923f446](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/fbe2b56e816de7e0b14659a0511da17b8923f446) | Warm greys, livelier role colours, the raised and sunk shadow sets and the account tones (vivid for blocks, chalky or lifted for charts). |
 | Depth look: controls | [2317fd3bb5604d8df4b18e5c0c158f637fecbb2a](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/2317fd3bb5604d8df4b18e5c0c158f637fecbb2a) | Buttons are raised keys that lift on hover and go in when pressed or chosen; view tabs and either-or choices are sliders; fields are sunk wells. |
 | Depth look: cards, menus, toast | [66eda29053e343abbb3940e79dbf549b2831e300](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/66eda29053e343abbb3940e79dbf549b2831e300) | Raised cards on the corner scale, porcelain menus with the row under the pointer sunk, and a porcelain toast with an inlaid state light and no countdown bar. |

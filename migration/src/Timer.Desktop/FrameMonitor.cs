@@ -62,7 +62,14 @@ public sealed class FrameMonitor
         return new FrameStats(sorted.Length, sorted.Average(), p95, sorted[^1], sorted.Count(m => m > 20), sorted.Count(m => m > 33));
     }
     /// <summary>A line to paste into a note: when, which page, and the figures.</summary>
-    public string Report() => $"{DateTime.Now:yyyy-MM-dd HH:mm} · {Page} · {BuildInfo.Current} · {Snapshot()}";
+    public string Report()
+    {
+        var all = gaps.Take(count).ToArray();
+        // How the frames spread, so a steady 20 ms pace can be told from a smooth run with a few long stalls.
+        var spread = $"{all.Length} frames: {all.Count(g => g <= 17.5)} up to 17.5 ms, {all.Count(g => g > 17.5 && g <= 20)} to 20, {all.Count(g => g > 20 && g <= 25)} to 25, {all.Count(g => g > 25 && g <= 33)} to 33, {all.Count(g => g > 33)} over 33";
+        var modes = (ThemeEngine.FlatShadows ? " [flat: no raised or sunk shadows]" : "") + (TimerModel.TickPaused ? " [1 s refresh paused]" : "");
+        return $"{DateTime.Now:yyyy-MM-dd HH:mm} · {Page} · {BuildInfo.Current}{modes} · {Snapshot()} · {spread}";
+    }
     /// <summary>The page the figures were taken on, kept by the readout; the figures start again when it changes, so each report is for one page.</summary>
     public string Page { get; set; } = "";
 }
@@ -76,7 +83,7 @@ public sealed class FrameChip : Border
     {
         this.page = page; Name = "FrameChip"; IsHitTestVisible = false; IsVisible = false;
         Background = new SolidColorBrush(Color.FromArgb(220, 16, 18, 22)); CornerRadius = new CornerRadius(8); Padding = new Thickness(9, 4);
-        HorizontalAlignment = HorizontalAlignment.Left; VerticalAlignment = VerticalAlignment.Bottom; Margin = new Thickness(10);
+        HorizontalAlignment = HorizontalAlignment.Right; VerticalAlignment = VerticalAlignment.Bottom; Margin = new Thickness(10, 10, 20, 8); // Right, clear of the sidebar's Quit timer.
         words.Foreground = Brushes.White; Child = words;
         FrameMonitor.Instance.Changed += Sync; Sync();
         DetachedFromVisualTree += (_, _) => FrameMonitor.Instance.Changed -= Sync;

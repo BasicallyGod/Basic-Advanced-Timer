@@ -842,11 +842,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         // The check is on the application's own dispatcher, which is what setting its theme verifies. The shared UI dispatcher is not always the same one (tests that build a
         // model off the UI thread while another headless session's application is current), and asking it let a call from the wrong thread through.
-        if (Application.Current is not { } app || !app.CheckAccess()) return;
+        // Setting the theme verifies against the shared UI dispatcher, which parallel headless sessions can move on from the application's own, so both must agree.
+        if (Application.Current is not { } app || !app.CheckAccess() || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;
         // System is Light or Dark by the computer's own setting, so the variant is chosen here and re-chosen when that setting changes.
         var variant = ThemeEngine.VariantFor(CurrentTheme);
         if (ReferenceEquals(variant, appliedVariant)) return;
-        appliedVariant = variant; app.RequestedThemeVariant = variant;
+        // A set the dispatcher still refuses (the race above, between the check and the set) is skipped and tried again at the next change, never thrown into the caller.
+        try { app.RequestedThemeVariant = variant; appliedVariant = variant; }
+        catch (InvalidOperationException) { }
     }
     // ---- Sunset to sunrise: Light by day and Dark by night. The clock tick saves and repaints every fifteen seconds, which is when the theme follows the sun. Saved as the appearance lines suncity=<city or hand> and sunhand=<dark from>-<light from>.
     private const string SunCityLine = "suncity=", SunHandLine = "sunhand=";
@@ -978,9 +981,11 @@ public sealed class TimerModel : INotifyPropertyChanged
             return Math.Clamp((Engine.Now - plan.Start).TotalSeconds / (plan.End - plan.Start).TotalSeconds, 0.0, 1.0);
         }
     }
+    /// <summary>Developer switch: skip the one-second refresh, so a page can be watched with nothing redrawing on the tick. Never saved; the clock stops moving while it is on.</summary>
+    public static bool TickPaused { get; set; }
     public void Tick()
     {
-        if (closed) return;
+        if (closed || TickPaused) return;
         ticks++;
         FollowToday();
         Notes.MakeSeriesNotes(); // A repeating meeting's next days are made as time goes on.

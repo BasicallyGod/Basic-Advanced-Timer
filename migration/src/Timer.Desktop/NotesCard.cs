@@ -48,7 +48,7 @@ public sealed class NotesCard : Border
         var scroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, Name = "NotesScroll" };
         var body = Ui.Grid("*", "Auto,Auto,*"); body.RowSpacing = 10;
         Ui.Put(body, header); Ui.Put(body, formHost, 0, 1); Ui.Put(body, scroll, 0, 2);
-        this.scroll = scroll;
+        this.scroll = scroll; Ui.LeaveRoomForTrack(scroll, list); // The slim bar lies over the content, so the rows give it room while the list scrolls.
         overlay.Children.Add(body); overlay.Children.Add(reminderHost); reminderHost.PlacementTarget = title; Child = overlay;
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditNoteRequested += OnEditNote; Sync(); };
         DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditNoteRequested -= OnEditNote; };

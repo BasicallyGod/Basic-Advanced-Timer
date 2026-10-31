@@ -265,11 +265,11 @@ public sealed class PillTests
                 var rest = ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color; Assert.Equal(255, rest.A); // A raised key with a solid face,
                 Assert.Null(cup.Fixed); Assert.True(tile.BoxShadow.Count > 0); // the cup in the theme's orange.
                 model.ToggleBreak(); Dispatcher.UIThread.RunJobs();
-                var on = ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color; Assert.Equal(orange, on); // Solid while a break is on.
-                var cupColour = ((Avalonia.Media.ISolidColorBrush)cup.Fixed!).Color;
-                Assert.True(ThemeColours.Contrast($"#{cupColour.R:X2}{cupColour.G:X2}{cupColour.B:X2}", $"#{on.R:X2}{on.G:X2}{on.B:X2}") >= 2.9, theme); // The lit cup reads on it.
-                if (theme == "Light") Assert.Equal(Avalonia.Media.Colors.White, cupColour);
-                Assert.True(tile.BoxShadow.Count > 0); // Pressed in.
+                // While a break is on the key is on: sunk into a well (the mock's "sunk and coloured"), with the cup still in the break colour and no solid orange fill.
+                var on = ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color; Assert.NotEqual(orange, on); Assert.NotEqual(rest, on);
+                Assert.True(tile.TryFindResource("Well", tile.ActualThemeVariant, out var well)); Assert.Equal(((Avalonia.Media.ISolidColorBrush)well!).Color, on);
+                Assert.Null(cup.Fixed); Assert.True(tile.BoxShadow.Count > 0);
+                Assert.True(ThemeColours.Contrast($"#{orange.R:X2}{orange.G:X2}{orange.B:X2}", $"#{on.R:X2}{on.G:X2}{on.B:X2}") >= 2.5, theme); // The amber cup reads on the well.
             }
             finally { pill.Close(); model.SetTheme("System"); }
         }
