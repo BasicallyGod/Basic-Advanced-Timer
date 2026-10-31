@@ -133,7 +133,8 @@
     <Style Selector="ComboBox"><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="12,0,0,0" /><Setter Property="VerticalContentAlignment" Value="Center" /></Style>
     <Style Selector="Button.softDay:disabled"><Setter Property="Opacity" Value="0.35" /></Style>
     <!-- Notes: the chips (an accent one for a reminder, a red one once it is late), the rows, the round tick and the form's box. -->
-    <Style Selector="Border.lateRow"><Setter Property="Background" Value="{DynamicResource LateTint}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+    <!-- A late row is a plain raised row like any other; its red words say it is late. -->
+    <Style Selector="Border.lateRow"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
     <!-- The Notes page: the views down the left, a row being changed, the rule under the form and the form's accent-edged box. -->
     <Style Selector="Button.weekDay"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="CornerRadius" Value="12" /></Style>
     <!-- No fill under the pointer or the press: a day's column would hide the schedule line and hour lines behind it. -->
@@ -145,17 +146,22 @@
     <Style Selector="Border.badge"><Setter Property="Background" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.accentChip"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <Style Selector="Border.lateChip"><Setter Property="Background" Value="{DynamicResource LateTint}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
-    <Style Selector="Border.noteRow"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
+    <Style Selector="Border.noteRow"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
     <!-- An important note: a faint accent wash and edge on its row, and its star solid in the accent; the words keep their weight. -->
-    <Style Selector="Border.noteRow.importantRow"><Setter Property="Background" Value="{DynamicResource ImportantTint}" /><Setter Property="BorderBrush" Value="{DynamicResource ImportantEdge}" /></Style>
+    <Style Selector="Border.noteRow.importantRow"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
     <Style Selector="Border.noteRow.rowSelected"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
-    <Style Selector="Border.tick"><Setter Property="BorderBrush" Value="{DynamicResource Muted}" /></Style>
-    <Style Selector="Border.tick.tickDone"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Border.tick"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
+    <Style Selector="Border.tick.tickDone"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
+    <Style Selector="Border.tick Path"><Setter Property="Stroke" Value="{DynamicResource AccentText}" /></Style>
+    <!-- The importance star is a small key: raised to offer, sunk and gold once the note is important. -->
+    <Style Selector="Button.starKey /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /><Setter Property="CornerRadius" Value="9" /></Style>
+    <Style Selector="Button.starKey:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource KeyHover}" /></Style>
+    <Style Selector="Button.starKey.on /template/ ContentPresenter#PART_ContentPresenter, Button.starKey.on:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="Border.composer"><Setter Property="Background" Value="{DynamicResource TextControlBackground}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="TextBox.bareField, TextBox.bareField:pointerover, TextBox.bareField:focus"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <Style Selector="TextBox.bareField /template/ Border#PART_BorderElement, TextBox.bareField:pointerover /template/ Border#PART_BorderElement, TextBox.bareField:focus /template/ Border#PART_BorderElement"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /></Style>
     <!-- Planned meetings on the timeline: dashed cards (the frame is a dashed rectangle, since a border cannot be dashed), and the row they sit in. -->
-    <Style Selector="Border.meetingCard"><Setter Property="Background" Value="{DynamicResource MeetBg}" /></Style>
+    <Style Selector="Border.meetingCard"><Setter Property="Background" Value="{DynamicResource MeetBg}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
     <Style Selector="Border.meetingCard.over"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
     <Style Selector="Border.meetingLane.over"><Setter Property="Background" Value="{DynamicResource MeetBg}" /></Style>
     <Style Selector="Border.plainChip"><Setter Property="Background" Value="{DynamicResource Surface}" /></Style>
@@ -206,10 +212,11 @@
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
     <!-- The dashboard's account rows are soft rounded cards. The recording account's card takes a gentle tint of the tracking colour. -->
-    <Style Selector="Button.accountCard"><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="4,4" /></Style>
-    <Style Selector="Button.accountCard:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
-    <Style Selector="Button.accountCard.active"><Setter Property="Background" Value="{DynamicResource LiveTint}" /></Style>
-    <Style Selector="Button.accountCard.active /template/ ContentPresenter#PART_ContentPresenter, Button.accountCard.active:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource LiveTint}" /></Style>
+    <Style Selector="Button.accountCard"><Setter Property="CornerRadius" Value="14" /><Setter Property="Padding" Value="4,4" /><Setter Property="BorderThickness" Value="0" /></Style>
+    <Style Selector="Button.accountCard /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
+    <Style Selector="Button.accountCard:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource KeyHover}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKey}" /></Style>
+    <!-- The account that is recording is sunk, with a gentle green wash: a key that is on. -->
+    <Style Selector="Button.accountCard.active /template/ ContentPresenter#PART_ContentPresenter, Button.accountCard.active:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource LiveTint}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <!-- The rail's icons sit in soft tiles. The chosen one is filled, and the rest are muted until the pointer arrives. -->
     <Style Selector="Button.rail">
       <Setter Property="Width" Value="44" /><Setter Property="Height" Value="44" />
@@ -233,7 +240,7 @@
     <!-- The three views as tabs at the left of the page header: a quiet track, with the chosen tab on a card of its own. -->
     <!-- An account as a tag pill, for filtering the Notes page: the same #Account a note carries, with the number of notes. Chosen, it takes the selection tint. -->
     <!-- The tile for a stack of blocks (the meetings' tile is a meetingCard): a quiet fill and a hairline, the selected tint under the pointer. -->
-    <Style Selector="Border.stackTile"><Setter Property="Background" Value="{DynamicResource MeetBg}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
+    <Style Selector="Border.stackTile"><Setter Property="Background" Value="{DynamicResource MeetBg}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
     <Style Selector="Border.stackTile.over"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
     <Style Selector="Button.iconButton /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Transitions"><Transitions><BrushTransition Property="Background" Duration="0:0:0.2" /></Transitions></Setter>
@@ -381,16 +388,17 @@
     <Style Selector="Button.flat:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <!-- The two big choices in the getting started setup. The chosen one has an accent border and the selection tint. -->
     <Style Selector="Button.choiceTile">
-      <Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BorderThickness" Value="1.5" />
+      <Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="14" /><Setter Property="Padding" Value="18,14" /><Setter Property="Foreground" Value="{DynamicResource Ink}" />
     </Style>
-    <Style Selector="Button.choiceTile:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
+    <Style Selector="Button.choiceTile /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKey}" /></Style>
+    <Style Selector="Button.choiceTile:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource KeyHover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKeyHover}" /></Style>
     <Style Selector="Button.choiceTile.selected /template/ ContentPresenter, Button.choiceTile.selected:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="2" />
+      <Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="2" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" />
     </Style>
     <!-- The section list on the settings page: quiet rows, and the chosen one in the selection tint with the accent for its words. -->
     <!-- A theme picture keeps its own colours, so a chosen one shows by its accent border alone. -->
-    <Style Selector="Button.choiceTile.themeTile.selected /template/ ContentPresenter, Button.choiceTile.themeTile.selected:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
+    <Style Selector="Button.choiceTile.themeTile.selected /template/ ContentPresenter, Button.choiceTile.themeTile.selected:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Well}" /></Style>
     <!-- The dashboard's buttons (the date arrows, Today, the gear, Add time, Undo, zoom and the Selected block card's actions): a card with a hairline, as drawn in the mock. -->
     <!-- The global TextBlock style gives every text the Ink colour, which beats what the button hands down, so a primary button's words are set here: white on the Light accent, where Ink was a dark grey on blue. -->
     <!-- Round option chips (the reminder pop-up's quick days and times): a soft fill, and the accent when chosen. -->
@@ -403,6 +411,8 @@
     <Style Selector="Button.quiet.breakButton.onBreak:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Break}" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="{DynamicResource Break}" />
     </Style>
+    <!-- A button clips to its own rectangle by default, which cut every raised key's shadow off square at its corners; the shadow is drawn outside the key, so buttons do not clip. -->
+    <Style Selector="Button"><Setter Property="ClipToBounds" Value="False" /></Style>
     <!-- ====== The depth look. Raised things (keys, cards) throw a soft shadow down and right, sunk things (fields, tracks, a pressed or chosen key) turn it inward.
          The shadows and the well colour come from the theme engine (ShadowKey, ShadowKeyHover, ShadowSunk, ShadowThumb, ShadowCard, Well, KeyHover, KeyEdge). ====== -->
     <!-- A key: every button on the dashboard and in dialogs. Hover lifts it a step; pressed or chosen sinks it, and a chosen one takes its words in the accent. -->
@@ -444,6 +454,20 @@
     <Style Selector="Button.toolButton.mainAction"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="1.5" /></Style>
     <Style Selector="Button.toolButton.mainAction /template/ ContentPresenter#PART_ContentPresenter, Button.toolButton.mainAction:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Button.toolButton.mainAction TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
+    <!-- A place you look into (the timeline's day): sunk into its card. -->
+    <Style Selector="Border.trough"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
+    <!-- A tick box: a small raised key while off, sunk with the accent tick while on. -->
+    <Style Selector="CheckBox /template/ Border#NormalRectangle"><Setter Property="CornerRadius" Value="7" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
+    <Style Selector="CheckBox:checked /template/ Border#NormalRectangle"><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
+    <!-- Two keys joined as one raised piece: the pair carries the shadow, each half is bare until it is pointed at or pressed. -->
+    <Style Selector="Border.keyPair"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKey}" /></Style>
+    <Style Selector="Border.pairDivider"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
+    <Style Selector="Button.ctl.pairFirst, Button.ctl.pairSecond"><Setter Property="BorderBrush" Value="Transparent" /></Style>
+    <Style Selector="Button.ctl.pairFirst /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.pairSecond /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.pairFirst:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.pairSecond:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BoxShadow" Value="none" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+    <Style Selector="Button.ctl.pairFirst /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.pairSecond /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
+    <Style Selector="Button.ctl.pairFirst /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="CornerRadius" Value="11,0,0,11" /></Style>
+    <Style Selector="Button.ctl.pairSecond /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="CornerRadius" Value="0,11,11,0" /></Style>
+    <Style Selector="Button.ctl.pairFirst:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.pairSecond:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <!-- A slider: a sunk track with a raised thumb under the chosen option. The three views, Notes or Meetings, Note or Meeting, Chart or Table. -->
     <Style Selector="Border.viewTabs"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="CornerRadius" Value="13" /><Setter Property="Padding" Value="4" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="Button.viewTab">

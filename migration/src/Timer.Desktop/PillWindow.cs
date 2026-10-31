@@ -129,7 +129,7 @@ public sealed class PillWindow : Window
         lastShadow = null;
     }
     /// <summary>The account list, a card that hangs below the account's box and scrolls inside.</summary>
-    public const double DropdownWidth = 208, DropdownMaxHeight = 380, DropdownGap = 11;
+    public const double DropdownWidth = 224, DropdownMaxHeight = 380, DropdownGap = 11;
     /// <summary>The list's card, built apart from the pop-up so it can also be drawn on its own.</summary>
     public Border MakeDropdownCard()
     {

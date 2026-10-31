@@ -59,13 +59,14 @@ public sealed class Round19Tests
         try
         {
             var canvas = Find<Canvas>(window, "TimelineCanvas");
+            var restingShadows = Find<Border>(window, "TimelineMeeting" + model.Notes.All.Single(n => NotesModel.IsMeeting(n)).Id).BoxShadow.Count; // A meeting is a small raised card, so it has a shadow of its own at rest.
             List<Border> Ringed() => canvas.Children.OfType<Border>().Where(b => b.Classes.Contains("guideOver")).ToList();
             window.MouseMove(At(window, model, 7.75, Lanes)); Settle(window); // Under the block and the meeting.
             var ringed = Ringed(); Assert.Equal(2, ringed.Count);
             // The ring is the card's own shadow, so it is the same width on every side.
             Assert.All(ringed, b => { var shadow = b.BoxShadow[0]; Assert.Equal(0, shadow.OffsetX); Assert.Equal(0, shadow.OffsetY); Assert.Equal(0, shadow.Blur); Assert.Equal(2, shadow.Spread); });
             window.MouseMove(At(window, model, 7.25, Lanes)); Settle(window); // Under the block alone: the meeting's ring goes and its own shadow is as it was.
-            Assert.Single(Ringed()); Assert.Equal(0, Find<Border>(window, "TimelineMeeting" + model.Notes.All.Single(n => NotesModel.IsMeeting(n)).Id).BoxShadow.Count);
+            Assert.Single(Ringed()); Assert.Equal(restingShadows, Find<Border>(window, "TimelineMeeting" + model.Notes.All.Single(n => NotesModel.IsMeeting(n)).Id).BoxShadow.Count);
             window.MouseMove(At(window, model, 7.75, Ruler)); Settle(window); // On the ruler the guide rings nothing.
             Assert.Empty(Ringed());
             window.MouseMove(At(window, model, 7.75, Lanes)); Settle(window); Assert.Equal(2, Ringed().Count);

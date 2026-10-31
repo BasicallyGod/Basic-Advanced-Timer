@@ -91,7 +91,7 @@ public sealed class MenuAndShellTests
             var first = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account0"); var drawer = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Sidebar");
             var circle = first.GetVisualDescendants().OfType<AccountIndicator>().Single();
             Assert.True(first.Bounds.Width - (circle.TranslatePoint(new Point(circle.Bounds.Width, 0), first)!.Value.X) <= 12, $"gap {first.Bounds.Width - (circle.TranslatePoint(new Point(circle.Bounds.Width, 0), first)!.Value.X)} row {first.Bounds.Width} circle {circle.Bounds}");
-            Assert.Equal(drawer.Bounds.Width - 24, first.Bounds.Width, 1.0);
+            Assert.Equal(drawer.Bounds.Width - 24 - 12, first.Bounds.Width, 1.0); // The list is inset 3 and 9 so the cards' shadows are not clipped by the scroll area.
             // The rest of the row keeps its shape: the account name and today's time are still both visible inside it.
             var row = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account0");
             Assert.All(row.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is { Length: > 0 }), t => Assert.True(t.TranslatePoint(default, row)!.Value.X >= 0 && t.TranslatePoint(new Point(t.Bounds.Width, 0), row)!.Value.X <= row.Bounds.Width + 1));

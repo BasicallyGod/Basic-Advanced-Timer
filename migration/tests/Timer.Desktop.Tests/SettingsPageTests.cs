@@ -128,7 +128,10 @@ public sealed class SettingsPageTests
             var sidebar = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Sidebar"); var middle = sidebar.TranslatePoint(new Avalonia.Point(sidebar.Bounds.Width / 2, 0), window)!.Value.X;
             double Centre(string name) { var c = window.GetVisualDescendants().OfType<Control>().Single(x => x.Name == name); return c.TranslatePoint(new Avalonia.Point(c.Bounds.Width / 2, 0), window)!.Value.X; }
             // The lights, the clock and the tracking card are all centred on the column.
-            Assert.Equal(middle, Centre("SidebarDisplay"), 1.0); Assert.Equal(middle, Centre("SidebarWell"), 1.5);
+            Assert.Equal(middle, Centre("SidebarDisplay"), 1.0);
+            // The well and the break key outside it make one row, centred on the column as a whole.
+            double Edge(string name, bool right) { var c = window.GetVisualDescendants().OfType<Control>().Single(x => x.Name == name); return c.TranslatePoint(new Avalonia.Point(right ? c.Bounds.Width : 0, 0), window)!.Value.X; }
+            Assert.Equal(middle, (Edge("SidebarWell", false) + Edge("DashboardBreak", true)) / 2, 6.0);
             // Quit timer is at the foot on its own, centred on the column and the width of its foot.
             var quit = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "QuitTimer");
             Assert.Equal(middle, Centre("QuitTimer"), 1.5); Assert.True(quit.Bounds.Width > sidebar.Bounds.Width - 40);

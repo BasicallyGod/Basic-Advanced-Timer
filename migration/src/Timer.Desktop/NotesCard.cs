@@ -139,7 +139,7 @@ public sealed class NotesCard : Border
             // The star marks a note important (solid) or not (an outline); an important note comes first in the list.
             var important = NotesModel.IsImportant(note);
             var star = Ui.IconButton(important ? IconKind.StarFilled : IconKind.Star, important ? "Not important" : "Mark important", "NoteImportant_" + note.Id, () => Notes.SetImportant(note.Id, !important));
-            star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, star, 3);
+            star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; star.Classes.Add("starKey"); star.Classes.Set("on", important); Ui.Put(line, star, 3);
             if (important && star.Content is IconGlyph solid) solid.TintKey = "ImportantStar"; // The mark is gold, so an important note is picked out without its words changing weight.
         }
         if (!meeting && NotesModel.ReminderOf(note) is null)

@@ -149,10 +149,10 @@ public sealed class CreditReviewTests
             Capture(dashboard, "timeline-bar");
             Rect Box(Control c) => new(c.TranslatePoint(default, dashboard)!.Value, c.Bounds.Size);
             var add = Box(Find<Button>(dashboard, "AddTime")); var undo = Box(Find<Button>(dashboard, "UndoEdit"));
-            var figures = Box(Find<StackPanel>(dashboard, "DayTotals")); var zoom = Box(Find<StackPanel>(dashboard, "TimelineControls"));
+            var figures = Box(Find<StackPanel>(dashboard, "DayTotals")); var zoom = Box(Find<Border>(dashboard, "TimelineControls"));
             Assert.True(add.Right <= undo.Left + .5 && undo.Right <= figures.Left + .5 && figures.Right <= zoom.Left + .5, "Add time, Undo, the figures and the zoom run left to right without overlapping.");
             foreach (var box in new[] { undo, figures, zoom }) Assert.True(Math.Abs(box.Center.Y - add.Center.Y) < 12, "They share one row.");
-            Assert.Equal(2, zoom.Width > 0 ? Find<StackPanel>(dashboard, "TimelineControls").Children.Count : 0); // Zoom out and zoom in, as in the mock.
+            Assert.Equal(2, Find<Border>(dashboard, "TimelineControls").GetVisualDescendants().OfType<Button>().Count()); // Zoom out and zoom in, one joined pair as in the mock.
         }
         finally { dashboard.Close(); }
     }

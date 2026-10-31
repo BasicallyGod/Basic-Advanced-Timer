@@ -333,15 +333,18 @@ public sealed class DashboardWindow : Window
         ScrollViewer? TimelineScroll() => timelineHost.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
         zoomOut = Ui.Ctl("TimelineZoomOut", null, IconKind.Minus, "Zoom out", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Width / 2, s.Offset.X); }, key: "Ctrl scroll");
         zoomIn = Ui.Ctl("TimelineZoomIn", null, IconKind.Plus, "Zoom in", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Width / 2, s.Offset.X); }, key: "Ctrl scroll");
-        var zoom = Ui.Horizontal(zoomOut, zoomIn); zoom.Spacing = 6; zoom.Name = "TimelineControls";
+        var zoom = Ui.KeyPair(zoomOut, zoomIn, "TimelineControls");
         totalsStrip = BuildTotals();
         var tools = Ui.Grid("Auto,*,Auto"); tools.Margin = new Thickness(14, 6, 14, 0);
-        Ui.Put(tools, Ui.Horizontal(addTime, undo, redo)); Ui.Put(tools, totalsStrip, 1); Ui.Put(tools, zoom, 2);
+        var editKeys = Ui.Horizontal(addTime, Ui.KeyPair(undo, redo, "EditKeys")); editKeys.Spacing = 8; Ui.Put(tools, editKeys); Ui.Put(tools, totalsStrip, 1); Ui.Put(tools, zoom, 2);
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
+        workspace.ClipToBounds = false; // A content control clips by default, which cut the raised cards' shadows square at the page's edge; the lists inside scroll and clip themselves.
         Ui.Put(review, workspace, row: 1);
         // The timeline is a card (the day across the top, its bar of buttons and figures under it) over the Selected block card. The week and the settings
         // fill the workspace instead, so these two are shown for the timeline alone.
-        var cardGrid = Ui.Grid("*", "Auto,Auto"); Ui.Put(cardGrid, timelineHost); Ui.Put(cardGrid, tools, 0, 1);
+        // The day itself sits in a sunk trough set into the card, as the mock draws it: the card is the stage, the timeline a place you look into.
+        var trough = new Border { Name = "TimelineTrough", Child = timelineHost, CornerRadius = new CornerRadius(14), Margin = new Thickness(14, 0, 14, 0), ClipToBounds = true }; trough.Classes.Add("trough");
+        var cardGrid = Ui.Grid("*", "Auto,Auto"); Ui.Put(cardGrid, trough); Ui.Put(cardGrid, tools, 0, 1);
         timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(0, 14, 0, 12), VerticalAlignment = VerticalAlignment.Top };
         timelineCard.Classes.Add("dayCard");
         selectedCard = new SelectedBlockCard(model) { Margin = new Thickness(0, 14, 7, 0) };
