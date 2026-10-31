@@ -86,6 +86,12 @@ public static class ThemeEngine
         Put("ImportantStar", Color.Parse(gold));
         Put("ImportantTint", Color.Parse(ThemeColours.Mix(colours["Panel"], gold, lightGround ? .09 : .12)));
         Put("ImportantEdge", Color.Parse(ThemeColours.Mix(colours["Line"], gold, lightGround ? .5 : .55)));
+        // The clock's display is set into the card: a well a shade under it, the grooves of its unlit LED, the shade falling inside its top and left edges and a faint light
+        // edge along its foot (dividers inside it take the same two).
+        Put("DisplayWell", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .035) : ThemeColours.Mix(colours["Panel"], "#000000", .45)));
+        Put("DisplayGroove", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .02) : ThemeColours.Mix(colours["Panel"], "#000000", .55)));
+        Put("DisplayShade", lightGround ? Color.FromArgb(62, 20, 30, 60) : Color.FromArgb(166, 0, 0, 0));
+        Put("DisplayEdge", lightGround ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(18, 255, 255, 255));
         Put("LateTint", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["Overtime"], .14)));
         Put("BudgetTint", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["BudgetWarning"], .16)));
         // Amber and the accent are right for bars and rings but too pale to read as small text on the light themes, so their words use a shade of each taken towards the text colour until it holds 4.5 to 1 on every ground it sits on.

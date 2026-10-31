@@ -470,7 +470,7 @@ Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
-            var lights = dashboard.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "SidebarLights");
+            var lights = dashboard.GetVisualDescendants().OfType<Border>().Single(p => p.Name == "SidebarStateLight");
             void Settle() { Dispatcher.UIThread.RunJobs(); using var f = dashboard.CaptureRenderedFrame(); }
             // The light is amber on a break.
             if (model.IsOnBreak) model.ToggleBreak();
@@ -502,7 +502,7 @@ Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(
             Assert.True(dashboard.Topmost); Assert.True(pill.Topmost);
             model.ToggleAccount("Account three"); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
             Assert.True(model.IsTracking); Assert.Equal("Recording", model.ThemeState); // However late in the day it is, there is no overtime state.
-            Assert.Equal("Recording", ToolTip.GetTip(pill.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "PillLights")));
+            Assert.Equal("Recording", ToolTip.GetTip(pill.GetVisualDescendants().OfType<Border>().Single(p => p.Name == "PillStateLight")));
             Assert.Equal("Start break", ToolTip.GetTip(dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak")));
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs();
             Assert.StartsWith("End break", ToolTip.GetTip(dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak"))?.ToString());

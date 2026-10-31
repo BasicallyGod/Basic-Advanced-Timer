@@ -333,7 +333,7 @@ Dispatcher.UIThread.RunJobs(); using var accountsFrame = dashboard.CaptureRender
             Assert.InRange(nine.TranslatePoint(default, coordinator.Dashboard)!.Value.Y, 100, 400);
             model.ToggleAccount("Account one");
             Save(coordinator.Dashboard, Path.Combine(output, "demo-tracking.png"));
-            Assert.Equal("Recording", ToolTip.GetTip(coordinator.Dashboard.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "SidebarLights")));
+            Assert.Equal("Recording", ToolTip.GetTip(coordinator.Dashboard.GetVisualDescendants().OfType<Border>().Single(p => p.Name == "SidebarStateLight")));
             Save(coordinator.Dashboard, Path.Combine(output, "demo-late.png"));
             coordinator.Dashboard.OpenPill!(); coordinator.Pill.ShowPanel();
             Save(coordinator.Pill, Path.Combine(output, "demo-pill-overtime.png"));

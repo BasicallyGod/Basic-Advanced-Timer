@@ -54,7 +54,7 @@ public sealed class PillTests
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            var lights = Find<StackPanel>(pill, "PillLights"); var circle = Find<Button>(pill, "PillPause"); var mug = Find<Button>(pill, "PillBreak");
+            var lights = Find<Border>(pill, "PillStateLight"); var circle = Find<Button>(pill, "PillPause"); var mug = Find<Button>(pill, "PillBreak");
             Assert.Equal("Not recording", Tip(lights)); Assert.StartsWith("Start ", Tip(circle)); Assert.Equal("Start break", Tip(mug));
             model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs();
             Assert.Equal("Recording", Tip(lights)); Assert.StartsWith("Pause", Tip(circle));
@@ -109,7 +109,7 @@ public sealed class PillTests
     public void TheReminderLightShowsOnlyWhileAReminderIsDue()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
-        try { Assert.Equal("No reminders waiting", Avalonia.Automation.AutomationProperties.GetName(Find<Border>(pill, "PillReminderLight"))); Assert.False(model.ReminderDue); }
+        try { Assert.Equal("Nothing waiting", Avalonia.Automation.AutomationProperties.GetName(Find<Button>(pill, "PillAlertsButton"))); Assert.False(model.ReminderDue); }
         finally { pill.Close(); }
     }
 
@@ -177,7 +177,7 @@ public sealed class PillTests
             var surface = Find<Border>(pill, "PillSurface");
             Point At(Control c) => c.TranslatePoint(default, pill)!.Value;
             (double, double, Point, Point, Point, Point) Snapshot() { Dispatcher.UIThread.RunJobs(); using var f = pill.CaptureRenderedFrame();
-                return (surface.BorderThickness.Left, surface.Bounds.Width, At(Find<StackPanel>(pill, "PillLights")), At(Find<Button>(pill, "PillDashboard")), At(Find<Button>(pill, "PillPause")), At(pill.AccountsButton)); }
+                return (surface.BorderThickness.Left, surface.Bounds.Width, At(Find<Border>(pill, "PillStateLight")), At(Find<Button>(pill, "PillDashboard")), At(Find<Button>(pill, "PillPause")), At(pill.AccountsButton)); }
             var idle = Snapshot();
             demo.ToggleAccount("Account one"); Assert.Equal(idle, Snapshot()); // Recording.
             demo.ToggleBreak(); Assert.Equal(idle, Snapshot()); // A break.

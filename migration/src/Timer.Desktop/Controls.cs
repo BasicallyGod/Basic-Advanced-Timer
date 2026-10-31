@@ -135,51 +135,6 @@ public static class Ui
         };
         pulses.Add(control, new PulseRun(source, new RunningAnimation(animation.RunAsync(control, source.Token))));
     }
-    /// <summary>
-    /// The reminder light's pulse, as the mock draws it: a ring in <paramref name="colour"/> that starts at the light's edge and swells to seven pixels while it fades out,
-    /// every 1.8 seconds. The light itself stays steady.
-    /// </summary>
-    public static void PulseRing(Border light, Border ring, bool on, Color colour)
-    {
-        // The ring is a shape of its own, behind the light and centred on it, that grows and fades. It used to be a box shadow on the light itself, whose corners stay as tight as
-        // the light's (a radius of 3), so the glow came out as a flat-topped box that looked cut off; here the radius grows with the ring, so it is round, as the mock draws it.
-        void Rest() { ring.Opacity = 0; ring.RenderTransform = null; ring.Width = light.Width; ring.Height = light.Height; ring.CornerRadius = light.CornerRadius; }
-        if (Motion.Reduced) { if (pulses.TryGetValue(light, out var still)) { still.Source.Cancel(); pulses.Remove(light); } Rest(); return; }
-        if (pulses.TryGetValue(light, out var running))
-        {
-            if (on && running.Run.Alive) { ring.Background = new SolidColorBrush(colour); return; }
-            running.Source.Cancel(); pulses.Remove(light); Rest();
-            if (!on) return;
-        }
-        if (!on) { Rest(); return; }
-        ring.Background = new SolidColorBrush(colour);
-        // The ring is laid out once at its full size, and the swell is a scale about its centre. Animating its width and height instead snapped it to whole pixels at every step
-        // (a seven pixel swell over a second is a step every 180 milliseconds, which looked juddery), and made the pill lay itself out on every frame; a render transform is
-        // drawn between pixels, so it is smooth, and costs no layout.
-        const double spread = 7;
-        double w = light.Width, h = light.Height; var r = light.CornerRadius.TopLeft; double fullW = w + 2 * spread, fullH = h + 2 * spread, sx = w / fullW, sy = h / fullH;
-        ring.Width = fullW; ring.Height = fullH; ring.CornerRadius = new CornerRadius(r + spread); ring.RenderTransformOrigin = RelativePoint.Center;
-        // The swell is driven frame by frame from the window's own animation frames (the display's refresh, so it is as smooth as the screen), setting a scale and an opacity;
-        // Avalonia's keyframe animations have no animator for a render transform, and its Width and Height ones are what snapped to pixels. Nothing here asks for a layout.
-        var scale = new ScaleTransform(sx, sy); ring.RenderTransform = scale;
-        var source = new CancellationTokenSource(); var finished = new TaskCompletionSource(); source.Token.Register(() => finished.TrySetResult());
-        const double seconds = 1.8, growing = .7;
-        var started = System.Diagnostics.Stopwatch.GetTimestamp(); var looping = false;
-        void Apply(double t)
-        {
-            if (t >= growing) { ring.Opacity = 0; scale.ScaleX = sx; scale.ScaleY = sy; return; } // Grown and faded: wait, invisible, for the next swell.
-            var p = t / growing; var eased = 1 - Math.Pow(1 - p, 3); // Cubic ease out, as the keyframes had.
-            scale.ScaleX = sx + (1 - sx) * eased; scale.ScaleY = sy + (1 - sy) * eased; ring.Opacity = .75 * (1 - eased);
-        }
-        void Frame(TimeSpan _)
-        {
-            looping = false; if (source.IsCancellationRequested) return;
-            Apply(System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalSeconds % seconds / seconds); Kick();
-        }
-        void Kick() { if (looping || source.IsCancellationRequested || TopLevel.GetTopLevel(ring) is not { } top) return; looping = true; top.RequestAnimationFrame(Frame); }
-        Apply(0); ring.AttachedToVisualTree += (_, _) => Kick(); Kick();
-        pulses.Add(light, new PulseRun(source, new RunningAnimation(finished.Task)));
-    }
     public static bool IsPulsing(Control control) => pulses.TryGetValue(control, out var run) && run.Run.Alive;
     /// <summary>A heading in the app's display face, the same as the dashboard's workspace title, so every page and pop-up names itself alike.</summary>
     public static TextBlock Heading(string text, double size = 20)

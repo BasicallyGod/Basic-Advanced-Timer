@@ -118,16 +118,16 @@ public sealed class FeedbackRound6Tests
     }
 
     [AvaloniaFact]
-    public void ThePillsReminderLightIsAlwaysThereGreyWhenNothingIsWaitingAndBlueWhenAReminderIsDue()
+    public void ThePillsAlertCountIsAlwaysThereTwoDigitsWideBlankWhenNothingIsWaitingAndBlueWhenAReminderIsDue()
     {
         var model = Model(false); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            var light = Find<Border>(pill, "PillReminderLight"); Assert.True(light.IsVisible);
-            var grey = ((Avalonia.Media.ISolidColorBrush)light.Background!).Color;
+            var count = Find<SegmentRun>(pill, "PillAlertCount"); Assert.True(count.IsVisible); Assert.Equal("  ", count.Text);
+            var width = count.Bounds.Width;
             model.Notes.AddNote("Send the budget", null, Day.AddHours(8)); Dispatcher.UIThread.RunJobs();
-            var blue = ((Avalonia.Media.ISolidColorBrush)Find<Border>(pill, "PillReminderLight").Background!).Color;
-            Assert.NotEqual(grey, blue); Assert.True(blue.B > blue.R); // Blue, where the grey was.
+            count = Find<SegmentRun>(pill, "PillAlertCount"); Assert.Equal(" 1", count.Text); Assert.Equal(width, count.Bounds.Width, 0.5); // The same width, so nothing moves.
+            var blue = count.Colour!.Value; Assert.True(blue.B > blue.R); // Blue, the reminder's colour.
         }
         finally { pill.Close(); }
     }

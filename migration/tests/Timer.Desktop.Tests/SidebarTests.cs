@@ -85,14 +85,14 @@ public sealed class SidebarTests
             Assert.Equal("Account one", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.Equal("Ready to track", Find<TextBlock>(window, "SidebarWhoStatus").Text);
             model.ToggleAccount("Account two"); Settle(window); Assert.Equal("Account two", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.False(Find<TextBlock>(window, "SidebarWhoStatus").IsVisible); // Tracking says itself, on the tile and the light.
             model.ToggleBreak(); Settle(window); Assert.Equal("Break", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.StartsWith("On break", Find<TextBlock>(window, "SidebarWhoStatus").Text);
-            // The clock is hours and minutes with the seconds beside them on one line, the pair centred in the column.
-            var clock = Find<Control>(window, "SidebarClockTile"); var sidebar = Find<Border>(window, "Sidebar");
-            var parts = clock.GetVisualDescendants().OfType<TextBlock>().Where(t => !string.IsNullOrEmpty(t.Text)).ToList(); Assert.Equal(2, parts.Count);
-            Assert.InRange(Math.Abs(parts[0].TranslatePoint(default, window)!.Value.Y - parts[1].TranslatePoint(default, window)!.Value.Y), 0, 40); // On one line (the seconds sit on the same baseline, lower in the box).
+            // The clock is seven-segment digits (hours and minutes, then the seconds the same height) inside the display, and the display is centred in the column.
+            var display = Find<Border>(window, "SidebarDisplay"); var sidebar = Find<Border>(window, "Sidebar");
+            var clock = display.GetVisualDescendants().OfType<SegmentClock>().Single(); var parts = clock.GetVisualDescendants().OfType<SegmentRun>().ToList(); Assert.Equal(2, parts.Count);
+            Assert.Equal(parts[0].Bounds.Height, parts[1].Bounds.Height, 0.5); // Seconds are as tall as the hours and minutes.
+            Assert.Equal(parts[0].TranslatePoint(default, window)!.Value.Y, parts[1].TranslatePoint(default, window)!.Value.Y, 0.5);
             Assert.True(parts[1].TranslatePoint(default, window)!.Value.X > parts[0].TranslatePoint(default, window)!.Value.X + parts[0].Bounds.Width - 1);
             var middle = sidebar.TranslatePoint(new Point(sidebar.Bounds.Width / 2, 0), window)!.Value.X;
-            var left = parts[0].TranslatePoint(default, window)!.Value.X; var right = parts[1].TranslatePoint(new Point(parts[1].Bounds.Width, 0), window)!.Value.X;
-            Assert.Equal(middle, (left + right) / 2, 2.0);
+            Assert.Equal(middle, display.TranslatePoint(new Point(display.Bounds.Width / 2, 0), window)!.Value.X, 2.0);
         }
         finally { window.Close(); }
     }

@@ -92,47 +92,6 @@ public sealed class Round11Tests
             }
     }
 
-    // The pulse ring is a round shape behind the light, free to grow past its cell. As a box shadow on the light its corners stayed tight and the glow looked cut off flat at the top.
-    [AvaloniaFact]
-    public void TheReminderPulseIsARoundRingBehindTheLightNotABoxShadowOnIt()
-    {
-        var model = TimerModel.CreateDemo(); model.SetTheme("Light");
-        var pill = new PillWindow(model); pill.Show(); Settle(pill);
-        try
-        {
-            Assert.True(model.ReminderDue);
-            var light = pill.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PillReminderLight"); var ring = pill.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PillReminderRing");
-            Assert.True(Ui.IsPulsing(light)); Assert.Equal(default, light.BoxShadow); Assert.False(ring.IsHitTestVisible);
-            Assert.Same(ring.Parent, light.Parent); Assert.Equal(new Size(6, 14), ((Control)light.Parent!).Bounds.Size); // The cell stays the light's size, so nothing moves as the ring swells.
-            PreviewCaptureTests.SetSwollen(ring, 1); ring.Background = Avalonia.Media.Brushes.Red; Settle(pill);
-            var corner = ring.TranslatePoint(new Point(1.5, 1.5), pill)!.Value; var middle = ring.TranslatePoint(new Point(10, 4), pill)!.Value; var body = new Point(middle.X, middle.Y + 26);
-            using var frame = pill.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var shot = pill.CaptureRenderedFrame();
-            var card = Pixel(shot!, body); var atCorner = Pixel(shot!, corner); var atTop = Pixel(shot!, middle);
-            Assert.True(Distance(atCorner, card) < 12, "the ring's corner should be round, so its very corner shows the card"); Assert.True(Distance(atTop, card) > 150, "the ring's top edge should be filled");
-        }
-        finally { pill.Close(); }
-        static int[] Pixel(Avalonia.Media.Imaging.WriteableBitmap bitmap, Point at)
-        {
-            using var pixels = bitmap.Lock(); var data = new byte[pixels.RowBytes * pixels.Size.Height]; System.Runtime.InteropServices.Marshal.Copy(pixels.Address, data, 0, data.Length);
-            var o = (int)at.Y * pixels.RowBytes + (int)at.X * 4; return new[] { (int)data[o], data[o + 1], data[o + 2] };
-        }
-        static int Distance(int[] a, int[] b) => a.Zip(b).Sum(c => Math.Abs(c.First - c.Second));
-    }
-
-    [AvaloniaFact]
-    public void TheRailsReminderRingIsNotClippedByAnythingAboveIt()
-    {
-        // The ring swells 7 pixels past the light, above the top of the face, so nothing between it and the rail may clip to its own bounds (a layout transform control does by default).
-        var window = new DashboardWindow(Model()); window.Show(); Dispatcher.UIThread.RunJobs();
-        try
-        {
-            var ring = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "SidebarReminderRing"); var rail = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Sidebar");
-            foreach (var up in ring.GetVisualAncestors().TakeWhile(a => a != rail).OfType<Control>().Where(a => a.ClipToBounds))
-                Assert.Fail($"{up.GetType().Name} {up.Name} clips the ring");
-        }
-        finally { window.Close(); }
-    }
-
     [AvaloniaFact]
     public void TheReminderCardIsGivenRoomForItsWholeShadowInItsPopup()
     {

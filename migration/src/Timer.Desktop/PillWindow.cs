@@ -21,7 +21,7 @@ public sealed class PillWindow : Window
     public Action? OpenDashboard { get; set; }
     private readonly TimerModel model;
     /// <summary>The pill's own size before it is scaled for the screen: 336 wide and 72 tall, a card with the dashboard's 20 pixel corner. Its contents start 20 pixels from the left and end 14 from the right.</summary>
-    public const double PillWidth = 336, PillHeight = 72, PillRadius = 20, InsetLeft = 20, InsetRight = 14;
+    public const double PillWidth = 416, PillHeight = 72, PillRadius = 20, InsetLeft = 20, InsetRight = 14;
     // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
     // A narrow screen (its width in device independent pixels over 1800, never above 95 per cent or below 80 per cent), and a screen with a low
     // Windows scale, because it has fewer pixels to the inch, so the same pill looks bigger on it. Windows scale 125 per cent or more gives the
@@ -48,7 +48,6 @@ public sealed class PillWindow : Window
     private Popup panel = new();
     private Popup alertsPanel = new();
     private PillAlertsCard? alertsCard; private Grid? alertsHung;
-    private Border badge = null!; private readonly TextBlock badgeText = new() { Name = "PillAlertsBadgeText" };
     private readonly HashSet<string> peeked = new();
     private DispatcherTimer? foldTimer;
     private long alertsDismissedAt;
@@ -69,8 +68,6 @@ public sealed class PillWindow : Window
     public PillAlertsCard? AlertsCard => alertsCard;
     /// <summary>The light button that opens what is waiting.</summary>
     public Button AlertsButton => face.AlertsButton!;
-    /// <summary>The count over the pill's corner, shown when more than one thing is waiting.</summary>
-    public Border AlertsBadge => badge;
     /// <summary>The account list's scroll box, so tests can read its limit.</summary>
     public ScrollViewer AccountScroll => accountScroll;
     /// <summary>The Accounts button on the pill's face.</summary>
@@ -124,12 +121,7 @@ public sealed class PillWindow : Window
         surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true, Width = PillWidth, Height = PillHeight, BorderThickness = new Thickness(EdgeThickness) };
         surface.Classes.Add("pillBody");
         shadowHost = Ui.Shadowed(surface, PillRadius);
-        // The count of what is waiting rides on the pill's top left, over the card's edge, so it sits in the room round the card that the shadow has.
-        badge = new Border { Name = "PillAlertsBadge", MinWidth = 20, Height = 20, CornerRadius = new CornerRadius(10), Padding = new Thickness(6, 0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, IsVisible = false,
-            Margin = new Thickness(Ui.ShadowMargin + 14, Ui.ShadowMargin - 9, 0, 0), BorderThickness = new Thickness(2), Child = badgeText };
-        badge.Bind(Border.BackgroundProperty, badge.GetResourceObservable("Overtime")); badge.Bind(Border.BorderBrushProperty, badge.GetResourceObservable("PillBody"));
-        badgeText.Foreground = Brushes.White; badgeText.FontSize = 11.5; badgeText.FontWeight = FontWeight.Bold; badgeText.HorizontalAlignment = HorizontalAlignment.Center; badgeText.VerticalAlignment = VerticalAlignment.Center;
-        Content = new LayoutTransformControl { LayoutTransform = pillScale, Child = new Grid { Children = { shadowHost, badge } } };
+        Content = new LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
         panel = new Popup();
         BuildDropdown();
         BuildAlerts();
@@ -191,7 +183,9 @@ public sealed class PillWindow : Window
         alertsCard.Open(list || model.Alerts.Count == 0);
         // The card lines up with the pill's left edge, under the lights, and its point sits under them.
         alertsPanel.HorizontalOffset = -HangingCard.Room.Left * Scale; alertsPanel.VerticalOffset = (DropdownGap - HangingCard.Room.Top) * Scale;
-        if (alertsHung is not null) HangingCard.MovePoint(alertsHung, AlertsPoint, HangingCard.ClampFromRight(PillAlertsCard.CardWidth - (InsetLeft + 9), PillAlertsCard.CardWidth, PillRadius));
+        // Its point sits under the count, which is what opens it.
+        if (alertsHung is not null && face.AlertsButton is { } countButton && countButton.TranslatePoint(new Point(countButton.Bounds.Width / 2, 0), surface) is { } under)
+            HangingCard.MovePoint(alertsHung, AlertsPoint, HangingCard.ClampFromRight(PillAlertsCard.CardWidth - under.X, PillAlertsCard.CardWidth, PillRadius));
         alertsPanel.IsOpen = true;
         if (!wasOpen) StartFoldTimer();
     }
@@ -328,7 +322,6 @@ public sealed class PillWindow : Window
     private void Refresh()
     {
         face.Refresh();
-        var count = face.AlertCount; badge.IsVisible = count > 1; badgeText.Text = count > 9 ? "9+" : count.ToString();
         var (key, _) = StatusFace.State(model);
         var stateColour = key == "Idle" ? Colors.Gray : Ui.PillStateColour(this, key);
 
