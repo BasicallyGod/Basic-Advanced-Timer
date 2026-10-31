@@ -92,7 +92,7 @@ public sealed class NotificationsFlyout : Border
         // Done and Reschedule are small icons at the right of the row, so the words keep the room.
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
         Button? reschedule = null;
-        if (late) { var done = Ui.Ctl("NotificationDone_" + note.Id, null, IconKind.Check, "Done", () => notes.Toggle(note.Id), small: true); done.Classes.Add("primary"); buttons.Children.Add(done); }
+        if (late) { var done = Ui.Ctl("NotificationDone_" + note.Id, null, IconKind.Check, "Done", () => notes.Toggle(note.Id), small: true); buttons.Children.Add(done); }
         reschedule = Ui.Ctl("NotificationReschedule_" + note.Id, null, IconKind.Clock, "Reschedule", () => Reschedule(note.Id, reschedule!), small: true); buttons.Children.Add(reschedule);
         Ui.Put(grid, buttons, 2);
         var card = new Border { Child = grid, CornerRadius = new CornerRadius(14), Padding = new Thickness(10), BorderThickness = new Thickness(1), Name = "Notification_" + note.Id };
@@ -114,7 +114,7 @@ public sealed class NotificationsFlyout : Border
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
         if (item.Kind == AlertKind.Break)
         {
-            var resume = Ui.Ctl("NotificationResume", null, IconKind.Check, "Resume", () => model.ToggleBreak(), small: true); resume.Classes.Add("primary"); buttons.Children.Add(resume);
+            var resume = Ui.Ctl("NotificationResume", null, IconKind.Check, "Resume", () => model.ToggleBreak(), small: true); buttons.Children.Add(resume);
             buttons.Children.Add(Ui.Ctl("NotificationStay", null, IconKind.Clock, "Stay on break", () => model.SnoozeAlert(item.Key, TimeSpan.FromMinutes(15)), small: true));
         }
         else buttons.Children.Add(Ui.Ctl("NotificationOk_" + item.Key, null, IconKind.Check, "OK", () => model.DismissAlert(item.Key), small: true));

@@ -580,7 +580,7 @@ public sealed class AccountList : StackPanel
     public AccountList(TimerModel model, bool reorderable = false, bool bars = false, bool compact = false)
     {
         this.model = model; this.reorderable = reorderable; this.bars = bars; this.compact = compact;
-        if (bars) { Spacing = RowGap; Margin = new Thickness(3, 2, 9, 8); } // Each row is a raised card: its shadow needs a gap to fall into, and room at the sides so the scroll area does not clip it.
+        if (bars) { Spacing = RowGap; Margin = compact ? new Thickness(1, 2, 3, 8) : new Thickness(3, 2, 9, 8); } // Each row is a raised card: its shadow needs a gap to fall into, and room at the sides so the scroll area does not clip it.
         Rebuild();
         // A list that sat hidden (in a pop-up) missed the changes made meanwhile, so it catches up when it is shown.
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Changed(null, new System.ComponentModel.PropertyChangedEventArgs(null)); };

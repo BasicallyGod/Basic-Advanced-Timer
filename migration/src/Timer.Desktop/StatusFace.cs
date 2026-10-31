@@ -183,13 +183,13 @@ public sealed class StatusFace : StackPanel
             var card = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 4 };
             Grid.SetColumn(who, 1);
             card.Children.Add(Circle); card.Children.Add(who);
-            well.Child = card; well.CornerRadius = new CornerRadius(WellRadius); well.Padding = new Thickness(WellPadding, WellPadding, 14, WellPadding);
+            well.Child = card; well.CornerRadius = new CornerRadius(WellRadius); well.Padding = new Thickness(WellPadding, WellPadding, 8, WellPadding);
             Break.VerticalAlignment = VerticalAlignment.Center;
         }
         Children.Add(displayBox);
         if (sidebar)
         {
-            var track = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Margin = well.Margin } /* 12 pixels clear of the well, as on the pill */; well.Margin = default;
+            var track = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 5, Margin = well.Margin } /* the break key clear of the well */; well.Margin = default;
             Grid.SetColumn(Break, 1); track.Children.Add(well); track.Children.Add(Break); Children.Add(track);
         }
         else { Children.Add(well); Children.Add(Break); }

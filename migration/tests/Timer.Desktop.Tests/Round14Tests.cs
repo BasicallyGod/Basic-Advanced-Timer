@@ -66,7 +66,7 @@ public sealed class Round14Tests
     [AvaloniaFact]
     public void TheAccountRowsAreOneLineWithItsBarUnder()
     {
-        Assert.True(PillWindow.DropdownWidth < 220);
+        Assert.True(PillWindow.DropdownWidth < 230); // Still a narrow drawer; the raised rows need a little more room than the flat ones did.
         var model = Model(); var window = new DashboardWindow(model); window.Show();Settle(window);
         try
         {

@@ -133,7 +133,8 @@
     <Style Selector="ComboBox"><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="12,0,0,0" /><Setter Property="VerticalContentAlignment" Value="Center" /></Style>
     <Style Selector="Button.softDay:disabled"><Setter Property="Opacity" Value="0.35" /></Style>
     <!-- Notes: the chips (an accent one for a reminder, a red one once it is late), the rows, the round tick and the form's box. -->
-    <Style Selector="Border.lateRow"><Setter Property="Background" Value="{DynamicResource LateTint}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
+    <!-- A late row is a plain raised row like any other; its red words say it is late. -->
+    <Style Selector="Border.lateRow"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
     <!-- The Notes page: the views down the left, a row being changed, the rule under the form and the form's accent-edged box. -->
     <Style Selector="Button.weekDay"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="CornerRadius" Value="12" /></Style>
     <!-- No fill under the pointer or the press: a day's column would hide the schedule line and hour lines behind it. -->
