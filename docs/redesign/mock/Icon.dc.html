@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Application icon</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.pg{--bg1:#F4F4F1;--bg2:#ECECE8;--ink:#18233A;--muted:#5A6070;--line:#E2E2DD;--card:#FFFFFF;--card2:#F7F7F5;--accent:#3558C8}
+.pg.dark{--bg1:#0F1420;--bg2:#131A2A;--ink:#EEF2FB;--muted:#A7B2CA;--line:#2D3853;--card:#1A2234;--card2:#212B42;--accent:#7C9BFF}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 1px 2px rgba(40,60,120,.06)}
+.lbl{font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.hero{display:block;border:0;background:transparent;padding:0;border-radius:56px}
+.hero .lightA,.hero .lightB{transition:fill .18s ease}
+.hero:hover .lightA,.hero:focus-visible .lightA{fill:#34D399}
+.hero:hover .lightB,.hero:focus-visible .lightB{fill:#6096FF}
+.hero:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.strip{display:flex;align-items:center;gap:18px;padding:10px 18px;border-radius:14px}
+.tbLight{background:#EFF2F9;color:#1B2336;border:1px solid #D9DFEC}
+.tbDark{background:#1A1F2E;color:#E9EEFB;border:1px solid #2A3248}
+.mp .body{fill:none;stroke:currentColor;stroke-width:1.7}
+.mp .lt{fill:currentColor}
+.mp .ln{fill:currentColor;opacity:.75}
+.mpx .body{fill:none;stroke:currentColor;stroke-width:2}
+.mpx .lt{fill:currentColor}
+@media (prefers-reduced-motion:reduce){.hero .lightA,.hero .lightB{transition:none}}
+</style>
+</helmet>
+<div class="pg {{modeClass}}" style="width: 1100px; height: 1010px; box-sizing: border-box; padding: 36px 32px 28px; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink); display: flex; flex-direction: column; gap: 20px">
+
+  <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="tileGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3A5BD0"/><stop offset="1" stop-color="#121B3A"/></linearGradient>
+      <symbol id="glyph" viewBox="0 0 256 256">
+        <rect x="77" y="31" width="102" height="194" rx="51" fill="none" stroke="currentColor" stroke-width="14"/>
+        <rect x="112" y="64" width="14" height="28" rx="7" fill="currentColor"/>
+        <rect x="130" y="64" width="14" height="28" rx="7" fill="currentColor"/>
+        <rect x="100" y="118" width="56" height="18" rx="9" fill="currentColor" opacity=".9"/>
+        <rect x="100" y="146" width="56" height="18" rx="9" fill="currentColor" opacity=".9"/>
+        <rect x="114" y="176" width="28" height="12" rx="6" fill="currentColor" opacity=".6"/>
+      </symbol>
+      <symbol id="glyphSmall" viewBox="0 0 256 256">
+        <rect x="79" y="33" width="98" height="190" rx="49" fill="none" stroke="currentColor" stroke-width="18"/>
+        <rect x="106" y="68" width="20" height="38" rx="10" fill="currentColor"/>
+        <rect x="130" y="68" width="20" height="38" rx="10" fill="currentColor"/>
+        <rect x="98" y="134" width="60" height="22" rx="11" fill="currentColor" opacity=".9"/>
+        <rect x="98" y="166" width="60" height="22" rx="11" fill="currentColor" opacity=".9"/>
+      </symbol>
+      <symbol id="appIcon" viewBox="0 0 256 256">
+        <rect x="1.5" y="1.5" width="253" height="253" rx="56.5" fill="#FFFFFF" stroke="#D5D9E2" stroke-width="3"/>
+        <use href="#glyph" style="color: #141824"/>
+      </symbol>
+      <symbol id="appIconSmall" viewBox="0 0 256 256">
+        <rect x="1.5" y="1.5" width="253" height="253" rx="56.5" fill="#FFFFFF" stroke="#D5D9E2" stroke-width="3"/>
+        <use href="#glyphSmall" style="color: #141824"/>
+      </symbol>
+      <symbol id="tileDark" viewBox="0 0 256 256">
+        <rect x="1.5" y="1.5" width="253" height="253" rx="56.5" fill="#141824" stroke="#2E3852" stroke-width="3"/>
+        <use href="#glyph" style="color: #FFFFFF"/>
+      </symbol>
+      <symbol id="oldIcon" viewBox="0 0 256 256">
+        <circle cx="128" cy="128" r="118" fill="#145232"/>
+        <circle cx="128" cy="128" r="100" fill="none" stroke="#B6F23A" stroke-width="12"/>
+        <path d="M128 128V54M128 128l38 24" stroke="#B6F23A" stroke-width="16" stroke-linecap="round" fill="none"/>
+        <circle cx="128" cy="128" r="14" fill="#EAFFB8"/>
+      </symbol>
+      <symbol id="prevIcon" viewBox="0 0 256 256">
+        <linearGradient id="pillGradOld" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#D9E2FA"/></linearGradient>
+        <rect width="256" height="256" rx="58" fill="url(#tileGrad)"/>
+        <rect x="86" y="34" width="84" height="188" rx="42" fill="url(#pillGradOld)"/>
+        <circle cx="128" cy="84" r="14" fill="#34D399"/>
+        <rect x="106" y="124" width="44" height="11" rx="5.5" fill="#1B2A52" opacity=".85"/>
+        <rect x="113" y="152" width="30" height="11" rx="5.5" fill="#1B2A52" opacity=".85"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 700">Application icon</h1>
+    <p style="margin: 0; font-size: 14px; color: var(--muted); max-width: 900px; line-height: 1.45">One drawing in one colour: the pill as a line outline, with its two lights (the state light and the reminder light) and a stack of bars for the hours, minutes and seconds, like the mark on the Getting started card. The icon is a white tile with the line in near black, with no gradient and no blue. A dark tile with a white line is the version for dark surfaces, and without a tile the line takes the colour of whatever it sits on, which is how the tray draws it. It replaces the green clock in the taskbar, the title bars, the tray, the installer and the Store tiles. Small sizes drop the seconds bar, thicken the outline and enlarge the lights so they still read. The lights are short and sit close together at the top, as on the pill, so the mark reads as a clock column and not a face or a pause symbol.</p>
+  </div>
+
+  <div style="display: flex; gap: 20px; align-items: flex-start">
+    <div class="card" style="padding: 22px 26px; display: flex; flex-direction: column; align-items: center; gap: 12px; width: 300px; box-sizing: border-box">
+      <button class="hero" aria-label="App icon, 210 pixels. The two lights take their colours when the pointer is over it." title="Hover: the lights take their colours, as on the pill"><svg width="210" height="210" viewBox="0 0 256 256" aria-hidden="true"><rect x="1.5" y="1.5" width="253" height="253" rx="56.5" fill="#FFFFFF" stroke="#D5D9E2" stroke-width="3"/><rect x="77" y="31" width="102" height="194" rx="51" fill="none" stroke="#141824" stroke-width="14"/><rect class="lightA" x="112" y="64" width="14" height="28" rx="7" fill="#141824"/><rect class="lightB" x="130" y="64" width="14" height="28" rx="7" fill="#141824"/><rect x="100" y="118" width="56" height="18" rx="9" fill="#141824" opacity=".9"/><rect x="100" y="146" width="56" height="18" rx="9" fill="#141824" opacity=".9"/><rect x="114" y="176" width="28" height="12" rx="6" fill="#141824" opacity=".6"/></svg></button>
+      <div style="font-size: 13px; color: var(--muted); text-align: center">256 pixel master. Hover it: the lights show their state and reminder colours.</div>
+    </div>
+
+    <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+      <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+        <div class="lbl">At real sizes</div>
+        <div class="strip tbLight">
+          <svg width="96" height="96" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIcon"/></svg>
+          <svg width="64" height="64" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIcon"/></svg>
+          <svg width="48" height="48" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIcon"/></svg>
+          <svg width="32" height="32" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIconSmall"/></svg>
+          <svg width="24" height="24" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIconSmall"/></svg>
+          <svg width="16" height="16" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIconSmall"/></svg>
+          <span style="font-size: 12px; opacity: .7">Light taskbar</span>
+        </div>
+        <div class="strip tbDark">
+          <svg width="96" height="96" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIcon"/></svg>
+          <svg width="64" height="64" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIcon"/></svg>
+          <svg width="48" height="48" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIcon"/></svg>
+          <svg width="32" height="32" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIconSmall"/></svg>
+          <svg width="24" height="24" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIconSmall"/></svg>
+          <svg width="16" height="16" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIconSmall"/></svg>
+          <span style="font-size: 12px; opacity: .7">Dark taskbar</span>
+        </div>
+      </div>
+      <div class="card" style="padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+        <div class="lbl">The same drawing on other grounds</div>
+        <div style="display: flex; align-items: flex-end; gap: 26px">
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><svg width="96" height="96" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIcon"/></svg><span style="font-size: 12px; color: var(--muted)">White tile, dark line (the icon)</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><svg width="96" height="96" viewBox="0 0 256 256" aria-hidden="true"><use href="#tileDark"/></svg><span style="font-size: 12px; color: var(--muted)">Dark tile, white line (dark surfaces)</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><span class="tbLight" style="display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 22px; box-sizing: border-box"><svg width="76" height="76" viewBox="0 0 256 256" aria-hidden="true"><use href="#glyph"/></svg></span><span style="font-size: 12px; color: var(--muted)">No tile, on light (tray)</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><span class="tbDark" style="display: flex; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 22px; box-sizing: border-box"><svg width="76" height="76" viewBox="0 0 256 256" aria-hidden="true"><use href="#glyph"/></svg></span><span style="font-size: 12px; color: var(--muted)">No tile, on dark (tray)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 20px; align-items: stretch">
+    <div class="card" style="flex: 1; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+      <div class="lbl">Store tiles</div>
+      <div style="display: flex; align-items: flex-end; gap: 20px">
+        <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><svg width="150" height="150" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIcon"/></svg><span style="font-size: 12px; color: var(--muted)">150 by 150</span></div>
+        <div style="display: flex; flex-direction: column; gap: 6px; align-items: center"><svg width="44" height="44" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIconSmall"/></svg><span style="font-size: 12px; color: var(--muted)">44 by 44</span></div>
+      </div>
+    </div>
+    <div class="card" style="flex: 1; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+      <div class="lbl">Title bar and tray</div>
+      <div class="strip tbLight" style="gap: 10px; padding: 8px 12px">
+        <svg width="16" height="16" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIconSmall"/></svg><span style="font-size: 12.5px">Basic's Advanced Timer</span>
+      </div>
+      <div class="strip tbDark" style="gap: 10px; padding: 8px 12px">
+        <svg width="16" height="16" viewBox="0 0 256 256" aria-hidden="true"><use href="#appIconSmall"/></svg><span style="font-size: 12.5px">Basic's Advanced Timer</span>
+      </div>
+      <div style="display: flex; gap: 12px">
+        <div class="strip tbLight" style="padding: 8px 12px; gap: 10px"><svg width="20" height="20" viewBox="0 0 256 256" aria-hidden="true"><use href="#glyphSmall"/></svg><span style="font-size: 12px; opacity: .8">Tray, light</span></div>
+        <div class="strip tbDark" style="padding: 8px 12px; gap: 10px"><svg width="20" height="20" viewBox="0 0 256 256" aria-hidden="true"><use href="#glyphSmall"/></svg><span style="font-size: 12px; opacity: .8">Tray, dark</span></div>
+      </div>
+    </div>
+    <div class="card" style="width: 250px; flex-shrink: 0; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+      <div class="lbl">Before</div>
+      <div style="display: flex; align-items: center; justify-content: center; gap: 18px; flex-grow: 1">
+        <svg width="80" height="80" viewBox="0 0 256 256" aria-hidden="true"><use href="#oldIcon"/></svg>
+        <svg width="80" height="80" viewBox="0 0 256 256" aria-hidden="true"><use href="#prevIcon"/></svg>
+      </div>
+      <div style="font-size: 12.5px; color: var(--muted); text-align: center">The green clock today, and the filled pill this drawing replaces.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:1010}}">
+class Component extends DCLogic {
+  renderVals() {
+    const mode = this.props.mode ?? 'light';
+    return { modeClass: mode === 'dark' ? 'dark' : '' };
+  }
+}
+</script>
+</body>
+</html>

@@ -25,7 +25,7 @@ The Store workflow is deliberately restricted to `main`. Pull requests to `main`
 
 ## Version labels and developer tools
 
-Stable builds show a normal version and retain the release MSIX identity. Experimental and Alpha builds show their channel beside the version and include the sample-data demo and overtime testing controls. The Store build hides demo controls and rejects the `--demo` argument; all builds retain normal version visibility.
+Stable builds show a normal version and retain the release MSIX identity. Experimental and Alpha builds show their channel beside the version and include the sample-data demo. The Store build hides demo controls and rejects the `--demo` argument; all builds retain normal version visibility.
 
 ## Safety
 
@@ -33,3 +33,7 @@ Stable builds show a normal version and retain the release MSIX identity. Experi
 - Back up stored data before changing database schemas; rollback is not a schema downgrade.
 - Run the installation, startup, export and data-persistence checks on the packaged build before each Store submission. The existing Partner Center submission is not changed by GitHub commits.
 - The older updater's `test-install/data` tree is retained without automatic migration.
+
+## Archive
+
+- `archive/notes-v1` holds the last `experimental` build that had Notes, reminders, meetings, the notification centre, Quick capture and the compact dashboard column (`4557363`). Do not merge it. Its behaviour is written up in `NOTES-SPEC.md`, and Notes is being rebuilt on feature branches from the clean `experimental`.

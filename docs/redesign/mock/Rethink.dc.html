@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rethinking busy days</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.pg{--bg1:#0F1420;--bg2:#131A2A;--ink:#EEF2FB;--muted:#A7B2CA;--line:#2D3853;--card:#1A2234;--card2:#212B42;--accent:#7C9BFF;color-scheme:dark;background:linear-gradient(135deg,var(--bg1),var(--bg2));color:var(--ink);font-family:'Inter',system-ui,sans-serif;box-sizing:border-box}
+.pg h1{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:28px;font-weight:700}
+.pg .lead{margin:6px 0 0;font-size:13.5px;line-height:1.5;color:var(--muted);max-width:1000px}
+.finds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.find{box-sizing:border-box;padding:14px 16px;border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,.03);font-size:12.5px;line-height:1.5;color:var(--muted)}
+.find b{display:block;color:var(--ink);font-size:13.5px;font-weight:600;margin-bottom:4px}
+.sec{display:flex;flex-direction:column;gap:12px}
+.sec .cap{display:flex;flex-direction:column;gap:4px}
+.sec .cap h2{margin:0;font-size:17px;font-weight:600}
+.sec .cap p{margin:0;font-size:12.5px;line-height:1.5;color:var(--muted);max-width:1100px}
+.tag{display:inline-block;min-width:22px;text-align:center;margin-right:8px;padding:1px 6px;border-radius:7px;background:rgba(124,155,255,.18);color:#B9C9FF;font-size:12px;font-weight:700}
+.pc b{color:var(--ink);font-weight:600}
+.row2{display:grid;grid-template-columns:600px 600px;column-gap:30px;align-items:start}
+.cell{margin:0}
+.pane{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0 0 8px}
+.strip{position:relative;width:600px;box-sizing:border-box;border-radius:18px;background:var(--card);border:1px solid var(--line);overflow:hidden}
+.hr{position:absolute;top:10px;transform:translateX(-50%);font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.ax{position:absolute;left:0;right:0;top:34px;height:1px;background:var(--line)}
+.gd{position:absolute;top:35px;bottom:0;width:1px;background:rgba(255,255,255,.06)}
+.gd.half{background:rgba(255,255,255,.03)}
+.m{position:absolute;box-sizing:border-box;left:var(--l);width:var(--w);top:var(--t);height:var(--h);border-radius:min(10px,calc(var(--h) * .4));background:rgba(255,255,255,.10);color:var(--ink);display:flex;align-items:center;gap:4px;padding:0 8px;font-size:var(--f,12px);font-weight:600;white-space:nowrap;overflow:hidden;line-height:1}
+.m svg{flex:none}
+.k{position:absolute;box-sizing:border-box;left:var(--l);width:var(--w);top:var(--t);height:var(--h);border-radius:min(8px,calc(var(--h) * .4));background:color-mix(in srgb,var(--c) 45%,#1A2234);color:var(--ink);display:flex;align-items:center;gap:5px;padding:0 6px;font-size:var(--f,11px);font-weight:700;white-space:nowrap;overflow:hidden;line-height:1}
+.k .in{background:rgba(238,242,251,.19);border-radius:5px;padding:1px 4px;font-size:9.5px;line-height:12px}
+.k.sel{box-shadow:0 0 0 3px #7C9BFF;overflow:visible;z-index:3}
+.hnd{position:absolute;top:50%;margin-top:-6px;width:6px;height:12px;border-radius:3px;background:#EEF2FB;border:1px solid #7C9BFF;box-sizing:border-box}
+.brk{position:absolute;box-sizing:border-box;left:378px;width:80px;top:var(--t);height:var(--h);border-radius:12px;border:1px solid rgba(238,242,251,.22);background:repeating-linear-gradient(135deg,rgba(167,178,202,.22) 0 4px,transparent 4px 9px);color:var(--muted);display:flex;align-items:center;padding:0 10px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.sum{position:absolute;box-sizing:border-box;left:var(--l);width:var(--w);top:var(--t);height:var(--h);border-radius:min(8px,calc(var(--h) * .45));border:1px solid rgba(238,242,251,.32);background:repeating-linear-gradient(135deg,rgba(238,242,251,.20) 0 3px,rgba(238,242,251,.05) 3px 7px);color:var(--ink);display:flex;align-items:center;gap:5px;padding:0 8px;font-size:var(--f,11px);font-weight:700;white-space:nowrap;line-height:1}
+.less{position:absolute;right:12px;bottom:10px;box-sizing:border-box;height:24px;border-radius:9px;border:1px solid var(--line);background:var(--card2);display:flex;align-items:center;gap:5px;padding:0 10px;font-size:11.5px;font-weight:600;color:var(--ink)}
+.tile{position:absolute;box-sizing:border-box;left:var(--l);width:var(--w);top:var(--t);height:var(--h);border-radius:12px;padding:6px 10px;font-size:12.5px;font-weight:700;line-height:17px;white-space:nowrap}
+.tile.mt{background:rgba(255,255,255,.10)}
+.tile.bk{background:rgba(255,255,255,.06);border:1.5px solid var(--line)}
+.tile.sel{border-color:#7C9BFF;box-shadow:0 0 0 2px rgba(124,155,255,.35)}
+.tile small{display:block;font-size:11px;font-weight:500;color:var(--muted);line-height:15px}
+.tile i{position:absolute;display:block;height:var(--bh,4px);border-radius:2px;background:var(--c)}
+.sc{box-sizing:border-box;width:600px;border-radius:18px;background:var(--card);border:1px solid var(--line);padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.sc h3{margin:0;font-size:15px;font-weight:600;display:flex;justify-content:space-between;align-items:baseline}
+.sc h3 span{font-size:12px;font-weight:500;color:var(--muted)}
+.gantt{position:relative;width:560px;height:166px}
+.gantt .gl{position:absolute;top:16px;bottom:0;width:1px;background:rgba(255,255,255,.07)}
+.gantt .gh{position:absolute;top:0;font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
+.gantt .gb{position:absolute;box-sizing:border-box;height:24px;border-radius:9px;background:color-mix(in srgb,var(--c) 45%,#1A2234);display:flex;align-items:center;gap:7px;padding:0 8px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.gantt .gb .in{background:rgba(238,242,251,.19);border-radius:5px;padding:1px 5px;font-size:10px;line-height:13px}
+.gantt .gb em{font-style:normal;font-weight:500;color:var(--muted);font-size:11px}
+.gantt .gb.sel{box-shadow:0 0 0 3px #7C9BFF}
+.flds{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:10px}
+.fld{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--muted)}
+.fld div{height:36px;box-sizing:border-box;border-radius:11px;border:1px solid var(--line);background:var(--card2);display:flex;align-items:center;gap:7px;padding:0 12px;font-size:13.5px;color:var(--ink);font-weight:500}
+.btns{display:flex;gap:8px}
+.btn{height:34px;box-sizing:border-box;border-radius:11px;border:1px solid var(--line);background:var(--card);padding:0 14px;display:flex;align-items:center;font-size:13px;font-weight:600}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%}
+.rules{box-sizing:border-box;padding:18px 22px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.03);font-size:13px;line-height:1.6;color:var(--muted)}
+.rules b{color:var(--ink);font-weight:600}
+.rules ul{margin:6px 0 10px;padding-left:20px}
+</style>
+</helmet>
+<div class="pg" style="width: 1280px; height: 1780px; padding: 34px 30px 30px; display: flex; flex-direction: column; gap: 26px; border-radius: 20px">
+
+  <div>
+    <h1>Rethinking busy days</h1>
+    <p class="lead">Your screenshot has three meetings and four blocks on top of one another. The same busy morning is drawn below under three different ideas, at the app's own proportions, with four meetings and five blocks so the limits show. Nothing is built; pick one or mix them.</p>
+  </div>
+
+  <div class="finds">
+    <div class="find"><b>1 · Why the +1 stood at 12:30</b>The folded meeting is Supplier check-in, 11:45 to 12:30. The chip was put in the free space after its stack, so it sat at the meeting's end, away from the other two, with nothing to say what it was. One extra meeting never needed hiding at all.</div>
+    <div class="find"><b>2 · The blue box</b>It was drawn over every lane to mark where the folded block is, so it covers blocks that are not selected and reads as a second, unexplained selection.</div>
+    <div class="find"><b>3 · The dashed AF</b>Dashed meant "folded into +1" in a legend above it. Once that idea goes, the dashes explain nothing.</div>
+  </div>
+
+  <!-- A -->
+  <div class="sec">
+    <div class="cap">
+      <h2><span class="tag">A</span>Make room, then squeeze: every block is always drawn</h2>
+      <p>The timeline card is about 40px taller, taken from the Selected block card, which has spare room at its foot. Three meetings and four blocks fit at today's lane height. A busier day shrinks all the lanes evenly (here 16px each, with the initials and time still readable) and past about seven deep stops at 11px. No chip, no list, no box over other lanes: the selected block is simply ringed in its own lane.</p>
+      <p class="pc"><b>Good:</b> nothing to learn, nothing detached, your real day looks exactly as full size. <b>Cost:</b> thin lanes are fiddlier to hit, and an extreme pile loses its text (the tooltip still has it).</p>
+    </div>
+    <div class="row2">
+      <figure class="cell">
+        <p class="pane">Resting · 4 meetings, 5 blocks</p>
+        <div class="strip" style="height: 244px">
+          <span class="hr" style="left:60px">11:00</span><span class="hr" style="left:260px">12:00</span><span class="hr" style="left:460px">13:00</span>
+          <div class="ax"></div><div class="gd" style="left:60px"></div><div class="gd half" style="left:160px"></div><div class="gd" style="left:260px"></div><div class="gd half" style="left:360px"></div><div class="gd" style="left:460px"></div>
+          <div class="m" style="--l:60px;--w:200px;--t:42px;--h:16px;--f:10.5px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Client call</div>
+          <div class="m" style="--l:160px;--w:150px;--t:60px;--h:16px;--f:10.5px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Design review</div>
+          <div class="m" style="--l:210px;--w:150px;--t:78px;--h:16px;--f:10.5px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Supplier check-in</div>
+          <div class="m" style="--l:227px;--w:100px;--t:96px;--h:16px;--f:10.5px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Retro prep</div>
+          <div class="k" style="--l:62px;--w:196px;--t:126px;--h:16px;--c:#94BF9B"><span class="in">AT</span>01:00</div>
+          <div class="k" style="--l:95px;--w:130px;--t:145px;--h:16px;--c:#C4A38F"><span class="in">AS</span>00:40</div>
+          <div class="k" style="--l:129px;--w:113px;--t:164px;--h:16px;--c:#D79BB5"><span class="in">I</span>00:35</div>
+          <div class="k" style="--l:175px;--w:160px;--t:183px;--h:16px;--c:#BAA4CE"><span class="in">AF</span>00:49</div>
+          <div class="k" style="--l:195px;--w:96px;--t:202px;--h:16px;--c:#86C5C0"><span class="in">AN</span>00:30</div>
+          <div class="brk" style="--t:126px;--h:92px">Break 00:25</div>
+        </div>
+      </figure>
+      <figure class="cell">
+        <p class="pane">A folded-away block is just a block: select AF</p>
+        <div class="strip" style="height: 244px">
+          <span class="hr" style="left:60px">11:00</span><span class="hr" style="left:260px">12:00</span><span class="hr" style="left:460px">13:00</span>
+          <div class="ax"></div><div class="gd" style="left:60px"></div><div class="gd half" style="left:160px"></div><div class="gd" style="left:260px"></div><div class="gd half" style="left:360px"></div><div class="gd" style="left:460px"></div>
+          <div class="m" style="--l:60px;--w:200px;--t:42px;--h:16px;--f:10.5px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Client call</div>
+          <div class="m" style="--l:160px;--w:150px;--t:60px;--h:16px;--f:10.5px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Design review</div>
+          <div class="m" style="--l:210px;--w:150px;--t:78px;--h:16px;--f:10.5px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Supplier check-in</div>
+          <div class="m" style="--l:227px;--w:100px;--t:96px;--h:16px;--f:10.5px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Retro prep</div>
+          <div class="k" style="--l:62px;--w:196px;--t:126px;--h:16px;--c:#94BF9B"><span class="in">AT</span>01:00</div>
+          <div class="k" style="--l:95px;--w:130px;--t:145px;--h:16px;--c:#C4A38F"><span class="in">AS</span>00:40</div>
+          <div class="k" style="--l:129px;--w:113px;--t:164px;--h:16px;--c:#D79BB5"><span class="in">I</span>00:35</div>
+          <div class="k sel" style="--l:175px;--w:160px;--t:183px;--h:16px;--c:#BAA4CE"><span class="in">AF</span>00:49<span class="hnd" style="left:-4px"></span><span class="hnd" style="right:-4px"></span></div>
+          <div class="k" style="--l:195px;--w:96px;--t:202px;--h:16px;--c:#86C5C0"><span class="in">AN</span>00:30</div>
+          <div class="brk" style="--t:126px;--h:92px">Break 00:25</div>
+        </div>
+      </figure>
+    </div>
+  </div>
+
+  <!-- B -->
+  <div class="sec">
+    <div class="cap">
+      <h2><span class="tag">B</span>A summary lane that sits in the time it covers, and opens in place</h2>
+      <p>The card keeps today's height. The first two lanes are drawn in full; everything beyond them becomes one striped bar in the next lane, spanning exactly the time those blocks cover, with its count inside ("+3 more blocks"). It is a lane, not a floating chip, so it reads as part of the pile. Pressing it opens the whole day's stack in place: the card grows, every lane is full size, and Show less puts it back. The meetings row works the same way, and one press opens both.</p>
+      <p class="pc"><b>Good:</b> the quiet day looks as it does now, and the extra is tied to its time. <b>Cost:</b> a press to see the rest, and the cards below lose about 100px while it is open.</p>
+    </div>
+    <div class="row2">
+      <figure class="cell">
+        <p class="pane">Resting</p>
+        <div class="strip" style="height: 200px">
+          <span class="hr" style="left:60px">11:00</span><span class="hr" style="left:260px">12:00</span><span class="hr" style="left:460px">13:00</span>
+          <div class="ax"></div><div class="gd" style="left:60px"></div><div class="gd half" style="left:160px"></div><div class="gd" style="left:260px"></div><div class="gd half" style="left:360px"></div><div class="gd" style="left:460px"></div>
+          <div class="m" style="--l:60px;--w:200px;--t:42px;--h:15px;--f:10.5px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Client call</div>
+          <div class="m" style="--l:160px;--w:150px;--t:60px;--h:15px;--f:10.5px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Design review</div>
+          <div class="sum" style="--l:212px;--w:146px;--t:78px;--h:12px;--f:9.5px">+2 more<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
+          <div class="k" style="--l:62px;--w:196px;--t:104px;--h:22px;--c:#94BF9B"><span class="in">AT</span>01:00</div>
+          <div class="k" style="--l:95px;--w:130px;--t:130px;--h:22px;--c:#C4A38F"><span class="in">AS</span>00:40</div>
+          <div class="sum" style="--l:129px;--w:206px;--t:156px;--h:20px;--f:11px">+3 more blocks<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
+          <div class="brk" style="--t:104px;--h:72px">Break 00:25</div>
+        </div>
+      </figure>
+      <figure class="cell">
+        <p class="pane">Opened · AF selected</p>
+        <div class="strip" style="height: 300px">
+          <span class="hr" style="left:60px">11:00</span><span class="hr" style="left:260px">12:00</span><span class="hr" style="left:460px">13:00</span>
+          <div class="ax"></div><div class="gd" style="left:60px"></div><div class="gd half" style="left:160px"></div><div class="gd" style="left:260px"></div><div class="gd half" style="left:360px"></div><div class="gd" style="left:460px"></div>
+          <div class="m" style="--l:60px;--w:200px;--t:42px;--h:22px;--f:11.5px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Client call</div>
+          <div class="m" style="--l:160px;--w:150px;--t:66px;--h:22px;--f:11.5px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Design review</div>
+          <div class="m" style="--l:210px;--w:150px;--t:90px;--h:22px;--f:11.5px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Supplier check-in</div>
+          <div class="m" style="--l:227px;--w:100px;--t:114px;--h:22px;--f:11.5px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>Retro prep</div>
+          <div class="k" style="--l:62px;--w:196px;--t:150px;--h:22px;--c:#94BF9B"><span class="in">AT</span>01:00</div>
+          <div class="k" style="--l:95px;--w:130px;--t:176px;--h:22px;--c:#C4A38F"><span class="in">AS</span>00:40</div>
+          <div class="k" style="--l:129px;--w:113px;--t:202px;--h:22px;--c:#D79BB5"><span class="in">I</span>00:35</div>
+          <div class="k sel" style="--l:175px;--w:160px;--t:228px;--h:22px;--c:#BAA4CE"><span class="in">AF</span>00:49<span class="hnd" style="left:-4px"></span><span class="hnd" style="right:-4px"></span></div>
+          <div class="k" style="--l:195px;--w:96px;--t:254px;--h:22px;--c:#86C5C0"><span class="in">AN</span>00:30</div>
+          <div class="brk" style="--t:150px;--h:126px">Break 00:25</div>
+          <div class="less"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>Show less</div>
+        </div>
+      </figure>
+    </div>
+  </div>
+
+  <!-- C -->
+  <div class="sec">
+    <div class="cap">
+      <h2><span class="tag">C</span>One tile on the timeline, the detail in the card</h2>
+      <p>Where blocks overlap, the timeline draws one quiet tile for the whole pile, from the first start to the last end, saying what is in it ("5 blocks · 03:34") with thin coloured lines along the bottom at each block's true time, so you can see both when and how much overlaps. Meetings get the same tile. Pressing a tile opens the Selected block card with a full-width mini timeline of the pile at about twice the timeline's scale, where any block is one press away, ringed and edited with its boxes below.</p>
+      <p class="pc"><b>Good:</b> the timeline is calm however deep the pile, and the card has the room the band never will. <b>Cost:</b> you can't drag a block's edge directly on a pile (zooming past the overlap could split the tile back into lanes), and it is the biggest change.</p>
+    </div>
+    <div class="row2">
+      <figure class="cell">
+        <p class="pane">Resting · the tiles on the timeline</p>
+        <div class="strip" style="height: 200px">
+          <span class="hr" style="left:60px">11:00</span><span class="hr" style="left:260px">12:00</span><span class="hr" style="left:460px">13:00</span>
+          <div class="ax"></div><div class="gd" style="left:60px"></div><div class="gd half" style="left:160px"></div><div class="gd" style="left:260px"></div><div class="gd half" style="left:360px"></div><div class="gd" style="left:460px"></div>
+          <div class="tile mt" style="--l:60px;--w:300px;--t:42px;--h:48px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>4 meetings · 11:00–12:30
+            <i style="--c:rgba(238,242,251,.55);--bh:3px;left:0;width:200px;top:27px"></i>
+            <i style="--c:rgba(238,242,251,.55);--bh:3px;left:100px;width:150px;top:32px"></i>
+            <i style="--c:rgba(238,242,251,.55);--bh:3px;left:150px;width:150px;top:37px"></i>
+            <i style="--c:rgba(238,242,251,.55);--bh:3px;left:167px;width:100px;top:42px"></i>
+          </div>
+          <div class="tile bk" style="--l:60px;--w:277px;--t:104px;--h:72px">5 blocks · 03:34<small>11:00–12:23 · 5 accounts</small>
+            <i style="--c:#94BF9B;left:2px;width:196px;top:42px"></i>
+            <i style="--c:#C4A38F;left:35px;width:130px;top:48px"></i>
+            <i style="--c:#D79BB5;left:69px;width:113px;top:54px"></i>
+            <i style="--c:#BAA4CE;left:115px;width:160px;top:60px"></i>
+            <i style="--c:#86C5C0;left:135px;width:96px;top:66px"></i>
+          </div>
+          <div class="brk" style="--t:104px;--h:72px">Break 00:25</div>
+        </div>
+      </figure>
+      <figure class="cell">
+        <p class="pane">Press the block tile · the card, AF selected</p>
+        <div class="sc">
+          <h3>Selected blocks<span>5 overlap · 11:00–12:23</span></h3>
+          <div class="gantt">
+            <span class="gh" style="left:0">11:00</span><span class="gh" style="left:187px;transform:translateX(-50%)">11:30</span><span class="gh" style="left:373px;transform:translateX(-50%)">12:00</span><span class="gh" style="left:560px;transform:translateX(-100%)">12:30</span>
+            <div class="gl" style="left:0"></div><div class="gl" style="left:187px"></div><div class="gl" style="left:373px"></div><div class="gl" style="left:559px"></div>
+            <div class="gb" style="left:0;width:373px;top:22px;--c:#94BF9B"><span class="in">AT</span>01:00<em>11:00–12:00</em></div>
+            <div class="gb" style="left:62px;width:249px;top:50px;--c:#C4A38F"><span class="in">AS</span>00:40<em>11:10–11:50</em></div>
+            <div class="gb" style="left:124px;width:218px;top:78px;--c:#D79BB5"><span class="in">I</span>00:35<em>11:20–11:55</em></div>
+            <div class="gb sel" style="left:211px;width:305px;top:106px;--c:#BAA4CE"><span class="in">AF</span>00:49<em>11:34–12:23</em></div>
+            <div class="gb" style="left:249px;width:187px;top:134px;--c:#86C5C0"><span class="in">AN</span>00:30<em>11:40–12:10</em></div>
+          </div>
+          <div class="flds">
+            <div class="fld">Account<div><span class="dot" style="background:#BAA4CE"></span>Account four</div></div>
+            <div class="fld">Start<div>11:34</div></div>
+            <div class="fld">End<div>12:23</div></div>
+            <div class="fld">Length<div>00:49</div></div>
+          </div>
+          <div class="btns"><span class="btn">Copy</span><span class="btn">Delete</span><span class="btn">Clear selection</span></div>
+        </div>
+      </figure>
+    </div>
+  </div>
+
+  <div class="rules">
+    <b>Whichever you choose, three things change</b>
+    <ul>
+      <li>A single extra block or meeting is never a "+1". It is drawn in full, so the 12:30 chip could not happen.</li>
+      <li>Nothing is outlined across other lanes. The selected block carries its own ring, as it does today.</li>
+      <li>The overlap row in the Selected block card stays as plain buttons with no dashes (the three-or-more-deep case only), since every block is now either drawn or named in the summary.</li>
+    </ul>
+    <b>My lean:</b> A for everyday use, since it is the only option that makes your screenshot's day look right without a new idea to learn. If you want a safety valve for the rare ten-deep pile, add B's summary lane once the lanes would drop under 11px. C is the right answer if you would rather the timeline never show a pile at all.
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1780}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

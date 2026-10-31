@@ -1,3 +1,4 @@
+using Avalonia.VisualTree;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -29,13 +30,12 @@ public sealed class OnboardingView : Grid
     // What each step keeps between visits, so going back shows what was typed.
     private readonly List<(string? Original, string? Colour, TextBox Name, TextBox Budget, ComboBox Period, CheckBox Show)> accountRows = new();
     private StackPanel? accountList;
-    private TextBox startBox = new(), endBox = new();
+    private TextBox startBox = new(), endBox = new(), breakBox = new();
     private readonly List<(DayOfWeek Day, CheckBox Box)> dayBoxes = new();
     private bool customHours, decimalChoice;
     private ComboBox weekStartBox = new();
     private Button hoursTile = null!, decimalTile = null!;
     public event Action? Finished;
-    public int Step => step;
 
     public OnboardingView(TimerModel model)
     {
@@ -43,18 +43,21 @@ public sealed class OnboardingView : Grid
         // A veil over the dashboard, which is also blurred beneath it by the window, and a card in the middle.
         Background = new SolidColorBrush(Color.FromArgb(120, 8, 10, 14));
         decimalChoice = model.DecimalHours;
-        var card = new Border { Name = "SetupCard", Width = 560, MinHeight = 440, CornerRadius = new CornerRadius(22), BorderThickness = new Thickness(1), Padding = new Thickness(30, 24, 30, 22), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        var card = new Border { Name = "SetupCard", Width = 720, MinHeight = 540, CornerRadius = new CornerRadius(24), BorderThickness = new Thickness(1), Padding = new Thickness(28, 22, 28, 20), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 12, Blur = 40, Color = Color.FromArgb(90, 0, 0, 0) }) };
         card.Classes.Add("dayCard");
-        var layout = new StackPanel { Spacing = 14 };
-        var top = Ui.Grid("*,Auto"); Ui.Put(top, stepLabel);
-        var skip = Ui.Button("Skip setup", () => Skip(), "SetupSkip"); skip.Classes.Add("flat"); Ui.Put(top, skip, 1);
-        layout.Children.Add(top); layout.Children.Add(title); layout.Children.Add(subtitle); layout.Children.Add(body); layout.Children.Add(error);
+        var layout = new StackPanel { Spacing = 12 };
+        // The pill's own outline at the top left, then the step and its name, and the steps as dots at the right with the current one in the accent.
+        var top = Ui.Grid("Auto,*,Auto"); var heading = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0) };
+        stepLabel.FontWeight = FontWeight.SemiBold; heading.Children.Add(stepLabel); heading.Children.Add(title);
+        Ui.Put(top, PillIcon()); Ui.Put(top, heading, 1); dots.Spacing = 7; Ui.Put(top, dots, 2);
+        layout.Children.Add(top); layout.Children.Add(subtitle); layout.Children.Add(body); layout.Children.Add(error);
+        var skip = Ui.Button("Skip setup", () => Skip(), "SetupSkip"); skip.Classes.Add("flat");
         back = Ui.DialogButton("Back", () => Go(-1), "SetupBack", main: false);
         next = Ui.DialogButton("Next", () => Advance(), "SetupNext", main: true);
-        // Equal outer columns keep the dots in the middle, whatever the width of Back (hidden on the first step) and of Next or Start tracking.
-        var footer = Ui.Grid("*,Auto,*"); footer.Margin = new Thickness(0, 8, 0, 0);
-        Ui.Put(footer, back); back.HorizontalAlignment = HorizontalAlignment.Left; Ui.Put(footer, dots, 1); dots.HorizontalAlignment = HorizontalAlignment.Center; Ui.Put(footer, next, 2); next.HorizontalAlignment = HorizontalAlignment.Right;
+        // Skip is at the left, and Back and Next at the right, so the main action is always where the eye ends.
+        var footer = Ui.Grid("Auto,*,Auto,Auto"); footer.Margin = new Thickness(0, 10, 0, 0);
+        Ui.Put(footer, skip); Ui.Put(footer, back, 2); back.Margin = new Thickness(0, 0, 8, 0); Ui.Put(footer, next, 3);
         layout.Children.Add(footer);
         card.Child = layout; Children.Add(card);
         Focusable = true;
@@ -94,14 +97,15 @@ public sealed class OnboardingView : Grid
         dots.Children.Clear();
         for (var i = 0; i < StepCount; i++)
         {
-            var dot = new Avalonia.Controls.Shapes.Ellipse { Width = 8, Height = 8 };
-            dot.Classes.Add(i == index ? "stepDot" : "idle");
+            var dot = new Avalonia.Controls.Shapes.Ellipse { Width = 9, Height = 9 };
+            // The current step is the accent, the steps done are a softer accent, and the ones to come are quiet.
+            dot.Classes.Add(i <= index ? "stepDot" : "idle"); if (i < index) dot.Opacity = .45;
             dots.Children.Add(dot);
         }
         (title.Text, subtitle.Text, body.Content) = index switch
         {
             0 => ("Your client accounts", "These are the clients you track time against. Rename the examples or add your own. Budgets are optional: leave them blank for no limit.", AccountsStep()),
-            1 => ("Your working hours", "The day clock starts at your start time and overtime begins after your end time. Overnight shifts are not supported yet.", HoursStep()),
+            1 => ("Your working hours", "The day clock starts at your start time, and the schedule is what the week overview measures your time against. Overnight shifts are not supported yet.", HoursStep()),
             2 => ("How you count time", "This changes every total and the exports. You can switch any time from the right-click menu.", FormatStep()),
             _ => ("You are all set", "A few things worth knowing before you start.", ReadyStep())
         };
@@ -180,6 +184,8 @@ public sealed class OnboardingView : Grid
             var first = schedule.Days.OrderBy(d => ((int)d + 6) % 7).FirstOrDefault(DayOfWeek.Monday);
             var shift = schedule.Shifts.GetValueOrDefault(first) ?? schedule.Default;
             startBox = new TextBox { Text = shift.Start.ToString(@"hh\:mm"), Width = 90, Name = "SetupStart" }; endBox = new TextBox { Text = shift.End.ToString(@"hh\:mm"), Width = 90, Name = "SetupEnd" };
+            // A timer that has never had a break chosen is offered half an hour, the usual lunch; one that has keeps what it has, even if that is nothing.
+            breakBox = new TextBox { Text = (model.BreakAllowanceChosen ? model.BreakAllowance : TimeSpan.FromMinutes(30)).ToString(@"hh\:mm"), Width = 90, Name = "SetupBreak", HorizontalAlignment = HorizontalAlignment.Left };
             foreach (var day in new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday })
                 dayBoxes.Add((day, new CheckBox { Content = day.ToString()[..3], IsChecked = schedule.Days.Contains(day), Name = "SetupDay" + day.ToString()[..3] }));
         }
@@ -188,9 +194,10 @@ public sealed class OnboardingView : Grid
         panel.Children.Add(Ui.Text("Working days", 12, "muted")); panel.Children.Add(days);
         panel.Children.Add(Ui.Text("Usual hours (24 hour clock)", 12, "muted"));
         panel.Children.Add(Ui.Horizontal(Detach(startBox), Ui.Dash(), Detach(endBox)));
+        panel.Children.Add(Ui.Text("Break each day (taken off the hours, so the schedule is the time you are to work)", 12, "muted")); panel.Children.Add(Detach(breakBox));
         var different = Ui.DialogButton("Different hours on some days…", () =>
         {
-            if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) { customHours = true; dashboard.Dialogs.Show(new ShiftDialog(model)); }
+            if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) { customHours = true; dashboard.Dialogs.Show(new ShiftDialog(model, withBreaks: false)); }
         }, "SetupDifferentHours", main: false);
         different.HorizontalAlignment = HorizontalAlignment.Left;
         panel.Children.Add(different);
@@ -198,6 +205,8 @@ public sealed class OnboardingView : Grid
     }
     private bool ApplyHours()
     {
+        if (!TimeSpan.TryParseExact((breakBox.Text ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture, TimeSpanStyles.None, out var allowance) || allowance > TimeSpan.FromHours(4)) { Fail("Break each day: HH:mm, up to 04:00."); return false; }
+        model.SetBreakAllowance(allowance);
         // Hours set one day at a time in their own dialog are kept as they are, rather than flattened to one shift.
         if (customHours) return true;
         var start = TimeSpan.ParseExact((startBox.Text ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture, TimeSpanStyles.None);
@@ -245,7 +254,10 @@ public sealed class OnboardingView : Grid
 
     private Control ReadyStep()
     {
-        var panel = new StackPanel { Spacing = 12 };
+        // The pill as it will look, drawn from the same parts as the real one, above the notes.
+        var panel = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+        panel.Children.Add(new Border { Child = DrawnPill(), Margin = new Thickness(2, 2, 0, 16), VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left });
+        var points = new StackPanel { Spacing = 8 }; Grid.SetRow(points, 1);
         StackPanel Point(string heading, string text)
         {
             var block = new StackPanel { Spacing = 2 };
@@ -253,15 +265,42 @@ public sealed class OnboardingView : Grid
             block.Children.Add(new TextBlock { Text = text, FontSize = 13, TextWrapping = TextWrapping.Wrap, Classes = { "muted" } });
             return block;
         }
-        panel.Children.Add(Point("The tray.", "Closing a window hides the timer to the notification area and tracking carries on. Use the cross at the foot of the dashboard to close the timer for good."));
-        panel.Children.Add(Point("The pill and this dashboard.", "Click the clock on the pill to open the dashboard, and the account name to pick what you are working on."));
-        panel.Children.Add(Point("Your data.", model.DataFolder is { } folder ? $"Stays on this computer in {folder}, with a backup each day." : "Stays on this computer, with a backup each day."));
+        points.Children.Add(Point("Click the time.", "On the pill it opens the dashboard. In the dashboard it collapses back to the pill."));
+        points.Children.Add(Point("The green square.", "It shows the account you are on and pauses or resumes it. With no account chosen it opens the list."));
+        points.Children.Add(Point("Breaks.", "The cup at the end starts a break, and the green square resumes your account."));
+        points.Children.Add(Point("Accounts.", "The dot and arrow beside the green square open the account list below the pill. Choosing an account starts it."));
+        points.Children.Add(Point("Settings.", "The gear at the top right of the dashboard holds the theme, hours, export and Run setup again."));
+        points.Children.Add(Point("The tray.", "Closing a window hides the timer to the notification area and tracking carries on. Quit timer, at the foot of the dashboard, closes it for good."));
+        points.Children.Add(Point("Your data.", model.DataFolder is { } folder ? $"Stays on this computer in {folder}, with a backup each day." : "Stays on this computer, with a backup each day."));
         if (model.AutoStart?.Available == true)
         {
-            var startup = new CheckBox { Content = "Start the timer when I sign in to Windows", IsChecked = model.AutoStart.IsEnabled, Name = "SetupStartup", Margin = new Thickness(0, 6, 0, 0) };
+            var startup = new CheckBox { Content = "Start the timer when I sign in to Windows", IsChecked = model.AutoStart.IsEnabled, Name = "SetupStartup", Margin = new Thickness(0, 4, 0, 0) };
             startup.Click += (_, _) => { model.SetAutoStart(startup.IsChecked == true); startup.IsChecked = model.AutoStart?.IsEnabled == true; };
-            panel.Children.Add(startup);
+            points.Children.Add(startup);
         }
+        panel.Children.Add(points);
         return panel;
+    }
+
+    // The application icon beside the step: the same picture as the window and the Store, so the first screen wears the icon the app does.
+    private static Control PillIcon()
+    {
+        var image = new Image { Width = 48, Height = 48, VerticalAlignment = VerticalAlignment.Center, Name = "SetupPillIcon" };
+        using var stream = Avalonia.Platform.AssetLoader.Open(new Uri("avares://" + typeof(OnboardingView).Assembly.GetName().Name + "/Assets/AppIcon.png"));
+        image.Source = new Avalonia.Media.Imaging.Bitmap(stream);
+        return image;
+    }
+
+    // The pill itself, drawn for show: the same lights, clock and three tiles as the real one, with nothing that can be pressed.
+    private Control DrawnPill()
+    {
+        var face = new StatusFace(model, "Setup", "SetupBreak", "", () => { }, () => { }, () => { });
+        face.Refresh();
+        face.Margin = new Thickness(PillWindow.InsetLeft - PillWindow.EdgeThickness, 0, PillWindow.InsetRight - PillWindow.EdgeThickness, 0); face.HorizontalAlignment = HorizontalAlignment.Left;
+        var card = new Border { Name = "SetupPill", Width = PillWindow.PillWidth, Height = PillWindow.PillHeight, CornerRadius = new CornerRadius(PillWindow.PillRadius), BorderThickness = new Thickness(PillWindow.EdgeThickness), Child = face, IsHitTestVisible = false, Focusable = false };
+        card.Classes.Add("surface");
+        Avalonia.Automation.AutomationProperties.SetAccessibilityView(card, Avalonia.Automation.AccessibilityView.Raw);
+        card.AttachedToVisualTree += (_, _) => { foreach (var button in face.GetVisualDescendants().OfType<Button>()) { button.IsTabStop = false; button.Focusable = false; } };
+        return card;
     }
 }

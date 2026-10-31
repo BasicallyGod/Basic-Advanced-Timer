@@ -3,12 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Timer.Desktop;
 using Timer.Core;
 using Timer.Storage;
 using Xunit;
@@ -27,7 +25,7 @@ public static class TestAppBuilder
 public sealed class ShellTests
 {
     [AvaloniaFact]
-    public void SwitchingAccountsPreservesElapsedAndFinishStopsRecording()
+    public void SwitchingAccountsKeepsEachAccountsTime()
     {
         var now = new DateTime(2026, 10, 9, 9, 0, 0);
         var model = new TimerModel(new TrackingEngine(clock: () => now));
@@ -36,14 +34,13 @@ public sealed class ShellTests
         model.ToggleAccount("Account two");
         Assert.Equal(TimeSpan.FromMinutes(2), model.Today(model.Accounts[0]));
         now += TimeSpan.FromMinutes(3);
-        model.ToggleDay();
+        model.TogglePause();
         Assert.False(model.IsTracking);
-        Assert.False(model.DayStarted);
         Assert.Equal(TimeSpan.FromMinutes(3), model.Today(model.Accounts[1]));
     }
 
     [AvaloniaFact]
-    public void IdleAndOvertimeUseIndependentThemeResources()
+    public void TheIdleStatusFollowsTheThemeAndPastTheEndOfTheDayThereIsNoOvertimeLine()
     {
         var model = Fixture();
         model.Engine.Schedule.Default = new Shift(TimeSpan.FromHours(9), TimeSpan.FromHours(13));
@@ -55,16 +52,13 @@ public sealed class ShellTests
             Dispatcher.UIThread.RunJobs();
             using var initialFrame = window.CaptureRenderedFrame();
             var labels = window.GetVisualDescendants().OfType<TextBlock>().ToArray();
-            var idle = labels.Single(x => x.Text == "Not tracking");
-            var overtime = labels.Single(x => x.Text is not null && x.Text.StartsWith("Overtime"));
-            Assert.NotEqual(idle.Foreground, overtime.Foreground);
-            var overtimeColour = ((ISolidColorBrush)overtime.Foreground!).Color;
-            Assert.True(overtimeColour.R > overtimeColour.G + 30);
-            Assert.True(overtime.IsVisible);
+            var idle = labels.Single(x => x.Text == "Ready to track");
+            Assert.NotNull(idle.Foreground);
+            Assert.DoesNotContain(labels, x => x.Text is not null && x.Text.StartsWith("Overtime")); // The day's hours are over (the shift ends at 13:00), and nothing says so in red.
             Assert.Equal(theme == "Light" ? ThemeVariant.Light : ThemeVariant.Dark, Application.Current!.ActualThemeVariant);
         }
         model.SetTheme("System");
-        Assert.Equal(ThemeEngine.VariantFor(model.CurrentTheme), Application.Current!.RequestedThemeVariant); // System is Time Deck, by the computer's light or dark.
+        Assert.Equal(ThemeEngine.VariantFor(model.CurrentTheme), Application.Current!.RequestedThemeVariant); // System is Light or Dark, by the computer's light or dark.
         Assert.Contains(model.CurrentTheme.Name, new[] { "Light", "Dark" });
     }
 
@@ -78,18 +72,20 @@ public sealed class ShellTests
         {
             Dispatcher.UIThread.RunJobs();
             window.UpdateLayout(); // Windows CI can reach the clicks before the first layout pass, leaving every row at 0, 0.
+            void Open() { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); using var opened = window.CaptureRenderedFrame(); }
             for (var i = 0; i < model.Accounts.Count - 1; i++) // The break has its own button, not a row.
             {
-                var row = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account" + i);
+                Open(); var row = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account" + i);
                 var point = row.TranslatePoint(new Point(row.Bounds.Width - 8, row.Bounds.Height / 2), window)!.Value;
+                window.MouseMove(point); // The pointer arrives over the row before it presses, as a real one does.
                 window.MouseDown(point, MouseButton.Left);
                 window.MouseUp(point, MouseButton.Left);
                 Assert.True(model.Accounts[i].Name == model.ActiveAccount,
                     $"Row {i}: bounds {row.Bounds}, point {point}, hit {window.GetVisualAt(point)?.GetType().Name}, active {model.ActiveAccount ?? "none"}");
-                Assert.InRange(row.Bounds.Width, 320, 340);
+                Assert.InRange(row.Bounds.Width, 200, 230);
             }
             model.TogglePause(); // Nothing recording, so the scrolled click below starts an account.
-            var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "AccountScroll");
+            Open(); var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "SidebarAccountScroll");
             scroll.Offset = new Vector(0, 2000);
             Dispatcher.UIThread.RunJobs();
             using var scrolledFrame = window.CaptureRenderedFrame();
@@ -100,6 +96,44 @@ public sealed class ShellTests
             Assert.Equal("Internal", model.ActiveAccount);
         }
         finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void CollapsingTheDashboardLeavesThePillShownAtItsOwnSize()
+    {
+        var model = Fixture();
+        var coordinator = new WindowCoordinator(model, () => { });
+        coordinator.HideToTray = true;
+        coordinator.Pill.Show();
+        try
+        {
+            coordinator.Pill.OpenDashboard!();
+            coordinator.Dashboard.OpenPill!();
+            Assert.True(coordinator.Pill.IsVisible);
+            Assert.Equal(WindowState.Normal, coordinator.Pill.WindowState);
+            Assert.InRange(coordinator.Pill.Width, 1, coordinator.Pill.WindowWidthNow + 2);
+            Assert.InRange(coordinator.Pill.Height, 1, coordinator.Pill.WindowHeightNow + 2);
+            Assert.True(coordinator.IsShown);
+        }
+        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void CollapsingWhileSetupIsPendingDoesNotSendYouBackToTheDashboard()
+    {
+        var model = Fixture();
+        var coordinator = new WindowCoordinator(model, () => { });
+        coordinator.OpenDashboardOnFirstShow();
+        coordinator.Pill.Show();
+        try
+        {
+            Assert.True(coordinator.Dashboard.IsVisible);
+            Assert.False(coordinator.Pill.IsVisible);
+            coordinator.Dashboard.OpenPill!();
+            Assert.True(coordinator.Pill.IsVisible);
+            Assert.False(coordinator.Dashboard.IsVisible);
+        }
+        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
     }
 
     [AvaloniaFact]
@@ -140,25 +174,27 @@ public sealed class ShellTests
                 model.SetTheme(theme);
                 dashboard.SelectTab(false);
                 Save(dashboard, Path.Combine(output, $"dashboard-timeline-{theme}.png"));
-                Assert.True(dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll").Offset.Y > 1000);
+                Assert.True(dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll").Offset.X > 500); // Opened part way along the day, on the first block.
                 var nine = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
                 var ninePoint = nine.TranslatePoint(new Point(0, 0), dashboard)!.Value;
-                Assert.InRange(ninePoint.Y, 100, 400);
+                Assert.InRange(ninePoint.X, 100, 500); Assert.InRange(ninePoint.Y, 100, 400);
                 dashboard.SelectTab(true);
                 Save(dashboard, Path.Combine(output, $"dashboard-week-{theme}.png"));
                 Save(pill, Path.Combine(output, $"pill-{theme}.png"));
             }
-            model.ToggleFormat();
+            model.ToggleFormat(); dashboard.SelectTab(false); Dispatcher.UIThread.RunJobs();
             var texts = dashboard.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
             Assert.Contains("Allocated", texts); Assert.Contains("4.50h", texts);
             Assert.Contains("Unallocated", texts); Assert.Contains("0.25h", texts);
-            // The totals sit under the clock, in one line with it above them.
-            var clockText = dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 46 && t.Classes.Contains("clock")); var figure = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "4.50h");
-            Assert.True(figure.TranslatePoint(new Point(0, 0), dashboard)!.Value.Y > clockText.TranslatePoint(new Point(0, clockText.Bounds.Height - 2), dashboard)!.Value.Y);
-            Assert.Contains("clock", clockText.Classes); Assert.Equal("Bricolage Display", clockText.FontFamily.Name); // The big clock wears the bundled display face.
-            Assert.Contains(texts, t => t is not null && t.Contains("9h / 15h")); Assert.Contains("This week", texts);
+            // The day's figures sit in one strip under the timeline, and the budgets read in the accounts beside the rail.
+            var strip = dashboard.GetVisualDescendants().OfType<StackPanel>().Single(p => p.Name == "DayTotals");
+            Assert.Contains(strip.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "4.50h");
+Dispatcher.UIThread.RunJobs(); using var accountsFrame = dashboard.CaptureRenderedFrame();
+            texts = dashboard.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
+            // The budget words are in the row's tooltip now, so the narrow panel keeps the room for the name and the time.
+            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")), b => ToolTip.GetTip(b)?.ToString() is { } tip && tip.Contains("9h / 15h")); dashboard.CloseFlyouts();
             model.ToggleAccount("Account three");
-            pill.ToggleExpansion();
+            pill.ShowPanel();
             Save(pill, Path.Combine(output, "pill-expanded-Dark.png"));
             Assert.Equal(DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, dashboard.Width);
             Assert.Equal(DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin, dashboard.Height);
@@ -187,14 +223,13 @@ public sealed class ShellTests
         window.Show();
         try
         {
-            Assert.Empty(window.GetVisualDescendants().OfType<ComboBox>()); // Nothing to choose until the settings page is opened.
+            Assert.Empty(window.GetVisualDescendants().OfType<Button>().Where(b => b.Name is "ThemeDark" or "ThemeLight" or "ThemeSystem")); // Nothing to choose until the settings page is opened.
             Assert.NotNull(window.ContextMenu);
-            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Dispatcher.UIThread.RunJobs();
-            var choice = window.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "ThemeChoice");
-            Assert.Equal(new[] { "System", "Light", "Dark", "After Hours", "Botanical", "Hawthorn" }, choice.Items.Cast<string>());
+            window.OpenSettings();
+            var tiles = window.GetVisualDescendants().OfType<Button>().Where(b => b.Name is "ThemeSystem" or "ThemeLight" or "ThemeDark").Select(b => b.Name!).ToList();
+            Assert.Equal(new[] { "ThemeSystem", "ThemeLight", "ThemeDark" }, tiles); // System, Light and Dark, as three small pictures.
             var elapsed = model.Elapsed;
-            choice.SelectedItem = "Dark";
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ThemeDark").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Assert.Equal("Dark", model.Theme);
             Assert.Equal(elapsed, model.Elapsed);
         }
@@ -260,17 +295,17 @@ public sealed class ShellTests
             {
                 window.Show(); Dispatcher.UIThread.RunJobs();
                 using var frame = window.CaptureRenderedFrame();
-                // The pill has one header. The dashboard has two drag areas: the identity block on the left and the empty middle of the tab row.
-                var headers = window.GetVisualDescendants().OfType<Panel>().Where(g => g.Name is "DragHeader" or "SidebarDragHeader").ToList();
-                Assert.Equal(window is DashboardWindow ? 2 : 1, headers.Count);
+                // The pill has one header. The dashboard has one: the empty middle of the header row (the sidebar is dragged by its bare parts).
+                var headers = window.GetVisualDescendants().OfType<Panel>().Where(g => g.Name is "DragHeader" or "RailDragHeader").ToList();
+                Assert.Single(headers);
                 foreach (var header in headers)
                 {
-                    Assert.NotNull(header.Background); Assert.True(Ui.IsDragSurface(header));
-                    if (header.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => !t.GetVisualAncestors().OfType<Button>().Any()) is { } label) Assert.Equal(window is DashboardWindow, Ui.IsDragSurface(label)); // Text outside a button drags.
+                    Assert.NotNull(header.Background); Assert.True(Ui.IsPlainSurface(header));
+                    if (header.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => !t.GetVisualAncestors().OfType<Button>().Any()) is { } label) Assert.Equal(window is DashboardWindow, Ui.IsPlainSurface(label)); // Text outside a button drags.
                     if (header.GetVisualDescendants().OfType<Button>().FirstOrDefault() is { } button)
                     {
-                        Assert.False(Ui.IsDragSurface(button));
-                        Assert.All(button.GetVisualDescendants(), child => Assert.False(Ui.IsDragSurface(child)));
+                        Assert.False(Ui.IsPlainSurface(button));
+                        Assert.All(button.GetVisualDescendants(), child => Assert.False(Ui.IsPlainSurface(child)));
                     }
                 }
             }
@@ -298,17 +333,16 @@ public sealed class ShellTests
             Assert.InRange(nine.TranslatePoint(default, coordinator.Dashboard)!.Value.Y, 100, 400);
             model.ToggleAccount("Account one");
             Save(coordinator.Dashboard, Path.Combine(output, "demo-tracking.png"));
-            Assert.Contains(coordinator.Dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Classes.Contains("live") && t.Text is { Length: > 0 } && model.ClockText.StartsWith(t.Text));
-            model.ForceOvertime(); Assert.True(model.IsOvertime);
-            Save(coordinator.Dashboard, Path.Combine(output, "demo-overtime.png"));
-            coordinator.Dashboard.OpenPill!(); coordinator.Pill.ToggleExpansion();
+            Assert.Equal("Recording", ToolTip.GetTip(coordinator.Dashboard.GetVisualDescendants().OfType<Border>().Single(p => p.Name == "SidebarStateLight")));
+            Save(coordinator.Dashboard, Path.Combine(output, "demo-late.png"));
+            coordinator.Dashboard.OpenPill!(); coordinator.Pill.ShowPanel();
             Save(coordinator.Pill, Path.Combine(output, "demo-pill-overtime.png"));
         }
         finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
     }
 
     [AvaloniaFact]
-    public void EditedShiftsSurviveRestartAndControlDayClockAndOvertime()
+    public void EditedShiftsSurviveRestartAndSetHowFarTheDayClockRuns()
     {
         var folder = Path.Combine(Path.GetTempPath(), "timer-shifts-" + Guid.NewGuid());
         var now = new DateTime(2026, 10, 9, 12, 0, 0);
@@ -319,87 +353,21 @@ public sealed class ShellTests
                 var engine = new TrackingEngine(clock: () => now);
                 var model = new TimerModel(engine, store.Load(engine), store);
                 model.SetShifts(new() { [DayOfWeek.Friday] = new(TimeSpan.FromHours(10), TimeSpan.FromHours(11)) });
-                Assert.Equal(TimeSpan.FromHours(2), model.Elapsed); Assert.True(model.IsOvertime);
+                Assert.Equal(TimeSpan.Zero, model.Elapsed); // Nothing is recorded, so the day has not begun, whatever its hours.
+                engine.AddSession("Account one", now.Date.AddHours(10), now.Date.AddHours(10.5));
+                Assert.Equal(TimeSpan.FromHours(1), model.Elapsed); Assert.Equal(TimeSpan.FromHours(1), model.WorkingOn(now)); // From the first block to the end of the hours: the clock stops there, at eleven, though it is noon.
+                engine.AddSession("Account one", now.Date.AddHours(11.5), now.Date.AddHours(12));
+                Assert.Equal(TimeSpan.FromHours(2), model.WorkingOn(now)); // Work past the hours is simply working time.
             }
             using (var store = new TimerStore(folder))
             {
                 var engine = new TrackingEngine(clock: () => now); store.Load(engine);
                 Assert.Equal(TimeSpan.FromHours(10), engine.Plan(now).Start.TimeOfDay);
                 Assert.Equal(TimeSpan.FromHours(11), engine.Plan(now).End.TimeOfDay);
-                Assert.Single(engine.Schedule.Days); Assert.Equal(TimeSpan.FromHours(1), engine.Totals(now).Overtime);
+                Assert.Single(engine.Schedule.Days);
             }
         }
         finally { Directory.Delete(folder, true); }
-    }
-
-    [AvaloniaFact]
-    public void PillAccountAndTimerClicksOpenTheirRespectiveViews()
-    {
-        var model = Fixture();
-        var coordinator = new WindowCoordinator(model, () => { });
-        coordinator.Pill.Show();
-        try
-        {
-            model.ToggleAccount("Account one");
-            Dispatcher.UIThread.RunJobs();
-            using var frame = coordinator.Pill.CaptureRenderedFrame();
-            void Click(string name)
-            {
-                var button = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
-                var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), coordinator.Pill)!.Value;
-                coordinator.Pill.MouseDown(point, MouseButton.Left);
-                coordinator.Pill.MouseUp(point, MouseButton.Left);
-                Dispatcher.UIThread.RunJobs();
-            }
-            Click("PillAccounts");
-            Assert.True(coordinator.Pill.Height > coordinator.Pill.CollapsedWindowHeightNow);
-            Assert.False(coordinator.Dashboard.IsVisible);
-            Click("PillAccounts");
-            Assert.Equal(coordinator.Pill.CollapsedWindowHeightNow, coordinator.Pill.Height);
-            Click("PillDashboard");
-            Assert.True(coordinator.Dashboard.IsVisible);
-            Assert.False(coordinator.Pill.IsVisible);
-            Assert.Equal("Account one", model.ActiveAccount);
-            coordinator.Dashboard.OpenPill!();
-            Assert.Equal(coordinator.Pill.CollapsedWindowHeightNow, coordinator.Pill.Height);
-        }
-        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void DraggingEachPillTargetSuppressesClicksAndPauseResumesTheSelectedAccount()
-    {
-        var model = Fixture();
-        var coordinator = new WindowCoordinator(model, () => { }); coordinator.Pill.Show();
-        try
-        {
-            model.ToggleAccount("Account one");
-            Dispatcher.UIThread.RunJobs(); using var initial = coordinator.Pill.CaptureRenderedFrame();
-            foreach (var name in new[] { "PillDashboard", "PillAccounts", "PillPause" })
-            {
-                var button = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
-                var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), coordinator.Pill)!.Value;
-                coordinator.Pill.MouseDown(point, MouseButton.Left);
-                coordinator.Pill.MouseMove(point + new Vector(20, 10));
-                coordinator.Pill.MouseUp(point + new Vector(20, 10), MouseButton.Left);
-                Assert.False(coordinator.Dashboard.IsVisible);
-                Assert.Equal(coordinator.Pill.CollapsedWindowHeightNow, coordinator.Pill.Height);
-                Assert.Equal("Account one", model.ActiveAccount);
-            }
-            var pause = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillPause");
-            var pausePoint = pause.TranslatePoint(new Point(18, 18), coordinator.Pill)!.Value;
-            coordinator.Pill.MouseDown(pausePoint, MouseButton.Left); coordinator.Pill.MouseUp(pausePoint, MouseButton.Left);
-            Assert.False(model.IsTracking); Assert.Equal("Account one", model.SelectedAccount);
-            coordinator.Pill.MouseDown(pausePoint, MouseButton.Left); coordinator.Pill.MouseUp(pausePoint, MouseButton.Left);
-            Assert.Equal("Account one", model.ActiveAccount);
-            var timerButton = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillDashboard");
-            var accountButton = coordinator.Pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PillAccounts");
-            Assert.True(timerButton.Bounds.X < accountButton.Bounds.X && accountButton.Bounds.X < pause.Bounds.X);
-            var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();
-            Save(coordinator.Pill, Path.Combine(output, "pill-classic-tracking.png"));
-            model.TogglePause(); Save(coordinator.Pill, Path.Combine(output, "pill-classic-paused.png"));
-        }
-        finally { coordinator.Pill.Close(); coordinator.Dashboard.Close(); }
     }
 
     [AvaloniaFact]
@@ -422,8 +390,8 @@ public sealed class ShellTests
                     Assert.DoesNotContain(model.Accounts, a => a.Name == "Account one");
                     Assert.Contains(model.ReviewAccounts, a => a.Name == "Account one");
                     Assert.Equal(TimeSpan.FromMinutes(5), engine.Credited("Account one", now.Date, now.Date.AddDays(1)));
-                    Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
-                    Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "New client");
+Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+                    Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "New client"); window.CloseFlyouts();
                     var editor = new AccountsDialog(model).Open((DashboardWindow)window);
                     var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();
                     Save(window, Path.Combine(output, "accounts-editor.png")); editor.Close();

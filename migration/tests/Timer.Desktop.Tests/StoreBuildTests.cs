@@ -1,13 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
-using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
 
@@ -31,7 +29,6 @@ public sealed class StoreBuildTests
             saved.SetDeveloper(true); Assert.False(saved.DeveloperUnlocked);
             var demo = TimerModel.CreateDemo();
             Assert.False(demo.DeveloperUnlocked); // Not even the demo model.
-            Assert.Throws<InvalidOperationException>(() => new TimerModel(new TrackingEngine()).SetOvertimeTest(true));
         }
         finally { BuildInfo.DeveloperFeaturesOverride = null; }
     }
@@ -47,14 +44,14 @@ public sealed class StoreBuildTests
         {
             window.ContextMenu!.Open(); Dispatcher.UIThread.RunJobs();
             var menu = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
-            Assert.False(menu.Single(m => m.Name == "BuildVersion").IsVisible); Assert.False(menu.Single(m => m.Name == "TestOvertime").IsVisible);
+            Assert.False(menu.Single(m => m.Name == "BuildVersion").IsVisible);
             Assert.True(menu.Single(m => (string?)m.Header == "Collapse to tray").IsVisible);
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window);
             Assert.False(window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DevelopmentSection").IsVisible);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "OpenDemo" && b.IsVisible && b.GetVisualAncestors().All(a => a is not Control c || c.IsVisible));
             // About still shows which version this is, since that is not a developer feature.
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "AboutVersion" && !string.IsNullOrEmpty(t.Text));
-            window.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "SettingsPage").Offset = new Vector(0, 5000); Settle(window);
+            window.GetVisualDescendants().OfType<SettingsView>().Single().ShowSection("about"); Settle(window);
             var about = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "AboutSection");
             var point = about.TranslatePoint(new Point(20, 20), window)!.Value;
             for (var i = 0; i < SettingsView.UnlockClicks + 3; i++) { window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left); }

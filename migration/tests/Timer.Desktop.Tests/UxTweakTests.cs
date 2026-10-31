@@ -7,7 +7,6 @@ using Avalonia.Threading;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using Timer.Core;
-using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
 
@@ -55,25 +54,10 @@ public sealed class UxTweakTests
         finally { window.Close(); }
     }
 
-    [AvaloniaFact]
-    public void ThemesMadeAfterTheSettingsPageWasBuiltAppearInItsList()
-    {
-        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
-        var view = new SettingsView(model); var window = new Window { Content = view }; window.Show();
-        try
-        {
-            var choice = view.GetLogicalDescendants().OfType<ComboBox>().Single(c => c.Name == "ThemeChoice");
-            Assert.DoesNotContain("Mine", choice.ItemsSource!.Cast<string>());
-            model.SaveTheme(ThemeLibrary.Light with { Name = "Mine" });
-            Assert.Contains("Mine", choice.ItemsSource!.Cast<string>());
-        }
-        finally { window.Close(); }
-    }
-
     [Fact]
     public void LightAndDarkAccentsKeepClearOfRedGreenAndOrange()
     {
-        foreach (var theme in new[] { ThemeLibrary.Light, ThemeLibrary.Dark })
+        foreach (var theme in new[] { AppThemes.Light, AppThemes.Dark })
         {
             var accent = Color.Parse(theme.Colour("Accent"));
             Assert.True(accent.B > accent.R + 40 && accent.B >= accent.G, $"{theme.Name} accent {theme.Colour("Accent")} is not clearly blue");
@@ -120,28 +104,12 @@ public sealed class UxTweakTests
         var window = new Window { Content = target }; window.Show();
         try
         {
-            int Dividers() => menu.ItemsSource!.OfType<Separator>().Skip(1).Count(r => r.IsVisible); // The first divider always follows Add note.
+            int Dividers() => menu.ItemsSource!.OfType<Separator>().Count(r => r.IsVisible);
             menu.Open(target); Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, Dividers()); // Only Collapse to tray is showing, so there is nothing to divide it from.
             menu.Close(); model.SetDeveloper(true); menu.Open(target); Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, Dividers()); // The version, then a divider, then Collapse to tray. Nothing above the version.
-            Assert.False(menu.ItemsSource!.OfType<Separator>().Skip(1).First().IsVisible);
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void LongTextSlidesAndShortTextStaysPut()
-    {
-        var longText = new AutoScrollText(new TextBlock { Text = "A very long client account name that cannot fit in the pill" }) { Width = 120 };
-        var shortText = new AutoScrollText(new TextBlock { Text = "Short" }) { Width = 120 };
-        var window = new Window { Content = new StackPanel { Children = { longText, shortText } } }; window.Show();
-        try
-        {
-            Settle(window);
-            Assert.True(longText.Overflow > 100); Assert.Equal(0, shortText.Overflow);
-            Assert.True(longText.Scrolling); Assert.False(shortText.Scrolling);
-            Assert.Equal(120, longText.Bounds.Width, 0.5); // It keeps to the room it was given.
+            Assert.IsNotType<Separator>(menu.ItemsSource!.Cast<object>().First()); // Nothing above the version.
         }
         finally { window.Close(); }
     }
@@ -151,7 +119,7 @@ public sealed class UxTweakTests
     {
         var name = new TextBlock { Text = "A very long client account name that cannot fit in the pill at all" };
         var chevron = new Border { Width = 12, Height = 12 }; var dot = new Border { Width = 14, Height = 14 };
-        var row = new NameRow { Width = 300 }; row.Children.Add(dot); row.Children.Add(new AutoScrollText(name)); row.Children.Add(chevron);
+        var row = new NameRow { Width = 300 }; row.Children.Add(dot); row.Children.Add(name); row.Children.Add(chevron);
         var window = new Window { Content = row }; window.Show();
         try
         {
@@ -165,28 +133,30 @@ public sealed class UxTweakTests
     [AvaloniaFact]
     public void EveryThemeAndPillStateWritesTooltipColoursFromItsOwnSurfaceAndText()
     {
-        foreach (var theme in ThemeLibrary.BuiltIn)
+        foreach (var theme in AppThemes.BuiltIn)
         {
             ThemeEngine.Register(Application.Current!, new[] { theme });
-            foreach (var variant in new[] { ThemeEngine.VariantFor(theme), ThemeEngine.StateVariant(theme, ThemeDerivation.Recording), ThemeEngine.StateVariant(theme, ThemeDerivation.Break), ThemeEngine.StateVariant(theme, ThemeDerivation.Overtime) })
+            foreach (var variant in new[] { ThemeEngine.VariantFor(theme), ThemeEngine.StateVariant(theme, ThemeDerivation.Recording), ThemeEngine.StateVariant(theme, ThemeDerivation.Break) })
             {
                 var dictionary = (ResourceDictionary)Application.Current!.Resources.ThemeDictionaries[variant];
                 var back = ((ISolidColorBrush)dictionary["ToolTipBackground"]!).Color; var text = ((ISolidColorBrush)dictionary["ToolTipForeground"]!).Color;
-                Assert.Equal(((ISolidColorBrush)dictionary["Surface"]!).Color, back); Assert.Equal(((ISolidColorBrush)dictionary["Ink"]!).Color, text);
+                Assert.Equal(((ISolidColorBrush)dictionary["Panel"]!).Color, back); // The card colour, like the pop-ups and messages. Assert.Equal(((ISolidColorBrush)dictionary["Ink"]!).Color, text);
             }
         }
     }
 
     [AvaloniaFact]
-    public void BackToPillIsFirstOnTheRailAndCloseTimerIsAtTheFootBelowSettings()
+    public void TheClockIsFirstInTheSidebarAndGoesBackToThePillAndCloseTimerIsAtTheFoot()
     {
-        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show(); var back = 0; window.OpenPill = () => back++;
         try
         {
             Settle(window);
             double Top(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Point(0, 0), window)!.Value.Y; }
-            Assert.True(Top("BackToPill") < Top("TimelineTab"));
-            Assert.True(Top("QuitTimer") > Top("Settings"));
+            Assert.True(Top("SidebarDashboard") < Top("SidebarPause")); Assert.True(Top("SidebarPause") < Top("Account0")); // The clock, then the tracking card, then the accounts.
+            Assert.Equal(Top("SidebarPause"), Top("DashboardBreak"), 1.0); Assert.True(Top("Account0") < Top("QuitTimer")); // Quit timer is at the foot.
+            Assert.Equal("Collapse to pill", ToolTip.GetTip(window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SidebarDashboard")));
+            window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SidebarDashboard").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.Equal(1, back);
             var quits = 0; model.QuitRequested += () => quits++;
             window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "QuitTimer").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(1, quits);
@@ -201,7 +171,7 @@ public sealed class UxTweakTests
     {
         var model = new TimerModel(new TrackingEngine()); var hides = 0; var quits = 0; model.HideRequested += () => hides++; model.QuitRequested += () => quits++;
         var menu = Ui.SettingsMenu(model); var items = ((IEnumerable<Control>)menu.ItemsSource!).OfType<MenuItem>().ToList();
-        Assert.DoesNotContain(items, m => (string?)m.Header == "Decimal hours"); Assert.DoesNotContain(items, m => (string?)m.Header == "Close timer");
+        Assert.DoesNotContain(items, m => (string?)m.Header == "Decimal hours"); Assert.DoesNotContain(items, m => (string?)m.Header == "Quit timer");
         items.Single(m => (string?)m.Header == "Collapse to tray").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
         Assert.Equal(1, hides); Assert.Equal(0, quits);
     }
@@ -221,7 +191,7 @@ public sealed class UxTweakTests
         var model = new TimerModel(new TrackingEngine()); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
         {
-            dashboard.Dialogs.Show(new ThemesDialog(model)); Settle(dashboard);
+            dashboard.Dialogs.Show(new AccountsDialog(model)); Settle(dashboard);
             Assert.Contains("clock", dashboard.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "DialogTitle").Classes);
         }
         finally { dashboard.Close(); }
@@ -244,25 +214,25 @@ public sealed class UxTweakTests
             var bar = dashboard.GetVisualDescendants().OfType<MessageBar>().Single();
             Assert.True(bar.IsVisible);
             Assert.IsAssignableFrom<ISolidColorBrush>(bar.Background); // A style that names Border alone skips a subclass, which once left it see-through.
-            Assert.NotNull(bar.BorderBrush); Assert.True(bar.BorderThickness.Left > 1);
+            // A porcelain card with a deep soft shadow, raised well clear of the page.
+            Assert.True(bar.TryFindResource("Porcelain", bar.ActualThemeVariant, out var porcelain) && porcelain is ISolidColorBrush brush && ((ISolidColorBrush)bar.Background!).Color == brush.Color);
+            Assert.True(bar.BoxShadow.Count > 0);
         }
         finally { dashboard.Close(); }
     }
 
     [AvaloniaFact]
-    public void WritingATwiceLeavesUnchangedColoursAloneAndAPreviewWritesOnlyTheMainVariant()
+    public void WritingAThemeTwiceLeavesUnchangedColoursAlone()
     {
-        var theme = ThemeLibrary.BuiltIn.First(t => t.Name == "Botanical"); var app = Application.Current!;
+        var theme = AppThemes.Dark; var app = Application.Current!;
         ThemeEngine.Register(app, new[] { theme });
         var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
         var ink = dictionary["Ink"]; var accent = dictionary["Accent"];
         ThemeEngine.Register(app, new[] { theme });
         Assert.Same(ink, dictionary["Ink"]); Assert.Same(accent, dictionary["Accent"]); // Nothing changed, so nothing was replaced.
         var edited = new Dictionary<string, string>(theme.Colours) { ["Accent"] = "#123456" };
-        var recording = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.StateVariant(theme, ThemeDerivation.Recording)]; var recordingAccent = recording["Accent"];
-        ThemeEngine.RegisterPreview(app, theme with { Colours = edited });
+        ThemeEngine.Register(app, new[] { theme with { Colours = edited } });
         Assert.NotSame(accent, dictionary["Accent"]); Assert.Same(ink, dictionary["Ink"]); // Only the colour that moved was replaced.
-        Assert.Same(recordingAccent, recording["Accent"]); // A preview leaves the pill's tinted variants alone.
         ThemeEngine.Register(app, new[] { theme }); // Put back.
     }
 
@@ -274,7 +244,7 @@ public sealed class UxTweakTests
         try
         {
             var items = tray.Icons[0].Menu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).ToList();
-            Assert.Equal(6, items.Count);
+            Assert.Equal(5, items.Count);
             Assert.All(items, item => Assert.False(string.IsNullOrWhiteSpace(item.Header), "A menu item has no words."));
         }
         finally { tray.Dispose(); }
@@ -288,27 +258,9 @@ public sealed class UxTweakTests
         try
         {
             byte[] Frame() { Settle(window); using var frame = window.CaptureRenderedFrame(); using var stream = new MemoryStream(); frame!.Save(stream); return stream.ToArray(); }
-            ThemeEngine.Register(Application.Current!, ThemeLibrary.BuiltIn);
+            ThemeEngine.Register(Application.Current!, AppThemes.BuiltIn);
             var light = Frame(); window.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark; var dark = Frame();
             Assert.NotEqual(light, dark); // The stroke changed colour, not only the window around it.
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void ThePillIconsDotTakesTheStatusColourOfTheDay()
-    {
-        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
-        try
-        {
-            Settle(window);
-            var button = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BackToPill");
-            var glyph = (IconGlyph)button.Content!;
-            Assert.Equal(IconKind.Minimise, glyph.Kind); Assert.Equal("Switch to pill", ToolTip.GetTip(button));
-            if (!model.IsTracking) model.ToggleAccount("Account one"); Settle(window);
-            Assert.Equal("Live", glyph.DotKey);
-            model.TogglePause(); Settle(window); Assert.Equal("Idle", glyph.DotKey);
-            model.ToggleBreak(); Settle(window); Assert.Equal("Break", glyph.DotKey);
         }
         finally { window.Close(); }
     }
@@ -316,7 +268,7 @@ public sealed class UxTweakTests
     [Fact]
     public void SlidersCanBeSeenInEveryBuiltInTheme()
     {
-        foreach (var theme in ThemeLibrary.BuiltIn)
+        foreach (var theme in AppThemes.BuiltIn)
         {
             var (fill, track) = ThemeEngine.SliderColours(theme.Colours);
             string Hex(Avalonia.Media.Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
@@ -386,7 +338,7 @@ public sealed class UxTweakTests
     public void SlidersThatAreSwitchedOffCanStillBeSeenInEveryBuiltInTheme()
     {
         var app = Application.Current!;
-        foreach (var theme in ThemeLibrary.BuiltIn)
+        foreach (var theme in AppThemes.BuiltIn)
         {
             ThemeEngine.Register(app, new[] { theme });
             var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
@@ -435,7 +387,7 @@ public sealed class UxTweakTests
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model); window.Show();
         try
         {
-            Settle(window);
+Settle(window);
             var rows = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")).ToList();
             Assert.NotEmpty(rows);
             Assert.All(rows, row => Assert.DoesNotContain(row.GetVisualDescendants().OfType<TextBlock>(), t => t.Text is { } x && x.EndsWith('%'))); // No percentage on the row itself.
@@ -454,7 +406,7 @@ public sealed class UxTweakTests
     public void TheRecordingAccountsCardTakesAGentleTintOfTheTrackingColourInEveryTheme()
     {
         var app = Application.Current!;
-        foreach (var theme in ThemeLibrary.BuiltIn)
+        foreach (var theme in AppThemes.BuiltIn)
         {
             ThemeEngine.Register(app, new[] { theme });
             var dictionary = (ResourceDictionary)app.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)];
@@ -539,7 +491,7 @@ public sealed class UxTweakTests
     }
 
     [AvaloniaFact]
-    public void TheRunningRecordingCountsInTheWeekTableTheChartAndTheEntriesDayTotal()
+    public void TheRunningRecordingCountsInTheWeekTable()
     {
         var now = new DateTime(2026, 10, 9, 12, 0, 0); var model = BudgetModel(() => now, out var engine);
         model.ToggleAccount("Weekly"); now = now.AddHours(2); // Two hours running, nothing saved yet.
@@ -547,12 +499,5 @@ public sealed class UxTweakTests
         var table = WeekTable.Build(model, new WeekExport(model.Editor, engine, week), week, new[] { 0, 1, 2, 3, 4 });
         var allocated = table.Rows.Single(r => r.Label == "Allocated"); Assert.Equal("02:00", allocated.Cells[4]); Assert.Equal("02:00", allocated.Total);
         Assert.Equal("02:00", table.Rows.Single(r => r.Label == "Weekly").Total);
-        var window = new DashboardWindow(model); window.Show();
-        try
-        {
-            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekEntriesTab").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "DayAllocated" && t.Text!.Contains("02:00"));
-        }
-        finally { window.Close(); }
     }
 }

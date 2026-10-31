@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Messages and errors</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.pg{--bg1:#F4F4F1;--bg2:#ECECE8;--ink:#18233A;--muted:#5A6070;--line:#E2E2DD;--card:#FFFFFF;--card2:#F7F7F5;--accent:#3558C8;--accentInk:#FFFFFF;--soft:#E8EEFF;--shadow:0 6px 18px rgba(20,30,70,.16)}
+.pg.dark{--bg1:#0F1420;--bg2:#131A2A;--ink:#EEF2FB;--muted:#A7B2CA;--line:#2D3853;--card:#1A2234;--card2:#212B42;--accent:#7C9BFF;--accentInk:#0E1530;--soft:#25335A;--shadow:0 6px 18px rgba(0,0,0,.45)}
+.pg{color-scheme:light}.pg.dark{color-scheme:dark}
+:where(.pg) button{font:inherit;color:inherit;cursor:pointer}
+.pg button:focus-visible,.pg input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:0 1px 2px rgba(40,60,120,.06)}
+.lbl{font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.sub{font-size:12.5px;color:var(--muted);line-height:1.4}
+.toast{box-sizing:border-box;display:inline-flex;align-items:center;gap:10px;padding:8px 8px 8px 10px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);max-width:520px;font-size:13px;font-weight:600;line-height:1.35}
+.toast.hold{border:1.5px solid var(--ink)}
+.toastIcon{width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;box-sizing:border-box}
+.toast.ok .toastIcon{background:var(--soft);color:var(--accent)}
+.toast.warn .toastIcon,.toast.hold .toastIcon{color:var(--ink);border:1.5px solid var(--ink)}
+.more{font-weight:400;color:var(--muted);font-size:12px}
+.small{height:28px;border-radius:9px;font-size:12.5px;padding:0 11px;border:1px solid transparent;font-weight:600;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center}
+.small.soft{color:var(--accent);background:var(--soft)}
+.small.solid{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.iconbtn{background:transparent;border:0;color:var(--muted);width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0}
+.iconbtn:hover{background:var(--card2);color:var(--ink)}
+.field{height:38px;box-sizing:border-box;border:1px solid var(--line);background:var(--card2);color:var(--ink);border-radius:11px;padding:0 10px;font:400 14px 'Inter',system-ui,sans-serif;width:100%}
+.field.bad{border:2px solid var(--ink)}
+.row{display:grid;grid-template-columns:170px minmax(0,1fr);gap:18px;align-items:center}
+.wrow{display:grid;grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr);gap:8px;align-items:center;padding:5px 0;border-top:1px solid var(--line);font-size:12.5px;line-height:1.35}
+.was{color:var(--muted)}
+.now{font-weight:600}
+@media (prefers-reduced-motion:reduce){*{transition:none}}
+</style>
+</helmet>
+<div class="pg {{modeClass}}" style="width: 1100px; height: 1530px; box-sizing: border-box; padding: 36px 32px 28px; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink); display: flex; flex-direction: column; gap: 20px">
+
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 700">Messages and errors</h1>
+    <p style="margin: 0; font-size: 14px; color: var(--muted); max-width: 920px; line-height: 1.45">Messages now speak like the tooltips: a few words, no full stops, the same card (panel colour, a hairline, a soft shadow). They float over the lowest part of the workspace so they never move a button, they never use red, and the icon always carries the meaning.</p>
+  </div>
+
+  <div style="display: flex; gap: 20px; align-items: flex-start">
+    <div class="panel" style="width: 640px; flex-shrink: 0; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; box-sizing: border-box">
+      <span class="lbl">Floating messages</span>
+
+      <div class="row">
+        <div><div style="font-size: 14px; font-weight: 600">Done</div><div class="sub">A tick on the accent. Undo when it can be undone. Fades after 15 seconds.</div></div>
+        <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-start">
+          <div class="toast ok"><span class="toastIcon" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>Merged <span class="more">· 00:05 gap added</span></span><button type="button" class="small soft">Undo</button><button type="button" class="iconbtn" aria-label="Dismiss"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+          <div class="toast ok"><span class="toastIcon" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>Note added <span class="more">· reminder Today, 15:30</span></span><button type="button" class="iconbtn" aria-label="Dismiss"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div><div style="font-size: 14px; font-weight: 600">Offer</div><div class="sub">After a quick slip, for a few minutes. The button names what it does.</div></div>
+        <div class="toast ok"><span class="toastIcon" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span>Switched <span class="more">· 00:03 on Account two</span></span><button type="button" class="small soft">Continue Account one</button><button type="button" class="iconbtn" aria-label="Dismiss"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      </div>
+
+      <div class="row">
+        <div><div style="font-size: 14px; font-weight: 600">Not possible</div><div class="sub">A ring with a mark. Nothing changed. Fades after 15 seconds.</div></div>
+        <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-start">
+          <div class="toast warn"><span class="toastIcon" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5v7"/><path d="M12 17.5h.01"/></svg></span><span>Overlaps another block</span><button type="button" class="iconbtn" aria-label="Dismiss"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+          <div class="toast warn"><span class="toastIcon" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5v7"/><path d="M12 17.5h.01"/></svg></span><span>End: try 10:30</span><button type="button" class="iconbtn" aria-label="Dismiss"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div><div style="font-size: 14px; font-weight: 600">Needs you</div><div class="sub">A heavier edge. Stays until it works. Dismissing hides it until it changes.</div></div>
+        <div class="toast hold"><span class="toastIcon" aria-hidden="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5v7"/><path d="M12 17.5h.01"/></svg></span><span style="display: flex; flex-direction: column">Not saved<span class="more">Kept on screen. Retrying.</span></span><button type="button" class="small solid">Try again</button><button type="button" class="iconbtn" aria-label="Dismiss"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      </div>
+    </div>
+
+    <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+      <div class="panel" style="padding: 20px 22px; display: flex; flex-direction: column; gap: 12px">
+        <span class="lbl">Beside a field</span>
+        <div class="sub">A typing slip is told next to the field, in the same few words.</div>
+        <div style="display: flex; gap: 12px">
+          <label style="display: flex; flex-direction: column; gap: 5px; width: 110px"><span class="lbl">Start</span><input class="field" type="text" value="09:30"></label>
+          <label style="display: flex; flex-direction: column; gap: 5px; width: 110px"><span class="lbl">End</span><input class="field bad" type="text" value="9.5h" aria-invalid="true"></label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600"><span style="width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--ink); display: flex; align-items: center; justify-content: center; flex-shrink: 0" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M12 6.5v7"/><path d="M12 17.5h.01"/></svg></span>End: try 10:30</div>
+      </div>
+
+      <div class="panel" style="padding: 20px 22px; display: flex; flex-direction: column; gap: 10px">
+        <span class="lbl">Rules</span>
+        <ul style="margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.55">
+          <li>Say what happened in a few words, with no full stop.</li>
+          <li>Detail comes after a dot, in the quiet colour, and only when it helps.</li>
+          <li>A failed edit says what to try: "End: try 10:30", never "looks like".</li>
+          <li>Offer one button that names its action (Undo, Try again, Continue Account one).</li>
+          <li>Done is a tick on the accent. Not possible and Needs you are a ring with a mark, never red.</li>
+          <li>Selection is not a message: it stays in the Selected block card.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" style="padding: 20px 22px 14px; display: flex; flex-direction: column; gap: 4px">
+    <span class="lbl">Every message, now and proposed</span>
+    <div style="display: flex; gap: 40px">
+      <sc-for list="{{columns}}" as="col" hint-placeholder-count="2">
+        <div style="flex: 1; min-width: 0">
+          <sc-for list="{{col.groups}}" as="g" hint-placeholder-count="3">
+            <div style="margin-top: 14px; font-size: 13.5px; font-weight: 600">{{g.title}}</div>
+            <sc-for list="{{g.rows}}" as="r" hint-placeholder-count="5">
+              <div class="wrow"><span class="was">{{r.was}}</span><span aria-hidden="true" style="color: var(--muted)">›</span><span class="now">{{r.now}}</span></div>
+            </sc-for>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:1530}}">
+class Component extends DCLogic {
+  renderVals() {
+    const r = (was, now) => ({ was: was, now: now });
+    const done = { title: 'Done', rows: [
+      r('Merged, with 00:05 of gap time added.', 'Merged · 00:05 gap added'),
+      r('Merged.', 'Merged'),
+      r('Unmerged. The blocks keep their own times.', 'Unmerged'),
+      r('Deleted. / Deleted 3 blocks.', 'Deleted / 3 blocks deleted'),
+      r('Undone.', 'Undone'),
+      r('Copied 3 blocks.', '3 blocks copied'),
+      r('Pasted 3 blocks.', '3 blocks pasted'),
+      r('Carrying on with the Account one block from 09:00.', 'Carrying on Account one from 09:00'),
+      r('Note added with a reminder for Today, 15:30.', 'Note added · reminder Today, 15:30'),
+      r('Note added. / Note saved. / Note removed.', 'Note added / Note saved / Note removed'),
+      r('Meeting added. It repeats every week.', 'Meeting added · repeats weekly'),
+      r('Meeting saved for this day and all later.', 'Saved for this day and all later'),
+      r('Changed for this day only. The series carries on as before.', 'Changed for this day only'),
+      r('Meeting removed for this day. The series carries on.', 'Removed for this day'),
+      r('This meeting and all later ones removed.', 'Removed from this day on'),
+      r('The timer now runs from the notification area. Click its icon to bring the timer back.', 'Running from the tray · click its icon to open')
+    ] };
+    const notPossible = { title: 'Not possible', rows: [
+      r('That would overlap an earlier block.', 'Overlaps another block'),
+      r('End has to be after the start.', 'End must be after start'),
+      r('Start looks like 09:30.', 'Start: try 09:30'),
+      r('End looks like 10:30.', 'End: try 10:30'),
+      r('Length looks like 1:30, or 90 for minutes.', 'Length: try 1:30 or 90'),
+      r('That runs past midnight.', 'Can’t pass midnight'),
+      r('Write a name for the meeting.', 'Name the meeting'),
+      r('Write something for the note.', 'Write a note first'),
+      r('Select another block to merge.', 'Pick a second block'),
+      r('Choose blocks from the same account to merge.', 'Same account only'),
+      r('Choose blocks from the same day to merge.', 'Same day only'),
+      r('Other time sits between these blocks, so they cannot be merged.', 'Time in between: can’t merge'),
+      r('Copy blocks from one day at a time.', 'One day at a time'),
+      r('Nothing recent to take back.', 'Nothing to take back')
+    ] };
+    const needs = { title: 'Needs you', rows: [
+      r('Could not save. Time remains in memory; retrying. (and the error)', 'Not saved · kept on screen, retrying'),
+      r('Could not save note to disk. It stays on screen and will be tried again.', 'Note not saved · will retry'),
+      r('Could not change starting with Windows. (and the error)', 'Couldn’t change Start with Windows'),
+      r('Your organisation does not allow this app to start with Windows.', 'Blocked by your organisation'),
+      r('Your organisation turns this on, so it cannot be switched off here.', 'Set by your organisation')
+    ] };
+    return { modeClass: (this.props.mode ?? 'light') === 'dark' ? 'dark' : '', columns: [{ groups: [done] }, { groups: [notPossible, needs] }] };
+  }
+}
+</script>
+</body>
+</html>

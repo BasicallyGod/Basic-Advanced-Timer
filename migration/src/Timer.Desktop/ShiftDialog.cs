@@ -1,19 +1,19 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Layout;
 using Timer.Core;
 
 namespace Timer.Desktop;
 
 public sealed class ShiftDialog : Dialog
 {
-    public ShiftDialog(TimerModel model)
+    /// <param name="withBreaks">Whether the form also asks for the daily break. Setup asks for it on its own step, so its dialog of different hours leaves it out.</param>
+    public ShiftDialog(TimerModel model, bool withBreaks = true)
     {
         Title = "Working hours";
         Width = 480; // The height follows the content, up to the window.
         // The dialog's header carries the title, so the editor has no heading of its own, only the margin round it.
-        Content = new ScrollViewer { Content = new Border { Padding = new Thickness(24, 4, 24, 24), Child = new ShiftEditor(model, Close, Close) } };
+        Content = new ScrollViewer { Content = new Border { Padding = new Thickness(24, 4, 24, 24), Child = new ShiftEditor(model, Close, Close, withBreaks: withBreaks) } };
     }
 }
 
@@ -22,12 +22,17 @@ public sealed class ShiftEditor : StackPanel
 {
     /// <param name="saved">Called after the hours are saved.</param>
     /// <param name="cancelled">Called when Cancel is pressed. Without it there is no Cancel button, as on the settings page.</param>
-    public ShiftEditor(TimerModel model, Action saved, Action? cancelled = null, bool heading = false)
+    /// <param name="withBreaks">Whether the form has the daily break box: time taken off every working day's hours, so the schedule is the working time you are to do.</param>
+    public ShiftEditor(TimerModel model, Action saved, Action? cancelled = null, bool heading = false, bool withBreaks = true)
     {
         Margin = new Thickness(heading ? 24 : 0); Spacing = 12;
         var root = this;
-        if (heading) root.Children.Add(Ui.Heading("Working hours", 24));
-        root.Children.Add(new TextBlock { Text = "Working days and shifts. Times are HH:mm.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        // On the settings page the section already has its heading and this line under it.
+        if (heading)
+        {
+            root.Children.Add(Ui.Heading("Working hours", 24));
+            root.Children.Add(new TextBlock { Text = "Working days and shifts. Times are HH:mm.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        }
         var entries = new List<(DayOfWeek Day, CheckBox On, TextBox Start, TextBox End)>();
         foreach (var day in new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday })
         {
@@ -38,6 +43,13 @@ public sealed class ShiftEditor : StackPanel
             var row = Ui.Grid("*,80,24,80");
             Ui.Put(row, on); Ui.Put(row, start, 1); Ui.Put(row, Ui.Dash(), 2); Ui.Put(row, end, 3);
             root.Children.Add(row); entries.Add((day, on, start, end));
+        }
+        var breakBox = new TextBox { Text = model.BreakAllowance.ToString(@"hh\:mm"), Width = 80, Name = "BreakAllowance" };
+        if (withBreaks)
+        {
+            var breakRow = Ui.Grid("*,80"); Ui.Put(breakRow, Ui.Text("Break each day", 14)); Ui.Put(breakRow, breakBox, 1); breakRow.Margin = new Thickness(0, 6, 0, 0);
+            root.Children.Add(breakRow);
+            root.Children.Add(Ui.Text("Taken off each working day's hours, so the schedule is the time you are to work.", 12, "muted"));
         }
         var today = new CheckBox { Content = "Also reset today to its new scheduled start/end" };
         root.Children.Add(today);
@@ -50,12 +62,15 @@ public sealed class ShiftEditor : StackPanel
                 var shifts = entries.Where(e => e.On.IsChecked == true).ToDictionary(e => e.Day,
                     e => new Shift(TimeSpan.ParseExact(e.Start.Text ?? "", @"hh\:mm", CultureInfo.InvariantCulture),
                         TimeSpan.ParseExact(e.End.Text ?? "", @"hh\:mm", CultureInfo.InvariantCulture)));
+                var allowance = withBreaks ? TimeSpan.ParseExact((breakBox.Text ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture) : model.BreakAllowance;
+                if (allowance < TimeSpan.Zero || allowance > TimeSpan.FromHours(4)) { error.Text = "Break each day: up to 04:00."; return; }
                 model.SetShifts(shifts, today.IsChecked == true);
                 if (model.LastError is not null) { error.Text = model.LastError; return; }
+                if (withBreaks) model.SetBreakAllowance(allowance);
                 error.Text = ""; saved();
             }
             catch (Exception ex) when (ex is FormatException or ArgumentException or OverflowException)
-            { error.Text = "Use HH:mm, with an end after the start, and at least one working day."; }
+            { error.Text = "Use HH:mm, with an end after the start, and at least one working day. The break is HH:mm too."; }
         }, "SaveShifts"));
         if (cancelled is not null) buttons.Children.Add(Ui.DialogButton("Cancel", cancelled));
         root.Children.Add(buttons);

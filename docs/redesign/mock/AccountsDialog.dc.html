@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Accounts and budgets</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.root{--bg1:#F4F4F1;--bg2:#ECECE8;--card:#FFFFFF;--card2:#F7F7F5;--line:#E2E2DD;--ink:#18233A;--muted:#5A6070;--accent:#3558C8;--accentInk:#FFFFFF;--soft:#E8EEFF;--shadow:0 1px 2px rgba(30,30,20,.06);--rail1:#FFFFFF;--rail2:#F6F6F4;--railLine:#E2E2DD;--lateInk:#B3363F;--lateBg:#FDECEC;--scrim:rgba(24,35,58,.38);--scroll:#C9C9C4}
+.root.dark{--bg1:#0F1420;--bg2:#131A2A;--card:#1A2234;--card2:#212B42;--line:#2D3853;--ink:#EEF2FB;--muted:#A7B2CA;--accent:#7C9BFF;--accentInk:#0E1530;--soft:#25335A;--shadow:0 1px 2px rgba(0,0,0,.25);--rail1:#1C2334;--rail2:#121826;--railLine:#2E3852;--lateInk:#FF9A9A;--lateBg:#3A2226;--scrim:rgba(5,8,16,.58);--scroll:#46526F}
+.root{color-scheme:light}.root.dark{color-scheme:dark}
+:where(.root) button{font:inherit;color:inherit;cursor:pointer}
+.root button:focus-visible,.root input:focus-visible,.root a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ctl{white-space:nowrap;background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:12px;height:38px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 14px;font-size:14px;font-weight:500;text-decoration:none}
+.ctl:hover{background:var(--card2)}
+.ctl.primary{background:var(--accent);border-color:var(--accent);color:var(--accentInk)}
+.ctl.primary:hover{background:var(--accent);filter:brightness(1.06)}
+.ctl.danger{background:var(--lateInk);border-color:var(--lateInk);color:var(--card)}
+.field{height:34px;box-sizing:border-box;border:1px solid var(--line);background:var(--card2);color:var(--ink);border-radius:11px;padding:0 10px;font:400 14px 'Inter',system-ui,sans-serif;min-width:0;width:100%}
+.field:disabled{opacity:.5}
+.iconbtn{background:transparent;border:0;color:var(--muted);width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0;text-decoration:none}
+.iconbtn:hover{background:var(--card2);color:var(--ink)}
+.iconbtn.bin:hover,.iconbtn.bin.on{background:var(--lateBg);color:var(--lateInk)}
+.tick{appearance:none;-webkit-appearance:none;width:20px;height:20px;margin:0;border-radius:50%;border:1.6px solid var(--muted);background:transparent;display:grid;place-content:center;cursor:pointer;flex-shrink:0;transition:background .15s,border-color .15s}
+.tick:hover{border-color:var(--accent)}
+.tick:checked{background:var(--accent);border-color:var(--accent)}
+.tick:checked::after{content:"";width:5px;height:9px;border:solid var(--accentInk);border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;height:34px;box-sizing:border-box;background:var(--card2)}
+.segb{flex:1;border:0;background:transparent;font-size:12.5px;font-weight:600;color:var(--muted);padding:0}
+.segb:hover{color:var(--ink)}
+.segb.on{background:var(--accent);color:var(--accentInk)}
+.sw{width:30px;height:30px;border-radius:10px;border:0;padding:0;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.sw:hover{transform:scale(1.06)}
+.lbl{font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.grid{display:grid;grid-template-columns:16px 30px minmax(0,1fr) 78px 98px 70px 30px;gap:10px;align-items:center}
+@media (prefers-reduced-motion:reduce){.tick,.sw{transition:none}.sw:hover{transform:none}}
+.root *{scrollbar-width:thin;scrollbar-color:var(--scroll) transparent}
+.root *::-webkit-scrollbar{width:10px;height:10px}
+.root *::-webkit-scrollbar-track{background:transparent}
+.root *::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px;border:2px solid transparent;background-clip:content-box}
+.root *::-webkit-scrollbar-thumb:hover{background:var(--muted);background-clip:content-box}
+</style>
+</helmet>
+<div class="root {{modeClass}}" style="width: 1100px; height: 720px; box-sizing: border-box; display: flex; position: relative; overflow: hidden; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink)">
+
+  <div aria-hidden="true" style="position: absolute; inset: 0; display: flex; filter: blur(5px)">
+    <div style="width: 76px; height: 100%; background: linear-gradient(180deg, var(--rail1), var(--rail2)); border-right: 1px solid var(--railLine)"></div>
+    <div style="flex-grow: 1; padding: 20px 22px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+      <div style="height: 44px; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 30px; font-weight: 700; padding-left: 4px">Today</div>
+      <div style="height: 250px; background: var(--card); border: 1px solid var(--line); border-radius: 20px"></div>
+      <div style="display: flex; gap: 14px; flex-grow: 1"><div style="flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 20px"></div><div style="flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 20px"></div></div>
+    </div>
+  </div>
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: var(--scrim)"></div>
+
+  <div role="dialog" aria-label="Accounts and budgets" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 690px; max-height: 660px; box-sizing: border-box; background: var(--card); border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 18px 48px rgba(10,16,40,.28); padding: 20px 22px 18px; display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <h2 style="margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 22px; font-weight: 700">Accounts and budgets</h2>
+      <a class="iconbtn" href="Main.dc.html" aria-label="Close" title="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>
+    </div>
+    <div style="font-size: 13px; color: var(--muted)">A budget is optional. Hiding an account only takes it off the tracker list; its time stays in every report.</div>
+
+    <div class="grid" style="padding: 0 0 0 0">
+      <span></span><span></span><span class="lbl">Account</span><span class="lbl">Budget</span><span class="lbl">Per</span><span class="lbl" style="text-align: center">In tracker</span><span></span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0">
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="4">
+        <div class="grid" style="{{r.style}}">
+          <svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true" style="color: var(--muted); opacity: .7"><circle cx="4" cy="4" r="1.5"/><circle cx="10" cy="4" r="1.5"/><circle cx="4" cy="9" r="1.5"/><circle cx="10" cy="9" r="1.5"/><circle cx="4" cy="14" r="1.5"/><circle cx="10" cy="14" r="1.5"/></svg>
+          <button type="button" class="sw" onClick="{{r.cycle}}" aria-label="{{r.colourLabel}}" title="Change colour" style="{{r.swatch}}"></button>
+          <div style="min-width: 0; display: flex; flex-direction: column; gap: 2px">
+            <input class="field" type="text" value="{{r.name}}" onChange="{{r.rename}}" aria-label="Account name" style="{{r.nameStyle}}">
+            <sc-if value="{{r.del}}" hint-placeholder-val="{{ false }}"><span style="font-size: 11.5px; font-weight: 600; color: var(--lateInk)">Deleted when you save</span></sc-if>
+          </div>
+          <input class="field" type="text" value="{{r.budget}}" onChange="{{r.setBudget}}" aria-label="Budget, HH:MM" placeholder="None">
+          <div class="seg" role="group" aria-label="Budget period">
+            <button type="button" class="{{r.dCls}}" onClick="{{r.perD}}" aria-pressed="{{r.dOn}}" title="Per day">D</button>
+            <button type="button" class="{{r.wCls}}" onClick="{{r.perW}}" aria-pressed="{{r.wOn}}" title="Per week">W</button>
+            <button type="button" class="{{r.mCls}}" onClick="{{r.perM}}" aria-pressed="{{r.mOn}}" title="Per month">M</button>
+          </div>
+          <span style="display: flex; justify-content: center"><input type="checkbox" class="tick" checked="{{r.tracker}}" onChange="{{r.flipTracker}}" aria-label="{{r.trackLabel}}"></span>
+          <button type="button" class="{{r.binCls}}" onClick="{{r.flipDel}}" aria-label="{{r.delLabel}}" aria-pressed="{{r.del}}" title="Delete this account"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg></button>
+        </div>
+      </sc-for>
+    </div>
+
+    <sc-if value="{{confirm}}" hint-placeholder-val="{{ false }}">
+      <div role="alertdialog" aria-label="Confirm delete" style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--lateBg)">
+        <div style="flex-grow: 1; font-size: 13px; line-height: 1.4; color: var(--ink)"><b>{{confirmText}}</b> A backup is saved first, and Undo history is cleared.</div>
+        <button type="button" class="ctl" onClick="{{keep}}" style="height: 34px">Keep it</button>
+        <button type="button" class="ctl danger" onClick="{{doDelete}}" style="height: 34px">Delete</button>
+      </div>
+    </sc-if>
+
+    <div style="display: flex; align-items: center; gap: 10px">
+      <button type="button" class="ctl" onClick="{{addRow}}" disabled="{{full}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add account</button>
+      <span role="status" style="flex-grow: 1; font-size: 12.5px; color: var(--muted); text-align: right">{{status}}</span>
+      <a class="ctl" href="Main.dc.html">Cancel</a>
+      <button type="button" class="ctl primary" onClick="{{save}}">Save</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:720}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      next: 7,
+      confirm: false,
+      status: '',
+      rows: [
+        { id: 1, name: 'Account one', ci: 0, budget: '10:00', per: 'W', tracker: true, del: false, time: '08:48' },
+        { id: 2, name: 'Account two', ci: 1, budget: '20:00', per: 'M', tracker: true, del: false, time: '12:00' },
+        { id: 3, name: 'Account three', ci: 2, budget: '08:00', per: 'W', tracker: true, del: false, time: '03:41' },
+        { id: 4, name: 'Account four', ci: 3, budget: '15:00', per: 'M', tracker: true, del: false, time: '16:30' },
+        { id: 5, name: 'Account five', ci: 4, budget: '', per: 'W', tracker: true, del: false, time: '00:32' },
+        { id: 6, name: 'Archive', ci: 5, budget: '', per: 'W', tracker: false, del: false, time: '02:15' }
+      ]
+    };
+  }
+  renderVals() {
+    const mode = this.props.mode ?? 'light';
+    const pal = [
+      ['#A8D4FF', '#7F98F7'], ['#B2EFD6', '#5FD6AE'], ['#FFD9B8', '#FF9F84'], ['#E8D0FF', '#C197F8'],
+      ['#EEF6B0', '#B9DF82'], ['#FFC9DE', '#F28DB4'], ['#BFEFF3', '#6CC7D6'], ['#FFE6A6', '#F2BD4B']
+    ];
+    const set = (list) => this.setState({ rows: list, status: '' });
+    const upd = (id, patch) => set(this.state.rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    const okBudget = (v) => /^\d{1,3}:[0-5]\d$/.test(v.trim()) || /^\d{1,3}$/.test(v.trim());
+    const fmtBudget = (v) => { const t = v.trim(); if (/^\d{1,3}$/.test(t)) return String(t).padStart(2, '0') + ':00'; return t.padStart(5, '0'); };
+    const rows = this.state.rows.map((r) => {
+      const seg = (k) => (r.per === k && r.budget ? 'segb on' : 'segb');
+      return {
+        name: r.name,
+        colourLabel: 'Change colour of ' + r.name,
+        trackLabel: 'Show ' + r.name + ' in the tracker',
+        delLabel: 'Delete ' + r.name,
+        budget: r.budget,
+        tracker: r.tracker,
+        del: r.del,
+        style: r.del ? 'opacity:.55' : (r.tracker ? '' : 'opacity:.85'),
+        nameStyle: r.del ? 'text-decoration:line-through' : '',
+        swatch: 'background:linear-gradient(135deg,' + pal[r.ci % pal.length][0] + ',' + pal[r.ci % pal.length][1] + ')',
+        dCls: seg('D'), wCls: seg('W'), mCls: seg('M'),
+        dOn: r.per === 'D' && !!r.budget, wOn: r.per === 'W' && !!r.budget, mOn: r.per === 'M' && !!r.budget,
+        binCls: r.del ? 'iconbtn bin on' : 'iconbtn bin',
+        cycle: () => upd(r.id, { ci: (r.ci + 1) % pal.length }),
+        rename: (e) => { const v = e.target.value.trim(); if (v && v.toLowerCase() !== 'break') upd(r.id, { name: v }); else this.setState({ status: 'The name Break is kept for breaks.' }); },
+        setBudget: (e) => {
+          const v = e.target.value.trim();
+          if (!v) return upd(r.id, { budget: '' });
+          if (!okBudget(v)) return this.setState({ status: 'A budget looks like 10:00.' });
+          upd(r.id, { budget: fmtBudget(v) });
+        },
+        perD: () => upd(r.id, { per: 'D' }),
+        perW: () => upd(r.id, { per: 'W' }),
+        perM: () => upd(r.id, { per: 'M' }),
+        flipTracker: () => upd(r.id, { tracker: !r.tracker }),
+        flipDel: () => upd(r.id, { del: !r.del })
+      };
+    });
+    const dying = this.state.rows.filter((r) => r.del && r.time);
+    const names = dying.map((r) => r.name + ' (' + r.time + ')').join(', ');
+    return {
+      modeClass: mode === 'dark' ? 'dark' : '',
+      rows: rows,
+      full: this.state.rows.length >= 8,
+      confirm: this.state.confirm,
+      confirmText: 'Delete ' + names + ' and its recorded time?',
+      status: this.state.status,
+      addRow: () => {
+        const id = this.state.next;
+        this.setState({ next: id + 1, status: '', rows: [...this.state.rows, { id: id, name: 'New account', ci: this.state.rows.length, budget: '', per: 'W', tracker: true, del: false, time: '' }] });
+      },
+      save: () => {
+        if (dying.length) { this.setState({ confirm: true }); return; }
+        this.setState({ rows: this.state.rows.filter((r) => !r.del), status: 'Saved.' });
+      },
+      keep: () => this.setState({ confirm: false, rows: this.state.rows.map((r) => ({ ...r, del: false })) }),
+      doDelete: () => this.setState({ confirm: false, rows: this.state.rows.filter((r) => !r.del), status: 'Saved. A before-delete backup was kept.' })
+    };
+  }
+}
+</script>
+</body>
+</html>

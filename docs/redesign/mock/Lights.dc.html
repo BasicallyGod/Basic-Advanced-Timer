@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Status lights</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.pg{--bg1:#F4F4F1;--bg2:#ECECE8;--ink:#18233A;--muted:#5A6070;--line:#E2E2DD;--card:#FFFFFF;--card2:#F7F7F5;--accent:#3558C8;--soft:#E8EEFF;--pill1:#FFFFFF;--pill2:#F3F3F0;--pillLine:#DDDDD8;--clock:#18233A;--clockSec:#5A6070;--quietDot:#C9C9C4;--idleDot:#7A849C}
+.pg.dark{--bg1:#0F1420;--bg2:#131A2A;--ink:#EEF2FB;--muted:#A7B2CA;--line:#2D3853;--card:#1A2234;--card2:#212B42;--accent:#7C9BFF;--soft:#25335A;--pill1:#202839;--pill2:#121826;--pillLine:#2E3852;--clock:#F3F6FF;--clockSec:#A9B5CF;--quietDot:#2D3750;--idleDot:#4A5570}
+.pg{color-scheme:light}.pg.dark{color-scheme:dark}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(96,150,255,.75)}70%{box-shadow:0 0 0 7px rgba(96,150,255,0)}100%{box-shadow:0 0 0 0 rgba(96,150,255,0)}}
+.pls{animation:pulse 1.8s ease-out infinite}
+@media (prefers-reduced-motion:reduce){.pls{animation:none}}
+.dot{width:10px;height:10px;border-radius:50%;display:block}
+.cap{width:6px;height:14px;border-radius:3px;display:block}
+.bar{width:3px;height:16px;border-radius:2px;display:block}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:0 1px 2px rgba(30,30,20,.06)}
+.grid{display:grid;grid-template-columns:210px repeat(4, 1fr);gap:10px 8px;align-items:center}
+.head{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;text-align:center}
+</style>
+</helmet>
+<div class="pg {{modeClass}}" style="width: 1180px; height: 1080px; box-sizing: border-box; padding: 36px 32px 28px; border-radius: 20px; background: linear-gradient(135deg, var(--bg1), var(--bg2)); font-family: 'Inter', system-ui, sans-serif; color: var(--ink); display: flex; flex-direction: column; gap: 18px">
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 700">Status lights</h1>
+    <p style="margin: 0; font-size: 14px; color: var(--muted); max-width: 980px; line-height: 1.45">The two lights at the top of the pill and the rail look too much like window buttons. Here are six shapes, each over the four states. The first row is today. The state is also in the circle's colour and glow, so the light never carries it alone.</p>
+  </div>
+
+  <div class="panel" style="padding: 20px 24px 22px">
+    <div class="grid">
+      <span></span>
+      <span class="head">Idle</span><span class="head">Recording</span><span class="head">Break</span><span class="head">Reminder due</span>
+      <sc-for list="{{items}}" as="c" hint-placeholder-count="12">
+        <sc-if value="{{c.isLabel}}" hint-placeholder-val="{{ false }}">
+          <div><div style="font-size: 14px; font-weight: 600">{{c.label}}</div><div style="font-size: 12px; color: var(--muted); line-height: 1.35; margin-top: 2px">{{c.sub}}</div></div>
+        </sc-if>
+        <sc-if value="{{c.isCell}}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; justify-content: center">
+            <div style="{{c.shell}}">
+              <div style="display: flex; align-items: center; justify-content: center; height: 16px" role="img" aria-label="{{c.aria}}">
+                <sc-if value="{{c.v1}}" hint-placeholder-val="{{ false }}"><div style="display: flex; gap: 7px; align-items: center"><span class="dot" style="{{c.stateBg}}"></span><span class="{{c.remCls}} dot" style="{{c.remBg}}"></span></div></sc-if>
+                <sc-if value="{{c.v2}}" hint-placeholder-val="{{ false }}"><div style="display: flex; gap: 6px; align-items: center"><span class="cap" style="{{c.stateBg}}"></span><span class="{{c.remCls}} cap" style="{{c.remBg}}"></span></div></sc-if>
+                <sc-if value="{{c.v3}}" hint-placeholder-val="{{ false }}"><div style="display: flex; gap: 6px; align-items: center"><span class="cap" style="{{c.stateBg}}"></span><sc-if value="{{c.due}}" hint-placeholder-val="{{ false }}"><span class="pls cap" style="{{c.remBg}}"></span></sc-if></div></sc-if>
+                <sc-if value="{{c.v4}}" hint-placeholder-val="{{ false }}"><div class="{{c.remCls}}" style="display: flex; width: 34px; height: 8px; border-radius: 4px; overflow: hidden"><span style="flex: 1; {{c.stateBg}}"></span><span style="flex: 1; {{c.remBg}}"></span></div></sc-if>
+                <sc-if value="{{c.v5}}" hint-placeholder-val="{{ false }}"><div style="display: flex; gap: 7px; align-items: center"><span style="width: 26px; height: 4px; border-radius: 2px; display: block; {{c.stateBg}}"></span><sc-if value="{{c.due}}" hint-placeholder-val="{{ false }}"><span class="pls" style="width: 4px; height: 12px; border-radius: 2px; display: block; {{c.remBg}}"></span></sc-if></div></sc-if>
+                <sc-if value="{{c.v6}}" hint-placeholder-val="{{ false }}"><div style="display: flex; gap: 5px; align-items: center"><span class="bar" style="{{c.stateBg}}"></span><span class="{{c.remCls}} bar" style="{{c.remBg}}"></span></div></sc-if>
+              </div>
+              <div style="display: flex; flex-direction: column; align-items: center; font-family: 'Bricolage Grotesque', system-ui, sans-serif; color: var(--clock); line-height: 1">
+                <span style="font-size: 30px; font-weight: 700">{{c.h}}</span>
+                <span style="font-size: 30px; font-weight: 700; margin-top: 2px">{{c.m}}</span>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 16px">
+    <div class="panel" style="flex: 1; padding: 14px 18px">
+      <div style="font-size: 14px; font-weight: 600">What I would pick</div>
+      <div style="font-size: 12.5px; color: var(--muted); line-height: 1.45; margin-top: 4px">Row three. One vertical capsule says what the timer is doing. A second blue one appears only when a reminder is due, and pulses. Most of the time there is one quiet shape, nothing like a row of three coloured dots, and the pill stays calmer.</div>
+    </div>
+    <div class="panel" style="flex: 1; padding: 14px 18px">
+      <div style="font-size: 14px; font-weight: 600">Other things worth knowing</div>
+      <div style="font-size: 12.5px; color: var(--muted); line-height: 1.45; margin-top: 4px">The same lights go on the dashboard rail. In Dark the capsules keep their colours. For people who cannot tell the colours apart, the circle already shows the account initials, pause or resume and the amber ring, and the tooltip names the state.</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;section&quot;:&quot;Look&quot;},&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:1080}}">
+class Component extends DCLogic {
+  renderVals() {
+    const dark = (this.props.mode ?? 'light') === 'dark';
+    const glow = (c, a) => 'box-shadow: 0 0 0 2px rgba(' + c + ',.9), 0 0 14px rgba(' + c + ',' + (dark ? a * 0.7 : a * 0.45) + ')';
+    const base = 'box-shadow: 0 3px 10px rgba(30,30,20,' + (dark ? .35 : .12) + ')';
+    const states = [
+      { name: 'Idle', col: 'var(--idleDot)', glow: base, due: false, h: '00', m: '00' },
+      { name: 'Recording', col: '#34D399', glow: glow('52,211,153', .5), due: false, h: '04', m: '47' },
+      { name: 'Break', col: '#F5A524', glow: glow('245,165,36', .5), due: false, h: '00', m: '23' },
+      { name: 'Reminder due', col: '#34D399', glow: glow('52,211,153', .5), due: true, h: '04', m: '47' }
+    ];
+    const opts = [
+      ['Today: two circles', 'Round, side by side. These are what looks like window buttons.'],
+      ['Two vertical capsules', 'The same two lights, stood on end.'],
+      ['One capsule, a second when due', 'The state light, plus a blue one only for a reminder.'],
+      ['One joined capsule', 'A single small pill in two halves.'],
+      ['A line, and a capsule when due', 'A short bar for the state, a tall mark for a reminder.'],
+      ['Two slim bars', 'Thin and tall, like a level meter.']
+    ];
+    const blank = { isLabel: false, isCell: false, label: '', sub: '', shell: '', aria: '', stateBg: '', remBg: '', remCls: '', due: false, h: '', m: '', v1: false, v2: false, v3: false, v4: false, v5: false, v6: false };
+    const items = [];
+    opts.forEach((o, oi) => {
+      items.push({ ...blank, isLabel: true, label: (oi + 1) + '. ' + o[0], sub: o[1] });
+      states.forEach((s) => {
+        const c = { ...blank, isCell: true, h: s.h, m: s.m, due: s.due };
+        c.shell = 'width:72px;height:104px;box-sizing:border-box;border-radius:36px 36px 10px 10px;padding-top:15px;display:flex;flex-direction:column;align-items:center;gap:9px;background:linear-gradient(180deg,var(--pill1),var(--pill2));border:1px solid var(--pillLine);' + s.glow;
+        c.stateBg = 'background:' + s.col;
+        c.remBg = 'background:' + (s.due ? '#6096FF' : 'var(--quietDot)');
+        c.remCls = s.due ? 'pls' : '';
+        c.aria = s.name + (s.due ? ', and a reminder is due' : '');
+        c['v' + (oi + 1)] = true;
+        items.push(c);
+      });
+    });
+    return { modeClass: dark ? 'dark' : '', items: items };
+  }
+}
+</script>
+</body>
+</html>

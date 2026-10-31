@@ -8,19 +8,19 @@ public sealed class ThemeTests
     [Fact]
     public void EveryBuiltInThemeSetsEveryPartWithValidColoursAndAUniqueName()
     {
-        Assert.Equal(ThemeLibrary.BuiltIn.Count, ThemeLibrary.BuiltIn.Select(t => t.Name.ToUpperInvariant()).Distinct().Count());
-        foreach (var theme in ThemeLibrary.BuiltIn)
+        Assert.Equal(AppThemes.BuiltIn.Count, AppThemes.BuiltIn.Select(t => t.Name.ToUpperInvariant()).Distinct().Count());
+        foreach (var theme in AppThemes.BuiltIn)
         {
             Assert.True(theme.BuiltIn);
             foreach (var token in ThemeTokens.Names) Assert.True(ThemeTokens.IsValid(token, theme.Colours.GetValueOrDefault(token)), $"{theme.Name} {token}");
         }
-        Assert.Contains(ThemeLibrary.BuiltIn, t => t.Name == "Light" && !t.Dark); Assert.Contains(ThemeLibrary.BuiltIn, t => t.Name == "Dark" && t.Dark);
+        Assert.Contains(AppThemes.BuiltIn, t => t.Name == "Light" && !t.Dark); Assert.Contains(AppThemes.BuiltIn, t => t.Name == "Dark" && t.Dark);
     }
 
     [Fact]
     public void TextIsReadableOnTheBackgroundInEveryThemeAndEveryStateTint()
     {
-        foreach (var theme in ThemeLibrary.BuiltIn)
+        foreach (var theme in AppThemes.BuiltIn)
         {
             Assert.True(ThemeColours.Contrast(theme.Colour("Ink"), theme.Colour("Surface")) >= 7, $"{theme.Name} text on surface");
             Assert.True(ThemeColours.Contrast(theme.Colour("Ink"), theme.Colour("Panel")) >= 7, $"{theme.Name} text on panel");
@@ -40,7 +40,7 @@ public sealed class ThemeTests
     [Fact]
     public void ThePillWearsItsStateColourWithPlainTextOnItAndLeavesTheThemesOtherColoursAlone()
     {
-        foreach (var theme in ThemeLibrary.BuiltIn)
+        foreach (var theme in AppThemes.BuiltIn)
         {
             var recording = ThemeDerivation.Variant(theme, ThemeDerivation.Recording); var amber = ThemeDerivation.Variant(theme, ThemeDerivation.Break); var red = ThemeDerivation.Variant(theme, ThemeDerivation.Overtime);
             Assert.Equal(theme.Colour("PillSurface"), recording["Surface"]); Assert.Equal(theme.Colour("PillInk"), recording["Ink"]);
@@ -65,9 +65,9 @@ public sealed class ThemeTests
     [Fact]
     public void YourOwnThemesSurviveSavingAndADamagedOneIsSkippedWithoutLosingTheRest()
     {
-        var mineColours = ThemeLibrary.Dark.Colours.ToDictionary(c => c.Key, c => c.Value); mineColours["Surface"] = "#102030";
+        var mineColours = AppThemes.Dark.Colours.ToDictionary(c => c.Key, c => c.Value); mineColours["Surface"] = "#102030";
         var mine = new ThemeDefinition("My blue", true, mineColours, false, ThemeBlockStyle.Softened);
-        var lines = new[] { ThemeStorage.ToLine(mine), "this is not json", ThemeStorage.ToLine(ThemeLibrary.Dark with { Name = "Dark" }), "{\"Name\":\"Plain\",\"Dark\":false,\"Colours\":{\"Surface\":\"nonsense\",\"Ink\":\"#112233\"}}" };
+        var lines = new[] { ThemeStorage.ToLine(mine), "this is not json", ThemeStorage.ToLine(AppThemes.Dark with { Name = "Dark" }), "{\"Name\":\"Plain\",\"Dark\":false,\"Colours\":{\"Surface\":\"nonsense\",\"Ink\":\"#112233\"}}" };
         var loaded = ThemeStorage.FromLines(lines);
         Assert.Equal(new[] { "My blue", "Plain" }, loaded.Select(t => t.Name)); // The broken line and the one reusing a built-in name are left out.
         Assert.Equal("#102030", loaded[0].Colour("Surface")); Assert.Equal(ThemeBlockStyle.Softened, loaded[0].BlockStyle); Assert.True(loaded[0].Dark); Assert.False(loaded[0].BuiltIn);
@@ -79,205 +79,39 @@ public sealed class ThemeTests
     [Fact]
     public void SoftenedBlocksMoveTowardsTheSurfaceAndAsChosenBlocksDoNot()
     {
-        var soft = ThemeLibrary.Dark with { BlockStyle = ThemeBlockStyle.Softened };
+        var soft = AppThemes.Dark with { BlockStyle = ThemeBlockStyle.Softened };
         var colour = "#91B7D5"; var softened = ThemeDerivation.Soften(soft, colour);
         Assert.NotEqual(colour, softened); Assert.True(ThemeColours.Luminance(softened) < ThemeColours.Luminance(colour)); // Towards a dark surface.
-        Assert.Equal(colour, ThemeDerivation.Soften(ThemeLibrary.Dark, colour));
-        Assert.True(ThemeColours.Luminance(ThemeDerivation.Soften(ThemeLibrary.Light with { BlockStyle = ThemeBlockStyle.Softened }, colour)) > ThemeColours.Luminance(colour));
-    }
-
-    [Avalonia.Headless.XUnit.AvaloniaFact]
-    public void AUserThemeIsRegisteredSelectedStyledAndRemembered_AndAnUnknownNameFallsBackToSystem()
-    {
-        var colours = ThemeLibrary.Dark.Colours.ToDictionary(c => c.Key, c => c.Value); colours["Surface"] = "#102030"; colours["Ink"] = "#FAFAFA";
-        var mine = new ThemeDefinition("Moonlit", true, colours);
-        var folder = Path.Combine(Path.GetTempPath(), "timer-theme-" + Guid.NewGuid());
-        try
-        {
-            using (var store = new Timer.Storage.TimerStore(folder))
-            {
-                var engine = new TrackingEngine(); var prefs = store.Load(engine) with { Themes = new[] { mine } };
-                var model = new TimerModel(engine, prefs, store);
-                Assert.Contains(model.Themes, t => t.Name == "Moonlit"); model.SetTheme("Moonlit");
-                Assert.Equal(ThemeEngine.VariantFor(mine), Avalonia.Application.Current!.RequestedThemeVariant);
-                Assert.True(((Avalonia.Controls.IResourceHost)Avalonia.Application.Current).TryGetResource("Surface", ThemeEngine.VariantFor(mine), out var surface)); Assert.Equal(Avalonia.Media.Color.Parse("#102030"), ((Avalonia.Media.ISolidColorBrush)surface!).Color);
-                Assert.NotEqual(ThemeEngine.VariantFor(mine), ThemeEngine.StateVariant(mine, ThemeDerivation.Break)); // The pill's break tint is its own variant.
-                Assert.Throws<ArgumentException>(() => model.SetTheme("No such theme"));
-                Assert.True(model.Save());
-            }
-            using (var store = new Timer.Storage.TimerStore(folder))
-            {
-                var prefs = store.Load(new TrackingEngine());
-                Assert.Equal("Moonlit", prefs.Theme); Assert.Equal("Moonlit", Assert.Single(prefs.Themes!).Name); Assert.Equal("#102030", prefs.Themes![0].Colour("Surface"));
-            }
-            // A theme name that no longer exists is not left selected.
-            File.WriteAllText(Path.Combine(folder, "basics-advanced-timer.settings.json"), "{\"schemaVersion\":1,\"sections\":{\"migrationAppearance\":[\"Gone\",\"shadows=on\"]}}");
-            using (var store = new Timer.Storage.TimerStore(folder)) Assert.Equal("System", store.Load(new TrackingEngine()).Theme);
-        }
-        finally { Avalonia.Application.Current!.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default; if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+        Assert.Equal(colour, ThemeDerivation.Soften(AppThemes.Dark, colour));
+        Assert.True(ThemeColours.Luminance(ThemeDerivation.Soften(AppThemes.Light with { BlockStyle = ThemeBlockStyle.Softened }, colour)) > ThemeColours.Luminance(colour));
     }
 
     private static T Find<T>(Avalonia.Controls.Control window, string name) where T : Avalonia.Controls.Control
         => Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<T>().Single(c => c.Name == name);
-
-    [Avalonia.Headless.XUnit.AvaloniaFact]
-    public void TheThemeEditorDuplicatesEditsPreviewsSavesAndDeletesYourOwnThemes_AndLocksBuiltInOnes()
-    {
-        var model = TimerModel.CreateDemo(); var window = new ThemesDialog(model).Open(model);
-        try
-        {
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            // A built-in theme is shown but cannot be edited.
-            Assert.False(Find<Avalonia.Controls.Button>(window, "ColourSurface").IsEnabled); Assert.False(Find<Avalonia.Controls.TextBox>(window, "ThemeName").IsEnabled);
-            Assert.DoesNotContain(Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(window).OfType<Avalonia.Controls.Button>(), b => b.Name == "SaveTheme");
-            Assert.False(Find<Avalonia.Controls.Button>(window, "DeleteTheme").IsEnabled);
-            var click = new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent);
-            // Duplicating makes your own, editable copy and selects it.
-            Find<Avalonia.Controls.Button>(window, "DuplicateTheme").RaiseEvent(click); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            var copyName = model.Theme; Assert.EndsWith(" copy", copyName); Assert.False(model.Themes.Single(t => t.Name == copyName).BuiltIn);
-            Assert.True(Find<Avalonia.Controls.Button>(window, "ColourSurface").IsEnabled); Assert.True(Find<Avalonia.Controls.Button>(window, "DeleteTheme").IsEnabled);
-            // Typing a hex colour changes the app at once, before anything is saved.
-            Edit(window, "#102030");
-            var variant = ThemeEngine.VariantFor(model.Themes.Single(t => t.Name == copyName));
-            Assert.True(((Avalonia.Controls.IResourceHost)Avalonia.Application.Current!).TryGetResource("Surface", variant, out var live)); Assert.Equal(Avalonia.Media.Color.Parse("#102030"), ((Avalonia.Media.ISolidColorBrush)live!).Color);
-            Assert.NotEqual("#102030", model.Themes.Single(t => t.Name == copyName).Colour("Surface")); // Not kept yet.
-            // Saving keeps it, with a new name.
-            Find<Avalonia.Controls.TextBox>(window, "ThemeName").Text = "Evening";
-            Find<Avalonia.Controls.Button>(window, "SaveTheme").RaiseEvent(click); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            Assert.Equal("Evening", model.Theme); Assert.Equal("#102030", model.Themes.Single(t => t.Name == "Evening").Colour("Surface")); Assert.DoesNotContain(model.Themes, t => t.Name == copyName);
-            // A built-in name is refused with a message.
-            Find<Avalonia.Controls.TextBox>(window, "ThemeName").Text = "Dark"; Find<Avalonia.Controls.Button>(window, "SaveTheme").RaiseEvent(click);
-            Assert.Equal("Evening", model.Theme);
-            // Deleting returns to System.
-            Find<Avalonia.Controls.Button>(window, "DeleteTheme").RaiseEvent(click); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            Assert.Equal(ThemeLibrary.System, model.Theme); Assert.DoesNotContain(model.Themes, t => t.Name == "Evening");
-        }
-        finally { window.Close(); }
-    }
-
-    [Avalonia.Headless.XUnit.AvaloniaFact]
-    public void TheColourWheelAndLightnessBarMoveTheColourAndTheHexBoxFollowsThem()
-    {
-        var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
-        var window = new ThemesDialog(model).Open(model);
-        try
-        {
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            Edit(window, "#336699"); // Opens the picker and puts a first colour in.
-            var picker = Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Avalonia.Controls.Control)((Avalonia.Controls.Flyout)Find<Avalonia.Controls.Button>(window, "ColourSurface").Flyout!).Content!).ToList();
-            var wheel = picker.OfType<Avalonia.Controls.Primitives.ColorSpectrum>().Single(); var bar = picker.OfType<Avalonia.Controls.Primitives.ColorSlider>().Single(); var hex = picker.OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "HexSurface");
-            Assert.Equal(Avalonia.Media.Color.Parse("#336699"), wheel.HsvColor.ToRgb()); Assert.Equal(wheel.HsvColor.V, bar.HsvColor.V, 3); // Typing a colour moves both.
-            wheel.HsvColor = new Avalonia.Media.HsvColor(1, 120, 1, 1); // Pure green, from the wheel.
-            Assert.Equal("#00FF00", hex.Text); // The app repaints a moment later (repaints are gathered while a control moves), so only the box is checked here.
-            var swatch = (Avalonia.Controls.Border)Find<Avalonia.Controls.Button>(window, "ColourSurface").Content!;
-            Assert.Equal(Avalonia.Media.Color.Parse("#00FF00"), ((Avalonia.Media.ISolidColorBrush)swatch.Background!).Color);
-            bar.HsvColor = new Avalonia.Media.HsvColor(1, 120, 1, 0.5); // Half as light, from the bar.
-            Assert.Equal(wheel.HsvColor.V, 0.5, 2); Assert.Equal(hex.Text, $"#{wheel.HsvColor.ToRgb().R:X2}{wheel.HsvColor.ToRgb().G:X2}{wheel.HsvColor.ToRgb().B:X2}");
-        }
-        finally { window.Close(); model.DeleteTheme(copy); model.SetTheme("System"); }
-    }
-
-    private static void Edit(ThemesDialog window, string hexColour)
-    {
-        // The picker is built the first time it opens, so it is opened (and put away again) before its box is typed in.
-        var button = Find<Avalonia.Controls.Button>(window, "ColourSurface");
-        var picker = (Avalonia.Controls.Flyout)button.Flyout!;
-        if (picker.Content is null) { picker.ShowAt(button); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); picker.Hide(); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); }
-        Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants((Avalonia.Controls.Control)picker.Content!).OfType<Avalonia.Controls.TextBox>().Single(t => t.Name == "HexSurface").Text = hexColour;
-    }
-    private static void Press(ThemesDialog window, string name)
-    {
-        Find<Avalonia.Controls.Button>(window, name).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
-        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-    }
-    private static Avalonia.Media.Color SurfaceOf(TimerModel model, string theme)
-    {
-        var variant = ThemeEngine.VariantFor(model.Themes.Single(t => t.Name == theme));
-        Assert.True(((Avalonia.Controls.IResourceHost)Avalonia.Application.Current!).TryGetResource("Surface", variant, out var surface));
-        return ((Avalonia.Media.ISolidColorBrush)surface!).Color;
-    }
-
-    [Avalonia.Headless.XUnit.AvaloniaFact]
-    public void ClosingWithUnsavedEditsAsksAndDiscardPutsTheSavedLookBack()
-    {
-        var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
-        var window = new ThemesDialog(model).Open(model);
-        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        Edit(window, "#FF00FF");
-        window.Close(); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        Assert.True(window.IsVisible); Assert.True(Find<Avalonia.Controls.Border>(window, "UnsavedPrompt").IsVisible); // Asked instead of closing.
-        Press(window, "UnsavedKeep");
-        Assert.False(Find<Avalonia.Controls.Border>(window, "UnsavedPrompt").IsVisible); Assert.True(window.IsVisible);
-        Assert.Equal(Avalonia.Media.Color.Parse("#FF00FF"), SurfaceOf(model, copy)); // Still previewing the edit.
-        window.Close(); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        Press(window, "UnsavedDiscard");
-        Assert.False(window.IsVisible);
-        Assert.Equal(Avalonia.Media.Color.Parse(ThemeLibrary.Dark.Colour("Surface")), SurfaceOf(model, copy));
-        model.DeleteTheme(copy); model.SetTheme("System");
-    }
-
-    [Avalonia.Headless.XUnit.AvaloniaFact]
-    public void SavingFromThePromptKeepsTheEditThenClosesOrSwitches()
-    {
-        var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
-        var window = new ThemesDialog(model).Open(model);
-        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        Edit(window, "#112233");
-        // Choosing another theme in the list also asks, and the edited theme stays selected until it is answered.
-        var list = Find<Avalonia.Controls.ListBox>(window, "ThemeList"); list.SelectedItem = "Light"; Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        Assert.True(Find<Avalonia.Controls.Border>(window, "UnsavedPrompt").IsVisible); Assert.Equal(copy, list.SelectedItem); Assert.NotEqual("Light", model.Theme);
-        Press(window, "UnsavedSave");
-        Assert.Equal("#112233", model.Themes.Single(t => t.Name == copy).Colour("Surface")); Assert.Equal("Light", model.Theme);
-        window.Close(); Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        Assert.False(window.IsVisible); // Nothing left unsaved, so it closes straight away.
-        model.DeleteTheme(copy); model.SetTheme("System");
-    }
-
-    [Fact]
-    public void FiveBuiltInsShipAndAnythingRemovedLandsOnTheNearestLightOrDark()
-    {
-        Assert.Equal(new[] { "Light", "Dark", "After Hours", "Botanical", "Hawthorn" }, ThemeLibrary.BuiltIn.Select(t => t.Name));
-        Assert.Equal(new[] { false, true, true, false, true }, ThemeLibrary.BuiltIn.Select(t => t.Dark));
-        Assert.Equal("Light", ThemeLibrary.Renamed("Time Deck")); Assert.Equal("Dark", ThemeLibrary.Renamed("Time Deck Dark"));
-        Assert.Equal("Hawthorn", ThemeLibrary.Renamed("Hawthorn")); Assert.Equal("Dark", ThemeLibrary.Renamed("Sage")); Assert.Equal("Light", ThemeLibrary.Renamed("Sandstone")); Assert.Equal("Dark", ThemeLibrary.Renamed("Ocean"));
-        Assert.Equal("Light", ThemeLibrary.Renamed("Studio"));
-        Assert.Equal("My own", ThemeLibrary.Renamed("My own"));
-    }
-
-    [Avalonia.Headless.XUnit.AvaloniaFact]
-    public void SoftenedBlockColoursFollowTheSelectedTheme()
-    {
-        var model = TimerModel.CreateDemo(); model.SetTheme("Dark"); var copy = model.DuplicateTheme("Dark");
-        model.SaveTheme(model.Themes.Single(t => t.Name == copy) with { BlockStyle = ThemeBlockStyle.AsChosen }, copy); model.SetTheme(copy);
-        Assert.Equal("#91B7D5", model.BlockColour("#91B7D5")); // As chosen.
-        model.SaveTheme(model.Themes.Single(t => t.Name == copy) with { BlockStyle = ThemeBlockStyle.Softened }, copy);
-        Assert.NotEqual("#91B7D5", model.BlockColour("#91B7D5"));
-        model.DeleteTheme(copy); model.SetTheme("System");
-    }
 
     [Fact]
     public void TintedBlocksKeepTheirTextReadableForEveryPresetColourAndTheEdgeKeepsTheAccountColour()
     {
         foreach (var colour in TimerModel.Palette)
         {
-            var look = ThemeDerivation.Block(ThemeLibrary.Light, colour);
+            var look = ThemeDerivation.Block(AppThemes.Light, colour);
             Assert.True(ThemeColours.Contrast(look.Text, look.Fill) >= 4.5, $"{colour}: text {look.Text} on fill {look.Fill}");
             Assert.Equal(colour.ToUpperInvariant(), look.Edge.ToUpperInvariant()); // The light theme leaves the edge as the account's own colour.
             Assert.NotEqual(colour.ToUpperInvariant(), look.Fill.ToUpperInvariant()); // The fill is a tint, not the colour itself.
         }
         // A theme can push the edge towards its text colour, and take more or less of the account colour into the fill.
-        var stronger = ThemeLibrary.Light with { BlockEdge = .5, BlockTint = .9 };
-        var a = ThemeDerivation.Block(ThemeLibrary.Light, "#91B7D5"); var b = ThemeDerivation.Block(stronger, "#91B7D5");
+        var stronger = AppThemes.Light with { BlockEdge = .5, BlockTint = .9 };
+        var a = ThemeDerivation.Block(AppThemes.Light, "#91B7D5"); var b = ThemeDerivation.Block(stronger, "#91B7D5");
         Assert.NotEqual(a.Edge, b.Edge); Assert.True(ThemeColours.Luminance(b.Edge) < ThemeColours.Luminance(a.Edge)); Assert.True(ThemeColours.Luminance(b.Fill) < ThemeColours.Luminance(a.Fill));
         // The older styles still work: solid blocks keep the account colour, softened ones blend towards the surface.
-        Assert.Equal("#91B7D5", ThemeDerivation.Block(ThemeLibrary.Light with { BlockStyle = ThemeBlockStyle.AsChosen }, "#91B7D5").Fill);
-        Assert.NotEqual("#91B7D5", ThemeDerivation.Block(ThemeLibrary.Light with { BlockStyle = ThemeBlockStyle.Softened }, "#91B7D5").Fill);
+        Assert.Equal("#91B7D5", ThemeDerivation.Block(AppThemes.Light with { BlockStyle = ThemeBlockStyle.AsChosen }, "#91B7D5").Fill);
+        Assert.NotEqual("#91B7D5", ThemeDerivation.Block(AppThemes.Light with { BlockStyle = ThemeBlockStyle.Softened }, "#91B7D5").Fill);
     }
 
     [Fact]
     public void BlockRulesSurviveSavingAndAnOlderThemeLineGetsTheDefaults()
     {
-        var mine = ThemeLibrary.Light with { Name = "Mine", BuiltIn = false, BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .45, BlockEdge = .1 };
+        var mine = AppThemes.Light with { Name = "Mine", BuiltIn = false, BlockStyle = ThemeBlockStyle.Tinted, BlockTint = .45, BlockEdge = .1 };
         var back = ThemeStorage.FromLines(new[] { ThemeStorage.ToLine(mine) }).Single();
         Assert.Equal(ThemeBlockStyle.Tinted, back.BlockStyle); Assert.Equal(.45, back.BlockTint); Assert.Equal(.1, back.BlockEdge);
         var old = ThemeStorage.FromLines(new[] { "{\"Name\":\"Older\",\"Dark\":false,\"Colours\":{},\"BlockStyle\":\"softened\"}" }).Single();
@@ -286,23 +120,43 @@ public sealed class ThemeTests
         Assert.Equal(1, wild.BlockTint); Assert.Equal(0, wild.BlockEdge); // Kept within sensible limits.
     }
 
-    [Avalonia.Headless.XUnit.AvaloniaFact]
-    public void TheEditorShowsTheBlockRuleSlidersForATintedThemeAndSavesThem()
+    [Fact]
+    public void OnlyLightAndDarkShipAndAnythingRetiredLandsOnTheNearestOfThem()
     {
-        var model = TimerModel.CreateDemo(); model.SetTheme("Light"); var copy = model.DuplicateTheme("Light");
-        var window = new ThemesDialog(model).Open(model);
+        Assert.Equal(new[] { "Light", "Dark" }, AppThemes.BuiltIn.Select(t => t.Name)); Assert.Equal(new[] { false, true }, AppThemes.BuiltIn.Select(t => t.Dark));
+        Assert.Equal("Light", ThemeLibrary.Renamed("Time Deck")); Assert.Equal("Dark", ThemeLibrary.Renamed("Time Deck Dark")); Assert.Equal("My own", ThemeLibrary.Renamed("My own"));
+        // A saved choice of a retired study becomes Light or Dark by its base, and a name that is nothing falls back to System.
+        Assert.Equal("Dark", AppThemes.Resolve("After Hours", null)); Assert.Equal("Light", AppThemes.Resolve("Botanical", null)); Assert.Equal("Dark", AppThemes.Resolve("hawthorn", null));
+        Assert.Equal("Dark", AppThemes.Resolve("Sage", null)); Assert.Equal("Light", AppThemes.Resolve("Studio", null));
+        Assert.Equal("System", AppThemes.Resolve("Gone", null)); Assert.Equal("System", AppThemes.Resolve(null, null)); Assert.Equal("System", AppThemes.Resolve("system", null));
+        Assert.Equal("Light", AppThemes.Resolve("light", null)); Assert.Equal("Dark", AppThemes.Resolve("DARK", null));
+        // A user's own theme goes by its own base.
+        var mine = new ThemeDefinition("Moonlit", true, AppThemes.Dark.Colours); var daylight = new ThemeDefinition("Daylight", false, AppThemes.Light.Colours);
+        Assert.Equal("Dark", AppThemes.Resolve("Moonlit", new[] { mine, daylight })); Assert.Equal("Light", AppThemes.Resolve("Daylight", new[] { mine, daylight }));
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void ASavedOwnThemeIsKeptInTheFileButTheChoiceBecomesItsBase()
+    {
+        var colours = AppThemes.Dark.Colours.ToDictionary(c => c.Key, c => c.Value); colours["Surface"] = "#102030";
+        var mine = new ThemeDefinition("Moonlit", true, colours);
+        var folder = Path.Combine(Path.GetTempPath(), "timer-theme-" + Guid.NewGuid());
         try
         {
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            var rules = Find<Avalonia.Controls.StackPanel>(window, "BlockRules"); Assert.True(rules.IsVisible);
-            var tint = Find<Avalonia.Controls.Slider>(window, "BlockTint"); Assert.Equal(.55, tint.Value, 2);
-            tint.Value = .8; Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            Assert.Equal(.55, model.CurrentTheme.BlockTint, 2); // Only previewed so far, not kept.
-            Press(window, "SaveTheme");
-            Assert.Equal(.8, model.Themes.Single(x => x.Name == copy).BlockTint, 2);
-            var style = Find<Avalonia.Controls.ComboBox>(window, "ThemeBlockStyle"); style.SelectedIndex = 0; Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            Assert.False(Find<Avalonia.Controls.StackPanel>(window, "BlockRules").IsVisible);
+            using (var store = new Timer.Storage.TimerStore(folder))
+            {
+                var engine = new TrackingEngine(); var prefs = store.Load(engine) with { Themes = new[] { mine }, Theme = "Moonlit" };
+                var model = new TimerModel(engine, prefs, store);
+                Assert.Equal("Dark", model.Theme); Assert.Equal(new[] { "Light", "Dark" }, model.Themes.Select(t => t.Name)); // Only the two are offered.
+                Assert.Throws<ArgumentException>(() => model.SetTheme("Moonlit"));
+                Assert.True(model.Save());
+            }
+            using (var store = new Timer.Storage.TimerStore(folder))
+            {
+                var prefs = store.Load(new TrackingEngine());
+                Assert.Equal("Dark", prefs.Theme); Assert.Equal("Moonlit", Assert.Single(prefs.Themes!).Name); // The theme is left alone in the settings file.
+            }
         }
-        finally { window.Close(); model.DeleteTheme(copy); model.SetTheme("System"); }
+        finally { Avalonia.Application.Current!.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default; if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }
 }

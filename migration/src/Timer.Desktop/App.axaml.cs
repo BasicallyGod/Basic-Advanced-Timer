@@ -14,13 +14,10 @@ public sealed partial class App : Application
     {
         AvaloniaXamlLoader.Load(this);
         // Colours are registered before any window exists, so every control finds them the first time it looks.
-        ThemeEngine.Register(this, ThemeLibrary.BuiltIn);
-        // The clock typeface is bundled as three instances of Bricolage Grotesque (display, figures and light), each its own family. The assembly name
-        // differs between the portable and Store builds, so the address is built from it.
-        var assets = new Uri("avares://" + typeof(App).Assembly.GetName().Name + "/");
-        Resources["ClockFont"] = new Avalonia.Media.FontFamily(assets, "/Assets/Fonts#Bricolage Display");
-        Resources["FiguresFont"] = new Avalonia.Media.FontFamily(assets, "/Assets/Fonts#Bricolage Figures");
-        Resources["ClockLightFont"] = new Avalonia.Media.FontFamily(assets, "/Assets/Fonts#Bricolage Light");
+        ThemeEngine.Register(this, AppThemes.BuiltIn);
+        // Headings and big figures share the interface typeface (Inter), set heavier, so the window reads as one face. The three keys stay so the classes keep working.
+        var inter = new Avalonia.Media.FontFamily("fonts:Inter#Inter");
+        Resources["ClockFont"] = inter; Resources["FiguresFont"] = inter; Resources["ClockLightFont"] = inter;
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -60,8 +57,8 @@ public sealed partial class App : Application
                 var preferences = store.Load(engine);
                 model = new TimerModel(engine, preferences, store);
                 if (store.AdjustmentsRemoved > 0)
-                    model.Notice = $"{store.AdjustmentsRemoved} time adjustment{(store.AdjustmentsRemoved == 1 ? " was" : "s were")} removed. A copy of your database is in Backups.";
-                else if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files were left alone. This version starts empty.";
+                    model.Notice = $"{store.AdjustmentsRemoved} time adjustment{(store.AdjustmentsRemoved == 1 ? "" : "s")} removed · a copy is in Backups";
+                else if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files left alone · starting empty";
                 if (!model.Save()) throw new IOException(model.LastError);
                 // Only an explicit data folder is remembered; the default one sits beside the program and needs no argument.
                 // A test build started by the updater is offered the setting only when the updater says where to find itself, so the
@@ -101,7 +98,7 @@ public sealed partial class App : Application
             var windows = new WindowCoordinator(model, () => { if (!lifetimeEnded) desktop.Shutdown(); });
             desktop.MainWindow = windows.Pill;
             // A new database opens on the dashboard, where the getting started setup is waiting. After that the pill is the usual start.
-            if (!model.SetupDone && !smokeMode) windows.Pill.Opened += (_, _) => windows.ShowDashboard();
+            if (!model.SetupDone && !smokeMode) windows.OpenDashboardOnFirstShow();
             if (!smokeMode)
             {
                 // The tray icon keeps the timer reachable when its windows are hidden, and closing a window hides it there.

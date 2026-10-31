@@ -1,48 +1,227 @@
+using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Xunit;
 
 namespace Timer.Desktop.Tests;
 
-/// <summary>Writes pictures of the Notes, Feed and Settings pages and the calendar into TIMER_PREVIEW_DIR when it is set, so layout can be looked at. Does nothing otherwise.</summary>
+/// <summary>Writes pictures of the Settings page and the calendar into TIMER_PREVIEW_DIR when it is set, so layout can be looked at. Does nothing otherwise.</summary>
 public sealed class PreviewCaptureTests
 {
-    private static readonly string[] Entries =
+    [AvaloniaFact]
+    public void WriteRailIcons()
     {
-        "## Regulator publishes surprise consultation on stablecoin reserves\nDate: 2026-10-16 09:00\nID: a1\n#Accountone\nA financial regulator has opened a short consultation on how stablecoin reserves should be held and reported.\n",
-        "## ! Fintech funding round draws wide trade press coverage\nDate: 2026-10-16 08:45\nID: a2\n#Accounttwo\nA mid-sized payments firm closed a large funding round and the story has been picked up by several outlets.\n",
-        "## Asset manager reports growing demand for digital asset products\nDate: 2026-10-16 08:30\nID: a3\n#Accountthree\nA leading asset manager noted rising client interest in digital asset exposure in its latest results.\n",
-        "## Exchange outage resolved\nDate: 2026-10-15 17:10\nID: a4\n#Accountfour\nService was restored after about forty minutes.\n",
-    };
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        var grid = new Avalonia.Controls.StackPanel { Orientation = Avalonia.Layout.Orientation.Vertical, Background = Avalonia.Media.Brushes.White };
+        foreach (var seconds in new[] { 0.0, 0.7, 1.4, 2.0 })
+        {
+            var row = new Avalonia.Controls.StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 20, Margin = new Avalonia.Thickness(10) };
+            foreach (var kind in new[] { IconKind.Timeline, IconKind.Week, IconKind.NotesList, IconKind.NotesList })
+            {
+                var glyph = new IconGlyph(kind) { PlaySeconds = kind == IconKind.NotesList && row.Children.Count == 3 ? seconds + 1.3 : seconds };
+                row.Children.Add(new Avalonia.Controls.Viewbox { Width = 110, Height = 110, Child = glyph });
+            }
+            grid.Children.Add(row);
+        }
+        var window = new Window { Content = grid, Width = 560, Height = 520 }; window.Show(); Dispatcher.UIThread.RunJobs();
+        try { using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, "rail-icons.png")); }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void WriteRecordingTimeline()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme); model.ToggleAccount(model.Accounts.First().Name);
+            var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+            try { using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-recording.png")); }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
+    public void WriteSidebarPages()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme);
+            var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"sidebar-{theme}-{name}.png")); }
+                void Press(string name) { window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+                foreach (var (page, tab) in new[] { ("timeline", "TimelineTab"), ("notes", "NotesTab"), ("week", "WeekOverviewTab") }) { Press(tab); Shot(page); }
+                Press("TimelineTab"); model.SelectBlock(model.Engine.Sessions.Take(1).ToArray(), false); Shot("timeline-selected");
+                model.SelectBlock(Array.Empty<Timer.Core.SessionRow>(), false);
+                Press("NotesTab"); Press("NotesAccount_Accountone"); Shot("notes-filtered");
+            }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
+    public void WriteRound20Pages()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme); model.ToggleAccount(model.Accounts.First().Name);
+            var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"r20-{theme}-{name}.png")); }
+                void Press(string name) { window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+                var due = model.Engine.Now.Date.AddHours(14);
+                model.Notes.AddNote("Follow up on the new brief", "Account two", due); model.Notes.AddNote("!! What if we put a really long reminder in here that ends up breaking the limit on characters", "Account four", due); Dispatcher.UIThread.RunJobs();
+                Press("TimelineTab"); Shot("timeline");
+                var pin = window.GetVisualDescendants().OfType<Border>().First(b => b.Name?.StartsWith("TimelinePinMark_") == true);
+                var at = pin.TranslatePoint(new Point(pin.Bounds.Width / 2, pin.Bounds.Height / 2), window)!.Value;
+                Avalonia.Headless.HeadlessWindowExtensions.MouseMove(window, at); Dispatcher.UIThread.RunJobs(); Shot("pin-hover");
+                Avalonia.Headless.HeadlessWindowExtensions.MouseMove(window, new Point(5, 5)); Dispatcher.UIThread.RunJobs();
+                Press("AddNote");
+                window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Follow #Accountt"; Dispatcher.UIThread.RunJobs();
+                Press("Suggest_Accounttwo");
+                window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Follow up on the new brief"; Dispatcher.UIThread.RunJobs();
+                Press("FormBell"); Press("ReminderSet"); Shot("note-form");
+                Press("AddMeeting"); Shot("meeting-form");
+                Press("NotesTab"); Shot("notes"); Press("PageKindMeeting"); Shot("notes-meeting");
+                Press("WeekOverviewTab"); Shot("week");
+            }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
+    public void WriteSunsetSettings()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme);
+            var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"sun-{theme}-{name}.png")); }
+                void Press(string name) { window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+                Press("Settings"); Press("ThemeSunset"); model.SetSunPlace("London"); Shot("city");
+                model.SetSunPlace(SunTimes.ByHand); Shot("hand");
+            }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
+    public void WriteRailLights()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var scale in new[] { 1.0, .8 })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme("Light");
+            var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                                using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"rail-lights-{scale}.png"));
+            }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
+    public void WritePillLights()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme("Light");
+            var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                // Animations do not tick here, so the ring is set part way through its swell by hand.
+                                using var f = pill.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = pill.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, "h-pill-lights.png"));
+            }
+            finally { pill.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
+    public void WriteHangingCards()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme);
+            var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Save(Window host, string name) { host.Show(); Dispatcher.UIThread.RunJobs(); using var f = host.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = host.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-" + name + ".png")); host.Close(); }
+                // The list, hung with its point under the account's box, under a strip drawn like the pill's lower edge.
+                var hung = HangingCard.Hang(pill.MakeDropdownCard(), 300 - 139, "PillDropdownPoint", "PillBody");
+                var strip = new Border { Height = 40, Width = 470, CornerRadius = new CornerRadius(0, 0, 36, 36), BorderThickness = new Thickness(1.5), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, -HangingCard.Room.Top + 2) };
+                strip.Bind(Border.BorderBrushProperty, strip.GetResourceObservable("Line")); strip.Bind(Border.BackgroundProperty, strip.GetResourceObservable("PillBody"));
+                var stack = new StackPanel { Children = { strip, new Border { Margin = new Thickness(40 - HangingCard.Room.Left, 11 - HangingCard.Room.Top + 14, 0, 0), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, Child = hung } } };
+                Save(new Window { Width = 520, Height = 520, RequestedThemeVariant = pill.ActualThemeVariant, Content = stack }, "hung-dropdown");
+                // The bell's card, with the point set past the corner as the dashboard places it.
+                var shift = HangingCard.ShiftForCorner(19, 18);
+                var bell = HangingCard.Hang(new NotificationsFlyout(model), 19 + shift);
+                Save(new Window { Width = 440, Height = 400, RequestedThemeVariant = pill.ActualThemeVariant, Content = new Border { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, Child = bell } }, "hung-bell");
+            }
+            finally { pill.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
+    public void WriteSetupAndSettings()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var fresh = new TimerModel(new Timer.Core.TrackingEngine(clock: () => new DateTime(2026, 10, 9, 10, 0, 0)), new Timer.Storage.StoreSettings(new() { new("Account one"), new("Account two") }, false, theme, DayOfWeek.Monday, SetupDone: false));
+            var window = new DashboardWindow(fresh); window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                void Press(string name) { window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+                void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-" + name + ".png")); }
+                for (var i = 0; i < 3; i++) Press("SetupNext");
+                Shot("setup-ready");
+                Press("SetupSkip"); Press("Settings"); Shot("settings-appearance");
+            }
+            finally { window.Close(); }
+        }
+    }
 
     [AvaloniaFact]
     public void WritePreviews()
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
         Directory.CreateDirectory(folder);
-        var feed = Path.Combine(Path.GetTempPath(), "preview-feed-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(feed);
-        File.WriteAllText(Path.Combine(feed, "feed-test-news-updates-2026-10-16-0900.md"), string.Join("\n", Entries));
         foreach (var theme in new[] { "Light", "Dark" })
         {
-            var model = TimerModel.CreateDemo(); model.SetTheme(theme); model.SetFeedFolder(feed); model.RefreshFeed();
+            var model = TimerModel.CreateDemo(); model.SetTheme(theme);
             var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
             try
             {
                 void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, theme + "-" + name + ".png")); }
-                window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "NotesTab").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Shot("notes");
-                window.ShowFeed(); Shot("feed");
-                window.GetVisualDescendants().OfType<FeedPage>().Single().Toggle("id:a1"); Shot("feed-selected");
-                window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "FeedTab").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                var open = window.GetVisualDescendants().OfType<StackPanel>().FirstOrDefault(p => p.Name?.StartsWith("FeedOpen_") == true); if (open is not null) { Dispatcher.UIThread.RunJobs(); }
-                window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
-                window.GetVisualDescendants().OfType<Control>().First(c => c.Name == "FeedFolder").BringIntoView(); Shot("settings-feed");
-                window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "FeedAddSource").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
-                window.GetVisualDescendants().OfType<Control>().First(c => c.Name == "FeedSourceSave").BringIntoView(); Shot("settings-feed-source");
+                void Press(string name) { window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+                Press("TimelineTab"); Shot("timeline"); Press("CardKindMeetings"); Shot("timeline-meetings"); Press("CardKindNotes");
+                model.Tell("Merged · 00:05 gap added"); Shot("toast"); model.Refuse("End: try 10:30"); Shot("toast-refused"); model.Tell("Undone");
+                var firstBlock = model.Engine.Sessions.First(); model.SelectBlock(new[] { firstBlock }, false); Dispatcher.UIThread.RunJobs();
+                var copyButton = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CopySelected"); ToolTip.SetIsOpen(copyButton, true); Shot("tooltip"); ToolTip.SetIsOpen(copyButton, false); model.ClearSelection();
+                Press("Notifications"); Shot("bell"); Press("Notifications"); Press("DatePick"); Shot("datepick"); Press("DatePick");
+                Press("WeekOverviewTab"); Shot("week"); Press("WeekTable"); Shot("weektable"); Press("WeekChart"); Press("NotesTab"); Shot("notes"); Press("TimelineTab");
+                window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Shot("settings");
                 var cal = new Window { Width = 360, Height = 380, Content = new Border { Padding = new Avalonia.Thickness(16), Child = new Calendar { SelectedDate = new DateTime(2026, 10, 16), DisplayDate = new DateTime(2026, 10, 16) } } };
                 cal.RequestedThemeVariant = window.RequestedThemeVariant; cal.Show(); Dispatcher.UIThread.RunJobs(); using var c1 = cal.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var c2 = cal.CaptureRenderedFrame(); c2?.Save(Path.Combine(folder, theme + "-calendar.png")); cal.Close();
             }

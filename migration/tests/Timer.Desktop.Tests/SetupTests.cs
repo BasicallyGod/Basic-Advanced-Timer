@@ -1,13 +1,10 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
-using Timer.Desktop;
 using Timer.Storage;
 using Xunit;
 
@@ -65,7 +62,7 @@ public sealed class SetupTests
     }
 
     [AvaloniaFact]
-    public void TheSetupSitsOverABlurredDashboardThatCannotBeClickedAndWalksThroughFourSteps()
+    public void TheSetupSitsOverABlurredDashboardThatCannotBeClickedAndWalksThroughFiveSteps()
     {
         var model = NewModel(); var window = new DashboardWindow(model); window.Show();
         try
@@ -84,8 +81,11 @@ public sealed class SetupTests
             Assert.Equal(7.5, model.AccountSettings[0].BudgetHours); Assert.Null(model.AccountSettings[1].BudgetHours); // Budgets are optional.
             // Step 2: 08:30 to 16:30, Monday to Thursday.
             Settle(window);
+            Assert.Equal("00:30", Find<TextBox>(window, "SetupBreak").Text); Assert.Equal(TimeSpan.Zero, model.BreakAllowance); // Half an hour is suggested, but nothing is set until Next.
             Find<TextBox>(window, "SetupStart").Text = "08:30"; Find<TextBox>(window, "SetupEnd").Text = "16:30"; Find<CheckBox>(window, "SetupDayFri").IsChecked = false;
+            Find<TextBox>(window, "SetupBreak").Text = "00:45";
             Press(window, "SetupNext");
+            Assert.Equal(TimeSpan.FromMinutes(45), model.BreakAllowance); Assert.Equal(TimeSpan.FromHours(8) - TimeSpan.FromMinutes(45), model.ScheduledOn(new DateTime(2026, 10, 5))); // 08:30 to 16:30 less 45 minutes.
             Assert.Equal(new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday }, model.Engine.Schedule.Days.OrderBy(d => (int)d));
             Assert.Equal(TimeSpan.FromHours(8.5), model.Engine.Schedule.Shifts[DayOfWeek.Monday].Start);
             // Step 3: decimal hours and a week that starts on Sunday.
@@ -93,8 +93,9 @@ public sealed class SetupTests
             Press(window, "SetupDecimal"); Find<ComboBox>(window, "SetupWeekStart").SelectedItem = "Sunday";
             Press(window, "SetupNext");
             Assert.True(model.DecimalHours); Assert.Equal(DayOfWeek.Sunday, model.WeekStartsOn);
-            // Step 4 finishes it.
+            // Step 4 finishes it, with the pill drawn for show.
             Settle(window); Assert.Equal("Start tracking", Find<Button>(window, "SetupNext").Content);
+            Assert.Equal(PillWindow.PillWidth, Find<Border>(window, "SetupPill").Width);
             Assert.False(model.SetupDone);
             Press(window, "SetupNext");
             Assert.True(model.SetupDone); Assert.False(window.SetupShowing); Assert.True(body.IsHitTestVisible); Assert.Null(body.Effect);
@@ -154,6 +155,8 @@ public sealed class SetupTests
             Find<TextBox>(window, "SetupBudget0").Text = ""; Find<TextBox>(window, "SetupName0").Text = "Internal"; Press(window, "SetupNext"); // A name already used.
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsVisible && t.Text is { } x && x.Contains("unique"));
             Find<TextBox>(window, "SetupName0").Text = "Account one"; Press(window, "SetupNext"); Settle(window);
+            Find<TextBox>(window, "SetupBreak").Text = "soon"; Press(window, "SetupNext"); Assert.True(window.SetupShowing); // A break that is not HH:mm stops it.
+            Find<TextBox>(window, "SetupBreak").Text = "00:30";
             Find<TextBox>(window, "SetupStart").Text = "25:99"; Press(window, "SetupNext");
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsVisible && t.Text is { Length: > 0 } x && t.Classes.Contains("overtime") && x.Length > 5);
             Assert.False(model.SetupDone); Assert.Equal(TimeSpan.FromHours(9), model.Engine.Schedule.Default.Start); // Nothing was applied.
@@ -187,6 +190,20 @@ public sealed class SetupTests
     {
         var demo = TimerModel.CreateDemo(); var window = new DashboardWindow(demo); window.Show();
         try { Settle(window); Assert.False(window.SetupShowing); Assert.True(demo.SetupDone); }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheSetupCardWearsTheApplicationIconNotTheOldAccentCapsule()
+    {
+        var model = NewModel(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var icon = Find<Avalonia.Controls.Image>(window, "SetupPillIcon");
+            Assert.NotNull(icon.Source); // The app's own picture, the bat on its violet tile, as the window and the Store wear.
+            Assert.Equal(48, icon.Width); Assert.Equal(48, icon.Height);
+            Assert.Empty(icon.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>()); // Not the old drawn pill.
+        }
         finally { window.Close(); }
     }
 }
