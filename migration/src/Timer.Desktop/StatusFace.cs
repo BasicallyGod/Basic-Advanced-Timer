@@ -81,6 +81,8 @@ public sealed class StatusFace : StackPanel
     private readonly TimerModel model;
     private readonly IClockText clock;
     private readonly Border stateLight, reminderLight, reminderRing;
+    /// <summary>How many alerts are waiting (none while Pill alerts is off), as of the last refresh.</summary>
+    public int AlertCount { get; private set; }
     private readonly TextBlock initials = new() { FontSize = 17, Classes = { "clock" }, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     private readonly PauseGlyph glyph = new();
     /// <summary>The primary control, the break and the Accounts button are all this square, so they read as one set with the same room either side in the pill.</summary>
@@ -121,6 +123,8 @@ public sealed class StatusFace : StackPanel
     private bool hoverCircle, circleFocus, accountsFocus;
     public StackPanel Lights { get; }
     public Button ClockButton { get; }
+    /// <summary>The lights as a button that opens the pill's alerts; null on the sidebar.</summary>
+    public Button? AlertsButton { get; }
     public Button Circle { get; }
     public Button AccountsButton { get; }
     public BreakButton Break { get; }
@@ -129,7 +133,7 @@ public sealed class StatusFace : StackPanel
     /// <summary>The soft background the primary control and the Accounts button share.</summary>
     public Border Well => well;
 
-    public StatusFace(TimerModel model, string prefix, string breakName, string clockTip, Action clockClick, Action circleClick, Action accountsClick, bool sidebar = false)
+    public StatusFace(TimerModel model, string prefix, string breakName, string clockTip, Action clockClick, Action circleClick, Action accountsClick, bool sidebar = false, Action? alertsClick = null)
     {
         this.model = model; this.clockTip = clockTip; Sidebar = sidebar;
         clock = sidebar ? new SidebarClock { Text = "00:00:00" } : new LineClock { Text = "00:00:00" };
@@ -199,7 +203,14 @@ public sealed class StatusFace : StackPanel
             card.Children.Add(Circle); card.Children.Add(who); card.Children.Add(Break);
             well.Child = card; Lights.Margin = new Thickness(0, 4, 0, 0);
         }
-        Children.Add(Lights); Children.Add(ClockButton); Children.Add(well); if (!sidebar) Children.Add(Break);
+        // On the pill the lights are a button: pressing them opens what is waiting. It reaches past the lights with padding and takes it back in its margin, so nothing moves.
+        if (alertsClick is not null)
+        {
+            AlertsButton = Ui.Button("", alertsClick, prefix + "AlertsButton"); AlertsButton.Classes.Add("pillBare"); AlertsButton.Padding = new Thickness(8, 12); AlertsButton.Margin = new Thickness(-8, -12);
+            AlertsButton.Content = Lights; AlertsButton.VerticalAlignment = VerticalAlignment.Center; Children.Add(AlertsButton);
+        }
+        else Children.Add(Lights);
+        Children.Add(ClockButton); Children.Add(well); if (!sidebar) Children.Add(Break);
         ActualThemeVariantChanged += (_, _) => Refresh();
         Refresh();
     }
@@ -263,10 +274,15 @@ public sealed class StatusFace : StackPanel
         ToolTip.SetTip(Lights, stateName); Avalonia.Automation.AutomationProperties.SetName(stateLight, stateName);
         // The reminder light is always there: blue and pulsing while a reminder is due, and a quiet grey when nothing is waiting. It only notifies.
         var grey = ThemeColourOr("Idle", "#8A8F98");
-        reminderLight.Background = new SolidColorBrush(model.ReminderDue ? ThemeColourOr("Accent", "#3558C8") : Color.FromArgb(150, grey.R, grey.G, grey.B));
-        Ui.PulseRing(reminderLight, reminderRing, model.ReminderDue, ThemeColourOr("Accent", "#3558C8"));
-        var reminderWords = model.ReminderDue ? "A reminder is due" : "No reminders waiting";
+        // It takes the colour of the most urgent thing waiting: blue for a reminder, amber for a budget at 80 per cent or a long break, red for a spent budget.
+        var alerts = model.PillAlertsMode == "off" ? Array.Empty<AlertItem>() : model.Alerts; var waiting = alerts.Count > 0;
+        var lit = waiting ? ThemeColourOr(alerts[0].LightToken, "#3558C8") : ThemeColourOr("Accent", "#3558C8");
+        reminderLight.Background = new SolidColorBrush(waiting ? lit : Color.FromArgb(150, grey.R, grey.G, grey.B));
+        Ui.PulseRing(reminderLight, reminderRing, waiting, lit);
+        var reminderWords = !waiting ? "No reminders waiting" : alerts.All(a => a.Kind == AlertKind.Reminder) ? "A reminder is due" : $"{alerts.Count} waiting, most urgent first";
+        AlertCount = alerts.Count;
         ToolTip.SetTip(reminderLight, reminderWords); Avalonia.Automation.AutomationProperties.SetName(reminderLight, reminderWords);
+        if (AlertsButton is not null) Avalonia.Automation.AutomationProperties.SetName(AlertsButton, waiting ? "What is waiting" : "Nothing waiting");
         clock.Text = model.ClockText;
 
         var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);

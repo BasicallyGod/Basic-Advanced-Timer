@@ -261,6 +261,7 @@ public sealed class DashboardWindow : Window
         face = sidebar.Face;
         Ui.Put(root, sidebar);
         model.OpenDayRequested += _ => SelectTab(false);
+        model.PageRequested += page => { if (page == "week") SelectTab(true); else if (page == "notes") ShowNotes(); };
         // A pin on the timeline opens its note for editing in the Notes card; the Notes page's own open request shows that page.
         model.Notes.OpenNoteRequested += id => { ShowNotes(); NotesPageInstance().OpenNote(id); };
         var body = Ui.Grid("*", "*");
