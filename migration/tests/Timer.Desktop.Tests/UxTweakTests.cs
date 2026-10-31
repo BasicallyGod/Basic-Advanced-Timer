@@ -214,8 +214,8 @@ public sealed class UxTweakTests
             var bar = dashboard.GetVisualDescendants().OfType<MessageBar>().Single();
             Assert.True(bar.IsVisible);
             Assert.IsAssignableFrom<ISolidColorBrush>(bar.Background); // A style that names Border alone skips a subclass, which once left it see-through.
-            // Inverted: the card is the theme's ink (dark on Light, light on Dark), with a soft shadow, so nothing under it can look like it.
-            Assert.True(bar.TryFindResource("Ink", bar.ActualThemeVariant, out var ink) && ink is ISolidColorBrush inkBrush && ((ISolidColorBrush)bar.Background!).Color == inkBrush.Color);
+            // A porcelain card with a deep soft shadow, raised well clear of the page.
+            Assert.True(bar.TryFindResource("Porcelain", bar.ActualThemeVariant, out var porcelain) && porcelain is ISolidColorBrush brush && ((ISolidColorBrush)bar.Background!).Color == brush.Color);
             Assert.True(bar.BoxShadow.Count > 0);
         }
         finally { dashboard.Close(); }

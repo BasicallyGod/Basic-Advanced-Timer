@@ -47,7 +47,7 @@ public sealed class SettingsView : Grid
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
         var inside = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*") };
         Ui.Put(inside, title); Ui.Put(inside, intro, 0, 1); Ui.Put(inside, Ui.WithMoreBelow(scroll), 0, 2);
-        var card = new Border { Name = "SettingsCard", CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = new Thickness(24, 20, 10, 16), Child = inside };
+        var card = new Border { Name = "SettingsCard", CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(24, 20, 10, 16), Child = inside };
         card.Classes.Add("dayCard"); SetColumn(card, 1); Children.Add(card);
         ShowSection("appearance");
 

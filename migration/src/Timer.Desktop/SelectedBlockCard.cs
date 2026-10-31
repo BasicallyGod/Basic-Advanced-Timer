@@ -25,7 +25,7 @@ public sealed partial class SelectedBlockCard : Border
     public SelectedBlockCard(TimerModel model)
     {
         this.model = model; Name = "SelectedBlockCard";
-        CornerRadius = new CornerRadius(20); BorderThickness = new Thickness(1); Padding = new Thickness(18, 14, 18, 16);
+        CornerRadius = new CornerRadius(18); BorderThickness = new Thickness(1); Padding = new Thickness(18, 14, 18, 16);
         Classes.Add("dayCard");
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Sync(); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;

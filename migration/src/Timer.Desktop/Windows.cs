@@ -342,7 +342,7 @@ public sealed class DashboardWindow : Window
         // The timeline is a card (the day across the top, its bar of buttons and figures under it) over the Selected block card. The week and the settings
         // fill the workspace instead, so these two are shown for the timeline alone.
         var cardGrid = Ui.Grid("*", "Auto,Auto"); Ui.Put(cardGrid, timelineHost); Ui.Put(cardGrid, tools, 0, 1);
-        timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Padding = new Thickness(0, 14, 0, 12), VerticalAlignment = VerticalAlignment.Top };
+        timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(0, 14, 0, 12), VerticalAlignment = VerticalAlignment.Top };
         timelineCard.Classes.Add("dayCard");
         selectedCard = new SelectedBlockCard(model) { Margin = new Thickness(0, 14, 7, 0) };
         notesCard = new NotesCard(model) { Margin = new Thickness(7, 14, 0, 0) };

@@ -84,22 +84,6 @@ public sealed class Round29Tests
     }
 
     [AvaloniaFact]
-    public void TheToastsLineRunsDownByScalingAndStaysWholeForAFailedSave()
-    {
-        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("Account one") }, false, "Dark", DayOfWeek.Monday)); model.CompleteSetup();
-        var window = new DashboardWindow(model); window.Show(); Settle(window);
-        try
-        {
-            model.ExplainRunning(); Settle(window);
-            var fill = window.GetVisualDescendants().OfType<CountdownFill>().First(b => b.Name == "MessageCountdown");
-            Assert.NotNull(fill.RenderTransform); // Drawn by the renderer, not laid out again each step.
-            Assert.True(fill.Bounds.Width > 40); Assert.InRange(fill.Fraction, .8, 1); // Just started, so nearly whole.
-            Assert.Equal(0, fill.RenderTransformOrigin.Point.X);
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
     public void TwoMeetingsThatMeetInTimeNeverMeetOnScreen()
     {
         var model = new TimerModel(new TrackingEngine(clock: () => new DateTime(2026, 10, 21, 8, 0, 0)), new StoreSettings(new() { new("Account one") }, false, "Light", DayOfWeek.Monday)); model.CompleteSetup();

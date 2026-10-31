@@ -38,7 +38,7 @@ public sealed class NotesCard : Border
     public NotesCard(TimerModel model)
     {
         this.model = model; Name = "NotesCard";
-        CornerRadius = new CornerRadius(20); BorderThickness = new Thickness(1); Padding = new Thickness(16, 14);
+        CornerRadius = new CornerRadius(18); BorderThickness = new Thickness(1); Padding = new Thickness(16, 14);
         Classes.Add("dayCard");
         addNote = Ui.Ctl("AddNote", "Add note", IconKind.Plus, "Add note", () => Open(Form.Note), small: true);
         addMeeting = Ui.Ctl("AddMeeting", "Add meeting", IconKind.Plus, "Add meeting", () => Open(Form.Meeting), small: true);

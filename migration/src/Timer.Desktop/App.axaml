@@ -118,8 +118,10 @@
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
     </Style>
     <!-- Right-click menus: rounded, with a little room round the items, in the theme's colours (ThemeEngine writes the menu resources). -->
-    <Style Selector="ContextMenu"><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="6" /></Style>
-    <Style Selector="ContextMenu MenuItem"><Setter Property="CornerRadius" Value="8" /><Setter Property="Padding" Value="10,7" /><Setter Property="FontSize" Value="13" /></Style>
+    <Style Selector="ContextMenu"><Setter Property="CornerRadius" Value="16" /><Setter Property="Padding" Value="6" /></Style>
+    <Style Selector="ContextMenu MenuItem"><Setter Property="CornerRadius" Value="10" /><Setter Property="Padding" Value="10,7" /><Setter Property="FontSize" Value="13" /></Style>
+    <!-- The row under the pointer sinks into the porcelain; it does not light up. -->
+    <Style Selector="ContextMenu MenuItem:pointerover /template/ Border#PART_LayoutRoot, ContextMenu MenuItem:pressed /template/ Border#PART_LayoutRoot"><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <!-- Fields: rounded, as the mock draws them (ThemeEngine writes their fill, hairline and focus colours). -->
     <Style Selector="TextBox"><Setter Property="CornerRadius" Value="12" /></Style>
     <Style Selector="TextBox /template/ Border#PART_BorderElement"><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
@@ -133,7 +135,7 @@
     <Style Selector="Button.weekDay"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="CornerRadius" Value="12" /></Style>
     <!-- No fill under the pointer or the press: a day's column would hide the schedule line and hour lines behind it. -->
     <Style Selector="Button.weekDay /template/ ContentPresenter, Button.weekDay:pointerover /template/ ContentPresenter, Button.weekDay:pressed /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
-    <Style Selector="Border.rowSelected"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="3,1,1,1" /></Style>
+    <Style Selector="Border.rowSelected"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="3,1,1,1" /><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="Border.ruleBelow"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
     <Style Selector="TextBox.accentField"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="TextBox.accentField /template/ Border#PART_BorderElement, TextBox.accentField:pointerover /template/ Border#PART_BorderElement, TextBox.accentField:focus /template/ Border#PART_BorderElement"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
@@ -143,7 +145,7 @@
     <Style Selector="Border.noteRow"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
     <!-- An important note: a faint accent wash and edge on its row, and its star solid in the accent; the words keep their weight. -->
     <Style Selector="Border.noteRow.importantRow"><Setter Property="Background" Value="{DynamicResource ImportantTint}" /><Setter Property="BorderBrush" Value="{DynamicResource ImportantEdge}" /></Style>
-    <Style Selector="Border.noteRow.rowSelected"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Border.noteRow.rowSelected"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Border.tick"><Setter Property="BorderBrush" Value="{DynamicResource Muted}" /></Style>
     <Style Selector="Border.tick.tickDone"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Border.composer"><Setter Property="Background" Value="{DynamicResource TextControlBackground}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
@@ -233,21 +235,18 @@
     <Style Selector="Button.iconButton /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Transitions"><Transitions><BrushTransition Property="Background" Duration="0:0:0.2" /></Transitions></Setter>
     </Style>
-    <!-- The floating message is inverted, so nothing under it can look like it: the card takes the ink colour (dark on Light, light on Dark) and its words and buttons the page colour. -->
+    <!-- The floating message is a porcelain card raised well clear of the page; its light sits in a sunk round well. -->
     <Style Selector=":is(Border).messageBar">
-      <Setter Property="Background" Value="{DynamicResource Ink}" />
-      <Setter Property="BoxShadow" Value="0 16 38 0 #66000000" />
+      <Setter Property="Background" Value="{DynamicResource Porcelain}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource ShadowPopup}" />
     </Style>
-    <Style Selector=":is(Border).messageBar TextBlock"><Setter Property="Foreground" Value="{DynamicResource Surface}" /></Style>
-    <Style Selector=":is(Border).messageBar TextBlock.muted"><Setter Property="Opacity" Value="0.72" /></Style>
-    <!-- Its buttons are the page colour on the card, so they read as buttons; their words take the ink. -->
-    <Style Selector=":is(Border).messageBar Button.ctl"><Setter Property="Background" Value="{DynamicResource Surface}" /><Setter Property="BorderBrush" Value="{DynamicResource Surface}" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
-    <Style Selector=":is(Border).messageBar Button.ctl TextBlock"><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="Opacity" Value="1" /></Style>
-    <Style Selector=":is(Border).messageBar Button.iconButton:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
+    <Style Selector=":is(Border).messageBar TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+    <Style Selector="Border.medallion"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <!-- The Day elapsed card is a raised tile with a bar of the accent colour along its top edge. -->
     <Style Selector=":is(Border).dayCard">
       <Setter Property="Background" Value="{DynamicResource Panel}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" />
+      <Setter Property="BoxShadow" Value="{DynamicResource ShadowCard}" />
     </Style>
     <!-- Small custom date picker: no system Calendar's heavy ruled grid or bright blue selection. -->
     <Style Selector="Border.softCalendar">

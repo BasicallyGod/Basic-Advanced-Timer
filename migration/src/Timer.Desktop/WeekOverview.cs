@@ -74,7 +74,7 @@ public static class WeekOverview
 
     private static Border Tile(Control child, Thickness padding)
     {
-        var tile = new Border { CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Padding = padding, Child = child };
+        var tile = new Border { CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = padding, Child = child };
         tile.Classes.Add("dayCard"); return tile;
     }
     private static Control Stat(TimerModel model, string name, string caption, string value, string? tip, string? tone = null, string? dot = null)

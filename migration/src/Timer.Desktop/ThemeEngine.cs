@@ -124,10 +124,11 @@ public static class ThemeEngine
         Put("ScrollThumb", Color.Parse(ThemeColours.Mix(colours["Line"], colours["Ink"], .13)));
         Put("ScrollThumbHover", Color.Parse(ThemeColours.Mix(colours["Line"], colours["Ink"], .3)));
         // Right-click menus are drawn from the standard menu resources, which are the computer's own greys. They wear the theme's panel, text, hover and line.
-        Put("MenuFlyoutPresenterBackground", Color.Parse(colours["Panel"]));
+        Put("MenuFlyoutPresenterBackground", Color.Parse(ThemeColours.Mix(colours["Panel"], "#FFFFFF", ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000") ? .3 : .06)));
         Put("MenuFlyoutPresenterBorderBrush", line);
-        Put("MenuFlyoutItemBackgroundPointerOver", Color.Parse(colours["Hover"]));
-        Put("MenuFlyoutItemBackgroundPressed", Color.Parse(colours["Selected"]));
+        var menuWell = Color.Parse(ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000") ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .03) : ThemeColours.Mix(colours["Surface"], "#000000", .2));
+        Put("MenuFlyoutItemBackgroundPointerOver", menuWell);
+        Put("MenuFlyoutItemBackgroundPressed", menuWell);
         foreach (var key in new[] { "MenuFlyoutItemForeground", "MenuFlyoutItemForegroundPointerOver", "MenuFlyoutItemForegroundPressed" }) Put(key, ink0);
         foreach (var key in new[] { "MenuFlyoutItemForegroundDisabled", "MenuFlyoutItemKeyboardAcceleratorTextForeground", "MenuFlyoutItemKeyboardAcceleratorTextForegroundPointerOver", "MenuFlyoutItemKeyboardAcceleratorTextForegroundPressed", "MenuFlyoutSubItemChevron", "MenuFlyoutSubItemChevronPointerOver", "MenuFlyoutSubItemChevronPressed" }) Put(key, Color.Parse(colours["Muted"]));
         Put("MenuFlyoutSeparatorBackground", line);

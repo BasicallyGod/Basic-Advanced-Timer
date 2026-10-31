@@ -227,8 +227,8 @@ public sealed class SelectedBlockCardTests
             {
                 Assert.True(Avalonia.Application.Current!.Resources.ThemeDictionaries.TryGetValue(ThemeEngine.VariantFor(theme), out var found));
                 var dictionary = (ResourceDictionary)found!;
-                Assert.Equal(Color.Parse(theme.Colour("Panel")), ((SolidColorBrush)dictionary["MenuFlyoutPresenterBackground"]!).Color);
-                Assert.Equal(Color.Parse(theme.Colour("Hover")), ((SolidColorBrush)dictionary["MenuFlyoutItemBackgroundPointerOver"]!).Color);
+                Assert.Equal(((SolidColorBrush)dictionary["Porcelain"]!).Color, ((SolidColorBrush)dictionary["MenuFlyoutPresenterBackground"]!).Color); // Porcelain, like the toast.
+                Assert.Equal(((SolidColorBrush)dictionary["Well"]!).Color, ((SolidColorBrush)dictionary["MenuFlyoutItemBackgroundPointerOver"]!).Color); // The row under the pointer sinks.
                 Assert.Equal(Color.Parse(theme.Colour("Ink")), ((SolidColorBrush)dictionary["MenuFlyoutItemForeground"]!).Color);
             }
         }

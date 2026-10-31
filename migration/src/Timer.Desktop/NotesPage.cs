@@ -34,10 +34,10 @@ public sealed class NotesPage : Grid
     {
         this.model = model; Name = "NotesPage";
         ColumnDefinitions = new ColumnDefinitions("196,14,*"); ClipToBounds = false;
-        var aside = new Border { Name = "NotesViews", CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Padding = new Thickness(12) }; aside.Classes.Add("dayCard");
+        var aside = new Border { Name = "NotesViews", CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(12) }; aside.Classes.Add("dayCard");
         aside.Child = new ScrollViewer { Content = views, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         Children.Add(aside);
-        var card = new Border { Name = "NotesListCard", CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), ClipToBounds = true }; card.Classes.Add("dayCard");
+        var card = new Border { Name = "NotesListCard", CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), ClipToBounds = true }; card.Classes.Add("dayCard");
         var inner = Ui.Grid("*", "Auto,Auto,*");
         // The form, then the row of accounts to filter by, then the list.
         var formBox = new Border { Child = formHost, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(14, 14, 14, 12) }; formBox.Classes.Add("ruleBelow");
