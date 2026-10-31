@@ -33,7 +33,7 @@ public sealed class FrameMonitor
 
     public void Start(TopLevel window)
     {
-        Stop(); Reset(); level = window;
+        Stop(); Reset(); ForgetPages(); level = window;
         window.RequestAnimationFrame(OnFrame);
         tick = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) }; tick.Tick += (_, _) => Changed?.Invoke(); tick.Start();
         Changed?.Invoke();
@@ -44,6 +44,8 @@ public sealed class FrameMonitor
         if (was) Changed?.Invoke();
     }
     public void Reset() { count = 0; next = 0; haveLast = false; }
+    /// <summary>Forgets the pages kept from before (a new run of the monitor starts clean).</summary>
+    public void ForgetPages() => remembered.Clear();
     private void OnFrame(TimeSpan now)
     {
         if (level is null) return;
@@ -63,6 +65,15 @@ public sealed class FrameMonitor
     }
     /// <summary>A line to paste into a note: when, which page, and the figures.</summary>
     public string Report()
+    {
+        // The pages visited since the monitor started, each with the figures it had when it was left (a page's figures start again on arriving), then this page's own.
+        var lines = remembered.Where(r => r.Key != Page).Select(r => r.Value).Append(Line());
+        return string.Join(Environment.NewLine, lines);
+    }
+    private readonly Dictionary<string, string> remembered = new();
+    /// <summary>Keeps the figures of the page being left, if there are enough frames to mean anything, so Copy report in Settings can still give the Timeline's.</summary>
+    public void Remember() { if (Page.Length > 0 && count >= 30) remembered[Page] = Line(); }
+    private string Line()
     {
         var all = gaps.Take(count).ToArray();
         // How the frames spread, so a steady 20 ms pace can be told from a smooth run with a few long stalls.
@@ -92,7 +103,7 @@ public sealed class FrameChip : Border
     {
         IsVisible = FrameMonitor.Instance.Running;
         if (!IsVisible) return;
-        var now = page(); if (FrameMonitor.Instance.Page != now) { FrameMonitor.Instance.Reset(); FrameMonitor.Instance.Page = now; }
+        var now = page(); if (FrameMonitor.Instance.Page != now) { FrameMonitor.Instance.Remember(); FrameMonitor.Instance.Reset(); FrameMonitor.Instance.Page = now; }
         words.Text = now + " · " + FrameMonitor.Instance.Snapshot();
     }
 }
