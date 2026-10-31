@@ -358,6 +358,7 @@ public sealed class DashboardWindow : Window
         messageBar = new MessageBar(model); Ui.Put(review, messageBar, row: 1);
         // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
         layers.Children.Add(root); dashboardBody = root;
+        layers.Children.Add(new FrameChip(() => settingsMode ? "Settings" : notesMode ? "Notes" : weekMode ? "Week overview" : "Timeline")); // Only shows while the frame monitor runs (Settings, Development).
         layers.Children.Add(Dialogs); Dialogs.OpenChanged += UpdateBackdrop; // Last, so a dialog is above the setup too.
         surface = new Border { Name = "DashboardSurface", Child = layers, ClipToBounds = true };
         surface.Classes.Add("surface");

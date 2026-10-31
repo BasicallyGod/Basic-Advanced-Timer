@@ -1,0 +1,47 @@
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Xunit;
+
+namespace Timer.Desktop.Tests;
+
+// The frame monitor: its figures, and that its switch and readout live where the developer features do.
+public sealed class FrameMonitorTests
+{
+    [Fact]
+    public void TheFiguresAreTheAverageTheNinetyFifthPercentileTheWorstAndTheLateOnes()
+    {
+        var gaps = Enumerable.Repeat(16.7, 95).Concat(new[] { 25.0, 25.0, 40.0, 40.0, 90.0 }).ToArray();
+        var stats = FrameMonitor.Summarise(gaps);
+        Assert.Equal(100, stats.Frames); Assert.Equal(90, stats.WorstMs); Assert.Equal(5, stats.Slow); Assert.Equal(3, stats.Dropped);
+        Assert.InRange(stats.AverageMs, 17.9, 18.3); Assert.InRange(stats.P95Ms, 16.7, 25.1); Assert.True(stats.Fps < 60);
+        Assert.Equal(default, FrameMonitor.Summarise(Array.Empty<double>()));
+    }
+
+    [Fact]
+    public void OnlyTheLastNineHundredFramesAreKept()
+    {
+        var monitor = new FrameMonitor();
+        for (var i = 0; i < FrameMonitor.Kept + 50; i++) monitor.Record(i < 50 ? 500 : 16);
+        Assert.Equal(FrameMonitor.Kept, monitor.Snapshot().Frames); Assert.Equal(16, monitor.Snapshot().WorstMs); // The slow early ones have gone.
+    }
+
+    [AvaloniaFact]
+    public void TheSwitchStartsAndStopsItAndTheChipShowsOnlyWhileItRuns()
+    {
+        var model = TimerModel.CreateDemo(); model.CompleteSetup();
+        var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var chip = window.GetVisualDescendants().OfType<FrameChip>().Single(); Assert.False(chip.IsVisible);
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            var toggle = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "FrameTimingToggle");
+            toggle.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.True(FrameMonitor.Instance.Running); Assert.True(chip.IsVisible);
+            toggle.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.False(FrameMonitor.Instance.Running); Assert.False(chip.IsVisible);
+        }
+        finally { FrameMonitor.Instance.Stop(); window.Close(); }
+    }
+}

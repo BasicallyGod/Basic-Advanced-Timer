@@ -311,6 +311,21 @@ public sealed class SettingsView : Grid
         var developerToggle = Toggle("Developer features", "The version on the right-click menu.", "DeveloperFeatures", () => model.DeveloperUnlocked, v => model.SetDeveloper(v), out var developerBox);
         developerBox.IsEnabled = !model.IsDemo;
         developer.Children.Add(developerToggle);
+        // Frame timing: while it is on, the dashboard shows how long its frames take and Copy report puts the figures on the clipboard. Never saved; it ends when the app does.
+        var frames = Ui.Text(FrameMonitor.Instance.Running ? "Running. The figures are in the corner of the dashboard." : "Off.", 13, "muted"); frames.Name = "FrameTimingState"; frames.TextWrapping = TextWrapping.Wrap;
+        var frameSwitch = Ui.DialogButton(FrameMonitor.Instance.Running ? "Stop frame timing" : "Start frame timing", () => { }, "FrameTimingToggle");
+        frameSwitch.Click += (_, _) =>
+        {
+            if (FrameMonitor.Instance.Running) FrameMonitor.Instance.Stop();
+            else if (TopLevel.GetTopLevel(frameSwitch) is { } window) FrameMonitor.Instance.Start(window);
+            frameSwitch.Content = FrameMonitor.Instance.Running ? "Stop frame timing" : "Start frame timing";
+            frames.Text = FrameMonitor.Instance.Running ? "Running. The figures are in the corner of the dashboard." : "Off.";
+        };
+        var frameCopy = Ui.DialogButton("Copy report", async () =>
+        {
+            if (TopLevel.GetTopLevel(frameSwitch)?.Clipboard is { } clipboard) await clipboard.SetTextAsync(FrameMonitor.Instance.Report());
+        }, "FrameTimingCopy");
+        developer.Children.Add(Row("Frame timing", "How long the dashboard's frames take, for judging smoothness. Switch it on, use the page you want to test for a few seconds, then copy the report.", Ui.Horizontal(frameSwitch, frameCopy), frames));
         var developerSection = new Border { Name = "DevelopmentSection", Child = developer, IsVisible = model.DeveloperUnlocked, Padding = new Thickness(0, 4) };
         syncs.Add(() => developerSection.IsVisible = model.DeveloperUnlocked);
         stack.Children.Add(developerSection);
