@@ -182,26 +182,6 @@ public static class Ui
         if (main ?? MainActions.Contains(text)) button.Classes.Add("mainAction");
         return button;
     }
-    /// <summary>
-    /// Draws a hairline in the theme's line colour along the edge of a scroll viewer that has more content past it, at the bottom while there is more
-    /// below and at the top once it has scrolled down, so rows cut off by the buttons underneath read as scrollable. A plain line suits every theme,
-    /// where a fade or shadow looked muddy on light ones. The lines ignore the pointer and go once the end is reached.
-    /// </summary>
-    public static Grid WithMoreBelow(ScrollViewer scroll)
-    {
-        Border Edge(string name, VerticalAlignment edge) { var line = new Border { Name = name, Height = 1, VerticalAlignment = edge, IsHitTestVisible = false, IsVisible = false }; line.Classes.Add("scrollEdge"); return line; }
-        var below = Edge("MoreBelow", VerticalAlignment.Bottom); var above = Edge("MoreAbove", VerticalAlignment.Top);
-        void Update()
-        {
-            var scrolls = scroll.Extent.Height > scroll.Viewport.Height + 1;
-            below.IsVisible = scrolls && scroll.Offset.Y + scroll.Viewport.Height < scroll.Extent.Height - 1;
-            above.IsVisible = scrolls && scroll.Offset.Y > 1;
-        }
-        scroll.ScrollChanged += (_, _) => Update();
-        scroll.PropertyChanged += (_, e) => { if (e.Property == ScrollViewer.ExtentProperty || e.Property == ScrollViewer.ViewportProperty) Update(); };
-        var host = new Grid(); host.Children.Add(scroll); host.Children.Add(above); host.Children.Add(below);
-        return host;
-    }
     public static Grid Grid(string columns, string rows = "Auto") => new()
     {
         ColumnDefinitions = new ColumnDefinitions(columns), RowDefinitions = new RowDefinitions(rows)

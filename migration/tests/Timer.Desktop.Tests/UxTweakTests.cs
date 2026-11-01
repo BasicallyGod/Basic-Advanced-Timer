@@ -36,24 +36,6 @@ public sealed class UxTweakTests
         Assert.Contains("Week overview", note.Text);
     }
 
-    [AvaloniaFact]
-    public void AFadeShowsOnlyWhileMoreContentLiesBelow()
-    {
-        var content = new StackPanel(); for (var i = 0; i < 30; i++) content.Children.Add(new TextBlock { Text = "row " + i, Height = 30 });
-        var scroll = new ScrollViewer { Content = content, Height = 200 };
-        var host = Ui.WithMoreBelow(scroll);
-        var window = new Window { Width = 300, Height = 300, Content = host }; window.Show();
-        try
-        {
-            Settle(window);
-            var fade = host.Children.OfType<Border>().Single(b => b.Name == "MoreBelow");
-            Assert.True(fade.IsVisible); Assert.False(fade.IsHitTestVisible);
-            scroll.Offset = new Vector(0, 100000); Settle(window);
-            Assert.False(fade.IsVisible);
-        }
-        finally { window.Close(); }
-    }
-
     [Fact]
     public void LightAndDarkAccentsKeepClearOfRedGreenAndOrange()
     {
@@ -395,7 +377,7 @@ Settle(window);
             Assert.Matches(@"^\d\d:\d\d / \d\d:\d\d$", model.BudgetUsage(withBudget)); Assert.Equal("This week", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null) with { Budget = TimeSpan.FromHours(5), Period = "week" }));
             Assert.Equal("This month", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null) with { Budget = TimeSpan.FromHours(5), Period = "month" }));
             Assert.Equal("Today", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null) with { Budget = TimeSpan.FromHours(5), Period = "day" })); Assert.Equal("", model.BudgetPeriodLabel(new TimerAccount("x", "#888888", null)));
-            Assert.Contains("% used", model.BudgetDetail(withBudget)); Assert.Contains("how far through", model.BudgetDetail(withBudget));
+            Assert.Contains("% used", model.BudgetDetail(withBudget)); Assert.DoesNotContain("how far through", model.BudgetRowTip(withBudget)); Assert.Equal(2, model.BudgetRowTip(withBudget).Split('\n').Length); // The name, then one line of facts.
             var bars = rows.SelectMany(r => r.GetVisualDescendants().OfType<BudgetBar>()).ToList(); Assert.NotEmpty(bars);
             Assert.All(bars, bar => Assert.Contains("% used", (string?)ToolTip.GetTip(bar)));
         }

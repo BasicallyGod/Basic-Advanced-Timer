@@ -308,7 +308,7 @@ public static class WeekOverview
             tile.Children.Add(row);
         }
         var scroll = new ScrollViewer { Content = tile, AllowAutoHide = false, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 8, 0) };
-        var inside = Ui.Grid("*", "Auto,*"); Ui.Put(inside, title); Ui.Put(inside, Ui.WithMoreBelow(scroll), 0, 1);
+        var inside = Ui.Grid("*", "Auto,*"); Ui.Put(inside, title); Ui.Put(inside, scroll, 0, 1);
         return Tile(inside, new Thickness(18, 12, 10, 10));
     }
     private static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
