@@ -768,10 +768,23 @@ public sealed class DashboardWindow : Window
         {
             // The marker moves independently. Only a running block changes today's timeline geometry;
             // current-week totals still change while idle, whereas an earlier week's data does not.
-            rebuild = weekMode ? model.WeekStart(model.SelectedDate) == model.WeekStart(model.Engine.Now)
+            rebuild = weekMode ? WeekHasLiveValues()
                 : model.Engine.Active is not null && model.SelectedDate.Date == model.Engine.Now.Date;
         }
         Refresh(rebuild);
+    }
+    private bool WeekHasLiveValues()
+    {
+        if (model.WeekStart(model.SelectedDate) == model.WeekStart(model.Engine.Now)) return true;
+        if (model.Engine.Active is not { } active) return false;
+        // An earlier week can share the running account's month/quarter budget with today.
+        var reference = model.BudgetReference(model.WeekStart(model.SelectedDate));
+        return model.ReviewAccounts.Any(account =>
+        {
+            if (account.Name != active.Account || account.Budget is null) return false;
+            var (from, to) = model.BudgetWindowAt(account, reference);
+            return model.Engine.Now >= from && model.Engine.Now < to;
+        });
     }
     private void Refresh(bool refreshWorkspace)
     {

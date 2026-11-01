@@ -41,7 +41,7 @@ public sealed class AnimationSchedulingTests
     [AvaloniaFact]
     public void HistoricalWeekIsReusedButCurrentWeekRefreshesOnCheckpoint()
     {
-        var now = new DateTime(2026, 11, 2, 14, 15, 0);
+        var now = new DateTime(2026, 11, 9, 14, 15, 0);
         var model = TimerModel.CreateDemo(() => now); model.CompleteSetup();
         var window = new DashboardWindow(model); window.Show();
         try
@@ -53,6 +53,9 @@ public sealed class AnimationSchedulingTests
             model.GoToDate(model.Engine.Now.AddDays(-7)); var previous = host.Content;
             for (var i = 0; i < 15; i++) { now = now.AddSeconds(1); model.Tick(); }
             Assert.Same(previous, host.Content);
+            model.ToggleAccount("Account four"); previous = host.Content; // Monthly budget shared by both weeks.
+            for (var i = 0; i < 15; i++) { now = now.AddSeconds(1); model.Tick(); }
+            Assert.NotSame(previous, host.Content);
             model.ShowToday(); previous = host.Content;
             for (var i = 0; i < 15; i++) { now = now.AddSeconds(1); model.Tick(); }
             Assert.NotSame(previous, host.Content);
