@@ -519,17 +519,31 @@ public sealed class DashboardWindow : Window
         SetMorph(from);
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
         // Each step is tied to the screen's own refresh (the frame request), not to a 16 ms timer, which beats against a 60 Hz screen and drops or doubles frames.
+        // A window that is not being drawn (no display, minimised, covered on some machines) never gets that request, so a plain timer steps in whenever no frame has
+        // come for 50 ms: the animation always finishes and the dashboard never stays half grown with nothing able to be pressed.
+        var lastStep = System.Diagnostics.Stopwatch.GetTimestamp();
+        Avalonia.Threading.DispatcherTimer? watchdog = null;
+        var finished = false;
+        void Finish() { finished = true; watchdog?.Stop(); }
         void Step(TimeSpan _)
         {
-            if (run != morphRun) return;
+            if (finished) return; // A step from the timer and one from a frame request can be waiting together; the end must run once.
+            if (run != morphRun) { Finish(); return; }
+            lastStep = System.Diagnostics.Stopwatch.GetTimestamp();
             var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             var length = closing ? WindowMorph.CloseMilliseconds : WindowMorph.OpenMilliseconds;
             var e = WindowMorph.Ease(elapsed, closing);
             // Opening runs m from 0 up to 1; closing runs it back from 1 down to 0 along the same ease.
             SetMorph(closing ? 1 - e : e);
-            if (elapsed >= length) { SetMorph(to); done?.Invoke(); return; }
+            if (elapsed >= length) { Finish(); SetMorph(to); done?.Invoke(); return; }
             RequestAnimationFrame(Step);
         }
+        watchdog = new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(25), Avalonia.Threading.DispatcherPriority.Render, (_, _) =>
+        {
+            if (run != morphRun) { Finish(); return; }
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(lastStep).TotalMilliseconds > 50) Step(TimeSpan.Zero);
+        });
+        watchdog.Start();
         RequestAnimationFrame(Step);
     }
     private void SetPillPicture(Avalonia.Media.Imaging.Bitmap? picture, Rect where)
