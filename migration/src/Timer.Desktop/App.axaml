@@ -216,7 +216,7 @@
     <Style Selector="Button.accountCard /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
     <Style Selector="Button.accountCard:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource KeyHover}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKey}" /></Style>
     <!-- The account that is recording is sunk, with a gentle green wash: a key that is on. -->
-    <Style Selector="Button.accountCard.active /template/ ContentPresenter#PART_ContentPresenter, Button.accountCard.active:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource LiveTint}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
+    <Style Selector="Button.accountCard.active /template/ ContentPresenter#PART_ContentPresenter, Button.accountCard.active:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource LiveTint}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
     <!-- The rail's icons sit in soft tiles. The chosen one is filled, and the rest are muted until the pointer arrives. -->
     <Style Selector="Button.rail">
       <Setter Property="Width" Value="44" /><Setter Property="Height" Value="44" />
@@ -412,8 +412,8 @@
       <Setter Property="Background" Value="{DynamicResource Break}" /><Setter Property="Foreground" Value="White" /><Setter Property="BorderBrush" Value="{DynamicResource Break}" />
     </Style>
     <!-- A button clips to its own rectangle by default, which cut every raised key's shadow off square at its corners; the shadow is drawn outside the key, so buttons do not clip. -->
-    <Style Selector="Button"><Setter Property="ClipToBounds" Value="False" /></Style>
-    <!-- ====== The depth look. Raised things (keys, cards) throw a soft shadow down and right, sunk things (fields, tracks, a pressed or chosen key) turn it inward.
+    <Style Selector=":is(Button)"><Setter Property="ClipToBounds" Value="False" /></Style>
+        <!-- ====== The depth look. Raised things (keys, cards) throw a soft shadow down and right, sunk things (fields, tracks, a pressed or chosen key) turn it inward.
          The shadows and the well colour come from the theme engine (ShadowKey, ShadowKeyHover, ShadowSunk, ShadowThumb, ShadowCard, Well, KeyHover, KeyEdge). ====== -->
     <!-- A key: every button on the dashboard and in dialogs. Hover lifts it a step; pressed or chosen sinks it, and a chosen one takes its words in the accent. -->
     <Style Selector="Button.ctl">
