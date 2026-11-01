@@ -65,7 +65,9 @@ public sealed class WindowCoordinator
             var picture = WindowMorph.Capture(Pill);
             Dashboard.ShrinkTo(card, radius, picture, at, () =>
             {
-                Pill.Show(); Dashboard.Hide(); BringToFront(Pill);
+                using (PerformanceTimings.Measure("pill show")) Pill.Show();
+                using (PerformanceTimings.Measure("dashboard hide")) Dashboard.Hide();
+                using (PerformanceTimings.Measure("pill activate")) BringToFront(Pill);
                 Avalonia.Threading.DispatcherTimer.RunOnce(() => { if (visibility == visibilityRun) KeepPillReachable(); }, TimeSpan.FromMilliseconds(400));
             });
         };
@@ -421,7 +423,9 @@ public sealed class DashboardWindow : Window
         // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
         layers.Children.Add(root); dashboardBody = root;
         dashboardSnapshot = new Avalonia.Controls.Image { Name = "MorphDashboardSnapshot", Stretch = Avalonia.Media.Stretch.Fill, IsHitTestVisible = false, IsVisible = false };
-        layers.Children.Add(dashboardSnapshot);
+        // A snapshot must never contribute an intrinsic bitmap size to the dashboard's layout.
+        var snapshotLayer = new Canvas { IsHitTestVisible = false };
+        snapshotLayer.Children.Add(dashboardSnapshot); layers.Children.Add(snapshotLayer);
         layers.Children.Add(new FrameChip(() => settingsMode ? "Settings" : notesMode ? "Notes" : weekMode ? "Week overview" : "Timeline")); // Only shows while the frame monitor runs (Settings, Development).
         layers.Children.Add(Dialogs); Dialogs.OpenChanged += UpdateBackdrop; // Last, so a dialog is above the setup too.
         surface = new Border { Name = "DashboardSurface", Child = layers, ClipToBounds = true };
@@ -518,8 +522,9 @@ public sealed class DashboardWindow : Window
             dashboardBody!.Opacity = 1; UpdateLayout();
             var size = dashboardBody.Bounds.Size;
             if (size.Width < 2 || size.Height < 2) throw new InvalidOperationException("Dashboard has no layout yet.");
-            bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)Math.Ceiling(size.Width * RenderScaling), (int)Math.Ceiling(size.Height * RenderScaling)), new Vector(96 * RenderScaling, 96 * RenderScaling));
-            bitmap.Render(dashboardBody);
+            bitmap = WindowMorph.CaptureVisual(dashboardBody, RenderScaling);
+            dashboardSnapshot.Width = size.Width; dashboardSnapshot.Height = size.Height;
+            Canvas.SetLeft(dashboardSnapshot, dashboardBody.Bounds.X); Canvas.SetTop(dashboardSnapshot, dashboardBody.Bounds.Y);
             dashboardSnapshot.Source = bitmap; bitmap = null;
             dashboardSnapshot.IsVisible = true;
             transitionTiming?.SetMode("snapshot");
@@ -613,10 +618,10 @@ public sealed class DashboardWindow : Window
     private void CompleteMorph(Action? done, string outcome)
     {
         transitionProbe?.Dispose(); transitionProbe = null;
-        ReleaseSnapshot();
+        using (PerformanceTimings.Measure("snapshot release")) ReleaseSnapshot();
         var timing = transitionTiming; transitionTiming = null;
         done?.Invoke();
-        FlushRefresh();
+        using (PerformanceTimings.Measure("deferred refresh")) FlushRefresh();
         timing?.Finish(outcome);
     }
     private void FlushRefresh()

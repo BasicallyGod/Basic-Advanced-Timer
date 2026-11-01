@@ -13,6 +13,21 @@ namespace Timer.Desktop;
 /// </summary>
 public static class WindowMorph
 {
+    /// <summary>Rasterize in logical coordinates with one explicit scale; retain a 96-DPI bitmap and an explicit logical destination.</summary>
+    public static RenderTargetBitmap CaptureVisual(Control visual, double scale)
+    {
+        var size = visual.Bounds.Size;
+        if (!double.IsFinite(scale) || scale <= 0 || size.Width < 2 || size.Height < 2) throw new ArgumentOutOfRangeException(nameof(scale));
+        var bitmap = new RenderTargetBitmap(new PixelSize((int)Math.Ceiling(size.Width * scale), (int)Math.Ceiling(size.Height * scale)), new Vector(96, 96));
+        try
+        {
+            using (var drawing = bitmap.CreateDrawingContext())
+            using (drawing.PushTransform(Matrix.CreateScale(scale, scale)))
+                drawing.DrawRectangle(new VisualBrush(visual) { Stretch = Stretch.Fill }, null, new Rect(size));
+            return bitmap;
+        }
+        catch { bitmap.Dispose(); throw; }
+    }
     /// <summary>Whether the move is animated. The tests switch it off, since nothing ticks in a headless test.</summary>
     public static bool Enabled { get; set; } = true;
     /// <summary>Temporary Development comparison switch, kept only for this process.</summary>
