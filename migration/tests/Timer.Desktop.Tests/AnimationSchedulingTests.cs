@@ -22,7 +22,7 @@ public sealed class AnimationSchedulingTests
         Assert.Empty(frames);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void TransitionReportIncludesOperationOverlapAndSeparatesCallbackSources()
     {
         var trace = TransitionTimings.Begin("diagnostic-test");

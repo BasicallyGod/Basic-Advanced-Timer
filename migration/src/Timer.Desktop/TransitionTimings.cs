@@ -22,7 +22,7 @@ public static class TransitionTimings
         if (operation is not ("save" or "workspace rebuild" or "expand preparation" or "collapse preparation")) return;
         lock (gate)
         {
-            if (active is null) return;
+            if (active is null || active.OwnerThread != Environment.CurrentManagedThreadId) return;
             var prior = active.operations.GetValueOrDefault(operation);
             active.operations[operation] = (prior.Count + 1, prior.Ms + ms);
         }
@@ -34,6 +34,7 @@ public static class TransitionTimings
     }
     public sealed class Transition(int id, string direction)
     {
+        internal int OwnerThread { get; } = Environment.CurrentManagedThreadId;
         private readonly long started = Stopwatch.GetTimestamp();
         internal readonly Dictionary<string, (int Count, double Ms)> operations = new();
         private int native, watchdog;
