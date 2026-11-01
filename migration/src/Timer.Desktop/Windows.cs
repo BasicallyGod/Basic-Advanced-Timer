@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using Avalonia;
 using Timer.Core;
 using Avalonia.Controls;
@@ -71,6 +72,23 @@ public sealed class WindowCoordinator
             else foreach (var window in new Window[] { Pill, Dashboard }) if (window.IsVisible) window.WindowState = WindowState.Minimized;
         };
         KeepInFront();
+        // The first open used to stutter while the dashboard's controls were first laid out and their templates built. Doing that once, unseen, as soon
+        // as the pill is up, leaves the grow animation only drawing. Headless tests and any failure just skip it.
+        Pill.Opened += WarmDashboard;
+    }
+    private void WarmDashboard(object? sender, EventArgs e)
+    {
+        Pill.Opened -= WarmDashboard;
+        Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+        {
+            try
+            {
+                if (Dashboard.IsVisible) return;
+                var size = new Avalonia.Size(DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin);
+                Dashboard.Measure(size); Dashboard.Arrange(new Avalonia.Rect(size));
+            }
+            catch (Exception) { /* Only a warm-up. */ }
+        }, TimeSpan.FromMilliseconds(600));
     }
     /// <summary>
     /// Opens the dashboard the first time the pill is shown, which is where the getting started setup waits. It must happen once only: the pill raises
@@ -336,14 +354,29 @@ public sealed class DashboardWindow : Window
         var zoom = Ui.KeyPair(zoomOut, zoomIn, "TimelineControls");
         totalsStrip = BuildTotals();
         var tools = Ui.Grid("Auto,*,Auto"); tools.Margin = new Thickness(14, 6, 14, 0);
-        var editKeys = Ui.Horizontal(addTime, Ui.KeyPair(undo, redo, "EditKeys")); editKeys.Spacing = 8; Ui.Put(tools, editKeys); Ui.Put(tools, totalsStrip, 1); Ui.Put(tools, zoom, 2);
+        var editKeys = Ui.Horizontal(addTime, Ui.KeyPair(undo, redo, "EditKeys")); editKeys.Spacing = 8; editKeys.VerticalAlignment = VerticalAlignment.Center; zoom.VerticalAlignment = VerticalAlignment.Center; Ui.Put(tools, editKeys); Ui.Put(tools, totalsStrip, 1); Ui.Put(tools, zoom, 2);
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
         workspace.ClipToBounds = false; // A content control clips by default, which cut the raised cards' shadows square at the page's edge; the lists inside scroll and clip themselves.
         Ui.Put(review, workspace, row: 1);
         // The timeline is a card (the day across the top, its bar of buttons and figures under it) over the Selected block card. The week and the settings
         // fill the workspace instead, so these two are shown for the timeline alone.
         // The day itself sits in a sunk trough set into the card, as the mock draws it: the card is the stage, the timeline a place you look into.
-        var trough = new Border { Name = "TimelineTrough", Child = timelineHost, CornerRadius = new CornerRadius(14), Margin = new Thickness(14, 0, 14, 0), ClipToBounds = true }; trough.Classes.Add("trough");
+        // The left and right edges are the display's lip: they cast a soft shadow over the day, so it reads as lying below them. Room above the hour labels keeps them off the top edge.
+        var lip = new Grid(); lip.Children.Add(timelineHost);
+        Border LipShadow(bool left)
+        {
+            var edge = new Border { Width = 18, IsHitTestVisible = false, HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right, Name = left ? "TimelineLipLeft" : "TimelineLipRight" };
+            void Paint()
+            {
+                var ink = Ui.ThemeColour(edge, "ShadowColor", Colors.Black); var dark = edge.ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark;
+                var strong = Color.FromArgb((byte)(dark ? 130 : 60), ink.R, ink.G, ink.B); var none = Color.FromArgb(0, ink.R, ink.G, ink.B);
+                edge.Background = new LinearGradientBrush { StartPoint = new RelativePoint(left ? 0 : 1, .5, RelativeUnit.Relative), EndPoint = new RelativePoint(left ? 1 : 0, .5, RelativeUnit.Relative), GradientStops = { new GradientStop(strong, 0), new GradientStop(none, 1) } };
+            }
+            edge.ActualThemeVariantChanged += (_, _) => Paint(); edge.AttachedToVisualTree += (_, _) => Paint();
+            return edge;
+        }
+        lip.Children.Add(LipShadow(true)); lip.Children.Add(LipShadow(false));
+        var trough = new Border { Name = "TimelineTrough", Child = lip, CornerRadius = new CornerRadius(14), Margin = new Thickness(14, 0, 14, 0), Padding = new Thickness(0, 6, 0, 0), ClipToBounds = true }; trough.Classes.Add("trough");
         var cardGrid = Ui.Grid("*", "Auto,Auto"); Ui.Put(cardGrid, trough); Ui.Put(cardGrid, tools, 0, 1);
         timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(0, 14, 0, 12), VerticalAlignment = VerticalAlignment.Top };
         timelineCard.Classes.Add("dayCard");

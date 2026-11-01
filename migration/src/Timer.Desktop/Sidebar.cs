@@ -42,9 +42,7 @@ public sealed class Sidebar : Border
         QuitButton.PointerEntered += (_, _) => quitGlyph.TintKey = "Finish"; QuitButton.PointerExited += (_, _) => quitGlyph.TintKey = null;
         Avalonia.Automation.AutomationProperties.SetName(QuitButton, "Quit timer");
         var foot = new Grid { Margin = new Thickness(0, 8, 0, 0) }; foot.Children.Add(QuitButton);
-        var rule = Ui.Rule(); rule.Margin = new Thickness(4, 6, 4, 0);
-        var footColumn = new StackPanel { Children = { rule, foot } };
-        Ui.Put(grid, footColumn, 0, 3);
+        Ui.Put(grid, foot, 0, 3);
         Child = grid;
         Refresh(model);
     }

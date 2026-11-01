@@ -1,4 +1,7 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -67,6 +70,25 @@ public sealed class DeleteAccountTests
             Assert.DoesNotContain(store.Load(new TrackingEngine()).Accounts, a => a.Name == "Account one"); // And it stays gone after a restart.
         }
         finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
+    }
+
+    [AvaloniaFact]
+    public void DraggingARowsGripReordersTheAccountsAndSaveKeepsTheOrder()
+    {
+        var model = Model(); var window = new AccountsDialog(model).Open(model);
+        try
+        {
+            Settle(window);
+            var grip = Find<Border>(window, "AccountGrip0"); var last = Find<Border>(window, "AccountGrip2");
+            var host = (Window)TopLevel.GetTopLevel(window)!;
+            var from = grip.TranslatePoint(new Point(grip.Bounds.Width / 2, grip.Bounds.Height / 2), host)!.Value;
+            var to = last.TranslatePoint(new Point(grip.Bounds.Width / 2, last.Bounds.Height * 1.2), host)!.Value;
+            host.MouseDown(from, MouseButton.Left); for (var step = 1; step <= 4; step++) { host.MouseMove(new Point(from.X, from.Y + (to.Y - from.Y) * step / 4)); Settle(window); } host.MouseUp(to, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Press(window, "SaveAccounts");
+            Assert.Equal(new[] { "Account two", "Internal", "Account one" }, model.AccountSettings.Select(a => a.Name).ToArray());
+        }
+        finally { window.Close(); }
     }
 
     [AvaloniaFact]

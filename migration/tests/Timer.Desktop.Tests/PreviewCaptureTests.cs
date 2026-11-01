@@ -11,6 +11,16 @@ namespace Timer.Desktop.Tests;
 public sealed class PreviewCaptureTests
 {
     [AvaloniaFact]
+    public void WriteAccountsDialog()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        var model = TimerModel.CreateDemo(); var dialog = new AccountsDialog(model); dialog.Open(model); var window = (Window)TopLevel.GetTopLevel(dialog)!;
+        try { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, "accounts-dialog.png")); }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void WriteRailIcons()
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
