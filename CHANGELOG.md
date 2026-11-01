@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Pill-first startup preparation | [4be0eca](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/4be0eca) | Default to snapshot transitions, remove the comparison switch, defer dashboard construction until after the first pill callback, preserve cold-start UI requests, and add managed startup milestones and phase timings. |
 | First-frame transition alignment | [06ead75](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/06ead75) | Use consistent capture scaling for the pill and arrange dashboard snapshots before exposure, with immediate-bounds and pill raster regression checks. |
 | Snapshot fidelity and collapse handoff | [129d716](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/129d716) | Rasterize at a single explicit scale, isolate the snapshot from layout, add rendered-image scale comparisons, and time collapse handoff phases. |
 | Snapshot transition comparison | [8ae32fa](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/8ae32fa) | Add a Development switch between live and snapshot transitions, capture/update costs, layout counts and UI-dispatcher delay measurements. |
