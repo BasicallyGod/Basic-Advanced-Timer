@@ -10,6 +10,7 @@ public static class PerformanceTimings
     public static IDisposable Measure(string operation) => new Measurement(operation);
     public static void Record(string operation, double milliseconds)
     {
+        TransitionTimings.Operation(operation, milliseconds);
         lock (gate)
         {
             if (!samples.ContainsKey(operation) && samples.Count >= 32) return;

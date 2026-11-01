@@ -9,6 +9,85 @@ namespace Timer.Desktop.Tests;
 public sealed class AnimationSchedulingTests
 {
     [Fact]
+    public void DiagnosticsDistinguishNativeCallbacksFromWatchdogAndKeepActualElapsedTime()
+    {
+        var frames = new Queue<Action<TimeSpan>>(); double now = 0;
+        var pump = new AnimationFramePump(frames.Enqueue, () => now);
+        var samples = new List<(double, bool)>();
+        pump.Start(280, _ => { }, () => { }, (elapsed, fallback) => samples.Add((elapsed, fallback)));
+        now = 16; frames.Dequeue()(default);
+        now = 100; pump.Watchdog();
+        now = 310; frames.Dequeue()(default);
+        Assert.Equal(new[] { (16d, false), (100d, true), (310d, false) }, samples);
+        Assert.Empty(frames);
+    }
+
+    [Fact]
+    public void TransitionReportIncludesOperationOverlapAndSeparatesCallbackSources()
+    {
+        var trace = TransitionTimings.Begin("diagnostic-test");
+        trace.Sample(10, false); trace.Sample(70, true); trace.Sample(90, false);
+        PerformanceTimings.Record("workspace rebuild", 25);
+        PerformanceTimings.Record("save", 4);
+        trace.Finish("completed"); trace.Finish("cancelled");
+        var line = TransitionTimings.Report().Split(Environment.NewLine).Last();
+        Assert.Contains("diagnostic-test completed", line);
+        Assert.Contains("native 2, watchdog 1", line);
+        Assert.Contains("workspace rebuild 1 / 25.0 ms", line);
+        Assert.Contains("save 1 / 4.0 ms", line);
+        Assert.Contains("worst 80.0 ms", line);
+    }
+
+    [AvaloniaFact]
+    public void HistoricalWeekIsReusedButCurrentWeekRefreshesOnCheckpoint()
+    {
+        var now = new DateTime(2026, 11, 2, 14, 15, 0);
+        var model = TimerModel.CreateDemo(() => now); model.CompleteSetup();
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekOverviewTab")
+                .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            // The non-timeline workspace is the content host whose child is the rendered week.
+            var host = window.GetVisualDescendants().OfType<ContentControl>()
+                .Single(c => c.GetType() == typeof(ContentControl) && c.Content is Control && c.Name != "TimelineHost");
+            model.GoToDate(model.Engine.Now.AddDays(-7)); var previous = host.Content;
+            for (var i = 0; i < 15; i++) { now = now.AddSeconds(1); model.Tick(); }
+            Assert.Same(previous, host.Content);
+            model.ShowToday(); previous = host.Content;
+            for (var i = 0; i < 15; i++) { now = now.AddSeconds(1); model.Tick(); }
+            Assert.NotSame(previous, host.Content);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void IdleCheckpointsReuseTimelineAndTotalsBarButTrackingStillRefreshesGeometry()
+    {
+        var now = new DateTime(2026, 11, 2, 14, 15, 0);
+        var model = TimerModel.CreateDemo(() => now); model.CompleteSetup();
+        if (model.IsTracking) model.TogglePause();
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            var host = window.GetVisualDescendants().OfType<ContentControl>().Single(c => c.Name == "TimelineHost");
+            var bar = window.GetVisualDescendants().OfType<Border>().Single(c => c.Name == "DayBar");
+            var timeline = host.Content; var parts = bar.Child;
+            for (var i = 0; i < 15; i++) { now = now.AddSeconds(1); model.Tick(); }
+            Assert.Same(timeline, host.Content); Assert.Same(parts, bar.Child);
+            model.SetPillScale(90); Assert.Same(timeline, host.Content);
+            model.ToggleAccount("Account one"); timeline = host.Content;
+            for (var i = 0; i < 15; i++) { now = now.AddSeconds(1); model.Tick(); }
+            Assert.NotSame(timeline, host.Content); Assert.Same(parts, bar.Child);
+            model.GoToDate(model.Engine.Now.AddDays(-2)); timeline = host.Content;
+            for (var i = 0; i < 15; i++) { now = now.AddSeconds(1); model.Tick(); }
+            Assert.Same(timeline, host.Content);
+            model.SetDecimalHours(true); Assert.NotSame(timeline, host.Content);
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
     public void WatchdogRecoversWithoutMultiplyingPendingFramesAndCompletesOnce()
     {
         var frames = new Queue<Action<TimeSpan>>(); double now = 0;

@@ -39,6 +39,7 @@ public sealed class WindowCoordinator
         // The dashboard grows out of the pill's card (see WindowMorph) and shrinks back into a pill at the sidebar's top left.
         Pill.OpenDashboard = () =>
         {
+            Dashboard.PrepareMorph(false);
             using var preparation = PerformanceTimings.Measure("expand preparation");
             EndWarm(false);
             model.ShowToday();
@@ -54,6 +55,7 @@ public sealed class WindowCoordinator
         Dashboard.OpenPill = () =>
         {
             if (Dashboard.Morphing) return;
+            Dashboard.PrepareMorph(true);
             using var preparation = PerformanceTimings.Measure("collapse preparation");
             var visibility = ++visibilityRun;
             Dashboard.CloseFlyouts(); Pill.CloseFlyouts();
@@ -495,6 +497,7 @@ public sealed class DashboardWindow : Window
     private Avalonia.Animation.Transitions? shadowFade;
     private double morph = 1, morphRadius = WindowMorph.DashboardRadius; private Rect morphFrom;
     private AnimationFramePump? morphPump;
+    private TransitionTimings.Transition? transitionTiming;
     private Avalonia.Threading.DispatcherTimer? morphWatchdog;
     private bool dashboardReady, refreshPending, workspacePending;
     /// <summary>How far the dashboard has grown from the pill, 0 (the pill's card) to 1 (the whole window).</summary>
@@ -528,8 +531,9 @@ public sealed class DashboardWindow : Window
     }
     private void StartMorph(double from, double to, bool closing, Action? done)
     {
-        CancelMorph();
-        if (!WindowMorph.Enabled || Motion.Reduced) { SetMorph(to); done?.Invoke(); FlushRefresh(); return; }
+        morphPump?.Stop(); morphWatchdog?.Stop();
+        transitionTiming ??= TransitionTimings.Begin(closing ? "collapse" : "expand");
+        if (!WindowMorph.Enabled || Motion.Reduced) { SetMorph(to); CompleteMorph(done, "instant"); return; }
         SetMorph(from);
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
         var previous = 0d;
@@ -551,16 +555,28 @@ public sealed class DashboardWindow : Window
             morphWatchdog.Stop();
             SetMorph(to);
             PerformanceTimings.Record(direction + " total", System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
-            done?.Invoke();
-            FlushRefresh();
-        });
+            CompleteMorph(done, "completed");
+        }, (elapsed, watchdog) => transitionTiming?.Sample(elapsed, watchdog));
         morphWatchdog.Start();
         layers.IsHitTestVisible = false;
     }
     private void CancelMorph()
     {
         morphPump?.Stop(); morphWatchdog?.Stop();
+        transitionTiming?.Finish("cancelled"); transitionTiming = null;
         SetMorph(1);
+    }
+    public void PrepareMorph(bool closing)
+    {
+        CancelMorph();
+        transitionTiming = TransitionTimings.Begin(closing ? "collapse" : "expand");
+    }
+    private void CompleteMorph(Action? done, string outcome)
+    {
+        var timing = transitionTiming; transitionTiming = null;
+        done?.Invoke();
+        FlushRefresh();
+        timing?.Finish(outcome);
     }
     private void FlushRefresh()
     {
@@ -626,6 +642,9 @@ public sealed class DashboardWindow : Window
         return strip;
     }
     // The bar is the scheduled day, its hours less the break allowance: time on accounts solid, working time with nothing on an account hatched. A day off has no bar.
+    private Grid? totalsBarGrid;
+    private Border? totalsBarStripes;
+    private string? totalsBarColour;
     private void UpdateTotals()
     {
         var shown = model.SelectedDate.Date;
@@ -648,15 +667,20 @@ public sealed class DashboardWindow : Window
             var whole = Math.Max(scheduled.TotalSeconds, working.TotalSeconds);
             var allocatedPart = Math.Min(totals.Allocated.TotalSeconds, working.TotalSeconds);
             var unallocatedPart = Math.Max(0, working.TotalSeconds - allocatedPart);
-            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{allocatedPart:0.###}*,{unallocatedPart:0.###}*,{Math.Max(0, whole - allocatedPart - unallocatedPart):0.###}*") };
-            Border Part(string key, int column, bool hatched = false)
+            if (totalsBarGrid is null)
             {
-                var part = new Border { Name = "DayBar" + key, [Grid.ColumnProperty] = column };
-                if (hatched) { part.Background = ReviewViews.Stripes(model); part.Opacity = .7; } else part.Classes.Add("bar" + key);
-                return part;
+                totalsBarGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*") };
+                var allocated = new Border { Name = "DayBarAllocated" }; allocated.Classes.Add("barAllocated");
+                totalsBarStripes = new Border { Name = "DayBarUnallocated", Opacity = .7, [Grid.ColumnProperty] = 1 };
+                totalsBarGrid.Children.Add(allocated); totalsBarGrid.Children.Add(totalsBarStripes);
             }
-            grid.Children.Add(Part("Allocated", 0)); grid.Children.Add(Part("Unallocated", 1, true));
-            dayBar.Child = grid; dayBar.Classes.Add("track");
+            totalsBarGrid.ColumnDefinitions[0].Width = new GridLength(allocatedPart, GridUnitType.Star);
+            totalsBarGrid.ColumnDefinitions[1].Width = new GridLength(unallocatedPart, GridUnitType.Star);
+            totalsBarGrid.ColumnDefinitions[2].Width = new GridLength(Math.Max(0, whole - allocatedPart - unallocatedPart), GridUnitType.Star);
+            var colour = model.CurrentTheme.Colour("Muted");
+            if (totalsBarColour != colour) { totalsBarStripes!.Background = ReviewViews.Stripes(model); totalsBarColour = colour; }
+            if (!ReferenceEquals(dayBar.Child, totalsBarGrid)) dayBar.Child = totalsBarGrid;
+            dayBar.Classes.Add("track");
             ToolTip.SetTip(dayBar, (scheduled > TimeSpan.Zero ? $"Scheduled {model.Format(scheduled)} ({plan.Start:HH:mm}–{plan.End:HH:mm}" + (model.BreakAllowance > TimeSpan.Zero ? $" less {model.Format(model.BreakAllowance)} break" : "") + ")" : "No schedule") + $"\nAllocated {model.Format(totals.Allocated)} · Unallocated {model.Format(model.UnallocatedOn(shown))} · Breaks {model.Format(breaks)}");
             Avalonia.Automation.AutomationProperties.SetName(dayBar, $"The scheduled day, {model.Format(working)} worked");
         }
@@ -737,7 +761,18 @@ public sealed class DashboardWindow : Window
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
     // The Notes page is built once and kept: it listens to the model itself, so coming back to it finds the search and the form as they were.
     private NotesPage NotesPageInstance() { if (notesPage is null) notesPage = new NotesPage(model) { Query = searchBox.Text ?? "" }; return notesPage; }
-    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
+    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        var rebuild = e.PropertyName is not (nameof(TimerModel.Elapsed) or TimerModel.PresentationChange);
+        if (e.PropertyName == TimerModel.CheckpointChange)
+        {
+            // The marker moves independently. Only a running block changes today's timeline geometry;
+            // current-week totals still change while idle, whereas an earlier week's data does not.
+            rebuild = weekMode ? model.WeekStart(model.SelectedDate) == model.WeekStart(model.Engine.Now)
+                : model.Engine.Active is not null && model.SelectedDate.Date == model.Engine.Now.Date;
+        }
+        Refresh(rebuild);
+    }
     private void Refresh(bool refreshWorkspace)
     {
         if (dashboardReady && (!IsVisible || morphPump?.Running == true))

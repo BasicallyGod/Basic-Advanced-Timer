@@ -79,7 +79,7 @@ public sealed class FrameMonitor
     {
         // The pages visited since the monitor started, each with the figures it had when it was left (a page's figures start again on arriving), then this page's own.
         var lines = remembered.Where(r => r.Key != Page).Select(r => r.Value).Append(Line());
-        return string.Join(Environment.NewLine, lines.Append(PerformanceTimings.Report()));
+        return string.Join(Environment.NewLine, lines.Append(PerformanceTimings.Report()).Append(TransitionTimings.Report()));
     }
     private readonly Dictionary<string, string> remembered = new();
     /// <summary>Keeps the figures of the page being left, if there are enough frames to mean anything, so Copy report in Settings can still give the Timeline's.</summary>
