@@ -19,7 +19,7 @@ public static class TransitionTimings
     }
     public static void Operation(string operation, double ms)
     {
-        if (operation is not ("save" or "workspace rebuild" or "expand preparation" or "collapse preparation" or "dashboard capture" or "animation update")) return;
+        if (operation is not ("save" or "workspace rebuild" or "expand preparation" or "collapse preparation" or "dashboard capture" or "animation update" or "snapshot release" or "deferred refresh" or "pill show" or "dashboard hide" or "pill activate")) return;
         lock (gate)
         {
             if (active is null || active.OwnerThread != Environment.CurrentManagedThreadId) return;
