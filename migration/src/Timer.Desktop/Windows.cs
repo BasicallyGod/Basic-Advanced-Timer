@@ -37,6 +37,7 @@ public sealed class WindowCoordinator
         // The dashboard grows out of the pill's card (see WindowMorph) and shrinks back into a pill at the sidebar's top left.
         Pill.OpenDashboard = () =>
         {
+            EndWarm(false);
             model.ShowToday();
             Pill.CloseFlyouts(); // So it is a capsule again when you come back.
             var picture = WindowMorph.Capture(Pill);
@@ -76,6 +77,7 @@ public sealed class WindowCoordinator
         // as the pill is up, leaves the grow animation only drawing. Headless tests and any failure just skip it.
         Pill.Opened += WarmDashboard;
     }
+    private bool warming; private double warmOpacity = 1;
     private void WarmDashboard(object? sender, EventArgs e)
     {
         Pill.Opened -= WarmDashboard;
@@ -83,20 +85,24 @@ public sealed class WindowCoordinator
         {
             try
             {
-                if (Dashboard.IsVisible || Pill.IsPointerOver || Motion.Reduced) return;
+                if (Dashboard.IsVisible || Motion.Reduced) return;
                 // Shown once, fully see-through, far off screen and not in the taskbar, for a few frames: its native window, its drawing surface and every shadow and
                 // control are built then, so the first grow from the pill only has to draw. Hidden again at once, so nobody sees it.
-                var opacity = Dashboard.Opacity;
+                warming = true; warmOpacity = Dashboard.Opacity;
                 Dashboard.Opacity = 0; Dashboard.ShowActivated = false; Dashboard.ShowInTaskbar = false; Dashboard.Position = new PixelPoint(-32000, -32000);
                 Dashboard.Show();
-                Avalonia.Threading.DispatcherTimer.RunOnce(() =>
-                {
-                    try { Dashboard.Hide(); }
-                    finally { Dashboard.Opacity = opacity; Dashboard.ShowActivated = true; ApplyTaskbar(); }
-                }, TimeSpan.FromMilliseconds(500));
+                Avalonia.Threading.DispatcherTimer.RunOnce(() => EndWarm(true), TimeSpan.FromMilliseconds(500));
             }
-            catch (Exception) { /* Only a warm-up. */ }
+            catch (Exception) { warming = false; /* Only a warm-up. */ }
         }, TimeSpan.FromMilliseconds(800));
+    }
+    // Ends the warm-up: the window is made ordinary again, and hidden unless somebody asked for the dashboard in the meantime.
+    private void EndWarm(bool hide)
+    {
+        if (!warming) return;
+        warming = false;
+        try { if (hide) Dashboard.Hide(); }
+        finally { Dashboard.Opacity = warmOpacity; Dashboard.ShowActivated = true; ApplyTaskbar(); }
     }
     /// <summary>
     /// Opens the dashboard the first time the pill is shown, which is where the getting started setup waits. It must happen once only: the pill raises
@@ -153,6 +159,7 @@ public sealed class WindowCoordinator
     }
     public void ShowDashboard()
     {
+        EndWarm(false);
         if (!Dashboard.IsVisible) { model.ShowToday(); if (!Pill.IsVisible) Pill.FitToScreen(Pill.Screens.ScreenFromWindow(Pill) ?? Pill.Screens.Primary); PlaceByCard(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin, 1); Dashboard.Show(); }
         Pill.CloseFlyouts(); Pill.Hide(); BringToFront(Dashboard);
         RescueOffScreen();
