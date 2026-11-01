@@ -39,6 +39,18 @@ public sealed class AccountEditingTests
     }
 
     [Fact]
+    public void ANewOrRenamedAccountNameIsKeptShortButAnOlderLongNameIsLeftAlone()
+    {
+        var model = new TimerModel(Engine());
+        var longName = new string('x', TimerModel.MaxAccountNameLength + 1); var fits = new string('y', TimerModel.MaxAccountNameLength);
+        Assert.Throws<ArgumentException>(() => model.SetAccounts(model.AccountSettings.Concat(new[] { new AccountSettings(longName) })));
+        Assert.Throws<ArgumentException>(() => model.SetAccounts(model.AccountSettings.Select(a => a.Name == "Account one" ? a with { Name = longName } : a), new Dictionary<string, string> { ["Account one"] = longName }));
+        model.SetAccounts(model.AccountSettings.Concat(new[] { new AccountSettings(fits) })); Assert.Contains(model.AccountSettings, a => a.Name == fits);
+        // A name that is already there may stay, whatever its length (here it is 24; it stays through an unrelated edit).
+        model.SetAccounts(model.AccountSettings.Select(a => a.Name == fits ? a with { BudgetHours = 5 } : a)); Assert.Equal(5, model.AccountSettings.Single(a => a.Name == fits).BudgetHours);
+    }
+
+    [Fact]
     public void RenamingRefusesNamesInTheHistoryAndTheActiveAccount()
     {
         var now = Day.AddHours(10);

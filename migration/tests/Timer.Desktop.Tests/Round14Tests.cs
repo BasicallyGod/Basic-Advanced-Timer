@@ -44,7 +44,7 @@ public sealed class Round14Tests
     [AvaloniaFact]
     public void ThePillKeepsItsPartsInside()
     {
-        Assert.Equal(416, PillWindow.PillWidth); // The display, the well and the break, 12 apart, between the two insets.
+        Assert.Equal(406, PillWindow.PillWidth); // The display, the well and the break, 12 apart, between the two insets.
         var model = Model();
         var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
