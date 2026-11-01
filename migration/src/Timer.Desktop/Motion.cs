@@ -24,9 +24,10 @@ public static class Motion
             if (forced is { } answer) return answer;
             if (!OperatingSystem.IsWindows()) return false;
             var now = Environment.TickCount64;
-            if (now - checkedAt < 3000) return lastKnown;
-            checkedAt = now;
+            if (checkedAt != long.MinValue && now >= checkedAt && now - checkedAt < 3000) return lastKnown;
             try { lastKnown = SystemParametersInfo(GetClientAreaAnimation, 0, out var on, 0) && !on; } catch { lastKnown = false; }
+            // Publish the cache timestamp only after the corresponding value is available.
+            checkedAt = now;
             return lastKnown;
         }
     }

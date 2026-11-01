@@ -51,6 +51,7 @@ public sealed class PillTests
     [AvaloniaFact]
     public void TheLightCirclePauseAndMugFollowTheState()
     {
+        using var motion = new EnabledMotionScope();
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {

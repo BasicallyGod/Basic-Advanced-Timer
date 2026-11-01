@@ -431,6 +431,7 @@ Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(
     [AvaloniaFact]
     public void TheBreakCupSteamsUnderThePointerAndStaysSteamingThroughAModelUpdate()
     {
+        using var motion = new EnabledMotionScope();
         var now = new DateTime(2026, 10, 9, 7, 0, 0);
         var model = TimerModel.CreateDemo(() => now); var dashboard = new DashboardWindow(model); dashboard.Show();
         try
