@@ -37,6 +37,7 @@ public static partial class ReviewViews
         public StackLines(IReadOnlyList<Line> lines, double top, double room, int rows, Color outline) { this.lines = lines; this.top = top; this.room = room; this.rows = Math.Max(1, rows); this.outline = outline; IsHitTestVisible = false; }
         public override void Render(DrawingContext context)
         {
+        FrameMonitor.Bump("draw Line");
             var scale = this.GetVisualRoot()?.RenderScaling ?? 1.0;
             var roomPixels = Math.Floor(room * scale);
             var pitch = Math.Max(1, Math.Min(Math.Floor(roomPixels / rows), Math.Round(8 * scale)));

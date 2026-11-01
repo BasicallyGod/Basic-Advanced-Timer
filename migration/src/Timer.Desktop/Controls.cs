@@ -398,6 +398,7 @@ public sealed class AccountIndicator : Control
     private double Scale = 1;
     public override void Render(DrawingContext context)
     {
+        FrameMonitor.Bump("draw AccountIndicator");
         base.Render(context);
         var running = model.ActiveAccount == Account.Name;
         // The row's play key is a small round key, as the mock draws it: raised off the row, a step lighter under the pointer, and sunk with the symbol in green while it records.
@@ -498,6 +499,7 @@ public sealed class BudgetBar : Control
     private IBrush Resource(string key) => this.TryFindResource(key, ActualThemeVariant, out var value) && value is IBrush brush ? brush : Brushes.Gray;
     public override void Render(DrawingContext context)
     {
+        FrameMonitor.Bump("draw BudgetBar");
         var width = Bounds.Width; var top = 2.0; var height = 6.0;
         context.DrawRectangle(Resource("Line"), null, new Rect(0, top, width, height), 3, 3);
         var fill = Math.Clamp(Ratio, 0, 1) * width;
@@ -553,7 +555,7 @@ public sealed class MarqueeText : Border
         timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         timer.Tick += (_, _) =>
         {
-            var now = DateTime.UtcNow; var seconds = Math.Min(.1, (now - last).TotalSeconds); last = now;
+            FrameMonitor.Bump("name sliding"); var now = DateTime.UtcNow; var seconds = Math.Min(.1, (now - last).TotalSeconds); last = now;
             if (hold > 0) { hold -= seconds; return; }
             offset = Math.Min(distance, offset + 28 * seconds);
             text.RenderTransform = new Avalonia.Media.TranslateTransform(-offset, 0);
@@ -809,6 +811,7 @@ public sealed class Chevron : Control
     }
     public override void Render(DrawingContext context)
     {
+        FrameMonitor.Bump("draw Chevron");
         var brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
         var pen = new Pen(brush, IconGlyph.StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         var y = Expanded ? 9 : 5;
@@ -839,6 +842,7 @@ public sealed class PauseGlyph : Control
     }
     public override void Render(DrawingContext context)
     {
+        FrameMonitor.Bump("draw PauseGlyph");
         var glow = Math.Clamp(Glow, 0, 1);
         using var grow = context.PushTransform(Matrix.CreateTranslation(-7, -7) * Matrix.CreateScale(1 + .08 * glow, 1 + .08 * glow) * Matrix.CreateTranslation(7, 7));
         var normal = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
@@ -924,6 +928,7 @@ public sealed class BreakGlyph : Control
     }
     public override void Render(DrawingContext context)
     {
+        FrameMonitor.Bump("draw BreakGlyph");
         IBrush? brush = null;
         var key = Mono ? (Hot ? HotKey : "Ink") : "Break";
         if (Fixed is not null) brush = Fixed; else if (Filled) brush = Brushes.White; else if (this.TryFindResource(key, ActualThemeVariant, out var value)) brush = value as IBrush;
@@ -1077,6 +1082,7 @@ public sealed class IconGlyph : Control
     public string ColourKey => TintKey ?? (this.FindAncestorOfType<Button>() is { } host && host.Classes.Contains("primary") ? "AccentInk" : "Ink");
     public override void Render(DrawingContext context)
     {
+        FrameMonitor.Bump("draw IconGlyph");
         IBrush brush = this.TryFindResource(ColourKey, ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;
         var pen = new Pen(brush, StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         var hover = Math.Clamp(Hover, 0, 1);

@@ -33,17 +33,28 @@ public sealed class FrameMonitor
 
     public void Start(TopLevel window)
     {
-        Stop(); Reset(); ForgetPages(); level = window;
+        Stop(); Reset(); ForgetPages(); level = window; layoutWatch = (_, _) => Bump("layout passes"); window.LayoutUpdated += layoutWatch; watched = window;
         window.RequestAnimationFrame(OnFrame);
         tick = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) }; tick.Tick += (_, _) => Changed?.Invoke(); tick.Start();
         Changed?.Invoke();
     }
     public void Stop()
     {
-        var was = Running; level = null; tick?.Stop(); tick = null; haveLast = false;
+        var was = Running; if (watched is not null && layoutWatch is not null) watched.LayoutUpdated -= layoutWatch; watched = null; level = null; tick?.Stop(); tick = null; haveLast = false;
         if (was) Changed?.Invoke();
     }
-    public void Reset() { count = 0; next = 0; haveLast = false; }
+    private EventHandler? layoutWatch; private TopLevel? watched;
+    public void Reset() { count = 0; next = 0; haveLast = false; counters.Clear(); sinceReset.Restart(); }
+    // What happened on the page while the frames were taken: how often things were laid out, changed and drawn, per second. A page that is quietly redrawing or
+    // laying out something every frame shows up here against one that is not.
+    private readonly Dictionary<string, int> counters = new(); private readonly System.Diagnostics.Stopwatch sinceReset = System.Diagnostics.Stopwatch.StartNew();
+    /// <summary>Counts one occurrence of <paramref name="what"/> while the monitor runs (nothing otherwise).</summary>
+    public static void Bump(string what) { var m = Instance; if (m.level is null) return; m.counters[what] = m.counters.GetValueOrDefault(what) + 1; }
+    private string Rates()
+    {
+        var seconds = Math.Max(1, sinceReset.Elapsed.TotalSeconds);
+        return counters.Count == 0 ? "" : " · per second: " + string.Join(", ", counters.OrderByDescending(c => c.Value).Select(c => $"{c.Key} {c.Value / seconds:0.#}"));
+    }
     /// <summary>Forgets the pages kept from before (a new run of the monitor starts clean).</summary>
     public void ForgetPages() => remembered.Clear();
     private void OnFrame(TimeSpan now)
@@ -79,7 +90,7 @@ public sealed class FrameMonitor
         // How the frames spread, so a steady 20 ms pace can be told from a smooth run with a few long stalls.
         var spread = $"{all.Length} frames: {all.Count(g => g <= 17.5)} up to 17.5 ms, {all.Count(g => g > 17.5 && g <= 20)} to 20, {all.Count(g => g > 20 && g <= 25)} to 25, {all.Count(g => g > 25 && g <= 33)} to 33, {all.Count(g => g > 33)} over 33";
         var modes = (ThemeEngine.FlatShadows ? " [flat: no raised or sunk shadows]" : "") + (TimerModel.TickPaused ? " [1 s refresh paused]" : "");
-        return $"{DateTime.Now:yyyy-MM-dd HH:mm} · {Page} · {BuildInfo.Current}{modes} · {Snapshot()} · {spread}";
+        return $"{DateTime.Now:yyyy-MM-dd HH:mm} · {Page} · {BuildInfo.Current}{modes} · {Snapshot()} · {spread}{Rates()}";
     }
     /// <summary>The page the figures were taken on, kept by the readout; the figures start again when it changes, so each report is for one page.</summary>
     public string Page { get; set; } = "";

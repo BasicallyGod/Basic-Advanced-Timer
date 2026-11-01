@@ -71,4 +71,19 @@ public sealed class FrameMonitorTests
         Assert.Contains("Settings", report[1]); Assert.Contains("40 frames: 40 up to 17.5 ms", report[1]);
         monitor.ForgetPages(); Assert.Single(monitor.Report().Split(Environment.NewLine));
     }
+
+    [AvaloniaFact]
+    public void WhatHappenedOnThePageIsCountedPerSecondWhileTheMonitorRuns()
+    {
+        FrameMonitor.Bump("before"); // Nothing counts while it is off.
+        var window = new Window(); window.Show();
+        try
+        {
+            FrameMonitor.Instance.Start(window); FrameMonitor.Instance.Page = "Probe";
+            FrameMonitor.Bump("model changes"); FrameMonitor.Bump("model changes");
+            var report = FrameMonitor.Instance.Report();
+            Assert.Contains("per second: model changes", report); Assert.DoesNotContain("before", report);
+        }
+        finally { FrameMonitor.Instance.Stop(); window.Close(); }
+    }
 }
