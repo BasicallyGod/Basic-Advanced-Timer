@@ -987,6 +987,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (closed || TickPaused) return;
         ticks++;
+        FrameMonitor.Bump("clock ticks");
         FollowToday();
         Notes.MakeSeriesNotes(); // A repeating meeting's next days are made as time goes on.
         if (ticks % 60 == 0) Notes.RetryUnsaved();
@@ -1052,5 +1053,5 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>True while a reminder is due (its time has passed and it is not ticked off), which lights the blue light on the pill and the rail.</summary>
     public bool ReminderDue => Notes.AttentionCount > 0;
-    private void Notify() { ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
+    private void Notify() { FrameMonitor.Bump("model changes"); ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
 }
