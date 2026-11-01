@@ -66,10 +66,21 @@ public sealed class FrameMonitorTests
         var monitor = new FrameMonitor();
         monitor.Page = "Timeline"; for (var i = 0; i < 40; i++) monitor.Record(20);
         monitor.Remember(); monitor.Reset(); monitor.Page = "Settings"; for (var i = 0; i < 40; i++) monitor.Record(16.7);
-        var report = monitor.Report().Split(Environment.NewLine);
+        var report = monitor.Report().Split(Environment.NewLine).TakeWhile(line => !line.StartsWith("Passive timings")).ToArray();
         Assert.Equal(2, report.Length); Assert.Contains("Timeline", report[0]); Assert.Contains("40 frames: 0 up to 17.5 ms, 40 to 20", report[0]);
         Assert.Contains("Settings", report[1]); Assert.Contains("40 frames: 40 up to 17.5 ms", report[1]);
-        monitor.ForgetPages(); Assert.Single(monitor.Report().Split(Environment.NewLine));
+        monitor.ForgetPages(); Assert.Single(monitor.Report().Split(Environment.NewLine).TakeWhile(line => !line.StartsWith("Passive timings")));
+    }
+
+    [Fact]
+    public void PassiveOperationTimingsAreAvailableWithoutStartingFrameMonitoring()
+    {
+        var monitor = new FrameMonitor();
+        PerformanceTimings.Record("test operation", 12.5);
+        Assert.False(monitor.Running);
+        Assert.Contains("Passive timings since launch", monitor.Report());
+        Assert.Contains("test operation:", monitor.Report());
+        Assert.Contains("last 12.5 ms", monitor.Report());
     }
 
     [AvaloniaFact]
