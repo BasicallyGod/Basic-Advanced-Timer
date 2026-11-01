@@ -212,7 +212,7 @@
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
     <!-- The dashboard's account rows are soft rounded cards. The recording account's card takes a gentle tint of the tracking colour. -->
-    <Style Selector="Button.accountCard"><Setter Property="CornerRadius" Value="14" /><Setter Property="Padding" Value="4,4" /><Setter Property="BorderThickness" Value="0" /></Style>
+    <Style Selector="Button.accountCard"><Setter Property="CornerRadius" Value="14" /><Setter Property="Padding" Value="12,4,8,4" /><Setter Property="BorderThickness" Value="0" /></Style>
     <Style Selector="Button.accountCard /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
     <Style Selector="Button.accountCard:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource KeyHover}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKey}" /></Style>
     <!-- The account that is recording is sunk, with a gentle green wash: a key that is on. -->
