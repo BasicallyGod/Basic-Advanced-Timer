@@ -89,8 +89,9 @@ public sealed class FrameMonitor
         var all = gaps.Take(count).ToArray();
         // How the frames spread, so a steady 20 ms pace can be told from a smooth run with a few long stalls.
         var spread = $"{all.Length} frames: {all.Count(g => g <= 17.5)} up to 17.5 ms, {all.Count(g => g > 17.5 && g <= 20)} to 20, {all.Count(g => g > 20 && g <= 25)} to 25, {all.Count(g => g > 25 && g <= 33)} to 33, {all.Count(g => g > 33)} over 33";
-        var modes = (ThemeEngine.FlatShadows ? " [flat: no raised or sunk shadows]" : "") + (TimerModel.TickPaused ? " [1 s refresh paused]" : "");
-        return $"{DateTime.Now:yyyy-MM-dd HH:mm} · {Page} · {BuildInfo.Current}{modes} · {Snapshot()} · {spread}{Rates()}";
+        var modes = (ThemeEngine.FlatShadows ? " [flat: no raised or sunk shadows]" : "") + (TimerModel.TickPaused ? " [1 s refresh paused]" : "") + (TimerResolution.Requested ? " [1 ms timer requested]" : "");
+        var tick = TimerResolution.CurrentMilliseconds is { } resolution ? $" · system timer tick {resolution:0.0} ms" : "";
+        return $"{DateTime.Now:yyyy-MM-dd HH:mm} · {Page} · {BuildInfo.Current}{modes} · {Snapshot()} · {spread}{Rates()}{tick}";
     }
     /// <summary>The page the figures were taken on, kept by the readout; the figures start again when it changes, so each report is for one page.</summary>
     public string Page { get; set; } = "";

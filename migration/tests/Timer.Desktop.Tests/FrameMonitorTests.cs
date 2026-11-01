@@ -86,4 +86,12 @@ public sealed class FrameMonitorTests
         }
         finally { FrameMonitor.Instance.Stop(); window.Close(); }
     }
+
+    [Fact]
+    public void TheTimerTickIsReadOnWindowsAndLeftAloneElsewhere()
+    {
+        var tick = TimerResolution.CurrentMilliseconds;
+        if (OperatingSystem.IsWindows()) { Assert.NotNull(tick); Assert.InRange(tick!.Value, 0.4, 20); }
+        else { Assert.Null(tick); TimerResolution.Request(true); Assert.False(TimerResolution.Requested); } // Nothing to ask for off Windows.
+    }
 }
