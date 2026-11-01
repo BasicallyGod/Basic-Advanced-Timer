@@ -997,6 +997,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool Save()
     {
+        using var timing = PerformanceTimings.Measure("save");
         // Once the app is closing, or its database has been closed, there is nothing left to save and a late tick must not try.
         if (closed || store is { IsDisposed: true }) return true;
         try { store?.Save(Engine, preferences); if (LastError is not null) { LastError = null; Notify(); } return true; } // A failure that has cleared is shown as gone at once, not at the next change.

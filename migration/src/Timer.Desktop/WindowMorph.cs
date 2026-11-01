@@ -65,6 +65,7 @@ public static class WindowMorph
     /// <summary>A picture of a window as it looks now (its content over a transparent ground), for the dashboard to draw the pill from; null if it cannot be taken.</summary>
     public static RenderTargetBitmap? Capture(Window window)
     {
+        using var timing = PerformanceTimings.Measure("pill capture");
         try
         {
             var scaling = window.RenderScaling; var width = window.ClientSize.Width; var height = window.ClientSize.Height;

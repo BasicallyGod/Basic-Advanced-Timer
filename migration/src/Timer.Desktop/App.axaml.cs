@@ -32,6 +32,7 @@ public sealed partial class App : Application
             TimerModel model;
             try
             {
+                using var loadTiming = PerformanceTimings.Measure("startup data and model");
                 var args = desktop.Args ?? Array.Empty<string>();
                 var index = Array.IndexOf(args, "--data-dir");
                 if (args.Contains("--demo") && !BuildInfo.DeveloperFeatures) throw new ArgumentException("Sample-data demo is not available in Store releases.");
