@@ -299,7 +299,7 @@ public sealed class DashboardWindow : Window
         model.Notes.OpenNoteRequested += id => { ShowNotes(); NotesPageInstance().OpenNote(id); };
         var body = Ui.Grid("*", "*");
         var review = Ui.Grid("*", "Auto,*");
-        review.Margin = new Thickness(22, 16, 22, 18);
+        review.Margin = new Thickness(2, 16, 22, 18); // Two on the left, so the sidebar rows and the first card are 14 apart, as the cards are from each other.
         // The workspace's name on the left; on the right the date to step through and a button back to today.
         // In Week views the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
         // The date has a fixed width, so the arrows stay put whatever its text says.

@@ -147,7 +147,7 @@ public sealed class NotesPage : Grid
         Ui.Put(line, lead);
         var text = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, FontWeight = isMeeting ? FontWeight.SemiBold : FontWeight.Normal, Name = "PageNoteText_" + note.Id }; NoteLinks.Fill(text, Notes.Shown(note));
         if (note.Done) { text.TextDecorations = TextDecorations.Strikethrough; text.Classes.Add("muted"); }
-        var chips = new WrapPanel { Orientation = Orientation.Horizontal };
+        var chips = new WrapPanel { Orientation = Orientation.Horizontal, LineSpacing = 4 }; // Lines that wrap never touch.
         void Add(Control chip) { chip.Margin = new Thickness(0, 0, 6, 0); chips.Children.Add(chip); }
         if (acct is not null) Add(NoteParts.Chip("#" + acct.Replace(" ", ""), "plain", null, NoteParts.Dot(model, acct)));
         if (isMeeting) Add(NoteParts.Chip(NoteDates.Day(note.Day, model.Engine.Now) + ", " + NoteParts.Span(note), "plain"));

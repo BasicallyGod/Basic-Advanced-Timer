@@ -207,7 +207,7 @@ public sealed class NotesCard : Border
         var stacked = !meeting && draftReminder is not null;
         var box = Ui.Grid(stacked ? "*" : "Auto,*,Auto", stacked ? "Auto,Auto" : "Auto"); box.ColumnSpacing = 6;
         var frame = new Border { Child = box, MinHeight = 36, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = stacked ? new Thickness(10, 2, 6, 0) : new Thickness(10, 0, 6, 0) }; frame.Classes.Add("composer");
-        var chips = stacked ? new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 7) } : null;
+        var chips = stacked ? new WrapPanel { Orientation = Orientation.Horizontal, LineSpacing = 4, Margin = new Thickness(0, 0, 0, 7) } : null;
         void PutChip(Control chip, int column) { if (chips is not null) { chip.Margin = new Thickness(0, 0, 6, 0); chips.Children.Add(chip); } else Ui.Put(box, chip, column); }
         // The account chip takes the account off again when pressed (its cross says so), or with Backspace in an empty box.
         if (draftAccount is { } account)

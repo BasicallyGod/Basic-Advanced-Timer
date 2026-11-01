@@ -21,7 +21,7 @@ public sealed class PillWindow : Window
     public Action? OpenDashboard { get; set; }
     private readonly TimerModel model;
     /// <summary>The pill's own size before it is scaled for the screen: 336 wide and 72 tall, a card with the dashboard's 20 pixel corner. Its contents start 20 pixels from the left and end 14 from the right.</summary>
-    public const double PillWidth = 416, PillHeight = 72, PillRadius = 20, InsetLeft = 20, InsetRight = 14;
+    public const double PillWidth = 406, PillHeight = 72, PillRadius = 20, InsetLeft = 10, InsetRight = 14;
     // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
     // A narrow screen (its width in device independent pixels over 1800, never above 95 per cent or below 80 per cent), and a screen with a low
     // Windows scale, because it has fewer pixels to the inch, so the same pill looks bigger on it. Windows scale 125 per cent or more gives the
