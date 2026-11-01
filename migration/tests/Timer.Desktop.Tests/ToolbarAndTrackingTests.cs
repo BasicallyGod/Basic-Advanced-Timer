@@ -10,6 +10,12 @@ using Xunit;
 
 namespace Timer.Desktop.Tests;
 
+// TimerModel construction applies process-wide tooltip settings. Model-only facts can run on
+// worker threads while an Avalonia fact runs, so this collection must exclude other collections.
+[CollectionDefinition("Toolbar global settings", DisableParallelization = true)]
+public sealed class ToolbarGlobalSettingsCollection { }
+
+[Collection("Toolbar global settings")]
 public sealed class ToolbarAndTrackingTests
 {
     // A few passes, because a new page's visuals appear only after a layout and render pass, and a slow Windows runner has been seen to need more than one.
