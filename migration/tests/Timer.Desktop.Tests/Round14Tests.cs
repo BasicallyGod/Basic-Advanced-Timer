@@ -44,7 +44,7 @@ public sealed class Round14Tests
     [AvaloniaFact]
     public void ThePillKeepsItsPartsInside()
     {
-        Assert.Equal(416, PillWindow.PillWidth); // The display, the well and the break, 12 apart, between the two insets.
+        Assert.Equal(406, PillWindow.PillWidth); // The display, the well and the break, 12 apart, between the two insets.
         var model = Model();
         var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
@@ -66,7 +66,7 @@ public sealed class Round14Tests
     [AvaloniaFact]
     public void TheAccountRowsAreOneLineWithItsBarUnder()
     {
-        Assert.True(PillWindow.DropdownWidth < 220);
+        Assert.True(PillWindow.DropdownWidth < 230); // Still a narrow drawer; the raised rows need a little more room than the flat ones did.
         var model = Model(); var window = new DashboardWindow(model); window.Show();Settle(window);
         try
         {

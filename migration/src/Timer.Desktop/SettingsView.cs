@@ -47,7 +47,7 @@ public sealed class SettingsView : Grid
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
         var inside = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*") };
         Ui.Put(inside, title); Ui.Put(inside, intro, 0, 1); Ui.Put(inside, Ui.WithMoreBelow(scroll), 0, 2);
-        var card = new Border { Name = "SettingsCard", CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Padding = new Thickness(24, 20, 10, 16), Child = inside };
+        var card = new Border { Name = "SettingsCard", CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(24, 20, 10, 16), Child = inside };
         card.Classes.Add("dayCard"); SetColumn(card, 1); Children.Add(card);
         ShowSection("appearance");
 
@@ -311,6 +311,29 @@ public sealed class SettingsView : Grid
         var developerToggle = Toggle("Developer features", "The version on the right-click menu.", "DeveloperFeatures", () => model.DeveloperUnlocked, v => model.SetDeveloper(v), out var developerBox);
         developerBox.IsEnabled = !model.IsDemo;
         developer.Children.Add(developerToggle);
+        // Frame timing: while it is on, the dashboard shows how long its frames take and Copy report puts the figures on the clipboard. Never saved; it ends when the app does.
+        var frames = Ui.Text(FrameMonitor.Instance.Running ? "Running. The figures are in the corner of the dashboard." : "Off.", 13, "muted"); frames.Name = "FrameTimingState"; frames.TextWrapping = TextWrapping.Wrap;
+        var frameSwitch = Ui.DialogButton(FrameMonitor.Instance.Running ? "Stop frame timing" : "Start frame timing", () => { }, "FrameTimingToggle");
+        frameSwitch.Click += (_, _) =>
+        {
+            if (FrameMonitor.Instance.Running) FrameMonitor.Instance.Stop();
+            else if (TopLevel.GetTopLevel(frameSwitch) is { } window) FrameMonitor.Instance.Start(window);
+            frameSwitch.Content = FrameMonitor.Instance.Running ? "Stop frame timing" : "Start frame timing";
+            frames.Text = FrameMonitor.Instance.Running ? "Running. The figures are in the corner of the dashboard." : "Off.";
+        };
+        var frameCopy = Ui.DialogButton("Copy report", async () =>
+        {
+            if (TopLevel.GetTopLevel(frameSwitch)?.Clipboard is { } clipboard) await clipboard.SetTextAsync(FrameMonitor.Instance.Report());
+        }, "FrameTimingCopy");
+        // Two switches for finding what costs frames: one draws every raised and sunk shadow empty, the other stops the one-second refresh. Neither is saved.
+        var flat = Ui.DialogButton(ThemeEngine.FlatShadows ? "Shadows back on" : "Draw flat (no shadows)", () => { }, "FrameFlatToggle");
+        flat.Click += (_, _) => { ThemeEngine.FlatShadows = !ThemeEngine.FlatShadows; if (Avalonia.Application.Current is { } app) ThemeEngine.Register(app, AppThemes.BuiltIn); flat.Content = ThemeEngine.FlatShadows ? "Shadows back on" : "Draw flat (no shadows)"; };
+        var pauseTick = Ui.DialogButton(TimerModel.TickPaused ? "Resume the 1 s refresh" : "Pause the 1 s refresh", () => { }, "FrameTickToggle");
+        pauseTick.Click += (_, _) => { TimerModel.TickPaused = !TimerModel.TickPaused; pauseTick.Content = TimerModel.TickPaused ? "Resume the 1 s refresh" : "Pause the 1 s refresh"; };
+        var fineTimer = Ui.DialogButton(TimerResolution.Requested ? "Give back the 1 ms timer" : "Ask for a 1 ms timer", () => { }, "FrameTimerToggle");
+        fineTimer.Click += (_, _) => { TimerResolution.Request(!TimerResolution.Requested); fineTimer.Content = TimerResolution.Requested ? "Give back the 1 ms timer" : "Ask for a 1 ms timer"; };
+        developer.Children.Add(Row("Find the cost", "Draw flat takes every raised and sunk shadow away; pausing the refresh stops the clock redrawing each second (and its saving). Asking for a 1 ms timer makes Windows tick finely while the app runs (the report names the current tick). Try each on the Timeline for 15 seconds, then copy the report.", Ui.Horizontal(flat, pauseTick, fineTimer)));
+        developer.Children.Add(Row("Frame timing", "How long the dashboard's frames take, for judging smoothness. Switch it on, use the page you want to test for a few seconds, then copy the report.", Ui.Horizontal(frameSwitch, frameCopy), frames));
         var developerSection = new Border { Name = "DevelopmentSection", Child = developer, IsVisible = model.DeveloperUnlocked, Padding = new Thickness(0, 4) };
         syncs.Add(() => developerSection.IsVisible = model.DeveloperUnlocked);
         stack.Children.Add(developerSection);

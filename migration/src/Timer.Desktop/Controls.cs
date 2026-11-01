@@ -40,6 +40,18 @@ public static class Ui
         void Fit() => content.Margin = scroll.Extent.Height > scroll.Viewport.Height + .5 ? new Thickness(content.Margin.Left, content.Margin.Top, room, content.Margin.Bottom) : new Thickness(content.Margin.Left, content.Margin.Top, 0, content.Margin.Bottom);
         scroll.PropertyChanged += (_, e) => { if (e.Property == ScrollViewer.ExtentProperty || e.Property == ScrollViewer.ViewportProperty) Fit(); };
     }
+    /// <summary>
+    /// Two keys joined as one raised piece with a hairline between them (Undo and Redo, the zoom pair), as the mock draws them: one shadow for the pair, and each half
+    /// still its own button that lifts and sinks on its own.
+    /// </summary>
+    public static Border KeyPair(Button first, Button second, string? name = null)
+    {
+        first.Classes.Add("pairFirst"); second.Classes.Add("pairSecond");
+        var divider = new Border { Width = 1, Height = 22, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false }; divider.Classes.Add("pairDivider");
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Children = { first, divider, second } };
+        var pair = new Border { Child = row, CornerRadius = new CornerRadius(11) }; pair.Classes.Add("keyPair"); if (name is not null) pair.Name = name;
+        return pair;
+    }
     public static Border Shadowed(Border card, double radius)
     {
         card.CornerRadius = new CornerRadius(radius);
@@ -386,20 +398,21 @@ public sealed class AccountIndicator : Control
     private double Scale = 1;
     public override void Render(DrawingContext context)
     {
+        FrameMonitor.Bump("draw AccountIndicator");
         base.Render(context);
+        var running = model.ActiveAccount == Account.Name;
+        // The row's play key is a small round key, as the mock draws it: raised off the row, a step lighter under the pointer, and sunk with the symbol in green while it records.
+        if (!Ring)
+        {
+            var glowNow = Math.Clamp(Glow, 0, 1);
+            var face = running ? Resource("Well") : glowNow > .5 ? Resource("KeyHover") : Resource("Panel");
+            var shadows = this.TryFindResource(running ? "ShadowSunk" : "ShadowThumb", ActualThemeVariant, out var found) && found is BoxShadows set ? set : default;
+            context.DrawRectangle(face, null, new RoundedRect(new Rect(0, 0, Width, Height), Width / 2), shadows);
+        }
         using var scaled = context.PushTransform(Matrix.CreateScale(Size * Scale / 42, Size * Scale / 42));
         var centre = new Point(21, 21);
         var ink = Resource("Ink");
-        var running = model.ActiveAccount == Account.Name;
-        // Without the ring the button is a rounded square, like the pill's circle and the accounts icon, not a circle.
-        // The play button is a soft green tile with a green symbol, deeper while it is running or under the pointer, like the pill's primary control.
-        var liveColour = Resource("Live") is SolidColorBrush liveBrush ? liveBrush.Color : Colors.SeaGreen;
-        if (!Ring)
-        {
-            var tint = running ? .30 : .14 + .16 * Math.Clamp(Glow, 0, 1);
-            context.DrawRectangle(new SolidColorBrush(Color.FromArgb((byte)(tint * 255), liveColour.R, liveColour.G, liveColour.B)), null, new Rect(2, 2, 38, 38), 12, 12);
-            ink = new SolidColorBrush(liveColour);
-        }
+        if (!Ring) ink = Resource("LiveText");
         if (Ring && Account.Budget is { } budget)
         {
             context.DrawEllipse(null, new Pen(Resource("Line"), 3), centre, 19, 19);
@@ -486,6 +499,7 @@ public sealed class BudgetBar : Control
     private IBrush Resource(string key) => this.TryFindResource(key, ActualThemeVariant, out var value) && value is IBrush brush ? brush : Brushes.Gray;
     public override void Render(DrawingContext context)
     {
+        FrameMonitor.Bump("draw BudgetBar");
         var width = Bounds.Width; var top = 2.0; var height = 6.0;
         context.DrawRectangle(Resource("Line"), null, new Rect(0, top, width, height), 3, 3);
         var fill = Math.Clamp(Ratio, 0, 1) * width;
@@ -541,7 +555,7 @@ public sealed class MarqueeText : Border
         timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         timer.Tick += (_, _) =>
         {
-            var now = DateTime.UtcNow; var seconds = Math.Min(.1, (now - last).TotalSeconds); last = now;
+            FrameMonitor.Bump("name sliding"); var now = DateTime.UtcNow; var seconds = Math.Min(.1, (now - last).TotalSeconds); last = now;
             if (hold > 0) { hold -= seconds; return; }
             offset = Math.Min(distance, offset + 28 * seconds);
             text.RenderTransform = new Avalonia.Media.TranslateTransform(-offset, 0);
@@ -562,12 +576,13 @@ public sealed class AccountList : StackPanel
     private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Period)> rows = new();
     private readonly bool reorderable, bars, compact;
     /// <summary>A row of the bar kind: the name and time on one line with the budget bar under it, and the play tile beside them.</summary>
-    public const double RowHeight = 46;
+    public const double RowHeight = 46, RowGap = 8;
     /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
     /// <param name="compact">With bars, a shorter row for the pill's narrow drawer: the name and time, the bar and the play button, without the budget words.</param>
     public AccountList(TimerModel model, bool reorderable = false, bool bars = false, bool compact = false)
     {
         this.model = model; this.reorderable = reorderable; this.bars = bars; this.compact = compact;
+        if (bars) { Spacing = RowGap; Margin = compact ? new Thickness(1, 2, 3, 8) : new Thickness(10, 2, 10, 8); } // Each row is a raised card: its shadow needs a gap to fall into, and room at the sides so the scroll area does not clip it.
         Rebuild();
         // A list that sat hidden (in a pop-up) missed the changes made meanwhile, so it catches up when it is shown.
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Changed(null, new System.ComponentModel.PropertyChangedEventArgs(null)); };
@@ -796,6 +811,7 @@ public sealed class Chevron : Control
     }
     public override void Render(DrawingContext context)
     {
+        FrameMonitor.Bump("draw Chevron");
         var brush = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
         var pen = new Pen(brush, IconGlyph.StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         var y = Expanded ? 9 : 5;
@@ -826,6 +842,7 @@ public sealed class PauseGlyph : Control
     }
     public override void Render(DrawingContext context)
     {
+        FrameMonitor.Bump("draw PauseGlyph");
         var glow = Math.Clamp(Glow, 0, 1);
         using var grow = context.PushTransform(Matrix.CreateTranslation(-7, -7) * Matrix.CreateScale(1 + .08 * glow, 1 + .08 * glow) * Matrix.CreateTranslation(7, 7));
         var normal = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
@@ -911,6 +928,7 @@ public sealed class BreakGlyph : Control
     }
     public override void Render(DrawingContext context)
     {
+        FrameMonitor.Bump("draw BreakGlyph");
         IBrush? brush = null;
         var key = Mono ? (Hot ? HotKey : "Ink") : "Break";
         if (Fixed is not null) brush = Fixed; else if (Filled) brush = Brushes.White; else if (this.TryFindResource(key, ActualThemeVariant, out var value)) brush = value as IBrush;
@@ -1064,6 +1082,7 @@ public sealed class IconGlyph : Control
     public string ColourKey => TintKey ?? (this.FindAncestorOfType<Button>() is { } host && host.Classes.Contains("primary") ? "AccentInk" : "Ink");
     public override void Render(DrawingContext context)
     {
+        FrameMonitor.Bump("draw IconGlyph");
         IBrush brush = this.TryFindResource(ColourKey, ActualThemeVariant, out var value) && value is IBrush found ? found : Brushes.Gray;
         var pen = new Pen(brush, StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
         var hover = Math.Clamp(Hover, 0, 1);

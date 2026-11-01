@@ -161,7 +161,7 @@ public sealed class HorizontalTimelineTests
         var theme = themeName == "Light" ? AppThemes.Light : AppThemes.Dark;
         foreach (var colour in new[] { "#91B7D5", "#E8A87C", "#85CDA1", "#C3A6E0", "#F2D16B", "#E58E8E", "#4F6D8F", "#2B2B2B" })
         {
-            var look = ThemeDerivation.Block(theme, Ui.Visible(colour)); var ink = look.Text;
+            var (vividFill, vividInk) = AccountTones.Vivid(Ui.Visible(colour)); var look = new ThemeDerivation.BlockLook(vividFill, ThemeColours.Mix(vividFill, "#000000", .2), vividInk); var ink = look.Text;
             Assert.True(ThemeColours.Contrast(ink, look.Fill) >= 4.5, $"{themeName} {colour} text on the start of the gradient");
             Assert.True(ThemeColours.Contrast(ink, ReviewViews.DeeperEnd(look)) >= 4.5, $"{themeName} {colour} text on the end of the gradient");
         }

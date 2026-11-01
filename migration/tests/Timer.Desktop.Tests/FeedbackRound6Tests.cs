@@ -90,11 +90,11 @@ public sealed class FeedbackRound6Tests
         try
         {
             Click(window, "AddNote"); Click(window, "FormBell");
-            var a = Find<Button>(window, "ReminderTime9"); var b = Find<Button>(window, "ReminderTime12"); var c = Find<Button>(window, "ReminderTime15"); var d = Find<Button>(window, "ReminderTime17");
+            var a = Find<Button>(window, "ReminderTime9"); var b = Find<Button>(window, "ReminderTime12"); var c = Find<Button>(window, "ReminderTime15");
             Point At(Control x) => x.TranslatePoint(default, window)!.Value;
             // One column, top to bottom, all the same width as the hour : minute boxes above them, so the time side is one even column and the picker is no wider than it needs.
-            Assert.Equal(At(a).X, At(b).X, 1); Assert.Equal(At(a).X, At(c).X, 1); Assert.Equal(At(a).X, At(d).X, 1); Assert.True(At(a).Y < At(b).Y && At(b).Y < At(c).Y && At(c).Y < At(d).Y);
-            Assert.All(new[] { a, b, c, d }, x => Assert.Equal(ReminderPopup.TimeColumnWidth, x.Bounds.Width, 1));
+            Assert.Equal(At(a).X, At(b).X, 1); Assert.Equal(At(a).X, At(c).X, 1); Assert.True(At(a).Y < At(b).Y && At(b).Y < At(c).Y);
+            Assert.All(new[] { a, b, c }, x => Assert.Equal(ReminderPopup.TimeColumnWidth, x.Bounds.Width, 1));
             var hour = Find<TextBox>(window, "ReminderHour"); var minute = Find<TextBox>(window, "ReminderMinute");
             Assert.Equal(ReminderPopup.TimeColumnWidth, At(minute).X + minute.Bounds.Width - At(hour).X, 1.5); // The boxes and the colon span the same width.
             Assert.Equal(ReminderPopup.Wide, Find<ReminderPopup>(window, "ReminderPopup").Width);

@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using Avalonia;
 using Timer.Core;
 using Avalonia.Controls;
@@ -36,6 +37,7 @@ public sealed class WindowCoordinator
         // The dashboard grows out of the pill's card (see WindowMorph) and shrinks back into a pill at the sidebar's top left.
         Pill.OpenDashboard = () =>
         {
+            EndWarm(false);
             model.ShowToday();
             Pill.CloseFlyouts(); // So it is a capsule again when you come back.
             var picture = WindowMorph.Capture(Pill);
@@ -71,6 +73,36 @@ public sealed class WindowCoordinator
             else foreach (var window in new Window[] { Pill, Dashboard }) if (window.IsVisible) window.WindowState = WindowState.Minimized;
         };
         KeepInFront();
+        // The first open used to stutter while the dashboard's controls were first laid out and their templates built. Doing that once, unseen, as soon
+        // as the pill is up, leaves the grow animation only drawing. Headless tests and any failure just skip it.
+        Pill.Opened += WarmDashboard;
+    }
+    private bool warming; private double warmOpacity = 1;
+    private void WarmDashboard(object? sender, EventArgs e)
+    {
+        Pill.Opened -= WarmDashboard;
+        Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+        {
+            try
+            {
+                if (Dashboard.IsVisible || Motion.Reduced) return;
+                // Shown once, fully see-through, far off screen and not in the taskbar, for a few frames: its native window, its drawing surface and every shadow and
+                // control are built then, so the first grow from the pill only has to draw. Hidden again at once, so nobody sees it.
+                warming = true; warmOpacity = Dashboard.Opacity;
+                Dashboard.Opacity = 0; Dashboard.ShowActivated = false; Dashboard.ShowInTaskbar = false; Dashboard.Position = new PixelPoint(-32000, -32000);
+                Dashboard.Show();
+                Avalonia.Threading.DispatcherTimer.RunOnce(() => EndWarm(true), TimeSpan.FromMilliseconds(500));
+            }
+            catch (Exception) { warming = false; /* Only a warm-up. */ }
+        }, TimeSpan.FromMilliseconds(800));
+    }
+    // Ends the warm-up: the window is made ordinary again, and hidden unless somebody asked for the dashboard in the meantime.
+    private void EndWarm(bool hide)
+    {
+        if (!warming) return;
+        warming = false;
+        try { if (hide) Dashboard.Hide(); }
+        finally { Dashboard.Opacity = warmOpacity; Dashboard.ShowActivated = true; ApplyTaskbar(); }
     }
     /// <summary>
     /// Opens the dashboard the first time the pill is shown, which is where the getting started setup waits. It must happen once only: the pill raises
@@ -127,6 +159,7 @@ public sealed class WindowCoordinator
     }
     public void ShowDashboard()
     {
+        EndWarm(false);
         if (!Dashboard.IsVisible) { model.ShowToday(); if (!Pill.IsVisible) Pill.FitToScreen(Pill.Screens.ScreenFromWindow(Pill) ?? Pill.Screens.Primary); PlaceByCard(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin, 1); Dashboard.Show(); }
         Pill.CloseFlyouts(); Pill.Hide(); BringToFront(Dashboard);
         RescueOffScreen();
@@ -266,7 +299,7 @@ public sealed class DashboardWindow : Window
         model.Notes.OpenNoteRequested += id => { ShowNotes(); NotesPageInstance().OpenNote(id); };
         var body = Ui.Grid("*", "*");
         var review = Ui.Grid("*", "Auto,*");
-        review.Margin = new Thickness(22, 16, 22, 18);
+        review.Margin = new Thickness(2, 16, 22, 18); // Two on the left, so the sidebar rows and the first card are 14 apart, as the cards are from each other.
         // The workspace's name on the left; on the right the date to step through and a button back to today.
         // In Week views the arrows move a whole week, and forward stops at the current week. In Timeline they move a day.
         // The date has a fixed width, so the arrows stay put whatever its text says.
@@ -333,16 +366,34 @@ public sealed class DashboardWindow : Window
         ScrollViewer? TimelineScroll() => timelineHost.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Name == "TimelineScroll");
         zoomOut = Ui.Ctl("TimelineZoomOut", null, IconKind.Minus, "Zoom out", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(-1, s.Viewport.Width / 2, s.Offset.X); }, key: "Ctrl scroll");
         zoomIn = Ui.Ctl("TimelineZoomIn", null, IconKind.Plus, "Zoom in", () => { if (TimelineScroll() is { } s) model.ZoomTimeline(1, s.Viewport.Width / 2, s.Offset.X); }, key: "Ctrl scroll");
-        var zoom = Ui.Horizontal(zoomOut, zoomIn); zoom.Spacing = 6; zoom.Name = "TimelineControls";
+        var zoom = Ui.KeyPair(zoomOut, zoomIn, "TimelineControls");
         totalsStrip = BuildTotals();
-        var tools = Ui.Grid("Auto,*,Auto"); tools.Margin = new Thickness(14, 6, 14, 0);
-        Ui.Put(tools, Ui.Horizontal(addTime, undo, redo)); Ui.Put(tools, totalsStrip, 1); Ui.Put(tools, zoom, 2);
+        var tools = Ui.Grid("Auto,*,Auto"); tools.Margin = new Thickness(14, 13, 14, 0);
+        var editKeys = Ui.Horizontal(addTime, Ui.KeyPair(undo, redo, "EditKeys")); editKeys.Spacing = 8; editKeys.VerticalAlignment = VerticalAlignment.Center; zoom.VerticalAlignment = VerticalAlignment.Center; Ui.Put(tools, editKeys); Ui.Put(tools, totalsStrip, 1); Ui.Put(tools, zoom, 2);
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
+        workspace.ClipToBounds = false; // A content control clips by default, which cut the raised cards' shadows square at the page's edge; the lists inside scroll and clip themselves.
         Ui.Put(review, workspace, row: 1);
         // The timeline is a card (the day across the top, its bar of buttons and figures under it) over the Selected block card. The week and the settings
         // fill the workspace instead, so these two are shown for the timeline alone.
-        var cardGrid = Ui.Grid("*", "Auto,Auto"); Ui.Put(cardGrid, timelineHost); Ui.Put(cardGrid, tools, 0, 1);
-        timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), Padding = new Thickness(0, 14, 0, 12), VerticalAlignment = VerticalAlignment.Top };
+        // The day itself sits in a sunk trough set into the card, as the mock draws it: the card is the stage, the timeline a place you look into.
+        // The left and right edges are the display's lip: they cast a soft shadow over the day, so it reads as lying below them. Room above the hour labels keeps them off the top edge.
+        var lip = new Grid(); lip.Children.Add(timelineHost);
+        Border LipShadow(bool left)
+        {
+            var edge = new Border { Width = 18, IsHitTestVisible = false, HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right, Name = left ? "TimelineLipLeft" : "TimelineLipRight" };
+            void Paint()
+            {
+                var ink = Ui.ThemeColour(edge, "ShadowColor", Colors.Black); var dark = edge.ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark;
+                var strong = Color.FromArgb((byte)(dark ? 60 : 28), ink.R, ink.G, ink.B); var none = Color.FromArgb(0, ink.R, ink.G, ink.B);
+                edge.Background = new LinearGradientBrush { StartPoint = new RelativePoint(left ? 0 : 1, .5, RelativeUnit.Relative), EndPoint = new RelativePoint(left ? 1 : 0, .5, RelativeUnit.Relative), GradientStops = { new GradientStop(strong, 0), new GradientStop(none, 1) } };
+            }
+            edge.ActualThemeVariantChanged += (_, _) => Paint(); edge.AttachedToVisualTree += (_, _) => Paint();
+            return edge;
+        }
+        lip.Children.Add(LipShadow(true)); lip.Children.Add(LipShadow(false));
+        var trough = new Border { Name = "TimelineTrough", Child = lip, CornerRadius = new CornerRadius(14), Margin = new Thickness(14, 0, 14, 0), Padding = new Thickness(0, 6, 0, 0), ClipToBounds = true }; trough.Classes.Add("trough");
+        var cardGrid = Ui.Grid("*", "Auto,Auto"); Ui.Put(cardGrid, trough); Ui.Put(cardGrid, tools, 0, 1);
+        timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(0, 14, 0, 9), VerticalAlignment = VerticalAlignment.Top };
         timelineCard.Classes.Add("dayCard");
         selectedCard = new SelectedBlockCard(model) { Margin = new Thickness(0, 14, 7, 0) };
         notesCard = new NotesCard(model) { Margin = new Thickness(7, 14, 0, 0) };
@@ -358,6 +409,7 @@ public sealed class DashboardWindow : Window
         messageBar = new MessageBar(model); Ui.Put(review, messageBar, row: 1);
         // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
         layers.Children.Add(root); dashboardBody = root;
+        layers.Children.Add(new FrameChip(() => settingsMode ? "Settings" : notesMode ? "Notes" : weekMode ? "Week overview" : "Timeline")); // Only shows while the frame monitor runs (Settings, Development).
         layers.Children.Add(Dialogs); Dialogs.OpenChanged += UpdateBackdrop; // Last, so a dialog is above the setup too.
         surface = new Border { Name = "DashboardSurface", Child = layers, ClipToBounds = true };
         surface.Classes.Add("surface");
@@ -430,7 +482,7 @@ public sealed class DashboardWindow : Window
     }
     private Avalonia.Animation.Transitions? shadowFade;
     private double morph = 1, morphRadius = WindowMorph.DashboardRadius; private Rect morphFrom;
-    private Avalonia.Threading.DispatcherTimer? morphTimer;
+    private int morphRun;
     /// <summary>How far the dashboard has grown from the pill, 0 (the pill's card) to 1 (the whole window).</summary>
     public double MorphProgress => morph;
     /// <summary>Whether the window is in the middle of growing or shrinking, when nothing in it can be pressed.</summary>
@@ -462,20 +514,37 @@ public sealed class DashboardWindow : Window
     }
     private void StartMorph(double from, double to, bool closing, Action? done)
     {
-        morphTimer?.Stop(); morphTimer = null;
+        var run = ++morphRun; // Any earlier animation sees a different number and stops.
         if (!WindowMorph.Enabled || Motion.Reduced) { SetMorph(to); done?.Invoke(); return; }
         SetMorph(from);
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
-        morphTimer = new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(16), Avalonia.Threading.DispatcherPriority.Render, (_, _) =>
+        // Each step is tied to the screen's own refresh (the frame request), not to a 16 ms timer, which beats against a 60 Hz screen and drops or doubles frames.
+        // A window that is not being drawn (no display, minimised, covered on some machines) never gets that request, so a plain timer steps in whenever no frame has
+        // come for 50 ms: the animation always finishes and the dashboard never stays half grown with nothing able to be pressed.
+        var lastStep = System.Diagnostics.Stopwatch.GetTimestamp();
+        Avalonia.Threading.DispatcherTimer? watchdog = null;
+        var finished = false;
+        void Finish() { finished = true; watchdog?.Stop(); }
+        void Step(TimeSpan _)
         {
+            if (finished) return; // A step from the timer and one from a frame request can be waiting together; the end must run once.
+            if (run != morphRun) { Finish(); return; }
+            lastStep = System.Diagnostics.Stopwatch.GetTimestamp();
             var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             var length = closing ? WindowMorph.CloseMilliseconds : WindowMorph.OpenMilliseconds;
             var e = WindowMorph.Ease(elapsed, closing);
             // Opening runs m from 0 up to 1; closing runs it back from 1 down to 0 along the same ease.
             SetMorph(closing ? 1 - e : e);
-            if (elapsed >= length) { morphTimer?.Stop(); morphTimer = null; SetMorph(to); done?.Invoke(); }
+            if (elapsed >= length) { Finish(); SetMorph(to); done?.Invoke(); return; }
+            RequestAnimationFrame(Step);
+        }
+        watchdog = new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(25), Avalonia.Threading.DispatcherPriority.Render, (_, _) =>
+        {
+            if (run != morphRun) { Finish(); return; }
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(lastStep).TotalMilliseconds > 50) Step(TimeSpan.Zero);
         });
-        morphTimer.Start();
+        watchdog.Start();
+        RequestAnimationFrame(Step);
     }
     private void SetPillPicture(Avalonia.Media.Imaging.Bitmap? picture, Rect where)
     {

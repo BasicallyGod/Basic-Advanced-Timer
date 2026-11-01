@@ -38,7 +38,7 @@ public sealed class NotesCard : Border
     public NotesCard(TimerModel model)
     {
         this.model = model; Name = "NotesCard";
-        CornerRadius = new CornerRadius(20); BorderThickness = new Thickness(1); Padding = new Thickness(16, 14);
+        CornerRadius = new CornerRadius(18); BorderThickness = new Thickness(1); Padding = new Thickness(16, 14);
         Classes.Add("dayCard");
         addNote = Ui.Ctl("AddNote", "Add note", IconKind.Plus, "Add note", () => Open(Form.Note), small: true);
         addMeeting = Ui.Ctl("AddMeeting", "Add meeting", IconKind.Plus, "Add meeting", () => Open(Form.Meeting), small: true);
@@ -48,7 +48,7 @@ public sealed class NotesCard : Border
         var scroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, Name = "NotesScroll" };
         var body = Ui.Grid("*", "Auto,Auto,*"); body.RowSpacing = 10;
         Ui.Put(body, header); Ui.Put(body, formHost, 0, 1); Ui.Put(body, scroll, 0, 2);
-        this.scroll = scroll;
+        this.scroll = scroll; Ui.LeaveRoomForTrack(scroll, list); // The slim bar lies over the content, so the rows give it room while the list scrolls.
         overlay.Children.Add(body); overlay.Children.Add(reminderHost); reminderHost.PlacementTarget = title; Child = overlay;
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditNoteRequested += OnEditNote; Sync(); };
         DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditNoteRequested -= OnEditNote; };
@@ -139,7 +139,7 @@ public sealed class NotesCard : Border
             // The star marks a note important (solid) or not (an outline); an important note comes first in the list.
             var important = NotesModel.IsImportant(note);
             var star = Ui.IconButton(important ? IconKind.StarFilled : IconKind.Star, important ? "Not important" : "Mark important", "NoteImportant_" + note.Id, () => Notes.SetImportant(note.Id, !important));
-            star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, star, 3);
+            star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; star.Classes.Add("starKey"); star.Classes.Set("on", important); Ui.Put(line, star, 3);
             if (important && star.Content is IconGlyph solid) solid.TintKey = "ImportantStar"; // The mark is gold, so an important note is picked out without its words changing weight.
         }
         if (!meeting && NotesModel.ReminderOf(note) is null)
@@ -207,7 +207,7 @@ public sealed class NotesCard : Border
         var stacked = !meeting && draftReminder is not null;
         var box = Ui.Grid(stacked ? "*" : "Auto,*,Auto", stacked ? "Auto,Auto" : "Auto"); box.ColumnSpacing = 6;
         var frame = new Border { Child = box, MinHeight = 36, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = stacked ? new Thickness(10, 2, 6, 0) : new Thickness(10, 0, 6, 0) }; frame.Classes.Add("composer");
-        var chips = stacked ? new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 7) } : null;
+        var chips = stacked ? new WrapPanel { Orientation = Orientation.Horizontal, LineSpacing = 4, Margin = new Thickness(0, 0, 0, 7) } : null;
         void PutChip(Control chip, int column) { if (chips is not null) { chip.Margin = new Thickness(0, 0, 6, 0); chips.Children.Add(chip); } else Ui.Put(box, chip, column); }
         // The account chip takes the account off again when pressed (its cross says so), or with Backspace in an empty box.
         if (draftAccount is { } account)

@@ -192,7 +192,7 @@ public static class TimelineGuide
             {
                 var words = new TextBlock { Text = model.Notes.Text(note), FontSize = 12.5, FontWeight = FontWeight.SemiBold, MaxWidth = 240, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
                 var head = Ui.Horizontal(NoteParts.Dot(model, model.Notes.AccountOf(note)), words); head.Spacing = 7;
-                if (NotesModel.IsImportant(note)) head.Children.Add(new IconGlyph(IconKind.StarFilled) { Width = 13, Height = 13, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
+                if (NotesModel.IsImportant(note)) head.Children.Add(new Avalonia.Controls.Viewbox { Width = 11, Height = 11, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 1), Child = new IconGlyph(IconKind.StarFilled) }); // Scaled to sit within the words' line; the glyph draws at its own size and ignores a Width.
                 return head;
             }
             var minutes = (int)Math.Max(0, (model.Engine.Now - due).TotalMinutes);

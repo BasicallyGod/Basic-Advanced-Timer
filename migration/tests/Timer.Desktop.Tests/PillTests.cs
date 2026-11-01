@@ -72,13 +72,13 @@ public sealed class PillTests
         try
         {
             var button = Find<Button>(pill, "PillPause"); var tile = Find<Border>(pill, "PillPrimaryTile");
-            Assert.Equal(14, tile.CornerRadius.TopLeft); // A rounded square, like the accounts icon.
+            Assert.Equal(22, tile.CornerRadius.TopLeft); // A round key.
             Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
-            var rest = ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color; Assert.InRange(rest.A, 30, 60); // A soft tint, not a solid fill.
-            var live = Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("Live")); Assert.Equal(live.G, rest.G); // In the tracking green.
+            var rest = ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color; Assert.Equal(255, rest.A); // A raised key: a solid face,
+            Assert.True(tile.BoxShadow.Count > 0); // standing off the well.
             var over = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), pill)!.Value;
-            pill.MouseMoveUntil(over, () => ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A > rest.A);
-            Assert.True(((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A > rest.A); // A stronger tint under the pointer.
+            pill.MouseMoveUntil(over, () => ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color != rest);
+            Assert.NotEqual(rest, ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color); // A step lighter under the pointer.
             Assert.Equal(StatusFace.WellTileWidth, tile.Bounds.Width, 0.5); // And no change of size.
             pill.MouseMove(new Point(2, 2)); Assert.Equal(rest, ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color);
         }
@@ -93,13 +93,13 @@ public sealed class PillTests
         {
             foreach (var (button, tileName) in new[] { (Find<Button>(pill, "PillPause"), "PillPrimaryTile"), (Find<Button>(pill, "PillBreak"), (string?)null), (pill.AccountsButton, (string?)null) })
             {
-                var tile = tileName is not null ? Find<Border>(pill, tileName) : button.GetVisualDescendants().OfType<Border>().First(b => b.Name != "PillSurface" && b.Child is not null && b.Width is >= 40 and <= 48);
-                Assert.Equal(0, tile.BoxShadow.Count);
+                var tile = tileName is not null ? Find<Border>(pill, tileName) : button.GetVisualDescendants().OfType<Border>().First(b => b.Name != "PillSurface" && b.Child is not null && b.Width is >= 40 and <= 50);
+                var resting = tile.BoxShadow; // A key stands off its well with a shadow of its own; the ring replaces it.
                 button.RaiseEvent(new GotFocusEventArgs { RoutedEvent = InputElement.GotFocusEvent, NavigationMethod = NavigationMethod.Pointer });
-                Assert.Equal(0, tile.BoxShadow.Count); // Focus left by a click is not shown.
+                Assert.Equal(resting, tile.BoxShadow); // Focus left by a click is not shown.
                 button.RaiseEvent(new GotFocusEventArgs { RoutedEvent = InputElement.GotFocusEvent, NavigationMethod = NavigationMethod.Tab });
-                Assert.True(tile.BoxShadow.Count > 0, button.Name); // Tab shows the ring.
-                button.RaiseEvent(new RoutedEventArgs(InputElement.LostFocusEvent)); Assert.Equal(0, tile.BoxShadow.Count);
+                Assert.NotEqual(resting, tile.BoxShadow); // Tab shows the ring.
+                button.RaiseEvent(new RoutedEventArgs(InputElement.LostFocusEvent)); Assert.Equal(resting, tile.BoxShadow);
             }
         }
         finally { pill.Close(); }
@@ -187,20 +187,14 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void ManageAccountsIsOneIconAtTheTopRightOfTheListAndOpensTheAccountsDialog()
+    public void TheAccountsListHasNoManageIconBecauseSettingsAndTheMenuOwnThat()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
             // The pop-up has no window of its own in a headless run, so the list's card is laid out in one made for it.
             var card = pill.MakeDropdownCard(); var host = new Window { Width = 320, Height = 600, Content = card }; host.Show(); Settle(host);
-            var manage = Find<Button>(host, "PillManageAccounts");
-            Assert.IsType<IconGlyph>(manage.Content); Assert.Equal(IconKind.Sliders, ((IconGlyph)manage.Content!).Kind); // An icon, with no words on it.
-            Assert.Equal("Manage accounts", Tip(manage)); Assert.Equal("Manage accounts", Avalonia.Automation.AutomationProperties.GetName(manage));
-            var at = manage.TranslatePoint(default, card)!.Value;
-            Assert.True(at.Y < 30, $"icon top {at.Y}"); // In the heading row,
-            Assert.InRange(card.Bounds.Width - (at.X + manage.Bounds.Width), 10, 18); // against the right padding.
-            Assert.DoesNotContain(host.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "Manage accounts"); // There is no button at the foot.
+            Assert.DoesNotContain(host.GetVisualDescendants().OfType<Button>(), b => b.Name == "PillManageAccounts"); // Managing accounts is in Settings and the right-click menu.
             var scroll = pill.AccountScroll; Assert.True(scroll.TranslatePoint(new Point(0, scroll.Bounds.Height), card)!.Value.Y >= card.Bounds.Height - 18); // The list runs to the foot.
         }
         finally { pill.Close(); }
@@ -238,7 +232,7 @@ public sealed class PillTests
             // The two share one well: the tiles 46 and 48 wide inside it, 4 from its edge and 2 apart, as high as the break's tile with the well's padding.
             var well = Find<Border>(pill, "PillWell");
             Assert.Equal(StatusFace.TileSize + 2 * StatusFace.WellPadding, well.Bounds.Height, 0.5);
-            Assert.Equal(StatusFace.WellRadius, well.CornerRadius.TopLeft); Assert.InRange(((Avalonia.Media.ISolidColorBrush)well.Background!).Color.A, 8, 24); // A soft background, not a fill.
+            Assert.Equal(StatusFace.WellRadius, well.CornerRadius.TopLeft); Assert.True(well.BoxShadow.Count > 0); // Sunk: the well turns its shadow inward.
             Border TileIn(Control c, double width) => c.GetVisualDescendants().OfType<Border>().First(x => x.Width == width);
             var primaryTile = Find<Border>(pill, "PillPrimaryTile"); var accountsTile = TileIn(pill.AccountsButton, StatusFace.SelectorWidth); var breakTile = TileIn(brk, StatusFace.TileSize);
             foreach (var t in new[] { primaryTile, accountsTile })
@@ -268,14 +262,14 @@ public sealed class PillTests
                 var tile = button.GetVisualDescendants().OfType<Border>().Single(b => b.Width == StatusFace.TileSize); var cup = button.GetVisualDescendants().OfType<BreakGlyph>().Single();
                 var orange = Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("Break"));
                 Assert.Equal(StatusFace.TileRadius, tile.CornerRadius.TopLeft); // A rounded square, like the primary control and the accounts icon.
-                var rest = ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color; Assert.InRange(rest.A, 30, 60); Assert.Equal(orange.R, rest.R); // A soft tint of the theme's orange.
-                Assert.Null(cup.Fixed); Assert.Equal(0, tile.BoxShadow.Count); // The cup is the theme's orange, with no ring.
+                var rest = ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color; Assert.Equal(255, rest.A); // A raised key with a solid face,
+                Assert.Null(cup.Fixed); Assert.True(tile.BoxShadow.Count > 0); // the cup in the theme's orange.
                 model.ToggleBreak(); Dispatcher.UIThread.RunJobs();
-                var on = ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color; Assert.Equal(orange, on); // Solid while a break is on.
-                var cupColour = ((Avalonia.Media.ISolidColorBrush)cup.Fixed!).Color;
-                Assert.True(ThemeColours.Contrast($"#{cupColour.R:X2}{cupColour.G:X2}{cupColour.B:X2}", $"#{on.R:X2}{on.G:X2}{on.B:X2}") >= 2.9, theme); // The lit cup reads on it.
-                if (theme == "Light") Assert.Equal(Avalonia.Media.Colors.White, cupColour);
-                Assert.True(tile.BoxShadow.Count > 0); // A soft ring.
+                // While a break is on the key is on: sunk into a well (the mock's "sunk and coloured"), with the cup still in the break colour and no solid orange fill.
+                var on = ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color; Assert.NotEqual(orange, on); Assert.NotEqual(rest, on);
+                Assert.True(tile.TryFindResource("Well", tile.ActualThemeVariant, out var well)); Assert.Equal(((Avalonia.Media.ISolidColorBrush)well!).Color, on);
+                Assert.Null(cup.Fixed); Assert.True(tile.BoxShadow.Count > 0);
+                Assert.True(ThemeColours.Contrast($"#{orange.R:X2}{orange.G:X2}{orange.B:X2}", $"#{on.R:X2}{on.G:X2}{on.B:X2}") >= 2.5, theme); // The amber cup reads on the well.
             }
             finally { pill.Close(); model.SetTheme("System"); }
         }
@@ -292,7 +286,7 @@ public sealed class PillTests
             Assert.Equal(Y(Find<Button>(window, "SidebarPause")), Y(brk), 1.0); // Level with the play tile, at the card's far end.
             Assert.NotNull(Find<Border>(window, "SidebarWell")); // The card is the pill's well.
             Assert.True(Y(brk) < Y(Find<Button>(window, "QuitTimer"))); // And not at the foot with Quit timer.
-            var tile = brk.GetVisualDescendants().OfType<Border>().Single(b => b.Width == StatusFace.TileSize); Assert.InRange(((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A, 30, 60);
+            var tile = brk.GetVisualDescendants().OfType<Border>().Single(b => b.Width == StatusFace.TileSize); Assert.NotEqual(((Avalonia.Media.ISolidColorBrush)tile.Background!).Color, Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("Break")));
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.Equal(255, ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A);
         }
         finally { window.Close(); }

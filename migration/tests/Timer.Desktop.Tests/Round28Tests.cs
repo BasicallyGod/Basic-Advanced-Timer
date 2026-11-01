@@ -49,7 +49,7 @@ public sealed class Round28Tests
     [AvaloniaTheory]
     [InlineData("Light")]
     [InlineData("Dark")]
-    public void TheFloatingMessageIsTheInkColourWithAStateMedallionAndACountdown(string theme)
+    public void TheFloatingMessageIsAPorcelainCardWithAnInlaidStateLight(string theme)
     {
         var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("Account one") }, false, theme, DayOfWeek.Monday)); model.CompleteSetup();
         var window = new DashboardWindow(model); window.Show(); Settle(window);
@@ -57,18 +57,20 @@ public sealed class Round28Tests
         {
             model.ExplainRunning(); Settle(window);
             var bar = window.GetVisualDescendants().OfType<MessageBar>().Single();
-            Assert.True(bar.TryFindResource("Ink", bar.ActualThemeVariant, out var ink));
-            Assert.Equal(((ISolidColorBrush)ink!).Color, ((ISolidColorBrush)bar.Background!).Color); // Dark on Light, light on Dark.
+            Assert.True(bar.TryFindResource("Porcelain", bar.ActualThemeVariant, out var porcelain));
+            Assert.Equal(((ISolidColorBrush)porcelain!).Color, ((ISolidColorBrush)bar.Background!).Color);
+            Assert.True(bar.BoxShadow.Count > 0); // Raised well clear of the page.
             var words = bar.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "MessageText");
             var wordsColour = ((ISolidColorBrush)words.Foreground!).Color; var card = ((ISolidColorBrush)bar.Background!).Color;
             Assert.True(ThemeColours.Contrast($"#{wordsColour.R:X2}{wordsColour.G:X2}{wordsColour.B:X2}", $"#{card.R:X2}{card.G:X2}{card.B:X2}") >= 7, "the words read on the card");
             var medallion = bar.GetVisualDescendants().OfType<Border>().First(b => b.Name == "MessageIcon");
-            var m = ((ISolidColorBrush)medallion.Background!).Color;
-            Assert.True(ThemeColours.Contrast($"#{m.R:X2}{m.G:X2}{m.B:X2}", $"#{card.R:X2}{card.G:X2}{card.B:X2}") >= 3, "the medallion's colour stands clear of the card");
-            // A new message starts with its whole line, and a failed save, which stays, keeps it whole.
-            var fill = bar.GetVisualDescendants().OfType<Border>().First(b => b.Name == "MessageCountdown");
-            Assert.True(fill.Bounds.Width > 0 && fill.Bounds.Height > 0);
-            Save(window, "toast-inverted-" + theme);
+            Assert.True(medallion.BoxShadow.Count > 0); // Sunk, like an inlaid light.
+            var well = ((ISolidColorBrush)medallion.Background!).Color;
+            var glyph = bar.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().First(p => p.IsVisible && p.Stroke is not null);
+            var g = ((ISolidColorBrush)glyph.Stroke!).Color;
+            Assert.True(ThemeColours.Contrast($"#{g.R:X2}{g.G:X2}{g.B:X2}", $"#{well.R:X2}{well.G:X2}{well.B:X2}") >= 3, "the light stands clear of its well");
+            Assert.Empty(bar.GetVisualDescendants().OfType<Border>().Where(b => b.Name == "MessageCountdown")); // No countdown line.
+            Save(window, "toast-porcelain-" + theme);
         }
         finally { window.Close(); }
     }

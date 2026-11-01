@@ -97,6 +97,7 @@ public sealed class SegmentRun : Control
     protected override Size MeasureOverride(Size availableSize) => new(WidthOf(Text, DigitHeight), DigitHeight);
     public override void Render(DrawingContext context)
     {
+        FrameMonitor.Bump("draw SegmentRun");
         var shapes = SegmentShapes.For(DigitHeight);
         var dark = ActualThemeVariant == ThemeVariant.Dark;
         Color colour;

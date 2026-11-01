@@ -11,6 +11,38 @@ namespace Timer.Desktop.Tests;
 public sealed class PreviewCaptureTests
 {
     [AvaloniaFact]
+    public void WriteAccountsDialog()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        var model = TimerModel.CreateDemo(); var dialog = new AccountsDialog(model); dialog.Open(model); var window = (Window)TopLevel.GetTopLevel(dialog)!;
+        try { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, "accounts-dialog.png")); }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void WriteLongAccountForm()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        var model = TimerModel.CreateDemo(); model.SetTheme("Dark");
+        var first = model.AccountSettings.First().Name;
+        model.SetAccounts(model.AccountSettings.Select((a, i) => i == 0 ? a with { Name = "Accountoneoneoneoneoneon" } : a).ToList(), new Dictionary<string, string> { [first] = "Accountoneoneoneoneoneon" });
+        var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, name + ".png")); }
+            void Press(string name) { window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
+            model.Notes.AddNote("Send the invoice batch", "Accountoneoneoneoneoneon", model.Engine.Now.Date.AddHours(17)); Dispatcher.UIThread.RunJobs();
+            Press("TimelineTab"); Shot("long-list");
+            Press("AddNote");
+            window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Send the invoice batch #Accountone"; Dispatcher.UIThread.RunJobs();
+            Press("Suggest_Accountoneoneoneoneoneon"); Press("FormBell"); Press("ReminderSet"); Shot("long-form");
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void WriteRailIcons()
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;

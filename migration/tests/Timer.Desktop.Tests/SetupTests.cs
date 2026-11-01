@@ -199,11 +199,10 @@ public sealed class SetupTests
         var model = NewModel(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var icon = Find<Avalonia.Controls.Viewbox>(window, "SetupPillIcon");
-            var parts = icon.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>().ToList();
-            Assert.Equal(6, parts.Count); // The outline, two lights, and the hours, minutes and seconds bars.
-            Assert.Single(parts, r => r.StrokeThickness > 0); // Only the outline is a line; the rest are filled.
-            Assert.All(parts, r => Assert.True((r.StrokeThickness > 0 ? r.Stroke : r.Fill) is not null)); // One colour, the text colour, nothing in the accent or the status colours.
+            var icon = Find<Avalonia.Controls.Image>(window, "SetupPillIcon");
+            Assert.NotNull(icon.Source); // The app's own picture, the bat on its violet tile, as the window and the Store wear.
+            Assert.Equal(48, icon.Width); Assert.Equal(48, icon.Height);
+            Assert.Empty(icon.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>()); // Not the old drawn pill.
         }
         finally { window.Close(); }
     }

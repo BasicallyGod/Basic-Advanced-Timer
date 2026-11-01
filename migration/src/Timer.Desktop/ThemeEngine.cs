@@ -67,13 +67,22 @@ public static class ThemeEngine
         var ink0 = Color.Parse(colours["Ink"]);
         var accent = Color.Parse(colours["Accent"]); var accentInk = Color.Parse(colours["AccentInk"]); var line = Color.Parse(colours["Line"]);
         var (sliderFill, sliderTrack) = SliderColours(colours);
-        foreach (var key in new[] { "CheckBoxCheckBackgroundFillChecked", "CheckBoxCheckBackgroundFillCheckedPointerOver", "CheckBoxCheckBackgroundFillCheckedPressed",
-            "CheckBoxCheckBackgroundStrokeChecked", "CheckBoxCheckBackgroundStrokeCheckedPointerOver", "CheckBoxCheckBackgroundStrokeCheckedPressed",
+        // A tick box is a small key: raised while it is off, sunk with the accent tick once it is on (the mock's grammar), so neither state is a solid fill.
+        {
+            var boxLight = ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000");
+            var boxWell = Color.Parse(boxLight ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .03) : ThemeColours.Mix(colours["Surface"], "#000000", .2));
+            var boxEdge = boxLight ? Color.FromArgb(18, 72, 78, 92) : Color.FromArgb(22, 255, 255, 255);
+            foreach (var key in new[] { "CheckBoxCheckBackgroundFillChecked", "CheckBoxCheckBackgroundFillCheckedPointerOver", "CheckBoxCheckBackgroundFillCheckedPressed" }) Put(key, boxWell);
+            foreach (var key in new[] { "CheckBoxCheckBackgroundFillUnchecked", "CheckBoxCheckBackgroundFillUncheckedPointerOver", "CheckBoxCheckBackgroundFillUncheckedPressed" }) Put(key, Color.Parse(colours["Panel"]));
+            foreach (var key in new[] { "CheckBoxCheckBackgroundStrokeChecked", "CheckBoxCheckBackgroundStrokeCheckedPointerOver", "CheckBoxCheckBackgroundStrokeCheckedPressed",
+                "CheckBoxCheckBackgroundStrokeUnchecked", "CheckBoxCheckBackgroundStrokeUncheckedPointerOver", "CheckBoxCheckBackgroundStrokeUncheckedPressed" }) Put(key, boxEdge);
+        }
+        foreach (var key in new[] {
             // The export dialog's week and month choices are radio buttons, which follow the theme too.
             "RadioButtonOuterEllipseCheckedFill", "RadioButtonOuterEllipseCheckedFillPointerOver", "RadioButtonOuterEllipseCheckedFillPressed",
             "RadioButtonOuterEllipseCheckedStroke", "RadioButtonOuterEllipseCheckedStrokePointerOver", "RadioButtonOuterEllipseCheckedStrokePressed" }) Put(key, accent);
         foreach (var key in new[] { "RadioButtonCheckGlyphFill", "RadioButtonCheckGlyphFillPointerOver", "RadioButtonCheckGlyphFillPressed", "RadioButtonCheckGlyphStroke", "RadioButtonCheckGlyphStrokePointerOver", "RadioButtonCheckGlyphStrokePressed" }) Put(key, accentInk);
-        foreach (var key in new[] { "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver", "CheckBoxCheckGlyphForegroundCheckedPressed" }) Put(key, accentInk);
+        foreach (var key in new[] { "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver", "CheckBoxCheckGlyphForegroundCheckedPressed" }) Put(key, Color.Parse(TextShade(colours["Accent"], colours["Ink"], new[] { colours["Panel"], colours["Surface"], colours["Hover"] })));
         // Tooltips are drawn by a pop-up that otherwise takes the computer's own light or dark colours, which left dark text on a dark tooltip (or the reverse)
         // when the theme and the computer disagreed, and in the recording pill. They wear the theme's surface, text and line instead.
         // A gentle wash of the tracking colour over the surface, for the card of the account that is recording.
@@ -92,6 +101,31 @@ public static class ThemeEngine
         Put("DisplayGroove", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .02) : ThemeColours.Mix(colours["Panel"], "#000000", .55)));
         Put("DisplayShade", lightGround ? Color.FromArgb(62, 20, 30, 60) : Color.FromArgb(166, 0, 0, 0));
         Put("DisplayEdge", lightGround ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(18, 255, 255, 255));
+        // Depth: every raised thing (a key, a card, a menu) throws one soft shadow down and to the right with a pale edge up and to the left, and every sunk thing (a field,
+        // a track, a pressed key) is the same two turned inward, so the whole app reads as one room lit from the top left. In Dark the pale edge is a whisper and the
+        // shadow does the work. A raised thing is never given a shade of its own: the page is the card colour's ground, and a sunk thing is a shade under it.
+        Put("Well", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .03) : ThemeColours.Mix(colours["Surface"], "#000000", .2)));
+        Put("KeyEdge", lightGround ? Color.FromArgb(18, 72, 78, 92) : Color.FromArgb(22, 255, 255, 255));
+        Put("KeyHover", Color.Parse(lightGround ? ThemeColours.Mix(colours["Panel"], "#FFFFFF", .4) : ThemeColours.Mix(colours["Panel"], "#FFFFFF", .07)));
+        Put("Porcelain", Color.Parse(lightGround ? ThemeColours.Mix(colours["Panel"], "#FFFFFF", .3) : ThemeColours.Mix(colours["Panel"], "#FFFFFF", .06)));
+        {
+            var (hiAlpha, loAlpha) = lightGround ? (.85, .17) : (.025, .42);
+            var lo = lightGround ? (R: (byte)72, G: (byte)78, B: (byte)92) : (R: (byte)0, G: (byte)0, B: (byte)0);
+            Color Hi(double k) => Color.FromArgb((byte)Math.Round(255 * Math.Min(1, hiAlpha * k)), 255, 255, 255);
+            Color Lo(double k) => Color.FromArgb((byte)Math.Round(255 * Math.Min(1, loAlpha * k)), lo.R, lo.G, lo.B);
+            BoxShadow Drop(double x, double y, double blur, Color colour, bool inset = false) => new() { OffsetX = x, OffsetY = y, Blur = blur, Color = colour, IsInset = inset };
+            // With FlatShadows on (a developer switch for judging what the depth costs) every raised and sunk shadow is written empty.
+            void PutShadow(string key, params BoxShadow[] shadows) => dictionary[key] = FlatShadows ? default(BoxShadows) : new BoxShadows(shadows[0], shadows.Skip(1).ToArray());
+            PutShadow("ShadowCard", Drop(0, 1, 0, Hi(.7), true), Drop(-7, -7, 16, Hi(.8)), Drop(9, 11, 26, Lo(.8)));
+            PutShadow("ShadowKey", Drop(-3, -3, 7, Hi(1)), Drop(3, 4, 9, Lo(1)));
+            PutShadow("ShadowKeyHover", Drop(-4, -4, 9, Hi(1.1)), Drop(4, 6, 13, Lo(1.2)));
+            PutShadow("ShadowSunk", Drop(2, 3, 6, Lo(1.2), true), Drop(-2, -2, 5, Hi(.9), true));
+            PutShadow("ShadowPopup", Drop(-6, -6, 14, Hi(.8)), Drop(8, 12, 26, Lo(1.1)));
+            PutShadow("ShadowThumb", Drop(-2, -2, 5, Hi(1)), Drop(2, 3, 7, Lo(1)));
+        }
+        // The deeper shade of the live and break colours that holds as words (the colour itself is for glyphs, bars and fills).
+        Put("LiveText", Color.Parse(TextShade(colours["Live"], colours["Ink"], new[] { colours["Panel"], colours["Surface"] })));
+        Put("BreakText", Color.Parse(TextShade(colours["Break"], colours["Ink"], new[] { colours["Panel"], colours["Surface"] })));
         Put("LateTint", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["Overtime"], .14)));
         Put("BudgetTint", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["BudgetWarning"], .16)));
         // Amber and the accent are right for bars and rings but too pale to read as small text on the light themes, so their words use a shade of each taken towards the text colour until it holds 4.5 to 1 on every ground it sits on.
@@ -100,10 +134,11 @@ public static class ThemeEngine
         Put("ScrollThumb", Color.Parse(ThemeColours.Mix(colours["Line"], colours["Ink"], .13)));
         Put("ScrollThumbHover", Color.Parse(ThemeColours.Mix(colours["Line"], colours["Ink"], .3)));
         // Right-click menus are drawn from the standard menu resources, which are the computer's own greys. They wear the theme's panel, text, hover and line.
-        Put("MenuFlyoutPresenterBackground", Color.Parse(colours["Panel"]));
+        Put("MenuFlyoutPresenterBackground", Color.Parse(ThemeColours.Mix(colours["Panel"], "#FFFFFF", ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000") ? .3 : .06)));
         Put("MenuFlyoutPresenterBorderBrush", line);
-        Put("MenuFlyoutItemBackgroundPointerOver", Color.Parse(colours["Hover"]));
-        Put("MenuFlyoutItemBackgroundPressed", Color.Parse(colours["Selected"]));
+        var menuWell = Color.Parse(ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000") ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .03) : ThemeColours.Mix(colours["Surface"], "#000000", .2));
+        Put("MenuFlyoutItemBackgroundPointerOver", menuWell);
+        Put("MenuFlyoutItemBackgroundPressed", menuWell);
         foreach (var key in new[] { "MenuFlyoutItemForeground", "MenuFlyoutItemForegroundPointerOver", "MenuFlyoutItemForegroundPressed" }) Put(key, ink0);
         foreach (var key in new[] { "MenuFlyoutItemForegroundDisabled", "MenuFlyoutItemKeyboardAcceleratorTextForeground", "MenuFlyoutItemKeyboardAcceleratorTextForegroundPointerOver", "MenuFlyoutItemKeyboardAcceleratorTextForegroundPressed", "MenuFlyoutSubItemChevron", "MenuFlyoutSubItemChevronPointerOver", "MenuFlyoutSubItemChevronPressed" }) Put(key, Color.Parse(colours["Muted"]));
         Put("MenuFlyoutSeparatorBackground", line);
@@ -115,13 +150,15 @@ public static class ThemeEngine
         // The rail's view icons: on Light a softer grey than the quiet text colour (about 3.4 to 1 on the page), the chosen one in the quiet colour on its tint; on Dark the quiet colour and the ink as before.
         Put("RailIcon", Color.Parse(darkTheme ? colours["Muted"] : ThemeColours.Mix(colours["Muted"], colours["Surface"], .28)));
         Put("RailIconOn", Color.Parse(darkTheme ? colours["Ink"] : colours["Muted"]));
-        var field = Color.Parse(darkTheme ? ThemeColours.Mix(colours["Panel"], "#FFFFFF", .05) : ThemeColours.Mix(colours["Panel"], colours["Surface"], .5));
+        // Fields are sunk: the same well colour as a slider track, with the inset shadow from App.axaml and only a faint edge until they have the focus.
+        var field = Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .03) : ThemeColours.Mix(colours["Surface"], "#000000", .2));
+        var fieldEdge = lightGround ? Color.FromArgb(18, 72, 78, 92) : Color.FromArgb(22, 255, 255, 255);
         foreach (var key in new[] { "TextControlBackground", "TextControlBackgroundPointerOver", "TextControlBackgroundFocused", "ComboBoxBackground", "ComboBoxBackgroundPointerOver", "ComboBoxBackgroundPressed", "ComboBoxBackgroundUnfocused" }) Put(key, field);
-        foreach (var key in new[] { "TextControlBorderBrush", "TextControlBorderBrushPointerOver", "ComboBoxBorderBrush", "ComboBoxBorderBrushPressed" }) Put(key, line);
+        foreach (var key in new[] { "TextControlBorderBrush", "TextControlBorderBrushPointerOver", "ComboBoxBorderBrush", "ComboBoxBorderBrushPressed" }) Put(key, fieldEdge);
         foreach (var key in new[] { "TextControlBorderBrushFocused", "ComboBoxBackgroundBorderBrushFocused", "ComboBoxBorderBrushPointerOver" }) Put(key, accent);
         foreach (var key in new[] { "TextControlForeground", "ComboBoxForeground", "ComboBoxForegroundFocused", "ComboBoxForegroundFocusedPressed", "ComboBoxItemForeground", "ComboBoxItemForegroundPointerOver", "ComboBoxItemForegroundPressed", "ComboBoxItemForegroundSelected", "ComboBoxItemForegroundSelectedPointerOver", "ComboBoxItemForegroundSelectedPressed" }) Put(key, ink0);
         foreach (var key in new[] { "TextControlPlaceholderForeground", "TextControlPlaceholderForegroundPointerOver", "TextControlPlaceholderForegroundFocused", "ComboBoxPlaceHolderForeground", "ComboBoxDropDownGlyphForeground", "ComboBoxDropDownGlyphForegroundFocused", "ComboBoxDropDownGlyphForegroundFocusedPressed" }) Put(key, Color.Parse(colours["Muted"]));
-        Put("MeetBg", Color.Parse(colours["Hover"])); Put("MeetLine", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["Accent"], .55)));
+        Put("MeetBg", Color.Parse(colours["Panel"])); // A meeting is a small raised card on the sunk timeline, as the mock draws it. Put("MeetLine", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["Accent"], .55)));
         Put("ComboBoxDropDownBackground", Color.Parse(colours["Panel"])); Put("ComboBoxDropDownBorderBrush", line);
         foreach (var key in new[] { "ComboBoxItemBackgroundPointerOver", "ComboBoxItemBackgroundPressed" }) Put(key, Color.Parse(colours["Hover"]));
         foreach (var key in new[] { "ComboBoxItemBackgroundSelected", "ComboBoxItemBackgroundSelectedPointerOver", "ComboBoxItemBackgroundSelectedPressed" }) Put(key, Color.Parse(colours["Selected"]));
@@ -165,6 +202,8 @@ public static class ThemeEngine
     public static (Color Fill, Color Track) DisabledSliderColours(IReadOnlyDictionary<string, string> colours)
         => (Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Ink"], .5)), Color.Parse(ThemeColours.Mix(colours["Surface"], colours["Ink"], .28)));
     /// <summary>Raised after theme colours are written, so windows with their own chrome (title bars) can follow a change or a preview.</summary>
+    /// <summary>Developer switch: draw no raised or sunk shadows, to see how much of the frame time they take. Never saved.</summary>
+    public static bool FlatShadows { get; set; }
     public static event Action? Applied;
     /// <summary>Makes the themes available to the app.</summary>
     public static void Register(Application app, IEnumerable<ThemeDefinition> themes)

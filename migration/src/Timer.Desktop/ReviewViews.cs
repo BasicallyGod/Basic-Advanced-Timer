@@ -213,6 +213,7 @@ public static partial class ReviewViews
 
     public static Control Timeline(TimerModel model)
     {
+        FrameMonitor.Bump("timeline builds");
         var day = model.SelectedDate;
         var pixelsPerHour = model.TimelinePixelsPerHour;
         var planned = model.Notes.MeetingsOn(day);

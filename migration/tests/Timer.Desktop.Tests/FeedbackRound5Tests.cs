@@ -109,7 +109,7 @@ public sealed class FeedbackRound5Tests
             // The day is chosen in the reminder's own card, without its time or Remove: a month, the day in words, and Set.
             Click(window, "MeetingDay"); Settle(window);
             var popup = Find<ReminderPopup>(window, "ReminderPopup");
-            Assert.Equal(244, popup.Width); Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "ReminderHour" or "ReminderRemove"); Assert.Equal("Today", Find<TextBlock>(window, "ReminderSummary").Text);
+            Assert.Equal(ReminderPopup.DayOnlyWide, popup.Width); Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "ReminderHour" or "ReminderRemove"); Assert.Equal("Today", Find<TextBlock>(window, "ReminderSummary").Text);
             Click(window, "ReminderCell_" + Day.AddDays(3).ToString("yyyyMMdd")); Assert.Equal("Mon 12 Oct", Find<TextBlock>(window, "ReminderSummary").Text);
             Click(window, "ReminderSet"); Settle(window);
             Assert.Contains(Find<Button>(window, "MeetingDay").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Mon 12 Oct");

@@ -395,6 +395,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Applies the account list. <paramref name="renames"/> maps an account's old name to its new one (the list holds the new
     /// names). A rename always applies everywhere, so all recorded time, notes, groups and positions move to the new name after a backup
     /// copy is saved. To start afresh, add a new account instead.</summary>
+    /// <summary>The longest name a new or renamed account may have.</summary>
+    public const int MaxAccountNameLength = 24;
     public void SetAccounts(IEnumerable<AccountSettings> accounts, IReadOnlyDictionary<string, string>? renames = null, IReadOnlyCollection<string>? deleted = null)
     {
         renames ??= new Dictionary<string, string>(); deleted ??= Array.Empty<string>();
@@ -405,6 +407,9 @@ public sealed class TimerModel : INotifyPropertyChanged
             || (a.BudgetHours is { } h && (!double.IsFinite(h) || h <= 0)))
             || values.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Count)
             throw new ArgumentException("Use unique account names and positive budgets; Break is reserved.");
+        // A new or renamed name is kept short so it fits chips, tags and rows. A name an account already has stays as it is, however long, so nothing older is touched.
+        if (values.Any(a => a.Name.Length > MaxAccountNameLength && !preferences.Accounts.Any(e => e.Name == a.Name)))
+            throw new ArgumentException($"Use at most {MaxAccountNameLength} characters for an account name.");
         // An account can leave the list only when it is deleted on purpose, which also removes its history. Otherwise it has to be hidden.
         if (preferences.Accounts.Any(a => !deleted.Contains(a.Name) && !values.Any(v => v.Name == (renames.TryGetValue(a.Name, out var to) ? to : a.Name))))
             throw new ArgumentException("Hide existing accounts instead of removing them.");
@@ -575,9 +580,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool MoveEntries(IReadOnlyList<SessionRow> rows, string account)
         => ChangeLog(() => KeepingSelection(rows, () => { ValidateAccount(account); Editor.Reassign(rows, account); }));
     /// <summary>The colour for an account's slice in a chart or its legend dot. A dark theme tints its blocks down into the surface, which makes thin slices vanish, so charts there use the account's own colour (the block's edge).</summary>
-    public string ChartColour(string accountColour) { var look = BlockLook(accountColour); return CurrentTheme.Dark ? look.Edge : look.Fill; }
+    public string ChartColour(string accountColour) => AccountTones.Chart(Ui.Visible(accountColour), CurrentTheme.Dark);
     /// <summary>The fill, left edge and text colour of a timeline block for an account colour, by the selected theme's block rules.</summary>
-    public ThemeDerivation.BlockLook BlockLook(string accountColour) => ThemeDerivation.Block(CurrentTheme, Ui.Visible(accountColour));
+    /// <summary>How a block of this account is drawn: a livelier, deeper shade of its colour that holds white words (or a bright one with dark words for a pale yellow), and a deeper edge.</summary>
+    public ThemeDerivation.BlockLook BlockLook(string accountColour)
+    {
+        var (fill, ink) = AccountTones.Vivid(Ui.Visible(accountColour));
+        return new ThemeDerivation.BlockLook(fill, ThemeColours.Mix(fill, "#000000", .2), ink);
+    }
     public void SetTheme(string theme)
     {
         if (theme != ThemeLibrary.System && theme != AppThemes.Sun && Themes.All(t => t.Name != theme)) throw new ArgumentException("Unknown theme", nameof(theme));
@@ -837,11 +847,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         // The check is on the application's own dispatcher, which is what setting its theme verifies. The shared UI dispatcher is not always the same one (tests that build a
         // model off the UI thread while another headless session's application is current), and asking it let a call from the wrong thread through.
-        if (Application.Current is not { } app || !app.CheckAccess()) return;
+        // Setting the theme verifies against the shared UI dispatcher, which parallel headless sessions can move on from the application's own, so both must agree.
+        if (Application.Current is not { } app || !app.CheckAccess() || !Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) return;
         // System is Light or Dark by the computer's own setting, so the variant is chosen here and re-chosen when that setting changes.
         var variant = ThemeEngine.VariantFor(CurrentTheme);
         if (ReferenceEquals(variant, appliedVariant)) return;
-        appliedVariant = variant; app.RequestedThemeVariant = variant;
+        // A set the dispatcher still refuses (the race above, between the check and the set) is skipped and tried again at the next change, never thrown into the caller.
+        try { app.RequestedThemeVariant = variant; appliedVariant = variant; }
+        catch (InvalidOperationException) { }
     }
     // ---- Sunset to sunrise: Light by day and Dark by night. The clock tick saves and repaints every fifteen seconds, which is when the theme follows the sun. Saved as the appearance lines suncity=<city or hand> and sunhand=<dark from>-<light from>.
     private const string SunCityLine = "suncity=", SunHandLine = "sunhand=";
@@ -973,10 +986,13 @@ public sealed class TimerModel : INotifyPropertyChanged
             return Math.Clamp((Engine.Now - plan.Start).TotalSeconds / (plan.End - plan.Start).TotalSeconds, 0.0, 1.0);
         }
     }
+    /// <summary>Developer switch: skip the one-second refresh, so a page can be watched with nothing redrawing on the tick. Never saved; the clock stops moving while it is on.</summary>
+    public static bool TickPaused { get; set; }
     public void Tick()
     {
-        if (closed) return;
+        if (closed || TickPaused) return;
         ticks++;
+        FrameMonitor.Bump("clock ticks");
         FollowToday();
         Notes.MakeSeriesNotes(); // A repeating meeting's next days are made as time goes on.
         if (ticks % 60 == 0) Notes.RetryUnsaved();
@@ -1042,5 +1058,5 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>True while a reminder is due (its time has passed and it is not ticked off), which lights the blue light on the pill and the rail.</summary>
     public bool ReminderDue => Notes.AttentionCount > 0;
-    private void Notify() { ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
+    private void Notify() { FrameMonitor.Bump("model changes"); ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
 }

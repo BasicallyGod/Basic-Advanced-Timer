@@ -25,7 +25,7 @@ public sealed partial class SelectedBlockCard : Border
     public SelectedBlockCard(TimerModel model)
     {
         this.model = model; Name = "SelectedBlockCard";
-        CornerRadius = new CornerRadius(20); BorderThickness = new Thickness(1); Padding = new Thickness(18, 14, 18, 16);
+        CornerRadius = new CornerRadius(18); BorderThickness = new Thickness(1); Padding = new Thickness(18, 14, 18, 16);
         Classes.Add("dayCard");
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Sync(); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
@@ -217,7 +217,8 @@ public sealed partial class SelectedBlockCard : Border
             var card = new Border { Child = line, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Padding = new Thickness(10, 6) }; card.Classes.Add("selectedRow");
             rows.Children.Add(card);
         }
-        body.Children.Add(new ScrollViewer { Content = rows, MaxHeight = 128, Name = "SelectedRows" });
+        var rowsScroll = new ScrollViewer { Content = rows, MaxHeight = 128, Name = "SelectedRows" }; Ui.LeaveRoomForTrack(rowsScroll, rows);
+        body.Children.Add(rowsScroll);
         // Merge is always pressable: when it cannot work, pressing it says why in the toast.
         var merge = Ui.Ctl("MergeSelected", "Merge", IconKind.Merge, null, () => model.MergeSelection(), small: true);
         merge.Classes.Set("primary", model.CanMergeSelection);
