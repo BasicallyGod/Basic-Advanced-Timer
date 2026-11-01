@@ -151,3 +151,7 @@ The report includes dashboard capture cost, worst synchronous animation-update t
 The user's recording showed a zoomed/displaced snapshot followed by a snap back to the live layout. Dashboard snapshots now rasterize into a 96-DPI target with one explicit transform at the requested capture scale. They are drawn at fixed logical dimensions inside a Canvas layer, so bitmap intrinsic dimensions cannot change the dashboard's layout. Rendered-image regression coverage compares the live dashboard with its snapshot at 1, 1.25, 1.5 and 2 capture scales in Light and Dark. These are raster-scale comparisons; actual Windows per-monitor movement remains a native manual check.
 
 Transition reports additionally time snapshot release, pill Show, dashboard Hide, pill activation and deferred refresh. This separates the collapse handoff from animation callbacks when investigating terminal UI stalls; no claim is made that those intermittent stalls have been resolved.
+
+### First-frame transition alignment
+
+Both pill and dashboard captures now use the explicit-scale 96-DPI raster path. The dashboard snapshot is initially transparent and explicitly measured/arranged at its logical body bounds before animation can expose it. Regression checks assert matching image bounds immediately (without settling) in both directions, and compare pill geometry at 1, 1.25, 1.5 and 2 capture scales. This addresses two code-level inconsistencies that could produce the remaining brief size flash; native confirmation is still needed before claiming the intermittent frame is eliminated.

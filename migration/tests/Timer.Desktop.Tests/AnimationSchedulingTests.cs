@@ -20,10 +20,14 @@ public sealed class AnimationSchedulingTests
             var image = window.GetVisualDescendants().OfType<Avalonia.Controls.Image>().Single(c => c.Name == "MorphDashboardSnapshot");
             var card = new Rect(12, 12, 406, 72);
             window.ShrinkTo(card, 20, null, default, () => { });
+            var body = (Avalonia.Controls.Control)((Avalonia.Controls.Grid)window.GetVisualDescendants().OfType<Border>().Single(c => c.Name == "DashboardSurface").Child!).Children[0];
+            Assert.Equal(body.Bounds, image.Bounds); // Before any settling/render passes.
             window.SetMorph(.5);
             Assert.NotNull(image.Source); Assert.True(image.IsVisible); Assert.Equal(0, window.ContentOpacity);
             window.Hide(); Assert.Null(image.Source); Assert.Equal(1, window.ContentOpacity);
-            window.GrowFrom(card, 20, null, default); window.SetMorph(.5);
+            window.GrowFrom(card, 20, null, default);
+            Assert.Equal(body.Bounds, image.Bounds);
+            window.SetMorph(.5);
             Assert.NotNull(image.Source); Assert.True(image.IsVisible);
             window.Hide(); Assert.Null(image.Source);
             Motion.Override = true;
