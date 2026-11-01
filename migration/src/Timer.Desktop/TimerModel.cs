@@ -395,6 +395,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Applies the account list. <paramref name="renames"/> maps an account's old name to its new one (the list holds the new
     /// names). A rename always applies everywhere, so all recorded time, notes, groups and positions move to the new name after a backup
     /// copy is saved. To start afresh, add a new account instead.</summary>
+    /// <summary>The longest name a new or renamed account may have.</summary>
+    public const int MaxAccountNameLength = 24;
     public void SetAccounts(IEnumerable<AccountSettings> accounts, IReadOnlyDictionary<string, string>? renames = null, IReadOnlyCollection<string>? deleted = null)
     {
         renames ??= new Dictionary<string, string>(); deleted ??= Array.Empty<string>();
@@ -405,6 +407,9 @@ public sealed class TimerModel : INotifyPropertyChanged
             || (a.BudgetHours is { } h && (!double.IsFinite(h) || h <= 0)))
             || values.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != values.Count)
             throw new ArgumentException("Use unique account names and positive budgets; Break is reserved.");
+        // A new or renamed name is kept short so it fits chips, tags and rows. A name an account already has stays as it is, however long, so nothing older is touched.
+        if (values.Any(a => a.Name.Length > MaxAccountNameLength && !preferences.Accounts.Any(e => e.Name == a.Name)))
+            throw new ArgumentException($"Use at most {MaxAccountNameLength} characters for an account name.");
         // An account can leave the list only when it is deleted on purpose, which also removes its history. Otherwise it has to be hidden.
         if (preferences.Accounts.Any(a => !deleted.Contains(a.Name) && !values.Any(v => v.Name == (renames.TryGetValue(a.Name, out var to) ? to : a.Name))))
             throw new ArgumentException("Hide existing accounts instead of removing them.");

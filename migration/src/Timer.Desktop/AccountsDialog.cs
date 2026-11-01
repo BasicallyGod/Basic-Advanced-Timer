@@ -52,7 +52,7 @@ public sealed class AccountsDialog : Dialog
         void Add(AccountSettings account, bool existing = true)
         {
             var row = Ui.Grid("26,*,50,80,85,110,44");
-            var name = new TextBox { Text = account.Name, Margin = new Thickness(0, 0, 8, 0) };
+            var name = new TextBox { Text = account.Name, MaxLength = Math.Max(TimerModel.MaxAccountNameLength, account.Name.Length), Margin = new Thickness(0, 0, 8, 0) };
             Ui.Put(row, name, 1);
             // A new account starts on the first palette colour nobody here is using, as the model would give it.
             var chosen = account.Colour ?? TimerModel.Palette.FirstOrDefault(c => !entries.Any(e => e.Colour().Equals(c, StringComparison.OrdinalIgnoreCase))) ?? TimerModel.Palette[0];
@@ -83,7 +83,7 @@ public sealed class AccountsDialog : Dialog
         bool Taken(string name) => entries.Any(e => (e.Name.Text ?? "").Trim().Equals(name, StringComparison.OrdinalIgnoreCase));
         Ui.Put(root, new ScrollViewer { Content = list, AllowAutoHide = false }, row: 1);
         var error = new TextBlock { Classes = { "overtime" }, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new Thickness(0, 10) };
-        var input = new TextBox { Watermark = "New account name", Width = 280 };
+        var input = new TextBox { Watermark = "New account name", Width = 280, MaxLength = TimerModel.MaxAccountNameLength };
         var add = Ui.Horizontal(input, Ui.DialogButton("Add account", () =>
         {
             var name = input.Text?.Trim() ?? "";
