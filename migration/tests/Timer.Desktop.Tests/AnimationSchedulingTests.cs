@@ -48,9 +48,8 @@ public sealed class AnimationSchedulingTests
         {
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekOverviewTab")
                 .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-            // The non-timeline workspace is the content host whose child is the rendered week.
             var host = window.GetVisualDescendants().OfType<ContentControl>()
-                .Single(c => c.GetType() == typeof(ContentControl) && c.Content is Control && c.Name != "TimelineHost");
+                .Single(c => c.Name == "WorkspaceHost");
             model.GoToDate(model.Engine.Now.AddDays(-7)); var previous = host.Content;
             for (var i = 0; i < 15; i++) { now = now.AddSeconds(1); model.Tick(); }
             Assert.Same(previous, host.Content);

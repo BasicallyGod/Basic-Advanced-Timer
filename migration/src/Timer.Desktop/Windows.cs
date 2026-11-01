@@ -272,7 +272,7 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock workingValue = Value(), allocatedValue = Value(), unallocatedValue = Value();
     private static TextBlock Value() => new() { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock date = Ui.Text("", 14); private Button datePick = null!;
-    private readonly ContentControl workspace = new(), timelineHost = new() { Name = "TimelineHost" };
+    private readonly ContentControl workspace = new() { Name = "WorkspaceHost" }, timelineHost = new() { Name = "TimelineHost" };
     private Border timelineCard = null!; private MessageBar messageBar = null!; private Grid timelinePage = null!; private SelectedBlockCard selectedCard = null!; private NotesCard notesCard = null!;
     private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, notesTab = null!, addTime = null!, bell = null!; private Control viewTabs = null!;
     private Border bellBadge = null!; private Control bellHostPanel = null!; private TextBlock bellBadgeText = null!; private TextBox searchBox = null!; private Control searchHost = null!; private Popup bellPopup = null!; private NotesPage? notesPage;
