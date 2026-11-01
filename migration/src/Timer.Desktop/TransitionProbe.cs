@@ -24,5 +24,10 @@ internal sealed class TransitionProbe : IDisposable
         timer.Start();
     }
     private void Layout(object? sender, EventArgs e) => timing?.Layout();
-    public void Dispose() { timer.Stop(); window.LayoutUpdated -= Layout; }
+    public void Dispose()
+    {
+        timer.Stop(); window.LayoutUpdated -= Layout;
+        // Include a stall at the end even if completion ran before the delayed timer callback.
+        timing?.ProbeDelay(Math.Max(0, Stopwatch.GetElapsedTime(previous).TotalMilliseconds - 20));
+    }
 }
