@@ -565,6 +565,7 @@ public sealed class DashboardWindow : Window
     private void StartMorph(double from, double to, bool closing, Action? done)
     {
         morphPump?.Stop(); morphWatchdog?.Stop();
+        transitionProbe?.Dispose(); transitionProbe = null;
         ReleaseSnapshot();
         transitionTiming ??= TransitionTimings.Begin(closing ? "collapse" : "expand");
         if (!WindowMorph.Enabled || Motion.Reduced) { SetMorph(to); CompleteMorph(done, "instant"); return; }
