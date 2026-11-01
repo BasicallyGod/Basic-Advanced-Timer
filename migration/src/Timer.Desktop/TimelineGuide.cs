@@ -101,9 +101,9 @@ public static class TimelineGuide
         // A pin turns red when its time passes, without the whole timeline being drawn again.
         if (pins.Count > 0 && day == model.Engine.Now.Date)
         {
-            DispatcherTimer? timer = null;
-            canvas.AttachedToVisualTree += (_, _) => { timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) }; timer.Tick += (_, _) => { foreach (var pin in pins) Recolour(pin); }; timer.Start(); };
-            canvas.DetachedFromVisualTree += (_, _) => { timer?.Stop(); timer = null; };
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+            timer.Tick += (_, _) => { foreach (var pin in pins) Recolour(pin); };
+            _ = new ViewActivity(canvas, active => { if (active) { foreach (var pin in pins) Recolour(pin); timer.Start(); } else timer.Stop(); });
         }
 
         // ---- the guide

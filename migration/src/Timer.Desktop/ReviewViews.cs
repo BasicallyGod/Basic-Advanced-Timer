@@ -469,9 +469,9 @@ public static partial class ReviewViews
                 nowText.Text = now.ToString("HH:mm"); Canvas.SetLeft(nowChip, x - nowChip.Width / 2); Canvas.SetTop(nowChip, BandBottom + 10);
             }
             PlaceNow();
-            DispatcherTimer? nowTimer = null;
-            canvas.AttachedToVisualTree += (_, _) => { nowTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) }; nowTimer.Tick += (_, _) => PlaceNow(); nowTimer.Start(); };
-            canvas.DetachedFromVisualTree += (_, _) => { nowTimer?.Stop(); nowTimer = null; };
+            var nowTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            nowTimer.Tick += (_, _) => PlaceNow();
+            _ = new ViewActivity(canvas, active => { if (active) { PlaceNow(); nowTimer.Start(); } else nowTimer.Stop(); });
         }
         TimelineGuide.Attach(canvas, model, day, pixelsPerHour, TimelineGutter, AxisY, BandBottom, planned.Count > 0 ? meetingTop : bandTop, pinned);
         DateTime clicked = day.AddHours(9);
