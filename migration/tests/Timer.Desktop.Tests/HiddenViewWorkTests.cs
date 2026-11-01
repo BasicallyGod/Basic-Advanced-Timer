@@ -82,7 +82,8 @@ public sealed class HiddenViewWorkTests
         {
             FrameMonitor.Instance.Start(window); Assert.True(chip.IsVisible);
             FrameMonitor.Instance.Stop(); Assert.False(chip.IsVisible);
-            window.Content = null; window.Content = chip;
+            window.Content = null; Dispatcher.UIThread.RunJobs();
+            window.Content = chip; Dispatcher.UIThread.RunJobs();
             FrameMonitor.Instance.Start(window); Assert.True(chip.IsVisible);
             FrameMonitor.Instance.Stop(); Assert.False(chip.IsVisible);
         }
