@@ -21,7 +21,7 @@ public sealed class Sidebar : Border
 
     public Sidebar(TimerModel model, Action clockClick, Action circleClick, Action manage, Action quit)
     {
-        Name = "Sidebar"; base.Width = Width; BorderThickness = new Thickness(0, 0, 1, 0); Padding = new Thickness(12, 14, 12, 14);
+        Name = "Sidebar"; base.Width = Width; BorderThickness = new Thickness(0); Padding = new Thickness(12, 14, 12, 14);
         Classes.Add("panel"); this.Bind(BorderBrushProperty, this.GetResourceObservable("Line"));
         // The lights and the day clock are the pill's own, and the card is what the pill's play tile, account chip and break become when there is room for all three.
         Face = new StatusFace(model, "Sidebar", "DashboardBreak", "Collapse to pill", clockClick, circleClick, () => { }, sidebar: true);
@@ -34,7 +34,9 @@ public sealed class Sidebar : Border
         Ui.Put(grid, heading, 0, 1);
         AccountScroll = new ScrollViewer { Name = "SidebarAccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        Ui.Put(grid, Ui.WithMoreBelow(AccountScroll), 0, 2);
+        // The rows are as wide as Quit timer. The scroll box reaches 10 pixels past them each side, so their raised shadows are not clipped.
+        var scrollHost = Ui.WithMoreBelow(AccountScroll); scrollHost.Margin = new Thickness(-10, 0, -10, 0);
+        Ui.Put(grid, scrollHost, 0, 2);
         // The foot: Quit timer closes it for good and goes red under the pointer. There is no Start day or Finish day: the day begins with its first block.
         var quitGlyph = new IconGlyph(IconKind.Close);
         QuitButton = new Button { Name = "QuitTimer", Content = Ui.Horizontal(quitGlyph, new TextBlock { Text = "Quit timer", VerticalAlignment = VerticalAlignment.Center }) }; ((StackPanel)QuitButton.Content).Spacing = 7;
