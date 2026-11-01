@@ -85,7 +85,6 @@
     <Style Selector="TextBlock.clockIdle"><Setter Property="Foreground" Value="{DynamicResource Clock}" /></Style>
     <Style Selector="TextBlock.idle"><Setter Property="Foreground" Value="{DynamicResource Idle}" /></Style>
     <Style Selector=":is(Border).selectionStrip"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
-    <Style Selector="Border.scrollEdge"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Ellipse.stepDot"><Setter Property="Fill" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Ellipse.live"><Setter Property="Fill" Value="{DynamicResource Live}" /></Style>
     <Style Selector="Ellipse.break"><Setter Property="Fill" Value="{DynamicResource Break}" /></Style>

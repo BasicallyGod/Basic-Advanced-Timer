@@ -15,6 +15,7 @@ public sealed class WindowCoordinator
     public DashboardWindow Dashboard { get; }
     private readonly TimerModel model;
     private bool quitting, dashboardWasShown;
+    private int visibilityRun;
     // Whether closing a window hides the timer to the tray. Without a tray the window really closes, as it always did.
     public bool HideToTray { get => hideToTray; set { hideToTray = value; ApplyTaskbar(); } }
     private bool hideToTray;
@@ -23,12 +24,13 @@ public sealed class WindowCoordinator
         // Only a timer that can hide in the tray may leave the taskbar.
         var show = model.TaskbarButton || !hideToTray;
         if (Pill.ShowInTaskbar != show) Pill.ShowInTaskbar = show;
-        if (Dashboard.ShowInTaskbar != show) Dashboard.ShowInTaskbar = show;
+        if (Dashboard.ShowInTaskbar != (show && !warming)) Dashboard.ShowInTaskbar = show && !warming;
     }
     public bool IsShown => Pill.IsVisible || Dashboard.IsVisible;
     public WindowCoordinator(TimerModel model, Action exit)
     {
         this.model = model;
+        using var construction = PerformanceTimings.Measure("window construction");
         Pill = new PillWindow(model);
         Dashboard = new DashboardWindow(model);
         // A taskbar button by default, so the timer can be pinned and launched like any app. It can be switched off to run from the tray alone.
@@ -37,6 +39,7 @@ public sealed class WindowCoordinator
         // The dashboard grows out of the pill's card (see WindowMorph) and shrinks back into a pill at the sidebar's top left.
         Pill.OpenDashboard = () =>
         {
+            using var preparation = PerformanceTimings.Measure("expand preparation");
             EndWarm(false);
             model.ShowToday();
             Pill.CloseFlyouts(); // So it is a capsule again when you come back.
@@ -51,6 +54,8 @@ public sealed class WindowCoordinator
         Dashboard.OpenPill = () =>
         {
             if (Dashboard.Morphing) return;
+            using var preparation = PerformanceTimings.Measure("collapse preparation");
+            var visibility = ++visibilityRun;
             Dashboard.CloseFlyouts(); Pill.CloseFlyouts();
             PlaceByCard(Pill, Dashboard, Pill.WindowWidthNow, Pill.WindowHeightNow, Pill.Scale, WindowMorph.PillInset);
             Pill.WindowState = WindowState.Normal;
@@ -59,7 +64,7 @@ public sealed class WindowCoordinator
             Dashboard.ShrinkTo(card, radius, picture, at, () =>
             {
                 Pill.Show(); Dashboard.Hide(); BringToFront(Pill);
-                Avalonia.Threading.DispatcherTimer.RunOnce(KeepPillReachable, TimeSpan.FromMilliseconds(400));
+                Avalonia.Threading.DispatcherTimer.RunOnce(() => { if (visibility == visibilityRun) KeepPillReachable(); }, TimeSpan.FromMilliseconds(400));
             });
         };
         Pill.Closed += (_, _) => exit();
@@ -85,15 +90,16 @@ public sealed class WindowCoordinator
         {
             try
             {
-                if (Dashboard.IsVisible || Motion.Reduced) return;
+                if (Dashboard.IsVisible || !Pill.IsVisible || quitting || Motion.Reduced) return;
                 // Shown once, fully see-through, far off screen and not in the taskbar, for a few frames: its native window, its drawing surface and every shadow and
                 // control are built then, so the first grow from the pill only has to draw. Hidden again at once, so nobody sees it.
                 warming = true; warmOpacity = Dashboard.Opacity;
                 Dashboard.Opacity = 0; Dashboard.ShowActivated = false; Dashboard.ShowInTaskbar = false; Dashboard.Position = new PixelPoint(-32000, -32000);
+                using var warmTiming = PerformanceTimings.Measure("warm-up show");
                 Dashboard.Show();
                 Avalonia.Threading.DispatcherTimer.RunOnce(() => EndWarm(true), TimeSpan.FromMilliseconds(500));
             }
-            catch (Exception) { warming = false; /* Only a warm-up. */ }
+            catch (Exception) { EndWarm(true); /* Only a warm-up; restore ordinary window state. */ }
         }, TimeSpan.FromMilliseconds(800));
     }
     // Ends the warm-up: the window is made ordinary again, and hidden unless somebody asked for the dashboard in the meantime.
@@ -148,11 +154,14 @@ public sealed class WindowCoordinator
     }
     public void Hide()
     {
+        visibilityRun++;
+        EndWarm(true);
         dashboardWasShown = Dashboard.IsVisible;
         Pill.Hide(); Dashboard.Hide();
     }
     public void ShowTimer()
     {
+        EndWarm(true);
         if (IsShown) { (Dashboard.IsVisible ? (Window)Dashboard : Pill).Activate(); return; }
         if (dashboardWasShown) ShowDashboard(); else { Pill.Show(); BringToFront(Pill); }
         RescueOffScreen();
@@ -468,8 +477,11 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += (_, _) => UpdateOnboarding();
         model.EntryRequested += ShowEntry;
         model.AccountsRequested += ShowAccounts;
-        Closed += (_, _) => { model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.AccountsRequested -= ShowAccounts; };
+        Opened += (_, _) => FlushRefresh();
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) CancelMorph(); };
+        Closed += (_, _) => { CancelMorph(); SetPillPicture(null, default); model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.AccountsRequested -= ShowAccounts; };
         Refresh(true);
+        dashboardReady = true;
         UpdateOnboarding();
     }
     // ---- the shadow, and the grow and shrink between the pill and the dashboard
@@ -482,11 +494,13 @@ public sealed class DashboardWindow : Window
     }
     private Avalonia.Animation.Transitions? shadowFade;
     private double morph = 1, morphRadius = WindowMorph.DashboardRadius; private Rect morphFrom;
-    private int morphRun;
+    private AnimationFramePump? morphPump;
+    private Avalonia.Threading.DispatcherTimer? morphWatchdog;
+    private bool dashboardReady, refreshPending, workspacePending;
     /// <summary>How far the dashboard has grown from the pill, 0 (the pill's card) to 1 (the whole window).</summary>
     public double MorphProgress => morph;
     /// <summary>Whether the window is in the middle of growing or shrinking, when nothing in it can be pressed.</summary>
-    public bool Morphing => morph < 1;
+    public bool Morphing => morphPump?.Running == true || morph < 1;
     /// <summary>How much of the dashboard shows, and whether it takes presses (for tests).</summary>
     public double ContentOpacity => dashboardBody!.Opacity; public bool ContentTakesPresses => layers.IsHitTestVisible;
     /// <summary>
@@ -514,41 +528,53 @@ public sealed class DashboardWindow : Window
     }
     private void StartMorph(double from, double to, bool closing, Action? done)
     {
-        var run = ++morphRun; // Any earlier animation sees a different number and stops.
-        if (!WindowMorph.Enabled || Motion.Reduced) { SetMorph(to); done?.Invoke(); return; }
+        CancelMorph();
+        if (!WindowMorph.Enabled || Motion.Reduced) { SetMorph(to); done?.Invoke(); FlushRefresh(); return; }
         SetMorph(from);
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
-        // Each step is tied to the screen's own refresh (the frame request), not to a 16 ms timer, which beats against a 60 Hz screen and drops or doubles frames.
-        // A window that is not being drawn (no display, minimised, covered on some machines) never gets that request, so a plain timer steps in whenever no frame has
-        // come for 50 ms: the animation always finishes and the dashboard never stays half grown with nothing able to be pressed.
-        var lastStep = System.Diagnostics.Stopwatch.GetTimestamp();
-        Avalonia.Threading.DispatcherTimer? watchdog = null;
-        var finished = false;
-        void Finish() { finished = true; watchdog?.Stop(); }
-        void Step(TimeSpan _)
+        var previous = 0d;
+        var first = true;
+        var direction = closing ? "collapse" : "expand";
+        morphPump ??= new AnimationFramePump(RequestAnimationFrame,
+            () => System.Diagnostics.Stopwatch.GetTimestamp() * 1000d / System.Diagnostics.Stopwatch.Frequency);
+        morphWatchdog ??= new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(25), Avalonia.Threading.DispatcherPriority.Render,
+            (_, _) => morphPump.Watchdog());
+        morphPump.Start(closing ? WindowMorph.CloseMilliseconds : WindowMorph.OpenMilliseconds, elapsed =>
         {
-            if (finished) return; // A step from the timer and one from a frame request can be waiting together; the end must run once.
-            if (run != morphRun) { Finish(); return; }
-            lastStep = System.Diagnostics.Stopwatch.GetTimestamp();
-            var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
-            var length = closing ? WindowMorph.CloseMilliseconds : WindowMorph.OpenMilliseconds;
-            var e = WindowMorph.Ease(elapsed, closing);
-            // Opening runs m from 0 up to 1; closing runs it back from 1 down to 0 along the same ease.
-            SetMorph(closing ? 1 - e : e);
-            if (elapsed >= length) { Finish(); SetMorph(to); done?.Invoke(); return; }
-            RequestAnimationFrame(Step);
-        }
-        watchdog = new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(25), Avalonia.Threading.DispatcherPriority.Render, (_, _) =>
+            elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            PerformanceTimings.Record(direction + (first ? " first callback" : " callback gap"), elapsed - previous);
+            previous = elapsed; first = false;
+            var eased = WindowMorph.Ease(elapsed, closing);
+            SetMorph(closing ? 1 - eased : eased);
+        }, () =>
         {
-            if (run != morphRun) { Finish(); return; }
-            if (System.Diagnostics.Stopwatch.GetElapsedTime(lastStep).TotalMilliseconds > 50) Step(TimeSpan.Zero);
+            morphWatchdog.Stop();
+            SetMorph(to);
+            PerformanceTimings.Record(direction + " total", System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            done?.Invoke();
+            FlushRefresh();
         });
-        watchdog.Start();
-        RequestAnimationFrame(Step);
+        morphWatchdog.Start();
+        layers.IsHitTestVisible = false;
+    }
+    private void CancelMorph()
+    {
+        morphPump?.Stop(); morphWatchdog?.Stop();
+        SetMorph(1);
+    }
+    private void FlushRefresh()
+    {
+        if (!refreshPending || !IsVisible || morphPump?.Running == true) return;
+        var workspace = workspacePending;
+        refreshPending = workspacePending = false;
+        Refresh(workspace);
     }
     private void SetPillPicture(Avalonia.Media.Imaging.Bitmap? picture, Rect where)
     {
-        morphOverlay.Source = picture; morphOverlay.Margin = new Thickness(where.X, where.Y, 0, 0); morphOverlay.Width = where.Width; morphOverlay.Height = where.Height;
+        var previous = morphOverlay.Source;
+        morphOverlay.Source = picture;
+        if (!ReferenceEquals(previous, picture)) (previous as IDisposable)?.Dispose();
+        morphOverlay.Margin = new Thickness(where.X, where.Y, 0, 0); morphOverlay.Width = where.Width; morphOverlay.Height = where.Height;
     }
     /// <summary>Shows the window grown from the pill's card: it starts as the pill and eases out to the whole dashboard.</summary>
     /// <param name="card">The pill's card in this window's card coordinates.</param><param name="radius">The pill's corner radius.</param>
@@ -714,6 +740,11 @@ public sealed class DashboardWindow : Window
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Refresh(e.PropertyName != nameof(TimerModel.Elapsed));
     private void Refresh(bool refreshWorkspace)
     {
+        if (dashboardReady && (!IsVisible || morphPump?.Running == true))
+        {
+            refreshPending = true; workspacePending |= refreshWorkspace;
+            return;
+        }
         sidebar.Refresh(model);
         var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
         date.Text = weekMode ? WeekRange(model.WeekStart(model.SelectedDate), british) : model.SelectedDate.ToString("ddd d MMM", british);
@@ -746,6 +777,7 @@ public sealed class DashboardWindow : Window
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
         if (settingsMode ? !renderedSettings : notesMode ? !renderedNotes : refreshWorkspace)
         {
+            using var rebuild = PerformanceTimings.Measure("workspace rebuild");
             var timeline = !settingsMode && !weekMode && !notesMode;
             ContentControl host = timeline ? timelineHost : workspace;
             var oldScroll = host.Content is ScrollViewer directOld ? directOld

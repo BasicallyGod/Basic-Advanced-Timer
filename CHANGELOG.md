@@ -6,10 +6,17 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 1 November 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Alpha performance foundation | [54abc48](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/54abc48) | Sync Experimental; keep one pending morph frame request during watchdog recovery, cancel on hide/close, consolidate dashboard refreshes while hidden or animating, release replaced captures, and add passive operation timings to Copy report. Visual design and animation durations unchanged. |
+
 ## 31 October 2026
 
 | Change | Commit | Details |
 |---|---|---|
+| Scroll lines and tooltips | [bf414b579d0462c738a3f0b965965e59ab2fe67f](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/bf414b579d0462c738a3f0b965965e59ab2fe67f) | The hairlines at the top and bottom of scrolling content are gone everywhere (`Ui.WithMoreBelow` removed). An account row's tooltip is now two lines, the name and then the budget used, its period and the percentage, with no explanation of the bar. |
 | Tooltip stars | [d3f8065c6d16cebd490396d5d75e1c6e6ec702ba](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/d3f8065c6d16cebd490396d5d75e1c6e6ec702ba) | The stars on the timeline's note tooltips are scaled down to sit within their line of words (the glyph ignored its width, so it drew at full size). |
 | Account name limit | [fd9ad14479b2dc65eb1a6dafa4a7b7143e339b21](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/fd9ad14479b2dc65eb1a6dafa4a7b7143e339b21) | A new or renamed account name is at most 24 characters (the boxes stop typing there and Save refuses a longer one). Names accounts already have are left alone however long. |
 | Round 42 | [fccf081dfc2dacdba616bbc27d8c72859e7a1011](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/fccf081dfc2dacdba616bbc27d8c72859e7a1011) | Chips that wrap onto a second line in the note form and on the Notes page no longer touch (4 pixels between lines). The sidebar's rows and the first card are 14 pixels apart, as the cards are from each other. The pill's left edge is 10 pixels, level with its top and bottom, so the pill is 10 narrower (406). |

@@ -519,16 +519,12 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string BudgetUsage(TimerAccount a) => a.Budget is { } target ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)}" : "No budget";
     /// <summary>The period the budget covers, in words that sit beside the usage, or an empty string when there is no budget.</summary>
     public string BudgetPeriodLabel(TimerAccount a) => a.Budget is null ? "" : a.Period switch { "day" => "Today", "month" => "This month", "quarter" => "This quarter", _ => "This week" };
-    /// <summary>The detail shown on hover instead of a percentage on the row: how much is used, and what the pace line means.</summary>
+    /// <summary>The detail shown on hover instead of a percentage on the row: how much of the budget is used, and that it is over when it is.</summary>
     public string BudgetDetail(TimerAccount a)
-    {
-        if (BudgetRatio(a) is not { } ratio) return "No budget";
-        var period = a.Period is "day" or "month" or "quarter" ? (a.Period == "day" ? "working day" : a.Period) : "week";
-        return $"{Math.Round(ratio * 100)}% used{(ratio >= 1 ? " · over budget" : "")}\nLine: how far through the {period}";
-    }
-    /// <summary>What the narrow account row says on hover: today's time is on the row, so this is the budget used against its target and the period, then how it is going.</summary>
+        => BudgetRatio(a) is not { } ratio ? "No budget" : $"{Math.Round(ratio * 100)}% used{(ratio >= 1 ? " · over budget" : "")}";
+    /// <summary>What the narrow account row says on hover: the name (it may be cut short on the row), then the budget used against its target and the period.</summary>
     public string BudgetRowTip(TimerAccount a)
-        => a.Budget is null ? a.Display + "\nNo budget" : $"{a.Display}\n{BudgetUsage(a)} · {BudgetPeriodLabel(a).ToLowerInvariant()}\n{BudgetDetail(a)}";
+        => a.Budget is null ? a.Display + "\nNo budget" : $"{a.Display}\n{BudgetUsage(a)} · {BudgetPeriodLabel(a).ToLowerInvariant()} · {BudgetDetail(a)}";
     public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
     /// <summary>Puts the timeline and week views back on the current day. The dashboard does this whenever it is opened, so it never comes up on a day left over from earlier.</summary>
@@ -1001,6 +997,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     public bool Save()
     {
+        using var timing = PerformanceTimings.Measure("save");
         // Once the app is closing, or its database has been closed, there is nothing left to save and a late tick must not try.
         if (closed || store is { IsDisposed: true }) return true;
         try { store?.Save(Engine, preferences); if (LastError is not null) { LastError = null; Notify(); } return true; } // A failure that has cleared is shown as gone at once, not at the next change.

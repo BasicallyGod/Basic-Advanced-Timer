@@ -23,6 +23,6 @@ public sealed class AccountsPanel : Grid
         var title = compact ? Ui.Text("Accounts", 15) : Ui.Heading("Accounts"); title.FontWeight = FontWeight.SemiBold; title.VerticalAlignment = VerticalAlignment.Center; heading.Children.Add(title);
         Scroll = new ScrollViewer { Name = prefix + "AccountScroll", Content = list = new AccountList(model, reorderable: reorderable, bars: true, compact: compact), AllowAutoHide = false,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        Children.Add(heading); var scroll = Ui.WithMoreBelow(Scroll); SetRow(scroll, 1); Children.Add(scroll);
+        Children.Add(heading); SetRow(Scroll, 1); Children.Add(Scroll);
     }
 }

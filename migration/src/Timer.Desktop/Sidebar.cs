@@ -35,8 +35,8 @@ public sealed class Sidebar : Border
         AccountScroll = new ScrollViewer { Name = "SidebarAccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         // The rows are as wide as Quit timer. The scroll box reaches 10 pixels past them each side, so their raised shadows are not clipped.
-        var scrollHost = Ui.WithMoreBelow(AccountScroll); scrollHost.Margin = new Thickness(-10, 0, -10, 0);
-        Ui.Put(grid, scrollHost, 0, 2);
+        AccountScroll.Margin = new Thickness(-10, 0, -10, 0);
+        Ui.Put(grid, AccountScroll, 0, 2);
         // The foot: Quit timer closes it for good and goes red under the pointer. There is no Start day or Finish day: the day begins with its first block.
         var quitGlyph = new IconGlyph(IconKind.Close);
         QuitButton = new Button { Name = "QuitTimer", Content = Ui.Horizontal(quitGlyph, new TextBlock { Text = "Quit timer", VerticalAlignment = VerticalAlignment.Center }) }; ((StackPanel)QuitButton.Content).Spacing = 7;
