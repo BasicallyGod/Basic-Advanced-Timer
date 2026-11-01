@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 1 November 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Alpha performance foundation | [54abc48](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/54abc48) | Sync Experimental; keep one pending morph frame request during watchdog recovery, cancel on hide/close, consolidate dashboard refreshes while hidden or animating, release replaced captures, and add passive operation timings to Copy report. Visual design and animation durations unchanged. |
+
 ## 31 October 2026
 
 | Change | Commit | Details |
