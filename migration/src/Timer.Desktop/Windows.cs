@@ -12,7 +12,11 @@ namespace Timer.Desktop;
 public sealed class WindowCoordinator
 {
     public PillWindow Pill { get; }
-    public DashboardWindow Dashboard { get; }
+    private DashboardWindow? dashboard;
+    public DashboardWindow Dashboard => dashboard ?? CreateDashboard();
+    public bool DashboardCreated => dashboard is not null;
+    private readonly Action exit;
+    private bool dashboardShown;
     private readonly TimerModel model;
     private bool quitting, dashboardWasShown;
     private int visibilityRun;
@@ -24,21 +28,22 @@ public sealed class WindowCoordinator
         // Only a timer that can hide in the tray may leave the taskbar.
         var show = model.TaskbarButton || !hideToTray;
         if (Pill.ShowInTaskbar != show) Pill.ShowInTaskbar = show;
-        if (Dashboard.ShowInTaskbar != (show && !warming)) Dashboard.ShowInTaskbar = show && !warming;
+        if (dashboard is not null && dashboard.ShowInTaskbar != (show && !warming)) dashboard.ShowInTaskbar = show && !warming;
     }
-    public bool IsShown => Pill.IsVisible || Dashboard.IsVisible;
+    public bool IsShown => Pill.IsVisible || dashboard?.IsVisible == true;
     public WindowCoordinator(TimerModel model, Action exit)
     {
-        this.model = model;
+        this.model = model; this.exit = exit;
         using var construction = PerformanceTimings.Measure("window construction");
-        Pill = new PillWindow(model);
-        Dashboard = new DashboardWindow(model);
+        using (PerformanceTimings.Measure("pill construction")) Pill = new PillWindow(model);
         // A taskbar button by default, so the timer can be pinned and launched like any app. It can be switched off to run from the tray alone.
         ApplyTaskbar();
         model.PropertyChanged += (_, _) => ApplyTaskbar();
         // The dashboard grows out of the pill's card (see WindowMorph) and shrinks back into a pill at the sidebar's top left.
         Pill.OpenDashboard = () =>
         {
+            var requestedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+            using var firstRequest = StartupTimings.MeasureOnce("first dashboard open preparation");
             Dashboard.PrepareMorph(false);
             using var preparation = PerformanceTimings.Measure("expand preparation");
             EndWarm(false);
@@ -50,7 +55,37 @@ public sealed class WindowCoordinator
             Dashboard.GrowFrom(card, radius, picture, at);
             Pill.Hide();
             Dashboard.Activate();
+            ObserveFirstDashboardCallback(requestedAt, firstRequest is not null);
         };
+        Pill.Closed += (_, _) => exit();
+        Pill.Closing += OnClosing;
+        model.QuitRequested += Quit;
+        // Requests can arrive from pill menus before the dashboard has been constructed.
+        // New event handlers are not part of the invocation already in progress, so deliver
+        // that first request explicitly; subsequent requests use the dashboard's handlers.
+        model.AccountsRequested += () => { if (dashboard is null) Dashboard.ShowAccounts(); };
+        model.OpenDayRequested += _ => { if (dashboard is null) Dashboard.SelectTab(false); };
+        model.PageRequested += page => { if (dashboard is null) { var view = Dashboard; if (page == "week") view.SelectTab(true); else if (page == "notes") view.ShowNotes(); } };
+        model.Notes.OpenNoteRequested += id => { if (dashboard is null) Dashboard.OpenRequestedNote(id); };
+        // Tucks the timer away with tracking still running. Without a tray it goes to the taskbar instead, so it can never be lost.
+        model.HideRequested += () =>
+        {
+            if (HideToTray) Hide();
+            else foreach (var window in ExistingWindows) if (window.IsVisible) window.WindowState = WindowState.Minimized;
+        };
+        KeepInFront();
+        // The first open used to stutter while the dashboard's controls were first laid out and their templates built. Doing that once, unseen, as soon
+        // as the pill is up, leaves the grow animation only drawing. Headless tests and any failure just skip it.
+        Pill.Opened += WarmDashboard;
+    }
+    private IEnumerable<Window> ExistingWindows
+    {
+        get { yield return Pill; if (dashboard is not null) yield return dashboard; }
+    }
+    private DashboardWindow CreateDashboard()
+    {
+        using var construction = PerformanceTimings.Measure("dashboard construction");
+        dashboard = new DashboardWindow(model);
         Dashboard.Reveal = ShowDashboard;
         Dashboard.OpenPill = () =>
         {
@@ -71,40 +106,45 @@ public sealed class WindowCoordinator
                 Avalonia.Threading.DispatcherTimer.RunOnce(() => { if (visibility == visibilityRun) KeepPillReachable(); }, TimeSpan.FromMilliseconds(400));
             });
         };
-        Pill.Closed += (_, _) => exit();
-        Dashboard.Closed += (_, _) => exit();
-        Pill.Closing += OnClosing; Dashboard.Closing += OnClosing;
-        model.QuitRequested += Quit;
-        // Tucks the timer away with tracking still running. Without a tray it goes to the taskbar instead, so it can never be lost.
-        model.HideRequested += () =>
-        {
-            if (HideToTray) Hide();
-            else foreach (var window in new Window[] { Pill, Dashboard }) if (window.IsVisible) window.WindowState = WindowState.Minimized;
-        };
-        KeepInFront();
-        // The first open used to stutter while the dashboard's controls were first laid out and their templates built. Doing that once, unseen, as soon
-        // as the pill is up, leaves the grow animation only drawing. Headless tests and any failure just skip it.
-        Pill.Opened += WarmDashboard;
+
+        dashboard.Opened += (_, _) => dashboardShown = true;
+        dashboard.Closed += (_, _) => exit();
+        dashboard.Closing += OnClosing;
+        AttachFront(dashboard);
+        ApplyTaskbar();
+        return dashboard;
     }
     private bool warming; private double warmOpacity = 1;
     private void WarmDashboard(object? sender, EventArgs e)
     {
         Pill.Opened -= WarmDashboard;
-        Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+        StartupTimings.Milestone("launch to pill opened");
+        Pill.RequestAnimationFrame(firstFrame =>
         {
-            try
+            StartupTimings.Milestone("launch to pill first callback");
+            // Let the pill render first. Construction and native preparation get separate
+            // low-priority turns, with user requests always able to use the same instance.
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                if (Dashboard.IsVisible || !Pill.IsVisible || quitting || Motion.Reduced) return;
-                // Shown once, fully see-through, far off screen and not in the taskbar, for a few frames: its native window, its drawing surface and every shadow and
-                // control are built then, so the first grow from the pill only has to draw. Hidden again at once, so nobody sees it.
-                warming = true; warmOpacity = Dashboard.Opacity;
-                Dashboard.Opacity = 0; Dashboard.ShowActivated = false; Dashboard.ShowInTaskbar = false; Dashboard.Position = new PixelPoint(-32000, -32000);
-                using var warmTiming = PerformanceTimings.Measure("warm-up show");
-                Dashboard.Show();
-                Avalonia.Threading.DispatcherTimer.RunOnce(() => EndWarm(true), TimeSpan.FromMilliseconds(500));
-            }
-            catch (Exception) { EndWarm(true); /* Only a warm-up; restore ordinary window state. */ }
-        }, TimeSpan.FromMilliseconds(800));
+                if (dashboardShown || !Pill.IsVisible || quitting || Motion.Reduced) return;
+                try { _ = Dashboard; }
+                catch (Exception) { return; /* An explicit open can retry preparation. */ }
+                Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+                {
+                    if (dashboardShown || !Pill.IsVisible || quitting || Motion.Reduced) return;
+                    try
+                    {
+                        warming = true; warmOpacity = Dashboard.Opacity;
+                        Dashboard.Opacity = 0; Dashboard.ShowActivated = false; Dashboard.ShowInTaskbar = false; Dashboard.Position = new PixelPoint(-32000, -32000);
+                        using var warmTiming = PerformanceTimings.Measure("warm-up show");
+                        Dashboard.Show();
+                        Dashboard.RequestAnimationFrame(_ => StartupTimings.Milestone("launch to dashboard prepared callback"));
+                        Avalonia.Threading.DispatcherTimer.RunOnce(() => EndWarm(true), TimeSpan.FromMilliseconds(500));
+                    }
+                    catch (Exception) { EndWarm(true); }
+                }, TimeSpan.FromMilliseconds(800));
+            }, Avalonia.Threading.DispatcherPriority.Background);
+        });
     }
     // Ends the warm-up: the window is made ordinary again, and hidden unless somebody asked for the dashboard in the meantime.
     private void EndWarm(bool hide)
@@ -135,18 +175,20 @@ public sealed class WindowCoordinator
     // it is put back at the front of the topmost windows, and a slow check does the same for one that was covered without a focus change.
     private void KeepInFront()
     {
-        // Not while a topmost window of another app has the focus (the screenshot tool's overlay, say), which this would otherwise jump on top of.
-        void Reassert(Window window) { if (window.Topmost && ZOrder.ShouldReassert(window.IsVisible, window.IsActive, window.WindowState == WindowState.Minimized, ZOrder.ForegroundIsTopmost())) { window.Topmost = false; window.Topmost = true; } }
-        foreach (var window in new Window[] { Pill, Dashboard })
-        {
-            var self = window;
-            self.Deactivated += (_, _) => Avalonia.Threading.DispatcherTimer.RunOnce(() => Reassert(self), TimeSpan.FromMilliseconds(250));
-        }
+        AttachFront(Pill);
         var check = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        check.Tick += (_, _) => { Reassert(Pill); Reassert(Dashboard); RescueOffScreen(); };
+        check.Tick += (_, _) => { foreach (var window in ExistingWindows) Reassert(window); RescueOffScreen(); };
         check.Start();
         // A monitor being plugged or unplugged is dealt with at once, and once more when Windows has settled.
         Pill.Screens.Changed += (_, _) => { Avalonia.Threading.Dispatcher.UIThread.Post(RescueOffScreen); Avalonia.Threading.DispatcherTimer.RunOnce(RescueOffScreen, TimeSpan.FromMilliseconds(1500)); };
+    }
+    private static void Reassert(Window window)
+    {
+        if (window.Topmost && ZOrder.ShouldReassert(window.IsVisible, window.IsActive, window.WindowState == WindowState.Minimized, ZOrder.ForegroundIsTopmost())) { window.Topmost = false; window.Topmost = true; }
+    }
+    private static void AttachFront(Window window)
+    {
+        window.Deactivated += (_, _) => Avalonia.Threading.DispatcherTimer.RunOnce(() => Reassert(window), TimeSpan.FromMilliseconds(250));
     }
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
@@ -160,27 +202,38 @@ public sealed class WindowCoordinator
     {
         visibilityRun++;
         EndWarm(true);
-        dashboardWasShown = Dashboard.IsVisible;
-        Pill.Hide(); Dashboard.Hide();
+        dashboardWasShown = dashboard?.IsVisible == true;
+        Pill.Hide(); dashboard?.Hide();
     }
     public void ShowTimer()
     {
         EndWarm(true);
-        if (IsShown) { (Dashboard.IsVisible ? (Window)Dashboard : Pill).Activate(); return; }
+        if (IsShown) { (dashboard?.IsVisible == true ? (Window)dashboard : Pill).Activate(); return; }
         if (dashboardWasShown) ShowDashboard(); else { Pill.Show(); BringToFront(Pill); }
         RescueOffScreen();
     }
     public void ShowDashboard()
     {
+        var requestedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        using var firstRequest = StartupTimings.MeasureOnce("first dashboard open preparation");
         EndWarm(false);
         if (!Dashboard.IsVisible) { model.ShowToday(); if (!Pill.IsVisible) Pill.FitToScreen(Pill.Screens.ScreenFromWindow(Pill) ?? Pill.Screens.Primary); PlaceByCard(Dashboard, Pill, DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin, 1); Dashboard.Show(); }
         Pill.CloseFlyouts(); Pill.Hide(); BringToFront(Dashboard);
         RescueOffScreen();
+        ObserveFirstDashboardCallback(requestedAt, firstRequest is not null);
+    }
+    private void ObserveFirstDashboardCallback(long requestedAt, bool firstRequest)
+    {
+        if (!firstRequest) return;
+        Dashboard.RequestAnimationFrame(_ =>
+        {
+            if (dashboard?.IsVisible == true) PerformanceTimings.Record("first dashboard request to callback", System.Diagnostics.Stopwatch.GetElapsedTime(requestedAt).TotalMilliseconds);
+        });
     }
     // The tray icon's left click shows the timer, or hides it when it is already in front.
     public void ToggleFromTray()
     {
-        if ((Pill.IsVisible && Pill.IsActive) || (Dashboard.IsVisible && Dashboard.IsActive)) Hide(); else ShowTimer();
+        if ((Pill.IsVisible && Pill.IsActive) || (dashboard?.IsVisible == true && dashboard.IsActive)) Hide(); else ShowTimer();
     }
     private void BringToFront(Window window)
     {
@@ -190,7 +243,7 @@ public sealed class WindowCoordinator
     public void ResetPosition()
     {
         // Back to the top right of the main screen, which also recovers a window dragged off a disconnected monitor.
-        Dashboard.Hide();
+        dashboard?.Hide();
         if (Pill.Screens.Primary is { } screen) Pill.FitToScreen(screen);
         Pill.Show(); PlacePillAtTopRight(); BringToFront(Pill);
     }
@@ -214,7 +267,7 @@ public sealed class WindowCoordinator
         try
         {
             if (Pill.IsVisible && Pill.WindowState != WindowState.Minimized && !ScreenGuard.IsOnAnyMonitor(Pill)) PlacePillAtTopRight();
-            if (Dashboard.IsVisible && Dashboard.WindowState != WindowState.Minimized && !ScreenGuard.IsOnAnyMonitor(Dashboard)
+            if (dashboard?.IsVisible == true && Dashboard.WindowState != WindowState.Minimized && !ScreenGuard.IsOnAnyMonitor(Dashboard)
                 && ScreenGuard.TryPrimaryWorkArea(out var area, out _) && ScreenGuard.TryBoundsOf(Dashboard, out var now))
                 ScreenGuard.Place(Dashboard, ScreenGuard.SlideInside(area, now with { X = area.X, Y = area.Y }));
         }
@@ -224,7 +277,7 @@ public sealed class WindowCoordinator
     {
         if (!model.StopForClose()) { ShowTimer(); return; }
         quitting = true;
-        Pill.Close(); Dashboard.Close();
+        Pill.Close(); dashboard?.Close();
     }
     /// <summary>
     /// Puts the target window so its card (the window less the room kept round it for the shadow) starts where the source's card starts, so the rail
@@ -309,7 +362,7 @@ public sealed class DashboardWindow : Window
         model.OpenDayRequested += _ => SelectTab(false);
         model.PageRequested += page => { if (page == "week") SelectTab(true); else if (page == "notes") ShowNotes(); };
         // A pin on the timeline opens its note for editing in the Notes card; the Notes page's own open request shows that page.
-        model.Notes.OpenNoteRequested += id => { ShowNotes(); NotesPageInstance().OpenNote(id); };
+        model.Notes.OpenNoteRequested += OpenRequestedNote;
         var body = Ui.Grid("*", "*");
         var review = Ui.Grid("*", "Auto,*");
         review.Margin = new Thickness(2, 16, 22, 18); // Two on the left, so the sidebar rows and the first card are 14 apart, as the cards are from each other.
@@ -514,7 +567,7 @@ public sealed class DashboardWindow : Window
     }
     private void CaptureDashboard()
     {
-        if (!WindowMorph.SnapshotComparison || onboarding is not null || Dialogs.Any) { transitionTiming?.SetMode("live"); return; }
+        if (onboarding is not null || Dialogs.Any) { transitionTiming?.SetMode("live (overlay)"); return; }
         using var timing = PerformanceTimings.Measure("dashboard capture");
         Avalonia.Media.Imaging.RenderTargetBitmap? bitmap = null;
         try
@@ -782,7 +835,7 @@ public sealed class DashboardWindow : Window
     }
     /// <summary>Set by the coordinator so a request that arrives while only the pill is showing can bring the dashboard up first.</summary>
     public Action? Reveal { get; set; }
-    private void ShowAccounts()
+    internal void ShowAccounts()
     {
         if (!IsVisible) Reveal?.Invoke();
         if (IsVisible && !Dialogs.Dialogs.OfType<AccountsDialog>().Any()) Dialogs.Show(new AccountsDialog(model));
@@ -790,6 +843,7 @@ public sealed class DashboardWindow : Window
     public void SelectTab(bool showWeek) { settingsMode = false; notesMode = false; weekMode = showWeek; Refresh(true); }
     /// <summary>Shows the Notes page.</summary>
     public void ShowNotes() { settingsMode = false; weekMode = false; notesMode = true; Refresh(true); }
+    internal void OpenRequestedNote(long id) { ShowNotes(); NotesPageInstance().OpenNote(id); }
     private Popup dateCalendar = null!;
     private void ToggleBell()
     {

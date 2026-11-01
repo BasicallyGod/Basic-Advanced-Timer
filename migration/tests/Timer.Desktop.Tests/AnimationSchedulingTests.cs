@@ -9,14 +9,14 @@ namespace Timer.Desktop.Tests;
 public sealed class AnimationSchedulingTests
 {
     [AvaloniaFact]
-    public void SnapshotComparisonCapturesBothDirectionsAndRestoresLiveContentOnHideAndReducedMotion()
+    public void SnapshotMorphCapturesBothDirectionsAndRestoresLiveContentOnHideAndReducedMotion()
     {
         var model = TimerModel.CreateDemo(); model.CompleteSetup();
         var window = new DashboardWindow(model); window.Show();
-        var enabled = WindowMorph.Enabled; var reduced = Motion.Override; var comparison = WindowMorph.SnapshotComparison;
+        var enabled = WindowMorph.Enabled; var reduced = Motion.Override;
         try
         {
-            WindowMorph.Enabled = true; Motion.Override = false; WindowMorph.SnapshotComparison = true;
+            WindowMorph.Enabled = true; Motion.Override = false;
             var image = window.GetVisualDescendants().OfType<Avalonia.Controls.Image>().Single(c => c.Name == "MorphDashboardSnapshot");
             var card = new Rect(12, 12, 406, 72);
             window.ShrinkTo(card, 20, null, default, () => { });
@@ -34,7 +34,7 @@ public sealed class AnimationSchedulingTests
             window.GrowFrom(card, 20, null, default);
             Assert.Null(image.Source); Assert.False(window.Morphing); Assert.Equal(1, window.ContentOpacity);
         }
-        finally { WindowMorph.Enabled = enabled; Motion.Override = reduced; WindowMorph.SnapshotComparison = comparison; window.Close(); }
+        finally { WindowMorph.Enabled = enabled; Motion.Override = reduced; window.Close(); }
     }
 
     [Fact]

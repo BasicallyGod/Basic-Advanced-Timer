@@ -155,3 +155,11 @@ Transition reports additionally time snapshot release, pill Show, dashboard Hide
 ### First-frame transition alignment
 
 Both pill and dashboard captures now use the explicit-scale 96-DPI raster path. The dashboard snapshot is initially transparent and explicitly measured/arranged at its logical body bounds before animation can expose it. Regression checks assert matching image bounds immediately (without settling) in both directions, and compare pill geometry at 1, 1.25, 1.5 and 2 capture scales. This addresses two code-level inconsistencies that could produce the remaining brief size flash; native confirmation is still needed before claiming the intermittent frame is eliminated.
+
+### Startup preparation and default snapshot rendering
+
+Snapshot rendering is now the normal animated transition; the temporary live/snapshot comparison setting is removed. Reduced motion, setup/dialog overlays and capture-failure fallback remain supported.
+
+WindowCoordinator constructs the pill first. Passive state queries, taskbar updates, hide, reset, rescue and quit do not instantiate the dashboard. After the pill's first animation-frame callback, a Background-priority UI turn constructs the dashboard. Native off-screen warm-up remains a later turn (800 ms after construction), skipped if the dashboard has already been shown or the timer is hidden/closing. All view work stays on the UI thread. Explicit early requests use the same lazy instance synchronously before starting the morph. Fresh setup still opens the dashboard on first show. Bootstrap routing preserves Accounts, page, day and note requests arriving before dashboard construction.
+
+Copy report now separates XAML/themes, storage open/load, model/demo construction, pill construction, dashboard construction, first dashboard request preparation and first request-to-callback. Launch-to-pill Opened/first callback and dashboard-prepared callback are measured from managed Program.Main entry, excluding OS/runtime work before Main; callbacks are not screen-presentation measurements. The older window construction figure now covers initial coordinator/pill wiring only. The work is moved off the initial pill path, not eliminated, and a click before warm-up can still pay preparation cost. Compare cold launch and immediate/delayed first dashboard opening before claiming a numerical speed-up.
