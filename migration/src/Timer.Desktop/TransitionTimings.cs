@@ -43,7 +43,8 @@ public static class TransitionTimings
         private bool finished;
         private string mode = "live";
         private int layouts, probes;
-        private double worstDelay, worstUpdate;
+        private double worstDelay;
+        internal double worstUpdate;
         public void SetMode(string value) { lock (gate) mode = value; }
         public void Layout() { lock (gate) layouts++; }
         public void ProbeDelay(double ms) { lock (gate) { probes++; worstDelay = Math.Max(worstDelay, ms); } }
