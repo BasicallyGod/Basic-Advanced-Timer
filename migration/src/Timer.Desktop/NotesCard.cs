@@ -29,6 +29,7 @@ public sealed class NotesCard : Border
     private readonly Grid overlay = new();
     private readonly StackPanel buttons; private readonly ScrollViewer scroll;
     private string? shown;
+    private readonly ViewActivity activity;
     // The form's state.
     private Form form = Form.None; private long? editing;
     private string draft = "", startText = "12:00", endText = "12:30"; private string? draftAccount; private DateTime? draftReminder; private RepeatChoice draftRepeat;
@@ -50,11 +51,12 @@ public sealed class NotesCard : Border
         Ui.Put(body, header); Ui.Put(body, formHost, 0, 1); Ui.Put(body, scroll, 0, 2);
         this.scroll = scroll; Ui.LeaveRoomForTrack(scroll, list); // The slim bar lies over the content, so the rows give it room while the list scrolls.
         overlay.Children.Add(body); overlay.Children.Add(reminderHost); reminderHost.PlacementTarget = title; Child = overlay;
-        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditNoteRequested += OnEditNote; Sync(); };
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditNoteRequested += OnEditNote; };
         DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditNoteRequested -= OnEditNote; };
+        activity = new ViewActivity(this, active => { if (active) Sync(); });
         Sync();
     }
-    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Sync();
+    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (activity.Active) Sync(); }
 
     // ---- The list ----
 

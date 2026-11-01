@@ -108,7 +108,8 @@ public sealed class FrameChip : Border
         Background = new SolidColorBrush(Color.FromArgb(220, 16, 18, 22)); CornerRadius = new CornerRadius(8); Padding = new Thickness(9, 4);
         HorizontalAlignment = HorizontalAlignment.Right; VerticalAlignment = VerticalAlignment.Bottom; Margin = new Thickness(10, 10, 20, 8); // Right, clear of the sidebar's Quit timer.
         words.Foreground = Brushes.White; Child = words;
-        FrameMonitor.Instance.Changed += Sync; Sync();
+        AttachedToVisualTree += (_, _) => { FrameMonitor.Instance.Changed += Sync; Sync(); };
+        Sync();
         DetachedFromVisualTree += (_, _) => FrameMonitor.Instance.Changed -= Sync;
     }
     private void Sync()

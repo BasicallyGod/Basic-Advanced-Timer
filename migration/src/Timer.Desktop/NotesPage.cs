@@ -46,11 +46,13 @@ public sealed class NotesPage : Grid
         Ui.Put(inner, formBox); Ui.Put(inner, filterBox, 0, 1); var pageScroll = new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }; Ui.LeaveRoomForTrack(pageScroll, listColumn);
         Ui.Put(inner, pageScroll, 0, 2);
         inner.Children.Add(whenHost); card.Child = inner; SetColumn(card, 2); Children.Add(card);
-        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Sync(); };
+        AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
+        activity = new ViewActivity(this, active => { if (active) Sync(); });
         ResetForm(); Sync();
     }
-    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Sync();
+    private readonly ViewActivity activity;
+    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (activity.Active) Sync(); }
 
     /// <summary>The words in the header's search box. The list and the counts follow them.</summary>
     public string Query { get => query; set { query = value ?? ""; shown = null; Sync(); } }

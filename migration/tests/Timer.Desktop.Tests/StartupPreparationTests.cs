@@ -24,6 +24,10 @@ public sealed class StartupPreparationTests
         }
         finally { windows.Quit(); }
         Assert.False(windows.DashboardCreated); // Quitting must not allocate an unused window.
+        model.OpenAccounts(); model.RequestPage("notes"); model.RequestHide(); model.Tick();
+        Assert.False(windows.DashboardCreated); Assert.False(windows.IsShown);
+        var topmost = windows.Pill.Topmost; model.SetPillOnTop(!topmost);
+        Assert.Equal(topmost, windows.Pill.Topmost);
     }
 
     [AvaloniaFact]

@@ -80,7 +80,7 @@ public sealed class PillWindow : Window
         // One item for now: the menu is kept to what the pill itself cannot do. Starting a break is the amber circle.
         ContextMenu = Ui.SettingsMenu(model);
         CanResize = false;
-        Topmost = model.PillOnTop; model.PropertyChanged += (_, _) => { if (Topmost != model.PillOnTop) Topmost = model.PillOnTop; };
+        Topmost = model.PillOnTop;
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
         Background = Brushes.Transparent;
@@ -90,7 +90,7 @@ public sealed class PillWindow : Window
         Opened += (_, _) => FitToScreen(Screens.ScreenFromWindow(this));
         PositionChanged += (_, _) => { FitIfScreenChanged(); SettleSoon(); };
         ScalingChanged += (_, _) => FitIfScreenChanged();
-        Closed += (_, _) => { closedWindow = true; settleTimer?.Stop(); };
+        Closed += (_, _) => { closedWindow = true; settleTimer?.Stop(); foldTimer?.Stop(); };
         // Whenever the real size is not the wanted one, say after a drag or a change made while hidden, it is put right.
         SizeChanged += (_, _) => { if (IsVisible && !ensuring && !closedWindow && (Math.Abs(ClientSize.Width - WindowWidthNow) > 1.5 || Math.Abs(ClientSize.Height - WindowHeightNow) > 1.5)) EnsureSize(); };
         Activated += (_, _) => EnsureSize();
@@ -334,6 +334,7 @@ public sealed class PillWindow : Window
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (Topmost != model.PillOnTop) Topmost = model.PillOnTop;
         // A new pill size from settings takes effect straight away, even while the pill is hidden behind the dashboard.
         if (model.PillScalePercent != appliedChoice) FitToScreen(Screens.ScreenFromWindow(this));
         Refresh(); PeekAtNewAlerts();

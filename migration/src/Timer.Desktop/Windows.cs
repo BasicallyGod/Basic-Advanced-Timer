@@ -17,6 +17,8 @@ public sealed class WindowCoordinator
     public bool DashboardCreated => dashboard is not null;
     private readonly Action exit;
     private bool dashboardShown;
+    private bool stopped;
+    private Avalonia.Threading.DispatcherTimer? frontCheck;
     private readonly TimerModel model;
     private bool quitting, dashboardWasShown;
     private int visibilityRun;
@@ -38,7 +40,7 @@ public sealed class WindowCoordinator
         using (PerformanceTimings.Measure("pill construction")) Pill = new PillWindow(model);
         // A taskbar button by default, so the timer can be pinned and launched like any app. It can be switched off to run from the tray alone.
         ApplyTaskbar();
-        model.PropertyChanged += (_, _) => ApplyTaskbar();
+        model.PropertyChanged += CoordinatorChanged;
         // The dashboard grows out of the pill's card (see WindowMorph) and shrinks back into a pill at the sidebar's top left.
         Pill.OpenDashboard = () =>
         {
@@ -57,22 +59,18 @@ public sealed class WindowCoordinator
             Dashboard.Activate();
             ObserveFirstDashboardCallback(requestedAt, firstRequest is not null);
         };
-        Pill.Closed += (_, _) => exit();
+        Pill.Closed += WindowClosed;
         Pill.Closing += OnClosing;
         model.QuitRequested += Quit;
         // Requests can arrive from pill menus before the dashboard has been constructed.
         // New event handlers are not part of the invocation already in progress, so deliver
         // that first request explicitly; subsequent requests use the dashboard's handlers.
-        model.AccountsRequested += () => { if (dashboard is null) Dashboard.ShowAccounts(); };
-        model.OpenDayRequested += _ => { if (dashboard is null) Dashboard.SelectTab(false); };
-        model.PageRequested += page => { if (dashboard is null) { var view = Dashboard; if (page == "week") view.SelectTab(true); else if (page == "notes") view.ShowNotes(); } };
-        model.Notes.OpenNoteRequested += id => { if (dashboard is null) Dashboard.OpenRequestedNote(id); };
+        model.AccountsRequested += FirstAccountsRequest;
+        model.OpenDayRequested += FirstDayRequest;
+        model.PageRequested += FirstPageRequest;
+        model.Notes.OpenNoteRequested += FirstNoteRequest;
         // Tucks the timer away with tracking still running. Without a tray it goes to the taskbar instead, so it can never be lost.
-        model.HideRequested += () =>
-        {
-            if (HideToTray) Hide();
-            else foreach (var window in ExistingWindows) if (window.IsVisible) window.WindowState = WindowState.Minimized;
-        };
+        model.HideRequested += HideRequested;
         KeepInFront();
         // The first open used to stutter while the dashboard's controls were first laid out and their templates built. Doing that once, unseen, as soon
         // as the pill is up, leaves the grow animation only drawing. Headless tests and any failure just skip it.
@@ -108,7 +106,7 @@ public sealed class WindowCoordinator
         };
 
         dashboard.Opened += (_, _) => dashboardShown = true;
-        dashboard.Closed += (_, _) => exit();
+        dashboard.Closed += WindowClosed;
         dashboard.Closing += OnClosing;
         AttachFront(dashboard);
         ApplyTaskbar();
@@ -126,12 +124,12 @@ public sealed class WindowCoordinator
             // low-priority turns, with user requests always able to use the same instance.
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                if (dashboardShown || !Pill.IsVisible || quitting || Motion.Reduced) return;
+                if (stopped || dashboardShown || !Pill.IsVisible || quitting || Motion.Reduced) return;
                 try { _ = Dashboard; }
                 catch (Exception) { return; /* An explicit open can retry preparation. */ }
                 Avalonia.Threading.DispatcherTimer.RunOnce(() =>
                 {
-                    if (dashboardShown || !Pill.IsVisible || quitting || Motion.Reduced) return;
+                    if (stopped || dashboardShown || !Pill.IsVisible || quitting || Motion.Reduced) return;
                     try
                     {
                         warming = true; warmOpacity = Dashboard.Opacity;
@@ -168,6 +166,7 @@ public sealed class WindowCoordinator
     // in the meantime, it is brought back to the main screen instead of leaving the timer reachable only from the tray.
     private void KeepPillReachable()
     {
+        if (stopped) return;
         if (!IsShown) { ShowTimer(); return; }
         if (Pill.IsVisible) RescueOffScreen();
     }
@@ -176,11 +175,36 @@ public sealed class WindowCoordinator
     private void KeepInFront()
     {
         AttachFront(Pill);
-        var check = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        check.Tick += (_, _) => { foreach (var window in ExistingWindows) Reassert(window); RescueOffScreen(); };
-        check.Start();
+        frontCheck = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        frontCheck.Tick += (_, _) => { foreach (var window in ExistingWindows) Reassert(window); RescueOffScreen(); };
+        frontCheck.Start();
         // A monitor being plugged or unplugged is dealt with at once, and once more when Windows has settled.
-        Pill.Screens.Changed += (_, _) => { Avalonia.Threading.Dispatcher.UIThread.Post(RescueOffScreen); Avalonia.Threading.DispatcherTimer.RunOnce(RescueOffScreen, TimeSpan.FromMilliseconds(1500)); };
+        Pill.Screens.Changed += ScreensChanged;
+    }
+    private void CoordinatorChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => ApplyTaskbar();
+    private void FirstAccountsRequest() { if (dashboard is null) Dashboard.ShowAccounts(); }
+    private void FirstDayRequest(DateTime day) { if (dashboard is null) Dashboard.SelectTab(false); }
+    private void FirstPageRequest(string page) { if (dashboard is null) { var view = Dashboard; if (page == "week") view.SelectTab(true); else if (page == "notes") view.ShowNotes(); } }
+    private void FirstNoteRequest(long id) { if (dashboard is null) Dashboard.OpenRequestedNote(id); }
+    private void HideRequested()
+    {
+        if (HideToTray) Hide();
+        else foreach (var window in ExistingWindows) if (window.IsVisible) window.WindowState = WindowState.Minimized;
+    }
+    private void ScreensChanged(object? sender, EventArgs e)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(RescueOffScreen);
+        Avalonia.Threading.DispatcherTimer.RunOnce(RescueOffScreen, TimeSpan.FromMilliseconds(1500));
+    }
+    private void WindowClosed(object? sender, EventArgs e) { StopInfrastructure(); exit(); }
+    private void StopInfrastructure()
+    {
+        if (stopped) return;
+        stopped = true; frontCheck?.Stop();
+        Pill.Opened -= WarmDashboard; Pill.Screens.Changed -= ScreensChanged;
+        model.PropertyChanged -= CoordinatorChanged; model.QuitRequested -= Quit; model.HideRequested -= HideRequested;
+        model.AccountsRequested -= FirstAccountsRequest; model.OpenDayRequested -= FirstDayRequest;
+        model.PageRequested -= FirstPageRequest; model.Notes.OpenNoteRequested -= FirstNoteRequest;
     }
     private static void Reassert(Window window)
     {
@@ -207,6 +231,7 @@ public sealed class WindowCoordinator
     }
     public void ShowTimer()
     {
+        if (stopped) return;
         EndWarm(true);
         if (IsShown) { (dashboard?.IsVisible == true ? (Window)dashboard : Pill).Activate(); return; }
         if (dashboardWasShown) ShowDashboard(); else { Pill.Show(); BringToFront(Pill); }
@@ -214,6 +239,7 @@ public sealed class WindowCoordinator
     }
     public void ShowDashboard()
     {
+        if (stopped) return;
         var requestedAt = System.Diagnostics.Stopwatch.GetTimestamp();
         using var firstRequest = StartupTimings.MeasureOnce("first dashboard open preparation");
         EndWarm(false);
@@ -264,6 +290,7 @@ public sealed class WindowCoordinator
     /// </summary>
     public void RescueOffScreen()
     {
+        if (stopped) return;
         try
         {
             if (Pill.IsVisible && Pill.WindowState != WindowState.Minimized && !ScreenGuard.IsOnAnyMonitor(Pill)) PlacePillAtTopRight();
@@ -277,6 +304,7 @@ public sealed class WindowCoordinator
     {
         if (!model.StopForClose()) { ShowTimer(); return; }
         quitting = true;
+        StopInfrastructure();
         Pill.Close(); dashboard?.Close();
     }
     /// <summary>
@@ -347,7 +375,7 @@ public sealed class DashboardWindow : Window
         ContextMenu = Ui.SettingsMenu(model);
         Width = DashboardWidth + 2 * Ui.ShadowMargin;
         Height = DashboardHeight + 2 * Ui.ShadowMargin;
-        Topmost = model.DashboardOnTop; model.PropertyChanged += (_, _) => { if (Topmost != model.DashboardOnTop) Topmost = model.DashboardOnTop; }; // In front of other windows unless switched off in settings.
+        Topmost = model.DashboardOnTop;
         CanResize = false;
         SystemDecorations = SystemDecorations.None;
         TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
@@ -359,8 +387,8 @@ public sealed class DashboardWindow : Window
         sidebar = new Sidebar(model, () => OpenPill?.Invoke(), OnPlay, () => model.OpenAccounts(), () => model.RequestQuit());
         face = sidebar.Face;
         Ui.Put(root, sidebar);
-        model.OpenDayRequested += _ => SelectTab(false);
-        model.PageRequested += page => { if (page == "week") SelectTab(true); else if (page == "notes") ShowNotes(); };
+        model.OpenDayRequested += OpenRequestedDay;
+        model.PageRequested += OpenRequestedPage;
         // A pin on the timeline opens its note for editing in the Notes card; the Notes page's own open request shows that page.
         model.Notes.OpenNoteRequested += OpenRequestedNote;
         var body = Ui.Grid("*", "*");
@@ -487,7 +515,6 @@ public sealed class DashboardWindow : Window
         morphOverlay = new Avalonia.Controls.Image { Name = "MorphPill", Stretch = Avalonia.Media.Stretch.Fill, IsHitTestVisible = false, IsVisible = false, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
         layers.Children.Add(morphOverlay);
         shadowHost = Ui.Shadowed(surface, 20); shadowFade = shadowHost.Transitions; Content = shadowHost;
-        model.PropertyChanged += (_, _) => UpdateShadow();
         ActualThemeVariantChanged += (_, _) => UpdateShadow();
         UpdateShadow();
         // The window can be picked up by any bare part of its top: the whole identity block and the accounts heading on the left, and the tab
@@ -535,12 +562,20 @@ public sealed class DashboardWindow : Window
             { if (model.SelectedRows.Count > 0) { model.DeleteSelection(); e.Handled = true; } }
         };
         model.PropertyChanged += Changed;
-        model.PropertyChanged += (_, _) => UpdateOnboarding();
         model.EntryRequested += ShowEntry;
         model.AccountsRequested += ShowAccounts;
         Opened += (_, _) => FlushRefresh();
-        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) CancelMorph(); };
-        Closed += (_, _) => { CancelMorph(); SetPillPicture(null, default); model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.AccountsRequested -= ShowAccounts; };
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == IsVisibleProperty && !IsVisible || e.Property == WindowStateProperty && WindowState == WindowState.Minimized) CancelMorph();
+            if (e.Property == WindowStateProperty && WindowState != WindowState.Minimized) FlushRefresh();
+        };
+        Closed += (_, _) =>
+        {
+            CancelMorph(); SetPillPicture(null, default);
+            model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.AccountsRequested -= ShowAccounts;
+            model.OpenDayRequested -= OpenRequestedDay; model.PageRequested -= OpenRequestedPage; model.Notes.OpenNoteRequested -= OpenRequestedNote;
+        };
         Refresh(true);
         dashboardReady = true;
         UpdateOnboarding();
@@ -684,7 +719,7 @@ public sealed class DashboardWindow : Window
     }
     private void FlushRefresh()
     {
-        if (!refreshPending || !IsVisible || morphPump?.Running == true) return;
+        if (!refreshPending || !IsVisible || WindowState == WindowState.Minimized || morphPump?.Running == true) return;
         var workspace = workspacePending;
         refreshPending = workspacePending = false;
         Refresh(workspace);
@@ -844,6 +879,8 @@ public sealed class DashboardWindow : Window
     /// <summary>Shows the Notes page.</summary>
     public void ShowNotes() { settingsMode = false; weekMode = false; notesMode = true; Refresh(true); }
     internal void OpenRequestedNote(long id) { ShowNotes(); NotesPageInstance().OpenNote(id); }
+    private void OpenRequestedDay(DateTime day) => SelectTab(false);
+    private void OpenRequestedPage(string page) { if (page == "week") SelectTab(true); else if (page == "notes") ShowNotes(); }
     private Popup dateCalendar = null!;
     private void ToggleBell()
     {
@@ -868,6 +905,8 @@ public sealed class DashboardWindow : Window
     private NotesPage NotesPageInstance() { if (notesPage is null) notesPage = new NotesPage(model) { Query = searchBox.Text ?? "" }; return notesPage; }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (Topmost != model.DashboardOnTop) Topmost = model.DashboardOnTop;
+        UpdateShadow(); UpdateOnboarding();
         var rebuild = e.PropertyName is not (nameof(TimerModel.Elapsed) or TimerModel.PresentationChange);
         if (e.PropertyName == TimerModel.CheckpointChange)
         {
@@ -893,7 +932,7 @@ public sealed class DashboardWindow : Window
     }
     private void Refresh(bool refreshWorkspace)
     {
-        if (dashboardReady && (!IsVisible || morphPump?.Running == true))
+        if (dashboardReady && (!IsVisible || WindowState == WindowState.Minimized || morphPump?.Running == true))
         {
             refreshPending = true; workspacePending |= refreshWorkspace;
             return;
