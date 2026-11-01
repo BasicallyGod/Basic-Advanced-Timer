@@ -330,7 +330,9 @@ public sealed class SettingsView : Grid
         flat.Click += (_, _) => { ThemeEngine.FlatShadows = !ThemeEngine.FlatShadows; if (Avalonia.Application.Current is { } app) ThemeEngine.Register(app, AppThemes.BuiltIn); flat.Content = ThemeEngine.FlatShadows ? "Shadows back on" : "Draw flat (no shadows)"; };
         var pauseTick = Ui.DialogButton(TimerModel.TickPaused ? "Resume the 1 s refresh" : "Pause the 1 s refresh", () => { }, "FrameTickToggle");
         pauseTick.Click += (_, _) => { TimerModel.TickPaused = !TimerModel.TickPaused; pauseTick.Content = TimerModel.TickPaused ? "Resume the 1 s refresh" : "Pause the 1 s refresh"; };
-        developer.Children.Add(Row("Find the cost", "Draw flat takes every raised and sunk shadow away; pausing the refresh stops the clock redrawing each second (and its saving). Try each on the Timeline for 15 seconds, then copy the report.", Ui.Horizontal(flat, pauseTick)));
+        var fineTimer = Ui.DialogButton(TimerResolution.Requested ? "Give back the 1 ms timer" : "Ask for a 1 ms timer", () => { }, "FrameTimerToggle");
+        fineTimer.Click += (_, _) => { TimerResolution.Request(!TimerResolution.Requested); fineTimer.Content = TimerResolution.Requested ? "Give back the 1 ms timer" : "Ask for a 1 ms timer"; };
+        developer.Children.Add(Row("Find the cost", "Draw flat takes every raised and sunk shadow away; pausing the refresh stops the clock redrawing each second (and its saving). Asking for a 1 ms timer makes Windows tick finely while the app runs (the report names the current tick). Try each on the Timeline for 15 seconds, then copy the report.", Ui.Horizontal(flat, pauseTick, fineTimer)));
         developer.Children.Add(Row("Frame timing", "How long the dashboard's frames take, for judging smoothness. Switch it on, use the page you want to test for a few seconds, then copy the report.", Ui.Horizontal(frameSwitch, frameCopy), frames));
         var developerSection = new Border { Name = "DevelopmentSection", Child = developer, IsVisible = model.DeveloperUnlocked, Padding = new Thickness(0, 4) };
         syncs.Add(() => developerSection.IsVisible = model.DeveloperUnlocked);
