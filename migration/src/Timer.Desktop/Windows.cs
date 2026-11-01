@@ -526,7 +526,12 @@ public sealed class DashboardWindow : Window
             dashboardSnapshot.Width = size.Width; dashboardSnapshot.Height = size.Height;
             Canvas.SetLeft(dashboardSnapshot, dashboardBody.Bounds.X); Canvas.SetTop(dashboardSnapshot, dashboardBody.Bounds.Y);
             dashboardSnapshot.Source = bitmap; bitmap = null;
+            // Source dimensions are device pixels at 96 DPI. Do not expose an old/implicit
+            // arrangement for the first frame while layout catches up with the new bitmap.
+            dashboardSnapshot.Opacity = 0;
             dashboardSnapshot.IsVisible = true;
+            dashboardSnapshot.Measure(size);
+            dashboardSnapshot.Arrange(dashboardBody.Bounds);
             transitionTiming?.SetMode("snapshot");
         }
         catch (Exception) { bitmap?.Dispose(); ReleaseSnapshot(); transitionTiming?.SetMode("live (capture unavailable)"); }

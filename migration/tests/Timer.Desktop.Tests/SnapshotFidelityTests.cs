@@ -11,6 +11,43 @@ namespace Timer.Desktop.Tests;
 
 public sealed class SnapshotFidelityTests
 {
+    [AvaloniaFact]
+    public void PillCaptureKeepsItsGeometryAtFractionalAndDoubleCaptureScales()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 11, 2, 14, 15, 0)); model.CompleteSetup();
+        var pill = new PillWindow(model); pill.Show(); Settle(pill);
+        var content = pill.Content;
+        try
+        {
+            using var reference = pill.CaptureRenderedFrame()!;
+            using var expected = reference.Lock();
+            var expectedBytes = new byte[expected.RowBytes * expected.Size.Height];
+            System.Runtime.InteropServices.Marshal.Copy(expected.Address, expectedBytes, 0, expectedBytes.Length);
+            using (var standard = WindowMorph.Capture(pill)) { Assert.NotNull(standard); Assert.Equal(new Vector(96, 96), standard!.Dpi); }
+            foreach (var scale in new[] { 1d, 1.25, 1.5, 2 })
+            {
+                using var bitmap = WindowMorph.CaptureVisual(pill, scale);
+                pill.Content = new Image { Source = bitmap, Stretch = Stretch.Fill, Width = pill.ClientSize.Width, Height = pill.ClientSize.Height };
+                try
+                {
+                    Settle(pill);
+                    using var frame = pill.CaptureRenderedFrame()!; using var pixels = frame.Lock();
+                    Assert.Equal(expected.Size, pixels.Size);
+                    var bytes = new byte[pixels.RowBytes * pixels.Size.Height];
+                    System.Runtime.InteropServices.Marshal.Copy(pixels.Address, bytes, 0, bytes.Length);
+                    double difference = 0; long count = 0;
+                    for (var y = 0; y < pixels.Size.Height; y++)
+                        for (var x = 0; x < pixels.Size.Width; x++)
+                            for (var c = 0; c < 3; c++)
+                            { difference += Math.Abs(bytes[y * pixels.RowBytes + x * 4 + c] - expectedBytes[y * expected.RowBytes + x * 4 + c]); count++; }
+                    Assert.True(difference / count < 6, $"Pill at {scale}: mean channel difference {difference / count:0.00}");
+                }
+                finally { pill.Content = content; Settle(pill); }
+            }
+        }
+        finally { pill.Content = content; pill.Close(); }
+    }
+
     private static void Settle(Window window)
     {
         for (var i = 0; i < 3; i++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); }

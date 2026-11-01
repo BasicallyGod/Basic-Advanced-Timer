@@ -87,9 +87,7 @@ public static class WindowMorph
         {
             var scaling = window.RenderScaling; var width = window.ClientSize.Width; var height = window.ClientSize.Height;
             if (width < 2 || height < 2) return null;
-            var bitmap = new RenderTargetBitmap(new PixelSize((int)Math.Ceiling(width * scaling), (int)Math.Ceiling(height * scaling)), new Vector(96 * scaling, 96 * scaling));
-            bitmap.Render(window);
-            return bitmap;
+            return CaptureVisual(window, scaling);
         }
         catch (Exception) { return null; }
     }
