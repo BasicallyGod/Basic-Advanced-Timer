@@ -137,4 +137,5 @@ Before judging smoothness, compare cold startup and repeated expand/collapse wit
 `TransitionTimings` adds the last 20 individual transitions to Copy report, with completion/cancellation, native callback count, watchdog count, native callback gaps and saves/rebuilds/preparation recorded during the transition. Native callbacks are not GPU presentation measurements. First callback is measured from animation scheduling; transition total starts before preparation and includes a deferred refresh at completion. The original aggregate animation total remains available for comparison with build 602. No continuous frame requests or disk logging are added.
 
 This is conservative workspace reuse, not a full incremental renderer: active block geometry and current-week totals still rebuild periodically. Compare cold startup and repeated transitions with the continuous frame monitor off before deciding whether a snapshot transition or larger view refactor is justified.
-`nAn earlier week still refreshes if the running account has a monthly/quarterly budget whose period includes today; historical weekly totals alone are not sufficient to decide it is static.
+
+An earlier week still refreshes if the running account has a monthly/quarterly budget whose period includes today; historical weekly totals alone are not sufficient to decide it is static.
