@@ -12,6 +12,7 @@ public sealed partial class App : Application
 {
     public override void Initialize()
     {
+        using var timing = PerformanceTimings.Measure("startup XAML and themes");
         AvaloniaXamlLoader.Load(this);
         // Colours are registered before any window exists, so every control finds them the first time it looks.
         ThemeEngine.Register(this, AppThemes.BuiltIn);
@@ -48,15 +49,15 @@ public sealed partial class App : Application
                 {
                     // The demo runs on a throwaway database in the temporary folder, removed when it closes.
                     folder = Path.Combine(Path.GetTempPath(), "timer-demo-" + Guid.NewGuid());
-                    store = new TimerStore(folder);
-                    model = TimerModel.CreateDemo(store: store);
+                    store = PerformanceTimings.Measure("startup storage open", () => new TimerStore(folder));
+                    model = PerformanceTimings.Measure("startup demo model", () => TimerModel.CreateDemo(store: store));
                 }
                 else
                 {
-                store = new TimerStore(folder);
+                store = PerformanceTimings.Measure("startup storage open", () => new TimerStore(folder));
                 var engine = new TrackingEngine();
-                var preferences = store.Load(engine);
-                model = new TimerModel(engine, preferences, store);
+                var preferences = PerformanceTimings.Measure("startup storage load", () => store.Load(engine));
+                model = PerformanceTimings.Measure("startup model construction", () => new TimerModel(engine, preferences, store));
                 if (store.AdjustmentsRemoved > 0)
                     model.Notice = $"{store.AdjustmentsRemoved} time adjustment{(store.AdjustmentsRemoved == 1 ? "" : "s")} removed · a copy is in Backups";
                 else if (store.TakeOldFilesNotice()) model.Notice = "Old timesheet files left alone · starting empty";

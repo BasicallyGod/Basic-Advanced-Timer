@@ -325,9 +325,6 @@ public sealed class SettingsView : Grid
         {
             if (TopLevel.GetTopLevel(frameSwitch)?.Clipboard is { } clipboard) await clipboard.SetTextAsync(FrameMonitor.Instance.Report());
         }, "FrameTimingCopy");
-        var snapshot = Ui.DialogButton(WindowMorph.SnapshotComparison ? "Use live dashboard" : "Use dashboard snapshot", () => { }, "MorphComparisonToggle");
-        snapshot.Click += (_, _) => { WindowMorph.SnapshotComparison = !WindowMorph.SnapshotComparison; snapshot.Content = WindowMorph.SnapshotComparison ? "Use live dashboard" : "Use dashboard snapshot"; };
-        developer.Children.Add(Row("Transition comparison", "Compare live rendering with a dashboard picture during expansion and collapse. The report labels each transition. This choice lasts until the app closes.", snapshot));
         // Two switches for finding what costs frames: one draws every raised and sunk shadow empty, the other stops the one-second refresh. Neither is saved.
         var flat = Ui.DialogButton(ThemeEngine.FlatShadows ? "Shadows back on" : "Draw flat (no shadows)", () => { }, "FrameFlatToggle");
         flat.Click += (_, _) => { ThemeEngine.FlatShadows = !ThemeEngine.FlatShadows; if (Avalonia.Application.Current is { } app) ThemeEngine.Register(app, AppThemes.BuiltIn); flat.Content = ThemeEngine.FlatShadows ? "Shadows back on" : "Draw flat (no shadows)"; };

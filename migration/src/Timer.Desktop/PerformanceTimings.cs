@@ -8,12 +8,17 @@ public static class PerformanceTimings
     private static readonly Dictionary<string, (long Count, double Total, double Worst, double Last)> samples = new();
     private static readonly object gate = new();
     public static IDisposable Measure(string operation) => new Measurement(operation);
+    public static T Measure<T>(string operation, Func<T> action)
+    {
+        using var timing = Measure(operation);
+        return action();
+    }
     public static void Record(string operation, double milliseconds)
     {
         TransitionTimings.Operation(operation, milliseconds);
         lock (gate)
         {
-            if (!samples.ContainsKey(operation) && samples.Count >= 32) return;
+            if (!samples.ContainsKey(operation) && samples.Count >= 64) return;
             var previous = samples.GetValueOrDefault(operation);
             samples[operation] = (previous.Count + 1, previous.Total + milliseconds, Math.Max(previous.Worst, milliseconds), milliseconds);
         }
