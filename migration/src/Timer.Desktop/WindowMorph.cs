@@ -15,6 +15,8 @@ public static class WindowMorph
 {
     /// <summary>Whether the move is animated. The tests switch it off, since nothing ticks in a headless test.</summary>
     public static bool Enabled { get; set; } = true;
+    /// <summary>Temporary Development comparison switch, kept only for this process.</summary>
+    public static bool SnapshotComparison { get; set; }
     /// <summary>Opening eases out quickly (most of the growth in the first 120 ms) and closing is a little shorter, since putting away is dismissing.</summary>
     public const int OpenMilliseconds = 340, CloseMilliseconds = 280;
     /// <summary>The pill's card sits this far in from the dashboard's top left when they line up, so it reads as the pill at the sidebar's top.</summary>

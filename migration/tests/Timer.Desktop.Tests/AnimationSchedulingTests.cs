@@ -8,6 +8,31 @@ namespace Timer.Desktop.Tests;
 
 public sealed class AnimationSchedulingTests
 {
+    [AvaloniaFact]
+    public void SnapshotComparisonCapturesBothDirectionsAndRestoresLiveContentOnHideAndReducedMotion()
+    {
+        var model = TimerModel.CreateDemo(); model.CompleteSetup();
+        var window = new DashboardWindow(model); window.Show();
+        var enabled = WindowMorph.Enabled; var reduced = Motion.Override; var comparison = WindowMorph.SnapshotComparison;
+        try
+        {
+            WindowMorph.Enabled = true; Motion.Override = false; WindowMorph.SnapshotComparison = true;
+            var image = window.GetVisualDescendants().OfType<Avalonia.Controls.Image>().Single(c => c.Name == "MorphDashboardSnapshot");
+            var card = new Rect(12, 12, 406, 72);
+            window.ShrinkTo(card, 20, null, default, () => { });
+            window.SetMorph(.5);
+            Assert.NotNull(image.Source); Assert.True(image.IsVisible); Assert.Equal(0, window.ContentOpacity);
+            window.Hide(); Assert.Null(image.Source); Assert.Equal(1, window.ContentOpacity);
+            window.GrowFrom(card, 20, null, default); window.SetMorph(.5);
+            Assert.NotNull(image.Source); Assert.True(image.IsVisible);
+            window.Hide(); Assert.Null(image.Source);
+            Motion.Override = true;
+            window.GrowFrom(card, 20, null, default);
+            Assert.Null(image.Source); Assert.False(window.Morphing); Assert.Equal(1, window.ContentOpacity);
+        }
+        finally { WindowMorph.Enabled = enabled; Motion.Override = reduced; WindowMorph.SnapshotComparison = comparison; window.Close(); }
+    }
+
     [Fact]
     public void DiagnosticsDistinguishNativeCallbacksFromWatchdogAndKeepActualElapsedTime()
     {

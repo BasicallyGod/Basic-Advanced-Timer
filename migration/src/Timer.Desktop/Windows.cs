@@ -420,6 +420,8 @@ public sealed class DashboardWindow : Window
         messageBar = new MessageBar(model); Ui.Put(review, messageBar, row: 1);
         // The setup overlay, when it is wanted, sits over everything in the card, which is blurred and cannot be clicked while it is up.
         layers.Children.Add(root); dashboardBody = root;
+        dashboardSnapshot = new Avalonia.Controls.Image { Name = "MorphDashboardSnapshot", Stretch = Avalonia.Media.Stretch.Fill, IsHitTestVisible = false, IsVisible = false };
+        layers.Children.Add(dashboardSnapshot);
         layers.Children.Add(new FrameChip(() => settingsMode ? "Settings" : notesMode ? "Notes" : weekMode ? "Week overview" : "Timeline")); // Only shows while the frame monitor runs (Settings, Development).
         layers.Children.Add(Dialogs); Dialogs.OpenChanged += UpdateBackdrop; // Last, so a dialog is above the setup too.
         surface = new Border { Name = "DashboardSurface", Child = layers, ClipToBounds = true };
@@ -497,6 +499,33 @@ public sealed class DashboardWindow : Window
     private Avalonia.Animation.Transitions? shadowFade;
     private double morph = 1, morphRadius = WindowMorph.DashboardRadius; private Rect morphFrom;
     private AnimationFramePump? morphPump;
+    private Avalonia.Controls.Image dashboardSnapshot = null!;
+    private TransitionProbe? transitionProbe;
+    private void ReleaseSnapshot()
+    {
+        dashboardSnapshot.IsVisible = false;
+        var bitmap = dashboardSnapshot.Source; dashboardSnapshot.Source = null;
+        (bitmap as IDisposable)?.Dispose();
+        dashboardBody!.Opacity = 1;
+    }
+    private void CaptureDashboard()
+    {
+        if (!WindowMorph.SnapshotComparison || onboarding is not null || Dialogs.Any) { transitionTiming?.SetMode("live"); return; }
+        using var timing = PerformanceTimings.Measure("dashboard capture");
+        Avalonia.Media.Imaging.RenderTargetBitmap? bitmap = null;
+        try
+        {
+            dashboardBody!.Opacity = 1; UpdateLayout();
+            var size = dashboardBody.Bounds.Size;
+            if (size.Width < 2 || size.Height < 2) throw new InvalidOperationException("Dashboard has no layout yet.");
+            bitmap = new Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize((int)Math.Ceiling(size.Width * RenderScaling), (int)Math.Ceiling(size.Height * RenderScaling)), new Vector(96 * RenderScaling, 96 * RenderScaling));
+            bitmap.Render(dashboardBody);
+            dashboardSnapshot.Source = bitmap; bitmap = null;
+            dashboardSnapshot.IsVisible = true;
+            transitionTiming?.SetMode("snapshot");
+        }
+        catch (Exception) { bitmap?.Dispose(); ReleaseSnapshot(); transitionTiming?.SetMode("live (capture unavailable)"); }
+    }
     private TransitionTimings.Transition? transitionTiming;
     private Avalonia.Threading.DispatcherTimer? morphWatchdog;
     private bool dashboardReady, refreshPending, workspacePending;
@@ -512,16 +541,20 @@ public sealed class DashboardWindow : Window
     /// </summary>
     public void SetMorph(double m)
     {
+        using var timing = PerformanceTimings.Measure("animation update");
         morph = Math.Clamp(m, 0, 1);
         var full = new Rect(0, 0, DashboardWidth, DashboardHeight);
         if (morph >= 1)
         {
-            surface.Clip = null; dashboardBody!.Opacity = 1; layers.IsHitTestVisible = true; morphOverlay.IsVisible = false;
+            surface.Clip = null; dashboardBody!.Opacity = 1; dashboardSnapshot.IsVisible = false; layers.IsHitTestVisible = true; morphOverlay.IsVisible = false;
             shadowHost.Transitions = shadowFade; lastShadow = null; UpdateShadow();
             return;
         }
         surface.Clip = WindowMorph.RoundedRect(WindowMorph.Lerp(morphFrom, full, morph), morphRadius + (WindowMorph.DashboardRadius - morphRadius) * morph);
-        dashboardBody!.Opacity = WindowMorph.DashboardOpacity(morph);
+        var bodyOpacity = WindowMorph.DashboardOpacity(morph);
+        dashboardBody!.Opacity = dashboardSnapshot.Source is null ? bodyOpacity : 0;
+        dashboardSnapshot.Opacity = bodyOpacity;
+        dashboardSnapshot.IsVisible = dashboardSnapshot.Source is not null;
         morphOverlay.Opacity = WindowMorph.PillOpacity(morph); morphOverlay.IsVisible = morphOverlay.Source is not null && morphOverlay.Opacity > 0;
         layers.IsHitTestVisible = false;
         // The card's shadow comes back when it has all grown. Its fade is switched off while it moves, or a shadow left from before the window was shown faded out over
@@ -534,6 +567,8 @@ public sealed class DashboardWindow : Window
         morphPump?.Stop(); morphWatchdog?.Stop();
         transitionTiming ??= TransitionTimings.Begin(closing ? "collapse" : "expand");
         if (!WindowMorph.Enabled || Motion.Reduced) { SetMorph(to); CompleteMorph(done, "instant"); return; }
+        CaptureDashboard();
+        transitionProbe = new TransitionProbe(this, transitionTiming);
         SetMorph(from);
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
         var previous = 0d;
@@ -562,9 +597,11 @@ public sealed class DashboardWindow : Window
     }
     private void CancelMorph()
     {
+        transitionProbe?.Dispose(); transitionProbe = null;
         morphPump?.Stop(); morphWatchdog?.Stop();
         transitionTiming?.Finish("cancelled"); transitionTiming = null;
         SetMorph(1);
+        ReleaseSnapshot();
     }
     public void PrepareMorph(bool closing)
     {
@@ -573,6 +610,8 @@ public sealed class DashboardWindow : Window
     }
     private void CompleteMorph(Action? done, string outcome)
     {
+        transitionProbe?.Dispose(); transitionProbe = null;
+        ReleaseSnapshot();
         var timing = transitionTiming; transitionTiming = null;
         done?.Invoke();
         FlushRefresh();

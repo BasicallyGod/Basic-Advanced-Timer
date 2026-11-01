@@ -139,3 +139,9 @@ Before judging smoothness, compare cold startup and repeated expand/collapse wit
 This is conservative workspace reuse, not a full incremental renderer: active block geometry and current-week totals still rebuild periodically. Compare cold startup and repeated transitions with the continuous frame monitor off before deciding whether a snapshot transition or larger view refactor is justified.
 
 An earlier week still refreshes if the running account has a monthly/quarterly budget whose period includes today; historical weekly totals alone are not sufficient to decide it is static.
+
+### Snapshot transition comparison (Alpha)
+
+Development settings offer Use dashboard snapshot / Use live dashboard. The default is live and the choice lasts only for the process. Try ten expand/collapse cycles per mode, with continuous frame timing off and the other diagnostic switches unchanged. Copy report after each set; each recent transition labels its mode. Snapshot mode captures the dashboard body at the current display scale once per transition, fades it with the existing easing and clip, and restores the live body on completion/cancellation. Setup/dialog overlays use live rendering. Capture failures fall back to live, labelled in the report. Captures are disposed when the transition ends.
+
+The report includes dashboard capture cost, worst synchronous animation-update time, layout events, and a 20 ms Normal-priority dispatcher probe's worst lateness. The probe runs only during animated transitions in both modes and requests no frames. Lateness indicates delayed servicing of that priority, not necessarily application CPU work; OS scheduling and timer delivery also affect it. Native callbacks still do not measure GPU presentation. Compare total preparation cost as well as smoothness before choosing an implementation.
