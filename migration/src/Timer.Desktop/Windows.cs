@@ -71,6 +71,23 @@ public sealed class WindowCoordinator
             else foreach (var window in new Window[] { Pill, Dashboard }) if (window.IsVisible) window.WindowState = WindowState.Minimized;
         };
         KeepInFront();
+        // The first open used to stutter while the dashboard's controls were first laid out and their templates built. Doing that once, unseen, as soon
+        // as the pill is up, leaves the grow animation only drawing. Headless tests and any failure just skip it.
+        Pill.Opened += WarmDashboard;
+    }
+    private void WarmDashboard(object? sender, EventArgs e)
+    {
+        Pill.Opened -= WarmDashboard;
+        Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+        {
+            try
+            {
+                if (Dashboard.IsVisible) return;
+                var size = new Avalonia.Size(DashboardWindow.DashboardWidth + 2 * Ui.ShadowMargin, DashboardWindow.DashboardHeight + 2 * Ui.ShadowMargin);
+                Dashboard.Measure(size); Dashboard.Arrange(new Avalonia.Rect(size));
+            }
+            catch (Exception) { /* Only a warm-up. */ }
+        }, TimeSpan.FromMilliseconds(600));
     }
     /// <summary>
     /// Opens the dashboard the first time the pill is shown, which is where the getting started setup waits. It must happen once only: the pill raises

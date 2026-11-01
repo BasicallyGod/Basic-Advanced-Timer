@@ -19,6 +19,10 @@
   <PropertyGroup Condition="'$(BuildChannel)' == 'alpha'">
     <DefineConstants>$(DefineConstants);ALPHA_BUILD</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- Precompiled code, so the first time the dashboard opens does not wait on the JIT. It only affects a publish, never a plain build or the tests. -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets/AppIcon.png" />
   </ItemGroup>
