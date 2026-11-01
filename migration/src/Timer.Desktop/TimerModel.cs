@@ -891,7 +891,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Whether the pill and the dashboard stay in front of other windows. Either can be let go, so the dashboard can drop back behind other work.</summary>
     public bool PillOnTop => preferences.PillOnTop;
     public bool DashboardOnTop => preferences.DashboardOnTop;
-    public void SetPillOnTop(bool on) { preferences = preferences with { PillOnTop = on }; Save(); Notify(); }
+    public void SetPillOnTop(bool on) { preferences = preferences with { PillOnTop = on }; Save(); Notify(PresentationChange); }
     public void SetDashboardOnTop(bool on) { preferences = preferences with { DashboardOnTop = on }; Save(); Notify(); }
     private const string ShadowsDefaultLine = "shadowsdefault=applied";
     private void SetAppearanceFlag(string prefix, string? value, bool changed)
@@ -930,7 +930,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         var net = plan.End - plan.Start - BreakAllowance; return net > TimeSpan.Zero ? net : TimeSpan.Zero;
     }
     public int? PillScalePercent => preferences.PillScale;
-    public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(); }
+    public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(PresentationChange); }
     // ---- the pill's alerts: what is waiting, how loud it is allowed to be (Peek: a card opens by itself; Light only: the light and the list; Off), and what has been put away
     private const string PillAlertsLine = "pillalerts=";
     /// <summary>What is waiting for the pill, most urgent first (see <see cref="PillAlertItems"/>).</summary>
@@ -938,18 +938,18 @@ public sealed class TimerModel : INotifyPropertyChanged
     public AlertState AlertState { get; } = new();
     /// <summary>"peek" (the default), "light" or "off". Saved as the appearance line pillalerts=light or pillalerts=off; peek has no line.</summary>
     public string PillAlertsMode => AppearanceValue(PillAlertsLine) is { } saved && (saved == "light" || saved == "off") ? saved : "peek";
-    public void SetPillAlertsMode(string mode) { var chosen = mode is "light" or "off" ? mode : "peek"; if (chosen == PillAlertsMode) return; SetAppearanceFlag(PillAlertsLine, chosen == "peek" ? null : chosen, true); Notify(); }
+    public void SetPillAlertsMode(string mode) { var chosen = mode is "light" or "off" ? mode : "peek"; if (chosen == PillAlertsMode) return; SetAppearanceFlag(PillAlertsLine, chosen == "peek" ? null : chosen, true); Notify(PresentationChange); }
     /// <summary>Puts an alert away (a budget the user pressed OK on): it stays away for the session.</summary>
-    public void DismissAlert(string key) { AlertState.Dismiss(key); Notify(); }
-    public void SnoozeAlert(string key, TimeSpan time) { AlertState.Snooze(key, Engine.Now + time); Notify(); }
+    public void DismissAlert(string key) { AlertState.Dismiss(key); Notify(PresentationChange); }
+    public void SnoozeAlert(string key, TimeSpan time) { AlertState.Snooze(key, Engine.Now + time); Notify(PresentationChange); }
     /// <summary>Asks the dashboard to show a page ("notes" or "week"); the coordinator brings the dashboard up first when only the pill is showing.</summary>
     public event Action<string>? PageRequested;
     public void RequestPage(string page) => PageRequested?.Invoke(page);
     public bool Tooltips => preferences.Tooltips;
-    public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(); }
+    public void SetTooltips(bool on) { preferences = preferences with { Tooltips = on }; Ui.ApplyTooltips(on); Save(); Notify(PresentationChange); }
     /// <summary>Whether the developer features are switched on: the sample-data demo and the version on the right-click menu. Off until unlocked from the About section.</summary>
     public bool DeveloperUnlocked => (preferences.Developer || IsDemo) && BuildInfo.DeveloperFeatures; // The demo is itself a developer tool, so it always shows them.
-    public void SetDeveloper(bool on) { if (on && !BuildInfo.DeveloperFeatures) return; preferences = preferences with { Developer = on }; Save(); Notify(); }
+    public void SetDeveloper(bool on) { if (on && !BuildInfo.DeveloperFeatures) return; preferences = preferences with { Developer = on }; Save(); Notify(PresentationChange); }
     /// <summary>Whether the getting started setup is finished or skipped. A brand new database starts without it, and it can be run again from settings.</summary>
     public bool SetupDone => preferences.SetupDone;
     /// <summary>Where this timer keeps its data, or null for a throwaway copy such as the demo.</summary>
@@ -992,7 +992,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         FollowToday();
         Notes.MakeSeriesNotes(); // A repeating meeting's next days are made as time goes on.
         if (ticks % 60 == 0) Notes.RetryUnsaved();
-        if (ticks % 15 == 0) { Save(); Notify(); }
+        if (ticks % 15 == 0) { Save(); Notify(CheckpointChange); }
         else PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Elapsed)));
     }
     public bool Save()
@@ -1055,5 +1055,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     /// <summary>True while a reminder is due (its time has passed and it is not ticked off), which lights the blue light on the pill and the rail.</summary>
     public bool ReminderDue => Notes.AttentionCount > 0;
-    private void Notify() { FrameMonitor.Bump("model changes"); ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null)); }
+    public const string PresentationChange = "Presentation", CheckpointChange = "Checkpoint";
+    private void Notify() => Notify(null);
+    private void Notify(string? property) { FrameMonitor.Bump("model changes"); ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property)); }
 }

@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Alpha transition diagnostics and workspace reuse | [a0930fd](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/a0930fd) | Keep unchanged idle/historical workspaces through checkpoints, reuse totals-bar controls, and report native callbacks, watchdog steps and overlapping work for the last 20 transitions. |
 | Alpha performance foundation | [54abc48](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/54abc48) | Sync Experimental; keep one pending morph frame request during watchdog recovery, cancel on hide/close, consolidate dashboard refreshes while hidden or animating, release replaced captures, and add passive operation timings to Copy report. Visual design and animation durations unchanged. |
 
 ## 31 October 2026

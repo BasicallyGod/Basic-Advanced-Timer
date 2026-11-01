@@ -7,17 +7,18 @@ public sealed class AnimationFramePump(Action<Action<TimeSpan>> requestFrame, Fu
     private double started, lastStep, duration;
     private Action<double>? step;
     private Action? completed;
+    private Action<double, bool>? observed;
     public bool Running { get; private set; }
 
-    public void Start(double length, Action<double> update, Action finish)
+    public void Start(double length, Action<double> update, Action finish, Action<double, bool>? observe = null)
     {
         Stop();
-        duration = length; step = update; completed = finish;
+        duration = length; step = update; completed = finish; observed = observe;
         started = lastStep = milliseconds(); Running = true;
         QueueFrame();
     }
 
-    public void Stop() { Running = false; step = null; completed = null; }
+    public void Stop() { Running = false; step = null; completed = null; observed = null; }
 
     private void QueueFrame()
     {
@@ -26,7 +27,7 @@ public sealed class AnimationFramePump(Action<Action<TimeSpan>> requestFrame, Fu
         requestFrame(_ =>
         {
             pending = false;
-            Advance();
+            Advance(false);
             QueueFrame();
         });
     }
@@ -34,14 +35,15 @@ public sealed class AnimationFramePump(Action<Action<TimeSpan>> requestFrame, Fu
     /// <summary>Advance a stalled animation without adding another frame request behind the one still waiting.</summary>
     public void Watchdog()
     {
-        if (Running && milliseconds() - lastStep >= 50) Advance();
+        if (Running && milliseconds() - lastStep >= 50) Advance(true);
     }
 
-    private void Advance()
+    private void Advance(bool watchdog)
     {
         if (!Running) return;
         lastStep = milliseconds();
         var elapsed = lastStep - started;
+        observed?.Invoke(elapsed, watchdog);
         var update = step;
         if (elapsed >= duration)
         {

@@ -92,13 +92,17 @@ public static class TimelineGuide
         {
             var key = ColourKey(pin);
             Paint(pin.Dot, Shape.FillProperty, key); Paint(pin.Halo, Shape.StrokeProperty, key); Paint(pin.Stem, Border.BackgroundProperty, key);
+            var due = NotesModel.ReminderOf(pin.First)!.Value;
+            var words = pin.Notes.Count == 1 ? model.Notes.Text(pin.First) : pin.Notes.Count + " reminders: " + string.Join(", ", pin.Notes.Select(model.Notes.Text));
+            Avalonia.Automation.AutomationProperties.SetName(pin.Visual, (pin.Notes.Count == 1 ? "Reminder " : "") + words + ", " + NoteDates.When(due, model.Engine.Now)
+                + (pin.Notes.Any(NotesModel.IsImportant) ? ", important" : "") + (Late(pin) ? ", late" : ""));
         }
         foreach (var pin in pins) Recolour(pin);
         // A pin turns red when its time passes, without the whole timeline being drawn again.
         if (pins.Count > 0 && day == model.Engine.Now.Date)
         {
             DispatcherTimer? timer = null;
-            canvas.AttachedToVisualTree += (_, _) => { timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) }; timer.Tick += (_, _) => { foreach (var pin in pins) Recolour(pin); }; timer.Start(); };
+            canvas.AttachedToVisualTree += (_, _) => { timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) }; timer.Tick += (_, _) => { foreach (var pin in pins) Recolour(pin); }; timer.Start(); };
             canvas.DetachedFromVisualTree += (_, _) => { timer?.Stop(); timer = null; };
         }
 
