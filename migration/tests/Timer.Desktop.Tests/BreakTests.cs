@@ -54,6 +54,7 @@ public sealed class BreakTests
     [AvaloniaFact]
     public void BreakHasItsOwnButtonsAndIsNotAnAccountRow()
     {
+        using var motion = new EnabledMotionScope();
         var now = Day.AddHours(10); var engine = new TrackingEngine(clock: () => now); var model = new TimerModel(engine);
         var dashboard = new DashboardWindow(model); dashboard.Show(); var pill = new PillWindow(model); pill.Show();
         try

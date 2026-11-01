@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Native reduced-motion preference | [fce80d0](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/fce80d0) | Prevent initial cache timestamp overflow, read the real Windows animation preference, and make animation tests explicit about their requested motion. |
 | Hidden visual work and lifetime cleanup | [0c0e772](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/0c0e772) | Pause hidden/minimised Notes and timeline visual work, catch up on reveal, release window/coordinator subscriptions and timers, and add a native performance campaign outline. |
 | Pill-first startup preparation | [4be0eca](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/4be0eca) | Default to snapshot transitions, remove the comparison switch, defer dashboard construction until after the first pill callback, preserve cold-start UI requests, and add managed startup milestones and phase timings. |
 | First-frame transition alignment | [06ead75](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/06ead75) | Use consistent capture scaling for the pill and arrange dashboard snapshots before exposure, with immediate-bounds and pill raster regression checks. |

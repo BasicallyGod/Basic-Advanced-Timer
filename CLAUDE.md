@@ -169,3 +169,7 @@ Copy report now separates XAML/themes, storage open/load, model/demo constructio
 Notes cards/pages now ignore model-driven visual refreshes while an ancestor/window is hidden or the window is minimised. A ViewActivity observer refreshes them immediately on reveal/restore without clearing drafts or query state. Timeline clock and reminder-pin timers use the same attachment/visibility lifecycle: stop while inactive and catch up before restarting. The model tick, saving and reminder calculations remain active.
 
 Dashboard refreshes are consolidated while minimised as well as hidden. Model/navigation subscriptions are removed on dashboard close. Coordinator front-check timers, screen subscriptions and cold-start request hooks stop on shutdown, and delayed rescue/warm-up work cannot revive it. FrameChip now resubscribes after reattachment. Native checks still pending are collected in migration/PERFORMANCE-TEST-CAMPAIGN.md for a later test session.
+
+### Native reduced-motion cache
+
+The initial reduced-motion read previously subtracted long.MinValue from TickCount64, overflowing and incorrectly accepting an uninitialised cache. The cache now checks its sentinel and monotonic time ordering first, and publishes the timestamp after the value is read. Native preference coverage compares unforced behaviour with Windows' client-area animation setting. Animation-specific visual tests explicitly choose enabled motion instead of inheriting CI desktop settings.

@@ -13,6 +13,7 @@ public static class Motion
     [DllImport("user32.dll", SetLastError = true)] private static extern bool SystemParametersInfo(uint action, uint param, out bool value, uint winIni);
 
     private static bool lastKnown; private static long checkedAt = long.MinValue;
+    private static readonly object cacheGate = new();
     /// <summary>Set by tests to force the answer on their own thread (so tests running side by side do not disturb each other); null reads the computer's setting.</summary>
     [ThreadStatic] private static bool? forced;
     public static bool? Override { get => forced; set => forced = value; }
@@ -23,11 +24,14 @@ public static class Motion
         {
             if (forced is { } answer) return answer;
             if (!OperatingSystem.IsWindows()) return false;
-            var now = Environment.TickCount64;
-            if (now - checkedAt < 3000) return lastKnown;
-            checkedAt = now;
-            try { lastKnown = SystemParametersInfo(GetClientAreaAnimation, 0, out var on, 0) && !on; } catch { lastKnown = false; }
-            return lastKnown;
+            lock (cacheGate)
+            {
+                var now = Environment.TickCount64;
+                if (checkedAt != long.MinValue && now >= checkedAt && now - checkedAt < 3000) return lastKnown;
+                try { lastKnown = SystemParametersInfo(GetClientAreaAnimation, 0, out var on, 0) && !on; } catch { lastKnown = false; }
+                checkedAt = now;
+                return lastKnown;
+            }
         }
     }
 
