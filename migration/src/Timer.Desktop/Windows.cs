@@ -364,8 +364,6 @@ public sealed class DashboardWindow : Window
     private static TextBlock Value() => new() { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock date = Ui.Text("", 14); private Button datePick = null!;
     private readonly ContentControl workspace = new() { Name = "WorkspaceHost" }, timelineHost = new() { Name = "TimelineHost" };
-    private SettingsView? settingsPage;
-    private Button settingsBack = null!;
     private Border timelineCard = null!; private MessageBar messageBar = null!; private Grid timelinePage = null!; private SelectedBlockCard selectedCard = null!; private NotesCard notesCard = null!;
     private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, notesTab = null!, addTime = null!, bell = null!; private Control viewTabs = null!;
     private Border bellBadge = null!; private Control bellHostPanel = null!; private TextBlock bellBadgeText = null!; private TextBox searchBox = null!; private Control searchHost = null!; private Popup bellPopup = null!; private NotesPage? notesPage;
@@ -423,9 +421,7 @@ public sealed class DashboardWindow : Window
         overviewTab = ViewTab(IconKind.Week, "WeekOverviewTab", "Week overview", () => SelectTab(true));
         var tabRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 }; foreach (var tab in new[] { timelineRail, notesTab, overviewTab }) tabRow.Children.Add(tab);
         var tabTrack = new Border { Name = "ViewTabs", Child = tabRow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left }; tabTrack.Classes.Add("viewTabs"); viewTabs = tabTrack;
-        settingsBack = Ui.Ctl("SettingsBack", "Back to Timeline", IconKind.Previous, "Return to the previous view", ShowSettings);
-        settingsBack.HorizontalAlignment = HorizontalAlignment.Left;
-        var leftOfHeader = new Grid { Children = { tabTrack, settingsBack }, Margin = new Thickness(4, 0, 0, 0) }; workspaceTitle.HorizontalAlignment = HorizontalAlignment.Left;
+        var leftOfHeader = new Grid { Children = { tabTrack, workspaceTitle }, Margin = new Thickness(4, 0, 0, 0) }; workspaceTitle.HorizontalAlignment = HorizontalAlignment.Left;
         Ui.Put(nav, leftOfHeader); headerRow = nav;
         date.Width = 124; date.TextAlignment = Avalonia.Media.TextAlignment.Center;
         // Pressing the date opens a calendar to jump to any day, so a day weeks away is one click instead of many arrows.
@@ -488,11 +484,11 @@ public sealed class DashboardWindow : Window
         var lip = new Grid(); lip.Children.Add(timelineHost);
         Border LipShadow(bool left)
         {
-            var edge = new Border { Width = 18, IsHitTestVisible = false, HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right, Name = left ? "TimelineLipLeft" : "TimelineLipRight" };
+            var edge = new Border { Width = 8, IsHitTestVisible = false, HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right, Name = left ? "TimelineLipLeft" : "TimelineLipRight" };
             void Paint()
             {
                 var ink = Ui.ThemeColour(edge, "ShadowColor", Colors.Black); var dark = edge.ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark;
-                var strong = Color.FromArgb((byte)(dark ? 60 : 28), ink.R, ink.G, ink.B); var none = Color.FromArgb(0, ink.R, ink.G, ink.B);
+                var strong = Color.FromArgb((byte)(dark ? 24 : 12), ink.R, ink.G, ink.B); var none = Color.FromArgb(0, ink.R, ink.G, ink.B);
                 edge.Background = new LinearGradientBrush { StartPoint = new RelativePoint(left ? 0 : 1, .5, RelativeUnit.Relative), EndPoint = new RelativePoint(left ? 1 : 0, .5, RelativeUnit.Relative), GradientStops = { new GradientStop(strong, 0), new GradientStop(none, 1) } };
             }
             edge.ActualThemeVariantChanged += (_, _) => Paint(); edge.AttachedToVisualTree += (_, _) => Paint();
@@ -550,7 +546,7 @@ public sealed class DashboardWindow : Window
         KeyDown += (_, e) =>
         {
             // Escape takes the top dialog away first, and only then clears the selection.
-            if (e.Key == Avalonia.Input.Key.Escape) { if (Dialogs.CloseTop()) { } else if (settingsMode) ShowSettings(); else model.ClearSelection(); e.Handled = true; }
+            if (e.Key == Avalonia.Input.Key.Escape) { if (Dialogs.CloseTop()) { } else model.ClearSelection(); e.Handled = true; }
             // Ctrl+C copies the selected blocks and Ctrl+V pastes them on the timeline, but never while typing in a text box.
             else if (e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key is Avalonia.Input.Key.C or Avalonia.Input.Key.V && !settingsMode && !weekMode && !notesMode && !Dialogs.Any && !SetupShowing
                 && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox or Avalonia.Controls.Primitives.RangeBase))
@@ -919,15 +915,7 @@ public sealed class DashboardWindow : Window
     }
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
     // The Notes page is built once and kept: it listens to the model itself, so coming back to it finds the search and the form as they were.
-    private NotesPage NotesPageInstance()
-    {
-        if (notesPage is null)
-        {
-            notesPage = new NotesPage(model) { Query = searchBox.Text ?? "" };
-            notesPage.SearchCleared += () => searchBox.Text = "";
-        }
-        return notesPage;
-    }
+    private NotesPage NotesPageInstance() { if (notesPage is null) notesPage = new NotesPage(model) { Query = searchBox.Text ?? "" }; return notesPage; }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (Topmost != model.DashboardOnTop) Topmost = model.DashboardOnTop;
@@ -989,11 +977,7 @@ public sealed class DashboardWindow : Window
         // The timeline card and the Selected block card are the Timeline page's alone; the week and the settings fill the workspace.
         timelinePage.IsVisible = !settingsMode && !weekMode && !notesMode; workspace.IsVisible = settingsMode || weekMode || notesMode;
         // The tabs say which page this is; the settings page has its name there instead.
-        settingsBack.Content = "Back to " + (notesMode ? "Notes" : weekMode ? "Week overview" : "Timeline");
-        settingsBack.IsVisible = settingsMode; viewTabs.IsVisible = !settingsMode;
-        Avalonia.Automation.AutomationProperties.SetName(settingsBack, settingsBack.Content.ToString());
-        ToolTip.SetTip(settingsRail, settingsMode ? "Close settings" : "Settings");
-        Avalonia.Automation.AutomationProperties.SetName(settingsRail, settingsMode ? "Close settings" : "Settings");
+        workspaceTitle.Text = "Settings"; workspaceTitle.IsVisible = settingsMode; viewTabs.IsVisible = !settingsMode;
         todayButton.IsEnabled = weekMode ? model.WeekStart(model.SelectedDate) != model.WeekStart(model.Engine.Now) : model.SelectedDate.Date != model.Engine.Now.Date;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
         if (settingsMode ? !renderedSettings : notesMode ? !renderedNotes : refreshWorkspace)
@@ -1009,7 +993,7 @@ public sealed class DashboardWindow : Window
                 : oldScroll?.Tag is Vector pending ? pending : oldScroll?.Offset;
             // What the other host showed is dropped, so only the page being shown is in the window.
             (timeline ? workspace : timelineHost).Content = null;
-            host.Content = settingsMode ? settingsPage ??= new SettingsView(model) : notesMode ? NotesPageInstance() : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
+            host.Content = settingsMode ? new SettingsView(model) : notesMode ? NotesPageInstance() : weekMode ? ReviewViews.Week(model) : ReviewViews.Timeline(model);
             if (previous is { } offset && host.Content is Control control)
             {
                 var scroll = control is ScrollViewer direct ? direct : control.GetLogicalDescendants().OfType<ScrollViewer>().FirstOrDefault();

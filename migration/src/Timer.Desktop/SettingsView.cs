@@ -53,7 +53,7 @@ public sealed class SettingsView : Grid
 
         // The page is built once, so it listens for changes made elsewhere (a theme or hours format chosen from another place) and keeps its boxes true.
         void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { foreach (var sync in syncs) sync(); }
-        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; foreach (var sync in syncs) sync(); if (current == "export") RefreshPeriods(preserve: true); };
+        AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
     }
 
@@ -73,7 +73,7 @@ public sealed class SettingsView : Grid
         current = id;
         foreach (var (key, part) in sections) { part.Body.IsVisible = key == id; part.Nav.Classes.Set("selected", key == id); }
         title.Text = sections[id].Title; intro.Text = sections[id].Intro;
-        if (id == "export") RefreshPeriods(preserve: true);
+        if (id == "export") RefreshPeriods();
     }
 
     // ---- appearance
@@ -243,8 +243,6 @@ public sealed class SettingsView : Grid
         var note = Ui.Text("Two CSV files are written: the hours by account and day, and every entry. Hundredths of an hour are shared out so each total adds up exactly. The running entry is provisional until it is saved.", 12, "muted");
         note.TextWrapping = TextWrapping.Wrap; stack.Children.Add(note);
         var export = Ui.DialogButton("Export CSV files", ExportFiles, "ExportCsv"); export.Content = Ui.Horizontal(new IconGlyph(IconKind.Export), Ui.Text("Export CSV files", 14));
-        export.Classes.Remove("mainAction"); export.Classes.Add("ctl"); export.Classes.Add("primary");
-        ((IconGlyph)((StackPanel)export.Content).Children[0]).TintKey = "AccentInk";
         copyHours = Ui.DialogButton("Copy hours table", CopyTable, "CopyHours", false); copyHours.Content = Ui.Horizontal(new IconGlyph(IconKind.Copy), Ui.Text("Copy hours table", 14));
         stack.Children.Add(Ui.Horizontal(export, copyHours));
         exportResult = Ui.Text("", 13); exportResult.Name = "ExportResult"; exportResult.TextWrapping = TextWrapping.Wrap; exportResult.IsVisible = false;
@@ -253,9 +251,8 @@ public sealed class SettingsView : Grid
         return stack;
     }
     // Each choice has its own list, from the current one back to the earliest recorded (or a few months if there is little), so any week or month can be picked.
-    private void RefreshPeriods(bool preserve = false)
+    private void RefreshPeriods()
     {
-        var chosen = preserve ? ChosenDay() : null;
         var today = model.Engine.Now.Date;
         var earliest = model.Engine.Sessions.Select(s => s.Day).DefaultIfEmpty(today).Min();
         var shown = model.SelectedDate.Date;
@@ -267,7 +264,6 @@ public sealed class SettingsView : Grid
         months = new List<DateTime>();
         for (var month = new DateTime(latest.Year, latest.Month, 1); month >= new DateTime(oldestMonth.Year, oldestMonth.Month, 1) && months.Count < 60; month = month.AddMonths(-1)) months.Add(month);
         FillPeriods(selectShown: true);
-        if (chosen is { } retained && (wholeMonth ? months : weeks).IndexOf(retained) is var index && index >= 0) periodPick.SelectedIndex = index;
     }
     private void FillPeriods(bool selectShown)
     {

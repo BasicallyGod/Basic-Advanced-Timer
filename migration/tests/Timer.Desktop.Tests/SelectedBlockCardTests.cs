@@ -236,7 +236,7 @@ public sealed class SelectedBlockCardTests
     }
 
     [AvaloniaFact]
-    public void FieldsAreRoundedWithASoftFillAndTheAccentWhenFocusedInBothThemes()
+    public void FieldsAreRoundedWithASoftFillAndNeutralTextBoxFocusInBothThemes()
     {
         var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
@@ -246,7 +246,7 @@ public sealed class SelectedBlockCardTests
             foreach (var theme in new[] { AppThemes.Light, AppThemes.Dark })
             {
                 var dictionary = (ResourceDictionary)Avalonia.Application.Current!.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)]!;
-                Assert.Equal(Color.Parse(theme.Colour("Accent")), ((SolidColorBrush)dictionary["TextControlBorderBrushFocused"]!).Color);
+                Assert.Equal(((SolidColorBrush)dictionary["TextControlBorderBrush"]!).Color, ((SolidColorBrush)dictionary["TextControlBorderBrushFocused"]!).Color);
                 Assert.Equal(((SolidColorBrush)dictionary["KeyEdge"]!).Color, ((SolidColorBrush)dictionary["TextControlBorderBrush"]!).Color); // Only a faint edge round a sunk field.
                 Assert.NotEqual(Color.Parse(theme.Colour("Panel")), ((SolidColorBrush)dictionary["TextControlBackground"]!).Color); // A shade off the card, as in the mock.
             }

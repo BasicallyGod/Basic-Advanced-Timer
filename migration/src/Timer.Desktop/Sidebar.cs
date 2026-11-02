@@ -27,17 +27,11 @@ public sealed class Sidebar : Border
         Face = new StatusFace(model, "Sidebar", "DashboardBreak", "Collapse to pill", clockClick, circleClick, () => { }, sidebar: true);
         var grid = Ui.Grid("*", "Auto,Auto,*,Auto"); grid.RowSpacing = 4;
         Ui.Put(grid, Face);
-        // Management belongs beside the list; Settings retains the same editor as a secondary route.
-        var heading = Ui.Grid("*,Auto"); heading.Margin = new Thickness(8, 6, 0, 2);
+        // Account management stays in Settings; the heading is deliberately quiet.
+        var heading = Ui.Grid("*"); heading.Margin = new Thickness(8, 6, 0, 2);
         var label = new TextBlock { Text = "ACCOUNTS", FontSize = 11.5, FontWeight = FontWeight.SemiBold, LetterSpacing = .5, VerticalAlignment = VerticalAlignment.Center, Name = "SidebarAccountsHeading" }; label.Classes.Add("muted");
         Ui.Put(heading, label);
-        var manageButton = Ui.Ctl("ManageAccounts", "Manage", IconKind.Gear, "Manage accounts and budgets", manage, small: true);
-        manageButton.Height = 30; manageButton.Padding = new Thickness(8, 0);
-        Ui.Put(heading, manageButton, 1);
-        var accountHeader = new StackPanel { Spacing = 2 };
-        accountHeader.Children.Add(heading);
-        var timeLabel = Ui.Text("Time today · budget periods below", 10.5, "muted"); timeLabel.Name = "SidebarTimePeriod"; timeLabel.Margin = new Thickness(8, 0, 0, 4);
-        accountHeader.Children.Add(timeLabel); Ui.Put(grid, accountHeader, 0, 1);
+        Ui.Put(grid, heading, 0, 1);
         AccountScroll = new ScrollViewer { Name = "SidebarAccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         // The rows are as wide as Quit timer. The scroll box reaches 10 pixels past them each side, so their raised shadows are not clipped.

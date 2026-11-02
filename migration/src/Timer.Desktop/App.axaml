@@ -126,7 +126,14 @@
     <Style Selector="ContextMenu MenuItem:pointerover /template/ Border#PART_LayoutRoot, ContextMenu MenuItem:pressed /template/ Border#PART_LayoutRoot"><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <!-- Fields: rounded, as the mock draws them (ThemeEngine writes their fill, hairline and focus colours). -->
     <Style Selector="TextBox"><Setter Property="CornerRadius" Value="12" /></Style>
-    <Style Selector="TextBox /template/ Border#PART_BorderElement"><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
+    <!-- The outer TextBox owns sizing. Its decorative border must fit the arranged field,
+         including narrow/short boxes, rather than applying the minimum size a second time. -->
+    <Style Selector="TextBox /template/ Border#PART_BorderElement">
+      <Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /><Setter Property="MinWidth" Value="0" /><Setter Property="MinHeight" Value="0" /><Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+      <Setter Property="BorderThickness" Value="{Binding BorderThickness, RelativeSource={RelativeSource TemplatedParent}}" />
+    </Style>
     <!-- The Fluent padding is 12,5,0,7, which sits the text above the middle of the box; an even one centres it. -->
     <Style Selector="ComboBox /template/ Border#Background"><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="ComboBox"><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="12,0,0,0" /><Setter Property="VerticalContentAlignment" Value="Center" /></Style>
@@ -140,8 +147,6 @@
     <Style Selector="Button.weekDay /template/ ContentPresenter, Button.weekDay:pointerover /template/ ContentPresenter, Button.weekDay:pressed /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
     <Style Selector="Border.rowSelected"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="3,1,1,1" /><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="Border.ruleBelow"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
-    <Style Selector="TextBox.accentField"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
-    <Style Selector="TextBox.accentField /template/ Border#PART_BorderElement, TextBox.accentField:pointerover /template/ Border#PART_BorderElement, TextBox.accentField:focus /template/ Border#PART_BorderElement"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Border.badge"><Setter Property="Background" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.accentChip"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <Style Selector="Border.lateChip"><Setter Property="Background" Value="{DynamicResource LateTint}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
@@ -158,7 +163,7 @@
     <Style Selector="Button.starKey.on /template/ ContentPresenter#PART_ContentPresenter, Button.starKey.on:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="Border.composer"><Setter Property="Background" Value="{DynamicResource TextControlBackground}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="TextBox.bareField, TextBox.bareField:pointerover, TextBox.bareField:focus"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
-    <Style Selector="TextBox.bareField /template/ Border#PART_BorderElement, TextBox.bareField:pointerover /template/ Border#PART_BorderElement, TextBox.bareField:focus /template/ Border#PART_BorderElement"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /></Style>
+    <Style Selector="TextBox.bareField /template/ Border#PART_BorderElement, TextBox.bareField:pointerover /template/ Border#PART_BorderElement, TextBox.bareField:focus /template/ Border#PART_BorderElement"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="BoxShadow" Value="none" /></Style>
     <!-- Planned meetings on the timeline: dashed cards (the frame is a dashed rectangle, since a border cannot be dashed), and the row they sit in. -->
     <Style Selector="Border.meetingCard"><Setter Property="Background" Value="{DynamicResource MeetBg}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
     <Style Selector="Border.meetingCard.over"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
@@ -508,9 +513,9 @@
       <Setter Property="FontSize" Value="12.5" /><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="Cursor" Value="Hand" />
       <Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.accountPill /template/ ContentPresenter#PART_ContentPresenter, Button.accountPill:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BoxShadow" Value="none" /></Style>
+    <Style Selector="Button.accountPill /template/ ContentPresenter#PART_ContentPresenter, Button.accountPill:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKey}" /></Style>
     <Style Selector="Button.accountPill:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource KeyHover}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKeyHover}" /></Style>
-    <Style Selector="Button.accountPill.on /template/ ContentPresenter#PART_ContentPresenter, Button.accountPill.on:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.accountPill.on:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BoxShadow" Value="none" /></Style>
+    <Style Selector="Button.accountPill.on /template/ ContentPresenter#PART_ContentPresenter, Button.accountPill.on:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.accountPill.on:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BorderBrush" Value="Transparent" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="Button.accountPill.on TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentText}" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
     <!-- Lists take the theme's colours, so a chosen row reads as chosen in every theme. -->
     <Style Selector="ListBox"><Setter Property="Background" Value="Transparent" /></Style>
@@ -527,7 +532,6 @@
     <Style Selector="Button:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="BorderBrush" Value="{DynamicResource FocusStroke}" /><Setter Property="BorderThickness" Value="2" />
     </Style>
-    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement"><Setter Property="BorderBrush" Value="{DynamicResource FocusStroke}" /><Setter Property="BorderThickness" Value="2" /></Style>
     <Style Selector="ComboBox:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource FocusStroke}" /><Setter Property="BorderThickness" Value="2" /></Style>
     <Style Selector="CheckBox:focus-visible /template/ Border#NormalRectangle"><Setter Property="BorderBrush" Value="{DynamicResource FocusStroke}" /><Setter Property="BorderThickness" Value="2" /></Style>
   </Application.Styles>

@@ -83,7 +83,7 @@ public sealed class DashboardShellTests
     }
 
     [AvaloniaFact]
-    public void TheViewsAreTabsAtTheLeftOfTheHeaderAndSettingsHasAnExplicitReturnAction()
+    public void TheViewsAreTabsAtTheLeftOfTheHeaderAndSettingsHasItsNameThereInstead()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
@@ -96,8 +96,7 @@ public sealed class DashboardShellTests
             Click(tabs[2]); Settle(window); Assert.Contains("selected", tabs[2].Classes);
             Click(Find<Button>(window, "Settings")); Settle(window);
             Assert.False(Find<Border>(window, "ViewTabs").IsEffectivelyVisible);
-            Assert.True(Find<Button>(window, "SettingsBack").IsEffectivelyVisible);
-            Assert.Equal("Back to Week overview", Find<Button>(window, "SettingsBack").Content);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Settings" && t.IsEffectivelyVisible);
         }
         finally { window.Close(); }
     }

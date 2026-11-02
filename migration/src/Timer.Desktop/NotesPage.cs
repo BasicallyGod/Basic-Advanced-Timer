@@ -23,9 +23,6 @@ public sealed class NotesPage : Grid
     private readonly StackPanel views = new() { Spacing = 4 }, listColumn = new() { Spacing = 6, Margin = new Thickness(14, 10, 14, 14) };
     private readonly ContentControl formHost = new() { Name = "PageForm" };
     private readonly WrapPanel filterRow = new() { Orientation = Orientation.Horizontal, Name = "NotesAccountPills" };
-    private readonly TextBlock resultSummary = new() { Name = "NotesResultSummary", FontSize = 12, MaxHeight = 36, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-    private readonly Button resetFilters;
-    public event Action? SearchCleared;
     private readonly Popup whenHost = new() { Placement = PlacementMode.Bottom, IsLightDismissEnabled = true, Name = "PageWhenHost" };
     private NoteView view = NoteView.All; private readonly List<string> accountFilters = new(); private string query = "";
     private string? shown;
@@ -42,16 +39,12 @@ public sealed class NotesPage : Grid
         aside.Child = viewsScroll;
         Children.Add(aside);
         var card = new Border { Name = "NotesListCard", CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), ClipToBounds = true }; card.Classes.Add("dayCard");
-        var inner = Ui.Grid("*", "Auto,Auto,Auto,*");
+        var inner = Ui.Grid("*", "Auto,Auto,*");
         // The form, then the row of accounts to filter by, then the list.
         var formBox = new Border { Child = formHost, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(14, 14, 14, 12) }; formBox.Classes.Add("ruleBelow");
-        var filterBox = new Border { Child = new ScrollViewer { Content = filterRow, MaxHeight = 84, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled }, Padding = new Thickness(14, 10, 14, 2), Name = "NotesAccountFilter" };
-        resultSummary.Classes.Add("muted");
-        resetFilters = Ui.Ctl("NotesResetFilters", "Reset all filters", null, "Clear search, account filters and the selected note view", ResetFilters, small: true);
-        var results = Ui.Grid("*,Auto"); results.ColumnSpacing = 8; results.Margin = new Thickness(16, 0, 14, 2);
-        Ui.Put(results, resultSummary); Ui.Put(results, resetFilters, 1); Ui.Put(inner, results, 0, 2);
+        var filterBox = new Border { Child = filterRow, Padding = new Thickness(14, 10, 14, 2), Name = "NotesAccountFilter" };
         Ui.Put(inner, formBox); Ui.Put(inner, filterBox, 0, 1); var pageScroll = new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }; Ui.LeaveRoomForTrack(pageScroll, listColumn);
-        Ui.Put(inner, pageScroll, 0, 3);
+        Ui.Put(inner, pageScroll, 0, 2);
         inner.Children.Add(whenHost); card.Child = inner; SetColumn(card, 2); Children.Add(card);
         AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
@@ -64,11 +57,6 @@ public sealed class NotesPage : Grid
     /// <summary>The words in the header's search box. The list and the counts follow them.</summary>
     public string Query { get => query; set { query = value ?? ""; shown = null; Sync(); } }
     public NoteView View => view;
-    public void ResetFilters()
-    {
-        view = NoteView.All; accountFilters.Clear(); query = ""; scope = null; shown = null;
-        SearchCleared?.Invoke(); Sync(); DrawForm();
-    }
 
     // ---- The views, the accounts and the list ----
 
@@ -90,11 +78,6 @@ public sealed class NotesPage : Grid
         DrawAccountFilter();
         // The list.
         var inView = matches.Where(n => Notes.InView(n, view)).ToList();
-        resultSummary.Text = $"{inView.Count} {(inView.Count == 1 ? "item" : "items")} · {view} · "
-            + (accountFilters.Count == 0 ? "All accounts" : string.Join(", ", accountFilters))
-            + (query.Trim().Length == 0 ? "" : $" · Search: {query.Trim()}");
-        ToolTip.SetTip(resultSummary, resultSummary.Text);
-        resetFilters.IsVisible = view != NoteView.All || accountFilters.Count > 0 || query.Trim().Length > 0;
         listColumn.Children.Clear();
         var groups = Notes.Groups(inView);
         foreach (var group in groups)
@@ -108,7 +91,7 @@ public sealed class NotesPage : Grid
         }
         if (groups.Count == 0)
         {
-            var empty = new TextBlock { Name = "NotesPageEmpty", FontSize = 13.5, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new Thickness(6, 24), Text = query.Trim().Length > 0 ? "Nothing matches that search." : accountFilters.Count > 0 ? "No items match these account filters. Clear account filters or reset all filters to see more." : view == NoteView.Overdue ? "Nothing is overdue." : view != NoteView.All ? $"No items in {view}. Choose All to see your other notes and meetings." : "Nothing here yet. Write a note above, or choose Meeting to add one." };
+            var empty = new TextBlock { Name = "NotesPageEmpty", FontSize = 13.5, TextAlignment = TextAlignment.Center, Margin = new Thickness(6, 24), Text = query.Trim().Length > 0 ? "Nothing matches that search." : view == NoteView.Overdue ? "Nothing is overdue." : "Nothing here yet." };
             empty.Classes.Add("muted"); listColumn.Children.Add(empty);
         }
     }
@@ -137,7 +120,7 @@ public sealed class NotesPage : Grid
         }
         if (accountFilters.Count > 0)
         {
-            var clear = Ui.Button("Clear accounts", () => { accountFilters.Clear(); shown = null; Sync(); }, "NotesAccountClear"); clear.Classes.Add("flat"); clear.Margin = new Thickness(2, 0, 0, 8); clear.Padding = new Thickness(6, 0);
+            var clear = Ui.Button("Clear", () => { accountFilters.Clear(); shown = null; Sync(); }, "NotesAccountClear"); clear.Classes.Add("flat"); clear.Margin = new Thickness(2, 0, 0, 8); clear.Padding = new Thickness(6, 0);
             clear.FontSize = 12.5; clear.FontWeight = FontWeight.SemiBold; ToolTip.SetTip(clear, "Show every account");
             filterRow.Children.Add(clear);
         }
