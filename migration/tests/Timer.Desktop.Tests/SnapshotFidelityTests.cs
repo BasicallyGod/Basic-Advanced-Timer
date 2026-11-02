@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
-using Avalonia.Rendering;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Xunit;
@@ -53,8 +52,9 @@ public sealed class SnapshotFidelityTests
     {
         // A timer tick alone may leave the first composition queued on a busy runner.
         // Request an actual paint after layout before comparing presented pixels.
-        window.UpdateLayout();
-        ((IRenderRoot)window).Renderer.Paint(new Rect(window.ClientSize));
+        Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+        var paint = window.PlatformImpl?.Paint; Assert.NotNull(paint);
+        paint!(new Rect(window.ClientSize));
         for (var i = 0; i < 3; i++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Assert.NotNull(frame); }
     }
 
