@@ -42,10 +42,12 @@ public sealed class UiEfficiencyTests
             window.ShowNotes(); Settle(window); Find<Button>(window, "NotesTab").Focus();
             window.KeyPress(Key.Left, RawInputModifiers.None, PhysicalKey.ArrowLeft, null);
             window.KeyPress(Key.V, RawInputModifiers.Control, PhysicalKey.V, null);
+            window.KeyPress(Key.Delete, RawInputModifiers.None, PhysicalKey.Delete, null);
             Assert.Equal(Now.Date, model.SelectedDate); Assert.Single(model.Engine.Sessions);
             window.SelectTab(false); model.OpenGap(); Settle(window); Find<Button>(window, "CloseDialog").Focus();
             window.KeyPress(Key.Left, RawInputModifiers.None, PhysicalKey.ArrowLeft, null);
             window.KeyPress(Key.V, RawInputModifiers.Control, PhysicalKey.V, null);
+            window.KeyPress(Key.Delete, RawInputModifiers.None, PhysicalKey.Delete, null);
             Assert.Equal(Now.Date, model.SelectedDate); Assert.Single(model.Engine.Sessions);
             window.Dialogs.CloseTop(); Settle(window); Find<Button>(window, "TimelineTab").Focus();
             window.KeyPress(Key.Left, RawInputModifiers.None, PhysicalKey.ArrowLeft, null);

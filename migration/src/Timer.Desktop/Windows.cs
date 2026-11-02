@@ -565,7 +565,7 @@ public sealed class DashboardWindow : Window
             // Ctrl+Y (or Ctrl+Shift+Z) puts back what Ctrl+Z took back, under the same rules.
             else if ((e.KeyModifiers == Avalonia.Input.KeyModifiers.Control && e.Key == Avalonia.Input.Key.Y
                     || e.KeyModifiers == (Avalonia.Input.KeyModifiers.Control | Avalonia.Input.KeyModifiers.Shift) && e.Key == Avalonia.Input.Key.Z)
-                && !settingsMode && !weekMode && !notesMode && !Dialogs.Any && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox))
+                && !settingsMode && !weekMode && !notesMode && !Dialogs.Any && !SetupShowing && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox or Avalonia.Controls.Primitives.RangeBase))
             { if (model.Editor.CanRedo) model.RedoEdit(); e.Handled = true; }
             // + and - lengthen or shorten the selected block by a minute (Shift is allowed, since + needs it on most keyboards), never while typing.
             else if (e.KeyModifiers is Avalonia.Input.KeyModifiers.None or Avalonia.Input.KeyModifiers.Shift && !settingsMode && !weekMode && !notesMode && !Dialogs.Any
@@ -573,7 +573,8 @@ public sealed class DashboardWindow : Window
                 && !SetupShowing && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox or Avalonia.Controls.Primitives.RangeBase))
             { if (model.SelectedRows.Count > 0) { model.NudgeSelection(e.Key is Avalonia.Input.Key.OemPlus or Avalonia.Input.Key.Add ? 1 : -1); e.Handled = true; } }
             // Backspace and Delete remove the selected blocks, but never while typing in a text box.
-            else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete && FocusManager?.GetFocusedElement() is not TextBox)
+            else if (e.Key is Avalonia.Input.Key.Back or Avalonia.Input.Key.Delete && !settingsMode && !weekMode && !notesMode && !Dialogs.Any && !SetupShowing
+                && FocusManager?.GetFocusedElement() is not (TextBox or ComboBox or Avalonia.Controls.Primitives.RangeBase))
             { if (model.SelectedRows.Count > 0) { model.DeleteSelection(); e.Handled = true; } }
         };
         model.PropertyChanged += Changed;
