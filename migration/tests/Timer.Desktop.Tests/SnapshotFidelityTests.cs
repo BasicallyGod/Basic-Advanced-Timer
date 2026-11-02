@@ -12,10 +12,10 @@ namespace Timer.Desktop.Tests;
 public sealed class SnapshotFidelityTests
 {
     [AvaloniaFact]
-    public void PillCaptureKeepsItsGeometryAtFractionalAndDoubleCaptureScales()
+    public async Task PillCaptureKeepsItsGeometryAtFractionalAndDoubleCaptureScales()
     {
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 11, 2, 14, 15, 0)); model.CompleteSetup();
-        var pill = new PillWindow(model); pill.Show(); Settle(pill);
+        var pill = new PillWindow(model); pill.Show(); await Settle(pill);
         var content = pill.Content;
         try
         {
@@ -30,7 +30,7 @@ public sealed class SnapshotFidelityTests
                 pill.Content = new Image { Source = bitmap, Stretch = Stretch.Fill, Width = pill.ClientSize.Width, Height = pill.ClientSize.Height };
                 try
                 {
-                    Settle(pill);
+                    await Settle(pill);
                     using var frame = pill.CaptureRenderedFrame()!; using var pixels = frame.Lock();
                     Assert.Equal(expected.Size, pixels.Size);
                     var bytes = new byte[pixels.RowBytes * pixels.Size.Height];
@@ -42,29 +42,33 @@ public sealed class SnapshotFidelityTests
                             { difference += Math.Abs(bytes[y * pixels.RowBytes + x * 4 + c] - expectedBytes[y * expected.RowBytes + x * 4 + c]); count++; }
                     Assert.True(difference / count < 6, $"Pill at {scale}: mean channel difference {difference / count:0.00}");
                 }
-                finally { pill.Content = content; Settle(pill); }
+                finally { pill.Content = content; await Settle(pill); }
             }
         }
         finally { pill.Content = content; pill.Close(); }
     }
 
-    private static void Settle(Window window)
+    private static async Task Settle(Window window)
     {
-        // A timer tick alone may leave the first composition queued on a busy runner.
-        // Request an actual paint after layout before comparing presented pixels.
-        Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
-        var paint = window.PlatformImpl?.Paint; Assert.NotNull(paint);
-        paint!(new Rect(window.ClientSize));
-        for (var i = 0; i < 3; i++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Assert.NotNull(frame); }
+        // Capturing ticks the timer but may return null while the first render is queued.
+        // Yield to composition and require real frames, with a deadline rather than retrying the test.
+        var deadline = System.Diagnostics.Stopwatch.StartNew(); window.InvalidateVisual();
+        for (var ready = 0; ready < 3;)
+        {
+            Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(5), $"No stable headless frame for {window.GetType().Name} at {window.ClientSize}.");
+            Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
+            await Task.Delay(10);
+            using var frame = window.CaptureRenderedFrame(); ready = frame is null ? 0 : ready + 1;
+        }
     }
 
     [AvaloniaFact]
-    public void DashboardRasterKeepsItsLayoutAtEachCaptureScaleInBothThemes()
+    public async Task DashboardRasterKeepsItsLayoutAtEachCaptureScaleInBothThemes()
     {
         foreach (var theme in new[] { "Light", "Dark" })
         {
             var model = TimerModel.CreateDemo(() => new DateTime(2026, 11, 2, 14, 15, 0)); model.CompleteSetup(); model.SetTheme(theme);
-            var window = new DashboardWindow(model); window.Show(); Settle(window);
+            var window = new DashboardWindow(model); window.Show(); await Settle(window);
             try
             {
                 var surface = window.GetVisualDescendants().OfType<Border>().Single(c => c.Name == "DashboardSurface");
@@ -84,7 +88,7 @@ public sealed class SnapshotFidelityTests
                     var overlay = new Canvas { IsHitTestVisible = false }; overlay.Children.Add(image); layers.Children.Insert(1, overlay); body.Opacity = 0;
                     try
                     {
-                        Settle(window); Assert.Equal(expectedBounds, body.Bounds);
+                        await Settle(window); Assert.Equal(expectedBounds, body.Bounds);
                         using var actualFrame = window.CaptureRenderedFrame()!;
                         using var actual = actualFrame.Lock();
                         var actualBytes = new byte[actual.RowBytes * actual.Size.Height];
@@ -99,7 +103,7 @@ public sealed class SnapshotFidelityTests
                         if (folder is not null) { Directory.CreateDirectory(folder); reference.Save(Path.Combine(folder, $"snapshot-reference-{theme}.png")); actualFrame.Save(Path.Combine(folder, $"snapshot-{theme}-{scale:0.##}.png")); }
                         Assert.True(difference / samples < 6, $"{theme} at {scale}: mean channel difference {difference / samples:0.00}; snapshot should preserve the live layout.");
                     }
-                    finally { body.Opacity = 1; layers.Children.Remove(overlay); Settle(window); }
+                    finally { body.Opacity = 1; layers.Children.Remove(overlay); await Settle(window); }
                 }
             }
             finally { window.Close(); }
