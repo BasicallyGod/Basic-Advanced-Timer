@@ -25,7 +25,12 @@ internal static class NeumorphicGallerySamples
         "buttons" => Buttons(prefix), "surfaces" => Surfaces(prefix), "navigation" => Navigation(prefix),
         "inputs" => Inputs(prefix), "colours" => Colours(prefix), "material" => Material(prefix), _ => new Border()
     };
-    private static StackPanel Column() => new() { Spacing = 14 };
+    private static StackPanel Column()
+    {
+        var column = new StackPanel { Spacing = 14 };
+        // Keep standalone comparison captures on the same ground as the live gallery.
+        column.Bind(Panel.BackgroundProperty, column.GetResourceObservable("Surface")); return column;
+    }
     private static TextBlock Caption(string text) { var label = Ui.Text(text, 12, "muted"); label.TextWrapping = TextWrapping.Wrap; return label; }
     private static WrapPanel Row(params Control[] controls)
     {

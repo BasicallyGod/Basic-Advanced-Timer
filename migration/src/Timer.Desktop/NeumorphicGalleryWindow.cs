@@ -89,6 +89,7 @@ public sealed class NeumorphicGalleryWindow : Window
     private ThemeVariantScope Pane(string name, ThemeVariant variant)
     {
         var content = new StackPanel { Spacing = 14, Margin = new Thickness(16) };
+        content.Bind(Panel.BackgroundProperty, content.GetResourceObservable("Surface"));
         var matrix = new StackPanel { Spacing = 2 };
         var labels = Ui.Grid("82,*,*,*,*,*,*");
         for (var i = 0; i < States.Length; i++)
