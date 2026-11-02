@@ -406,7 +406,7 @@ public sealed class NotesModel
 
     // ---- Storage: a write that fails never loses the words ----
 
-    private DayNote AddRow(DateTime day, TimeSpan? at, string text, TimeSpan? end, long? seriesId, DayNoteKind kind, bool hasDate)
+    private DayNote AddRow(DateTime day, TimeSpan? at, string text, TimeSpan? end, long? seriesId, DayNoteKind? kind, bool hasDate)
     {
         long id;
         if (store is null) id = localNote++;
