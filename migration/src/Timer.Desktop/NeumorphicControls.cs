@@ -50,7 +50,7 @@ public static class NeumorphicControls
         void Sync()
         {
             var marked = button.IsChecked == true;
-            button.Content = new IconGlyph(marked ? IconKind.StarFilled : IconKind.Star) { TintKey = marked ? "ImportantStar" : "Muted" };
+            button.Content = new IconGlyph(IconKind.Star) { TintKey = marked ? "ImportantStar" : "Muted" };
             var tip = marked ? "Not important" : "Mark important";
             AutomationProperties.SetName(button, tip); ToolTip.SetTip(button, tip);
         }

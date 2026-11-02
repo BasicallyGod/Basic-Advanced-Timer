@@ -90,6 +90,7 @@ public sealed class Round18Tests
             // The line is where the pointer is.
             var canvas = Find<Canvas>(window, "TimelineCanvas");
             Assert.Equal(ReviewViews.TimelineGutter + 12.6667 * model.TimelinePixelsPerHour, Canvas.GetLeft(line) + 1, 1.5);
+            Assert.Equal(canvas.Bounds.Height, Canvas.GetTop(line) + line.EndPoint.Y, .5);
             window.MouseMove(new Point(2, 2)); Settle(window); // Off the timeline: it goes.
             Assert.False(line.IsVisible); Assert.False(chip.IsVisible);
             // A press (dragging a block) has the pointer's attention, so the guide steps aside.
@@ -111,6 +112,7 @@ public sealed class Round18Tests
             // A few pixels off the pin: the guide snaps to it.
             window.MouseMove(At(window, model, 8.0, 40) + new Vector(4, 0)); Settle(window);
             Assert.Equal("08:00", ((TextBlock)chip.Child!).Text); Assert.Equal(Canvas.GetLeft(late) + 10, Canvas.GetLeft(line) + 1, .5);
+            Assert.Equal(Find<Canvas>(window, "TimelineCanvas").Bounds.Height, Canvas.GetTop(line) + line.EndPoint.Y, .5); // Snapping skips the pin, but still reaches the display's bottom.
             Assert.True(card.IsVisible); var words = string.Join(" ", card.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
             Assert.Contains("Send the revised budget", words); Assert.Contains("Today, 08:00", words); Assert.Contains("2h 00m late", words);
             Assert.Equal(TimelineGuide.ActiveDot, late.Children.OfType<Avalonia.Controls.Shapes.Ellipse>().Last().Width); // The pin swells while the guide is on it.

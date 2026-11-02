@@ -25,7 +25,7 @@ public sealed class NeumorphicControlsTests
     private static string Hex(Color colour) => $"#{colour.R:X2}{colour.G:X2}{colour.B:X2}";
 
     [AvaloniaFact]
-    public void GalleryResolvesDistinctStatesAndLegibleWarmStarsInBothThemes()
+    public void GalleryKeepsStarsOutlinedAndNeutralWithLegibleGoldInBothThemes()
     {
         var gallery = new NeumorphicGalleryWindow { Height = 1000 }; gallery.Show(); Settle(gallery);
         try
@@ -35,9 +35,11 @@ public sealed class NeumorphicControlsTests
                 var ready = Find<ToggleButton>(gallery, theme + "_Important_Ready");
                 var on = Find<ToggleButton>(gallery, theme + "_Important_On");
                 var pressed = Find<ToggleButton>(gallery, theme + "_Important_Pressed");
-                Assert.NotEqual(Colour(Surface(ready).Background), Colour(Surface(on).Background));
+                Assert.Equal(Colour(Surface(ready).Background), Colour(Surface(on).Background));
                 Assert.NotEqual(Colour(Surface(pressed).Background), Colour(Surface(on).Background));
-                var fill = Colour(Surface(on).Background); Assert.True(fill.R > fill.B);
+                var fill = Colour(Surface(on).Background);
+                Assert.Equal(IconKind.Star, Assert.IsType<IconGlyph>(on.Content).Kind);
+                Assert.Equal("ImportantStar", Assert.IsType<IconGlyph>(on.Content).TintKey);
                 var gold = Colour((IBrush)on.FindResource(on.ActualThemeVariant, "ImportantStar")!);
                 Assert.True(ThemeColours.Contrast(Hex(gold), Hex(fill)) >= 3, theme + " star contrast");
                 Assert.Equal(ready.Bounds.Size, on.Bounds.Size);
@@ -46,6 +48,9 @@ public sealed class NeumorphicControlsTests
                 Assert.True(Find<Border>(Find<Button>(gallery, theme + "_Important_Focus"), "PART_NeumorphicFocus").IsVisible);
                 Assert.False(Find<Border>(ready, "PART_NeumorphicFocus").IsVisible);
                 Assert.Equal(0, Surface(Find<Button>(gallery, theme + "_Important_Disabled")).BoxShadow.Count);
+                var disabled = Find<Button>(gallery, theme + "_Primary_Disabled");
+                Assert.Equal(Colour(Surface(ready).Background), Colour(Surface(disabled).Background));
+                Assert.Equal(Colour((IBrush)disabled.FindResource(disabled.ActualThemeVariant, "Muted")!), Colour(disabled.Foreground));
                 var primary = Find<Button>(gallery, theme + "_Primary_Hover");
                 Assert.Equal(Colour((IBrush)primary.FindResource(primary.ActualThemeVariant, "AccentInk")!), Colour(primary.GetVisualDescendants().OfType<TextBlock>().Single().Foreground));
                 foreach (var button in Find<Border>(gallery, theme + "_StateMatrix").GetVisualDescendants().OfType<Button>())
@@ -64,6 +69,73 @@ public sealed class NeumorphicControlsTests
                     using var picture = WindowMorph.CaptureVisual(Find<Border>(gallery, theme + "_StateMatrix"), 2);
                     picture.Save(Path.Combine(folder, "neumorphic-states-" + theme + ".png"));
                 }
+            }
+        }
+        finally { gallery.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void GallerySectionsShowExistingFamiliesAndKeepNavigationLocal()
+    {
+        var gallery = new NeumorphicGalleryWindow { Height = 1000 }; gallery.Show(); Settle(gallery);
+        try
+        {
+            var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
+            foreach (var id in new[] { "buttons", "surfaces", "navigation", "inputs", "colours" })
+            {
+                Find<Button>(gallery, "GallerySection_" + id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(gallery);
+                foreach (var theme in new[] { "Light", "Dark" })
+                {
+                    var section = Find<Control>(gallery, theme + "_Section_" + id); Assert.True(section.IsEffectivelyVisible);
+                    Assert.False(Find<Control>(gallery, theme + "_Section_states").IsEffectivelyVisible);
+                    Assert.True(section.Bounds.Width > 450);
+                    if (folder is not null)
+                    {
+                        Directory.CreateDirectory(folder);
+                        using var picture = WindowMorph.CaptureVisual(section, 1.5);
+                        picture.Save(Path.Combine(folder, "neumorphic-" + id + "-" + theme + ".png"));
+                    }
+                }
+            }
+            gallery.ShowSection("buttons"); Settle(gallery);
+            foreach (var theme in new[] { "Light", "Dark" })
+            {
+                var disabled = Find<Button>(gallery, theme + "_CurrentSaveDisabled");
+                var presenter = Find<Avalonia.Controls.Presenters.ContentPresenter>(disabled, "PART_ContentPresenter");
+                Assert.Equal(Colour((IBrush)disabled.FindResource(disabled.ActualThemeVariant, "Panel")!), Colour(presenter.Background));
+            }
+            gallery.ShowSection("navigation"); Settle(gallery);
+            var notes = Find<Button>(gallery, "Light_ViewNotes"); notes.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Contains("selected", notes.Classes); Assert.DoesNotContain("selected", Find<Button>(gallery, "Light_ViewTimeline").Classes);
+            Assert.Contains("selected", Find<Button>(gallery, "Dark_ViewTimeline").Classes);
+            var behaviour = Find<Button>(gallery, "Light_MenuSettingsBehaviour"); behaviour.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Contains("selected", behaviour.Classes); Assert.DoesNotContain("selected", Find<Button>(gallery, "Light_MenuSettingsAppearance").Classes);
+            var menuButton = Find<Button>(gallery, "Light_OpenContextMenu"); menuButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(gallery);
+            Assert.True(menuButton.ContextMenu!.IsOpen); menuButton.ContextMenu.Close();
+        }
+        finally { gallery.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void CircularCheckboxesKeepNativeKeyboardMixedDisabledAndFocusBehaviour()
+    {
+        var gallery = new NeumorphicGalleryWindow(); gallery.Show(); gallery.ShowSection("inputs"); Settle(gallery);
+        try
+        {
+            foreach (var theme in new[] { "Light", "Dark" })
+            {
+                var off = Find<CheckBox>(gallery, theme + "_TickOff"); var ring = Find<Border>(off, "PART_CheckRing");
+                Assert.Equal(new CornerRadius(10), ring.CornerRadius); Assert.Equal(new Size(20, 20), ring.Bounds.Size);
+                var before = off.Bounds.Size; off.Focus(NavigationMethod.Tab); Settle(gallery);
+                Assert.True(Find<Border>(off, "PART_CheckFocus").IsVisible); Assert.Equal(before, off.Bounds.Size);
+                gallery.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null);
+                gallery.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null); Settle(gallery);
+                Assert.True(off.IsChecked); Assert.True(Find<Avalonia.Controls.Shapes.Path>(off, "PART_CheckMark").IsVisible);
+                var mixed = Find<CheckBox>(gallery, theme + "_TickMixed"); Assert.Null(mixed.IsChecked);
+                Assert.True(Find<Avalonia.Controls.Shapes.Path>(mixed, "PART_MixedMark").IsVisible);
+                Assert.False(Find<Avalonia.Controls.Shapes.Path>(mixed, "PART_CheckMark").IsVisible);
+                var disabled = Find<CheckBox>(gallery, theme + "_TickDisabled"); Assert.True(disabled.IsChecked); Assert.False(disabled.IsEnabled);
+                Assert.False(disabled.Focus()); Assert.Equal(0, Find<Border>(disabled, "PART_CheckRing").BoxShadow.Count);
             }
         }
         finally { gallery.Close(); }
