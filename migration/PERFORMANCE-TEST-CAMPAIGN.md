@@ -13,6 +13,8 @@ Use the demo for visual stress and a separate Alpha test folder for persistence 
 | P1 | Setup and cold menu requests | In a fresh test folder check first-run setup; separately open Accounts or Notes from the pill before ordinary dashboard use. | Correct view opens once; no missing request, duplicate dialog or unexpected return to setup. |
 | P1 | Normal tracking | Start, switch accounts, pause, resume and take a break. Leave the dashboard hidden for several minutes. | Clocks and allocation remain correct; reminders and checkpoint saves continue while visual work is paused. |
 | P1 | Persistence | In the Alpha test folder track known intervals, wait through a checkpoint, quit and reopen. | Accounts, entries, preferences and running-session recovery behave as expected. Keep this separate from demo-only visual tests. |
+| P1 | Account identity | Add an account, drag it before existing rows, rename existing accounts and save; reopen the app. | Order and colours persist; each account keeps its own time, notes and grouped blocks. |
+| P2 | Diagnostic controls | Start/stop frame timing several times; separately pause routine refresh while tracking and waiting for a reminder. | Fresh frame sessions have one callback chain. Checkpoints and reminder maintenance continue during refresh pause; important errors/alerts still appear. |
 
 ## Second pass: transitions and hidden views
 

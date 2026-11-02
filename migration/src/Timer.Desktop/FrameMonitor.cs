@@ -20,6 +20,10 @@ public readonly record struct FrameStats(int Frames, double AverageMs, double P9
 /// </summary>
 public sealed class FrameMonitor
 {
+    private readonly Action<TopLevel, Action<TimeSpan>> requestFrame;
+    private int session;
+    public FrameMonitor(Action<TopLevel, Action<TimeSpan>>? requestFrame = null)
+        => this.requestFrame = requestFrame ?? ((window, callback) => window.RequestAnimationFrame(callback));
     public static FrameMonitor Instance { get; } = new();
     public const int Kept = 900;
     private readonly double[] gaps = new double[Kept];
@@ -34,12 +38,16 @@ public sealed class FrameMonitor
     public void Start(TopLevel window)
     {
         Stop(); Reset(); ForgetPages(); level = window; layoutWatch = (_, _) => Bump("layout passes"); window.LayoutUpdated += layoutWatch; watched = window;
-        window.RequestAnimationFrame(OnFrame);
+        var current = session;
+        Action<TimeSpan> callback = null!;
+        callback = now => OnFrame(now, current, callback);
+        requestFrame(window, callback);
         tick = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) }; tick.Tick += (_, _) => Changed?.Invoke(); tick.Start();
         Changed?.Invoke();
     }
     public void Stop()
     {
+        session++;
         var was = Running; if (watched is not null && layoutWatch is not null) watched.LayoutUpdated -= layoutWatch; watched = null; level = null; tick?.Stop(); tick = null; haveLast = false;
         if (was) Changed?.Invoke();
     }
@@ -57,12 +65,12 @@ public sealed class FrameMonitor
     }
     /// <summary>Forgets the pages kept from before (a new run of the monitor starts clean).</summary>
     public void ForgetPages() => remembered.Clear();
-    private void OnFrame(TimeSpan now)
+    private void OnFrame(TimeSpan now, int current, Action<TimeSpan> callback)
     {
-        if (level is null) return;
+        if (current != session || level is null) return;
         if (haveLast) Record((now - last).TotalMilliseconds);
         last = now; haveLast = true;
-        level.RequestAnimationFrame(OnFrame);
+        requestFrame(level, callback);
     }
     /// <summary>Adds one gap between frames, in milliseconds. Public so a test can feed it.</summary>
     public void Record(double milliseconds) { gaps[next] = milliseconds; next = (next + 1) % Kept; if (count < Kept) count++; }

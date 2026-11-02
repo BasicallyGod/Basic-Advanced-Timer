@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 2 November 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Account identity and diagnostic safeguards | [7dcdbec](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/7dcdbec) | Keep rename pairs aligned through new/reordered rows, preserve checkpoints and important maintenance during refresh pause, and reject stale frame-monitor callbacks after restart/window switches. |
+
 ## 1 November 2026
 
 | Change | Commit | Details |
