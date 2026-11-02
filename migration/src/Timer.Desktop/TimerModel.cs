@@ -327,7 +327,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         var action = noticeUndo;
         if (!CanUndoNotice) return;
         if (action is null) { UndoEdit(); return; }
-        Notice = null; action(); Notice = "Removal undone"; Notify();
+        Notice = null; action(); Notice = Notes.Unsaved ? "Removal undone · not saved yet, retrying" : "Removal undone"; Notify();
     }
     public void RemoveNote(long id)
     {
@@ -335,6 +335,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         Notes.Remove(id);
         if (SelectedMeetingId == id) ClearSelection();
         EditError = null; Notice = NotesModel.IsMeeting(note) ? "Meeting removed" : "Note removed";
+        if (Notes.Unsaved) Notice += " · not saved yet, retrying";
         noticeUndo = () => Notes.RestoreRemoved(note); NoticeHasUndo = true; messageSeen = (null, null); Notify();
     }
     /// <summary>Whether the note on show is for an edit that Undo takes back, so the message offers an Undo button.</summary>
@@ -1063,6 +1064,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool StopForClose()
     {
         if (savedForClose) return true;
+        Notes.RetryUnsaved();
+        if (Notes.Unsaved) { LastError = Notes.Fault ?? "Notes not saved · kept on screen, retrying"; Notify(); return false; }
         Engine.StopAccount(); var saved = Save(); if (!saved) Notify();
         savedForClose = saved; return saved;
     }

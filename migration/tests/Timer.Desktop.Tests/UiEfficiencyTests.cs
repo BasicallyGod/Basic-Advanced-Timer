@@ -175,8 +175,10 @@ public sealed class UiEfficiencyTests
             model.Notes.Toggle(note.Id); note = Assert.Single(model.Notes.All); model.RemoveNote(note.Id);
             store.Database.Execute("CREATE TRIGGER block_restore BEFORE INSERT ON day_notes BEGIN SELECT RAISE(ABORT, 'full'); END");
             model.UndoNotice(); Assert.True(model.Notes.Unsaved); Assert.True(Assert.Single(model.Notes.All).Done);
+            Assert.False(model.StopForClose()); Assert.Contains("not saved", model.LastError);
             store.Database.Execute("DROP TRIGGER block_restore"); model.Notes.RetryUnsaved();
             var restored = Assert.Single(store.LoadDayNotes()); Assert.Equal(note with { Id = restored.Id }, restored); Assert.False(model.Notes.Unsaved);
+            Assert.True(model.StopForClose());
         }, reopened => Assert.True(Assert.Single(reopened.All).Done));
     }
 
