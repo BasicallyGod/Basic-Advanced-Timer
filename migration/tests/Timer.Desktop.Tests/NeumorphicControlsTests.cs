@@ -83,7 +83,8 @@ public sealed class NeumorphicControlsTests
                 button.Focus(NavigationMethod.Tab); Settle(window);
                 Assert.True(Find<Border>(button, "PART_NeumorphicFocus").IsVisible);
                 Assert.Equal(before, button.Bounds.Size);
-                window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null); Settle(window);
+                window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null);
+                window.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null); Settle(window);
                 Assert.Equal(i == 0, NotesModel.IsImportant(model.Notes.Find(note.Id)!));
                 Assert.Equal(i == 0, Find<ToggleButton>(window, "NoteImportant_" + note.Id).IsChecked);
                 Assert.Single(model.Notes.All);
@@ -105,7 +106,8 @@ public sealed class NeumorphicControlsTests
             NeumorphicGalleryWindow.Open(owner); var gallery = Assert.Single(owner.OwnedWindows.OfType<NeumorphicGalleryWindow>()); Settle(gallery);
             NeumorphicGalleryWindow.Open(owner); Assert.Same(gallery, Assert.Single(owner.OwnedWindows.OfType<NeumorphicGalleryWindow>()));
             var button = Find<ToggleButton>(gallery, "Light_LiveImportant"); button.Focus(NavigationMethod.Tab);
-            gallery.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null); Settle(gallery);
+            gallery.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null);
+            gallery.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null); Settle(gallery);
             Assert.False(button.IsChecked); Assert.Contains("changed", Find<TextBlock>(gallery, "Light_GalleryStatus").Text);
             Assert.Equal(notes, model.Notes.All); Assert.Equal(sessions, model.Engine.Sessions); Assert.Equal(theme, model.Theme); Assert.Equal(tracking, model.IsTracking);
             owner.Close(); Assert.False(gallery.IsVisible);
