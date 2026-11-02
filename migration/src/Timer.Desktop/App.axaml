@@ -152,7 +152,7 @@
     <Style Selector="Border.accentChip"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <Style Selector="Border.lateChip"><Setter Property="Background" Value="{DynamicResource LateTint}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <Style Selector="Border.noteRow"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BoxShadow" Value="none" /></Style>
-    <!-- An important note: a faint accent wash and edge on its row, and its star solid in the accent; the words keep their weight. -->
+    <!-- Important notes keep a neutral row; the importance button uses a gold stroke star. -->
     <Style Selector="Border.noteRow.importantRow"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
     <Style Selector="Border.noteRow.rowSelected"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Border.tick"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>

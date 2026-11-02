@@ -88,7 +88,7 @@ public sealed class NeumorphicControlsTests
                 {
                     var section = Find<Control>(gallery, theme + "_Section_" + id); Assert.True(section.IsEffectivelyVisible);
                     Assert.False(Find<Control>(gallery, theme + "_Section_states").IsEffectivelyVisible);
-                    Assert.True(section.Bounds.Width > 450);
+                    Assert.InRange(section.Bounds.Width, 450, 520); // Captions must wrap within each half, not widen the horizontally scrollable comparison.
                     if (folder is not null)
                     {
                         Directory.CreateDirectory(folder);

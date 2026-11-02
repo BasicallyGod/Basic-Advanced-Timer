@@ -10,7 +10,7 @@ The section buttons change both theme panes together:
 - **Existing buttons:** production toolbar/dialog actions, disabled Save, icon buttons, chips, quick choices, joined Undo/Redo and zoom keys, and the exit action.
 - **On surfaces:** shared buttons and ticks on flat, raised, inset and striped material, with room for their shadows.
 - **Menus & navigation:** dashboard three-way selector, all three two-way selector families, Settings and Notes selection rows, real dropdown and context menus with checked/disabled entries. These change only local sample selection.
-- **Ticks & inputs:** circular checkboxes including mixed/disabled states, working-day and long-label examples, fields, number inputs, dropdown/date picker and scale slider.
+- **Ticks & inputs:** circular checkboxes including mixed/disabled states, working-day and long-label examples, note/budget/time fields, dropdown, the application's own calendar and scale slider.
 - **Colour experiments:** the supplied Sage, Lavender, Butter, Clay, Coral, Ink, Mint, Blush and Slate palette, each on a solid and soft sample button. These colours are not assigned to production actions yet.
 
 ## Material rules

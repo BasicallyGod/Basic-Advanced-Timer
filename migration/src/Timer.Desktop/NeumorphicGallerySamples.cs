@@ -140,12 +140,15 @@ internal static class NeumorphicGallerySamples
             new CheckBox { Name = p + "_TickDisabled", Content = "Disabled", IsChecked = true, IsEnabled = false }),
             Row(new CheckBox { Content = "Mon", IsChecked = true }, new CheckBox { Content = "Tue", IsChecked = true }, new CheckBox { Content = "Wed" }),
             new CheckBox { Name = p + "_LongTick", Content = "Start the timer when I sign in to Windows" }));
-        body.Children.Add(Card("Text and number fields", new TextBox { Name = p + "_InputText", Watermark = "Write a note", Height = 36 },
+        body.Children.Add(Card("Text, budget and time fields", new TextBox { Name = p + "_InputText", Watermark = "Write a note", Height = 36 },
             new TextBox { Watermark = "Disabled field", Height = 36, IsEnabled = false },
-            Row(new NumericUpDown { Name = p + "_Number", Minimum = 0, Maximum = 24, Increment = .25m, Value = 8, Width = 120 }, new TextBox { Text = "09:00", Width = 100, Height = 36 })));
-        body.Children.Add(Card("Dropdowns, date and scale", Row(new ComboBox { Name = p + "_InputDropdown", ItemsSource = new[] { "Day", "Week", "Month", "Quarter" }, SelectedIndex = 1, Width = 150 },
-            new CalendarDatePicker { Name = p + "_Date", SelectedDate = new DateTime(2026, 11, 2), Width = 200 }),
+            Row(new TextBox { Name = p + "_Budget", Text = "37.5", Width = 100, Height = 36 }, new TextBox { Text = "09:00", Width = 100, Height = 36 })));
+        body.Children.Add(Card("Dropdown and scale", Row(new ComboBox { Name = p + "_InputDropdown", ItemsSource = new[] { "Day", "Week", "Month", "Quarter" }, SelectedIndex = 1, Width = 150 }),
             new Slider { Name = p + "_Scale", Minimum = 50, Maximum = 120, Value = 90, Width = 280, HorizontalAlignment = HorizontalAlignment.Left }));
+        var calendar = new SoftDatePicker { Name = p + "_Calendar", HorizontalAlignment = HorizontalAlignment.Left };
+        calendar.Classes.Add("flyoutCard"); calendar.View(new DateTime(2026, 11, 2), new DateTime(2026, 11, 2));
+        var chosen = Caption("Mon 2 Nov"); calendar.DayPicked += day => { calendar.View(day, day); chosen.Text = day.ToString("ddd d MMM"); };
+        body.Children.Add(Card("Application date picker", calendar, chosen));
         return body;
     }
     private static Control Colours(string p)
