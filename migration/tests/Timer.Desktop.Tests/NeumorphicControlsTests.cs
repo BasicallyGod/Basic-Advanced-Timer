@@ -110,8 +110,17 @@ public sealed class NeumorphicControlsTests
             Assert.Contains("selected", Find<Button>(gallery, "Dark_ViewTimeline").Classes);
             var behaviour = Find<Button>(gallery, "Light_MenuSettingsBehaviour"); behaviour.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Contains("selected", behaviour.Classes); Assert.DoesNotContain("selected", Find<Button>(gallery, "Light_MenuSettingsAppearance").Classes);
-            var menuButton = Find<Button>(gallery, "Light_OpenContextMenu"); menuButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(gallery);
-            Assert.True(menuButton.ContextMenu!.IsOpen); menuButton.ContextMenu.Close();
+            foreach (var theme in new[] { "Light", "Dark" })
+            {
+                var menuButton = Find<Button>(gallery, theme + "_OpenContextMenu"); menuButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(gallery);
+                var menu = menuButton.ContextMenu!; Assert.True(menu.IsOpen); Assert.Equal(menuButton.ActualThemeVariant, menu.ActualThemeVariant);
+                if (folder is not null)
+                {
+                    using var picture = WindowMorph.CaptureVisual(menu, 1.5);
+                    picture.Save(Path.Combine(folder, "neumorphic-context-menu-" + theme + ".png"));
+                }
+                menu.Close();
+            }
         }
         finally { gallery.Close(); }
     }
