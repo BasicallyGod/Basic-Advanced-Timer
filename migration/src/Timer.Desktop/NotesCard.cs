@@ -140,9 +140,8 @@ public sealed class NotesCard : Border
         {
             // The star marks a note important (solid) or not (an outline); an important note comes first in the list.
             var important = NotesModel.IsImportant(note);
-            var star = Ui.IconButton(important ? IconKind.StarFilled : IconKind.Star, important ? "Not important" : "Mark important", "NoteImportant_" + note.Id, () => Notes.SetImportant(note.Id, !important));
-            star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; star.Classes.Add("starKey"); star.Classes.Set("on", important); Ui.Put(line, star, 3);
-            if (important && star.Content is IconGlyph solid) solid.TintKey = "ImportantStar"; // The mark is gold, so an important note is picked out without its words changing weight.
+            var star = NeumorphicControls.Important(important, () => Notes.SetImportant(note.Id, !important), "NoteImportant_" + note.Id);
+            Ui.Put(line, star, 3);
         }
         if (!meeting && NotesModel.ReminderOf(note) is null)
         {
@@ -233,7 +232,7 @@ public sealed class NotesCard : Border
         {
             // The star puts the important mark (!!) at the start of the words, or takes it off; typing !! does the same.
             var marked = NotesModel.IsMarked(draft);
-            var star = Ui.Ctl("FormImportant", null, marked ? IconKind.StarFilled : IconKind.Star, marked ? "Not important" : "Mark important", () => { draft = NotesModel.WithMark(draft, !NotesModel.IsMarked(draft)); DrawForm(); }, small: true); Ui.Put(row, star, 1);
+            var star = NeumorphicControls.Important(marked, () => { draft = NotesModel.WithMark(draft, !NotesModel.IsMarked(draft)); DrawForm(); }, "FormImportant", 30); Ui.Put(row, star, 1);
             var bell = Ui.Ctl("FormBell", null, IconKind.Bell, "Set reminder", () => OpenReminder(null), small: true); Ui.Put(row, bell, 2);
             bell.IsVisible = draftReminder is null; // Once a reminder is set its chip changes it, so the bell steps aside and the box gets the room.
         }

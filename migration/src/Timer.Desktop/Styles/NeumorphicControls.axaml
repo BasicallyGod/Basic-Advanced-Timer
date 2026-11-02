@@ -1,0 +1,46 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- One template for action and toggle controls. Reference-state classes are used only by the gallery. -->
+  <ControlTheme x:Key="NeumorphicButton" TargetType="Button">
+    <Setter Property="Height" Value="38" /><Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="12,0" /><Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BorderThickness" Value="1" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" /><Setter Property="FocusAdorner" Value="{x:Null}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid>
+          <Border Name="PART_NeumorphicSurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}" BoxShadow="{DynamicResource NeoRaised}">
+            <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                              Padding="{TemplateBinding Padding}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" Foreground="{TemplateBinding Foreground}" />
+          </Border>
+          <Border Name="PART_NeumorphicFocus" BorderBrush="{DynamicResource FocusStroke}" BorderThickness="2"
+                  CornerRadius="{TemplateBinding CornerRadius}" IsVisible="False" IsHitTestVisible="False" />
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^.compact"><Setter Property="Height" Value="30" /><Setter Property="Width" Value="30" /><Setter Property="Padding" Value="0" /><Setter Property="CornerRadius" Value="9" /></Style>
+    <Style Selector="^.compact /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="{DynamicResource NeoSmallRaised}" /></Style>
+    <Style Selector="^:pointerover, ^.previewHover"><Setter Property="Background" Value="{DynamicResource KeyHover}" /></Style>
+    <Style Selector="^:pointerover /template/ Border#PART_NeumorphicSurface, ^.previewHover /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="{DynamicResource NeoHover}" /></Style>
+    <Style Selector="^.compact:pointerover /template/ Border#PART_NeumorphicSurface, ^.compact.previewHover /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="{DynamicResource NeoSmallHover}" /></Style>
+    <Style Selector="^:checked, ^.on"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
+    <Style Selector="^:checked /template/ Border#PART_NeumorphicSurface, ^.on /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="{DynamicResource NeoInset}" /></Style>
+    <Style Selector="^.compact:checked /template/ Border#PART_NeumorphicSurface, ^.compact.on /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="{DynamicResource NeoSmallInset}" /></Style>
+    <Style Selector="^:pressed, ^.previewPressed"><Setter Property="Background" Value="{DynamicResource NeoPressed}" /></Style>
+    <Style Selector="^:pressed /template/ Border#PART_NeumorphicSurface, ^.previewPressed /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="{DynamicResource NeoInset}" /></Style>
+    <Style Selector="^.compact:pressed /template/ Border#PART_NeumorphicSurface, ^.compact.previewPressed /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="{DynamicResource NeoSmallPressed}" /></Style>
+    <Style Selector="^.primary, ^.primary:pointerover, ^.primary.previewHover, ^.primary:pressed, ^.primary.previewPressed"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
+    <Style Selector="^.important:checked"><Setter Property="Background" Value="{DynamicResource NeoImportantFill}" /><Setter Property="BorderBrush" Value="{DynamicResource ImportantEdge}" /></Style>
+    <Style Selector="^.important:checked:pointerover, ^.important:checked.previewHover"><Setter Property="Background" Value="{DynamicResource NeoImportantHover}" /></Style>
+    <Style Selector="^.important:checked:pressed, ^.important:checked.previewPressed"><Setter Property="Background" Value="{DynamicResource NeoImportantPressed}" /></Style>
+    <Style Selector="^.break:checked"><Setter Property="Background" Value="{DynamicResource NeoBreakFill}" /><Setter Property="BorderBrush" Value="{DynamicResource BreakText}" /><Setter Property="Foreground" Value="{DynamicResource BreakText}" /></Style>
+    <Style Selector="^:disabled"><Setter Property="Foreground" Value="{DynamicResource Muted}" /><Setter Property="Opacity" Value="0.55" /></Style>
+    <Style Selector="^.primary:disabled"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
+    <Style Selector="^:disabled /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="none" /></Style>
+    <Style Selector="^:focus-visible /template/ Border#PART_NeumorphicFocus, ^.previewFocus /template/ Border#PART_NeumorphicFocus"><Setter Property="IsVisible" Value="True" /></Style>
+  </ControlTheme>
+  <ControlTheme x:Key="NeumorphicToggle" TargetType="ToggleButton" BasedOn="{StaticResource NeumorphicButton}" />
+</ResourceDictionary>

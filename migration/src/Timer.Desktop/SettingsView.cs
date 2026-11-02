@@ -308,6 +308,8 @@ public sealed class SettingsView : Grid
         developer.Children.Add(openDemo);
         var inDemo = Ui.Text("You are in the sample-data demo, so the developer features are on. Nothing here is saved.", 13, "muted"); inDemo.Name = "InDemoNote"; inDemo.TextWrapping = TextWrapping.Wrap; inDemo.IsVisible = model.IsDemo;
         developer.Children.Add(inDemo);
+        developer.Children.Add(Row("Controls gallery", "Compare Light and Dark controls and try their states with local samples.",
+            Ui.DialogButton("Open controls gallery", () => { if (TopLevel.GetTopLevel(this) is Window owner) NeumorphicGalleryWindow.Open(owner); }, "OpenControlsGallery")));
         var developerToggle = Toggle("Developer features", "The version on the right-click menu.", "DeveloperFeatures", () => model.DeveloperUnlocked, v => model.SetDeveloper(v), out var developerBox);
         developerBox.IsEnabled = !model.IsDemo;
         developer.Children.Add(developerToggle);
