@@ -45,7 +45,7 @@ public sealed class NeumorphicGalleryWindow : Window
         Ui.Put(root, new ScrollViewer { Content = themes, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled }, 0, 1); Content = root;
     }
 
-    private static Border Pane(string name, ThemeVariant variant)
+    private static ThemeVariantScope Pane(string name, ThemeVariant variant)
     {
         var content = new StackPanel { Spacing = 14, Margin = new Thickness(16) };
         content.Children.Add(Ui.Heading(name, 21));
@@ -110,9 +110,10 @@ public sealed class NeumorphicGalleryWindow : Window
             var swatch = Ui.Horizontal(dot, Ui.Text(label, 11.5, "muted")); swatch.Margin = new Thickness(0, 0, 14, 6); palette.Children.Add(swatch);
         }
         content.Children.Add(palette);
-        var pane = new Border { Name = "Gallery" + name, RequestedThemeVariant = variant, CornerRadius = new CornerRadius(18),
+        var pane = new Border { Name = "Gallery" + name, CornerRadius = new CornerRadius(18),
             Child = new ScrollViewer { Content = content, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
-        pane.Bind(Border.BackgroundProperty, pane.GetResourceObservable("Surface")); return pane;
+        pane.Bind(Border.BackgroundProperty, pane.GetResourceObservable("Surface"));
+        return new ThemeVariantScope { RequestedThemeVariant = variant, Child = pane };
     }
 
     private static Button Sample(string family, bool on, string name)
