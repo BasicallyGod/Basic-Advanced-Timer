@@ -1,0 +1,82 @@
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Loaded by the gallery and its example menus only. No application-wide include. -->
+  <Styles.Resources>
+    <ControlTheme x:Key="GalleryRadio" TargetType="RadioButton">
+      <Setter Property="MinHeight" Value="28" /><Setter Property="MinWidth" Value="0" /><Setter Property="FocusAdorner" Value="{x:Null}" /><Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid ColumnDefinitions="22,Auto" ColumnSpacing="9" Background="Transparent">
+            <Border Name="StudyRadioWell" Width="22" Height="22" CornerRadius="11" Background="{DynamicResource StudyPanel}" BorderBrush="{DynamicResource StudyEdge}" BorderThickness="1" BoxShadow="{DynamicResource StudyCompact}" VerticalAlignment="Center">
+              <Ellipse Name="StudyRadioDot" Width="8" Height="8" Fill="{DynamicResource AccentText}" IsVisible="False" />
+            </Border>
+            <ContentPresenter Grid.Column="1" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" VerticalAlignment="Center" RecognizesAccessKey="True" />
+            <Border Name="StudyRadioFocus" Grid.Column="0" Width="26" Height="26" Margin="-2" CornerRadius="13" BorderBrush="{DynamicResource FocusStroke}" BorderThickness="2" IsVisible="False" IsHitTestVisible="False" />
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:checked /template/ Border#StudyRadioWell"><Setter Property="Background" Value="{DynamicResource StudyWell}" /><Setter Property="BoxShadow" Value="{DynamicResource StudyCompactInset}" /></Style>
+      <Style Selector="^:checked /template/ Ellipse#StudyRadioDot"><Setter Property="IsVisible" Value="True" /></Style>
+      <Style Selector="^:pointerover /template/ Border#StudyRadioWell"><Setter Property="BorderBrush" Value="{DynamicResource Muted}" /></Style>
+      <Style Selector="^:focus-visible /template/ Border#StudyRadioFocus"><Setter Property="IsVisible" Value="True" /></Style>
+      <Style Selector="^:disabled"><Setter Property="Opacity" Value="0.5" /></Style>
+      <Style Selector="^:disabled /template/ Border#StudyRadioWell"><Setter Property="BoxShadow" Value="none" /></Style>
+    </ControlTheme>
+    <ControlTheme x:Key="GallerySwitch" TargetType="ToggleSwitch">
+      <Setter Property="MinHeight" Value="32" /><Setter Property="MinWidth" Value="0" /><Setter Property="FocusAdorner" Value="{x:Null}" /><Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid ColumnDefinitions="52,Auto" ColumnSpacing="10" Background="Transparent">
+            <Border Name="StudySwitchTrack" Width="52" Height="28" CornerRadius="14" Background="{DynamicResource StudyWell}" BorderBrush="{DynamicResource StudyEdge}" BorderThickness="1" BoxShadow="{DynamicResource StudyCompactInset}" VerticalAlignment="Center" />
+            <!-- Native ToggleSwitch moves this 24 px panel through one knob width, retaining drag and keyboard behaviour. -->
+            <Canvas Name="PART_SwitchKnob" Width="24" Height="28" Margin="2,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center">
+              <Grid Name="PART_MovingKnobs" Width="24" Height="28">
+                <Border Width="22" Height="22" CornerRadius="11" Background="{DynamicResource StudyPanel}" BorderBrush="{DynamicResource StudyEdge}" BorderThickness="1" BoxShadow="{DynamicResource StudyCompact}" />
+                <Ellipse Name="StudySwitchLight" Width="5" Height="5" Fill="{DynamicResource Muted}" />
+              </Grid>
+            </Canvas>
+            <ContentPresenter Name="PART_OffContentPresenter" Grid.Column="1" Content="{TemplateBinding OffContent}" ContentTemplate="{TemplateBinding OffContentTemplate}" VerticalAlignment="Center" />
+            <ContentPresenter Name="PART_OnContentPresenter" Grid.Column="1" Content="{TemplateBinding OnContent}" ContentTemplate="{TemplateBinding OnContentTemplate}" VerticalAlignment="Center" IsVisible="False" />
+            <Border Name="StudySwitchFocus" Width="56" Height="32" Margin="-2,0,0,0" CornerRadius="16" BorderBrush="{DynamicResource FocusStroke}" BorderThickness="2" IsVisible="False" IsHitTestVisible="False" />
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:checked /template/ Ellipse#StudySwitchLight"><Setter Property="Fill" Value="{DynamicResource AccentText}" /></Style>
+      <Style Selector="^:checked /template/ ContentPresenter#PART_OffContentPresenter"><Setter Property="IsVisible" Value="False" /></Style>
+      <Style Selector="^:checked /template/ ContentPresenter#PART_OnContentPresenter"><Setter Property="IsVisible" Value="True" /></Style>
+      <Style Selector="^:pointerover /template/ Border#StudySwitchTrack"><Setter Property="BorderBrush" Value="{DynamicResource Muted}" /></Style>
+      <Style Selector="^:focus-visible /template/ Border#StudySwitchFocus"><Setter Property="IsVisible" Value="True" /></Style>
+      <Style Selector="^:disabled"><Setter Property="Opacity" Value="0.5" /></Style>
+    </ControlTheme>
+  </Styles.Resources>
+
+  <Style Selector="Window.galleryProposal RadioButton"><Setter Property="Theme" Value="{StaticResource GalleryRadio}" /></Style>
+  <Style Selector="Window.galleryProposal ToggleSwitch"><Setter Property="Theme" Value="{StaticResource GallerySwitch}" /></Style>
+  <Style Selector="Window.galleryProposal Border.galleryCard"><Setter Property="BoxShadow" Value="{DynamicResource StudyCard}" /><Setter Property="BorderBrush" Value="{DynamicResource StudyEdge}" /></Style>
+  <Style Selector="Window.galleryProposal Button.galleryRound, Window.galleryProposal :is(Button).neo.compact"><Setter Property="CornerRadius" Value="999" /></Style>
+  <Style Selector="Window.galleryProposal Button.ctl, Window.galleryProposal Button.toolButton"><Setter Property="CornerRadius" Value="12" /></Style>
+  <Style Selector="Window.galleryProposal Button.ctl /template/ ContentPresenter#PART_ContentPresenter, Window.galleryProposal Button.toolButton /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BoxShadow" Value="{DynamicResource StudyRaised}" /><Setter Property="BorderBrush" Value="{DynamicResource StudyEdge}" /><Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Window.galleryProposal Button.ctl:pointerover /template/ ContentPresenter#PART_ContentPresenter, Window.galleryProposal Button.toolButton:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BoxShadow" Value="{DynamicResource StudyHover}" /></Style>
+  <Style Selector="Window.galleryProposal Button.ctl:pressed /template/ ContentPresenter#PART_ContentPresenter, Window.galleryProposal Button.toolButton:pressed /template/ ContentPresenter#PART_ContentPresenter, Window.galleryProposal Button.ctl.on /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BoxShadow" Value="{DynamicResource StudyInset}" /></Style>
+  <Style Selector="Window.galleryProposal Button.ctl.primary /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="Transparent" /></Style>
+  <Style Selector="Window.galleryProposal Button.ctl.accentOutline /template/ ContentPresenter#PART_ContentPresenter, Window.galleryProposal Button.toolButton.mainAction /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource StudyEdge}" /></Style>
+  <Style Selector="Window.galleryProposal Button.ctl:disabled /template/ ContentPresenter#PART_ContentPresenter, Window.galleryProposal Button.toolButton:disabled /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource StudyPanel}" /><Setter Property="BorderBrush" Value="{DynamicResource StudyEdge}" /><Setter Property="BoxShadow" Value="none" /></Style>
+  <Style Selector="Window.galleryProposal Button.galleryRound /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="CornerRadius" Value="999" /><Setter Property="BoxShadow" Value="{DynamicResource StudyCompact}" /></Style>
+  <Style Selector="Window.galleryProposal Button.galleryRound:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BoxShadow" Value="{DynamicResource StudyCompactInset}" /></Style>
+  <Style Selector="Window.galleryProposal Button.galleryRound:disabled /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BoxShadow" Value="none" /></Style>
+  <Style Selector="Window.galleryProposal Button.pairFirst /template/ ContentPresenter#PART_ContentPresenter, Window.galleryProposal Button.pairSecond /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BoxShadow" Value="none" /></Style>
+  <Style Selector="Window.galleryProposal Button.pairFirst:pressed /template/ ContentPresenter#PART_ContentPresenter, Window.galleryProposal Button.pairSecond:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BoxShadow" Value="{DynamicResource StudyCompactInset}" /></Style>
+  <Style Selector="Window.galleryProposal CheckBox /template/ Border#PART_CheckRing"><Setter Property="BoxShadow" Value="{DynamicResource StudyCompact}" /><Setter Property="BorderBrush" Value="{DynamicResource StudyEdge}" /></Style>
+  <Style Selector="Window.galleryProposal CheckBox:checked /template/ Border#PART_CheckRing, Window.galleryProposal CheckBox:indeterminate /template/ Border#PART_CheckRing"><Setter Property="BoxShadow" Value="{DynamicResource StudyCompactInset}" /></Style>
+  <Style Selector="Window.galleryProposal CheckBox:disabled /template/ Border#PART_CheckRing"><Setter Property="BoxShadow" Value="none" /></Style>
+  <Style Selector="Window.galleryProposal TextBox /template/ Border#PART_BorderElement, Window.galleryProposal ComboBox /template/ Border#Background"><Setter Property="Background" Value="{DynamicResource StudyWell}" /><Setter Property="BoxShadow" Value="{DynamicResource StudyInset}" /><Setter Property="BorderBrush" Value="{DynamicResource StudyEdge}" /></Style>
+  <Style Selector="Window.galleryProposal TextBox:disabled /template/ Border#PART_BorderElement, Window.galleryProposal ComboBox:disabled /template/ Border#Background"><Setter Property="Opacity" Value="0.55" /><Setter Property="BoxShadow" Value="none" /></Style>
+  <Style Selector="Window.galleryProposal ComboBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BoxShadow" Value="{DynamicResource StudyCompactInset}" /></Style>
+  <Style Selector="Window.galleryProposal Button.settingsNav.selected /template/ ContentPresenter#PART_ContentPresenter, Window.galleryProposal Button.vitem.vitemOn /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BoxShadow" Value="{DynamicResource StudyCompactInset}" /></Style>
+  <Style Selector="Window.galleryProposal Slider /template/ Border#TrackBackground"><Setter Property="CornerRadius" Value="3" /><Setter Property="BoxShadow" Value="{DynamicResource StudyCompactInset}" /></Style>
+  <Style Selector="Window.galleryProposal Slider /template/ Thumb /template/ Border"><Setter Property="BoxShadow" Value="{DynamicResource StudyCompact}" /><Setter Property="BorderBrush" Value="{DynamicResource StudyEdge}" /><Setter Property="BorderThickness" Value="1" /></Style>
+  <Style Selector="ContextMenu.galleryStudyMenu"><Setter Property="Background" Value="{DynamicResource StudyPanel}" /></Style>
+  <Style Selector="ContextMenu.galleryStudyMenu /template/ Border"><Setter Property="BoxShadow" Value="{DynamicResource StudyCard}" /><Setter Property="Margin" Value="16" /></Style>
+  <Style Selector="ContextMenu.galleryStudyMenu MenuItem:pointerover /template/ Border#PART_LayoutRoot, ContextMenu.galleryStudyMenu MenuItem:pressed /template/ Border#PART_LayoutRoot"><Setter Property="Background" Value="{DynamicResource StudyWell}" /><Setter Property="BoxShadow" Value="{DynamicResource StudyCompactInset}" /></Style>
+</Styles>

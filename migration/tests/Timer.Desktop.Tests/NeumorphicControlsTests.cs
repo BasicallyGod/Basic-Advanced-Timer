@@ -81,8 +81,10 @@ public sealed class NeumorphicControlsTests
         try
         {
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
-            foreach (var id in new[] { "buttons", "surfaces", "navigation", "inputs", "colours" })
+            foreach (var proposed in new[] { false, true })
+            foreach (var id in new[] { "material", "buttons", "surfaces", "navigation", "inputs", "colours" })
             {
+                gallery.SetProposed(proposed);
                 Find<Button>(gallery, "GallerySection_" + id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(gallery);
                 foreach (var theme in new[] { "Light", "Dark" })
                 {
@@ -93,7 +95,7 @@ public sealed class NeumorphicControlsTests
                     {
                         Directory.CreateDirectory(folder);
                         using var picture = WindowMorph.CaptureVisual(section, 1.5);
-                        picture.Save(Path.Combine(folder, "neumorphic-" + id + "-" + theme + ".png"));
+                        picture.Save(Path.Combine(folder, "neumorphic-" + (proposed ? "proposed" : "current") + "-" + id + "-" + theme + ".png"));
                     }
                 }
             }
@@ -145,6 +147,62 @@ public sealed class NeumorphicControlsTests
                 Assert.False(Find<Avalonia.Controls.Shapes.Path>(mixed, "PART_CheckMark").IsVisible);
                 var disabled = Find<CheckBox>(gallery, theme + "_TickDisabled"); Assert.True(disabled.IsChecked); Assert.False(disabled.IsEnabled);
                 Assert.False(disabled.Focus()); Assert.Equal(0, Find<Border>(disabled, "PART_CheckRing").BoxShadow.Count);
+            }
+        }
+        finally { gallery.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ProposedMaterialsStayInsideTheGalleryAndCanBeComparedWithoutChangingSamples()
+    {
+        var model = TimerModel.CreateDemo(); model.CompleteSetup(); var owner = new DashboardWindow(model); owner.Show(); Settle(owner);
+        var star = owner.GetVisualDescendants().OfType<ToggleButton>().First(b => b.Name?.StartsWith("NoteImportant_") == true);
+        var productionShadow = Surface(star).BoxShadow; var productionRadius = star.CornerRadius;
+        var appShadow = (BoxShadows)Application.Current!.FindResource(Avalonia.Styling.ThemeVariant.Light, "ShadowKey")!;
+        var notes = model.Notes.All.ToArray(); var selectedTheme = model.Theme; var tracking = model.IsTracking;
+        var gallery = new NeumorphicGalleryWindow(); gallery.Show(owner); Settle(gallery);
+        try
+        {
+            Assert.True(gallery.IsProposed);
+            var sample = Find<ToggleButton>(gallery, "Light_Important_On"); var proposedShadow = Surface(sample).BoxShadow;
+            Assert.Equal(new CornerRadius(999), sample.CornerRadius);
+            Find<Button>(gallery, "GalleryCurrent").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(gallery);
+            Assert.False(gallery.IsProposed); Assert.True(sample.IsChecked); Assert.NotEqual(proposedShadow, Surface(sample).BoxShadow);
+            Assert.NotEqual(new CornerRadius(999), sample.CornerRadius);
+            Find<Button>(gallery, "GalleryProposed").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(gallery);
+            Assert.True(gallery.IsProposed); Assert.Equal(proposedShadow, Surface(sample).BoxShadow); Assert.True(sample.IsChecked);
+            Assert.Equal(productionShadow, Surface(star).BoxShadow); Assert.Equal(productionRadius, star.CornerRadius);
+            Assert.Equal(appShadow, (BoxShadows)Application.Current.FindResource(Avalonia.Styling.ThemeVariant.Light, "ShadowKey")!);
+            Assert.False(Application.Current.TryFindResource("StudyRaised", Avalonia.Styling.ThemeVariant.Light, out _));
+            Assert.Equal(notes, model.Notes.All); Assert.Equal(selectedTheme, model.Theme); Assert.Equal(tracking, model.IsTracking);
+        }
+        finally { gallery.Close(); owner.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void GalleryRadiosSwitchesAndSliderRetainNativeInputInBothMaterialModes()
+    {
+        var gallery = new NeumorphicGalleryWindow { Height = 1200 }; gallery.Show(); gallery.ShowSection("inputs"); Settle(gallery);
+        void Space() { gallery.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null); gallery.KeyRelease(Key.Space, RawInputModifiers.None, PhysicalKey.Space, null); Settle(gallery); }
+        try
+        {
+            foreach (var proposed in new[] { false, true })
+            {
+                gallery.SetProposed(proposed); Settle(gallery);
+                foreach (var theme in new[] { "Light", "Dark" })
+                {
+                    var first = Find<RadioButton>(gallery, theme + "_RadioFirst"); var second = Find<RadioButton>(gallery, theme + "_RadioSecond"); first.IsChecked = true;
+                    second.BringIntoView(); Settle(gallery); Assert.True(second.Focus(NavigationMethod.Tab)); Space();
+                    Assert.True(second.IsChecked); Assert.False(first.IsChecked);
+                    var toggle = Find<ToggleSwitch>(gallery, theme + "_SwitchOff"); toggle.IsChecked = false;
+                    toggle.BringIntoView(); Settle(gallery); Assert.True(toggle.Focus(NavigationMethod.Tab)); Space(); Assert.True(toggle.IsChecked);
+                    Assert.True(Canvas.GetLeft(Find<Grid>(toggle, "PART_MovingKnobs")) > 0);
+                    if (proposed) Assert.True(Find<Border>(toggle, "StudySwitchFocus").IsVisible);
+                    Assert.False(Find<ToggleSwitch>(gallery, theme + "_SwitchDisabled").Focus());
+                    var slider = Find<Slider>(gallery, theme + "_Scale"); slider.BringIntoView(); Settle(gallery); Assert.True(slider.Focus(NavigationMethod.Tab));
+                    gallery.KeyPress(Key.End, RawInputModifiers.None, PhysicalKey.End, null); gallery.KeyRelease(Key.End, RawInputModifiers.None, PhysicalKey.End, null); Settle(gallery);
+                    Assert.Equal(slider.Maximum, slider.Value);
+                }
             }
         }
         finally { gallery.Close(); }
