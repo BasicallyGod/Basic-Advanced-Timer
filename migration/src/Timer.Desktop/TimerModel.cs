@@ -319,7 +319,24 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string? LastError { get; private set; }
     /// <summary>A one-off message for the footer, such as the note that old timesheet files are not used.</summary>
     private string? notice;
-    public string? Notice { get => notice; set { notice = value; NoticeHasUndo = false; } }
+    public string? Notice { get => notice; set { notice = value; NoticeHasUndo = false; noticeUndo = null; } }
+    private Action? noticeUndo;
+    public bool CanUndoNotice => NoticeHasUndo && (noticeUndo is not null || Editor.CanUndo);
+    public void UndoNotice()
+    {
+        var action = noticeUndo;
+        if (!CanUndoNotice) return;
+        if (action is null) { UndoEdit(); return; }
+        Notice = null; action(); Notice = "Removal undone"; Notify();
+    }
+    public void RemoveNote(long id)
+    {
+        if (Notes.Find(id) is not { SeriesId: null } note) return;
+        Notes.Remove(id);
+        if (SelectedMeetingId == id) ClearSelection();
+        EditError = null; Notice = NotesModel.IsMeeting(note) ? "Meeting removed" : "Note removed";
+        noticeUndo = () => Notes.RestoreRemoved(note); NoticeHasUndo = true; messageSeen = (null, null); Notify();
+    }
     /// <summary>Whether the note on show is for an edit that Undo takes back, so the message offers an Undo button.</summary>
     public bool NoticeHasUndo { get; private set; }
     /// <summary>Says that something was done, with an Undo beside the words.</summary>
@@ -354,7 +371,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (Engine.ContinuedBlock is { } block) { DropSelection(); Notice = $"Carrying on {Label(block.Account)} from {block.From:HH:mm}"; }
     }
     // The block being recorded has no ledger row yet, so it cannot be dragged or edited until tracking stops.
-    /// <summary>Says that something was done, in the message bar, with no Undo (notes are outside the undo history).</summary>
+    /// <summary>Says that something was done, in the message bar, without an Undo action.</summary>
     public void Tell(string text) { Notice = text; Notify(); }
     /// <summary>Shows a refused edit in the message bar, such as a time that was typed wrongly in the Selected block card.</summary>
     public void Refuse(string message) { EditError = message; Notice = null; Notify(); }
@@ -432,7 +449,11 @@ public sealed class TimerModel : INotifyPropertyChanged
             if (store is not null && deleted.Any(d => AccountHistory(d).Entries > 0)) { store.Save(Engine, preferences); store.Backup("before-delete"); }
             foreach (var name in deleted) Editor.DeleteAccount(name);
         }
-        if (renamed.Count > 0 || deleted.Count > 0) Notes.Relink(preferences.Accounts.Select(a => a.Name), renames, deleted);
+        if (renamed.Count > 0 || deleted.Count > 0)
+        {
+            if (noticeUndo is not null) Notice = null; // A removed item's old account tag must not be restored after relinking.
+            Notes.Relink(preferences.Accounts.Select(a => a.Name), renames, deleted);
+        }
         if (renamed.Count > 0)
         {
             // Save first so the backup holds the latest entries, then rewrite everything in one go.

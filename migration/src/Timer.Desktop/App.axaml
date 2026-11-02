@@ -145,7 +145,7 @@
     <Style Selector="Border.badge"><Setter Property="Background" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.accentChip"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <Style Selector="Border.lateChip"><Setter Property="Background" Value="{DynamicResource LateTint}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
-    <Style Selector="Border.noteRow"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
+    <Style Selector="Border.noteRow"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BoxShadow" Value="none" /></Style>
     <!-- An important note: a faint accent wash and edge on its row, and its star solid in the accent; the words keep their weight. -->
     <Style Selector="Border.noteRow.importantRow"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
     <Style Selector="Border.noteRow.rowSelected"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
@@ -508,9 +508,9 @@
       <Setter Property="FontSize" Value="12.5" /><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="Cursor" Value="Hand" />
       <Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.accountPill /template/ ContentPresenter#PART_ContentPresenter, Button.accountPill:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKey}" /></Style>
+    <Style Selector="Button.accountPill /template/ ContentPresenter#PART_ContentPresenter, Button.accountPill:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BoxShadow" Value="none" /></Style>
     <Style Selector="Button.accountPill:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource KeyHover}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKeyHover}" /></Style>
-    <Style Selector="Button.accountPill.on /template/ ContentPresenter#PART_ContentPresenter, Button.accountPill.on:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.accountPill.on:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BorderBrush" Value="Transparent" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
+    <Style Selector="Button.accountPill.on /template/ ContentPresenter#PART_ContentPresenter, Button.accountPill.on:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.accountPill.on:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BoxShadow" Value="none" /></Style>
     <Style Selector="Button.accountPill.on TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentText}" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
     <!-- Lists take the theme's colours, so a chosen row reads as chosen in every theme. -->
     <Style Selector="ListBox"><Setter Property="Background" Value="Transparent" /></Style>
@@ -521,5 +521,14 @@
       <Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" />
     </Style>
     <Style Selector="Button.iconButton:disabled"><Setter Property="Opacity" Value="0.4" /></Style>
+    <Style Selector="Button.ctl.primary /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+    </Style>
+    <Style Selector="Button:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="BorderBrush" Value="{DynamicResource FocusStroke}" /><Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement"><Setter Property="BorderBrush" Value="{DynamicResource FocusStroke}" /><Setter Property="BorderThickness" Value="2" /></Style>
+    <Style Selector="ComboBox:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource FocusStroke}" /><Setter Property="BorderThickness" Value="2" /></Style>
+    <Style Selector="CheckBox:focus-visible /template/ Border#NormalRectangle"><Setter Property="BorderBrush" Value="{DynamicResource FocusStroke}" /><Setter Property="BorderThickness" Value="2" /></Style>
   </Application.Styles>
 </Application>

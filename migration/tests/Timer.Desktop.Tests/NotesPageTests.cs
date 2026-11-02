@@ -209,7 +209,7 @@ public sealed class NotesPageTests
                 Assert.IsType<IconGlyph>(delete.Content); Assert.IsType<IconGlyph>(cancel.Content); Assert.Equal(IconKind.Trash, ((IconGlyph)delete.Content!).Kind); Assert.Equal(IconKind.Close, ((IconGlyph)cancel.Content!).Kind);
                 Assert.Contains("Delete", ToolTip.GetTip(delete)?.ToString()); Assert.Contains("Cancel", ToolTip.GetTip(cancel)?.ToString());
                 Assert.Equal("Delete", Avalonia.Automation.AutomationProperties.GetName(delete)); Assert.Equal("Cancel", Avalonia.Automation.AutomationProperties.GetName(cancel));
-                Assert.DoesNotContain(Find<ContentControl>(window, "PageForm").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Length"); // The box's tooltip says what it is.
+                Assert.Contains(Find<ContentControl>(window, "PageForm").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Length"); // The duration is labelled without relying on hover.
                 Assert.Equal("Length, H:MM", ToolTip.GetTip(length)?.ToString());
             }
         }

@@ -31,7 +31,7 @@ public sealed class MessageBar : Border
         // A failed save stays until a save works, so the cross hides it only until it changes.
         offer = Ui.Ctl("ContinuePrevious", "", null, "Continue earlier block", () => model.ContinuePrevious(), small: true);
         offer.Padding = new Thickness(12, 0);
-        undo = Ui.Ctl("UndoMessage", "Undo", null, "Undo the last change", () => model.UndoEdit(), small: true, key: "Ctrl Z"); undo.Padding = new Thickness(12, 0);
+        undo = Ui.Ctl("UndoMessage", "Undo", null, "Undo this action", model.UndoNotice, small: true); undo.Padding = new Thickness(12, 0);
         var close = Ui.IconButton(IconKind.Close, "Dismiss", "DismissMessage", () => { dismissedError = model.LastError; dismissedOffer = model.ContinuePreviousText; model.ExpireMessages(); Sync(); });
         var glyphs = new Grid { Width = 28, Height = 28 }; glyphs.Children.Add(tick); glyphs.Children.Add(mark); icon.Child = new Viewbox { Child = glyphs };
         detail.Classes.Add("muted");
@@ -69,7 +69,7 @@ public sealed class MessageBar : Border
         var continueText = model.ContinuePreviousText; if (continueText is null) dismissedOffer = null;
         if (continueText is not null && continueText == dismissedOffer || failuresOnly) continueText = null;
         offer.IsVisible = continueText is not null; if (continueText is not null) offer.Content = continueText;
-        undo.IsVisible = !failuresOnly && line is not null && !warning && model.NoticeHasUndo && model.Editor.CanUndo;
+        undo.IsVisible = !failuresOnly && line is not null && !warning && model.CanUndoNotice;
         IsVisible = line is not null || continueText is not null;
     }
     private string? shownLine;

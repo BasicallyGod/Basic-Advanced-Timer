@@ -11,6 +11,32 @@ namespace Timer.Desktop.Tests;
 public sealed class PreviewCaptureTests
 {
     [AvaloniaFact]
+    public void WriteUiEfficiencyReviewPages()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = TimerModel.CreateDemo(); model.CompleteSetup(); model.SetTheme(theme);
+            var window = new DashboardWindow(model); window.Show();
+            try
+            {
+                void Shot(string name)
+                {
+                    for (var i = 0; i < 3; i++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); }
+                    using var picture = window.CaptureRenderedFrame(); picture?.Save(Path.Combine(folder, $"ui-efficiency-{theme}-{name}.png"));
+                }
+                void Press(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Shot("timeline"); window.ShowNotes(); Shot("notes");
+                Press("PageKindMeeting"); Shot("meeting");
+                window.SelectTab(true); Shot("week"); Press("WeekTable"); Shot("week-table");
+                Press("Settings"); Press("SettingsExport"); Shot("export");
+            }
+            finally { window.Close(); }
+        }
+    }
+
+    [AvaloniaFact]
     public void WriteAccountsDialog()
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;

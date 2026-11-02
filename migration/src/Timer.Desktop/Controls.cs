@@ -556,7 +556,7 @@ public sealed class AccountList : StackPanel
     private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Period)> rows = new();
     private readonly bool reorderable, bars, compact;
     /// <summary>A row of the bar kind: the name and time on one line with the budget bar under it, and the play tile beside them.</summary>
-    public const double RowHeight = 46, RowGap = 8;
+    public const double RowHeight = 54, RowGap = 8;
     /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
     /// <param name="compact">With bars, a shorter row for the pill's narrow drawer: the name and time, the bar and the play button, without the budget words.</param>
     public AccountList(TimerModel model, bool reorderable = false, bool bars = false, bool compact = false)
@@ -607,11 +607,19 @@ public sealed class AccountList : StackPanel
                 // texts are still kept (off the screen) for the tooltip to be worded from.
                 percent = period;
                 labels.Children.Add(nameLine);
+                if (!compact)
+                {
+                    budget.FontSize = 11.5; period.FontSize = 11.5;
+                    budget.Name = "AccountBudgetUsage"; period.Name = "AccountBudgetPeriod";
+                    var budgetLine = Ui.Grid("*,Auto"); budgetLine.ColumnSpacing = 5;
+                    Ui.Put(budgetLine, budget); Ui.Put(budgetLine, period, 1); labels.Children.Add(budgetLine);
+                    labels.Spacing = 3;
+                }
                 if (account.Budget is not null) { bar = new BudgetBar(); labels.Children.Add(bar); }
                 icon.Margin = new Thickness(4, 0, 0, 0);
                 Ui.Put(grid, labels, shift); Ui.Put(grid, icon, 1 + shift);
                 // A rounded card inset from the edges, so the recording account's soft highlight has room to show. The same one line row on the dashboard and the pill.
-                row.Classes.Add("accountCard"); row.Margin = new Thickness(0); row.Height = RowHeight;
+                row.Classes.Add("accountCard"); row.Margin = new Thickness(0); row.Height = compact ? 46 : RowHeight;
             }
             else
             {
