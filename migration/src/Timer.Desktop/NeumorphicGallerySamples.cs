@@ -11,7 +11,7 @@ internal static class NeumorphicGallerySamples
 {
     internal static readonly (string Id, string Label)[] Sections =
     {
-        ("states", "States"), ("buttons", "Existing buttons"), ("surfaces", "On surfaces"),
+        ("states", "States"), ("material", "Material rules"), ("buttons", "Button families"), ("surfaces", "On surfaces"),
         ("navigation", "Menus & navigation"), ("inputs", "Ticks & inputs"), ("colours", "Colour experiments")
     };
     internal static readonly (string Name, string Hex)[] Palette =
@@ -23,9 +23,14 @@ internal static class NeumorphicGallerySamples
     internal static Control Build(string id, string prefix) => id switch
     {
         "buttons" => Buttons(prefix), "surfaces" => Surfaces(prefix), "navigation" => Navigation(prefix),
-        "inputs" => Inputs(prefix), "colours" => Colours(prefix), _ => new Border()
+        "inputs" => Inputs(prefix), "colours" => Colours(prefix), "material" => Material(prefix), _ => new Border()
     };
-    private static StackPanel Column() => new() { Spacing = 14 };
+    private static StackPanel Column()
+    {
+        var column = new StackPanel { Spacing = 14 };
+        // Keep standalone comparison captures on the same ground as the live gallery.
+        column.Bind(Panel.BackgroundProperty, column.GetResourceObservable("Surface")); return column;
+    }
     private static TextBlock Caption(string text) { var label = Ui.Text(text, 12, "muted"); label.TextWrapping = TextWrapping.Wrap; return label; }
     private static WrapPanel Row(params Control[] controls)
     {
@@ -38,7 +43,7 @@ internal static class NeumorphicGallerySamples
         var body = new StackPanel { Spacing = 10 }; body.Children.Add(Ui.Heading(title, 15));
         foreach (var c in controls) body.Children.Add(c);
         var card = new Border { Child = body, Padding = new Thickness(14), CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1) };
-        card.Bind(Border.BackgroundProperty, card.GetResourceObservable("Panel")); card.Bind(Border.BorderBrushProperty, card.GetResourceObservable("Line")); return card;
+        card.Classes.Add("galleryCard"); card.Bind(Border.BackgroundProperty, card.GetResourceObservable("Panel")); card.Bind(Border.BorderBrushProperty, card.GetResourceObservable("Line")); return card;
     }
     private static Button Current(string prefix, string words, string? role = null, IconKind? icon = null)
     {
@@ -46,7 +51,7 @@ internal static class NeumorphicGallerySamples
     }
     private static Control Buttons(string p)
     {
-        var body = Column(); body.Children.Add(Caption("Existing application styles, alongside the shared themes on the States page. These examples do not perform timer actions."));
+        var body = Column(); body.Children.Add(Caption("The same action families in Current and Proposed. Compare the shared depth, edge treatment and circular icon keys without performing timer actions."));
         var disabled = Current(p + "_CurrentSaveDisabled", "Save", "primary"); disabled.IsEnabled = false;
         body.Children.Add(Card("Actions and dialog buttons", Row(Current(p + "_CurrentAdd", "Add time", "primary", IconKind.Plus), Current(p + "_CurrentSave", "Save", "primary"), disabled,
             Ui.DialogButton("Save", () => { }, p + "_DialogSave"), Ui.DialogButton("Cancel", () => { }, p + "_DialogCancel"))));
@@ -88,7 +93,7 @@ internal static class NeumorphicGallerySamples
     }
     private static Control Navigation(string p)
     {
-        var body = Column(); body.Children.Add(Caption("Existing selection styles. All navigation stays inside this gallery; dropdown and context-menu examples open real menus."));
+        var body = Column(); body.Children.Add(Caption("Selection uses a recessed row or a raised thumb inside a recessed rail. All navigation stays in this gallery; dropdown and context-menu examples open real menus."));
         var tabs = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         var tabButtons = new List<Button>();
         foreach (var (label, icon) in new[] { ("Timeline", IconKind.Timeline), ("Notes", IconKind.NotesList), ("Week overview", IconKind.Week) })
@@ -140,6 +145,14 @@ internal static class NeumorphicGallerySamples
             new CheckBox { Name = p + "_TickDisabled", Content = "Disabled", IsChecked = true, IsEnabled = false }),
             Row(new CheckBox { Content = "Mon", IsChecked = true }, new CheckBox { Content = "Tue", IsChecked = true }, new CheckBox { Content = "Wed" }),
             new CheckBox { Name = p + "_LongTick", Content = "Start the timer when I sign in to Windows" }));
+        body.Children.Add(Card("One choice · radio buttons", Row(
+            new RadioButton { Name = p + "_RadioFirst", Content = "Day", GroupName = p + "_Period", IsChecked = true },
+            new RadioButton { Name = p + "_RadioSecond", Content = "Week", GroupName = p + "_Period" },
+            new RadioButton { Content = "Month", GroupName = p + "_Period" },
+            new RadioButton { Content = "Disabled", GroupName = p + "_DisabledPeriod", IsEnabled = false })));
+        body.Children.Add(Card("On / off · inset track, raised knob", Row(
+            new ToggleSwitch { Name = p + "_SwitchOff", IsChecked = false }, new ToggleSwitch { Name = p + "_SwitchOn", IsChecked = true },
+            new ToggleSwitch { Name = p + "_SwitchDisabled", IsChecked = true, IsEnabled = false })));
         body.Children.Add(Card("Text, budget and time fields", new TextBox { Name = p + "_InputText", Watermark = "Write a note", Height = 36 },
             new TextBox { Watermark = "Disabled field", Height = 36, IsEnabled = false },
             Row(new TextBox { Name = p + "_Budget", Text = "37.5", Width = 100, Height = 36 }, new TextBox { Text = "09:00", Width = 100, Height = 36 })));
@@ -149,6 +162,22 @@ internal static class NeumorphicGallerySamples
         calendar.Classes.Add("flyoutCard"); calendar.View(new DateTime(2026, 11, 2), new DateTime(2026, 11, 2));
         var chosen = Caption("Mon 2 Nov"); calendar.DayPicked += day => { calendar.View(day, day); chosen.Text = day.ToString("ddd d MMM"); };
         body.Children.Add(Card("Application date picker", calendar, chosen));
+        return body;
+    }
+    private static Control Material(string p)
+    {
+        var body = Column(); body.Children.Add(Caption("One material, lit from the upper left. Size sets depth; state sets whether a control rises out of or presses into that material."));
+        body.Children.Add(Card("Raised · an available action", Row(NeumorphicControls.Action("Save", () => { }, p + "_RuleRaised"), NeumorphicControls.Icon(IconKind.Plus, "Add", () => { }, p + "_RuleCompact")),
+            Caption("A small key casts a tighter shadow than a card. Hover lifts it slightly; pressing turns the same light and shadow inward.")));
+        body.Children.Add(Card("Inset · a value or a persistent choice", Row(new TextBox { Text = "09:00", Width = 120, Height = 36 }, NeumorphicControls.Toggle("Selected", true, p + "_RuleInset")),
+            Caption("Fields and wells are recessed. Selected toggles keep their label or glyph as a second cue, so depth and colour never have to carry the state alone.")));
+        var first = NotesPage.Seg(p + "_RuleFirst", "Timeline", true, () => { }); var second = NotesPage.Seg(p + "_RuleSecond", "Notes", false, () => { });
+        first.Click += (_, _) => { first.Classes.Set("optOn", true); second.Classes.Set("optOn", false); };
+        second.Click += (_, _) => { first.Classes.Set("optOn", false); second.Classes.Set("optOn", true); };
+        body.Children.Add(Card("A raised thumb inside an inset rail", NotesPage.Switch(first, second),
+            Caption("The track is the recess; the selected thumb is raised. This applies to two-way and three-way navigation, sliders and switches.")));
+        body.Children.Add(Card("Colour and quiet states", Row(NeumorphicControls.Important(true, () => { }, p + "_RuleStar"), new CheckBox { Content = "Checked", IsChecked = true }),
+            Caption("Gold remains a stroke star on neutral material. Primary actions may use a colour fill. Disabled actions are grey and lose elevation; keyboard focus adds a stable outline.")));
         return body;
     }
     private static Control Colours(string p)

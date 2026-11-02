@@ -1,5 +1,7 @@
 # Neumorphic controls: comparison gallery
 
+The latest gallery-only material proposal is described in [Neumorphic material study](NEUMORPHIC-GALLERY-STUDY.md). Its Current/Proposed comparison adds consistent depth recipes, circular icon keys, radio and switch examples without changing the working application's controls.
+
 Alpha 647 remains the visual baseline; Alpha 653 introduced the first pilot. The expanded gallery includes existing control families and contextual comparisons. Working-page changes are the outlined gold importance star, neutral disabled primary buttons and circular native checkboxes. Palette experiments and other shared button families stay in the gallery pending feedback. Navigation and text fields keep their accepted appearance.
 
 Open **Settings → About → Development → Open controls gallery**. The sample-data demo already has Development enabled. The gallery compares Light and Dark locally without changing the application's selected theme. Fixed reference states are labelled; the live samples below them can be clicked or operated with the keyboard. Samples do not receive the timer model, write preferences or change tracking. Closing the owner closes the gallery, and reopening from the same owner reuses it. Smaller screens can scroll the comparison.

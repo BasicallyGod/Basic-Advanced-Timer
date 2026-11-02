@@ -14,6 +14,15 @@ public sealed class NeumorphicGalleryWindow : Window
     private readonly Dictionary<string, List<Control>> sections = new();
     private readonly Dictionary<string, Button> sectionButtons = new();
     private readonly List<ScrollViewer> paneScrolls = new();
+    private readonly GalleryMaterialStudy material;
+    private readonly Button currentMaterial, proposedMaterial;
+    public bool IsProposed { get; private set; }
+
+    public void SetProposed(bool proposed)
+    {
+        IsProposed = proposed; material.SetProposed(proposed);
+        currentMaterial.Classes.Set("optOn", !proposed); proposedMaterial.Classes.Set("optOn", proposed);
+    }
 
     public void ShowSection(string id)
     {
@@ -49,13 +58,17 @@ public sealed class NeumorphicGalleryWindow : Window
 
     public NeumorphicGalleryWindow()
     {
+        material = new GalleryMaterialStudy(this);
         Title = "Neumorphic controls — Basic’s Advanced Timer"; WindowChrome.Attach(this);
         Width = 1140; Height = 760; MinWidth = 1100; MinHeight = 600;
         ShowInTaskbar = false; WindowStartupLocation = WindowStartupLocation.CenterOwner;
         var root = Ui.Grid("*", "Auto,*"); root.Margin = new Thickness(18);
         var header = new StackPanel { Spacing = 4, Margin = new Thickness(4, 0, 0, 14) };
         header.Children.Add(Ui.Heading("Neumorphic controls", 24));
-        var intro = Ui.Text("Compare the reference states, then try the samples. Nothing here changes your timer or theme.", 13, "muted"); intro.TextWrapping = TextWrapping.Wrap; header.Children.Add(intro);
+        var intro = Ui.Text("Compare Current and Proposed across the same controls. These material experiments stay in this gallery.", 13, "muted"); intro.TextWrapping = TextWrapping.Wrap; header.Children.Add(intro);
+        currentMaterial = NotesPage.Seg("GalleryCurrent", "Current", false, () => SetProposed(false));
+        proposedMaterial = NotesPage.Seg("GalleryProposed", "Proposed", true, () => SetProposed(true));
+        var mode = Ui.Horizontal(NotesPage.Switch(currentMaterial, proposedMaterial), Ui.Text("Raised keys · inset wells · one lighting direction", 12, "muted")); mode.Spacing = 14; mode.Margin = new Thickness(0, 7, 0, 3); header.Children.Add(mode);
         var choices = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var (id, label) in NeumorphicGallerySamples.Sections)
         {
@@ -70,11 +83,13 @@ public sealed class NeumorphicGalleryWindow : Window
         // Horizontal scrolling measures with infinite width. Bound the comparison explicitly so wrapped captions cannot widen the panes.
         comparison.SizeChanged += (_, _) => themes.Width = Math.Max(1064, comparison.Bounds.Width);
         Ui.Put(root, comparison, 0, 1); Content = root;
+        material.CollectSamples(); SetProposed(true);
     }
 
     private ThemeVariantScope Pane(string name, ThemeVariant variant)
     {
         var content = new StackPanel { Spacing = 14, Margin = new Thickness(16) };
+        content.Bind(Panel.BackgroundProperty, content.GetResourceObservable("Surface"));
         var matrix = new StackPanel { Spacing = 2 };
         var labels = Ui.Grid("82,*,*,*,*,*,*");
         for (var i = 0; i < States.Length; i++)
@@ -169,6 +184,6 @@ public sealed class NeumorphicGalleryWindow : Window
     private static Border Card(Control child)
     {
         var card = new Border { Child = child, CornerRadius = new CornerRadius(14), Padding = new Thickness(12), BorderThickness = new Thickness(1) };
-        card.Bind(Border.BackgroundProperty, card.GetResourceObservable("Panel")); card.Bind(Border.BorderBrushProperty, card.GetResourceObservable("Line")); return card;
+        card.Classes.Add("galleryCard"); card.Bind(Border.BackgroundProperty, card.GetResourceObservable("Panel")); card.Bind(Border.BorderBrushProperty, card.GetResourceObservable("Line")); return card;
     }
 }
