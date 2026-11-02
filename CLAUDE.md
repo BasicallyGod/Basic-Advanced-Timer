@@ -173,3 +173,11 @@ Dashboard refreshes are consolidated while minimised as well as hidden. Model/na
 ### Native reduced-motion cache
 
 The initial reduced-motion read previously subtracted long.MinValue from TickCount64, overflowing and incorrectly accepting an uninitialised cache. The cache now checks its sentinel and monotonic time ordering first, and publishes the timestamp after the value is read. Native preference coverage compares unforced behaviour with Windows' client-area animation setting. Animation-specific visual tests explicitly choose enabled motion instead of inheriting CI desktop settings.
+
+### Correctness guards before native feedback
+
+AccountsDialog now pairs every kept source row with its edited AccountSettings before filtering rename pairs, so adding/reordering new rows cannot shift an existing account's identity. The regression exercises the dialog drag/save path and reloads persisted history, groups, notes and colours.
+
+TickPaused suppresses routine visual Elapsed/checkpoint notifications only. Tick counters, date following, recurring-note generation, retry cadence and 15-second saves continue. Alert identity/light changes and checkpoint failures still notify; recovery clears the error through Save's existing notification. Diagnostic text describes this behaviour. The static diagnostic-pause test collection is isolated from other collections, and checks persisted ledger/running snapshots and failure/retry rather than relying on an unchanged snapshot save.
+
+FrameMonitor callbacks carry a session id. A callback left pending by Stop cannot record or enqueue another frame after a restart or a switch to another window. Injected frame delivery makes both cases deterministic in regression tests. The campaign outline includes account identity and diagnostic-control checks.

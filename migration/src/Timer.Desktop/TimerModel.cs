@@ -982,18 +982,32 @@ public sealed class TimerModel : INotifyPropertyChanged
             return Math.Clamp((Engine.Now - plan.Start).TotalSeconds / (plan.End - plan.Start).TotalSeconds, 0.0, 1.0);
         }
     }
-    /// <summary>Developer switch: skip the one-second refresh, so a page can be watched with nothing redrawing on the tick. Never saved; the clock stops moving while it is on.</summary>
+    /// <summary>Developer switch: pause routine visual tick notifications. Checkpoints, scheduled maintenance and important notifications continue.</summary>
     public static bool TickPaused { get; set; }
+    private (string Key, string LightToken)[]? pausedAlerts;
     public void Tick()
     {
-        if (closed || TickPaused) return;
+        if (closed) return;
         ticks++;
         FrameMonitor.Bump("clock ticks");
         FollowToday();
         Notes.MakeSeriesNotes(); // A repeating meeting's next days are made as time goes on.
         if (ticks % 60 == 0) Notes.RetryUnsaved();
-        if (ticks % 15 == 0) { Save(); Notify(CheckpointChange); }
-        else PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Elapsed)));
+        var checkpoint = ticks % 15 == 0;
+        if (checkpoint) Save();
+        if (!TickPaused)
+        {
+            pausedAlerts = null;
+            if (checkpoint) Notify(CheckpointChange);
+            else PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Elapsed)));
+        }
+        else
+        {
+            var attention = Alerts.Select(a => (a.Key, a.LightToken)).ToArray();
+            var attentionChanged = pausedAlerts is null ? attention.Length > 0 : !attention.SequenceEqual(pausedAlerts);
+            pausedAlerts = attention;
+            if (attentionChanged || checkpoint && LastError is not null) Notify(PresentationChange);
+        }
     }
     public bool Save()
     {

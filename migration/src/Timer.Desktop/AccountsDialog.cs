@@ -83,7 +83,7 @@ public sealed class AccountsDialog : Dialog
         bool Taken(string name) => entries.Any(e => (e.Name.Text ?? "").Trim().Equals(name, StringComparison.OrdinalIgnoreCase));
         Ui.Put(root, new ScrollViewer { Content = list, AllowAutoHide = false }, row: 1);
         var error = new TextBlock { Classes = { "overtime" }, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new Thickness(0, 10) };
-        var input = new TextBox { Watermark = "New account name", Width = 280, MaxLength = TimerModel.MaxAccountNameLength };
+        var input = new TextBox { Name = "NewAccountName", Watermark = "New account name", Width = 280, MaxLength = TimerModel.MaxAccountNameLength };
         var add = Ui.Horizontal(input, Ui.DialogButton("Add account", () =>
         {
             var name = input.Text?.Trim() ?? "";
@@ -91,7 +91,7 @@ public sealed class AccountsDialog : Dialog
                 || Taken(name))
             { error.Text = "Choose a unique account name. Break is reserved."; return; }
             Add(new(name), false); input.Text = ""; error.Text = "";
-        }));
+        }, "AddAccount"));
         add.Margin = new Thickness(0, 14, 0, 0); Ui.Put(root, add, row: 2); Ui.Put(root, error, row: 3);
         // Saves the list. Anything marked for deleting that has recorded time asks first, in a panel above the buttons, and only goes once confirmed.
         void Commit(bool confirmed)
@@ -115,8 +115,8 @@ public sealed class AccountsDialog : Dialog
                 var accounts = kept.Select(e => new AccountSettings((e.Name.Text ?? "").Trim(),
                     string.IsNullOrWhiteSpace(e.Budget.Text) ? null : double.Parse(e.Budget.Text, NumberStyles.Float, CultureInfo.InvariantCulture),
                     (string?)e.Period.SelectedItem ?? "week", e.Visible.IsChecked != true, e.Colour())).ToList();
-                var renames = kept.Where(e => e.Original is not null).Zip(accounts, (e, a) => (From: e.Original!, To: a.Name))
-                    .Where(r => r.From != r.To).ToDictionary(r => r.From, r => r.To);
+                var renames = kept.Zip(accounts, (e, a) => (From: e.Original, To: a.Name))
+                    .Where(r => r.From is not null && r.From != r.To).ToDictionary(r => r.From!, r => r.To);
                 model.SetAccounts(accounts, renames, deleted);
                 if (model.LastError is not null) { error.Text = model.LastError; return; }
                 Close();
