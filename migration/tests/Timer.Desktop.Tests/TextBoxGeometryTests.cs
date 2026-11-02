@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -63,5 +64,24 @@ public sealed class TextBoxGeometryTests
             }
             finally { window.Close(); }
         }
+    }
+
+    [AvaloniaFact]
+    public void InlineNoteEditorHasANeutralOuterFrameAndNoSecondFieldShadow()
+    {
+        var model = TimerModel.CreateDemo(); model.CompleteSetup();
+        var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "AddNote").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Settle(window);
+            var field = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "NoteField");
+            field.Focus(); Settle(window);
+            var frame = window.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("composer"));
+            Assert.NotEqual(Color.Parse(model.CurrentTheme.Colour("Accent")), ((ISolidColorBrush)frame.BorderBrush!).Color);
+            var decoration = field.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PART_BorderElement");
+            Assert.Equal(0, decoration.BoxShadow.Count); Assert.Equal(new Thickness(0), decoration.BorderThickness);
+        }
+        finally { window.Close(); }
     }
 }
