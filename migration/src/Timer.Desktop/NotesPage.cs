@@ -23,6 +23,9 @@ public sealed class NotesPage : Grid
     private readonly StackPanel views = new() { Spacing = 4 }, listColumn = new() { Spacing = 6, Margin = new Thickness(14, 10, 14, 14) };
     private readonly ContentControl formHost = new() { Name = "PageForm" };
     private readonly WrapPanel filterRow = new() { Orientation = Orientation.Horizontal, Name = "NotesAccountPills" };
+    private readonly TextBlock resultSummary = new() { Name = "NotesResultSummary", FontSize = 12, MaxHeight = 36, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+    private readonly Button resetFilters;
+    public event Action? SearchCleared;
     private readonly Popup whenHost = new() { Placement = PlacementMode.Bottom, IsLightDismissEnabled = true, Name = "PageWhenHost" };
     private NoteView view = NoteView.All; private readonly List<string> accountFilters = new(); private string query = "";
     private string? shown;
@@ -39,12 +42,16 @@ public sealed class NotesPage : Grid
         aside.Child = viewsScroll;
         Children.Add(aside);
         var card = new Border { Name = "NotesListCard", CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), ClipToBounds = true }; card.Classes.Add("dayCard");
-        var inner = Ui.Grid("*", "Auto,Auto,*");
+        var inner = Ui.Grid("*", "Auto,Auto,Auto,*");
         // The form, then the row of accounts to filter by, then the list.
         var formBox = new Border { Child = formHost, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(14, 14, 14, 12) }; formBox.Classes.Add("ruleBelow");
-        var filterBox = new Border { Child = filterRow, Padding = new Thickness(14, 10, 14, 2), Name = "NotesAccountFilter" };
+        var filterBox = new Border { Child = new ScrollViewer { Content = filterRow, MaxHeight = 84, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled }, Padding = new Thickness(14, 10, 14, 2), Name = "NotesAccountFilter" };
+        resultSummary.Classes.Add("muted");
+        resetFilters = Ui.Ctl("NotesResetFilters", "Reset all filters", null, "Clear search, account filters and the selected note view", ResetFilters, small: true);
+        var results = Ui.Grid("*,Auto"); results.ColumnSpacing = 8; results.Margin = new Thickness(16, 0, 14, 2);
+        Ui.Put(results, resultSummary); Ui.Put(results, resetFilters, 1); Ui.Put(inner, results, 0, 2);
         Ui.Put(inner, formBox); Ui.Put(inner, filterBox, 0, 1); var pageScroll = new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }; Ui.LeaveRoomForTrack(pageScroll, listColumn);
-        Ui.Put(inner, pageScroll, 0, 2);
+        Ui.Put(inner, pageScroll, 0, 3);
         inner.Children.Add(whenHost); card.Child = inner; SetColumn(card, 2); Children.Add(card);
         AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
@@ -57,14 +64,21 @@ public sealed class NotesPage : Grid
     /// <summary>The words in the header's search box. The list and the counts follow them.</summary>
     public string Query { get => query; set { query = value ?? ""; shown = null; Sync(); } }
     public NoteView View => view;
+    public void ResetFilters()
+    {
+        view = NoteView.All; accountFilters.Clear(); query = ""; scope = null; shown = null;
+        SearchCleared?.Invoke(); Sync(); DrawForm();
+    }
 
     // ---- The views, the accounts and the list ----
 
     private string Signature() => string.Join("|", Notes.All.Select(n => $"{n.Id};{n.Day:yyyyMMdd};{n.At};{n.End};{n.Text};{n.Done};{n.SeriesId}"))
-        + $"#{view}#{string.Join(",", accountFilters)}#{query}#{editing}#{model.Engine.Now:yyyyMMddHHmm}#{model.ReviewAccounts.Count}";
+        + $"#{view}#{string.Join(",", accountFilters)}#{query}#{editing}#{model.Engine.Now:yyyyMMddHHmm}#"
+        + string.Join(";", model.ReviewAccounts.Select(a => $"{a.Name}/{a.Display}/{a.Colour}"));
 
     public void Sync()
     {
+        accountFilters.RemoveAll(name => !model.ReviewAccounts.Any(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));
         var signature = Signature(); if (signature == shown) return; shown = signature;
         var matches = Notes.MatchingAny(query, accountFilters);
         views.Children.Clear();
@@ -76,6 +90,11 @@ public sealed class NotesPage : Grid
         DrawAccountFilter();
         // The list.
         var inView = matches.Where(n => Notes.InView(n, view)).ToList();
+        resultSummary.Text = $"{inView.Count} {(inView.Count == 1 ? "item" : "items")} · {view} · "
+            + (accountFilters.Count == 0 ? "All accounts" : string.Join(", ", accountFilters))
+            + (query.Trim().Length == 0 ? "" : $" · Search: {query.Trim()}");
+        ToolTip.SetTip(resultSummary, resultSummary.Text);
+        resetFilters.IsVisible = view != NoteView.All || accountFilters.Count > 0 || query.Trim().Length > 0;
         listColumn.Children.Clear();
         var groups = Notes.Groups(inView);
         foreach (var group in groups)
@@ -89,7 +108,7 @@ public sealed class NotesPage : Grid
         }
         if (groups.Count == 0)
         {
-            var empty = new TextBlock { Name = "NotesPageEmpty", FontSize = 13.5, TextAlignment = TextAlignment.Center, Margin = new Thickness(6, 24), Text = query.Trim().Length > 0 ? "Nothing matches that search." : view == NoteView.Overdue ? "Nothing is overdue." : "Nothing here yet." };
+            var empty = new TextBlock { Name = "NotesPageEmpty", FontSize = 13.5, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new Thickness(6, 24), Text = query.Trim().Length > 0 ? "Nothing matches that search." : accountFilters.Count > 0 ? "No items match these account filters. Clear account filters or reset all filters to see more." : view == NoteView.Overdue ? "Nothing is overdue." : view != NoteView.All ? $"No items in {view}. Choose All to see your other notes and meetings." : "Nothing here yet. Write a note above, or choose Meeting to add one." };
             empty.Classes.Add("muted"); listColumn.Children.Add(empty);
         }
     }
@@ -118,7 +137,7 @@ public sealed class NotesPage : Grid
         }
         if (accountFilters.Count > 0)
         {
-            var clear = Ui.Button("Clear", () => { accountFilters.Clear(); shown = null; Sync(); }, "NotesAccountClear"); clear.Classes.Add("flat"); clear.Margin = new Thickness(2, 0, 0, 8); clear.Padding = new Thickness(6, 0);
+            var clear = Ui.Button("Clear accounts", () => { accountFilters.Clear(); shown = null; Sync(); }, "NotesAccountClear"); clear.Classes.Add("flat"); clear.Margin = new Thickness(2, 0, 0, 8); clear.Padding = new Thickness(6, 0);
             clear.FontSize = 12.5; clear.FontWeight = FontWeight.SemiBold; ToolTip.SetTip(clear, "Show every account");
             filterRow.Children.Add(clear);
         }
@@ -153,19 +172,25 @@ public sealed class NotesPage : Grid
         void Add(Control chip) { chip.Margin = new Thickness(0, 0, 6, 0); chips.Children.Add(chip); }
         if (acct is not null) Add(NoteParts.Chip("#" + acct.Replace(" ", ""), "plain", null, NoteParts.Dot(model, acct)));
         if (isMeeting) Add(NoteParts.Chip(NoteDates.Day(note.Day, model.Engine.Now) + ", " + NoteParts.Span(note), "plain"));
-        else if (NotesModel.ReminderOf(note) is { } due) Add(NoteParts.Chip(NoteDates.When(due, model.Engine.Now), Notes.IsLate(note) ? "late" : "accent", IconKind.Bell));
+        else if (NotesModel.ReminderOf(note) is { } due)
+        {
+            var reminder = Ui.Button("", () => { Edit(note); OpenWhen(); }, "PageNoteReminder_" + note.Id);
+            reminder.Classes.Add("pillBare"); reminder.Content = NoteParts.Chip(NoteDates.When(due, model.Engine.Now), Notes.IsLate(note) ? "late" : "accent", IconKind.Bell);
+            ToolTip.SetTip(reminder, "Change reminder"); Avalonia.Automation.AutomationProperties.SetName(reminder, "Change reminder for " + plain); Add(reminder);
+        }
         if (isMeeting && Notes.SeriesOf(note) is { } series) Add(NoteParts.Chip(Notes.RepeatOf(note) == RepeatChoice.None ? series.Rule.Words() : NotesModel.Label(Notes.RepeatOf(note)), "quiet", IconKind.Repeat));
-        var stack = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center }; stack.Children.Add(text); if (chips.Children.Count > 0) stack.Children.Add(chips);
-        var main = Ui.Button("", () => Edit(note), "PageNoteOpen_" + note.Id); main.Classes.Add("pillBare"); main.Content = stack; main.Padding = new Thickness(0); main.HorizontalContentAlignment = HorizontalAlignment.Left; main.HorizontalAlignment = HorizontalAlignment.Stretch;
+        var stack = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
+        var main = Ui.Button("", () => Edit(note), "PageNoteOpen_" + note.Id); main.Classes.Add("pillBare"); main.Content = text; main.Padding = new Thickness(0); main.HorizontalContentAlignment = HorizontalAlignment.Left; main.HorizontalAlignment = HorizontalAlignment.Stretch;
         Avalonia.Automation.AutomationProperties.SetName(main, (isMeeting ? "Edit meeting: " : "Edit note: ") + plain);
-        Ui.Put(line, main, 1);
+        stack.Children.Add(main); if (chips.Children.Count > 0) stack.Children.Add(chips);
+        Ui.Put(line, stack, 1);
         if (!isMeeting)
         {
             var important = NotesModel.IsImportant(note);
             var star = Ui.IconButton(important ? IconKind.StarFilled : IconKind.Star, important ? "Not important" : "Mark important", "PageNoteImportant_" + note.Id, () => Notes.SetImportant(note.Id, !important)); star.Classes.Add("starKey"); star.Classes.Set("on", important); star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, star, 2);
             if (important && star.Content is IconGlyph solid) solid.TintKey = "ImportantStar";
         }
-        var remove = Ui.IconButton(IconKind.Close, isMeeting ? "Remove meeting" : "Remove note", "PageNoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, remove, isMeeting ? 2 : 3);
+        var remove = Ui.IconButton(IconKind.Trash, isMeeting ? "Remove meeting" : "Remove note", "PageNoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 30; remove.Height = 30; remove.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, remove, isMeeting ? 2 : 3);
         var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9), Name = "PageRow_" + note.Id }; card.Classes.Add("noteRow"); if (!isMeeting && NotesModel.IsImportant(note)) card.Classes.Add("importantRow");
         if (editing == note.Id) card.Classes.Add("rowSelected"); // The row being changed has the accent edge.
         return card;
@@ -194,7 +219,7 @@ public sealed class NotesPage : Grid
     private void AskRemove(DayNote note)
     {
         if (Notes.SeriesOf(note) is not null && NotesModel.IsMeeting(note)) { editing ??= null; scope = (note.Id, true); DrawForm(); return; }
-        Notes.Remove(note.Id); if (editing == note.Id) ResetForm(); model.Tell(NotesModel.IsMeeting(note) ? "Meeting removed" : "Note removed");
+        model.RemoveNote(note.Id); if (editing == note.Id) { ResetForm(); shown = null; Sync(); DrawForm(); }
     }
 
     private void DrawForm()
@@ -203,7 +228,7 @@ public sealed class NotesPage : Grid
         var top = Ui.Grid("*,Auto"); top.ColumnSpacing = 8;
         var field = new TextBox { Name = "PageNoteField", Text = draft, Height = 36, MinHeight = 36, VerticalContentAlignment = VerticalAlignment.Center, IsEnabled = !archived,
             Watermark = meeting ? "Meeting name" : "Write a note", HorizontalAlignment = HorizontalAlignment.Stretch };
-        field.Classes.Add("accentField"); NoteLinks.AttachPaste(field);
+        NoteLinks.AttachPaste(field);
         field.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) draft = field.Text ?? ""; };
         field.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Submit(); e.Handled = true; } };
         Ui.Put(top, field);
@@ -225,7 +250,8 @@ public sealed class NotesPage : Grid
         void Add(Control control) { control.Margin = new Thickness(0, 0, 6, 6); options.Children.Add(control); }
         if (editing is not null)
         {
-            var label = NoteParts.Chip(meeting ? "Editing a meeting" : "Editing a note", "plain"); label.Height = 36; label.Padding = new Thickness(12, 0); Add(label);
+            var label = Ui.Text(meeting ? "Editing a meeting" : "Editing a note", 12, "muted"); label.Name = "PageEditingLabel";
+            column.Children.Insert(0, label);
         }
         else
         {
@@ -244,6 +270,8 @@ public sealed class NotesPage : Grid
         Add(accounts);
         var whenText = when is { } w ? (meeting ? NoteDates.When(w, model.Engine.Now) : NoteDates.When(w, model.Engine.Now)) : meeting ? "Pick a time" : "Reminder";
         var whenButton = Ui.Button("", OpenWhen, "PageWhen"); whenButton.Classes.Add("ctl"); whenButton.Height = 36; whenButton.Padding = new Thickness(12, 0); whenButton.IsEnabled = !archived;
+        ToolTip.SetTip(whenButton, meeting ? "Start: choose the meeting's day and time" : "Choose a reminder");
+        Avalonia.Automation.AutomationProperties.SetName(whenButton, (meeting ? "Meeting start: " : "Reminder: ") + whenText);
         whenButton.Content = Ui.Horizontal(new IconGlyph(meeting ? IconKind.Today : IconKind.Bell), new TextBlock { Text = whenText, FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center }); Add(whenButton);
         if (!meeting)
         {
@@ -257,7 +285,7 @@ public sealed class NotesPage : Grid
             length.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) lengthText = length.Text ?? ""; };
             Avalonia.Automation.AutomationProperties.SetName(length, "Length, H:MM");
             // No word beside the box: its tooltip says what it is, so the line keeps its room for the repeat list.
-            ToolTip.SetTip(length, "Length, H:MM"); Add(length);
+            ToolTip.SetTip(length, "Length, H:MM"); var lengthLabel = Ui.Text("Length", 12, "muted"); lengthLabel.VerticalAlignment = VerticalAlignment.Center; Add(Ui.Horizontal(lengthLabel, length));
             var repeats = new ComboBox { Name = "PageRepeat", ItemsSource = NotesModel.Offered(repeat), Width = 150, Height = 36, MinHeight = 36, FontSize = 13.5, IsEnabled = !archived };
             repeats.SelectedItem = NotesModel.Label(repeat);
             repeats.SelectionChanged += (_, _) => { if (repeats.SelectedItem is string label) repeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };

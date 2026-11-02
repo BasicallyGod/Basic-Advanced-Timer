@@ -28,6 +28,7 @@ public sealed class NotesModel
     private readonly List<NoteSeries> series;
     private long localNote = 1, localSeries = 1, unsaved;
     private readonly HashSet<long> pendingDeletes = new();
+    private readonly HashSet<long> pendingUpdates = new();
 
     public NotesModel(TimerStore? store, Func<DateTime> now, Func<IReadOnlyList<string>> accountNames)
     {
@@ -327,6 +328,23 @@ public sealed class NotesModel
         Changed?.Invoke();
     }
 
+    /// <summary>Restores an ordinary removed item, retaining all its fields. Series removals use their explicit scope flow instead.</summary>
+    public void RestoreRemoved(DayNote note)
+    {
+        if (note.SeriesId is not null) return;
+        if (pendingDeletes.Remove(note.Id) || note.Id < 0)
+        {
+            // A refused delete is still in storage. Cancel its retry instead of inserting a duplicate.
+            notes.Add(note); Persist(note);
+        }
+        else
+        {
+            var restored = AddRow(note.Day, note.At, note.Text, note.End, null, note.Kind, note.HasDate);
+            if (note.Done) Change(restored.Id, n => n with { Done = true });
+        }
+        Changed?.Invoke();
+    }
+
     /// <summary>Notes tagged with an account follow its rename, and the tag becomes an ordinary word if the account is deleted.</summary>
     public void Relink(IEnumerable<string> before, IReadOnlyDictionary<string, string> renamed, IReadOnlyCollection<string> deleted)
     {
@@ -388,7 +406,7 @@ public sealed class NotesModel
 
     // ---- Storage: a write that fails never loses the words ----
 
-    private DayNote AddRow(DateTime day, TimeSpan? at, string text, TimeSpan? end, long? seriesId, DayNoteKind kind, bool hasDate)
+    private DayNote AddRow(DateTime day, TimeSpan? at, string text, TimeSpan? end, long? seriesId, DayNoteKind? kind, bool hasDate)
     {
         long id;
         if (store is null) id = localNote++;
@@ -406,12 +424,14 @@ public sealed class NotesModel
     private void Persist(DayNote note)
     {
         if (store is null || note.Id < 0) return; // An unsaved note is written whole when it is retried.
-        Try(() => store.UpdateDayNote(note), "that change");
+        if (Try(() => store.UpdateDayNote(note), "that change")) pendingUpdates.Remove(note.Id);
+        else pendingUpdates.Add(note.Id);
     }
 
     private void RemoveRow(DayNote note)
     {
         notes.Remove(note);
+        pendingUpdates.Remove(note.Id);
         if (store is null) return;
         if (note.Id < 0) return;
         if (!Try(() => store.DeleteDayNote(note.Id), "that removal")) pendingDeletes.Add(note.Id);
@@ -424,7 +444,7 @@ public sealed class NotesModel
     }
 
     /// <summary>True while any note is on screen but not yet in the database.</summary>
-    public bool Unsaved => pendingDeletes.Count > 0 || notes.Any(n => n.Id < 0);
+    public bool Unsaved => pendingDeletes.Count > 0 || pendingUpdates.Count > 0 || notes.Any(n => n.Id < 0);
 
     /// <summary>Writes again whatever the database refused: notes never stored, and removals. Called now and then.</summary>
     public void RetryUnsaved()
@@ -436,8 +456,11 @@ public sealed class NotesModel
             var note = notes[i]; if (note.Id >= 0) continue;
             long stored = 0;
             if (!Quiet(() => stored = store.AddDayNote(note.Day, note.At, note.Text, note.End, note.SeriesId, note.Kind, note.HasDate))) continue;
-            notes[i] = note with { Id = stored }; if (note.Done) Quiet(() => store.UpdateDayNote(notes[i]));
+            notes[i] = note with { Id = stored };
+            if (note.Done && !Quiet(() => store.UpdateDayNote(notes[i]))) pendingUpdates.Add(stored);
         }
+        foreach (var id in pendingUpdates.ToList())
+            if (Find(id) is not { } note || Quiet(() => store.UpdateDayNote(note))) pendingUpdates.Remove(id);
         foreach (var id in pendingDeletes.ToList()) if (Quiet(() => store.DeleteDayNote(id))) pendingDeletes.Remove(id);
         if (!Unsaved) { Fault = null; Changed?.Invoke(); }
     }

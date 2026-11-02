@@ -64,7 +64,7 @@ public sealed class Round14Tests
     }
 
     [AvaloniaFact]
-    public void TheAccountRowsAreOneLineWithItsBarUnder()
+    public void TheAccountRowsSeparateTodaysTimeFromBudgetUsageAndPeriod()
     {
         Assert.True(PillWindow.DropdownWidth < 230); // Still a narrow drawer; the raised rows need a little more room than the flat ones did.
         var model = Model(); var window = new DashboardWindow(model); window.Show();Settle(window);
@@ -73,9 +73,13 @@ public sealed class Round14Tests
             var rows = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")).ToList();
             Assert.Equal(2, rows.Count); Assert.True(rows.Count == 2 && rows[0].Bounds.Width <= Sidebar.Width - 24 + 1); Assert.All(rows, r => Assert.Equal(AccountList.RowHeight, r.Bounds.Height, 0.5));
             var first = rows[0];
-            // Name and today's time share a line, and nothing else in the row is words: the budget is in the tooltip.
+            // Name and today's time share a line; budget usage and period occupy their own line.
             var words = first.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsVisible && !string.IsNullOrEmpty(t.Text)).ToList();
-            Assert.Equal(2, words.Count); Assert.Equal(words[0].TranslatePoint(default, first)!.Value.Y, words[1].TranslatePoint(default, first)!.Value.Y, 6);
+            Assert.Equal(4, words.Count); Assert.Equal(words[0].TranslatePoint(default, first)!.Value.Y, words[1].TranslatePoint(default, first)!.Value.Y, 6);
+            var usage = first.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "AccountBudgetUsage");
+            var period = first.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "AccountBudgetPeriod");
+            Assert.Equal("00:00 / 10:00", usage.Text); Assert.Equal("This week", period.Text);
+            Assert.True(usage.TranslatePoint(default, first)!.Value.Y > words[0].TranslatePoint(default, first)!.Value.Y);
             Assert.NotEmpty(first.GetVisualDescendants().OfType<BudgetBar>());
             Assert.Contains("00:00 / 10:00", ToolTip.GetTip(first)?.ToString()); Assert.Contains("this week", ToolTip.GetTip(first)?.ToString());
             Assert.Equal(AccountIndicator.RowSize, first.GetVisualDescendants().OfType<AccountIndicator>().Single().Bounds.Width, 0.5);

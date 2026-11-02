@@ -148,7 +148,7 @@ public sealed class NotesCard : Border
         {
             var bell = Ui.IconButton(IconKind.Bell, "Add reminder", "NoteAddReminder_" + note.Id, () => OpenReminder(note.Id)); bell.Width = 28; bell.Height = 28; bell.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, bell, 2);
         }
-        var remove = Ui.IconButton(IconKind.Close, meeting ? "Remove meeting" : "Remove note", "NoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 28; remove.Height = 28; remove.VerticalAlignment = VerticalAlignment.Center;
+        var remove = Ui.IconButton(IconKind.Trash, meeting ? "Remove meeting" : "Remove note", "NoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 30; remove.Height = 30; remove.VerticalAlignment = VerticalAlignment.Center;
         Ui.Put(line, remove, 4);
         var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9) }; card.Classes.Add("noteRow"); if (meeting && tinted.Contains(note.Id)) card.Classes.Add("rowSelected"); if (!meeting && NotesModel.IsImportant(note)) card.Classes.Add("importantRow");
         return card;
@@ -159,10 +159,9 @@ public sealed class NotesCard : Border
     private void AskRemove(DayNote note)
     {
         if (Notes.SeriesOf(note) is not null && NotesModel.IsMeeting(note)) { scope = (note.Id, true); DrawOverlay(); return; }
-        Notes.Remove(note.Id);
+        model.RemoveNote(note.Id);
         if (editing == note.Id) Close();
         if (model.SelectedMeetingId == note.Id) model.ClearSelection();
-        model.Tell(NotesModel.IsMeeting(note) ? "Meeting removed" : "Note removed");
     }
 
     // ---- The form ----

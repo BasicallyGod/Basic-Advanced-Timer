@@ -83,7 +83,7 @@ public sealed class DashboardShellTests
     }
 
     [AvaloniaFact]
-    public void TheViewsAreTabsAtTheLeftOfTheHeaderAndTheSettingsPageHasItsNameThereInstead()
+    public void TheViewsAreTabsAtTheLeftOfTheHeaderAndSettingsHasAnExplicitReturnAction()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
@@ -95,7 +95,9 @@ public sealed class DashboardShellTests
             Click(tabs[1]); Settle(window); Assert.Contains("selected", tabs[1].Classes); Assert.DoesNotContain("selected", tabs[0].Classes);
             Click(tabs[2]); Settle(window); Assert.Contains("selected", tabs[2].Classes);
             Click(Find<Button>(window, "Settings")); Settle(window);
-            Assert.False(Find<Border>(window, "ViewTabs").IsEffectivelyVisible); Assert.Equal("Settings", window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Settings" && t.IsEffectivelyVisible).Text);
+            Assert.False(Find<Border>(window, "ViewTabs").IsEffectivelyVisible);
+            Assert.True(Find<Button>(window, "SettingsBack").IsEffectivelyVisible);
+            Assert.Equal("Back to Week overview", Find<Button>(window, "SettingsBack").Content);
         }
         finally { window.Close(); }
     }

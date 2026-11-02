@@ -126,10 +126,20 @@ public static class WeekOverview
     private static Control ByDay(TimerModel model, WeekFigures w, WeekTable grid)
     {
         var inChart = !model.WeekAsTable;
-        var head = Ui.Grid("Auto,*,Auto"); head.Margin = new Thickness(0, 0, 0, 6);
+        var head = Ui.Grid("Auto,*,Auto,Auto"); head.Margin = new Thickness(0, 0, 0, 6); head.ColumnSpacing = 12;
         var title = Ui.Text("Time by day", 15); title.FontWeight = FontWeight.SemiBold; Ui.Put(head, title);
         var seg = NotesPage.Switch(NotesPage.Seg("WeekChart", "Chart", inChart, () => model.SetWeekAsTable(false)), NotesPage.Seg("WeekTable", "Table", !inChart, () => model.SetWeekAsTable(true))); seg.Height = 36;
-        Ui.Put(head, seg, 2);
+        void Say(string text, bool success) { if (success) model.Tell(text); else model.Refuse(text); }
+        var copy = Ui.Ctl("WeekCopyHours", "Copy hours table", IconKind.Copy, "Copy the hours table for " + w.Start.ToString("d MMM yyyy"), async () =>
+        {
+            var copied = await TimesheetActions.Copy(TopLevel.GetTopLevel(head), TimesheetActions.Table(model, w.Start));
+            Say(copied.Message, copied.Success);
+        }, small: true);
+        var export = Ui.Ctl("WeekExportCsv", "Export CSV", IconKind.Export, "Export CSV files for " + w.Start.ToString("d MMM yyyy"), () =>
+        {
+            var message = TimesheetActions.Export(model, false, w.Start, out var success); Say(message, success);
+        }, small: true);
+        Ui.Put(head, Ui.Horizontal(copy, export), 2); Ui.Put(head, seg, 3);
         var body = new StackPanel(); body.Children.Add(head);
         body.Children.Add(inChart ? Chart(model, w) : Table(model, grid));
         var tile = Tile(body, new Thickness(18, 12, 18, 10)); tile.Name = "WeekByDay"; return tile;
@@ -295,9 +305,10 @@ public static class WeekOverview
                 var rest = new Border { CornerRadius = new CornerRadius(3), Height = 6 }; rest.Classes.Add("rule"); Grid.SetColumn(rest, 1);
                 var fill = new Border { CornerRadius = new CornerRadius(3), Height = 6 }; fill.Classes.Add("budgetFill"); fill.Classes.Set("budgetWarn", warn); fill.Classes.Set("budgetOver", over);
                 track.Children.Add(rest); track.Children.Add(fill); Ui.Put(line, track, 4);
-                // One short caption: what is used of the budget, and the period only when it is not the week.
-                var period = budget.Period.Equals("This week", StringComparison.OrdinalIgnoreCase) ? "" : "  " + budget.Period.ToLowerInvariant().Replace("this ", "");
-                var caption = Ui.Text($"{budget.Used} of {budget.Budget}{period}", 12.5, over ? "overtime" : warn ? "budgetWarning" : "muted");
+                // The week's total and budget-period usage are different figures. Always name the period, including historical periods.
+                var period = model.BudgetPeriodNameAt(account, reference);
+                period = char.ToUpperInvariant(period[0]) + period[1..];
+                var caption = Ui.Text($"{budget.Used} / {budget.Budget}\n{period}", 11.5, over ? "overtime" : warn ? "budgetWarning" : "muted");
                 caption.Name = "BudgetCaption"; caption.Margin = new Thickness(12, 0, 0, 0); caption.TextTrimming = TextTrimming.CharacterEllipsis; caption.VerticalAlignment = VerticalAlignment.Center;
                 if (over || warn) caption.FontWeight = FontWeight.SemiBold;
                 Ui.Put(line, caption, 5);

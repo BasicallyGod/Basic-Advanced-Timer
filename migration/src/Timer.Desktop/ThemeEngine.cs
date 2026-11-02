@@ -71,12 +71,13 @@ public static class ThemeEngine
         {
             var boxLight = ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000");
             var boxWell = Color.Parse(boxLight ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .03) : ThemeColours.Mix(colours["Surface"], "#000000", .2));
-            var boxEdge = boxLight ? Color.FromArgb(18, 72, 78, 92) : Color.FromArgb(22, 255, 255, 255);
+            var boxEdge = Color.Parse(TextShade(colours["Muted"], colours["Ink"], new[] { colours["Panel"], colours["Surface"] }, 3));
             foreach (var key in new[] { "CheckBoxCheckBackgroundFillChecked", "CheckBoxCheckBackgroundFillCheckedPointerOver", "CheckBoxCheckBackgroundFillCheckedPressed" }) Put(key, boxWell);
             foreach (var key in new[] { "CheckBoxCheckBackgroundFillUnchecked", "CheckBoxCheckBackgroundFillUncheckedPointerOver", "CheckBoxCheckBackgroundFillUncheckedPressed" }) Put(key, Color.Parse(colours["Panel"]));
             foreach (var key in new[] { "CheckBoxCheckBackgroundStrokeChecked", "CheckBoxCheckBackgroundStrokeCheckedPointerOver", "CheckBoxCheckBackgroundStrokeCheckedPressed",
                 "CheckBoxCheckBackgroundStrokeUnchecked", "CheckBoxCheckBackgroundStrokeUncheckedPointerOver", "CheckBoxCheckBackgroundStrokeUncheckedPressed" }) Put(key, boxEdge);
         }
+        Put("FocusStroke", Color.Parse(TextShade(colours["Accent"], colours["Ink"], new[] { colours["Panel"], colours["Surface"] }, 3)));
         foreach (var key in new[] {
             // The export dialog's week and month choices are radio buttons, which follow the theme too.
             "RadioButtonOuterEllipseCheckedFill", "RadioButtonOuterEllipseCheckedFillPointerOver", "RadioButtonOuterEllipseCheckedFillPressed",
