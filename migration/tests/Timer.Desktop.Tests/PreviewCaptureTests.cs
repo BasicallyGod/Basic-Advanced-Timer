@@ -27,7 +27,9 @@ public sealed class PreviewCaptureTests
                     using var picture = window.CaptureRenderedFrame(); picture?.Save(Path.Combine(folder, $"ui-efficiency-{theme}-{name}.png"));
                 }
                 void Press(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Shot("timeline"); window.ShowNotes(); Shot("notes");
+                Shot("timeline"); Press("AddNote"); Shot("inline-note"); Press("AddNote");
+                window.ShowNotes(); Shot("notes");
+                window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "PageNoteField").Focus(); Shot("notes-focused");
                 Press("PageKindMeeting"); Shot("meeting");
                 window.GetVisualDescendants().OfType<NotesPage>().Single().OpenNote(model.Notes.MeetingsOn(model.Engine.Now.Date).First().Id); Shot("meeting-edit");
                 window.SelectTab(true); Shot("week"); Press("WeekTable"); Shot("week-table");

@@ -130,7 +130,7 @@ public sealed partial class SelectedBlockCard : Border
         var when = day == model.Engine.Now.Date ? "today" : "on this day";
         var (header, _) = Header(null);
         var message = new TextBlock { Name = "SelectedEmpty", FontSize = 13, TextWrapping = TextWrapping.Wrap,
-            Text = anything ? "Nothing is selected. Press a block, a meeting or a stack to see it here.\n\nSelect a block to change its account, times or note. Hold Shift to select several blocks to merge or copy.\n\nDouble-click an empty part of the timeline, or choose Add time, to fill a gap." : $"Nothing is recorded yet {when}. Press play on an account to track time, or choose Add time to record an earlier block." };
+            Text = anything ? "Nothing is selected." : $"Nothing is recorded yet {when}." };
         message.Classes.Add("muted");
         return Page(header, message);
     }

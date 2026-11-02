@@ -25,8 +25,7 @@ public sealed class SettingsPageTests
             OpenSettings(window); using var again = window.CaptureRenderedFrame();
             var all = window.GetVisualDescendants().ToList();
             Assert.Contains(all.OfType<SettingsView>(), s => s.Name == "SettingsPage");
-            var back = Assert.Single(all.OfType<Button>().Where(b => b.Name == "SettingsBack"));
-            Assert.True(back.IsEffectivelyVisible); Assert.Equal("Back to Timeline", back.Content);
+            Assert.Contains(all.OfType<TextBlock>(), t => t.Text == "Settings" && t.Classes.Contains("clock"));
             Assert.Contains(all.OfType<Button>(), b => b.Name == "SaveShifts"); // The working hours form is on the page.
             Assert.Contains(all.OfType<Button>(), b => b.Name == "ThemeLight"); Assert.Contains(all.OfType<Button>(), b => b.Name == "EditAccounts");
             Assert.Contains(all.OfType<CheckBox>(), c => c.Name == "WindowShadows");

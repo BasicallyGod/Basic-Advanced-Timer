@@ -57,7 +57,7 @@ public sealed class UiEfficiencyTests
     }
 
     [AvaloniaFact]
-    public void SettingsBackAndEscapeReturnToThePreviousViewAndRetainExportChoices()
+    public void SettingsUsesTheOriginalGearToggleAndReopensOnAppearance()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
@@ -65,50 +65,51 @@ public sealed class UiEfficiencyTests
             window.SelectTab(true); Press(window, "Settings"); Press(window, "SettingsExport");
             var page = window.GetVisualDescendants().OfType<SettingsView>().Single();
             Press(window, "ExportMonthChoice"); var pick = Find<ComboBox>(window, "ExportPeriodPick"); pick.SelectedIndex = 2;
-            var chosen = pick.SelectedItem;
-            Assert.Contains("Week overview", Find<Button>(window, "SettingsBack").Content!.ToString());
-            Press(window, "SettingsBack"); Assert.True(Find<Button>(window, "WeekOverviewTab").Classes.Contains("selected"));
-            Press(window, "Settings"); Assert.Same(page, window.GetVisualDescendants().OfType<SettingsView>().Single());
-            Assert.Equal("Export", Find<TextBlock>(window, "SettingsTitle").Text);
-            Assert.Equal(chosen, Find<ComboBox>(window, "ExportPeriodPick").SelectedItem);
-            Assert.False(Find<Button>(window, "CopyHours").IsEnabled);
-            Find<Button>(window, "SettingsBack").Focus(); window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null); Settle(window);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "SettingsBack");
+            Press(window, "Settings"); Assert.True(Find<Button>(window, "WeekOverviewTab").Classes.Contains("selected"));
+            Press(window, "Settings"); Assert.NotSame(page, window.GetVisualDescendants().OfType<SettingsView>().Single());
+            Assert.Equal("Appearance", Find<TextBlock>(window, "SettingsTitle").Text);
+            Press(window, "Settings");
             Assert.True(Find<Button>(window, "WeekOverviewTab").IsEffectivelyVisible);
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void SidebarManagementOpensTheExistingEditorWithoutChangingTheWorkspace()
+    public void ManagementStaysInSettingsWithoutExtraSidebarControls()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            window.ShowNotes(); Press(window, "ManageAccounts"); Assert.IsType<AccountsDialog>(Assert.Single(window.Dialogs.Dialogs));
-            Assert.True(Find<Button>(window, "NotesTab").Classes.Contains("selected"));
-            window.Dialogs.CloseTop(); Settle(window);
+            window.ShowNotes();
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "ManageAccounts" or "SidebarTimePeriod");
+            Press(window, "Settings"); Press(window, "SettingsAccounts"); Press(window, "EditAccounts");
+            Assert.IsType<AccountsDialog>(Assert.Single(window.Dialogs.Dialogs));
+            window.Dialogs.CloseTop(); Settle(window); Press(window, "Settings");
             Assert.True(Find<Button>(window, "NotesTab").Classes.Contains("selected"));
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void ResetAllFiltersClearsTheHeaderSearchButKeepsTheNoteDraft()
+    public void OriginalNotesFiltersKeepIndependentSearchAndDraftWithoutExtraSummaryControls()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); window.ShowNotes(); Settle(window);
         try
         {
             Find<TextBox>(window, "PageNoteField").Text = "An unfinished draft";
             Press(window, "NotesView_Important"); Press(window, "NotesAccount_Accountone");
-            Assert.Contains("account filters", Find<TextBlock>(window, "NotesPageEmpty").Text);
             Find<TextBox>(window, "NotesSearch").Text = "no match"; Settle(window);
-            Assert.Contains("Search: no match", Find<TextBlock>(window, "NotesResultSummary").Text);
-            Press(window, "NotesResetFilters");
-            Assert.Equal("", Find<TextBox>(window, "NotesSearch").Text);
+            Assert.Equal("Nothing matches that search.", Find<TextBlock>(window, "NotesPageEmpty").Text);
+            Assert.Equal("Clear", Find<Button>(window, "NotesAccountClear").Content);
+            Press(window, "NotesAccountClear");
+            Assert.Equal("no match", Find<TextBox>(window, "NotesSearch").Text);
             Assert.Equal("An unfinished draft", Find<TextBox>(window, "PageNoteField").Text);
-            Assert.Equal(NoteView.All, window.GetVisualDescendants().OfType<NotesPage>().Single().View);
-            Assert.Contains("All accounts", Find<TextBlock>(window, "NotesResultSummary").Text);
-            Assert.False(Find<Button>(window, "NotesResetFilters").IsVisible);
+            Assert.Equal(NoteView.Important, window.GetVisualDescendants().OfType<NotesPage>().Single().View);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "NotesResultSummary" or "NotesResetFilters");
+            window.SelectTab(true); window.ShowNotes(); Settle(window);
+            Assert.Equal("An unfinished draft", Find<TextBox>(window, "PageNoteField").Text);
+            Assert.Equal("no match", Find<TextBox>(window, "NotesSearch").Text);
         }
         finally { window.Close(); }
     }
