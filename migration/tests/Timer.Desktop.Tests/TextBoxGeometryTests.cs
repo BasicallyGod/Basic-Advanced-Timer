@@ -47,7 +47,7 @@ public sealed class TextBoxGeometryTests
                     Assert.Equal(field.BorderThickness, border.BorderThickness);
                     Assert.NotEqual(Color.Parse(model.CurrentTheme.Colour("Accent")), ((ISolidColorBrush)border.BorderBrush!).Color);
                     if (field.Classes.Contains("bareField")) Assert.Equal(0, border.BoxShadow.Count);
-                    else { Assert.True(border.BoxShadow.Count > 0); Assert.All(border.BoxShadow, shadow => Assert.True(shadow.IsInset)); }
+                    else { Assert.True(border.BoxShadow.Count > 0); for (var i = 0; i < border.BoxShadow.Count; i++) Assert.True(border.BoxShadow[i].IsInset); }
                 }
                 foreach (var field in fields)
                 {
@@ -79,7 +79,7 @@ public sealed class TextBoxGeometryTests
             field.Focus(); Settle(window);
             var frame = window.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("composer"));
             Assert.NotEqual(Color.Parse(model.CurrentTheme.Colour("Accent")), ((ISolidColorBrush)frame.BorderBrush!).Color);
-            Assert.True(frame.BoxShadow.Count > 0); Assert.All(frame.BoxShadow, shadow => Assert.True(shadow.IsInset));
+            Assert.True(frame.BoxShadow.Count > 0); for (var i = 0; i < frame.BoxShadow.Count; i++) Assert.True(frame.BoxShadow[i].IsInset);
             var decoration = field.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PART_BorderElement");
             Assert.Equal(0, decoration.BoxShadow.Count); Assert.Equal(new Thickness(0), decoration.BorderThickness);
         }
