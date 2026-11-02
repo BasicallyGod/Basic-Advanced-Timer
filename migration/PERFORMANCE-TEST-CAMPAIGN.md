@@ -40,3 +40,11 @@ If a stall remains, copy the passive report after reproducing it. Handoff timing
 | | | | | | | |
 
 Prioritise data correctness, lost windows and draft loss above cosmetic differences. Before further optimisation, separate reproducible rendering problems from isolated scheduling delays using the reports and visual observations together.
+
+## Follow-up: dashboard native bounds
+
+Alpha 628 feedback passed the functional scenarios but reported one dashboard opening at the correct content scale inside an undersized window. Most repeated transitions had approximately 16–17 ms callback cadence; two recent expansions had approximately 150 ms of dispatcher lateness without a matching save or workspace rebuild. Those stalls remain unexplained and are separate from window sizing.
+
+After the bounds guard change, repeat immediate and prepared opening plus collapse/reopen near the work-area edges. If multiple monitors are available, include different scaling/work-area sizes and move the pill between them before expanding. The dashboard should use its intended size, limited to the source monitor's work area, without cropping at an old window boundary. Reduced-motion opening should reach the same bounds.
+
+Copy report includes expected and actual native dimensions in pixels and the result of any corrective resize. If cropping recurs, copy that report before collapsing, and capture a screenshot showing the outer window edge. Automated checks simulate stale native bounds and late logical-size notifications; they do not reproduce native Windows monitor/DPI event ordering.

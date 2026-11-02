@@ -42,9 +42,11 @@ public static class TransitionTimings
         private double firstNative, lastNative, worstGap, totalGaps;
         private bool finished;
         private string mode = "live";
+        private string windowBounds = "";
         private int layouts, probes;
         private double worstDelay;
         internal double worstUpdate;
+        public void SetWindowBounds(string value) { lock (gate) windowBounds += (windowBounds.Length == 0 ? "" : " | ") + value; }
         public void SetMode(string value) { lock (gate) mode = value; }
         public void Layout() { lock (gate) layouts++; }
         public void ProbeDelay(double ms) { lock (gate) { probes++; worstDelay = Math.Max(worstDelay, ms); } }
@@ -68,6 +70,7 @@ public static class TransitionTimings
                 var work = operations.Count == 0 ? "none" : string.Join(", ", operations.Select(p => $"{p.Key} {p.Value.Count} / {p.Value.Ms:0.0} ms"));
                 var first = native == 0 ? "none" : $"{firstNative:0.0} ms";
                 work += $"; mode {mode}; layout events {layouts}; update worst {worstUpdate:0.0} ms; dispatcher probes {probes}, worst lateness {worstDelay:0.0} ms";
+                if (windowBounds.Length != 0) work += "; window bounds " + windowBounds;
                 recent.Enqueue($"#{id} {direction} {outcome}: total {Stopwatch.GetElapsedTime(started).TotalMilliseconds:0.0} ms; native {native}, watchdog {watchdog}; first native after scheduling {first}; native gaps avg {(native > 1 ? totalGaps / (native - 1) : 0):0.0} ms, worst {worstGap:0.0} ms; work during transition: {work}");
                 if (recent.Count > 20) recent.Dequeue();
                 if (ReferenceEquals(active, this)) active = null;
