@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Neumorphic controls gallery and star pilot | [4a2fd9a](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/4a2fd9a) | Add an isolated Light/Dark state gallery under Development, shared Button/ToggleButton themes with compact depth recipes, and a warm enabled importance star across note lists and composers. Other button families remain gallery samples. |
 | UI restraint and field geometry | [cbaacb0](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/cbaacb0) | Restore the original Settings flow and Notes filters, remove sidebar management/caption additions, neutralise text-box focus edges and align inset shadows, soften timeline edge shading, and shorten empty Details copy. |
 | Dashboard workflow and UI consistency | [a844727](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/a844727) | Scope shortcuts to their page, retain Settings state with explicit return navigation, add account/week actions, recover ordinary removals through message-bar Undo with persistence retries, clarify filters and budget periods, and strengthen hierarchy/focus boundaries. |
 | Dashboard native bounds recovery | [16352a2](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/16352a2) | Preserve the intended work-area-limited size across native notifications, correct stale borderless window bounds after show and expansion, and report expected/actual dimensions with regression coverage. |
