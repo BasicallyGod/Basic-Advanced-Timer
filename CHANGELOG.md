@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| UI restraint and field geometry | [cbaacb0](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/cbaacb0) | Restore the original Settings flow and Notes filters, remove sidebar management/caption additions, neutralise text-box focus edges and align inset shadows, soften timeline edge shading, and shorten empty Details copy. |
 | Dashboard workflow and UI consistency | [a844727](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/a844727) | Scope shortcuts to their page, retain Settings state with explicit return navigation, add account/week actions, recover ordinary removals through message-bar Undo with persistence retries, clarify filters and budget periods, and strengthen hierarchy/focus boundaries. |
 | Dashboard native bounds recovery | [16352a2](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/16352a2) | Preserve the intended work-area-limited size across native notifications, correct stale borderless window bounds after show and expansion, and report expected/actual dimensions with regression coverage. |
 | Account identity and diagnostic safeguards | [7dcdbec](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/7dcdbec) | Keep rename pairs aligned through new/reordered rows, preserve checkpoints and important maintenance during refresh pause, and reject stale frame-monitor callbacks after restart/window switches. |
