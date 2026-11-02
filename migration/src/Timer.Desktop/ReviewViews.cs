@@ -473,7 +473,7 @@ public static partial class ReviewViews
             nowTimer.Tick += (_, _) => PlaceNow();
             _ = new ViewActivity(canvas, active => { if (active) { PlaceNow(); nowTimer.Start(); } else nowTimer.Stop(); });
         }
-        TimelineGuide.Attach(canvas, model, day, pixelsPerHour, TimelineGutter, AxisY, BandBottom, planned.Count > 0 ? meetingTop : bandTop, pinned);
+        TimelineGuide.Attach(canvas, model, day, pixelsPerHour, TimelineGutter, AxisY, planned.Count > 0 ? meetingTop : bandTop, pinned);
         DateTime clicked = day.AddHours(9);
         DateTime At(double x) => day.AddMinutes(Math.Clamp(Math.Floor((x - TimelineGutter) / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);

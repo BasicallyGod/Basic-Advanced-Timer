@@ -33,14 +33,40 @@
     <Style Selector="^:pressed /template/ Border#PART_NeumorphicSurface, ^.previewPressed /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="{DynamicResource NeoInset}" /></Style>
     <Style Selector="^.compact:pressed /template/ Border#PART_NeumorphicSurface, ^.compact.previewPressed /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="{DynamicResource NeoSmallPressed}" /></Style>
     <Style Selector="^.primary, ^.primary:pointerover, ^.primary.previewHover, ^.primary:pressed, ^.primary.previewPressed"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
-    <Style Selector="^.important:checked"><Setter Property="Background" Value="{DynamicResource NeoImportantFill}" /><Setter Property="BorderBrush" Value="{DynamicResource ImportantEdge}" /></Style>
-    <Style Selector="^.important:checked:pointerover, ^.important:checked.previewHover"><Setter Property="Background" Value="{DynamicResource NeoImportantHover}" /></Style>
-    <Style Selector="^.important:checked:pressed, ^.important:checked.previewPressed"><Setter Property="Background" Value="{DynamicResource NeoImportantPressed}" /></Style>
+    <Style Selector="^.important:checked"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /></Style>
+    <Style Selector="^.important:checked:pointerover, ^.important:checked.previewHover"><Setter Property="Background" Value="{DynamicResource KeyHover}" /></Style>
+    <Style Selector="^.important:checked:pressed, ^.important:checked.previewPressed"><Setter Property="Background" Value="{DynamicResource NeoPressed}" /></Style>
     <Style Selector="^.break:checked"><Setter Property="Background" Value="{DynamicResource NeoBreakFill}" /><Setter Property="BorderBrush" Value="{DynamicResource BreakText}" /><Setter Property="Foreground" Value="{DynamicResource BreakText}" /></Style>
-    <Style Selector="^:disabled"><Setter Property="Foreground" Value="{DynamicResource Muted}" /><Setter Property="Opacity" Value="0.55" /></Style>
-    <Style Selector="^.primary:disabled"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
+    <Style Selector="^:disabled, ^.primary:disabled"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /><Setter Property="Opacity" Value="0.55" /></Style>
     <Style Selector="^:disabled /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="none" /></Style>
     <Style Selector="^:focus-visible /template/ Border#PART_NeumorphicFocus, ^.previewFocus /template/ Border#PART_NeumorphicFocus"><Setter Property="IsVisible" Value="True" /></Style>
   </ControlTheme>
   <ControlTheme x:Key="NeumorphicToggle" TargetType="ToggleButton" BasedOn="{StaticResource NeumorphicButton}" />
+  <!-- Native CheckBox behaviour, with the same 20 px circular material as the notes tick. -->
+  <ControlTheme x:Key="NeumorphicCheckBox" TargetType="CheckBox">
+    <Setter Property="MinHeight" Value="24" /><Setter Property="MinWidth" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="Cursor" Value="Hand" /><Setter Property="FocusAdorner" Value="{x:Null}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid ColumnDefinitions="20,Auto" ColumnSpacing="8" Background="Transparent">
+          <Border Name="PART_CheckRing" Width="20" Height="20" CornerRadius="10" BorderThickness="1.6" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource KeyEdge}" BoxShadow="{DynamicResource ShadowThumb}" VerticalAlignment="Center">
+            <Grid>
+              <Path Name="PART_CheckMark" Data="M 3.9,8.6 L 7.2,11.9 L 12.9,5.1" Stroke="{DynamicResource AccentText}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" IsVisible="False" />
+              <Path Name="PART_MixedMark" Data="M 4,8 L 12,8" Stroke="{DynamicResource AccentText}" StrokeThickness="2" StrokeLineCap="Round" IsVisible="False" />
+            </Grid>
+          </Border>
+          <ContentPresenter Name="PART_ContentPresenter" Grid.Column="1" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" VerticalAlignment="Center" RecognizesAccessKey="True" />
+          <Border Name="PART_CheckFocus" Grid.Column="0" Width="24" Height="24" Margin="-2" CornerRadius="12" BorderThickness="2" BorderBrush="{DynamicResource FocusStroke}" IsVisible="False" IsHitTestVisible="False" />
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:checked /template/ Border#PART_CheckRing, ^:indeterminate /template/ Border#PART_CheckRing"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
+    <Style Selector="^:checked /template/ Path#PART_CheckMark"><Setter Property="IsVisible" Value="True" /></Style>
+    <Style Selector="^:indeterminate /template/ Path#PART_MixedMark"><Setter Property="IsVisible" Value="True" /></Style>
+    <Style Selector="^:pointerover /template/ Border#PART_CheckRing"><Setter Property="BorderBrush" Value="{DynamicResource Muted}" /></Style>
+    <Style Selector="^:pressed /template/ Border#PART_CheckRing"><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
+    <Style Selector="^:focus-visible /template/ Border#PART_CheckFocus"><Setter Property="IsVisible" Value="True" /></Style>
+    <Style Selector="^:disabled"><Setter Property="Opacity" Value="0.55" /></Style>
+    <Style Selector="^:disabled /template/ Border#PART_CheckRing"><Setter Property="BoxShadow" Value="none" /></Style>
+  </ControlTheme>
 </ResourceDictionary>

@@ -93,11 +93,7 @@ public static class ThemeEngine
         // 3 to 1 on the card), apart from the break's amber and the overdue red, and the row takes a faint wash of it and an edge.
         var lightGround = ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000");
         var gold = lightGround ? "#B86E00" : "#F5B63A";
-        var importantFill = ThemeColours.Mix(colours["Panel"], "#FFC94A", lightGround ? .26 : .16);
-        var importantHover = ThemeColours.Mix(importantFill, "#FFFFFF", lightGround ? .18 : .05);
-        var importantPressed = ThemeColours.Mix(importantFill, lightGround ? colours["Ink"] : "#000000", lightGround ? .025 : .08);
-        Put("ImportantStar", Color.Parse(TextShade(gold, colours["Ink"], new[] { colours["Panel"], importantFill, importantHover, importantPressed }, 3)));
-        Put("NeoImportantFill", Color.Parse(importantFill)); Put("NeoImportantHover", Color.Parse(importantHover)); Put("NeoImportantPressed", Color.Parse(importantPressed));
+        Put("ImportantStar", Color.Parse(TextShade(gold, colours["Ink"], new[] { colours["Panel"], ThemeColours.Mix(colours["Panel"], "#FFFFFF", lightGround ? .4 : .07), ThemeColours.Mix(colours["Panel"], lightGround ? colours["Ink"] : "#000000", lightGround ? .025 : .12) }, 3)));
         Put("NeoPressed", Color.Parse(ThemeColours.Mix(colours["Panel"], lightGround ? colours["Ink"] : "#000000", lightGround ? .025 : .12)));
         Put("NeoBreakFill", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["Break"], lightGround ? .12 : .16)));
         Put("ImportantTint", Color.Parse(ThemeColours.Mix(colours["Panel"], gold, lightGround ? .09 : .12)));

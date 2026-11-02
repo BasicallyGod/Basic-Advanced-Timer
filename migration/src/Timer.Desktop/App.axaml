@@ -152,7 +152,7 @@
     <Style Selector="Border.accentChip"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <Style Selector="Border.lateChip"><Setter Property="Background" Value="{DynamicResource LateTint}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <Style Selector="Border.noteRow"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /><Setter Property="BoxShadow" Value="none" /></Style>
-    <!-- An important note: a faint accent wash and edge on its row, and its star solid in the accent; the words keep their weight. -->
+    <!-- Important notes keep a neutral row; the importance button uses a gold stroke star. -->
     <Style Selector="Border.noteRow.importantRow"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
     <Style Selector="Border.noteRow.rowSelected"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="Border.tick"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
@@ -458,8 +458,7 @@
     <!-- A place you look into (the timeline's day): sunk into its card. -->
     <Style Selector="Border.trough"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <!-- A tick box: a small raised key while off, sunk with the accent tick while on. -->
-    <Style Selector="CheckBox /template/ Border#NormalRectangle"><Setter Property="CornerRadius" Value="7" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
-    <Style Selector="CheckBox:checked /template/ Border#NormalRectangle"><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
+    <Style Selector="CheckBox"><Setter Property="Theme" Value="{StaticResource NeumorphicCheckBox}" /></Style>
     <!-- Two keys joined as one raised piece: the pair carries the shadow, each half is bare until it is pointed at or pressed. -->
     <Style Selector="Border.keyPair"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKey}" /></Style>
     <Style Selector="Border.pairDivider"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
@@ -530,6 +529,7 @@
       <Setter Property="BorderBrush" Value="{DynamicResource FocusStroke}" /><Setter Property="BorderThickness" Value="2" />
     </Style>
     <Style Selector="ComboBox:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource FocusStroke}" /><Setter Property="BorderThickness" Value="2" /></Style>
-    <Style Selector="CheckBox:focus-visible /template/ Border#NormalRectangle"><Setter Property="BorderBrush" Value="{DynamicResource FocusStroke}" /><Setter Property="BorderThickness" Value="2" /></Style>
+    <Style Selector="Button.ctl.primary:disabled /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="none" /></Style>
+    <Style Selector="Button.ctl.primary:disabled TextBlock"><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
   </Application.Styles>
 </Application>

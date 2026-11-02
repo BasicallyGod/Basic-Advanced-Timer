@@ -11,6 +11,23 @@ namespace Timer.Desktop;
 public sealed class NeumorphicGalleryWindow : Window
 {
     private static readonly string[] States = { "Ready", "Hover", "Pressed", "On", "Disabled", "Focus" };
+    private readonly Dictionary<string, List<Control>> sections = new();
+    private readonly Dictionary<string, Button> sectionButtons = new();
+    private readonly List<ScrollViewer> paneScrolls = new();
+
+    public void ShowSection(string id)
+    {
+        if (!sections.ContainsKey(id)) return;
+        foreach (var (key, controls) in sections) foreach (var control in controls) control.IsVisible = key == id;
+        foreach (var (key, button) in sectionButtons) button.Classes.Set("optOn", key == id);
+        foreach (var scroll in paneScrolls) scroll.Offset = default;
+    }
+
+    private void Register(string id, Control control)
+    {
+        if (!sections.TryGetValue(id, out var controls)) sections[id] = controls = new();
+        controls.Add(control); control.IsVisible = id == "states";
+    }
 
     public static void Open(Window owner)
     {
@@ -39,16 +56,25 @@ public sealed class NeumorphicGalleryWindow : Window
         var header = new StackPanel { Spacing = 4, Margin = new Thickness(4, 0, 0, 14) };
         header.Children.Add(Ui.Heading("Neumorphic controls", 24));
         var intro = Ui.Text("Compare the reference states, then try the samples. Nothing here changes your timer or theme.", 13, "muted"); intro.TextWrapping = TextWrapping.Wrap; header.Children.Add(intro);
+        var choices = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var (id, label) in NeumorphicGallerySamples.Sections)
+        {
+            var choice = NotesPage.Seg("GallerySection_" + id, label, id == "states", () => ShowSection(id));
+            choice.Margin = new Thickness(0, 6, 6, 0); sectionButtons[id] = choice; choices.Children.Add(choice);
+        }
+        header.Children.Add(choices);
         Ui.Put(root, header);
-        var themes = Ui.Grid("*,*"); themes.ColumnSpacing = 18; themes.MinWidth = 1064;
+        var themes = Ui.Grid("*,*"); themes.ColumnSpacing = 18; themes.MinWidth = 1064; themes.Width = 1064;
         Ui.Put(themes, Pane("Light", ThemeVariant.Light)); Ui.Put(themes, Pane("Dark", ThemeVariant.Dark), 1);
-        Ui.Put(root, new ScrollViewer { Content = themes, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled }, 0, 1); Content = root;
+        var comparison = new ScrollViewer { Content = themes, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        // Horizontal scrolling measures with infinite width. Bound the comparison explicitly so wrapped captions cannot widen the panes.
+        comparison.SizeChanged += (_, _) => themes.Width = Math.Max(1064, comparison.Bounds.Width);
+        Ui.Put(root, comparison, 0, 1); Content = root;
     }
 
-    private static ThemeVariantScope Pane(string name, ThemeVariant variant)
+    private ThemeVariantScope Pane(string name, ThemeVariant variant)
     {
         var content = new StackPanel { Spacing = 14, Margin = new Thickness(16) };
-        content.Children.Add(Ui.Heading(name, 21));
         var matrix = new StackPanel { Spacing = 2 };
         var labels = Ui.Grid("82,*,*,*,*,*,*");
         for (var i = 0; i < States.Length; i++)
@@ -110,8 +136,17 @@ public sealed class NeumorphicGalleryWindow : Window
             var swatch = Ui.Horizontal(dot, Ui.Text(label, 11.5, "muted")); swatch.Margin = new Thickness(0, 0, 14, 6); palette.Children.Add(swatch);
         }
         content.Children.Add(palette);
-        var pane = new Border { Name = "Gallery" + name, CornerRadius = new CornerRadius(18),
-            Child = new ScrollViewer { Content = content, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } };
+        content.Name = name + "_Section_states"; Register("states", content);
+        var pages = new StackPanel { Spacing = 14, Margin = new Thickness(16) };
+        content.Margin = new Thickness(0); pages.Children.Add(Ui.Heading(name, 21)); pages.Children.Add(content);
+        foreach (var (id, _) in NeumorphicGallerySamples.Sections.Where(s => s.Id != "states"))
+        {
+            var section = NeumorphicGallerySamples.Build(id, name); section.Name = name + "_Section_" + id;
+            Register(id, section); pages.Children.Add(section);
+        }
+        var scroll = new ScrollViewer { Content = pages, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        paneScrolls.Add(scroll);
+        var pane = new Border { Name = "Gallery" + name, CornerRadius = new CornerRadius(18), Child = scroll };
         pane.Bind(Border.BackgroundProperty, pane.GetResourceObservable("Surface"));
         return new ThemeVariantScope { RequestedThemeVariant = variant, Child = pane };
     }

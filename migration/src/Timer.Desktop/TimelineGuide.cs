@@ -46,7 +46,7 @@ public static class TimelineGuide
     /// Hangs the pins and the guide on the timeline's canvas. <paramref name="pinned"/> are the day's notes with a reminder, in time order. <paramref name="lanesTop"/> is where
     /// the meeting row or the blocks begin: above it the pointer is on the ruler and the pins, below it on the day's own blocks.
     /// </summary>
-    public static void Attach(Canvas canvas, TimerModel model, DateTime day, double pixelsPerHour, double gutter, double axisY, double bandBottom, double lanesTop, IReadOnlyList<DayNote> pinned)
+    public static void Attach(Canvas canvas, TimerModel model, DateTime day, double pixelsPerHour, double gutter, double axisY, double lanesTop, IReadOnlyList<DayNote> pinned)
     {
         double X(DateTime time) => gutter + (time - day).TotalHours * pixelsPerHour;
         var pins = new List<Pin>();
@@ -107,7 +107,7 @@ public static class TimelineGuide
         }
 
         // ---- the guide
-        var line = new Line { Name = "TimelineGuideLine", StartPoint = new Point(1, 0), EndPoint = new Point(1, bandBottom + 8 - axisY), StrokeThickness = 2, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 2.5, 2 }, Opacity = .75, IsHitTestVisible = false, IsVisible = false, ZIndex = 9 };
+        var line = new Line { Name = "TimelineGuideLine", StartPoint = new Point(1, 0), EndPoint = new Point(1, canvas.Height - axisY), StrokeThickness = 2, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 2.5, 2 }, Opacity = .75, IsHitTestVisible = false, IsVisible = false, ZIndex = 9 };
         Paint(line, Shape.StrokeProperty, "Accent");
         var guideDot = new Ellipse { Name = "TimelineGuideDot", Width = 9, Height = 9, StrokeThickness = 2, IsHitTestVisible = false, IsVisible = false, ZIndex = 9 };
         Paint(guideDot, Shape.StrokeProperty, "Accent"); Paint(guideDot, Shape.FillProperty, "Panel");
@@ -162,7 +162,8 @@ public static class TimelineGuide
             line.IsVisible = guideDot.IsVisible = chip.IsVisible = true;
             // Snapped to a pin, the line starts under the pin so it does not run through the dot or the count in it.
             var skip = near is null ? 0 : 11.5 + near.Active / 2 + 4;
-            line.EndPoint = new Point(1, bandBottom + 8 - axisY - skip);
+            // Follow the full display, including the space below the blocks and the now chip.
+            line.EndPoint = new Point(1, Math.Max(0, canvas.Bounds.Height - axisY - skip));
             Canvas.SetLeft(line, x - 1); Canvas.SetTop(line, axisY + skip);
             Canvas.SetLeft(guideDot, x - 4.5); Canvas.SetTop(guideDot, axisY - 5);
             chipText.Text = time.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
