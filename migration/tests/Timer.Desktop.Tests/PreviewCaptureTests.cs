@@ -29,6 +29,7 @@ public sealed class PreviewCaptureTests
                 void Press(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Shot("timeline"); window.ShowNotes(); Shot("notes");
                 Press("PageKindMeeting"); Shot("meeting");
+                window.GetVisualDescendants().OfType<NotesPage>().Single().OpenNote(model.Notes.MeetingsOn(model.Engine.Now.Date).First().Id); Shot("meeting-edit");
                 window.SelectTab(true); Shot("week"); Press("WeekTable"); Shot("week-table");
                 Press("Settings"); Press("SettingsExport"); Shot("export");
             }

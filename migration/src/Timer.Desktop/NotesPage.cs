@@ -250,7 +250,8 @@ public sealed class NotesPage : Grid
         void Add(Control control) { control.Margin = new Thickness(0, 0, 6, 6); options.Children.Add(control); }
         if (editing is not null)
         {
-            var label = NoteParts.Chip(meeting ? "Editing a meeting" : "Editing a note", "plain"); label.Height = 36; label.Padding = new Thickness(12, 0); Add(label);
+            var label = Ui.Text(meeting ? "Editing a meeting" : "Editing a note", 12, "muted"); label.Name = "PageEditingLabel";
+            column.Children.Insert(0, label);
         }
         else
         {

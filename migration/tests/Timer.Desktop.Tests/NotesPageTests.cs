@@ -195,7 +195,7 @@ public sealed class NotesPageTests
     }
 
     [AvaloniaFact]
-    public void EditingAMeetingKeepsTheRepeatListOnTheOptionsLineWithIconsForDeleteAndCancelAndNoLengthWord()
+    public void EditingAMeetingKeepsRepeatAndLabelledDurationOnTheOptionsLineWithDeleteAndCancelIcons()
     {
         var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
