@@ -3,6 +3,7 @@
              xmlns:local="clr-namespace:Timer.Desktop" x:Class="Timer.Desktop.App" RequestedThemeVariant="Default">
   <Application.Resources>
     <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries><ResourceInclude Source="/Styles/NeumorphicControls.axaml" /></ResourceDictionary.MergedDictionaries>
       <!-- The colours come from the theme engine (ThemeEngine.cs), which registers a dictionary for every theme and its break and overtime tints. -->
     </ResourceDictionary>
   </Application.Resources>
@@ -105,7 +106,7 @@
     <Style Selector=":is(Border).pillBody"><Setter Property="Background" Value="{DynamicResource PillBody}" /></Style>
     <Style Selector="Border.panel"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
     <Style Selector="Border.rule"><Setter Property="Background" Value="{DynamicResource Line}" /></Style>
-    <Style Selector="Button">
+    <Style Selector="Button:not(.neo)">
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="CornerRadius" Value="8" />
@@ -115,7 +116,7 @@
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="Padding" Value="12,8" />
     </Style>
-    <Style Selector="Button:pointerover /template/ ContentPresenter">
+    <Style Selector="Button:not(.neo):pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Hover}" />
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
     </Style>
@@ -157,10 +158,6 @@
     <Style Selector="Border.tick"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
     <Style Selector="Border.tick.tickDone"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="Border.tick Path"><Setter Property="Stroke" Value="{DynamicResource AccentText}" /></Style>
-    <!-- The importance star is a small key: raised to offer, sunk and gold once the note is important. -->
-    <Style Selector="Button.starKey /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /><Setter Property="CornerRadius" Value="9" /></Style>
-    <Style Selector="Button.starKey:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource KeyHover}" /></Style>
-    <Style Selector="Button.starKey.on /template/ ContentPresenter#PART_ContentPresenter, Button.starKey.on:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="Border.composer"><Setter Property="Background" Value="{DynamicResource TextControlBackground}" /><Setter Property="BorderBrush" Value="{DynamicResource TextControlBorderBrush}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /><Setter Property="ClipToBounds" Value="True" /></Style>
     <Style Selector="TextBox.bareField, TextBox.bareField:pointerover, TextBox.bareField:focus"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
     <Style Selector="TextBox.bareField /template/ Border#PART_BorderElement, TextBox.bareField:pointerover /template/ Border#PART_BorderElement, TextBox.bareField:focus /template/ Border#PART_BorderElement"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="BoxShadow" Value="none" /></Style>
@@ -529,7 +526,7 @@
     <Style Selector="Button.ctl.primary /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
     </Style>
-    <Style Selector="Button:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+    <Style Selector="Button:not(.neo):focus-visible /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="BorderBrush" Value="{DynamicResource FocusStroke}" /><Setter Property="BorderThickness" Value="2" />
     </Style>
     <Style Selector="ComboBox:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource FocusStroke}" /><Setter Property="BorderThickness" Value="2" /></Style>

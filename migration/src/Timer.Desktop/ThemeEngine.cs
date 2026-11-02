@@ -93,7 +93,13 @@ public static class ThemeEngine
         // 3 to 1 on the card), apart from the break's amber and the overdue red, and the row takes a faint wash of it and an edge.
         var lightGround = ThemeColours.Contrast(colours["Surface"], "#FFFFFF") < ThemeColours.Contrast(colours["Surface"], "#000000");
         var gold = lightGround ? "#B86E00" : "#F5B63A";
-        Put("ImportantStar", Color.Parse(gold));
+        var importantFill = ThemeColours.Mix(colours["Panel"], "#FFC94A", lightGround ? .26 : .16);
+        var importantHover = ThemeColours.Mix(importantFill, "#FFFFFF", lightGround ? .18 : .05);
+        var importantPressed = ThemeColours.Mix(importantFill, lightGround ? colours["Ink"] : "#000000", lightGround ? .025 : .08);
+        Put("ImportantStar", Color.Parse(TextShade(gold, colours["Ink"], new[] { colours["Panel"], importantFill, importantHover, importantPressed }, 3)));
+        Put("NeoImportantFill", Color.Parse(importantFill)); Put("NeoImportantHover", Color.Parse(importantHover)); Put("NeoImportantPressed", Color.Parse(importantPressed));
+        Put("NeoPressed", Color.Parse(ThemeColours.Mix(colours["Panel"], lightGround ? colours["Ink"] : "#000000", lightGround ? .025 : .12)));
+        Put("NeoBreakFill", Color.Parse(ThemeColours.Mix(colours["Panel"], colours["Break"], lightGround ? .12 : .16)));
         Put("ImportantTint", Color.Parse(ThemeColours.Mix(colours["Panel"], gold, lightGround ? .09 : .12)));
         Put("ImportantEdge", Color.Parse(ThemeColours.Mix(colours["Line"], gold, lightGround ? .5 : .55)));
         // The clock's display is set into the card: a well a shade under it, the grooves of its unlit LED, the shade falling inside its top and left edges and a faint light
@@ -123,6 +129,14 @@ public static class ThemeEngine
             PutShadow("ShadowSunk", Drop(2, 3, 6, Lo(1.2), true), Drop(-2, -2, 5, Hi(.9), true));
             PutShadow("ShadowPopup", Drop(-6, -6, 14, Hi(.8)), Drop(8, 12, 26, Lo(1.1)));
             PutShadow("ShadowThumb", Drop(-2, -2, 5, Hi(1)), Drop(2, 3, 7, Lo(1)));
+            // Compact controls have their own depth budget: the large field inset overwhelms a 28 px key.
+            PutShadow("NeoRaised", Drop(-2, -2, 5, Hi(.8)), Drop(2, 3, 6, Lo(.7)));
+            PutShadow("NeoHover", Drop(-2, -2, 6, Hi(.9)), Drop(2, 3, 7, Lo(.8)));
+            PutShadow("NeoInset", Drop(1, 1.5, 3, Lo(.6), true), Drop(-1, -1, 3, Hi(.65), true));
+            PutShadow("NeoSmallRaised", Drop(-1, -1, 2, Hi(.7)), Drop(1, 1.5, 3, Lo(.55)));
+            PutShadow("NeoSmallHover", Drop(-1, -1, 3, Hi(.8)), Drop(1, 2, 4, Lo(.65)));
+            PutShadow("NeoSmallInset", Drop(1, 1, 2, Lo(.35), true), Drop(-1, -1, 2, Hi(.5), true));
+            PutShadow("NeoSmallPressed", Drop(1, 1.5, 3, Lo(.6), true), Drop(-1, -1, 2, Hi(.6), true));
         }
         // The deeper shade of the live and break colours that holds as words (the colour itself is for glyphs, bars and fills).
         Put("LiveText", Color.Parse(TextShade(colours["Live"], colours["Ink"], new[] { colours["Panel"], colours["Surface"] })));

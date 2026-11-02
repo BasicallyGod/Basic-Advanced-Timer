@@ -170,8 +170,7 @@ public sealed class NotesPage : Grid
         if (!isMeeting)
         {
             var important = NotesModel.IsImportant(note);
-            var star = Ui.IconButton(important ? IconKind.StarFilled : IconKind.Star, important ? "Not important" : "Mark important", "PageNoteImportant_" + note.Id, () => Notes.SetImportant(note.Id, !important)); star.Classes.Add("starKey"); star.Classes.Set("on", important); star.Width = 28; star.Height = 28; star.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, star, 2);
-            if (important && star.Content is IconGlyph solid) solid.TintKey = "ImportantStar";
+            var star = NeumorphicControls.Important(important, () => Notes.SetImportant(note.Id, !important), "PageNoteImportant_" + note.Id); Ui.Put(line, star, 2);
         }
         var remove = Ui.IconButton(IconKind.Trash, isMeeting ? "Remove meeting" : "Remove note", "PageNoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 30; remove.Height = 30; remove.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, remove, isMeeting ? 2 : 3);
         var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 9), Name = "PageRow_" + note.Id }; card.Classes.Add("noteRow"); if (!isMeeting && NotesModel.IsImportant(note)) card.Classes.Add("importantRow");
@@ -260,7 +259,7 @@ public sealed class NotesPage : Grid
         {
             // The star puts the important mark (!!) at the start of the words, or takes it off; typing !! does the same.
             var marked = NotesModel.IsMarked(draft);
-            var star = Ui.Ctl("PageImportant", null, marked ? IconKind.StarFilled : IconKind.Star, marked ? "Not important" : "Mark important", () => { draft = NotesModel.WithMark(draft, !NotesModel.IsMarked(draft)); DrawForm(); }); star.Height = 36; star.Width = 36; star.IsEnabled = !archived; Add(star);
+            var star = NeumorphicControls.Important(marked, () => { draft = NotesModel.WithMark(draft, !NotesModel.IsMarked(draft)); DrawForm(); }, "PageImportant", 36); star.IsEnabled = !archived; Add(star);
         }
         if (meeting)
         {
