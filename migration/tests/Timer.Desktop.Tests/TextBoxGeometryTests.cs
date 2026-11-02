@@ -79,6 +79,7 @@ public sealed class TextBoxGeometryTests
             field.Focus(); Settle(window);
             var frame = window.GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("composer"));
             Assert.NotEqual(Color.Parse(model.CurrentTheme.Colour("Accent")), ((ISolidColorBrush)frame.BorderBrush!).Color);
+            Assert.True(frame.BoxShadow.Count > 0); Assert.All(frame.BoxShadow, shadow => Assert.True(shadow.IsInset));
             var decoration = field.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PART_BorderElement");
             Assert.Equal(0, decoration.BoxShadow.Count); Assert.Equal(new Thickness(0), decoration.BorderThickness);
         }
