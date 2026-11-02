@@ -7,6 +7,7 @@ using Xunit;
 namespace Timer.Desktop.Tests;
 
 // The frame monitor: its figures, and that its switch and readout live where the developer features do.
+[Collection("Diagnostic pause state")]
 public sealed class FrameMonitorTests
 {
     [Fact]
