@@ -332,13 +332,14 @@ public sealed class WindowCoordinator
         if (screen is null) return;
         var area = screen.WorkingArea; var scale = screen.Scaling;
         var sourceScale = source is PillWindow pill ? pill.Scale : 1.0;
-        target.Width = Math.Min(width, area.Width / scale);
-        target.Height = Math.Min(height, area.Height / scale);
+        var size = new Size(Math.Min(width, area.Width / scale), Math.Min(height, area.Height / scale));
+        if (target is DashboardWindow dashboard) dashboard.RequestWindowSize(size);
+        else { target.Width = size.Width; target.Height = size.Height; }
         // The card sits one margin in from its window, and the margin shrinks with the pill's scale.
         var shift = CardShift(sourceScale, targetScale, scale) + (int)Math.Round(insetDips * scale);
         target.Position = new PixelPoint(
-            Math.Clamp(source.Position.X + shift, area.X, Math.Max(area.X, area.Right - (int)(target.Width * scale))),
-            Math.Clamp(source.Position.Y + shift, area.Y, Math.Max(area.Y, area.Bottom - (int)(target.Height * scale))));
+            Math.Clamp(source.Position.X + shift, area.X, Math.Max(area.X, area.Right - (int)(size.Width * scale))),
+            Math.Clamp(source.Position.Y + shift, area.Y, Math.Max(area.Y, area.Bottom - (int)(size.Height * scale))));
     }
 }
 
@@ -348,6 +349,13 @@ public sealed class DashboardWindow : Window
     public const double DashboardWidth = 1100 - 76 + Sidebar.Width, DashboardHeight = 760;
     public Action? OpenPill { get; set; }
     private readonly TimerModel model;
+    private readonly WindowSizeGuard sizeGuard;
+    public void RequestWindowSize(Size size) => sizeGuard.Request(size);
+    private void EnsureWindowSize()
+    {
+        var bounds = sizeGuard.Ensure();
+        transitionTiming?.SetWindowBounds(bounds);
+    }
     private readonly TextBlock workspaceTitle = new() { FontSize = 26, Classes = { "clock" }, VerticalAlignment = VerticalAlignment.Center };
     private Button todayButton = null!; private TextBlock todayWords = null!;
     private Control? totalsStrip; private Button zoomOut = null!, zoomIn = null!;
@@ -375,6 +383,7 @@ public sealed class DashboardWindow : Window
         ContextMenu = Ui.SettingsMenu(model);
         Width = DashboardWidth + 2 * Ui.ShadowMargin;
         Height = DashboardHeight + 2 * Ui.ShadowMargin;
+        sizeGuard = new WindowSizeGuard(this, new Size(Width, Height));
         Topmost = model.DashboardOnTop;
         CanResize = false;
         SystemDecorations = SystemDecorations.None;
@@ -564,7 +573,7 @@ public sealed class DashboardWindow : Window
         model.PropertyChanged += Changed;
         model.EntryRequested += ShowEntry;
         model.AccountsRequested += ShowAccounts;
-        Opened += (_, _) => FlushRefresh();
+        Opened += (_, _) => { EnsureWindowSize(); FlushRefresh(); };
         PropertyChanged += (_, e) =>
         {
             if (e.Property == IsVisibleProperty && !IsVisible || e.Property == WindowStateProperty && WindowState == WindowState.Minimized) CancelMorph();
@@ -666,7 +675,7 @@ public sealed class DashboardWindow : Window
         transitionProbe?.Dispose(); transitionProbe = null;
         ReleaseSnapshot();
         transitionTiming ??= TransitionTimings.Begin(closing ? "collapse" : "expand");
-        if (!WindowMorph.Enabled || Motion.Reduced) { SetMorph(to); CompleteMorph(done, "instant"); return; }
+        if (!WindowMorph.Enabled || Motion.Reduced) { SetMorph(to); if (!closing) EnsureWindowSize(); CompleteMorph(done, "instant"); return; }
         CaptureDashboard();
         transitionProbe = new TransitionProbe(this, transitionTiming);
         SetMorph(from);
@@ -689,6 +698,7 @@ public sealed class DashboardWindow : Window
         {
             morphWatchdog.Stop();
             SetMorph(to);
+            if (!closing) EnsureWindowSize();
             PerformanceTimings.Record(direction + " total", System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             CompleteMorph(done, "completed");
         }, (elapsed, watchdog) => transitionTiming?.Sample(elapsed, watchdog));
@@ -737,7 +747,7 @@ public sealed class DashboardWindow : Window
     public void GrowFrom(Rect card, double radius, Avalonia.Media.Imaging.Bitmap? picture, Rect pictureAt)
     {
         morphFrom = card; morphRadius = radius; SetPillPicture(picture, pictureAt); SetMorph(0);
-        Show(); StartMorph(0, 1, false, null);
+        Show(); EnsureWindowSize(); StartMorph(0, 1, false, null);
     }
     /// <summary>Shrinks the window back to the pill's card and then calls <paramref name="done"/>, when the real pill takes over and this window is hidden.</summary>
     public void ShrinkTo(Rect card, double radius, Avalonia.Media.Imaging.Bitmap? picture, Rect pictureAt, Action done)
