@@ -2,7 +2,8 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Update', 'Launch', 'Rollback')][string]$Mode = 'Update',
-    [Parameter(Mandatory = $true)][string]$Branch
+    [Parameter(Mandatory = $true)][string]$Branch,
+    [string]$GitHubCli = 'gh'
 )
 
 Set-StrictMode -Version Latest
@@ -43,7 +44,7 @@ function Select-Channel([string]$Name) {
 }
 
 function Invoke-GhJson([string]$Endpoint) {
-    $output = & gh api --hostname github.com $Endpoint
+    $output = & $GitHubCli api --hostname github.com $Endpoint
     if ($LASTEXITCODE -ne 0) { throw "GitHub request failed: $Endpoint. Check gh auth status and repository access." }
     return ($output -join "`n" | ConvertFrom-Json)
 }
@@ -179,7 +180,7 @@ function Invoke-TestUpdater {
             Start-Build $state.previous
             return
         }
-        if (!(Get-Command gh -ErrorAction SilentlyContinue)) { throw 'Install GitHub CLI (https://cli.github.com), then run gh auth login once. Launch Current works offline.' }
+        if (!(Get-Command -Name $GitHubCli -ErrorAction SilentlyContinue)) { throw 'Install GitHub CLI (https://cli.github.com), then use GitHub sign-in. Launch installed works offline.' }
         $latest = Get-LatestBuild
         $run = $latest.run
         $artifact = $latest.artifact
@@ -199,7 +200,7 @@ function Invoke-TestUpdater {
         $staging = Join-Path $Root ('staging-' + [guid]::NewGuid().ToString('N'))
         $null = New-Item -ItemType Directory -Path $staging
         # gh extracts only the named artifact directly into this fresh staging directory.
-        & gh run download "$($run.id)" --repo $Repository --name $ArtifactName --dir $staging
+        & $GitHubCli run download "$($run.id)" --repo $Repository --name $ArtifactName --dir $staging
         if ($LASTEXITCODE -ne 0) { throw "Download failed. Current build is unchanged. Staging retained at $staging" }
         Assert-Build $staging
         Assert-TestClosed

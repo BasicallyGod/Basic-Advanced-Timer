@@ -33,7 +33,8 @@ function Invoke-GhJson($Endpoint) {
         event = 'push'; status = 'completed'; conclusion = 'success'
     }) }
 }
-function gh {
+$GitHubCli = 'Mock-GitHubCli'
+function Mock-GitHubCli {
     $script:Downloads++
     $destination = $args[[Array]::IndexOf($args, '--dir') + 1]
     [IO.File]::WriteAllBytes((Join-Path $destination $Executable), [byte[]]@(77, 90, 1))
