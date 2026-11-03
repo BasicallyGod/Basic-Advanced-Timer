@@ -2,8 +2,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Update', 'Launch', 'Rollback')][string]$Mode = 'Update',
-    # Which branch to take the newest successful build from. The console shortcut defaults to experimental.
-    [string]$Branch = 'experimental'
+    [Parameter(Mandatory = $true)][string]$Branch
 )
 
 Set-StrictMode -Version Latest
@@ -13,9 +12,7 @@ $Workflow = 'avalonia-preview.yml'
 $ArtifactName = $null
 $Executable = 'BasicsAdvancedTimer.Preview.exe'
 $UpdaterDirectory = $PSScriptRoot
-# Handed to the timer so its Start with Windows setting can point back here and survive updates.
-$UpdaterScript = Join-Path $PSScriptRoot 'Update-TestBuild.ps1'
-# Fixed private installation alongside this standalone script. Never accept a production data path.
+# Private installation alongside the temporary worker, rooted in the folder selected by the launcher.
 $Root = Join-Path $PSScriptRoot 'test-install'
 $ChannelRoot = $null
 $Versions = $null
@@ -29,12 +26,20 @@ function Assert-BranchName([string]$Name) {
 
 function Select-Channel([string]$Name) {
     Assert-BranchName $Name
-    if ($Name -notin @('experimental', 'alpha')) { throw 'Select experimental or alpha. Stable releases are installed through Microsoft Store.' }
-    $script:ChannelRoot = Join-Path (Join-Path $Root 'channels') $Name
+    if ($Name -cin @('experimental', 'alpha')) {
+        $folder = $Name
+    } elseif ($Name -ine 'main') {
+        # Exact branch identity on a case-insensitive filesystem, including refs containing slashes.
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { $hash = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Name))).Replace('-', '').ToLowerInvariant() }
+        finally { $sha.Dispose() }
+        $folder = "branch-$hash"
+    } else { throw 'Choose a preview branch. The main branch is installed through Microsoft Store.' }
+    $script:ChannelRoot = Join-Path (Join-Path $Root 'channels') $folder
     $script:Versions = Join-Path $ChannelRoot 'versions'
     $script:Data = Join-Path $ChannelRoot 'data'
     $script:StatePath = Join-Path $ChannelRoot 'state.json'
-    $script:ArtifactName = "BasicsAdvancedTimer-Windows-$Name"
+    $script:ArtifactName = 'BasicsAdvancedTimer-Windows-' + ($Name -creplace '[^A-Za-z0-9._-]', '-')
 }
 
 function Invoke-GhJson([string]$Endpoint) {
@@ -65,7 +70,11 @@ function Assert-Build([string]$Folder) {
 
 function Get-BuildFolder($Build) {
     if ($null -eq $Build -or $Build.folder -notmatch '^run-[0-9]+-attempt-[0-9]+-artifact-[0-9]+$') { throw 'Invalid installed-build record.' }
-    return Join-Path $Versions $Build.folder
+    $folder = Join-Path $Versions $Build.folder
+    if ((Join-Path $folder $Executable).Length -ge 260) {
+        throw 'The executable path is too long for Windows. Choose a shorter installation folder.'
+    }
+    return $folder
 }
 
 function Read-State {
@@ -86,20 +95,18 @@ function Write-State($Current, $Previous) {
     else { [IO.File]::Move($temporary, $StatePath) }
 }
 
-function Wait-TestClosed {
-    while ($true) {
-        $running = @(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Executable)) -ErrorAction SilentlyContinue | Where-Object {
-            try { $_.Path.StartsWith($Versions + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) }
-            catch { $true } # Fail closed when process access is denied.
-        })
-        $locked = $false
-        try {
-            $handle = [IO.File]::Open((Join-Path $Data '.migration.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
-            $handle.Dispose()
-        } catch { $locked = $true }
-        if ($running.Count -eq 0 -and !$locked) { return }
-        $answer = Read-Host 'The test timer is running. Exit it from the tray menu, then press Enter to retry (Q cancels)'
-        if ($answer -eq 'Q') { throw 'Cancelled. No running application was terminated.' }
+function Assert-TestClosed {
+    $running = @(Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($Executable)) -ErrorAction SilentlyContinue | Where-Object {
+        try { $_.Path.StartsWith($Versions + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) }
+        catch { $true } # Fail closed when process access is denied.
+    })
+    $locked = $false
+    try {
+        $handle = [IO.File]::Open((Join-Path $Data '.migration.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        $handle.Dispose()
+    } catch { $locked = $true }
+    if ($running.Count -gt 0 -or $locked) {
+        throw 'Exit the timer for this branch from the tray menu, then try again.'
     }
 }
 
@@ -113,13 +120,13 @@ function Backup-TestData {
 function Start-Build($Build) {
     $folder = Get-BuildFolder $Build
     Assert-Build $folder
-    Wait-TestClosed
+    Assert-TestClosed
     Write-Host "Branch: $($Build.branch)"
     Write-Host "Commit: $($Build.commitSha)"
     Write-Host "Run: $($Build.runId), attempt $($Build.runAttempt)"
     Write-Host "Build date (artifact upload, local): $(([datetimeoffset]$Build.buildDate).ToLocalTime())"
     Write-Host "Test data: $Data"
-    Start-Process -FilePath (Join-Path $folder $Executable) -WorkingDirectory $Data -ArgumentList @('--test-build', '--data-dir', ('"' + $Data + '"'), '--updater-script', ('"' + $UpdaterScript + '"'))
+    Start-Process -FilePath (Join-Path $folder $Executable) -WorkingDirectory $Data -ArgumentList @('--test-build', '--data-dir', ('"' + $Data + '"'))
 }
 
 function Get-LatestBuild {
@@ -128,7 +135,7 @@ function Get-LatestBuild {
         $response = Invoke-GhJson "repos/$Repository/actions/workflows/$Workflow/runs?branch=$([uri]::EscapeDataString($Branch))&status=success&per_page=100&page=$page"
         $runs = @($response.workflow_runs)
         foreach ($run in $runs) {
-            if ($run.head_branch -ne $Branch -or $run.event -notin @('push', 'workflow_dispatch') -or
+            if ($run.head_branch -cne $Branch -or $run.event -notin @('push', 'workflow_dispatch') -or
                 $run.status -ne 'completed' -or $run.conclusion -ne 'success') { continue }
             $artifacts = @()
             for ($artifactPage = 1; ; $artifactPage++) {
@@ -140,7 +147,7 @@ function Get-LatestBuild {
             if ($artifacts.Count -ne 1) { throw 'Ambiguous portable artifacts for one run; refusing to choose.' }
             return [pscustomobject]@{ run = $run; artifact = $artifacts[0] }
         }
-        if ($runs.Count -lt 100) { throw 'No successful portable build for this branch with with an unexpired artifact is available.' }
+        if ($runs.Count -lt 100) { throw 'No successful portable build with an unexpired download is available for this branch.' }
     }
 }
 
@@ -166,7 +173,7 @@ function Invoke-TestUpdater {
         if ($Mode -eq 'Rollback') {
             if ($null -eq $state.previous) { throw 'No previous build is available.' }
             Assert-Build (Get-BuildFolder $state.previous)
-            Wait-TestClosed
+            Assert-TestClosed
             Backup-TestData
             Write-State $state.previous $state.current
             Start-Build $state.previous
@@ -182,6 +189,7 @@ function Invoke-TestUpdater {
             artifactId = $artifact.id; buildDate = $artifact.created_at
             folder = "run-$($run.id)-attempt-$($run.run_attempt)-artifact-$($artifact.id)"
         }
+        $destination = Get-BuildFolder $build
         if ($null -ne $state.current -and $state.current.runId -eq $build.runId -and
             $state.current.commitSha -eq $build.commitSha -and $state.current.artifactId -eq $build.artifactId) {
             Write-Host 'Latest successful build is already installed; skipping download.'
@@ -194,9 +202,8 @@ function Invoke-TestUpdater {
         & gh run download "$($run.id)" --repo $Repository --name $ArtifactName --dir $staging
         if ($LASTEXITCODE -ne 0) { throw "Download failed. Current build is unchanged. Staging retained at $staging" }
         Assert-Build $staging
-        Wait-TestClosed
+        Assert-TestClosed
         Backup-TestData
-        $destination = Get-BuildFolder $build
         if (Test-Path -LiteralPath $destination) {
             # A previous interrupted promotion may have left this complete version behind.
             Assert-Build $destination

@@ -4,7 +4,7 @@
 
 - [User guide and architecture](../app/README.md)
 - [Release channels](../BRANCHES.md)
-- [Preview updater](../app/preview-updater/README.md)
+- [Timer Branch Launcher](../app/preview-launcher/README.md)
 - [Microsoft Store packaging](../app/store-packaging/README.md)
 - [Engineering notes](../CLAUDE.md)
 
