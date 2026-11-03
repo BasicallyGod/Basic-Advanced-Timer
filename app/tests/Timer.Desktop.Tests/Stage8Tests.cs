@@ -71,7 +71,7 @@ public sealed class Stage8Tests
             Press(window, "AddMeeting"); Scan("meeting form"); Press(window, "MeetingDay");
             window.SelectTab(true); Settle(window); Scan("week");
             window.ShowNotes(); Settle(window); Scan("notes page");
-            Press(window, "Notifications"); Scan("bell"); Press(window, "Notifications");
+            Press(window, "SidebarAlertsButton"); Scan("alerts card"); Press(window, "SidebarAlertsButton");
             Press(window, "Settings"); Scan("settings");
             Assert.True(missing.Count == 0, "Buttons with no words and no accessible name: " + string.Join("; ", missing.Distinct()));
         }

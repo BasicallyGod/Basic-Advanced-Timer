@@ -136,19 +136,6 @@ public sealed class FeedbackRound8Tests
     }
 
     [AvaloniaFact]
-    public void TheBellCardHasNoSubtitle()
-    {
-        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
-        try
-        {
-            Click(window, "Notifications");
-            var popup = Find<Avalonia.Controls.Primitives.Popup>(window, "NotificationsPopup");
-            Assert.DoesNotContain(((Visual)popup.Child!).GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Reminders from your notes");
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
     public void TheRailIconsAreASofterGreyOnLightButStillReadAgainstThePageAndTheChosenTile()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);

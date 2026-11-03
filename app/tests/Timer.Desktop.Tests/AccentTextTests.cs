@@ -67,7 +67,7 @@ public sealed class AccentTextTests
             Press(window, "AddMeeting"); Audit(window, "notes card, meeting form", model, found);
             Press(window, "AddNote"); Audit(window, "notes card, note form", model, found);
             Press(window, "DatePick"); Audit(window, "date button", model, found); AuditPopups(window, "date", model, found); Press(window, "DatePick");
-            Press(window, "Notifications"); AuditPopups(window, "bell", model, found); Press(window, "Notifications");
+            Press(window, "SidebarAlertsButton"); AuditPopups(window, "alerts", model, found); Press(window, "SidebarAlertsButton");
             Press(window, "FormBell"); AuditPopups(window, "reminder", model, found); window.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "ReminderCancel" || b.Name == "ReminderClose").ToList().ForEach(b => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent))); Press(window, "AddNote");
             Press(window, "NotesTab"); Audit(window, "notes page", model, found);
             Press(window, "WeekOverviewTab"); Audit(window, "week", model, found);

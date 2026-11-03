@@ -135,21 +135,4 @@ public sealed class FeedbackRound5Tests
         finally { window.Close(); }
     }
     private static Avalonia.Layout.HorizontalAlignment HorizontalAlignmentOf(Control c) => c is Button ? Avalonia.Layout.HorizontalAlignment.Center : Avalonia.Layout.HorizontalAlignment.Center;
-
-    [AvaloniaFact]
-    public void TheBellsRowsHaveDoneAndRescheduleAsIconsAtTheRightAndTheCardHangsFromAPointUnderTheBell()
-    {
-        var model = Model(out _); model.Notes.AddNote("Send the budget", null, Day.AddHours(8));
-        var window = new DashboardWindow(model); window.Show(); Settle(window);
-        try
-        {
-            Click(window, "Notifications"); var id = model.Notes.All.Single().Id;
-            var done = Find<Button>(window, "NotificationDone_" + id); var reschedule = Find<Button>(window, "NotificationReschedule_" + id); var row = Find<Border>(window, "Notification_" + id);
-            Assert.IsType<IconGlyph>(done.Content); Assert.Equal(IconKind.Check, ((IconGlyph)done.Content!).Kind); Assert.Equal(IconKind.Clock, ((IconGlyph)reschedule.Content!).Kind);
-            Assert.True(done.Width <= 32 && reschedule.Width <= 32);
-            Assert.True(done.TranslatePoint(default, row)!.Value.X > row.Bounds.Width / 2); // At the right of the row.
-            Assert.NotNull(Find<Canvas>(window, "NotificationsPoint")); Assert.Contains("on", Find<Button>(window, "Notifications").Classes); // The bell shows pressed while it is open.
-        }
-        finally { window.Close(); }
-    }
 }

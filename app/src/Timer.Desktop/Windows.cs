@@ -444,7 +444,7 @@ public sealed class DashboardWindow : Window
         searchBox.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && notesPage is not null) notesPage.Query = searchBox.Text ?? ""; };
         var searchGrid = new Grid { Width = 240 }; searchGrid.Children.Add(searchBox); searchGrid.Children.Add(new IconGlyph(IconKind.Search) { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(11, 0, 0, 0), IsHitTestVisible = false, Opacity = .7 });
         searchHost = searchGrid;
-        var dateHost = new Grid { Children = { datePick, dateCalendar } };
+        var dateHost = new Grid { Children = { datePick, dateCalendar, alertsPopup } }; // The popup only needs a place in the tree: it is placed against the sidebar's display when it opens.
         todayButton.Margin = new Thickness(8, 0, 0, 0);
         searchHost.Margin = new Thickness(0, 0, 8, 0); dateHost.Margin = new Thickness(8, 0, 0, 0); next.Margin = new Thickness(8, 0, 0, 0);
         var steps = Ui.Horizontal(searchHost, previous, dateHost, next, todayButton); steps.Spacing = 0;
