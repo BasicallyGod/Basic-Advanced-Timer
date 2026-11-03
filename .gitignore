@@ -16,6 +16,9 @@ basics-advanced-timer.settings.json*
 artifacts/
 TestResults/
 
+# Installed preview builds and per-branch user data
+test-install/
+
 # Isolated Avalonia migration runtime data
 migration-data/
 **/migration-data/
