@@ -365,8 +365,8 @@ public sealed class DashboardWindow : Window
     private readonly TextBlock date = Ui.Text("", 14); private Button datePick = null!;
     private readonly ContentControl workspace = new() { Name = "WorkspaceHost" }, timelineHost = new() { Name = "TimelineHost" };
     private Border timelineCard = null!; private MessageBar messageBar = null!; private Grid timelinePage = null!; private SelectedBlockCard selectedCard = null!; private NotesCard notesCard = null!;
-    private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, notesTab = null!, addTime = null!, bell = null!; private Control viewTabs = null!;
-    private Border bellBadge = null!; private Control bellHostPanel = null!; private TextBlock bellBadgeText = null!; private TextBox searchBox = null!; private Control searchHost = null!; private Popup bellPopup = null!; private NotesPage? notesPage;
+    private Button timelineRail = null!, previous = null!, next = null!, overviewTab = null!, notesTab = null!, addTime = null!; private Control viewTabs = null!;
+    private TextBox searchBox = null!; private Control searchHost = null!; private Popup alertsPopup = null!; private PillAlertsCard? alertsCard; private Grid? alertsHung; private NotesPage? notesPage;
     private readonly Button undo, redo;
     private EntryDialog? entryEditor;
     private bool weekMode, settingsMode, notesMode, renderedSettings, renderedNotes;
@@ -393,7 +393,7 @@ public sealed class DashboardWindow : Window
         // below them, and Quit timer at its foot. The workspace beside it has a header with the three views as tabs, the date and the gear.
         var root = Ui.Grid("Auto,*", "*");
         // The clock goes back to the pill, and the play tile pauses or resumes, as on the pill.
-        sidebar = new Sidebar(model, () => OpenPill?.Invoke(), OnPlay, () => model.OpenAccounts(), () => model.RequestQuit());
+        sidebar = new Sidebar(model, () => OpenPill?.Invoke(), OnPlay, () => model.OpenAccounts(), () => model.RequestQuit(), ToggleAlerts);
         face = sidebar.Face;
         Ui.Put(root, sidebar);
         model.OpenDayRequested += OpenRequestedDay;
@@ -438,24 +438,16 @@ public sealed class DashboardWindow : Window
         next = Ui.Ctl("NextPeriod", null, IconKind.Next, "Next day or week", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); });
         todayButton = Ui.Ctl("GoToToday", "Today", IconKind.Today, "Back to today", () => { if (weekMode) model.GoToDate(model.Engine.Now.Date, true); else model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days); });
         todayWords = (TextBlock)((StackPanel)todayButton.Content!).Children[1];
-        // The bell opens what is waiting (the reminders that have passed, and the ones coming up), with a count of the ones that need attention. In Notes the header also holds the search box.
-        bell = Ui.Ctl("Notifications", null, IconKind.Bell, "Notifications", ToggleBell); bell.Width = 42;
-        // A margin of 1 on the left and top moves the digit half a pixel right and down: a 1 is weighted to its left, and the digits sit a little high in their line box, so the number looked off the dot's centre.
-        bellBadgeText = new TextBlock { FontSize = 11, FontWeight = Avalonia.Media.FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(1, 1, 0, 0) };
-        bellBadgeText.Bind(TextBlock.ForegroundProperty, bellBadgeText.GetResourceObservable("Panel"));
-        bellBadge = new Border { Name = "NotificationsBadge", MinWidth = 18, Height = 18, CornerRadius = new CornerRadius(9), Padding = new Thickness(4, 0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, -6, -6, 0), IsHitTestVisible = false, IsVisible = false, Child = bellBadgeText }; bellBadge.Classes.Add("badge");
-        bellPopup = new Popup { Placement = PlacementMode.BottomEdgeAlignedRight, Name = "NotificationsPopup" }; HangingCard.CloseOnOutsidePress(bellPopup, bell);
-        bellPopup.Opened += (_, _) => bell.Classes.Set("on", true); bellPopup.Closed += (_, _) => { if (((Avalonia.LogicalTree.ILogical)bell).IsAttachedToLogicalTree) bell.Classes.Set("on", false); };
-        var bellHost = new Grid { Name = "NotificationsHost" }; bellHostPanel = bellHost; bellHost.Children.Add(bell); bellHost.Children.Add(bellBadge); bellHost.Children.Add(bellPopup); bellPopup.PlacementTarget = bell;
+        // What is waiting opens from the alert count in the sidebar's display, as it does on the pill; the card hangs under the count.
+        alertsPopup = new Popup { Placement = PlacementMode.BottomEdgeAlignedLeft, Name = "AlertsPopup" };
         searchBox = new TextBox { Name = "NotesSearch", Watermark = "Search notes", Width = 240, Height = 38, MinHeight = 38, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(34, 0, 8, 0) };
         searchBox.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && notesPage is not null) notesPage.Query = searchBox.Text ?? ""; };
         var searchGrid = new Grid { Width = 240 }; searchGrid.Children.Add(searchBox); searchGrid.Children.Add(new IconGlyph(IconKind.Search) { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(11, 0, 0, 0), IsHitTestVisible = false, Opacity = .7 });
         searchHost = searchGrid;
         var dateHost = new Grid { Children = { datePick, dateCalendar } };
         todayButton.Margin = new Thickness(8, 0, 0, 0);
-        searchHost.Margin = new Thickness(0, 0, 8, 0); dateHost.Margin = new Thickness(8, 0, 0, 0); next.Margin = new Thickness(8, 0, 0, 0); bellHost.Margin = new Thickness(8, 0, 0, 0);
-        var steps = Ui.Horizontal(searchHost, previous, dateHost, next, todayButton, bellHost); steps.Spacing = 0;
+        searchHost.Margin = new Thickness(0, 0, 8, 0); dateHost.Margin = new Thickness(8, 0, 0, 0); next.Margin = new Thickness(8, 0, 0, 0);
+        var steps = Ui.Horizontal(searchHost, previous, dateHost, next, todayButton); steps.Spacing = 0;
         Ui.Put(nav, steps, 1);
         // Settings is a gear at the top right, which also closes it again.
         settingsRail = Ui.Ctl("Settings", null, IconKind.Gear, "Settings", ShowSettings); settingsRail.Margin = new Thickness(8, 0, 0, 0);
@@ -895,17 +887,31 @@ public sealed class DashboardWindow : Window
     private void OpenRequestedDay(DateTime day) => SelectTab(false);
     private void OpenRequestedPage(string page) { if (page == "week") SelectTab(true); else if (page == "notes") ShowNotes(); }
     private Popup dateCalendar = null!;
-    private void ToggleBell()
+    /// <summary>Opens what is waiting from the sidebar's alert count, hung under it like the pill's card (the same <see cref="PillAlertsCard"/>), and closes it again.</summary>
+    private void ToggleAlerts()
     {
-        if (bellPopup.IsOpen) { bellPopup.IsOpen = false; return; }
-        // The card hangs from a point under the bell, so it reads as coming from it: a small triangle of the card's own fill over its top edge, with only its two slanted
-        // sides drawn in the line colour, so the card's border runs into it. The room round the card is for its shadow.
-        var flyout = new NotificationsFlyout(model);
-        // No taller than the window below the bell, so a long list scrolls inside the card instead of running past the app.
-        flyout.LimitHeight(NotificationsFlyout.MaxHeightFor(bell.TranslatePoint(new Point(0, bell.Bounds.Height), this)?.Y ?? 60, Ui.ShadowMargin + DashboardHeight));
-        var half = Math.Max(38, bell.Bounds.Width) / 2; var shift = HangingCard.ShiftForCorner(half, 18); // The bell is near the card's end, so the card sits a little past it to keep the point off the rounded corner.
-        bellPopup.Child = HangingCard.Hang(flyout, half + shift); bellPopup.HorizontalOffset = HangingCard.Room.Right + shift; bellPopup.VerticalOffset = HangingCard.TopOffset; bellPopup.IsOpen = true;
+        if (alertsPopup.IsOpen) { alertsPopup.IsOpen = false; return; }
+        var display = sidebar.Face.Display; var countButton = sidebar.Face.AlertsButton;
+        if (countButton is null) return;
+        if (alertsCard is null)
+        {
+            alertsCard = new PillAlertsCard(model, () => alertsPopup.IsOpen = false, () => { alertsPopup.IsOpen = false; ShowNotes(); });
+            alertsCard.Emptied += () => alertsPopup.IsOpen = false;
+            alertsHung = HangingCard.Hang(alertsCard, -1, AlertsPoint, "PillBody");
+            alertsPopup.Child = alertsHung; HangingCard.CloseOnOutsidePress(alertsPopup, countButton);
+            alertsPopup.Opened += (_, _) => countButton.Classes.Set("on", true); alertsPopup.Closed += (_, _) => countButton.Classes.Set("on", false);
+        }
+        alertsPopup.PlacementTarget = display;
+        alertsCard.Open(model.PillAlertsMode != "peek" || model.Alerts.Count == 0);
+        alertsPopup.HorizontalOffset = -HangingCard.Room.Left; alertsPopup.VerticalOffset = 11 - HangingCard.Room.Top;
+        if (countButton.TranslatePoint(new Point(countButton.Bounds.Width / 2, 0), display) is { } under)
+            HangingCard.MovePoint(alertsHung!, AlertsPoint, HangingCard.ClampFromRight(PillAlertsCard.CardWidth - under.X, PillAlertsCard.CardWidth, PillWindow.PillRadius));
+        alertsPopup.IsOpen = true;
     }
+    private const string AlertsPoint = "DashboardAlertsPoint";
+    /// <summary>Whether the alerts card is open under the sidebar's count (for tests, which have no pop-up window).</summary>
+    public bool AlertsOpen => alertsPopup.IsOpen;
+    public PillAlertsCard? AlertsCard => alertsCard;
     // The gear opens the settings page and the same gear closes it, going back to the view that was showing.
     // "19 – 25 Oct", or "28 Sep – 4 Oct" when the week crosses a month.
     private static string WeekRange(DateTime start, System.Globalization.CultureInfo culture)
@@ -967,12 +973,9 @@ public sealed class DashboardWindow : Window
         Tab(timelineRail, !weekMode && !settingsMode && !notesMode);
         Tab(overviewTab, !settingsMode && weekMode);
         Tab(notesTab, !settingsMode && notesMode);
-        // The bell shows how many things need attention: reminders that have passed, budgets at 80 per cent or spent, and a break running long, as the pill counts them.
-        var waiting = model.Alerts.Count; bellBadge.IsVisible = waiting > 0; bellBadgeText.Text = waiting > 99 ? "99+" : waiting.ToString();
-        Avalonia.Automation.AutomationProperties.SetName(bell, waiting > 0 ? $"Notifications, {waiting} need attention" : "Notifications");
         // The settings page has no date to step through and no editing buttons, so the header shows only its name.
         foreach (var control in new Control[] { previous, datePick, next, todayButton }) control.IsVisible = !settingsMode && !notesMode;
-        bellHostPanel.IsVisible = !settingsMode; searchHost.IsVisible = notesMode && !settingsMode;
+        searchHost.IsVisible = notesMode && !settingsMode;
         settingsRail.Classes.Set("on", settingsMode);
         // The timeline card and the Selected block card are the Timeline page's alone; the week and the settings fill the workspace.
         timelinePage.IsVisible = !settingsMode && !weekMode && !notesMode; workspace.IsVisible = settingsMode || weekMode || notesMode;

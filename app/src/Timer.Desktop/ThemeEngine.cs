@@ -102,27 +102,28 @@ public static class ThemeEngine
         // edge along its foot (dividers inside it take the same two).
         Put("DisplayWell", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .035) : ThemeColours.Mix(colours["Panel"], "#000000", .45)));
         Put("DisplayGroove", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .02) : ThemeColours.Mix(colours["Panel"], "#000000", .55)));
-        Put("DisplayShade", lightGround ? Color.FromArgb(62, 20, 30, 60) : Color.FromArgb(166, 0, 0, 0));
+        Put("DisplayShade", lightGround ? Color.FromArgb(38, 60, 52, 100) : Color.FromArgb(166, 0, 0, 0));
         Put("DisplayEdge", lightGround ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(18, 255, 255, 255));
         // Depth: every raised thing (a key, a card, a menu) throws one soft shadow down and to the right with a pale edge up and to the left, and every sunk thing (a field,
         // a track, a pressed key) is the same two turned inward, so the whole app reads as one room lit from the top left. In Dark the pale edge is a whisper and the
         // shadow does the work. A raised thing is never given a shade of its own: the page is the card colour's ground, and a sunk thing is a shade under it.
         Put("Well", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .03) : ThemeColours.Mix(colours["Surface"], "#000000", .2)));
-        Put("KeyEdge", lightGround ? Color.FromArgb(18, 72, 78, 92) : Color.FromArgb(22, 255, 255, 255));
+        Put("KeyEdge", lightGround ? Color.FromArgb(12, 96, 88, 132) : Color.FromArgb(22, 255, 255, 255));
         Put("KeyHover", Color.Parse(lightGround ? ThemeColours.Mix(colours["Panel"], "#FFFFFF", .4) : ThemeColours.Mix(colours["Panel"], "#FFFFFF", .07)));
         Put("Porcelain", Color.Parse(lightGround ? ThemeColours.Mix(colours["Panel"], "#FFFFFF", .3) : ThemeColours.Mix(colours["Panel"], "#FFFFFF", .06)));
         {
-            var (hiAlpha, loAlpha) = lightGround ? (.85, .17) : (.025, .42);
-            var lo = lightGround ? (R: (byte)72, G: (byte)78, B: (byte)92) : (R: (byte)0, G: (byte)0, B: (byte)0);
+            var (hiAlpha, loAlpha) = lightGround ? (.85, .085) : (.025, .42);
+            var lo = lightGround ? (R: (byte)96, G: (byte)88, B: (byte)132) : (R: (byte)0, G: (byte)0, B: (byte)0);
             Color Hi(double k) => Color.FromArgb((byte)Math.Round(255 * Math.Min(1, hiAlpha * k)), 255, 255, 255);
             Color Lo(double k) => Color.FromArgb((byte)Math.Round(255 * Math.Min(1, loAlpha * k)), lo.R, lo.G, lo.B);
             BoxShadow Drop(double x, double y, double blur, Color colour, bool inset = false) => new() { OffsetX = x, OffsetY = y, Blur = blur, Color = colour, IsInset = inset };
             // With FlatShadows on (a developer switch for judging what the depth costs) every raised and sunk shadow is written empty.
             void PutShadow(string key, params BoxShadow[] shadows) => dictionary[key] = FlatShadows ? default(BoxShadows) : new BoxShadows(shadows[0], shadows.Skip(1).ToArray());
-            PutShadow("ShadowCard", Drop(0, 1, 0, Hi(.7), true), Drop(-7, -7, 16, Hi(.8)), Drop(9, 11, 26, Lo(.8)));
+            PutShadow("ShadowCard", Drop(0, 1, 0, Hi(.7), true), Drop(-7, -7, 16, Hi(.8)), lightGround ? Drop(6, 8, 24, Lo(.8)) : Drop(9, 11, 26, Lo(.8)));
             PutShadow("ShadowKey", Drop(-3, -3, 7, Hi(1)), Drop(3, 4, 9, Lo(1)));
             PutShadow("ShadowKeyHover", Drop(-4, -4, 9, Hi(1.1)), Drop(4, 6, 13, Lo(1.2)));
-            PutShadow("ShadowSunk", Drop(2, 3, 6, Lo(1.2), true), Drop(-2, -2, 5, Hi(.9), true));
+            // On Light the sunk shadow (text boxes, tracks, chosen tabs) is shallower and wider, so a field reads as slightly cut in rather than dug out.
+            PutShadow("ShadowSunk", lightGround ? Drop(1, 1.5, 5, Lo(.7), true) : Drop(2, 3, 6, Lo(1.2), true), lightGround ? Drop(-1, -1, 4, Hi(.7), true) : Drop(-2, -2, 5, Hi(.9), true));
             PutShadow("ShadowPopup", Drop(-6, -6, 14, Hi(.8)), Drop(8, 12, 26, Lo(1.1)));
             PutShadow("ShadowThumb", Drop(-2, -2, 5, Hi(1)), Drop(2, 3, 7, Lo(1)));
             // Compact controls have their own depth budget: the large field inset overwhelms a 28 px key.
@@ -164,7 +165,7 @@ public static class ThemeEngine
         Put("RailIconOn", Color.Parse(darkTheme ? colours["Ink"] : colours["Muted"]));
         // Fields are sunk: the same well colour as a slider track, with the inset shadow from App.axaml and only a faint edge until they have the focus.
         var field = Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .03) : ThemeColours.Mix(colours["Surface"], "#000000", .2));
-        var fieldEdge = lightGround ? Color.FromArgb(18, 72, 78, 92) : Color.FromArgb(22, 255, 255, 255);
+        var fieldEdge = lightGround ? Color.FromArgb(12, 96, 88, 132) : Color.FromArgb(22, 255, 255, 255);
         foreach (var key in new[] { "TextControlBackground", "TextControlBackgroundPointerOver", "TextControlBackgroundFocused", "ComboBoxBackground", "ComboBoxBackgroundPointerOver", "ComboBoxBackgroundPressed", "ComboBoxBackgroundUnfocused" }) Put(key, field);
         foreach (var key in new[] { "TextControlBorderBrush", "TextControlBorderBrushPointerOver", "TextControlBorderBrushFocused", "ComboBoxBorderBrush", "ComboBoxBorderBrushPressed" }) Put(key, fieldEdge);
         foreach (var key in new[] { "ComboBoxBackgroundBorderBrushFocused", "ComboBoxBorderBrushPointerOver" }) Put(key, accent);

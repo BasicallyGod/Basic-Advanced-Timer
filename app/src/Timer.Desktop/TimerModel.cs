@@ -951,6 +951,14 @@ public sealed class TimerModel : INotifyPropertyChanged
         var plan = Engine.Plan(day); if (!plan.Working) return TimeSpan.Zero;
         var net = plan.End - plan.Start - BreakAllowance; return net > TimeSpan.Zero ? net : TimeSpan.Zero;
     }
+    // ---- accessibility and pill shape: plain numerals for the clock, and a pill that is only its display
+    private const string ClockDigitsLine = "clockdigits=", CompactPillLine = "pillcompact=";
+    /// <summary>Whether the day clock and the alert count are drawn as plain numerals (Chakra Petch) instead of seven-segment digits. Saved as the appearance line clockdigits=plain; segments have no line.</summary>
+    public bool PlainClock => AppearanceValue(ClockDigitsLine) == "plain";
+    public void SetPlainClock(bool on) { if (on == PlainClock) return; SetAppearanceFlag(ClockDigitsLine, on ? "plain" : null, true); Notify(PresentationChange); }
+    /// <summary>Whether the pill is only its display: the state light, the clock and the alert count. Saved as pillcompact=on; the full pill has no line.</summary>
+    public bool CompactPill => AppearanceValue(CompactPillLine) == "on";
+    public void SetCompactPill(bool on) { if (on == CompactPill) return; SetAppearanceFlag(CompactPillLine, on ? "on" : null, true); Notify(PresentationChange); }
     public int? PillScalePercent => preferences.PillScale;
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(PresentationChange); }
     // ---- the pill's alerts: what is waiting, how loud it is allowed to be (Peek: a card opens by itself; Light only: the light and the list; Off), and what has been put away

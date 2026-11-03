@@ -120,7 +120,9 @@ public sealed class SettingsView : Grid
         sizeNote.Margin = new Thickness(0, 0, 0, 10);
         stack.Children.Add(Rows(new StackPanel { Children = { Row("Pill size", null, Ui.Horizontal(slider, automatic)), sizeNote } },
             Toggle("Window shadows", "Soft shadows under the pill and the dashboard.", "WindowShadows", () => model.Shadows, v => model.SetShadows(v)),
-            Toggle("Show tooltips", "With tooltips off, budget percentages are still in Week overview.", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v))));
+            Toggle("Show tooltips", "With tooltips off, budget percentages are still in Week overview.", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v)),
+            Toggle("Plain clock digits", "Plain numerals instead of segments, which some people find easier to read.", "PlainClock", () => model.PlainClock, v => model.SetPlainClock(v)),
+            Toggle("Compact pill", "The pill is only its clock, light and alert count. The controls move to its right-click menu.", "CompactPill", () => model.CompactPill, v => model.SetCompactPill(v))));
         return stack;
     }
 

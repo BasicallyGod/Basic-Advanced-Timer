@@ -286,7 +286,7 @@ public static class Ui
     /// The right-click menu is kept short on purpose: which build this is (once developer features are unlocked) and Collapse to tray.
     /// Everything else lives on the settings page.
     /// </summary>
-    public static ContextMenu SettingsMenu(TimerModel model)
+    public static ContextMenu SettingsMenu(TimerModel model, bool pillControls = false)
     {
         // Which build this is, greyed out because it is information, not an action.
         var version = new MenuItem { Header = BuildInfo.Current, IsEnabled = false, IsVisible = false, Name = "BuildVersion" };
@@ -294,13 +294,30 @@ public static class Ui
         var collapse = new MenuItem { Header = "Collapse to tray", Name = "CollapseToTray" };
         collapse.Click += (_, _) => model.RequestHide();
         var collapseRule = new Separator { IsVisible = false };
-        var menu = new ContextMenu { ItemsSource = new Control[] { version, collapseRule, collapse } };
+        // The compact pill is only its display, so what its play key, break and account box did is here instead.
+        var play = new MenuItem { Name = "CompactPlay" }; play.Click += (_, _) => model.TogglePause();
+        var onBreak = new MenuItem { Name = "CompactBreak" }; onBreak.Click += (_, _) => model.ToggleBreak();
+        var track = new MenuItem { Header = "Track", Name = "CompactTrack" };
+        var compactRule = new Separator { IsVisible = false };
+        var menu = new ContextMenu { ItemsSource = pillControls ? new Control[] { play, onBreak, track, compactRule, version, collapseRule, collapse } : new Control[] { version, collapseRule, collapse } };
         void Sync()
         {
+            if (pillControls)
+            {
+                var compact = model.CompactPill;
+                play.IsVisible = onBreak.IsVisible = track.IsVisible = compactRule.IsVisible = compact;
+                if (compact)
+                {
+                    var chosen = model.Accounts.Any(a => a.Name == model.SelectedAccount);
+                    play.Header = model.IsTracking && !model.IsOnBreak ? "Pause" : model.IsOnBreak ? "Resume" : "Start"; play.IsEnabled = model.IsTracking || chosen;
+                    onBreak.Header = model.IsOnBreak ? "End break" : "Take a break";
+                    track.ItemsSource = model.Accounts.Select(a => { var item = new MenuItem { Header = a.Name, Name = "CompactTrack_" + a.Name }; item.Click += (_, _) => model.ToggleAccount(a.Name); return item; }).ToArray<object>();
+                }
+            }
             var developer = model.DeveloperUnlocked;
             version.IsVisible = developer;
             // A divider only goes between two things that are showing, so it never sits at the top of the menu or above the only item.
-            collapseRule.IsVisible = version.IsVisible;
+            collapseRule.IsVisible = version.IsVisible || (pillControls && model.CompactPill);
         }
         menu.Opened += (_, _) => Sync(); Sync();
         return menu;

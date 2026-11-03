@@ -233,10 +233,6 @@ public sealed class PreviewCaptureTests
                 strip.Bind(Border.BorderBrushProperty, strip.GetResourceObservable("Line")); strip.Bind(Border.BackgroundProperty, strip.GetResourceObservable("PillBody"));
                 var stack = new StackPanel { Children = { strip, new Border { Margin = new Thickness(40 - HangingCard.Room.Left, 11 - HangingCard.Room.Top + 14, 0, 0), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, Child = hung } } };
                 Save(new Window { Width = 520, Height = 520, RequestedThemeVariant = pill.ActualThemeVariant, Content = stack }, "hung-dropdown");
-                // The bell's card, with the point set past the corner as the dashboard places it.
-                var shift = HangingCard.ShiftForCorner(19, 18);
-                var bell = HangingCard.Hang(new NotificationsFlyout(model), 19 + shift);
-                Save(new Window { Width = 440, Height = 400, RequestedThemeVariant = pill.ActualThemeVariant, Content = new Border { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, Child = bell } }, "hung-bell");
             }
             finally { pill.Close(); }
         }

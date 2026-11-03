@@ -73,7 +73,13 @@ public sealed class SegmentRun : Control
     public static readonly StyledProperty<double> DigitHeightProperty = AvaloniaProperty.Register<SegmentRun, double>(nameof(DigitHeight), 28);
     public static readonly StyledProperty<string> LitKeyProperty = AvaloniaProperty.Register<SegmentRun, string>(nameof(LitKey), "Ink");
     public static readonly StyledProperty<Color?> ColourProperty = AvaloniaProperty.Register<SegmentRun, Color?>(nameof(Colour));
-    static SegmentRun() { AffectsMeasure<SegmentRun>(TextProperty, DigitHeightProperty); AffectsRender<SegmentRun>(TextProperty, DigitHeightProperty, LitKeyProperty, ColourProperty); }
+    public static readonly StyledProperty<bool> PlainProperty = AvaloniaProperty.Register<SegmentRun, bool>(nameof(Plain));
+    public static readonly StyledProperty<double> PlainScaleProperty = AvaloniaProperty.Register<SegmentRun, double>(nameof(PlainScale), 1);
+    static SegmentRun() { AffectsMeasure<SegmentRun>(TextProperty, DigitHeightProperty); AffectsRender<SegmentRun>(TextProperty, DigitHeightProperty, LitKeyProperty, ColourProperty, PlainProperty, PlainScaleProperty); }
+    /// <summary>Draws the run as plain numerals (Chakra Petch) instead of segments, in the same cells, so nothing round it moves. An accessibility choice.</summary>
+    public bool Plain { get => GetValue(PlainProperty); set => SetValue(PlainProperty, value); }
+    /// <summary>How large plain numerals are against the biggest that fit the run's height and cells (the seconds are drawn smaller and quiet).</summary>
+    public double PlainScale { get => GetValue(PlainScaleProperty); set => SetValue(PlainScaleProperty, value); }
     public SegmentRun() { IsHitTestVisible = false; ActualThemeVariantChanged += (_, _) => InvalidateVisual(); }
     public string Text { get => GetValue(TextProperty); set => SetValue(TextProperty, value); }
     public double DigitHeight { get => GetValue(DigitHeightProperty); set => SetValue(DigitHeightProperty, value); }
@@ -103,6 +109,7 @@ public sealed class SegmentRun : Control
         Color colour;
         if (Colour is { } own) colour = own;
         else colour = this.TryFindResource(LitKey, ActualThemeVariant, out var found) && found is ISolidColorBrush solid ? solid.Color : Colors.Gray;
+        if (Plain) { RenderPlain(context, shapes, colour); return; }
         var lit = new SolidColorBrush(colour); var ghost = new SolidColorBrush(Color.FromArgb((byte)(dark ? 31 : 26), colour.R, colour.G, colour.B));
         // On a dark card the lit segments carry a faint halo of their own colour, as a lit display does.
         var halo = dark ? new Pen(new SolidColorBrush(Color.FromArgb(70, colour.R, colour.G, colour.B)), 1.3, lineJoin: PenLineJoin.Round) : null;
@@ -125,6 +132,39 @@ public sealed class SegmentRun : Control
             x += shapes.Width; previousDigit = true;
         }
     }
+
+    // ---- plain numerals: the same cells as the segments, so the clock is exactly as wide, and nothing beside it moves
+    private static readonly Typeface PlainFace = new(new FontFamily($"avares://{typeof(SegmentRun).Assembly.GetName().Name}/Assets/Fonts#Chakra Petch"), FontStyle.Normal, FontWeight.SemiBold);
+    private static double advanceRatio, inkTop, inkBottom;
+    private static FormattedText Text0(string text, double size, Color colour) => new(text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, PlainFace, size, new SolidColorBrush(colour));
+    /// <summary>Measures the face once at a large size: the widest digit's advance and where a digit's ink starts and ends, as fractions of the font size.</summary>
+    private static void MeasurePlainFace()
+    {
+        if (advanceRatio > 0) return;
+        var widest = 0.0;
+        foreach (var d in "0123456789") widest = Math.Max(widest, Text0(d.ToString(), 100, Colors.Black).Width / 100);
+        var bounds = Text0("0", 100, Colors.Black).BuildGeometry(default)?.Bounds ?? new Rect(0, 15, 60, 70);
+        inkTop = bounds.Top / 100; inkBottom = bounds.Bottom / 100; advanceRatio = Math.Max(widest, .3);
+    }
+    private void RenderPlain(DrawingContext context, SegmentShapes shapes, Color colour)
+    {
+        MeasurePlainFace();
+        // As large as the cell and the run's height allow, then scaled for the seconds. The digits are drawn one to a cell, so the widths never depend on the face.
+        var size = Math.Min(DigitHeight * .96, shapes.Width * .98 / advanceRatio) * PlainScale;
+        var y = DigitHeight / 2 - size * (inkTop + inkBottom) / 2;
+        var x = 0.0; var previousDigit = false;
+        foreach (var c in Text)
+        {
+            if (c == ':')
+            {
+                var cell = shapes.ColonWidth + 2 * ColonPad; var colon = Text0(":", size, colour);
+                context.DrawText(colon, new Point(x + (cell - colon.Width) / 2, y)); x += cell; previousDigit = false; continue;
+            }
+            if (previousDigit) x += DigitGap;
+            if (c != ' ') { var glyph = Text0(c.ToString(), size, colour); context.DrawText(glyph, new Point(x + (shapes.Width - glyph.Width) / 2, y)); }
+            x += shapes.Width; previousDigit = true;
+        }
+    }
 }
 
 /// <summary>
@@ -141,8 +181,10 @@ public sealed class SegmentClock : StackPanel, IClockText
     public SegmentClock()
     {
         Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; Spacing = SegmentRun.DigitGap;
-        Children.Add(main); Children.Add(seconds); Text = "00:00:00";
+        Children.Add(main); Children.Add(seconds); seconds.PlainScale = .66; Text = "00:00:00";
     }
+    /// <summary>Draws the clock as plain numerals instead of segments (the accessibility choice); the width does not change.</summary>
+    public bool Plain { get => main.Plain; set { main.Plain = value; seconds.Plain = value; } }
     public string Text
     {
         get => main.Text + seconds.Text;

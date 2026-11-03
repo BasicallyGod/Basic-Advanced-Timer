@@ -13,8 +13,8 @@ public enum AlertKind { Reminder, Budget, BudgetSpent, Break }
 public sealed record AlertItem(string Key, AlertKind Kind, int Rank, DateTime Since, string Headline, string Detail, string Words, string? Account, string? When,
     long? NoteId, string Caption, double Ratio)
 {
-    public string Token => Kind switch { AlertKind.Reminder => "Overtime", AlertKind.BudgetSpent => "Overtime", _ => "BudgetWarning" };
-    public string LightToken => Kind switch { AlertKind.Reminder => "Accent", AlertKind.BudgetSpent => "Overtime", AlertKind.Break => "Break", _ => "BudgetWarning" };
+    public string Token => "Overtime";
+    public string LightToken => "Overtime";
 }
 
 /// <summary>What the user has put away for now: budgets and breaks they pressed OK or Stay on break on. Kept for the session only, since a budget alert is about this week's use.</summary>
