@@ -1,0 +1,66 @@
+# Basic’s Advanced Timer: user guide and architecture
+
+This folder contains the Windows application and its build tools.
+
+- `src/Timer.Desktop` contains the Avalonia application.
+- `tests/Timer.Desktop.Tests` contains the desktop regression tests.
+- `store-packaging` contains the Microsoft Store packaging tools and artwork.
+- `preview-launcher` contains the standalone Windows app for downloading and launching preview builds.
+
+## Running it
+
+Download **BasicsAdvancedTimer-Windows-experimental** from the latest successful **Development builds** workflow run, extract the whole ZIP into its own folder and run `BasicsAdvancedTimer.Preview.exe`. The package includes the .NET runtime and needs no administrator rights. Data goes to **migration-data** beside the executable, or to the folder given with `--data-dir`. `Start-Demo.cmd` (or Settings, Open sample-data demo) runs a simulated 14:15 day with seven accounts and does not save anything real.
+
+**Collapse to tray** hides the timer while tracking continues. Use **Quit timer** at the bottom of the dashboard sidebar to exit. Open Settings with the gear in the dashboard header. **About** shows the running version, and **Hours and accounts** includes account management and the hours format.
+
+In Alpha and Experimental, click the **About** tile ten times in quick succession to unlock **Development**. It includes the sample-data demo, controls gallery and frame timing reports. The demo opens with developer features enabled.
+
+## The two windows
+
+- **Pill.** A small card that stays on top, one line long. From the left it has two lights (the state light: grey idle, green recording, amber on a break; and the reminder light: grey until a reminder is due, then blue and pulsing), the day clock (hours and minutes with the seconds smaller), the primary control (the running account's initials, a play or pause symbol under the pointer; it pauses or resumes), the account's box (a dot and an arrow) and the break control (a cup that turns orange while on a break). A soft ring and glow round the card repeat the state. Click the clock to open the dashboard. The account's box hangs the account list below the pill, with each account's time, budget bar and play button and a Manage accounts icon; choosing an account leaves it open, and the box, Esc or a click elsewhere folds it away. The right-click menu has Collapse to tray. Drag it anywhere to move it.
+- **Dashboard.** Opens from the pill and fits the available screen area. The sidebar contains the status lights, clock, tracking controls, account list with budget bars, and **Quit timer**. The header includes the **Timeline**, **Notes** and **Week overview** views, date controls, the notification bell and Settings. Click the sidebar clock to collapse back to the pill.
+
+The working-day span starts at the first recorded or manually added work block. The clock continues through pauses and account switches. Recorded work can extend the span beyond the scheduled end. On a day off, the span comes from the recorded work.
+
+## Day to day
+
+- **Accounts.** Settings, Accounts and budgets adds, hides, reorders and recolours accounts and edits day, week, month or quarter budgets (decimals such as 7.5 are fine, blank means none). The bin on a row marks that account for deleting (press it again to keep the account), and Save removes it together with everything recorded against it. An account with recorded time asks first, saves a backup copy and cannot be undone; an account with nothing recorded just goes. Hiding an account instead keeps its time. Each account has one of sixteen palette colours, or any `#RRGGBB`.
+- **Break.** Stops time going to every account and wears the amber break colour. Ending a break goes back to the account that was running.
+- **Working hours.** The Working hours section of the settings page edits each weekday's start, end and day-off status. Overnight shifts are not supported yet.
+- **Timeline.** The day runs left to right, 24 hours long, with the hours along the top. Planned meetings sit in a dashed row under the hours, and the blocks under that (on a day with no meetings the blocks take the whole height). Each block shows its name, credited time and note as far as it has room; a long name slides on hover, and a note too small to show is a small dot. A line and a chip in the accent colour mark the current time. Scroll sideways with the wheel, or hold Ctrl and use the wheel or the minus and plus buttons to zoom (60 to 640 pixels an hour). Click a block to select it (Shift-click adds more); the Details card under the timeline edits its account, start, end, length and note, and merges, copies, deletes or unmerges. Three or more blocks (or meetings) at one moment are one tile, '5 blocks · 03:34', that Details opens as a timeline of its own, where a press picks one and the picked bar's ends can be dragged; the block being recorded keeps a lane above the tile. Drag a block to move it, or an edge to resize it; movement snaps to five minutes and to neighbours. Blocks may overlap, and stack in lanes, and the overlapped hours count twice. Under the timeline: Add time, Undo, the day's figures (Working time with a bar of the scheduled day, Allocated, Unallocated, Breaks) and the zoom buttons. Double-click empty space, or right-click for Add time, Add meeting and Paste here.
+- **Notes and meetings.** The Notes card beside the Details card lists the day's meetings and notes (a meeting's words show it in Details, where it is edited); Add note and Add meeting open one form (type # for an account; a reminder by the bell, a day, start, end and repeat for a meeting). The Notes page (second on the rail) lists them all with views and accounts on the left, a search above and the same form; click a row to change it. A note with a reminder that has passed and is not ticked off needs attention: the bell in the header counts them, its card offers Done and Reschedule, and the pill's reminder light turns blue. A meeting is planned time and is never counted as tracked time.
+- **Getting started.** A new database opens on the dashboard with a four step setup over it, the dashboard blurred behind. It asks for your client accounts (rename the examples, add your own, and an optional budget), your working days and hours, whether to show hours and minutes or decimal hours and which day the week starts, then lists what is worth knowing. Skip setup, or Esc, closes it at any point. Settings, About, Run setup again opens it again.
+- **Switching back.** If you go from one account to another and back within a few minutes by mistake, Continue earlier block (offered in the message that floats over the timeline, and on the right-click menu) drops the short block and carries on with the earlier one as a single block, counting the time of the slip.
+- **Playing into a block ahead.** If the current time is inside a block of an account that you added or pasted ahead of time, pressing play on that account carries the block on rather than starting a second one on top of it.
+- **Pill size.** The pill is sized for the screen it is on and its Windows scale, and follows when you drag it to another screen. Settings, Pill size lets you choose a size yourself (50 to 120 per cent) or go back to Automatic.
+- **Copy and paste.** Right-click a block, or press Ctrl+C with blocks selected, to copy them. Right-click the timeline and choose Paste here, or press Ctrl+V, to paste with the first block at that time. Each pasted block keeps its account, credited length and note. Like Add time it adds credited time, and Undo takes the whole paste back in one step.
+- **Week overview.** Working time against the scheduled week, a bar of allocated and unallocated time and Breaks; a chart of time by day (a column per day, its breaks in amber on top, so the column is the clock time the day covered, against a dashed schedule line, a dot for unallocated or overlapping time, meetings and open tasks under it; hover for the split, click to open the day), or the same as a table; and each account with its week, share, budget over its own period and a pace word (On pace, Ahead of pace, Over by).
+- **Undo.** Reverses the latest time edit, up to 50 steps, kept across restarts. Notes are not part of it.
+- **Export.** Settings, Export writes `Detail.csv` and `Summary.csv` for a chosen week or month to a new folder under `Timesheets/Exports` in the data folder, and copies the hours table. Decimal hours are apportioned so daily, weekly and detail figures add up exactly. Only saved entries are included, so pause first to include the running interval.
+- **Icons and motion.** Icons use rounded line strokes, and the three view icons on the rail are solid shapes that play a short loop under the pointer. The cup steams, the reminder light pulses and the flag ripples; all of it stops when Windows is set to show no animations.
+- **Themes.** Settings, Appearance has System (follows Windows light or dark, the default), Light and Dark, and switches for window shadows and tooltips. A saved choice of one of the retired themes opens as Light or Dark.
+- **Taskbar, tray and start-up.** The timer has an app icon (the pill outline with its two lights) and a taskbar button, so it can be pinned and launched like any app. Settings, Behaviour switches the button off to run from the notification area alone, and left-clicking the tray icon then shows or hides the timer. The tray icon is the same mark in the colour of the taskbar, with the state light green while recording and the reminder light blue while one is due. Quit timer at the foot of the rail quits the application. Alt+F4 hides the timer to the tray while tracking carries on. Start with Windows adds a per-user sign-in entry and needs no administrator rights.
+
+## Data and safety
+
+Records live in `timer.db` (SQLite, write-ahead log), opened exclusively so two copies cannot share a folder, with daily backups. The settings file `basics-advanced-timer.settings.json` is replaced atomically with a `.bak` copy and preserves unknown sections. The running session checkpoints every 15 seconds, stops and saves on a normal close and, after a crash, credits time only up to the last checkpoint. A failed save keeps pending time and cancels closing. The app refuses a folder that holds the old PowerShell script, and deliberately never imports the old CSV timesheets.
+
+## Microsoft Store package
+
+The MSIX build and signing instructions are in [store-packaging/README.md](store-packaging/README.md). Release promotion rules and the three channels (`main`, `experimental`, `alpha`) are in [../BRANCHES.md](../BRANCHES.md). Portable data stays beside the exe, while packaged app data lives in per-user storage. The Store build hides the sample-data demo and rejects `--demo`. A locally built development MSIX is self-signed for testing only and is not a published Store build.
+
+## Architecture
+
+- `Timer.Core` (a NuGet package from the Basic-Timer-Core repository) is platform-independent C#: tracking engine, schedules, day calculations, credited sessions, recovery and the theme model and library.
+- `Timer.Storage` (also from Basic-Timer-Core) is the SQLite database, settings, undo history, credit review, ledger editing and week export. Restoring the packages needs a `read:packages` token in the `PACKAGES_TOKEN` environment variable.
+- `Timer.Desktop` is the Avalonia UI. `TimerModel` adapts the engine and store to the views. Styles and the Light/Dark/theme dictionaries come from `ThemeEngine`, which registers each theme as an Avalonia theme variant at start-up.
+
+The build uses .NET 8 and pinned Avalonia 11.3.16.
+
+```sh
+dotnet run --project app/src/Timer.Desktop/Timer.Desktop.csproj
+dotnet test app/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release
+dotnet publish app/src/Timer.Desktop/Timer.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true -o artifacts/windows-preview
+```
+
+Tests use disposable synthetic data only. They cover the engine (early starts, pauses, lunch, finish and resume, days off, midnight splitting), storage (database, backups, undo, fault injection), the production windows and styles in a headless Avalonia, and the theme engine (contrast, derived tints, editor flow). The workflow runs them on Windows, then publishes the Windows build.

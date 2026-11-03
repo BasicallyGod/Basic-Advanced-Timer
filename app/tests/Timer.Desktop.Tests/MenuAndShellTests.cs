@@ -1,0 +1,146 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Headless.XUnit;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Timer.Core;
+using Timer.Storage;
+using Xunit;
+
+namespace Timer.Desktop.Tests;
+
+public sealed class MenuAndShellTests
+{
+    private static DateTime Day => new(2026, 10, 9);
+    private static TrackingEngine Engine(Func<DateTime>? clock = null) => new(clock: clock ?? (() => Day.AddHours(14)));
+    private static SessionRow Row(string start, string minutes, string account = "Account one", string date = "2026-10-09") => new(date, account, start, "added", minutes);
+
+    [AvaloniaFact]
+    public void WindowMenuIsOrderedByUseWithCloseTimerAlone()
+    {
+        var model = new TimerModel(Engine());
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            var items = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).ToList();
+            var headers = items.Select(i => i is MenuItem m ? (string?)m.Header : "|").ToList();
+            Assert.Equal(new[] { BuildInfo.Current, "|", "Collapse to tray" }, headers);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheMenuHasNoOvertimeTesterAndNothingTurnsTheDayRedForBeingLate()
+    {
+        var now = new DateTime(2026, 10, 9, 14, 15, 0);
+        var model = TimerModel.CreateDemo(() => now);
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            var menu = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().ToList();
+            Assert.DoesNotContain(menu, m => m.Name == "TestOvertime");
+            // Past the end of the day's hours the day is just a longer day: the same state, the same colours, and the time worked counts in full.
+            model.SetShifts(new() { [DayOfWeek.Friday] = new(TimeSpan.FromHours(9), TimeSpan.FromHours(11)) });
+            Assert.Equal("Normal", model.ThemeState); Assert.True(model.WorkingOn(now) > TimeSpan.FromHours(2));
+            Assert.Equal(model.Engine.Totals(now).Working + model.Engine.Totals(now).Overtime, model.WorkingOn(now));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void RightClickOnATimelineBlockOffersDeleteForItOrTheWholeSelection()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("10:00:00", "30"), Row("11:00:00", "30") });
+        var model = new TimerModel(engine);
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
+            MenuItem Delete(int index)
+            {
+                var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + index);
+                var items = ((IEnumerable<Control>)card.ContextMenu!.ItemsSource!).ToList();
+                Assert.IsType<Separator>(items[^2]); return (MenuItem)items[^1]; // Delete sits last, apart from the other actions.
+            }
+            Assert.Equal("Delete", Delete(1).Header);
+            Delete(1).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "09:00:00", "11:00:00" }, engine.Sessions.Select(s => s.Start)); // Only the clicked one went.
+            Assert.True(model.UndoEdit()); Assert.Equal(3, engine.Sessions.Count); Dispatcher.UIThread.RunJobs();
+            model.ToggleSelection(new[] { engine.Sessions[0] }); model.ToggleSelection(new[] { engine.Sessions[2] }); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Delete 2 blocks", Delete(0).Header); // On a selected block it speaks for the whole selection.
+            Delete(0).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("10:00:00", Assert.Single(engine.Sessions).Start); Assert.Empty(model.SelectedRows);
+            Assert.True(model.UndoEdit()); Assert.Equal(3, engine.Sessions.Count); // One Undo brings them all back.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void AccountRowsHaveNoGrabHandlesAndWasteNoRoomAtTheRight()
+    {
+        var model = new TimerModel(Engine());
+        var dashboard = new DashboardWindow(model); dashboard.Show(); var pill = new PillWindow(model); pill.Show(); pill.ShowPanel();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(); using var pillFrame = pill.CaptureRenderedFrame();
+            Assert.Empty(dashboard.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip)); // No grab handles; rows still drag.
+            Assert.Empty(pill.GetVisualDescendants().OfType<IconGlyph>().Where(g => g.Kind == IconKind.Grip));
+            // No dead space at the right of a row: its play circle sits close to the row's edge, and the row fills the drawer's inner width.
+            var first = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account0"); var drawer = dashboard.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Sidebar");
+            var circle = first.GetVisualDescendants().OfType<AccountIndicator>().Single();
+            Assert.True(first.Bounds.Width - (circle.TranslatePoint(new Point(circle.Bounds.Width, 0), first)!.Value.X) <= 12, $"gap {first.Bounds.Width - (circle.TranslatePoint(new Point(circle.Bounds.Width, 0), first)!.Value.X)} row {first.Bounds.Width} circle {circle.Bounds}");
+            var quit = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "QuitTimer");
+            Assert.Equal(quit.Bounds.Width, first.Bounds.Width, 1.0); // Rows are as wide as Quit timer; the scroll box reaches past them so their shadows are not clipped.
+            // The rest of the row keeps its shape: the account name and today's time are still both visible inside it.
+            var row = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Account0");
+            Assert.All(row.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Text is { Length: > 0 }), t => Assert.True(t.TranslatePoint(default, row)!.Value.X >= 0 && t.TranslatePoint(new Point(t.Bounds.Width, 0), row)!.Value.X <= row.Bounds.Width + 1));
+            var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
+            if (folder is not null) { Directory.CreateDirectory(folder); frame?.Save(Path.Combine(folder, "account-rows.png")); }
+        }
+        finally { pill.Close(); dashboard.Close(); }
+    }
+
+    [Theory]
+    [InlineData("0.1.77+aa17cdaf4ceb5540116abd71ca9124e24a6ad33", "Version 0.1.77 (aa17cda)")]
+    [InlineData("0.1.77", "Version 0.1.77")]
+    [InlineData("0.1.77+abc", "Version 0.1.77")] // A commit too short to be one is left off.
+    [InlineData("1.0.0", "Version: development build")]
+    [InlineData("1.0.0+aa17cdaf", "Version: development build")]
+    [InlineData("", "Version: development build")]
+    [InlineData(null, "Version: development build")]
+    public void TheBuildNumberReadsAsAVersionAndACommit(string? stamp, string expected) => Assert.Equal(expected, BuildInfo.Describe(stamp));
+
+    [AvaloniaFact]
+    public void TheMenuShowsWhichBuildIsRunningAsAGreyedItem()
+    {
+        var window = new DashboardWindow(new TimerModel(Engine())); window.Show();
+        try
+        {
+            var item = ((IEnumerable<Control>)window.ContextMenu!.ItemsSource!).OfType<MenuItem>().Single(m => m.Name == "BuildVersion");
+            Assert.False(item.IsEnabled); Assert.StartsWith("Version", (string)item.Header!);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheChosenViewTabKeepsItsCardUnderThePointer()
+    {
+        var model = TimerModel.CreateDemo(); model.SetTheme("Light");
+        var window = new DashboardWindow(model); window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            var tab = window.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("viewTab") && b.Classes.Contains("selected"));
+            var presenter = tab.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First(p => p.Name == "PART_ContentPresenter");
+            var tile = Color.Parse(model.CurrentTheme.Colour("Panel")); // The chosen tab is on a card of its own.
+            Assert.Equal(tile, ((ISolidColorBrush)presenter.Background!).Color);
+            ((IPseudoClasses)tab.Classes).Set(":pointerover", true); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(tile, ((ISolidColorBrush)presenter.Background!).Color);
+            ((IPseudoClasses)tab.Classes).Set(":pressed", true); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(tile, ((ISolidColorBrush)presenter.Background!).Color);
+        }
+        finally { window.Close(); }
+    }
+}
