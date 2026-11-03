@@ -1,6 +1,6 @@
 # Redesign: build stages
 
-The plan agreed with the owner for turning the mock (`docs/redesign/mock/`) into the app. `DESIGN-BRIEF.md` holds the decisions. Each stage is one `feature/redesign-...` branch and one pull request into `experimental`, with its CHANGELOG row and CLAUDE.md changes. The app stays usable after every stage. Nothing is merged without the owner saying so, and the owner tests on Windows after each drop.
+The plan agreed with the owner for turning the mock (`docs/archive/avalonia-redesign/mock/`) into the app. `DESIGN-BRIEF.md` holds the decisions. Each stage is one `feature/redesign-...` branch and one pull request into `experimental`, with its CHANGELOG row and CLAUDE.md changes. The app stays usable after every stage. Nothing is merged without the owner saying so, and the owner tests on Windows after each drop.
 
 Defaults agreed: the Light and Dark changes are done inside the app (no shared-package release, `SharedTimerVersion` stays 0.5.0); the timeline keeps its scrolling and zoom (the mock draws a fixed 08:00 to 18:00); Ctrl+C and Ctrl+V on blocks carry over unchanged.
 

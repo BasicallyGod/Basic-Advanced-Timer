@@ -36,4 +36,4 @@ Stable builds show a normal version and retain the release MSIX identity. Experi
 
 ## Archive
 
-- `archive/notes-v1` holds the last `experimental` build that had Notes, reminders, meetings, the notification centre, Quick capture and the compact dashboard column (`4557363`). Do not merge it. Its behaviour is written up in `NOTES-SPEC.md`, and Notes is being rebuilt on feature branches from the clean `experimental`.
+- `archive/notes-v1` holds the original Notes implementation on `experimental` (`4557363`). The [archived specification](docs/archive/notes-v1/README.md) records that implementation and its mockups. Use the archive as a reference for the original design.

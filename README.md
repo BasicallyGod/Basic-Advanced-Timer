@@ -43,4 +43,4 @@ dotnet run --project migration/src/Timer.Desktop/Timer.Desktop.csproj
 dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release
 ```
 
-The code lives under `migration/` for now, so existing updater shortcuts keep working. See [migration/README.md](migration/README.md) for the user guide and architecture, [CLAUDE.md](CLAUDE.md) for engineering notes and [CHANGELOG.md](CHANGELOG.md) for history.
+The application, tests, packaging and updater live under `migration/`. The [documentation index](docs/README.md) links to the current guides, design notes and historical archive. See [CHANGELOG.md](CHANGELOG.md) for build history.

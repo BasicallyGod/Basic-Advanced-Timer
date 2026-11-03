@@ -20,7 +20,7 @@ The paragraphs below were the Notes and Quick capture sections of `CLAUDE.md` wh
 
 ## Design material
 
-- `docs/notes-design/mockup-1.webp` and `mockup-2.webp`: the user's mockups of the refined pill, sidebar, Notes view, add/edit popover, calendar, timeline prompt, notification variants and week-overview hover.
+- `mockups/mockup-1.webp` and `mockups/mockup-2.webp`: the user's mockups of the refined pill, sidebar, Notes view, add/edit popover, calendar, timeline prompt, notification variants and week-overview hover.
 - Options canvas comparing a flyout against a dialog and chips against one line: https://claude.ai/artifact/TvZ8sEhA5Kmt1jj2M5Weoe
 
 ## Lessons from the build
