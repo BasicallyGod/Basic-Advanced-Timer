@@ -47,14 +47,21 @@ public static class NeumorphicControls
     {
         var button = Configure(new ToggleButton { IsChecked = on }, name, compact: true);
         button.Classes.Add("important"); button.Width = button.Height = size;
+        var glyph = new IconGlyph(IconKind.Star);
+        button.Content = glyph;
+        void SyncTint() => glyph.TintKey = button.IsEffectivelyEnabled && button.IsChecked == true ? "ImportantStar" : "Muted";
         void Sync()
         {
             var marked = button.IsChecked == true;
-            button.Content = new IconGlyph(IconKind.Star) { TintKey = marked ? "ImportantStar" : "Muted" };
+            SyncTint();
             var tip = marked ? "Not important" : "Mark important";
             AutomationProperties.SetName(button, tip); ToolTip.SetTip(button, tip);
         }
-        button.PropertyChanged += (_, e) => { if (e.Property == ToggleButton.IsCheckedProperty) Sync(); };
+        button.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == ToggleButton.IsCheckedProperty) Sync();
+            if (e.Property == Avalonia.Input.InputElement.IsEffectivelyEnabledProperty) SyncTint();
+        };
         // Model callbacks still own the stored value. A routed Click used by existing callers is delivered exactly once too.
         button.Click += (_, _) => click(); Sync(); return button;
     }

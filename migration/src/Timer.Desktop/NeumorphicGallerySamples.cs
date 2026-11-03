@@ -182,7 +182,7 @@ internal static class NeumorphicGallerySamples
     }
     private static Control Colours(string p)
     {
-        var body = Column(); body.Children.Add(Caption("Your original palette, applied to sample buttons. Colour placement is exploratory; blue selection, green recording, amber break and red warning roles remain intact in the app."));
+        var body = Column(); body.Children.Add(Caption("Your original palette, applied to sample buttons. Colour placement is exploratory; lavender selection, green recording, amber break and red warning roles remain intact in the app."));
         foreach (var (name, hex) in Palette)
         {
             var fill = NeumorphicControls.Action(name, () => { }, p + "_Colour" + name, true);
