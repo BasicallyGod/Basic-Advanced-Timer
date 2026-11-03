@@ -1,6 +1,6 @@
 # Neumorphic controls: comparison gallery
 
-The latest gallery-only material proposal is described in [Neumorphic material study](NEUMORPHIC-GALLERY-STUDY.md). Its Current/Proposed comparison adds consistent depth recipes, circular icon keys, radio and switch examples without changing the working application's controls.
+The latest gallery-only material proposal is described in [Neumorphic material study](neumorphic-gallery-study.md). Its Current/Proposed comparison adds consistent depth recipes, circular icon keys, radio and switch examples without changing the working application's controls.
 
 Alpha 647 remains the visual baseline; Alpha 653 introduced the first pilot. The expanded gallery includes existing control families and contextual comparisons. Working-page changes are the outlined gold importance star, neutral disabled primary buttons and circular native checkboxes. Palette experiments and other shared button families stay in the gallery pending feedback. Navigation and text fields keep their accepted appearance.
 
