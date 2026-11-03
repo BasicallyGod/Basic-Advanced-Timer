@@ -8,14 +8,14 @@ The earlier PowerShell application (v2.32) has been retired. Its source remains 
 
 1. Open the latest successful run of the [Development builds workflow](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) and download **BasicsAdvancedTimer-Windows-experimental** (or the alpha artifact if intentionally testing alpha).
 2. Extract the whole ZIP into its own folder and run `BasicsAdvancedTimer.Preview.exe`. Keep its DLLs together.
-3. To update, copy [migration/updater](migration/updater/README.md) somewhere writable and run `Timer Updater.cmd`. Choose the experimental or alpha channel, then install the newest successful build and roll back if needed. Each channel keeps its own data.
+3. For updates, open **Timer Branch Launcher.exe**, choose a preview branch and click **Download and launch**. Each branch keeps its own data. The [launcher guide](app/preview-launcher/README.md) explains how to request a fresh launcher download.
 
 Run `Start-Demo.cmd` to try the app with sample accounts and history, without touching real data. Data is saved to a `migration-data` folder beside the executable, or to a folder you choose with `--data-dir`.
 
 ## What it does
 
 - Start, stop and switch between client accounts, with Break and Lunch, from the pill or the dashboard.
-- Set working hours by weekday, days off and one-off starts. Start day and Finish day work throughout the day, and the week overview measures your time against the schedule.
+- Set working hours and days off by weekday. The timer's working-day span starts with the first recorded or manually added block, and the week overview measures your time against the schedule.
 - Track budgets by week, month or quarter, with a ring on each account.
 - Review each day on a scrollable, zoomable timeline. Drag blocks to move or resize them, add, merge and delete time, and keep notes and planned meetings with reminders. Every time edit can be undone, and the history survives a restart.
 - Review the week as a chart or table of time by day, with each account's budget and pace. Export a summary and detailed CSV with decimal hours that add up exactly.
@@ -32,15 +32,15 @@ The new app deliberately does not import the old CSV timesheets. If it finds `Ti
 
 ## Release channels
 
-The repository uses `main` (Microsoft Store stable), `experimental` (everyday testing) and `alpha` (unstable prototypes). Development builds use separate portable artifacts and isolated updater data. See [BRANCHES.md](BRANCHES.md) and [updater guide](migration/updater/README.md).
+The repository uses `main` (Microsoft Store stable), `experimental` (everyday testing) and `alpha` (unstable prototypes). Development builds use separate portable artifacts and isolated preview data. See [BRANCHES.md](BRANCHES.md) and the [launcher guide](app/preview-launcher/README.md).
 
-The Store build comes from `main` as an unsigned MSIX, and the Store signs and distributes it. Installs and updates for it go through the Microsoft Store, not the updater. See the [MSIX packaging guide](migration/packaging/README.md) for Microsoft Partner Center instructions.
+The Store build comes from `main` as an unsigned MSIX, and the Store signs and distributes it. Installs and updates for it go through the Microsoft Store, not the updater. See the [MSIX packaging guide](app/store-packaging/README.md) for Microsoft Partner Center instructions.
 
 ## Building
 
 ```sh
-dotnet run --project migration/src/Timer.Desktop/Timer.Desktop.csproj
-dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release
+dotnet run --project app/src/Timer.Desktop/Timer.Desktop.csproj
+dotnet test app/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release
 ```
 
-The code lives under `migration/` for now, so existing updater shortcuts keep working. See [migration/README.md](migration/README.md) for the user guide and architecture, [CLAUDE.md](CLAUDE.md) for engineering notes and [CHANGELOG.md](CHANGELOG.md) for history.
+The application, tests, packaging and updater live under `app/`. The [documentation index](docs/README.md) links to the current guides, design notes and historical archive. See [CHANGELOG.md](CHANGELOG.md) for build history.
