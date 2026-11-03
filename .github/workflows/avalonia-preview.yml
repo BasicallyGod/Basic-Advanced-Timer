@@ -14,7 +14,7 @@ concurrency:
 permissions:
   contents: read
 
-# Reads the shared Timer.Core and Timer.Storage packages from GitHub Packages (see migration/NuGet.config).
+# Reads the shared Timer.Core and Timer.Storage packages from GitHub Packages (see app/NuGet.config).
 env:
   PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
 
@@ -35,12 +35,12 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          ./migration/updater/Test-Updater.ps1
-          ./migration/updater/Test-UpdaterWindow.ps1
+          ./app/preview-updater/Test-Updater.ps1
+          ./app/preview-updater/Test-UpdaterWindow.ps1
       - name: Build and test production views and themes
         env:
           TIMER_PREVIEW_DIR: ${{ runner.temp }}/avalonia-timer-previews
-        run: dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release --verbosity minimal --logger trx --results-directory "${{ runner.temp }}/avalonia-timer-results"
+        run: dotnet test app/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release --verbosity minimal --logger trx --results-directory "${{ runner.temp }}/avalonia-timer-results"
       - name: Report failed tests in check annotations
         if: failure()
         shell: pwsh
@@ -64,7 +64,7 @@ jobs:
           retention-days: 7
       - name: Publish self-contained Windows preview
         if: runner.os == 'Windows'
-        run: dotnet publish migration/src/Timer.Desktop/Timer.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=false -p:BuildChannel=${{ github.ref_name }} -p:Version=0.1.${{ github.run_number }} -p:InformationalVersion=0.1.${{ github.run_number }}+${{ github.sha }} -o artifacts/windows-preview
+        run: dotnet publish app/src/Timer.Desktop/Timer.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=false -p:BuildChannel=${{ github.ref_name }} -p:Version=0.1.${{ github.run_number }} -p:InformationalVersion=0.1.${{ github.run_number }}+${{ github.sha }} -o artifacts/windows-preview
       - name: Check the database library is in the published folder
         if: runner.os == 'Windows'
         shell: pwsh
@@ -76,8 +76,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Copy-Item migration/README.md artifacts/windows-preview/README.md
-          Copy-Item migration/Start-Demo.cmd artifacts/windows-preview/Start-Demo.cmd
+          Copy-Item app/README.md artifacts/windows-preview/README.md
+          Copy-Item app/Start-Demo.cmd artifacts/windows-preview/Start-Demo.cmd
           '{"schemaVersion":1,"testBuildArgument":"--test-build"}' | Set-Content artifacts/windows-preview/test-build-support.json
       - name: Check the published native executable starts and switches views
         if: runner.os == 'Windows'

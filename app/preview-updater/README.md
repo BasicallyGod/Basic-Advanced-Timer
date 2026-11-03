@@ -5,13 +5,13 @@ The Windows updater is for the **experimental** and **alpha** channels only. A S
 ## Choose a channel
 
 1. Install [GitHub CLI](https://cli.github.com/) and run `gh auth login` once.
-2. Keep a writable copy of this `migration/updater` folder on your computer.
+2. Keep a writable copy of this `app/preview-updater` folder on your computer.
 3. Double-click **Timer Updater.cmd** and choose **experimental** for normal testing or **alpha** for unstable prototypes.
 4. Choose **Update and launch**, **Launch current** or **Roll back and launch**. The command-line shortcuts default to `experimental`.
 
 The picker opens without GitHub CLI, authentication or an internet connection. GitHub CLI is required only for **Update and launch**. A console stays alongside the picker; the selected action opens its own console for progress and prompts. Close the picker when finished.
 
-To update an existing updater, download the `experimental` source ZIP from GitHub (**Code > Download ZIP** with `experimental` selected), extract it first, then replace the `.cmd` and `.ps1` files in your existing updater folder with the files from `migration/updater`. Keep your existing `test-install` folder in place; it holds your builds and data. Run the launcher from that same writable folder, not from inside the ZIP.
+To update an existing updater, download and extract the source ZIP for your branch from GitHub. Copy the `.cmd` and `.ps1` files from `app/preview-updater` into your existing updater folder. Older source ZIPs call this folder `migration/updater`. Keep your existing `test-install` folder in place because it holds your builds and data. Run the updater from that same writable folder.
 
 If startup fails, the console displays the error and stays open. Script errors also produce `updater-startup-error.log` beside the launcher where writable, and a message box where Windows Forms is available. If workplace policy blocks PowerShell, the console should show that policy error; ask IT to permit the updater. For a diagnostic check from a terminal in the updater folder:
 

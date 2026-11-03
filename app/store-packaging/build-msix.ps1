@@ -23,7 +23,7 @@ New-Item -ItemType Directory -Force -Path $stage, $output | Out-Null
 $version = "1.0.$BuildNumber.0"
 
 # Store-only AssemblyName keeps the portable executable's existing filename.
-dotnet publish (Join-Path $repoRoot 'migration/src/Timer.Desktop/Timer.Desktop.csproj') --configuration Release --runtime win-x64 --self-contained true -p:StorePackage=true -p:PublishSingleFile=false "-p:Version=$version" -o $stage
+dotnet publish (Join-Path $repoRoot 'app/src/Timer.Desktop/Timer.Desktop.csproj') --configuration Release --runtime win-x64 --self-contained true -p:StorePackage=true -p:PublishSingleFile=false "-p:Version=$version" -o $stage
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed.' }
 if (-not (Test-Path (Join-Path $stage 'BasicsAdvancedTimer.exe'))) { throw 'Missing packaged EXE.' }
 
