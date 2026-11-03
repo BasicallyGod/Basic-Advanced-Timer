@@ -140,7 +140,7 @@ internal sealed class LauncherWindow : Form
 
     private Task SignIn()
     {
-        using var process = Process.Start(new ProcessStartInfo("gh.exe", "auth login --hostname github.com --web") { UseShellExecute = true });
+        using var process = Process.Start(new ProcessStartInfo(FindGitHubCli(), "auth login --hostname github.com --web") { UseShellExecute = true });
         Append("Finish GitHub sign-in in the opened window, then refresh branches.");
         return Task.CompletedTask;
     }
@@ -148,7 +148,7 @@ internal sealed class LauncherWindow : Form
     private async Task RefreshBranches()
     {
         Append("Fetching branches from GitHub…");
-        var start = HiddenProcess("gh.exe", "api", "--paginate", "--hostname", "github.com", $"repos/{Repository}/branches?per_page=100", "--jq", ".[].name");
+        var start = HiddenProcess(FindGitHubCli(), "api", "--paginate", "--hostname", "github.com", $"repos/{Repository}/branches?per_page=100", "--jq", ".[].name");
         using var process = Process.Start(start)!;
         var output = process.StandardOutput.ReadToEndAsync();
         var errors = process.StandardError.ReadToEndAsync();
@@ -171,6 +171,7 @@ internal sealed class LauncherWindow : Form
         if (selected.Length == 0) throw new InvalidOperationException("Choose a branch first.");
         if (selected.Equals("main", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The main branch is installed through Microsoft Store. Choose a preview branch.");
+        var githubCli = mode == "Update" ? FindGitHubCli() : null;
         Directory.CreateDirectory(folder);
         var worker = Path.Combine(folder, $"timer-launcher-{Guid.NewGuid():N}.ps1");
         try
@@ -184,7 +185,13 @@ internal sealed class LauncherWindow : Form
             }
             Append($"{selected} · {mode}");
             var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
-            using var process = new Process { StartInfo = HiddenProcess(powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", worker, "-Mode", mode, "-Branch", selected) };
+            var start = HiddenProcess(powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", worker, "-Mode", mode, "-Branch", selected);
+            if (githubCli is not null)
+            {
+                start.ArgumentList.Add("-GitHubCli");
+                start.ArgumentList.Add(githubCli);
+            }
+            using var process = new Process { StartInfo = start };
             void Report(object sender, DataReceivedEventArgs e)
             {
                 if (e.Data is { } line && !IsDisposed) BeginInvoke(new Action(() => Append(line)));
@@ -198,6 +205,26 @@ internal sealed class LauncherWindow : Form
             Append(process.ExitCode == 0 ? "Timer launched." : "Launch stopped. See the message above.");
         }
         finally { File.Delete(worker); }
+    }
+
+    private static string FindGitHubCli()
+    {
+        // Explorer may still hold the PATH it inherited before GitHub CLI was installed.
+        var directories = new List<string>();
+        foreach (var target in new[] { EnvironmentVariableTarget.Process, EnvironmentVariableTarget.User, EnvironmentVariableTarget.Machine })
+        {
+            var path = Environment.GetEnvironmentVariable("PATH", target);
+            if (path is not null) directories.AddRange(path.Split(Path.PathSeparator));
+        }
+        directories.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "GitHub CLI"));
+        foreach (var directory in directories)
+        {
+            var expanded = Environment.ExpandEnvironmentVariables(directory.Trim().Trim('"'));
+            if (!Path.IsPathFullyQualified(expanded)) continue;
+            var executable = Path.Combine(expanded, "gh.exe");
+            if (File.Exists(executable)) return executable;
+        }
+        throw new InvalidOperationException("GitHub CLI could not be found. Install it from https://cli.github.com/ or run: winget install --id GitHub.cli --exact. Then reopen the launcher and use GitHub sign-in.");
     }
 
     private static ProcessStartInfo HiddenProcess(string executable, params string[] arguments)
