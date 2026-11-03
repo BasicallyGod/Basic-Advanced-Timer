@@ -8,7 +8,7 @@ The earlier PowerShell application (v2.32) has been retired. Its source remains 
 
 1. Open the latest successful run of the [Development builds workflow](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) and download **BasicsAdvancedTimer-Windows-experimental** (or the alpha artifact if intentionally testing alpha).
 2. Extract the whole ZIP into its own folder and run `BasicsAdvancedTimer.Preview.exe`. Keep its DLLs together.
-3. To update, copy [migration/updater](migration/updater/README.md) somewhere writable and run `Timer Updater.cmd`. Choose the experimental or alpha channel, then install the newest successful build and roll back if needed. Each channel keeps its own data.
+3. To update, copy [app/preview-updater](app/preview-updater/README.md) somewhere writable and run `Timer Updater.cmd`. Choose the experimental or alpha channel, then install the newest successful build and roll back if needed. Each channel keeps its own data.
 
 Run `Start-Demo.cmd` to try the app with sample accounts and history, without touching real data. Data is saved to a `migration-data` folder beside the executable, or to a folder you choose with `--data-dir`.
 
@@ -32,15 +32,15 @@ The new app deliberately does not import the old CSV timesheets. If it finds `Ti
 
 ## Release channels
 
-The repository uses `main` (Microsoft Store stable), `experimental` (everyday testing) and `alpha` (unstable prototypes). Development builds use separate portable artifacts and isolated updater data. See [BRANCHES.md](BRANCHES.md) and [updater guide](migration/updater/README.md).
+The repository uses `main` (Microsoft Store stable), `experimental` (everyday testing) and `alpha` (unstable prototypes). Development builds use separate portable artifacts and isolated updater data. See [BRANCHES.md](BRANCHES.md) and [updater guide](app/preview-updater/README.md).
 
-The Store build comes from `main` as an unsigned MSIX, and the Store signs and distributes it. Installs and updates for it go through the Microsoft Store, not the updater. See the [MSIX packaging guide](migration/packaging/README.md) for Microsoft Partner Center instructions.
+The Store build comes from `main` as an unsigned MSIX, and the Store signs and distributes it. Installs and updates for it go through the Microsoft Store, not the updater. See the [MSIX packaging guide](app/store-packaging/README.md) for Microsoft Partner Center instructions.
 
 ## Building
 
 ```sh
-dotnet run --project migration/src/Timer.Desktop/Timer.Desktop.csproj
-dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release
+dotnet run --project app/src/Timer.Desktop/Timer.Desktop.csproj
+dotnet test app/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release
 ```
 
-The application, tests, packaging and updater live under `migration/`. The [documentation index](docs/README.md) links to the current guides, design notes and historical archive. See [CHANGELOG.md](CHANGELOG.md) for build history.
+The application, tests, packaging and updater live under `app/`. The [documentation index](docs/README.md) links to the current guides, design notes and historical archive. See [CHANGELOG.md](CHANGELOG.md) for build history.

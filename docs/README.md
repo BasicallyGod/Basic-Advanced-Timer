@@ -2,10 +2,10 @@
 
 ## Current guides
 
-- [User guide and architecture](../migration/README.md)
+- [User guide and architecture](../app/README.md)
 - [Release channels](../BRANCHES.md)
-- [Preview updater](../migration/updater/README.md)
-- [Microsoft Store packaging](../migration/packaging/README.md)
+- [Preview updater](../app/preview-updater/README.md)
+- [Microsoft Store packaging](../app/store-packaging/README.md)
 - [Engineering notes](../CLAUDE.md)
 
 ## Design and testing

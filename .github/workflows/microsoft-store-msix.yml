@@ -14,7 +14,7 @@ concurrency:
 permissions:
   contents: read
 
-# Reads the shared Timer.Core and Timer.Storage packages from GitHub Packages (see migration/NuGet.config).
+# Reads the shared Timer.Core and Timer.Storage packages from GitHub Packages (see app/NuGet.config).
 env:
   PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
 
@@ -28,10 +28,10 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - name: Run desktop tests
-        run: dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release --verbosity minimal
+        run: dotnet test app/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release --verbosity minimal
       - name: Compile Windows Store target during release review
         if: github.event_name == 'pull_request'
-        run: dotnet publish migration/src/Timer.Desktop/Timer.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true -p:StorePackage=true -p:PublishSingleFile=false -o artifacts/store-pr-compile
+        run: dotnet publish app/src/Timer.Desktop/Timer.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true -p:StorePackage=true -p:PublishSingleFile=false -o artifacts/store-pr-compile
       - name: Create Microsoft Store release MSIX
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         shell: pwsh
@@ -40,7 +40,7 @@ jobs:
           STORE_PUBLISHER: CN=BF422802-B4CA-4B00-A09A-2EDA3315C0DE
           STORE_PUBLISHER_DISPLAY_NAME: Basically
         run: |
-          ./migration/packaging/build-msix.ps1 `
+          ./app/store-packaging/build-msix.ps1 `
             -BuildNumber ${{ github.run_number }} `
             -OutputDirectory artifacts/msix `
             -UnsignedForStore `

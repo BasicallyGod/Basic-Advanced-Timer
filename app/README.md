@@ -1,6 +1,11 @@
 # Basic’s Advanced Timer: user guide and architecture
 
-This folder holds the whole application. The name `migration` is historical and is kept so the updater and workflow paths keep working.
+This folder contains the Windows application and its build tools.
+
+- `src/Timer.Desktop` contains the Avalonia application.
+- `tests/Timer.Desktop.Tests` contains the desktop regression tests.
+- `store-packaging` contains the Microsoft Store packaging tools and artwork.
+- `preview-updater` contains the scripts for installing Alpha and Experimental builds.
 
 ## Running it
 
@@ -40,7 +45,7 @@ Records live in `timer.db` (SQLite, write-ahead log), opened exclusively so two 
 
 ## Microsoft Store package
 
-The MSIX build and signing instructions are in [packaging/README.md](packaging/README.md). Release promotion rules and the three channels (`main`, `experimental`, `alpha`) are in [../BRANCHES.md](../BRANCHES.md). Portable data stays beside the exe, while packaged app data lives in per-user storage. The Store build hides the sample-data demo and rejects `--demo`. A locally built development MSIX is self-signed for testing only and is not a published Store build.
+The MSIX build and signing instructions are in [store-packaging/README.md](store-packaging/README.md). Release promotion rules and the three channels (`main`, `experimental`, `alpha`) are in [../BRANCHES.md](../BRANCHES.md). Portable data stays beside the exe, while packaged app data lives in per-user storage. The Store build hides the sample-data demo and rejects `--demo`. A locally built development MSIX is self-signed for testing only and is not a published Store build.
 
 ## Architecture
 
@@ -51,9 +56,9 @@ The MSIX build and signing instructions are in [packaging/README.md](packaging/R
 The build uses .NET 8 and pinned Avalonia 11.3.16.
 
 ```sh
-dotnet run --project migration/src/Timer.Desktop/Timer.Desktop.csproj
-dotnet test migration/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release
-dotnet publish migration/src/Timer.Desktop/Timer.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true -o artifacts/windows-preview
+dotnet run --project app/src/Timer.Desktop/Timer.Desktop.csproj
+dotnet test app/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release
+dotnet publish app/src/Timer.Desktop/Timer.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true -o artifacts/windows-preview
 ```
 
 Tests use disposable synthetic data only. They cover the engine (early starts, pauses, lunch, finish and resume, days off, midnight splitting), storage (database, backups, undo, fault injection), the production windows and styles in a headless Avalonia, and the theme engine (contrast, derived tints, editor flow). The workflow runs them on Windows, then publishes the Windows build.
