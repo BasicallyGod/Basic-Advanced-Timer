@@ -1,20 +1,15 @@
 # Offline regression tests: mock GitHub/download/process boundaries, exercise real filesystem promotion.
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-$source = Join-Path $PSScriptRoot 'Update-TestBuild.ps1'
+$source = Join-Path $PSScriptRoot 'UpdaterWorker.ps1'
 $tokens = $null; $errors = $null
 $ast = [Management.Automation.Language.Parser]::ParseFile($source, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw ($errors | Out-String) }
 foreach ($definition in $ast.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     Invoke-Expression $definition.Extent.Text
 }
-# The picker window cannot be opened in a test, but it must at least parse.
-$windowTokens = $null; $windowErrors = $null
-$null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'Timer-Updater-Window.ps1'), [ref]$windowTokens, [ref]$windowErrors)
-if ($windowErrors.Count) { throw ($windowErrors | Out-String) }
 $Repository = 'BasicallyGod/Basic-Advanced-Timer'; $Branch = 'experimental'; $Workflow = 'avalonia-preview.yml'
 $UpdaterDirectory = $PSScriptRoot
-$UpdaterScript = Join-Path $PSScriptRoot 'Update-TestBuild.ps1'
 $ArtifactName = 'BasicsAdvancedTimer-Windows-experimental'; $Executable = 'BasicsAdvancedTimer.Preview.exe'
 $Root = Join-Path ([IO.Path]::GetTempPath()) ('timer-updater-tests-' + [guid]::NewGuid().ToString('N'))
 Select-Channel $Branch
@@ -55,7 +50,7 @@ function Start-Process {
     Assert ($WorkingDirectory -eq $Data) 'Wrong working directory.'
     Assert ($ArgumentList[0] -eq '--test-build' -and $ArgumentList[1] -eq '--data-dir') 'Missing isolation arguments.'
     Assert ($ArgumentList[2] -eq ('"' + $Data + '"')) 'Data path was not quoted.'
-    Assert ($ArgumentList[3] -eq '--updater-script' -and $ArgumentList[4] -match 'Update-TestBuild\.ps1"$') 'Missing updater script path.'
+    Assert ($ArgumentList.Count -eq 3) 'The launcher must keep the preview isolated from sign-in settings.'
     $script:Launches++
 }
 try {
@@ -88,10 +83,9 @@ try {
     Assert ((Read-State).current.runId -eq 10) 'Offline error changed installed version.'
     $handle = [IO.File]::Open((Join-Path $ChannelRoot 'updater.lock'), 'Open', 'ReadWrite', 'None')
     try { Expect-Failure { Invoke-TestUpdater } } finally { $handle.Dispose() }
-    # A busy timer must prompt, and cancelling must leave the build untouched.
-    function Read-Host { param($Prompt) return 'Q' }
+    # A busy timer must return an error to the launcher.
     $handle = [IO.File]::Open((Join-Path $Data '.migration.lock'), 'Open', 'ReadWrite', 'None')
-    try { Expect-Failure { Wait-TestClosed } } finally { $handle.Dispose() }
+    try { Expect-Failure { Assert-TestClosed } } finally { $handle.Dispose() }
     Expect-Failure { Get-BuildFolder ([pscustomobject]@{ folder = '../production' }) }
     foreach ($bad in @('', '..', 'a/../b', 'x y', 'main;calc', '-flag', 'a//b', 'a/', 'x.lock')) { Expect-Failure { Assert-BranchName $bad } }
     foreach ($good in @('main', 'migration', 'feature/new-theme', 'release-1.2')) { Assert-BranchName $good }
@@ -112,6 +106,17 @@ try {
     Assert (!(Test-Path -LiteralPath (Join-Path $Root 'state.json.bak'))) 'Channels share a state backup.'
     $Branch = 'main'
     Expect-Failure { Select-Channel $Branch }
+    $Branch = 'feature/new-theme'; $Mode = 'Update'; $script:RunId = 30; $script:ArtifactId = 300
+    Invoke-TestUpdater
+    $featureData = $Data
+    Assert ($ArtifactName -eq 'BasicsAdvancedTimer-Windows-feature-new-theme') 'Feature artifact name is wrong.'
+    Assert ((Read-State).current.branch -ceq $Branch) 'Feature branch was not installed.'
+    Select-Channel 'feature-new-theme'
+    Assert ($Data -ne $featureData) 'Branches with matching artifact names share a data folder.'
+    Select-Channel 'feature/New-Theme'
+    Assert ($Data -ne $featureData) 'Branch names that differ by case share a data folder.'
+    $Mode = 'Launch'; $script:Offline = $true
+    Invoke-TestUpdater
     Write-Host 'PASS: branch-separated install, data and rollback; offline launch; locking and validation.'
 } finally {
     # Only delete the exact temporary directory created by this test.

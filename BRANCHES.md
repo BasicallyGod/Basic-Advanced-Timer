@@ -15,7 +15,7 @@ The Store packaging and the release workflow are merged into `main`. Installed-a
 ## Daily workflow
 
 1. Develop on `experimental`, or make a temporary `feature/...` branch from it for an isolated change. Use `alpha` for larger/riskier experiments.
-2. Push changes; automatic tests and native smoke tests run. Select the appropriate channel using **Timer Updater.cmd**. Never test an alpha database against the experimental branch.
+2. Push changes to run automated tests and native smoke checks. Use **Timer Branch Launcher.exe** to select the preview branch and launch its isolated build. See the [launcher guide](app/preview-launcher/README.md).
 3. Promote alpha work through a pull request into `experimental`. Every merge into `alpha` or `experimental` builds a portable ZIP, so gather several related changes on one `feature/...` branch and merge them together instead of opening a pull request for each. Build the next candidate when you are about to test it, not after every change, and sync `experimental` only when a candidate is worth testing. Builds are kept for 14 days and rendered previews are kept only when a test fails.
 4. When experimental is thoroughly tested, open a pull request from `experimental` into `main`. Review the diff and require successful checks. Merging this PR produces a Store MSIX from the exact main commit.
 5. Download `BasicsAdvancedTimer-MSIX-Store` from the **successful main workflow run** in GitHub Actions, extract the ZIP and upload the enclosed `BasicsAdvancedTimer-Store-unsigned.msix` to the existing Partner Center submission. Create a Git tag for the actual submitted commit, e.g. `v1.0.1`.

@@ -14,12 +14,41 @@ concurrency:
 permissions:
   contents: read
 
-# Reads the shared Timer.Core and Timer.Storage packages from GitHub Packages (see app/NuGet.config).
-env:
-  PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-
 jobs:
+  preview-launcher:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test preview installs and rollback offline
+        shell: powershell
+        run: ./app/preview-launcher/Test-UpdaterWorker.ps1
+      - name: Publish standalone Windows launcher
+        run: dotnet publish app/preview-launcher/TimerBranchLauncher.csproj --configuration Release -p:DebugType=None -o artifacts/preview-launcher
+      - name: Check the packaged launcher opens
+        shell: pwsh
+        run: |
+          $launcher = Start-Process -FilePath './artifacts/preview-launcher/Timer Branch Launcher.exe' -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru
+          if (-not $launcher.WaitForExit(30000)) {
+            $launcher.Kill()
+            throw 'The launcher did not finish its startup check.'
+          }
+          if ($launcher.ExitCode -ne 0) { throw "Launcher exited with code $($launcher.ExitCode)." }
+      - name: Upload standalone Windows launcher
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Timer-Branch-Launcher-Windows
+          path: artifacts/preview-launcher/Timer Branch Launcher.exe
+          if-no-files-found: error
+          retention-days: 14
   shell-checks:
+    # Reads the shared Timer.Core and Timer.Storage packages from GitHub Packages.
+    env:
+      PACKAGES_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
@@ -31,12 +60,6 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Test standalone updater without network or launching an application
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          ./app/preview-updater/Test-Updater.ps1
-          ./app/preview-updater/Test-UpdaterWindow.ps1
       - name: Build and test production views and themes
         env:
           TIMER_PREVIEW_DIR: ${{ runner.temp }}/avalonia-timer-previews

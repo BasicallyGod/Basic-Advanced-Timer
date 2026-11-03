@@ -5,7 +5,7 @@ This folder contains the Windows application and its build tools.
 - `src/Timer.Desktop` contains the Avalonia application.
 - `tests/Timer.Desktop.Tests` contains the desktop regression tests.
 - `store-packaging` contains the Microsoft Store packaging tools and artwork.
-- `preview-updater` contains the scripts for installing Alpha and Experimental builds.
+- `preview-launcher` contains the standalone Windows app for downloading and launching preview builds.
 
 ## Running it
 
