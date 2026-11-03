@@ -158,23 +158,42 @@ public static class TimelineGestures
                 if (other.Start >= row.To && (upper is null || boundary < upper.Value)) upper = boundary;
             }
         }
-        // Clamp to the first neighbour crossed, even when the pointer travels
-        // well beyond it. Apply this to grid rounding as well as raw movement.
+        bool Fits(TimeSpan delta)
+        {
+            var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero);
+            var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
+            if (from < row.Day || until > row.Day.AddDays(1) || (until - from).TotalSeconds < 3) return false;
+            var saved = LedgerEditor.TimedRow(row.Account, from, until, "edited");
+            return !occupied.Any(other => other.Start < saved.To && other.End > saved.From);
+        }
+
+        // Keep the first neighbour as the stopping point for resizing and short drags.
         var overshoot = lower is { } l && requested < l ? (l - requested).TotalHours * pixelsPerHour
             : upper is { } u && requested > u ? (requested - u).TotalHours * pixelsPerHour : 0;
-        if (overshoot > 24 && edge == 0) { nudge = true; return grid; }
-        if (lower is { } minimum && (requested <= minimum || grid <= minimum)) requested = minimum;
-        if (upper is { } maximum && (requested >= maximum || grid >= maximum)) requested = maximum;
+        var crossedNeighbour = edge == 0 && overshoot > 24;
+        if (!crossedNeighbour)
+        {
+            if (lower is { } minimum && (requested <= minimum || grid <= minimum)) requested = minimum;
+            if (upper is { } maximum && (requested >= maximum || grid >= maximum)) requested = maximum;
+        }
         foreach (var candidate in candidates.OrderBy(c => Math.Abs((c - requested).TotalHours)))
         {
             if (Math.Abs((candidate - requested).TotalHours * pixelsPerHour) > 8) break;
-            var from = row.From + (edge <= 0 ? candidate : TimeSpan.Zero);
-            var until = row.To + (edge >= 0 ? candidate : TimeSpan.Zero);
-            if (from < row.Day || until > row.Day.AddDays(1) || (until - from).TotalSeconds < 3) continue;
-            var saved = LedgerEditor.TimedRow(row.Account, from, until, "edited");
-            if (!occupied.Any(other => other.Start < saved.To && other.End > saved.From)) return candidate;
+            if (Fits(candidate)) return candidate;
         }
-        // Nothing close enough to snap to. Never go past the nearest neighbour all the same.
+        if (crossedNeighbour)
+        {
+            grid = ClampToDay(row, edge, grid);
+            if (Fits(grid)) return grid;
+
+            // A gap can fit the block under the pointer even when rounding to five minutes would overlap a neighbour.
+            requested = ClampToDay(row, edge, requested);
+            if (Fits(requested)) return requested;
+
+            nudge = true;
+            return grid;
+        }
+        // Apply the same stopping point to grid rounding.
         if (lower is { } floor && grid < floor) grid = floor;
         if (upper is { } ceiling && grid > ceiling) grid = ceiling;
         return grid;

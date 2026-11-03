@@ -375,6 +375,45 @@ public sealed class CreditReviewTests
         }
         finally { window.Close(); }
     }
+    [AvaloniaFact]
+    public void DraggingThroughAnOccupiedSlotIntoAGapRestoresNeighbourPositions()
+    {
+        var engine = Engine();
+        engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("11:00:00", "30") });
+        var model = new TimerModel(engine);
+        const double scale = 160;
+        model.SetTimelineScale(scale, 0, 0);
+        model.TimelineOffset = null;
+        var window = new DashboardWindow(model);
+        window.Show();
+        Capture(window, "drag-gap-before");
+        try
+        {
+            var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(Canvas.GetLeft).ToArray();
+            var neighbourLeft = Canvas.GetLeft(cards[1]);
+            var nextLeft = Canvas.GetLeft(cards[2]);
+            var csv = model.Editor.SessionsCsv;
+            var point = cards[0].TranslatePoint(new Point(cards[0].Width / 2, cards[0].Height / 2), window)!.Value;
+
+            window.MouseDown(point, MouseButton.Left);
+            window.MouseMove(point + new Vector(20d / 60 * scale, 0));
+            Assert.True(Canvas.GetLeft(cards[1]) < neighbourLeft);
+
+            var gap = point + new Vector(70d / 60 * scale, 0);
+            window.MouseMove(gap);
+            Assert.Equal(neighbourLeft, Canvas.GetLeft(cards[1]));
+            Assert.Equal(nextLeft, Canvas.GetLeft(cards[2]));
+            Assert.Equal(csv, model.Editor.SessionsCsv);
+
+            window.MouseUp(gap, MouseButton.Left);
+            Assert.Null(model.EditError);
+            Assert.Equal(new[] { Day.AddHours(9.5), Day.AddHours(10).AddMinutes(10), Day.AddHours(11) },
+                engine.Sessions.Select(row => row.From).OrderBy(from => from).ToArray());
+            Assert.True(model.UndoEdit());
+            Assert.Equal(csv, model.Editor.SessionsCsv);
+        }
+        finally { window.Close(); }
+    }
     [Fact]
     public void MergeFillsGapsButRejectsInterveningAccountsAndPartialGroups()
     {
