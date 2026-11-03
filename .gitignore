@@ -25,3 +25,4 @@ migration-data/
 
 # External Feed archive and SQLite sidecars
 feed.db*
+!app/src/Timer.Desktop/Assets/Fonts/OFL.txt
