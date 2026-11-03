@@ -40,6 +40,7 @@ public sealed class StatusFace : StackPanel
 {
     private readonly TimerModel model;
     private readonly IClockText clock;
+    private readonly SegmentClock segmentClock;
     private readonly Border stateLight;
     private readonly SegmentRun alertCountRun = new() { DigitHeight = CountDigitHeight, Text = "  " };
     private readonly IconGlyph bell = new(IconKind.Bell);
@@ -94,6 +95,8 @@ public sealed class StatusFace : StackPanel
     public Border StateLight => stateLight;
     /// <summary>The alert count's two digits.</summary>
     public SegmentRun AlertCountDigits => alertCountRun;
+    /// <summary>Hides the play key, account box and break so the pill is only its display (the compact pill). Not for the sidebar.</summary>
+    public void SetCompact(bool compact) { if (Sidebar) return; well.IsVisible = !compact; Break.IsVisible = !compact; }
     public Button ClockButton { get; }
     /// <summary>The lights as a button that opens the pill's alerts; null on the sidebar.</summary>
     public Button? AlertsButton { get; }
@@ -108,7 +111,7 @@ public sealed class StatusFace : StackPanel
     public StatusFace(TimerModel model, string prefix, string breakName, string clockTip, Action clockClick, Action circleClick, Action accountsClick, bool sidebar = false, Action? alertsClick = null)
     {
         this.model = model; this.clockTip = clockTip; Sidebar = sidebar;
-        clock = new SegmentClock();
+        segmentClock = new SegmentClock(); clock = segmentClock;
         Spacing = 12; HorizontalAlignment = HorizontalAlignment.Center; if (sidebar) { Spacing = 6; HorizontalAlignment = HorizontalAlignment.Stretch; } else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
         // The state LED is a capsule set into the display, like a segment: an empty groove when idle, inlaid in the state's colour when not.
         stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3.5), VerticalAlignment = VerticalAlignment.Center };
@@ -283,6 +286,7 @@ public sealed class StatusFace : StackPanel
         if (shownCount >= 0 && count > shownCount && !Motion.Reduced) FlashCount(); shownCount = count; AlertCount = alerts.Count;
         var countTarget = (Control?)AlertsButton ?? (Control)alertCountRun;
         ToolTip.SetTip(countTarget, reminderWords); Avalonia.Automation.AutomationProperties.SetName(countTarget, waiting ? (alerts.Count == 1 ? reminderWords : $"{alerts.Count} waiting") : "Nothing waiting");
+        segmentClock.Plain = model.PlainClock; alertCountRun.Plain = model.PlainClock;
         clock.Text = model.ClockText;
 
         var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);

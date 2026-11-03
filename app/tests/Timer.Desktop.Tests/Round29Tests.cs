@@ -23,51 +23,6 @@ public sealed class Round29Tests
         return model;
     }
 
-    private static string? BadgeText(Window dashboard) => dashboard.GetVisualDescendants().OfType<Border>().First(b => b.Name == "NotificationsBadge").GetVisualDescendants().OfType<TextBlock>().First().Text;
-
-    [AvaloniaFact]
-    public void TheBellsListLeavesRoomForItsScrollBarOnlyWhileItScrolls()
-    {
-        var model = Busy(); var flyout = new NotificationsFlyout(model) { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top };
-        var window = new Window { Width = 460, Height = 1100, Content = flyout, SystemDecorations = SystemDecorations.None }; window.Show(); Settle(window);
-        try
-        {
-            var scroll = flyout.GetVisualDescendants().OfType<ScrollViewer>().First(s => s.Name == "NotificationsScroll"); var column = (Control)scroll.Content!;
-            Assert.True(scroll.Extent.Height <= scroll.Viewport.Height + .5, $"extent {scroll.Extent.Height} viewport {scroll.Viewport.Height}"); Assert.Equal(0, column.Margin.Right); // It fits, so the rows use the whole width.
-            flyout.LimitHeight(220); Settle(window);
-            Assert.True(scroll.Extent.Height > scroll.Viewport.Height, "the list now scrolls"); Assert.True(column.Margin.Right >= 12, "room for the 10 pixel track and a gap");
-            foreach (var button in column.GetVisualDescendants().OfType<Button>().Where(b => b.IsVisible))
-            {
-                var right = button.TranslatePoint(new Point(button.Bounds.Width, 0), scroll)!.Value.X;
-                Assert.True(right <= scroll.Bounds.Width - 12, $"{button.Name} ends at {right} of {scroll.Bounds.Width}, clear of the track");
-            }
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void TheBellListsWhatThePillCounts_SoTheTwoNumbersAgree()
-    {
-        var model = Busy(); var dashboard = new DashboardWindow(model); var pill = new PillWindow(model); dashboard.Show(); pill.Show(); Settle(dashboard); Settle(pill);
-        try
-        {
-            var alerts = model.Alerts; Assert.Contains(alerts, a => a.Kind is AlertKind.Budget or AlertKind.BudgetSpent); Assert.Contains(alerts, a => a.Kind == AlertKind.Reminder);
-            var badge = BadgeText(dashboard);
-            Assert.Equal(alerts.Count.ToString(), badge);
-            var flyout = new NotificationsFlyout(model); var host = new Window { Width = 460, Height = 900, Content = flyout }; host.Show(); Settle(host);
-            try
-            {
-                var rows = flyout.GetVisualDescendants().OfType<Border>().Count(b => b.Name?.StartsWith("NotificationAlert_") == true || b.Name?.StartsWith("Notification_") == true && b.Classes.Contains("lateRow"));
-                Assert.Equal(alerts.Count, rows);
-                var budget = alerts.First(a => a.Kind is AlertKind.Budget or AlertKind.BudgetSpent);
-                flyout.GetVisualDescendants().OfType<Button>().First(b => b.Name == "NotificationOk_" + budget.Key).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(host);
-                Assert.Equal(alerts.Count - 1, model.Alerts.Count);
-                Assert.Equal((alerts.Count - 1).ToString(), BadgeText(dashboard));
-            }
-            finally { host.Close(); }
-        }
-        finally { dashboard.Close(); pill.Close(); }
-    }
 
     [AvaloniaFact]
     public void ThePillAndItsCardsTakeTheDashboardsCornerAndNotACapsule()

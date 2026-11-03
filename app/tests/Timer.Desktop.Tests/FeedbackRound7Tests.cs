@@ -46,19 +46,19 @@ public sealed class FeedbackRound7Tests
     }
 
     [AvaloniaFact]
-    public void PressingTheBellOrTheDateAgainClosesItsCardAndAPressOutsideDoesToo()
+    public void PressingTheAlertCountOrTheDateAgainClosesItsCardAndAPressOutsideDoesToo()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var bell = Find<Popup>(window, "NotificationsPopup"); var calendar = Find<Popup>(window, "DateCalendarPopup");
+            var bell = Find<Popup>(window, "AlertsPopup"); var calendar = Find<Popup>(window, "DateCalendarPopup");
             // As a person does it: a real press and release on the button, twice.
-            Press(window, Centre(window, Find<Button>(window, "Notifications"))); Assert.True(bell.IsOpen);
-            Press(window, Centre(window, Find<Button>(window, "Notifications"))); Assert.False(bell.IsOpen);
+            Press(window, Centre(window, Find<Button>(window, "SidebarAlertsButton"))); Assert.True(bell.IsOpen);
+            Press(window, Centre(window, Find<Button>(window, "SidebarAlertsButton"))); Assert.False(bell.IsOpen);
             Press(window, Centre(window, Find<Button>(window, "DatePick"))); Assert.True(calendar.IsOpen);
             Press(window, Centre(window, Find<Button>(window, "DatePick"))); Assert.False(calendar.IsOpen);
             // A press somewhere else closes them, and so does Escape.
-            Press(window, Centre(window, Find<Button>(window, "Notifications"))); Assert.True(bell.IsOpen);
+            Press(window, Centre(window, Find<Button>(window, "SidebarAlertsButton"))); Assert.True(bell.IsOpen);
             Press(window, new Point(300, 640)); Assert.False(bell.IsOpen);
             Press(window, Centre(window, Find<Button>(window, "DatePick"))); Assert.True(calendar.IsOpen);
             window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null); Settle(window); Assert.False(calendar.IsOpen);

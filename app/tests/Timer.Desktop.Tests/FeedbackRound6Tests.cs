@@ -103,21 +103,6 @@ public sealed class FeedbackRound6Tests
     }
 
     [AvaloniaFact]
-    public void TheBellSitsNextToTheGearAndAnotherPressOnItClosesTheCard()
-    {
-        var model = Model(false); var window = new DashboardWindow(model); window.Show(); Settle(window);
-        try
-        {
-            var bell = Find<Button>(window, "Notifications"); var gear = Find<Button>(window, "Settings"); var today = Find<Button>(window, "GoToToday");
-            double X(Control c) => c.TranslatePoint(default, window)!.Value.X;
-            Assert.True(X(today) < X(bell) && X(bell) < X(gear)); // Today, the bell, then the gear.
-            var popup = Find<Avalonia.Controls.Primitives.Popup>(window, "NotificationsPopup");
-            Click(window, "Notifications"); Assert.True(popup.IsOpen); Click(window, "Notifications"); Assert.False(popup.IsOpen);
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
     public void ThePillsAlertCountIsAlwaysThereTwoDigitsWideBlankWhenNothingIsWaitingAndBlueWhenAReminderIsDue()
     {
         var model = Model(false); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
@@ -127,7 +112,7 @@ public sealed class FeedbackRound6Tests
             var width = count.Bounds.Width;
             model.Notes.AddNote("Send the budget", null, Day.AddHours(8)); Dispatcher.UIThread.RunJobs();
             count = Find<SegmentRun>(pill, "PillAlertCount"); Assert.Equal(" 1", count.Text); Assert.Equal(width, count.Bounds.Width, 0.5); // The same width, so nothing moves.
-            var blue = count.Colour!.Value; Assert.True(blue.B > blue.R); // Blue, the reminder's colour.
+            var red = count.Colour!.Value; Assert.True(red.R > red.B && red.R > red.G); // Red, as every alert is.
         }
         finally { pill.Close(); }
     }

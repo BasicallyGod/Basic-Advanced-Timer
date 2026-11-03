@@ -41,7 +41,7 @@ public sealed class DashboardShellTests
         try
         {
             Assert.Equal("Not recording", ToolTip.GetTip(Find<Border>(window, "SidebarStateLight")));
-            Assert.Equal("Nothing waiting", Avalonia.Automation.AutomationProperties.GetName(Find<SegmentRun>(window, "SidebarAlertCount"))); // Always there, blank, until one is due.
+            Assert.Equal("Nothing waiting", Avalonia.Automation.AutomationProperties.GetName(Find<Button>(window, "SidebarAlertsButton"))); // Always there, blank, until one is due.
             model.ToggleAccount("Account one"); Settle(window);
             Assert.Equal("Recording", ToolTip.GetTip(Find<Border>(window, "SidebarStateLight")));
             Assert.StartsWith("Pause", ToolTip.GetTip(Find<Button>(window, "SidebarPause"))?.ToString());

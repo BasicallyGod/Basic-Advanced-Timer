@@ -52,15 +52,15 @@ public sealed class Round11Tests
     }
 
     [AvaloniaFact]
-    public void TheOpenBellCardsPointIsClearOfItsRoundedCorner()
+    public void TheOpenAlertsCardsPointIsClearOfItsRoundedCorner()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var bell = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Notifications");
-            bell.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
-            var point = window.GetVisualDescendants().OfType<Canvas>().Single(c => c.Name == "NotificationsPoint");
-            var card = window.GetVisualDescendants().OfType<NotificationsFlyout>().Single();
+            var count = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SidebarAlertsButton");
+            count.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            var point = window.GetVisualDescendants().OfType<Canvas>().Single(c => c.Name == "DashboardAlertsPoint");
+            var card = window.GetVisualDescendants().OfType<PillAlertsCard>().Single();
             var fromRight = point.Margin.Right - HangingCard.Room.Right + point.Width / 2;
             Assert.True(fromRight - point.Width / 2 >= card.CornerRadius.TopRight + 2, $"the point's base starts {fromRight - point.Width / 2} from the end, inside the {card.CornerRadius.TopRight} corner");
         }
@@ -75,7 +75,7 @@ public sealed class Round11Tests
             foreach (var nudge in new[] { 0.0, 0.5 })
             {
                 var model = Model(); model.SetTheme(theme);
-                var hung = HangingCard.Hang(new NotificationsFlyout(model), -1);
+                var alerts = new PillAlertsCard(model, () => { }, () => { }); alerts.Open(true); var hung = HangingCard.Hang(alerts, -1, "NotificationsPoint", "PillBody");
                 var window = new Window { Width = 412, Height = 300, RequestedThemeVariant = theme == "Dark" ? Avalonia.Styling.ThemeVariant.Dark : Avalonia.Styling.ThemeVariant.Light, Content = new Border { Margin = new Thickness(0, nudge, 0, 0), Child = hung } };
                 window.Show(); Settle(window);
                 try
@@ -84,8 +84,8 @@ public sealed class Round11Tests
                     using var pixels = shot!.Lock(); var data = new byte[pixels.RowBytes * pixels.Size.Height]; System.Runtime.InteropServices.Marshal.Copy(pixels.Address, data, 0, data.Length);
                     int[] At(int x, int y) { var o = y * pixels.RowBytes + x * 4; return new[] { (int)data[o], data[o + 1], data[o + 2] }; }
                     bool Same(int[] a, int[] b) => a.Zip(b).All(c => Math.Abs(c.First - c.Second) <= 2);
-                    var inside = At(206, 60); var top = (int)HangingCard.Room.Top;
-                    foreach (var row in new[] { top, top + 1 }) Assert.True(Same(At(206, row), inside), $"{theme}, nudge {nudge}: row {row} under the point {string.Join(",", At(206, row))} is not the card's {string.Join(",", inside)}");
+                    var centre = 206; var inside = At(centre, 60); var top = (int)HangingCard.Room.Top;
+                    foreach (var row in new[] { top, top + 1 }) Assert.True(Same(At(centre, row), inside), $"{theme}, nudge {nudge}: row {row} under the point {string.Join(",", At(centre, row))} is not the card's {string.Join(",", inside)}");
                     Assert.True(Enumerable.Range(top - 1, 3).Any(row => !Same(At(120, row), inside)), "the edge beside the point should still be drawn"); // So the check can tell.
                 }
                 finally { window.Close(); }

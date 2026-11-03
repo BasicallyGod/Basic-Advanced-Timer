@@ -76,38 +76,6 @@ public sealed class NotesPageTests
         Assert.True(notes.All.Count(n => n.SeriesId is not null) > 30); Assert.Single(notes.Listed());
     }
 
-    // ---- The bell and the light ----
-
-    [AvaloniaFact]
-    public void TheBellCountsOverdueRemindersAndItsFlyoutHasDoneAndReschedule()
-    {
-        var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);
-        try
-        {
-            var badge = Find<Border>(window, "NotificationsBadge"); Assert.True(badge.IsVisible); Assert.Equal("1", Assert.IsType<TextBlock>(badge.Child).Text);
-            Click(window, "Notifications");
-            Assert.True(Find<Avalonia.Controls.Primitives.Popup>(window, "NotificationsPopup").IsOpen);
-            var id = IdOf(model, "Send the budget"); Assert.NotNull(Find<Border>(window, "Notification_" + id)); Assert.NotNull(Find<Border>(window, "Notification_" + IdOf(model, "Follow up on the brief")));
-            Click(window, "NotificationReschedule_" + id); Assert.True(Find<Avalonia.Controls.Primitives.Popup>(window, "RescheduleHost").IsOpen);
-            Click(window, "ReminderCell_20261010"); Click(window, "ReminderSet");
-            Assert.Equal(Day.AddDays(1).AddHours(8), NotesModel.ReminderOf(model.Notes.Find(id)!)); Assert.Equal(0, model.Notes.AttentionCount); Assert.False(badge.IsVisible);
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "Notification_" + id + "x");
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void DoneInTheFlyoutClearsTheAttentionAndAnEmptyBellSaysNothingIsWaiting()
-    {
-        var model = Model(notes => notes.AddNote("Send the budget", null, Day.AddHours(8))); var window = new DashboardWindow(model); window.Show(); Settle(window);
-        try
-        {
-            Click(window, "Notifications"); Click(window, "NotificationDone_" + model.Notes.All.Single().Id);
-            Assert.True(model.Notes.All.Single().Done); Assert.False(Find<Border>(window, "NotificationsBadge").IsVisible);
-            Assert.Equal("Nothing is waiting.", Find<TextBlock>(window, "NothingWaiting").Text);
-        }
-        finally { window.Close(); }
-    }
 
     [AvaloniaFact]
     public void TheBlueLightOnTheRailAndThePillComesOnWhileAReminderIsDueAndGoesWhenItIsDone()
@@ -115,7 +83,7 @@ public sealed class NotesPageTests
         var model = Model(notes => notes.AddNote("Send the budget", null, Day.AddHours(8))); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var light = Find<SegmentRun>(window, "SidebarAlertCount"); Assert.Equal("A reminder is due", Avalonia.Automation.AutomationProperties.GetName(light));
+            var light = Find<Button>(window, "SidebarAlertsButton"); Assert.Equal("A reminder is due", Avalonia.Automation.AutomationProperties.GetName(light));
             model.Notes.Toggle(model.Notes.All.Single().Id); Settle(window); Assert.Equal("Nothing waiting", Avalonia.Automation.AutomationProperties.GetName(light));
         }
         finally { window.Close(); }

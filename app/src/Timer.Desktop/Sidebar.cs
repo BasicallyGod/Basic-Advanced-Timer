@@ -19,12 +19,12 @@ public sealed class Sidebar : Border
     public Button QuitButton { get; }
     public ScrollViewer AccountScroll { get; }
 
-    public Sidebar(TimerModel model, Action clockClick, Action circleClick, Action manage, Action quit)
+    public Sidebar(TimerModel model, Action clockClick, Action circleClick, Action manage, Action quit, Action? alertsClick = null)
     {
         Name = "Sidebar"; base.Width = Width; BorderThickness = new Thickness(0); Padding = new Thickness(12, 14, 12, 14);
         Classes.Add("panel"); this.Bind(BorderBrushProperty, this.GetResourceObservable("Line"));
         // The lights and the day clock are the pill's own, and the card is what the pill's play tile, account chip and break become when there is room for all three.
-        Face = new StatusFace(model, "Sidebar", "DashboardBreak", "Collapse to pill", clockClick, circleClick, () => { }, sidebar: true);
+        Face = new StatusFace(model, "Sidebar", "DashboardBreak", "Collapse to pill", clockClick, circleClick, () => { }, sidebar: true, alertsClick: alertsClick);
         var grid = Ui.Grid("*", "Auto,Auto,*,Auto"); grid.RowSpacing = 4;
         Ui.Put(grid, Face);
         // Account management stays in Settings; the heading is deliberately quiet.
