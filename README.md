@@ -8,7 +8,7 @@ The earlier PowerShell application (v2.32) has been retired. Its source remains 
 
 1. Open the latest successful run of the [Development builds workflow](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) and download **BasicsAdvancedTimer-Windows-experimental** (or the alpha artifact if intentionally testing alpha).
 2. Extract the whole ZIP into its own folder and run `BasicsAdvancedTimer.Preview.exe`. Keep its DLLs together.
-3. For updates, download **Timer-Branch-Launcher-Windows** from the workflow run and open **Timer Branch Launcher.exe**. Choose a preview branch and click **Download and launch**. Each branch keeps its own data. See the [launcher guide](app/preview-launcher/README.md).
+3. For updates, open **Timer Branch Launcher.exe**, choose a preview branch and click **Download and launch**. Each branch keeps its own data. The [launcher guide](app/preview-launcher/README.md) explains how to request a fresh launcher download.
 
 Run `Start-Demo.cmd` to try the app with sample accounts and history, without touching real data. Data is saved to a `migration-data` folder beside the executable, or to a folder you choose with `--data-dir`.
 

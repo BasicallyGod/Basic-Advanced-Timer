@@ -12,7 +12,7 @@ Notes for contributors and coding assistants. The application is a C# Avalonia d
 | `app/preview-launcher` | Standalone Windows branch picker with download, cached launch and rollback. The executable embeds its install worker. |
 | `app/store-packaging` | MSIX packaging for the Microsoft Store (manifest template, `build-msix.ps1`, and `StoreAssets`, the tile and logo PNGs cut from the app icon). Packaged builds keep data under `%LOCALAPPDATA%` via `PackageEnvironment`; portable builds keep it beside the exe. Store builds compile for `net8.0-windows10.0.19041.0` (`StorePackage=true`, `STORE_PACKAGE` defined) so the Start with Windows menu item can use the WinRT startup task; everyday builds stay `net8.0`. |
 | `.github/workflows/microsoft-store-msix.yml` | Store release workflow for `main`. Pull requests compile the Store target and run tests only; a push to `main` builds the unsigned `BasicsAdvancedTimer-MSIX-Store` package. |
-| `.github/workflows/avalonia-preview.yml` | Windows tests and native startup checks for the preview timer and launcher. Successful development builds publish a branch-named portable timer and a standalone launcher. |
+| `.github/workflows/avalonia-preview.yml` | Windows tests and native startup checks for the preview timer. Pull requests also check the launcher. A manual workflow run can opt in to a standalone launcher download. |
 | `BRANCHES.md` | The three release channels and how changes are promoted. |
 | `README.md`, `app/README.md`, `CHANGELOG.md` | Overview, user guide and architecture, history. |
 

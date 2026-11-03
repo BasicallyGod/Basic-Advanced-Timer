@@ -1,6 +1,8 @@
 # Timer Branch Launcher
 
-Download **Timer-Branch-Launcher-Windows** from a successful development build, extract the executable and run it. Choose Alpha or Experimental, then click **Download and launch**. Use **Refresh branches** to populate the picker from GitHub, or type the exact name of a preview branch. The launcher looks for the latest successful Windows artifact that is still available. A feature branch needs a portable artifact from a manual development workflow run.
+To produce a fresh download, open **Development builds (experimental and alpha)** in GitHub Actions, select **Run workflow**, and enable **Include the Timer Branch Launcher download**. Download **Timer-Branch-Launcher-Windows** from that run, extract the executable and open it.
+
+Choose Alpha or Experimental, then click **Download and launch**. Use **Refresh branches** to populate the picker from GitHub, or type the exact name of a preview branch. The launcher looks for the latest successful Windows artifact that is still available. A feature branch needs a portable artifact from a manual development workflow run.
 
 Downloads and branch refresh use GitHub CLI. Install it if needed, then use **GitHub sign-in** to authenticate. **Launch installed** and **Roll back and launch** work offline.
 
