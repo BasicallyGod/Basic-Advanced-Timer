@@ -33,6 +33,7 @@
     <Style Selector="^:pressed /template/ Border#PART_NeumorphicSurface, ^.previewPressed /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="{DynamicResource NeoInset}" /></Style>
     <Style Selector="^.compact:pressed /template/ Border#PART_NeumorphicSurface, ^.compact.previewPressed /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="{DynamicResource NeoSmallPressed}" /></Style>
     <Style Selector="^.primary, ^.primary:pointerover, ^.primary.previewHover, ^.primary:pressed, ^.primary.previewPressed"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
+    <Style Selector="^.primary:pressed /template/ Border#PART_NeumorphicSurface, ^.primary.previewPressed /template/ Border#PART_NeumorphicSurface"><Setter Property="BoxShadow" Value="{DynamicResource PrimaryPressedInset}" /></Style>
     <Style Selector="^.important:checked"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /></Style>
     <Style Selector="^.important:checked:pointerover, ^.important:checked.previewHover"><Setter Property="Background" Value="{DynamicResource KeyHover}" /></Style>
     <Style Selector="^.important:checked:pressed, ^.important:checked.previewPressed"><Setter Property="Background" Value="{DynamicResource NeoPressed}" /></Style>

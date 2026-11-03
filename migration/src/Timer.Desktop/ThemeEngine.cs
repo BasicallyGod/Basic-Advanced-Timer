@@ -129,6 +129,7 @@ public static class ThemeEngine
             PutShadow("NeoRaised", Drop(-2, -2, 5, Hi(.8)), Drop(2, 3, 6, Lo(.7)));
             PutShadow("NeoHover", Drop(-2, -2, 6, Hi(.9)), Drop(2, 3, 7, Lo(.8)));
             PutShadow("NeoInset", Drop(1, 1.5, 3, Lo(.6), true), Drop(-1, -1, 3, Hi(.65), true));
+            PutShadow("PrimaryPressedInset", Drop(1, 1.5, 3, Color.FromArgb(40, 45, 32, 72), true));
             PutShadow("NeoSmallRaised", Drop(-1, -1, 2, Hi(.7)), Drop(1, 1.5, 3, Lo(.55)));
             PutShadow("NeoSmallHover", Drop(-1, -1, 3, Hi(.8)), Drop(1, 2, 4, Lo(.65)));
             PutShadow("NeoSmallInset", Drop(1, 1, 2, Lo(.35), true), Drop(-1, -1, 2, Hi(.5), true));

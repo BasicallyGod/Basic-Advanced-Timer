@@ -47,7 +47,13 @@ public sealed class NeumorphicControlsTests
                 for (var i = 0; i < Surface(on).BoxShadow.Count; i++) { Assert.True(Surface(on).BoxShadow[i].IsInset); Assert.True(Surface(on).BoxShadow[i].Blur <= 2); }
                 Assert.True(Find<Border>(Find<Button>(gallery, theme + "_Important_Focus"), "PART_NeumorphicFocus").IsVisible);
                 Assert.False(Find<Border>(ready, "PART_NeumorphicFocus").IsVisible);
-                Assert.Equal(0, Surface(Find<Button>(gallery, theme + "_Important_Disabled")).BoxShadow.Count);
+                var disabledStar = Find<ToggleButton>(gallery, theme + "_Important_Disabled");
+                Assert.True(disabledStar.IsChecked);
+                Assert.Equal("Muted", Assert.IsType<IconGlyph>(disabledStar.Content).TintKey);
+                Assert.Equal(0, Surface(disabledStar).BoxShadow.Count);
+                var pressedPrimary = Surface(Find<Button>(gallery, theme + "_Primary_Pressed")).BoxShadow;
+                Assert.Equal(1, pressedPrimary.Count);
+                Assert.True(pressedPrimary[0].IsInset);
                 var disabled = Find<Button>(gallery, theme + "_Primary_Disabled");
                 Assert.Equal(Colour(Surface(ready).Background), Colour(Surface(disabled).Background));
                 Assert.Equal(Colour((IBrush)disabled.FindResource(disabled.ActualThemeVariant, "Muted")!), Colour(disabled.Foreground));

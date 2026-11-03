@@ -77,7 +77,8 @@ internal sealed class GalleryMaterialStudy
             d["KeyEdge"] = new SolidColorBrush(light ? Color.FromArgb(12, 90, 97, 110) : Color.FromArgb(16, 255, 255, 255));
             foreach (var key in new[] { "TextControlBackground", "TextControlBackgroundPointerOver", "TextControlBackgroundFocused", "TextControlBackgroundDisabled", "ComboBoxBackground", "ComboBoxBackgroundPointerOver", "ComboBoxBackgroundPressed", "ComboBoxBackgroundDisabled" }) d[key] = Brush.Parse(well);
             foreach (var key in new[] { "ComboBoxItemBackgroundPointerOver", "ComboBoxItemBackgroundPressed", "ComboBoxItemBackgroundSelected", "ComboBoxItemBackgroundSelectedPointerOver", "ComboBoxItemBackgroundSelectedPressed" }) d[key] = Brush.Parse(well);
-            foreach (var key in new[] { "ComboBoxItemForegroundSelected", "ComboBoxItemForegroundSelectedPointerOver", "ComboBoxItemForegroundSelectedPressed" }) d[key] = Brush.Parse(theme.Colour("Accent"));
+            var selectionInk = ThemeEngine.TextShade(theme.Colour("Accent"), theme.Colour("Ink"), new[] { well });
+            foreach (var key in new[] { "ComboBoxItemForegroundSelected", "ComboBoxItemForegroundSelectedPointerOver", "ComboBoxItemForegroundSelectedPressed" }) d[key] = Brush.Parse(selectionInk);
             d["SliderTrackThemeHeight"] = 6d;
             foreach (var key in new[] { "SliderThumbBackground", "SliderThumbBackgroundPointerOver", "SliderThumbBackgroundPressed" }) d[key] = Brush.Parse(panel);
         }

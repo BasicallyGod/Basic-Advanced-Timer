@@ -381,7 +381,7 @@
     <Style Selector="Button.noteLink:pointerover TextBlock"><Setter Property="TextDecorations" Value="Underline" /></Style>
     <Style Selector="Button.pillBare:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
     <Style Selector="Button.pillBare:pressed /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
-    <Style Selector="Button.peekAll"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Foreground" Value="{DynamicResource Accent}" /><Setter Property="Padding" Value="8,6" /><Setter Property="FontSize" Value="13" /></Style>
+    <Style Selector="Button.peekAll"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /><Setter Property="Padding" Value="8,6" /><Setter Property="FontSize" Value="13" /></Style>
     <Style Selector="Button.peekAll:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
     <Style Selector="Button.flat"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /><Setter Property="Padding" Value="8,4" /></Style>
     <!-- The offered account the arrow keys have reached, as the hovered one looks, so keyboard and pointer read alike. -->
@@ -429,7 +429,7 @@
     <Style Selector="Button.ctl:disabled"><Setter Property="Opacity" Value="0.5" /></Style>
     <Style Selector="Button.ctl:disabled /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BoxShadow" Value="none" /><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
     <Style Selector="Button.ctl.small"><Setter Property="CornerRadius" Value="9" /><Setter Property="Padding" Value="11,0" /><Setter Property="FontSize" Value="12.5" /></Style>
-    <Style Selector="Button.ctl.accentOutline"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="1.5" /></Style>
+    <Style Selector="Button.ctl.accentOutline"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /><Setter Property="BorderThickness" Value="1.5" /></Style>
     <Style Selector="Button.ctl.accentOutline /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.accentOutline:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
     <Style Selector="Button.ctl.accentOutline TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
     <Style Selector="Button.ctl.primary"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
