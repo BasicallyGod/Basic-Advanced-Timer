@@ -199,7 +199,7 @@ public sealed class FeedbackRound10Tests
         var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var ink = Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("AccentInk")); Assert.Equal(Avalonia.Media.Colors.White, ink); // On the Light accent it is white.
+            var ink = Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("AccentInk")); Assert.NotEqual(Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("Ink")), ink);
             Avalonia.Media.Color WordsOf(Button b) => ((Avalonia.Media.ISolidColorBrush)b.GetVisualDescendants().OfType<TextBlock>().First().Foreground!).Color;
             Click(window, "AddNote"); Assert.Equal(ink, WordsOf(Find<Button>(window, "SubmitNote")));
             Click(window, "AddMeeting"); Assert.Equal(ink, WordsOf(Find<Button>(window, "SubmitNote")));

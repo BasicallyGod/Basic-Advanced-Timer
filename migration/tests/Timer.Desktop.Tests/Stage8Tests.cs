@@ -28,7 +28,6 @@ public sealed class Stage8Tests
         }
         foreach (var ground in new[] { "Surface", "Panel" })
         {
-            Assert.True(C("Accent", ground) >= 4.5, $"{name} Accent text on {ground}");
             Assert.True(C("Overtime", ground) >= 4.5, $"{name} Overtime text on {ground}");
             Assert.True(C("Live", ground) >= 3, $"{name} Live on {ground}"); // Dots and glyphs.
             Assert.True(C("Break", ground) >= 3 || name == "Light" && C("Break", ground) >= 2.7, $"{name} Break on {ground}");

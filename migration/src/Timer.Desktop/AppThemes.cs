@@ -15,7 +15,7 @@ public static class AppThemes
         Colours = new Dictionary<string, string>(ThemeLibrary.Light.Colours)
         {
             ["Surface"] = "#E9E9E7", ["Panel"] = "#F3F3F1", ["Line"] = "#D9D9D5", ["Hover"] = "#E3E3E0", ["Muted"] = "#596070", ["Idle"] = "#596070",
-            ["Ink"] = "#1D222B", ["Clock"] = "#1D222B", ["Accent"] = "#B3A6E0", ["AccentInk"] = "#1D222B", ["Selected"] = "#E6E0F4",
+            ["Ink"] = "#1D222B", ["Clock"] = "#1D222B", ["Accent"] = "#B3A6E0", ["AccentInk"] = "#241B36", ["Selected"] = "#E6E0F4",
             ["Live"] = "#12864D", ["Start"] = "#12864D", ["Overtime"] = "#C41E36", ["Finish"] = "#C41E36", ["BudgetWarning"] = "#E3920B",
             ["PillSurface"] = "#1D222B", ["PillInk"] = "#E9E9E7", ["PillBreak"] = "#FFA033", ["PillOvertime"] = "#C41E36", ["Break"] = BreakOnTheWarmPage()
         },

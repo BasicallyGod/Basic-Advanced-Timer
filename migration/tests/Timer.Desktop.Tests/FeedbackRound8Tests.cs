@@ -112,7 +112,7 @@ public sealed class FeedbackRound8Tests
             Assert.Contains("optOn", note.Classes); Assert.DoesNotContain("optOn", meeting.Classes);
             Click(window, "PageKindMeeting"); Assert.Contains("optOn", Find<Button>(window, "PageKindMeeting").Classes); Assert.DoesNotContain("optOn", Find<Button>(window, "PageKindNote").Classes);
             var add = Find<Button>(window, "PageSubmit"); Assert.Contains("primary", add.Classes);
-            Assert.Equal("#FFFFFF", AppThemes.Light.Colour("AccentInk"), ignoreCase: true);
+            Assert.True(ThemeColours.Contrast(AppThemes.Light.Colour("AccentInk"), AppThemes.Light.Colour("Accent")) >= 4.5);
         }
         finally { window.Close(); }
     }
