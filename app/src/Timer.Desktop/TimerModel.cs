@@ -83,7 +83,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
     {
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
-        var remove = IsSelected(rows); SelectedMeetingId = null;
+        SelectionChanging?.Invoke(); var remove = IsSelected(rows); SelectedMeetingId = null;
         foreach (var row in rows) { if (remove) selectedRows.Remove(row); else selectedRows.Add(row); }
         EditError = null; Notice = null; Notify();
     }
@@ -96,7 +96,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
         if (additive) { ToggleSelection(rows); return; }
         var onlyThis = SelectedBlockCount == 1 && IsSelected(rows);
-        DropSelection();
+        SelectionChanging?.Invoke(); DropSelection();
         if (!onlyThis) foreach (var row in rows) selectedRows.Add(row);
         EditError = null; Notice = null; Notify();
     }
@@ -123,7 +123,12 @@ public sealed class TimerModel : INotifyPropertyChanged
             return blocks.OrderBy(b => b.Start).ToArray();
         }
     }
-    public void ClearSelection() { if (selectedRows.Count == 0 && SelectedMeetingId is null) return; DropSelection(); Notify(); }
+    /// <summary>
+    /// Raised just before the selection is changed by the user (a click on another block, a meeting, nothing, or another day), while the old one is still selected. The Details card
+    /// uses it to let go of a box being typed in, which commits that text to the block it was typed for instead of carrying it over to the next block.
+    /// </summary>
+    public event Action? SelectionChanging;
+    public void ClearSelection() { if (selectedRows.Count == 0 && SelectedMeetingId is null) return; SelectionChanging?.Invoke(); DropSelection(); Notify(); }
     /// <summary>The meeting the Details card shows, when a meeting (and not a block) is selected. Selecting a block, another day or nothing lets it go.</summary>
     public long? SelectedMeetingId { get; private set; }
     private void DropSelection() { selectedRows.Clear(); SelectedMeetingId = null; }
@@ -132,7 +137,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (Notes.Find(id) is not { } meeting || !NotesModel.IsMeeting(meeting)) return;
         var again = SelectedMeetingId == id;
-        DropSelection(); if (!again) { SelectedMeetingId = id; NotesCardShowsMeetings = true; }
+        SelectionChanging?.Invoke(); DropSelection(); if (!again) { SelectedMeetingId = id; NotesCardShowsMeetings = true; }
         EditError = null; Notice = null; Notify();
     }
     // After a quick slip from one account to another and back, the earlier block can be picked up again. Blocks in a group are left alone, since
@@ -569,9 +574,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         day = day.Date; if (day == SelectedDate.Date) return;
         if (weeks && WeekStart(day) > WeekStart(Engine.Now)) return;
-        DropSelection(); TimelineOffset = null; SelectedDate = day; Notify();
+        SelectionChanging?.Invoke(); DropSelection(); TimelineOffset = null; SelectedDate = day; Notify();
     }
-    public void ChangeDate(int days) { DropSelection(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
+    public void ChangeDate(int days) { SelectionChanging?.Invoke(); DropSelection(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
     /// <summary>Steps the Week tab by whole weeks. It never goes past the current week, since there is nothing to review there.</summary>
     public void ChangeWeek(int weeks)
     {

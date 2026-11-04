@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Timer.Core;
 
 namespace Timer.Desktop;
@@ -27,11 +28,18 @@ public sealed partial class SelectedBlockCard : Border
         this.model = model; Name = "SelectedBlockCard";
         CornerRadius = new CornerRadius(18); BorderThickness = new Thickness(1); Padding = new Thickness(18, 14, 18, 16);
         Classes.Add("dayCard");
-        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Sync(); };
-        DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; model.SelectionChanging += LetGoOfTypedBox; Sync(); };
+        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; model.SelectionChanging -= LetGoOfTypedBox; };
         Sync();
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Sync();
+    // A box with the focus keeps what is being typed in it when the card is brought up to date, and clicking a block on the timeline does not move the focus, so a note typed for one
+    // block stayed in the box when another was selected (and was later written onto that one). Before the selection changes, a box in this card lets go of the focus: that applies
+    // what was typed to the block it was typed for, and the card then shows the next block's own values.
+    private void LetGoOfTypedBox()
+    {
+        if (TopLevel.GetTopLevel(this) is { } top && top.FocusManager?.GetFocusedElement() is Visual focused && this.IsVisualAncestorOf(focused)) top.FocusManager.ClearFocus();
+    }
 
     private string Signature(IReadOnlyList<TimerModel.SelectedBlock> blocks)
         => string.Join("|", blocks.Select(b => $"{b.Account};{b.Start.Ticks};{b.End.Ticks};{b.Minutes};{b.Note};{b.Group?.Sources.Count}"))
