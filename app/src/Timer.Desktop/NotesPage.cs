@@ -146,6 +146,13 @@ public sealed class NotesPage : Grid
     private Control Row(DayNote note)
     {
         var isMeeting = NotesModel.IsMeeting(note); var plain = Notes.Text(note); var acct = Notes.AccountOf(note);
+        // The note open in the form above is not also editable here: its row keeps its place as a quiet marker, so there is one place to change it.
+        if (editing == note.Id)
+        {
+            var marker = new TextBlock { Text = isMeeting ? "Editing this meeting above" : "Editing this note above", FontSize = 13, FontStyle = FontStyle.Italic, VerticalAlignment = VerticalAlignment.Center, Name = "PageNoteText_" + note.Id }; marker.Classes.Add("muted");
+            var held = new Border { Child = marker, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 14), Name = "PageRow_" + note.Id, IsHitTestVisible = false }; held.Classes.Add("noteRow"); held.Classes.Add("rowSelected");
+            return held;
+        }
         var line = Ui.Grid(isMeeting ? "Auto,*,Auto" : "Auto,*,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
         Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
         Ui.Put(line, lead);
