@@ -294,6 +294,7 @@ public sealed class WindowCoordinator
         try
         {
             if (Pill.IsVisible && Pill.WindowState != WindowState.Minimized && !ScreenGuard.IsOnAnyMonitor(Pill)) PlacePillAtTopRight();
+            Pill.RepairSize(); // A pill left at a sliver by the screen change gets its size back, whichever mode it is in.
             if (dashboard?.IsVisible == true && Dashboard.WindowState != WindowState.Minimized && !ScreenGuard.IsOnAnyMonitor(Dashboard)
                 && ScreenGuard.TryPrimaryWorkArea(out var area, out _) && ScreenGuard.TryBoundsOf(Dashboard, out var now))
                 ScreenGuard.Place(Dashboard, ScreenGuard.SlideInside(area, now with { X = area.X, Y = area.Y }));

@@ -185,6 +185,24 @@ public sealed class NotesPageTests
     }
 
     [AvaloniaFact]
+    public void TheNoteOpenInTheFormIsNotAlsoEditableInItsRow()
+    {
+        var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            Click(window, "NotesTab"); var id = IdOf(model, "Send the budget"); var other = IdOf(model, "Tidy the drive");
+            Click(window, "PageNoteOpen_" + id);
+            foreach (var name in new[] { "PageNoteOpen_", "PageNoteImportant_", "PageNoteRemove_", "PageNoteReminder_" })
+                Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == name + id);
+            Assert.Contains("Editing this note above", Find<TextBlock>(window, "PageNoteText_" + id).Text);
+            Assert.NotNull(Find<Button>(window, "PageNoteOpen_" + other)); // Other rows stay as they were.
+            Click(window, "PageCancel");
+            Assert.NotNull(Find<Button>(window, "PageNoteOpen_" + id));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ARowOpensInTheFormAsEditingWithTheAccentEdgeAndSaveChangesItAndCancelPutsTheFormBack()
     {
         var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);

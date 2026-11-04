@@ -33,6 +33,10 @@ public sealed class PillWindow : Window
     public const double ScreenWidthDivisor = 1800, LargestScale = 0.95, SmallestScale = 0.8, LargestScaleFromDisplayScale = 1.25;
     public static double ScaleFor(double screenWidth, double displayScale = LargestScaleFromDisplayScale)
     {
+        // While a monitor is being unplugged Windows can report a screen with no width or no scale, which made this a NaN (Math.Clamp passes a NaN through) and
+        // collapsed the pill to a sliver. A figure that is not a usable number counts as the usual one instead.
+        if (!double.IsFinite(screenWidth) || screenWidth <= 0) screenWidth = ScreenWidthDivisor * LargestScale;
+        if (!double.IsFinite(displayScale) || displayScale <= 0) displayScale = LargestScaleFromDisplayScale;
         var byWidth = Math.Clamp(screenWidth / ScreenWidthDivisor, SmallestScale, LargestScale);
         var byDensity = SmallestScale + Math.Clamp((displayScale - 1.0) / (LargestScaleFromDisplayScale - 1.0), 0, 1) * (LargestScale - SmallestScale);
         return Math.Min(byWidth, byDensity);
@@ -262,11 +266,23 @@ public sealed class PillWindow : Window
         // A size chosen in settings wins. Otherwise it is worked out from the screen, and with no screen to measure (a hidden window) it stays as it is.
         var chosen = model.PillScalePercent;
         var scale = chosen is { } percent ? percent / 100.0 : screen is null ? pillScale.ScaleX : ScaleFor(screen.WorkingArea.Width / screen.Scaling, screen.Scaling);
+        if (!double.IsFinite(scale) || scale < .2) scale = double.IsFinite(pillScale.ScaleX) && pillScale.ScaleX >= .2 ? pillScale.ScaleX : SmallestScale;
         appliedChoice = chosen; if (screen is not null) lastScreen = (screen.Bounds, screen.Scaling);
         pillScale.ScaleX = scale; pillScale.ScaleY = scale;
         // Whether or not the scale moved, the window is brought to the size it calls for. Skipping this when the scale was already right left the
         // height at its old unscaled value whenever the scale had been set before the window was showing.
         EnsureSize();
+    }
+    /// <summary>
+    /// Puts right a pill whose real window is not the size it should be, which a monitor being unplugged left at a sliver: the scale is checked, and the native
+    /// window is asked for its size again if Windows is holding another. Does nothing when the size is already right, so it is safe to run every few seconds.
+    /// </summary>
+    public void RepairSize()
+    {
+        if (closedWindow || !IsVisible || WindowState != WindowState.Normal) return;
+        if (!double.IsFinite(pillScale.ScaleX) || pillScale.ScaleX < .2) FitToScreen(Screens.ScreenFromWindow(this) ?? Screens.Primary); else EnsureSize();
+        var width = (int)Math.Round(WindowWidthNow * RenderScaling); var height = (int)Math.Round(WindowHeightNow * RenderScaling);
+        if (ScreenGuard.TryBoundsOf(this, out var now) && (Math.Abs(now.Width - width) > 2 || Math.Abs(now.Height - height) > 2)) ScreenGuard.Place(this, now with { Width = width, Height = height });
     }
     // After the last move of a drag (nothing for a moment) the size is checked once more, since Windows does not take size changes during the drag.
     private void SettleSoon()
@@ -291,6 +307,7 @@ public sealed class PillWindow : Window
     {
         if (closedWindow) return;
         var wantWidth = WindowWidthNow; var wantHeight = WindowHeightNow;
+        if (!double.IsFinite(wantWidth) || !double.IsFinite(wantHeight) || wantWidth < 20 || wantHeight < 20) { FitToScreen(Screens.ScreenFromWindow(this) ?? Screens.Primary); return; }
         Width = wantWidth; Height = wantHeight;
         // A correction is already on its way. It will use the size wanted when it runs, so this change is not lost.
         if (ensuring || !IsVisible || (Math.Abs(ClientSize.Width - wantWidth) <= 1.5 && Math.Abs(ClientSize.Height - wantHeight) <= 1.5)) return;
