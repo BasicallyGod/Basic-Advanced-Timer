@@ -106,4 +106,28 @@ public sealed class DisplayOptionsTests
         }
         finally { window.Close(); }
     }
+
+    // A monitor being unplugged left the compact pill as a sliver: Windows can report a screen with no width or scale for a moment, and a NaN scale collapsed the pill.
+    [Fact]
+    public void ThePillsScaleIsAlwaysAUsableNumberWhateverAScreenReports()
+    {
+        foreach (var (width, scale) in new[] { (double.NaN, double.NaN), (0.0, 0.0), (0.0, 1.5), (1536.0, 0.0), (double.PositiveInfinity, 1.0), (-5.0, -1.0), (1920.0, double.NaN) })
+        {
+            var result = PillWindow.ScaleFor(width, scale);
+            Assert.True(double.IsFinite(result) && result >= PillWindow.SmallestScale && result <= PillWindow.LargestScale, $"{width}, {scale} gave {result}");
+        }
+        Assert.Equal(PillWindow.ScaleFor(1536, 1.5), PillWindow.ScaleFor(1536.0, 1.5)); // Real figures are unchanged.
+    }
+
+    [AvaloniaFact]
+    public void RepairingAHealthyPillChangesNothing()
+    {
+        var model = Demo(); model.SetCompactPill(true); var pill = new PillWindow(model); pill.Show(); Settle(pill);
+        try
+        {
+            var before = (pill.Width, pill.Height, pill.Scale); pill.RepairSize(); Settle(pill);
+            Assert.Equal(before, (pill.Width, pill.Height, pill.Scale));
+        }
+        finally { pill.Close(); }
+    }
 }
