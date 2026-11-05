@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 5 November 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Settings picture choices use consistent boxes | [748fe09](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/748fe0992ed2ed0e9b843e75224192384b663735) | Themes, shadows, pill styles, clock digits and alert modes share 168 × 188 tiles, an 80-pixel picture area and 10-pixel gaps. Captions line up, descriptions wrap and groups wrap rather than stretching their tiles. |
+
 ## 2 November 2026
 
 | Change | Commit | Details |
