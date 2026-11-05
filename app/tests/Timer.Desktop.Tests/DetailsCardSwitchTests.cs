@@ -69,6 +69,8 @@ public sealed class DetailsCardSwitchTests
             Assert.Equal(day, model.SelectedDate);
             Assert.Same(row, model.SelectedBlocks.Single().Row);
             Assert.NotNull(model.EditError);
+            Assert.Equal("invalid", box.Text);
+            Assert.True(box.IsFocused);
         }
         finally { window.Close(); }
     }

@@ -40,7 +40,16 @@ public sealed partial class SelectedBlockCard : Border
     // what was typed to the block it was typed for, and the card then shows the next block's own values.
     private void LetGoOfTypedBox()
     {
-        if (TopLevel.GetTopLevel(this) is { } top && top.FocusManager?.GetFocusedElement() is Visual focused && this.IsVisualAncestorOf(focused)) top.FocusManager.ClearFocus();
+        if (TopLevel.GetTopLevel(this) is not { } top || top.FocusManager?.GetFocusedElement() is not Visual focused || !this.IsVisualAncestorOf(focused)) return;
+        var box = focused as TextBox;
+        var draft = box?.Text;
+        top.FocusManager.ClearFocus();
+        if (box is not null && (model.EditError is not null || model.LastError is not null))
+        {
+            // A refused commit refreshes the saved values. Keep the draft available for correction or retry.
+            box.Text = draft;
+            box.Focus();
+        }
     }
 
     private string Signature(IReadOnlyList<TimerModel.SelectedBlock> blocks)
