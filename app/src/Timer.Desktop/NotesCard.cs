@@ -48,12 +48,13 @@ public sealed class NotesCard : Border
         Ui.Put(body, header); Ui.Put(body, formHost, 0, 1); Ui.Put(body, scroll, 0, 2);
         this.scroll = scroll; Ui.LeaveRoomForTrack(scroll, list); // The slim bar lies over the content, so the rows give it room while the list scrolls.
         overlay.Children.Add(body); overlay.Children.Add(reminderHost); reminderHost.PlacementTarget = title; Child = overlay;
-        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditNoteRequested += OnEditNote; };
-        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditNoteRequested -= OnEditNote; };
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditNoteRequested += OnEditNote; Notes.NoteIdChanged += NoteIdChanged; };
+        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditNoteRequested -= OnEditNote; Notes.NoteIdChanged -= NoteIdChanged; };
         activity = new ViewActivity(this, active => { if (active) Sync(); });
         Sync();
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (activity.Active) Sync(); }
+    private void NoteIdChanged(long previous, long current) { if (popupTarget == previous) popupTarget = current; if (scope is { } pending && pending.Id == previous) scope = (current, pending.Delete); }
 
     // ---- The list ----
 

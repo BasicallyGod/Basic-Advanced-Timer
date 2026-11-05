@@ -25,6 +25,67 @@ public sealed class NoteDetailsTests
     private static void Commit(Window window, string name, string text) { var box = Find<TextBox>(window, name); box.Text = text; box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window); }
 
     [AvaloniaFact]
+    public void SwitchingBetweenNotesAndBlocksCommitsEachDraftToItsOwnItem()
+    {
+        var model = Model();
+        var row = new SessionRow("2026-10-09", "Account one", "09:00:00", "added", "30");
+        model.Engine.Sessions.Add(row);
+        model.Notes.AddNote("Original note", "Account two", null);
+        var id = model.Notes.All.Single().Id;
+        var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            model.SelectBlock(new[] { row }, false); Settle(window);
+            var blockBox = Find<TextBox>(window, "SelectedNote"); blockBox.Focus(); blockBox.Text = "Block draft";
+            model.SelectNote(id); Settle(window);
+            Assert.Empty(model.SelectedRows);
+            Assert.Equal(id, model.SelectedNoteId);
+            Assert.Equal("Block draft", model.Editor.Note(model.Engine.Sessions.Single()));
+            var noteBox = Find<TextBox>(window, "DetailsNoteWords"); noteBox.Focus(); noteBox.Text = "Note draft";
+            model.SelectBlock(new[] { model.Engine.Sessions.Single() }, false); Settle(window);
+            Assert.Null(model.SelectedNoteId);
+            Assert.Equal("Note draft", model.Notes.Text(model.Notes.Find(id)!));
+            Assert.Equal("Account two", model.Notes.AccountOf(model.Notes.Find(id)!));
+            Assert.Equal("Block draft", Find<TextBox>(window, "SelectedNote").Text);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void RecoveringANoteIdKeepsTheFocusedDetailsDraft()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-details-recovery-" + Guid.NewGuid());
+        try
+        {
+            using var store = new TimerStore(folder);
+            var engine = new TrackingEngine(clock: () => Day.AddHours(10));
+            var model = new TimerModel(engine, store.Load(engine), store); model.CompleteSetup();
+            store.Database.Execute("CREATE TRIGGER block_notes BEFORE INSERT ON day_notes BEGIN SELECT RAISE(ABORT, 'disk full'); END");
+            model.Notes.AddNote("Retained note", null, null);
+            var id = model.Notes.All.Single().Id;
+            Assert.True(id < 0);
+            var window = new DashboardWindow(model); window.Show(); Settle(window);
+            try
+            {
+                model.SelectNote(id); Settle(window);
+                var box = Find<TextBox>(window, "DetailsNoteWords"); box.Focus(); box.Text = "Draft after recovery";
+                store.Database.Execute("DROP TRIGGER block_notes");
+                model.Notes.RetryUnsaved(); Settle(window);
+                Assert.True(model.SelectedNoteId > 0);
+                Assert.Same(box, Find<TextBox>(window, "DetailsNoteWords"));
+                Assert.True(box.IsFocused);
+                Assert.Equal("Draft after recovery", box.Text);
+                model.ClearSelection(); Settle(window);
+                Assert.Null(model.SelectedNoteId);
+                Assert.Equal("Draft after recovery", model.Notes.Text(model.Notes.Find(id)!));
+                Assert.False(model.Notes.Unsaved);
+            }
+            finally { window.Close(); }
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
     public void SelectingANoteShowsItInDetailsAndSelectingABlockOrMeetingOrNothingLetsItGo()
     {
         var model = Model(); model.Notes.AddNote("Ring the bank", "Account one", Day.AddHours(15)); model.Notes.AddMeeting(Day, TimeSpan.FromHours(11), TimeSpan.FromHours(12), "Review", null, RepeatChoice.None);

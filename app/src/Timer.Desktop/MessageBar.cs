@@ -32,7 +32,7 @@ public sealed class MessageBar : Border
         offer = Ui.Ctl("ContinuePrevious", "", null, "Continue earlier block", () => model.ContinuePrevious(), small: true);
         offer.Padding = new Thickness(12, 0);
         undo = Ui.Ctl("UndoMessage", "Undo", null, "Undo this action", model.UndoNotice, small: true); undo.Padding = new Thickness(12, 0);
-        var close = Ui.IconButton(IconKind.Close, "Dismiss", "DismissMessage", () => { dismissedError = model.LastError; dismissedOffer = model.ContinuePreviousText; model.ExpireMessages(); Sync(); });
+        var close = Ui.IconButton(IconKind.Close, "Dismiss", "DismissMessage", () => { dismissedError = model.SaveError; dismissedOffer = model.ContinuePreviousText; model.ExpireMessages(); Sync(); });
         var glyphs = new Grid { Width = 28, Height = 28 }; glyphs.Children.Add(tick); glyphs.Children.Add(mark); icon.Child = new Viewbox { Child = glyphs };
         detail.Classes.Add("muted");
         icon.Classes.Add("medallion");
@@ -45,17 +45,17 @@ public sealed class MessageBar : Border
         Sync();
     }
     /// <summary>The line to show, or null when there is nothing to say.</summary>
-    public string? Text => model.LastError is { } failed && failed != dismissedError ? failed : failuresOnly ? null : model.EditError ?? model.Notice ?? (OfferShowing ? model.ContinuePreviousNote : null);
+    public string? Text => model.SaveError is { } failed && failed != dismissedError ? failed : failuresOnly ? null : model.EditError ?? model.Notice ?? (OfferShowing ? model.ContinuePreviousNote : null);
     private bool OfferShowing => model.ContinuePreviousText is { } offered && offered != dismissedOffer;
     /// <summary>Whether the line is a refusal or a failure, not a note that something was done.</summary>
-    public bool IsWarning => model.LastError is { } failed && failed != dismissedError || !failuresOnly && model.EditError is not null;
+    public bool IsWarning => model.SaveError is { } failed && failed != dismissedError || !failuresOnly && model.EditError is not null;
     private void Sync()
     {
-        if (model.LastError is null) dismissedError = null;
+        if (model.SaveError is null) dismissedError = null;
         var line = Text; var split = line?.IndexOf(" · ", StringComparison.Ordinal) ?? -1;
         text.Text = split > 0 ? line![..split] : line ?? ""; text.IsVisible = line is not null;
         detail.Text = split > 0 ? line![(split + 3)..] : ""; detail.IsVisible = split > 0;
-        var warning = IsWarning; var held = model.LastError is { } kept && kept != dismissedError;
+        var warning = IsWarning; var held = model.SaveError is { } kept && kept != dismissedError;
         icon.IsVisible = line is not null; tick.IsVisible = !warning; mark.IsVisible = warning;
         icon.Classes.Set("warnIcon", warning); icon.Classes.Set("okIcon", !warning); Classes.Set("warn", warning); Classes.Set("hold", held);
         // The light's colour is the theme's own, in the shade that holds on the card; it is drawn in the glyph, which sits in a sunk well.

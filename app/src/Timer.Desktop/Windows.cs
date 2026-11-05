@@ -935,7 +935,7 @@ public sealed class DashboardWindow : Window
             rebuild = weekMode ? WeekHasLiveValues()
                 : model.Engine.Active is not null && model.SelectedDate.Date == model.Engine.Now.Date;
         }
-        Refresh(rebuild);
+        Refresh(rebuild || workspacePending);
     }
     private bool WeekHasLiveValues()
     {
@@ -952,11 +952,12 @@ public sealed class DashboardWindow : Window
     }
     private void Refresh(bool refreshWorkspace)
     {
-        if (dashboardReady && (!IsVisible || WindowState == WindowState.Minimized || morphPump?.Running == true))
+        if (dashboardReady && (!IsVisible || WindowState == WindowState.Minimized || morphPump?.Running == true || model.TimelineGestureActive))
         {
             refreshPending = true; workspacePending |= refreshWorkspace;
             return;
         }
+        refreshPending = workspacePending = false;
         sidebar.Refresh(model);
         var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
         date.Text = weekMode ? WeekRange(model.WeekStart(model.SelectedDate), british) : model.SelectedDate.ToString("ddd d MMM", british);

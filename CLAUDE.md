@@ -38,6 +38,10 @@ The `app` folder groups the application, its tests, Store packaging and preview 
 
 ## Storage
 
+Notes keeps failed series creation, updates and deletion in its retry state alongside note writes. Negative series IDs are temporary and are resolved before dependent notes are saved. `TimerModel.SaveError` combines ledger failures with pending Notes persistence. A date or repeat change for this and later meetings ends the old series before the original occurrence and starts a new series from the moved occurrence.
+
+Selection navigation calls `CommitSelection` before dropping the old selection, and remaps row positions after an edit replaces a row. Timeline and stack gestures use `BeginTimelineGesture`/`EndTimelineGesture` so checkpoints defer rebuilding the grabbed controls. Details and account lists use `ViewActivity` to pause hidden work. Notes increments `Revision` for changes so the Notes page can skip same-minute clock updates.
+
 `TimerDatabase` holds accounts, entries, groups, away, day_starts, running, edits, edit_changes and meta. It takes an exclusive lock, uses WAL and `user_version`, and makes daily backups. The schema is format 2 (a budget can be per day), and `TimerDatabase.Upgrades` holds the numbered steps that take an older file forward after a copy is saved; a step that rebuilds a table runs with foreign keys off and is checked with `foreign_key_check` before it is kept, and an older build refuses a newer file. Dispose every `SqliteCommand` or Windows keeps the file locked, which fails tests on CI. `TimerStore` rewrites `entries` when a snapshot changes. Notes, groups and `accountsSeeded` are blobs in `meta`. The settings JSON preserves unknown sections and is swapped in atomically with a `.bak`. Sessions checkpoint every 15 seconds and recovery stops at the last checkpoint. `TimerStore` refuses a folder holding the old `AccountTimer2.ps1` or launcher, and the old CSV files are deliberately never imported. Never auto-open another app's data folder. Never commit `migration-data`, `timer.db`, settings JSON or logs (`.gitignore` excludes them).
 
 ## Themes

@@ -48,15 +48,27 @@ public sealed class NotesPage : Grid
         var pageScroll = new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }; Ui.LeaveRoomForTrack(pageScroll, listColumn);
         Ui.Put(inner, pageScroll, 0, 2);
         inner.Children.Add(whenHost); inner.Children.Add(filterHost); card.Child = inner; Children.Add(card);
-        AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
-        DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NoteIdChanged += NoteIdChanged; };
+        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NoteIdChanged -= NoteIdChanged; };
         activity = new ViewActivity(this, active => { if (active) Sync(); });
         // Escape puts a row being edited back as it was.
         AddHandler(KeyDownEvent, (_, e) => { if (e.Key == Key.Escape && !whenHost.IsOpen && !filterHost.IsOpen && (editing is not null || removing is not null)) { EndEdit(); Redraw(); e.Handled = true; } }, Avalonia.Interactivity.RoutingStrategies.Bubble);
         Blank(); DrawForm(); Sync();
     }
     private readonly ViewActivity activity;
-    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (activity.Active) Sync(); }
+    private void NoteIdChanged(long previous, long current)
+    {
+        if (editing == previous) editing = current;
+        if (removing == previous) removing = current;
+    }
+    private DateTime syncedMinute;
+    private DateTime MinuteNow() { var now = model.Engine.Now; return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMinute)); }
+    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (!activity.Active) return;
+        if (e.PropertyName == nameof(TimerModel.Elapsed) && syncedMinute == MinuteNow()) return;
+        Sync();
+    }
     private void Redraw() { shown = null; Sync(); DrawForm(); }
 
     /// <summary>The words in the header's search box. The list and the counts follow them.</summary>
@@ -65,12 +77,16 @@ public sealed class NotesPage : Grid
 
     // ---- The views, the account filter and the list ----
 
-    private string Signature() => string.Join("|", Notes.All.Select(n => $"{n.Id};{n.Day:yyyyMMdd};{n.At};{n.End};{n.Text};{n.Done};{n.SeriesId}"))
+    private string Signature() => Notes.Revision.ToString(CultureInfo.InvariantCulture)
         + $"#{view}#{string.Join(",", accountFilters)}#{query}#{editing}#{removing}#{model.Engine.Now:yyyyMMddHHmm}#"
         + string.Join(";", model.ReviewAccounts.Select(a => $"{a.Name}/{a.Display}/{a.Colour}"));
 
     public void Sync()
     {
+        using var timing = PerformanceTimings.Measure("notes page sync");
+        if (editing is { } id && Notes.Find(id) is { } edited) editing = edited.Id;
+        if (removing is { } pending && Notes.Find(pending) is { } scoped) removing = scoped.Id;
+        syncedMinute = MinuteNow();
         accountFilters.RemoveAll(name => !model.ReviewAccounts.Any(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));
         var signature = Signature(); if (signature == shown) return; shown = signature;
         var matches = Notes.MatchingAny(query, accountFilters);
