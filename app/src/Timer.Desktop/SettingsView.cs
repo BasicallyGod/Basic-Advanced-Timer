@@ -25,27 +25,22 @@ public sealed class SettingsView : Grid
 
     private readonly TimerModel model;
     private readonly List<Action> syncs = new();
-    private readonly Dictionary<string, (Button Nav, Control Body, string Title, string Intro, string Words)> sections = new();
+    private readonly Dictionary<string, (Button Nav, Control Body, string Title, string Intro)> sections = new();
     private readonly TextBlock title = Ui.Heading("", 22), intro = Ui.Text("", 13, "muted");
-    private string current = "look";
 
     public SettingsView(TimerModel model)
     {
         this.model = model; Name = "SettingsPage"; ColumnDefinitions = new ColumnDefinitions("210,*"); Margin = new Thickness(0, 0, 0, 8);
         var list = new StackPanel { Spacing = 2, Margin = new Thickness(0, 0, 14, 0), Name = "SettingsSections" };
         var body = new StackPanel { Spacing = 0 };
-        Add("look", "Look", IconKind.Sunrise, "Colours, shadows and hints.", BuildLook(), list, body, "theme light dark system sunset shadows tooltips hints colours");
-        Add("pill", "The pill", IconKind.Pill, "How the small always-on-top timer looks and behaves.", BuildPill(), list, body, "pill size automatic compact full clock digits segments plain on top taskbar tray start windows");
-        Add("alerts", "Alerts", IconKind.Bell, "How loudly the pill tells you what is waiting.", BuildAlerts(), list, body, "alerts peek light only off reminders budgets break card count");
-        Add("day", "Day and time", IconKind.Clock, "The hours you are measured against, and how time is written.", BuildDay(), list, body, "working hours days break week starts first day decimal time format schedule");
-        Add("accounts", "Accounts", IconKind.Accounts, "The accounts you track time against, and their budgets.", BuildAccounts(), list, body, "accounts budgets colours tracker names order hidden clients");
-        Add("export", "Export", IconKind.Export, "Save a week or a month as CSV files, or copy the hours table for a timesheet.", BuildExport(), list, body, "export csv copy hours table timesheet week month");
-        Add("about", "About", IconKind.Info, "Setup and version.", BuildAbout(), list, body, "about version setup sample data demo developer");
-        var search = new TextBox { Name = "SettingsSearch", Watermark = "Search settings", Height = 36, MinHeight = 36, FontSize = 13, Margin = new Thickness(0, 0, 0, 8) };
-        Avalonia.Automation.AutomationProperties.SetName(search, "Search settings");
-        search.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) FilterSections(search.Text); };
-        var rail = new StackPanel { Margin = new Thickness(0, 2, 0, 0) }; rail.Children.Add(search); rail.Children.Add(list);
-        Children.Add(rail);
+        Add("look", "Look", IconKind.Sunrise, "Colours, shadows and hints.", BuildLook(), list, body);
+        Add("pill", "The pill", IconKind.Pill, "How the small always-on-top timer looks and behaves.", BuildPill(), list, body);
+        Add("alerts", "Alerts", IconKind.Bell, "How loudly the pill tells you what is waiting.", BuildAlerts(), list, body);
+        Add("day", "Day and time", IconKind.Clock, "The hours you are measured against, and how time is written.", BuildDay(), list, body);
+        Add("accounts", "Accounts", IconKind.Accounts, "The accounts you track time against, and their budgets.", BuildAccounts(), list, body);
+        Add("export", "Export", IconKind.Export, "Save a week or a month as CSV files, or copy the hours table for a timesheet.", BuildExport(), list, body);
+        Add("about", "About", IconKind.Info, "Setup and version.", BuildAbout(), list, body);
+        var rail = new StackPanel { Margin = new Thickness(0, 2, 0, 0) }; rail.Children.Add(list); Children.Add(rail);
 
         // The chosen section sits on a card, under its name and a short line about it.
         title.Name = "SettingsTitle"; intro.Name = "SettingsIntro"; intro.TextWrapping = TextWrapping.Wrap; intro.Margin = new Thickness(0, 2, 0, 12);
@@ -63,7 +58,7 @@ public sealed class SettingsView : Grid
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
     }
 
-    private void Add(string id, string name, IconKind icon, string text, Control content, StackPanel list, StackPanel body, string words)
+    private void Add(string id, string name, IconKind icon, string text, Control content, StackPanel list, StackPanel body)
     {
         var glyph = new IconGlyph(icon) { TintKey = "Muted", Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center };
         var label = Ui.Text(name, 14); label.VerticalAlignment = VerticalAlignment.Center;
@@ -72,25 +67,16 @@ public sealed class SettingsView : Grid
         nav.Classes.Add("settingsNav"); nav.Click += (_, _) => ShowSection(id);
         Avalonia.Automation.AutomationProperties.SetName(nav, name);
         list.Children.Add(nav); content.IsVisible = false; body.Children.Add(content);
-        sections[id] = (nav, content, name, text, (name + " " + words).ToLowerInvariant());
+        sections[id] = (nav, content, name, text);
     }
 
     /// <summary>Shows one section and hides the others.</summary>
     public void ShowSection(string id)
     {
         if (!sections.ContainsKey(id)) return;
-        current = id;
         foreach (var (key, part) in sections) { part.Body.IsVisible = key == id; part.Nav.Classes.Set("selected", key == id); }
         title.Text = sections[id].Title; intro.Text = sections[id].Intro;
         if (id == "export") RefreshPeriods();
-    }
-
-    // Typing in the search box keeps only the sections whose name or settings contain every word, and moves to the first one if the chosen section has gone.
-    private void FilterSections(string? query)
-    {
-        var words = (query ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(w => w.ToLowerInvariant()).ToList();
-        foreach (var (_, part) in sections) part.Nav.IsVisible = words.All(w => part.Words.Contains(w));
-        if (!sections[current].Nav.IsVisible && sections.FirstOrDefault(s => s.Value.Nav.IsVisible) is { Key: { } first } && first is not null) ShowSection(first);
     }
 
     // ---- look
@@ -104,7 +90,7 @@ public sealed class SettingsView : Grid
         var buttons = new Dictionary<string, Button>();
         foreach (var (choice, words) in new[] { (ThemeLibrary.System, "System"), (AppThemes.Light.Name, "Light"), (AppThemes.Dark.Name, "Dark"), (AppThemes.Sun, "Sunset") })
         {
-            var tile = new Button { Name = "Theme" + words, MaxWidth = 172, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 12, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch }; tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile"); tile.Padding = new Thickness(8);
+            var tile = new Button { Name = "Theme" + words, BorderThickness = new Thickness(2), MaxWidth = 172, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 12, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch }; tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile"); tile.Padding = new Thickness(8);
             var caption = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(2, 8, 0, 0) };
             caption.Children.Add(Ui.Text(words, 14)); ((TextBlock)caption.Children[0]).FontWeight = FontWeight.SemiBold;
             var picture = ThemePicture(words);
@@ -486,7 +472,7 @@ public sealed class SettingsView : Grid
         var head = Ui.Text(label, 13.5); head.FontWeight = FontWeight.SemiBold; words.Children.Add(head);
         var detail = Ui.Text(description, 12, "muted"); detail.TextWrapping = TextWrapping.Wrap; words.Children.Add(detail);
         var inner = new StackPanel(); inner.Children.Add(frame); inner.Children.Add(words);
-        var tile = new Button { Name = name, Content = inner, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Top, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(8), Margin = new Thickness(0, 0, 10, 0) };
+        var tile = new Button { Name = name, Content = inner, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top, Padding = new Thickness(8), BorderThickness = new Thickness(2), Margin = new Thickness(0, 0, 10, 0) };
         tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile");
         Avalonia.Automation.AutomationProperties.SetName(tile, label);
         tile.Click += (_, _) => { if (!chosen()) choose(); };
@@ -494,7 +480,7 @@ public sealed class SettingsView : Grid
         syncs.Add(Sync); Sync();
         return tile;
     }
-    /// <summary>Choices side by side, sharing the width equally.</summary>
+    /// <summary>Each group shares equal widths and the height of its tallest caption; other groups size themselves independently.</summary>
     private static Control Choices(params Button[] tiles)
     {
         var grid = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1, Columns = tiles.Length, HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 250 * tiles.Length };

@@ -159,11 +159,11 @@ public sealed class Round19Tests
     }
 
     [Fact]
-    public void ANoteIsMarkedImportantWithAMarkAtTheStartOfItsWordsAndComesFirst()
+    public void AStarredNoteComesFirstAndKeepsTheStoredFlagOutOfItsEditableWords()
     {
-        var model = Model(); model.Notes.AddNote("Plain one", null, null); model.Notes.AddNote("!! Pay the invoice", "Account one", null); model.Notes.AddNote("Plain two", null, null);
+        var model = Model(); model.Notes.AddNote("Plain one", null, null); model.Notes.AddNote("Pay the invoice", "Account one", null, important: true); model.Notes.AddNote("Plain two", null, null);
         var pay = model.Notes.All.Single(n => model.Notes.Text(n) == "Pay the invoice");
-        Assert.True(NotesModel.IsImportant(pay)); Assert.Equal("Pay the invoice", model.Notes.Text(pay)); Assert.Equal("!! Pay the invoice", model.Notes.Words(pay)); Assert.Equal("Account one", model.Notes.AccountOf(pay));
+        Assert.True(NotesModel.IsImportant(pay)); Assert.Equal("Pay the invoice", model.Notes.Text(pay)); Assert.Equal("Pay the invoice", model.Notes.Words(pay)); Assert.Equal("Account one", model.Notes.AccountOf(pay));
         Assert.Equal(new[] { "Pay the invoice", "Plain one", "Plain two" }, model.Notes.ForDay(Day).Select(model.Notes.Text)); // Important first, the rest in their order.
         var one = IdOf(model, "Plain one"); model.Notes.SetImportant(one, true);
         Assert.True(NotesModel.IsImportant(model.Notes.Find(one)!)); Assert.Equal("Plain one", model.Notes.Text(model.Notes.Find(one)!));
@@ -192,12 +192,13 @@ public sealed class Round19Tests
             var names = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name?.StartsWith("NoteText_") == true).Select(t => t.Name!).ToList();
             Assert.Equal("NoteText_" + pay, names[0]); // Important first in the card.
             Click(window, "NoteImportant_" + pay); Assert.False(NotesModel.IsImportant(model.Notes.Find(pay)!)); Click(window, "NoteImportant_" + pay);
-            // Typing !! at the start of the line marks the note.
+            // Punctuation is plain text; only the star marks a note important.
             Click(window, "CardKindNotes"); var field = Find<TextBox>(window, "NoteField"); field.Text = "Call back";
-            field.Text = "!! Call back"; Click(window, "SubmitNote"); // Typing !! at the start marks it, as the star in a note's own Details card does. Assert.True(NotesModel.IsImportant(model.Notes.All.Single(n => model.Notes.Text(n) == "Call back")));
+            field.Text = "!! Call back"; Click(window, "SubmitNote");
+            Assert.False(NotesModel.IsImportant(model.Notes.All.Single(n => model.Notes.Text(n) == "!! Call back")));
             // The Notes page lists them as a view with a count, and its rows have the star too.
             Click(window, "NotesTab");
-            Assert.Contains("2", Find<Button>(window, "NotesView_Important").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+            Assert.Contains("1", Find<Button>(window, "NotesView_Important").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
             Click(window, "NotesView_Important");
             Assert.True(Has(window, "PageNoteText_" + pay)); Assert.False(Has(window, "PageNoteText_" + plain));
             Click(window, "PageNoteImportant_" + pay); Assert.False(NotesModel.IsImportant(model.Notes.Find(pay)!));

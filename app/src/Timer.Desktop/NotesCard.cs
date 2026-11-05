@@ -6,6 +6,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Timer.Core;
 
 namespace Timer.Desktop;
@@ -129,6 +130,14 @@ public sealed class NotesCard : Border
         var remove = Ui.IconButton(IconKind.Trash, meeting ? "Remove meeting" : "Remove note", "NoteRemove_" + note.Id, () => AskRemove(note)); remove.Width = 30; remove.Height = 30; actions.Children.Add(remove);
         Ui.Put(line, actions, 3);
         var card = new Border { Child = line, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(10, 6), MinHeight = 42 }; card.Classes.Add("noteRow");
+        // Padding and chips select the row too; the tick, star, delete key and links keep their own actions.
+        card.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed || e.Source is not Visual source
+                || source.GetSelfAndVisualAncestors().TakeWhile(v => v != card).Any(v => v is Button)) return;
+            if (meeting) model.SelectMeeting(note.Id); else model.SelectNote(note.Id);
+            e.Handled = true;
+        };
         if ((meeting && tinted.Contains(note.Id)) || (!meeting && model.SelectedNoteId == note.Id)) card.Classes.Add("rowSelected"); if (important) card.Classes.Add("importantRow");
         void Show(bool on) { remove.Opacity = on ? 1 : 0; remove.IsHitTestVisible = on; if (star is not null) { var visible = on || important; star.Opacity = visible ? 1 : 0; star.IsHitTestVisible = visible; } }
         Show(false);

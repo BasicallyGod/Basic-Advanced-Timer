@@ -117,7 +117,7 @@ public sealed class UiEfficiencyTests
     [AvaloniaFact]
     public void RemovedNoteHasItsOwnUndoAndDoesNotUndoALedgerEdit()
     {
-        var model = Model(); model.Notes.AddNote("!! Keep the account and reminder", "Account one", Now.AddHours(1));
+        var model = Model(); model.Notes.AddNote("Keep the account and reminder", "Account one", Now.AddHours(1), important: true);
         var before = Assert.Single(model.Notes.All); model.Notes.Toggle(before.Id); before = Assert.Single(model.Notes.All);
         var window = new DashboardWindow(model); window.Show(); window.ShowNotes(); Settle(window);
         try
@@ -172,7 +172,7 @@ public sealed class UiEfficiencyTests
     {
         WithStore((folder, store, model) =>
         {
-            model.Notes.AddNote("!! Completed", "Account one", Now.AddHours(1)); var note = Assert.Single(model.Notes.All);
+            model.Notes.AddNote("Completed", "Account one", Now.AddHours(1), important: true); var note = Assert.Single(model.Notes.All);
             model.Notes.Toggle(note.Id); note = Assert.Single(model.Notes.All); model.RemoveNote(note.Id);
             store.Database.Execute("CREATE TRIGGER block_restore BEFORE INSERT ON day_notes BEGIN SELECT RAISE(ABORT, 'full'); END");
             model.UndoNotice(); Assert.True(model.Notes.Unsaved); Assert.True(Assert.Single(model.Notes.All).Done);

@@ -88,17 +88,30 @@ public sealed class NotesModel
 
     /// <summary>The words shown for a note: without a deadline marker, without the important mark and without the #Tag that has its own chip.</summary>
     public string Text(DayNote note) => NoteLinks.Flatten(Shown(note));
-    /// <summary>The same words as they are written, with any links still in their <c>[words](address)</c> form and the important mark if it has one: what the form is given to edit.</summary>
-    public string Words(DayNote note) => NoteShorthand.Display(note, Names);
+    /// <summary>The editable words, including link markup, without the stored importance flag.</summary>
+    public string Words(DayNote note)
+    {
+        var words = NoteShorthand.Display(note, Names);
+        if (IsMeeting(note)) return words;
+        words = WithoutMark(words);
+        return words.StartsWith(LiteralPrefix, StringComparison.Ordinal) ? words[LiteralPrefix.Length..] : words;
+    }
     /// <summary>The words as a row draws them: as written, but without the important mark, which a row shows as its star.</summary>
-    public string Shown(DayNote note) => IsMeeting(note) ? Words(note) : WithoutMark(Words(note));
+    public string Shown(DayNote note) => Words(note);
 
-    // An important note starts with !!, which is how it is kept (the shared package has no field for it, and a note written with !! at the start is important the same way as
-    // one starred in a row). Meetings are plans, not tasks, so they are never important.
-    /// <summary>Whether some words (as typed in a form, or as stored) start with the important mark.</summary>
+    // Keep the existing storage flag for compatibility. New text beginning with that flag is escaped with an invisible separator,
+    // so typing punctuation never changes importance. Escape the separator itself too, so arbitrary text round-trips unchanged.
+    private const string LiteralPrefix = "\u2063";
+    private static string StoredWords(string words, bool important)
+    {
+        words = words.Trim();
+        if (IsMarked(words) || words.StartsWith(LiteralPrefix, StringComparison.Ordinal)) words = LiteralPrefix + words;
+        return WithMark(words, important);
+    }
+    /// <summary>Whether stored text carries the legacy importance flag.</summary>
     public static bool IsMarked(string text) => text.StartsWith("!!", StringComparison.Ordinal) && (text.Length == 2 || char.IsWhiteSpace(text[2]));
     private static string WithoutMark(string text) => IsMarked(text) ? text[2..].TrimStart() : text;
-    /// <summary>The words with the important mark put at the start, or taken off: what a form's star does to the box.</summary>
+    /// <summary>Adds or removes the stored flag without changing the editable words.</summary>
     public static string WithMark(string text, bool important) => important ? (IsMarked(text) ? text : ("!! " + text).TrimEnd()) : WithoutMark(text);
     /// <summary>Whether a note is marked important.</summary>
     public static bool IsImportant(DayNote note) => !IsMeeting(note) && IsMarked(note.Text);
@@ -230,10 +243,10 @@ public sealed class NotesModel
     }
 
     /// <summary>Adds a note. With a reminder it is dated and timed; without, it is an undated task. Returns what is wrong, or null.</summary>
-    public string? AddNote(string words, string? account, DateTime? reminder)
+    public string? AddNote(string words, string? account, DateTime? reminder, bool important = false)
     {
         if (string.IsNullOrWhiteSpace(words)) return "Write a note first";
-        var text = Compose(words, account);
+        var text = Compose(StoredWords(words, important), account);
         if (reminder is { } when) AddRow(when.Date, when.TimeOfDay.Truncate(), text, null, null, DayNoteKind.Task, true);
         else AddRow(now().Date, null, text, null, null, DayNoteKind.Task, false);
         NotifyChanged(); return null;
@@ -265,11 +278,11 @@ public sealed class NotesModel
     }
 
     /// <summary>Changes a note's words, account and reminder (a null reminder makes it undated again).</summary>
-    public string? EditNote(long id, string words, string? account, DateTime? reminder)
+    public string? EditNote(long id, string words, string? account, DateTime? reminder, bool? important = null)
     {
         if (Find(id) is not { } note) return "That note is no longer there.";
         if (string.IsNullOrWhiteSpace(words)) return "Write a note first";
-        var text = Compose(words, account);
+        var text = Compose(StoredWords(words, important ?? IsImportant(note)), account);
         Change(id, n => reminder is { } when ? n with { Text = text, Day = when.Date, At = when.TimeOfDay.Truncate(), HasDate = true, Done = n.Done && ReminderOf(n) == when }
             : n with { Text = text, Day = now().Date, At = null, HasDate = false });
         NotifyChanged(); return null;
@@ -570,21 +583,21 @@ public sealed class NotesModel
         AddMeeting(today.AddDays(7), TimeSpan.FromHours(9), TimeSpan.FromHours(10.5), "Planning", Account(1), RepeatChoice.None);
 
         // Notes that are late: one a few minutes ago, one a day old, one days old, and important ones.
-        AddNote("!! Call the client back about the contract", Account(1), today.AddHours(13.75));
+        AddNote("Call the client back about the contract", Account(1), today.AddHours(13.75), important: true);
         AddNote("Chase the invoice", Account(4), today.AddDays(-1).AddHours(16));
         AddNote("Renew the software licence", null, today.AddDays(-3).AddHours(10));
-        AddNote("!! Reply to the auditor", Account(3), today.AddDays(-2).AddHours(9.5));
+        AddNote("Reply to the auditor", Account(3), today.AddDays(-2).AddHours(9.5), important: true);
         // Notes coming up: three at nearly the same minute (one pin on the timeline), then later today, tomorrow and further on.
         AddNote("Book the meeting room", null, today.AddHours(15.5));
-        AddNote("!! Print the agenda", Account(2), today.AddHours(15.5).AddMinutes(5));
+        AddNote("Print the agenda", Account(2), today.AddHours(15.5).AddMinutes(5), important: true);
         AddNote("Submit the timesheet", Account(6), today.AddHours(16.75));
-        AddNote("!! Send the invoice batch", Account(3), today.AddHours(17));
-        AddNote("!! Confirm the catering", null, today.AddDays(1).AddHours(8.5));
+        AddNote("Send the invoice batch", Account(3), today.AddHours(17), important: true);
+        AddNote("Confirm the catering", null, today.AddDays(1).AddHours(8.5), important: true);
         AddNote("Prepare the workshop slides", Account(3), today.AddDays(1).AddHours(9));
         AddNote("Review the [contract draft](https://example.com/contract) before the call", Account(1), today.AddDays(2).AddHours(11));
         AddNote("Quarterly report due: see [the template](https://example.com/report) and [last quarter](https://example.com/report-q3)", Account(4), today.AddDays(8).AddHours(12));
         // Notes with no date: one important, one with a link, one with an account, a long one that wraps, and a few more for the lists.
-        AddNote("!! Back up the laptop", null, null);
+        AddNote("Back up the laptop", null, null, important: true);
         AddNote("Look at [other time-tracking tools](https://example.com/research) for ideas", null, null);
         AddNote("Write up the retro", Account(6), null);
         AddNote("Ask finance about the Q4 budget", Account(4), null);
