@@ -83,7 +83,11 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
     {
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
-        SelectionChanging?.Invoke(); var remove = IsSelected(rows); SelectedMeetingId = null;
+        var remove = IsSelected(rows);
+        var places = rows.Select(r => Engine.Sessions.IndexOf(r)).ToArray();
+        if (!CommitSelection()) return;
+        rows = places.Select(i => Engine.Sessions[i]).ToArray();
+        SelectedMeetingId = null;
         foreach (var row in rows) { if (remove) selectedRows.Remove(row); else selectedRows.Add(row); }
         EditError = null; Notice = null; Notify();
     }
@@ -96,7 +100,10 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
         if (additive) { ToggleSelection(rows); return; }
         var onlyThis = SelectedBlockCount == 1 && IsSelected(rows);
-        SelectionChanging?.Invoke(); DropSelection();
+        var places = rows.Select(r => Engine.Sessions.IndexOf(r)).ToArray();
+        if (!CommitSelection()) return;
+        rows = places.Select(i => Engine.Sessions[i]).ToArray();
+        DropSelection();
         if (!onlyThis) foreach (var row in rows) selectedRows.Add(row);
         EditError = null; Notice = null; Notify();
     }
@@ -128,7 +135,13 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// uses it to let go of a box being typed in, which commits that text to the block it was typed for instead of carrying it over to the next block.
     /// </summary>
     public event Action? SelectionChanging;
-    public void ClearSelection() { if (selectedRows.Count == 0 && SelectedMeetingId is null) return; SelectionChanging?.Invoke(); DropSelection(); Notify(); }
+    private bool CommitSelection()
+    {
+        EditError = null;
+        SelectionChanging?.Invoke();
+        return EditError is null;
+    }
+    public void ClearSelection() { if (selectedRows.Count == 0 && SelectedMeetingId is null || !CommitSelection()) return; DropSelection(); Notify(); }
     /// <summary>The meeting the Details card shows, when a meeting (and not a block) is selected. Selecting a block, another day or nothing lets it go.</summary>
     public long? SelectedMeetingId { get; private set; }
     private void DropSelection() { selectedRows.Clear(); SelectedMeetingId = null; }
@@ -137,7 +150,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (Notes.Find(id) is not { } meeting || !NotesModel.IsMeeting(meeting)) return;
         var again = SelectedMeetingId == id;
-        SelectionChanging?.Invoke(); DropSelection(); if (!again) { SelectedMeetingId = id; NotesCardShowsMeetings = true; }
+        if (!CommitSelection()) return;
+        DropSelection(); if (!again) { SelectedMeetingId = id; NotesCardShowsMeetings = true; }
         EditError = null; Notice = null; Notify();
     }
     // After a quick slip from one account to another and back, the earlier block can be picked up again. Blocks in a group are left alone, since
@@ -218,6 +232,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         Editor = store?.Editor ?? new LedgerEditor(Engine);
         Notes = new NotesModel(store, () => Engine.Now, () => ReviewAccounts.Select(a => a.Name).ToList());
         Notes.Changed += Notify;
+        Notes.NoteIdChanged += (previous, current) => { if (SelectedMeetingId == previous) SelectedMeetingId = current; };
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         // A new timer starts with window shadows off (the choice stays in Settings). The shared package defaults them on, so the first run turns them off once and marks it,
@@ -262,8 +277,16 @@ public sealed class TimerModel : INotifyPropertyChanged
         return preferences.Accounts.Select(a => new TimerAccount(a.Name, a.Colour ?? Palette[0],
             a.BudgetHours is { } hours ? TimeSpan.FromHours(hours) : null, a.BudgetPeriod)).Append(new(BreakAccount.Name, "#D6C48C", null)).ToArray();
     }
-    public IReadOnlyList<TimerAccount> ReviewAccounts => Catalogue().Concat(Engine.Sessions.Select(s => s.Account).Distinct(StringComparer.OrdinalIgnoreCase)
-        .Where(name => !Catalogue().Any(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase))).Select(name => new TimerAccount(name, "#91B7D5", null))).ToArray();
+    public IReadOnlyList<TimerAccount> ReviewAccounts
+    {
+        get
+        {
+            var catalogue = Catalogue().ToArray();
+            var names = catalogue.Select(a => a.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return catalogue.Concat(Engine.Sessions.Select(s => s.Account).Where(names.Add)
+                .Select(name => new TimerAccount(name, "#91B7D5", null))).ToArray();
+        }
+    }
     public IReadOnlyList<TimerAccount> Accounts => Catalogue().Where(a => !preferences.Accounts.Any(p => p.Name == a.Name && p.Hidden)).ToArray();
     public string? SelectedAccount { get; private set; }
     public string? ActiveAccount => Engine.Active?.Account;
@@ -322,6 +345,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public DateTime SelectedDate { get; private set; }
     public string Theme => preferences.Theme;
     public string? LastError { get; private set; }
+    public string? SaveError => LastError ?? (Notes.Unsaved ? Notes.Fault ?? "Notes not saved · kept on screen, retrying" : null);
     /// <summary>A one-off message for the footer, such as the note that old timesheet files are not used.</summary>
     private string? notice;
     public string? Notice { get => notice; set { notice = value; NoticeHasUndo = false; noticeUndo = null; } }
@@ -378,7 +402,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     // The block being recorded has no ledger row yet, so it cannot be dragged or edited until tracking stops.
     /// <summary>Says that something was done, in the message bar, without an Undo action.</summary>
-    public void Tell(string text) { Notice = text; Notify(); }
+    public void Tell(string text) { Notice = Notes.Unsaved ? "Not saved yet · kept on screen, retrying" : text; Notify(); }
     /// <summary>Shows a refused edit in the message bar, such as a time that was typed wrongly in the Selected block card.</summary>
     public void Refuse(string message) { EditError = message; Notice = null; Notify(); }
     public void ExplainRunning() { EditError = "Still recording · stop to edit"; Notify(); }
@@ -524,7 +548,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         };
     }
     /// <summary>How much of the budget is used, where 1 is all of it. Null when the account has no budget.</summary>
-    public double? BudgetRatio(TimerAccount a) => a.Budget is { } target && target > TimeSpan.Zero ? BudgetUsed(a).TotalSeconds / target.TotalSeconds : null;
+    public double? BudgetRatio(TimerAccount a, TimeSpan? used = null) => a.Budget is { } target && target > TimeSpan.Zero ? (used ?? BudgetUsed(a)).TotalSeconds / target.TotalSeconds : null;
     /// <summary>How far through the budget's period it is now, from 0 to 1. The bar's tick sits here, so a bar past the tick is running ahead of pace.</summary>
     public double BudgetPace(TimerAccount a)
     {
@@ -543,21 +567,22 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string BudgetLine(TimerAccount a) => a.Budget is { } target
         ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)} {(a.Period switch { "day" => "daily", "month" => "monthly", "quarter" => "quarterly", _ => "weekly" })}" : "No budget";
     /// <summary>What has been used against the budget, such as "8h 45m / 15h", for the dashboard's account rows, or "No budget".</summary>
-    public string BudgetUsage(TimerAccount a) => a.Budget is { } target ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)}" : "No budget";
+    public string BudgetUsage(TimerAccount a, TimeSpan? used = null) => a.Budget is { } target ? $"{FormatCompact(used ?? BudgetUsed(a))} / {FormatCompact(target)}" : "No budget";
     /// <summary>The period the budget covers, in words that sit beside the usage, or an empty string when there is no budget.</summary>
     public string BudgetPeriodLabel(TimerAccount a) => a.Budget is null ? "" : a.Period switch { "day" => "Today", "month" => "This month", "quarter" => "This quarter", _ => "This week" };
     /// <summary>The detail shown on hover instead of a percentage on the row: how much of the budget is used, and that it is over when it is.</summary>
-    public string BudgetDetail(TimerAccount a)
-        => BudgetRatio(a) is not { } ratio ? "No budget" : $"{Math.Round(ratio * 100)}% used{(ratio >= 1 ? " · over budget" : "")}";
+    public string BudgetDetail(TimerAccount a, TimeSpan? used = null)
+        => BudgetRatio(a, used) is not { } ratio ? "No budget" : $"{Math.Round(ratio * 100)}% used{(ratio >= 1 ? " · over budget" : "")}";
     /// <summary>What the narrow account row says on hover: the name (it may be cut short on the row), then the budget used against its target and the period.</summary>
-    public string BudgetRowTip(TimerAccount a)
-        => a.Budget is null ? a.Display + "\nNo budget" : $"{a.Display}\n{BudgetUsage(a)} · {BudgetPeriodLabel(a).ToLowerInvariant()} · {BudgetDetail(a)}";
-    public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
+    public string BudgetRowTip(TimerAccount a, TimeSpan? used = null)
+        => a.Budget is null ? a.Display + "\nNo budget" : $"{a.Display}\n{BudgetUsage(a, used)} · {BudgetPeriodLabel(a).ToLowerInvariant()} · {BudgetDetail(a, used)}";
+    public string BudgetSummary(TimerAccount a, TimeSpan? used = null) => a.Budget is { } target ? $"{Format(used ?? BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
     /// <summary>Puts the timeline and week views back on the current day. The dashboard does this whenever it is opened, so it never comes up on a day left over from earlier.</summary>
     public void ShowToday()
     {
         if (SelectedDate.Date == Engine.Now.Date) return;
+        if (!CommitSelection()) return;
         DropSelection(); TimelineOffset = null; SelectedDate = Engine.Now.Date; Notify();
     }
     // A timer left running past midnight carries on following the current day, if that is the day being shown. Someone reviewing an earlier day is left there.
@@ -565,7 +590,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     private void FollowToday()
     {
         var today = Engine.Now.Date; if (today == lastToday) return;
-        var following = SelectedDate.Date == lastToday; lastToday = today;
+        var following = SelectedDate.Date == lastToday;
+        if (following && !CommitSelection()) return;
+        lastToday = today;
         if (following) { DropSelection(); TimelineOffset = null; SelectedDate = today; }
         Notify();
     }
@@ -574,14 +601,16 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         day = day.Date; if (day == SelectedDate.Date) return;
         if (weeks && WeekStart(day) > WeekStart(Engine.Now)) return;
-        SelectionChanging?.Invoke(); DropSelection(); TimelineOffset = null; SelectedDate = day; Notify();
+        if (!CommitSelection()) return;
+        DropSelection(); TimelineOffset = null; SelectedDate = day; Notify();
     }
-    public void ChangeDate(int days) { SelectionChanging?.Invoke(); DropSelection(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
+    public void ChangeDate(int days) { if (!CommitSelection()) return; DropSelection(); TimelineOffset = null; SelectedDate = SelectedDate.AddDays(days); Notify(); }
     /// <summary>Steps the Week tab by whole weeks. It never goes past the current week, since there is nothing to review there.</summary>
     public void ChangeWeek(int weeks)
     {
         var target = WeekStart(SelectedDate).AddDays(7 * weeks);
         if (target > WeekStart(Engine.Now)) return;
+        if (!CommitSelection()) return;
         DropSelection(); TimelineOffset = null; SelectedDate = target; Notify();
     }
     /// <summary>Whether the Week overview shows its table in place of the chart. Kept for the session only.</summary>
@@ -1107,6 +1136,14 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>True while a reminder is due (its time has passed and it is not ticked off), which lights the blue light on the pill and the rail.</summary>
     public bool ReminderDue => Notes.AttentionCount > 0;
     public const string PresentationChange = "Presentation", CheckpointChange = "Checkpoint";
+    public bool TimelineGestureActive { get; private set; }
+    public void BeginTimelineGesture() => TimelineGestureActive = true;
+    public void EndTimelineGesture()
+    {
+        if (!TimelineGestureActive) return;
+        TimelineGestureActive = false;
+        Notify(CheckpointChange);
+    }
     private void Notify() => Notify(null);
     private void Notify(string? property) { FrameMonitor.Bump("model changes"); ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property)); }
 }

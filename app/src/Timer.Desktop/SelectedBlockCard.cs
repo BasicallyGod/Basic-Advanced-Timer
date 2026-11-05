@@ -31,14 +31,25 @@ public sealed partial class SelectedBlockCard : Border
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; model.SelectionChanging += LetGoOfTypedBox; Sync(); };
         DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; model.SelectionChanging -= LetGoOfTypedBox; };
         Sync();
+        activity = new ViewActivity(this, active => { if (active) Sync(); });
     }
-    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Sync();
+    private readonly ViewActivity activity;
+    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (activity.Active && !model.TimelineGestureActive) Sync(); }
     // A box with the focus keeps what is being typed in it when the card is brought up to date, and clicking a block on the timeline does not move the focus, so a note typed for one
     // block stayed in the box when another was selected (and was later written onto that one). Before the selection changes, a box in this card lets go of the focus: that applies
     // what was typed to the block it was typed for, and the card then shows the next block's own values.
     private void LetGoOfTypedBox()
     {
-        if (TopLevel.GetTopLevel(this) is { } top && top.FocusManager?.GetFocusedElement() is Visual focused && this.IsVisualAncestorOf(focused)) top.FocusManager.ClearFocus();
+        if (TopLevel.GetTopLevel(this) is not { } top || top.FocusManager?.GetFocusedElement() is not Visual focused || !this.IsVisualAncestorOf(focused)) return;
+        var box = focused as TextBox;
+        var draft = box?.Text;
+        top.FocusManager.ClearFocus();
+        if (box is not null && model.EditError is not null)
+        {
+            // A refused commit refreshes the saved values. Keep the draft available for correction or retry.
+            box.Text = draft;
+            box.Focus();
+        }
     }
 
     private string Signature(IReadOnlyList<TimerModel.SelectedBlock> blocks)
@@ -48,6 +59,7 @@ public sealed partial class SelectedBlockCard : Border
     /// <summary>Redraws the card if what it shows has changed since it was last drawn.</summary>
     public void Sync()
     {
+        using var timing = PerformanceTimings.Measure("details sync");
         if (model.SelectedMeetingId is { } meetingId && model.Notes.Find(meetingId) is { } meeting && NotesModel.IsMeeting(meeting)) { SyncMeeting(meeting); return; }
         meetingFields = null;
         var blocks = model.SelectedBlocks;

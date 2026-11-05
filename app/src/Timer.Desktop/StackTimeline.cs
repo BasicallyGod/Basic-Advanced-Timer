@@ -71,7 +71,7 @@ public sealed class StackTimeline : Panel
         var handle = new Border { Name = atStart ? "StackHandleStart" : "StackHandleEnd", Width = HandleWidth, Height = RowHeight - 4, CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), ZIndex = 5, Cursor = new Cursor(StandardCursorType.SizeWestEast), Background = Brush.Parse(model.CurrentTheme.Colour("Accent")), BorderBrush = Brush.Parse(model.CurrentTheme.Colour("Panel")) }; // The accent with a card-coloured edge: seen on both themes, where the text colour was near black on Light.
         ToolTip.SetTip(handle, atStart ? "Drag the start" : "Drag the end");
         var dragging = false;
-        handle.PointerPressed += (_, e) => { if (e.GetCurrentPoint(handle).Properties.IsLeftButtonPressed) { dragging = true; e.Pointer.Capture(handle); preview = (bar, bar.Start, bar.End); e.Handled = true; } };
+        handle.PointerPressed += (_, e) => { if (e.GetCurrentPoint(handle).Properties.IsLeftButtonPressed) { model.BeginTimelineGesture(); dragging = true; e.Pointer.Capture(handle); preview = (bar, bar.Start, bar.End); e.Handled = true; } };
         handle.PointerMoved += (_, e) =>
         {
             if (!dragging || preview is not { } now) return;
@@ -86,8 +86,9 @@ public sealed class StackTimeline : Panel
             if (!dragging) return;
             dragging = false; e.Pointer.Capture(null); var result = preview; preview = null; InvalidateArrange(); e.Handled = true;
             if (result is { } r && (r.Start != bar.Start || r.End != bar.End)) Resized?.Invoke(bar, r.Start, r.End);
+            model.EndTimelineGesture();
         };
-        handle.PointerCaptureLost += (_, _) => { if (dragging) { dragging = false; preview = null; InvalidateArrange(); } };
+        handle.PointerCaptureLost += (_, _) => { if (dragging) { dragging = false; preview = null; InvalidateArrange(); model.EndTimelineGesture(); } };
         Children.Add(handle); handles.Add((handle, bar, atStart));
     }
 
