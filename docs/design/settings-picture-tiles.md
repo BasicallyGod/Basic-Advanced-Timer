@@ -1,7 +1,7 @@
 # Settings picture tiles
 
-Use the same 168 × 188 logical-pixel choice tile for themes, window shadows, pill styles, clock digits and alert modes. Each tile has an 80-pixel preview area, 8-pixel padding and a 10-pixel gap to its neighbour. Captions start at the same height; descriptions wrap below them. The picture stays centred at its own proportions.
+Size each setting group independently: themes, window shadows, pill styles, clock digits and alert modes. Within each group, all choice boxes share the same width and height. The longest caption determines the group's height, and the shorter choices stretch to match it. Preview areas match within the group, with captions aligned at the top.
 
-Rows use as many tiles as fit and wrap as a group becomes narrower. A pair occupies the same two column widths as a pair in a larger group; it does not expand to fill the card. The live pill-size preview remains a separate slider preview rather than a choice tile.
+Theme previews remain compact; the window-shadow and pill choices use their own proportions, and alert previews retain extra height for the Peek card. Rows share the available width up to their existing limits. Keep the selection border the same thickness for selected and unselected tiles so selecting an option does not shift its picture or caption. The live pill-size preview remains a separate slider preview rather than a choice tile.
 
 Keep the existing theme colours, selection ring and controls. Review Look, The pill and Alerts in both Light and Dark, including the longer Compact and Peek descriptions, and check the settings card for overflow.
