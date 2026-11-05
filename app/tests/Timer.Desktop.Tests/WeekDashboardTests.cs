@@ -235,6 +235,8 @@ public sealed class WeekDashboardTests
                     Assert.True(Math.Abs(Centre(other) - Centre(name)) < 1.5, $"{name.Text}: column {Grid.GetColumn(other)} is {Centre(other) - Centre(name):0.0}px off");
             }
             Assert.Equal(1, lines.Select(l => Math.Round(l.Bounds.Height)).Distinct().Count()); // Rows are the same height with or without a budget.
+            // The words sit at the same height in their row with or without a budget.
+            Assert.Equal(1, lines.Select(l => Math.Round(Centre(l.Children.OfType<TextBlock>().First(t => Grid.GetColumn(t) == 1)) - l.TranslatePoint(new Point(0, 0), window)!.Value.Y)).Distinct().Count());
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
             if (folder is not null) { Directory.CreateDirectory(folder); frame?.Save(Path.Combine(folder, "demo-overview.png")); }
         }
