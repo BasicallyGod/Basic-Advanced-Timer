@@ -54,7 +54,7 @@ public sealed class NotesCard : Border
         Sync();
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (activity.Active) Sync(); }
-    private void NoteIdChanged(long previous, long current) { if (popupTarget == previous) popupTarget = current; if (scope is { } pending && pending.Id == previous) scope = (current, pending.Delete); }
+    private void NoteIdChanged(long previous, long current) { if (scope is { } pending && pending.Id == previous) scope = (current, pending.Delete); }
 
     // ---- The list ----
 
