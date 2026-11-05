@@ -9,6 +9,28 @@ public sealed class ReliabilityTests
     private static readonly DateTime Day = new(2026, 11, 5);
 
     [Fact]
+    public void AnExistingSaveFailureDoesNotPreventInspectingRecordedBlocks()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-inspect-unsaved-" + Guid.NewGuid());
+        try
+        {
+            using var store = new TimerStore(folder);
+            var engine = new TrackingEngine(clock: () => Day.AddHours(12));
+            var model = new TimerModel(engine, store.Load(engine), store);
+            var row = new SessionRow("2026-11-05", "Account one", "09:00:00", "added", "30");
+            engine.Sessions.Add(row);
+            StorageFaults.Block(store);
+            Assert.False(model.Save());
+            Assert.NotNull(model.SaveError);
+            model.SelectBlock(new[] { row }, false);
+            Assert.Same(row, model.SelectedBlocks.Single().Row);
+            Assert.NotNull(model.SaveError);
+            StorageFaults.Unblock(store);
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [Fact]
     public void ReschedulingAndRemovingAReminderKeepItsAccountAndImportance()
     {
         var notes = new NotesModel(null, () => Day, () => new[] { "Account one" });

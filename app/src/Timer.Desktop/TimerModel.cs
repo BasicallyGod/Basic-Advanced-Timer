@@ -139,7 +139,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         EditError = null;
         SelectionChanging?.Invoke();
-        return EditError is null && LastError is null;
+        return EditError is null;
     }
     public void ClearSelection() { if (selectedRows.Count == 0 && SelectedMeetingId is null || !CommitSelection()) return; DropSelection(); Notify(); }
     /// <summary>The meeting the Details card shows, when a meeting (and not a block) is selected. Selecting a block, another day or nothing lets it go.</summary>

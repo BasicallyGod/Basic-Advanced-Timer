@@ -44,7 +44,7 @@ public sealed partial class SelectedBlockCard : Border
         var box = focused as TextBox;
         var draft = box?.Text;
         top.FocusManager.ClearFocus();
-        if (box is not null && (model.EditError is not null || model.LastError is not null))
+        if (box is not null && model.EditError is not null)
         {
             // A refused commit refreshes the saved values. Keep the draft available for correction or retry.
             box.Text = draft;
