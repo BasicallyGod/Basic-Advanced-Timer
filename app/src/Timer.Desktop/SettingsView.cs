@@ -28,6 +28,7 @@ public sealed class SettingsView : Grid
     private readonly Dictionary<string, (Button Nav, Control Body, string Title, string Intro, string Words)> sections = new();
     private readonly TextBlock title = Ui.Heading("", 22), intro = Ui.Text("", 13, "muted");
     private string current = "look";
+    private const double PictureTileWidth = 168, PictureTileHeight = 188, PictureHeight = 80, PictureTileGap = 10;
 
     public SettingsView(TimerModel model)
     {
@@ -99,23 +100,18 @@ public sealed class SettingsView : Grid
         var stack = new StackPanel { Spacing = 0 };
         stack.Children.Add(SectionLabel("Theme"));
         // System follows the computer's light or dark setting. Each tile is a small picture of the dashboard in that theme.
-        // Four equal tiles that share the card's width up to their own 172, so with the card narrower they narrow too, side by side, instead of running past the card's edge.
-        var tiles = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1, Columns = 4, Margin = new Thickness(0, 6, 0, 10), HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 4 * 172 + 36 };
+        var tiles = new List<Button>();
         var buttons = new Dictionary<string, Button>();
         foreach (var (choice, words) in new[] { (ThemeLibrary.System, "System"), (AppThemes.Light.Name, "Light"), (AppThemes.Dark.Name, "Dark"), (AppThemes.Sun, "Sunset") })
         {
-            var tile = new Button { Name = "Theme" + words, MaxWidth = 172, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 12, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch }; tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile"); tile.Padding = new Thickness(8);
-            var caption = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(2, 8, 0, 0) };
-            caption.Children.Add(Ui.Text(words, 14)); ((TextBlock)caption.Children[0]).FontWeight = FontWeight.SemiBold;
-            var picture = ThemePicture(words);
-            var inner = new StackPanel(); inner.Children.Add(picture); inner.Children.Add(caption);
-            tile.Content = inner; tile.Click += (_, _) => { if (model.Theme != choice) model.SetTheme(choice); };
+            var tile = PictureTile("Theme" + words, words, ThemePicture(words));
+            tile.Click += (_, _) => { if (model.Theme != choice) model.SetTheme(choice); };
             Avalonia.Automation.AutomationProperties.SetName(tile, words + " theme");
-            buttons[choice] = tile; tiles.Children.Add(tile);
+            buttons[choice] = tile; tiles.Add(tile);
         }
         void SyncThemes() { foreach (var (choice, tile) in buttons) tile.Classes.Set("selected", choice == model.Theme); }
         syncs.Add(SyncThemes); SyncThemes();
-        stack.Children.Add(tiles);
+        var themeChoices = Choices(tiles.ToArray()); themeChoices.Margin = new Thickness(0, 6, 0, 10); stack.Children.Add(themeChoices);
         stack.Children.Add(BuildSunOptions());
 
         stack.Children.Add(Section("Window shadows", Choices(
@@ -183,9 +179,9 @@ public sealed class SettingsView : Grid
         // The three choices are three different pills: a card that opens under it, only the red count, or nothing.
         void Pick(string mode) => model.SetPillAlertsMode(mode);
         stack.Children.Add(Section("Pill alerts", Choices(
-            Choice("AlertsPeek", "Peek", "A card opens under the pill for a new alert, and again when you press the count", SettingsPictures.Alerts("peek", .5), () => model.PillAlertsMode == "peek", () => Pick("peek"), 120),
-            Choice("AlertsLight", "Light only", "Only the red count. Press it to see the list", SettingsPictures.Alerts("light", .5), () => model.PillAlertsMode == "light", () => Pick("light"), 120),
-            Choice("AlertsOff", "Off", "No count, no card. The sidebar still lists them", SettingsPictures.Alerts("off", .5), () => model.PillAlertsMode == "off", () => Pick("off"), 120))));
+            Choice("AlertsPeek", "Peek", "A card opens under the pill for a new alert, and again when you press the count", SettingsPictures.Alerts("peek", .5), () => model.PillAlertsMode == "peek", () => Pick("peek")),
+            Choice("AlertsLight", "Light only", "Only the red count. Press it to see the list", SettingsPictures.Alerts("light", .5), () => model.PillAlertsMode == "light", () => Pick("light")),
+            Choice("AlertsOff", "Off", "No count, no card. The sidebar still lists them", SettingsPictures.Alerts("off", .5), () => model.PillAlertsMode == "off", () => Pick("off")))));
         var counts = new StackPanel();
         foreach (var (what, where) in new[] { ("A reminder has passed", "A note's reminder time has gone."), ("A budget is at 80 per cent or spent", "Budgets are set under Accounts."), ("A break has run past the allowance", "The daily break is set under Day and time.") })
         {
@@ -331,7 +327,7 @@ public sealed class SettingsView : Grid
                 Grid.SetColumn(night, 1); system.Children.Add(day); system.Children.Add(night);
             }
         }
-        var frame = new Border { Height = 72, CornerRadius = new CornerRadius(10), ClipToBounds = true, BorderThickness = new Thickness(1), Child = inside };
+        var frame = new Border { Height = PictureHeight, CornerRadius = new CornerRadius(10), ClipToBounds = true, BorderThickness = new Thickness(1), Child = inside };
         frame.Bind(Border.BorderBrushProperty, frame.GetResourceObservable("Line"));
         return frame;
     }
@@ -479,25 +475,31 @@ public sealed class SettingsView : Grid
         return stack;
     }
     /// <summary>A picture of what a choice does, with its name and one line under it. The chosen one wears the accent ring, as the theme tiles do.</summary>
-    private Button Choice(string name, string label, string description, Control picture, Func<bool> chosen, Action choose, double pictureHeight = 66)
+    private Button Choice(string name, string label, string description, Control picture, Func<bool> chosen, Action choose)
     {
-        var frame = new Border { Height = pictureHeight, CornerRadius = new CornerRadius(9), ClipToBounds = true, Child = picture }; frame.Bind(Border.BackgroundProperty, frame.GetResourceObservable("Hover"));
-        var words = new StackPanel { Spacing = 2, Margin = new Thickness(2, 8, 2, 0) };
-        var head = Ui.Text(label, 13.5); head.FontWeight = FontWeight.SemiBold; words.Children.Add(head);
-        var detail = Ui.Text(description, 12, "muted"); detail.TextWrapping = TextWrapping.Wrap; words.Children.Add(detail);
-        var inner = new StackPanel(); inner.Children.Add(frame); inner.Children.Add(words);
-        var tile = new Button { Name = name, Content = inner, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Top, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(8), Margin = new Thickness(0, 0, 10, 0) };
-        tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile");
-        Avalonia.Automation.AutomationProperties.SetName(tile, label);
+        var tile = PictureTile(name, label, picture, description);
         tile.Click += (_, _) => { if (!chosen()) choose(); };
         void Sync() => tile.Classes.Set("selected", chosen());
         syncs.Add(Sync); Sync();
         return tile;
     }
-    /// <summary>Choices side by side, sharing the width equally.</summary>
+    // Every picture choice uses the same footprint, so the row's size does not depend on its captions or number of options.
+    private static Button PictureTile(string name, string label, Control picture, string? description = null)
+    {
+        var frame = new Border { Height = PictureHeight, CornerRadius = new CornerRadius(9), ClipToBounds = true, Child = picture, Name = name + "Picture" }; frame.Bind(Border.BackgroundProperty, frame.GetResourceObservable("Hover"));
+        var words = new StackPanel { Spacing = 2, Margin = new Thickness(2, 8, 2, 0) };
+        var head = Ui.Text(label, 13.5); head.FontWeight = FontWeight.SemiBold; words.Children.Add(head);
+        if (description is not null) { var detail = Ui.Text(description, 12, "muted"); detail.TextWrapping = TextWrapping.Wrap; words.Children.Add(detail); }
+        var inner = new StackPanel(); inner.Children.Add(frame); inner.Children.Add(words);
+        var tile = new Button { Name = name, Content = inner, Width = PictureTileWidth, Height = PictureTileHeight, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top, Padding = new Thickness(8), BorderThickness = new Thickness(2) };
+        tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile");
+        Avalonia.Automation.AutomationProperties.SetName(tile, label);
+        return tile;
+    }
+    /// <summary>Choices keep the same column width across sections and wrap if the card cannot fit another tile.</summary>
     private static Control Choices(params Button[] tiles)
     {
-        var grid = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1, Columns = tiles.Length, HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 250 * tiles.Length };
+        var grid = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = PictureTileGap, LineSpacing = PictureTileGap };
         foreach (var tile in tiles) grid.Children.Add(tile);
         return grid;
     }
