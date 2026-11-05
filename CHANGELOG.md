@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Notes are easier to select and importance uses the star | [1f83084](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/1f83084ba2073aaf6444a2fde3ea0a6a2964b6ba) | Timeline note and meeting rows select from their padding and chips while their actions remain independent. The note Details star moves beside Delete and completion stays in the list. Typed `!!` is plain text, existing stars remain intact and editor drafts keep importance separately. The Note kind picker no longer clips its shadow. Settings search is removed. |
 | Settings picture choices match within each setting | [7347501](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/73475014854258a43447d069c7eff4bbc723512f) | Each group of themes, window shadows, pill styles, clock digits or alert modes uses equal-width boxes that stretch to its longest caption. Groups keep their own proportions, captions stay aligned and selection does not change the space reserved for the border. |
 
 ## 2 November 2026
