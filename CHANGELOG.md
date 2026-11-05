@@ -10,7 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
-| Settings picture choices use consistent boxes | [748fe09](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/748fe0992ed2ed0e9b843e75224192384b663735) | Themes, shadows, pill styles, clock digits and alert modes share 168 × 188 tiles, an 80-pixel picture area and 10-pixel gaps. Captions line up, descriptions wrap and groups wrap rather than stretching their tiles. |
+| Settings picture choices match within each setting | [7347501](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/73475014854258a43447d069c7eff4bbc723512f) | Each group of themes, window shadows, pill styles, clock digits or alert modes uses equal-width boxes that stretch to its longest caption. Groups keep their own proportions, captions stay aligned and selection does not change the space reserved for the border. |
 
 ## 2 November 2026
 
