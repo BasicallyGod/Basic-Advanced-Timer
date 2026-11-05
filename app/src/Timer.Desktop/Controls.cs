@@ -760,13 +760,14 @@ public sealed class AccountList : StackPanel
         {
             row.Row.Classes.Set("active", model.ActiveAccount == row.Account.Name);
             row.Today.Text = model.Format(model.Today(row.Account));
-            row.Budget.Text = bars ? model.BudgetUsage(row.Account) : model.BudgetSummary(row.Account);
-            if (bars) { row.Period.Text = model.BudgetPeriodLabel(row.Account); ToolTip.SetTip(row.Row, model.BudgetRowTip(row.Account)); }
-            if (row.Bar is { } bar && model.BudgetRatio(row.Account) is { } ratio)
+            var used = row.Account.Budget is null ? (TimeSpan?)null : model.BudgetUsed(row.Account);
+            row.Budget.Text = bars ? model.BudgetUsage(row.Account, used) : model.BudgetSummary(row.Account, used);
+            if (bars) { row.Period.Text = model.BudgetPeriodLabel(row.Account); ToolTip.SetTip(row.Row, model.BudgetRowTip(row.Account, used)); }
+            if (row.Bar is { } bar && model.BudgetRatio(row.Account, used) is { } ratio)
             {
                 bar.Set(ratio, model.BudgetPace(row.Account));
                 // The percentage and what the pace line means are in the hover detail, and a spent budget turns the usage red so overrunning reads at a glance.
-                var detail = model.BudgetDetail(row.Account);
+                var detail = model.BudgetDetail(row.Account, used);
                 ToolTip.SetTip(bar, detail); ToolTip.SetTip(row.Budget, detail);
                 row.Budget.Classes.Set("overtime", ratio >= 1);
             }

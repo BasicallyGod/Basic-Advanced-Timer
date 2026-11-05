@@ -548,7 +548,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         };
     }
     /// <summary>How much of the budget is used, where 1 is all of it. Null when the account has no budget.</summary>
-    public double? BudgetRatio(TimerAccount a) => a.Budget is { } target && target > TimeSpan.Zero ? BudgetUsed(a).TotalSeconds / target.TotalSeconds : null;
+    public double? BudgetRatio(TimerAccount a, TimeSpan? used = null) => a.Budget is { } target && target > TimeSpan.Zero ? (used ?? BudgetUsed(a)).TotalSeconds / target.TotalSeconds : null;
     /// <summary>How far through the budget's period it is now, from 0 to 1. The bar's tick sits here, so a bar past the tick is running ahead of pace.</summary>
     public double BudgetPace(TimerAccount a)
     {
@@ -567,16 +567,16 @@ public sealed class TimerModel : INotifyPropertyChanged
     public string BudgetLine(TimerAccount a) => a.Budget is { } target
         ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)} {(a.Period switch { "day" => "daily", "month" => "monthly", "quarter" => "quarterly", _ => "weekly" })}" : "No budget";
     /// <summary>What has been used against the budget, such as "8h 45m / 15h", for the dashboard's account rows, or "No budget".</summary>
-    public string BudgetUsage(TimerAccount a) => a.Budget is { } target ? $"{FormatCompact(BudgetUsed(a))} / {FormatCompact(target)}" : "No budget";
+    public string BudgetUsage(TimerAccount a, TimeSpan? used = null) => a.Budget is { } target ? $"{FormatCompact(used ?? BudgetUsed(a))} / {FormatCompact(target)}" : "No budget";
     /// <summary>The period the budget covers, in words that sit beside the usage, or an empty string when there is no budget.</summary>
     public string BudgetPeriodLabel(TimerAccount a) => a.Budget is null ? "" : a.Period switch { "day" => "Today", "month" => "This month", "quarter" => "This quarter", _ => "This week" };
     /// <summary>The detail shown on hover instead of a percentage on the row: how much of the budget is used, and that it is over when it is.</summary>
-    public string BudgetDetail(TimerAccount a)
-        => BudgetRatio(a) is not { } ratio ? "No budget" : $"{Math.Round(ratio * 100)}% used{(ratio >= 1 ? " · over budget" : "")}";
+    public string BudgetDetail(TimerAccount a, TimeSpan? used = null)
+        => BudgetRatio(a, used) is not { } ratio ? "No budget" : $"{Math.Round(ratio * 100)}% used{(ratio >= 1 ? " · over budget" : "")}";
     /// <summary>What the narrow account row says on hover: the name (it may be cut short on the row), then the budget used against its target and the period.</summary>
-    public string BudgetRowTip(TimerAccount a)
-        => a.Budget is null ? a.Display + "\nNo budget" : $"{a.Display}\n{BudgetUsage(a)} · {BudgetPeriodLabel(a).ToLowerInvariant()} · {BudgetDetail(a)}";
-    public string BudgetSummary(TimerAccount a) => a.Budget is { } target ? $"{Format(BudgetUsed(a))} / {Format(target)}" : "No budget";
+    public string BudgetRowTip(TimerAccount a, TimeSpan? used = null)
+        => a.Budget is null ? a.Display + "\nNo budget" : $"{a.Display}\n{BudgetUsage(a, used)} · {BudgetPeriodLabel(a).ToLowerInvariant()} · {BudgetDetail(a, used)}";
+    public string BudgetSummary(TimerAccount a, TimeSpan? used = null) => a.Budget is { } target ? $"{Format(used ?? BudgetUsed(a))} / {Format(target)}" : "No budget";
     public void ToggleFormat() { preferences = preferences with { DecimalHours = !DecimalHours }; Save(); Notify(); }
     /// <summary>Puts the timeline and week views back on the current day. The dashboard does this whenever it is opened, so it never comes up on a day left over from earlier.</summary>
     public void ShowToday()
