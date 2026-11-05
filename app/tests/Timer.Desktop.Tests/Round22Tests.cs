@@ -43,7 +43,7 @@ public sealed class Round22Tests
     [AvaloniaFact]
     public void AnImportantNoteIsGoldNotTheAccent()
     {
-        var model = Model(); model.Notes.AddNote("!! Ring the client", null, null); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        var model = Model(); model.Notes.AddNote("Ring the client", null, null, important: true); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             var app = Application.Current!;
@@ -60,7 +60,7 @@ public sealed class Round22Tests
     [AvaloniaFact]
     public void TheStarAndBinKeepTheirPlaceOnEveryRowWhateverItsChips()
     {
-        var model = Model(); model.Notes.AddNote("!! With a reminder", null, Day.AddHours(15)); model.Notes.AddNote("!! Without one", null, null);
+        var model = Model(); model.Notes.AddNote("With a reminder", null, Day.AddHours(15), important: true); model.Notes.AddNote("Without one", null, null, important: true);
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {

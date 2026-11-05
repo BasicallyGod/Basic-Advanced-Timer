@@ -113,9 +113,13 @@ public sealed class NoteDetailsTests
             Assert.Contains(Find<Button>(window, "DetailsNoteReminder").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "No reminder");
             Find<ComboBox>(window, "DetailsNoteAccount").SelectedItem = "Account two"; Settle(window); Assert.Equal("Account two", model.Notes.AccountOf(model.Notes.Find(id)!));
             Click(window, "DetailsNoteImportant"); Assert.True(NotesModel.IsImportant(model.Notes.Find(id)!)); Assert.Equal(id, model.SelectedNoteId); // Still selected, the box follows.
-            Assert.Equal("!! Ring the bank", Find<TextBox>(window, "DetailsNoteWords").Text);
-            Click(window, "DetailsNoteDone"); Assert.True(model.Notes.Find(id)!.Done);
-            Commit(window, "DetailsNoteWords", ""); Assert.Equal("Write a note first", model.EditError); Assert.Equal("!! Ring the bank", Find<TextBox>(window, "DetailsNoteWords").Text); // A refused edit puts the saved words back.
+            Assert.Equal("Ring the bank", Find<TextBox>(window, "DetailsNoteWords").Text);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "DetailsNoteDone");
+            var star = Find<Button>(window, "DetailsNoteImportant"); var delete = Find<Button>(window, "DeleteNote");
+            Assert.True(star.TranslatePoint(new Point(0, 0), window)!.Value.X < delete.TranslatePoint(new Point(0, 0), window)!.Value.X);
+            Assert.Equal(star.TranslatePoint(new Point(0, 0), window)!.Value.Y, delete.TranslatePoint(new Point(0, 0), window)!.Value.Y, 1);
+            Click(window, "NoteDone_" + id); Assert.True(model.Notes.Find(id)!.Done);
+            Commit(window, "DetailsNoteWords", ""); Assert.Equal("Write a note first", model.EditError); Assert.Equal("Ring the bank", Find<TextBox>(window, "DetailsNoteWords").Text); // A refused edit puts the saved words back.
             Click(window, "DeleteNote"); Assert.Empty(model.Notes.All); Assert.Null(model.SelectedNoteId); Assert.True(model.NoticeHasUndo);
             model.UndoNotice(); Assert.Single(model.Notes.All); // The toast's Undo brings it back.
         }

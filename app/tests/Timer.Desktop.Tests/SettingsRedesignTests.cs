@@ -113,19 +113,16 @@ public sealed class SettingsRedesignTests
     }
 
     [AvaloniaFact]
-    public void AlertsListsWhatCountsAndTheSearchBoxKeepsOnlyTheMatchingSections()
+    public void AlertsListsWhatCountsAndSettingsShowsAllSectionsWithoutASearchBox()
     {
         var (window, view, _) = Open();
         try
         {
             view.ShowSection("alerts"); Dispatcher.UIThread.RunJobs();
             Assert.Contains(view.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "A budget is at 80 per cent or spent");
-            var search = Find<TextBox>(view, "SettingsSearch");
-            search.Text = "break"; Dispatcher.UIThread.RunJobs();
-            Assert.True(Find<Button>(view, "SettingsAlerts").IsVisible); Assert.True(Find<Button>(view, "SettingsDay").IsVisible); Assert.False(Find<Button>(view, "SettingsExport").IsVisible);
-            search.Text = "csv"; Dispatcher.UIThread.RunJobs();
-            Assert.Equal("Export", Find<TextBlock>(view, "SettingsTitle").Text); // The chosen section went, so the first match is shown.
-            search.Text = ""; Dispatcher.UIThread.RunJobs(); Assert.True(Find<Button>(view, "SettingsLook").IsVisible);
+            Assert.DoesNotContain(view.GetVisualDescendants().OfType<TextBox>(), t => t.Name == "SettingsSearch");
+            foreach (var section in new[] { "Look", "Pill", "Alerts", "Day", "Accounts", "Export", "About" })
+                Assert.True(Find<Button>(view, "Settings" + section).IsVisible);
         }
         finally { window.Close(); }
     }

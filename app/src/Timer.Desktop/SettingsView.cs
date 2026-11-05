@@ -25,27 +25,22 @@ public sealed class SettingsView : Grid
 
     private readonly TimerModel model;
     private readonly List<Action> syncs = new();
-    private readonly Dictionary<string, (Button Nav, Control Body, string Title, string Intro, string Words)> sections = new();
+    private readonly Dictionary<string, (Button Nav, Control Body, string Title, string Intro)> sections = new();
     private readonly TextBlock title = Ui.Heading("", 22), intro = Ui.Text("", 13, "muted");
-    private string current = "look";
 
     public SettingsView(TimerModel model)
     {
         this.model = model; Name = "SettingsPage"; ColumnDefinitions = new ColumnDefinitions("210,*"); Margin = new Thickness(0, 0, 0, 8);
         var list = new StackPanel { Spacing = 2, Margin = new Thickness(0, 0, 14, 0), Name = "SettingsSections" };
         var body = new StackPanel { Spacing = 0 };
-        Add("look", "Look", IconKind.Sunrise, "Colours, shadows and hints.", BuildLook(), list, body, "theme light dark system sunset shadows tooltips hints colours");
-        Add("pill", "The pill", IconKind.Pill, "How the small always-on-top timer looks and behaves.", BuildPill(), list, body, "pill size automatic compact full clock digits segments plain on top taskbar tray start windows");
-        Add("alerts", "Alerts", IconKind.Bell, "How loudly the pill tells you what is waiting.", BuildAlerts(), list, body, "alerts peek light only off reminders budgets break card count");
-        Add("day", "Day and time", IconKind.Clock, "The hours you are measured against, and how time is written.", BuildDay(), list, body, "working hours days break week starts first day decimal time format schedule");
-        Add("accounts", "Accounts", IconKind.Accounts, "The accounts you track time against, and their budgets.", BuildAccounts(), list, body, "accounts budgets colours tracker names order hidden clients");
-        Add("export", "Export", IconKind.Export, "Save a week or a month as CSV files, or copy the hours table for a timesheet.", BuildExport(), list, body, "export csv copy hours table timesheet week month");
-        Add("about", "About", IconKind.Info, "Setup and version.", BuildAbout(), list, body, "about version setup sample data demo developer");
-        var search = new TextBox { Name = "SettingsSearch", Watermark = "Search settings", Height = 36, MinHeight = 36, FontSize = 13, Margin = new Thickness(0, 0, 0, 8) };
-        Avalonia.Automation.AutomationProperties.SetName(search, "Search settings");
-        search.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) FilterSections(search.Text); };
-        var rail = new StackPanel { Margin = new Thickness(0, 2, 0, 0) }; rail.Children.Add(search); rail.Children.Add(list);
-        Children.Add(rail);
+        Add("look", "Look", IconKind.Sunrise, "Colours, shadows and hints.", BuildLook(), list, body);
+        Add("pill", "The pill", IconKind.Pill, "How the small always-on-top timer looks and behaves.", BuildPill(), list, body);
+        Add("alerts", "Alerts", IconKind.Bell, "How loudly the pill tells you what is waiting.", BuildAlerts(), list, body);
+        Add("day", "Day and time", IconKind.Clock, "The hours you are measured against, and how time is written.", BuildDay(), list, body);
+        Add("accounts", "Accounts", IconKind.Accounts, "The accounts you track time against, and their budgets.", BuildAccounts(), list, body);
+        Add("export", "Export", IconKind.Export, "Save a week or a month as CSV files, or copy the hours table for a timesheet.", BuildExport(), list, body);
+        Add("about", "About", IconKind.Info, "Setup and version.", BuildAbout(), list, body);
+        var rail = new StackPanel { Margin = new Thickness(0, 2, 0, 0) }; rail.Children.Add(list); Children.Add(rail);
 
         // The chosen section sits on a card, under its name and a short line about it.
         title.Name = "SettingsTitle"; intro.Name = "SettingsIntro"; intro.TextWrapping = TextWrapping.Wrap; intro.Margin = new Thickness(0, 2, 0, 12);
@@ -63,7 +58,7 @@ public sealed class SettingsView : Grid
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
     }
 
-    private void Add(string id, string name, IconKind icon, string text, Control content, StackPanel list, StackPanel body, string words)
+    private void Add(string id, string name, IconKind icon, string text, Control content, StackPanel list, StackPanel body)
     {
         var glyph = new IconGlyph(icon) { TintKey = "Muted", Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center };
         var label = Ui.Text(name, 14); label.VerticalAlignment = VerticalAlignment.Center;
@@ -72,25 +67,16 @@ public sealed class SettingsView : Grid
         nav.Classes.Add("settingsNav"); nav.Click += (_, _) => ShowSection(id);
         Avalonia.Automation.AutomationProperties.SetName(nav, name);
         list.Children.Add(nav); content.IsVisible = false; body.Children.Add(content);
-        sections[id] = (nav, content, name, text, (name + " " + words).ToLowerInvariant());
+        sections[id] = (nav, content, name, text);
     }
 
     /// <summary>Shows one section and hides the others.</summary>
     public void ShowSection(string id)
     {
         if (!sections.ContainsKey(id)) return;
-        current = id;
         foreach (var (key, part) in sections) { part.Body.IsVisible = key == id; part.Nav.Classes.Set("selected", key == id); }
         title.Text = sections[id].Title; intro.Text = sections[id].Intro;
         if (id == "export") RefreshPeriods();
-    }
-
-    // Typing in the search box keeps only the sections whose name or settings contain every word, and moves to the first one if the chosen section has gone.
-    private void FilterSections(string? query)
-    {
-        var words = (query ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(w => w.ToLowerInvariant()).ToList();
-        foreach (var (_, part) in sections) part.Nav.IsVisible = words.All(w => part.Words.Contains(w));
-        if (!sections[current].Nav.IsVisible && sections.FirstOrDefault(s => s.Value.Nav.IsVisible) is { Key: { } first } && first is not null) ShowSection(first);
     }
 
     // ---- look

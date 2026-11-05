@@ -22,7 +22,7 @@ public sealed class NotesPage : Grid
     private readonly TimerModel model;
     private NotesModel Notes => model.Notes;
     private readonly StackPanel listColumn = new() { Spacing = 8, Margin = new Thickness(14, 4, 14, 14) };
-    private readonly ContentControl formHost = new() { Name = "PageForm" };
+    private readonly ContentControl formHost = new() { Name = "PageForm", ClipToBounds = false };
     private readonly Border viewsTrack = new() { Name = "NotesViews", HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
     private readonly Button accountButton = new() { Name = "NotesAccountFilter" };
     private readonly Popup whenHost = new() { Placement = PlacementMode.Bottom, IsLightDismissEnabled = true, Name = "PageWhenHost" };
@@ -31,9 +31,9 @@ public sealed class NotesPage : Grid
     private NoteView view = NoteView.All; private readonly List<string> accountFilters = new(); private string query = "";
     private string? shown;
     // The form: one state, drawn in the add line at the top, or in the row that is open for editing.
-    private bool meeting; private long? editing; private string draft = ""; private string startText = "12:00", endText = "12:30"; private string? account; private DateTime? when; private DateTime meetingDay; private RepeatChoice repeat;
+    private bool meeting, important; private long? editing; private string draft = ""; private string startText = "12:00", endText = "12:30"; private string? account; private DateTime? when; private DateTime meetingDay; private RepeatChoice repeat;
     private string? error; private bool allLater; private long? removing; private bool archived;
-    private (bool Meeting, string Draft, string Start, string End, string? Account, DateTime? When, DateTime Day, RepeatChoice Repeat)? stash;
+    private (bool Meeting, bool Important, string Draft, string Start, string End, string? Account, DateTime? When, DateTime Day, RepeatChoice Repeat)? stash;
 
     public NotesPage(TimerModel model)
     {
@@ -264,13 +264,13 @@ public sealed class NotesPage : Grid
 
     private void Blank()
     {
-        meeting = false; editing = null; draft = ""; startText = "12:00"; endText = "12:30"; account = null; when = null; meetingDay = model.SelectedDate.Date; repeat = RepeatChoice.None; error = null; allLater = false; removing = null; archived = false; whenHost.IsOpen = false;
+        meeting = false; important = false; editing = null; draft = ""; startText = "12:00"; endText = "12:30"; account = null; when = null; meetingDay = model.SelectedDate.Date; repeat = RepeatChoice.None; error = null; allLater = false; removing = null; archived = false; whenHost.IsOpen = false;
     }
     // A note being typed in the add line is kept while a row is open for editing, and comes back when the row is closed.
     private void EndEdit()
     {
         whenHost.IsOpen = false;
-        if (stash is { } kept) { (meeting, draft, startText, endText, account, when, meetingDay, repeat) = kept; stash = null; editing = null; error = null; allLater = false; removing = null; archived = false; }
+        if (stash is { } kept) { (meeting, important, draft, startText, endText, account, when, meetingDay, repeat) = kept; stash = null; editing = null; error = null; allLater = false; removing = null; archived = false; }
         else Blank();
     }
 
@@ -286,9 +286,9 @@ public sealed class NotesPage : Grid
 
     private void Edit(DayNote note)
     {
-        if (editing is null) stash = (meeting, draft, startText, endText, account, when, meetingDay, repeat);
+        if (editing is null) stash = (meeting, important, draft, startText, endText, account, when, meetingDay, repeat);
         whenHost.IsOpen = false; removing = null;
-        meeting = NotesModel.IsMeeting(note); editing = note.Id; draft = Notes.Words(note); account = Notes.AccountOf(note); error = null; allLater = false;
+        meeting = NotesModel.IsMeeting(note); important = NotesModel.IsImportant(note); editing = note.Id; draft = Notes.Words(note); account = Notes.AccountOf(note); error = null; allLater = false;
         archived = meeting && Notes.IsArchivedRepeat(note);
         if (meeting) { meetingDay = note.Day.Date; when = note.Day.Date + note.At!.Value; startText = note.At.Value.ToString(@"hh\:mm"); endText = note.End!.Value.ToString(@"hh\:mm"); repeat = Notes.RepeatOf(note); }
         else { when = NotesModel.ReminderOf(note); repeat = RepeatChoice.None; }
@@ -320,7 +320,7 @@ public sealed class NotesPage : Grid
         if (!meeting)
         {
             Ui.Put(top, WhenButton(top: true), 2);
-            var star = NeumorphicControls.Important(NotesModel.IsMarked(draft), () => { draft = NotesModel.WithMark(draft, !NotesModel.IsMarked(draft)); DrawForm(); }, "PageImportant", 36); Ui.Put(top, star, 3);
+            var star = NeumorphicControls.Important(important, () => { important = !important; DrawForm(); }, "PageImportant", 36); Ui.Put(top, star, 3);
         }
         var submit = Ui.Ctl("PageSubmit", "Add", null, "Add", Submit, small: true); submit.Classes.Add("primary"); submit.Height = 36; submit.Padding = new Thickness(16, 0); Ui.Put(top, submit, 4);
         column.Children.Add(top); column.Children.Add(suggestions);
@@ -462,7 +462,7 @@ public sealed class NotesPage : Grid
         {
             void Add(Control c) { c.Margin = new Thickness(0, 0, 8, 0); options.Children.Add(c); }
             Add(AccountBox()); Add(WhenButton(top: false));
-            Add(NeumorphicControls.Important(NotesModel.IsMarked(draft), () => { draft = NotesModel.WithMark(draft, !NotesModel.IsMarked(draft)); Redraw(); }, "PageImportant", 36));
+            Add(NeumorphicControls.Important(important, () => { important = !important; Redraw(); }, "PageImportant", 36));
         }
         column.Children.Add(options);
         var repeating = isMeeting && Notes.SeriesOf(note) is not null && !archived;
@@ -529,7 +529,7 @@ public sealed class NotesPage : Grid
         if (words.Length == 0) { error = meeting ? "Name the meeting" : "Write a note first"; Redraw(); return; }
         if (!meeting)
         {
-            var problem = editing is { } id ? Notes.EditNote(id, words, account, when) : Notes.AddNote(words, account, when);
+            var problem = editing is { } id ? Notes.EditNote(id, words, account, when, important) : Notes.AddNote(words, account, when, important);
             if (problem is not null) { error = problem; Redraw(); return; }
             var said = editing is not null ? "Note saved" : when is { } at ? "Note added · reminder " + NoteDates.When(at, model.Engine.Now) : "Note added";
             if (editing is not null) EndEdit(); else Blank();

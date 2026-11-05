@@ -64,7 +64,7 @@ public sealed class Round21Tests
     [AvaloniaFact]
     public void AnImportantNoteHasNoBoldWordsButASolidGoldStarAndATintedRow()
     {
-        var model = Model(); model.Notes.AddNote("!! Ring the client", null, null); model.Notes.AddNote("Tidy the drive", null, null);
+        var model = Model(); model.Notes.AddNote("Ring the client", null, null, important: true); model.Notes.AddNote("Tidy the drive", null, null);
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {

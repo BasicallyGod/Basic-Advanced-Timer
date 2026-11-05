@@ -34,7 +34,7 @@ public sealed class ReliabilityTests
     public void ReschedulingAndRemovingAReminderKeepItsAccountAndImportance()
     {
         var notes = new NotesModel(null, () => Day, () => new[] { "Account one" });
-        notes.AddNote("!! Call the client", "Account one", Day.AddHours(9));
+        notes.AddNote("Call the client", "Account one", Day.AddHours(9), important: true);
         var id = notes.All.Single().Id;
         foreach (var reminder in new DateTime?[] { Day.AddHours(10), null })
         {
