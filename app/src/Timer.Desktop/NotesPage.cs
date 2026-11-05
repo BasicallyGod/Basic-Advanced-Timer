@@ -52,7 +52,14 @@ public sealed class NotesPage : Grid
         ResetForm(); Sync();
     }
     private readonly ViewActivity activity;
-    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (activity.Active) Sync(); }
+    private DateTime syncedMinute;
+    private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (!activity.Active) return;
+        if (e.PropertyName == nameof(TimerModel.Elapsed) && syncedMinute == MinuteNow()) return;
+        Sync();
+    }
+    private DateTime MinuteNow() => model.Engine.Now.AddTicks(-(model.Engine.Now.Ticks % TimeSpan.TicksPerMinute));
 
     /// <summary>The words in the header's search box. The list and the counts follow them.</summary>
     public string Query { get => query; set { query = value ?? ""; shown = null; Sync(); } }
@@ -60,12 +67,14 @@ public sealed class NotesPage : Grid
 
     // ---- The views, the accounts and the list ----
 
-    private string Signature() => string.Join("|", Notes.All.Select(n => $"{n.Id};{n.Day:yyyyMMdd};{n.At};{n.End};{n.Text};{n.Done};{n.SeriesId}"))
+    private string Signature() => Notes.Revision.ToString(CultureInfo.InvariantCulture)
         + $"#{view}#{string.Join(",", accountFilters)}#{query}#{editing}#{model.Engine.Now:yyyyMMddHHmm}#"
         + string.Join(";", model.ReviewAccounts.Select(a => $"{a.Name}/{a.Display}/{a.Colour}"));
 
     public void Sync()
     {
+        using var timing = PerformanceTimings.Measure("notes page sync");
+        syncedMinute = MinuteNow();
         accountFilters.RemoveAll(name => !model.ReviewAccounts.Any(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));
         var signature = Signature(); if (signature == shown) return; shown = signature;
         var matches = Notes.MatchingAny(query, accountFilters);

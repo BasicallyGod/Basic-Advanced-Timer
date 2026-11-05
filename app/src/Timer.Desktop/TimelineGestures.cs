@@ -27,6 +27,7 @@ public static class TimelineGestures
         void Press(Control source, PointerPressedEventArgs e, int? forced)
         {
             if (!e.GetCurrentPoint(source).Properties.IsLeftButtonPressed) return;
+            model.BeginTimelineGesture();
             origin = e.GetPosition(canvas); delta = TimeSpan.Zero; dragging = false;
             oldLeft = Canvas.GetLeft(card); oldWidth = card.Width;
             edge = forced ?? EdgeAt(e.GetPosition(card).X, oldWidth);
@@ -80,6 +81,7 @@ public static class TimelineGestures
             if (commit) model.DragEntry(row, row.From + (mode <= 0 ? change : TimeSpan.Zero),
                 row.To + (mode >= 0 ? change : TimeSpan.Zero), push);
             else if (select) model.SelectBlock(new[] { row }, shift);
+            model.EndTimelineGesture();
             e.Handled = true;
         }
         card.PointerReleased += (_, e) => Release(e);
@@ -90,6 +92,7 @@ public static class TimelineGestures
             RestoreNeighbours();
             origin = null; dragging = false; card.Opacity = 1;
             Canvas.SetLeft(card, oldLeft); card.Width = oldWidth;
+            model.EndTimelineGesture();
         }
         card.PointerCaptureLost += (_, _) => Lost();
         card.Cursor = new Cursor(StandardCursorType.SizeAll);

@@ -572,6 +572,7 @@ public sealed class AccountList : StackPanel
     private readonly TimerModel model;
     private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Period)> rows = new();
     private readonly bool reorderable, bars, compact;
+    private readonly ViewActivity activity;
     /// <summary>A row of the bar kind: the name and time on one line with the budget bar under it, and the play tile beside them.</summary>
     public const double RowHeight = 54, RowGap = 8;
     /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
@@ -584,6 +585,7 @@ public sealed class AccountList : StackPanel
         // A list that sat hidden (in a pop-up) missed the changes made meanwhile, so it catches up when it is shown.
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Changed(null, new System.ComponentModel.PropertyChangedEventArgs(null)); };
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
+        activity = new ViewActivity(this, active => { if (active) Changed(null, new System.ComponentModel.PropertyChangedEventArgs(null)); });
     }
     // The break has its own button, set apart from the accounts, so it is not one of the rows.
     private static IEnumerable<TimerAccount> Listed(TimerModel model) => model.Accounts.Where(a => !BreakAccount.Is(a.Name));
@@ -748,10 +750,12 @@ public sealed class AccountList : StackPanel
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (!activity.Active) return;
         if (!rows.Select(r => r.Account).SequenceEqual(Listed(model))) Rebuild(); else Refresh();
     }
     private void Refresh()
     {
+        using var timing = PerformanceTimings.Measure("account list refresh");
         foreach (var row in rows)
         {
             row.Row.Classes.Set("active", model.ActiveAccount == row.Account.Name);

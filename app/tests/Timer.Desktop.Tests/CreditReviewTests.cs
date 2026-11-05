@@ -375,12 +375,15 @@ public sealed class CreditReviewTests
         }
         finally { window.Close(); }
     }
-    [AvaloniaFact]
-    public void DraggingThroughAnOccupiedSlotIntoAGapRestoresNeighbourPositions()
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DraggingThroughAnOccupiedSlotIntoAGapRestoresNeighbourPositions(bool checkpointDuringDrag)
     {
         var engine = Engine();
         engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("11:00:00", "30") });
         var model = new TimerModel(engine);
+        if (checkpointDuringDrag) model.ToggleAccount("Account two");
         const double scale = 160;
         model.SetTimelineScale(scale, 0, 0);
         model.TimelineOffset = null;
@@ -399,6 +402,13 @@ public sealed class CreditReviewTests
             window.MouseMove(point + new Vector(20d / 60 * scale, 0));
             Assert.True(Canvas.GetLeft(cards[1]) < neighbourLeft);
 
+            if (checkpointDuringDrag)
+            {
+                for (var i = 0; i < 15; i++) model.Tick();
+                Capture(window, "checkpoint-during-drag");
+                Assert.Contains(cards[0], window.GetVisualDescendants());
+                Assert.True(model.TimelineGestureActive);
+            }
             var gap = point + new Vector(70d / 60 * scale, 0);
             window.MouseMove(gap);
             Assert.Equal(neighbourLeft, Canvas.GetLeft(cards[1]));
@@ -406,6 +416,7 @@ public sealed class CreditReviewTests
             Assert.Equal(csv, model.Editor.SessionsCsv);
 
             window.MouseUp(gap, MouseButton.Left);
+            Assert.False(model.TimelineGestureActive);
             Assert.Null(model.EditError);
             Assert.Equal(new[] { Day.AddHours(9.5), Day.AddHours(10).AddMinutes(10), Day.AddHours(11) },
                 engine.Sessions.Select(row => row.From).OrderBy(from => from).ToArray());

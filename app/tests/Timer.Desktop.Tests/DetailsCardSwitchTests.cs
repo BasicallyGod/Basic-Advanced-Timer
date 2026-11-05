@@ -15,6 +15,67 @@ public sealed class DetailsCardSwitchTests
     private static void Settle(Window w) { for (var i = 0; i < 3; i++) { Dispatcher.UIThread.RunJobs(); using var f = w.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
 
     [AvaloniaFact]
+    public void ShiftClickingTheEditedBlockDeselectsItsReplacementRow()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 14, 14, 15, 7)); model.CompleteSetup();
+        var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var row = model.Engine.Sessions.First(r => r.Duration > TimeSpan.Zero && r.Day == model.SelectedDate.Date);
+            model.SelectBlock(new[] { row }, false); Settle(window);
+            var box = window.GetVisualDescendants().OfType<TextBox>().Single(b => b.Name == "SelectedNote");
+            box.Focus(); box.Text = "Kept on the original block";
+            model.SelectBlock(new[] { row }, true); Settle(window);
+            Assert.Empty(model.SelectedRows);
+            var updated = model.Engine.Sessions.Single(r => r.Account == row.Account && r.From == row.From);
+            Assert.Equal("Kept on the original block", model.Editor.Note(updated));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void InvalidPendingTimeKeepsTheSelectionAndDayWithItsError()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 14, 14, 15, 7)); model.CompleteSetup();
+        var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var row = model.Engine.Sessions.First(r => r.Duration > TimeSpan.Zero && r.Day == model.SelectedDate.Date);
+            model.SelectBlock(new[] { row }, false); Settle(window);
+            var box = window.GetVisualDescendants().OfType<TextBox>().Single(b => b.Name == "SelectedStart");
+            box.Focus(); box.Text = "invalid";
+            var day = model.SelectedDate;
+            model.ChangeDate(1); Settle(window);
+            Assert.Equal(day, model.SelectedDate);
+            Assert.Same(row, model.SelectedBlocks.Single().Row);
+            Assert.NotNull(model.EditError);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void MidnightCommitsTheFocusedNoteBeforeClearingTheSelection()
+    {
+        var now = new DateTime(2026, 10, 14, 23, 59, 59);
+        var model = TimerModel.CreateDemo(() => now); model.CompleteSetup();
+        var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var row = model.Engine.Sessions.First(r => r.Duration > TimeSpan.Zero && r.Day == model.SelectedDate.Date);
+            model.SelectBlock(new[] { row }, false); Settle(window);
+            var box = window.GetVisualDescendants().OfType<TextBox>().Single(b => b.Name == "SelectedNote");
+            box.Focus(); box.Text = "Saved at midnight";
+            now = now.AddSeconds(2);
+            model.Tick(); Settle(window);
+            Assert.Equal(now.Date, model.SelectedDate);
+            Assert.Empty(model.SelectedRows);
+            var updated = model.Engine.Sessions.Single(r => r.Account == row.Account && r.From == row.From);
+            Assert.Equal("Saved at midnight", model.Editor.Note(updated));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void SelectingAnotherBlockShowsItsOwnNoteAndKeepsWhatWasTypedForTheFirst()
     {
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 14, 14, 15, 7)); model.CompleteSetup();

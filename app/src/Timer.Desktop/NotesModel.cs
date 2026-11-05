@@ -29,6 +29,9 @@ public sealed class NotesModel
     private long localNote = 1, localSeries = 1, unsaved;
     private readonly HashSet<long> pendingDeletes = new();
     private readonly HashSet<long> pendingUpdates = new();
+    private readonly HashSet<long> pendingSeriesUpdates = new();
+    private readonly HashSet<long> pendingSeriesDeletes = new();
+    private long unsavedSeries;
 
     public NotesModel(TimerStore? store, Func<DateTime> now, Func<IReadOnlyList<string>> accountNames)
     {
@@ -39,6 +42,8 @@ public sealed class NotesModel
 
     /// <summary>Raised after anything changes, so the views redraw.</summary>
     public event Action? Changed;
+    public long Revision { get; private set; }
+    private void NotifyChanged() { Revision++; Changed?.Invoke(); }
     /// <summary>A meeting form is wanted at a time (a click in the timeline's meeting row), or for an existing meeting (a click on its card).</summary>
     public event Action<DateTime>? NewMeetingRequested;
     public event Action<long>? EditMeetingRequested;
@@ -99,7 +104,7 @@ public sealed class NotesModel
     public void SetImportant(long id, bool important)
     {
         if (Find(id) is not { } note || IsMeeting(note) || IsImportant(note) == important) return;
-        Change(id, n => n with { Text = WithMark(n.Text, important) }); Changed?.Invoke();
+        Change(id, n => n with { Text = WithMark(n.Text, important) }); NotifyChanged();
     }
     /// <summary>The account a note is tagged with, or null.</summary>
     public string? AccountOf(DayNote note) => NoteShorthand.AccountOf(note.Text, Names);
@@ -229,7 +234,7 @@ public sealed class NotesModel
         var text = Compose(words, account);
         if (reminder is { } when) AddRow(when.Date, when.TimeOfDay.Truncate(), text, null, null, DayNoteKind.Task, true);
         else AddRow(now().Date, null, text, null, null, DayNoteKind.Task, false);
-        Changed?.Invoke(); return null;
+        NotifyChanged(); return null;
     }
 
     /// <summary>Adds a meeting on a day, with a repeat if one is chosen. Returns what is wrong, or null.</summary>
@@ -239,7 +244,7 @@ public sealed class NotesModel
         if (MeetingTimeProblem(start, end) is { } problem) return problem;
         var row = AddRow(day.Date, start, Compose(words, account), end, null, DayNoteKind.Meeting, true);
         if (RuleOf(repeat) is { } rule) StartSeriesFrom(row, rule);
-        Changed?.Invoke(); return null;
+        NotifyChanged(); return null;
     }
 
     private static string? MeetingTimeProblem(TimeSpan start, TimeSpan end)
@@ -254,7 +259,7 @@ public sealed class NotesModel
         if (Find(id) is not { } meeting || !IsMeeting(meeting)) return "That meeting is no longer there.";
         if (MeetingTimeProblem(start, end) is { } problem) return problem;
         Change(id, n => n with { At = start, End = end });
-        MeetingMoved?.Invoke(id); Changed?.Invoke(); return null;
+        MeetingMoved?.Invoke(id); NotifyChanged(); return null;
     }
 
     /// <summary>Changes a note's words, account and reminder (a null reminder makes it undated again).</summary>
@@ -265,14 +270,14 @@ public sealed class NotesModel
         var text = Compose(words, account);
         Change(id, n => reminder is { } when ? n with { Text = text, Day = when.Date, At = when.TimeOfDay.Truncate(), HasDate = true, Done = n.Done && ReminderOf(n) == when }
             : n with { Text = text, Day = now().Date, At = null, HasDate = false });
-        Changed?.Invoke(); return null;
+        NotifyChanged(); return null;
     }
 
     /// <summary>Sets or removes a note's reminder, keeping its words.</summary>
     public void SetReminder(long id, DateTime? reminder)
     {
         if (Find(id) is not { } note) return;
-        EditNote(id, note.Text, null, reminder);
+        EditNote(id, Words(note), AccountOf(note), reminder);
     }
 
     /// <summary>
@@ -289,14 +294,17 @@ public sealed class NotesModel
         if (current is null) { if (RuleOf(repeat) is { } rule) StartSeriesFrom(Find(id)!, rule); }
         else if (allLater && !IsArchivedRepeat(meeting))
         {
-            var later = notes.Where(n => n.SeriesId == current.Id && n.Day.Date > day.Date && n.Id != id).ToList();
+            var later = notes.Where(n => n.SeriesId == current.Id && n.Day.Date > meeting.Day.Date && n.Id != id).ToList();
             var wanted = RuleOf(repeat);
             if (wanted is null) { foreach (var gone in later) RemoveRow(gone); EndSeries(current); }
-            else if (wanted != current.Rule)
+            else if (wanted != current.Rule || day.Date != meeting.Day.Date)
             {
                 foreach (var gone in later) RemoveRow(gone);
-                var remade = current with { Rule = wanted, Start = day.Date, GeneratedTo = day.Date, Text = text, At = start, End = end, Kind = DayNoteKind.Meeting };
-                series[series.FindIndex(s => s.Id == current.Id)] = remade; PersistSeries(remade); MakeSeriesNotes();
+                // Keep the earlier occurrences on their original schedule. The moved occurrence anchors a new series.
+                var ended = current with { Rule = current.Rule with { Until = meeting.Day.Date.AddDays(-1) } };
+                series[series.FindIndex(s => s.Id == current.Id)] = ended;
+                PersistSeries(ended);
+                StartSeriesFrom(Find(id)!, wanted);
             }
             else
             {
@@ -305,13 +313,13 @@ public sealed class NotesModel
                 series[series.FindIndex(s => s.Id == current.Id)] = updated; PersistSeries(updated);
             }
         }
-        Changed?.Invoke(); return null;
+        NotifyChanged(); return null;
     }
 
     public void Toggle(long id)
     {
         if (Find(id) is null) return;
-        Change(id, n => n with { Done = !n.Done }); Changed?.Invoke();
+        Change(id, n => n with { Done = !n.Done }); NotifyChanged();
     }
 
     /// <summary>Removes a note or meeting. For one in a series, <paramref name="allLater"/> removes this one and every later one and ends the series there; otherwise only this day goes and the series carries on.</summary>
@@ -325,7 +333,7 @@ public sealed class NotesModel
             else EndSeries(s);
         }
         else RemoveRow(note);
-        Changed?.Invoke();
+        NotifyChanged();
     }
 
     /// <summary>Restores an ordinary removed item, retaining all its fields. Series removals use their explicit scope flow instead.</summary>
@@ -342,7 +350,7 @@ public sealed class NotesModel
             var restored = AddRow(note.Day, note.At, note.Text, note.End, null, note.Kind, note.HasDate);
             if (note.Done) Change(restored.Id, n => n with { Done = true });
         }
-        Changed?.Invoke();
+        NotifyChanged();
     }
 
     /// <summary>Notes tagged with an account follow its rename, and the tag becomes an ordinary word if the account is deleted.</summary>
@@ -360,7 +368,7 @@ public sealed class NotesModel
             var text = NoteShorthand.Relink(series[i].Text, names, renamed, deleted);
             if (text != series[i].Text) { series[i] = series[i] with { Text = text }; PersistSeries(series[i]); }
         }
-        if (any) Changed?.Invoke();
+        if (any) NotifyChanged();
     }
 
     // ---- Repeats ----
@@ -376,7 +384,7 @@ public sealed class NotesModel
             foreach (var day in s.Pending(today)) { AddRow(day, s.At, s.Text, s.End, s.Id, s.Kind ?? DayNoteKind.Meeting, true); made++; }
             series[i] = s with { GeneratedTo = reach }; PersistSeries(series[i]);
         }
-        if (made > 0) Changed?.Invoke();
+        if (made > 0) NotifyChanged();
         return made;
     }
 
@@ -387,8 +395,7 @@ public sealed class NotesModel
         if (store is not null)
         {
             long stored = 0;
-            if (!Try(() => stored = store.AddSeries(template), "that repeat")) return;
-            id = stored;
+            id = Try(() => stored = store.AddSeries(template), "that repeat") ? stored : --unsavedSeries;
         }
         series.Add(template with { Id = id });
         Change(first.Id, n => n with { SeriesId = id });
@@ -398,11 +405,17 @@ public sealed class NotesModel
     private void EndSeries(NoteSeries s)
     {
         series.RemoveAll(x => x.Id == s.Id);
-        if (store is not null && s.Id >= 0) Try(() => store.DeleteSeries(s.Id), "that repeat");
+        pendingSeriesUpdates.Remove(s.Id);
+        if (store is not null && s.Id >= 0 && !Try(() => store.Database.InTransaction(() => store.DeleteSeries(s.Id)), "that repeat")) pendingSeriesDeletes.Add(s.Id);
         for (var i = 0; i < notes.Count; i++) if (notes[i].SeriesId == s.Id) notes[i] = notes[i] with { SeriesId = null };
     }
 
-    private void PersistSeries(NoteSeries s) { if (store is not null && s.Id >= 0) Try(() => store.UpdateSeries(s), "that repeat"); }
+    private void PersistSeries(NoteSeries s)
+    {
+        if (store is null || s.Id < 0) return;
+        if (Try(() => store.UpdateSeries(s), "that repeat")) pendingSeriesUpdates.Remove(s.Id);
+        else pendingSeriesUpdates.Add(s.Id);
+    }
 
     // ---- Storage: a write that fails never loses the words ----
 
@@ -410,6 +423,7 @@ public sealed class NotesModel
     {
         long id;
         if (store is null) id = localNote++;
+        else if (seriesId < 0) id = --unsaved;
         else { long stored = 0; id = Try(() => stored = store.AddDayNote(day, at, text, end, seriesId, kind, hasDate), "that note") ? stored : --unsaved; }
         var note = new DayNote(id, day, at, text, false, end, seriesId, kind, hasDate);
         notes.Add(note); return note;
@@ -424,6 +438,7 @@ public sealed class NotesModel
     private void Persist(DayNote note)
     {
         if (store is null || note.Id < 0) return; // An unsaved note is written whole when it is retried.
+        if (note.SeriesId < 0) { pendingUpdates.Add(note.Id); return; }
         if (Try(() => store.UpdateDayNote(note), "that change")) pendingUpdates.Remove(note.Id);
         else pendingUpdates.Add(note.Id);
     }
@@ -444,25 +459,44 @@ public sealed class NotesModel
     }
 
     /// <summary>True while any note is on screen but not yet in the database.</summary>
-    public bool Unsaved => pendingDeletes.Count > 0 || pendingUpdates.Count > 0 || notes.Any(n => n.Id < 0);
+    public bool Unsaved => pendingDeletes.Count > 0 || pendingUpdates.Count > 0 || notes.Any(n => n.Id < 0)
+        || pendingSeriesUpdates.Count > 0 || pendingSeriesDeletes.Count > 0 || series.Any(s => s.Id < 0);
 
     /// <summary>Writes again whatever the database refused: notes never stored, and removals. Called now and then.</summary>
     public void RetryUnsaved()
     {
         if (store is null || !Unsaved) return;
         bool Quiet(Action write) { try { write(); return true; } catch (Exception) { return false; } }
+        for (var i = 0; i < series.Count; i++)
+        {
+            var item = series[i];
+            if (item.Id >= 0) continue;
+            long stored = 0;
+            if (!Quiet(() => stored = store.AddSeries(item))) continue;
+            series[i] = item with { Id = stored };
+            for (var n = 0; n < notes.Count; n++)
+            {
+                if (notes[n].SeriesId != item.Id) continue;
+                notes[n] = notes[n] with { SeriesId = stored };
+                Persist(notes[n]);
+            }
+        }
         for (var i = 0; i < notes.Count; i++)
         {
-            var note = notes[i]; if (note.Id >= 0) continue;
+            var note = notes[i]; if (note.Id >= 0 || note.SeriesId < 0) continue;
             long stored = 0;
             if (!Quiet(() => stored = store.AddDayNote(note.Day, note.At, note.Text, note.End, note.SeriesId, note.Kind, note.HasDate))) continue;
             notes[i] = note with { Id = stored };
             if (note.Done && !Quiet(() => store.UpdateDayNote(notes[i]))) pendingUpdates.Add(stored);
         }
         foreach (var id in pendingUpdates.ToList())
-            if (Find(id) is not { } note || Quiet(() => store.UpdateDayNote(note))) pendingUpdates.Remove(id);
+            if (Find(id) is not { } note || note.SeriesId is not < 0 && Quiet(() => store.UpdateDayNote(note))) pendingUpdates.Remove(id);
         foreach (var id in pendingDeletes.ToList()) if (Quiet(() => store.DeleteDayNote(id))) pendingDeletes.Remove(id);
-        if (!Unsaved) { Fault = null; Changed?.Invoke(); }
+        foreach (var id in pendingSeriesDeletes.ToList())
+            if (Quiet(() => store.Database.InTransaction(() => store.DeleteSeries(id)))) pendingSeriesDeletes.Remove(id);
+        foreach (var id in pendingSeriesUpdates.ToList())
+            if (series.FirstOrDefault(s => s.Id == id) is not { } item || Quiet(() => store.UpdateSeries(item))) pendingSeriesUpdates.Remove(id);
+        if (!Unsaved) { Fault = null; NotifyChanged(); }
     }
 
     /// <summary>

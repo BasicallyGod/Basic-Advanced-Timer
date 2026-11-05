@@ -44,6 +44,7 @@ public static class MeetingGestures
         card.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
+            model.BeginTimelineGesture();
             origin = e.GetPosition(canvas); dragging = false; now = (start, end);
             oldLeft = Canvas.GetLeft(card); oldWidth = card.Width; oldSpan = span?.Text;
             edge = TimelineGestures.EdgeAt(e.GetPosition(card).X, card.Width);
@@ -74,8 +75,9 @@ public static class MeetingGestures
                 else model.Tell((model.Notes.SeriesOf(meeting) is not null ? "Moved for this day only" : "Meeting moved") + " · " + Hm(result.Start) + "–" + Hm(result.End));
             }
             else if (plain && e.InitialPressMouseButton == MouseButton.Left) model.SelectMeeting(meeting.Id);
+            model.EndTimelineGesture();
             e.Handled = true;
         };
-        card.PointerCaptureLost += (_, _) => { if (origin is null) return; origin = null; dragging = false; Restore(); };
+        card.PointerCaptureLost += (_, _) => { if (origin is null) return; origin = null; dragging = false; Restore(); model.EndTimelineGesture(); };
     }
 }
