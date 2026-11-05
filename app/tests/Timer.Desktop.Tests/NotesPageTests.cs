@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -115,10 +117,10 @@ public sealed class NotesPageTests
         {
             Click(window, "NotesTab");
             string CountOf(string name) => Find<Button>(window, name).GetVisualDescendants().OfType<TextBlock>().Last().Text!;
-            Assert.Equal("5", CountOf("NotesView_All")); Assert.Equal("1", CountOf("NotesView_Overdue")); Assert.Equal("2", CountOf("NotesAccount_Accounttwo"));
+            Assert.Equal("5", CountOf("NotesView_All")); Assert.Equal("1", CountOf("NotesView_Overdue")); Click(window, "NotesAccountFilter"); Assert.Equal("2", CountOf("NotesAccount_Accounttwo")); Click(window, "NotesAccountFilter");
             Click(window, "NotesView_Overdue"); Assert.Single(window.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("PageRow_") == true));
-            Click(window, "NotesView_All"); Click(window, "NotesAccount_Accounttwo"); Assert.Equal(2, window.GetVisualDescendants().OfType<Border>().Count(b => b.Name?.StartsWith("PageRow_") == true));
-            Type(window, "NotesSearch", "zzz"); Settle(window); Assert.Equal("Nothing matches that search.", Find<TextBlock>(window, "NotesPageEmpty").Text);
+            Click(window, "NotesView_All"); Click(window, "NotesAccountFilter"); Click(window, "NotesAccount_Accounttwo"); Assert.Equal(2, window.GetVisualDescendants().OfType<Border>().Count(b => b.Name?.StartsWith("PageRow_") == true));
+            Type(window, "NotesSearch", "zzz"); Settle(window); Assert.Equal("No match", Find<TextBlock>(window, "NotesPageEmpty").Text);
             Type(window, "NotesSearch", "call"); Settle(window); Assert.Single(window.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("PageRow_") == true));
         }
         finally { window.Close(); }
@@ -131,10 +133,10 @@ public sealed class NotesPageTests
         try
         {
             Click(window, "NotesTab");
-            Click(window, "PageSubmit"); Assert.Equal("Write a note first", Find<TextBlock>(window, "PageError").Text); // Told beside the field.
+            Click(window, "PageSubmit"); Assert.Equal("Write a note first", Find<TextBlock>(window, "PageError").Text); // Told under the line.
             Type(window, "PageNoteField", "Draft the plan"); Click(window, "PageSubmit");
             Assert.Equal("Draft the plan", model.Notes.Text(Assert.Single(model.Notes.All))); Assert.Equal("Note added", model.Notice);
-            Click(window, "PageKindMeeting"); Type(window, "PageNoteField", "Review"); Type(window, "PageLength", "0:30");
+            window.GetVisualDescendants().OfType<NotesPage>().Single().SetKind(true); Settle(window); Type(window, "PageNoteField", "Review"); Type(window, "PageStart", "12:00"); Type(window, "PageEnd", "12:30");
             Click(window, "PageWhen"); Click(window, "ReminderSet"); // Today at the pop-up's own default, midday.
             Click(window, "PageSubmit");
             var meeting = model.Notes.MeetingsOn(Day).Single(); Assert.Equal(TimeSpan.FromHours(12), meeting.At); Assert.Equal(TimeSpan.FromHours(12.5), meeting.End);
@@ -142,8 +144,9 @@ public sealed class NotesPageTests
         finally { window.Close(); }
     }
 
+
     [AvaloniaFact]
-    public void DeleteAndCancelSitOnTheOptionsLineAtItsRightEndWithNoLineOfTheirOwn()
+    public void TheOpenRowHasDeleteCancelAndSaveOnItsFootLineWithDeleteAsAnIcon()
     {
         var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
@@ -152,85 +155,125 @@ public sealed class NotesPageTests
             foreach (var text in new[] { "Tidy the drive", "Client call" })
             {
                 Click(window, "PageNoteOpen_" + IdOf(model, text));
-                var account = Find<ComboBox>(window, "PageAccount"); var delete = Find<Button>(window, "PageDelete"); var cancel = Find<Button>(window, "PageCancel");
-                var accountMid = account.TranslatePoint(new Point(0, account.Bounds.Height / 2), window)!.Value.Y; var deleteMid = delete.TranslatePoint(new Point(0, delete.Bounds.Height / 2), window)!.Value.Y;
-                Assert.Equal(accountMid, deleteMid, 4); // The same line, not a row below with nothing beside it.
-                var field = Find<TextBox>(window, "PageNoteField"); var fieldRight = field.TranslatePoint(new Point(field.Bounds.Width, 0), window)!.Value.X;
-                Assert.True(cancel.TranslatePoint(new Point(cancel.Bounds.Width, 0), window)!.Value.X <= fieldRight + 80 && cancel.TranslatePoint(default, window)!.Value.X > delete.TranslatePoint(default, window)!.Value.X);
+                var delete = Find<Button>(window, "PageDelete"); var cancel = Find<Button>(window, "PageCancel"); var save = Find<Button>(window, "PageSubmit");
+                double Mid(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y; double Left(Control c) => c.TranslatePoint(default, window)!.Value.X;
+                Assert.Equal(Mid(delete), Mid(cancel), 4); Assert.Equal(Mid(cancel), Mid(save), 4); // One line, in the order Delete, Cancel, Save.
+                Assert.True(Left(delete) < Left(cancel) && Left(cancel) < Left(save));
+                Assert.IsType<IconGlyph>(delete.Content); Assert.Equal(IconKind.Trash, ((IconGlyph)delete.Content!).Kind); Assert.Contains("Delete", ToolTip.GetTip(delete)?.ToString());
+                Assert.Contains(save.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "Save"); Assert.Contains("primary", save.Classes);
             }
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void EditingAMeetingKeepsRepeatAndLabelledDurationOnTheOptionsLineWithDeleteAndCancelIcons()
+    public void EditingAMeetingKeepsDayStartEndRepeatAndAccountOnOneLine()
     {
         var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             Click(window, "NotesTab"); Click(window, "PageNoteOpen_" + IdOf(model, "Client call"));
-            {
-                var account = Find<ComboBox>(window, "PageAccount"); var repeat = Find<ComboBox>(window, "PageRepeat"); var length = Find<TextBox>(window, "PageLength");
-                double Mid(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
-                Assert.Equal(Mid(account), Mid(repeat), 4); Assert.Equal(Mid(account), Mid(length), 4);
-                var delete = Find<Button>(window, "PageDelete"); var cancel = Find<Button>(window, "PageCancel");
-                Assert.IsType<IconGlyph>(delete.Content); Assert.IsType<IconGlyph>(cancel.Content); Assert.Equal(IconKind.Trash, ((IconGlyph)delete.Content!).Kind); Assert.Equal(IconKind.Close, ((IconGlyph)cancel.Content!).Kind);
-                Assert.Contains("Delete", ToolTip.GetTip(delete)?.ToString()); Assert.Contains("Cancel", ToolTip.GetTip(cancel)?.ToString());
-                Assert.Equal("Delete", Avalonia.Automation.AutomationProperties.GetName(delete)); Assert.Equal("Cancel", Avalonia.Automation.AutomationProperties.GetName(cancel));
-                Assert.Contains(Find<ContentControl>(window, "PageForm").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Length"); // The duration is labelled without relying on hover.
-                Assert.Equal("Length, H:MM", ToolTip.GetTip(length)?.ToString());
-            }
+            double Mid(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
+            var day = Find<Button>(window, "PageWhen"); var start = Find<TextBox>(window, "PageStart"); var end = Find<TextBox>(window, "PageEnd"); var repeat = Find<ComboBox>(window, "PageRepeat"); var account = Find<ComboBox>(window, "PageAccount");
+            foreach (var c in new Control[] { start, end, repeat, account }) Assert.Equal(Mid(day), Mid(c), 4);
+            Assert.Equal("14:00", start.Text); Assert.Equal("15:00", end.Text);
+            Assert.Equal("Start, HH:mm", ToolTip.GetTip(start)?.ToString());
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheNoteOpenInTheFormIsNotAlsoEditableInItsRow()
+    public void PressingARowOpensItInPlaceAndTheAddLineRestsUntilItIsClosed()
     {
         var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             Click(window, "NotesTab"); var id = IdOf(model, "Send the budget"); var other = IdOf(model, "Tidy the drive");
+            Type(window, "PageNoteField", "A draft in the add line");
+            double Top(string name) => Find<Border>(window, name).TranslatePoint(default, window)!.Value.Y;
+            var before = Top("PageRow_" + id);
             Click(window, "PageNoteOpen_" + id);
-            foreach (var name in new[] { "PageNoteOpen_", "PageNoteImportant_", "PageNoteRemove_", "PageNoteReminder_" })
-                Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == name + id);
-            Assert.Contains("Editing this note above", Find<TextBlock>(window, "PageNoteText_" + id).Text);
+            // The row is its own editor, where it was: it holds the words and the controls, and has the accent edge.
+            var row = Find<Border>(window, "PageRow_" + id); Assert.Contains("rowSelected", row.Classes);
+            Assert.Equal("Send the budget", row.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "PageNoteField").Text);
+            Assert.Equal(before, Top("PageRow_" + id), 1.5); // Nothing above it moved.
+            foreach (var name in new[] { "PageNoteOpen_", "PageNoteImportant_", "PageNoteRemove_", "PageNoteReminder_" }) Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == name + id); // No second copy of its controls.
+            Assert.NotNull(Find<Border>(window, "PageAddResting")); Assert.Single(window.GetVisualDescendants().OfType<TextBox>().Where(t => t.Name == "PageNoteField")); // One place to type.
             Assert.NotNull(Find<Button>(window, "PageNoteOpen_" + other)); // Other rows stay as they were.
             Click(window, "PageCancel");
-            Assert.NotNull(Find<Button>(window, "PageNoteOpen_" + id));
+            Assert.NotNull(Find<Button>(window, "PageNoteOpen_" + id)); Assert.Equal("A draft in the add line", Find<TextBox>(window, "PageNoteField").Text); // The draft comes back.
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void ARowOpensInTheFormAsEditingWithTheAccentEdgeAndSaveChangesItAndCancelPutsTheFormBack()
+    public void SavingARowChangesItAndEscapePutsTheSavedWordsBack()
     {
         var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             Click(window, "NotesTab"); var id = IdOf(model, "Tidy the drive");
             Click(window, "PageNoteOpen_" + id);
-            Assert.Equal("Tidy the drive", Find<TextBox>(window, "PageNoteField").Text); Assert.Contains("rowSelected", Find<Border>(window, "PageRow_" + id).Classes);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Editing a note");
-            Type(window, "PageNoteField", "Tidy the shared drive"); Click(window, "PageSubmit");
-            Assert.Equal("Tidy the shared drive", model.Notes.Text(model.Notes.Find(id)!)); Assert.False(Find<Button>(window, "PageSubmit").Content is null);
-            Click(window, "PageNoteOpen_" + id); Click(window, "PageCancel"); Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Editing a note");
+            Assert.Equal("Tidy the drive", Find<TextBox>(window, "PageNoteField").Text); Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Editing a note"); // There is no form at the top to be told about.
+            Type(window, "PageNoteField", "Tidy the shared drive"); Find<TextBox>(window, "PageNoteField").Focus(); HeadlessWindowExtensions.KeyPressQwerty(window, Avalonia.Input.PhysicalKey.Escape, Avalonia.Input.RawInputModifiers.None); Settle(window);
+            Assert.Equal("Tidy the drive", model.Notes.Text(model.Notes.Find(id)!)); Assert.DoesNotContain(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "PageAddResting"); // Escape closed it without saving.
+            Click(window, "PageNoteOpen_" + id); Type(window, "PageNoteField", "Tidy the shared drive"); Click(window, "PageSubmit");
+            Assert.Equal("Tidy the shared drive", model.Notes.Text(model.Notes.Find(id)!)); Assert.Equal("Note saved", model.Notice);
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void RemovingARepeatingMeetingFromThePageAsksInsideTheFormAndNotesFromTheirCross()
+    public void ARowsStarAndBinAppearOnHoverAndAnImportantNoteKeepsItsStar()
+    {
+        var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            Click(window, "NotesTab"); var plain = IdOf(model, "Tidy the drive"); model.Notes.SetImportant(IdOf(model, "Send the budget"), true); Settle(window);
+            var bin = Find<Button>(window, "PageNoteRemove_" + plain); Assert.Equal(0, bin.Opacity); Assert.False(bin.IsHitTestVisible);
+            Assert.Equal(0, Find<ToggleButton>(window, "PageNoteImportant_" + plain).Opacity);
+            Assert.Equal(1, Find<ToggleButton>(window, "PageNoteImportant_" + IdOf(model, "Send the budget")).Opacity); // Shown without a hover.
+            var row = Find<Border>(window, "PageRow_" + plain); var at = row.TranslatePoint(new Point(40, 20), window)!.Value;
+            Avalonia.Headless.HeadlessWindowExtensions.MouseMove(window, at); Settle(window);
+            Assert.Equal(1, bin.Opacity); Assert.True(bin.IsHitTestVisible);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void RemovingARepeatingMeetingAsksInTheRowAndNotesGoAtOnce()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             model.Notes.AddMeeting(Day, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Stand-up", null, RepeatChoice.Day); model.Notes.AddNote("A note", null, null);
             Click(window, "NotesTab");
-            Click(window, "PageNoteRemove_" + IdOf(model, "A note")); Assert.Single(model.Notes.All.Where(n => n.SeriesId is null) .Where(n => model.Notes.Text(n) == "Stand-up").DefaultIfEmpty()); // The note went.
-            Assert.DoesNotContain(model.Notes.All, n => model.Notes.Text(n) == "A note");
-            Click(window, "PageNoteRemove_" + model.Notes.MeetingsOn(Day).Single().Id); Assert.NotNull(Find<Border>(window, "PageScope"));
-            Click(window, "PageScopeAll"); Assert.Empty(model.Notes.All);
+            Click(window, "PageNoteRemove_" + IdOf(model, "A note"));
+            Assert.DoesNotContain(model.Notes.All, n => model.Notes.Text(n) == "A note"); // The note went at once.
+            Click(window, "PageNoteRemove_" + model.Notes.MeetingsOn(Day).Single().Id); Assert.NotNull(Find<Border>(window, "PageScope")); // The meeting asks first, in its own row.
+            Click(window, "PageRemoveKeep"); Assert.NotEmpty(model.Notes.All);
+            Click(window, "PageNoteRemove_" + model.Notes.MeetingsOn(Day).Single().Id); Click(window, "PageScopeAll"); Click(window, "PageRemoveConfirm"); Assert.Empty(model.Notes.All);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheViewsAreOneRowOfTabsWithCountsAndTheAccountFilterIsOneButton()
+    {
+        var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            Click(window, "NotesTab");
+            var tabs = Find<Border>(window, "NotesViews"); Assert.Contains("viewTabs", tabs.Classes);
+            Assert.Equal(7, tabs.GetVisualDescendants().OfType<Button>().Count(b => b.Name?.StartsWith("NotesView_") == true)); // All, Important, Today, Overdue, Upcoming, Meetings, Done.
+            Assert.Contains("selected", Find<Button>(window, "NotesView_All").Classes);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<WrapPanel>(), w => w.Name == "NotesAccountPills"); // The row of account pills is gone.
+            Assert.Contains(Find<Button>(window, "NotesAccountFilter").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "All accounts");
+            Click(window, "NotesAccountFilter"); Click(window, "NotesAccount_Accountone");
+            Assert.Contains(Find<Button>(window, "NotesAccountFilter").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Account one");
+            Click(window, "NotesAccount_Accounttwo");
+            Assert.Contains(Find<Button>(window, "NotesAccountFilter").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "2 accounts");
+            Assert.Contains(Find<Button>(window, "NotesAccountFilter").Classes, c => c == "on");
         }
         finally { window.Close(); }
     }

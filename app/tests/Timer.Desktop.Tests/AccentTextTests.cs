@@ -64,16 +64,16 @@ public sealed class AccentTextTests
             // Two blocks of one account selected, so Merge is the accent.
             var same = model.Engine.Sessions.Where(s => s.Account == model.Engine.Sessions[0].Account).Take(2).ToArray();
             if (same.Length == 2) { model.SelectBlock(same, false); Settle(window); Audit(window, "merge ready", model, found); model.SelectBlock(Array.Empty<SessionRow>(), false); }
-            Press(window, "AddMeeting"); Audit(window, "notes card, meeting form", model, found);
-            Press(window, "AddNote"); Audit(window, "notes card, note form", model, found);
+            Press(window, "CardKindMeetings"); Audit(window, "notes card, meeting form", model, found);
+            Press(window, "CardKindNotes"); Audit(window, "notes card, note form", model, found);
             Press(window, "DatePick"); Audit(window, "date button", model, found); AuditPopups(window, "date", model, found); Press(window, "DatePick");
             Press(window, "SidebarAlertsButton"); AuditPopups(window, "alerts", model, found); Press(window, "SidebarAlertsButton");
-            Press(window, "FormBell"); AuditPopups(window, "reminder", model, found); window.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "ReminderCancel" || b.Name == "ReminderClose").ToList().ForEach(b => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent))); Press(window, "AddNote");
+            Press(window, "FormBell"); AuditPopups(window, "reminder", model, found); window.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "ReminderCancel" || b.Name == "ReminderClose").ToList().ForEach(b => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent))); Press(window, "CardKindNotes");
             Press(window, "NotesTab"); Audit(window, "notes page", model, found);
             Press(window, "WeekOverviewTab"); Audit(window, "week", model, found);
             if (Has(window, "WeekTable")) { Press(window, "WeekTable"); Audit(window, "week table", model, found); }
             Press(window, "Settings");
-            foreach (var section in new[] { "Appearance", "Behaviour", "Hours", "Accounts", "Export", "About" })
+            foreach (var section in new[] { "Look", "Pill", "Alerts", "Day", "Accounts", "Export", "About" })
                 if (Has(window, "Settings" + section)) { Press(window, "Settings" + section); Audit(window, "settings " + section, model, found); }
             Press(window, "TimelineTab");
             var entry = new EntryDialog(model, new DateTime(2026, 10, 26, 9, 0, 0), new DateTime(2026, 10, 26, 9, 30, 0)).Open(window); Audit(window, "add time", model, found); entry.Close(); Settle(window);
@@ -98,7 +98,7 @@ public sealed class AccentTextTests
         }
         finally { setup.Close(); }
         // The audit must really have seen the buttons that sit on the accent, or a pass would mean nothing.
-        foreach (var expected in new[] { "Add meeting", "Add note", "Add", "Merge", "Set" }) Assert.True(Checked.Contains(expected), "The audit never saw \"" + expected + "\" on the accent. It saw: " + string.Join(", ", Checked));
+        foreach (var expected in new[] { "Add", "Merge", "Set" }) Assert.True(Checked.Contains(expected), "The audit never saw \"" + expected + "\" on the accent. It saw: " + string.Join(", ", Checked));
         Assert.True(found.Count == 0, "Words on the accent that are not the accent's text colour:\n" + string.Join("\n", found.Distinct()));
     }
 

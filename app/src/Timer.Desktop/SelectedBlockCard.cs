@@ -28,12 +28,17 @@ public sealed partial class SelectedBlockCard : Border
         this.model = model; Name = "SelectedBlockCard";
         CornerRadius = new CornerRadius(18); BorderThickness = new Thickness(1); Padding = new Thickness(18, 14, 18, 16);
         Classes.Add("dayCard");
-        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; model.SelectionChanging += LetGoOfTypedBox; Sync(); };
-        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; model.SelectionChanging -= LetGoOfTypedBox; };
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; model.SelectionChanging += LetGoOfTypedBox; model.Notes.NoteIdChanged += NoteIdChanged; Sync(); };
+        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; model.SelectionChanging -= LetGoOfTypedBox; model.Notes.NoteIdChanged -= NoteIdChanged; };
         Sync();
         activity = new ViewActivity(this, active => { if (active) Sync(); });
     }
     private readonly ViewActivity activity;
+    private void NoteIdChanged(long previous, long current)
+    {
+        if (noteFields is { } note && note.Id == previous) note.Id = current;
+        if (meetingFields is { } meeting && meeting.Id == previous) meeting.Id = current;
+    }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { if (activity.Active && !model.TimelineGestureActive) Sync(); }
     // A box with the focus keeps what is being typed in it when the card is brought up to date, and clicking a block on the timeline does not move the focus, so a note typed for one
     // block stayed in the box when another was selected (and was later written onto that one). Before the selection changes, a box in this card lets go of the focus: that applies
@@ -60,8 +65,9 @@ public sealed partial class SelectedBlockCard : Border
     public void Sync()
     {
         using var timing = PerformanceTimings.Measure("details sync");
-        if (model.SelectedMeetingId is { } meetingId && model.Notes.Find(meetingId) is { } meeting && NotesModel.IsMeeting(meeting)) { SyncMeeting(meeting); return; }
-        meetingFields = null;
+        if (model.SelectedMeetingId is { } meetingId && model.Notes.Find(meetingId) is { } meeting && NotesModel.IsMeeting(meeting)) { noteFields = null; SyncMeeting(meeting); return; }
+        if (model.SelectedNoteId is { } noteId && model.Notes.Find(noteId) is { } picked && !NotesModel.IsMeeting(picked)) { meetingFields = null; SyncNote(picked); return; }
+        meetingFields = null; noteFields = null;
         var blocks = model.SelectedBlocks;
         // The stack the one selected block belongs to (three or more at once), which the card draws as a timeline so any of them is a press away.
         var items = blocks.Count == 1 ? ReviewViews.BlockStackOf(model, blocks[0].Rows) : null;

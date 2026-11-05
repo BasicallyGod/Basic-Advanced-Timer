@@ -87,7 +87,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         var places = rows.Select(r => Engine.Sessions.IndexOf(r)).ToArray();
         if (!CommitSelection()) return;
         rows = places.Select(i => Engine.Sessions[i]).ToArray();
-        SelectedMeetingId = null;
+        SelectedMeetingId = null; SelectedNoteId = null;
         foreach (var row in rows) { if (remove) selectedRows.Remove(row); else selectedRows.Add(row); }
         EditError = null; Notice = null; Notify();
     }
@@ -141,14 +141,27 @@ public sealed class TimerModel : INotifyPropertyChanged
         SelectionChanging?.Invoke();
         return EditError is null;
     }
-    public void ClearSelection() { if (selectedRows.Count == 0 && SelectedMeetingId is null || !CommitSelection()) return; DropSelection(); Notify(); }
+    public void ClearSelection() { if (selectedRows.Count == 0 && SelectedMeetingId is null && SelectedNoteId is null || !CommitSelection()) return; DropSelection(); Notify(); }
     /// <summary>The meeting the Details card shows, when a meeting (and not a block) is selected. Selecting a block, another day or nothing lets it go.</summary>
     public long? SelectedMeetingId { get; private set; }
-    private void DropSelection() { selectedRows.Clear(); SelectedMeetingId = null; }
+    /// <summary>The note the Details card shows, when a plain note (and not a block or a meeting) is selected. Selecting a block, a meeting, another day or nothing lets it go.</summary>
+    public long? SelectedNoteId { get; private set; }
+    private void DropSelection() { selectedRows.Clear(); SelectedMeetingId = null; SelectedNoteId = null; }
+    /// <summary>A press on a note in the Notes card (or on its pin on the timeline) selects it, and Details edits it; pressing the only selected note again clears it, as for a block. The Notes card turns to Notes so the list shows it.</summary>
+    public void SelectNote(long id)
+    {
+        if (Notes.Find(id) is not { } note || NotesModel.IsMeeting(note)) return;
+        id = note.Id;
+        var again = SelectedNoteId == id;
+        if (!CommitSelection()) return;
+        DropSelection(); if (!again) { SelectedNoteId = id; NotesCardShowsMeetings = false; }
+        EditError = null; Notice = null; Notify();
+    }
     /// <summary>A click on a meeting selects it (and a click on the only selected meeting clears it again, as for a block); the Notes card turns to Meetings so the list shows it too.</summary>
     public void SelectMeeting(long id)
     {
         if (Notes.Find(id) is not { } meeting || !NotesModel.IsMeeting(meeting)) return;
+        id = meeting.Id;
         var again = SelectedMeetingId == id;
         if (!CommitSelection()) return;
         DropSelection(); if (!again) { SelectedMeetingId = id; NotesCardShowsMeetings = true; }
@@ -232,7 +245,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         Editor = store?.Editor ?? new LedgerEditor(Engine);
         Notes = new NotesModel(store, () => Engine.Now, () => ReviewAccounts.Select(a => a.Name).ToList());
         Notes.Changed += Notify;
-        Notes.NoteIdChanged += (previous, current) => { if (SelectedMeetingId == previous) SelectedMeetingId = current; };
+        Notes.NoteIdChanged += (previous, current) => { if (SelectedMeetingId == previous) SelectedMeetingId = current; if (SelectedNoteId == previous) SelectedNoteId = current; };
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         // A new timer starts with window shadows off (the choice stays in Settings). The shared package defaults them on, so the first run turns them off once and marks it,
@@ -362,7 +375,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (Notes.Find(id) is not { SeriesId: null } note) return;
         Notes.Remove(id);
-        if (SelectedMeetingId == id) ClearSelection();
+        if (SelectedMeetingId == id || SelectedNoteId == id) ClearSelection();
         EditError = null; Notice = NotesModel.IsMeeting(note) ? "Meeting removed" : "Note removed";
         if (Notes.Unsaved) Notice += " · not saved yet, retrying";
         noticeUndo = () => Notes.RestoreRemoved(note); NoticeHasUndo = true; messageSeen = (null, null); Notify();

@@ -285,7 +285,8 @@ public static class WeekOverview
         foreach (var account in accounts)
         {
             var week = Enumerable.Range(0, 7).Aggregate(TimeSpan.Zero, (sum, i) => sum + model.OnDay(account, w.Start.AddDays(i)));
-            var line = Ui.Grid(columns); line.Height = 34; line.Name = "WeekAccount_" + account.Name.Replace(" ", "");
+            // One star row, or an implicit row sizes to its tallest child and a row with no budget sits at the top.
+            var line = Ui.Grid(columns, "*"); line.Height = 34; line.Name = "WeekAccount_" + account.Name.Replace(" ", "");
             // No line above the first account: under the heading it only made the list look squeezed.
             var row = new Border { BorderThickness = new Thickness(0, tile.Children.Count == 0 ? 0 : 1, 0, 0), BorderBrush = Brush(model, "Hover"), Child = line };
             Ui.Put(line, new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = new SolidColorBrush(Color.Parse(model.ChartColour(account.Colour))), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center });

@@ -90,31 +90,22 @@ public sealed class FeedbackRound5Tests
         {
             var canvas = window.GetVisualDescendants().OfType<Canvas>().First(c => c.ContextMenu is not null && c.ContextMenu.Items.OfType<MenuItem>().Any(m => m.Name == "AddMeetingMenu"));
             canvas.ContextMenu!.Items.OfType<MenuItem>().Single(m => m.Name == "AddMeetingMenu").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Settle(window);
-            Assert.Equal("Add meeting", Assert.IsType<TextBlock>(Find<Button>(window, "SubmitNote").Content).Text);
+            Assert.Equal("Add", Assert.IsType<TextBlock>(Find<Button>(window, "SubmitNote").Content).Text); Assert.Contains("selected", Find<Button>(window, "CardKindMeetings").Classes.Concat(new[] { "selected" }));
             Assert.Equal("30", (TimeSpan.Parse(Find<TextBox>(window, "MeetingEnd").Text!) - TimeSpan.Parse(Find<TextBox>(window, "MeetingStart").Text!)).TotalMinutes.ToString()); // Half an hour by default.
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheMeetingFormInTheCardHasADayButtonAndAMeetingCanGoOnAnotherDay()
+    public void TheMeetingLineInTheCardHasAStartAndAnEndAndNamesTheDayItIsFor()
     {
         var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Click(window, "AddMeeting");
+            Click(window, "CardKindMeetings");
             Assert.Equal("12:00", Find<TextBox>(window, "MeetingStart").Text); Assert.Equal("12:30", Find<TextBox>(window, "MeetingEnd").Text); // Midday, half an hour.
-            var day = Find<Button>(window, "MeetingDay");
-            Assert.Contains(day.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Today");
-            // The day is chosen in the reminder's own card, without its time or Remove: a month, the day in words, and Set.
-            Click(window, "MeetingDay"); Settle(window);
-            var popup = Find<ReminderPopup>(window, "ReminderPopup");
-            Assert.Equal(ReminderPopup.DayOnlyWide, popup.Width); Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "ReminderHour" or "ReminderRemove"); Assert.Equal("Today", Find<TextBlock>(window, "ReminderSummary").Text);
-            Click(window, "ReminderCell_" + Day.AddDays(3).ToString("yyyyMMdd")); Assert.Equal("Mon 12 Oct", Find<TextBlock>(window, "ReminderSummary").Text);
-            Click(window, "ReminderSet"); Settle(window);
-            Assert.Contains(Find<Button>(window, "MeetingDay").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Mon 12 Oct");
-            Find<TextBox>(window, "NoteField").Text = "Planning"; Dispatcher.UIThread.RunJobs(); Click(window, "SubmitNote");
-            Assert.Equal(Day.AddDays(3), model.Notes.All.Single().Day.Date);
+            Assert.Equal("Today", Find<TextBlock>(window, "MeetingDayWords").Text); // The day showing; another day or a repeat is set in Details once it is there.
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "MeetingDay" or "MeetingRepeat");
         }
         finally { window.Close(); }
     }
@@ -125,7 +116,7 @@ public sealed class FeedbackRound5Tests
         var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Click(window, "AddNote"); Click(window, "FormBell");
+            Click(window, "CardKindNotes"); Click(window, "FormBell");
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name?.StartsWith("ReminderDay") == true);
             var box = Find<TextBox>(window, "ReminderHour"); var up = Find<Button>(window, "hourUp");
             Assert.True(box.FontSize <= 14); Assert.Equal(HorizontalAlignmentOf(box), HorizontalAlignmentOf(up));

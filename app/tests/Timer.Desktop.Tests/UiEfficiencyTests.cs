@@ -68,7 +68,7 @@ public sealed class UiEfficiencyTests
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "SettingsBack");
             Press(window, "Settings"); Assert.True(Find<Button>(window, "WeekOverviewTab").Classes.Contains("selected"));
             Press(window, "Settings"); Assert.NotSame(page, window.GetVisualDescendants().OfType<SettingsView>().Single());
-            Assert.Equal("Appearance", Find<TextBlock>(window, "SettingsTitle").Text);
+            Assert.Equal("Look", Find<TextBlock>(window, "SettingsTitle").Text);
             Press(window, "Settings");
             Assert.True(Find<Button>(window, "WeekOverviewTab").IsEffectivelyVisible);
         }
@@ -98,9 +98,9 @@ public sealed class UiEfficiencyTests
         try
         {
             Find<TextBox>(window, "PageNoteField").Text = "An unfinished draft";
-            Press(window, "NotesView_Important"); Press(window, "NotesAccount_Accountone");
+            Press(window, "NotesView_Important"); Press(window, "NotesAccountFilter"); Press(window, "NotesAccount_Accountone");
             Find<TextBox>(window, "NotesSearch").Text = "no match"; Settle(window);
-            Assert.Equal("Nothing matches that search.", Find<TextBlock>(window, "NotesPageEmpty").Text);
+            Assert.Equal("No match", Find<TextBlock>(window, "NotesPageEmpty").Text);
             Assert.Equal("Clear", Find<Button>(window, "NotesAccountClear").Content);
             Press(window, "NotesAccountClear");
             Assert.Equal("no match", Find<TextBox>(window, "NotesSearch").Text);

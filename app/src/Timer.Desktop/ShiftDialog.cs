@@ -49,7 +49,7 @@ public sealed class ShiftEditor : StackPanel
         {
             var breakRow = Ui.Grid("*,80"); Ui.Put(breakRow, Ui.Text("Break each day", 14)); Ui.Put(breakRow, breakBox, 1); breakRow.Margin = new Thickness(0, 6, 0, 0);
             root.Children.Add(breakRow);
-            root.Children.Add(Ui.Text("Taken off each working day's hours, so the schedule is the time you are to work.", 12, "muted"));
+            var breakNote = Ui.Text("Taken off each working day's hours, so the schedule is the time you are to work.", 12, "muted"); breakNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; root.Children.Add(breakNote);
         }
         var today = new CheckBox { Content = "Also reset today to its new scheduled start/end" };
         root.Children.Add(today);

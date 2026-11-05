@@ -957,7 +957,7 @@ public sealed class BreakGlyph : Control
     }
 }
 
-public enum IconKind { NotesList, Check, Clock, Search, Bell, Repeat, Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Redo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders, Dock, Star, StarFilled }
+public enum IconKind { NotesList, Check, Clock, Search, Bell, Repeat, Note, Minus, Grip, Gear, Minimise, Export, Copy, Flag, Timeline, Week, Table, Entries, Plus, Undo, Redo, Merge, Trash, Today, Close, Edit, Previous, Next, Accounts, Sunrise, Sliders, Dock, Star, StarFilled, Pill, Info }
 
 // Small line icons for buttons that have no words. They are drawn in the ordinary text colour so every theme suits them.
 public sealed class IconGlyph : Control
@@ -1221,6 +1221,16 @@ public sealed class IconGlyph : Control
                 context.DrawGeometry(null, pen, Geometry.Parse("M 5.5,13.5 A 3.5,3.5 0 0 1 12.5,13.5"));
                 context.DrawLine(pen, new Point(9, 4.5 - hover), new Point(9, 6.5)); context.DrawLine(pen, new Point(3.8, 7.6), new Point(5.2, 8.9));
                 context.DrawLine(pen, new Point(14.2, 7.6), new Point(12.8, 8.9));
+                break;
+            case IconKind.Pill:
+                // A small capsule with its clock: the pill.
+                context.DrawRectangle(null, pen, new Rect(2, 5.5, 14, 7), 3.5, 3.5);
+                context.DrawLine(pen, new Point(5.2, 9), new Point(9, 9));
+                break;
+            case IconKind.Info:
+                // A circle with an i: about.
+                context.DrawEllipse(null, pen, new Point(9, 9), 6.5, 6.5);
+                context.DrawLine(pen, new Point(9, 8), new Point(9, 12.2)); context.DrawEllipse(brush, null, new Point(9, 5.6), .8, .8);
                 break;
             case IconKind.Close:
                 context.DrawLine(pen, new Point(4.5, 4.5), new Point(13.5, 13.5)); context.DrawLine(pen, new Point(13.5, 4.5), new Point(4.5, 13.5));
