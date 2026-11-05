@@ -89,7 +89,7 @@ public sealed class FeedbackRound6Tests
         var model = Model(false); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Click(window, "AddNote"); Click(window, "FormBell");
+            Click(window, "CardKindNotes"); Click(window, "FormBell");
             var a = Find<Button>(window, "ReminderTime9"); var b = Find<Button>(window, "ReminderTime12"); var c = Find<Button>(window, "ReminderTime15");
             Point At(Control x) => x.TranslatePoint(default, window)!.Value;
             // One column, top to bottom, all the same width as the hour : minute boxes above them, so the time side is one even column and the picker is no wider than it needs.

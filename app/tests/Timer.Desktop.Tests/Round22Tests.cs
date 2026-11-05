@@ -58,18 +58,17 @@ public sealed class Round22Tests
     private static double Hue(Avalonia.Media.Color c) { var hsv = c.ToHsv(); return hsv.H; }
 
     [AvaloniaFact]
-    public void TheStarKeepsItsPlaceWhetherOrNotTheBellIsThere()
+    public void TheStarAndBinKeepTheirPlaceOnEveryRowWhateverItsChips()
     {
-        var model = Model(); model.Notes.AddNote("!! With a bell", null, null); model.Notes.AddNote("!! Without a bell", null, Day.AddHours(15));
+        var model = Model(); model.Notes.AddNote("!! With a reminder", null, Day.AddHours(15)); model.Notes.AddNote("!! Without one", null, null);
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var withBell = model.Notes.All.Single(n => n.Text.Contains("With a bell")); var without = model.Notes.All.Single(n => n.Text.Contains("Without a bell"));
+            var withBell = model.Notes.All.Single(n => n.Text.Contains("With a reminder")); var without = model.Notes.All.Single(n => n.Text.Contains("Without one"));
             var a = Find<Button>(window, "NoteImportant_" + withBell.Id); var b = Find<Button>(window, "NoteImportant_" + without.Id);
-            var bell = Find<Button>(window, "NoteAddReminder_" + withBell.Id);
             Assert.Equal(a.Bounds.Width, b.Bounds.Width, 0.01);
             Assert.Equal(LeftOf(window, a) - LeftOf(window, Find<Button>(window, "NoteRemove_" + withBell.Id)), LeftOf(window, b) - LeftOf(window, Find<Button>(window, "NoteRemove_" + without.Id)), 0.01);
-            Assert.True(LeftOf(window, bell) < LeftOf(window, a)); // The bell is on the star's left, where it can come and go.
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), x => x.Name?.StartsWith("NoteAddReminder_") == true); // A reminder is set from Details, not from a bell on every row.
         }
         finally { window.Close(); }
     }

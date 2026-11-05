@@ -27,7 +27,7 @@ public sealed class PreviewCaptureTests
                     using var picture = window.CaptureRenderedFrame(); picture?.Save(Path.Combine(folder, $"ui-efficiency-{theme}-{name}.png"));
                 }
                 void Press(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Shot("timeline"); Press("AddNote"); Shot("inline-note"); Press("AddNote");
+                Shot("timeline"); model.SelectNote(model.Notes.All.First(n => !NotesModel.IsMeeting(n) && n.Day.Date == model.Engine.Now.Date).Id); Shot("timeline-note"); model.ClearSelection(); Press("CardKindMeetings"); Shot("timeline-meetings"); Press("CardKindNotes");
                 window.ShowNotes(); Shot("notes");
                 window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "PageNoteField").Focus(); Shot("notes-focused");
                 window.GetVisualDescendants().OfType<NotesPage>().Single().OpenNote(model.Notes.All.First(n => !NotesModel.IsMeeting(n) && n.Day.Date == model.Engine.Now.Date).Id); Shot("note-edit");
@@ -65,7 +65,7 @@ public sealed class PreviewCaptureTests
             void Press(string name) { window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
             model.Notes.AddNote("Send the invoice batch", "Accountoneoneoneoneoneon", model.Engine.Now.Date.AddHours(17)); Dispatcher.UIThread.RunJobs();
             Press("TimelineTab"); Shot("long-list");
-            Press("AddNote");
+            Press("CardKindNotes");
             window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Send the invoice batch #Accountone"; Dispatcher.UIThread.RunJobs();
             Press("Suggest_Accountoneoneoneoneoneon"); Press("FormBell"); Press("ReminderSet"); Shot("long-form");
         }
@@ -149,12 +149,12 @@ public sealed class PreviewCaptureTests
                 var at = pin.TranslatePoint(new Point(pin.Bounds.Width / 2, pin.Bounds.Height / 2), window)!.Value;
                 Avalonia.Headless.HeadlessWindowExtensions.MouseMove(window, at); Dispatcher.UIThread.RunJobs(); Shot("pin-hover");
                 Avalonia.Headless.HeadlessWindowExtensions.MouseMove(window, new Point(5, 5)); Dispatcher.UIThread.RunJobs();
-                Press("AddNote");
+                Press("CardKindNotes");
                 window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Follow #Accountt"; Dispatcher.UIThread.RunJobs();
                 Press("Suggest_Accounttwo");
                 window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Follow up on the new brief"; Dispatcher.UIThread.RunJobs();
                 Press("FormBell"); Press("ReminderSet"); Shot("note-form");
-                Press("AddMeeting"); Shot("meeting-form");
+                Press("CardKindMeetings"); Shot("meeting-form");
                 Press("NotesTab"); Shot("notes"); window.GetVisualDescendants().OfType<NotesPage>().Single().SetKind(true); Dispatcher.UIThread.RunJobs(); Shot("notes-meeting");
                 Press("WeekOverviewTab"); Shot("week");
             }

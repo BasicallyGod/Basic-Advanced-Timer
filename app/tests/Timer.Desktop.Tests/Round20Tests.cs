@@ -29,7 +29,7 @@ public sealed class Round20Tests
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Click(window, "AddNote");
+            Click(window, "CardKindNotes");
             Find<TextBox>(window, "NoteField").Text = "Follow #Accountt"; Settle(window);
             Click(window, "Suggest_Accounttwo");
             Click(window, "FormBell"); Click(window, "ReminderSet");

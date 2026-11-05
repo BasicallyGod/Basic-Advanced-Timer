@@ -19,7 +19,7 @@ public sealed class HiddenViewWorkTests
         var window = new Window { Width = 600, Height = 600, Content = parent }; window.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            Find<Button>(card, "AddNote").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Find<Button>(card, "CardKindNotes").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var field = Find<TextBox>(card, "NoteField"); field.Text = "Unsubmitted draft";
             var list = Find<StackPanel>(card, "NotesList"); var before = list.Children[0]; var count = list.Children.Count;
             parent.IsVisible = false;

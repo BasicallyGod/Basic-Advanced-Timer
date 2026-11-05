@@ -55,7 +55,7 @@ public sealed class FeedbackRound10Tests
         var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Click(window, "AddMeeting");
+            Click(window, "CardKindMeetings");
             var start = Find<TextBox>(window, "MeetingStart"); var end = Find<TextBox>(window, "MeetingEnd");
             Assert.Equal("12:00", start.Text); Assert.Equal("12:30", end.Text);
             start.Text = "16:00"; Dispatcher.UIThread.RunJobs();
@@ -74,7 +74,7 @@ public sealed class FeedbackRound10Tests
         var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Click(window, "AddMeeting");
+            Click(window, "CardKindMeetings");
             var start = Find<TextBox>(window, "MeetingStart"); start.Text = "23:50"; Key(start, Avalonia.Input.Key.Enter); Dispatcher.UIThread.RunJobs();
             Assert.Equal("23:59", Find<TextBox>(window, "MeetingEnd").Text);
         }
@@ -87,7 +87,7 @@ public sealed class FeedbackRound10Tests
         var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Click(window, "AddNote");
+            Click(window, "CardKindNotes");
             Type(window, "NoteField", "Draft the plan #Acc"); Settle(window);
             Assert.Equal(2, window.GetVisualDescendants().OfType<Button>().Count(b => b.Name?.StartsWith("Suggest_") == true));
             Key(Find<TextBox>(window, "NoteField"), Avalonia.Input.Key.Tab); Settle(window);
@@ -112,9 +112,9 @@ public sealed class FeedbackRound10Tests
             Assert.True(model.NotesCardShowsMeetings); Assert.True(Has("NoteEdit_")); Assert.False(Has("NoteDone_"));
             Click(window, "CardKindNotes");
             Assert.True(Has("NoteDone_"));
-            Click(window, "AddMeeting"); // Adding a meeting turns the switch to meetings, so what is added shows.
+            Click(window, "CardKindMeetings"); // Adding a meeting turns the switch to meetings, so what is added shows.
             Assert.True(model.NotesCardShowsMeetings);
-            Click(window, "AddNote");
+            Click(window, "CardKindNotes");
             Assert.False(model.NotesCardShowsMeetings);
         }
         finally { window.Close(); }
@@ -126,9 +126,9 @@ public sealed class FeedbackRound10Tests
         var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Assert.Equal("No notes for this day. Add one.", Find<TextBlock>(window, "NotesEmpty").Text);
+            Assert.Equal("No notes for this day. Write one above.", Find<TextBlock>(window, "NotesEmpty").Text);
             Click(window, "CardKindMeetings");
-            Assert.Equal("No meetings this day. Add one.", Find<TextBlock>(window, "NotesEmpty").Text);
+            Assert.Equal("No meetings this day. Add one above.", Find<TextBlock>(window, "NotesEmpty").Text);
         }
         finally { window.Close(); }
     }
@@ -201,8 +201,8 @@ public sealed class FeedbackRound10Tests
         {
             var ink = Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("AccentInk")); Assert.NotEqual(Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("Ink")), ink);
             Avalonia.Media.Color WordsOf(Button b) => ((Avalonia.Media.ISolidColorBrush)b.GetVisualDescendants().OfType<TextBlock>().First().Foreground!).Color;
-            Click(window, "AddNote"); Assert.Equal(ink, WordsOf(Find<Button>(window, "SubmitNote")));
-            Click(window, "AddMeeting"); Assert.Equal(ink, WordsOf(Find<Button>(window, "SubmitNote")));
+            Click(window, "CardKindNotes"); Assert.Equal(ink, WordsOf(Find<Button>(window, "SubmitNote")));
+            Click(window, "CardKindMeetings"); Assert.Equal(ink, WordsOf(Find<Button>(window, "SubmitNote")));
             Click(window, "NotesTab"); Assert.Equal(ink, WordsOf(Find<Button>(window, "PageSubmit")));
         }
         finally { window.Close(); }

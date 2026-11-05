@@ -73,7 +73,7 @@ public sealed class TextBoxGeometryTests
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "AddNote").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CardKindNotes").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Settle(window);
             var field = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "NoteField");
             field.Focus(); Settle(window);

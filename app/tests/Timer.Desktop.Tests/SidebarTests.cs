@@ -41,7 +41,7 @@ public sealed class SidebarTests
                 model.SelectBlock(model.Engine.Sessions.Take(1).ToArray(), false); Settle(window); Audit("timeline, one block selected");
                 model.SelectBlock(model.Engine.Sessions.Take(3).ToArray(), false); Settle(window); Audit("timeline, three blocks selected");
                 model.SelectBlock(Array.Empty<SessionRow>(), false);
-                Click(window, "AddMeeting"); Audit("timeline, meeting form"); Click(window, "AddNote"); Audit("timeline, note form");
+                Click(window, "CardKindMeetings"); Audit("timeline, meeting form"); Click(window, "CardKindNotes"); Audit("timeline, note form");
                 Click(window, "NotesTab"); Audit("notes"); window.GetVisualDescendants().OfType<NotesPage>().Single().SetKind(true); Dispatcher.UIThread.RunJobs(); Audit("notes, meeting form");
                 Click(window, "WeekOverviewTab"); Audit("week chart"); Click(window, "WeekTable"); Audit("week table");
                 Click(window, "Settings");

@@ -123,10 +123,9 @@ public sealed class Round18Tests
             model.SetTooltips(false); Settle(window); // The timeline is drawn again, so its parts are found again.
             window.MouseMove(At(window, model, 8.0, 40) + new Vector(2, 0)); Settle(window); Assert.False(Find<Border>(window, "TimelineGuideNote").IsVisible); Assert.True(Find<Border>(window, "TimelineGuideChip").IsVisible);
             model.SetTooltips(true); Settle(window); late = Find<Canvas>(window, "TimelinePin_" + lateId); At(window, model, 8.0);
-            // Pressing the pin opens the note for editing in the Notes card, on the timeline.
+            // Pressing the pin selects the note, and Details edits it.
             var onPin = late.TranslatePoint(new Point(10, 14), window)!.Value; window.MouseDown(onPin, MouseButton.Left); window.MouseUp(onPin, MouseButton.Left); Settle(window);
-            Assert.Equal("Send the revised budget", Find<TextBox>(window, "NoteField").Text);
-            Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "SubmitNote" && b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Save"));
+            Assert.Equal("Send the revised budget", Find<TextBox>(window, "DetailsNoteWords").Text); // Details shows the note.
         }
         finally { window.Close(); }
     }

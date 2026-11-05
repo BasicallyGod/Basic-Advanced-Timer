@@ -68,7 +68,7 @@ public sealed class Stage8Tests
             void Scan(string where) { foreach (var b in window.GetVisualDescendants().OfType<Button>().Where(b => b.IsVisible && b.Name?.StartsWith("PART_") != true)) if (!HasName(b)) missing.Add($"{where}: {b.Name ?? b.GetType().Name} ({b.Classes.FirstOrDefault()})"); }
             Scan("timeline");
             model.SelectBlock(new[] { model.Engine.Sessions[1] }, false); Settle(window); Scan("timeline with a block selected");
-            Press(window, "AddMeeting"); Scan("meeting form"); Press(window, "MeetingDay");
+            Press(window, "CardKindMeetings"); Scan("meeting line"); model.SelectNote(model.Notes.All.First(n => !NotesModel.IsMeeting(n)).Id); Settle(window); Scan("note in Details"); model.ClearSelection();
             window.SelectTab(true); Settle(window); Scan("week");
             window.ShowNotes(); Settle(window); Scan("notes page");
             Press(window, "SidebarAlertsButton"); Scan("alerts card"); Press(window, "SidebarAlertsButton");

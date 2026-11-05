@@ -83,7 +83,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void ToggleSelection(IReadOnlyList<SessionRow> rows)
     {
         if (rows.Count == 0 || rows.Any(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)))) return;
-        SelectionChanging?.Invoke(); var remove = IsSelected(rows); SelectedMeetingId = null;
+        SelectionChanging?.Invoke(); var remove = IsSelected(rows); SelectedMeetingId = null; SelectedNoteId = null;
         foreach (var row in rows) { if (remove) selectedRows.Remove(row); else selectedRows.Add(row); }
         EditError = null; Notice = null; Notify();
     }
@@ -128,10 +128,20 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// uses it to let go of a box being typed in, which commits that text to the block it was typed for instead of carrying it over to the next block.
     /// </summary>
     public event Action? SelectionChanging;
-    public void ClearSelection() { if (selectedRows.Count == 0 && SelectedMeetingId is null) return; SelectionChanging?.Invoke(); DropSelection(); Notify(); }
+    public void ClearSelection() { if (selectedRows.Count == 0 && SelectedMeetingId is null && SelectedNoteId is null) return; SelectionChanging?.Invoke(); DropSelection(); Notify(); }
     /// <summary>The meeting the Details card shows, when a meeting (and not a block) is selected. Selecting a block, another day or nothing lets it go.</summary>
     public long? SelectedMeetingId { get; private set; }
-    private void DropSelection() { selectedRows.Clear(); SelectedMeetingId = null; }
+    /// <summary>The note the Details card shows, when a plain note (and not a block or a meeting) is selected. Selecting a block, a meeting, another day or nothing lets it go.</summary>
+    public long? SelectedNoteId { get; private set; }
+    private void DropSelection() { selectedRows.Clear(); SelectedMeetingId = null; SelectedNoteId = null; }
+    /// <summary>A press on a note in the Notes card (or on its pin on the timeline) selects it, and Details edits it; pressing the only selected note again clears it, as for a block. The Notes card turns to Notes so the list shows it.</summary>
+    public void SelectNote(long id)
+    {
+        if (Notes.Find(id) is not { } note || NotesModel.IsMeeting(note)) return;
+        var again = SelectedNoteId == id;
+        SelectionChanging?.Invoke(); DropSelection(); if (!again) { SelectedNoteId = id; NotesCardShowsMeetings = false; }
+        EditError = null; Notice = null; Notify();
+    }
     /// <summary>A click on a meeting selects it (and a click on the only selected meeting clears it again, as for a block); the Notes card turns to Meetings so the list shows it too.</summary>
     public void SelectMeeting(long id)
     {
@@ -338,7 +348,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (Notes.Find(id) is not { SeriesId: null } note) return;
         Notes.Remove(id);
-        if (SelectedMeetingId == id) ClearSelection();
+        if (SelectedMeetingId == id || SelectedNoteId == id) ClearSelection();
         EditError = null; Notice = NotesModel.IsMeeting(note) ? "Meeting removed" : "Note removed";
         if (Notes.Unsaved) Notice += " · not saved yet, retrying";
         noticeUndo = () => Notes.RestoreRemoved(note); NoticeHasUndo = true; messageSeen = (null, null); Notify();
