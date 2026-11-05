@@ -15,6 +15,26 @@ public sealed class DetailsCardSwitchTests
     private static void Settle(Window w) { for (var i = 0; i < 3; i++) { Dispatcher.UIThread.RunJobs(); using var f = w.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
 
     [AvaloniaFact]
+    public void HiddenDetailsWaitUntilShownBeforeRefreshingTheirFields()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 14, 14, 15, 7)); model.CompleteSetup();
+        var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var row = model.Engine.Sessions.First(r => r.Duration > TimeSpan.Zero && r.Day == model.SelectedDate.Date);
+            model.SelectBlock(new[] { row }, false); Settle(window);
+            var box = window.GetVisualDescendants().OfType<TextBox>().Single(b => b.Name == "SelectedNote");
+            var before = box.Text;
+            window.Hide(); Dispatcher.UIThread.RunJobs();
+            Assert.True(model.EditEntry(row, row.Account, row.From, row.To, "Changed while hidden"));
+            Assert.Equal(before, box.Text);
+            window.Show(); Settle(window);
+            Assert.Equal("Changed while hidden", window.GetVisualDescendants().OfType<TextBox>().Single(b => b.Name == "SelectedNote").Text);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void ShiftClickingTheEditedBlockDeselectsItsReplacementRow()
     {
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 14, 14, 15, 7)); model.CompleteSetup();

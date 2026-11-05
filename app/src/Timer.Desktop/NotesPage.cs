@@ -46,12 +46,17 @@ public sealed class NotesPage : Grid
         Ui.Put(inner, formBox); Ui.Put(inner, filterBox, 0, 1); var pageScroll = new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }; Ui.LeaveRoomForTrack(pageScroll, listColumn);
         Ui.Put(inner, pageScroll, 0, 2);
         inner.Children.Add(whenHost); card.Child = inner; SetColumn(card, 2); Children.Add(card);
-        AttachedToVisualTree += (_, _) => model.PropertyChanged += Changed;
-        DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NoteIdChanged += NoteIdChanged; };
+        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NoteIdChanged -= NoteIdChanged; };
         activity = new ViewActivity(this, active => { if (active) Sync(); });
         ResetForm(); Sync();
     }
     private readonly ViewActivity activity;
+    private void NoteIdChanged(long previous, long current)
+    {
+        if (editing == previous) editing = current;
+        if (scope is { } pending && pending.Id == previous) scope = (current, pending.Delete);
+    }
     private DateTime syncedMinute;
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -59,7 +64,7 @@ public sealed class NotesPage : Grid
         if (e.PropertyName == nameof(TimerModel.Elapsed) && syncedMinute == MinuteNow()) return;
         Sync();
     }
-    private DateTime MinuteNow() => model.Engine.Now.AddTicks(-(model.Engine.Now.Ticks % TimeSpan.TicksPerMinute));
+    private DateTime MinuteNow() { var now = model.Engine.Now; return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMinute)); }
 
     /// <summary>The words in the header's search box. The list and the counts follow them.</summary>
     public string Query { get => query; set { query = value ?? ""; shown = null; Sync(); } }
@@ -74,6 +79,8 @@ public sealed class NotesPage : Grid
     public void Sync()
     {
         using var timing = PerformanceTimings.Measure("notes page sync");
+        if (editing is { } id && Notes.Find(id) is { } edited) editing = edited.Id;
+        if (scope is { } pending && Notes.Find(pending.Id) is { } scoped) scope = (scoped.Id, pending.Delete);
         syncedMinute = MinuteNow();
         accountFilters.RemoveAll(name => !model.ReviewAccounts.Any(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));
         var signature = Signature(); if (signature == shown) return; shown = signature;

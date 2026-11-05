@@ -106,4 +106,67 @@ public sealed class ReliabilityTests
         }
         finally { Directory.Delete(folder, true); }
     }
+
+    [Fact]
+    public void FailedGenerationRollsBackTheOccurrencesAndTheCursorTogether()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-generation-retry-" + Guid.NewGuid());
+        var now = Day;
+        try
+        {
+            int count;
+            using (var store = new TimerStore(folder))
+            {
+                store.Load(new TrackingEngine(clock: () => now));
+                var notes = new NotesModel(store, () => now, () => Array.Empty<string>());
+                notes.AddMeeting(Day, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Daily", null, RepeatChoice.Day);
+                count = notes.All.Count;
+                store.Database.Execute("CREATE TRIGGER block_cursor BEFORE UPDATE ON note_series BEGIN SELECT RAISE(ABORT, 'disk full'); END");
+                now = now.AddDays(1);
+                Assert.Equal(1, notes.MakeSeriesNotes());
+                Assert.Equal(count, store.LoadDayNotes().Count);
+                Assert.Equal(count + 1, notes.All.Count);
+                Assert.True(notes.Unsaved);
+                notes.RetryUnsaved();
+                Assert.Equal(count, store.LoadDayNotes().Count);
+                store.Database.Execute("DROP TRIGGER block_cursor");
+                notes.RetryUnsaved();
+                Assert.False(notes.Unsaved);
+            }
+            using (var store = new TimerStore(folder))
+            {
+                var reopened = new NotesModel(store, () => now, () => Array.Empty<string>());
+                Assert.Equal(count + 1, reopened.All.Count);
+                Assert.Equal(reopened.All.Count, reopened.All.Select(n => n.Day).Distinct().Count());
+            }
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [Fact]
+    public void APartlyRefusedRetryPublishesNoIdsAndCreatesNoDuplicates()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-atomic-retry-" + Guid.NewGuid());
+        try
+        {
+            using var store = new TimerStore(folder);
+            store.Load(new TrackingEngine(clock: () => Day));
+            var notes = new NotesModel(store, () => Day, () => Array.Empty<string>());
+            store.Database.Execute("CREATE TRIGGER block_notes BEFORE INSERT ON day_notes BEGIN SELECT RAISE(ABORT, 'disk full'); END");
+            notes.AddNote("First", null, null); notes.AddNote("Second", null, null);
+            var ids = notes.All.Select(n => n.Id).ToArray();
+            store.Database.Execute("DROP TRIGGER block_notes");
+            store.Database.Execute("CREATE TRIGGER block_second BEFORE INSERT ON day_notes WHEN NEW.text = 'Second' BEGIN SELECT RAISE(ABORT, 'disk full'); END");
+            notes.RetryUnsaved();
+            Assert.Empty(store.LoadDayNotes());
+            Assert.Equal(ids, notes.All.Select(n => n.Id).ToArray());
+            store.Database.Execute("DROP TRIGGER block_second");
+            notes.RetryUnsaved();
+            Assert.False(notes.Unsaved);
+            Assert.Equal(2, store.LoadDayNotes().Count);
+            notes.SetReminder(ids[0], Day.AddHours(10));
+            Assert.Equal(Day.AddHours(10), NotesModel.ReminderOf(notes.Find(ids[0])!));
+        }
+        finally { Directory.Delete(folder, true); }
+    }
 }

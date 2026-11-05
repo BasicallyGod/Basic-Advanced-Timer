@@ -32,6 +32,7 @@ public sealed class NotesModel
     private readonly HashSet<long> pendingSeriesUpdates = new();
     private readonly HashSet<long> pendingSeriesDeletes = new();
     private long unsavedSeries;
+    private readonly Dictionary<long, long> savedNoteIds = new();
 
     public NotesModel(TimerStore? store, Func<DateTime> now, Func<IReadOnlyList<string>> accountNames)
     {
@@ -42,6 +43,7 @@ public sealed class NotesModel
 
     /// <summary>Raised after anything changes, so the views redraw.</summary>
     public event Action? Changed;
+    public event Action<long, long>? NoteIdChanged;
     public long Revision { get; private set; }
     private void NotifyChanged() { Revision++; Changed?.Invoke(); }
     /// <summary>A meeting form is wanted at a time (a click in the timeline's meeting row), or for an existing meeting (a click on its card).</summary>
@@ -61,7 +63,7 @@ public sealed class NotesModel
     public string? Fault { get; private set; }
 
     public IReadOnlyList<DayNote> All => notes;
-    public DayNote? Find(long id) => notes.FirstOrDefault(n => n.Id == id);
+    public DayNote? Find(long id) => notes.FirstOrDefault(n => n.Id == savedNoteIds.GetValueOrDefault(id, id));
     public static bool IsMeeting(DayNote note) => DayNotes.IsMeeting(note);
     private IReadOnlyList<string> Names => accountNames();
 
@@ -287,6 +289,7 @@ public sealed class NotesModel
     public string? EditMeeting(long id, string words, string? account, DateTime day, TimeSpan start, TimeSpan end, RepeatChoice repeat, bool allLater)
     {
         if (Find(id) is not { } meeting) return "That meeting is no longer there.";
+        id = meeting.Id;
         if (string.IsNullOrWhiteSpace(words)) return "Name the meeting";
         if (MeetingTimeProblem(start, end) is { } problem) return problem;
         var text = Compose(words, account); var current = SeriesOf(meeting);
@@ -381,8 +384,29 @@ public sealed class NotesModel
         {
             var s = series[i]; var reach = today.AddDays(NoteSeries.HorizonDays);
             if (s.GeneratedTo.Date >= reach) continue;
-            foreach (var day in s.Pending(today)) { AddRow(day, s.At, s.Text, s.End, s.Id, s.Kind ?? DayNoteKind.Meeting, true); made++; }
-            series[i] = s with { GeneratedTo = reach }; PersistSeries(series[i]);
+            var days = s.Pending(today);
+            var updated = s with { GeneratedTo = reach };
+            var generated = new List<DayNote>();
+            var kind = s.Kind ?? DayNoteKind.Meeting;
+            // A generation cursor must never be committed separately from its occurrences.
+            var written = store is not null && s.Id >= 0 && Try(() => store.Database.InTransaction(() =>
+            {
+                foreach (var day in days)
+                {
+                    var id = store.AddDayNote(day, s.At, s.Text, s.End, s.Id, kind, true);
+                    generated.Add(new DayNote(id, day, s.At, s.Text, false, s.End, s.Id, kind, true));
+                }
+                store.UpdateSeries(updated);
+            }), "that repeat");
+            if (written) { notes.AddRange(generated); pendingSeriesUpdates.Remove(s.Id); }
+            else
+            {
+                foreach (var day in days)
+                    notes.Add(new DayNote(store is null ? localNote++ : --unsaved, day, s.At, s.Text, false, s.End, s.Id, kind, true));
+                if (store is not null && s.Id >= 0) pendingSeriesUpdates.Add(s.Id);
+            }
+            series[i] = updated;
+            made += days.Count;
         }
         if (made > 0) NotifyChanged();
         return made;
@@ -431,6 +455,7 @@ public sealed class NotesModel
 
     private void Change(long id, Func<DayNote, DayNote> change)
     {
+        id = savedNoteIds.GetValueOrDefault(id, id);
         var index = notes.FindIndex(n => n.Id == id); if (index < 0) return;
         notes[index] = change(notes[index]); Persist(notes[index]);
     }
@@ -466,39 +491,51 @@ public sealed class NotesModel
     public void RetryUnsaved()
     {
         if (store is null || !Unsaved) return;
-        bool Quiet(Action write) { try { write(); return true; } catch (Exception) { return false; } }
-        for (var i = 0; i < series.Count; i++)
+        var seriesIds = new Dictionary<long, long>();
+        var noteIds = new Dictionary<long, long>();
+        DayNote StoredNote(DayNote note) => note with
         {
-            var item = series[i];
-            if (item.Id >= 0) continue;
-            long stored = 0;
-            if (!Quiet(() => stored = store.AddSeries(item))) continue;
-            series[i] = item with { Id = stored };
-            for (var n = 0; n < notes.Count; n++)
+            SeriesId = note.SeriesId is { } id && seriesIds.TryGetValue(id, out var stored) ? stored : note.SeriesId
+        };
+        // Resolve IDs inside the transaction, but publish them to the views only after every write commits.
+        // A refused write rolls back the whole retry, so repeating it cannot duplicate successful inserts.
+        if (!Try(() => store.Database.InTransaction(() =>
+        {
+            foreach (var item in series.Where(s => s.Id < 0)) seriesIds[item.Id] = store.AddSeries(item);
+            foreach (var note in notes.Where(n => n.Id < 0))
             {
-                if (notes[n].SeriesId != item.Id) continue;
-                notes[n] = notes[n] with { SeriesId = stored };
-                Persist(notes[n]);
+                var row = StoredNote(note);
+                var id = store.AddDayNote(row.Day, row.At, row.Text, row.End, row.SeriesId, row.Kind, row.HasDate);
+                noteIds[note.Id] = id;
+                if (row.Done) store.UpdateDayNote(row with { Id = id });
             }
-        }
+            foreach (var id in pendingUpdates)
+                if (Find(id) is { } note) store.UpdateDayNote(StoredNote(note));
+            foreach (var id in pendingDeletes) store.DeleteDayNote(id);
+            foreach (var id in pendingSeriesDeletes) store.DeleteSeries(id);
+            foreach (var id in pendingSeriesUpdates)
+                if (series.FirstOrDefault(s => s.Id == id) is { } item) store.UpdateSeries(item);
+        }), "notes and repeats")) return;
+
+        for (var i = 0; i < series.Count; i++)
+            if (seriesIds.TryGetValue(series[i].Id, out var id)) series[i] = series[i] with { Id = id };
         for (var i = 0; i < notes.Count; i++)
         {
-            var note = notes[i]; if (note.Id >= 0 || note.SeriesId < 0) continue;
-            long stored = 0;
-            if (!Quiet(() => stored = store.AddDayNote(note.Day, note.At, note.Text, note.End, note.SeriesId, note.Kind, note.HasDate))) continue;
-            notes[i] = note with { Id = stored };
-            if (note.Done && !Quiet(() => store.UpdateDayNote(notes[i]))) pendingUpdates.Add(stored);
+            var row = StoredNote(notes[i]);
+            if (noteIds.TryGetValue(row.Id, out var id))
+            {
+                var previous = row.Id;
+                row = row with { Id = id };
+                notes[i] = row;
+                savedNoteIds[previous] = id;
+                NoteIdChanged?.Invoke(previous, id);
+            }
+            else notes[i] = row;
         }
-        foreach (var id in pendingUpdates.ToList())
-            if (Find(id) is not { } note || note.SeriesId is not < 0 && Quiet(() => store.UpdateDayNote(note))) pendingUpdates.Remove(id);
-        foreach (var id in pendingDeletes.ToList()) if (Quiet(() => store.DeleteDayNote(id))) pendingDeletes.Remove(id);
-        foreach (var id in pendingSeriesDeletes.ToList())
-            if (Quiet(() => store.Database.InTransaction(() => store.DeleteSeries(id)))) pendingSeriesDeletes.Remove(id);
-        foreach (var id in pendingSeriesUpdates.ToList())
-            if (series.FirstOrDefault(s => s.Id == id) is not { } item || Quiet(() => store.UpdateSeries(item))) pendingSeriesUpdates.Remove(id);
-        if (!Unsaved) { Fault = null; NotifyChanged(); }
+        pendingUpdates.Clear(); pendingDeletes.Clear(); pendingSeriesUpdates.Clear(); pendingSeriesDeletes.Clear();
+        Fault = null;
+        NotifyChanged();
     }
-
     /// <summary>
     /// Notes and meetings for the sample-data demo, enough to try every part of them: meetings that repeat (daily, weekly, every other week, monthly) and overlap on one day and
     /// run long on another, notes that are late (one by days), coming up, at the same minute (a cluster on the timeline), important with and without a reminder, with links,
