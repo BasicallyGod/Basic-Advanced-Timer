@@ -33,7 +33,7 @@ public sealed class PreviewCaptureTests
                 Press("PageKindMeeting"); Shot("meeting");
                 window.GetVisualDescendants().OfType<NotesPage>().Single().OpenNote(model.Notes.MeetingsOn(model.Engine.Now.Date).First().Id); Shot("meeting-edit");
                 window.SelectTab(true); Shot("week"); Press("WeekTable"); Shot("week-table");
-                Press("Settings"); Press("SettingsExport"); Shot("export");
+                Press("Settings"); foreach (var section in new[] { "Look", "Pill", "Alerts", "Day", "Accounts", "Export", "About" }) { Press("Settings" + section); Shot("settings-" + section.ToLowerInvariant()); }
             }
             finally { window.Close(); }
         }

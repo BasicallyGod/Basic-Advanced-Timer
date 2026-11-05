@@ -73,7 +73,7 @@ public sealed class AccentTextTests
             Press(window, "WeekOverviewTab"); Audit(window, "week", model, found);
             if (Has(window, "WeekTable")) { Press(window, "WeekTable"); Audit(window, "week table", model, found); }
             Press(window, "Settings");
-            foreach (var section in new[] { "Appearance", "Behaviour", "Hours", "Accounts", "Export", "About" })
+            foreach (var section in new[] { "Look", "Pill", "Alerts", "Day", "Accounts", "Export", "About" })
                 if (Has(window, "Settings" + section)) { Press(window, "Settings" + section); Audit(window, "settings " + section, model, found); }
             Press(window, "TimelineTab");
             var entry = new EntryDialog(model, new DateTime(2026, 10, 26, 9, 0, 0), new DateTime(2026, 10, 26, 9, 30, 0)).Open(window); Audit(window, "add time", model, found); entry.Close(); Settle(window);

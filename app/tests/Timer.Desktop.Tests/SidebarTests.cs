@@ -45,7 +45,7 @@ public sealed class SidebarTests
                 Click(window, "NotesTab"); Audit("notes"); Click(window, "PageKindMeeting"); Audit("notes, meeting form");
                 Click(window, "WeekOverviewTab"); Audit("week chart"); Click(window, "WeekTable"); Audit("week table");
                 Click(window, "Settings");
-                foreach (var section in new[] { "Appearance", "Behaviour", "Hours", "Accounts", "Export", "About" }) { Click(window, "Settings" + section); Audit("settings " + section); }
+                foreach (var section in new[] { "Look", "Pill", "Alerts", "Day", "Accounts", "Export", "About" }) { Click(window, "Settings" + section); Audit("settings " + section); }
             }
             finally { window.Close(); }
         }

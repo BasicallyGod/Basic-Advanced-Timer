@@ -10,9 +10,10 @@ using Timer.Storage;
 namespace Timer.Desktop;
 
 /// <summary>
-/// The settings page, shown in the dashboard's workspace: a list of sections on the left and the chosen section on the right (Appearance, Behaviour,
-/// Working hours, Hours and accounts, Export and About). Every section is built once and the others are hidden, so a section keeps what is being typed
-/// in it while another is looked at, and the page is never rebuilt under the pointer.
+/// The settings page, shown in the dashboard's workspace: seven sections down the left, each with an icon (Look, The pill, Alerts, Day and time, Accounts,
+/// Export and About), and the chosen one on a card on the right. A choice that changes how something looks is a picture of the result (the theme, shadows,
+/// the pill's style and clock digits, and the three alert modes); everything else is a plain tick, list, box or key. Every section is built once and the others
+/// are hidden, so a section keeps what is being typed in it while another is looked at, and the page is never rebuilt under the pointer.
 /// </summary>
 public sealed class SettingsView : Grid
 {
@@ -24,22 +25,27 @@ public sealed class SettingsView : Grid
 
     private readonly TimerModel model;
     private readonly List<Action> syncs = new();
-    private readonly Dictionary<string, (Button Nav, Control Body, string Title, string Intro)> sections = new();
+    private readonly Dictionary<string, (Button Nav, Control Body, string Title, string Intro, string Words)> sections = new();
     private readonly TextBlock title = Ui.Heading("", 22), intro = Ui.Text("", 13, "muted");
-    private string current = "appearance";
+    private string current = "look";
 
     public SettingsView(TimerModel model)
     {
-        this.model = model; Name = "SettingsPage"; ColumnDefinitions = new ColumnDefinitions("200,*"); Margin = new Thickness(0, 0, 0, 8);
+        this.model = model; Name = "SettingsPage"; ColumnDefinitions = new ColumnDefinitions("210,*"); Margin = new Thickness(0, 0, 0, 8);
         var list = new StackPanel { Spacing = 2, Margin = new Thickness(0, 0, 14, 0), Name = "SettingsSections" };
         var body = new StackPanel { Spacing = 0 };
-        Add("appearance", "Appearance", "Theme, pill size, window shadows and tooltips.", BuildAppearance(), list, body);
-        Add("behaviour", "Behaviour", "Which windows stay on top, and how the timer starts and shows.", BuildBehaviour(), list, body);
-        Add("hours", "Working hours", "Working days and shifts. Times are HH:MM.", new ShiftEditor(model, () => { }, null), list, body);
-        Add("accounts", "Hours and accounts", "How hours are written, and the accounts you track time against.", BuildAccounts(), list, body);
-        Add("export", "Export", "Save a week or a month as CSV files, or copy the hours table for a timesheet.", BuildExport(), list, body);
-        Add("about", "About", "Setup and version.", BuildAbout(), list, body);
-        Children.Add(list);
+        Add("look", "Look", IconKind.Sunrise, "Colours, shadows and hints.", BuildLook(), list, body, "theme light dark system sunset shadows tooltips hints colours");
+        Add("pill", "The pill", IconKind.Pill, "How the small always-on-top timer looks and behaves.", BuildPill(), list, body, "pill size automatic compact full clock digits segments plain on top taskbar tray start windows");
+        Add("alerts", "Alerts", IconKind.Bell, "How loudly the pill tells you what is waiting.", BuildAlerts(), list, body, "alerts peek light only off reminders budgets break card count");
+        Add("day", "Day and time", IconKind.Clock, "The hours you are measured against, and how time is written.", BuildDay(), list, body, "working hours days break week starts first day decimal time format schedule");
+        Add("accounts", "Accounts", IconKind.Accounts, "The accounts you track time against, and their budgets.", BuildAccounts(), list, body, "accounts budgets colours tracker names order hidden clients");
+        Add("export", "Export", IconKind.Export, "Save a week or a month as CSV files, or copy the hours table for a timesheet.", BuildExport(), list, body, "export csv copy hours table timesheet week month");
+        Add("about", "About", IconKind.Info, "Setup and version.", BuildAbout(), list, body, "about version setup sample data demo developer");
+        var search = new TextBox { Name = "SettingsSearch", Watermark = "Search settings", Height = 36, MinHeight = 36, FontSize = 13, Margin = new Thickness(0, 0, 0, 8) };
+        Avalonia.Automation.AutomationProperties.SetName(search, "Search settings");
+        search.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) FilterSections(search.Text); };
+        var rail = new StackPanel { Margin = new Thickness(0, 2, 0, 0) }; rail.Children.Add(search); rail.Children.Add(list);
+        Children.Add(rail);
 
         // The chosen section sits on a card, under its name and a short line about it.
         title.Name = "SettingsTitle"; intro.Name = "SettingsIntro"; intro.TextWrapping = TextWrapping.Wrap; intro.Margin = new Thickness(0, 2, 0, 12);
@@ -49,7 +55,7 @@ public sealed class SettingsView : Grid
         Ui.Put(inside, title); Ui.Put(inside, intro, 0, 1); Ui.Put(inside, scroll, 0, 2);
         var card = new Border { Name = "SettingsCard", CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(24, 20, 10, 16), Child = inside };
         card.Classes.Add("dayCard"); SetColumn(card, 1); Children.Add(card);
-        ShowSection("appearance");
+        ShowSection("look");
 
         // The page is built once, so it listens for changes made elsewhere (a theme or hours format chosen from another place) and keeps its boxes true.
         void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e) { foreach (var sync in syncs) sync(); }
@@ -57,13 +63,16 @@ public sealed class SettingsView : Grid
         DetachedFromVisualTree += (_, _) => model.PropertyChanged -= Changed;
     }
 
-    private void Add(string id, string name, string text, Control content, StackPanel list, StackPanel body)
+    private void Add(string id, string name, IconKind icon, string text, Control content, StackPanel list, StackPanel body, string words)
     {
-        var nav = new Button { Name = "Settings" + char.ToUpperInvariant(id[0]) + id[1..], Content = name, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left };
+        var glyph = new IconGlyph(icon) { TintKey = "Muted", Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center };
+        var label = Ui.Text(name, 14); label.VerticalAlignment = VerticalAlignment.Center;
+        var nav = new Button { Name = "Settings" + char.ToUpperInvariant(id[0]) + id[1..], Content = Ui.Horizontal(glyph, label), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left };
+        ((StackPanel)nav.Content).Spacing = 10;
         nav.Classes.Add("settingsNav"); nav.Click += (_, _) => ShowSection(id);
         Avalonia.Automation.AutomationProperties.SetName(nav, name);
         list.Children.Add(nav); content.IsVisible = false; body.Children.Add(content);
-        sections[id] = (nav, content, name, text);
+        sections[id] = (nav, content, name, text, (name + " " + words).ToLowerInvariant());
     }
 
     /// <summary>Shows one section and hides the others.</summary>
@@ -76,13 +85,21 @@ public sealed class SettingsView : Grid
         if (id == "export") RefreshPeriods();
     }
 
-    // ---- appearance
-    private Control BuildAppearance()
+    // Typing in the search box keeps only the sections whose name or settings contain every word, and moves to the first one if the chosen section has gone.
+    private void FilterSections(string? query)
+    {
+        var words = (query ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(w => w.ToLowerInvariant()).ToList();
+        foreach (var (_, part) in sections) part.Nav.IsVisible = words.All(w => part.Words.Contains(w));
+        if (!sections[current].Nav.IsVisible && sections.FirstOrDefault(s => s.Value.Nav.IsVisible) is { Key: { } first } && first is not null) ShowSection(first);
+    }
+
+    // ---- look
+    private Control BuildLook()
     {
         var stack = new StackPanel { Spacing = 0 };
-        stack.Children.Add(Label("Theme"));
+        stack.Children.Add(SectionLabel("Theme"));
         // System follows the computer's light or dark setting. Each tile is a small picture of the dashboard in that theme.
-        // Three equal tiles that share the card's width up to their own 172, so with the account panel docked and the card narrower they narrow too, side by side, instead of running past the card's edge.
+        // Four equal tiles that share the card's width up to their own 172, so with the card narrower they narrow too, side by side, instead of running past the card's edge.
         var tiles = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1, Columns = 4, Margin = new Thickness(0, 6, 0, 10), HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 4 * 172 + 36 };
         var buttons = new Dictionary<string, Button>();
         foreach (var (choice, words) in new[] { (ThemeLibrary.System, "System"), (AppThemes.Light.Name, "Light"), (AppThemes.Dark.Name, "Dark"), (AppThemes.Sun, "Sunset") })
@@ -101,29 +118,146 @@ public sealed class SettingsView : Grid
         stack.Children.Add(tiles);
         stack.Children.Add(BuildSunOptions());
 
-        // The pill is sized for the screen it is on. This overrides that with a size of your own, from 50 to 120 per cent.
-        var sizeNote = Ui.Text("", 12, "muted"); sizeNote.TextWrapping = TextWrapping.Wrap; sizeNote.Name = "PillSizeNote";
-        var slider = new Slider { Name = "PillSize", Minimum = 50, Maximum = 120, TickFrequency = 10, IsSnapToTickEnabled = true, Width = 220, VerticalAlignment = VerticalAlignment.Center, Value = model.PillScalePercent ?? 100 };
+        stack.Children.Add(Section("Window shadows", Choices(
+            Choice("ShadowsOn", "On", "Soft shadows under the pill and the dashboard", SettingsPictures.Shadows(true), () => model.Shadows, () => model.SetShadows(true)),
+            Choice("ShadowsOff", "Off", "Flat, with a hairline", SettingsPictures.Shadows(false), () => !model.Shadows, () => model.SetShadows(false)))));
+        stack.Children.Add(Section("Hints", Toggle("Show tooltips", "Short hints on hover. With them off, budget percentages are still in Week overview.", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v))));
+        return stack;
+    }
+
+    // ---- the pill
+    private Control BuildPill()
+    {
+        var stack = new StackPanel { Spacing = 0 };
+        // Size: the real pill, drawn at the size chosen, over a slider and an Automatic tick. Automatic fits the pill to the screen it is on; a size of your own overrides it.
+        var stage = new Border { Height = 92, CornerRadius = new CornerRadius(14), Name = "PillSizePreview" }; stage.Bind(Border.BackgroundProperty, stage.GetResourceObservable("Well")); stage.Bind(Border.BoxShadowProperty, stage.GetResourceObservable("ShadowSunk"));
+        var slider = new Slider { Name = "PillSize", Minimum = 50, Maximum = 120, TickFrequency = 10, IsSnapToTickEnabled = true, MinWidth = 160, VerticalAlignment = VerticalAlignment.Center, Value = model.PillScalePercent ?? 100 };
         var automatic = new CheckBox { Name = "PillSizeAutomatic", Content = "Automatic", IsChecked = model.PillScalePercent is null, VerticalAlignment = VerticalAlignment.Center };
+        var percent = Ui.Text("", 13); percent.FontWeight = FontWeight.SemiBold; percent.Name = "PillSizeNote"; percent.Width = 112; percent.TextAlignment = TextAlignment.Right; percent.VerticalAlignment = VerticalAlignment.Center;
         Avalonia.Automation.AutomationProperties.SetName(slider, "Pill size");
         void SyncSize()
         {
             var auto = model.PillScalePercent is null;
             if (automatic.IsChecked != auto) automatic.IsChecked = auto;
             slider.IsEnabled = !auto; if (!auto && Math.Abs(slider.Value - model.PillScalePercent!.Value) > .5) slider.Value = model.PillScalePercent.Value;
-            sizeNote.Text = auto ? "Automatic fits the pill to the screen it is on, so it looks the same size on any display." : $"Set by hand, from 50 to 120 per cent. Now {model.PillScalePercent} per cent.";
+            var shown = auto ? 95 : model.PillScalePercent!.Value;
+            percent.Text = auto ? "Fits the screen" : $"{shown} per cent";
+            // The picture is the pill at that size, kept inside the well.
+            stage.Child = SettingsPictures.Pill(true, model.PlainClock, null, Math.Min(1.1, 0.8 * shown / 95.0));
         }
         slider.PropertyChanged += (_, e) => { if (e.Property == Avalonia.Controls.Primitives.RangeBase.ValueProperty && slider.IsEnabled) { var chosen = (int)Math.Round(slider.Value / 10) * 10; if (chosen != model.PillScalePercent) model.SetPillScale(chosen); } };
         automatic.Click += (_, _) => { model.SetPillScale(automatic.IsChecked == true ? null : (int)Math.Round(slider.Value / 10) * 10); SyncSize(); };
         syncs.Add(SyncSize); SyncSize();
-        // The note sits under the whole row, not in the label's column, which is narrow beside the slider and wrapped to five lines.
-        sizeNote.Margin = new Thickness(0, 0, 0, 10);
-        stack.Children.Add(Rows(new StackPanel { Children = { Row("Pill size", null, Ui.Horizontal(slider, automatic)), sizeNote } },
-            Toggle("Window shadows", "Soft shadows under the pill and the dashboard.", "WindowShadows", () => model.Shadows, v => model.SetShadows(v)),
-            Toggle("Show tooltips", "With tooltips off, budget percentages are still in Week overview.", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v)),
-            Toggle("Plain clock digits", "Plain numerals instead of segments, which some people find easier to read.", "PlainClock", () => model.PlainClock, v => model.SetPlainClock(v)),
-            Toggle("Compact pill", "The pill is only its clock, light and alert count. The controls move to its right-click menu.", "CompactPill", () => model.CompactPill, v => model.SetCompactPill(v))));
+        var sizeRow = Ui.Grid("Auto,*,Auto"); sizeRow.Margin = new Thickness(0, 10, 0, 0); sizeRow.ColumnSpacing = 14;
+        Ui.Put(sizeRow, automatic); Ui.Put(sizeRow, slider, 1); Ui.Put(sizeRow, percent, 2);
+        var sizeStack = new StackPanel(); sizeStack.Children.Add(stage); sizeStack.Children.Add(sizeRow);
+        stack.Children.Add(Section("Size", sizeStack));
+
+        // Style and clock digits sit side by side: each is two pictures of the real pill.
+        var style = Choices(
+            Choice("StyleFull", "Full", "Clock, keys and alert count", SettingsPictures.Pill(true, false, null, .38), () => !model.CompactPill, () => model.SetCompactPill(false)),
+            Choice("StyleCompact", "Compact", "Only the clock. The keys move to its right-click menu", SettingsPictures.Pill(false, false, null, .6), () => model.CompactPill, () => model.SetCompactPill(true)));
+        var digits = Choices(
+            Choice("DigitsSegments", "Segments", "Like a digital watch", SettingsPictures.Clock(false, .6), () => !model.PlainClock, () => model.SetPlainClock(false)),
+            Choice("DigitsPlain", "Plain", "Plain numerals, which some people find easier to read", SettingsPictures.Clock(true, .6), () => model.PlainClock, () => model.SetPlainClock(true)));
+        var both = Ui.Grid("*,*"); both.ColumnSpacing = 26;
+        Ui.Put(both, Section("Style", style)); Ui.Put(both, Section("Clock digits", digits), 1);
+        stack.Children.Add(both);
+
+        // The windows: nothing here changes how anything looks, so these are plain ticks.
+        var rows = new List<Control>
+        {
+            Toggle("Keep the pill on top", "The pill stays above other windows.", "PillOnTop", () => model.PillOnTop, v => model.SetPillOnTop(v)),
+            Toggle("Keep the dashboard on top", "The dashboard stays above other windows.", "DashboardOnTop", () => model.DashboardOnTop, v => model.SetDashboardOnTop(v))
+        };
+        if (model.TrayAvailable) rows.Add(Toggle("Show in taskbar", "Off runs the timer from the tray alone.", "ShowInTaskbar", () => model.TaskbarButton, v => model.SetTaskbarButton(v)));
+        if (model.AutoStart?.Available == true) rows.Add(Toggle("Start with Windows", "Opens the timer when you sign in.", "StartWithWindows", () => model.AutoStart?.IsEnabled == true, v => model.SetAutoStart(v)));
+        stack.Children.Add(Section("Windows", Rows(rows.ToArray())));
         return stack;
+    }
+
+    // ---- alerts
+    private Control BuildAlerts()
+    {
+        var stack = new StackPanel { Spacing = 0 };
+        // The three choices are three different pills: a card that opens under it, only the red count, or nothing.
+        void Pick(string mode) => model.SetPillAlertsMode(mode);
+        stack.Children.Add(Section("Pill alerts", Choices(
+            Choice("AlertsPeek", "Peek", "A card opens under the pill for a new alert, and again when you press the count", SettingsPictures.Alerts("peek", .5), () => model.PillAlertsMode == "peek", () => Pick("peek"), 120),
+            Choice("AlertsLight", "Light only", "Only the red count. Press it to see the list", SettingsPictures.Alerts("light", .5), () => model.PillAlertsMode == "light", () => Pick("light"), 120),
+            Choice("AlertsOff", "Off", "No count, no card. The sidebar still lists them", SettingsPictures.Alerts("off", .5), () => model.PillAlertsMode == "off", () => Pick("off"), 120))));
+        var counts = new StackPanel();
+        foreach (var (what, where) in new[] { ("A reminder has passed", "A note's reminder time has gone."), ("A budget is at 80 per cent or spent", "Budgets are set under Accounts."), ("A break has run past the allowance", "The daily break is set under Day and time.") })
+        {
+            var row = Ui.Grid("Auto,230,*"); row.Margin = new Thickness(0, 8); row.ColumnSpacing = 10;
+            var dot = new Ellipse { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center }; dot.Bind(Shape.FillProperty, dot.GetResourceObservable("Overtime"));
+            Ui.Put(row, dot); var w = Ui.Text(what, 13.5); w.FontWeight = FontWeight.SemiBold; Ui.Put(row, w, 1); Ui.Put(row, Ui.Text(where, 12.5, "muted"), 2);
+            counts.Children.Add(row);
+        }
+        var order = Ui.Text("Reminders from an earlier day come first, then a spent budget, then the rest. A card that opens by itself folds after 12 seconds, unless a budget is spent.", 12, "muted"); order.TextWrapping = TextWrapping.Wrap; counts.Children.Add(order);
+        stack.Children.Add(Section("What counts as an alert", counts));
+        return stack;
+    }
+
+    // ---- day and time
+    private Control BuildDay()
+    {
+        var grid = Ui.Grid("1.15*,*"); grid.ColumnSpacing = 34;
+        var left = Section("Working hours", new ShiftEditor(model, () => { }, null));
+        // The first day of the week used to be asked for only in the first-run setup; it is here too, and the week on screen follows it.
+        var days = new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday };
+        var start = new ComboBox { Name = "WeekStartsOn", ItemsSource = days.Select(d => d.ToString()).ToList(), Width = 150, Height = 36, MinHeight = 36, FontSize = 13.5 };
+        Avalonia.Automation.AutomationProperties.SetName(start, "Week starts on");
+        var syncing = false;
+        void SyncStart() { syncing = true; start.SelectedIndex = Array.IndexOf(days, model.WeekStartsOn); syncing = false; }
+        start.SelectionChanged += (_, _) => { if (!syncing && start.SelectedIndex >= 0) model.SetWeekStart(days[start.SelectedIndex]); };
+        syncs.Add(SyncStart); SyncStart();
+        // How time is written is a two-way choice whose options are the examples themselves.
+        var hm = NotesPage.Seg("TimeFormatHm", "01:30", !model.DecimalHours, () => { if (model.DecimalHours) model.ToggleFormat(); });
+        var dec = NotesPage.Seg("TimeFormatDecimal", "1.50h", model.DecimalHours, () => { if (!model.DecimalHours) model.ToggleFormat(); });
+        var format = new Border { Name = "TimeFormat", HorizontalAlignment = HorizontalAlignment.Right, Child = Ui.Horizontal(hm, dec) }; format.Classes.Add("segTrack");
+        void SyncFormat() { hm.Classes.Set("selected", !model.DecimalHours); dec.Classes.Set("selected", model.DecimalHours); }
+        syncs.Add(SyncFormat); SyncFormat();
+        var side = new StackPanel();
+        side.Children.Add(Section("Week", Rows(Row("Week starts on", "The Week overview and the exports begin here.", start), Row("How time is written", "A 90 minute block reads 01:30, or 1.50h. Exports follow it.", format))));
+        Ui.Put(grid, left); Ui.Put(grid, side, 1);
+        return grid;
+    }
+
+    // ---- accounts
+    private StackPanel accountList = null!; private TextBlock accountSummary = null!;
+    private Control BuildAccounts()
+    {
+        var stack = new StackPanel { Spacing = 10 };
+        accountSummary = Ui.Text("", 13, "muted"); accountSummary.Name = "AccountsSummary"; accountSummary.VerticalAlignment = VerticalAlignment.Center;
+        var edit = Ui.DialogButton("Edit accounts and budgets…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new AccountsDialog(model)); }, "EditAccounts", true);
+        edit.Content = Ui.Horizontal(new IconGlyph(IconKind.Edit), Ui.Text("Edit accounts and budgets…", 14));
+        var top = Ui.Grid("*,Auto"); Ui.Put(top, accountSummary); Ui.Put(top, edit, 1); stack.Children.Add(top);
+        accountList = new StackPanel { Name = "AccountList" }; stack.Children.Add(accountList);
+        var note = Ui.Text("Hiding an account only removes it from the tracker list. Its time stays in every report.", 12, "muted"); note.TextWrapping = TextWrapping.Wrap; stack.Children.Add(note);
+        syncs.Add(RefreshAccounts); RefreshAccounts();
+        return stack;
+    }
+    // A read-only look at each account: its colour, its budget and whether it is in the tracker. The form that changes them is the dialog.
+    private void RefreshAccounts()
+    {
+        var all = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
+        var shown = model.Accounts.Select(a => a.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        accountSummary.Text = $"{all.Count} accounts · {all.Count(a => a.Budget is not null)} with budgets · {all.Count(a => !shown.Contains(a.Name))} hidden from the tracker";
+        accountList.Children.Clear();
+        foreach (var account in all)
+        {
+            var row = Ui.Grid("Auto,*,150,130"); row.Height = 36; row.ColumnSpacing = 12; row.Name = "SettingsAccount_" + account.Name.Replace(" ", "");
+            var visible = shown.Contains(account.Name);
+            Ui.Put(row, NoteParts.Dot(model, account.Name, 12));
+            var name = Ui.Text(account.Display, 13.5); name.FontWeight = FontWeight.Medium; name.VerticalAlignment = VerticalAlignment.Center; Ui.Put(row, name, 1);
+            Ui.Put(row, Ui.Text(account.Budget is { } budget ? $"{model.FormatShort(budget)} per {account.Period}" : "No budget", 13, "muted"), 2);
+            Ui.Put(row, Ui.Text(visible ? "In the tracker" : "Hidden from tracker", 12, "muted"), 3);
+            foreach (var cell in row.Children.OfType<TextBlock>()) cell.VerticalAlignment = VerticalAlignment.Center;
+            if (!visible) row.Opacity = .55;
+            var line = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Child = row }; line.Bind(Border.BorderBrushProperty, line.GetResourceObservable("Hover"));
+            accountList.Children.Add(line);
+        }
     }
 
     // Under the tiles while Sunset is chosen: the place whose sun sets the times, or two times typed in, and what they come to today.
@@ -202,36 +336,10 @@ public sealed class SettingsView : Grid
         return frame;
     }
 
-    // ---- behaviour
-    private Control BuildBehaviour()
-    {
-        var rows = new List<Control>
-        {
-            Toggle("Keep the pill on top", "The pill stays above other windows.", "PillOnTop", () => model.PillOnTop, v => model.SetPillOnTop(v)),
-            Toggle("Keep the dashboard on top", "The dashboard stays above other windows.", "DashboardOnTop", () => model.DashboardOnTop, v => model.SetDashboardOnTop(v))
-        };
-        // How loud the pill is about what is waiting: a card that opens by itself, the light and the list only, or nothing.
-        var choices = new[] { "Peek", "Light only", "Off" }; var modes = new[] { "peek", "light", "off" };
-        var alerts = new ComboBox { Name = "PillAlertsChoice", ItemsSource = choices, Width = 150, Height = 36, MinHeight = 36, FontSize = 13.5, SelectedIndex = Array.IndexOf(modes, model.PillAlertsMode) };
-        Avalonia.Automation.AutomationProperties.SetName(alerts, "Pill alerts");
-        alerts.SelectionChanged += (_, _) => { if (alerts.SelectedIndex >= 0) model.SetPillAlertsMode(modes[alerts.SelectedIndex]); };
-        rows.Add(Row("Pill alerts", "Peek opens a card under the pill for reminders, budgets and long breaks. Light only keeps the light and the list. Off keeps the pill quiet.", alerts));
-        if (model.TrayAvailable) rows.Add(Toggle("Show in taskbar", "Off runs the timer from the tray alone.", "ShowInTaskbar", () => model.TaskbarButton, v => model.SetTaskbarButton(v)));
-        if (model.AutoStart?.Available == true) rows.Add(Toggle("Start with Windows", "Opens the timer when you sign in.", "StartWithWindows", () => model.AutoStart?.IsEnabled == true, v => model.SetAutoStart(v)));
-        return Rows(rows.ToArray());
-    }
-
-    // ---- hours and accounts
-    private Control BuildAccounts()
-    {
-        return Rows(Toggle("Decimal hours", "Write 1.50h instead of 01:30 everywhere, in exports too.", "DecimalHours", () => model.DecimalHours, _ => model.ToggleFormat()),
-            Row("Client accounts", "Names, colours, budgets and the order they are listed in.", Ui.DialogButton("Accounts and budgets…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new AccountsDialog(model)); }, "EditAccounts")));
-    }
-
     // ---- export
     private ComboBox periodPick = null!;
     private Button weekChoice = null!, monthChoice = null!, copyHours = null!;
-    private TextBlock periodLabel = null!, exportResult = null!, exportError = null!;
+    private TextBlock periodLabel = null!, exportResult = null!, exportError = null!, weekOnly = null!;
     private List<DateTime> weeks = new(), months = new();
     private bool wholeMonth;
     private Control BuildExport()
@@ -246,7 +354,8 @@ public sealed class SettingsView : Grid
         note.TextWrapping = TextWrapping.Wrap; stack.Children.Add(note);
         var export = Ui.DialogButton("Export CSV files", ExportFiles, "ExportCsv"); export.Content = Ui.Horizontal(new IconGlyph(IconKind.Export), Ui.Text("Export CSV files", 14));
         copyHours = Ui.DialogButton("Copy hours table", CopyTable, "CopyHours", false); copyHours.Content = Ui.Horizontal(new IconGlyph(IconKind.Copy), Ui.Text("Copy hours table", 14));
-        stack.Children.Add(Ui.Horizontal(export, copyHours));
+        weekOnly = Ui.Text("The table is for a week.", 12.5, "muted"); weekOnly.Name = "CopyHoursNote"; weekOnly.VerticalAlignment = VerticalAlignment.Center; weekOnly.IsVisible = false;
+        stack.Children.Add(Ui.Horizontal(export, copyHours, weekOnly));
         exportResult = Ui.Text("", 13); exportResult.Name = "ExportResult"; exportResult.TextWrapping = TextWrapping.Wrap; exportResult.IsVisible = false;
         exportError = Ui.Text("", 13); exportError.Classes.Add("overtime"); exportError.Name = "ExportError"; exportError.TextWrapping = TextWrapping.Wrap; exportError.IsVisible = false;
         stack.Children.Add(exportResult); stack.Children.Add(exportError);
@@ -275,7 +384,7 @@ public sealed class SettingsView : Grid
         periodLabel.Text = wholeMonth ? "Month" : "Week";
         weekChoice.Classes.Set("mainAction", !wholeMonth); monthChoice.Classes.Set("mainAction", wholeMonth);
         // The hours table is laid out by week, so there is nothing to copy for a month.
-        copyHours.IsEnabled = !wholeMonth; ToolTip.SetTip(copyHours, wholeMonth ? "Week only" : null);
+        copyHours.IsEnabled = !wholeMonth; ToolTip.SetTip(copyHours, wholeMonth ? "Week only" : null); weekOnly.IsVisible = wholeMonth;
     }
     private void ChoosePeriod(bool month) { wholeMonth = month; FillPeriods(selectShown: true); exportResult.IsVisible = exportError.IsVisible = false; }
     private DateTime? ChosenDay() => wholeMonth ? months.ElementAtOrDefault(periodPick.SelectedIndex) : weeks.ElementAtOrDefault(periodPick.SelectedIndex);
@@ -361,6 +470,37 @@ public sealed class SettingsView : Grid
     }
 
     // ---- pieces
+    private static TextBlock SectionLabel(string text) { var t = Ui.Text(text.ToUpperInvariant(), 11.5, "muted"); t.FontWeight = FontWeight.Bold; t.LetterSpacing = 0.6; return t; }
+    /// <summary>A small heading over what it holds, with room under it.</summary>
+    private static StackPanel Section(string label, Control content)
+    {
+        var stack = new StackPanel { Spacing = 8, Margin = new Thickness(0, 0, 0, 18) };
+        stack.Children.Add(SectionLabel(label)); stack.Children.Add(content);
+        return stack;
+    }
+    /// <summary>A picture of what a choice does, with its name and one line under it. The chosen one wears the accent ring, as the theme tiles do.</summary>
+    private Button Choice(string name, string label, string description, Control picture, Func<bool> chosen, Action choose, double pictureHeight = 66)
+    {
+        var frame = new Border { Height = pictureHeight, CornerRadius = new CornerRadius(9), ClipToBounds = true, Child = picture }; frame.Bind(Border.BackgroundProperty, frame.GetResourceObservable("Hover"));
+        var words = new StackPanel { Spacing = 2, Margin = new Thickness(2, 8, 2, 0) };
+        var head = Ui.Text(label, 13.5); head.FontWeight = FontWeight.SemiBold; words.Children.Add(head);
+        var detail = Ui.Text(description, 12, "muted"); detail.TextWrapping = TextWrapping.Wrap; words.Children.Add(detail);
+        var inner = new StackPanel(); inner.Children.Add(frame); inner.Children.Add(words);
+        var tile = new Button { Name = name, Content = inner, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Top, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(8), Margin = new Thickness(0, 0, 10, 0) };
+        tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile");
+        Avalonia.Automation.AutomationProperties.SetName(tile, label);
+        tile.Click += (_, _) => { if (!chosen()) choose(); };
+        void Sync() => tile.Classes.Set("selected", chosen());
+        syncs.Add(Sync); Sync();
+        return tile;
+    }
+    /// <summary>Choices side by side, sharing the width equally.</summary>
+    private static Control Choices(params Button[] tiles)
+    {
+        var grid = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1, Columns = tiles.Length, HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 250 * tiles.Length };
+        foreach (var tile in tiles) grid.Children.Add(tile);
+        return grid;
+    }
     private static TextBlock Label(string text) { var t = Ui.Text(text, 14); t.FontWeight = FontWeight.SemiBold; return t; }
     /// <summary>Rows set one under another, with a hairline between them.</summary>
     private static StackPanel Rows(params Control[] rows)

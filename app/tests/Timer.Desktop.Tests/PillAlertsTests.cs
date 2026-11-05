@@ -242,14 +242,17 @@ public sealed class PillAlertsTests
     }
 
     [AvaloniaFact]
-    public void PillAlertsIsAChoiceInSettingsBehaviour()
+    public void PillAlertsIsAChoiceOfThreePicturesInSettingsAlerts()
     {
         var model = Demo(); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         try
         {
-            dashboard.OpenSettings(); dashboard.GetVisualDescendants().OfType<SettingsView>().Single().ShowSection("behaviour"); Settle(dashboard);
-            var choice = dashboard.GetVisualDescendants().OfType<ComboBox>().First(b => b.Name == "PillAlertsChoice");
-            Assert.Equal(0, choice.SelectedIndex); choice.SelectedIndex = 1; Assert.Equal("light", model.PillAlertsMode); choice.SelectedIndex = 2; Assert.Equal("off", model.PillAlertsMode); choice.SelectedIndex = 0; Assert.Equal("peek", model.PillAlertsMode);
+            dashboard.OpenSettings(); dashboard.GetVisualDescendants().OfType<SettingsView>().Single().ShowSection("alerts"); Settle(dashboard);
+            Button Tile(string name) => dashboard.GetVisualDescendants().OfType<Button>().First(b => b.Name == name);
+            Assert.Contains("selected", Tile("AlertsPeek").Classes);
+            Tile("AlertsLight").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal("light", model.PillAlertsMode); Assert.Contains("selected", Tile("AlertsLight").Classes);
+            Tile("AlertsOff").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal("off", model.PillAlertsMode);
+            Tile("AlertsPeek").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Equal("peek", model.PillAlertsMode);
         }
         finally { dashboard.Close(); }
     }

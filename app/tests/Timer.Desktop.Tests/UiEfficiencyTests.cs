@@ -68,7 +68,7 @@ public sealed class UiEfficiencyTests
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "SettingsBack");
             Press(window, "Settings"); Assert.True(Find<Button>(window, "WeekOverviewTab").Classes.Contains("selected"));
             Press(window, "Settings"); Assert.NotSame(page, window.GetVisualDescendants().OfType<SettingsView>().Single());
-            Assert.Equal("Appearance", Find<TextBlock>(window, "SettingsTitle").Text);
+            Assert.Equal("Look", Find<TextBlock>(window, "SettingsTitle").Text);
             Press(window, "Settings");
             Assert.True(Find<Button>(window, "WeekOverviewTab").IsEffectivelyVisible);
         }
