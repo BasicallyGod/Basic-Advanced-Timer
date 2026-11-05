@@ -76,7 +76,7 @@ public sealed class DetailsCardSwitchTests
     [AvaloniaFact]
     public void MidnightCommitsTheFocusedNoteBeforeClearingTheSelection()
     {
-        var now = new DateTime(2026, 10, 14, 23, 59, 59);
+        var now = new DateTime(2026, 10, 14, 14, 15, 0);
         var model = TimerModel.CreateDemo(() => now); model.CompleteSetup();
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
@@ -85,7 +85,7 @@ public sealed class DetailsCardSwitchTests
             model.SelectBlock(new[] { row }, false); Settle(window);
             var box = window.GetVisualDescendants().OfType<TextBox>().Single(b => b.Name == "SelectedNote");
             box.Focus(); box.Text = "Saved at midnight";
-            now = now.AddSeconds(2);
+            now = now.Date.AddDays(1).AddSeconds(1);
             model.Tick(); Settle(window);
             Assert.Equal(now.Date, model.SelectedDate);
             Assert.Empty(model.SelectedRows);
