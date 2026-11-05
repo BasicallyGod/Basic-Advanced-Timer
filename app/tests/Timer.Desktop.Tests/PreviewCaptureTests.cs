@@ -30,7 +30,8 @@ public sealed class PreviewCaptureTests
                 Shot("timeline"); Press("AddNote"); Shot("inline-note"); Press("AddNote");
                 window.ShowNotes(); Shot("notes");
                 window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "PageNoteField").Focus(); Shot("notes-focused");
-                Press("PageKindMeeting"); Shot("meeting");
+                window.GetVisualDescendants().OfType<NotesPage>().Single().OpenNote(model.Notes.All.First(n => !NotesModel.IsMeeting(n) && n.Day.Date == model.Engine.Now.Date).Id); Shot("note-edit");
+                window.GetVisualDescendants().OfType<NotesPage>().Single().SetKind(true); Dispatcher.UIThread.RunJobs(); Shot("meeting");
                 window.GetVisualDescendants().OfType<NotesPage>().Single().OpenNote(model.Notes.MeetingsOn(model.Engine.Now.Date).First().Id); Shot("meeting-edit");
                 window.SelectTab(true); Shot("week"); Press("WeekTable"); Shot("week-table");
                 Press("Settings"); foreach (var section in new[] { "Look", "Pill", "Alerts", "Day", "Accounts", "Export", "About" }) { Press("Settings" + section); Shot("settings-" + section.ToLowerInvariant()); }
@@ -122,7 +123,7 @@ public sealed class PreviewCaptureTests
                 foreach (var (page, tab) in new[] { ("timeline", "TimelineTab"), ("notes", "NotesTab"), ("week", "WeekOverviewTab") }) { Press(tab); Shot(page); }
                 Press("TimelineTab"); model.SelectBlock(model.Engine.Sessions.Take(1).ToArray(), false); Shot("timeline-selected");
                 model.SelectBlock(Array.Empty<Timer.Core.SessionRow>(), false);
-                Press("NotesTab"); Press("NotesAccount_Accountone"); Shot("notes-filtered");
+                Press("NotesTab"); Press("NotesAccountFilter"); Press("NotesAccount_Accountone"); Shot("notes-filtered");
             }
             finally { window.Close(); }
         }
@@ -154,7 +155,7 @@ public sealed class PreviewCaptureTests
                 window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Follow up on the new brief"; Dispatcher.UIThread.RunJobs();
                 Press("FormBell"); Press("ReminderSet"); Shot("note-form");
                 Press("AddMeeting"); Shot("meeting-form");
-                Press("NotesTab"); Shot("notes"); Press("PageKindMeeting"); Shot("notes-meeting");
+                Press("NotesTab"); Shot("notes"); window.GetVisualDescendants().OfType<NotesPage>().Single().SetKind(true); Dispatcher.UIThread.RunJobs(); Shot("notes-meeting");
                 Press("WeekOverviewTab"); Shot("week");
             }
             finally { window.Close(); }
