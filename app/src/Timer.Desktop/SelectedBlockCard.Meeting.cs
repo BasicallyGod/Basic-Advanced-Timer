@@ -15,7 +15,8 @@ public sealed partial class SelectedBlockCard
     private const string NoAccount = "No account";
     private sealed class MeetingFields
     {
-        public long Id; public bool Series, Later, Settling; public DateTime Day;
+        public long Id; public bool Series, Later, Settling, Dirty, Saved; public DateTime Day;
+        public TextBlock State = null!; public Button Save = null!, Discard = null!;
         public TextBox Name = null!, Start = null!, End = null!; public ComboBox Account = null!, Repeat = null!; public TextBlock DayWords = null!; public Border ScopeHost = null!;
     }
     private MeetingFields? meetingFields;
@@ -79,6 +80,13 @@ public sealed partial class SelectedBlockCard
             f.ScopeHost = new Border { Name = "DetailsScope" }; var scope = new StackPanel { Spacing = 5 }; scope.Children.Add(Label("Changes apply to")); scope.Children.Add(f.ScopeHost); body.Children.Add(scope);
             DrawScope(f);
         }
+        // Whether the changes are saved is always said. A plain meeting saves each change as it is made, and says so. A repeating one keeps its changes until Save, so the choice of what
+        // they apply to can be made after them, and says Unsaved changes with Save and Discard while there are some.
+        f.State = new TextBlock { Name = "DetailsSaveState", FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+        f.Save = Ui.Ctl("DetailsSave", "Save", null, "Save changes", () => Apply(f, "save", true), small: true); f.Save.Classes.Add("accentOutline");
+        f.Discard = Ui.Ctl("DetailsDiscard", "Discard", null, "Discard changes", () => Discard(f), small: true);
+        var status = Ui.Horizontal(f.Save, f.Discard, f.State); status.Spacing = 10; body.Children.Add(status);
+        ShowState(f);
         Committing(f.Name, () => Apply(f, "name")); Committing(f.Start, () => Apply(f, "start")); Committing(f.End, () => Apply(f, "end"));
         f.Account.SelectionChanged += (_, _) => Apply(f, "account"); f.Repeat.SelectionChanged += (_, _) => Apply(f, "repeat");
         return Page(header, body);
@@ -87,15 +95,15 @@ public sealed partial class SelectedBlockCard
     // The switch for what a change applies to, drawn again when it is pressed so the chosen half is filled.
     private void DrawScope(MeetingFields f)
     {
-        var one = NotesPage.Seg("DetailsScopeOne", "This one", !f.Later, () => { f.Later = false; DrawScope(f); });
-        var all = NotesPage.Seg("DetailsScopeAll", "This and all later", f.Later, () => { f.Later = true; DrawScope(f); });
+        var one = NotesPage.Seg("DetailsScopeOne", "This one", !f.Later, () => { f.Later = false; DrawScope(f); ShowState(f); });
+        var all = NotesPage.Seg("DetailsScopeAll", "This and all later", f.Later, () => { f.Later = true; DrawScope(f); ShowState(f); });
         var track = NotesPage.Switch(one, all); track.HorizontalAlignment = HorizontalAlignment.Left; f.ScopeHost.Child = track;
     }
 
     private static string Hm(TimeSpan? time) => time is { } t ? t.ToString(@"hh\:mm") : "";
 
     // Applies the boxes to the meeting. Moving the start moves the end with it, so the meeting keeps its length, unless the end was typed as well. A refused change puts the saved values back.
-    private void Apply(MeetingFields f, string changed)
+    private void Apply(MeetingFields f, string changed, bool commit = false)
     {
         if (f.Settling || model.Notes.Find(f.Id) is not { } meeting) return;
         var words = (f.Name.Text ?? "").Trim();
@@ -107,16 +115,39 @@ public sealed partial class SelectedBlockCard
         {
             end = start + (savedEnd - savedStart);
             if (end >= f.Day.AddDays(1)) end = f.Day.AddDays(1).AddMinutes(-1);
+            if (f.Series) { f.Settling = true; try { f.End.Text = end.ToString("HH:mm"); } finally { f.Settling = false; } } // Pending: the end box shows it moved too.
         }
         var account = f.Account.SelectedItem is string chosen && chosen != NoAccount ? chosen : null;
         var repeat = f.Repeat.SelectedItem is string label ? Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label) : model.Notes.RepeatOf(meeting);
         var later = f.Series && f.Later;
         var unchanged = words == model.Notes.Words(meeting).Trim() && string.Equals(account, model.Notes.AccountOf(meeting), StringComparison.OrdinalIgnoreCase) && f.Day == meeting.Day.Date
             && start.TimeOfDay == meeting.At && end.TimeOfDay == meeting.End && repeat == model.Notes.RepeatOf(meeting);
-        if (unchanged) { RefreshMeeting(meeting, true); return; }
+        // A repeating meeting keeps what is typed until Save, so what it applies to can be chosen after the changes are made.
+        if (f.Series && !commit) { f.Dirty = !unchanged; f.Saved = false; ShowState(f); return; }
+        if (unchanged) { f.Dirty = false; ShowState(f); if (!f.Series) RefreshMeeting(meeting, true); return; }
         var problem = model.Notes.EditMeeting(meeting.Id, words, account, f.Day, start.TimeOfDay, end.TimeOfDay, repeat, later);
-        if (problem is not null) { model.Refuse(problem); RefreshMeeting(meeting, true); return; }
-        if (f.Series) model.Tell(later ? "Saved for this day and all later" : "Changed for this day only");
+        if (problem is not null) { model.Refuse(problem); f.Dirty = false; RefreshMeeting(meeting, true); ShowState(f); return; }
+        f.Dirty = false; f.Saved = true; ShowState(f);
+        if (f.Series) model.Tell(later ? "Saved for this day and all later" : "Saved for this day only");
+    }
+
+    private void Discard(MeetingFields f)
+    {
+        f.Dirty = false; f.Saved = false;
+        if (model.Notes.Find(f.Id) is { } meeting) RefreshMeeting(meeting, true);
+        ShowState(f);
+    }
+
+    // The line under the boxes that says whether the changes are saved, and shows Save and Discard while a repeating meeting has some that are not.
+    private void ShowState(MeetingFields f)
+    {
+        var pending = f.Series && f.Dirty;
+        f.Save.IsVisible = f.Discard.IsVisible = pending;
+        f.State.Text = f.Series
+            ? (pending ? "Unsaved changes · apply to " + (f.Later ? "this and all later" : "this one") : f.Saved ? "Saved" : "No changes")
+            : (f.Saved ? "Saved" : "Changes save as you make them");
+        f.State.Classes.Set("muted", !pending);
+        if (pending) f.State.Bind(TextBlock.ForegroundProperty, f.State.GetResourceObservable("AccentText")); else f.State.ClearValue(TextBlock.ForegroundProperty);
     }
 
     private void DeleteMeeting(MeetingFields f)
@@ -131,6 +162,7 @@ public sealed partial class SelectedBlockCard
     private void RefreshMeeting(DayNote meeting, bool all)
     {
         if (meetingFields is not { } f) return;
+        if (f.Dirty && !all) return; // Unsaved changes are kept; only Save, Discard or a refusal put the saved values back.
         f.Settling = true;
         try
         {
@@ -142,6 +174,7 @@ public sealed partial class SelectedBlockCard
             f.Repeat.SelectedItem = NotesModel.Label(model.Notes.RepeatOf(meeting));
         }
         finally { f.Settling = false; }
+        if (all) { f.Dirty = false; ShowState(f); } // Every box back to the saved values leaves nothing unsaved.
     }
 
     // The timeline of a stack of meetings, in place of the blocks' one; drag a picked meeting's ends and it moves by five minutes (a repeating meeting for this day only).

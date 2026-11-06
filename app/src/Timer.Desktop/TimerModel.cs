@@ -230,13 +230,14 @@ public sealed class TimerModel : INotifyPropertyChanged
         Notify(); return true;
     }
     public bool CopySelection() => CopyBlocks(Engine.Sessions.Where(selectedRows.Contains).ToList());
-    /// <summary>Pastes the copied blocks with the first at this time on the day shown. One undo step, and the time is credited like Add time.</summary>
+    /// <summary>Pastes the copied blocks with the first at this time on the day shown. One undo step, and the time is credited like Add time. The copy is used up by a paste that works.</summary>
     public bool PasteBlocks(DateTime at)
     {
         if (!CanPaste) { EditError = "Copy blocks first"; Notify(); return false; }
         var count = copied.Count;
         var done = ChangeLog(() => { foreach (var block in copied) ValidateAccount(block.Account); Editor.Paste(copied, at, allowOverlap: true); });
-        if (done) { Notice = count == 1 ? "1 block pasted" : $"{count} blocks pasted"; Notify(); }
+        // A copy lasts for one paste: the outlines that showed where it would go end with it, and another copy needs the blocks copied again.
+        if (done) { copied = Array.Empty<LedgerEditor.ClipBlock>(); Notice = count == 1 ? "1 block pasted" : $"{count} blocks pasted"; Notify(); }
         return done;
     }
     /// <summary>

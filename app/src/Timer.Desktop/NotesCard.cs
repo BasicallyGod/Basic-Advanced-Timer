@@ -229,7 +229,7 @@ public sealed class NotesCard : Border
         field.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Submit(); e.Handled = true; } };
         if (meeting)
         {
-            // A start and an end beside each other. The day is the one showing, and a repeat or another day is set in Details once the meeting is there.
+            // A start and an end beside each other, and the day (the one showing unless another is picked). A repeat is set in Details once the meeting is there.
             var times = Ui.Grid("Auto,Auto,Auto,*"); times.ColumnSpacing = 8;
             var start = TimeBox("MeetingStart", startText, v => startText = v); var end = TimeBox("MeetingEnd", endText, v => endText = v);
             // Moving the start moves the end with it, so the meeting keeps its length (12:00 to 12:30 becomes 16:00 to 16:30). It is applied when the box is
@@ -252,7 +252,12 @@ public sealed class NotesCard : Border
             start.LostFocus += (_, _) => MoveEndWithStart();
             start.KeyDown += (_, e) => { if (e.Key == Key.Enter) MoveEndWithStart(); };
             Ui.Put(times, start); Ui.Put(times, new TextBlock { Text = "–", VerticalAlignment = VerticalAlignment.Center, Classes = { "muted" } }, 1); Ui.Put(times, end, 2);
-            var day = new TextBlock { Text = NoteDates.Day(formDay, model.Engine.Now), VerticalAlignment = VerticalAlignment.Center, FontSize = 12.5, Name = "MeetingDayWords" }; day.Classes.Add("muted"); Ui.Put(times, day, 3);
+            // The day is a button that opens the small calendar of a reminder in its day-only form, so a meeting can go on any day from here.
+            var dayWords = new TextBlock { Text = NoteDates.Day(formDay, model.Engine.Now), VerticalAlignment = VerticalAlignment.Center, FontSize = 12.5, Name = "MeetingDayWords" };
+            Button dayButton = null!;
+            dayButton = Ui.Ctl("MeetingDay", null, null, "Meeting day", () => OpenMeetingDay(dayButton), small: true);
+            dayButton.Width = double.NaN; dayButton.Padding = new Thickness(10, 0); dayButton.HorizontalAlignment = HorizontalAlignment.Left; dayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), dayWords);
+            Ui.Put(times, dayButton, 3);
             column.Children.Add(times);
         }
         formHost.Content = column;
@@ -299,6 +304,14 @@ public sealed class NotesCard : Border
         scope = null;
         var label = string.IsNullOrWhiteSpace(draft) ? "New note" : draft;
         var content = new ReminderPopup(() => model.Engine.Now, label, draftReminder, answered => { draftReminder = answered; CloseReminder(); DrawForm(true); }, CloseReminder);
+        reminderHost.Child = ReminderPopup.Roomy(content, reminderHost); reminderHost.IsOpen = true;
+    }
+    // The meeting's day, on the same small calendar in its day-only form, hung under the day button.
+    private void OpenMeetingDay(Control anchor)
+    {
+        scope = null; reminderHost.PlacementTarget = anchor;
+        var label = string.IsNullOrWhiteSpace(draft) ? "New meeting" : draft;
+        var content = new ReminderPopup(() => model.Engine.Now, label, formDay, answered => { if (answered is { } picked) formDay = picked.Date; CloseReminder(); DrawForm(true); }, CloseReminder, "Meeting day", dayOnly: true);
         reminderHost.Child = ReminderPopup.Roomy(content, reminderHost); reminderHost.IsOpen = true;
     }
     private void CloseReminder() { reminderHost.IsOpen = false; reminderHost.Child = null; reminderHost.PlacementTarget = title; }

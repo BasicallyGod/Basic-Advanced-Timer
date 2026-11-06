@@ -342,7 +342,7 @@ public sealed class NotesTests
     }
 
     [AvaloniaFact]
-    public void ChangingARepeatingMeetingInDetailsAppliesToThisOneOrToAllLaterAsTheSwitchSays()
+    public void ChangingARepeatingMeetingInDetailsKeepsTheChangeUntilSaveAndThenAppliesAsTheSwitchSays()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
@@ -351,14 +351,52 @@ public sealed class NotesTests
             var today = model.Notes.MeetingsOn(Day).Single(); var tomorrow = model.Notes.MeetingsOn(Day.AddDays(1)).Single();
             model.SelectMeeting(today.Id); Settle(window);
             Assert.Equal("Meeting", Find<Border>(window, "DetailsKind").GetVisualDescendants().OfType<TextBlock>().First().Text);
-            Assert.NotNull(Find<Border>(window, "DetailsScope")); // A repeating meeting says what a change applies to, so nothing has to be asked.
-            // This one only is chosen to begin with.
+            Assert.NotNull(Find<Border>(window, "DetailsScope"));
+            Assert.Equal("No changes", Find<TextBlock>(window, "DetailsSaveState").Text); Assert.False(Find<Button>(window, "DetailsSave").IsVisible);
+            // A change is kept, not saved, so what it applies to can be chosen after making it.
             Type(window, "DetailsMeetingEnd", "10:30"); Find<TextBox>(window, "DetailsMeetingEnd").RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window);
-            Assert.Equal(TimeSpan.FromHours(10.5), model.Notes.Find(today.Id)!.End); Assert.Equal(TimeSpan.FromHours(10), model.Notes.Find(tomorrow.Id)!.End);
+            Assert.Equal(TimeSpan.FromHours(10), model.Notes.Find(today.Id)!.End); // Nothing written yet.
+            Assert.Contains("Unsaved changes", Find<TextBlock>(window, "DetailsSaveState").Text); Assert.True(Find<Button>(window, "DetailsSave").IsVisible); Assert.True(Find<Button>(window, "DetailsDiscard").IsVisible);
+            Click(window, "DetailsScopeAll"); Settle(window);
+            Assert.Contains("this and all later", Find<TextBlock>(window, "DetailsSaveState").Text); Assert.Equal("10:30", Find<TextBox>(window, "DetailsMeetingEnd").Text); // The choice does not lose the change.
+            Click(window, "DetailsSave"); Settle(window);
+            Assert.Equal(TimeSpan.FromHours(10.5), model.Notes.Find(today.Id)!.End); Assert.Equal(TimeSpan.FromHours(10.5), model.Notes.MeetingsOn(Day.AddDays(1)).Single().End);
+            Assert.Contains("all later", model.Notice);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ARepeatingMeetingsChangeCanBeSavedForThisOneOnlyOrDiscarded()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            model.Notes.AddMeeting(Day, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Stand-up", null, RepeatChoice.Day); Settle(window);
+            var today = model.Notes.MeetingsOn(Day).Single(); var tomorrow = model.Notes.MeetingsOn(Day.AddDays(1)).Single();
+            model.SelectMeeting(today.Id); Settle(window);
+            Type(window, "DetailsMeetingEnd", "10:30"); Find<TextBox>(window, "DetailsMeetingEnd").RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window);
+            Click(window, "DetailsDiscard"); Settle(window);
+            Assert.Equal("10:00", Find<TextBox>(window, "DetailsMeetingEnd").Text); Assert.Equal("No changes", Find<TextBlock>(window, "DetailsSaveState").Text); Assert.Equal(TimeSpan.FromHours(10), model.Notes.Find(today.Id)!.End);
+            Type(window, "DetailsMeetingEnd", "10:30"); Find<TextBox>(window, "DetailsMeetingEnd").RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window);
+            Click(window, "DetailsSave"); Settle(window); // This one only is chosen to begin with.
+            Assert.Equal(TimeSpan.FromHours(10.5), model.Notes.MeetingsOn(Day).Single().End); Assert.Equal(TimeSpan.FromHours(10), model.Notes.MeetingsOn(Day.AddDays(1)).Single().End);
             Assert.Contains("this day only", model.Notice);
-            Click(window, "DetailsScopeAll");
-            Type(window, "DetailsMeetingEnd", "11:00"); Find<TextBox>(window, "DetailsMeetingEnd").RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window);
-            Assert.Equal(TimeSpan.FromHours(11), model.Notes.Find(today.Id)!.End); Assert.Equal(TimeSpan.FromHours(11), model.Notes.MeetingsOn(Day.AddDays(1)).Single().End);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void APlainMeetingSavesAsItGoesAndSaysSo()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            model.Notes.AddMeeting(Day, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Review", null, RepeatChoice.None); Settle(window);
+            model.SelectMeeting(model.Notes.MeetingsOn(Day).Single().Id); Settle(window);
+            Assert.Equal("Changes save as you make them", Find<TextBlock>(window, "DetailsSaveState").Text); Assert.False(Find<Button>(window, "DetailsSave").IsVisible);
+            Type(window, "DetailsMeetingEnd", "10:30"); Find<TextBox>(window, "DetailsMeetingEnd").RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window);
+            Assert.Equal(TimeSpan.FromHours(10.5), model.Notes.MeetingsOn(Day).Single().End); Assert.Equal("Saved", Find<TextBlock>(window, "DetailsSaveState").Text);
         }
         finally { window.Close(); }
     }

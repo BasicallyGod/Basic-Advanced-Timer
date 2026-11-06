@@ -198,9 +198,20 @@ public sealed class TweakTests
         model.CopyBlocks(engine.Sessions.ToList());
         Assert.True(model.PasteBlocks(new DateTime(2026, 10, 14, 9, 15, 0))); // Lands on the existing 09:00 block: time may overlap, so it is accepted.
         Assert.Equal(4, engine.Sessions.Count); Assert.True(model.UndoEdit()); Assert.Equal(2, engine.Sessions.Count);
+        Assert.False(model.CanPaste); model.CopyBlocks(engine.Sessions.ToList()); // A paste uses its copy up, so it is copied again.
         Assert.False(model.PasteBlocks(engine.Sessions[0].From)); // The same account at the same second would share one note, so it is refused whole.
         Assert.Equal(2, engine.Sessions.Count); Assert.NotNull(model.EditError);
         Assert.True(model.PasteBlocks(new DateTime(2026, 10, 14, 23, 30, 0))); Assert.True(model.UndoEdit()); // Running past midnight is allowed now.
+    }
+
+    [Fact]
+    public void ACopyLastsForOnePasteAndAFailedPasteKeepsIt()
+    {
+        var model = CopyModel(out var engine);
+        Assert.True(model.CopyBlocks(engine.Sessions.ToList())); Assert.True(model.CanPaste); Assert.NotEmpty(model.CopiedShape);
+        Assert.True(model.PasteBlocks(new DateTime(2026, 10, 14, 15, 0, 0)));
+        Assert.False(model.CanPaste); Assert.Empty(model.CopiedShape); // The outlines that showed where it would go are gone with it.
+        Assert.False(model.PasteBlocks(new DateTime(2026, 10, 14, 17, 0, 0))); Assert.Equal(4, engine.Sessions.Count);
     }
 
     [Fact]

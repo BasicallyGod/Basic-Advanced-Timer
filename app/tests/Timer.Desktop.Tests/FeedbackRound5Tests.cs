@@ -104,8 +104,10 @@ public sealed class FeedbackRound5Tests
         {
             Click(window, "CardKindMeetings");
             Assert.Equal("12:00", Find<TextBox>(window, "MeetingStart").Text); Assert.Equal("12:30", Find<TextBox>(window, "MeetingEnd").Text); // Midday, half an hour.
-            Assert.Equal("Today", Find<TextBlock>(window, "MeetingDayWords").Text); // The day showing; another day or a repeat is set in Details once it is there.
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "MeetingDay" or "MeetingRepeat");
+            Assert.Equal("Today", Find<TextBlock>(window, "MeetingDayWords").Text); // The day showing, on a button that opens the day's calendar; a repeat is set in Details once it is there.
+            var day = Find<Button>(window, "MeetingDay"); Assert.Contains(day.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "MeetingDayWords");
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "MeetingRepeat");
+            Click(window, "MeetingDay"); Assert.NotNull(Find<TextBox>(window, "MeetingStart")); // Pressing it opens the calendar over the card and leaves the line as it was.
         }
         finally { window.Close(); }
     }

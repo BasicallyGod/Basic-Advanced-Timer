@@ -114,6 +114,7 @@ public sealed class TimelineMagnetTests
         Assert.True(model.CopyBlocks(new[] { a }));
         Assert.True(model.PasteBlocks(Day.AddHours(10).AddMinutes(10))); // On B, which used to refuse.
         Assert.Equal(4, model.Engine.Sessions.Count);
+        Assert.True(model.CopyBlocks(new[] { a })); // A paste uses its copy up.
         // Ctrl+V: the pointer's place when it is over the timeline, snapped flush to a nearby edge.
         model.PasteTime = Day.AddHours(10).AddMinutes(33); Assert.Equal(Day.AddHours(10.5), model.DefaultPasteTime()); // 3 minutes after B ends.
         model.PasteTime = Day.AddHours(13); Assert.Equal(Day.AddHours(13), model.DefaultPasteTime());
