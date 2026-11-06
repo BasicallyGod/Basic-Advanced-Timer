@@ -87,7 +87,7 @@ public sealed class DayStartTests
     }
 
     [AvaloniaFact]
-    public void SettingsOffersTheDayStartWithQuickChoices_AndTheHeaderNamesTheStretch()
+    public void SettingsOffersTheDayStartAsOneTimeBox_AndTheHeaderNamesTheStretch()
     {
         var model = Night(out _); model.SetDayStart(TimeSpan.Zero);
         var dashboard = new DashboardWindow(model); dashboard.Show();
@@ -96,7 +96,8 @@ public sealed class DayStartTests
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             dashboard.OpenSettings(); dashboard.GetVisualDescendants().OfType<SettingsView>().Single().ShowSection("day"); Dispatcher.UIThread.RunJobs();
             var box = dashboard.GetVisualDescendants().OfType<TextBox>().Single(b => b.Name == "DayStartBox"); Assert.Equal("00:00", box.Text);
-            dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DayStartQuick_1800").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<Button>(), b => b.Name?.StartsWith("DayStartQuick") == true); // Only the time box: no canned choices.
+            box.Text = "18:00"; box.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter });
             Assert.Equal(TimeSpan.FromHours(18), model.DayStart); Assert.Equal("18:00", box.Text);
             box.Text = "6:30"; box.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter });
             Assert.Equal(new TimeSpan(6, 30, 0), model.DayStart);

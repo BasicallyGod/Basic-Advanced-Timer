@@ -131,7 +131,7 @@ public sealed class SettingsView : Grid
             var shown = auto ? 95 : model.PillScalePercent!.Value;
             percent.Text = auto ? "Fits the screen" : $"{shown} per cent";
             // The picture is the pill at that size, kept inside the well.
-            stage.Child = SettingsPictures.Pill(true, model.PlainClock, null, Math.Min(1.1, 0.8 * shown / 95.0));
+            stage.Child = SettingsPictures.Pill(true, model.PlainClock, null, Math.Clamp(1.2 * shown / 100.0, 0.7, 1.6));
         }
         slider.PropertyChanged += (_, e) => { if (e.Property == Avalonia.Controls.Primitives.RangeBase.ValueProperty && slider.IsEnabled) { var chosen = (int)Math.Round(slider.Value / 10) * 10; if (chosen != model.PillScalePercent) model.SetPillScale(chosen); } };
         automatic.Click += (_, _) => { model.SetPillScale(automatic.IsChecked == true ? null : (int)Math.Round(slider.Value / 10) * 10); SyncSize(); };
@@ -143,11 +143,11 @@ public sealed class SettingsView : Grid
 
         // Style and clock digits sit side by side: each is two pictures of the real pill.
         var style = Choices(
-            Choice("StyleFull", "Full", "Clock, keys and alert count", SettingsPictures.Pill(true, false, null, .38), () => !model.CompactPill, () => model.SetCompactPill(false)),
-            Choice("StyleCompact", "Compact", "Only the clock. The keys move to its right-click menu", SettingsPictures.Pill(false, false, null, .6), () => model.CompactPill, () => model.SetCompactPill(true)));
+            Choice("StyleFull", "Full", "Clock, keys and alert count", SettingsPictures.Pill(true, false, null, 1), () => !model.CompactPill, () => model.SetCompactPill(false)),
+            Choice("StyleCompact", "Compact", "Only the clock. The keys move to its right-click menu", SettingsPictures.Pill(false, false, null, 1), () => model.CompactPill, () => model.SetCompactPill(true)));
         var digits = Choices(
-            Choice("DigitsSegments", "Segments", "Like a digital watch", SettingsPictures.Clock(false, .6), () => !model.PlainClock, () => model.SetPlainClock(false)),
-            Choice("DigitsPlain", "Plain", "Plain numerals, which some people find easier to read", SettingsPictures.Clock(true, .6), () => model.PlainClock, () => model.SetPlainClock(true)));
+            Choice("DigitsSegments", "Segments", "Like a digital watch", SettingsPictures.Clock(false, 1), () => !model.PlainClock, () => model.SetPlainClock(false)),
+            Choice("DigitsPlain", "Plain", "Plain numerals, which some people find easier to read", SettingsPictures.Clock(true, 1), () => model.PlainClock, () => model.SetPlainClock(true)));
         var both = Ui.Grid("*,*"); both.ColumnSpacing = 26;
         Ui.Put(both, Section("Style", style)); Ui.Put(both, Section("Clock digits", digits), 1);
         stack.Children.Add(both);
@@ -171,9 +171,9 @@ public sealed class SettingsView : Grid
         // The three choices are three different pills: a card that opens under it, only the red count, or nothing.
         void Pick(string mode) => model.SetPillAlertsMode(mode);
         stack.Children.Add(Section("Pill alerts", Choices(
-            Choice("AlertsPeek", "Peek", "A card opens under the pill for a new alert, and again when you press the count", SettingsPictures.Alerts("peek", .5), () => model.PillAlertsMode == "peek", () => Pick("peek"), 120),
-            Choice("AlertsLight", "Light only", "Only the red count. Press it to see the list", SettingsPictures.Alerts("light", .5), () => model.PillAlertsMode == "light", () => Pick("light"), 120),
-            Choice("AlertsOff", "Off", "No count, no card. The sidebar still lists them", SettingsPictures.Alerts("off", .5), () => model.PillAlertsMode == "off", () => Pick("off"), 120))));
+            Choice("AlertsPeek", "Peek", "A card opens under the pill for a new alert, and again when you press the count", SettingsPictures.Alerts("peek", 1), () => model.PillAlertsMode == "peek", () => Pick("peek")),
+            Choice("AlertsLight", "Light only", "Only the red count. Press it to see the list", SettingsPictures.Alerts("light", 1), () => model.PillAlertsMode == "light", () => Pick("light")),
+            Choice("AlertsOff", "Off", "No count, no card. The sidebar still lists them", SettingsPictures.Alerts("off", 1), () => model.PillAlertsMode == "off", () => Pick("off")))));
         var counts = new StackPanel();
         foreach (var (what, where) in new[] { ("A reminder has passed", "A note's reminder time has gone."), ("A budget is at 80 per cent or spent", "Budgets are set under Accounts."), ("A break has run past the allowance", "The daily break is set under Day and time.") })
         {
@@ -217,16 +217,10 @@ public sealed class SettingsView : Grid
             else { model.Refuse("Time, like 18:00"); SyncDayStart(); }
         }
         dayStart.LostFocus += (_, _) => CommitDayStart(); dayStart.KeyDown += (_, e) => { if (e.Key == Key.Enter) { CommitDayStart(); e.Handled = true; } };
-        // Three quick choices on the same slider the time format uses, so they take one short line under the words and match the rest of the page.
-        var quickChoices = new[] { ("Midnight", TimeSpan.Zero), ("12:00", TimeSpan.FromHours(12)), ("18:00", TimeSpan.FromHours(18)) };
-        var quickButtons = quickChoices.Select(c => NotesPage.Seg("DayStartQuick_" + c.Item2.ToString("hhmm", CultureInfo.InvariantCulture), c.Item1, model.DayStart == c.Item2, () => model.SetDayStart(c.Item2))).ToList();
-        var quick = new Border { Name = "DayStartQuick", HorizontalAlignment = HorizontalAlignment.Left, Child = Ui.Horizontal(quickButtons.ToArray()) }; quick.Classes.Add("segTrack");
-        void SyncQuick() { for (var i = 0; i < quickChoices.Length; i++) quickButtons[i].Classes.Set("selected", model.DayStart == quickChoices[i].Item2); }
-        syncs.Add(SyncQuick); SyncQuick();
-        dayStart.HorizontalAlignment = HorizontalAlignment.Right; quick.Margin = new Thickness(0, 6, 0, 0); // The quick choices sit under the words, so they never squeeze them.
+        dayStart.HorizontalAlignment = HorizontalAlignment.Right; // Only the time box: the whole setting is one time.
         syncs.Add(SyncDayStart); SyncDayStart();
         var side = new StackPanel();
-        side.Children.Add(Section("Week", Rows(Row("Week starts on", "The Week overview and the exports begin here.", start), Row("Day starts at", "Where one day ends and the next begins. Leave it at midnight unless you work through it.", dayStart, quick), Row("How time is written", "A 90 minute block reads 01:30, or 1.50h. Exports follow it.", format))));
+        side.Children.Add(Section("Week", Rows(Row("Week starts on", "The Week overview and the exports begin here.", start), Row("Day starts at", "Where one day ends and the next begins. Leave it at midnight unless you work through it.", dayStart), Row("How time is written", "A 90 minute block reads 01:30, or 1.50h. Exports follow it.", format))));
         Ui.Put(grid, left); Ui.Put(grid, side, 1);
         return grid;
     }

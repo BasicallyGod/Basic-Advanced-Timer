@@ -121,28 +121,42 @@ public sealed class PillAlertsTests
         {
             card.Open(); Settle(window);
             var row = window.GetVisualDescendants().OfType<Border>().First(b => b.Name == "AlertListRow_1"); Assert.Equal(AlertKind.Reminder, card.Items[1].Kind);
-            var late = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "AlertRowLate_1"); Assert.True(late.IsVisible); Assert.Equal(card.Items[1].Detail, late.Text);
-            Assert.False(Find(window, "AlertRowDone_1").IsEffectivelyVisible);
+            var late = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "AlertRowLate_1"); Assert.Equal(1, late.Opacity); Assert.Equal(card.Items[1].Detail, late.Text);
+            Assert.Equal(0, ((Control)Find(window, "AlertRowDone_1").Parent!).Opacity); // The tick and clock wait, unseen but measured, beside the lateness.
             var key = card.Items[1].Key;
             window.MouseMove(row.TranslatePoint(new Point(row.Bounds.Width / 2, row.Bounds.Height / 2), window)!.Value, RawInputModifiers.None);
-            Settle(window); Assert.True(Find(window, "AlertRowDone_1").IsEffectivelyVisible); Assert.False(late.IsVisible);
+            Settle(window); Assert.Equal(1, ((Control)Find(window, "AlertRowDone_1").Parent!).Opacity); Assert.True(((Control)Find(window, "AlertRowDone_1").Parent!).IsHitTestVisible); Assert.Equal(0, late.Opacity);
             Press(window, "AlertRowDone_1"); Settle(window); Assert.DoesNotContain(model.Alerts, i => i.Key == key);
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void WhatComesUpLaterFoldsToOneLineThatOpensTheNextFew()
+    public void NothingComingUpIsListedAndTheListHasNoScrollBar()
     {
         var model = Demo(); var (window, card) = Host(model);
         try
         {
-            card.Open(); Settle(window); var soon = model.Notes.ComingUp(3); Assert.NotEmpty(soon);
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name?.StartsWith("AlertComing_") == true);
-            Press(window, "AlertComingToggle"); Settle(window);
-            Assert.Equal(soon.Count, window.GetVisualDescendants().OfType<Control>().Count(c => c.Name?.StartsWith("AlertComing_") == true));
-            Press(window, "AlertComingToggle"); Settle(window);
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name?.StartsWith("AlertComing_") == true);
+            card.Open(); Settle(window);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name == "AlertComingToggle" || c.Name?.StartsWith("AlertComing_") == true); // Open Notes shows what is coming.
+            Assert.Equal(Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden, window.GetVisualDescendants().OfType<ScrollViewer>().First(v => v.Name == "AlertListScroll").VerticalScrollBarVisibility);
+            Assert.NotNull(Find(window, "AlertOpenDashboard"));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void APressAnywhereOnAClosedRowOpensItNotOnlyOnItsWords()
+    {
+        var model = Demo(); var (window, card) = Host(model);
+        try
+        {
+            card.Open(); Settle(window); Assert.Equal(0, card.Index);
+            var row = window.GetVisualDescendants().OfType<Border>().First(b => b.Name == "AlertListRow_1");
+            // The far right of the row, past the words, is on the row's padding and the lateness text, not on the button that holds the words.
+            var at = row.TranslatePoint(new Point(row.Bounds.Width - 3, row.Bounds.Height / 2), window)!.Value;
+            window.MouseDown(at, Avalonia.Input.MouseButton.Left, RawInputModifiers.None); window.MouseUp(at, Avalonia.Input.MouseButton.Left, RawInputModifiers.None); Settle(window);
+            Assert.Equal(1, card.Index);
         }
         finally { window.Close(); }
     }

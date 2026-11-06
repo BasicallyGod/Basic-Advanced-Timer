@@ -24,7 +24,7 @@ public sealed class PillAlertsCard : Border
     private string? shown;
     /// <summary>Which alert is open, in the order of <see cref="Items"/>.</summary>
     public int Index { get; private set; }
-    private bool allowEmpty, showComing;
+    private bool allowEmpty;
     public IReadOnlyList<AlertItem> Items => items;
     /// <summary>Raised when nothing is waiting any more, so the pill can fold the card away.</summary>
     public event Action? Emptied;
@@ -62,7 +62,7 @@ public sealed class PillAlertsCard : Border
         Index = (Index + by + items.Count) % items.Count; Sync(true);
     }
 
-    private string Signature() => Index + "|" + showComing + "|" + string.Join(";", items.Select(i => i.Key + "," + i.Detail + "," + i.Caption)) + "|" + string.Join(";", model.Notes.ComingUp().Select(n => n.Id + n.Text));
+    private string Signature() => Index + "|" + string.Join(";", items.Select(i => i.Key + "," + i.Detail + "," + i.Caption));
     /// <summary>Works out what is waiting again and redraws when it changed, or when asked to.</summary>
     public void Sync(bool force)
     {
@@ -95,12 +95,9 @@ public sealed class PillAlertsCard : Border
         var cross = Ui.IconButton(IconKind.Close, "Fold", "AlertFold", fold); cross.Width = 24; cross.Height = 24; Ui.Put(head, cross, 1);
         var rows = new StackPanel { Spacing = 2, Name = "AlertRows" };
         for (var i = 0; i < items.Count; i++) rows.Children.Add(i == Index ? OpenRowFor(items[i]) : ClosedRow(i));
-        var soon = model.Notes.ComingUp(3);
-        if (showComing) foreach (var note in soon) rows.Children.Add(ComingRow(note));
-        var scroll = new ScrollViewer { Name = "AlertListScroll", Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        Ui.LeaveRoomForTrack(scroll, rows);
+        // The list has no scroll bar (the wheel still moves it when there are more alerts than room); what comes later is on the Notes page, which Open Notes shows.
+        var scroll = new ScrollViewer { Name = "AlertListScroll", Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
         var foot = Ui.Grid("Auto,*,Auto"); foot.Margin = new Thickness(6, 6, 6, 0);
-        if (soon.Count > 0) Ui.Put(foot, Link($"{soon.Count} coming up", "AlertComingToggle", () => { showComing = !showComing; Sync(true); }, IconKind.Next, "Muted"));
         Ui.Put(foot, Link("Open Notes", "AlertOpenDashboard", OpenNotes, null, "Ink"), 2);
         var frame = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
         Grid.SetRow(scroll, 1); Grid.SetRow(foot, 2); frame.Children.Add(head); frame.Children.Add(scroll); frame.Children.Add(foot); frame.Children.Add(rescheduling);
@@ -201,7 +198,7 @@ public sealed class PillAlertsCard : Border
         StackPanel? hover = null;
         if (item.Kind == AlertKind.Reminder && item.NoteId is { } id)
         {
-            hover = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, IsVisible = false, VerticalAlignment = VerticalAlignment.Center };
+            hover = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Opacity = 0, IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
             hover.Children.Add(Small("AlertRowDone_" + index, IconKind.Check, "Done", () => model.Notes.Toggle(id)));
             hover.Children.Add(Small("AlertRowLater_" + index, IconKind.Clock, "In 10 min", () => model.Notes.SetReminder(id, model.Engine.Now.AddMinutes(10))));
             side.Children.Add(hover);
@@ -211,19 +208,14 @@ public sealed class PillAlertsCard : Border
         void Over(bool on)
         {
             if (on) card.Bind(Border.BackgroundProperty, card.GetResourceObservable("Hover")); else { card.ClearValue(Border.BackgroundProperty); card.Background = Brushes.Transparent; }
-            if (hover is not null) { hover.IsVisible = on; late.IsVisible = !on; }
+            // Both stay measured, so the row never changes width under the pointer (a change there moved the words between the press and the release, and the click was lost).
+            if (hover is not null) { hover.Opacity = on ? 1 : 0; hover.IsHitTestVisible = on; late.Opacity = on ? 0 : 1; }
         }
+        // The whole row is the target, not only the words: a press anywhere on it that no button took opens the alert.
+        card.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand); card.PointerPressed += (_, e) => { if (!e.Handled && e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) { e.Handled = true; OpenRow(index); } };
         card.PointerEntered += (_, _) => Over(true); card.PointerExited += (_, _) => Over(false);
         card.GotFocus += (_, _) => Over(true); card.LostFocus += (_, _) => Over(card.IsPointerOver);
         return card;
-    }
-    private Control ComingRow(DayNote note)
-    {
-        var due = NotesModel.ReminderOf(note)!.Value; var row = Ui.Grid("Auto,*,Auto"); row.ColumnSpacing = 10; row.Margin = new Thickness(8, 5); row.Name = "AlertComing_" + note.Id;
-        Ui.Put(row, Dot("Idle"));
-        Ui.Put(row, new TextBlock { Text = model.Notes.Text(note), FontSize = 12.5, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center }, 1);
-        Ui.Put(row, NoteParts.Ink((model.Notes.AccountOf(note) is { } a ? a + " · " : "") + NoteDates.When(due, model.Engine.Now), "Muted", 11.5), 2);
-        return row;
     }
     private static Button Small(string name, IconKind icon, string tip, Action click) { var b = Ui.IconButton(icon, tip, name, click); b.Width = 26; b.Height = 26; return b; }
 }
