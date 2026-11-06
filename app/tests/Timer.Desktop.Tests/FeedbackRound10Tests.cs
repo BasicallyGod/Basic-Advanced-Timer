@@ -69,14 +69,14 @@ public sealed class FeedbackRound10Tests
     }
 
     [AvaloniaFact]
-    public void AMeetingMovedToTheEndOfTheDayStopsItsEndAtMidnight()
+    public void AMeetingMovedToTheEndOfTheDayKeepsItsLengthAcrossMidnight()
     {
         var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             Click(window, "CardKindMeetings");
             var start = Find<TextBox>(window, "MeetingStart"); start.Text = "23:50"; Key(start, Avalonia.Input.Key.Enter); Dispatcher.UIThread.RunJobs();
-            Assert.Equal("23:59", Find<TextBox>(window, "MeetingEnd").Text);
+            Assert.Equal("00:20", Find<TextBox>(window, "MeetingEnd").Text);
         }
         finally { window.Close(); }
     }

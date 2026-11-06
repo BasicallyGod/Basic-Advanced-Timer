@@ -46,16 +46,16 @@ public sealed partial class SelectedBlockCard : Border
     // what was typed to the block it was typed for, and the card then shows the next block's own values.
     private void LetGoOfTypedBox()
     {
-        if (TopLevel.GetTopLevel(this) is not { } top || top.FocusManager?.GetFocusedElement() is not Visual focused || !this.IsVisualAncestorOf(focused)) return;
-        var box = focused as TextBox;
-        var draft = box?.Text;
-        top.FocusManager.ClearFocus();
-        if (box is not null && model.EditError is not null)
+        if (TopLevel.GetTopLevel(this) is { } top && top.FocusManager?.GetFocusedElement() is Visual focused && this.IsVisualAncestorOf(focused))
         {
-            // A refused commit refreshes the saved values. Keep the draft available for correction or retry.
-            box.Text = draft;
-            box.Focus();
+            var box = focused as TextBox;
+            var draft = box?.Text;
+            top.FocusManager.ClearFocus();
+            if (box is not null && model.EditError is not null) { box.Text = draft; box.Focus(); }
         }
+        // Repeating meetings require Save/Discard; merely clearing focus must not dispose their draft.
+        if (meetingFields is { Dirty: true } pending && model.EditError is null)
+            model.Refuse(pending.Series ? "Save or discard meeting changes first" : "Correct meeting changes first");
     }
 
     private string Signature(IReadOnlyList<TimerModel.SelectedBlock> blocks)

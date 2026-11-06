@@ -54,7 +54,7 @@ public static class NoteParts
     }
 
     /// <summary>The time of a meeting as 09:15–10:00.</summary>
-    public static string Span(DayNote note) => note.At is { } a && note.End is { } z ? a.ToString(@"hh\:mm") + "–" + z.ToString(@"hh\:mm") : "";
+    public static string Span(DayNote note) => note.At is { } a && note.End is { } z ? a.ToString(@"hh\:mm") + "–" + z.ToString(@"hh\:mm") + (z >= TimeSpan.FromDays(1) ? " (+1 day)" : "") : "";
 
     /// <summary>Which of the offered accounts is lit, so the arrow keys can move through them and Tab or Enter take the lit one. It goes back to the first when the words change.</summary>
     public sealed class SuggestionState

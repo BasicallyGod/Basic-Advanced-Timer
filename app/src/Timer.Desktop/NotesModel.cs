@@ -64,6 +64,9 @@ public sealed class NotesModel
 
     public IReadOnlyList<DayNote> All => notes;
     public DayNote? Find(long id) => notes.FirstOrDefault(n => n.Id == savedNoteIds.GetValueOrDefault(id, id));
+    /// <summary>Whether this item and its recurrence template have reached storage, rather than only the retry queue.</summary>
+    public bool IsSaved(long id) => Find(id) is { Id: >= 0 } note && !pendingUpdates.Contains(note.Id)
+        && (note.SeriesId is not { } seriesId || seriesId >= 0 && !pendingSeriesUpdates.Contains(seriesId));
     public static bool IsMeeting(DayNote note) => DayNotes.IsMeeting(note);
     private IReadOnlyList<string> Names => accountNames();
 
@@ -95,7 +98,8 @@ public sealed class NotesModel
     /// </summary>
     public IReadOnlyList<DayNote> ForDay(DateTime day)
     {
-        var meetings = notes.Where(n => n.HasDate && InDay(MomentOf(n), day) && IsMeeting(n)).OrderBy(n => MomentOf(n)).ThenBy(n => n.Id);
+        var begin = day.Date + DayStart; var finish = begin.AddDays(1);
+        var meetings = notes.Where(n => n.HasDate && IsMeeting(n) && DayNotes.EndsAt(n) > begin && MomentOf(n) < finish).OrderBy(n => MomentOf(n)).ThenBy(n => n.Id);
         var dated = notes.Where(n => n.HasDate && InDay(MomentOf(n), day) && !IsMeeting(n)).OrderBy(n => n.At is null ? DateTime.MaxValue : MomentOf(n)).ThenBy(n => n.Id);
         var undated = notes.Where(n => !n.HasDate).OrderBy(n => n.Id);
         // What matters comes first among the notes (the sort keeps time order within each kind), and what is done goes last.
@@ -190,15 +194,16 @@ public sealed class NotesModel
     /// </summary>
     public IReadOnlyList<DayNote> Listed()
     {
-        var today = now().Date; var firstOf = new HashSet<long>();
+        var today = DayOf(now()); var firstOf = new HashSet<long>();
         var list = new List<DayNote>();
         foreach (var n in notes.OrderBy(n => n.Day).ThenBy(n => n.At).ThenBy(n => n.Id))
         {
             if (IsMeeting(n) && !n.Done)
             {
-                if (n.Day.Date < today) continue;
-                if (n.SeriesId is { } id && n.Day.Date > today && !firstOf.Add(id)) continue; // One occurrence of a series is enough in a list.
-                if (n.SeriesId is { } today1 && n.Day.Date == today) firstOf.Add(today1);
+                var day = DayOf(MomentOf(n));
+                if (day < today && DayNotes.EndsAt(n) <= today + DayStart) continue;
+                if (n.SeriesId is { } id && day > today && !firstOf.Add(id)) continue;
+                if (n.SeriesId is { } today1 && day <= today) firstOf.Add(today1);
             }
             list.Add(n);
         }
@@ -218,13 +223,13 @@ public sealed class NotesModel
 
     public bool InView(DayNote n, NoteView view)
     {
-        var today = now().Date;
+        var today = DayOf(now());
         return view switch
         {
             NoteView.Important => IsImportant(n) && !n.Done,
-            NoteView.Today => n.HasDate && n.Day.Date == today,
+            NoteView.Today => n.HasDate && DayOf(MomentOf(n)) == today,
             NoteView.Overdue => IsLate(n),
-            NoteView.Upcoming => n.HasDate && n.Day.Date > today && !n.Done,
+            NoteView.Upcoming => n.HasDate && DayOf(MomentOf(n)) > today && !n.Done,
             NoteView.Meetings => IsMeeting(n),
             NoteView.Done => n.Done,
             _ => true
@@ -234,14 +239,14 @@ public sealed class NotesModel
     /// <summary>The Notes page's list in groups: Overdue, then each day from today, then notes with no date, then Done. Each group is in time order.</summary>
     public IReadOnlyList<NoteGroup> Groups(IReadOnlyList<DayNote> shown)
     {
-        var today = now().Date; var groups = new List<NoteGroup>();
+        var today = DayOf(now()); var groups = new List<NoteGroup>();
         var overdue = shown.Where(IsLate).OrderBy(n => ReminderOf(n)).ToList();
         if (overdue.Count > 0) groups.Add(new("Overdue", true, overdue));
         var open = shown.Where(n => !IsLate(n) && !n.Done).ToList();
-        foreach (var day in open.Where(n => n.HasDate).Select(n => n.Day.Date).Distinct().OrderBy(d => d))
+        foreach (var day in open.Where(n => n.HasDate).Select(n => DayOf(MomentOf(n))).Distinct().OrderBy(d => d))
         {
             var label = NoteDates.Day(day, today) + (day == today || day == today.AddDays(1) ? " · " + day.ToString("d MMM", CultureInfo.GetCultureInfo("en-GB")) : "");
-            groups.Add(new(label, false, open.Where(n => n.HasDate && n.Day.Date == day).OrderByDescending(IsImportant).ThenBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList()));
+            groups.Add(new(label, false, open.Where(n => n.HasDate && DayOf(MomentOf(n)) == day).OrderByDescending(IsImportant).ThenBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList()));
         }
         var undated = open.Where(n => !n.HasDate).OrderByDescending(IsImportant).ThenBy(n => n.Id).ToList();
         if (undated.Count > 0) groups.Add(new("No date", false, undated));
@@ -279,7 +284,8 @@ public sealed class NotesModel
     }
 
     private static string? MeetingTimeProblem(TimeSpan start, TimeSpan end)
-        => start < TimeSpan.Zero || end >= TimeSpan.FromDays(1) ? "A meeting has to fall within one day." : end <= start ? "The end has to be after the start." : null;
+        => start < TimeSpan.Zero || start >= TimeSpan.FromDays(1) ? "The start must be a clock time."
+            : end <= start ? "The end has to be after the start." : end - start > TimeSpan.FromDays(1) ? "A meeting can last at most 24 hours." : null;
 
     /// <summary>
     /// Gives a meeting new times on its own day, as when it is dragged or resized on the timeline. A meeting in a series changes for this day only. Returns what is
@@ -288,8 +294,13 @@ public sealed class NotesModel
     public string? MoveMeeting(long id, TimeSpan start, TimeSpan end)
     {
         if (Find(id) is not { } meeting || !IsMeeting(meeting)) return "That meeting is no longer there.";
-        if (MeetingTimeProblem(start, end) is { } problem) return problem;
-        Change(id, n => n with { At = start, End = end });
+        return MoveMeeting(id, meeting.Day.Date + start, meeting.Day.Date + end);
+    }
+    public string? MoveMeeting(long id, DateTime start, DateTime end)
+    {
+        if (Find(id) is not { } meeting || !IsMeeting(meeting)) return "That meeting is no longer there.";
+        if (MeetingTimeProblem(start.TimeOfDay, end - start.Date) is { } problem) return problem;
+        Change(id, n => n with { Day = start.Date, At = start.TimeOfDay, End = end - start.Date });
         MeetingMoved?.Invoke(id); NotifyChanged(); return null;
     }
 

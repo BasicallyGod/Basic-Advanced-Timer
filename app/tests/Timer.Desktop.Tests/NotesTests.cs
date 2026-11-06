@@ -322,7 +322,7 @@ public sealed class NotesTests
         {
             Click(window, "CardKindMeetings"); Type(window, "NoteField", "Review"); Type(window, "MeetingStart", "ten"); Click(window, "SubmitNote");
             Assert.Equal("Start: try 09:30", model.EditError);
-            Type(window, "MeetingStart", "10:00"); Type(window, "MeetingEnd", "09:00"); Click(window, "SubmitNote");
+            Type(window, "MeetingStart", "10:00"); Type(window, "MeetingEnd", "10:00"); Click(window, "SubmitNote");
             Assert.Equal("The end has to be after the start.", model.EditError); Assert.Empty(model.Notes.All);
         }
         finally { window.Close(); }

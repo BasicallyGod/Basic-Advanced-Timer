@@ -406,10 +406,9 @@ public sealed class NotesPage : Grid
         string was = startText;
         void CommitStart()
         {
-            if (TimeText.TryParseClock(start.Text, meetingDay, false, out var a) && TimeText.TryParseClock(was, meetingDay, false, out var b) && TimeText.TryParseClock(end.Text, meetingDay, false, out var z) && a != b)
+            if (TimeText.TryParseClock(start.Text, meetingDay, false, out var a) && TimeText.TryParseClock(was, meetingDay, false, out var b) && TimeText.TryParseClockAfter(end.Text, b, false, true, out var z) && a != b)
             {
-                var moved = z + (a - b); if (moved.Date == meetingDay.Date && moved.TimeOfDay <= new TimeSpan(23, 59, 0)) { end.Text = moved.ToString("HH:mm"); endText = end.Text; }
-                else { end.Text = "23:59"; endText = "23:59"; }
+                var moved = z + (a - b); end.Text = moved.ToString("HH:mm"); endText = end.Text;
             }
             was = start.Text ?? was;
         }
@@ -536,18 +535,19 @@ public sealed class NotesPage : Grid
             Redraw(); model.Tell(said); return;
         }
         if (!TimeText.TryParseClock(startText, meetingDay, false, out var start)) { error = "Start: try 09:30"; Redraw(); return; }
-        if (!TimeText.TryParseClock(endText, meetingDay, false, out var end)) { error = "End: try 10:00"; Redraw(); return; }
+        if (!TimeText.TryParseClockAfter(endText, start, false, true, out var end)) { error = "End: try 10:00"; Redraw(); return; }
+        if (end == start && editing is { } fullDayId && Notes.Find(fullDayId) is { } fullDay && fullDay.End - fullDay.At == TimeSpan.FromDays(1)) end = end.AddDays(1);
         if (end <= start) { error = "End must be after the start."; Redraw(); return; }
-        if (end.Date != start.Date) { error = "A meeting has to fall within one day."; Redraw(); return; }
+
         if (editing is { } meetingId)
         {
             var inSeries = Notes.Find(meetingId) is { } before && Notes.SeriesOf(before) is not null;
-            var problem = Notes.EditMeeting(meetingId, words, account, meetingDay.Date, start.TimeOfDay, end.TimeOfDay, repeat, allLater);
+            var problem = Notes.EditMeeting(meetingId, words, account, meetingDay.Date, start.TimeOfDay, end - meetingDay.Date, repeat, allLater);
             if (problem is not null) { error = problem; Redraw(); return; }
             var said = inSeries ? (allLater ? "Saved for this day and all later" : "Changed for this day only") : "Meeting saved";
             EndEdit(); Redraw(); model.Tell(said); return;
         }
-        var failed = Notes.AddMeeting(meetingDay.Date, start.TimeOfDay, end.TimeOfDay, words, account, repeat);
+        var failed = Notes.AddMeeting(meetingDay.Date, start.TimeOfDay, end - meetingDay.Date, words, account, repeat);
         if (failed is not null) { error = failed; Redraw(); return; }
         var message = repeat == RepeatChoice.None ? "Meeting added" : "Meeting added · repeats " + NotesModel.RepeatWords(repeat);
         Blank(); Redraw(); model.Tell(message);

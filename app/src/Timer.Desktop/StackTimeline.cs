@@ -76,7 +76,10 @@ public sealed class StackTimeline : Panel
         {
             if (!dragging || preview is not { } now) return;
             var at = AtX(e.GetPosition(this).X); var minimum = TimeSpan.FromMinutes(stepMinutes);
-            var day = bar.Start.Date; var latest = stepMinutes >= 5 ? day.AddMinutes(1439) : day.AddDays(1);
+            var day = model.DayBegins(model.SelectedDate); if (bar.Start < day) day = bar.Start;
+            var latest = model.DayEnds(model.SelectedDate); if (bar.End > latest) latest = bar.End;
+            if (now.End - day > TimeSpan.FromDays(1)) day = now.End.AddDays(-1);
+            if (latest - now.Start > TimeSpan.FromDays(1)) latest = now.Start.AddDays(1);
             if (atStart) now = now with { Start = at < now.End - minimum ? (at < day ? day : at) : now.End - minimum };
             else now = now with { End = at > now.Start + minimum ? (at > latest ? latest : at) : now.Start + minimum };
             preview = now; InvalidateArrange(); e.Handled = true;
