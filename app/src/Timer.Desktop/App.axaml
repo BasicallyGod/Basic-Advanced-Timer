@@ -381,6 +381,10 @@
     <Style Selector="Button.noteLink:pointerover TextBlock"><Setter Property="TextDecorations" Value="Underline" /></Style>
     <Style Selector="Button.pillBare:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
     <Style Selector="Button.pillBare:pressed /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
+    <!-- The pressable zones of the pill's display (clock, count, play and pause, account name, cup) all wash the same way: a faint tint under the pointer, deeper pressed. -->
+    <Style Selector="Button.pillBare.zone /template/ ContentPresenter"><Setter Property="CornerRadius" Value="9" /></Style>
+    <Style Selector="Button.pillBare.zone:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource ZoneHover}" /></Style>
+    <Style Selector="Button.pillBare.zone:pressed /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource ZonePressed}" /></Style>
     <Style Selector="Button.peekAll"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /><Setter Property="Padding" Value="8,6" /><Setter Property="FontSize" Value="13" /></Style>
     <Style Selector="Button.peekAll:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
     <Style Selector="Button.flat"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /><Setter Property="Padding" Value="8,4" /></Style>

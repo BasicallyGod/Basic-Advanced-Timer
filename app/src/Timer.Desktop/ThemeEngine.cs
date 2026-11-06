@@ -103,6 +103,8 @@ public static class ThemeEngine
         Put("DisplayWell", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .035) : ThemeColours.Mix(colours["Panel"], "#000000", .45)));
         Put("DisplayGroove", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .02) : ThemeColours.Mix(colours["Panel"], "#000000", .55)));
         Put("DisplayShade", lightGround ? Color.FromArgb(38, 60, 52, 100) : Color.FromArgb(166, 0, 0, 0));
+        Put("ZoneHover", Color.FromArgb(lightGround ? (byte)22 : (byte)24, lightGround ? (byte)60 : (byte)255, lightGround ? (byte)52 : (byte)255, lightGround ? (byte)100 : (byte)255));
+        Put("ZonePressed", Color.FromArgb(lightGround ? (byte)40 : (byte)42, lightGround ? (byte)60 : (byte)255, lightGround ? (byte)52 : (byte)255, lightGround ? (byte)100 : (byte)255));
         Put("DisplayEdge", lightGround ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(18, 255, 255, 255));
         // Depth: every raised thing (a key, a card, a menu) throws one soft shadow down and to the right with a pale edge up and to the left, and every sunk thing (a field,
         // a track, a pressed key) is the same two turned inward, so the whole app reads as one room lit from the top left. In Dark the pale edge is a whisper and the
