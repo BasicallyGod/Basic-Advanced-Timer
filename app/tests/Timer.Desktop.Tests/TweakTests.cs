@@ -198,8 +198,9 @@ public sealed class TweakTests
         model.CopyBlocks(engine.Sessions.ToList());
         Assert.True(model.PasteBlocks(new DateTime(2026, 10, 14, 9, 15, 0))); // Lands on the existing 09:00 block: time may overlap, so it is accepted.
         Assert.Equal(4, engine.Sessions.Count); Assert.True(model.UndoEdit()); Assert.Equal(2, engine.Sessions.Count);
-        Assert.False(model.PasteBlocks(new DateTime(2026, 10, 14, 23, 30, 0))); // Runs past midnight.
+        Assert.False(model.PasteBlocks(engine.Sessions[0].From)); // The same account at the same second would share one note, so it is refused whole.
         Assert.Equal(2, engine.Sessions.Count); Assert.NotNull(model.EditError);
+        Assert.True(model.PasteBlocks(new DateTime(2026, 10, 14, 23, 30, 0))); Assert.True(model.UndoEdit()); // Running past midnight is allowed now.
     }
 
     [Fact]

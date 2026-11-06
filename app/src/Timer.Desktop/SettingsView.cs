@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -204,8 +205,24 @@ public sealed class SettingsView : Grid
         var format = new Border { Name = "TimeFormat", HorizontalAlignment = HorizontalAlignment.Right, Child = Ui.Horizontal(hm, dec) }; format.Classes.Add("segTrack");
         void SyncFormat() { hm.Classes.Set("selected", !model.DecimalHours); dec.Classes.Set("selected", model.DecimalHours); }
         syncs.Add(SyncFormat); SyncFormat();
+        // Where a day begins: midnight unless someone works through it. A night shift is then one day on one page and one column in the week.
+        var dayStart = new TextBox { Name = "DayStartBox", Width = 84, Height = 36, MinHeight = 36, FontSize = 13.5, HorizontalContentAlignment = HorizontalAlignment.Center };
+        Avalonia.Automation.AutomationProperties.SetName(dayStart, "Day starts at");
+        void SyncDayStart() { syncing = true; dayStart.Text = model.DayStart.ToString("hh\\:mm", CultureInfo.InvariantCulture); syncing = false; }
+        void CommitDayStart()
+        {
+            if (syncing) return;
+            if (TimeSpan.TryParseExact((dayStart.Text ?? "").Trim(), new[] { "h\\:mm", "hh\\:mm" }, CultureInfo.InvariantCulture, out var at) && at >= TimeSpan.Zero && at < TimeSpan.FromDays(1)) model.SetDayStart(at);
+            else { model.Refuse("Time, like 18:00"); SyncDayStart(); }
+        }
+        dayStart.LostFocus += (_, _) => CommitDayStart(); dayStart.KeyDown += (_, e) => { if (e.Key == Key.Enter) { CommitDayStart(); e.Handled = true; } };
+        var quick = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 6, LineSpacing = 6 };
+        foreach (var (words, at) in new[] { ("Midnight", TimeSpan.Zero), ("12:00", TimeSpan.FromHours(12)), ("18:00", TimeSpan.FromHours(18)) })
+            quick.Children.Add(Ui.DialogButton(words, () => model.SetDayStart(at), "DayStartQuick_" + at.ToString("hhmm", CultureInfo.InvariantCulture)));
+        var dayControl = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right }; dayControl.Children.Add(dayStart); dayControl.Children.Add(quick);
+        syncs.Add(SyncDayStart); SyncDayStart();
         var side = new StackPanel();
-        side.Children.Add(Section("Week", Rows(Row("Week starts on", "The Week overview and the exports begin here.", start), Row("How time is written", "A 90 minute block reads 01:30, or 1.50h. Exports follow it.", format))));
+        side.Children.Add(Section("Week", Rows(Row("Week starts on", "The Week overview and the exports begin here.", start), Row("Day starts at", "Where one day ends and the next begins. Leave it at midnight unless you work through it.", dayControl), Row("How time is written", "A 90 minute block reads 01:30, or 1.50h. Exports follow it.", format))));
         Ui.Put(grid, left); Ui.Put(grid, side, 1);
         return grid;
     }
@@ -350,8 +367,8 @@ public sealed class SettingsView : Grid
     // Each choice has its own list, from the current one back to the earliest recorded (or a few months if there is little), so any week or month can be picked.
     private void RefreshPeriods()
     {
-        var today = model.Engine.Now.Date;
-        var earliest = model.Engine.Sessions.Select(s => s.Day).DefaultIfEmpty(today).Min();
+        var today = model.TodayKey;
+        var earliest = model.Engine.Sessions.Select(s => model.DayOf(s.From)).DefaultIfEmpty(today).Min();
         var shown = model.SelectedDate.Date;
         var oldest = new[] { earliest, shown, today.AddDays(-7 * 12) }.Min();
         var latest = today > shown ? today : shown;

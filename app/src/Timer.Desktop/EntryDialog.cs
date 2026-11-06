@@ -9,7 +9,7 @@ public sealed class EntryDialog : Dialog
 {
     public EntryDialog(TimerModel model, DateTime start, DateTime end)
     {
-        Title = "Add time";
+        Title = "Add time"; var dayBegin = model.DayBegins(model.DayOf(start)); // The day this block is on, which may begin in the evening.
         Width = 480; // The height follows the content, up to the window.
         var root = new StackPanel { Margin = new Thickness(24, 4, 24, 24), Spacing = 12 };
         root.Children.Add(Ui.Text(start.ToString("dddd, d MMMM yyyy"), 13, "muted"));
@@ -37,7 +37,7 @@ public sealed class EntryDialog : Dialog
             syncing = true;
             try
             {
-                length.Text = TimeText.TryParseClock(from.Text, start, false, out var a) && TimeText.TryParseClock(until.Text, start, true, out var b) && b > a ? TimeText.ShowLength(b - a) : "";
+                length.Text = TimeText.TryParseClockAfter(from.Text, dayBegin, false, false, out var a) && TimeText.TryParseClockAfter(until.Text, a, true, true, out var b) && b > a ? TimeText.ShowLength(b - a) : "";
             }
             finally { syncing = false; }
         }
@@ -47,11 +47,10 @@ public sealed class EntryDialog : Dialog
         length.PropertyChanged += (_, e) =>
         {
             if (e.Property != TextBox.TextProperty || syncing) return;
-            if (TimeText.ParseLength(length.Text) is not { } span || !TimeText.TryParseClock(from.Text, start, false, out var begin)) return;
+            if (TimeText.ParseLength(length.Text) is not { } span || !TimeText.TryParseClockAfter(from.Text, dayBegin, false, false, out var begin)) return;
             var finish = begin + span;
-            if (finish > start.Date.AddDays(1)) { error.Text = "That length would run past midnight."; return; }
             error.Text = ""; syncing = true;
-            try { until.Text = TimeText.ShowClock(finish, start); } finally { syncing = false; }
+            try { until.Text = TimeText.ShowClock(finish, finish.Date); } finally { syncing = false; }
         };
         var applied = false;
         var save = Ui.DialogButton("Save", () =>
@@ -60,7 +59,8 @@ public sealed class EntryDialog : Dialog
             {
                 if (applied) { if (model.Save()) Close(); else error.Text = model.LastError; return; }
                 var previous = model.Editor.UndoState;
-                if (model.AddEntry(BreakAccount.Stored((string?)accounts.SelectedItem ?? ""), TimeText.ParseClock(from.Text, start, false), TimeText.ParseClock(until.Text, start, true), note.Text ?? "")) Close();
+                var blockStart = TimeText.ParseClockAfter(from.Text, dayBegin, false);
+                if (model.AddEntry(BreakAccount.Stored((string?)accounts.SelectedItem ?? ""), blockStart, TimeText.ParseClockAfter(until.Text, blockStart, true, true), note.Text ?? "")) Close();
                 else
                 {
                     applied = model.LastError is not null && !ReferenceEquals(previous, model.Editor.UndoState);

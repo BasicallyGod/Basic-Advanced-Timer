@@ -29,18 +29,18 @@ public static class WeekOverview
 
     public static WeekFigures Figures(TimerModel model, DateTime weekStart)
     {
-        var engine = model.Engine; var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList(); var today = engine.Now.Date;
+        var engine = model.Engine; var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList(); var today = model.TodayKey;
         var shown = Enumerable.Range(0, 7).Where(i => engine.Schedule.Days.Contains(weekStart.AddDays(i).DayOfWeek)
-            || engine.Sessions.Any(s => s.Day == weekStart.AddDays(i)) || (engine.Active is not null && weekStart.AddDays(i) == today)).ToArray();
+            || engine.Sessions.Any(s => model.CountsOn(s, weekStart.AddDays(i))) || (engine.Active is not null && weekStart.AddDays(i) == today)).ToArray();
         if (shown.Length == 0) shown = Enumerable.Range(0, 5).ToArray();
         var days = new List<WeekDay>();
         foreach (var i in shown)
         {
-            var date = weekStart.AddDays(i); var totals = engine.Totals(date); var plan = engine.Plan(date);
+            var date = weekStart.AddDays(i); var plan = engine.Plan(date);
             var per = accounts.Select(a => (a, model.OnDay(a, date))).Where(p => p.Item2 > TimeSpan.Zero).ToList();
             var allocated = per.Aggregate(TimeSpan.Zero, (sum, p) => sum + p.Item2);
             var working = model.WorkingOn(date); var left = working - allocated; var dayBreaks = model.BreakTimeOn(date);
-            var blocks = engine.Sessions.Where(s => s.Day == date && s.Duration > TimeSpan.Zero && !BreakAccount.Is(s.Account)).OrderBy(s => s.From).ToList();
+            var blocks = engine.Sessions.Where(s => model.CountsOn(s, date) && s.Duration > TimeSpan.Zero && !BreakAccount.Is(s.Account)).OrderBy(s => s.From).ToList();
             var overlaps = false; var reach = DateTime.MinValue;
             foreach (var block in blocks) { if (block.From.AddSeconds(2) < reach) overlaps = true; if (block.To > reach) reach = block.To; }
             var meetings = model.Notes.MeetingsOn(date).Count;

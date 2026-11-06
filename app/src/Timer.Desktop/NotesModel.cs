@@ -67,11 +67,27 @@ public sealed class NotesModel
     public static bool IsMeeting(DayNote note) => DayNotes.IsMeeting(note);
     private IReadOnlyList<string> Names => accountNames();
 
-    /// <summary>The meetings on a day, in time order. A ticked meeting is one that was taken off the timeline.</summary>
-    public IReadOnlyList<DayNote> MeetingsOn(DateTime day) => notes.Where(n => n.HasDate && n.Day.Date == day.Date && !n.Done && IsMeeting(n)).OrderBy(n => n.At).ThenBy(n => n.Id).ToList();
+    /// <summary>
+    /// Where a day begins, set by the model (midnight unless someone works through it). A "day" in this class is the 24 hours from its date at this time, so a note or a meeting
+    /// belongs to the day that holds its moment: with days beginning at 18:00 a reminder at 02:00 is the evening before's.
+    /// </summary>
+    public TimeSpan DayStart { get; set; }
+    /// <summary>The moment a dated note is at: its date and time, and for one with no time 09:00 of its date.</summary>
+    public static DateTime MomentOf(DayNote note) => note.Day.Date + (note.At ?? TimeSpan.FromHours(9));
+    /// <summary>The day, as the date it starts on, that a moment belongs to.</summary>
+    public DateTime DayOf(DateTime moment) => (moment - DayStart).Date;
+    private bool InDay(DateTime moment, DateTime day) => DayOf(moment) == day.Date;
+
+    /// <summary>The meetings on a day, in time order: those that start in it, and one that began before and runs on into it. A ticked meeting is one that was taken off the timeline.</summary>
+    public IReadOnlyList<DayNote> MeetingsOn(DateTime day)
+    {
+        var begin = day.Date + DayStart; var finish = begin.AddDays(1);
+        return notes.Where(n => n.HasDate && !n.Done && IsMeeting(n) && n.At is not null && n.End is not null && n.Day.Date + n.End.Value > begin && n.Day.Date + n.At.Value < finish)
+            .OrderBy(n => n.Day.Date + n.At!.Value).ThenBy(n => n.Id).ToList();
+    }
 
     /// <summary>The notes with a reminder on a day that are not ticked off, in time order: the ones the timeline hangs a pin for.</summary>
-    public IReadOnlyList<DayNote> PinnedOn(DateTime day) => notes.Where(n => !n.Done && ReminderOf(n) is { } due && due.Date == day.Date).OrderBy(n => ReminderOf(n)).ThenBy(n => n.Id).ToList();
+    public IReadOnlyList<DayNote> PinnedOn(DateTime day) => notes.Where(n => !n.Done && ReminderOf(n) is { } due && InDay(due, day)).OrderBy(n => ReminderOf(n)).ThenBy(n => n.Id).ToList();
 
     /// <summary>
     /// What the Notes card lists for a day: the day's meetings, then notes with a reminder that day, then notes with no date, and whatever is done last of all (kept in
@@ -79,8 +95,8 @@ public sealed class NotesModel
     /// </summary>
     public IReadOnlyList<DayNote> ForDay(DateTime day)
     {
-        var meetings = notes.Where(n => n.HasDate && n.Day.Date == day.Date && IsMeeting(n)).OrderBy(n => n.At).ThenBy(n => n.Id);
-        var dated = notes.Where(n => n.HasDate && n.Day.Date == day.Date && !IsMeeting(n)).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id);
+        var meetings = notes.Where(n => n.HasDate && InDay(MomentOf(n), day) && IsMeeting(n)).OrderBy(n => MomentOf(n)).ThenBy(n => n.Id);
+        var dated = notes.Where(n => n.HasDate && InDay(MomentOf(n), day) && !IsMeeting(n)).OrderBy(n => n.At is null ? DateTime.MaxValue : MomentOf(n)).ThenBy(n => n.Id);
         var undated = notes.Where(n => !n.HasDate).OrderBy(n => n.Id);
         // What matters comes first among the notes (the sort keeps time order within each kind), and what is done goes last.
         return meetings.Concat(dated.Concat(undated).OrderByDescending(IsImportant)).OrderBy(n => n.Done).ToList();

@@ -14,6 +14,25 @@ public static class TimeText
         if (time >= TimeSpan.FromDays(1)) throw new FormatException();
         return day.Date + time;
     }
+    /// <summary>
+    /// The first moment with this clock time that is at or after <paramref name="after"/> (strictly after with <paramref name="strictly"/>), so an end typed as 02:00 for a block
+    /// that starts at 22:00 is the next day's 02:00, and a start typed as 02:00 in a day that begins at 18:00 is after midnight. 24:00 is the next midnight.
+    /// </summary>
+    public static DateTime ParseClockAfter(string? value, DateTime after, bool strictly, bool finish = false)
+    {
+        value = value?.Trim();
+        if (finish && value is "24:00" or "24:00:00") { var midnight = after.Date.AddDays(1); return midnight > after ? midnight : midnight.AddDays(1); }
+        var time = TimeSpan.ParseExact(value ?? "", new[] { @"h\:mm", @"hh\:mm", @"h\:mm\:ss", @"hh\:mm\:ss" }, CultureInfo.InvariantCulture);
+        if (time >= TimeSpan.FromDays(1)) throw new FormatException();
+        var candidate = after.Date + time;
+        while (strictly ? candidate <= after : candidate < after) candidate = candidate.AddDays(1);
+        return candidate;
+    }
+    public static bool TryParseClockAfter(string? value, DateTime after, bool strictly, bool finish, out DateTime result)
+    {
+        try { result = ParseClockAfter(value, after, strictly, finish); return true; }
+        catch (Exception ex) when (ex is FormatException or OverflowException) { result = default; return false; }
+    }
     public static bool TryParseClock(string? value, DateTime day, bool finish, out DateTime result)
     {
         try { result = ParseClock(value, day, finish); return true; }

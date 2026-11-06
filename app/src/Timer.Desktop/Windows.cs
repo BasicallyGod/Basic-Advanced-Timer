@@ -437,7 +437,7 @@ public sealed class DashboardWindow : Window
         datePicker.DayPicked += picked => { dateCalendar.IsOpen = false; model.GoToDate(picked, weekMode); };
         previous = Ui.Ctl("PreviousPeriod", null, IconKind.Previous, "Previous day or week", () => { if (weekMode) model.ChangeWeek(-1); else model.ChangeDate(-1); });
         next = Ui.Ctl("NextPeriod", null, IconKind.Next, "Next day or week", () => { if (weekMode) model.ChangeWeek(1); else model.ChangeDate(1); });
-        todayButton = Ui.Ctl("GoToToday", "Today", IconKind.Today, "Back to today", () => { if (weekMode) model.GoToDate(model.Engine.Now.Date, true); else model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days); });
+        todayButton = Ui.Ctl("GoToToday", "Today", IconKind.Today, "Back to today", () => { if (weekMode) model.GoToDate(model.TodayKey, true); else model.ChangeDate((model.Engine.Now.Date - model.SelectedDate.Date).Days); });
         todayWords = (TextBlock)((StackPanel)todayButton.Content!).Children[1];
         // What is waiting opens from the alert count in the sidebar's display, as it does on the pill; the card hangs under the count.
         alertsPopup = new Popup { Placement = PlacementMode.BottomEdgeAlignedLeft, Name = "AlertsPopup" };
@@ -793,9 +793,9 @@ public sealed class DashboardWindow : Window
     private void UpdateTotals()
     {
         var shown = model.SelectedDate.Date;
-        var totals = model.Engine.Totals(shown); var plan = model.Engine.Plan(shown);
+        var allocatedToday = model.AllocatedOn(shown); var plan = model.Engine.Plan(shown);
         var working = model.WorkingOn(shown);
-        workingValue.Text = model.Format(working); allocatedValue.Text = model.Format(totals.Allocated); unallocatedValue.Text = model.Format(model.UnallocatedOn(shown));
+        workingValue.Text = model.Format(working); allocatedValue.Text = model.Format(allocatedToday); unallocatedValue.Text = model.Format(model.UnallocatedOn(shown));
         breaksValue.Text = model.Format(model.BreakTimeOn(shown));
         var scheduled = model.ScheduledOn(shown);
         // The bar is always there and always the same width, so the figures beside it never move from one day to the next. A day with nothing scheduled and no time
@@ -810,7 +810,7 @@ public sealed class DashboardWindow : Window
         {
             // The bar is as long as the longer of the schedule (its hours less the break allowance) and the time worked, so time past the schedule has room at the end.
             var whole = Math.Max(scheduled.TotalSeconds, working.TotalSeconds);
-            var allocatedPart = Math.Min(totals.Allocated.TotalSeconds, working.TotalSeconds);
+            var allocatedPart = Math.Min(allocatedToday.TotalSeconds, working.TotalSeconds);
             var unallocatedPart = Math.Max(0, working.TotalSeconds - allocatedPart);
             if (totalsBarGrid is null)
             {
@@ -826,7 +826,7 @@ public sealed class DashboardWindow : Window
             if (totalsBarColour != colour) { totalsBarStripes!.Background = ReviewViews.Stripes(model); totalsBarColour = colour; }
             if (!ReferenceEquals(dayBar.Child, totalsBarGrid)) dayBar.Child = totalsBarGrid;
             dayBar.Classes.Add("track");
-            ToolTip.SetTip(dayBar, (scheduled > TimeSpan.Zero ? $"Scheduled {model.Format(scheduled)} ({plan.Start:HH:mm}–{plan.End:HH:mm}" + (model.BreakAllowance > TimeSpan.Zero ? $" less {model.Format(model.BreakAllowance)} break" : "") + ")" : "No schedule") + $"\nAllocated {model.Format(totals.Allocated)} · Unallocated {model.Format(model.UnallocatedOn(shown))} · Breaks {model.Format(breaks)}");
+            ToolTip.SetTip(dayBar, (scheduled > TimeSpan.Zero ? $"Scheduled {model.Format(scheduled)} ({plan.Start:HH:mm}–{plan.End:HH:mm}" + (model.BreakAllowance > TimeSpan.Zero ? $" less {model.Format(model.BreakAllowance)} break" : "") + ")" : "No schedule") + $"\nAllocated {model.Format(allocatedToday)} · Unallocated {model.Format(model.UnallocatedOn(shown))} · Breaks {model.Format(breaks)}");
             Avalonia.Automation.AutomationProperties.SetName(dayBar, $"The scheduled day, {model.Format(working)} worked");
         }
     }
@@ -933,9 +933,16 @@ public sealed class DashboardWindow : Window
             // The marker moves independently. Only a running block changes today's timeline geometry;
             // current-week totals still change while idle, whereas an earlier week's data does not.
             rebuild = weekMode ? WeekHasLiveValues()
-                : model.Engine.Active is not null && model.SelectedDate.Date == model.Engine.Now.Date;
+                : model.Engine.Active is not null && model.SelectedDate.Date == model.TodayKey;
         }
         Refresh(rebuild || workspacePending);
+    }
+    /// <summary>The day in the header: "Mon 3 Nov" as ever, and when days begin in the evening the stretch it covers, "Mon 3 Nov, 18:00 – Tue 06:00" (the end is where the next day begins).</summary>
+    private string DayWords(DateTime day, System.Globalization.CultureInfo culture)
+    {
+        if (model.DayStart == TimeSpan.Zero) return day.ToString("ddd d MMM", culture);
+        var begin = model.DayBegins(day); var end = model.DayEnds(day);
+        return $"{begin.ToString("ddd d MMM", culture)}, {begin:HH:mm} – {end.ToString("ddd", culture)} {end:HH:mm}";
     }
     private bool WeekHasLiveValues()
     {
@@ -960,7 +967,7 @@ public sealed class DashboardWindow : Window
         refreshPending = workspacePending = false;
         sidebar.Refresh(model);
         var british = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
-        date.Text = weekMode ? WeekRange(model.WeekStart(model.SelectedDate), british) : model.SelectedDate.ToString("ddd d MMM", british);
+        date.Text = weekMode ? WeekRange(model.WeekStart(model.SelectedDate), british) : DayWords(model.SelectedDate, british);
         todayWords.Text = weekMode ? "This week" : "Today";
         next.IsEnabled = !weekMode || model.CanStepForwardAWeek;
         ToolTip.SetTip(previous, weekMode ? "Previous week" : "Previous day"); ToolTip.SetTip(next, weekMode ? "Next week" : "Next day");
@@ -983,7 +990,7 @@ public sealed class DashboardWindow : Window
         timelinePage.IsVisible = !settingsMode && !weekMode && !notesMode; workspace.IsVisible = settingsMode || weekMode || notesMode;
         // The tabs say which page this is; the settings page has its name there instead.
         workspaceTitle.Text = "Settings"; workspaceTitle.IsVisible = settingsMode; viewTabs.IsVisible = !settingsMode;
-        todayButton.IsEnabled = weekMode ? model.WeekStart(model.SelectedDate) != model.WeekStart(model.Engine.Now) : model.SelectedDate.Date != model.Engine.Now.Date;
+        todayButton.IsEnabled = weekMode ? model.WeekStart(model.SelectedDate) != model.WeekStart(model.TodayKey) : model.SelectedDate.Date != model.TodayKey;
         // The settings page is built once when it opens, so a model change does not rebuild it under the pointer and lose what is being typed.
         if (settingsMode ? !renderedSettings : notesMode ? !renderedNotes : refreshWorkspace)
         {

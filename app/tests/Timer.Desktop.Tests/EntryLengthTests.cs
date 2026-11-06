@@ -39,7 +39,7 @@ public sealed class EntryLengthTests
             Type(window, "EntryEnd", "11:50:00"); Assert.Equal("0:50", Find<TextBox>(window, "EntryLength").Text);
             Type(window, "EntryStart", "11:10:00"); Assert.Equal("0:40", Find<TextBox>(window, "EntryLength").Text); // Moving the start changes the length, the end stays.
             Type(window, "EntryLength", "twenty"); Assert.Equal("11:50:00", Find<TextBox>(window, "EntryEnd").Text); // Nonsense changes nothing.
-            Type(window, "EntryLength", "23:59"); Assert.Contains("midnight", Find<TextBlock>(window, "EntryError").Text);
+            Type(window, "EntryLength", "23:59"); Assert.Equal("11:09:00", Find<TextBox>(window, "EntryEnd").Text); Assert.Equal("", Find<TextBlock>(window, "EntryError").Text); // A block may cross midnight: 11:10 and 23:59 later is 11:09 the next day.
         }
         finally { window.Close(); }
     }
@@ -73,8 +73,8 @@ public sealed class EntryLengthTests
         {
             model.ToggleSelection(new[] { engine.Sessions[0] }); Dispatcher.UIThread.RunJobs();
             var end = Find<TextBox>(window, "SelectedEnd");
-            Type(window, "SelectedEnd", "08:00:00"); end.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter }); Dispatcher.UIThread.RunJobs();
-            Assert.Equal("End must be after start", model.EditError); Assert.Equal("09:30:00", Find<TextBox>(window, "SelectedEnd").Text); Assert.Equal("09:30:00", engine.Sessions[0].To.ToString("HH:mm:ss"));
+            Type(window, "SelectedEnd", "banana"); end.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter }); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("End: try 10:30", model.EditError); Assert.Equal("09:30:00", Find<TextBox>(window, "SelectedEnd").Text); Assert.Equal("09:30:00", engine.Sessions[0].To.ToString("HH:mm:ss"));
             Type(window, "SelectedStart", "nine"); Find<TextBox>(window, "SelectedStart").RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter }); Dispatcher.UIThread.RunJobs();
             Assert.Equal("Start: try 09:30", model.EditError);
         }

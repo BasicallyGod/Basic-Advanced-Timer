@@ -106,7 +106,7 @@ public static partial class ReviewViews
     // A tile for a stack of blocks. With the recording block over it (compact), the tile is slimmer and sits under that block's lane.
     private static void AddBlockTile(Canvas canvas, TimerModel model, List<Interval> members, bool compact, double bandTop, double bandHeight, double pixelsPerHour, Func<DateTime, double> X)
     {
-        var start = members.Min(i => i.Start); var day = start.Date; var end = members.Max(i => i.End); if (end > day.AddDays(1)) end = day.AddDays(1);
+        var begin = model.DayBegins(model.SelectedDate); var start = members.Min(i => i.Start); if (start < begin) start = begin; var end = members.Max(i => i.End); if (end > begin.AddDays(1)) end = begin.AddDays(1);
         var width = Math.Max(MinimumBlockWidth, (end - start).TotalHours * pixelsPerHour - BlockGap);
         var height = TileHeight(bandHeight, compact); var top = bandTop + bandHeight - height; // Sits on the foot of the band, where the blocks end.
         var total = members.Aggregate(TimeSpan.Zero, (sum, i) => sum + DurationOf(i));
@@ -143,12 +143,12 @@ public static partial class ReviewViews
     // A tile for a stack of meetings, the height of the meeting row.
     private static void AddMeetingTile(Canvas canvas, TimerModel model, DateTime day, List<DayNote> stack, double meetingTop, double pixelsPerHour, Func<DateTime, double> X)
     {
-        var start = day + stack.Min(m => m.At!.Value); var end = day + stack.Max(m => m.End!.Value);
+        var start = stack.Min(m => MeetingStart(m)); var end = stack.Max(m => MeetingEnd(m));
         var width = Math.Max(24, (end - start).TotalHours * pixelsPerHour - 2);
-        var placed = PlaceLanes(stack.Select(m => (m, day + m.At!.Value, day + m.End!.Value))); var rows = placed.Values.Max(v => v.Count);
+        var placed = PlaceLanes(stack.Select(m => (m, MeetingStart(m), MeetingEnd(m)))); var rows = placed.Values.Max(v => v.Count);
         var selectedIn = stack.Any(m => m.Id == model.SelectedMeetingId);
         var ink = Color.Parse(model.CurrentTheme.Colour("Ink"));
-        var lines = stack.Select(m => new StackLines.Line(Math.Max(8, ((day + m.At!.Value) - start).TotalHours * pixelsPerHour), Math.Min(width - 8, ((day + m.End!.Value) - start).TotalHours * pixelsPerHour), placed[m].Lane,
+        var lines = stack.Select(m => new StackLines.Line(Math.Max(8, ((MeetingStart(m)) - start).TotalHours * pixelsPerHour), Math.Min(width - 8, ((MeetingEnd(m)) - start).TotalHours * pixelsPerHour), placed[m].Lane,
             ink, selectedIn && m.Id == model.SelectedMeetingId, selectedIn && m.Id != model.SelectedMeetingId)).ToList();
         var title = Words(stack.Count, "meeting", "meetings");
         var card = new Border { Name = "TimelineMeetingStack" + start.ToString("HHmm"), Width = width, Height = MeetingHeight, CornerRadius = new CornerRadius(12), Tag = new StackTag(stack.Count), Cursor = new Cursor(StandardCursorType.Hand) };

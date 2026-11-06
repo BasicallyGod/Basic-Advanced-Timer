@@ -208,12 +208,13 @@ public sealed class TimerModel : INotifyPropertyChanged
         var band = TimeSpan.FromHours(TimelineGestures.MagnetPixels / TimelinePixelsPerHour);
         DateTime? best = null; var distance = band;
         void Consider(DateTime candidate) { var d = (candidate - start).Duration(); if (d <= distance) { distance = d; best = candidate; } }
-        foreach (var s in Engine.Sessions.Where(s => s.Duration > TimeSpan.Zero && s.Day == start.Date || s.Duration > TimeSpan.Zero && s.To > start.Date && s.From < start.Date.AddDays(1)))
+        var windowStart = DayBegins(DayOf(start)); var windowEnd = windowStart.AddDays(1);
+        foreach (var s in Engine.Sessions.Where(s => s.Duration > TimeSpan.Zero && s.To > windowStart && s.From < windowEnd))
         {
             Consider(new DateTime(((s.To.Ticks + TimeSpan.TicksPerSecond - 1) / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond));
             Consider(new DateTime(s.From.Ticks - s.From.Ticks % TimeSpan.TicksPerSecond) - length);
         }
-        return best is { } snapped && snapped >= start.Date && snapped + length <= start.Date.AddDays(1) ? snapped : start;
+        return best is { } snapped && snapped >= windowStart && snapped + length <= windowEnd ? snapped : start;
     }
     /// <summary>Where Ctrl+V pastes. The timeline keeps it at the time under the pointer, and it is null when the pointer has not been over it.</summary>
     public DateTime? PasteTime { get; set; }
@@ -245,10 +246,10 @@ public sealed class TimerModel : INotifyPropertyChanged
     public DateTime DefaultPasteTime()
     {
         var day = SelectedDate.Date;
-        if (PasteTime is { } at && at.Date == day) return SnapPlacement(at, CopiedFirstLength);
-        var chosen = Engine.Sessions.Where(s => selectedRows.Contains(s) && s.Day == day && s.Duration > TimeSpan.Zero).Select(s => s.To).DefaultIfEmpty().Max();
-        if (chosen > day) return chosen;
-        return Engine.Plan(day).Working ? Engine.Plan(day).Start : day.AddHours(9);
+        if (PasteTime is { } at && DayOf(at) == day) return SnapPlacement(at, CopiedFirstLength);
+        var chosen = Engine.Sessions.Where(s => selectedRows.Contains(s) && CountsOn(s, day) && s.Duration > TimeSpan.Zero).Select(s => s.To).DefaultIfEmpty().Max();
+        if (chosen > DayBegins(day)) return chosen;
+        return Engine.Plan(day).Working ? Engine.Plan(day).Start : DayBegins(day).AddHours(9);
     }
     public bool MergeSelection()
     {
@@ -280,7 +281,7 @@ public sealed class TimerModel : INotifyPropertyChanged
             this.preferences = this.preferences with { Shadows = false }; SetAppearanceFlag("shadowsdefault=", "applied", true); Save();
         }
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
-        SelectedDate = Engine.Now.Date; lastToday = SelectedDate;
+        Engine.DayStart = DayStart; Notes.DayStart = DayStart; SelectedDate = TodayKey; lastToday = SelectedDate;
         // Only Light and Dark are offered now, so a saved choice of a retired theme or one of the user's own becomes Light or Dark (the theme stays in the file).
         this.preferences = this.preferences with { Theme = AppThemes.Resolve(this.preferences.Theme, this.preferences.Themes) };
         ApplyTheme(); Ui.ApplyTooltips(this.preferences.Tooltips);
@@ -340,17 +341,17 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// </summary>
     public (DateTime From, DateTime Until)? DaySpan(DateTime day)
     {
-        day = day.Date; var next = day.AddDays(1); var now = Engine.Now;
-        var blocks = Engine.Sessions.Where(s => s.Day == day && !BreakAccount.Is(s.Account) && s.Duration > TimeSpan.Zero).ToList();
+        day = day.Date; var begin = DayBegins(day); var next = DayEnds(day); var now = Engine.Now;
+        var blocks = Engine.Sessions.Where(s => CountsOn(s, day) && !BreakAccount.Is(s.Account) && s.Duration > TimeSpan.Zero).ToList();
         DateTime? first = blocks.Count > 0 ? blocks.Min(s => s.From) : null; DateTime? last = blocks.Count > 0 ? blocks.Max(s => s.To) : null;
-        if (Engine.Active is { } active && !BreakAccount.Is(active.Account) && now > day && active.Start < next)
+        if (Engine.Active is { } active && !BreakAccount.Is(active.Account) && now > begin && active.Start < next)
         {
-            var from = active.Start > day ? active.Start : day; var until = now < next ? now : next;
+            var from = active.Start > begin ? active.Start : begin; var until = now < next ? now : next;
             first = first is { } f && f < from ? f : from; last = last is { } l && l > until ? l : until;
         }
         if (first is null || last is null) return null;
         var plan = Engine.Plan(day); var limit = plan.Working && plan.End > last.Value ? plan.End : last.Value;
-        var finished = Engine.Away.Where(a => a.Start.Date == day).Select(a => (DateTime?)a.Start).Max();
+        var finished = Engine.Away.Where(a => DayOf(a.Start) == day).Select(a => (DateTime?)a.Start).Max();
         if (finished is { } stopped) limit = stopped > last.Value ? stopped : last.Value;
         var cap = new[] { now, limit, next }.Min();
         return cap > first.Value ? (first.Value, cap) : null;
@@ -362,7 +363,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public TimeSpan WorkingOn(DateTime day)
     {
         if (DaySpan(day) is not { } span) return TimeSpan.Zero;
-        var now = Engine.Now; var breaks = Engine.Sessions.Where(s => s.Day == day.Date && BreakAccount.Is(s.Account) && s.Duration > TimeSpan.Zero).Select(s => (s.From, s.To)).ToList();
+        var now = Engine.Now; var breaks = Engine.Sessions.Where(s => CountsOn(s, day) && BreakAccount.Is(s.Account) && s.Duration > TimeSpan.Zero).Select(s => (s.From, s.To)).ToList();
         if (Engine.Active is { } running && BreakAccount.Is(running.Account)) breaks.Add((running.Start, now));
         // Overlapping breaks are joined first, so one is never taken off twice.
         var gone = TimeSpan.Zero; var end = span.From;
@@ -376,7 +377,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         return worked < TimeSpan.Zero ? TimeSpan.Zero : worked;
     }
     /// <summary>Working time with nothing recorded on an account on a day: the working time less what is on accounts, never below nothing.</summary>
-    public TimeSpan UnallocatedOn(DateTime day) { var left = WorkingOn(day) - Engine.Totals(day).Allocated; return left < TimeSpan.Zero ? TimeSpan.Zero : left; }
+    public TimeSpan UnallocatedOn(DateTime day) { var left = WorkingOn(day) - AllocatedOn(day); return left < TimeSpan.Zero ? TimeSpan.Zero : left; }
     public bool DecimalHours => preferences.DecimalHours;
     /// <summary>Where the pointer last was on the timeline's canvas, so the guide line can be put back when the timeline is drawn again under a pointer that has not moved.</summary>
     public Avalonia.Point? GuidePointer { get; set; }
@@ -412,15 +413,15 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool IsDemo { get; private set; }
     public bool Persistent => store is not null;
     /// <summary>The day clock: working time so far today, counting up from the first block of the day.</summary>
-    public TimeSpan Elapsed => WorkingOn(Engine.Now);
+    public TimeSpan Elapsed => WorkingOn(TodayKey);
     public string ClockText => $"{(int)Elapsed.TotalHours:00}:{Elapsed.Minutes:00}:{Elapsed.Seconds:00}";
-    public TimeSpan Allocated => Engine.Totals(Engine.Now).Allocated;
-    public TimeSpan Unallocated => UnallocatedOn(Engine.Now);
+    public TimeSpan Allocated => AllocatedOn(TodayKey);
+    public TimeSpan Unallocated => UnallocatedOn(TodayKey);
     /// <summary>The time on breaks on a day, kept apart from working time, including a break that is running now.</summary>
     public TimeSpan BreakTimeOn(DateTime day)
     {
         day = day.Date;
-        var saved = Engine.Sessions.Where(s => s.Day == day && BreakAccount.Is(s.Account)).Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
+        var saved = Engine.Sessions.Where(s => CountsOn(s, day) && BreakAccount.Is(s.Account)).Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
         // The two readings of the running block are taken a moment apart, so with no break running they can differ by a few milliseconds the wrong way,
         // which showed as -00:00. Time on a break is never below nothing.
         var running = Engine.ActiveElapsedOn(day, includeBreak: true) - Engine.ActiveElapsedOn(day);
@@ -540,7 +541,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         return (rows.Count, rows.Aggregate(TimeSpan.Zero, (sum, row) => sum + row.Duration));
     }
     public DateTime WeekStart(DateTime date) => date.Date.AddDays(-((7 + (int)date.DayOfWeek - (int)preferences.WeekStart) % 7));
-    public TimeSpan Today(TimerAccount a) => Engine.Credited(a.Name, Engine.Now.Date, Engine.Now.Date.AddDays(1));
+    public TimeSpan Today(TimerAccount a) => Engine.Credited(a.Name, TodayKey, TodayKey.AddDays(1));
     public TimeSpan OnDay(TimerAccount a, DateTime day) => Engine.Credited(a.Name, day, day.AddDays(1));
     /// <summary>The span a budget covers right now, from the account's own period (today, this week, month or quarter).</summary>
     private (DateTime Start, DateTime End) BudgetWindow(TimerAccount a) => BudgetWindowAt(a, Engine.Now);
@@ -550,7 +551,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         var now = reference;
         var start = a.Period switch
         {
-            "day" => now.Date,
+            "day" => DayOf(now),
             "month" => new DateTime(now.Year, now.Month, 1),
             "quarter" => new DateTime(now.Year, ((now.Month - 1) / 3) * 3 + 1, 1), _ => WeekStart(now)
         };
@@ -567,7 +568,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public DateTime BudgetReference(DateTime weekStart)
     {
         var now = Engine.Now; weekStart = weekStart.Date;
-        return now.Date >= weekStart && now.Date < weekStart.AddDays(7) ? now : weekStart.AddDays(3);
+        return DayOf(now) >= weekStart && DayOf(now) < weekStart.AddDays(7) ? now : weekStart.AddDays(3);
     }
     /// <summary>
     /// Names the budget period that holds the reference moment: "this month" when it is the current one, and otherwise which one it was, such as "September 2026",
@@ -619,15 +620,15 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Puts the timeline and week views back on the current day. The dashboard does this whenever it is opened, so it never comes up on a day left over from earlier.</summary>
     public void ShowToday()
     {
-        if (SelectedDate.Date == Engine.Now.Date) return;
+        if (SelectedDate.Date == TodayKey) return;
         if (!CommitSelection()) return;
-        DropSelection(); TimelineOffset = null; SelectedDate = Engine.Now.Date; Notify();
+        DropSelection(); TimelineOffset = null; SelectedDate = TodayKey; Notify();
     }
     // A timer left running past midnight carries on following the current day, if that is the day being shown. Someone reviewing an earlier day is left there.
     private DateTime lastToday;
     private void FollowToday()
     {
-        var today = Engine.Now.Date; if (today == lastToday) return;
+        var today = TodayKey; if (today == lastToday) return;
         var following = SelectedDate.Date == lastToday;
         if (following && !CommitSelection()) return;
         lastToday = today;
@@ -793,10 +794,10 @@ public sealed class TimerModel : INotifyPropertyChanged
             throw new ArgumentException("Choose at least one working day, with an end after its start.");
         Engine.Schedule.Days = shifts.Keys.ToHashSet();
         Engine.Schedule.Shifts = new(shifts);
-        if (resetToday) { Engine.Schedule.Overrides.Remove(Engine.Now.Date); Engine.DayStarts.Remove(Engine.Now.Date); }
+        if (resetToday) { Engine.Schedule.Overrides.Remove(TodayKey); Engine.DayStarts.Remove(TodayKey); }
         // A manual start was only needed while the day was off. Once the new hours make today or a later day a working day, the
         // usual start applies, so the old press must not keep overriding it.
-        foreach (var day in Engine.DayStarts.Where(p => p.Key >= Engine.Now.Date && Engine.Schedule.Scheduled(p.Key) is { Working: true } plan && p.Value >= plan.Start).Select(p => p.Key).ToList()) Engine.DayStarts.Remove(day);
+        foreach (var day in Engine.DayStarts.Where(p => p.Key >= TodayKey && Engine.Schedule.Scheduled(p.Key) is { Working: true } plan && p.Value >= plan.Start).Select(p => p.Key).ToList()) Engine.DayStarts.Remove(day);
         Save(); Notify();
     }
     /// <summary>
@@ -805,8 +806,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// </summary>
     public void OpenGap(DateTime? at = null)
     {
-        var day = SelectedDate; var limit = day.AddDays(1); var length = TimeSpan.FromMinutes(30);
-        var start = at ?? (Engine.Plan(day).Working ? Engine.Plan(day).Start : day.AddHours(9));
+        var day = SelectedDate; var limit = DayEnds(day); var length = TimeSpan.FromMinutes(30);
+        var start = at ?? (Engine.Plan(day).Working ? Engine.Plan(day).Start : DayBegins(day).AddHours(9));
         start = SnapPlacement(start, length);
         if (Engine.Active is { } active && active.Start < start + length && Engine.Now > start)
         {
@@ -814,7 +815,7 @@ public sealed class TimerModel : INotifyPropertyChanged
             start = new DateTime(((Engine.Now.Ticks + TimeSpan.TicksPerMinute - 1) / TimeSpan.TicksPerMinute) * TimeSpan.TicksPerMinute);
         }
         var end = start + length > limit ? limit : start + length;
-        if (end <= start || start < day) { EditError = "No room here"; Notify(); return; }
+        if (end <= start || start < DayBegins(day)) { EditError = "No room here"; Notify(); return; }
         EditError = null; EntryRequested?.Invoke(start, end);
     }
     public bool AddEntry(string account, DateTime start, DateTime end, string note)
@@ -833,7 +834,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Sets a block's start to where the block before it ends (the latest end of the blocks that begin earlier), closing a gap or an overlap there. The end stays.</summary>
     public bool FitToPrevious(SessionRow row)
     {
-        var ends = Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero && s.Day == row.Day && s.From < row.From).Select(s => s.To).ToList();
+        var ends = Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero && CountsOn(s, DayOf(row.From)) && s.From < row.From).Select(s => s.To).ToList();
         if (ends.Count == 0) { Refuse("No block before"); return false; }
         var end = ends.Max(); var start = new DateTime(((end.Ticks + TimeSpan.TicksPerSecond - 1) / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond);
         if (start >= row.To - TimeSpan.FromMinutes(1)) { Refuse("No room before"); return false; }
@@ -842,7 +843,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Sets a block's end to where the next block begins (the earliest start of the blocks that begin later). The start stays.</summary>
     public bool FitToNext(SessionRow row)
     {
-        var starts = Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero && s.Day == row.Day && s.From > row.From).Select(s => s.From).ToList();
+        var starts = Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero && CountsOn(s, DayOf(row.From)) && s.From > row.From).Select(s => s.From).ToList();
         if (starts.Count == 0) { Refuse("No block after"); return false; }
         var next = starts.Min(); var end = new DateTime(next.Ticks - next.Ticks % TimeSpan.TicksPerSecond);
         if (end <= row.From + TimeSpan.FromMinutes(1)) { Refuse("No room after"); return false; }
@@ -891,7 +892,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         if (block.IsGroup || block.Row is null) { Refuse("Unmerge to resize"); return false; }
         var end = block.End.AddMinutes(minutes);
         if (end <= block.Start) { Refuse("Block can’t be shorter"); return false; }
-        if (end > block.Start.Date.AddDays(1)) { Refuse("Can’t pass midnight"); return false; }
+        if (end - block.Start > LedgerEditor.MaxBlock) { Refuse("At most 24 hours"); return false; }
         return EditEntry(block.Row, block.Row.Account, block.Start, end, block.Note);
     }
     public bool UndoEdit() { var done = ChangeLog(Editor.Undo); if (done) { Notice = "Undone"; Notify(); } return done; }
@@ -1036,6 +1037,42 @@ public sealed class TimerModel : INotifyPropertyChanged
         var minutes = (int)Math.Clamp(Math.Round(allowance.TotalMinutes), 0, 240);
         if (BreakAllowanceChosen && BreakAllowance == TimeSpan.FromMinutes(minutes)) return;
         SetAppearanceFlag(BreakAllowanceLine, minutes.ToString(CultureInfo.InvariantCulture), true); Notify();
+    }
+    // ---- where a day begins (the board "Timeline behaviours", Day starts at): midnight unless someone works through it
+    private const string DayStartLine = "daystart=";
+    /// <summary>Where a day begins, saved as the appearance line daystart=HH:mm; midnight (no line) unless set. It is what makes a night shift one day: the timeline, the clock, the week, budgets and exports all use it.</summary>
+    public TimeSpan DayStart
+    {
+        get
+        {
+            var line = AppearanceValue(DayStartLine);
+            return line is not null && TimeSpan.TryParseExact(line, "hh\\:mm", CultureInfo.InvariantCulture, out var start) && start >= TimeSpan.Zero && start < TimeSpan.FromDays(1) ? start : TimeSpan.Zero;
+        }
+    }
+    public void SetDayStart(TimeSpan start)
+    {
+        start = TimeSpan.FromMinutes(Math.Clamp(Math.Round(start.TotalMinutes), 0, 24 * 60 - 1));
+        if (start == DayStart) return;
+        SetAppearanceFlag(DayStartLine, start == TimeSpan.Zero ? null : start.ToString("hh\\:mm", CultureInfo.InvariantCulture), true);
+        Engine.DayStart = start; Notes.DayStart = start;
+        // The day being looked at keeps its date, and today moves with the new boundary; the clock and every day figure follow.
+        lastToday = TodayKey; if (SelectedDate > TodayKey) SelectedDate = TodayKey;
+        TimelineOffset = null; Notify();
+    }
+    /// <summary>The day that holds this moment, as the date it starts on.</summary>
+    public DateTime DayOf(DateTime moment) => Engine.WorkDay(moment);
+    /// <summary>The day it is now. This is what "today" means everywhere, since after midnight a night shift is still yesterday's day.</summary>
+    public DateTime TodayKey => Engine.WorkDay(Engine.Now);
+    /// <summary>The moment a day begins and the moment it ends (24 hours on).</summary>
+    public DateTime DayBegins(DateTime day) => Engine.DayBegins(day);
+    public DateTime DayEnds(DateTime day) => Engine.DayBegins(day).AddDays(1);
+    /// <summary>Whether a block counts on a day: the day it starts.</summary>
+    public bool CountsOn(SessionRow row, DateTime day) => Engine.WorkDayOf(row) == day.Date;
+    /// <summary>The time on accounts on a day (not breaks), including the block being recorded.</summary>
+    public TimeSpan AllocatedOn(DateTime day)
+    {
+        var saved = Engine.Sessions.Where(s => CountsOn(s, day) && !BreakAccount.Is(s.Account)).Aggregate(TimeSpan.Zero, (sum, s) => sum + s.Duration);
+        return saved + Engine.ActiveElapsedOn(day);
     }
     /// <summary>The working time a day is scheduled for: its hours less the break allowance, or nothing on a day off (and never below nothing).</summary>
     public TimeSpan ScheduledOn(DateTime day)
