@@ -224,6 +224,9 @@ public static partial class ReviewViews
         double X(DateTime time) => TimelineGutter + (time - day).TotalHours * pixelsPerHour;
         // A little room before the first hour and after the last lets the end labels sit fully in view.
         var canvas = new Canvas { Name = "TimelineCanvas", Width = 24 * pixelsPerHour + 2 * TimelineGutter, Height = TimelineHeight, Background = Brushes.Transparent };
+        // Where the last right-click landed, to the 5 minutes: Add time and Paste on any menu, a block's included, use it.
+        DateTime clicked = day.AddHours(9);
+        DateTime At(double x) => day.AddMinutes(Math.Clamp(Math.Floor((x - TimelineGutter) / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var axis = new Border { Name = "TimelineAxis", Height = 1, Width = 24 * pixelsPerHour, Opacity = .8 }; axis.Classes.Add("rule");
         Canvas.SetLeft(axis, TimelineGutter); Canvas.SetTop(axis, AxisY); canvas.Children.Add(axis);
         void Tick(double hours, double height, double opacity)
@@ -359,7 +362,7 @@ public static partial class ReviewViews
             if (interval.Row is { } row)
             {
                 card.Tag = row; card.Name = "TimelineEntry" + model.Engine.Sessions.IndexOf(row);
-                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { MoveMenu(model, new[] { row }), CopyMenu(model, new[] { row }), MergeMenu(model), new Separator(), DeleteMenu(model, new[] { row }) } };
+                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { MoveMenu(model, new[] { row }), CopyMenu(model, new[] { row }), MergeMenu(model), new Separator(), AddHereMenu(model, () => clicked), PasteHereMenu(model, () => clicked), new Separator(), DeleteMenu(model, new[] { row }) } };
                 Canvas.SetLeft(card, X(interval.Start) + BlockInset); Canvas.SetTop(card, cardTop); canvas.Children.Add(card); addedEarly = true;
                 TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour, model.IsSelected(selectionSources));
             }
@@ -392,7 +395,7 @@ public static partial class ReviewViews
                 };
                 card.Tag = group; card.Name = "TimelineGroup" + group.GroupId + "-" + interval.Start.ToString("HHmmss");
                 var ungroup = new MenuItem { Header = "Unmerge", Name = "UnmergeMenu" }; ungroup.Click += (_, _) => model.UngroupEntries(group.GroupId!);
-                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { ungroup, CopyMenu(model, group.Sources), MergeMenu(model) } };
+                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { ungroup, CopyMenu(model, group.Sources), MergeMenu(model), new Separator(), AddHereMenu(model, () => clicked), PasteHereMenu(model, () => clicked) } };
                 ToolTip.SetTip(card, $"{model.Label(group.Account)} · {model.Format(duration)}\nMerged, {group.Sources.Count} blocks");
             }
             if (!addedEarly) { Canvas.SetLeft(card, X(interval.Start) + BlockInset); Canvas.SetTop(card, cardTop); canvas.Children.Add(card); }
@@ -474,17 +477,33 @@ public static partial class ReviewViews
             _ = new ViewActivity(canvas, active => { if (active) { PlaceNow(); nowTimer.Start(); } else nowTimer.Stop(); });
         }
         TimelineGuide.Attach(canvas, model, day, pixelsPerHour, TimelineGutter, AxisY, planned.Count > 0 ? meetingTop : bandTop, pinned);
-        DateTime clicked = day.AddHours(9);
-        DateTime At(double x) => day.AddMinutes(Math.Clamp(Math.Floor((x - TimelineGutter) / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);
         var addMeeting = new MenuItem { Header = "Add meeting…", Name = "AddMeetingMenu" }; addMeeting.Click += (_, _) => model.Notes.RequestNewMeeting(clicked);
         // Paste puts the copied blocks with the first at the time that was right-clicked, snapped to five minutes like Add time.
-        var paste = new MenuItem { Header = "Paste here", Name = "PasteHereMenu", InputGesture = new KeyGesture(Key.V, KeyModifiers.Control), IsEnabled = model.CanPaste };
-        paste.Click += (_, _) => model.PasteBlocks(clicked);
+        var paste = PasteHereMenu(model, () => clicked);
         canvas.ContextMenu = new ContextMenu { ItemsSource = new Control[] { add, addMeeting, paste, MergeMenu(model) } };
         // Ctrl+V pastes where the pointer last was on this timeline.
-        canvas.PointerMoved += (_, e) => model.PasteTime = At(e.GetPosition(canvas).X);
-        canvas.PointerExited += (_, _) => model.PasteTime = null;
+        // While blocks are copied, outlines follow the pointer and show where Paste would put them (the first block's start snapped flush to a nearby edge; the gaps are kept).
+        var ghosts = new List<Border>();
+        void ClearGhosts() { foreach (var g in ghosts) canvas.Children.Remove(g); ghosts.Clear(); }
+        void ShowGhosts(DateTime at)
+        {
+            ClearGhosts(); if (!model.CanPaste) return;
+            var first = model.SnapPlacement(at, model.CopiedFirstLength); var index = 0;
+            foreach (var (offset, length) in model.CopiedShape)
+            {
+                var ghost = new Border { Name = "PastePreview" + index++, IsHitTestVisible = false, ZIndex = 11, CornerRadius = new CornerRadius(BlockRadius), BorderThickness = new Thickness(2),
+                    Width = Math.Max(MinimumBlockWidth, length.TotalHours * pixelsPerHour - BlockGap), Height = Math.Max(24, bandHeight * .6) };
+                ghost.Bind(Border.BorderBrushProperty, ghost.GetResourceObservable("Accent")); ghost.Bind(Border.BackgroundProperty, ghost.GetResourceObservable("Selected")); ghost.Opacity = .8;
+                Canvas.SetLeft(ghost, X(first + offset) + BlockInset); Canvas.SetTop(ghost, bandTop + 6); canvas.Children.Add(ghost); ghosts.Add(ghost);
+            }
+        }
+        canvas.PointerMoved += (_, e) =>
+        {
+            model.PasteTime = At(e.GetPosition(canvas).X);
+            if (e.GetCurrentPoint(canvas).Properties.IsLeftButtonPressed) ClearGhosts(); else ShowGhosts(model.PasteTime.Value);
+        };
+        canvas.PointerExited += (_, _) => { model.PasteTime = null; ClearGhosts(); };
         bool OnBlock(object? source) => source is Visual visual && (visual is Border { Tag: SessionRow or ReviewEntry or StackTag }
             || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow or ReviewEntry or StackTag));
         Point? emptyPress = null;
@@ -585,6 +604,14 @@ public static partial class ReviewViews
         var item = new MenuItem { Name = "CopyBlocksMenu", Header = rows.Count > 1 ? $"Copy {rows.Count} blocks" : "Copy", InputGesture = new KeyGesture(Key.C, KeyModifiers.Control), IsEnabled = rows.Count > 0 };
         item.Click += (_, _) => model.CopyBlocks(rows);
         return item;
+    }
+    // Add time and Paste at the time that was right-clicked, from any menu on the timeline, so a crowded stretch is never a dead end. Both snap flush to a block's edge that is close by.
+    private static MenuItem AddHereMenu(TimerModel model, Func<DateTime> at)
+    { var item = new MenuItem { Name = "AddTimeHereMenu", Header = "Add time here…" }; item.Click += (_, _) => model.OpenGap(at()); return item; }
+    private static MenuItem PasteHereMenu(TimerModel model, Func<DateTime> at)
+    {
+        var item = new MenuItem { Header = "Paste here", Name = "PasteHereMenu", InputGesture = new KeyGesture(Key.V, KeyModifiers.Control), IsEnabled = model.CanPaste };
+        item.Click += (_, _) => model.PasteBlocks(model.SnapPlacement(at(), model.CopiedFirstLength)); return item;
     }
     private static MenuItem MergeMenu(TimerModel model)
     {

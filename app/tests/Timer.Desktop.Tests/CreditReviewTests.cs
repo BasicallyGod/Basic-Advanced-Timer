@@ -276,11 +276,11 @@ public sealed class CreditReviewTests
         Check("09:00:00", "53", "10:00:00", "30", 1, .5, -7, Day.AddHours(9).AddMinutes(53), Day.AddHours(10).AddMinutes(23));
         // Move downward until the bottom edge meets a 10:03 start.
         Check("09:00:00", "30", "10:03:00", "30", 0, .5, 33, Day.AddHours(9).AddMinutes(33), Day.AddHours(10).AddMinutes(3));
-        // Small overshoots stop at the first neighbour rather than overlap or jump past it.
-        Check("09:00:00", "53", "10:00:00", "30", 1, .5, -12, Day.AddHours(9).AddMinutes(53), Day.AddHours(10).AddMinutes(23));
-        Check("09:00:00", "30", "10:03:00", "30", 0, .5, 40, Day.AddHours(9).AddMinutes(33), Day.AddHours(10).AddMinutes(3));
-        Check("09:00:00", "53", "10:00:00", "30", 1, .01, -12, Day.AddHours(9).AddMinutes(53), Day.AddHours(10.5));
-        Check("09:00:00", "30", "10:03:00", "30", 0, .99, 40, Day.AddHours(9), Day.AddHours(10).AddMinutes(3));
+        // Past the magnet (10 pixels, under 4 minutes at this zoom) the edge is free: it goes where the pointer is, to the five minutes, and may overlap.
+        Check("09:00:00", "53", "10:00:00", "30", 1, .5, -12, Day.AddHours(9).AddMinutes(50), Day.AddHours(10).AddMinutes(20));
+        Check("09:00:00", "30", "10:03:00", "30", 0, .5, 40, Day.AddHours(9).AddMinutes(40), Day.AddHours(10).AddMinutes(10));
+        Check("09:00:00", "53", "10:00:00", "30", 1, .01, -12, Day.AddHours(9).AddMinutes(50), Day.AddHours(10.5));
+        Check("09:00:00", "30", "10:03:00", "30", 0, .99, 40, Day.AddHours(9), Day.AddHours(10).AddMinutes(10));
         // Resize either edge to the same exact boundaries.
         Check("09:00:00", "53", "10:00:00", "30", 1, .01, -7, Day.AddHours(9).AddMinutes(53), Day.AddHours(10.5));
         Check("09:00:00", "30", "10:03:00", "30", 0, .99, 33, Day.AddHours(9), Day.AddHours(10).AddMinutes(3));
@@ -359,7 +359,7 @@ public sealed class CreditReviewTests
         model.ChangeDate(1); Assert.Null(model.TimelineOffset);
     }
     [AvaloniaFact]
-    public void DragBeyondNestleThresholdInsertsAndPreviewsNeighbours()
+    public void HoldingShiftWhileDraggingAcrossANeighbourInsertsAndPreviewsNeighbours()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:00:00", "30") });
         var model = new TimerModel(engine); model.SetTimelineScale(160, 0, 0); model.TimelineOffset = null; var window = new DashboardWindow(model); window.Show(); Capture(window, "nudge-before");
@@ -368,17 +368,35 @@ public sealed class CreditReviewTests
             var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(Canvas.GetLeft).ToArray();
             var csv = model.Editor.SessionsCsv; var oldLeft = Canvas.GetLeft(cards[1]);
             var point = cards[0].TranslatePoint(new Point(cards[0].Width / 2, cards[0].Height / 2), window)!.Value; var target = point + new Vector(20.0 / 60 * 160, 0);
-            window.MouseDown(point, MouseButton.Left); window.MouseMove(target);
+            window.MouseDown(point, MouseButton.Left, RawInputModifiers.Shift); window.MouseMove(target, RawInputModifiers.Shift);
             Assert.True(Canvas.GetLeft(cards[1]) < oldLeft); Assert.Equal(csv, model.Editor.SessionsCsv);
-            window.MouseUp(target, MouseButton.Left); Assert.Null(model.EditError); Assert.Empty(model.SelectedRows);
+            window.MouseUp(target, MouseButton.Left, RawInputModifiers.Shift); Assert.Null(model.EditError); Assert.Empty(model.SelectedRows);
             Assert.Equal(Day.AddHours(9), engine.Sessions[1].From); Assert.Equal(Day.AddHours(9.5), engine.Sessions[0].From); Assert.True(model.UndoEdit()); Assert.Equal(csv, model.Editor.SessionsCsv);
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
+    public void DraggingAcrossANeighbourWithoutShiftOverlapsItAndMovesNothingElse()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:00:00", "30") });
+        var model = new TimerModel(engine); model.SetTimelineScale(160, 0, 0); model.TimelineOffset = null; var window = new DashboardWindow(model); window.Show(); Capture(window, "overlap-before");
+        try
+        {
+            var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(Canvas.GetLeft).ToArray();
+            var oldLeft = Canvas.GetLeft(cards[1]); var csv = model.Editor.SessionsCsv;
+            var point = cards[0].TranslatePoint(new Point(cards[0].Width / 2, cards[0].Height / 2), window)!.Value; var target = point + new Vector(20.0 / 60 * 160, 0);
+            window.MouseDown(point, MouseButton.Left); window.MouseMove(target);
+            Assert.Equal(oldLeft, Canvas.GetLeft(cards[1])); // Nothing is pushed out of the way.
+            window.MouseUp(target, MouseButton.Left); Assert.Null(model.EditError);
+            Assert.Equal(Day.AddHours(9).AddMinutes(20), engine.Sessions[0].From); Assert.Equal(Day.AddHours(9.5), engine.Sessions[1].From); // The first now shares 09:30 to 09:50 with the second.
+            Assert.True(model.UndoEdit()); Assert.Equal(csv, model.Editor.SessionsCsv);
         }
         finally { window.Close(); }
     }
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
-    public void DraggingThroughAnOccupiedSlotIntoAGapRestoresNeighbourPositions(bool checkpointDuringDrag)
+    public void DraggingThroughAnOccupiedSlotIntoAGapLeavesNeighboursWhereTheyAre(bool checkpointDuringDrag)
     {
         var engine = Engine();
         engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("11:00:00", "30") });
@@ -400,7 +418,7 @@ public sealed class CreditReviewTests
 
             window.MouseDown(point, MouseButton.Left);
             window.MouseMove(point + new Vector(20d / 60 * scale, 0));
-            Assert.True(Canvas.GetLeft(cards[1]) < neighbourLeft);
+            Assert.Equal(neighbourLeft, Canvas.GetLeft(cards[1])); // Passing over a neighbour no longer shoves it.
 
             if (checkpointDuringDrag)
             {

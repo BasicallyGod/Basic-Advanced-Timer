@@ -45,13 +45,18 @@ public static class TimelineGestures
             var moved = e.GetPosition(canvas) - start;
             if (!dragging && Math.Abs(moved.X) < 5) return;
             dragging = true;
-            delta = SnapDelta(model, row, edge, TimeSpan.FromHours(moved.X / pixelsPerHour), pixelsPerHour, out nudging);
+            var insert = e.KeyModifiers.HasFlag(KeyModifiers.Shift); var free = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
+            var requested = TimeSpan.FromHours(moved.X / pixelsPerHour);
+            SnapNote note = default;
+            if (insert) delta = SnapDelta(model, row, edge, requested, pixelsPerHour, out nudging, insert: true);
+            else { nudging = false; delta = ClampToDay(row, edge, Magnet(model, row, edge, requested, pixelsPerHour, free, out note)); note = note with { Overlap = OverlapOf(model, row, edge, delta) }; }
             RestoreNeighbours();
             var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero);
             var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
             Canvas.SetLeft(card, oldLeft + (edge <= 0 ? delta.TotalHours * pixelsPerHour : 0));
             card.Width = Math.Max(ReviewViews.MinimumBlockWidth, (until - from).TotalHours * pixelsPerHour - ReviewViews.BlockGap);
             card.Opacity = .75;
+            ShowSnap(canvas, model, card, row, pixelsPerHour, insert ? default : note);
             if (nudging)
             {
                 try
@@ -75,11 +80,15 @@ public static class TimelineGestures
             if (origin is null) return;
             var commit = dragging && delta != TimeSpan.Zero;
             var change = delta; var mode = edge; var push = nudging; var select = !dragging; var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-            RestoreNeighbours();
+            RestoreNeighbours(); ClearSnap(canvas);
             origin = null; dragging = false; e.Pointer.Capture(null); card.Opacity = 1;
             Canvas.SetLeft(card, oldLeft); card.Width = oldWidth;
-            if (commit) model.DragEntry(row, row.From + (mode <= 0 ? change : TimeSpan.Zero),
-                row.To + (mode >= 0 ? change : TimeSpan.Zero), push);
+            if (commit)
+            {
+                var newFrom = row.From + (mode <= 0 ? change : TimeSpan.Zero); var newTo = row.To + (mode >= 0 ? change : TimeSpan.Zero);
+                // A drag may now land on other blocks and share their hours; only Shift (insert) keeps the neighbours clear.
+                if (shift) model.DragEntry(row, newFrom, newTo, push); else model.MoveEntry(row, newFrom, newTo);
+            }
             else if (select) model.SelectBlock(new[] { row }, shift);
             model.EndTimelineGesture();
             e.Handled = true;
@@ -89,7 +98,7 @@ public static class TimelineGestures
         {
             // Context menus can release capture without a left-button gesture.
             if (origin is null) return;
-            RestoreNeighbours();
+            RestoreNeighbours(); ClearSnap(canvas);
             origin = null; dragging = false; card.Opacity = 1;
             Canvas.SetLeft(card, oldLeft); card.Width = oldWidth;
             model.EndTimelineGesture();
@@ -128,10 +137,96 @@ public static class TimelineGestures
         var high = edge >= 0 ? row.Day.AddDays(1) - row.To : (row.To - minimum) - row.From;
         return delta < low ? low : delta > high ? high : delta;
     }
-    public static TimeSpan SnapDelta(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour, out bool nudge)
+    public static TimeSpan SnapDelta(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour, out bool nudge, bool insert = false, bool free = false)
     {
-        var snapped = Snap(model, row, edge, requested, pixelsPerHour, out nudge);
-        return ClampToDay(row, edge, snapped);
+        if (insert) { var snapped = Snap(model, row, edge, requested, pixelsPerHour, out nudge); return ClampToDay(row, edge, snapped); }
+        nudge = false; return ClampToDay(row, edge, Magnet(model, row, edge, requested, pixelsPerHour, free, out _));
+    }
+
+    /// <summary>How far an edge pulls, in screen pixels either side of a neighbour's edge, before a drag is free to overlap.</summary>
+    public const double MagnetPixels = 10;
+    /// <summary>What the magnet did: where it snapped (the seam), and how much the block now shares with others.</summary>
+    public readonly record struct SnapNote(bool Snapped, DateTime At, TimeSpan Overlap);
+
+    /// <summary>
+    /// A drag with a magnet: the edge being moved is pulled flush to the nearest edge of another block (or to now) when it is within <see cref="MagnetPixels"/>,
+    /// and otherwise goes where the pointer is, to the 5 minutes, or the minute with <paramref name="free"/> (Alt). Passing through a neighbour is allowed, so
+    /// blocks may overlap; only the block being recorded stops a drag. Nothing is pushed.
+    /// </summary>
+    public static TimeSpan Magnet(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour, bool free, out SnapNote note)
+    {
+        note = default;
+        var others = model.Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero).Select(s => (Start: s.From, End: s.To)).ToList();
+        (DateTime Start, DateTime End)? running = model.Engine.Active is { } active && model.Engine.Now > active.Start ? (active.Start, model.Engine.Now) : null;
+        bool Legal(TimeSpan delta)
+        {
+            var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero); var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
+            if (from < row.Day || until > row.Day.AddDays(1) || (until - from).TotalSeconds < 3) return false;
+            if (edge != 0 && until - from < TimeSpan.FromMinutes(1)) return false;
+            return running is not { } r || !(r.Start < until && r.End > from);
+        }
+        if (!free)
+        {
+            var candidates = new List<(TimeSpan Delta, DateTime At)>();
+            foreach (var other in others.Concat(running is { } run ? new (DateTime Start, DateTime End)[] { run } : Array.Empty<(DateTime Start, DateTime End)>()))
+            {
+                // Starts are stored in whole seconds, so a fractional end is rounded up and never leaves a sliver of overlap.
+                if (edge <= 0) { var end = new DateTime(((other.End.Ticks + TimeSpan.TicksPerSecond - 1) / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond, other.End.Kind); candidates.Add((end - row.From, end)); }
+                if (edge >= 0) candidates.Add((LastDeltaBefore(row, edge, other.Start), other.Start));
+            }
+            // Ending something at this moment, on today.
+            if (edge >= 0 && model.Engine.Now.Date == row.Day) candidates.Add((LastDeltaBefore(row, edge, model.Engine.Now), model.Engine.Now));
+            foreach (var candidate in candidates.OrderBy(c => Math.Abs((c.Delta - requested).TotalHours)))
+            {
+                if (Math.Abs((candidate.Delta - requested).TotalHours * pixelsPerHour) > MagnetPixels) break;
+                if (!Legal(candidate.Delta)) continue;
+                note = new(true, candidate.At, TimeSpan.Zero); return candidate.Delta;
+            }
+        }
+        var step = free ? 1.0 : 5.0;
+        var grid = TimeSpan.FromMinutes(Math.Round(requested.TotalMinutes / step) * step);
+        if (running is { } wall)
+        {
+            // The block being recorded is the one thing nothing may run into: stop at it.
+            if (row.To <= wall.Start) { var limit = LastDeltaBefore(row, edge, wall.Start); if (grid > limit) grid = limit; }
+            else if (row.From >= wall.End && edge <= 0) { var floor = new DateTime(((wall.End.Ticks + TimeSpan.TicksPerSecond - 1) / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond) - row.From; if (grid < floor) grid = floor; }
+        }
+        return grid;
+    }
+    /// <summary>The most this block would share with any other block after a drag of <paramref name="delta"/>, for the chip that says so.</summary>
+    public static TimeSpan OverlapOf(TimerModel model, SessionRow row, int edge, TimeSpan delta)
+    {
+        var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero); var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
+        var most = TimeSpan.Zero;
+        foreach (var other in model.Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero))
+        {
+            var share = (until < other.To ? until : other.To) - (from > other.From ? from : other.From);
+            if (share > most) most = share;
+        }
+        return most;
+    }
+    private const string SnapLineName = "TimelineSnapLine", SnapChipName = "TimelineSnapChip";
+    private static void ClearSnap(Canvas canvas)
+    { foreach (var item in canvas.Children.Where(c => c.Name is SnapLineName or SnapChipName).ToList()) canvas.Children.Remove(item); }
+    /// <summary>An accent line at the seam a drag has snapped to, and a chip saying so, or how much the block now overlaps.</summary>
+    private static void ShowSnap(Canvas canvas, TimerModel model, Border card, SessionRow row, double pixelsPerHour, SnapNote note)
+    {
+        ClearSnap(canvas);
+        var text = note.Overlap > TimeSpan.FromSeconds(30) ? $"Overlaps {model.Format(note.Overlap)}" : note.Snapped ? $"Flush · {note.At:HH:mm}" : null;
+        if (text is null) return;
+        var top = Canvas.GetTop(card);
+        double x;
+        if (note.Snapped) x = ReviewViews.TimelineGutter + (note.At - row.Day).TotalHours * pixelsPerHour;
+        else x = Canvas.GetLeft(card) + card.Width / 2;
+        if (note.Snapped)
+        {
+            var line = new Border { Name = SnapLineName, Width = 3, Height = card.Height + 16, CornerRadius = new CornerRadius(1.5), IsHitTestVisible = false, ZIndex = 12 };
+            line.Bind(Border.BackgroundProperty, line.GetResourceObservable("Accent")); Canvas.SetLeft(line, x - 1.5); Canvas.SetTop(line, top - 8); canvas.Children.Add(line);
+        }
+        var label = new TextBlock { Text = text, FontSize = 11.5, FontWeight = Avalonia.Media.FontWeight.SemiBold };
+        var chip = new Border { Name = SnapChipName, Child = label, Padding = new Thickness(9, 3), CornerRadius = new CornerRadius(9), IsHitTestVisible = false, ZIndex = 13 };
+        chip.Bind(Border.BackgroundProperty, chip.GetResourceObservable("Porcelain")); chip.Bind(Border.BoxShadowProperty, chip.GetResourceObservable("ShadowPopup"));
+        chip.Measure(Size.Infinity); Canvas.SetLeft(chip, Math.Max(2, x - chip.DesiredSize.Width / 2)); Canvas.SetTop(chip, Math.Max(2, top - 28)); canvas.Children.Add(chip);
     }
     private static TimeSpan Snap(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour, out bool nudge)
     {

@@ -196,10 +196,10 @@ public sealed class TweakTests
     {
         var model = CopyModel(out var engine);
         model.CopyBlocks(engine.Sessions.ToList());
-        Assert.False(model.PasteBlocks(new DateTime(2026, 10, 14, 9, 15, 0))); // Lands on the existing 09:00 block.
-        Assert.Equal(2, engine.Sessions.Count); Assert.NotNull(model.EditError);
+        Assert.True(model.PasteBlocks(new DateTime(2026, 10, 14, 9, 15, 0))); // Lands on the existing 09:00 block: time may overlap, so it is accepted.
+        Assert.Equal(4, engine.Sessions.Count); Assert.True(model.UndoEdit()); Assert.Equal(2, engine.Sessions.Count);
         Assert.False(model.PasteBlocks(new DateTime(2026, 10, 14, 23, 30, 0))); // Runs past midnight.
-        Assert.Equal(2, engine.Sessions.Count);
+        Assert.Equal(2, engine.Sessions.Count); Assert.NotNull(model.EditError);
     }
 
     [Fact]
@@ -213,11 +213,12 @@ public sealed class TweakTests
     }
 
     [Fact]
-    public void CtrlVWithoutAPointerPastesStraightAfterTheLastBlockOfTheDay()
+    public void CtrlVWithoutAPointerPastesAfterTheSelectedBlockElseAtTheDaysStart_NeverAfterTheLastBlock()
     {
         var model = CopyModel(out var engine);
         model.CopyBlocks(new[] { engine.Sessions[0] });
-        Assert.Equal(new DateTime(2026, 10, 14, 10, 45, 0), model.DefaultPasteTime());
+        Assert.NotEqual(new DateTime(2026, 10, 14, 10, 45, 0), model.DefaultPasteTime()); // The last block's end is no longer the fallback.
+        model.SelectBlock(new[] { engine.Sessions[0] }, false); Assert.Equal(engine.Sessions[0].To, model.DefaultPasteTime()); model.ClearSelection();
         model.PasteTime = new DateTime(2026, 10, 14, 15, 0, 0);
         Assert.Equal(new DateTime(2026, 10, 14, 15, 0, 0), model.DefaultPasteTime());
     }
