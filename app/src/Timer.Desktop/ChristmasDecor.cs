@@ -9,6 +9,15 @@ namespace Timer.Desktop;
 /// <summary>What the lights follow: the pill's own state.</summary>
 public enum DecorState { Idle, Recording, Break }
 
+/// <summary>
+/// Where the card sits inside the decoration and how big the decoration is drawn: the room kept round the card, the card's corner radius and a scale (1 on the pill, smaller
+/// round the dashboard sidebar's clock display, which is a small card with little room round it).
+/// </summary>
+public readonly record struct DecorFrame(double Room, double Radius, double Scale)
+{
+    public static readonly DecorFrame Pill = new(Ui.ShadowMargin, PillWindow.PillRadius, 1);
+}
+
 /// <summary>A point on a rounded rectangle, walked clockwise from the start of the top edge, with the direction of travel there.</summary>
 public static class RoundedRing
 {
@@ -41,10 +50,13 @@ public sealed class ChristmasDecor : Control
     public enum Layers { Garland, Lights }
     /// <summary>The bulb ring sits this far outside the card, the garland a little nearer.</summary>
     public const double BulbRing = 8, GarlandRing = 4, BulbSpacing = 30, NeedleSpacing = 11;
-    public const double BulbSpeed = 1.4;
+    public const double BulbSpeed = 0.75;
     private static readonly Stopwatch Clock = Stopwatch.StartNew();
 
     public Layers Layer { get; }
+    private DecorFrame frame = DecorFrame.Pill;
+    /// <summary>Where the card is and how big to draw; the pill's by default.</summary>
+    public DecorFrame Frame { get => frame; set { if (value == frame) return; frame = value; InvalidateVisual(); } }
     private bool active, dark; private DecorState state;
     private DispatcherTimer? timer;
     private readonly ViewActivity activity;
@@ -106,13 +118,13 @@ public sealed class ChristmasDecor : Control
     };
 
     /// <summary>Where the card is inside this control: the window keeps <see cref="Ui.ShadowMargin"/> round it.</summary>
-    public static Rect CardIn(Size size) => new(Ui.ShadowMargin, Ui.ShadowMargin, Math.Max(0, size.Width - 2 * Ui.ShadowMargin), Math.Max(0, size.Height - 2 * Ui.ShadowMargin));
+    public static Rect CardIn(Size size, double room = Ui.ShadowMargin) => new(room, room, Math.Max(0, size.Width - 2 * room), Math.Max(0, size.Height - 2 * room));
 
     /// <summary>The bulbs for a card of this size, with their places in this control's own coordinates.</summary>
-    public static IReadOnlyList<Bulb> BulbsFor(Size size, DecorState state)
+    public static IReadOnlyList<Bulb> BulbsFor(Size size, DecorState state, DecorFrame? within = null)
     {
-        var card = CardIn(size); var d = BulbRing; double w = card.Width + 2 * d, h = card.Height + 2 * d, r = PillWindow.PillRadius + d;
-        var n = Math.Max(1, (int)Math.Round(RoundedRing.Length(w, h, r) / BulbSpacing)); var list = new List<Bulb>(n);
+        var f = within ?? DecorFrame.Pill; var card = CardIn(size, f.Room); var d = BulbRing * f.Scale; double w = card.Width + 2 * d, h = card.Height + 2 * d, r = f.Radius + d;
+        var n = Math.Max(1, (int)Math.Round(RoundedRing.Length(w, h, r) / (BulbSpacing * f.Scale))); var list = new List<Bulb>(n);
         for (var i = 0; i < n; i++)
         {
             var p = RoundedRing.At((i + .5) * RoundedRing.Length(w, h, r) / n, w, h, r);
@@ -125,10 +137,10 @@ public sealed class ChristmasDecor : Control
 
     // ---- the garland
     private readonly record struct Needle(double X, double Y, double Angle, int Shade);
-    private static IReadOnlyList<Needle> NeedlesFor(Size size, out IReadOnlyList<Point> berries)
+    private static IReadOnlyList<Needle> NeedlesFor(Size size, DecorFrame f, out IReadOnlyList<Point> berries)
     {
-        var card = CardIn(size); var d = GarlandRing; double w = card.Width + 2 * d, h = card.Height + 2 * d, r = PillWindow.PillRadius + d;
-        var length = RoundedRing.Length(w, h, r); var n = Math.Max(1, (int)Math.Round(length / NeedleSpacing));
+        var card = CardIn(size, f.Room); var d = GarlandRing * f.Scale; double w = card.Width + 2 * d, h = card.Height + 2 * d, r = f.Radius + d;
+        var length = RoundedRing.Length(w, h, r); var n = Math.Max(1, (int)Math.Round(length / (NeedleSpacing * f.Scale)));
         var needles = new List<Needle>(2 * n); var berryList = new List<Point>();
         for (var i = 0; i < n; i++)
         {
@@ -136,10 +148,10 @@ public sealed class ChristmasDecor : Control
             double angle = Math.Atan2(p.Ty, p.Tx) * 180 / Math.PI, nx = p.Ty, ny = -p.Tx;
             for (var k = 0; k < 2; k++)
             {
-                var out_ = k == 0 ? 1.5 : -1.5;
+                var out_ = (k == 0 ? 1.5 : -1.5) * f.Scale;
                 needles.Add(new Needle(card.X - d + p.X + nx * out_, card.Y - d + p.Y + ny * out_, angle + (k == 0 ? -42 : 42) + (i * 5 % 9) - 4, (i + k) % 3));
             }
-            if (i % 7 == 3) berryList.Add(new Point(card.X - d + p.X + nx * 3, card.Y - d + p.Y + ny * 3));
+            if (i % 7 == 3) berryList.Add(new Point(card.X - d + p.X + nx * 3 * f.Scale, card.Y - d + p.Y + ny * 3 * f.Scale));
         }
         berries = berryList; return needles;
     }
@@ -160,7 +172,7 @@ public sealed class ChristmasDecor : Control
     private static readonly IPen BowCrease = new Pen(new SolidColorBrush(Color.FromArgb(153, 0x8A, 0x14, 0x26)), 1.2);
     private const double BowWidth = 46, BowHeight = 38;
     /// <summary>The bow sits on the card's top edge, near the left end (nearer in on the full pill than on the compact one, which has less edge).</summary>
-    public static Rect BowFor(Size size, bool compact) { var card = CardIn(size); return new Rect(card.X + (compact ? 40 : 64), card.Y - 24, BowWidth, BowHeight); }
+    public static Rect BowFor(Size size, bool compact, DecorFrame? within = null) { var f = within ?? DecorFrame.Pill; var card = CardIn(size, f.Room); return new Rect(card.X + (compact ? 40 : 64) * f.Scale, card.Y - 24 * f.Scale, BowWidth * f.Scale, BowHeight * f.Scale); }
 
     // ---- the lights' timer
     private void UpdateTimer()
@@ -179,26 +191,26 @@ public sealed class ChristmasDecor : Control
     public override void Render(DrawingContext context)
     {
         base.Render(context);
-        if (!active || Bounds.Width < 2 * Ui.ShadowMargin + 20 || Bounds.Height < 2 * Ui.ShadowMargin + 20) return;
-        var size = Bounds.Size; var card = CardIn(size);
+        if (!active || Bounds.Width < 2 * frame.Room + 20 || Bounds.Height < 2 * frame.Room + 20) return;
+        var size = Bounds.Size; var card = CardIn(size, frame.Room);
         if (Layer == Layers.Garland) DrawGarland(context, size, card); else DrawLights(context, size, card);
     }
 
     private void DrawGarland(DrawingContext context, Size size, Rect card)
     {
-        var d = BulbRing; var wire = new Rect(card.X - d, card.Y - d, card.Width + 2 * d, card.Height + 2 * d);
-        context.DrawRectangle(null, WirePen, wire, PillWindow.PillRadius + d, PillWindow.PillRadius + d);
+        var d = BulbRing * frame.Scale; var wire = new Rect(card.X - d, card.Y - d, card.Width + 2 * d, card.Height + 2 * d);
+        context.DrawRectangle(null, WirePen, wire, frame.Radius + d, frame.Radius + d);
         var greens = dark ? DarkGreens : LightGreens;
-        var needles = NeedlesFor(size, out var berries);
+        var needles = NeedlesFor(size, frame, out var berries);
         foreach (var n in needles)
         {
-            using (context.PushTransform(Matrix.CreateRotation(n.Angle * Math.PI / 180) * Matrix.CreateTranslation(n.X, n.Y)))
+            using (context.PushTransform(Matrix.CreateScale(frame.Scale, frame.Scale) * Matrix.CreateRotation(n.Angle * Math.PI / 180) * Matrix.CreateTranslation(n.X, n.Y)))
             {
                 using (context.PushTransform(Matrix.CreateTranslation(0, 1))) context.DrawGeometry(NeedleShade, null, NeedleShape);
                 context.DrawGeometry(greens[n.Shade], null, NeedleShape);
             }
         }
-        foreach (var b in berries) using (context.PushTransform(Matrix.CreateTranslation(b.X, b.Y))) context.DrawGeometry(BerryBrush, null, BerryShape);
+        foreach (var b in berries) using (context.PushTransform(Matrix.CreateScale(frame.Scale, frame.Scale) * Matrix.CreateTranslation(b.X, b.Y))) context.DrawGeometry(BerryBrush, null, BerryShape);
     }
 
     private static readonly Dictionary<Color, (IBrush Glass, IBrush Glow, IBrush Halo)> BulbBrushes = new();
@@ -219,13 +231,13 @@ public sealed class ChristmasDecor : Control
     private void DrawLights(DrawingContext context, Size size, Rect card)
     {
         var seconds = FixedSeconds ?? Clock.Elapsed.TotalSeconds; var steady = Motion.Reduced;
-        var bulbs = BulbsFor(size, state);
+        var bulbs = BulbsFor(size, state, frame);
         for (var i = 0; i < bulbs.Count; i++)
         {
             var b = bulbs[i]; var brushes = BrushesFor(b.Colour);
             var opacity = steady ? 1 : Twinkle(state, i, seconds);
             using (context.PushOpacity(opacity))
-            using (context.PushTransform(Matrix.CreateRotation(b.Rotation * Math.PI / 180) * Matrix.CreateTranslation(b.X, b.Y)))
+            using (context.PushTransform(Matrix.CreateScale(frame.Scale, frame.Scale) * Matrix.CreateRotation(b.Rotation * Math.PI / 180) * Matrix.CreateTranslation(b.X, b.Y)))
             {
                 context.DrawEllipse(brushes.Halo, null, new Point(0, 8), 12, 12);
                 context.DrawEllipse(brushes.Glow, null, new Point(0, 8), 7, 8);
@@ -233,8 +245,8 @@ public sealed class ChristmasDecor : Control
                 context.DrawGeometry(brushes.Glass, null, GlassShape);
             }
         }
-        var bow = BowFor(size, PillWindow.PillWidth - card.Width > 1);
-        using (context.PushTransform(Matrix.CreateTranslation(bow.X, bow.Y)))
+        var bow = BowFor(size, PillWindow.PillWidth * frame.Scale - card.Width > 1, frame);
+        using (context.PushTransform(Matrix.CreateScale(frame.Scale, frame.Scale) * Matrix.CreateTranslation(bow.X, bow.Y)))
         {
             context.DrawGeometry(BowRed, null, BowLoops);
             context.DrawGeometry(null, BowCrease, BowCreases);
