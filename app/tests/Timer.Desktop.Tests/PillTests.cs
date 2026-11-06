@@ -251,7 +251,7 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void TheSidebarsBreakIsThePillsBreakAtTheEndOfTheTrackingCardBesideThePlayTile()
+    public void TheSidebarsBreakIsThePillsCupAtTheEndOfTheTrackingDisplayBesideThePlayDots()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
         try
@@ -259,10 +259,10 @@ public sealed class PillTests
             double Y(Control c) => c.TranslatePoint(default, window)!.Value.Y;
             var brk = Find<Button>(window, "DashboardBreak");
             Assert.Equal(Y(Find<Button>(window, "SidebarPause")), Y(brk), 1.0); // Level with the play tile, at the card's far end.
-            Assert.NotNull(Find<Border>(window, "SidebarWell")); // The card is the pill's well.
+            Assert.NotNull(Find<Border>(window, "SidebarTrack")); // The card is a second display, as wide as the clock's.
             Assert.True(Y(brk) < Y(Find<Button>(window, "QuitTimer"))); // And not at the foot with Quit timer.
-            var tile = brk.GetVisualDescendants().OfType<Border>().Single(b => b.Width == StatusFace.TileSize); Assert.NotEqual(((Avalonia.Media.ISolidColorBrush)tile.Background!).Color, Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("Break")));
-            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.Equal(255, ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color.A);
+            Assert.False(brk.GetVisualDescendants().OfType<CupGlyph>().Single().On);
+            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.True(brk.GetVisualDescendants().OfType<CupGlyph>().Single().On);
         }
         finally { window.Close(); }
     }

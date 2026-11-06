@@ -45,7 +45,7 @@ public sealed class DashboardShellTests
             model.ToggleAccount("Account one"); Settle(window);
             Assert.Equal("Recording", ToolTip.GetTip(Find<Border>(window, "SidebarStateLight")));
             Assert.StartsWith("Pause", ToolTip.GetTip(Find<Button>(window, "SidebarPause"))?.ToString());
-            Assert.Equal("Account one", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.False(Find<TextBlock>(window, "SidebarWhoStatus").IsVisible);
+            Assert.Equal("Account one · Recording", ToolTip.GetTip(Find<Border>(window, "SidebarWhoName"))?.ToString());
             Click(Find<Button>(window, "SidebarPause")); Assert.False(model.IsTracking);
         }
         finally { window.Close(); }
@@ -63,7 +63,7 @@ public sealed class DashboardShellTests
         finally { window.Close(); }
         var none = new TimerModel(new TrackingEngine(clock: () => Day.AddHours(10)), new Timer.Storage.StoreSettings(new List<Timer.Storage.AccountSettings> { new Timer.Storage.AccountSettings("Account one") with { Hidden = true } }, false, "System", DayOfWeek.Monday));
         none.CompleteSetup(); var bare = new DashboardWindow(none); bare.Show(); Settle(bare);
-        try { Click(Find<Button>(bare, "SidebarPause")); Assert.False(none.IsTracking); Assert.Equal("Choose an account", Find<TextBlock>(bare, "SidebarWhoName").Text); } // Nothing chosen: nothing starts, and the card says what to do.
+        try { Click(Find<Button>(bare, "SidebarPause")); Assert.False(none.IsTracking); Assert.Equal("CHOOSE", Find<SegmentName>(bare, "SidebarAccountName").Text); } // Nothing chosen: nothing starts, and the card says what to do.
         finally { bare.Close(); }
     }
 

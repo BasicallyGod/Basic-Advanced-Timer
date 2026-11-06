@@ -101,16 +101,17 @@ public sealed class Round22Tests
     }
 
     [AvaloniaFact]
-    public void TheTrackingCardsDotKeepsOneLeftEdgeWhateverTheNameIs()
+    public void TheTrackingDisplaysNameKeepsOneLeftEdgeWhateverTheNameIs()
     {
         var model = Model("Al", "A rather long account name that goes on"); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            double Edge() { var dot = Find<Border>(window, "SidebarWell").GetVisualDescendants().OfType<Ellipse>().First(e => e.Width == 9); return LeftOf(window, dot); }
+            double Edge() => LeftOf(window, Find<SegmentName>(window, "SidebarAccountName"));
+            var width = Find<Border>(window, "SidebarTrack").Bounds.Width;
             var idle = Edge(); model.ToggleAccount("Al"); Settle(window); var short1 = Edge();
             model.ToggleAccount("A rather long account name that goes on"); Settle(window); var long1 = Edge();
-            Assert.Equal(short1, long1, 0.01); Assert.Equal(idle, short1, 0.01);
-            var name = Find<TextBlock>(window, "SidebarWhoName"); Assert.True(name.Bounds.Right <= Find<Border>(window, "SidebarWell").Bounds.Width);
+            Assert.Equal(short1, long1, 0.01); Assert.Equal(idle, short1, 0.01); // The name starts at one place whatever it says,
+            Assert.Equal(width, Find<Border>(window, "SidebarTrack").Bounds.Width, 0.01); // and the display never changes width.
         }
         finally { window.Close(); }
     }

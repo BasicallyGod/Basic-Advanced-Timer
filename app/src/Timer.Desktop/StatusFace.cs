@@ -155,7 +155,7 @@ public sealed class StatusFace : StackPanel
         Circle.PointerEntered += (_, _) => { hoverCircle = true; Refresh(); };
         Circle.PointerExited += (_, _) => { hoverCircle = false; Refresh(); };
         SoftTint.WatchKeyboardFocus(Circle, f => { circleFocus = f; Refresh(); });
-        Break = new BreakButton(model, breakName, inDisplay: !sidebar);
+        Break = new BreakButton(model, breakName, inDisplay: true);
         // The accounts button is the same on the pill and the rail: it opens the account list beside the window, and closes it again.
         AccountsButton = Ui.Button("", accountsClick, prefix + "Accounts");
         AccountsButton.Classes.Add("pillBare");
