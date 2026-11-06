@@ -10,7 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
-| Christmas wreath and lights on the pill | PENDING | A Seasonal decorations tick in Settings, Look (off by default) dresses the full and the compact pill with a garland, a bow and a string of lights from 1 December to 6 January. The lights follow the state: four colours twinkling when ready, green and red alternating while recording, amber on a break, steady with less motion asked for. Settings, About, Development has Preview a season so it can be seen on any day. |
+| Christmas wreath and lights on the pill | [338d528](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/338d528) | A Seasonal decorations tick in Settings, Look (off by default) dresses the full and the compact pill with a garland, a bow and a string of lights from 1 December to 6 January. The lights follow the state: four colours twinkling when ready, green and red alternating while recording, amber on a break, steady with less motion asked for. Settings, About, Development has Preview a season so it can be seen on any day. |
 
 ## 5 November 2026
 
