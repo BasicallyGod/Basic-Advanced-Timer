@@ -53,6 +53,9 @@ public sealed class PillWindow : Window
 
     private StatusFace face = null!;
     private Border surface = null!, shadowHost = null!;
+    private ChristmasDecor decorGarland = null!, decorLights = null!;
+    /// <summary>The garland and lights, so tests can read them.</summary>
+    public ChristmasDecor Garland => decorGarland; public ChristmasDecor Lights => decorLights;
     private Popup panel = new();
     private Popup alertsPanel = new();
     private PillAlertsCard? alertsCard; private Grid? alertsHung;
@@ -130,7 +133,10 @@ public sealed class PillWindow : Window
         surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true, Width = CardWidth, Height = PillHeight, BorderThickness = new Thickness(EdgeThickness) };
         surface.Classes.Add("pillBody");
         shadowHost = Ui.Shadowed(surface, PillRadius);
-        Content = new LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
+        // The Christmas garland sits behind the card and the lights and bow over its edge, in the room the window keeps round the card.
+        decorGarland = new ChristmasDecor(ChristmasDecor.Layers.Garland); decorLights = new ChristmasDecor(ChristmasDecor.Layers.Lights);
+        var stack = new Grid { Background = Brushes.Transparent }; stack.Children.Add(decorGarland); stack.Children.Add(shadowHost); stack.Children.Add(decorLights);
+        Content = new LayoutTransformControl { LayoutTransform = pillScale, Child = stack };
         panel = new Popup();
         BuildDropdown();
         BuildAlerts();
@@ -383,6 +389,9 @@ public sealed class PillWindow : Window
     {
         face.Refresh();
         var (key, _) = StatusFace.State(model);
+        // The decoration follows the season and the pill's state; a season that is not on hides it altogether.
+        var dressed = model.ActiveSeason?.Id == Seasons.Christmas.Id; var decorState = key == "Break" ? DecorState.Break : key == "Live" ? DecorState.Recording : DecorState.Idle;
+        decorGarland.Configure(dressed, decorState, ActualThemeVariant == ThemeVariant.Dark); decorLights.Configure(dressed, decorState, ActualThemeVariant == ThemeVariant.Dark);
         var stateColour = key == "Idle" ? Colors.Gray : Ui.PillStateColour(this, key);
 
         // A ring and a glow in the state's colour round the pill while it is doing something, and the plain edge and shadow when it is idle.
