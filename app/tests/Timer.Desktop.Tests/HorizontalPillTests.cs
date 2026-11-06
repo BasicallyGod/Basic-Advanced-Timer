@@ -38,37 +38,33 @@ public sealed class HorizontalPillTests
             Assert.Equal(PillWindow.PillWidth, surface.Width); Assert.Equal(PillWindow.PillHeight, surface.Height); Assert.Equal(PillWindow.PillRadius, surface.CornerRadius.TopLeft);
             Assert.Equal((PillWindow.PillWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.WindowWidthNow, 0.5); Assert.Equal((PillWindow.PillHeight + 2 * Ui.ShadowMargin) * pill.Scale, pill.WindowHeightNow, 0.5);
             double X(Control c) => c.TranslatePoint(default, surface)!.Value.X; double Y(Control c) => c.TranslatePoint(default, surface)!.Value.Y;
-            var lights = Find<Border>(pill, "PillStateLight"); var clock = Find<Button>(pill, "PillDashboard"); var well = Find<Border>(pill, "PillWell");
+            var lights = Find<Border>(pill, "PillStateLight"); var clock = Find<Button>(pill, "PillDashboard");
             var primary = Find<Button>(pill, "PillPause"); var accounts = pill.AccountsButton; var brk = Find<Button>(pill, "PillBreak");
-            Assert.True(X(lights) < X(clock)); Assert.True(X(clock) < X(primary)); Assert.True(X(primary) < X(accounts)); Assert.True(X(accounts) < X(brk)); // Left to right.
-            // The primary control and the account share the well, 4 pixels in from its edge and 2 apart, the well as tall as the two tiles and their room.
-            Assert.Equal(2 * StatusFace.WellPadding + StatusFace.TileSize, well.Bounds.Height, 0.5);
-            Assert.Equal(StatusFace.WellPadding, Find<Border>(pill, "PillPrimaryTile").TranslatePoint(default, well)!.Value.X, 0.5);
-            // Everything is centred on the card's height, and the break is 14 pixels from the card's end with no spare room before it.
-            Assert.True(Math.Abs(Y(well) + well.Bounds.Height / 2 - surface.Bounds.Height / 2) <= 1);
-            var breakTile = brk.GetVisualDescendants().OfType<Border>().First(b => b.Width == StatusFace.TileSize);
-            var end = surface.Bounds.Width - (X(breakTile) + breakTile.Bounds.Width);
-            Assert.InRange(end, PillWindow.InsetRight - 1.5, PillWindow.InsetRight + 0.5);
-            Assert.InRange(X(Find<Border>(pill, "PillDisplay")), PillWindow.InsetLeft - 3, PillWindow.InsetLeft + 1); Assert.InRange(X(lights), PillWindow.InsetLeft + StatusFace.DisplayPadding - 3, PillWindow.InsetLeft + StatusFace.DisplayPadding + 1); // The display starts at the inset, the LED a padding in.
-            var gapBeforeBreak = X(breakTile) - (X(well) + well.Bounds.Width); Assert.InRange(gapBeforeBreak, 8, 16);
+            Assert.True(X(lights) < X(clock)); Assert.True(X(clock) < X(primary)); Assert.True(X(primary) < X(accounts)); Assert.True(X(accounts) < X(brk)); // Left to right, all inside the one display.
+            var display = Find<Border>(pill, "PillDisplay");
+            foreach (var zone in new Control[] { primary, accounts, brk }) Assert.True(zone.GetVisualAncestors().Contains(display));
+            // Everything is centred on the card's height, and the bezel is the same all round.
+            Assert.True(Math.Abs(Y(display) + display.Bounds.Height / 2 - surface.Bounds.Height / 2) <= 1);
+            Assert.InRange(X(display), PillWindow.InsetLeft - 3, PillWindow.InsetLeft + 1);
+            Assert.InRange(surface.Bounds.Width - (X(display) + display.Bounds.Width), PillWindow.InsetRight - 3, PillWindow.InsetRight + 1);
         }
         finally { pill.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheAccountsBoxIsADotAndAChevronAndTheNameIsItsTooltip()
+    public void TheAccountsBoxIsTheNameInSegmentsAndTheFullNameIsItsTooltip()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
         {
             model.ToggleAccount("Account two"); Settle(pill);
-            // The account's box is only the state dot and a chevron: the name is its tooltip and the list, so the pill stays narrow whatever the name.
-            var tile = Find<Border>(pill, "PillAccountSelector");
-            Assert.Empty(tile.GetVisualDescendants().OfType<TextBlock>()); Assert.Equal(StatusFace.SelectorWidth, tile.Bounds.Width, 0.5);
+            // The account's box is its name in sixteen segments: six cells wide whatever the name, with the full name as its tooltip and the list it opens.
+            var name = Find<SegmentName>(pill, "PillAccountName");
+            Assert.Equal("ACCOUNT TWO", name.Text); Assert.Equal(StatusFace.NameZone, pill.AccountsButton.Bounds.Width, 0.5);
             Assert.Equal("Account two", ToolTip.GetTip(pill.AccountsButton)?.ToString());
             model.ToggleAccount(LongName); Settle(pill);
             Assert.Equal(LongName, ToolTip.GetTip(pill.AccountsButton)?.ToString());
-            Assert.Equal(StatusFace.SelectorWidth, tile.Bounds.Width, 0.5); Assert.Equal(PillWindow.PillWidth, Find<Border>(pill, "PillSurface").Bounds.Width, 0.5); // The pill keeps its size.
+            Assert.Equal(StatusFace.NameZone, pill.AccountsButton.Bounds.Width, 0.5); Assert.Equal(PillWindow.PillWidth, Find<Border>(pill, "PillSurface").Bounds.Width, 0.5); // The pill keeps its size.
             Assert.Contains(LongName, Avalonia.Automation.AutomationProperties.GetName(pill.AccountsButton)); // And says the full name to a screen reader.
         }
         finally { pill.Close(); }
@@ -102,7 +98,7 @@ public sealed class HorizontalPillTests
             Click(Find<Button>(pill, "PillPause")); Assert.False(model.IsTracking);
             Click(Find<Button>(pill, "PillPause")); Assert.True(model.IsTracking);
             Click(Find<Button>(pill, "PillBreak")); Assert.True(model.IsOnBreak); Click(Find<Button>(pill, "PillBreak")); Assert.False(model.IsOnBreak);
-            Assert.Contains("AO", Find<Border>(pill, "PillPrimaryTile").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+            Assert.Equal("ACCOUNT ONE", Find<SegmentName>(pill, "PillAccountName").Text);
         }
         finally { pill.Close(); }
     }

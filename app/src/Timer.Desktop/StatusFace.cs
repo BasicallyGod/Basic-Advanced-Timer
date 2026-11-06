@@ -4,6 +4,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using Timer.Core;
 
 namespace Timer.Desktop;
@@ -79,7 +80,12 @@ public sealed class StatusFace : StackPanel
     /// <summary>The display window is as tall as the well beside it, with its digits 28 tall and the count's 15; the count's column is 24 wide.</summary>
     public const double DisplayHeight = 52, CountDigitHeight = 15, CountColumn = 24, DisplayPadding = 10, DividerGap = 9;
     /// <summary>The window's width, which is one size whatever the time or the count: padding, the LED, a divider, the clock, a divider and the count's column.</summary>
-    public static double DisplayWidth => 2 * DisplayPadding + 6 + 2 * (2 * DividerGap + 1) + SegmentClock.Width + CountColumn;
+    public static double LeftWidth => 2 * DisplayPadding + 6 + 2 * (2 * DividerGap + DottedDivider.ColumnWidth) + SegmentClock.Width + CountColumn;
+    /// <summary>The pill's window continues past the count: a divider, then the play and pause zone, the account's name and the break.</summary>
+    public const double TransportZone = 36, NameZone = 90, BreakZone = 36;
+    public static double DisplayWidth => LeftWidth - DisplayPadding + (2 * DividerGap + DottedDivider.ColumnWidth) + TransportZone + NameZone + BreakZone + 6;
+    /// <summary>The window of the sidebar and the compact pill, which stop at the count.</summary>
+    public static double ShortDisplayWidth => LeftWidth;
     private readonly Ellipse selectorDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
     private readonly Chevron selectorChevron = new() { VerticalAlignment = VerticalAlignment.Center };
     private Border selectorTile = null!;
@@ -96,11 +102,17 @@ public sealed class StatusFace : StackPanel
     /// <summary>The alert count's two digits.</summary>
     public SegmentRun AlertCountDigits => alertCountRun;
     /// <summary>Hides the play key, account box and break so the pill is only its display (the compact pill). Not for the sidebar.</summary>
-    public void SetCompact(bool compact) { if (Sidebar) return; well.IsVisible = !compact; Break.IsVisible = !compact; }
+    public void SetCompact(bool compact) { if (Sidebar) return; displayBox.Padding = new Thickness(DisplayPadding, 0, compact ? DisplayPadding : 6, 0); transportDivider!.IsVisible = !compact; Circle.IsVisible = !compact; AccountsButton.IsVisible = !compact; Break.IsVisible = !compact; }
     public Button ClockButton { get; }
     /// <summary>The lights as a button that opens the pill's alerts; null on the sidebar.</summary>
     public Button? AlertsButton { get; }
     public Button Circle { get; }
+    /// <summary>The pill's dot-matrix play or pause symbol, the account's sixteen-segment name and the cup (null on the sidebar).</summary>
+    public TransportGlyph? Transport { get; private set; }
+    public SegmentName? NameRun { get; private set; }
+    public CupGlyph? Cup { get; private set; }
+    private DottedDivider? transportDivider;
+    private bool wasTracking; private string? scrolledFor;
     public Button AccountsButton { get; }
     public BreakButton Break { get; }
     private bool accountsOpen, hoverAccounts; private double accountsAmount;
@@ -112,14 +124,13 @@ public sealed class StatusFace : StackPanel
     {
         this.model = model; this.clockTip = clockTip; Sidebar = sidebar;
         segmentClock = new SegmentClock(); clock = segmentClock;
-        Spacing = 12; HorizontalAlignment = HorizontalAlignment.Center; if (sidebar) { Spacing = 6; HorizontalAlignment = HorizontalAlignment.Stretch; } else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
+        Spacing = 0; HorizontalAlignment = HorizontalAlignment.Center; if (sidebar) { Spacing = 6; HorizontalAlignment = HorizontalAlignment.Stretch; } else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
         // The state LED is a capsule set into the display, like a segment: an empty groove when idle, inlaid in the state's colour when not.
         stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3.5), VerticalAlignment = VerticalAlignment.Center };
         // The clock opens the dashboard (and collapses it again), as it always has; it is one width whatever the time.
         ClockButton = Ui.Button("", clockClick, prefix + "Dashboard");
-        ClockButton.Classes.Add("pillBare"); ClockButton.Padding = new Thickness(0); ClockButton.Content = (Control)clock; ClockButton.HorizontalAlignment = HorizontalAlignment.Center; ClockButton.VerticalAlignment = VerticalAlignment.Center;
-        ClockButton.PointerEntered += (_, _) => ((Control)clock).Opacity = .8;
-        ClockButton.PointerExited += (_, _) => ((Control)clock).Opacity = 1;
+        ClockButton.Classes.Add("pillBare"); ClockButton.Content = (Control)clock; ClockButton.HorizontalAlignment = HorizontalAlignment.Center; ClockButton.VerticalAlignment = VerticalAlignment.Center;
+        ClockButton.Classes.Add("zone"); ClockButton.Padding = new Thickness(4, 6); ClockButton.Margin = new Thickness(-4, -6);
         ToolTip.SetTip(ClockButton, clockTip); Avalonia.Automation.AutomationProperties.SetName(ClockButton, clockTip);
         // The alert count: a small bell over two segment digits, in the colour of the most urgent thing waiting. Pressing it opens what is waiting (on the pill).
         alertCountRun.Name = prefix + "AlertCount";
@@ -128,11 +139,11 @@ public sealed class StatusFace : StackPanel
         Control countHost;
         if (alertsClick is not null)
         {
-            AlertsButton = Ui.Button("", alertsClick, prefix + "AlertsButton"); AlertsButton.Classes.Add("pillBare"); AlertsButton.Padding = new Thickness(0, 6); AlertsButton.Margin = new Thickness(0, -6);
+            AlertsButton = Ui.Button("", alertsClick, prefix + "AlertsButton"); AlertsButton.Classes.Add("pillBare"); AlertsButton.Classes.Add("zone"); AlertsButton.Padding = new Thickness(3, 6); AlertsButton.Margin = new Thickness(-3, -6);
             AlertsButton.Content = countStack; AlertsButton.VerticalAlignment = VerticalAlignment.Center; AlertsButton.HorizontalContentAlignment = HorizontalAlignment.Center; countHost = AlertsButton;
         }
         else countHost = countStack;
-        Border Divider() { var d = new Border { Width = 1, Height = 28, Margin = new Thickness(DividerGap, 0), VerticalAlignment = VerticalAlignment.Center }; d.Bind(Border.BackgroundProperty, d.GetResourceObservable("DisplayEdge")); return d; }
+        DottedDivider Divider() => new() { Margin = new Thickness(DividerGap, 0), VerticalAlignment = VerticalAlignment.Center };
         var inside = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Spacing = 0 };
         inside.Children.Add(stateLight); inside.Children.Add(Divider()); inside.Children.Add(ClockButton); inside.Children.Add(Divider()); inside.Children.Add(countHost);
         displayBox = new Border { Name = prefix + "Display", Height = DisplayHeight, CornerRadius = new CornerRadius(14), Padding = new Thickness(DisplayPadding, 0), Child = inside, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -147,7 +158,7 @@ public sealed class StatusFace : StackPanel
         Circle.PointerEntered += (_, _) => { hoverCircle = true; Refresh(); };
         Circle.PointerExited += (_, _) => { hoverCircle = false; Refresh(); };
         SoftTint.WatchKeyboardFocus(Circle, f => { circleFocus = f; Refresh(); });
-        Break = new BreakButton(model, breakName);
+        Break = new BreakButton(model, breakName, inDisplay: !sidebar);
         // The accounts button is the same on the pill and the rail: it opens the account list beside the window, and closes it again.
         AccountsButton = Ui.Button("", accountsClick, prefix + "Accounts");
         AccountsButton.Classes.Add("pillBare");
@@ -165,10 +176,15 @@ public sealed class StatusFace : StackPanel
         well.Name = prefix + "Well";
         if (!sidebar)
         {
-            // Along the pill: the display (LED, clock and count), the well (the play tile, then the account), and the break at the end.
-            well.Width = double.NaN; well.Height = TileSize + 2 * WellPadding; well.Margin = default; well.VerticalAlignment = VerticalAlignment.Center;
-            well.Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = WellGap, Children = { Circle, AccountsButton } };
+            // Along the pill the display simply carries on past the count: a divider, the play or pause symbol, the account's name and the cup, each a zone that washes
+            // under the pointer exactly as the clock and the count do.
+            Transport = new TransportGlyph { Colour = ThemeColourOr("Live", "#34D399") };
+            Circle.Content = Transport; Circle.Classes.Add("zone"); Circle.Margin = default; Circle.Padding = new Thickness(0); Circle.Width = TransportZone; Circle.Height = 40; Circle.VerticalAlignment = VerticalAlignment.Center;
+            NameRun = new SegmentName { Name = prefix + "AccountName", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            AccountsButton.Content = NameRun; AccountsButton.Classes.Add("zone"); AccountsButton.Margin = default; AccountsButton.Padding = new Thickness(0); AccountsButton.Width = NameZone; AccountsButton.Height = 40; AccountsButton.VerticalAlignment = VerticalAlignment.Center;
+            AccountsButton.PointerEntered += (_, _) => NameRun.Scroll();
             Break.VerticalAlignment = VerticalAlignment.Center;
+            transportDivider = Divider(); Cup = Break.Cup;
         }
         else
         {
@@ -190,12 +206,16 @@ public sealed class StatusFace : StackPanel
             Break.VerticalAlignment = VerticalAlignment.Center;
         }
         Children.Add(displayBox);
+        if (!sidebar)
+        {
+            displayBox.Padding = new Thickness(DisplayPadding, 0, 6, 0);
+            inside.Children.Add(transportDivider!); inside.Children.Add(Circle); inside.Children.Add(AccountsButton); inside.Children.Add(Break);
+        }
         if (sidebar)
         {
             var track = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 5, Margin = well.Margin } /* the break key clear of the well */; well.Margin = default;
             Grid.SetColumn(Break, 1); track.Children.Add(well); track.Children.Add(Break); Children.Add(track);
         }
-        else { Children.Add(well); Children.Add(Break); }
         ActualThemeVariantChanged += (_, _) => Refresh();
         Refresh();
     }
@@ -318,6 +338,21 @@ public sealed class StatusFace : StackPanel
         Avalonia.Automation.AutomationProperties.SetName(ClockButton, clockTip + ". Working time " + model.ClockText);
         Break.Refresh();
         PaintAccountsTile();
+        if (!Sidebar) RefreshTransport(onBreak, who, shown);
+    }
+
+    // The display's right-hand end: the symbol for what pressing the first zone does, the account's name and (in the cup) the break.
+    private void RefreshTransport(bool onBreak, string? who, string? shown)
+    {
+        var recording = model.IsTracking && !onBreak;
+        Transport!.Colour = ThemeColourOr(SoftTint.IsDark(this) ? "Live" : "LiveText", "#34D399");
+        Transport.Show(recording, instant: !Transport.IsAttachedToVisualTree());
+        var index = shown is null ? -1 : model.Accounts.ToList().FindIndex(a => a.Name == shown);
+        NameRun!.Colour = ThemeColourOr("Ink", "#18233A");
+        NameRun.Text = shown is null ? "CHOOSE" : SegmentName.ForAccount(model.Accounts.FirstOrDefault(a => a.Name == shown)?.Display ?? shown, Math.Max(0, index));
+        // A long name runs along once when recording starts (and again whenever the pointer is over it).
+        if (recording && !wasTracking || (recording && scrolledFor != shown)) NameRun.Scroll();
+        wasTracking = recording; scrolledFor = recording ? shown : null;
     }
 }
 
@@ -331,11 +366,24 @@ public sealed class BreakButton : Button
     private readonly BreakGlyph cup = new() { Mono = false };
     private readonly Border tile = new() { Width = StatusFace.TileSize, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius), Background = Brushes.Transparent };
     private bool hover, focus;
-    public BreakButton(TimerModel model, string name)
+    // Styles written for Button (pillBare, zone) must reach this subclass too.
+    protected override Type StyleKeyOverride => typeof(Button);
+    private readonly CupGlyph? dots;
+    /// <summary>The dot-matrix cup when the break sits in the pill's display (null for the round key).</summary>
+    public CupGlyph? Cup => dots;
+    public BreakButton(TimerModel model, string name, bool inDisplay = false)
     {
         this.model = model; Name = name;
         Click += (_, _) => model.ToggleBreak();
         Classes.Add("pillBare"); StatusFace.MakeRoomForRing(this); HorizontalAlignment = HorizontalAlignment.Center;
+        if (inDisplay)
+        {
+            dots = new CupGlyph(); Classes.Add("zone"); Margin = default; Padding = new Thickness(0); Width = StatusFace.BreakZone; Height = 40; Content = dots;
+            PointerEntered += (_, _) => { hover = true; Refresh(); };
+            PointerExited += (_, _) => { hover = false; Refresh(); };
+            ActualThemeVariantChanged += (_, _) => Refresh();
+            Refresh(); return;
+        }
         // Drawn at its own size, so its line is as thin as the other icons'.
         tile.Child = cup; cup.HorizontalAlignment = HorizontalAlignment.Center; cup.VerticalAlignment = VerticalAlignment.Center;
         Content = tile;
@@ -349,6 +397,12 @@ public sealed class BreakButton : Button
     {
         var onBreak = model.IsOnBreak;
         var orange = Ui.ThemeColour(this, "Break", Color.Parse("#F5A524"));
+        if (dots is not null)
+        {
+            dots.Colour = orange; dots.Show(onBreak, onBreak || hover, instant: !dots.IsAttachedToVisualTree());
+            var dotTip = onBreak ? "End break" + (model.ResumeAccount is { } back ? " and resume " + back : "") : "Start break";
+            ToolTip.SetTip(this, dotTip); Avalonia.Automation.AutomationProperties.SetName(this, dotTip); return;
+        }
         cup.Filled = false;
         if (onBreak)
         {
