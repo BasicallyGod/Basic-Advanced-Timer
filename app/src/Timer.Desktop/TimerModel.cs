@@ -1088,6 +1088,16 @@ public sealed class TimerModel : INotifyPropertyChanged
     /// <summary>Whether the pill is only its display: the state light, the clock and the alert count. Saved as pillcompact=on; the full pill has no line.</summary>
     public bool CompactPill => AppearanceValue(CompactPillLine) == "on";
     public void SetCompactPill(bool on) { if (on == CompactPill) return; SetAppearanceFlag(CompactPillLine, on ? "on" : null, true); Notify(PresentationChange); }
+    // ---- seasonal decorations: a wreath and lights round the pill on holidays
+    private const string SeasonalLine = "seasonal=";
+    /// <summary>Whether seasonal decorations are allowed. Off until chosen, saved as the appearance line seasonal=on; each season then shows only within its own dates.</summary>
+    public bool SeasonalDecorations => AppearanceValue(SeasonalLine) == "on";
+    public void SetSeasonalDecorations(bool on) { if (on == SeasonalDecorations) return; SetAppearanceFlag(SeasonalLine, on ? "on" : null, true); Notify(PresentationChange); }
+    /// <summary>A season chosen to be shown now whatever the date, so each can be tried on any day. Developer only, never saved, and it ends when the app does.</summary>
+    public string? SeasonPreview { get; private set; }
+    public void SetSeasonPreview(string? id) { var chosen = Seasons.Find(id)?.Id; if (chosen == SeasonPreview) return; SeasonPreview = chosen; Notify(PresentationChange); }
+    /// <summary>The season the pill is dressed for: the one being previewed, else the one the calendar is in when decorations are on, else none.</summary>
+    public Season? ActiveSeason => Seasons.Find(SeasonPreview) ?? (SeasonalDecorations ? Seasons.On(Engine.Now.Date) : null);
     public int? PillScalePercent => preferences.PillScale;
     public void SetPillScale(int? percent) { preferences = preferences with { PillScale = percent is { } p ? Math.Clamp(p, 50, 120) : null }; Save(); Notify(PresentationChange); }
     // ---- the pill's alerts: what is waiting, how loud it is allowed to be (Peek: a card opens by itself; Light only: the light and the list; Off), and what has been put away

@@ -109,6 +109,7 @@ public sealed class SettingsView : Grid
             Choice("ShadowsOn", "On", "Soft shadows under the pill and the dashboard", SettingsPictures.Shadows(true), () => model.Shadows, () => model.SetShadows(true)),
             Choice("ShadowsOff", "Off", "Flat, with a hairline", SettingsPictures.Shadows(false), () => !model.Shadows, () => model.SetShadows(false)))));
         stack.Children.Add(Section("Hints", Toggle("Show tooltips", "Short hints on hover. With them off, budget percentages are still in Week overview.", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v))));
+        stack.Children.Add(Section("Seasonal", Toggle("Seasonal decorations", "A wreath and lights round the pill at Christmas, 1 December to 6 January. Off by default.", "SeasonalDecorations", () => model.SeasonalDecorations, v => model.SetSeasonalDecorations(v))));
         return stack;
     }
 
@@ -450,6 +451,15 @@ public sealed class SettingsView : Grid
         fineTimer.Click += (_, _) => { TimerResolution.Request(!TimerResolution.Requested); fineTimer.Content = TimerResolution.Requested ? "Give back the 1 ms timer" : "Ask for a 1 ms timer"; };
         developer.Children.Add(Row("Find the cost", "Draw flat takes every raised and sunk shadow away; pausing the refresh stops routine clock redraws while checkpoint saves, reminder maintenance and important notifications continue. Asking for a 1 ms timer makes Windows tick finely while the app runs (the report names the current tick). Try each on the Timeline for 15 seconds, then copy the report.", Ui.Horizontal(flat, pauseTick, fineTimer)));
         developer.Children.Add(Row("Frame timing", "How long the dashboard's frames take, for judging smoothness. Switch it on, use the page you want to test for a few seconds, then copy the report.", Ui.Horizontal(frameSwitch, frameCopy), frames));
+        // Preview a season: shows one now whatever the date, so each can be tried on any day. Not saved.
+        var seasonNames = new List<string> { "Automatic" }; seasonNames.AddRange(Seasons.All.Select(x => x.Name));
+        var seasonPick = new ComboBox { Name = "SeasonPreview", ItemsSource = seasonNames, Width = 170, Height = 36, MinHeight = 36, FontSize = 13.5 };
+        Avalonia.Automation.AutomationProperties.SetName(seasonPick, "Preview a season");
+        var seasonSyncing = false;
+        void SyncSeason() { seasonSyncing = true; seasonPick.SelectedIndex = model.SeasonPreview is { } id ? 1 + Seasons.All.ToList().FindIndex(x => x.Id == id) : 0; seasonSyncing = false; }
+        seasonPick.SelectionChanged += (_, _) => { if (!seasonSyncing && seasonPick.SelectedIndex >= 0) model.SetSeasonPreview(seasonPick.SelectedIndex == 0 ? null : Seasons.All[seasonPick.SelectedIndex - 1].Id); };
+        syncs.Add(SyncSeason); SyncSeason();
+        developer.Children.Add(Row("Preview a season", "Shows the chosen season on the pill now, whatever the date and whether or not seasonal decorations are on. Not saved.", seasonPick));
         var developerSection = new Border { Name = "DevelopmentSection", Child = developer, IsVisible = model.DeveloperUnlocked, Padding = new Thickness(0, 4) };
         syncs.Add(() => developerSection.IsVisible = model.DeveloperUnlocked);
         stack.Children.Add(developerSection);
