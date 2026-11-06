@@ -244,7 +244,7 @@ public sealed class PillWindow : Window
         if (!peekOpened) return; foldTimer.Start();
     }
     private bool peekOpened;
-    private void OnFold(object? sender, EventArgs e) { foldTimer?.Stop(); if (alertsCard is { View: "card" } card && card.Items.Any(i => i.Kind == AlertKind.BudgetSpent)) return; if (!overList) FoldAlerts(); else foldTimer?.Start(); }
+    private void OnFold(object? sender, EventArgs e) { foldTimer?.Stop(); if (alertsCard is { } card && card.Items.Any(i => i.Kind == AlertKind.BudgetSpent)) return; if (!overList) FoldAlerts(); else foldTimer?.Start(); }
     /// <summary>
     /// Opens the card by itself when something new is waiting (under Peek, with the pill showing and no other list open). What was already waiting, or came while the
     /// dashboard was up, is not shown again; an alert that goes away and comes back (a break stayed on, then asked again) is new.
