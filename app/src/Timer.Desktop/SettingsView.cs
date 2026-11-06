@@ -217,13 +217,16 @@ public sealed class SettingsView : Grid
             else { model.Refuse("Time, like 18:00"); SyncDayStart(); }
         }
         dayStart.LostFocus += (_, _) => CommitDayStart(); dayStart.KeyDown += (_, e) => { if (e.Key == Key.Enter) { CommitDayStart(); e.Handled = true; } };
-        var quick = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 6, LineSpacing = 6 };
-        foreach (var (words, at) in new[] { ("Midnight", TimeSpan.Zero), ("12:00", TimeSpan.FromHours(12)), ("18:00", TimeSpan.FromHours(18)) })
-            quick.Children.Add(Ui.DialogButton(words, () => model.SetDayStart(at), "DayStartQuick_" + at.ToString("hhmm", CultureInfo.InvariantCulture)));
-        var dayControl = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right }; dayControl.Children.Add(dayStart); dayControl.Children.Add(quick);
+        // Three quick choices on the same slider the time format uses, so they take one short line under the words and match the rest of the page.
+        var quickChoices = new[] { ("Midnight", TimeSpan.Zero), ("12:00", TimeSpan.FromHours(12)), ("18:00", TimeSpan.FromHours(18)) };
+        var quickButtons = quickChoices.Select(c => NotesPage.Seg("DayStartQuick_" + c.Item2.ToString("hhmm", CultureInfo.InvariantCulture), c.Item1, model.DayStart == c.Item2, () => model.SetDayStart(c.Item2))).ToList();
+        var quick = new Border { Name = "DayStartQuick", HorizontalAlignment = HorizontalAlignment.Left, Child = Ui.Horizontal(quickButtons.ToArray()) }; quick.Classes.Add("segTrack");
+        void SyncQuick() { for (var i = 0; i < quickChoices.Length; i++) quickButtons[i].Classes.Set("selected", model.DayStart == quickChoices[i].Item2); }
+        syncs.Add(SyncQuick); SyncQuick();
+        dayStart.HorizontalAlignment = HorizontalAlignment.Right; quick.Margin = new Thickness(0, 6, 0, 0); // The quick choices sit under the words, so they never squeeze them.
         syncs.Add(SyncDayStart); SyncDayStart();
         var side = new StackPanel();
-        side.Children.Add(Section("Week", Rows(Row("Week starts on", "The Week overview and the exports begin here.", start), Row("Day starts at", "Where one day ends and the next begins. Leave it at midnight unless you work through it.", dayControl), Row("How time is written", "A 90 minute block reads 01:30, or 1.50h. Exports follow it.", format))));
+        side.Children.Add(Section("Week", Rows(Row("Week starts on", "The Week overview and the exports begin here.", start), Row("Day starts at", "Where one day ends and the next begins. Leave it at midnight unless you work through it.", dayStart, quick), Row("How time is written", "A 90 minute block reads 01:30, or 1.50h. Exports follow it.", format))));
         Ui.Put(grid, left); Ui.Put(grid, side, 1);
         return grid;
     }

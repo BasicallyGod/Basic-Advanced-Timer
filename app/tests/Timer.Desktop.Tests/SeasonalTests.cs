@@ -134,6 +134,40 @@ public sealed class SeasonalTests
         finally { window.Close(); }
     }
 
+
+    [AvaloniaFact]
+    public void TheSidebarsDisplayCarriesTheWreathOnAndFollowsTheState()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var sidebar = window.GetVisualDescendants().OfType<Sidebar>().Single();
+            Assert.False(sidebar.Lights.Active); // Off until chosen.
+            model.SetSeasonalDecorations(true); Settle(window);
+            Assert.True(sidebar.Garland.Active && sidebar.Lights.Active); Assert.Equal(DecorState.Idle, sidebar.Lights.State);
+            // It wraps the clock display, with the room the frame keeps round it, and is smaller than the pill's.
+            var display = sidebar.Face.Display; var box = display.TranslatePoint(default, sidebar.Garland)!.Value;
+            Assert.Equal(Sidebar.DisplayFrame.Room, box.X, 1.5); Assert.Equal(Sidebar.DisplayFrame.Room, box.Y, 1.5);
+            Assert.Equal(display.Bounds.Width + 2 * Sidebar.DisplayFrame.Room, sidebar.Garland.Bounds.Width, 1.5);
+            Assert.True(Sidebar.DisplayFrame.Scale < 1);
+            model.ToggleAccount("Account one"); Settle(window); Assert.Equal(DecorState.Recording, sidebar.Lights.State);
+            model.SetSeasonalDecorations(false); Settle(window); Assert.False(sidebar.Lights.Active);
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void ASmallerFrameDrawsTheBulbsCloserAndSmaller()
+    {
+        var pill = ChristmasDecor.BulbsFor(new Size(406 + 60, 72 + 60), DecorState.Idle);
+        var size = new Size(210 + 2 * Sidebar.DisplayFrame.Room, 52 + 2 * Sidebar.DisplayFrame.Room);
+        var small = ChristmasDecor.BulbsFor(size, DecorState.Idle, Sidebar.DisplayFrame);
+        Assert.InRange(small.Count, 15, 40);
+        var card = ChristmasDecor.CardIn(size, Sidebar.DisplayFrame.Room);
+        foreach (var b in small) { Assert.InRange(b.X, 0, size.Width); Assert.InRange(b.Y, 0, size.Height); Assert.False(b.X > card.X + 1 && b.X < card.Right - 1 && b.Y > card.Y + 1 && b.Y < card.Bottom - 1); }
+        Assert.True(pill.Count > 0);
+    }
+
     [AvaloniaFact]
     public void WritePicturesOfTheDressedPill()
     {
@@ -154,5 +188,24 @@ public sealed class SeasonalTests
                 }
                 finally { pill.Close(); }
             }
+    }
+
+    [AvaloniaFact]
+    public void WritePicturesOfTheDressedSidebar()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            var model = Model(); model.SetTheme(theme); model.SetSeasonalDecorations(true);
+            var window = new DashboardWindow(model); window.Show(); Settle(window);
+            try
+            {
+                var sidebar = window.GetVisualDescendants().OfType<Sidebar>().Single(); sidebar.Lights.FixedSeconds = 1.3;
+                void Shot(string state) { Settle(window); sidebar.Lights.InvalidateVisual(); Settle(window); using var f = window.CaptureRenderedFrame(); f?.Save(Path.Combine(folder, $"christmas-sidebar-{theme}-{state}.png")); }
+                Shot("ready"); model.ToggleAccount("Account one"); Shot("recording"); model.ToggleBreak(); Shot("break");
+            }
+            finally { window.Close(); }
+        }
     }
 }
