@@ -79,6 +79,8 @@ public sealed class StatusFace : StackPanel
     /// <summary>The window's width, which is one size whatever the time or the count: padding, the LED, a divider, the clock, a divider and the count's column.</summary>
     public static double LeftWidth => 2 * DisplayPadding + 6 + 2 * (2 * DividerGap + DottedDivider.ColumnWidth) + SegmentClock.Width + CountColumn;
     /// <summary>The pill's window continues past the count: a divider, then the play and pause zone, the account's name and the break.</summary>
+    /// <summary>The sidebar's display has a second row for the play dots, the name and the cup, under a dotted rule.</summary>
+    public const double SecondRowHeight = 48;
     public const double TransportZone = 36, NameZone = 90, BreakZone = 36;
     public static double DisplayWidth => LeftWidth - DisplayPadding + (2 * DividerGap + DottedDivider.ColumnWidth) + TransportZone + NameZone + BreakZone + 6;
     /// <summary>The window of the sidebar and the compact pill, which stop at the count.</summary>
@@ -127,7 +129,7 @@ public sealed class StatusFace : StackPanel
         // The clock opens the dashboard (and collapses it again), as it always has; it is one width whatever the time.
         ClockButton = Ui.Button("", clockClick, prefix + "Dashboard");
         ClockButton.Classes.Add("pillBare"); ClockButton.Content = (Control)clock; ClockButton.HorizontalAlignment = HorizontalAlignment.Center; ClockButton.VerticalAlignment = VerticalAlignment.Center;
-        ClockButton.Classes.Add("zone"); ClockButton.Padding = new Thickness(4, 6); ClockButton.Margin = new Thickness(-4, -6);
+        ClockButton.Classes.Add("zone"); ClockButton.Padding = new Thickness(3, 6); ClockButton.Margin = new Thickness(-3, -6);
         ToolTip.SetTip(ClockButton, clockTip); Avalonia.Automation.AutomationProperties.SetName(ClockButton, clockTip);
         // The alert count: a small bell over two segment digits, in the colour of the most urgent thing waiting. Pressing it opens what is waiting (on the pill).
         alertCountRun.Name = prefix + "AlertCount";
@@ -188,12 +190,17 @@ public sealed class StatusFace : StackPanel
         }
         else
         {
-            // A second window under the clock's, exactly as wide: play and pause, the account's name (a label: the account list is already below it) and the cup.
+            // The display folds in two: the clock row above, and under a dotted rule play and pause, the account's name (a label: the account list is already below it) and
+            // the cup. Every zone keeps its wash clear of the dividers and of the window's edge.
             nameHost = new Border { Name = prefix + "WhoName", Width = NameZone, Height = 40, Child = NameRun, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
             var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Children = { Circle, Divider(), nameHost, Divider(), Break } };
-            trackBox = new Border { Name = prefix + "Track", Height = DisplayHeight, Width = ShortDisplayWidth, CornerRadius = new CornerRadius(14), Child = strip, HorizontalAlignment = HorizontalAlignment.Center };
-            trackBox.Bind(Border.BackgroundProperty, trackBox.GetResourceObservable("DisplayWell"));
-            Children.Add(trackBox);
+            trackBox = new Border { Name = prefix + "Track", Height = SecondRowHeight, Width = ShortDisplayWidth, Child = strip, HorizontalAlignment = HorizontalAlignment.Center };
+            var rule = new DottedDivider(false, ShortDisplayWidth - 2 * 16) { VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center };
+            var rows = new Grid { RowDefinitions = new RowDefinitions(DisplayHeight + "," + SecondRowHeight) };
+            displayBox.Child = null; inside.Margin = new Thickness(DisplayPadding, 0); displayBox.Padding = default; displayBox.Height = DisplayHeight + SecondRowHeight;
+            Grid.SetRow(trackBox, 1); Grid.SetRow(rule, 1); rule.Margin = new Thickness(0, -1, 0, 0);
+            rows.Children.Add(inside); rows.Children.Add(trackBox); rows.Children.Add(rule);
+            displayBox.Child = rows;
         }
         ActualThemeVariantChanged += (_, _) => Refresh();
         Refresh();
@@ -261,7 +268,6 @@ public sealed class StatusFace : StackPanel
         Avalonia.Automation.AutomationProperties.SetName(stateLight, stateName); ToolTip.SetTip(stateLight, stateName);
         var well0 = ThemeColourOr("DisplayWell", "#101317"); var edge = ThemeColourOr("DisplayEdge", "#12FFFFFF");
         displayBox.BoxShadow = new BoxShadows(new BoxShadow { IsInset = true, OffsetY = 2, Blur = 5, Color = shade }, new[] { new BoxShadow { OffsetY = 1, Color = edge } });
-        if (trackBox is not null) trackBox.BoxShadow = displayBox.BoxShadow;
         // The count takes the colour of the most urgent thing waiting: blue a reminder, amber a budget at 80 per cent or a long break, red a spent budget. It is two digits
         // always (the leading one blank under ten, both blank with nothing waiting), so the display never changes width.
         var alerts = model.PillAlertsMode == "off" ? Array.Empty<AlertItem>() : model.Alerts; var waiting = alerts.Count > 0;
