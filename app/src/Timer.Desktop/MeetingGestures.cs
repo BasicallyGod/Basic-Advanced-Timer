@@ -17,18 +17,19 @@ public static class MeetingGestures
 
     /// <summary>
     /// Where a meeting from <paramref name="start"/> to <paramref name="end"/> ends up when the pointer has moved <paramref name="movedMinutes"/>: the edge it grabbed (-1 the
-    /// start, 1 the end, 0 the whole meeting) lands on the nearest five minutes, never before midnight or after 23:59, and a meeting is never shorter than five minutes. A
+    /// start, 1 the end, 0 the whole meeting) lands on the nearest five minutes within the supplied workday window, and is never shorter than five minutes. A
     /// move of less than half a step changes nothing, so a meeting that sits off the grid is not nudged by a click that wobbled.
     /// </summary>
-    public static (TimeSpan Start, TimeSpan End) Resolve(TimeSpan start, TimeSpan end, int edge, double movedMinutes)
+    public static (TimeSpan Start, TimeSpan End) Resolve(TimeSpan start, TimeSpan end, int edge, double movedMinutes, TimeSpan? earliest = null, TimeSpan? latest = null)
     {
         if (Math.Abs(movedMinutes) < Step / 2.0) return (start, end);
         static TimeSpan Grid(TimeSpan t) => TimeSpan.FromMinutes(Math.Round(t.TotalMinutes / Step) * Step);
         static TimeSpan Clamp(TimeSpan t, TimeSpan low, TimeSpan high) => t < low ? low : t > high ? high : t;
         var delta = TimeSpan.FromMinutes(movedMinutes);
-        if (edge < 0) return (Clamp(Grid(start + delta), TimeSpan.Zero, end - Shortest), end);
-        if (edge > 0) return (start, Clamp(Grid(end + delta), start + Shortest, Last));
-        var length = end - start; var moved = Clamp(Grid(start + delta), TimeSpan.Zero, Last - length);
+        var floor = earliest ?? TimeSpan.Zero; var ceiling = latest ?? Last;
+        if (edge < 0) return (Clamp(Grid(start + delta), floor > end - TimeSpan.FromDays(1) ? floor : end - TimeSpan.FromDays(1), end - Shortest), end);
+        if (edge > 0) return (start, Clamp(Grid(end + delta), start + Shortest, ceiling < start + TimeSpan.FromDays(1) ? ceiling : start + TimeSpan.FromDays(1)));
+        var length = end - start; var moved = Clamp(Grid(start + delta), floor, ceiling - length);
         return (moved, moved + length);
     }
 
@@ -38,6 +39,9 @@ public static class MeetingGestures
     {
         Point? origin = null; var edge = 0; var dragging = false;
         var start = meeting.At!.Value; var end = meeting.End!.Value;
+        var dayOrigin = model.DayBegins(model.SelectedDate);
+        var floor = dayOrigin - meeting.Day.Date; if (start < floor) floor = start;
+        var ceiling = model.DayEnds(model.SelectedDate) - meeting.Day.Date; if (end > ceiling) ceiling = end;
         var oldLeft = Canvas.GetLeft(card); var oldWidth = card.Width; var oldSpan = span?.Text;
         (TimeSpan Start, TimeSpan End) now = (start, end);
         void Restore() { Canvas.SetLeft(card, oldLeft); card.Width = oldWidth; card.Opacity = 1; if (span is not null) span.Text = oldSpan; }
@@ -56,8 +60,8 @@ public static class MeetingGestures
             var moved = e.GetPosition(canvas).X - from.X;
             if (!dragging && Math.Abs(moved) < 5) return;
             dragging = true;
-            now = Resolve(start, end, edge, moved / pixelsPerHour * 60);
-            Canvas.SetLeft(card, ReviewViews.TimelineGutter + now.Start.TotalHours * pixelsPerHour + 1);
+            now = Resolve(start, end, edge, moved / pixelsPerHour * 60, floor, ceiling);
+            Canvas.SetLeft(card, ReviewViews.TimelineGutter + (meeting.Day.Date + now.Start - dayOrigin).TotalHours * pixelsPerHour + 1);
             card.Width = Math.Max(24, (now.End - now.Start).TotalHours * pixelsPerHour - 2); card.Opacity = .75;
             if (span is not null) span.Text = Hm(now.Start) + "–" + Hm(now.End);
             e.Handled = true;

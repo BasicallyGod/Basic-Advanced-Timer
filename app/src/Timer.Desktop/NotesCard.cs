@@ -164,9 +164,9 @@ public sealed class NotesCard : Border
     private void OnNewMeeting(DateTime start)
     {
         model.SetNotesCardShowsMeetings(true); form = Form.Meeting; ResetDraft();
-        var snapped = new TimeSpan(Math.Clamp((int)Math.Round(start.TimeOfDay.TotalMinutes / 15) * 15, 0, 23 * 60 + 45) * TimeSpan.TicksPerMinute);
-        var end = snapped + TimeSpan.FromMinutes(30); if (end >= TimeSpan.FromDays(1)) end = new TimeSpan(23, 59, 0);
-        startText = snapped.ToString(@"hh\:mm"); endText = end.ToString(@"hh\:mm"); DrawForm(true);
+        var snapped = start.Date.AddMinutes(Math.Round(start.TimeOfDay.TotalMinutes / 15) * 15);
+        formDay = snapped.Date;
+        startText = snapped.ToString("HH:mm"); endText = snapped.AddMinutes(30).ToString("HH:mm"); DrawForm(true);
     }
     /// <summary>A pin on the timeline (or a press on the words) selects the note; Details edits it.</summary>
     private void OnEditNote(long id) => model.SelectNote(id);
@@ -239,12 +239,9 @@ public sealed class NotesCard : Border
             {
                 var now = startText;
                 if (now == committedStart) return;
-                if (TimeText.TryParseClock(committedStart, formDay, false, out var before) && TimeText.TryParseClock(now, formDay, false, out var after) && TimeText.TryParseClock(endText, formDay, true, out var until))
+                if (TimeText.TryParseClock(committedStart, formDay, false, out var before) && TimeText.TryParseClock(now, formDay, false, out var after) && TimeText.TryParseClockAfter(endText, before, false, true, out var until))
                 {
                     var moved = until + (after - before);
-                    // A meeting stays inside its day: carried past midnight, the end stops at 23:59.
-                    if (moved >= formDay.Date.AddDays(1)) moved = formDay.Date.AddDays(1).AddMinutes(-1);
-                    if (moved < formDay.Date) moved = formDay.Date;
                     endText = moved.ToString("HH:mm"); end.Text = endText;
                 }
                 committedStart = now;
@@ -289,8 +286,8 @@ public sealed class NotesCard : Border
             ResetDraft(); DrawForm(true); model.Tell(said); return;
         }
         if (!TimeText.TryParseClock(startText, formDay, false, out var start)) { model.Refuse("Start: try 09:30"); return; }
-        if (!TimeText.TryParseClock(endText, formDay, false, out var end)) { model.Refuse("End: try 10:30"); return; }
-        var problem = Notes.AddMeeting(formDay, start.TimeOfDay, end.TimeOfDay, words, draftAccount, draftRepeat);
+        if (!TimeText.TryParseClockAfter(endText, start, false, true, out var end)) { model.Refuse("End: try 10:30"); return; }
+        var problem = Notes.AddMeeting(formDay, start.TimeOfDay, end - formDay.Date, words, draftAccount, draftRepeat);
         if (problem is not null) { model.Refuse(problem); return; }
         ResetDraft(); DrawForm(true); model.Tell("Meeting added");
     }

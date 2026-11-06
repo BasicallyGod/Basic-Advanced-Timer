@@ -211,7 +211,8 @@ public sealed class Round25Tests
             Commit("DetailsMeetingStart", "14:00");
             Assert.Equal(TimeSpan.FromHours(14), model.Notes.Find(id)!.At); Assert.Equal(TimeSpan.FromHours(14.5), model.Notes.Find(id)!.End); // Half an hour long still.
             Commit("DetailsMeetingEnd", "15:00"); Assert.Equal(TimeSpan.FromHours(15), model.Notes.Find(id)!.End);
-            Commit("DetailsMeetingStart", "nonsense"); Assert.Equal(TimeSpan.FromHours(14), model.Notes.Find(id)!.At); Assert.Equal("14:00", Find<TextBox>(window, "DetailsMeetingStart").Text); // Refused, and put back.
+            Commit("DetailsMeetingStart", "nonsense"); Assert.Equal(TimeSpan.FromHours(14), model.Notes.Find(id)!.At); Assert.Equal("nonsense", Find<TextBox>(window, "DetailsMeetingStart").Text); // Keep refused input available for correction.
+            Commit("DetailsMeetingStart", "14:00"); Assert.Null(model.EditError);
             var account = Find<ComboBox>(window, "DetailsMeetingAccount"); account.SelectedItem = "Account two"; Settle(window);
             Assert.Equal("Account two", model.Notes.AccountOf(model.Notes.Find(id)!));
             Press(window, Centre(window, Find<Button>(window, "DeleteMeeting")));

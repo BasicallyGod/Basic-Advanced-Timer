@@ -223,7 +223,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         var chosen = Engine.Sessions.Where(s => rows.Any(r => ReferenceEquals(r, s)) && s.Duration > TimeSpan.Zero).OrderBy(s => s.From).ToList();
         if (chosen.Count == 0) return false;
-        if (chosen.Select(s => s.Day).Distinct().Count() > 1) { EditError = "One day at a time"; Notify(); return false; }
+        if (chosen.Select(Engine.WorkDayOf).Distinct().Count() > 1) { EditError = "One day at a time"; Notify(); return false; }
         var first = chosen[0].From;
         copied = chosen.Select(s => new LedgerEditor.ClipBlock(s.Account, s.From - first, s.Minutes, Editor.Note(s))).ToList();
         EditError = null; Notice = copied.Count == 1 ? "1 block copied" : $"{copied.Count} blocks copied";
@@ -445,6 +445,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void Tell(string text) { Notice = Notes.Unsaved ? "Not saved yet · kept on screen, retrying" : text; Notify(); }
     /// <summary>Shows a refused edit in the message bar, such as a time that was typed wrongly in the Selected block card.</summary>
     public void Refuse(string message) { EditError = message; Notice = null; Notify(); }
+    internal void ClearEditRefusal() { if (EditError is null) return; EditError = null; Notify(); }
     public void ExplainRunning() { EditError = "Still recording · stop to edit"; Notify(); }
     public void TogglePause()
     {
