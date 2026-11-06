@@ -99,7 +99,7 @@ public static class TimelineGuide
         }
         foreach (var pin in pins) Recolour(pin);
         // A pin turns red when its time passes, without the whole timeline being drawn again.
-        if (pins.Count > 0 && day == model.Engine.Now.Date)
+        if (pins.Count > 0 && model.DayOf(day) == model.TodayKey)
         {
             var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
             timer.Tick += (_, _) => { foreach (var pin in pins) Recolour(pin); };

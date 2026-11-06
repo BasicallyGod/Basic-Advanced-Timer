@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using Timer.Core;
+using Timer.Storage;
 
 namespace Timer.Desktop;
 
@@ -152,8 +153,8 @@ public sealed partial class SelectedBlockCard : Border
     private Control Empty()
     {
         var day = model.SelectedDate.Date;
-        var anything = model.Engine.Sessions.Any(s => s.Day == day && s.Duration > TimeSpan.Zero) || (model.Engine.Active is not null && day == model.Engine.Now.Date);
-        var when = day == model.Engine.Now.Date ? "today" : "on this day";
+        var anything = model.Engine.Sessions.Any(s => model.CountsOn(s, day) && s.Duration > TimeSpan.Zero) || (model.Engine.Active is not null && day == model.TodayKey);
+        var when = day == model.TodayKey ? "today" : "on this day";
         var (header, _) = Header(null);
         var message = new TextBlock { Name = "SelectedEmpty", FontSize = 13, TextWrapping = TextWrapping.Wrap,
             Text = anything ? "Nothing is selected." : $"Nothing is recorded yet {when}." };
@@ -206,8 +207,10 @@ public sealed partial class SelectedBlockCard : Border
                     newEnd = newStart + span;
                 }
                 else if (!TimeText.TryParseClock(end.Text, day, true, out newEnd)) { model.Refuse("End: try 10:30"); return; }
+                // An end at or before the start is the next day's time: a shift 22:00 to 02:00 ends after midnight.
+                if (which != "length" && newEnd <= newStart) newEnd = newEnd.AddDays(1);
                 if (newEnd <= newStart) { model.Refuse("End must be after start"); return; }
-                if (newEnd > day.AddDays(1)) { model.Refuse("Can’t pass midnight"); return; }
+                if (newEnd - newStart > LedgerEditor.MaxBlock) { model.Refuse("At most 24 hours"); return; }
                 if (newStart == block.Start && newEnd == block.End) { ShowBoxes(block, true); return; } // Nothing changed, so the boxes are only tidied (09:5 becomes 09:05).
                 model.EditEntry(block.Row!, block.Row!.Account, newStart, newEnd, block.Note);
             }

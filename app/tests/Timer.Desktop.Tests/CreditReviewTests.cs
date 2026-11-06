@@ -290,8 +290,6 @@ public sealed class CreditReviewTests
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("00:00:00", "30"), Row("00:30:00", "30") });
         var editor = new LedgerEditor(engine); var csv = editor.SessionsCsv;
-        Assert.Throws<ArgumentException>(() => editor.EditTimeline(engine.Sessions[1], Day.AddMinutes(-10), Day.AddMinutes(20), true));
-        Assert.Equal(csv, editor.SessionsCsv); Assert.False(editor.CanUndo);
         engine.Sessions.Clear(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:15:00", "30") });
         engine.ToggleAccount("Account two"); csv = editor.SessionsCsv; var undo = System.Text.Json.JsonSerializer.Serialize(editor.Steps); // Running from 15:00.
         Assert.Throws<ArgumentException>(() => editor.EditTimeline(engine.Sessions[2], Day.AddHours(14).AddMinutes(50), Day.AddHours(15).AddMinutes(20), true));

@@ -49,7 +49,7 @@ public static class TimelineGestures
             var requested = TimeSpan.FromHours(moved.X / pixelsPerHour);
             SnapNote note = default;
             if (insert) delta = SnapDelta(model, row, edge, requested, pixelsPerHour, out nudging, insert: true);
-            else { nudging = false; delta = ClampToDay(row, edge, Magnet(model, row, edge, requested, pixelsPerHour, free, out note)); note = note with { Overlap = OverlapOf(model, row, edge, delta) }; }
+            else { nudging = false; delta = ClampToDay(row, edge, Magnet(model, row, edge, requested, pixelsPerHour, free, out note), model.DayBegins(model.SelectedDate)); note = note with { Overlap = OverlapOf(model, row, edge, delta) }; }
             RestoreNeighbours();
             var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero);
             var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
@@ -66,7 +66,7 @@ public static class TimelineGestures
                         foreach (var neighbour in canvas.Children.OfType<Border>().Where(b => ReferenceEquals(b.Tag, change.Source)))
                         {
                             previews[neighbour] = (Canvas.GetLeft(neighbour), neighbour.Width);
-                            Canvas.SetLeft(neighbour, ReviewViews.TimelineGutter + (change.Updated.From - row.Day).TotalHours * pixelsPerHour + ReviewViews.BlockInset); neighbour.Opacity = .75;
+                            Canvas.SetLeft(neighbour, ReviewViews.TimelineGutter + (change.Updated.From - model.DayBegins(model.SelectedDate)).TotalHours * pixelsPerHour + ReviewViews.BlockInset); neighbour.Opacity = .75;
                         }
                     }
                 }
@@ -130,17 +130,20 @@ public static class TimelineGestures
         return 0;
     }
     /// <summary>Keeps a drag inside its day and above the minimum length, so the preview and the saved value always agree.</summary>
-    public static TimeSpan ClampToDay(SessionRow row, int edge, TimeSpan delta)
+    public static TimeSpan ClampToDay(SessionRow row, int edge, TimeSpan delta, DateTime? dayBegins = null)
     {
+        // A block can be dragged anywhere in the day on show, and never further out than it already is (one that runs in from the day before stays where it begins).
+        var begin = dayBegins ?? row.Day; var floor = row.From < begin ? row.From : begin; var ceiling = row.To > begin.AddDays(1) ? row.To : begin.AddDays(1);
         var minimum = edge == 0 ? TimeSpan.Zero : TimeSpan.FromMinutes(1);
-        var low = edge <= 0 ? row.Day - row.From : (row.From + minimum) - row.To;
-        var high = edge >= 0 ? row.Day.AddDays(1) - row.To : (row.To - minimum) - row.From;
+        var low = edge <= 0 ? floor - row.From : (row.From + minimum) - row.To;
+        var high = edge >= 0 ? ceiling - row.To : (row.To - minimum) - row.From;
         return delta < low ? low : delta > high ? high : delta;
     }
     public static TimeSpan SnapDelta(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour, out bool nudge, bool insert = false, bool free = false)
     {
-        if (insert) { var snapped = Snap(model, row, edge, requested, pixelsPerHour, out nudge); return ClampToDay(row, edge, snapped); }
-        nudge = false; return ClampToDay(row, edge, Magnet(model, row, edge, requested, pixelsPerHour, free, out _));
+        var begin = model.DayBegins(model.SelectedDate);
+        if (insert) { var snapped = Snap(model, row, edge, requested, pixelsPerHour, out nudge); return ClampToDay(row, edge, snapped, begin); }
+        nudge = false; return ClampToDay(row, edge, Magnet(model, row, edge, requested, pixelsPerHour, free, out _), begin);
     }
 
     /// <summary>How far an edge pulls, in screen pixels either side of a neighbour's edge, before a drag is free to overlap.</summary>
@@ -156,12 +159,13 @@ public static class TimelineGestures
     public static TimeSpan Magnet(TimerModel model, SessionRow row, int edge, TimeSpan requested, double pixelsPerHour, bool free, out SnapNote note)
     {
         note = default;
+        var begin = model.DayBegins(model.SelectedDate); var floor = row.From < begin ? row.From : begin; var ceiling = row.To > begin.AddDays(1) ? row.To : begin.AddDays(1);
         var others = model.Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero).Select(s => (Start: s.From, End: s.To)).ToList();
         (DateTime Start, DateTime End)? running = model.Engine.Active is { } active && model.Engine.Now > active.Start ? (active.Start, model.Engine.Now) : null;
         bool Legal(TimeSpan delta)
         {
             var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero); var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
-            if (from < row.Day || until > row.Day.AddDays(1) || (until - from).TotalSeconds < 3) return false;
+            if (from < floor || until > ceiling || (until - from).TotalSeconds < 3) return false;
             if (edge != 0 && until - from < TimeSpan.FromMinutes(1)) return false;
             return running is not { } r || !(r.Start < until && r.End > from);
         }
@@ -175,7 +179,7 @@ public static class TimelineGestures
                 if (edge >= 0) candidates.Add((LastDeltaBefore(row, edge, other.Start), other.Start));
             }
             // Ending something at this moment, on today.
-            if (edge >= 0 && model.Engine.Now.Date == row.Day) candidates.Add((LastDeltaBefore(row, edge, model.Engine.Now), model.Engine.Now));
+            if (edge >= 0 && model.DayOf(model.Engine.Now) == model.SelectedDate.Date) candidates.Add((LastDeltaBefore(row, edge, model.Engine.Now), model.Engine.Now));
             foreach (var candidate in candidates.OrderBy(c => Math.Abs((c.Delta - requested).TotalHours)))
             {
                 if (Math.Abs((candidate.Delta - requested).TotalHours * pixelsPerHour) > MagnetPixels) break;
@@ -189,7 +193,7 @@ public static class TimelineGestures
         {
             // The block being recorded is the one thing nothing may run into: stop at it.
             if (row.To <= wall.Start) { var limit = LastDeltaBefore(row, edge, wall.Start); if (grid > limit) grid = limit; }
-            else if (row.From >= wall.End && edge <= 0) { var floor = new DateTime(((wall.End.Ticks + TimeSpan.TicksPerSecond - 1) / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond) - row.From; if (grid < floor) grid = floor; }
+            else if (row.From >= wall.End && edge <= 0) { var wallEnd = new DateTime(((wall.End.Ticks + TimeSpan.TicksPerSecond - 1) / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond) - row.From; if (grid < wallEnd) grid = wallEnd; }
         }
         return grid;
     }
@@ -216,7 +220,7 @@ public static class TimelineGestures
         if (text is null) return;
         var top = Canvas.GetTop(card);
         double x;
-        if (note.Snapped) x = ReviewViews.TimelineGutter + (note.At - row.Day).TotalHours * pixelsPerHour;
+        if (note.Snapped) x = ReviewViews.TimelineGutter + (note.At - model.DayBegins(model.SelectedDate)).TotalHours * pixelsPerHour;
         else x = Canvas.GetLeft(card) + card.Width / 2;
         if (note.Snapped)
         {
@@ -309,7 +313,7 @@ public static class TimelineGestures
         {
             var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero);
             var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
-            if ((until - from).TotalSeconds < 3 || until > row.Day.AddDays(1)) break;
+            if ((until - from).TotalSeconds < 3) break;
             if (LedgerEditor.TimedRow(row.Account, from, until, "edited").To <= limit) return delta;
         }
         return limit - row.To;

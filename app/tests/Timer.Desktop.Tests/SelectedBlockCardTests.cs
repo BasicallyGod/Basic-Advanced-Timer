@@ -67,7 +67,7 @@ public sealed class SelectedBlockCardTests
             end.Text = "11:3"; // Half typed in the box that has the focus,
             Assert.True(model.NudgeSelection(1)); // while the block changes under it.
             Assert.Equal("11:3", end.Text); Assert.Equal("0:31", length.Text); Assert.Equal("11:00:00", start.Text);
-            end.Text = "10:00"; Enter(end); // Before the start: refused, so every box goes back to what is saved.
+            end.Text = "banana"; Enter(end); // Not a time: refused, so every box goes back to what is saved. (An end before the start is the next day's, since a block may cross midnight.)
             Assert.Equal("11:31:00", end.Text); Assert.Equal("11:00:00", start.Text);
             end.Text = "11:40"; Enter(end); Assert.Equal("0:40", length.Text); // And the same box takes the next edit.
         }
