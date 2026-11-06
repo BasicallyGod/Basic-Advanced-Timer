@@ -195,6 +195,26 @@ public sealed class TimerModel : INotifyPropertyChanged
     // Copied blocks stay inside the app, not on the system clipboard, so they can carry their credited minutes and notes exactly.
     private IReadOnlyList<LedgerEditor.ClipBlock> copied = Array.Empty<LedgerEditor.ClipBlock>();
     public bool CanPaste => copied.Count > 0;
+    /// <summary>The copied blocks as lengths and gaps from the first, for the outlines that show where Paste would put them.</summary>
+    public IReadOnlyList<(TimeSpan Offset, TimeSpan Length)> CopiedShape => copied.Select(c => (c.Offset, TimeSpan.FromMinutes(double.Parse(c.Minutes, System.Globalization.CultureInfo.InvariantCulture)))).ToList();
+    /// <summary>How long the first copied block is, which is the stretch a paste or Add time snaps by.</summary>
+    public TimeSpan CopiedFirstLength => copied.Count > 0 ? TimeSpan.FromMinutes(double.Parse(copied[0].Minutes, System.Globalization.CultureInfo.InvariantCulture)) : TimeSpan.FromMinutes(30);
+    /// <summary>
+    /// Pulls a new block's start flush to the nearest edge of another block, within the same ten pixels a drag uses at the zoom now showing: its start to another block's end,
+    /// or its end (start plus <paramref name="length"/>) to another block's start. Past the band it is left where it is, so it may overlap.
+    /// </summary>
+    public DateTime SnapPlacement(DateTime start, TimeSpan length)
+    {
+        var band = TimeSpan.FromHours(TimelineGestures.MagnetPixels / TimelinePixelsPerHour);
+        DateTime? best = null; var distance = band;
+        void Consider(DateTime candidate) { var d = (candidate - start).Duration(); if (d <= distance) { distance = d; best = candidate; } }
+        foreach (var s in Engine.Sessions.Where(s => s.Duration > TimeSpan.Zero && s.Day == start.Date || s.Duration > TimeSpan.Zero && s.To > start.Date && s.From < start.Date.AddDays(1)))
+        {
+            Consider(new DateTime(((s.To.Ticks + TimeSpan.TicksPerSecond - 1) / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond));
+            Consider(new DateTime(s.From.Ticks - s.From.Ticks % TimeSpan.TicksPerSecond) - length);
+        }
+        return best is { } snapped && snapped >= start.Date && snapped + length <= start.Date.AddDays(1) ? snapped : start;
+    }
     /// <summary>Where Ctrl+V pastes. The timeline keeps it at the time under the pointer, and it is null when the pointer has not been over it.</summary>
     public DateTime? PasteTime { get; set; }
     /// <summary>Copies the blocks, or the selection when the clicked block is part of it. Blocks from several days cannot be copied together.</summary>
@@ -214,16 +234,21 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         if (!CanPaste) { EditError = "Copy blocks first"; Notify(); return false; }
         var count = copied.Count;
-        var done = ChangeLog(() => { foreach (var block in copied) ValidateAccount(block.Account); Editor.Paste(copied, at); });
+        var done = ChangeLog(() => { foreach (var block in copied) ValidateAccount(block.Account); Editor.Paste(copied, at, allowOverlap: true); });
         if (done) { Notice = count == 1 ? "1 block pasted" : $"{count} blocks pasted"; Notify(); }
         return done;
     }
-    /// <summary>The time Ctrl+V uses on the day shown, which is the pointer's place on the timeline, or straight after the day's last block.</summary>
+    /// <summary>
+    /// The time Ctrl+V uses on the day shown: where the pointer is on the timeline (snapped flush to a block's edge close by), else straight after the selected block, else the day's
+    /// start. It is never after the day's last block, which put a paste past anything added ahead of time whatever the pointer was doing.
+    /// </summary>
     public DateTime DefaultPasteTime()
     {
-        if (PasteTime is { } at && at.Date == SelectedDate.Date) return at;
-        var day = SelectedDate.Date; var last = Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero).Select(s => s.To).DefaultIfEmpty().Max();
-        return last > day ? last : Engine.Plan(day).Working ? Engine.Plan(day).Start : day.AddHours(9);
+        var day = SelectedDate.Date;
+        if (PasteTime is { } at && at.Date == day) return SnapPlacement(at, CopiedFirstLength);
+        var chosen = Engine.Sessions.Where(s => selectedRows.Contains(s) && s.Day == day && s.Duration > TimeSpan.Zero).Select(s => s.To).DefaultIfEmpty().Max();
+        if (chosen > day) return chosen;
+        return Engine.Plan(day).Working ? Engine.Plan(day).Start : day.AddHours(9);
     }
     public bool MergeSelection()
     {
@@ -774,27 +799,26 @@ public sealed class TimerModel : INotifyPropertyChanged
         foreach (var day in Engine.DayStarts.Where(p => p.Key >= Engine.Now.Date && Engine.Schedule.Scheduled(p.Key) is { Working: true } plan && p.Value >= plan.Start).Select(p => p.Key).ToList()) Engine.DayStarts.Remove(day);
         Save(); Notify();
     }
+    /// <summary>
+    /// Opens Add time at the time asked for (a right-click, to the 5 minutes), 30 minutes long or to the day's end, flush to a block's edge close by. It no longer slides away to a gap:
+    /// blocks may overlap, so the only place it moves is past the block being recorded, which nothing can overlap.
+    /// </summary>
     public void OpenGap(DateTime? at = null)
     {
-        var day = SelectedDate;
-        var limit = day.AddDays(1);
+        var day = SelectedDate; var limit = day.AddDays(1); var length = TimeSpan.FromMinutes(30);
         var start = at ?? (Engine.Plan(day).Working ? Engine.Plan(day).Start : day.AddHours(9));
-        var occupied = Engine.Sessions.Where(s => s.Duration > TimeSpan.Zero && s.From < day.AddDays(1) && s.To > day)
-            .Select(s => (Start: s.From, End: s.To)).ToList();
-        if (Engine.Active is { } active) occupied.Add((active.Start, Engine.Now));
-        foreach (var span in occupied.OrderBy(s => s.Start))
+        start = SnapPlacement(start, length);
+        if (Engine.Active is { } active && active.Start < start + length && Engine.Now > start)
         {
-            if (span.End <= start) continue;
-            if (span.Start > start) break;
-            start = span.End;
+            // Running time is the one thing Add time cannot share, so the box opens just after it.
+            start = new DateTime(((Engine.Now.Ticks + TimeSpan.TicksPerMinute - 1) / TimeSpan.TicksPerMinute) * TimeSpan.TicksPerMinute);
         }
-        var next = occupied.Where(s => s.Start > start).Select(s => s.Start).DefaultIfEmpty(limit).Min();
-        var end = new[] { start.AddMinutes(30), next, limit, day.AddDays(1) }.Min();
-        if (end <= start) { EditError = "No gap here"; Notify(); return; }
+        var end = start + length > limit ? limit : start + length;
+        if (end <= start || start < day) { EditError = "No room here"; Notify(); return; }
         EditError = null; EntryRequested?.Invoke(start, end);
     }
     public bool AddEntry(string account, DateTime start, DateTime end, string note)
-        => ChangeLog(() => { ValidateAccount(account); Editor.Add(account, start, end, note); });
+        => ChangeLog(() => { ValidateAccount(account); Editor.Add(account, start, end, note, allowOverlap: true); });
     /// <summary>Changes a block's account, times or note in place. Blocks may overlap (they stack on the timeline), so only the block being recorded can refuse it.</summary>
     public bool EditEntry(SessionRow row, string account, DateTime start, DateTime end, string note)
         => ChangeLog(() => KeepingSelection(new[] { row }, () => { ValidateAccount(account); Editor.Edit(row, account, start, end, note, allowOverlap: true); }));
@@ -806,6 +830,27 @@ public sealed class TimerModel : INotifyPropertyChanged
         foreach (var row in rows) selectedRows.Remove(row);
         foreach (var place in places) if (place < Engine.Sessions.Count) selectedRows.Add(Engine.Sessions[place]);
     }
+    /// <summary>Sets a block's start to where the block before it ends (the latest end of the blocks that begin earlier), closing a gap or an overlap there. The end stays.</summary>
+    public bool FitToPrevious(SessionRow row)
+    {
+        var ends = Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero && s.Day == row.Day && s.From < row.From).Select(s => s.To).ToList();
+        if (ends.Count == 0) { Refuse("No block before"); return false; }
+        var end = ends.Max(); var start = new DateTime(((end.Ticks + TimeSpan.TicksPerSecond - 1) / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond);
+        if (start >= row.To - TimeSpan.FromMinutes(1)) { Refuse("No room before"); return false; }
+        return EditEntry(row, row.Account, start, row.To, Editor.Note(row));
+    }
+    /// <summary>Sets a block's end to where the next block begins (the earliest start of the blocks that begin later). The start stays.</summary>
+    public bool FitToNext(SessionRow row)
+    {
+        var starts = Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero && s.Day == row.Day && s.From > row.From).Select(s => s.From).ToList();
+        if (starts.Count == 0) { Refuse("No block after"); return false; }
+        var next = starts.Min(); var end = new DateTime(next.Ticks - next.Ticks % TimeSpan.TicksPerSecond);
+        if (end <= row.From + TimeSpan.FromMinutes(1)) { Refuse("No room after"); return false; }
+        return EditEntry(row, row.Account, row.From, end, Editor.Note(row));
+    }
+    /// <summary>Moves or resizes a block by dragging it. It may land on other blocks and share their hours, so only the block being recorded can refuse it.</summary>
+    public bool MoveEntry(SessionRow row, DateTime start, DateTime end)
+        => ChangeLog(() => KeepingSelection(new[] { row }, () => Editor.Edit(row, row.Account, start, end, Editor.Note(row), allowOverlap: true)));
     public bool DragEntry(SessionRow row, DateTime start, DateTime end, bool insert)
         => ChangeLog(() => Editor.EditTimeline(row, start, end, insert));
     /// <summary>Moves an account to a new place among the accounts (hidden ones keep their own places).</summary>
