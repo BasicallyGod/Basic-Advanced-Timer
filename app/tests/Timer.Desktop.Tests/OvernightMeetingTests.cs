@@ -82,6 +82,28 @@ public sealed class OvernightMeetingTests
         finally { Directory.Delete(folder, true); }
     }
 
+    [AvaloniaTheory]
+    [InlineData(0)]
+    [InlineData(18)]
+    public void FullDayMeetingsKeepTheirDurationWhenReopenedInEitherEditor(int hour)
+    {
+        var model = Model(); var day = hour == 0 ? Day.AddDays(1) : Day;
+        model.Notes.AddMeeting(day, TimeSpan.FromHours(hour), TimeSpan.FromHours(hour + 24), "Full day", null, RepeatChoice.None);
+        var meeting = Assert.Single(model.Notes.All);
+        var window = new DashboardWindow(model); window.Show(); model.SelectMeeting(meeting.Id); Settle(window);
+        try
+        {
+            Commit(window, "DetailsMeetingName", "Updated Details"); Assert.Null(model.EditError);
+            Assert.Equal("Updated Details", model.Notes.Words(model.Notes.Find(meeting.Id)!));
+            Assert.Equal(TimeSpan.FromHours(hour + 24), model.Notes.Find(meeting.Id)!.End);
+            window.ShowNotes(); Settle(window); var page = window.GetVisualDescendants().OfType<NotesPage>().Single();
+            page.OpenNote(meeting.Id); Settle(window); Find<TextBox>(window, "PageNoteField").Text = "Updated page"; Click(window, "PageSubmit");
+            Assert.Equal("Updated page", model.Notes.Words(model.Notes.Find(meeting.Id)!));
+            Assert.Equal(TimeSpan.FromHours(hour + 24), model.Notes.Find(meeting.Id)!.End);
+        }
+        finally { window.Close(); }
+    }
+
     [Fact]
     public void DraggingUsesTheWorkdayWindowAndAllowsMidnightCrossing()
     {

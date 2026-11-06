@@ -536,6 +536,7 @@ public sealed class NotesPage : Grid
         }
         if (!TimeText.TryParseClock(startText, meetingDay, false, out var start)) { error = "Start: try 09:30"; Redraw(); return; }
         if (!TimeText.TryParseClockAfter(endText, start, false, true, out var end)) { error = "End: try 10:00"; Redraw(); return; }
+        if (end == start && editing is { } fullDayId && Notes.Find(fullDayId) is { } fullDay && fullDay.End - fullDay.At == TimeSpan.FromDays(1)) end = end.AddDays(1);
         if (end <= start) { error = "End must be after the start."; Redraw(); return; }
 
         if (editing is { } meetingId)

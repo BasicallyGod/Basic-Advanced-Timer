@@ -122,6 +122,8 @@ public sealed partial class SelectedBlockCard
             f.Settling = true; try { f.End.Text = end.ToString("HH:mm"); } finally { f.Settling = false; }
         }
         else if (!TimeText.TryParseClockAfter(f.End.Text, start, false, true, out end)) { Refuse("End: try 10:30"); return; }
+        // Equal clock faces can represent a stored full-day meeting; preserve that duration when editing other fields.
+        if (end == start && f.LastEnd - f.LastStart == TimeSpan.FromDays(1) && f.End.Text == Hm(f.LastEnd)) end = end.AddDays(1);
         if (end <= start || end - start > TimeSpan.FromDays(1)) { Refuse("End must be after start, within 24 hours"); return; }
         var endOffset = end - f.Day.Date;
         f.LastStart = start.TimeOfDay; f.LastEnd = endOffset;
@@ -172,7 +174,7 @@ public sealed partial class SelectedBlockCard
     private void RefreshMeeting(DayNote meeting, bool all)
     {
         if (meetingFields is not { } f) return;
-        if (f.Dirty && !all) return; // Unsaved changes are kept; only Save, Discard or a refusal put the saved values back.
+        if (f.Dirty && !all) return; // Pending and refused values remain until Save, Discard or correction.
         f.Settling = true;
         try
         {
