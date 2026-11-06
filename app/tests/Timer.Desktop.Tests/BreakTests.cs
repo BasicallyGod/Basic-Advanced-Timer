@@ -78,7 +78,7 @@ Dispatcher.UIThread.RunJobs(); using var panelFrame = dashboard.CaptureRenderedF
             Assert.StartsWith("End break", ToolTip.GetTip(dashboardBreak)?.ToString());
             Assert.Equal("On break", ToolTip.GetTip(pill.GetVisualDescendants().OfType<Border>().Single(p => p.Name == "PillStateLight")));
             Assert.True(pill.GetVisualDescendants().OfType<CupGlyph>().Single().Steaming); // The steam moves while the break is on.
-            Assert.True(dashboard.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming);
+            Assert.True(dashboard.GetVisualDescendants().OfType<CupGlyph>().Single().Steaming);
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
             if (folder is not null)
             {

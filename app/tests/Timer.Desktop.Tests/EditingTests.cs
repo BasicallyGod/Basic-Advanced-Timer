@@ -439,7 +439,7 @@ Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
             // The cup steams while the pointer is over the button. (Headless tests do not run animation timers, so this checks the switches, not the frames.)
-            var cup = breakButton.GetVisualDescendants().OfType<BreakGlyph>().Single(); var cupSpot = breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, breakButton.Bounds.Height / 2), dashboard)!.Value;
+            var cup = breakButton.GetVisualDescendants().OfType<CupGlyph>().Single(); var cupSpot = breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, breakButton.Bounds.Height / 2), dashboard)!.Value;
             var wasSteaming = cup.Steaming; dashboard.MouseMoveUntil(cupSpot, () => cup.Steaming); Assert.True(cup.Steaming);
             model.SetPillScale(null); Dispatcher.UIThread.RunJobs(); Assert.True(cup.Steaming); // A model update while the pointer is over it does not stop the steam, as on the pill.
             dashboard.MouseMove(new Point(5, 5)); Assert.Equal(wasSteaming, cup.Steaming);
